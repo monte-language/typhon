@@ -1,4 +1,5 @@
 import struct
+import sys
 from encodings.utf_8 import IncrementalDecoder
 
 class Stream(object):
@@ -40,8 +41,6 @@ def unshift(bs):
 
 
 LONG_SHIFT = 15
-LONG_BASE = 1 << LONG_SHIFT
-LONG_MASK = LONG_BASE - 1
 
 kernelNodeInfo = [
     ('null', 0),
@@ -124,7 +123,21 @@ def loadTerm(stream):
 
     return [tag, [loadTerm(stream) for _ in range(arity)]]
 
-import sys
-import pprint
 
-pprint.pprint(loadTerm(Stream(open(sys.argv[1], "rb").read())))
+def entry_point(argv):
+    print argv
+
+    if len(argv) < 2:
+        print "No file provided?"
+        return 1
+
+    print loadTerm(Stream(open(sys.argv[1], "rb").read()))
+    return 0
+
+
+def target(*args):
+    return entry_point, None
+
+
+if __name__ == "__main__":
+    entry_point(sys.argv)
