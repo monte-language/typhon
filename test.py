@@ -1,6 +1,19 @@
 import struct
 import sys
-from encodings.utf_8 import IncrementalDecoder
+from rpython.rlib.rstruct.ieee import unpack_float
+from rpython.rlib.runicode import str_decode_utf_8
+
+
+def unshift(byte):
+    return chr((ord(byte[0]) - 32) % 256)
+
+
+def unshiftBytes(bs):
+    rv = ''
+    for b in bs:
+        rv += unshift(b)
+    return rv
+
 
 class Stream(object):
 
@@ -10,8 +23,7 @@ class Stream(object):
         self._items = items
 
     def nextItem(self):
-        if self._counter >= len(self._items):
-            return None
+        assert self._counter < len(self._items), "Buffer underrun while streaming"
         rv = self._items[self._counter]
         self._counter += 1
         return rv
@@ -20,41 +32,39 @@ class Stream(object):
         return ord(unshift(self.nextItem()))
 
     def slice(self, count):
-        if self._counter + count >= len(self._items):
-            return None
+        assert count > 0, "Count must be positive when slicing"
+        assert self._counter + count < len(self._items), "Buffer underrun while streaming"
         rv = self._items[self._counter:self._counter + count]
         self._counter += count
         return rv
 
     def nextShort(self):
-        return struct.unpack('!h', unshift(self.slice(2)))[0]
+        return self.nextByte() << 8 | self.nextByte()
 
     def nextInt(self):
-        return struct.unpack('!i', unshift(self.slice(4)))[0]
+        return (self.nextByte() << 24 | self.nextByte() << 16 |
+                self.nextByte() << 8 | self.nextByte())
 
     def nextDouble(self):
-        return struct.unpack('!d', unshift(self.slice(8)))[0]
-
-
-def unshift(bs):
-    return ''.join(chr((ord(b) - 32) % 256) for b in bs)
+        # Second parameter is the big-endian flag.
+        return unpack_float(self.slice(8), True)
 
 
 LONG_SHIFT = 15
 
 kernelNodeInfo = [
     ('null', 0),
-    ('.String.', None),
-    ('.float64.', None),
-    ('.char.', None),
+    ('.String.', 0),
+    ('.float64.', 0),
+    ('.char.', 0),
     # different tags for short ints...
-    ('.int.', None),
+    ('.int.', 0),
     # ... and long ints
-    ('.int.', None),
+    ('.int.', 0),
     # this one for small tuples...
-    ('.tuple.', None),
+    ('.tuple.', 0),
     # ... this one for large
-    ('.tuple.', None),
+    ('.tuple.', 0),
     ('LiteralExpr', 1),
     ('NounExpr', 1),
     ('BindingExpr', 1),
@@ -86,12 +96,51 @@ SHORT_INT, LONG_INT  = (4, 5) # indices of the two '.int.'s above
 BIG_TUPLE, SMALL_TUPLE  = (6, 7) # indices of the two '.int.'s above
 
 
+class Node(object):
+    pass
+
+
+class Null(Node):
+    pass
+
+
+class Int(Node):
+    def __init__(self, i):
+        self._i = i
+
+
+class Str(Node):
+    def __init__(self, s):
+        self._s = s
+
+
+class Double(Node):
+    def __init__(self, d):
+        self._d = d
+
+
+class Char(Node):
+    def __init__(self, c):
+        self._c = c
+
+
+class Tuple(Node):
+    def __init__(self, t):
+        self._t = t
+
+
+class Tag(Node):
+    def __init__(self, tag, args):
+        self._tag = tag
+        self._args = args
+
+
 def loadTerm(stream):
     kind = stream.nextByte()
     tag, arity = kernelNodeInfo[kind]
 
     if tag == "null":
-        return "null"
+        return Null()
     elif tag == '.int.':
         if kind == SHORT_INT:
             rv = stream.nextInt()
@@ -100,28 +149,28 @@ def loadTerm(stream):
             size = stream.nextInt()
             for i in range(size):
                 chunk = stream.nextShort()
-                literalVal |= (chunk << LONG_SHIFT * i)
-        return ["int", rv]
+                rv |= (chunk << LONG_SHIFT * i)
+        return Int(rv)
     elif tag == '.String.':
         size = stream.nextInt()
         rv = stream.slice(size).decode('utf-8')
-        return ["str", rv]
+        return Str(rv)
     elif tag == '.float64.':
-        return ["double", stream.nextDouble()]
+        return Double(stream.nextDouble())
     elif tag == '.char.':
-        de = IncrementalDecoder()
-        rv = de.decode(stream.nextItem())
+        buf = stream.nextItem()
+        rv, count = str_decode_utf_8(buf, len(buf), None)
         while rv == u'':
-            rv = de.decode(stream.nextItem())
-        return ["char", rv]
+            rv, count = str_decode_utf_8(buf, len(buf), None)
+        return Char(rv)
     elif tag == '.tuple.':
         if kind == BIG_TUPLE:
             arity = stream.nextInt()
         else:
             arity = stream.nextByte()
-        return ["tuple", [loadTerm(stream) for _ in range(arity)]]
+        return Tuple([loadTerm(stream) for _ in range(arity)])
 
-    return [tag, [loadTerm(stream) for _ in range(arity)]]
+    return Tag(tag, [loadTerm(stream) for _ in range(arity)])
 
 
 def entry_point(argv):
@@ -131,7 +180,7 @@ def entry_point(argv):
         print "No file provided?"
         return 1
 
-    print loadTerm(Stream(open(sys.argv[1], "rb").read()))
+    print loadTerm(Stream(open(argv[1], "rb").read()))
     return 0
 
 
