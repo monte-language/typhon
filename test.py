@@ -4,6 +4,9 @@ from rpython.rlib.rstruct.ieee import unpack_float
 from rpython.rlib.runicode import str_decode_utf_8
 
 
+from typhon.nodes import Char, Double, Int, Null, Str, Tag, Tuple
+
+
 def unshift(byte):
     return chr((ord(byte[0]) - 32) % 256)
 
@@ -96,45 +99,6 @@ SHORT_INT, LONG_INT  = (4, 5) # indices of the two '.int.'s above
 BIG_TUPLE, SMALL_TUPLE  = (6, 7) # indices of the two '.int.'s above
 
 
-class Node(object):
-    pass
-
-
-class Null(Node):
-    pass
-
-
-class Int(Node):
-    def __init__(self, i):
-        self._i = i
-
-
-class Str(Node):
-    def __init__(self, s):
-        self._s = s
-
-
-class Double(Node):
-    def __init__(self, d):
-        self._d = d
-
-
-class Char(Node):
-    def __init__(self, c):
-        self._c = c
-
-
-class Tuple(Node):
-    def __init__(self, t):
-        self._t = t
-
-
-class Tag(Node):
-    def __init__(self, tag, args):
-        self._tag = tag
-        self._args = args
-
-
 def loadTerm(stream):
     kind = stream.nextByte()
     tag, arity = kernelNodeInfo[kind]
@@ -174,13 +138,13 @@ def loadTerm(stream):
 
 
 def entry_point(argv):
-    print argv
-
     if len(argv) < 2:
         print "No file provided?"
         return 1
 
-    print loadTerm(Stream(open(argv[1], "rb").read()))
+    term = loadTerm(Stream(open(argv[1], "rb").read()))
+    print term.evaluate().repr()
+
     return 0
 
 
