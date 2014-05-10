@@ -3,8 +3,8 @@ class Environment(object):
     An execution context.
     """
 
-    def __init__(self):
-        self._frames = [{}]
+    def __init__(self, baseScope):
+        self._frames = [baseScope]
 
     def enterFrame(self):
         self._frames.append({})

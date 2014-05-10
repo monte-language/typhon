@@ -8,6 +8,7 @@ from typhon.env import Environment
 from typhon.nodes import (Call, Char, Def, Double, FinalPattern, Int,
                           IgnorePattern, ListPattern, Noun, Null, Str,
                           Sequence, Tag, Tuple, VarPattern)
+from typhon.simple import simpleScope
 
 
 def unshift(byte):
@@ -177,7 +178,7 @@ def entry_point(argv):
         return 1
 
     term = loadTerm(Stream(open(argv[1], "rb").read()))
-    env = Environment()
+    env = Environment(simpleScope())
     print term.repr()
     print term.evaluate(env).repr()
 
