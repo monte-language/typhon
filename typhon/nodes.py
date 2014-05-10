@@ -138,7 +138,7 @@ class Noun(Node):
         self._n = noun._s
 
     def repr(self):
-        return "Noun(" + self._n + ")"
+        return "Noun(" + self._n.encode("utf-8") + ")"
 
     def evaluate(self, env):
         return env.find(self._n)
