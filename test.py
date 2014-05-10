@@ -1,4 +1,3 @@
-import struct
 import sys
 from rpython.rlib.rstruct.ieee import unpack_float
 from rpython.rlib.runicode import str_decode_utf_8
@@ -6,7 +5,7 @@ from rpython.rlib.runicode import str_decode_utf_8
 
 from typhon.env import Environment
 from typhon.nodes import (Call, Char, Def, Double, FinalPattern, Int,
-                          IgnorePattern, ListPattern, Noun, Null, Str,
+                          IgnorePattern, ListPattern, Noun, Null, Obj, Str,
                           Sequence, Tag, Tuple, VarPattern)
 from typhon.simple import simpleScope
 
@@ -163,6 +162,10 @@ def loadTerm(stream):
 
     elif tag == "NounExpr":
         return Noun(loadTerm(stream))
+
+    elif tag == "Object":
+        return Obj(loadTerm(stream), loadTerm(stream), loadTerm(stream),
+                   loadTerm(stream))
 
     elif tag == "SeqExpr":
         # SeqExprs contain one single tuple; consume and return the tuple

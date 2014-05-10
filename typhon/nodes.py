@@ -1,4 +1,5 @@
-from typhon.objects import (ConstListObject, IntObject, NullObject, StrObject)
+from typhon.objects import (ConstListObject, IntObject, NullObject,
+                            ScriptObject, StrObject)
 
 
 class Node(object):
@@ -142,6 +143,23 @@ class Noun(Node):
 
     def evaluate(self, env):
         return env.find(self._n)
+
+
+class Obj(Node):
+
+    def __init__(self, doc, name, auditors, script):
+        assert isinstance(auditors, Tuple), "malformed auditors"
+        self._d = doc
+        self._n = name
+        self._as = auditors._t[0]
+        self._implements = auditors._t[1:]
+        self._s = script
+
+    def repr(self):
+        return "Obj(" + self._n.repr() + ")"
+
+    def evaluate(self, env):
+        return ScriptObject(self._s)
 
 
 class Sequence(Node):

@@ -46,3 +46,12 @@ class StrObject(Object):
 
     def recv(self, verb, args):
         raise RuntimeError
+
+
+class ScriptObject(Object):
+
+    def __init__(self, script):
+        self._s = script
+
+    def repr(self):
+        return "<scriptObject>"
