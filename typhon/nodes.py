@@ -163,6 +163,9 @@ class Sequence(Node):
         return rv
 
 
+# Tag is a transitional node; it doesn't actually do anything, but it's here
+# nonetheless because I was too lazy to crank out nodes for every single bit
+# of the AST in advance. It will go away real soon.
 class Tag(Node):
 
     def __init__(self, tag, args):
@@ -174,6 +177,10 @@ class Tag(Node):
         buf += ", ".join([item.repr() for item in self._args])
         buf += ")"
         return buf
+
+    def evaluate(self, env):
+        print "Not evaluating Tag", self._tag
+        raise NotImplementedError
 
 
 class Pattern(Node):
@@ -196,3 +203,83 @@ class FinalPattern(Pattern):
     def unify(self, specimen, env):
         env.record(self._n._n, specimen)
         return True
+
+
+class IgnorePattern(Pattern):
+
+    def __init__(self, guard):
+        self._g = None if isinstance(guard, Null) else guard
+
+    def repr(self):
+        if self._g is None:
+            return "_"
+        else:
+            return "_ :" + self._g.repr()
+
+    def unify(self, specimen, env):
+        return True
+
+
+class ListPattern(Pattern):
+
+    def __init__(self, patterns, tail):
+        assert isinstance(patterns, Tuple), "non-Tuple in ListPattern"
+        self._ps = patterns._t
+        self._t = None if isinstance(tail, Null) else tail
+
+    def repr(self):
+        buf = "[" + ", ".join([item.repr() for item in self._ps]) + "]"
+        if self._t is not None:
+            buf += " | " + self._t.repr()
+        return buf
+
+    def unify(self, specimen, env):
+        patterns = self._ps
+        tail = self._t
+
+        # Can't unify lists and non-lists.
+        if not isinstance(specimen, ConstListObject):
+            return False
+        items = specimen._l
+
+        # If we have no tail, then unification isn't going to work if the
+        # lists are of differing lengths.
+        if tail is None and len(patterns) != len(items):
+            return False
+        # Even if there's a tail, there must be at least as many elements in
+        # the pattern list as there are in the specimen list.
+        elif len(patterns) > len(items):
+            return False
+
+        # Actually unify. Because of the above checks, this shouldn't run
+        # ragged.
+        for i, pattern in enumerate(patterns):
+            pattern.unify(items[i], env)
+
+        # And unify the tail as well.
+        if tail is not None:
+            remainder = ConstListObject(items[len(patterns):])
+            tail.unify(remainder, env)
+
+        return True
+
+
+class VarPattern(Pattern):
+
+    def __init__(self, noun, guard):
+        assert isinstance(noun, Noun), "non-Noun noun!?"
+        self._n = noun
+        self._g = None if isinstance(guard, Null) else guard
+
+    def repr(self):
+        if self._g is None:
+            return "Var(" + self._n.repr() + ")"
+        else:
+            return "Var(" + self._n.repr() + " :" + self._g.repr() + ")"
+
+    def unify(self, specimen, env):
+        env.record(self._n._n, specimen)
+        return True
+
+    ('ViaPattern', 2),
+    ('BindingPattern', 1),

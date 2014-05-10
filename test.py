@@ -5,8 +5,9 @@ from rpython.rlib.runicode import str_decode_utf_8
 
 
 from typhon.env import Environment
-from typhon.nodes import (Call, Char, Def, Double, FinalPattern, Int, Noun,
-                          Null, Str, Sequence, Tag, Tuple)
+from typhon.nodes import (Call, Char, Def, Double, FinalPattern, Int,
+                          IgnorePattern, ListPattern, Noun, Null, Str,
+                          Sequence, Tag, Tuple, VarPattern)
 
 
 def unshift(byte):
@@ -38,7 +39,7 @@ class Stream(object):
 
     def slice(self, count):
         assert count > 0, "Count must be positive when slicing"
-        assert self._counter + count < len(self._items), "Buffer underrun while streaming"
+        assert self._counter + count <= len(self._items), "Buffer underrun while streaming"
         rv = self._items[self._counter:self._counter + count]
         self._counter += count
         return rv
@@ -138,6 +139,15 @@ def loadTerm(stream):
 
     elif tag == "FinalPattern":
         return FinalPattern(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "IgnorePattern":
+        return IgnorePattern(loadTerm(stream))
+
+    elif tag == "ListPattern":
+        return ListPattern(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "VarPattern":
+        return VarPattern(loadTerm(stream), loadTerm(stream))
 
     elif tag == "Def":
         return Def(loadTerm(stream), loadTerm(stream), loadTerm(stream))
