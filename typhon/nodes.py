@@ -9,7 +9,7 @@ class Node(object):
     def repr(self):
         assert False, "Inconceivable!"
 
-    def evaluate(self):
+    def evaluate(self, env):
         raise NotImplementedError
 
 
@@ -18,7 +18,7 @@ class Null(Node):
     def repr(self):
         return "<null>"
 
-    def evaluate(self):
+    def evaluate(self, env):
         return NullObject()
 
 
@@ -30,7 +30,7 @@ class Int(Node):
     def repr(self):
         return "%d" % self._i
 
-    def evaluate(self):
+    def evaluate(self, env):
         return IntObject(self._i)
 
 
@@ -42,7 +42,7 @@ class Str(Node):
     def repr(self):
         return '"%s"' % (self._s.encode("utf-8"))
 
-    def evaluate(self):
+    def evaluate(self, env):
         return StrObject(self._s)
 
 
@@ -75,8 +75,8 @@ class Tuple(Node):
         buf += "]"
         return buf
 
-    def evaluate(self):
-        return ConstListObject([item.evaluate() for item in self._t])
+    def evaluate(self, env):
+        return ConstListObject([item.evaluate(env) for item in self._t])
 
 
 class Call(Node):
@@ -91,17 +91,50 @@ class Call(Node):
         buf += ", " + self._args.repr() + ")"
         return buf
 
-    def evaluate(self):
+    def evaluate(self, env):
         # There's a careful order of operations here. First we have to
         # evaluate the target, then the verb, and finally the arguments.
         # Once we do all that, we make the actual call.
-        target = self._target.evaluate()
-        verb = self._verb.evaluate()
+        target = self._target.evaluate(env)
+        verb = self._verb.evaluate(env)
         assert isinstance(verb, StrObject), "non-Str verb"
-        args = self._args.evaluate()
+        args = self._args.evaluate(env)
         assert isinstance(args, ConstListObject), "non-List arguments"
 
         return target.recv(verb._s, args._l)
+
+
+class Def(Node):
+
+    def __init__(self, pattern, ejector, value):
+        assert isinstance(pattern, Pattern), "non-Pattern lvalue"
+        self._p = pattern
+        self._e = None if isinstance(ejector, Null) else ejector
+        self._v = value
+
+    def repr(self):
+        if self._e is None:
+            buf = "Def(" + self._p.repr() + ", " + self._v.repr() + ")"
+        else:
+            buf = "Def(" + self._p.repr() + ", " + self._e.repr() + ", "
+            buf += self._v.repr() + ")"
+        return buf
+
+    def evaluate(self, env):
+        rval = self._v.evaluate(env)
+        # We don't care about whether we only get partway through the pattern
+        # unification here before exiting on failure, since we're going to
+        # exit this scope on failure before those names can even be used.
+        if not self._p.unify(rval, env):
+            # XXX if self._p is None
+            raise RuntimeError
+        return rval
+
+
+class Noun(Node):
+
+    def __init__(self, noun):
+        self._n = noun
 
 
 class Sequence(Node):
@@ -116,10 +149,10 @@ class Sequence(Node):
         buf += ")"
         return buf
 
-    def evaluate(self):
+    def evaluate(self, env):
         rv = NullObject()
         for node in self._t._t:
-            rv = node.evaluate()
+            rv = node.evaluate(env)
         return rv
 
 
@@ -134,3 +167,24 @@ class Tag(Node):
         buf += ", ".join([item.repr() for item in self._args])
         buf += ")"
         return buf
+
+
+class Pattern(Node):
+    pass
+
+
+class FinalPattern(Pattern):
+
+    def __init__(self, noun, guard):
+        self._n = noun
+        self._g = None if isinstance(guard, Null) else guard
+
+    def repr(self):
+        if self._g is None:
+            return "Final(" + self._n.repr() + ")"
+        else:
+            return "Final(" + self._n.repr() + " :" + self._g.repr() + ")"
+
+    def unify(self, specimen, env):
+        # XXX stick the specimen => noun in the environment
+        return True

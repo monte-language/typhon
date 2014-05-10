@@ -4,8 +4,9 @@ from rpython.rlib.rstruct.ieee import unpack_float
 from rpython.rlib.runicode import str_decode_utf_8
 
 
-from typhon.nodes import (Call, Char, Double, Int, Null, Str, Sequence, Tag,
-                          Tuple)
+from typhon.env import Environment
+from typhon.nodes import (Call, Char, Def, Double, FinalPattern, Int, Null,
+                          Str, Sequence, Tag, Tuple)
 
 
 def unshift(byte):
@@ -135,6 +136,12 @@ def loadTerm(stream):
             arity = stream.nextByte()
         return Tuple([loadTerm(stream) for _ in range(arity)])
 
+    elif tag == "FinalPattern":
+        return FinalPattern(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "Def":
+        return Def(loadTerm(stream), loadTerm(stream), loadTerm(stream))
+
     elif tag == "LiteralExpr":
         # LiteralExprs always contain one single literal; consume and return
         # that literal.
@@ -157,8 +164,9 @@ def entry_point(argv):
         return 1
 
     term = loadTerm(Stream(open(argv[1], "rb").read()))
+    env = Environment()
     print term.repr()
-    print term.evaluate().repr()
+    print term.evaluate(env).repr()
 
     return 0
 
