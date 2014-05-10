@@ -14,13 +14,20 @@ class Node(object):
         raise NotImplementedError
 
 
-class Null(Node):
+class _Null(Node):
 
     def repr(self):
         return "<null>"
 
     def evaluate(self, env):
-        return NullObject()
+        return NullObject
+
+
+Null = _Null()
+
+
+def nullToNone(node):
+    return None if node is Null else node
 
 
 class Int(Node):
@@ -110,7 +117,7 @@ class Def(Node):
     def __init__(self, pattern, ejector, value):
         assert isinstance(pattern, Pattern), "non-Pattern lvalue"
         self._p = pattern
-        self._e = None if isinstance(ejector, Null) else ejector
+        self._e = nullToNone(ejector)
         self._v = value
 
     def repr(self):
@@ -175,7 +182,7 @@ class Sequence(Node):
         return buf
 
     def evaluate(self, env):
-        rv = NullObject()
+        rv = NullObject
         for node in self._t._t:
             rv = node.evaluate(env)
         return rv
@@ -210,7 +217,7 @@ class FinalPattern(Pattern):
     def __init__(self, noun, guard):
         assert isinstance(noun, Noun), "non-Noun noun!?"
         self._n = noun
-        self._g = None if isinstance(guard, Null) else guard
+        self._g = nullToNone(guard)
 
     def repr(self):
         if self._g is None:
@@ -226,7 +233,7 @@ class FinalPattern(Pattern):
 class IgnorePattern(Pattern):
 
     def __init__(self, guard):
-        self._g = None if isinstance(guard, Null) else guard
+        self._g = nullToNone(guard)
 
     def repr(self):
         if self._g is None:
@@ -243,7 +250,7 @@ class ListPattern(Pattern):
     def __init__(self, patterns, tail):
         assert isinstance(patterns, Tuple), "non-Tuple in ListPattern"
         self._ps = patterns._t
-        self._t = None if isinstance(tail, Null) else tail
+        self._t = nullToNone(tail)
 
     def repr(self):
         buf = "[" + ", ".join([item.repr() for item in self._ps]) + "]"
@@ -287,7 +294,7 @@ class VarPattern(Pattern):
     def __init__(self, noun, guard):
         assert isinstance(noun, Noun), "non-Noun noun!?"
         self._n = noun
-        self._g = None if isinstance(guard, Null) else guard
+        self._g = nullToNone(guard)
 
     def repr(self):
         if self._g is None:

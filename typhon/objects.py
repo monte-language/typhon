@@ -2,6 +2,15 @@ class Object(object):
     pass
 
 
+class _NullObject(Object):
+
+    def recv(self, verb, args):
+        raise RuntimeError
+
+
+NullObject = _NullObject()
+
+
 class IntObject(Object):
 
     def __init__(self, i):
@@ -28,12 +37,6 @@ class ConstListObject(Object):
 
     def __init__(self, l):
         self._l = l
-
-    def recv(self, verb, args):
-        raise RuntimeError
-
-
-class NullObject(Object):
 
     def recv(self, verb, args):
         raise RuntimeError

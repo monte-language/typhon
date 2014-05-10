@@ -107,7 +107,7 @@ def loadTerm(stream):
     tag, arity = kernelNodeInfo[kind]
 
     if tag == "null":
-        return Null()
+        return Null
     elif tag == '.int.':
         if kind == SHORT_INT:
             rv = stream.nextInt()
