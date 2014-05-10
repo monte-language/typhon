@@ -5,8 +5,8 @@ from rpython.rlib.runicode import str_decode_utf_8
 
 
 from typhon.env import Environment
-from typhon.nodes import (Call, Char, Def, Double, FinalPattern, Int, Null,
-                          Str, Sequence, Tag, Tuple)
+from typhon.nodes import (Call, Char, Def, Double, FinalPattern, Int, Noun,
+                          Null, Str, Sequence, Tag, Tuple)
 
 
 def unshift(byte):
@@ -149,6 +149,9 @@ def loadTerm(stream):
 
     elif tag == "MethodCallExpr":
         return Call(loadTerm(stream), loadTerm(stream), loadTerm(stream))
+
+    elif tag == "NounExpr":
+        return Noun(loadTerm(stream))
 
     elif tag == "SeqExpr":
         # SeqExprs contain one single tuple; consume and return the tuple

@@ -11,7 +11,12 @@ class IntObject(Object):
         return "%d" % self._i
 
     def recv(self, verb, args):
-        if verb == u"multiply":
+        if verb == u"add":
+            if len(args) == 1:
+                other = args[0]
+                if isinstance(other, IntObject):
+                    return IntObject(self._i + other._i)
+        elif verb == u"multiply":
             if len(args) == 1:
                 other = args[0]
                 if isinstance(other, IntObject):

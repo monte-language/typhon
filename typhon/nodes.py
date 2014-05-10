@@ -134,7 +134,14 @@ class Def(Node):
 class Noun(Node):
 
     def __init__(self, noun):
-        self._n = noun
+        assert isinstance(noun, Str), "non-Str Noun"
+        self._n = noun._s
+
+    def repr(self):
+        return "Noun(" + self._n + ")"
+
+    def evaluate(self, env):
+        return env.find(self._n)
 
 
 class Sequence(Node):
@@ -176,6 +183,7 @@ class Pattern(Node):
 class FinalPattern(Pattern):
 
     def __init__(self, noun, guard):
+        assert isinstance(noun, Noun), "non-Noun noun!?"
         self._n = noun
         self._g = None if isinstance(guard, Null) else guard
 
@@ -186,5 +194,5 @@ class FinalPattern(Pattern):
             return "Final(" + self._n.repr() + " :" + self._g.repr() + ")"
 
     def unify(self, specimen, env):
-        # XXX stick the specimen => noun in the environment
+        env.record(self._n._n, specimen)
         return True
