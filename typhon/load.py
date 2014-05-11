@@ -2,9 +2,9 @@ from rpython.rlib.rstruct.ieee import unpack_float
 from rpython.rlib.runicode import str_decode_utf_8
 
 from typhon.nodes import (Assign, Call, Char, Def, Double, Escape,
-                          FinalPattern, If, Int, IgnorePattern, ListPattern,
-                          Method, Noun, Null, Obj, Script, Sequence, Str, Tag,
-                          Tuple, VarPattern)
+                          FinalPattern, Finally, If, Int, IgnorePattern,
+                          ListPattern, Method, Noun, Null, Obj, Script,
+                          Sequence, Str, Tag, Tuple, VarPattern)
 
 
 def unshift(byte):
@@ -137,17 +137,6 @@ def loadTerm(stream):
             arity = stream.nextByte()
         return Tuple([loadTerm(stream) for _ in range(arity)])
 
-    elif tag == "Assign":
-        return Assign(loadTerm(stream), loadTerm(stream))
-
-    elif tag == "Character":
-        # Characters should always contain a single .char. term which can
-        # stand alone in RPython.
-        string = loadTerm(stream)
-        assert isinstance(string, Str)
-        assert len(string._s) == 1
-        return Char(string._s[0])
-
     elif tag == "FinalPattern":
         return FinalPattern(loadTerm(stream), loadTerm(stream))
 
@@ -160,11 +149,25 @@ def loadTerm(stream):
     elif tag == "VarPattern":
         return VarPattern(loadTerm(stream), loadTerm(stream))
 
+    elif tag == "Assign":
+        return Assign(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "Character":
+        # Characters should always contain a single .char. term which can
+        # stand alone in RPython.
+        string = loadTerm(stream)
+        assert isinstance(string, Str)
+        assert len(string._s) == 1
+        return Char(string._s[0])
+
     elif tag == "Def":
         return Def(loadTerm(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "Escape":
         return Escape(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "Finally":
+        return Finally(loadTerm(stream), loadTerm(stream))
 
     elif tag == "If":
         return If(loadTerm(stream), loadTerm(stream), loadTerm(stream))
