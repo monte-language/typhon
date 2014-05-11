@@ -151,6 +151,11 @@ class StrObject(Object):
             if len(args) == 1:
                 if isinstance(args[0], IntObject):
                     return CharObject(self._s[args[0]._i])
+        elif verb == u"slice":
+            if len(args) == 1:
+                if isinstance(args[0], IntObject):
+                    start = args[0]._i
+                    return StrObject(self._s[start:])
         raise Refused(verb, args)
 
 
