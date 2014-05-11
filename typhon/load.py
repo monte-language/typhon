@@ -38,7 +38,7 @@ class Stream(object):
         return ord(unshift(self.nextItem()))
 
     def slice(self, count):
-        assert count > 0, "Count must be positive when slicing"
+        assert count > 0, "Negative count while slicing: %d" % count
         assert self._counter + count <= len(self._items), "Buffer underrun while streaming"
         rv = self._items[self._counter:self._counter + count]
         self._counter += count
@@ -120,6 +120,9 @@ def loadTerm(stream):
         return Int(rv)
     elif tag == '.String.':
         size = stream.nextInt()
+        # Special-case zero-length strings to avoid confusing Stream.slice().
+        if size == 0:
+            return Str(u"")
         rv = stream.slice(size).decode('utf-8')
         return Str(rv)
     elif tag == '.float64.':
