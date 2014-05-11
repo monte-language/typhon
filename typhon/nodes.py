@@ -173,8 +173,8 @@ class Escape(Node):
         except Ejecting as e:
             # Is it the ejector that we created in this frame? If not,
             # reraise.
-            if e.args[0] is ej:
-                return e.args[1]
+            if e.ejector is ej:
+                return e.value
             raise
         finally:
             # I don't think that the order of things matters here.
