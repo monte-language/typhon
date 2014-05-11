@@ -64,6 +64,9 @@ class ConstListObject(Object):
     def __init__(self, l):
         self._l = l
 
+    def repr(self):
+        return "[" + ", ".join([obj.repr() for obj in self._l]) + "]"
+
     def recv(self, verb, args):
         raise RuntimeError
 
