@@ -204,6 +204,29 @@ class Escape(Node):
             env.leaveFrame()
 
 
+class Finally(Node):
+
+    def __init__(self, block, atLast):
+        self._block = block
+        self._atLast = atLast
+
+    def repr(self):
+        buf = "Finally(" + self._block.repr() + ", " + self._atLast.repr()
+        buf += ")"
+        return buf
+
+    def evaluate(self, env):
+        # Use RPython's exception handling system to ensure the execution of
+        # the atLast block after exiting the main block.
+        try:
+            env.enterScope()
+            rv = self._block.evaluate(env)
+            env.leaveScope()
+            return rv
+        finally:
+            self._atLast.evaluate(env)
+
+
 class If(Node):
 
     def __init__(self, test, then, otherwise):
@@ -219,14 +242,19 @@ class If(Node):
     def evaluate(self, env):
         # If is a short-circuiting expression. We construct zero objects in
         # the branch that is not chosen.
-        whether = self._test.evaluate(env)
-        if isinstance(whether, BoolObject):
-            if whether.isTrue():
-                return self._then.evaluate(env)
+        env.enterScope()
+
+        try:
+            whether = self._test.evaluate(env)
+            if isinstance(whether, BoolObject):
+                if whether.isTrue():
+                    return self._then.evaluate(env)
+                else:
+                    return self._otherwise.evaluate(env)
             else:
-                return self._otherwise.evaluate(env)
-        else:
-            raise TypeError("non-Boolean in conditional expression")
+                raise TypeError("non-Boolean in conditional expression")
+        finally:
+            env.leaveScope()
 
 
 class Method(Node):
