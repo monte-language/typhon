@@ -1,7 +1,7 @@
 import sys
 
 from typhon.env import Environment
-from typhon.load import Stream, loadTerm
+from typhon.load import load
 from typhon.simple import simpleScope
 
 
@@ -10,10 +10,11 @@ def entry_point(argv):
         print "No file provided?"
         return 1
 
-    term = loadTerm(Stream(open(argv[1], "rb").read()))
+    terms = load(open(argv[1], "rb").read())
     env = Environment(simpleScope())
-    print term.repr()
-    print term.evaluate(env).repr()
+    for term in terms:
+        print term.repr()
+        print term.evaluate(env).repr()
 
     return 0
 

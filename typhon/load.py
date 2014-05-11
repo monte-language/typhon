@@ -24,6 +24,9 @@ class Stream(object):
     def __init__(self, items):
         self._items = items
 
+    def done(self):
+        return self._counter >= len(self._items)
+
     def nextItem(self):
         assert self._counter < len(self._items), "Buffer underrun while streaming"
         rv = self._items[self._counter]
@@ -179,3 +182,13 @@ def loadTerm(stream):
         return Sequence(loadTerm(stream))
 
     return Tag(tag, [loadTerm(stream) for _ in range(arity)])
+
+
+def load(data):
+    stream = Stream(data)
+    terms = []
+    while not stream.done():
+        print "before", stream._counter, len(stream._items)
+        terms.append(loadTerm(stream))
+        print "after", stream._counter, len(stream._items)
+    return terms
