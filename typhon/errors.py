@@ -15,4 +15,4 @@ class Refused(Exception):
 
     def __init__(self, verb, args):
         self.verb = verb
-        self.args = args
+        self.args = verb, args

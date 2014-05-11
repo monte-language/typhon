@@ -17,6 +17,26 @@ class _NullObject(Object):
 NullObject = _NullObject()
 
 
+class _BoolObject(Object):
+
+    def __init__(self, b):
+        self._b = b
+
+    def repr(self):
+        return "true" if self._b else "false"
+
+    def recv(self, verb, args):
+        raise Refused(verb, args)
+
+
+TrueObject = _BoolObject(True)
+FalseObject = _BoolObject(False)
+
+
+def wrapBool(b):
+    return TrueObject if b else FalseObject
+
+
 class EjectorObject(Object):
 
     active = True
@@ -35,6 +55,33 @@ class EjectorObject(Object):
 
     def deactivate(self):
         self.active = False
+
+
+class EqualizerObject(Object):
+
+    def repr(self):
+        return "<equalizer>"
+
+    def recv(self, verb, args):
+        if verb == u"sameEver":
+            if len(args) == 2:
+                first, second = args
+                return wrapBool(self.sameEver(first, second))
+        raise Refused(verb, args)
+
+    def sameEver(self, first, second):
+        """
+        Determine whether two objects are ever equal.
+
+        This is a complex topic; expect lots of comments.
+        """
+
+        # Two identical objects are equal.
+        if first is second:
+            return True
+
+        # By default, objects are not equal.
+        return False
 
 
 class IntObject(Object):

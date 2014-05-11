@@ -1,4 +1,5 @@
-from typhon.objects import Object, ConstListObject, NullObject
+from typhon.objects import (Object, ConstListObject, EqualizerObject,
+                            FalseObject, NullObject, TrueObject)
 
 
 class makeList(Object):
@@ -10,6 +11,9 @@ class makeList(Object):
 
 def simpleScope():
     return {
+        u"__equalizer": EqualizerObject(),
         u"__makeList": makeList(),
+        u"false": FalseObject,
         u"null": NullObject,
+        u"true": TrueObject,
     }

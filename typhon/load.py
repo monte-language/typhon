@@ -188,7 +188,5 @@ def load(data):
     stream = Stream(data)
     terms = []
     while not stream.done():
-        print "before", stream._counter, len(stream._items)
         terms.append(loadTerm(stream))
-        print "after", stream._counter, len(stream._items)
     return terms
