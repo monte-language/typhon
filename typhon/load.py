@@ -1,9 +1,10 @@
 from rpython.rlib.rstruct.ieee import unpack_float
 from rpython.rlib.runicode import str_decode_utf_8
 
-from typhon.nodes import (Call, Char, Def, Double, Escape, FinalPattern, If,
-                          Int, IgnorePattern, ListPattern, Method, Noun, Null,
-                          Obj, Script, Sequence, Str, Tag, Tuple, VarPattern)
+from typhon.nodes import (Assign, Call, Char, Def, Double, Escape,
+                          FinalPattern, If, Int, IgnorePattern, ListPattern,
+                          Method, Noun, Null, Obj, Script, Sequence, Str, Tag,
+                          Tuple, VarPattern)
 
 
 def unshift(byte):
@@ -135,6 +136,9 @@ def loadTerm(stream):
         else:
             arity = stream.nextByte()
         return Tuple([loadTerm(stream) for _ in range(arity)])
+
+    elif tag == "Assign":
+        return Assign(loadTerm(stream), loadTerm(stream))
 
     elif tag == "Character":
         # Characters should always contain a single .char. term which can

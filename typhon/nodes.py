@@ -102,6 +102,24 @@ def tupleToList(t):
     return t._t
 
 
+class Assign(Node):
+
+    def __init__(self, target, rvalue):
+        assert isinstance(target, Noun), "Can't assign to non-Noun"
+        self._target = target._n
+        self._rvalue = rvalue
+
+    def repr(self):
+        buf = "Assign(" + self._target.encode("utf-8") + " := "
+        buf += self._rvalue.repr() + ")"
+        return buf
+
+    def evaluate(self, env):
+        value = self._rvalue.evaluate(env)
+        env.record(value)
+        return value
+
+
 class Call(Node):
 
     def __init__(self, target, verb, args):
