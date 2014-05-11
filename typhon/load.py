@@ -1,9 +1,9 @@
 from rpython.rlib.rstruct.ieee import unpack_float
 from rpython.rlib.runicode import str_decode_utf_8
 
-from typhon.nodes import (Call, Char, Def, Double, Escape, FinalPattern, Int,
-                          IgnorePattern, ListPattern, Method, Noun, Null, Obj,
-                          Script, Sequence, Str, Tag, Tuple, VarPattern)
+from typhon.nodes import (Call, Char, Def, Double, Escape, FinalPattern, If,
+                          Int, IgnorePattern, ListPattern, Method, Noun, Null,
+                          Obj, Script, Sequence, Str, Tag, Tuple, VarPattern)
 
 
 def unshift(byte):
@@ -158,6 +158,9 @@ def loadTerm(stream):
 
     elif tag == "Escape":
         return Escape(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "If":
+        return If(loadTerm(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "LiteralExpr":
         # LiteralExprs always contain one single literal; consume and return

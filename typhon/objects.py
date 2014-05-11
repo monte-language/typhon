@@ -17,7 +17,7 @@ class _NullObject(Object):
 NullObject = _NullObject()
 
 
-class _BoolObject(Object):
+class BoolObject(Object):
 
     def __init__(self, b):
         self._b = b
@@ -28,9 +28,12 @@ class _BoolObject(Object):
     def recv(self, verb, args):
         raise Refused(verb, args)
 
+    def isTrue(self):
+        return self._b
 
-TrueObject = _BoolObject(True)
-FalseObject = _BoolObject(False)
+
+TrueObject = BoolObject(True)
+FalseObject = BoolObject(False)
 
 
 def wrapBool(b):

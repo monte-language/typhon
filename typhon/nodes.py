@@ -1,6 +1,7 @@
 from typhon.errors import Ejecting
-from typhon.objects import (CharObject, ConstListObject, EjectorObject,
-                            IntObject, NullObject, ScriptObject, StrObject)
+from typhon.objects import (BoolObject, CharObject, ConstListObject,
+                            EjectorObject, IntObject, NullObject,
+                            ScriptObject, StrObject)
 
 
 class Node(object):
@@ -184,6 +185,30 @@ class Escape(Node):
             ej.deactivate()
             env.leaveFrame()
 
+
+class If(Node):
+
+    def __init__(self, test, then, otherwise):
+        self._test = test
+        self._then = then
+        self._otherwise = otherwise
+
+    def repr(self):
+        buf = "If(" + self._test.repr() + ", " + self._then.repr() + ", "
+        buf += self._otherwise.repr() + ")"
+        return buf
+
+    def evaluate(self, env):
+        # If is a short-circuiting expression. We construct zero objects in
+        # the branch that is not chosen.
+        whether = self._test.evaluate(env)
+        if isinstance(whether, BoolObject):
+            if whether.isTrue():
+                return self._then.evaluate(env)
+            else:
+                return self._otherwise.evaluate(env)
+        else:
+            raise TypeError("non-Boolean in conditional expression")
 
 
 class Method(Node):
