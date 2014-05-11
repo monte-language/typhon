@@ -139,7 +139,10 @@ def loadTerm(stream):
     elif tag == "Character":
         # Characters should always contain a single .char. term which can
         # stand alone in RPython.
-        return loadTerm(stream)
+        string = loadTerm(stream)
+        assert isinstance(string, Str)
+        assert len(string._s) == 1
+        return Char(string._s[0])
 
     elif tag == "FinalPattern":
         return FinalPattern(loadTerm(stream), loadTerm(stream))
