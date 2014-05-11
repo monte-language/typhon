@@ -37,6 +37,18 @@ def wrapBool(b):
     return TrueObject if b else FalseObject
 
 
+class CharObject(Object):
+
+    def __init__(self, c):
+        self._c = c
+
+    def repr(self):
+        return "'%s'" % (self._c.encode("utf-8"))
+
+    def recv(self, verb, args):
+        raise Refused(verb, args)
+
+
 class EjectorObject(Object):
 
     active = True
@@ -124,6 +136,10 @@ class StrObject(Object):
         self._s = s
 
     def recv(self, verb, args):
+        if verb == u"get":
+            if len(args) == 1:
+                if isinstance(args[0], IntObject):
+                    return CharObject(self._s[args[0]._i])
         raise Refused(verb, args)
 
 
