@@ -155,7 +155,8 @@ class StrObject(Object):
             if len(args) == 1:
                 if isinstance(args[0], IntObject):
                     start = args[0]._i
-                    return StrObject(self._s[start:])
+                    if start >= 0:
+                        return StrObject(self._s[start:])
         raise Refused(verb, args)
 
 

@@ -219,9 +219,9 @@ class Finally(Node):
         # Use RPython's exception handling system to ensure the execution of
         # the atLast block after exiting the main block.
         try:
-            env.enterScope()
+            env.enterFrame()
             rv = self._block.evaluate(env)
-            env.leaveScope()
+            env.leaveFrame()
             return rv
         finally:
             self._atLast.evaluate(env)
@@ -242,7 +242,7 @@ class If(Node):
     def evaluate(self, env):
         # If is a short-circuiting expression. We construct zero objects in
         # the branch that is not chosen.
-        env.enterScope()
+        env.enterFrame()
 
         try:
             whether = self._test.evaluate(env)
@@ -254,7 +254,7 @@ class If(Node):
             else:
                 raise TypeError("non-Boolean in conditional expression")
         finally:
-            env.leaveScope()
+            env.leaveFrame()
 
 
 class Method(Node):
