@@ -95,6 +95,14 @@ class EqualizerObject(Object):
         if first is second:
             return True
 
+        # Bools.
+        if isinstance(first, BoolObject) and isinstance(second, BoolObject):
+            return first.isTrue() == second.isTrue()
+
+        # Chars.
+        if isinstance(first, CharObject) and isinstance(second, CharObject):
+            return first._c == second._c
+
         # By default, objects are not equal.
         return False
 
