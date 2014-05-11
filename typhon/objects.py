@@ -1,3 +1,6 @@
+from typhon.errors import Ejecting
+
+
 class Object(object):
     pass
 
@@ -12,6 +15,26 @@ class _NullObject(Object):
 
 
 NullObject = _NullObject()
+
+
+class EjectorObject(Object):
+
+    active = True
+
+    def repr(self):
+        return "<ejector>"
+
+    def recv(self, verb, args):
+        if verb == u"run":
+            if len(args) == 1:
+                if self.active:
+                    raise Ejecting(self, args[0])
+                else:
+                    raise RuntimeError
+        raise RuntimeError
+
+    def deactivate(self):
+        self.active = False
 
 
 class IntObject(Object):

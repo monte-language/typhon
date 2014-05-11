@@ -1,5 +1,6 @@
-from typhon.objects import (ConstListObject, IntObject, NullObject,
-                            ScriptObject, StrObject)
+from typhon.errors import Ejecting
+from typhon.objects import (ConstListObject, EjectorObject, IntObject,
+                            NullObject, ScriptObject, StrObject)
 
 
 class Node(object):
@@ -147,6 +148,39 @@ class Def(Node):
             # XXX if self._p is None
             raise RuntimeError
         return rval
+
+
+class Escape(Node):
+
+    def __init__(self, pattern, node):
+        assert isinstance(pattern, Pattern), "non-Pattern in Escape"
+        self._pattern = pattern
+        self._node = node
+
+    def repr(self):
+        buf = "Escape(" + self._pattern.repr() + ", " + self._node.repr()
+        buf += ")"
+        return buf
+
+    def evaluate(self, env):
+        ej = EjectorObject()
+        env.enterFrame()
+        if not self._pattern.unify(ej, env):
+            raise RuntimeError
+
+        try:
+            return self._node.evaluate(env)
+        except Ejecting as e:
+            # Is it the ejector that we created in this frame? If not,
+            # reraise.
+            if e.args[0] is ej:
+                return e.args[1]
+            raise
+        finally:
+            # I don't think that the order of things matters here.
+            ej.deactivate()
+            env.leaveFrame()
+
 
 
 class Method(Node):
