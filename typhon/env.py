@@ -23,4 +23,4 @@ class Environment(object):
             frame = self._frames[i]
             if noun in frame:
                 return frame[noun]
-        raise RuntimeError
+        raise KeyError(noun)
