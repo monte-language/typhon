@@ -1,4 +1,4 @@
-from typhon.errors import Ejecting
+from typhon.errors import Ejecting, Refused
 
 
 class Object(object):
@@ -11,7 +11,7 @@ class _NullObject(Object):
         return "<null>"
 
     def recv(self, verb, args):
-        raise RuntimeError
+        raise Refused(verb, args)
 
 
 NullObject = _NullObject()
@@ -31,7 +31,7 @@ class EjectorObject(Object):
                     raise Ejecting(self, args[0])
                 else:
                     raise RuntimeError
-        raise RuntimeError
+        raise Refused(verb, args)
 
     def deactivate(self):
         self.active = False
@@ -56,7 +56,7 @@ class IntObject(Object):
                 other = args[0]
                 if isinstance(other, IntObject):
                     return IntObject(self._i * other._i)
-        raise RuntimeError
+        raise Refused(verb, args)
 
 
 class ConstListObject(Object):
@@ -68,7 +68,7 @@ class ConstListObject(Object):
         return "[" + ", ".join([obj.repr() for obj in self._l]) + "]"
 
     def recv(self, verb, args):
-        raise RuntimeError
+        raise Refused(verb, args)
 
 
 class StrObject(Object):
@@ -77,7 +77,7 @@ class StrObject(Object):
         self._s = s
 
     def recv(self, verb, args):
-        raise RuntimeError
+        raise Refused(verb, args)
 
 
 class ScriptObject(Object):
@@ -112,4 +112,4 @@ class ScriptObject(Object):
                 self._env.leaveFrame()
 
             return rv
-        raise RuntimeError
+        raise Refused(verb, args)
