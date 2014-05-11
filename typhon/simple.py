@@ -1,4 +1,4 @@
-from typhon.objects import Object, ConstListObject
+from typhon.objects import Object, ConstListObject, NullObject
 
 
 class makeList(Object):
@@ -11,4 +11,5 @@ class makeList(Object):
 def simpleScope():
     return {
         u"__makeList": makeList(),
+        u"null": NullObject,
     }
