@@ -54,6 +54,11 @@ class Str(Node):
         return StrObject(self._s)
 
 
+def strToString(s):
+    assert isinstance(s, Str), "not a Str!"
+    return s._s
+
+
 class Double(Node):
 
     def __init__(self, d):
@@ -85,6 +90,11 @@ class Tuple(Node):
 
     def evaluate(self, env):
         return ConstListObject([item.evaluate(env) for item in self._t])
+
+
+def tupleToList(t):
+    assert isinstance(t, Tuple), "not a Tuple!"
+    return t._t
 
 
 class Call(Node):
@@ -139,6 +149,21 @@ class Def(Node):
         return rval
 
 
+class Method(Node):
+
+    def __init__(self, doc, verb, params, guard, block):
+        self._d = doc
+        self._verb = strToString(verb)
+        self._ps = ListPattern(params, Null)
+        self._g = guard
+        self._b = block
+
+    def repr(self):
+        buf = "Method(" + self._verb.encode("utf-8") + ", " + self._ps.repr()
+        buf += ", " + self._g.repr() + ", " + self._b.repr() + ")"
+        return buf
+
+
 class Noun(Node):
 
     def __init__(self, noun):
@@ -155,18 +180,44 @@ class Noun(Node):
 class Obj(Node):
 
     def __init__(self, doc, name, auditors, script):
-        assert isinstance(auditors, Tuple), "malformed auditors"
+        assert isinstance(name, Pattern), "non-Pattern object name"
+        auditors = tupleToList(auditors)
+        assert isinstance(script, Script), "malformed script"
         self._d = doc
         self._n = name
-        self._as = auditors._t[0]
-        self._implements = auditors._t[1:]
-        self._s = script
+        self._as = nullToNone(auditors[0])
+        self._implements = auditors[1:]
+        self._script = script
 
     def repr(self):
-        return "Obj(" + self._n.repr() + ")"
+        buf = "Obj(" + self._n.repr() + ", "
+        if self._as is not None:
+            buf += ":" + self._as.repr() + ", "
+        buf += self._script.repr() + ")"
+        return buf
 
     def evaluate(self, env):
-        return ScriptObject(self._s)
+        rv = ScriptObject(self._script, env)
+        self._n.unify(rv, env)
+        return rv
+
+
+class Script(Node):
+
+    def __init__(self, extends, methods, matchers):
+        self._extends = nullToNone(extends)
+        self._methods = tupleToList(methods)
+        for method in self._methods:
+            assert isinstance(method, Method)
+        self._matchers = matchers
+
+    def repr(self):
+        buf = "Script("
+        if self._extends is not None:
+            buf += "extends " + self._extends.repr() + ", "
+        buf += ", ".join([method.repr() for method in self._methods]) + ", "
+        buf += self._matchers.repr() + ")"
+        return buf
 
 
 class Sequence(Node):

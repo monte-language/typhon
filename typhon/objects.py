@@ -4,6 +4,9 @@ class Object(object):
 
 class _NullObject(Object):
 
+    def repr(self):
+        return "<null>"
+
     def recv(self, verb, args):
         raise RuntimeError
 
@@ -53,8 +56,34 @@ class StrObject(Object):
 
 class ScriptObject(Object):
 
-    def __init__(self, script):
-        self._s = script
+    def __init__(self, script, env):
+        self._env = env
+        self._script = script
+        self._methods = {}
+
+        for method in self._script._methods:
+            # God *dammit*, RPython.
+            from typhon.nodes import Method
+            assert isinstance(method, Method)
+            assert isinstance(method._verb, unicode)
+            self._methods[method._verb] = method
 
     def repr(self):
         return "<scriptObject>"
+
+    def recv(self, verb, args):
+        if verb in self._methods:
+            method = self._methods[verb]
+
+            try:
+                self._env.enterFrame()
+                # Set up parameters from arguments.
+                if not method._ps.unify(ConstListObject(args), self._env):
+                    raise RuntimeError
+                # Run the block.
+                rv = method._b.evaluate(self._env)
+            finally:
+                self._env.leaveFrame()
+
+            return rv
+        raise RuntimeError

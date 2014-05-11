@@ -5,8 +5,8 @@ from rpython.rlib.runicode import str_decode_utf_8
 
 from typhon.env import Environment
 from typhon.nodes import (Call, Char, Def, Double, FinalPattern, Int,
-                          IgnorePattern, ListPattern, Noun, Null, Obj, Str,
-                          Sequence, Tag, Tuple, VarPattern)
+                          IgnorePattern, ListPattern, Method, Noun, Null, Obj,
+                          Script, Sequence, Str, Tag, Tuple, VarPattern)
 from typhon.simple import simpleScope
 
 
@@ -157,6 +157,10 @@ def loadTerm(stream):
         # that literal.
         return loadTerm(stream)
 
+    elif tag == "Method":
+        return Method(loadTerm(stream), loadTerm(stream), loadTerm(stream),
+                      loadTerm(stream), loadTerm(stream))
+
     elif tag == "MethodCallExpr":
         return Call(loadTerm(stream), loadTerm(stream), loadTerm(stream))
 
@@ -166,6 +170,9 @@ def loadTerm(stream):
     elif tag == "Object":
         return Obj(loadTerm(stream), loadTerm(stream), loadTerm(stream),
                    loadTerm(stream))
+
+    elif tag == "Script":
+        return Script(loadTerm(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "SeqExpr":
         # SeqExprs contain one single tuple; consume and return the tuple
