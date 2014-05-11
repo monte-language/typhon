@@ -116,7 +116,7 @@ class Assign(Node):
 
     def evaluate(self, env):
         value = self._rvalue.evaluate(env)
-        env.record(value)
+        env.update(self._target, value)
         return value
 
 
@@ -254,7 +254,7 @@ class Noun(Node):
         return "Noun(" + self._n.encode("utf-8") + ")"
 
     def evaluate(self, env):
-        return env.find(self._n)
+        return env.get(self._n)
 
 
 class Obj(Node):
@@ -357,7 +357,7 @@ class FinalPattern(Pattern):
             return "Final(" + self._n.repr() + " :" + self._g.repr() + ")"
 
     def unify(self, specimen, env):
-        env.record(self._n._n, specimen)
+        env.final(self._n._n, specimen)
         return True
 
 
@@ -434,7 +434,7 @@ class VarPattern(Pattern):
             return "Var(" + self._n.repr() + " :" + self._g.repr() + ")"
 
     def unify(self, specimen, env):
-        env.record(self._n._n, specimen)
+        env.variable(self._n._n, specimen)
         return True
 
     ('ViaPattern', 2),
