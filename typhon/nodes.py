@@ -1,6 +1,6 @@
 from typhon.errors import Ejecting
-from typhon.objects import (ConstListObject, EjectorObject, IntObject,
-                            NullObject, ScriptObject, StrObject)
+from typhon.objects import (CharObject, ConstListObject, EjectorObject,
+                            IntObject, NullObject, ScriptObject, StrObject)
 
 
 class Node(object):
@@ -76,6 +76,9 @@ class Char(Node):
 
     def repr(self):
         return "'%s'" % (self._c.encode("utf-8"))
+
+    def evaluate(self, env):
+        return CharObject(self._c)
 
 
 class Tuple(Node):

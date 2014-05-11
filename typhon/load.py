@@ -136,6 +136,11 @@ def loadTerm(stream):
             arity = stream.nextByte()
         return Tuple([loadTerm(stream) for _ in range(arity)])
 
+    elif tag == "Character":
+        # Characters should always contain a single .char. term which can
+        # stand alone in RPython.
+        return loadTerm(stream)
+
     elif tag == "FinalPattern":
         return FinalPattern(loadTerm(stream), loadTerm(stream))
 
