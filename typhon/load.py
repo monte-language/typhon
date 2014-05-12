@@ -58,89 +58,80 @@ class Stream(object):
 
 LONG_SHIFT = 15
 
-kernelNodeInfo = [
-    ('null', 0),
-    ('.String.', 0),
-    ('.float64.', 0),
-    ('.char.', 0),
-    # different tags for short ints...
-    ('.int.', 0),
-    # ... and long ints
-    ('.int.', 0),
-    # this one for small tuples...
-    ('.tuple.', 0),
-    # ... this one for large
-    ('.tuple.', 0),
-    ('LiteralExpr', 1),
-    ('NounExpr', 1),
-    ('BindingExpr', 1),
-    ('SeqExpr', 1),
-    ('MethodCallExpr', 3),
-    ('Def', 3),
-    ('Escape', 3),
-    ('Catch', 2),
-    ('Object', 4),
-    ('Script', 3),
-    ('Method', 5),
-    ('Matcher', 2),
-    ('Assign', 2),
-    ('Finally', 2),
-    ('KernelTry', 2),
-    ('HideExpr', 1),
-    ('If', 3),
-    ('Meta', 1),
-    ('FinalPattern', 2),
-    ('IgnorePattern', 1),
-    ('VarPattern', 2),
-    ('ListPattern', 2),
-    ('ViaPattern', 2),
-    ('BindingPattern', 1),
-    ('Character', 1)
-]
+# The kinds for primitive nodes.
+NULL, STR, FLOAT, CHAR = 0, 1, 2, 3
+SHORT_INT, LONG_INT  = 4, 5
+BIG_TUPLE, SMALL_TUPLE  = 6, 7
 
-SHORT_INT, LONG_INT  = (4, 5) # indices of the two '.int.'s above
-BIG_TUPLE, SMALL_TUPLE  = (6, 7) # indices of the two '.int.'s above
+kernelNodeInfo = {
+    8: ('LiteralExpr', 1),
+    9: ('NounExpr', 1),
+    10: ('BindingExpr', 1),
+    11: ('SeqExpr', 1),
+    12: ('MethodCallExpr', 3),
+    13: ('Def', 3),
+    14: ('Escape', 3),
+    15: ('Catch', 2),
+    16: ('Object', 4),
+    17: ('Script', 3),
+    18: ('Method', 5),
+    19: ('Matcher', 2),
+    20: ('Assign', 2),
+    21: ('Finally', 2),
+    22: ('KernelTry', 2),
+    23: ('HideExpr', 1),
+    24: ('If', 3),
+    25: ('Meta', 1),
+    26: ('FinalPattern', 2),
+    27: ('IgnorePattern', 1),
+    28: ('VarPattern', 2),
+    29: ('ListPattern', 2),
+    30: ('ViaPattern', 2),
+    31: ('BindingPattern', 1),
+    32: ('Character', 1),
+}
 
 
 def loadTerm(stream):
     kind = stream.nextByte()
-    tag, arity = kernelNodeInfo[kind]
 
-    if tag == "null":
+    if kind == NULL:
         return Null
-    elif tag == '.int.':
-        if kind == SHORT_INT:
-            rv = stream.nextInt()
-        else:
-            rv = 0
-            size = stream.nextInt()
-            for i in range(size):
-                chunk = stream.nextShort()
-                rv |= (chunk << LONG_SHIFT * i)
-        return Int(rv)
-    elif tag == '.String.':
+    elif kind == STR:
         size = stream.nextInt()
         # Special-case zero-length strings to avoid confusing Stream.slice().
         if size == 0:
             return Str(u"")
         rv = stream.slice(size).decode('utf-8')
         return Str(rv)
-    elif tag == '.float64.':
+    elif kind == FLOAT:
         return Double(stream.nextDouble())
-    elif tag == '.char.':
+    elif kind == CHAR:
         buf = stream.nextItem()
         rv, count = str_decode_utf_8(buf, len(buf), None)
         while rv == u'':
             rv, count = str_decode_utf_8(buf, len(buf), None)
         return Char(rv)
-    elif tag == '.tuple.':
-        if kind == BIG_TUPLE:
-            arity = stream.nextInt()
-        else:
-            arity = stream.nextByte()
+    elif kind == SHORT_INT:
+        return Int(stream.nextInt())
+    elif kind == LONG_INT:
+        rv = 0
+        size = stream.nextInt()
+        for i in range(size):
+            chunk = stream.nextShort()
+            rv |= (chunk << LONG_SHIFT * i)
+        return Int(rv)
+    elif kind == SMALL_TUPLE:
+        arity = stream.nextByte()
+        return Tuple([loadTerm(stream) for _ in range(arity)])
+    elif kind == BIG_TUPLE:
+        arity = stream.nextInt()
         return Tuple([loadTerm(stream) for _ in range(arity)])
 
-    elif tag == "FinalPattern":
+    # Well, that's it for the primitives. Let's lookup the tag and arity.
+    tag, arity = kernelNodeInfo[kind]
+
+    if tag == "FinalPattern":
         return FinalPattern(loadTerm(stream), loadTerm(stream))
 
     elif tag == "IgnorePattern":
