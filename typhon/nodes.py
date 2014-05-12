@@ -465,5 +465,24 @@ class VarPattern(Pattern):
         env.variable(self._n._n, specimen)
         return True
 
-    ('ViaPattern', 2),
-    ('BindingPattern', 1),
+
+class ViaPattern(Pattern):
+
+    def __init__(self, expr, pattern):
+        assert isinstance(noun, Noun), "non-Noun noun!?"
+        self._expr = expr
+        self._pattern = pattern
+
+    def repr(self):
+        return "Via(" + self._expr.repr() + ", " + self._pattern.repr() + ")"
+
+    def unify(self, specimen, env):
+        # This one always bamboozles me, so I'll spell out what it's doing.
+        # The via pattern takes an expression and another pattern, and passes
+        # the specimen into the expression along with an ejector. The
+        # expression can reject the specimen by escaping, or it can transform
+        # the specimen and return a new specimen which is then applied to the
+        # inner pattern.
+        examiner = self._expr.evaluate(env)
+        self._pattern.unify(examiner(specimen), env)
+        return True
