@@ -469,7 +469,6 @@ class VarPattern(Pattern):
 class ViaPattern(Pattern):
 
     def __init__(self, expr, pattern):
-        assert isinstance(noun, Noun), "non-Noun noun!?"
         self._expr = expr
         self._pattern = pattern
 

@@ -4,7 +4,7 @@ from rpython.rlib.runicode import str_decode_utf_8
 from typhon.nodes import (Assign, Call, Char, Def, Double, Escape,
                           FinalPattern, Finally, If, Int, IgnorePattern,
                           ListPattern, Method, Noun, Null, Obj, Script,
-                          Sequence, Str, Tag, Tuple, VarPattern)
+                          Sequence, Str, Tag, Tuple, VarPattern, ViaPattern)
 
 
 def unshift(byte):
@@ -151,6 +151,9 @@ def loadTerm(stream):
 
     elif tag == "VarPattern":
         return VarPattern(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "ViaPattern":
+        return ViaPattern(loadTerm(stream), loadTerm(stream))
 
     elif tag == "Assign":
         return Assign(loadTerm(stream), loadTerm(stream))
