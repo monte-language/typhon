@@ -483,5 +483,5 @@ class ViaPattern(Pattern):
         # the specimen and return a new specimen which is then applied to the
         # inner pattern.
         examiner = self._expr.evaluate(env)
-        self._pattern.unify(examiner(specimen), env)
+        self._pattern.unify(examiner.recv(u"run", [specimen]), env)
         return True
