@@ -50,19 +50,18 @@ class loop(Object):
             iterable = args[0]
             consumer = args[1]
             iterator = iterable.recv(u"_makeIterator", [])
-            ej = EjectorObject()
 
-            while True:
-                try:
-                    values = iterator.recv(u"next", [ej])
-                    if not isinstance(values, ConstListObject):
-                        raise RuntimeError
-                    consumer.recv(u"run", values._l[:2])
-                except Ejecting as e:
-                    if e.ejector == ej:
-                        break
+            with EjectorObject() as ej:
+                while True:
+                    try:
+                        values = iterator.recv(u"next", [ej])
+                        if not isinstance(values, ConstListObject):
+                            raise RuntimeError
+                        consumer.recv(u"run", values._l[:2])
+                    except Ejecting as e:
+                        if e.ejector == ej:
+                            break
 
-            ej.deactivate()
             return NullObject
         raise Refused(verb, args)
 
