@@ -78,7 +78,7 @@ kernelNodeInfo = {
     19: ('Matcher', 2),
     20: ('Assign', 2),
     21: ('Finally', 2),
-    22: ('KernelTry', 2),
+    22: ('KernelTry', 3),
     23: ('HideExpr', 1),
     24: ('If', 3),
     25: ('Meta', 1),
