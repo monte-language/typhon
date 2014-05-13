@@ -161,7 +161,7 @@ def loadTerm(stream):
         return Def(loadTerm(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "Escape":
-        return Escape(loadTerm(stream), loadTerm(stream))
+        return Escape(loadTerm(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "Finally":
         return Finally(loadTerm(stream), loadTerm(stream))

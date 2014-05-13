@@ -174,13 +174,16 @@ class Def(Node):
 
 class Escape(Node):
 
-    def __init__(self, pattern, node):
+    def __init__(self, pattern, node, catch):
         assert isinstance(pattern, Pattern), "non-Pattern in Escape"
         self._pattern = pattern
         self._node = node
+        self._catch = nullToNone(catch)
 
     def repr(self):
         buf = "Escape(" + self._pattern.repr() + ", " + self._node.repr()
+        if self._catch is not None:
+            buf += ", " + self._catch.repr()
         buf += ")"
         return buf
 
