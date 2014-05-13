@@ -25,8 +25,20 @@ class Environment(object):
         print "~~~ Leaving frame:", frame.keys()
 
     def _record(self, noun, value):
-        frame = self._frames[-1]
+        try:
+            frame = self._findFrame(noun)
+        except:
+            frame = self._frames[-1]
         frame[noun] = value
+
+    def _findFrame(self, noun):
+        i = len(self._frames)
+        while i > 0:
+            i -= 1
+            frame = self._frames[i]
+            if noun in frame:
+                return frame
+        raise KeyError(noun)
 
     def _find(self, noun):
         i = len(self._frames)
