@@ -155,14 +155,15 @@ class Def(Node):
 
     def repr(self):
         if self._e is None:
-            buf = "Def(" + self._p.repr() + ", " + self._v.repr() + ")"
+            buf = "Def(" + self._p.repr() + " := " + self._v.repr() + ")"
         else:
-            buf = "Def(" + self._p.repr() + ", " + self._e.repr() + ", "
+            buf = "Def(" + self._p.repr() + " := " + self._e.repr() + ", "
             buf += self._v.repr() + ")"
         return buf
 
     def evaluate(self, env):
         rval = self._v.evaluate(env)
+        print self._p.repr(), ":=", rval.repr()
         # We don't care about whether we only get partway through the pattern
         # unification here before exiting on failure, since we're going to
         # exit this scope on failure before those names can even be used.
@@ -285,6 +286,7 @@ class Noun(Node):
         return "Noun(" + self._n.encode("utf-8") + ")"
 
     def evaluate(self, env):
+        print "lookup:", self._n, "->", env.get(self._n).repr()
         return env.get(self._n)
 
 
