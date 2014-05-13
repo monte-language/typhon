@@ -1,7 +1,7 @@
 from typhon.errors import Ejecting, Refused
-from typhon.objects import (Object, ConstListObject, EjectorObject,
-                            EqualizerObject, FalseObject, NullObject,
-                            TrueObject)
+from typhon.objects import (Object, BoolObject, ConstListObject,
+                            EjectorObject, EqualizerObject, FalseObject,
+                            NullObject, TrueObject)
 
 
 class accumulateList(Object):
@@ -39,11 +39,23 @@ class makeList(Object):
         raise Refused(verb, args)
 
 
+class validateFor(Object):
+
+    def recv(self, verb, args):
+        if verb == u"run" and len(args) == 1:
+            flag = args[0]
+            if isinstance(flag, BoolObject) and flag.isTrue():
+                return NullObject
+            raise RuntimeError("Failed to validate for-loop!")
+        raise Refused(verb, args)
+
+
 def simpleScope():
     return {
         u"__accumulateList": accumulateList(),
         u"__equalizer": EqualizerObject(),
         u"__makeList": makeList(),
+        u"__validateFor": validateFor(),
         u"false": FalseObject,
         u"null": NullObject,
         u"true": TrueObject,
