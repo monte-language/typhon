@@ -201,12 +201,13 @@ class StrObject(Object):
             if len(args) == 1:
                 if isinstance(args[0], IntObject):
                     return CharObject(self._s[args[0]._i])
-        elif verb == u"slice":
-            if len(args) == 1:
-                if isinstance(args[0], IntObject):
-                    start = args[0]._i
-                    if start >= 0:
-                        return StrObject(self._s[start:])
+        elif verb == u"slice" and len(args) == 1:
+            if isinstance(args[0], IntObject):
+                start = args[0]._i
+                if start >= 0:
+                    print "Before", self._s
+                    print "After", self._s[start:]
+                    return StrObject(self._s[start:])
         elif verb == u"_makeIterator" and len(args) == 0:
             return listIterator([CharObject(c) for c in self._s])
         raise Refused(verb, args)

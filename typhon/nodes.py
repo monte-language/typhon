@@ -116,6 +116,7 @@ class Assign(Node):
 
     def evaluate(self, env):
         value = self._rvalue.evaluate(env)
+        print "update:", self._target, ":=", value.repr()
         env.update(self._target, value)
         return value
 
