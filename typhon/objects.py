@@ -43,12 +43,14 @@ def wrapBool(b):
 class CharObject(Object):
 
     def __init__(self, c):
-        self._c = c
+        self._c = c[0]
 
     def repr(self):
         return "'%s'" % (self._c.encode("utf-8"))
 
     def recv(self, verb, args):
+        if verb == u"asInteger" and len(args) == 0:
+            return IntObject(ord(self._c))
         raise Refused(verb, args)
 
 
@@ -126,6 +128,10 @@ class IntObject(Object):
                 other = args[0]
                 if isinstance(other, IntObject):
                     return IntObject(self._i * other._i)
+        elif verb == u"subtract" and len(args) == 1:
+            other = args[0]
+            if isinstance(other, IntObject):
+                return IntObject(self._i - other._i)
         raise Refused(verb, args)
 
 
