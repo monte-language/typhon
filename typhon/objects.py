@@ -146,6 +146,9 @@ class StrObject(Object):
     def __init__(self, s):
         self._s = s
 
+    def repr(self):
+        return '"%s"' % self._s.encode("utf-8")
+
     def recv(self, verb, args):
         if verb == u"get":
             if len(args) == 1:
