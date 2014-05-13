@@ -141,6 +141,23 @@ class ConstListObject(Object):
         raise Refused(verb, args)
 
 
+def pairRepr(pair):
+    key, value = pair
+    return key.repr() + " => " + value.repr()
+
+
+class ConstMapObject(Object):
+
+    def __init__(self, l):
+        self._l = l
+
+    def repr(self):
+        return "[" + ", ".join([pairRepr(pair) for pair in self._l]) + "]"
+
+    def recv(self, verb, args):
+        raise Refused(verb, args)
+
+
 class StrObject(Object):
 
     def __init__(self, s):
