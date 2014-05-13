@@ -17,12 +17,10 @@ class Environment(object):
         self._frames = [finalize(baseScope)]
 
     def enterFrame(self):
-        print "~~~ Entering frame"
         self._frames.append({})
 
     def leaveFrame(self):
         frame = self._frames.pop()
-        print "~~~ Leaving frame:", frame.keys()
 
     def _record(self, noun, value):
         try:

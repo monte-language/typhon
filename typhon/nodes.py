@@ -116,7 +116,6 @@ class Assign(Node):
 
     def evaluate(self, env):
         value = self._rvalue.evaluate(env)
-        print "update:", self._target, ":=", value.repr()
         env.update(self._target, value)
         return value
 
@@ -164,7 +163,6 @@ class Def(Node):
 
     def evaluate(self, env):
         rval = self._v.evaluate(env)
-        print self._p.repr(), ":=", rval.repr()
         # We don't care about whether we only get partway through the pattern
         # unification here before exiting on failure, since we're going to
         # exit this scope on failure before those names can even be used.
@@ -287,7 +285,6 @@ class Noun(Node):
         return "Noun(" + self._n.encode("utf-8") + ")"
 
     def evaluate(self, env):
-        print "lookup:", self._n, "->", env.get(self._n).repr()
         return env.get(self._n)
 
 
