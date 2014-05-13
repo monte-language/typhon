@@ -128,6 +128,8 @@ class IntObject(Object):
                 other = args[0]
                 if isinstance(other, IntObject):
                     return IntObject(self._i * other._i)
+        elif verb == u"negate" and len(args) == 0:
+            return IntObject(-self._i)
         elif verb == u"subtract" and len(args) == 1:
             other = args[0]
             if isinstance(other, IntObject):
@@ -144,6 +146,8 @@ class ConstListObject(Object):
         return "[" + ", ".join([obj.repr() for obj in self._l]) + "]"
 
     def recv(self, verb, args):
+        if verb == u"_makeIterator" and len(args) == 0:
+            return listIterator(self._l)
         raise Refused(verb, args)
 
 

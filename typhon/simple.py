@@ -6,6 +6,9 @@ from typhon.objects import (Object, BoolObject, ConstListObject,
 
 class accumulateList(Object):
 
+    def repr(self):
+        return "<accumulateList>"
+
     def recv(self, verb, args):
         if verb == u"run" and len(args) == 2:
             rv = []
@@ -39,7 +42,37 @@ class makeList(Object):
         raise Refused(verb, args)
 
 
+class loop(Object):
+
+    def repr(self):
+        return "<loop>"
+
+    def recv(self, verb, args):
+        if verb == u"run" and len(args) == 2:
+            iterable = args[0]
+            consumer = args[1]
+            iterator = iterable.recv(u"_makeIterator", [])
+            ej = EjectorObject()
+
+            while True:
+                try:
+                    values = iterator.recv(u"next", [ej])
+                    if not isinstance(values, ConstListObject):
+                        raise RuntimeError
+                    consumer.recv(u"run", values._l[:2])
+                except Ejecting as e:
+                    if e.ejector == ej:
+                        break
+
+            ej.deactivate()
+            return NullObject
+        raise Refused(verb, args)
+
+
 class validateFor(Object):
+
+    def repr(self):
+        return "<validateFor>"
 
     def recv(self, verb, args):
         if verb == u"run" and len(args) == 1:
@@ -54,6 +87,7 @@ def simpleScope():
     return {
         u"__accumulateList": accumulateList(),
         u"__equalizer": EqualizerObject(),
+        u"__loop": loop(),
         u"__makeList": makeList(),
         u"__validateFor": validateFor(),
         u"false": FalseObject,
