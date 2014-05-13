@@ -188,23 +188,21 @@ class Escape(Node):
         return buf
 
     def evaluate(self, env):
-        ej = EjectorObject()
-        env.enterFrame()
-        if not self._pattern.unify(ej, env):
-            raise RuntimeError
+        with EjectorObject() as ej:
+            env.enterFrame()
+            if not self._pattern.unify(ej, env):
+                raise RuntimeError
 
-        try:
-            return self._node.evaluate(env)
-        except Ejecting as e:
-            # Is it the ejector that we created in this frame? If not,
-            # reraise.
-            if e.ejector is ej:
-                return e.value
-            raise
-        finally:
-            # I don't think that the order of things matters here.
-            ej.deactivate()
-            env.leaveFrame()
+            try:
+                return self._node.evaluate(env)
+            except Ejecting as e:
+                # Is it the ejector that we created in this frame? If not,
+                # reraise.
+                if e.ejector is ej:
+                    return e.value
+                raise
+            finally:
+                env.leaveFrame()
 
 
 class Finally(Node):

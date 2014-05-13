@@ -73,6 +73,12 @@ class EjectorObject(Object):
     def deactivate(self):
         self.active = False
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.deactivate()
+
 
 class EqualizerObject(Object):
 

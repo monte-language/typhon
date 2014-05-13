@@ -16,19 +16,17 @@ class accumulateList(Object):
             iterable = args[0]
             mapper = args[1]
             iterator = iterable.recv(u"_makeIterator", [])
-            ej = EjectorObject()
 
-            while True:
-                try:
-                    values = iterator.recv(u"next", [ej])
-                    if not isinstance(values, ConstListObject):
-                        raise RuntimeError
-                    rv.append(mapper.recv(u"run", values._l))
-                except Ejecting as e:
-                    if e.ejector == ej:
-                        break
-
-            ej.deactivate()
+            with EjectorObject() as ej:
+                while True:
+                    try:
+                        values = iterator.recv(u"next", [ej])
+                        if not isinstance(values, ConstListObject):
+                            raise RuntimeError
+                        rv.append(mapper.recv(u"run", values._l))
+                    except Ejecting as e:
+                        if e.ejector == ej:
+                            break
 
             return ConstListObject(rv)
         raise Refused(verb, args)
