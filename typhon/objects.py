@@ -238,15 +238,12 @@ class ScriptObject(Object):
         if verb in self._methods:
             method = self._methods[verb]
 
-            try:
-                self._env.enterFrame()
+            with self._env as env:
                 # Set up parameters from arguments.
-                if not method._ps.unify(ConstListObject(args), self._env):
+                if not method._ps.unify(ConstListObject(args), env):
                     raise RuntimeError
                 # Run the block.
-                rv = method._b.evaluate(self._env)
-            finally:
-                self._env.leaveFrame()
+                rv = method._b.evaluate(env)
 
             return rv
         raise Refused(verb, args)

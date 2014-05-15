@@ -189,20 +189,18 @@ class Escape(Node):
 
     def evaluate(self, env):
         with EjectorObject() as ej:
-            env.enterFrame()
-            if not self._pattern.unify(ej, env):
-                raise RuntimeError
+            with env as env:
+                if not self._pattern.unify(ej, env):
+                    raise RuntimeError
 
-            try:
-                return self._node.evaluate(env)
-            except Ejecting as e:
-                # Is it the ejector that we created in this frame? If not,
-                # reraise.
-                if e.ejector is ej:
-                    return e.value
-                raise
-            finally:
-                env.leaveFrame()
+                try:
+                    return self._node.evaluate(env)
+                except Ejecting as e:
+                    # Is it the ejector that we created in this frame? If not,
+                    # reraise.
+                    if e.ejector is ej:
+                        return e.value
+                    raise
 
 
 class Finally(Node):
@@ -220,12 +218,12 @@ class Finally(Node):
         # Use RPython's exception handling system to ensure the execution of
         # the atLast block after exiting the main block.
         try:
-            env.enterFrame()
-            rv = self._block.evaluate(env)
-            env.leaveFrame()
+            with env as env:
+                rv = self._block.evaluate(env)
             return rv
         finally:
-            self._atLast.evaluate(env)
+            with env as env:
+                self._atLast.evaluate(env)
 
 
 class If(Node):
@@ -243,19 +241,16 @@ class If(Node):
     def evaluate(self, env):
         # If is a short-circuiting expression. We construct zero objects in
         # the branch that is not chosen.
-        env.enterFrame()
-
-        try:
+        with env as env:
             whether = self._test.evaluate(env)
             if isinstance(whether, BoolObject):
-                if whether.isTrue():
-                    return self._then.evaluate(env)
-                else:
-                    return self._otherwise.evaluate(env)
+                with env as env:
+                    if whether.isTrue():
+                        return self._then.evaluate(env)
+                    else:
+                        return self._otherwise.evaluate(env)
             else:
                 raise TypeError("non-Boolean in conditional expression")
-        finally:
-            env.leaveFrame()
 
 
 class Method(Node):

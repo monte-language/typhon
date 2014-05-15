@@ -16,6 +16,13 @@ class Environment(object):
     def __init__(self, baseScope):
         self._frames = [finalize(baseScope)]
 
+    def __enter__(self):
+        self.enterFrame()
+        return self
+
+    def __exit__(self, *args):
+        self.leaveFrame()
+
     def enterFrame(self):
         self._frames.append({})
 
