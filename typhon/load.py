@@ -82,14 +82,58 @@ kernelNodeInfo = {
     23: ('HideExpr', 1),
     24: ('If', 3),
     25: ('Meta', 1),
-    26: ('FinalPattern', 2),
-    27: ('IgnorePattern', 1),
-    28: ('VarPattern', 2),
-    29: ('ListPattern', 2),
-    30: ('ViaPattern', 2),
-    31: ('BindingPattern', 1),
     32: ('Character', 1),
 }
+
+patternInfo = {
+    26: 'Final',
+    27: 'Ignore',
+    28: 'Var',
+    29: 'List',
+    30: 'Via',
+    31: 'Binding',
+}
+
+
+def loadPatternList(stream):
+    kind = stream.nextByte()
+
+    if kind == SMALL_TUPLE:
+        arity = stream.nextByte()
+        return [loadPattern(stream) for _ in range(arity)]
+    elif kind == BIG_TUPLE:
+        arity = stream.nextInt()
+    else:
+        raise RuntimeError
+
+    return [loadPattern(stream) for _ in range(arity)]
+
+
+def loadPattern(stream):
+    kind = stream.nextByte()
+
+    if kind == NULL:
+        return None
+
+    tag = patternInfo[kind]
+
+    if tag == "Final":
+        return FinalPattern(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "Ignore":
+        return IgnorePattern(loadTerm(stream))
+
+    elif tag == "List":
+        return ListPattern(loadPatternList(stream), loadPattern(stream))
+
+    elif tag == "Var":
+        return VarPattern(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "Via":
+        return ViaPattern(loadTerm(stream), loadPattern(stream))
+
+    assert False, "Impossible condition"
+    return None
 
 
 def loadTerm(stream):
@@ -131,22 +175,7 @@ def loadTerm(stream):
     # Well, that's it for the primitives. Let's lookup the tag and arity.
     tag, arity = kernelNodeInfo[kind]
 
-    if tag == "FinalPattern":
-        return FinalPattern(loadTerm(stream), loadTerm(stream))
-
-    elif tag == "IgnorePattern":
-        return IgnorePattern(loadTerm(stream))
-
-    elif tag == "ListPattern":
-        return ListPattern(loadTerm(stream), loadTerm(stream))
-
-    elif tag == "VarPattern":
-        return VarPattern(loadTerm(stream), loadTerm(stream))
-
-    elif tag == "ViaPattern":
-        return ViaPattern(loadTerm(stream), loadTerm(stream))
-
-    elif tag == "Assign":
+    if tag == "Assign":
         return Assign(loadTerm(stream), loadTerm(stream))
 
     elif tag == "Character":
@@ -158,10 +187,10 @@ def loadTerm(stream):
         return Char(string._s[0])
 
     elif tag == "Def":
-        return Def(loadTerm(stream), loadTerm(stream), loadTerm(stream))
+        return Def(loadPattern(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "Escape":
-        return Escape(loadTerm(stream), loadTerm(stream), loadTerm(stream))
+        return Escape(loadPattern(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "Finally":
         return Finally(loadTerm(stream), loadTerm(stream))
@@ -175,8 +204,9 @@ def loadTerm(stream):
         return loadTerm(stream)
 
     elif tag == "Method":
-        return Method(loadTerm(stream), loadTerm(stream), loadTerm(stream),
-                      loadTerm(stream), loadTerm(stream))
+        return Method(loadTerm(stream), loadTerm(stream),
+                      loadPatternList(stream), loadTerm(stream),
+                      loadTerm(stream))
 
     elif tag == "MethodCallExpr":
         return Call(loadTerm(stream), loadTerm(stream), loadTerm(stream))
@@ -185,7 +215,7 @@ def loadTerm(stream):
         return Noun(loadTerm(stream))
 
     elif tag == "Object":
-        return Obj(loadTerm(stream), loadTerm(stream), loadTerm(stream),
+        return Obj(loadTerm(stream), loadPattern(stream), loadTerm(stream),
                    loadTerm(stream))
 
     elif tag == "Script":

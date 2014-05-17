@@ -148,7 +148,6 @@ class Call(Node):
 class Def(Node):
 
     def __init__(self, pattern, ejector, value):
-        assert isinstance(pattern, Pattern), "non-Pattern lvalue"
         self._p = pattern
         self._e = nullToNone(ejector)
         self._v = value
@@ -175,7 +174,6 @@ class Def(Node):
 class Escape(Node):
 
     def __init__(self, pattern, node, catch):
-        assert isinstance(pattern, Pattern), "non-Pattern in Escape"
         self._pattern = pattern
         self._node = node
         self._catch = nullToNone(catch)
@@ -258,7 +256,7 @@ class Method(Node):
     def __init__(self, doc, verb, params, guard, block):
         self._d = doc
         self._verb = strToString(verb)
-        self._ps = ListPattern(params, Null)
+        self._ps = ListPattern(params, None)
         self._g = guard
         self._b = block
 
@@ -284,7 +282,6 @@ class Noun(Node):
 class Obj(Node):
 
     def __init__(self, doc, name, auditors, script):
-        assert isinstance(name, Pattern), "non-Pattern object name"
         auditors = tupleToList(auditors)
         assert isinstance(script, Script), "malformed script"
         self._d = doc
@@ -363,7 +360,7 @@ class Tag(Node):
         raise NotImplementedError
 
 
-class Pattern(Node):
+class Pattern(object):
     pass
 
 
@@ -403,9 +400,8 @@ class IgnorePattern(Pattern):
 class ListPattern(Pattern):
 
     def __init__(self, patterns, tail):
-        assert isinstance(patterns, Tuple), "non-Tuple in ListPattern"
-        self._ps = patterns._t
-        self._t = nullToNone(tail)
+        self._ps = patterns
+        self._t = tail
 
     def repr(self):
         buf = "[" + ", ".join([item.repr() for item in self._ps]) + "]"
