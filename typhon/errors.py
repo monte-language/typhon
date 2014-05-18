@@ -8,11 +8,25 @@ class Ejecting(Exception):
         self.value = value
 
 
-class Refused(Exception):
+
+class UserException(Exception):
+    """
+    An error occurred in user code.
+    """
+
+    def error(self):
+        return u"Error"
+
+
+class Refused(UserException):
     """
     An object refused to accept a message passed to it.
     """
 
     def __init__(self, verb, args):
         self.verb = verb
-        self.args = verb, args
+        self.args = args
+
+    def error(self):
+        args = u", ".join([arg.repr().decode("utf-8") for arg in self.args])
+        return u"Message refused: (%s, [%s])" % (self.verb, args)

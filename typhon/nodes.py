@@ -1,4 +1,4 @@
-from typhon.errors import Ejecting
+from typhon.errors import Ejecting, UserException
 from typhon.objects import (BoolObject, CharObject, ConstListObject,
                             EjectorObject, IntObject, NullObject,
                             ScriptObject, StrObject)
@@ -360,7 +360,7 @@ class Try(Node):
                 return self._first.evaluate(env)
         except UserException as ue:
             with env as env:
-                if self._pattern.unify(ue.error, env):
+                if self._pattern.unify(StrObject(ue.error()), env):
                     return self._then.evaluate(env)
                 else:
                     raise
