@@ -4,7 +4,8 @@ from rpython.rlib.runicode import str_decode_utf_8
 from typhon.nodes import (Assign, Call, Char, Def, Double, Escape,
                           FinalPattern, Finally, If, Int, IgnorePattern,
                           ListPattern, Method, Noun, Null, Obj, Script,
-                          Sequence, Str, Tag, Tuple, VarPattern, ViaPattern)
+                          Sequence, Str, Tag, Try, Tuple, VarPattern,
+                          ViaPattern)
 
 
 def unshift(byte):
@@ -197,6 +198,9 @@ def loadTerm(stream):
 
     elif tag == "If":
         return If(loadTerm(stream), loadTerm(stream), loadTerm(stream))
+
+    elif tag == "KernelTry":
+        return Try(loadTerm(stream), loadPattern(stream), loadTerm(stream))
 
     elif tag == "LiteralExpr":
         # LiteralExprs always contain one single literal; consume and return

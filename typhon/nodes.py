@@ -340,6 +340,32 @@ class Sequence(Node):
         return rv
 
 
+class Try(Node):
+
+    def __init__(self, first, pattern, then):
+        self._first = first
+        self._pattern = pattern
+        self._then = then
+
+    def repr(self):
+        buf = "Try(" + self._first.repr() + ", " + self._pattern.repr() + ", "
+        buf += self._then.repr() + ")"
+        return buf
+
+    def evaluate(self, env):
+        # Try the first block, and if an exception is raised, pattern-match it
+        # against the catch-pattern in the then-block.
+        try:
+            with env as env:
+                return self._first.evaluate(env)
+        except UserException as ue:
+            with env as env:
+                if self._pattern.unify(ue.error, env):
+                    return self._then.evaluate(env)
+                else:
+                    raise
+
+
 # Tag is a transitional node; it doesn't actually do anything, but it's here
 # nonetheless because I was too lazy to crank out nodes for every single bit
 # of the AST in advance. It will go away real soon.
