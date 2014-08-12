@@ -373,7 +373,9 @@ class Try(Node):
                 return self._first.evaluate(env)
         except UserException as ue:
             with env as env:
-                if self._pattern.unify(StrObject(ue.error()), env):
+                # XXX Exception information can't be leaked back into Monte;
+                # seal it properly instead of using null here.
+                if self._pattern.unify(NullObject, env):
                     return self._then.evaluate(env)
                 else:
                     raise

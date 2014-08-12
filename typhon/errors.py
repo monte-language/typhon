@@ -11,6 +11,8 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
+
 class Ejecting(Exception):
     """
     An ejector is currently being used.
@@ -21,14 +23,31 @@ class Ejecting(Exception):
         self.value = value
 
 
+class LoadFailed(Exception):
+    """
+    An AST couldn't be loaded.
+    """
+
 
 class UserException(Exception):
     """
     An error occurred in user code.
     """
 
+    def __init__(self, payload):
+        self.payload = payload
+        self.trail = []
+
+    def formatError(self):
+        pieces = [self.error()]
+        for crumb, code in self.trail:
+            pieces.append("In %s:\n    %s" % (crumb, code))
+        pieces.append("Exception in user code:")
+        pieces.reverse()
+        return "\n".join(pieces)
+
     def error(self):
-        return u"Error"
+        return "Error"
 
 
 class Refused(UserException):
@@ -39,7 +58,15 @@ class Refused(UserException):
     def __init__(self, verb, args):
         self.verb = verb
         self.args = args
+        self.trail = []
 
     def error(self):
-        args = u", ".join([arg.repr().decode("utf-8") for arg in self.args])
-        return u"Message refused: (%s, [%s])" % (self.verb, args)
+        l = []
+        for arg in self.args:
+            if arg is None:
+                l.append("None")
+            else:
+                l.append(arg.repr())
+        args = ", ".join(l)
+        return "Message refused: (%s, [%s])" % (
+                self.verb.encode("utf-8"), args)

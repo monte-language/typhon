@@ -14,6 +14,7 @@
 import sys
 
 from typhon.env import Environment
+from typhon.errors import UserException
 from typhon.load import load
 from typhon.simple import simpleScope
 
@@ -27,7 +28,11 @@ def entry_point(argv):
     env = Environment(simpleScope())
     for term in terms:
         print term.repr()
-        print term.evaluate(env).repr()
+        try:
+            print term.evaluate(env).repr()
+        except UserException as ue:
+            print "Caught exception:", ue.formatError()
+            return 1
 
     return 0
 
