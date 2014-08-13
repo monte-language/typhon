@@ -11,46 +11,10 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
 from typhon.errors import Ejecting, Refused
-
-
-class Object(object):
-    pass
-
-
-class _NullObject(Object):
-
-    def repr(self):
-        return "<null>"
-
-    def recv(self, verb, args):
-        raise Refused(verb, args)
-
-
-NullObject = _NullObject()
-
-
-class BoolObject(Object):
-
-    def __init__(self, b):
-        self._b = b
-
-    def repr(self):
-        return "true" if self._b else "false"
-
-    def recv(self, verb, args):
-        raise Refused(verb, args)
-
-    def isTrue(self):
-        return self._b
-
-
-TrueObject = BoolObject(True)
-FalseObject = BoolObject(False)
-
-
-def wrapBool(b):
-    return TrueObject if b else FalseObject
+from typhon.objects.constants import BoolObject, NullObject, wrapBool
+from typhon.objects.root import Object
 
 
 class CharObject(Object):
@@ -218,11 +182,13 @@ class StrObject(Object):
     def recv(self, verb, args):
         if verb == u"get":
             if len(args) == 1:
-                if isinstance(args[0], IntObject):
-                    return CharObject(self._s[args[0]._i])
+                index = args[0]
+                if isinstance(index, IntObject):
+                    return CharObject(self._s[index._i])
         elif verb == u"slice" and len(args) == 1:
-            if isinstance(args[0], IntObject):
-                start = args[0]._i
+            index = args[0]
+            if isinstance(index, IntObject):
+                start = index._i
                 if start >= 0:
                     return StrObject(self._s[start:])
         elif verb == u"_makeIterator" and len(args) == 0:

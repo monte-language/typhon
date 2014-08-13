@@ -12,9 +12,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 from typhon.errors import Ejecting, UserException
-from typhon.objects import (BoolObject, CharObject, ConstListObject,
-                            EjectorObject, IntObject, NullObject,
-                            ScriptObject, StrObject)
+from typhon.objects.constants import BoolObject, NullObject
+from typhon.objects import (CharObject, ConstListObject, EjectorObject,
+                            IntObject, ScriptObject, StrObject)
 
 
 class Node(object):

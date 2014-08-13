@@ -12,9 +12,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 from typhon.errors import Ejecting, Refused
-from typhon.objects import (Object, BoolObject, ConstListObject,
-                            EjectorObject, EqualizerObject, FalseObject,
-                            NullObject, TrueObject)
+from typhon.objects.constants import NullObject, unwrapBool, wrapBool
+from typhon.objects.root import Object
+from typhon.objects import ConstListObject, EjectorObject, EqualizerObject
 
 
 class accumulateList(Object):
@@ -86,8 +86,7 @@ class validateFor(Object):
 
     def recv(self, verb, args):
         if verb == u"run" and len(args) == 1:
-            flag = args[0]
-            if isinstance(flag, BoolObject) and flag.isTrue():
+            if unwrapBool(args[0]):
                 return NullObject
             raise RuntimeError("Failed to validate for-loop!")
         raise Refused(verb, args)
@@ -100,7 +99,7 @@ def simpleScope():
         u"__loop": loop(),
         u"__makeList": makeList(),
         u"__validateFor": validateFor(),
-        u"false": FalseObject,
+        u"false": wrapBool(False),
         u"null": NullObject,
-        u"true": TrueObject,
+        u"true": wrapBool(True),
     }
