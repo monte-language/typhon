@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from typhon.errors import Ejecting, Refused
+from typhon.errors import Refused
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.root import Object
 
@@ -29,32 +29,6 @@ class CharObject(Object):
         if verb == u"asInteger" and len(args) == 0:
             return IntObject(ord(self._c))
         raise Refused(verb, args)
-
-
-class EjectorObject(Object):
-
-    active = True
-
-    def repr(self):
-        return "<ejector>"
-
-    def recv(self, verb, args):
-        if verb == u"run":
-            if len(args) == 1:
-                if self.active:
-                    raise Ejecting(self, args[0])
-                else:
-                    raise RuntimeError
-        raise Refused(verb, args)
-
-    def deactivate(self):
-        self.active = False
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        self.deactivate()
 
 
 class EqualizerObject(Object):

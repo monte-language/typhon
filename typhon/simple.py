@@ -11,10 +11,12 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-from typhon.errors import Ejecting, Refused
-from typhon.objects.constants import NullObject, unwrapBool, wrapBool
+
+from typhon.errors import Ejecting, Refused, UserException
+from typhon.objects import ConstListObject, EqualizerObject
+from typhon.objects.constants import NullObject, wrapBool
+from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.root import Object
-from typhon.objects import ConstListObject, EjectorObject, EqualizerObject
 
 
 class accumulateList(Object):
@@ -30,7 +32,7 @@ class accumulateList(Object):
             mapper = args[1]
             iterator = iterable.recv(u"_makeIterator", [])
 
-            with EjectorObject() as ej:
+            with Ejector() as ej:
                 while True:
                     try:
                         values = iterator.recv(u"next", [ej])
@@ -64,7 +66,7 @@ class loop(Object):
             consumer = args[1]
             iterator = iterable.recv(u"_makeIterator", [])
 
-            with EjectorObject() as ej:
+            with Ejector() as ej:
                 while True:
                     try:
                         values = iterator.recv(u"next", [ej])
@@ -79,16 +81,16 @@ class loop(Object):
         raise Refused(verb, args)
 
 
-class validateFor(Object):
+class Throw(Object):
 
     def repr(self):
-        return "<validateFor>"
+        return "<throw>"
 
     def recv(self, verb, args):
         if verb == u"run" and len(args) == 1:
-            if unwrapBool(args[0]):
-                return NullObject
-            raise RuntimeError("Failed to validate for-loop!")
+            raise UserException(args[0])
+        if verb == u"eject" and len(args) == 2:
+            return throw(args[0], args[1])
         raise Refused(verb, args)
 
 
@@ -98,8 +100,8 @@ def simpleScope():
         u"__equalizer": EqualizerObject(),
         u"__loop": loop(),
         u"__makeList": makeList(),
-        u"__validateFor": validateFor(),
         u"false": wrapBool(False),
         u"null": NullObject,
+        u"throw": Throw(),
         u"true": wrapBool(True),
     }

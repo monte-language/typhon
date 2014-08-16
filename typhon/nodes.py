@@ -13,8 +13,9 @@
 # under the License.
 from typhon.errors import Ejecting, UserException
 from typhon.objects.constants import BoolObject, NullObject
-from typhon.objects import (CharObject, ConstListObject, EjectorObject,
-                            IntObject, ScriptObject, StrObject)
+from typhon.objects.ejectors import Ejector
+from typhon.objects import (CharObject, ConstListObject, IntObject,
+                            ScriptObject, StrObject)
 
 
 class Node(object):
@@ -199,7 +200,7 @@ class Escape(Node):
         return buf
 
     def evaluate(self, env):
-        with EjectorObject() as ej:
+        with Ejector() as ej:
             with env as env:
                 if not self._pattern.unify(ej, env):
                     raise RuntimeError
