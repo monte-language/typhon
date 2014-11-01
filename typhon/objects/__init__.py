@@ -13,7 +13,7 @@
 # under the License.
 
 from typhon.errors import Refused
-from typhon.objects.constants import BoolObject, NullObject, wrapBool
+from typhon.objects.constants import BoolObject, wrapBool
 from typhon.objects.root import Object
 
 
@@ -93,56 +93,8 @@ class IntObject(Object):
                 return IntObject(self._i - other._i)
         raise Refused(verb, args)
 
-
-class ConstListObject(Object):
-
-    def __init__(self, l):
-        self._l = l
-
-    def repr(self):
-        return "[" + ", ".join([obj.repr() for obj in self._l]) + "]"
-
-    def recv(self, verb, args):
-        if verb == u"_makeIterator" and len(args) == 0:
-            return listIterator(self._l)
-        raise Refused(verb, args)
-
-
-def pairRepr(pair):
-    key, value = pair
-    return key.repr() + " => " + value.repr()
-
-
-class ConstMapObject(Object):
-
-    def __init__(self, l):
-        self._l = l
-
-    def repr(self):
-        return "[" + ", ".join([pairRepr(pair) for pair in self._l]) + "]"
-
-    def recv(self, verb, args):
-        raise Refused(verb, args)
-
-
-class listIterator(Object):
-
-    _index = 0
-
-    def __init__(self, l):
-        self._l = l
-
-    def recv(self, verb, args):
-        if verb == u"next" and len(args) == 1:
-            if self._index < len(self._l):
-                rv = [IntObject(self._index), self._l[self._index],
-                        NullObject]
-                self._index += 1
-                return ConstListObject(rv)
-            else:
-                ej = args[0]
-                ej.recv(u"run", [StrObject(u"Iterator exhausted")])
-        raise Refused(verb, args)
+    def getInt(self):
+        return self._i
 
 
 class StrObject(Object):
@@ -166,6 +118,7 @@ class StrObject(Object):
                 if start >= 0:
                     return StrObject(self._s[start:])
         elif verb == u"_makeIterator" and len(args) == 0:
+            from typhon.objects.collections import listIterator
             return listIterator([CharObject(c) for c in self._s])
         raise Refused(verb, args)
 
@@ -193,7 +146,8 @@ class ScriptObject(Object):
 
             with self._env as env:
                 # Set up parameters from arguments.
-                if not method._ps.unify(ConstListObject(args), env):
+                from typhon.objects.collections import ConstList
+                if not method._ps.unify(ConstList(args), env):
                     raise RuntimeError
                 # Run the block.
                 rv = method._b.evaluate(env)

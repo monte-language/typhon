@@ -11,11 +11,12 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
 from typhon.errors import Ejecting, UserException
+from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import BoolObject, NullObject
 from typhon.objects.ejectors import Ejector
-from typhon.objects import (CharObject, ConstListObject, IntObject,
-                            ScriptObject, StrObject)
+from typhon.objects import CharObject, IntObject, ScriptObject, StrObject
 
 
 class Node(object):
@@ -108,7 +109,7 @@ class Tuple(Node):
         return buf
 
     def evaluate(self, env):
-        return ConstListObject([item.evaluate(env) for item in self._t])
+        return ConstList([item.evaluate(env) for item in self._t])
 
 
 def tupleToList(t):
@@ -154,9 +155,8 @@ class Call(Node):
         verb = self._verb.evaluate(env)
         assert isinstance(verb, StrObject), "non-Str verb"
         args = self._args.evaluate(env)
-        assert isinstance(args, ConstListObject), "non-List arguments"
 
-        return target.recv(verb._s, args._l)
+        return target.recv(verb._s, unwrapList(args))
 
 
 class Def(Node):
@@ -456,9 +456,9 @@ class ListPattern(Pattern):
         tail = self._t
 
         # Can't unify lists and non-lists.
-        if not isinstance(specimen, ConstListObject):
+        if not isinstance(specimen, ConstList):
             return False
-        items = specimen._l
+        items = unwrapList(specimen)
 
         # If we have no tail, then unification isn't going to work if the
         # lists are of differing lengths.
@@ -476,7 +476,7 @@ class ListPattern(Pattern):
 
         # And unify the tail as well.
         if tail is not None:
-            remainder = ConstListObject(items[len(patterns):])
+            remainder = ConstList(items[len(patterns):])
             tail.unify(remainder, env)
 
         return True

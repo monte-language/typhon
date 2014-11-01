@@ -13,7 +13,8 @@
 # under the License.
 
 from typhon.errors import Ejecting, Refused, UserException
-from typhon.objects import ConstListObject, EqualizerObject
+from typhon.objects import EqualizerObject
+from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.root import Object
@@ -36,14 +37,12 @@ class accumulateList(Object):
                 while True:
                     try:
                         values = iterator.recv(u"next", [ej])
-                        if not isinstance(values, ConstListObject):
-                            raise RuntimeError
-                        rv.append(mapper.recv(u"run", values._l))
+                        rv.append(mapper.recv(u"run", unwrapList(values)))
                     except Ejecting as e:
                         if e.ejector == ej:
                             break
 
-            return ConstListObject(rv)
+            return ConstList(rv)
         raise Refused(verb, args)
 
 
@@ -51,7 +50,7 @@ class makeList(Object):
 
     def recv(self, verb, args):
         if verb == u"run":
-            return ConstListObject(args)
+            return ConstList(args)
         raise Refused(verb, args)
 
 
@@ -70,9 +69,7 @@ class loop(Object):
                 while True:
                     try:
                         values = iterator.recv(u"next", [ej])
-                        if not isinstance(values, ConstListObject):
-                            raise RuntimeError
-                        consumer.recv(u"run", values._l[:2])
+                        consumer.recv(u"run", unwrapList(values)[:2])
                     except Ejecting as e:
                         if e.ejector == ej:
                             break
