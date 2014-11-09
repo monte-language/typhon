@@ -13,10 +13,11 @@
 # under the License.
 
 from typhon.errors import Ejecting, UserException
+from typhon.objects import IntObject, ScriptObject, StrObject
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import BoolObject, NullObject
+from typhon.objects.data import CharObject
 from typhon.objects.ejectors import Ejector
-from typhon.objects import CharObject, IntObject, ScriptObject, StrObject
 
 
 class Node(object):

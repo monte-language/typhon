@@ -59,6 +59,7 @@ class EqualizerObject(Object):
             return first.isTrue() == second.isTrue()
 
         # Chars.
+        from typhon.objects.data import CharObject
         if isinstance(first, CharObject) and isinstance(second, CharObject):
             return first._c == second._c
 
@@ -110,6 +111,7 @@ class StrObject(Object):
             if len(args) == 1:
                 index = args[0]
                 if isinstance(index, IntObject):
+                    from typhon.objects.data import CharObject
                     return CharObject(self._s[index._i])
         elif verb == u"slice" and len(args) == 1:
             index = args[0]
@@ -119,6 +121,7 @@ class StrObject(Object):
                     return StrObject(self._s[start:])
         elif verb == u"_makeIterator" and len(args) == 0:
             from typhon.objects.collections import listIterator
+            from typhon.objects.data import CharObject
             return listIterator([CharObject(c) for c in self._s])
         raise Refused(verb, args)
 
