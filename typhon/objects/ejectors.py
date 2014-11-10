@@ -12,10 +12,14 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.constants import NullObject
 from typhon.objects.root import Object
 
+DISABLE_0 = getAtom(u"disable", 0)
+RUN_0 = getAtom(u"run", 0)
+RUN_1 = getAtom(u"run", 1)
 
 class Ejector(Object):
     """
@@ -31,19 +35,20 @@ class Ejector(Object):
     def repr(self):
         return "<ejector>" if self.active else "<ejector (inert)>"
 
-    def recv(self, verb, args):
-        if verb == u"run":
+    def recv(self, atom, args):
+        if atom is RUN_0:
             if self.active:
-                if args:
-                    self.fire(args[0])
-                else:
-                    self.fire()
+                self.fire()
 
-        if verb == u"disable":
+        if atom is RUN_1:
+            if self.active:
+                self.fire(args[0])
+
+        if atom is DISABLE_0:
             self.disable()
             return NullObject
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
     def fire(self, payload=NullObject):
         raise Ejecting(self, payload)

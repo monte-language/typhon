@@ -12,12 +12,18 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.atoms import getAtom
 from typhon.errors import Refused
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.refs import UnconnectedRef, RefOps, makePromise
 from typhon.objects.root import Object
+
+
+BROKEN_0 = getAtom(u"broken", 0)
+FAILURELIST_1 = getAtom(u"failureList", 1)
+SEND_3 = getAtom(u"send", 3)
 
 
 class Vat(Object):
@@ -35,9 +41,6 @@ class Vat(Object):
     def repr(self):
         return "<vat (%d pending)>" % (len(self._pending),)
 
-    def recv(self, verb, args):
-        raise Refused(verb, args)
-
     def send(self, message):
         promise, resolver = makePromise(self)
         self._pending.append((resolver, message))
@@ -52,8 +55,8 @@ class Vat(Object):
 
     def takeTurn(self):
         resolver, message = self._pending.pop(0)
-        target, verb, args = message
-        result = target.recv(verb, args)
+        target, atom, args = message
+        result = target.call(atom.verb, args)
         if resolver is not None:
             resolver.resolve(result)
 
@@ -69,17 +72,18 @@ class MObject(Object):
     def repr(self):
         return "<M>"
 
-    def recv(self, verb, args):
-        if verb == u"send" and len(args) == 3:
+    def recv(self, atom, args):
+        if atom is SEND_3:
             target = args[0]
             sendVerb = args[1]
-            sendArgs = args[2]
+            sendArgs = unwrapList(args[2])
             if isinstance(sendVerb, StrObject):
-                if isinstance(sendArgs, ConstList):
-                    # Signed, sealed, delivered, I'm yours.
-                    package = target, sendVerb._s, unwrapList(sendArgs)
-                    return self._vat.send(package)
-        raise Refused(verb, args)
+                # Signed, sealed, delivered, I'm yours.
+                atom = getAtom(sendVerb._s, len(sendArgs))
+                package = target, atom, sendArgs
+                return self._vat.send(package)
+
+        raise Refused(atom, args)
 
 
 class BooleanFlow(Object):
@@ -90,18 +94,19 @@ class BooleanFlow(Object):
     def repr(self):
         return "<booleanFlow>"
 
-    def recv(self, verb, args):
-        if verb == u"broken":
+    def recv(self, atom, args):
+        if atom is BROKEN_0:
             # broken/*: Create an UnconnectedRef.
             return self.broken()
 
-        if verb == u"failureList" and len(args) == 1:
+        if atom is FAILURELIST_1:
             length = args[0]
             if isinstance(length, IntObject):
                 i = length.getInt()
                 refs = [self.broken()] * i
                 return ConstList([wrapBool(False)] + refs)
-        raise Refused(verb, args)
+
+        raise Refused(atom, args)
 
     def broken(self):
         return UnconnectedRef(StrObject(u"Boolean flow expression failed"),

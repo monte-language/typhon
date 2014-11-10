@@ -12,9 +12,14 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.atoms import getAtom
 from typhon.errors import Refused
 from typhon.objects.constants import NullObject
 from typhon.objects.root import Object
+
+
+GET_0 = getAtom(u"get", 0)
+PUT_1 = getAtom(u"put", 1)
 
 
 class Binding(Object):
@@ -22,13 +27,16 @@ class Binding(Object):
     A slot and a guard describing the nature of the slot.
     """
 
+    _immutable_ = True
+
     def __init__(self, slot):
         self.slot = slot
 
-    def recv(self, verb, args):
-        if verb == u"get" and len(args) == 0:
+    def recv(self, atom, args):
+        if atom is GET_0:
             return self.slot
-        raise Refused(verb, args)
+
+        raise Refused(atom, args)
 
 
 class Slot(Object):
@@ -40,10 +48,12 @@ class Slot(Object):
         return "<slot>"
 
     def recv(self, verb, args):
-        if verb == u"get" and len(args) == 0:
+        if verb is GET_0:
             return self.get()
-        if verb == u"put" and len(args) == 1:
+
+        if verb is PUT_1:
             return self.put(args[0])
+
         raise Refused(verb, args)
 
 

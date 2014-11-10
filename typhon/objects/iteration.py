@@ -14,7 +14,8 @@
 
 from rpython.rlib.jit import JitDriver
 
-from typhon.errors import Ejecting, Refused
+from typhon.atoms import getAtom
+from typhon.errors import Ejecting
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
@@ -22,11 +23,15 @@ from typhon.objects.root import runnable
 from typhon.objects.user import ScriptObject
 
 
-def getLocation(map):
-    return map.repr()
+RUN_2 = getAtom(u"run", 2)
+RUN_3 = getAtom(u"run", 3)
 
 
-accumDriver = JitDriver(greens=["mapperMap"],
+def getLocation(ast):
+    return ast.repr()
+
+
+accumDriver = JitDriver(greens=["mapperAST"],
                         reds=["mapper", "ejector", "iterator", "accumulator",
                               "skipper"],
                         get_printable_location=getLocation)
@@ -34,77 +39,73 @@ accumDriver = JitDriver(greens=["mapperMap"],
 
 def accumJIT(mapper, ejector, iterator, accumulator, skipper):
     if isinstance(mapper, ScriptObject):
-        accumDriver.jit_merge_point(mapperMap=mapper._map, mapper=mapper,
+        patterns, ast = mapper._map.lookup(RUN_3)
+        accumDriver.jit_merge_point(mapperAST=ast, mapper=mapper,
                                     ejector=ejector, iterator=iterator,
                                     accumulator=accumulator, skipper=skipper)
-    values = iterator.recv(u"next", [ejector])
-    args = unwrapList(values)
-    args.append(skipper)
-    accumulator.append(mapper.recv(u"run", args))
+    values = iterator.call(u"next", [ejector])
+    args = unwrapList(values) + [skipper]
+    accumulator.append(mapper.call(u"run", args))
 
 
-@runnable
+@runnable(RUN_2)
 def accumulateList(args):
-    if len(args) == 2:
-        rv = []
+    rv = []
 
-        iterable = args[0]
-        mapper = args[1]
-        iterator = iterable.recv(u"_makeIterator", [])
+    iterable = args[0]
+    mapper = args[1]
+    iterator = iterable.call(u"_makeIterator", [])
 
-        with Ejector() as ej:
-            while True:
-                with Ejector() as skip:
-                    try:
-                        accumJIT(mapper, ej, iterator, rv, skip)
-                    except Ejecting as e:
-                        if e.ejector is ej:
-                            break
-                        if e.ejector is skip:
-                            continue
-                        raise
+    with Ejector() as ej:
+        while True:
+            with Ejector() as skip:
+                try:
+                    accumJIT(mapper, ej, iterator, rv, skip)
+                except Ejecting as e:
+                    if e.ejector is ej:
+                        break
+                    if e.ejector is skip:
+                        continue
+                    raise
 
-        return ConstList(rv)
-    raise Refused(u"run", args)
+    return ConstList(rv[:])
 
 
-@runnable
+@runnable(RUN_2)
 def accumulateMap(args):
-    rv = accumulateList().recv(u"run", args)
+    rv = accumulateList().call(u"run", args)
     return ConstMap.fromPairs(rv)
 
 
-loopDriver = JitDriver(greens=["consumerMap"],
+loopDriver = JitDriver(greens=["consumerAST"],
                        reds=["consumer", "ejector", "iterator"],
                        get_printable_location=getLocation)
 
 
 def loopJIT(consumer, ejector, iterator):
     if isinstance(consumer, ScriptObject):
-        loopDriver.jit_merge_point(consumerMap=consumer._map,
+        patterns, ast = consumer._map.lookup(RUN_2)
+        loopDriver.jit_merge_point(consumerAST=ast,
                                    consumer=consumer, ejector=ejector,
                                    iterator=iterator)
-    values = iterator.recv(u"next", [ejector])
-    # XXX wait, what's this slice do again?
-    consumer.recv(u"run", unwrapList(values))
+    values = iterator.call(u"next", [ejector])
+    consumer.call(u"run", unwrapList(values))
 
 
-@runnable
+@runnable(RUN_2)
 def loop(args):
-    if len(args) == 2:
-        iterable = args[0]
-        consumer = args[1]
-        iterator = iterable.recv(u"_makeIterator", [])
+    iterable = args[0]
+    consumer = args[1]
+    iterator = iterable.call(u"_makeIterator", [])
 
-        with Ejector() as ej:
-            while True:
-                try:
-                    loopJIT(consumer, ej, iterator)
-                except Ejecting as e:
-                    if e.ejector is ej:
-                        break
-                    else:
-                        raise
+    with Ejector() as ej:
+        while True:
+            try:
+                loopJIT(consumer, ej, iterator)
+            except Ejecting as e:
+                if e.ejector is ej:
+                    break
+                else:
+                    raise
 
-        return NullObject
-    raise Refused(u"run", args)
+    return NullObject

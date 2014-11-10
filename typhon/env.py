@@ -72,11 +72,11 @@ class Environment(object):
 
     def update(self, noun, value):
         slot = self._find(noun)
-        slot.recv(u"put", [value])
+        slot.call(u"put", [value])
 
     def get(self, noun):
         slot = self._find(noun)
-        return slot.recv(u"get", [])
+        return slot.call(u"get", [])
 
     def freeze(self):
         """

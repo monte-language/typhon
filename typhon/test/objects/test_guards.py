@@ -28,7 +28,7 @@ class TestPredGuard(TestCase):
             return o.getInt() == 42
 
         i = IntObject(42)
-        result = g().recv(u"coerce", [i, None])
+        result = g().call(u"coerce", [i, None])
         self.assertEqual(i.getInt(), 42)
 
     def testCoerceIntFailure(self):
@@ -37,7 +37,7 @@ class TestPredGuard(TestCase):
             return o.getInt() == 42
 
         i = IntObject(41)
-        self.assertRaises(UserException, g().recv, u"coerce", [i, None])
+        self.assertRaises(UserException, g().call, u"coerce", [i, None])
 
     def testCoerceIntEjection(self):
         @predGuard
@@ -46,4 +46,4 @@ class TestPredGuard(TestCase):
 
         i = IntObject(41)
         with Ejector() as ej:
-            self.assertRaises(Ejecting, g().recv, u"coerce", [i, ej])
+            self.assertRaises(Ejecting, g().call, u"coerce", [i, ej])

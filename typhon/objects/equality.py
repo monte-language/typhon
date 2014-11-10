@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.collections import ConstList, unwrapList
@@ -19,6 +20,12 @@ from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.refs import EVENTUAL, Promise, resolution
 from typhon.objects.root import Object
+
+
+ISSETTLED_1 = getAtom(u"isSettled", 1)
+OPTSAME_2 = getAtom(u"optSame", 2)
+SAMEEVER_2 = getAtom(u"sameEver", 2)
+SAMEYET_2 = getAtom(u"sameYet", 2)
 
 
 class Equality(object):
@@ -128,8 +135,8 @@ def optSame(first, second, cache=None):
             cache = {}
         cache[first, second] = INEQUAL
 
-        left = first.recv(u"_uncall", [])
-        right = second.recv(u"_uncall", [])
+        left = first.call(u"_uncall", [])
+        right = second.call(u"_uncall", [])
 
         # Recurse, add the new value to the cache, and return.
         rv = optSame(left, right, cache)
@@ -149,27 +156,27 @@ class Equalizer(Object):
     def repr(self):
         return "<equalizer>"
 
-    def recv(self, verb, args):
-        if verb == u"isSettled" and len(args) == 1:
+    def recv(self, atom, args):
+        if atom is ISSETTLED_1:
             return wrapBool(isSettled(args[0]))
 
-        if verb == u"optSame" and len(args) == 2:
+        if atom is OPTSAME_2:
             first, second = args
             result = optSame(first, second)
             if result is NOTYET:
                 return NullObject
             return wrapBool(result is EQUAL)
 
-        if verb == u"sameEver" and len(args) == 2:
+        if atom is SAMEEVER_2:
             first, second = args
             result = optSame(first, second)
             if result is NOTYET:
                 raise userError(u"Not yet settled!")
             return wrapBool(result is EQUAL)
 
-        if verb == u"sameYet" and len(args) == 2:
+        if atom is SAMEYET_2:
             first, second = args
             result = optSame(first, second)
             return wrapBool(result is EQUAL)
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)

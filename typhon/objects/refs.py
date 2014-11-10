@@ -14,6 +14,7 @@
 
 import weakref
 
+from typhon.atoms import getAtom
 from typhon.errors import Refused
 from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
@@ -25,6 +26,18 @@ class RefState(object):
     pass
 
 BROKEN, EVENTUAL, NEAR = RefState(), RefState(), RefState()
+
+BROKEN_1 = getAtom(u"broken", 1)
+ISBROKEN_1 = getAtom(u"isBroken", 1)
+RESOLVE_1 = getAtom(u"resolve", 1)
+RESOLVE_2 = getAtom(u"resolve", 2)
+RUN_0 = getAtom(u"run", 0)
+RUN_1 = getAtom(u"run", 1)
+WHENRESOLVED_2 = getAtom(u"whenResolved", 2)
+_PRINTON_1 = getAtom(u"_printOn", 1)
+_WHENBROKEN_1 = getAtom(u"_whenBroken", 1)
+_WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
+_WHENMORERESOLVED_2 = getAtom(u"_whenMoreResolved", 2)
 
 
 def makePromise(vat):
@@ -56,17 +69,17 @@ class RefOps(Object):
     def repr(self):
         return "<Ref>"
 
-    def recv(self, verb, args):
-        if verb == u"whenResolved" and len(args) == 2:
+    def recv(self, atom, args):
+        if atom is WHENRESOLVED_2:
             return self.whenResolved(args[0], args[1])
 
-        if verb == u"isBroken" and len(args) == 1:
+        if atom is ISBROKEN_1:
             return self.isBroken(args[0])
 
-        if verb == u"broken" and len(args) == 1:
+        if atom is BROKEN_1:
             return self.broken(args[0])
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
     def promise(self):
         p, r = makePromise(self._vat)
@@ -132,7 +145,7 @@ class RefOps(Object):
 
     def whenResolved(self, o, callback):
         p, r = makePromise(self._vat)
-        prob = self._vat.sendOnly((o, u'_whenMoreResolved',
+        prob = self._vat.sendOnly((o, _WHENMORERESOLVED_2,
                                   [self._vat, _whenResolvedReactor(callback,
                                       o, r, self._vat)]))
         # if prob is not None:
@@ -141,13 +154,13 @@ class RefOps(Object):
 
     def whenResolvedOnly(self, o, callback):
         p, r = makePromise(self._vat)
-        return self._vat.sendOnly((o, u'_whenMoreResolved',
+        return self._vat.sendOnly((o, _WHENMORERESOLVED_2,
                                   [self._vat, _whenResolvedReactor(callback,
                                       o, r, self._vat)]))
 
     def whenBroken(self, o, callback):
         p, r = makePromise(self._vat)
-        prob = self._vat.sendOnly((o, u'_whenMoreResolved',
+        prob = self._vat.sendOnly((o, _WHENMORERESOLVED_2,
                                   [self._vat, _whenBrokenReactor(callback, o,
                                       r, self._vat)]))
         # if prob is not None:
@@ -156,7 +169,7 @@ class RefOps(Object):
 
     def whenBrokenOnly(self, o, callback):
         p, r = makePromise(self._vat)
-        return self._vat.sendOnly((o, u'_whenMoreResolved',
+        return self._vat.sendOnly((o, _WHENMORERESOLVED_2,
                                   [self._vat, _whenBrokenReactor(callback, o,
                                       r, self._vat)]))
 
@@ -174,14 +187,13 @@ class RefOps(Object):
 
 
 def _whenBrokenReactor(callback, ref, resolver, vat):
-    @runnable
+    @runnable(RUN_0)
     def whenBroken(_):
         if not isinstance(ref, Promise):
             return NullObject
 
         if ref.state() is EVENTUAL:
-            vat.sendOnly(ref, u'_whenMoreResolved',
-                    ConstList([whenBroken]))
+            vat.sendOnly(ref, _WHENMORERESOLVED_2, ConstList([whenBroken]))
         elif ref.state() is BROKEN:
             try:
                 outcome = callback(ref)
@@ -203,14 +215,14 @@ class _whenResolvedReactor(Object):
         self._resolver = resolver
         self._vat = vat
 
-    def recv(self, verb, args):
-        if verb == u"run":
+    def recv(self, atom, args):
+        if atom is RUN_0:
             if self.done:
                 return NullObject
 
             if self._ref.isResolved():
                 try:
-                    outcome = self._cb.recv(u"run", [self._ref])
+                    outcome = self._cb.call(u"run", [self._ref])
                 except Exception, e:
                     # XXX reify the exception and raise it in Monte
                     raise
@@ -220,11 +232,11 @@ class _whenResolvedReactor(Object):
                     self._resolver.resolve(outcome)
                 self.done = True
             else:
-                self._vat.sendOnly((self._ref, '_whenMoreResolved',
+                self._vat.sendOnly((self._ref, _WHENMORERESOLVED_1,
                     ConstList([_whenResolvedReactor])))
 
             return NullObject
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
 
 class LocalResolver(Object):
@@ -237,14 +249,14 @@ class LocalResolver(Object):
     def repr(self):
         return "<Ref$Resolver>"
 
-    def recv(self, verb, args):
-        if verb == u"resolve" and len(args) == 1:
+    def recv(self, atom, args):
+        if atom is RESOLVE_1:
             return wrapBool(self.resolve(args[0]))
 
-        if verb == u"resolve" and len(args) == 2:
+        if atom is RESOLVE_2:
             return wrapBool(self.resolve(args[0], unwrapBool(args[1])))
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
     def resolve(self, target, strict=True):
         if self._ref is None:
@@ -293,8 +305,8 @@ class _Buffer(object):
 
 class Promise(Object):
 
-    def callAll(self, verb, args):
-        raise Refused(verb, args)
+    def callAll(self, atom, args):
+        raise Refused(atom, args)
 
     def resolutionRef(self):
         # XXX mostly just here to sate RPython
@@ -325,14 +337,15 @@ class Promise(Object):
     def repr(self):
         return "<promise>"
 
-    def recv(self, verb, args):
-        if verb == u"_printOn" and len(args) == 1:
+    def recv(self, atom, args):
+        if atom is _PRINTON_1:
             out = args[0]
-            return out.recv(u"write", [StrObject(self.repr().decode("utf-8"))])
+            return out.call(u"write", [StrObject(self.repr().decode("utf-8"))])
 
-        if verb == u"_whenMoreResolved" and len(args) == 2:
+        if atom is _WHENMORERESOLVED_2:
             return self._whenMoreResolved(args[0], args[1])
-        return self.callAll(verb, args)
+
+        return self.callAll(atom, args)
 
     def _whenMoreResolved(self, vat, callback):
         # Welcome to _whenMoreResolved.
@@ -342,7 +355,7 @@ class Promise(Object):
         # are; this will be better someday. Perhaps. ~ C.
         from typhon.objects.vats import Vat
         assert isinstance(vat, Vat)
-        vat.sendOnly((callback, u"run", [self]))
+        vat.sendOnly((callback, RUN_1, [self]))
         return NullObject
 
 
@@ -384,25 +397,25 @@ class SwitchableRef(Promise):
             self.resolutionRef()
             return self._target.state()
 
-    def callAll(self, verb, args):
+    def callAll(self, atom, args):
         if self.isSwitchable:
             raise RuntimeError("not synchronously callable (%s)" %
-                    (verb.encode("utf-8"),))
+                    atom.repr())
         else:
             self.resolutionRef()
-            return self._target.callAll(verb, args)
+            return self._target.callAll(atom, args)
 
     def sendMsg(self, msg):
         self.resolutionRef()
         self._target.sendMsg(msg)
 
-    def sendAll(self, verb, args):
+    def sendAll(self, atom, args):
         self.resolutionRef()
-        return self._target.sendAll(verb, args)
+        return self._target.sendAll(atom, args)
 
-    def sendAllOnly(self, verb, args):
+    def sendAllOnly(self, atom, args):
         self.resolutionRef()
-        return self._target.sendAllOnly(verb, args)
+        return self._target.sendAllOnly(atom, args)
 
     def isResolved(self):
         if self.isSwitchable:
@@ -454,23 +467,22 @@ class BufferingRef(Promise):
     def state(self):
         return EVENTUAL
 
-    def callAll(self, verb, args):
-        raise RuntimeError("not synchronously callable (%s)" %
-                (verb.encode("utf-8"),))
+    def callAll(self, atom, args):
+        raise RuntimeError("not synchronously callable (%s)" % atom.repr())
 
-    def sendAll(self, verb, args):
+    def sendAll(self, atom, args):
         optMsgs = self._buf()
         if optMsgs is None:
             return self
         else:
             p, r = makePromise(self._vat)
-            optMsgs.buf.append((r, verb, args))
+            optMsgs.buf.append((r, atom, args))
             return ConstList([p, r])
 
-    def sendAllOnly(self, verb, args):
+    def sendAllOnly(self, atom, args):
         optMsgs = self._buf()
         if optMsgs is not None:
-            optMsgs.buf.append((NullObject, verb, args))
+            optMsgs.buf.append((NullObject, atom, args))
         return NullObject
 
     def isResolved(self):
@@ -501,14 +513,14 @@ class NearRef(Promise):
     def resolutionRef(self):
         return self
 
-    def callAll(self, verb, args):
-        return self._target.recv(verb, args)
+    def callAll(self, atom, args):
+        return self._target.call(atom.verb, args)
 
-    def sendAll(self, verb, args):
-        return self._vat.sendAll(self._target, verb, args)
+    def sendAll(self, atom, args):
+        return self._vat.sendAll(self._target, atom, args)
 
-    def sendAllOnly(self, verb, args):
-        return self._vat.sendAllOnly(self._target, verb, args)
+    def sendAllOnly(self, atom, args):
+        return self._vat.sendAllOnly(self._target, atom, args)
 
     def isResolved(self):
         return wrapBool(True)
@@ -538,20 +550,20 @@ class UnconnectedRef(Promise):
     def resolutionRef(self):
         return self
 
-    def _doBreakage(self, verb, args):
-        if verb in (u'_whenMoreResolved', u'_whenBroken') and len(args) == 1:
-            return self._vat.sendOnly((args[0], u"run", [self]))
+    def _doBreakage(self, atom, args):
+        if atom in (_WHENMORERESOLVED_1, _WHENBROKEN_1):
+            return self._vat.sendOnly((args[0], RUN_1, [self]))
 
-    def callAll(self, verb, args):
-        self._doBreakage(verb, args)
+    def callAll(self, atom, args):
+        self._doBreakage(atom, args)
         raise RuntimeError(self._problem)
 
-    def sendAll(self, verb, args):
-        self._doBreakage(verb, args)
+    def sendAll(self, atom, args):
+        self._doBreakage(atom, args)
         return self
 
-    def sendAllOnly(self, verb, args):
-        return self._doBreakage(verb, args)
+    def sendAllOnly(self, atom, args):
+        return self._doBreakage(atom, args)
 
     def isResolved(self):
         return wrapBool(True)

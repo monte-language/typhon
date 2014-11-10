@@ -22,33 +22,33 @@ from typhon.objects.root import Object
 class TestNullObject(TestCase):
 
     def testNullRefusal(self):
-        self.assertRaises(Refused, NullObject.recv, u"test", [])
+        self.assertRaises(Refused, NullObject.call, u"test", [])
 
 
 class TestBoolObject(TestCase):
 
     def testAnd(self):
-        result = FalseObject.recv(u"and", [TrueObject])
+        result = FalseObject.call(u"and", [TrueObject])
         self.assertEqual(result, FalseObject)
 
     def testOr(self):
-        result = FalseObject.recv(u"or", [TrueObject])
+        result = FalseObject.call(u"or", [TrueObject])
         self.assertEqual(result, TrueObject)
 
     def testNot(self):
-        result = FalseObject.recv(u"not", [])
+        result = FalseObject.call(u"not", [])
         self.assertEqual(result, TrueObject)
 
     def testPick(self):
         first = Object()
         second = Object()
 
-        result = TrueObject.recv(u"pick", [first, second])
+        result = TrueObject.call(u"pick", [first, second])
         self.assertTrue(result is first)
 
-        result = FalseObject.recv(u"pick", [first, second])
+        result = FalseObject.call(u"pick", [first, second])
         self.assertTrue(result is second)
 
     def testXor(self):
-        result = FalseObject.recv(u"xor", [TrueObject])
+        result = FalseObject.call(u"xor", [TrueObject])
         self.assertEqual(result, TrueObject)

@@ -14,6 +14,7 @@
 
 from rpython.rlib.jit import elidable, promote, unroll_safe
 
+from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject
@@ -51,7 +52,9 @@ class ScriptMap(object):
             block = method._b
             arity = len(patterns)
 
-            self._methods[verb] = patterns, block
+            atom = getAtom(verb, arity)
+
+            self._methods[atom] = patterns, block
 
         self.matchers = []
         for matcher in script._matchers:
@@ -61,12 +64,12 @@ class ScriptMap(object):
             self.matchers.append((matcher._pattern, matcher._block))
 
     def repr(self):
-        ms = [verb.encode("utf-8") for verb in self._methods.keys()]
+        ms = [atom.repr() for atom in self._methods.keys()]
         return "ScriptMap(%s, {%s})" % (self.name, ", ".join(ms))
 
     @elidable
-    def lookup(self, verb):
-        return self._methods.get(verb, (None, None))
+    def lookup(self, atom):
+        return self._methods.get(atom, (None, None))
 
 
 class ScriptObject(Object):
@@ -88,11 +91,11 @@ class ScriptObject(Object):
         return "<%s>" % self.displayName
 
     @unroll_safe
-    def recv(self, verb, args):
+    def recv(self, atom, args):
         # Circular import here to get at the evaluation function.
         from typhon.nodes import evaluate
 
-        patterns, block = self._map.lookup(verb)
+        patterns, block = self._map.lookup(atom)
 
         if patterns is not None and block is not None:
             block = promote(block)
@@ -104,7 +107,7 @@ class ScriptObject(Object):
                 try:
                     with self._env as env:
                         # Set up parameters from arguments.
-                        # We are assured that the counts line up by the verb
+                        # We are assured that the counts line up by the atom
                         # generation system.
                         for i, pattern in enumerate(patterns):
                             promote(pattern).unify(args[i], ej, env)
@@ -120,7 +123,7 @@ class ScriptObject(Object):
 
         # Well, let's try the matchers.
         matchers = self._map.matchers
-        message = ConstList([StrObject(verb), ConstList(args)])
+        message = ConstList([StrObject(atom.verb), ConstList(args)])
 
         for pattern, block in matchers:
             with self._env as env:
@@ -138,4 +141,4 @@ class ScriptObject(Object):
                             continue
                         raise
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)

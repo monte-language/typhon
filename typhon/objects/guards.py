@@ -12,12 +12,18 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.atoms import getAtom
 from typhon.errors import Refused
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import throw
 from typhon.objects.root import Object
 
+
+COERCE_2 = getAtom(u"coerce", 2)
+GET_0 = getAtom(u"get", 0)
+MAKESLOT_1 = getAtom(u"makeSlot", 1)
+PUT_1 = getAtom(u"put", 1)
 
 def predGuard(f):
     """
@@ -37,13 +43,13 @@ def predGuard(f):
         def repr(self):
             return "<predicateSlot>"
 
-        def recv(self, verb, args):
+        def recv(self, atom, args):
             # get/0: Obtain the contents of the slot.
-            if verb == u"get" and len(args) == 0:
+            if atom is GET_0:
                 return self._slot
 
             # put/1: Change the contents of the slot.
-            if verb == u"put" and len(args) == 1:
+            if atom is PUT_1:
                 value = args[0]
                 if f(value):
                     self._slot = value
@@ -51,7 +57,7 @@ def predGuard(f):
                     raise Exception("Coercion failed")
                 return NullObject
 
-            raise Refused(verb, args)
+            raise Refused(atom, args)
 
     class PredicateGuard(Object):
 
@@ -60,9 +66,9 @@ def predGuard(f):
         def repr(self):
             return "<predicateGuard(%s)>" % name
 
-        def recv(self, verb, args):
+        def recv(self, atom, args):
             # coerce/2: Coercion of specimens.
-            if verb == u"coerce" and len(args) == 2:
+            if atom is COERCE_2:
                 specimen = args[0]
                 ejector = args[1]
                 if f(specimen):
@@ -72,10 +78,10 @@ def predGuard(f):
                 throw(ejector, StrObject(u"Failed to coerce specimen"))
 
             # makeSlot/1: Creation of slots with this guard.
-            if verb == u"makeSlot" and len(args) == 1:
+            if atom is MAKESLOT_1:
                 initial = args[0]
                 return PredicateSlot(initial)
 
-            raise Refused(verb, args)
+            raise Refused(atom, args)
 
     return PredicateGuard

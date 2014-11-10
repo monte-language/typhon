@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.root import Object
@@ -26,11 +27,14 @@ class _NullObject(Object):
     def repr(self):
         return "<null>"
 
-    def recv(self, verb, args):
-        raise Refused(verb, args)
-
 
 NullObject = _NullObject()
+
+AND_1 = getAtom(u"and", 1)
+NOT_0 = getAtom(u"not", 0)
+OR_1 = getAtom(u"or", 1)
+PICK_2 = getAtom(u"pick", 2)
+XOR_1 = getAtom(u"xor", 1)
 
 
 class BoolObject(Object):
@@ -45,29 +49,29 @@ class BoolObject(Object):
     def repr(self):
         return "true" if self._b else "false"
 
-    def recv(self, verb, args):
+    def recv(self, atom, args):
 
         # and/1
-        if verb == u"and" and len(args) == 1:
+        if atom is AND_1:
             return wrapBool(self._b and unwrapBool(args[0]))
 
         # not/0
-        if verb == u"not" and len(args) == 0:
+        if atom is NOT_0:
             return wrapBool(not self._b)
 
         # or/1
-        if verb == u"or" and len(args) == 1:
+        if atom is OR_1:
             return wrapBool(self._b or unwrapBool(args[0]))
 
         # pick/2
-        if verb == u"pick" and len(args) == 2:
+        if atom is PICK_2:
             return args[0] if self._b else args[1]
 
         # xor/1
-        if verb == u"xor" and len(args) == 1:
+        if atom is XOR_1:
             return wrapBool(self._b ^ unwrapBool(args[0]))
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
     def isTrue(self):
         return self._b

@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException
 from typhon.objects.collections import ConstList, ConstMap
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
@@ -22,6 +23,15 @@ from typhon.objects.guards import predGuard
 from typhon.objects.iteration import accumulateList, accumulateMap, loop
 from typhon.objects.root import Object, runnable
 from typhon.objects.slots import Binding
+
+
+VALUEMAKER_1 = getAtom(u"valueMaker", 1)
+MATCHMAKER_1 = getAtom(u"matchMaker", 1)
+FROMPAIRS_1 = getAtom(u"fromPairs", 1)
+RUN_1 = getAtom(u"run", 1)
+RUN_2 = getAtom(u"run", 2)
+EJECT_2 = getAtom(u"eject", 2)
+SUBSTITUTE_1 = getAtom(u"substitute", 1)
 
 
 @predGuard
@@ -59,41 +69,42 @@ def mapGuard(specimen):
     return isinstance(specimen, ConstMap)
 
 
-@runnable
-def trace(args):
-    print "TRACE:",
-    for obj in args:
-        print obj.repr(),
-
-    return NullObject
-
-
-@runnable
-def traceln(args):
-    print "TRACE:",
-    for obj in args:
-        print obj.repr(),
-    print ""
-    return NullObject
-
-
-@runnable
-def makeList(args):
-    return ConstList(args)
-
-
-class makeMap(Object):
-    """
-    Create maps.
-    """
-
+class Trace(Object):
     def repr(self):
-        return "<makeMap>"
+        return "<trace>"
 
-    def recv(self, verb, args):
-        if verb == u"fromPairs" and len(args) == 1:
-            return ConstMap.fromPairs(args[0])
-        raise Refused(verb, args)
+    def call(self, verb, args):
+        print "TRACE:",
+        for obj in args:
+            print obj.repr(),
+
+        return NullObject
+
+
+class TraceLn(Object):
+    def repr(self):
+        return "<traceln>"
+
+    def call(self, verb, args):
+        print "TRACE:",
+        for obj in args:
+            print obj.repr(),
+        print ""
+
+        return NullObject
+
+
+class MakeList(Object):
+    def repr(self):
+        return "<makeList>"
+
+    def call(self, verb, args):
+        return ConstList(args)
+
+
+@runnable(FROMPAIRS_1)
+def makeMap(args):
+    return ConstMap.fromPairs(args[0])
 
 
 class Throw(Object):
@@ -101,22 +112,22 @@ class Throw(Object):
     def repr(self):
         return "<throw>"
 
-    def recv(self, verb, args):
-        if verb == u"run" and len(args) == 1:
+    def recv(self, atom, args):
+        if atom is RUN_1:
             raise UserException(args[0])
-        if verb == u"eject" and len(args) == 2:
+
+        if atom is EJECT_2:
             return throw(args[0], args[1])
-        raise Refused(verb, args)
+
+        raise Refused(atom, args)
 
 
-@runnable
+@runnable(RUN_2)
 def slotToBinding(args):
-    if len(args) == 2:
-        # XXX don't really care much about this right now
-        specimen = args[0]
-        # ej = args[1]
-        return Binding(specimen)
-    raise Refused(u"run", args)
+    # XXX don't really care much about this right now
+    specimen = args[0]
+    # ej = args[1]
+    return Binding(specimen)
 
 
 def simpleScope():
@@ -140,10 +151,10 @@ def simpleScope():
         u"__accumulateMap": accumulateMap(),
         u"__equalizer": Equalizer(),
         u"__loop": loop(),
-        u"__makeList": makeList(),
+        u"__makeList": MakeList(),
         u"__makeMap": makeMap(),
         u"__slotToBinding": slotToBinding(),
         u"throw": Throw(),
-        u"trace": trace(),
-        u"traceln": traceln(),
+        u"trace": Trace(),
+        u"traceln": TraceLn(),
     }

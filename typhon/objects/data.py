@@ -20,10 +20,51 @@ from rpython.rlib.rarithmetic import ovfcheck
 from rpython.rlib.rstring import UnicodeBuilder, split
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
+from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.constants import wrapBool
 from typhon.objects.root import Object
+
+
+ABOVEZERO_0 = getAtom(u"aboveZero", 0)
+ABS_0 = getAtom(u"abs", 0)
+ADD_1 = getAtom(u"add", 1)
+AND_1 = getAtom(u"and", 1)
+APPROXDIVIDE_1 = getAtom(u"approxDivide", 1)
+ASINTEGER_0 = getAtom(u"asInteger", 0)
+ASSTRING_0 = getAtom(u"asString", 0)
+ATLEASTZERO_0 = getAtom(u"atLeastZero", 0)
+ATMOSTZERO_0 = getAtom(u"atMostZero", 0)
+BELOWZERO_0 = getAtom(u"belowZero", 0)
+CONTAINS_1 = getAtom(u"contains", 1)
+COS_0 = getAtom(u"cos", 0)
+FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
+GETCATEGORY_0 = getAtom(u"getCategory", 0)
+GET_1 = getAtom(u"get", 1)
+ISZERO_0 = getAtom(u"isZero", 0)
+JOIN_1 = getAtom(u"join", 1)
+MAX_1 = getAtom(u"max", 1)
+MIN_1 = getAtom(u"min", 1)
+MOD_1 = getAtom(u"mod", 1)
+MULTIPLY_1 = getAtom(u"multiply", 1)
+NEGATE_0 = getAtom(u"negate", 0)
+NEXT_0 = getAtom(u"next", 0)
+NEXT_1 = getAtom(u"next", 1)
+OP__CMP_1 = getAtom(u"op__cmp", 1)
+POW_1 = getAtom(u"pow", 1)
+PREVIOUS_0 = getAtom(u"previous", 0)
+SIN_0 = getAtom(u"sin", 0)
+SIZE_0 = getAtom(u"size", 0)
+SLICE_1 = getAtom(u"slice", 1)
+SPLIT_1 = getAtom(u"split", 1)
+SPLIT_2 = getAtom(u"split", 2)
+SQRT_0 = getAtom(u"sqrt", 0)
+SUBTRACT_1 = getAtom(u"subtract", 1)
+TAN_0 = getAtom(u"tan", 0)
+TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
+TOUPPERCASE_0 = getAtom(u"toUpperCase", 0)
+_MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 
 
 class CharObject(Object):
@@ -40,43 +81,43 @@ class CharObject(Object):
     def repr(self):
         return "'%s'" % (self._c.encode("utf-8"))
 
-    def recv(self, verb, args):
-        if verb == u"add" and len(args) == 1:
+    def recv(self, atom, args):
+        if atom is ADD_1:
             other = args[0]
             if isinstance(other, IntObject):
                 return self.withOffset(other.getInt())
 
-        if verb == u"asInteger" and len(args) == 0:
+        if atom is ASINTEGER_0:
             return IntObject(ord(self._c))
 
-        if verb == u"asString" and len(args) == 0:
+        if atom is ASSTRING_0:
             return StrObject(unicode(self._c))
 
-        if verb == u"getCategory" and len(args) == 0:
+        if atom is GETCATEGORY_0:
             return StrObject(unicode(unicodedb.category(ord(self._c))))
 
-        if verb == u"max" and len(args) == 1:
+        if atom is MAX_1:
             other = args[0]
             if isinstance(other, CharObject):
                 return self if self._c > other._c else other
 
-        if verb == u"min" and len(args) == 1:
+        if atom is MIN_1:
             other = args[0]
             if isinstance(other, CharObject):
                 return self if self._c < other._c else other
 
-        if verb == u"next" and len(args) == 0:
+        if atom is NEXT_0:
             return self.withOffset(1)
 
-        if verb == u"previous" and len(args) == 0:
+        if atom is PREVIOUS_0:
             return self.withOffset(-1)
 
-        if verb == u"subtract" and len(args) == 1:
+        if atom is SUBTRACT_1:
             other = args[0]
             if isinstance(other, IntObject):
                 return self.withOffset(-other.getInt())
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
     def withOffset(self, offset):
         return CharObject(unichr(ord(self._c) + offset))
@@ -114,42 +155,42 @@ class DoubleObject(Object):
     def repr(self):
         return "%f" % (self._d,)
 
-    def recv(self, verb, args):
+    def recv(self, atom, args):
         # Doubles can be compared.
-        if verb == u"op__cmp" and len(args) == 1:
+        if atom is OP__CMP_1:
             other = promoteToDouble(args[0])
             return polyCmp(self._d, other)
 
-        if verb == u"abs" and len(args) == 0:
+        if atom is ABS_0:
             return DoubleObject(abs(self._d))
 
-        if verb == u"add" and len(args) == 1:
+        if atom is ADD_1:
             return self.add(args[0])
 
-        if verb == u"multiply" and len(args) == 1:
+        if atom is MULTIPLY_1:
             return self.mul(args[0])
 
-        if verb == u"negate" and len(args) == 0:
+        if atom is NEGATE_0:
             return DoubleObject(-self._d)
 
-        if verb == u"sqrt" and len(args) == 0:
+        if atom is SQRT_0:
             return DoubleObject(math.sqrt(self._d))
 
-        if verb == u"subtract" and len(args) == 1:
+        if atom is SUBTRACT_1:
             return self.subtract(args[0])
 
         # Trigonometry.
 
-        if verb == u"sin" and len(args) == 0:
+        if atom is SIN_0:
             return DoubleObject(math.sin(self._d))
 
-        if verb == u"cos" and len(args) == 0:
+        if atom is COS_0:
             return DoubleObject(math.cos(self._d))
 
-        if verb == u"tan" and len(args) == 0:
+        if atom is TAN_0:
             return DoubleObject(math.tan(self._d))
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
     @elidable
     def add(self, other):
@@ -181,78 +222,78 @@ class IntObject(Object):
     def repr(self):
         return "%d" % self._i
 
-    def recv(self, verb, args):
+    def recv(self, atom, args):
         # Ints can be compared.
-        if verb == u"op__cmp" and len(args) == 1:
+        if atom is OP__CMP_1:
             other = unwrapInt(args[0])
             return polyCmp(self._i, other)
 
         # Ints are usually used to store the results of comparisons.
-        if verb == u"aboveZero" and len(args) == 0:
+        if atom is ABOVEZERO_0:
             return wrapBool(self._i > 0)
-        if verb == u"atLeastZero" and len(args) == 0:
+        if atom is ATLEASTZERO_0:
             return wrapBool(self._i >= 0)
-        if verb == u"atMostZero" and len(args) == 0:
+        if atom is ATMOSTZERO_0:
             return wrapBool(self._i <= 0)
-        if verb == u"belowZero" and len(args) == 0:
+        if atom is BELOWZERO_0:
             return wrapBool(self._i < 0)
-        if verb == u"isZero" and len(args) == 0:
+        if atom is ISZERO_0:
             return wrapBool(self._i == 0)
 
-        if verb == u"add" and len(args) == 1:
+        if atom is ADD_1:
             other = args[0]
             if isinstance(other, DoubleObject):
                 # Addition commutes.
                 return other.add(self)
             return IntObject(self._i + unwrapInt(other))
 
-        if verb == u"and" and len(args) == 1:
+        if atom is AND_1:
             other = unwrapInt(args[0])
             return IntObject(self._i & other)
 
-        if verb == u"approxDivide" and len(args) == 1:
+        if atom is APPROXDIVIDE_1:
             # approxDivide/1: Promote both this int and its argument to
             # double, then perform division.
             d = float(self._i)
             other = promoteToDouble(args[0])
             return DoubleObject(d / other)
 
-        if verb == u"floorDivide" and len(args) == 1:
+        if atom is FLOORDIVIDE_1:
             other = unwrapInt(args[0])
             return IntObject(self._i // other)
 
-        if verb == u"mod" and len(args) == 1:
+        if atom is MOD_1:
             other = unwrapInt(args[0])
             return IntObject(self._i % other)
 
-        if verb == u"multiply" and len(args) == 1:
+        if atom is MULTIPLY_1:
             other = args[0]
             if isinstance(other, DoubleObject):
                 # Multiplication commutes.
                 return other.mul(self)
             return IntObject(self._i * unwrapInt(other))
 
-        if verb == u"negate" and len(args) == 0:
+        if atom is NEGATE_0:
             return IntObject(-self._i)
 
-        if verb == u"next" and len(args) == 0:
+        if atom is NEXT_0:
             return IntObject(self._i + 1)
 
-        if verb == u"pow" and len(args) == 1:
+        if atom is POW_1:
             other = unwrapInt(args[0])
             return self.intPow(other)
 
-        if verb == u"previous" and len(args) == 0:
+        if atom is PREVIOUS_0:
             return IntObject(self._i - 1)
 
-        if verb == u"subtract" and len(args) == 1:
+        if atom is SUBTRACT_1:
             other = args[0]
             if isinstance(other, DoubleObject):
                 # Promote ourselves to double and retry.
                 return DoubleObject(float(self._i)).subtract(other)
             return IntObject(self._i - unwrapInt(other))
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
     def getInt(self):
         return self._i
@@ -285,8 +326,8 @@ class strIterator(Object):
     def __init__(self, s):
         self.s = s
 
-    def recv(self, verb, args):
-        if verb == u"next" and len(args) == 1:
+    def recv(self, atom, args):
+        if atom is NEXT_1:
             if self._index < len(self.s):
                 from typhon.objects.collections import ConstList
                 rv = [IntObject(self._index), CharObject(self.s[self._index])]
@@ -294,9 +335,9 @@ class strIterator(Object):
                 return ConstList(rv)
             else:
                 ej = args[0]
-                ej.recv(u"run", [StrObject(u"Iterator exhausted")])
+                ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
 
 class StrObject(Object):
@@ -311,27 +352,27 @@ class StrObject(Object):
     def repr(self):
         return '"%s"' % self._s.encode("utf-8")
 
-    def recv(self, verb, args):
-        if verb == u"add" and len(args) == 1:
+    def recv(self, atom, args):
+        if atom is ADD_1:
             other = args[0]
             if isinstance(other, StrObject):
                 return StrObject(self._s + other._s)
             if isinstance(other, CharObject):
                 return StrObject(self._s + unicode(other._c))
 
-        if verb == u"contains" and len(args) == 1:
+        if atom is CONTAINS_1:
             needle = args[0]
             if isinstance(needle, CharObject):
                 return wrapBool(needle._c in self._s)
             if isinstance(needle, StrObject):
                 return wrapBool(needle._s in self._s)
 
-        if verb == u"get" and len(args) == 1:
+        if atom is GET_1:
             index = args[0]
             if isinstance(index, IntObject):
                 return CharObject(self._s[index._i])
 
-        if verb == u"join" and len(args) == 1:
+        if atom is JOIN_1:
             l = args[0]
             from typhon.objects.collections import ConstList, unwrapList
             if isinstance(l, ConstList):
@@ -341,36 +382,40 @@ class StrObject(Object):
                     strs.append(s._s)
                 return StrObject(self._s.join(strs))
 
-        if verb == u"multiply" and len(args) == 1:
+        if atom is MULTIPLY_1:
             amount = args[0]
             if isinstance(amount, IntObject):
                 return StrObject(self._s * amount._i)
 
-        if verb == u"size" and len(args) == 0:
+        if atom is SIZE_0:
             return IntObject(len(self._s))
 
-        if verb == u"slice" and len(args) == 1:
+        if atom is SLICE_1:
             index = args[0]
             if isinstance(index, IntObject):
                 start = index._i
                 if start >= 0:
                     return StrObject(self._s[start:])
 
-        if verb == u"split" and len(args) >= 1:
+        if atom is SPLIT_1:
             splitter = args[0]
             if isinstance(splitter, StrObject):
                 from typhon.objects.collections import ConstList
-                if len(args) == 2:
-                    splits = args[1]
-                    if isinstance(splits, IntObject):
-                        strings = [StrObject(s)
-                                for s in split(self._s, splitter._s,
-                                    splits.getInt())]
-                        return ConstList(strings)
                 strings = [StrObject(s) for s in split(self._s, splitter._s)]
                 return ConstList(strings)
 
-        if verb == u"toLowerCase" and len(args) == 0:
+        if atom is SPLIT_2:
+            splitter = args[0]
+            splits = args[1]
+            if isinstance(splitter, StrObject):
+                if isinstance(splits, IntObject):
+                    from typhon.objects.collections import ConstList
+                    strings = [StrObject(s)
+                            for s in split(self._s, splitter._s,
+                                splits.getInt())]
+                    return ConstList(strings)
+
+        if atom is TOLOWERCASE_0:
             # Use current size as a size hint. In the best case, characters
             # are one-to-one; in the next-best case, we overestimate and end
             # up with a couple bytes of slop.
@@ -379,16 +424,16 @@ class StrObject(Object):
                 ub.append(unichr(unicodedb.tolower(ord(char))))
             return StrObject(ub.build())
 
-        if verb == u"toUpperCase" and len(args) == 0:
+        if atom is TOUPPERCASE_0:
             ub = UnicodeBuilder(len(self._s))
             for char in self._s:
                 ub.append(unichr(unicodedb.toupper(ord(char))))
             return StrObject(ub.build())
 
-        if verb == u"_makeIterator" and len(args) == 0:
+        if atom is _MAKEITERATOR_0:
             return strIterator(self._s)
 
-        raise Refused(verb, args)
+        raise Refused(atom, args)
 
     def getString(self):
         return self._s

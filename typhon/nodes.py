@@ -279,7 +279,7 @@ class Call(Node):
         assert isinstance(verb, StrObject), "non-Str verb"
         args = evaluate(self._args, env)
 
-        return target.recv(verb._s, unwrapList(args))
+        return target.call(verb._s, unwrapList(args))
 
     def transform(self, f):
         return f(Call(self._target.transform(f), self._verb.transform(f),
@@ -805,7 +805,7 @@ class FinalPattern(Pattern):
 
             # Since this is a final assignment, we can run the specimen through
             # the guard once and for all, right now.
-            rv = guard.recv(u"coerce", [specimen, ejector])
+            rv = guard.call(u"coerce", [specimen, ejector])
 
         env.final(self._n, rv)
 
@@ -828,7 +828,7 @@ class IgnorePattern(Pattern):
         # ignore pattern. Who would do such a thing?
         if self._g is not None:
             guard = evaluate(self._g, env)
-            guard.recv(u"coerce", [specimen, ejector])
+            guard.call(u"coerce", [specimen, ejector])
 
 
 class ListPattern(Pattern):
@@ -906,7 +906,7 @@ class VarPattern(Pattern):
             guard = evaluate(self._g, env)
 
             # Generate a slot.
-            rv = guard.recv(u"makeSlot", [specimen])
+            rv = guard.call(u"makeSlot", [specimen])
 
         # Add the slot to the environment.
         env.recordSlot(self._n, rv)
@@ -936,8 +936,8 @@ class ViaPattern(Pattern):
         # the specimen and return a new specimen which is then applied to the
         # inner pattern.
         examiner = evaluate(self._expr, env)
-        self._pattern.unify(examiner.recv(u"run", [specimen, ejector]),
-                            ejector, env)
+        self._pattern.unify(examiner.call(u"run", [specimen, ejector]),
+                ejector, env)
 
 
 def formatName(p):

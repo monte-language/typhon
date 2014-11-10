@@ -12,6 +12,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.jit import jit_debug, promote
+
+from typhon.atoms import getAtom
 from typhon.errors import Refused
 
 
@@ -29,24 +32,40 @@ class Object(object):
     def repr(self):
         return "<object>"
 
+    def call(self, verb, arguments):
+        """
+        Pass a message immediately to this object.
+        """
 
-def runnable(f):
+        arity = len(arguments)
+        atom = promote(getAtom(verb, arity))
+        jit_debug(atom.repr())
+        return self.recv(atom, arguments)
+
+    def recv(self, atom, args):
+        raise Refused(atom, args)
+
+
+def runnable(singleAtom):
     """
-    Promote a function to a Monte object.
+    Promote a function to a Monte object type.
 
-    The resulting object can be called multiple times to create multiple Monte
-    objects.
+    The resulting class object can be called multiple times to create multiple
+    Monte objects.
     """
 
-    name = f.__name__
+    def inner(f):
+        name = f.__name__
 
-    class runnableObject(Object):
-        def repr(self):
-            return "<%s>" % name
+        class runnableObject(Object):
+            def repr(self):
+                return "<%s>" % name
 
-        def recv(self, verb, args):
-            if verb == u"run":
-                return f(args)
-            raise Refused(verb, args)
+            def recv(self, atom, args):
+                if atom is singleAtom:
+                    return f(args)
+                raise Refused(atom, args)
 
-    return runnableObject
+        return runnableObject
+
+    return inner
