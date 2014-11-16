@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import elidable, unroll_safe
+from rpython.rlib.jit import assert_green, elidable, jit_debug, unroll_safe
 
 from typhon.errors import Ejecting, LoadFailed, UserException
 from typhon.objects.collections import ConstList, unwrapList
@@ -25,6 +25,9 @@ from typhon.pretty import Buffer, LineWriter, OneLine
 
 
 def evaluate(node, env):
+    # Want to see nodes in JIT traces? Uncomment these two lines. ~ C.
+    # assert_green(node)
+    # jit_debug(node.repr())
     try:
         return node.evaluate(env)
     except UserException as ue:
