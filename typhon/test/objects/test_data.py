@@ -16,8 +16,10 @@
 
 from unittest import TestCase
 
+from typhon.errors import Ejecting
 from typhon.objects import IntObject
-from typhon.objects.data import CharObject
+from typhon.objects.data import CharObject, StrObject
+from typhon.objects.ejectors import Ejector
 
 
 class TestCharObject(TestCase):
@@ -57,3 +59,59 @@ class TestCharObject(TestCase):
         c = CharObject(u'¡')
         result = c.recv(u"next", [])
         self.assertEqual(result._c, u'¢')
+
+
+class TestStr(TestCase):
+
+    def testContainsTrue(self):
+        """
+        String containment tests have true positives.
+        """
+
+        haystack = StrObject(u"needle in a haystack")
+        needle = StrObject(u"needle")
+        result = haystack.recv(u"contains", [needle])
+        self.assertTrue(result.isTrue())
+
+    def testSplit(self):
+        """
+        Strings can be split.
+        """
+
+        s = StrObject(u"first second")
+        result = s.recv(u"split", [StrObject(u" ")])
+        pieces = [obj._s for obj in result.objects]
+        self.assertEqual(pieces, [u"first", u"second"])
+
+    def testToLowerCaseUnicode(self):
+        s = StrObject(u"Α And Ω")
+        result = s.recv(u"toLowerCase", [])
+        self.assertEqual(result._s, u"α and ω")
+
+    def testToUpperCase(self):
+        s = StrObject(u"lower")
+        result = s.recv(u"toUpperCase", [])
+        self.assertEqual(result._s, u"LOWER")
+
+    def testToUpperCaseUnicode(self):
+        s = StrObject(u"¡Holá!")
+        result = s.recv(u"toUpperCase", [])
+        self.assertEqual(result._s, u"¡HOLÁ!")
+
+    def testMakeIterator(self):
+        """
+        Strings are iterable.
+        """
+
+        s = StrObject(u"cs")
+        iterator = s.recv(u"_makeIterator", [])
+        with Ejector() as ej:
+            result = iterator.recv(u"next", [ej])
+            objs = result.objects
+            self.assertEqual(objs[0].getInt(), 0)
+            self.assertEqual(objs[1]._c, u'c')
+            result = iterator.recv(u"next", [ej])
+            objs = result.objects
+            self.assertEqual(objs[0].getInt(), 1)
+            self.assertEqual(objs[1]._c, u's')
+            self.assertRaises(Ejecting, iterator.recv, u"next", [ej])
