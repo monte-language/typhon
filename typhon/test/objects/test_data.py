@@ -27,6 +27,21 @@ class TestCharObject(TestCase):
         result = c.recv(u"add", [IntObject(2)])
         self.assertEqual(result._c, u'e')
 
+    def testCategory(self):
+        c = CharObject(u'c')
+        result = c.recv(u"getCategory", [])
+        self.assertEqual(result._s, u"Ll")
+
+    def testCategoryUnicode(self):
+        c = CharObject(u'č')
+        result = c.recv(u"getCategory", [])
+        self.assertEqual(result._s, u"Ll")
+
+    def testCategorySymbol(self):
+        c = CharObject(u'¢')
+        result = c.recv(u"getCategory", [])
+        self.assertEqual(result._s, u"Sc")
+
     def testMax(self):
         c = CharObject(u'c')
         d = CharObject(u'd')

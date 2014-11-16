@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
+
 from typhon.errors import Refused
 from typhon.objects import IntObject, StrObject
 from typhon.objects.auditors import DeepFrozenStamp
@@ -43,6 +45,9 @@ class CharObject(Object):
 
         if verb == u"asString" and len(args) == 0:
             return StrObject(unicode(self._c))
+
+        if verb == u"getCategory" and len(args) == 0:
+            return StrObject(unicode(unicodedb.category(ord(self._c))))
 
         if verb == u"max" and len(args) == 1:
             other = args[0]
