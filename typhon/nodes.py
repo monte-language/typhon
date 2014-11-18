@@ -13,10 +13,10 @@
 # under the License.
 
 from typhon.errors import Ejecting, UserException
-from typhon.objects import IntObject, ScriptObject, StrObject
+from typhon.objects import ScriptObject
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import BoolObject, NullObject
-from typhon.objects.data import CharObject
+from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import Ejector
 
 
@@ -84,6 +84,9 @@ class Double(Node):
 
     def repr(self):
         return "%f" % self._d
+
+    def evaluate(self, env):
+        return DoubleObject(self._d)
 
 
 class Char(Node):

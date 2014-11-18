@@ -12,11 +12,15 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import math
+
+from rpython.rlib.jit import elidable
+from rpython.rlib.objectmodel import specialize
+from rpython.rlib.rarithmetic import ovfcheck
 from rpython.rlib.rstring import UnicodeBuilder, split
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
-from typhon.errors import Refused
-from typhon.objects import IntObject
+from typhon.errors import Refused, UserException
 from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.constants import wrapBool
 from typhon.objects.root import Object
@@ -76,6 +80,197 @@ class CharObject(Object):
 
     def withOffset(self, offset):
         return CharObject(unichr(ord(self._c) + offset))
+
+
+@specialize.argtype(0)
+def promoteToDouble(n):
+    if isinstance(n, IntObject):
+        return float(n.getInt())
+    if isinstance(n, DoubleObject):
+        return n.getDouble()
+    raise UserException(StrObject(u"Failed to promote to double"))
+
+
+@specialize.argtype(0, 1)
+def polyCmp(l, r):
+    if l < r:
+        return IntObject(-1)
+    elif l > r:
+        return IntObject(1)
+    else:
+        return IntObject(0)
+
+
+class DoubleObject(Object):
+
+    _immutable_fields_ = "stamps", "_d"
+
+    stamps = [DeepFrozenStamp]
+
+    def __init__(self, d):
+        self._d = d
+
+    def repr(self):
+        return "%f" % (self._d,)
+
+    def recv(self, verb, args):
+        # Doubles can be compared.
+        if verb == u"op__cmp" and len(args) == 1:
+            other = promoteToDouble(args[0])
+            return polyCmp(self._d, other)
+
+        if verb == u"abs" and len(args) == 0:
+            return DoubleObject(abs(self._d))
+
+        if verb == u"add" and len(args) == 1:
+            return self.add(args[0])
+
+        if verb == u"multiply" and len(args) == 1:
+            return self.mul(args[0])
+
+        if verb == u"negate" and len(args) == 0:
+            return DoubleObject(-self._d)
+
+        if verb == u"sqrt" and len(args) == 0:
+            return DoubleObject(math.sqrt(self._d))
+
+        if verb == u"subtract" and len(args) == 1:
+            return self.subtract(args[0])
+
+        # Trigonometry.
+
+        if verb == u"sin" and len(args) == 0:
+            return DoubleObject(math.sin(self._d))
+
+        if verb == u"cos" and len(args) == 0:
+            return DoubleObject(math.cos(self._d))
+
+        if verb == u"tan" and len(args) == 0:
+            return DoubleObject(math.tan(self._d))
+
+        raise Refused(verb, args)
+
+    @elidable
+    def add(self, other):
+        return DoubleObject(self._d + promoteToDouble(other))
+
+    @elidable
+    def mul(self, other):
+        return DoubleObject(self._d * promoteToDouble(other))
+
+    @elidable
+    def subtract(self, other):
+        return DoubleObject(self._d - promoteToDouble(other))
+
+    def getDouble(self):
+        return self._d
+
+
+class IntObject(Object):
+
+    _immutable_fields_ = "stamps", "_i"
+
+    _i = 0
+
+    stamps = [DeepFrozenStamp]
+
+    def __init__(self, i=0):
+        self._i = i
+
+    def repr(self):
+        return "%d" % self._i
+
+    def recv(self, verb, args):
+        # Ints can be compared.
+        if verb == u"op__cmp" and len(args) == 1:
+            other = unwrapInt(args[0])
+            return polyCmp(self._i, other)
+
+        # Ints are usually used to store the results of comparisons.
+        if verb == u"aboveZero" and len(args) == 0:
+            return wrapBool(self._i > 0)
+        if verb == u"atLeastZero" and len(args) == 0:
+            return wrapBool(self._i >= 0)
+        if verb == u"atMostZero" and len(args) == 0:
+            return wrapBool(self._i <= 0)
+        if verb == u"belowZero" and len(args) == 0:
+            return wrapBool(self._i < 0)
+        if verb == u"isZero" and len(args) == 0:
+            return wrapBool(self._i == 0)
+
+        if verb == u"add" and len(args) == 1:
+            other = args[0]
+            if isinstance(other, DoubleObject):
+                # Addition commutes.
+                return other.add(self)
+            return IntObject(self._i + unwrapInt(other))
+
+        if verb == u"and" and len(args) == 1:
+            other = unwrapInt(args[0])
+            return IntObject(self._i & other)
+
+        if verb == u"approxDivide" and len(args) == 1:
+            # approxDivide/1: Promote both this int and its argument to
+            # double, then perform division.
+            d = float(self._i)
+            other = promoteToDouble(args[0])
+            return DoubleObject(d / other)
+
+        if verb == u"floorDivide" and len(args) == 1:
+            other = unwrapInt(args[0])
+            return IntObject(self._i // other)
+
+        if verb == u"mod" and len(args) == 1:
+            other = unwrapInt(args[0])
+            return IntObject(self._i % other)
+
+        if verb == u"multiply" and len(args) == 1:
+            other = args[0]
+            if isinstance(other, DoubleObject):
+                # Multiplication commutes.
+                return other.mul(self)
+            return IntObject(self._i * unwrapInt(other))
+
+        if verb == u"negate" and len(args) == 0:
+            return IntObject(-self._i)
+
+        if verb == u"next" and len(args) == 0:
+            return IntObject(self._i + 1)
+
+        if verb == u"pow" and len(args) == 1:
+            other = unwrapInt(args[0])
+            return self.intPow(other)
+
+        if verb == u"previous" and len(args) == 0:
+            return IntObject(self._i - 1)
+
+        if verb == u"subtract" and len(args) == 1:
+            other = args[0]
+            if isinstance(other, DoubleObject):
+                # Promote ourselves to double and retry.
+                return DoubleObject(float(self._i)).subtract(other)
+            return IntObject(self._i - unwrapInt(other))
+
+        raise Refused(verb, args)
+
+    def getInt(self):
+        return self._i
+
+    def intPow(self, exponent):
+        # XXX implement the algo in pypy.objspace.std.intobject, or
+        # port it to rlib (per arigato)
+        accumulator = 1
+        # XXX only correct for positive exponents
+        while (exponent > 0):
+            accumulator = ovfcheck(accumulator * self._i)
+            exponent -= 1
+        return IntObject(accumulator)
+
+
+def unwrapInt(i):
+    if isinstance(i, IntObject):
+        return i.getInt()
+    raise UserException(StrObject(u"Not an integer!"))
 
 
 class strIterator(Object):

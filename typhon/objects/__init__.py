@@ -17,20 +17,6 @@ from typhon.objects.constants import BoolObject, wrapBool
 from typhon.objects.root import Object
 
 
-class CharObject(Object):
-
-    def __init__(self, c):
-        self._c = c[0]
-
-    def repr(self):
-        return "'%s'" % (self._c.encode("utf-8"))
-
-    def recv(self, verb, args):
-        if verb == u"asInteger" and len(args) == 0:
-            return IntObject(ord(self._c))
-        raise Refused(verb, args)
-
-
 class EqualizerObject(Object):
 
     def repr(self):
@@ -65,65 +51,6 @@ class EqualizerObject(Object):
 
         # By default, objects are not equal.
         return False
-
-
-class IntObject(Object):
-
-    def __init__(self, i):
-        self._i = i
-
-    def repr(self):
-        return "%d" % self._i
-
-    def recv(self, verb, args):
-        if verb == u"add":
-            if len(args) == 1:
-                other = args[0]
-                if isinstance(other, IntObject):
-                    return IntObject(self._i + other._i)
-        elif verb == u"multiply":
-            if len(args) == 1:
-                other = args[0]
-                if isinstance(other, IntObject):
-                    return IntObject(self._i * other._i)
-        elif verb == u"negate" and len(args) == 0:
-            return IntObject(-self._i)
-        elif verb == u"subtract" and len(args) == 1:
-            other = args[0]
-            if isinstance(other, IntObject):
-                return IntObject(self._i - other._i)
-        raise Refused(verb, args)
-
-    def getInt(self):
-        return self._i
-
-
-class StrObject(Object):
-
-    def __init__(self, s):
-        self._s = s
-
-    def repr(self):
-        return '"%s"' % self._s.encode("utf-8")
-
-    def recv(self, verb, args):
-        if verb == u"get":
-            if len(args) == 1:
-                index = args[0]
-                if isinstance(index, IntObject):
-                    from typhon.objects.data import CharObject
-                    return CharObject(self._s[index._i])
-        elif verb == u"slice" and len(args) == 1:
-            index = args[0]
-            if isinstance(index, IntObject):
-                start = index._i
-                if start >= 0:
-                    return StrObject(self._s[start:])
-        elif verb == u"_makeIterator" and len(args) == 0:
-            from typhon.objects.collections import listIterator
-            from typhon.objects.data import CharObject
-            return listIterator([CharObject(c) for c in self._s])
-        raise Refused(verb, args)
 
 
 class ScriptObject(Object):

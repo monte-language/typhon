@@ -14,11 +14,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import math
 from unittest import TestCase
 
 from typhon.errors import Ejecting
-from typhon.objects import IntObject
-from typhon.objects.data import CharObject, StrObject
+from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import Ejector
 
 
@@ -115,3 +115,64 @@ class TestStr(TestCase):
             self.assertEqual(objs[0].getInt(), 1)
             self.assertEqual(objs[1]._c, u's')
             self.assertRaises(Ejecting, iterator.recv, u"next", [ej])
+
+
+class TestDouble(TestCase):
+
+    def testAdd(self):
+        d = DoubleObject(3.2)
+        result = d.recv(u"add", [DoubleObject(1.1)])
+        self.assertAlmostEqual(result.getDouble(), 4.3)
+
+    def testAddInt(self):
+        d = DoubleObject(3.2)
+        result = d.recv(u"add", [IntObject(1)])
+        self.assertAlmostEqual(result.getDouble(), 4.2)
+
+    def testSin(self):
+        d = DoubleObject(math.pi / 2.0)
+        result = d.recv(u"sin", [])
+        self.assertAlmostEqual(result.getDouble(), 1.0)
+
+    def testSubtract(self):
+        d = DoubleObject(5.5)
+        result = d.recv(u"subtract", [DoubleObject(1.3)])
+        self.assertAlmostEqual(result.getDouble(), 4.2)
+
+
+class TestInt(TestCase):
+
+    def testAdd(self):
+        i = IntObject(32)
+        result = i.recv(u"add", [IntObject(11)])
+        self.assertEqual(result.getInt(), 43)
+
+    def testAddDouble(self):
+        i = IntObject(32)
+        result = i.recv(u"add", [DoubleObject(1.1)])
+        self.assertAlmostEqual(result.getDouble(), 33.1)
+
+    def testApproxDivide(self):
+        i = IntObject(4)
+        result = i.recv(u"approxDivide", [IntObject(2)])
+        self.assertAlmostEqual(result.getDouble(), 2.0)
+
+    def testMulDouble(self):
+        """
+        Ints are promoted by doubles during multiplication.
+        """
+
+        i = IntObject(4)
+        result = i.recv(u"multiply", [DoubleObject(2.1)])
+        self.assertTrue(isinstance(result, DoubleObject))
+        self.assertEqual(result.getDouble(), 8.4)
+
+    def testSubtract(self):
+        i = IntObject(5)
+        result = i.recv(u"subtract", [IntObject(15)])
+        self.assertAlmostEqual(result.getInt(), -10)
+
+    def testSubtractDouble(self):
+        i = IntObject(5)
+        result = i.recv(u"subtract", [DoubleObject(1.5)])
+        self.assertAlmostEqual(result.getDouble(), 3.5)

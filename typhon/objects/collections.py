@@ -15,8 +15,8 @@
 from rpython.rlib.objectmodel import specialize
 
 from typhon.errors import Refused
-from typhon.objects import IntObject, StrObject
 from typhon.objects.constants import NullObject
+from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object
 
 
