@@ -14,7 +14,7 @@
 
 from rpython.rlib.objectmodel import specialize
 
-from typhon.errors import Refused
+from typhon.errors import Refused, userError
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object
@@ -258,11 +258,17 @@ def dictToMap(d):
     return ConstMap(l)
 
 
-def unwrapList(l):
-    assert isinstance(l, ConstList), "%s is not a list" % (l.repr(),)
-    return l.objects
+def unwrapList(o):
+    from typhon.objects.refs import near
+    l = near(o)
+    if isinstance(l, ConstList):
+        return l.objects
+    raise userError(u"Not a list!")
 
 
-def unwrapMap(l):
-    assert isinstance(l, ConstMap), "%s is not a map" % (l.repr(),)
-    return l.objects
+def unwrapMap(o):
+    from typhon.objects.refs import near
+    m = near(o)
+    if isinstance(m, ConstMap):
+        return m.objects
+    raise userError(u"Not a map!")

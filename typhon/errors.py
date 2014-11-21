@@ -50,6 +50,11 @@ class UserException(Exception):
         return "Error"
 
 
+def userError(s):
+    from typhon.objects.data import StrObject
+    return UserException(StrObject(s))
+
+
 class Refused(UserException):
     """
     An object refused to accept a message passed to it.

@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from typhon.errors import Refused
+from typhon.errors import Refused, userError
 from typhon.objects.root import Object
 
 
@@ -80,7 +80,9 @@ def wrapBool(b):
     return TrueObject if b else FalseObject
 
 
-def unwrapBool(b):
-    # XXX pick a better exception
-    assert isinstance(b, BoolObject)
-    return b.isTrue()
+def unwrapBool(o):
+    from typhon.objects.refs import near
+    b = near(o)
+    if isinstance(b, BoolObject):
+        return b.isTrue()
+    raise userError(u"Not a boolean!")

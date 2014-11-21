@@ -20,7 +20,7 @@ from rpython.rlib.rarithmetic import ovfcheck
 from rpython.rlib.rstring import UnicodeBuilder, split
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
-from typhon.errors import Refused, UserException
+from typhon.errors import Refused, userError
 from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.constants import wrapBool
 from typhon.objects.root import Object
@@ -82,13 +82,14 @@ class CharObject(Object):
         return CharObject(unichr(ord(self._c) + offset))
 
 
-@specialize.argtype(0)
-def promoteToDouble(n):
+def promoteToDouble(o):
+    from typhon.objects.refs import near
+    n = near(o)
     if isinstance(n, IntObject):
         return float(n.getInt())
     if isinstance(n, DoubleObject):
         return n.getDouble()
-    raise UserException(StrObject(u"Failed to promote to double"))
+    raise userError(u"Failed to promote to double")
 
 
 @specialize.argtype(0, 1)
@@ -267,10 +268,12 @@ class IntObject(Object):
         return IntObject(accumulator)
 
 
-def unwrapInt(i):
+def unwrapInt(o):
+    from typhon.objects.refs import near
+    i = near(o)
     if isinstance(i, IntObject):
         return i.getInt()
-    raise UserException(StrObject(u"Not an integer!"))
+    raise userError(u"Not an integer!")
 
 
 class strIterator(Object):
