@@ -16,16 +16,24 @@ import sys
 from typhon.env import Environment
 from typhon.errors import UserException
 from typhon.load import load
+from typhon.objects.vats import Vat, vatScope
+from typhon.reactor import Reactor
 from typhon.simple import simpleScope
 
 
-def entry_point(argv):
+def entryPoint(argv):
     if len(argv) < 2:
         print "No file provided?"
         return 1
 
+    reactor = Reactor()
+    vat = Vat(reactor)
+
+    scope = simpleScope()
+    scope.update(vatScope(vat))
+    env = Environment(scope)
+
     terms = load(open(argv[1], "rb").read())
-    env = Environment(simpleScope())
     for term in terms:
         print term.repr()
         try:
@@ -34,12 +42,27 @@ def entry_point(argv):
             print "Caught exception:", ue.formatError()
             return 1
 
+    # Run any remaining turns.
+    while vat.hasTurns() or reactor.hasObjects():
+        if vat.hasTurns():
+            count = len(vat._pending)
+            print "Taking", count, "turn(s) on", vat.repr()
+            for _ in range(count):
+                try:
+                    vat.takeTurn()
+                except UserException as ue:
+                    print "Caught exception:", ue.formatError()
+
+        if reactor.hasObjects():
+            print "Performing I/O..."
+            reactor.spin(vat.hasTurns())
+
     return 0
 
 
 def target(*args):
-    return entry_point, None
+    return entryPoint, None
 
 
 if __name__ == "__main__":
-    entry_point(sys.argv)
+    entryPoint(sys.argv)

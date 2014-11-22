@@ -248,11 +248,11 @@ class LocalResolver(Object):
         return "<Ref$Resolver>"
 
     def recv(self, verb, args):
-        if verb == u"resolve" and args == 1:
-            return self.resolve(args[0])
+        if verb == u"resolve" and len(args) == 1:
+            return wrapBool(self.resolve(args[0]))
 
-        if verb == u"resolve" and args == 2:
-            return self.resolve(args[0], unwrapBool(args[1]))
+        if verb == u"resolve" and len(args) == 2:
+            return wrapBool(self.resolve(args[0], unwrapBool(args[1])))
 
         raise Refused(verb, args)
 
