@@ -368,9 +368,11 @@ class StrObject(Object):
                 return wrapBool(needle._s in self._s)
 
         if atom is GET_1:
-            index = args[0]
-            if isinstance(index, IntObject):
-                return CharObject(self._s[index._i])
+            index = unwrapInt(args[0])
+            if not 0 <= index < len(self._s):
+                raise userError(u"string.get/1: Index out of bounds: %d" %
+                                index)
+            return CharObject(self._s[index])
 
         if atom is JOIN_1:
             l = args[0]

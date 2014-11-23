@@ -17,7 +17,7 @@
 import math
 from unittest import TestCase
 
-from typhon.errors import Ejecting
+from typhon.errors import Ejecting, UserException
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import Ejector
 
@@ -72,6 +72,19 @@ class TestStr(TestCase):
         needle = StrObject(u"needle")
         result = haystack.call(u"contains", [needle])
         self.assertTrue(result.isTrue())
+
+    def testGet(self):
+        s = StrObject(u"index")
+        result = s.call(u"get", [IntObject(2)])
+        self.assertEqual(result._c, u'd')
+
+    def testGetNegative(self):
+        s = StrObject(u"index")
+        self.assertRaises(UserException, s.call, u"get", [IntObject(-1)])
+
+    def testGetOutOfBounds(self):
+        s = StrObject(u"index")
+        self.assertRaises(UserException, s.call, u"get", [IntObject(6)])
 
     def testSplit(self):
         """
