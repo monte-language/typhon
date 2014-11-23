@@ -170,6 +170,16 @@ class TestInt(TestCase):
         result = i.call(u"approxDivide", [IntObject(2)])
         self.assertAlmostEqual(result.getDouble(), 2.0)
 
+    def testMax(self):
+        i = IntObject(3)
+        result = i.call(u"max", [IntObject(5)])
+        self.assertEqual(result.getInt(), 5)
+
+    def testMin(self):
+        i = IntObject(3)
+        result = i.call(u"min", [IntObject(5)])
+        self.assertEqual(result.getInt(), 3)
+
     def testMulDouble(self):
         """
         Ints are promoted by doubles during multiplication.

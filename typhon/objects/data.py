@@ -262,6 +262,14 @@ class IntObject(Object):
             other = unwrapInt(args[0])
             return IntObject(self._i // other)
 
+        if atom is MAX_1:
+            other = unwrapInt(args[0])
+            return self if self._i > other else args[0]
+
+        if atom is MIN_1:
+            other = unwrapInt(args[0])
+            return self if self._i < other else args[0]
+
         if atom is MOD_1:
             other = unwrapInt(args[0])
             return IntObject(self._i % other)
