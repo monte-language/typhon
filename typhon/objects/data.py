@@ -83,8 +83,8 @@ class CharObject(Object):
 
 
 def promoteToDouble(o):
-    from typhon.objects.refs import near
-    n = near(o)
+    from typhon.objects.refs import resolution
+    n = resolution(o)
     if isinstance(n, IntObject):
         return float(n.getInt())
     if isinstance(n, DoubleObject):
@@ -269,8 +269,8 @@ class IntObject(Object):
 
 
 def unwrapInt(o):
-    from typhon.objects.refs import near
-    i = near(o)
+    from typhon.objects.refs import resolution
+    i = resolution(o)
     if isinstance(i, IntObject):
         return i.getInt()
     raise userError(u"Not an integer!")

@@ -81,8 +81,8 @@ def wrapBool(b):
 
 
 def unwrapBool(o):
-    from typhon.objects.refs import near
-    b = near(o)
+    from typhon.objects.refs import resolution
+    b = resolution(o)
     if isinstance(b, BoolObject):
         return b.isTrue()
     raise userError(u"Not a boolean!")

@@ -13,7 +13,7 @@
 # under the License.
 
 from typhon.errors import Ejecting, Refused, UserException
-from typhon.objects import EqualizerObject
+from typhon.objects.equality import Equalizer
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.ejectors import Ejector, throw
@@ -94,7 +94,7 @@ class Throw(Object):
 def simpleScope():
     return {
         u"__accumulateList": accumulateList(),
-        u"__equalizer": EqualizerObject(),
+        u"__equalizer": Equalizer(),
         u"__loop": loop(),
         u"__makeList": makeList(),
         u"false": wrapBool(False),

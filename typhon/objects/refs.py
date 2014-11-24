@@ -39,9 +39,9 @@ def _toRef(o, vat):
     return NearRef(o, vat)
 
 
-def near(o):
-    while isinstance(o, Promise):
-        o = o.resolution()
+def resolution(o):
+    if isinstance(o, Promise):
+        return o.resolution()
     return o
 
 
@@ -110,12 +110,6 @@ class RefOps(Object):
         else:
             return NEAR
 
-    def resolution(self, ref):
-        if isinstance(ref, Promise):
-            return ref.resolution()
-        else:
-            return ref
-
 #    def fulfillment(self, ref):
 #        ref = self.resolution(ref)
 #        p = self.optProblem(ref)
@@ -177,10 +171,6 @@ class RefOps(Object):
 
     def isSelfish(self, o):
         return self.isNear(o) and not self.isSelfless(o)
-
-    def isSettled(self, o):
-        from monte.runtime.equalizer import _isSettled
-        return _isSettled(o)
 
 
 def _whenBrokenReactor(callback, ref, resolver, vat):

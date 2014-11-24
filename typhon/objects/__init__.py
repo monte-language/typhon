@@ -17,42 +17,6 @@ from typhon.objects.constants import BoolObject, wrapBool
 from typhon.objects.root import Object
 
 
-class EqualizerObject(Object):
-
-    def repr(self):
-        return "<equalizer>"
-
-    def recv(self, verb, args):
-        if verb == u"sameEver":
-            if len(args) == 2:
-                first, second = args
-                return wrapBool(self.sameEver(first, second))
-        raise Refused(verb, args)
-
-    def sameEver(self, first, second):
-        """
-        Determine whether two objects are ever equal.
-
-        This is a complex topic; expect lots of comments.
-        """
-
-        # Two identical objects are equal.
-        if first is second:
-            return True
-
-        # Bools.
-        if isinstance(first, BoolObject) and isinstance(second, BoolObject):
-            return first.isTrue() == second.isTrue()
-
-        # Chars.
-        from typhon.objects.data import CharObject
-        if isinstance(first, CharObject) and isinstance(second, CharObject):
-            return first._c == second._c
-
-        # By default, objects are not equal.
-        return False
-
-
 class ScriptObject(Object):
 
     def __init__(self, script, env):

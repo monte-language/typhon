@@ -19,7 +19,7 @@ from typhon.objects.collections import (ConstList, ConstMap, unwrapList,
 from typhon.objects.constants import unwrapBool, wrapBool
 from typhon.objects.data import (DoubleObject, IntObject, promoteToDouble,
                                  unwrapInt)
-from typhon.objects.refs import near, makePromise
+from typhon.objects.refs import makePromise, resolution
 
 
 def makeNear(o):
@@ -32,7 +32,7 @@ class TestRefs(TestCase):
 
     def testResolveNear(self):
         p = makeNear(wrapBool(False))
-        self.assertFalse(near(p).isTrue())
+        self.assertFalse(resolution(p).isTrue())
 
 
 class TestUnwrappers(TestCase):

@@ -187,8 +187,8 @@ class ConstMap(Object, Collection):
         return ConstMap(pairs)
 
     def _recv(self, verb, args):
-        # XXX we should be using hashing here, not equality.
-        from typhon.objects import EqualizerObject
+        # XXX we should be using hashing here, not equality, right?
+        from typhon.objects.equality import optSame, EQUAL
 
         if verb == u"_uncall" and len(args) == 0:
             rv = ConstList([ConstList([k, v]) for k, v in self.objects])
@@ -197,7 +197,7 @@ class ConstMap(Object, Collection):
         if verb == u"get" and len(args) == 1:
             key = args[0]
             for (k, v) in self.objects:
-                if EqualizerObject().sameEver(key, k):
+                if optSame(key, k) is EQUAL:
                     return v
 
         # or/1: Unify the elements of this collection with another.
@@ -210,7 +210,7 @@ class ConstMap(Object, Collection):
             value = args[1]
             rv = [(key, value)]
             for (k, v) in self.objects:
-                if EqualizerObject().sameEver(key, k):
+                if optSame(key, k) is EQUAL:
                     # Hit!
                     continue
                 else:
@@ -220,7 +220,7 @@ class ConstMap(Object, Collection):
         if verb == u"without" and len(args) == 1:
             key = args[0]
             return ConstMap([(k, v) for (k, v) in self.objects
-                if not EqualizerObject().sameEver(key, k)])
+                if optSame(key, k) is not EQUAL])
 
         raise Refused(verb, args)
 
@@ -233,8 +233,8 @@ class ConstMap(Object, Collection):
         for ok, ov in unwrapMap(other):
             found = False
             for i, (k, v) in enumerate(rv):
-                from typhon.objects import EqualizerObject
-                if EqualizerObject().sameEver(k, ok):
+                from typhon.objects.equality import optSame, EQUAL
+                if optSame(k, ok) is EQUAL:
                     found = True
             if not found:
                 rv.append((ok, ov))
@@ -259,16 +259,16 @@ def dictToMap(d):
 
 
 def unwrapList(o):
-    from typhon.objects.refs import near
-    l = near(o)
+    from typhon.objects.refs import resolution
+    l = resolution(o)
     if isinstance(l, ConstList):
         return l.objects
     raise userError(u"Not a list!")
 
 
 def unwrapMap(o):
-    from typhon.objects.refs import near
-    m = near(o)
+    from typhon.objects.refs import resolution
+    m = resolution(o)
     if isinstance(m, ConstMap):
         return m.objects
     raise userError(u"Not a map!")
