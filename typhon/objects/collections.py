@@ -27,6 +27,8 @@ ASMAP_0 = getAtom(u"asMap", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 DIVERGE_0 = getAtom(u"diverge", 0)
 GET_1 = getAtom(u"get", 1)
+INDEXOF_1 = getAtom(u"indexOf", 1)
+INDEXOF_2 = getAtom(u"indexOf", 2)
 MULTIPLY_1 = getAtom(u"multiply", 1)
 NEXT_1 = getAtom(u"next", 1)
 OR_1 = getAtom(u"or", 1)
@@ -161,6 +163,14 @@ class ConstList(Collection, Object):
             index = args[0]
             if isinstance(index, IntObject):
                 return self.objects[index.getInt()]
+
+        if atom is INDEXOF_1:
+            from typhon.objects.equality import EQUAL, optSame
+            needle = args[0]
+            for index, specimen in enumerate(self.objects):
+                if optSame(needle, specimen) is EQUAL:
+                    return IntObject(index)
+            return IntObject(-1)
 
         if atom is MULTIPLY_1:
             # multiply/1: Create a new list by repeating this list's contents.
