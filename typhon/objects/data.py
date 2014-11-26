@@ -63,6 +63,7 @@ SQRT_0 = getAtom(u"sqrt", 0)
 SUBTRACT_1 = getAtom(u"subtract", 1)
 TAN_0 = getAtom(u"tan", 0)
 TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
+TOSTRING_0 = getAtom(u"toString", 0)
 TOUPPERCASE_0 = getAtom(u"toUpperCase", 0)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 
@@ -300,6 +301,9 @@ class IntObject(Object):
                 # Promote ourselves to double and retry.
                 return DoubleObject(float(self._i)).subtract(other)
             return IntObject(self._i - unwrapInt(other))
+
+        if atom is TOSTRING_0:
+            return StrObject(u"%d" % self._i)
 
         raise Refused(atom, args)
 
