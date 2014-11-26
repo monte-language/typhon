@@ -389,3 +389,6 @@ class StrObject(Object):
             return strIterator(self._s)
 
         raise Refused(verb, args)
+
+    def getString(self):
+        return self._s
