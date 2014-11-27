@@ -15,11 +15,12 @@
 from rpython.rlib.jit import elidable, unroll_safe
 
 from typhon.errors import Ejecting, LoadFailed, UserException
-from typhon.objects import ScriptObject
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import BoolObject, NullObject
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
-from typhon.objects.ejectors import Ejector
+from typhon.objects.ejectors import Ejector, throw
+from typhon.objects.slots import VarSlot
+from typhon.objects.user import ScriptMap, ScriptObject
 from typhon.pretty import Buffer, LineWriter, OneLine
 
 
@@ -267,13 +268,14 @@ class Def(Node):
         out.writeLine("")
 
     def evaluate(self, env):
-        rval = self._v.evaluate(env)
-        # We don't care about whether we only get partway through the pattern
-        # unification here before exiting on failure, since we're going to
-        # exit this scope on failure before those names can even be used.
-        if not self._p.unify(rval, env):
-            # XXX if self._p is None
-            raise RuntimeError
+        rval = evaluate(self._v, env)
+
+        if self._e is None:
+            ejector = None
+        else:
+            ejector = evaluate(self._e, env)
+
+        self._p.unify(rval, ejector, env)
         return rval
 
 
@@ -300,18 +302,31 @@ class Escape(Node):
 
     def evaluate(self, env):
         with Ejector() as ej:
-            with env as env:
-                if not self._pattern.unify(ej, env):
-                    raise RuntimeError
+            rv = None
+
+            with env as newEnv:
+                self._pattern.unify(ej, None, newEnv)
 
                 try:
-                    return self._node.evaluate(env)
+                    return evaluate(self._node, newEnv)
                 except Ejecting as e:
                     # Is it the ejector that we created in this frame? If not,
                     # reraise.
                     if e.ejector is ej:
-                        return e.value
-                    raise
+                        # If no catch, then return as-is.
+                        rv = e.value
+                    else:
+                        raise
+
+            # If we have no catch block, then let's just return the value that
+            # we captured earlier.
+            if self._catchNode is None:
+                return rv
+
+            # Else, let's set up another frame and handle the catch block.
+            with env as newEnv:
+                self._catchPattern.unify(rv, None, newEnv)
+                return evaluate(self._catchNode, newEnv)
 
 
 class Finally(Node):
@@ -468,6 +483,10 @@ class Obj(Node):
         self._implements = implements
         self._script = script
 
+        # Create a cached map which will be reused for all objects created
+        # from this node.
+        self._cachedMap = ScriptMap(name.__repr__(), self._script)
+
     @staticmethod
     def fromAST(doc, name, auditors, script):
         auditors = tupleToList(auditors)
@@ -484,8 +503,14 @@ class Obj(Node):
         self._script.pretty(out.indent())
 
     def evaluate(self, env):
-        rv = ScriptObject(self._script, env)
-        self._n.unify(rv, env)
+        # Hmm. Objects need to have access to themselves within their scope...
+        rv = ScriptObject(formatName(self._n), self._cachedMap, env.freeze())
+        # ...but fortunately, objects don't contain any evaluations while
+        # being created, and it's always possible to perform the assignment
+        # into the environment afterwards.
+        self._n.unify(rv, None, rv.env())
+        # Oh, and assign it into the outer environment too.
+        self._n.unify(rv, None, env)
         return rv
 
 
@@ -575,7 +600,7 @@ class Try(Node):
             with env as env:
                 # XXX Exception information can't be leaked back into Monte;
                 # seal it properly instead of using null here.
-                if self._pattern.unify(NullObject, env):
+                if self._pattern.unify(NullObject, None, env):
                     return self._then.evaluate(env)
                 else:
                     raise
@@ -605,6 +630,10 @@ class BindingPattern(Pattern):
         out.write("&&")
         out.write(self._noun.encode("utf-8"))
 
+    def unify(self, specimen, ejector, env):
+        env.recordSlot(self._noun, specimen)
+
+
 class FinalPattern(Pattern):
 
     _immutable_ = True
@@ -620,10 +649,18 @@ class FinalPattern(Pattern):
             out.write(" :")
             self._g.pretty(out)
 
+    def unify(self, specimen, ejector, env):
+        if self._g is None:
+            rv = specimen
+        else:
+            # Get the guard.
+            guard = evaluate(self._g, env)
 
-    def unify(self, specimen, env):
-        env.final(self._n, specimen)
-        return True
+            # Since this is a final assignment, we can run the specimen through
+            # the guard once and for all, right now.
+            rv = guard.recv(u"coerce", [specimen, ejector])
+
+        env.final(self._n, rv)
 
 
 class IgnorePattern(Pattern):
@@ -639,8 +676,12 @@ class IgnorePattern(Pattern):
             out.write(" :")
             self._g.pretty(out)
 
-    def unify(self, specimen, env):
-        return True
+    def unify(self, specimen, ejector, env):
+        # We don't have to do anything, unless somebody put a guard on an
+        # ignore pattern. Who would do such a thing?
+        if self._g is not None:
+            guard = evaluate(self._g, env)
+            guard.recv(u"coerce", [specimen, ejector])
 
 
 class ListPattern(Pattern):
@@ -664,35 +705,35 @@ class ListPattern(Pattern):
             self._t.pretty(out)
 
     @unroll_safe
-    def unify(self, specimen, env):
+    def unify(self, specimen, ejector, env):
         patterns = self._ps
         tail = self._t
 
         # Can't unify lists and non-lists.
         if not isinstance(specimen, ConstList):
-            return False
+            throw(ejector, StrObject(u"Can't unify lists and non-lists"))
+
         items = unwrapList(specimen)
 
         # If we have no tail, then unification isn't going to work if the
         # lists are of differing lengths.
         if tail is None and len(patterns) != len(items):
-            return False
+            throw(ejector, StrObject(u"Lists are different lengths"))
+
         # Even if there's a tail, there must be at least as many elements in
         # the pattern list as there are in the specimen list.
         elif len(patterns) > len(items):
-            return False
+            throw(ejector, StrObject(u"List is too short"))
 
         # Actually unify. Because of the above checks, this shouldn't run
         # ragged.
         for i, pattern in enumerate(patterns):
-            pattern.unify(items[i], env)
+            pattern.unify(items[i], ejector, env)
 
         # And unify the tail as well.
         if tail is not None:
             remainder = ConstList(items[len(patterns):])
-            tail.unify(remainder, env)
-
-        return True
+            tail.unify(remainder, ejector, env)
 
 
 class VarPattern(Pattern):
@@ -710,9 +751,18 @@ class VarPattern(Pattern):
             out.write(" :")
             self._g.pretty(out)
 
-    def unify(self, specimen, env):
-        env.variable(self._n, specimen)
-        return True
+    def unify(self, specimen, ejector, env):
+        if self._g is None:
+            rv = VarSlot(specimen)
+        else:
+            # Get the guard.
+            guard = evaluate(self._g, env)
+
+            # Generate a slot.
+            rv = guard.recv(u"makeSlot", [specimen])
+
+        # Add the slot to the environment.
+        env.recordSlot(self._n, rv)
 
 
 class ViaPattern(Pattern):
@@ -731,13 +781,19 @@ class ViaPattern(Pattern):
         out.write(") ")
         self._pattern.pretty(out)
 
-    def unify(self, specimen, env):
+    def unify(self, specimen, ejector, env):
         # This one always bamboozles me, so I'll spell out what it's doing.
         # The via pattern takes an expression and another pattern, and passes
         # the specimen into the expression along with an ejector. The
         # expression can reject the specimen by escaping, or it can transform
         # the specimen and return a new specimen which is then applied to the
         # inner pattern.
-        examiner = self._expr.evaluate(env)
-        self._pattern.unify(examiner.recv(u"run", [specimen]), env)
-        return True
+        examiner = evaluate(self._expr, env)
+        self._pattern.unify(examiner.recv(u"run", [specimen, ejector]),
+                            ejector, env)
+
+
+def formatName(p):
+    if isinstance(p, FinalPattern):
+        return p._n.encode("utf-8")
+    return "_"

@@ -11,77 +11,84 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-DEF, VAR = range(2)
+
+from typhon.objects.slots import Binding, FinalSlot
 
 
 def finalize(scope):
     rv = {}
     for key in scope:
-        rv[key] = DEF, scope[key]
+        rv[key] = FinalSlot(scope[key])
     return rv
 
 
 class Environment(object):
     """
     An execution context.
+
+    Environments are append-only mappings of nouns to slots. They may be
+    nested to provide scoping.
     """
 
-    def __init__(self, baseScope):
-        self._frames = [finalize(baseScope)]
+    _immutable_ = True
+
+    def __init__(self, initialScope, parent):
+        if parent is None:
+            self._frame = {}
+        else:
+            self._frame = parent._frame.copy()
+        self._frame.update(initialScope)
 
     def __enter__(self):
-        self.enterFrame()
-        return self
+        return Environment({}, self)
 
     def __exit__(self, *args):
-        self.leaveFrame()
+        pass
 
-    def enterFrame(self):
-        self._frames.append({})
-
-    def leaveFrame(self):
-        frame = self._frames.pop()
-
-    def _record(self, noun, value):
-        try:
-            frame = self._findFrame(noun)
-        except:
-            frame = self._frames[-1]
-        frame[noun] = value
-
-    def _findFrame(self, noun):
-        i = len(self._frames)
-        while i > 0:
-            i -= 1
-            frame = self._frames[i]
-            if noun in frame:
-                return frame
-        raise KeyError(noun)
+    def recordSlot(self, noun, value):
+        self._frame[noun] = value
 
     def _find(self, noun):
-        i = len(self._frames)
-        while i > 0:
-            i -= 1
-            frame = self._frames[i]
-            if noun in frame:
-                return frame[noun]
-        raise KeyError(noun)
+        # XXX the compiler needs to have proven this operation's safety
+        # beforehand, because the JIT will not. We should look into some sort
+        # of safe append-only situation here that will let us construct
+        # environment names and slots at the beginning of the frame.
+        v = self._frame.get(noun, None)
+        if v is None:
+            from typhon.objects.data import StrObject
+            from typhon.errors import UserException
+            raise UserException(StrObject(u"Noun %s not in frame" % noun))
+        return v
+
+    def bindingFor(self, noun):
+        """
+        Create a binding object for a given name.
+        """
+
+        return Binding(self._find(noun))
 
     def final(self, noun, value):
-        self._record(noun, (DEF, value))
-
-    def variable(self, noun, value):
-        self._record(noun, (VAR, value))
+        self.recordSlot(noun, FinalSlot(value))
 
     def update(self, noun, value):
-        style, oldValue = self._find(noun)
-        if style == VAR:
-            # XXX this won't alter outer bindings. A real slot mechanism is
-            # needed here!
-            self._record(noun, (VAR, value))
-        else:
-            raise RuntimeError
+        slot = self._find(noun)
+        slot.recv(u"put", [value])
 
     def get(self, noun):
-        style, value = self._find(noun)
-        return value
+        slot = self._find(noun)
+        return slot.recv(u"get", [])
+
+    def freeze(self):
+        """
+        Return a copy of this environment with the scope flattened for easy
+        lookup.
+
+        Meant to generate closures for objects.
+        """
+
+        # Allow me to break the ice. My name is Freeze. Learn it well, for it
+        # is the chilling sound of your doom.
+
+        # But wait, what's this? It's okay, kids; freezing is no longer
+        # necessary.
+        return self

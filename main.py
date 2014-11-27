@@ -31,7 +31,7 @@ def entryPoint(argv):
 
     scope = simpleScope()
     scope.update(vatScope(vat))
-    env = Environment(scope)
+    env = Environment(scope, None)
 
     terms = load(open(argv[1], "rb").read())
     for term in terms:
