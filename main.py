@@ -17,6 +17,7 @@ from typhon.env import Environment
 from typhon.errors import UserException
 from typhon.load import load
 from typhon.objects.vats import Vat, vatScope
+from typhon.optimizer import optimize
 from typhon.reactor import Reactor
 from typhon.simple import simpleScope
 
@@ -35,6 +36,7 @@ def entryPoint(argv):
 
     terms = load(open(argv[1], "rb").read())
     for term in terms:
+        term = optimize(term)
         print term.repr()
         try:
             print term.evaluate(env).repr()

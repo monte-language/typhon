@@ -16,7 +16,7 @@ from rpython.rlib.jit import elidable, unroll_safe
 
 from typhon.errors import Ejecting, LoadFailed, UserException
 from typhon.objects.collections import ConstList, unwrapList
-from typhon.objects.constants import BoolObject, NullObject
+from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.slots import VarSlot
@@ -60,6 +60,21 @@ class Node(object):
 
     def evaluate(self, env):
         raise NotImplementedError
+
+    def transform(self, f):
+        """
+        Apply the given transformation to all children of this node, and this
+        node, bottom-up.
+        """
+
+        return f(self)
+
+    def usesName(self, name):
+        """
+        Whether a name is used within this node.
+        """
+
+        return False
 
 
 class _Null(Node):
@@ -166,7 +181,18 @@ class Tuple(Node):
 
     @unroll_safe
     def evaluate(self, env):
-        return ConstList([item.evaluate(env) for item in self._t])
+        return ConstList([evaluate(item, env) for item in self._t])
+
+    def transform(self, f):
+        # I don't care if it's cheating. It's elegant and simple and pretty.
+        return f(Tuple([node.transform(f) for node in self._t]))
+
+    def usesName(self, name):
+        uses = False
+        for node in self._t:
+            if node.usesName(name):
+                uses = True
+        return uses
 
 
 def tupleToList(t):
@@ -193,9 +219,15 @@ class Assign(Node):
         self.rvalue.pretty(out)
 
     def evaluate(self, env):
-        value = self.rvalue.evaluate(env)
+        value = evaluate(self.rvalue, env)
         env.update(self.target, value)
         return value
+
+    def transform(self, f):
+        return f(Assign(self.target, self.rvalue.transform(f)))
+
+    def usesName(self, name):
+        return self.rvalue.usesName(name)
 
 
 class Binding(Node):
@@ -212,6 +244,12 @@ class Binding(Node):
     def pretty(self, out):
         out.write("&&")
         out.write(self.name.encode("utf-8"))
+
+    def evaluate(self, env):
+        return env.bindingFor(self.name)
+
+    def transform(self, f):
+        return f(self)
 
 
 class Call(Node):
@@ -235,12 +273,20 @@ class Call(Node):
         # There's a careful order of operations here. First we have to
         # evaluate the target, then the verb, and finally the arguments.
         # Once we do all that, we make the actual call.
-        target = self._target.evaluate(env)
-        verb = self._verb.evaluate(env)
+        target = evaluate(self._target, env)
+        verb = evaluate(self._verb, env)
         assert isinstance(verb, StrObject), "non-Str verb"
-        args = self._args.evaluate(env)
+        args = evaluate(self._args, env)
 
         return target.recv(verb._s, unwrapList(args))
+
+    def transform(self, f):
+        return f(Call(self._target.transform(f), self._verb.transform(f),
+            self._args.transform(f)))
+
+    def usesName(self, name):
+        rv = self._target.usesName(name) or self._verb.usesName(name)
+        return rv or self._args.usesName(name)
 
 
 class Def(Node):
@@ -277,6 +323,15 @@ class Def(Node):
 
         self._p.unify(rval, ejector, env)
         return rval
+
+    def transform(self, f):
+        return f(Def(self._p, self._e, self._v.transform(f)))
+
+    def usesName(self, name):
+        rv = self._v.usesName(name)
+        if self._e is not None:
+            rv = rv or self._e.usesName(name)
+        return rv
 
 
 class Escape(Node):
@@ -328,6 +383,22 @@ class Escape(Node):
                 self._catchPattern.unify(rv, None, newEnv)
                 return evaluate(self._catchNode, newEnv)
 
+    def transform(self, f):
+        # We have to write some extra code here since catchNode could be None.
+        if self._catchNode is None:
+            catchNode = None
+        else:
+            catchNode = self._catchNode.transform(f)
+
+        return f(Escape(self._pattern, self._node.transform(f),
+            self._catchPattern, catchNode))
+
+    def usesName(self, name):
+        rv = self._node.usesName(name)
+        if self._catchNode is not None:
+            rv = rv or self._catchNode.usesName(name)
+        return rv
+
 
 class Finally(Node):
 
@@ -349,11 +420,17 @@ class Finally(Node):
         # the atLast block after exiting the main block.
         try:
             with env as env:
-                rv = self._block.evaluate(env)
+                rv = evaluate(self._block, env)
             return rv
         finally:
             with env as env:
-                self._atLast.evaluate(env)
+                evaluate(self._atLast, env)
+
+    def transform(self, f):
+        return f(Finally(self._block.transform(f), self._atLast.transform(f)))
+
+    def usesName(self, name):
+        return self._block.usesName(name) or self._atLast.usesName(name)
 
 
 class Hide(Node):
@@ -370,6 +447,14 @@ class Hide(Node):
     def evaluate(self, env):
         with env as env:
             return evaluate(self._inner, env)
+
+    def transform(self, f):
+        return f(Hide(self._inner.transform(f)))
+
+    def usesName(self, name):
+        # XXX not technically correct due to Hide intentionally altering
+        # scope resolution.
+        return self._inner.usesName(name)
 
 
 class If(Node):
@@ -394,15 +479,20 @@ class If(Node):
         # If is a short-circuiting expression. We construct zero objects in
         # the branch that is not chosen.
         with env as env:
-            whether = self._test.evaluate(env)
-            if isinstance(whether, BoolObject):
-                with env as env:
-                    if whether.isTrue():
-                        return self._then.evaluate(env)
-                    else:
-                        return self._otherwise.evaluate(env)
+            whether = evaluate(self._test, env)
+
+            if unwrapBool(whether):
+                return evaluate(self._then, env)
             else:
-                raise TypeError("non-Boolean in conditional expression")
+                return evaluate(self._otherwise, env)
+
+    def transform(self, f):
+        return f(If(self._test.transform(f), self._then.transform(f),
+            self._otherwise.transform(f)))
+
+    def usesName(self, name):
+        rv = self._test.usesName(name) or self._then.usesName(name)
+        return rv or self._otherwise.usesName(name)
 
 
 class Matcher(Node):
@@ -413,6 +503,15 @@ class Matcher(Node):
         self._pattern = pattern
         self._block = block
 
+    def pretty(self, out):
+        out.write("match ")
+        self._pattern.pretty(out)
+        out.writeLine(":")
+        self._block.pretty(out.indent())
+        out.writeLine("")
+
+    def transform(self, f):
+        return f(Matcher(self._pattern, self._block.transform(f)))
 
 class Method(Node):
 
@@ -449,6 +548,13 @@ class Method(Node):
         self._b.pretty(out.indent())
         out.writeLine("")
 
+    def transform(self, f):
+        return f(Method(self._d, self._verb, self._ps, self._g,
+            self._b.transform(f)))
+
+    def usesName(self, name):
+        return self._b.usesName(name)
+
 
 class Noun(Node):
 
@@ -462,6 +568,9 @@ class Noun(Node):
 
     def evaluate(self, env):
         return env.get(self.name)
+
+    def usesName(self, name):
+        return self.name == name
 
 
 def nounToString(n):
@@ -513,6 +622,13 @@ class Obj(Node):
         self._n.unify(rv, None, env)
         return rv
 
+    def transform(self, f):
+        return f(Obj(self._d, self._n, self._as, self._implements,
+            self._script.transform(f)))
+
+    def usesName(self, name):
+        return self._script.usesName(name)
+
 
 class Script(Node):
 
@@ -545,6 +661,19 @@ class Script(Node):
         for matcher in self._matchers:
             matcher.pretty(out)
 
+    def transform(self, f):
+        methods = [method.transform(f) for method in self._methods]
+        return f(Script(self._extends, methods, self._matchers))
+
+    def usesName(self, name):
+        for method in self._methods:
+            if method.usesName(name):
+                return True
+        for matcher in self._matchers:
+            if matcher.usesName(name):
+                return True
+        return False
+
 
 class Sequence(Node):
 
@@ -571,6 +700,15 @@ class Sequence(Node):
             rv = evaluate(node, env)
         return rv
 
+    def transform(self, f):
+        return f(Sequence([node.transform(f) for node in self._l]))
+
+    def usesName(self, name):
+        for node in self._l:
+            if node.usesName(name):
+                return True
+        return False
+
 
 class Try(Node):
 
@@ -595,15 +733,22 @@ class Try(Node):
         # against the catch-pattern in the then-block.
         try:
             with env as env:
-                return self._first.evaluate(env)
+                return evaluate(self._first, env)
         except UserException:
             with env as env:
                 # XXX Exception information can't be leaked back into Monte;
                 # seal it properly instead of using null here.
                 if self._pattern.unify(NullObject, None, env):
-                    return self._then.evaluate(env)
+                    return evaluate(self._then, env)
                 else:
                     raise
+
+    def transform(self, f):
+        return f(Try(self._first.transform(f), self._pattern,
+            self._then.transform(f)))
+
+    def usesName(self, name):
+        return self._first.usesName(name) or self._then.usesName(name)
 
 
 class Pattern(object):
