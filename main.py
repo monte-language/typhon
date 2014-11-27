@@ -25,6 +25,7 @@ from typhon.metrics import Recorder
 from typhon.objects.collections import ConstMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
+from typhon.objects.imports import addImportToScope
 from typhon.objects.vats import Vat, vatScope
 from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
@@ -102,6 +103,7 @@ def entryPoint(argv):
     scope = simpleScope()
     scope.update(prelude)
     scope.update(vatScope(vat))
+    addImportToScope(scope, recorder)
     env = Environment(finalize(scope), None)
 
     result = NullObject
