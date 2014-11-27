@@ -18,33 +18,13 @@ from typhon.objects.root import Object
 
 
 class ScriptObject(Object):
+    # XXX intentionally gimped for one commit
 
     def __init__(self, script, env):
-        self._env = env
-        self._script = script
-        self._methods = {}
-
-        for method in self._script._methods:
-            # God *dammit*, RPython.
-            from typhon.nodes import Method
-            assert isinstance(method, Method)
-            assert isinstance(method._verb, unicode)
-            self._methods[method._verb] = method
+        pass
 
     def repr(self):
         return "<scriptObject>"
 
     def recv(self, verb, args):
-        if verb in self._methods:
-            method = self._methods[verb]
-
-            with self._env as env:
-                # Set up parameters from arguments.
-                from typhon.objects.collections import ConstList
-                if not method._ps.unify(ConstList(args), env):
-                    raise RuntimeError
-                # Run the block.
-                rv = method._b.evaluate(env)
-
-            return rv
         raise Refused(verb, args)

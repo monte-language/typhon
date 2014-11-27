@@ -11,14 +11,17 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
 from rpython.rlib.rstruct.ieee import unpack_float
 from rpython.rlib.runicode import str_decode_utf_8
 
-from typhon.nodes import (Assign, Call, Char, Def, Double, Escape,
-                          FinalPattern, Finally, If, Int, IgnorePattern,
-                          ListPattern, Method, Noun, Null, Obj, Script,
-                          Sequence, Str, Tag, Try, Tuple, VarPattern,
-                          ViaPattern)
+from typhon.errors import LoadFailed
+from typhon.nodes import (Assign, Binding, BindingPattern, Call, Char, Def,
+                          Double, Escape, FinalPattern, Finally, Hide, If,
+                          Int, IgnorePattern, ListPattern, Matcher, Method,
+                          Noun, Null, Obj, Script, Sequence, Str, Try, Tuple,
+                          VarPattern, ViaPattern)
+from typhon.pretty import Buffer, LineWriter
 
 
 def unshift(byte):
@@ -32,6 +35,12 @@ def unshiftBytes(bs):
     return rv
 
 
+class InvalidStream(LoadFailed):
+    """
+    A stream was invalid.
+    """
+
+
 class Stream(object):
 
     _counter = 0
@@ -43,83 +52,97 @@ class Stream(object):
         return self._counter >= len(self._items)
 
     def nextItem(self):
-        assert self._counter < len(self._items), "Buffer underrun while streaming"
+        if self._counter >= len(self._items):
+            raise InvalidStream("Buffer underrun while streaming")
         rv = self._items[self._counter]
         self._counter += 1
         return rv
+
+    def rewind(self):
+        self._counter -= 1
 
     def nextByte(self):
         return ord(unshift(self.nextItem()))
 
     def slice(self, count):
-        assert count > 0, "Negative count while slicing: %d" % count
-        assert self._counter + count <= len(self._items), "Buffer underrun while streaming"
-        rv = self._items[self._counter:self._counter + count]
+
+        if self._counter + count > len(self._items):
+            raise InvalidStream("Buffer underrun while streaming")
+
+        # RPython non-negative slice proofs.
+        start = self._counter
+        end = start + count
+        assert end > 0, "Negative count while slicing: %d" % count
+        assert start >= 0, "Inconceivable!"
+
+        rv = self._items[start:end]
         self._counter += count
         return rv
 
     def nextShort(self):
         return self.nextByte() << 8 | self.nextByte()
 
-    def nextInt(self):
-        return (self.nextByte() << 24 | self.nextByte() << 16 |
-                self.nextByte() << 8 | self.nextByte())
-
     def nextDouble(self):
         # Second parameter is the big-endian flag.
-        return unpack_float(self.slice(8), True)
+        bs = unshiftBytes(self.slice(8))
+        return unpack_float(bs, True)
+
+    def nextVarInt(self):
+        shift = 0
+        i = 0
+        cont = True
+        while cont:
+            b = self.nextByte()
+            i |= (b & 0x7f) << shift
+            shift += 7
+            cont = bool(b & 0x80)
+        return i
 
 
-LONG_SHIFT = 15
+def zzd(i):
+    return (i // 2) ^ -1 if i & 1 else i // 2
+
 
 # The kinds for primitive nodes.
-NULL, STR, FLOAT, CHAR = 0, 1, 2, 3
-SHORT_INT, LONG_INT  = 4, 5
-BIG_TUPLE, SMALL_TUPLE  = 6, 7
+NULL, TRUE, FALSE, STR, FLOAT, CHAR, INT, TUPLE, BAG, ATTR = range(10)
 
 kernelNodeInfo = {
-    8: ('LiteralExpr', 1),
-    9: ('NounExpr', 1),
-    10: ('BindingExpr', 1),
-    11: ('SeqExpr', 1),
-    12: ('MethodCallExpr', 3),
-    13: ('Def', 3),
-    14: ('Escape', 3),
-    15: ('Catch', 2),
-    16: ('Object', 4),
-    17: ('Script', 3),
-    18: ('Method', 5),
-    19: ('Matcher', 2),
-    20: ('Assign', 2),
-    21: ('Finally', 2),
-    22: ('KernelTry', 3),
-    23: ('HideExpr', 1),
-    24: ('If', 3),
-    25: ('Meta', 1),
-    32: ('Character', 1),
+    10: 'LiteralExpr',
+    11: 'NounExpr',
+    12: 'BindingExpr',
+    13: 'SeqExpr',
+    14: 'MethodCallExpr',
+    15: 'Def',
+    16: 'Escape',
+    17: 'Object',
+    18: 'Script',
+    19: 'Method',
+    20: 'Matcher',
+    21: 'Assign',
+    22: 'Finally',
+    23: 'KernelTry',
+    24: 'HideExpr',
+    25: 'If',
+    33: 'Character',
 }
 
 patternInfo = {
-    26: 'Final',
-    27: 'Ignore',
-    28: 'Var',
-    29: 'List',
-    30: 'Via',
-    31: 'Binding',
+    27: 'Final',
+    28: 'Ignore',
+    29: 'Var',
+    30: 'List',
+    31: 'Via',
+    32: 'Binding',
 }
 
 
 def loadPatternList(stream):
     kind = stream.nextByte()
 
-    if kind == SMALL_TUPLE:
-        arity = stream.nextByte()
-        return [loadPattern(stream) for _ in range(arity)]
-    elif kind == BIG_TUPLE:
-        arity = stream.nextInt()
-    else:
-        raise RuntimeError
+    if kind != TUPLE:
+        raise InvalidStream("Pattern list was not actually a list!")
 
+    arity = stream.nextVarInt()
     return [loadPattern(stream) for _ in range(arity)]
 
 
@@ -129,9 +152,14 @@ def loadPattern(stream):
     if kind == NULL:
         return None
 
-    tag = patternInfo[kind]
+    tag = patternInfo.get(kind, None)
+    if tag is None:
+        raise LoadFailed("Unknown pattern kind %d" % kind)
 
-    if tag == "Final":
+    if tag == "Binding":
+        return BindingPattern(loadTerm(stream))
+
+    elif tag == "Final":
         return FinalPattern(loadTerm(stream), loadTerm(stream))
 
     elif tag == "Ignore":
@@ -146,8 +174,7 @@ def loadPattern(stream):
     elif tag == "Via":
         return ViaPattern(loadTerm(stream), loadPattern(stream))
 
-    assert False, "Impossible condition"
-    return None
+    raise LoadFailed("Unknown pattern tag %s (implementation error)" % tag)
 
 
 def loadTerm(stream):
@@ -156,7 +183,7 @@ def loadTerm(stream):
     if kind == NULL:
         return Null
     elif kind == STR:
-        size = stream.nextInt()
+        size = stream.nextVarInt()
         # Special-case zero-length strings to avoid confusing Stream.slice().
         if size == 0:
             return Str(u"")
@@ -168,46 +195,49 @@ def loadTerm(stream):
         buf = stream.nextItem()
         rv, count = str_decode_utf_8(buf, len(buf), None)
         while rv == u'':
+            buf += stream.nextItem()
             rv, count = str_decode_utf_8(buf, len(buf), None)
         return Char(rv)
-    elif kind == SHORT_INT:
-        return Int(stream.nextInt())
-    elif kind == LONG_INT:
-        rv = 0
-        size = stream.nextInt()
-        for i in range(size):
-            chunk = stream.nextShort()
-            rv |= (chunk << LONG_SHIFT * i)
-        return Int(rv)
-    elif kind == SMALL_TUPLE:
-        arity = stream.nextByte()
-        return Tuple([loadTerm(stream) for _ in range(arity)])
-    elif kind == BIG_TUPLE:
-        arity = stream.nextInt()
+    elif kind == INT:
+        return Int(zzd(stream.nextVarInt()))
+    elif kind == TUPLE:
+        arity = stream.nextVarInt()
         return Tuple([loadTerm(stream) for _ in range(arity)])
 
-    # Well, that's it for the primitives. Let's lookup the tag and arity.
-    tag, arity = kernelNodeInfo[kind]
+    # Well, that's it for the primitives. Let's lookup the tag.
+    tag = kernelNodeInfo.get(kind, None)
+    if tag is None:
+        raise LoadFailed("Unknown kind %d" % kind)
 
     if tag == "Assign":
-        return Assign(loadTerm(stream), loadTerm(stream))
+        return Assign.fromAST(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "BindingExpr":
+        return Binding.fromAST(loadTerm(stream))
 
     elif tag == "Character":
         # Characters should always contain a single .char. term which can
         # stand alone in RPython.
         string = loadTerm(stream)
-        assert isinstance(string, Str)
-        assert len(string._s) == 1
+        if not isinstance(string, Str):
+            raise InvalidStream("Character node contained non-string")
+        if len(string._s) != 1:
+            raise InvalidStream("Character node contained extra characters")
         return Char(string._s[0])
 
     elif tag == "Def":
-        return Def(loadPattern(stream), loadTerm(stream), loadTerm(stream))
+        return Def.fromAST(loadPattern(stream), loadTerm(stream),
+                loadTerm(stream))
 
     elif tag == "Escape":
-        return Escape(loadPattern(stream), loadTerm(stream), loadTerm(stream))
+        return Escape(loadPattern(stream), loadTerm(stream),
+                loadPattern(stream), loadTerm(stream))
 
     elif tag == "Finally":
         return Finally(loadTerm(stream), loadTerm(stream))
+
+    elif tag == "HideExpr":
+        return Hide(loadTerm(stream))
 
     elif tag == "If":
         return If(loadTerm(stream), loadTerm(stream), loadTerm(stream))
@@ -220,10 +250,12 @@ def loadTerm(stream):
         # that literal.
         return loadTerm(stream)
 
+    elif tag == "Matcher":
+        return Matcher(loadPattern(stream), loadTerm(stream))
+
     elif tag == "Method":
-        return Method(loadTerm(stream), loadTerm(stream),
-                      loadPatternList(stream), loadTerm(stream),
-                      loadTerm(stream))
+        return Method.fromAST(loadTerm(stream), loadTerm(stream),
+                loadPatternList(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "MethodCallExpr":
         return Call(loadTerm(stream), loadTerm(stream), loadTerm(stream))
@@ -232,23 +264,57 @@ def loadTerm(stream):
         return Noun(loadTerm(stream))
 
     elif tag == "Object":
-        return Obj(loadTerm(stream), loadPattern(stream), loadTerm(stream),
-                   loadTerm(stream))
+        return Obj.fromAST(loadTerm(stream), loadPattern(stream),
+                loadTerm(stream), loadTerm(stream))
 
     elif tag == "Script":
-        return Script(loadTerm(stream), loadTerm(stream), loadTerm(stream))
+        return Script.fromAST(loadTerm(stream), loadTerm(stream),
+                loadTerm(stream))
 
     elif tag == "SeqExpr":
         # SeqExprs contain one single tuple; consume and return the tuple
         # wrapped in a Sequence.
-        return Sequence(loadTerm(stream))
+        return Sequence.fromAST(loadTerm(stream))
 
-    return Tag(tag, [loadTerm(stream) for _ in range(arity)])
+    raise LoadFailed("Unknown tag %s (implementation error)" % tag)
 
 
 def load(data):
     stream = Stream(data)
     terms = []
     while not stream.done():
-        terms.append(loadTerm(stream))
+        term = loadTerm(stream)
+        print "Loaded term:"
+        b = Buffer()
+        term.pretty(LineWriter(b))
+        print b.get()
+        terms.append(term)
     return terms
+
+
+def loadModule(data):
+    stream = Stream(data)
+    tag = 0x22
+    magic = stream.nextByte()
+    if magic != tag:
+        raise LoadFailed("Module magic was %d (expected %d)" % (magic, tag))
+
+    imports = loadPatternList(stream)
+    exports = []
+    exportTerms = loadTerm(stream)
+    if not isinstance(exportTerms, Tuple):
+        raise LoadFailed("Modules must export a list of zero or more Nouns")
+
+    for export in exportTerms._t:
+        if not isinstance(export, Noun):
+            raise LoadFailed("Modules may only export Nouns")
+
+        exports.append(export.name)
+    body = loadTerm(stream)
+
+    print "Loaded term:"
+    b = Buffer()
+    body.pretty(LineWriter(b))
+    print b.get()
+
+    return imports, exports, body
