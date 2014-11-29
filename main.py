@@ -11,15 +11,46 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+
 import sys
 
-from typhon.env import Environment
-from typhon.errors import UserException
-from typhon.load import load
+from typhon.env import Environment, finalize
+from typhon.errors import LoadFailed, UserException
+from typhon.importing import evaluateTerms, obtainModule
+from typhon.metrics import Recorder
+from typhon.objects.collections import ConstMap, unwrapMap
+from typhon.objects.data import StrObject
 from typhon.objects.vats import Vat, vatScope
-from typhon.optimizer import optimize
+from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
 from typhon.simple import simpleScope
+
+
+def loadPrelude(recorder, vat):
+    scope = simpleScope()
+    scope.update(vatScope(vat))
+    env = Environment(finalize(scope), None)
+
+    terms = obtainModule("prelude.ty", recorder)
+
+    with recorder.context("Time spent in prelude"):
+        result = evaluateTerms(terms, env)
+
+    if result is None:
+        print "Prelude returned None!?"
+        return {}
+
+    print "Prelude result:", result.repr()
+
+    if isinstance(result, ConstMap):
+        prelude = {}
+        for key, value in unwrapMap(result):
+            assert isinstance(key, StrObject)
+            prelude[key._s] = value
+        return prelude
+
+    print "Prelude didn't return map!?"
+    return {}
 
 
 def entryPoint(argv):
@@ -27,37 +58,58 @@ def entryPoint(argv):
         print "No file provided?"
         return 1
 
+    recorder = Recorder()
+    recorder.start()
+
+    terms = obtainModule(argv[1], recorder)
+
+    # Intialize our vat.
     reactor = Reactor()
     vat = Vat(reactor)
 
+    try:
+        prelude = loadPrelude(recorder, vat)
+    except LoadFailed as lf:
+        print lf
+        return 1
+
+    registerGlobals(prelude)
+
+    try:
+        terms = obtainModule(argv[1], recorder)
+    except LoadFailed as lf:
+        print lf
+        return 1
+
     scope = simpleScope()
+    scope.update(prelude)
     scope.update(vatScope(vat))
-    env = Environment(scope, None)
+    env = Environment(finalize(scope), None)
 
-    terms = load(open(argv[1], "rb").read())
-    for term in terms:
-        term = optimize(term)
-        print term.repr()
-        try:
-            print term.evaluate(env).repr()
-        except UserException as ue:
-            print "Caught exception:", ue.formatError()
-            return 1
+    with recorder.context("Time spent in vats"):
+        result = evaluateTerms(terms, env)
+    if result is None:
+        return 1
 
-    # Run any remaining turns.
-    while vat.hasTurns() or reactor.hasObjects():
-        if vat.hasTurns():
-            count = len(vat._pending)
-            print "Taking", count, "turn(s) on", vat.repr()
-            for _ in range(count):
-                try:
-                    vat.takeTurn()
-                except UserException as ue:
-                    print "Caught exception:", ue.formatError()
+    try:
+        # Run any remaining turns.
+        while vat.hasTurns() or reactor.hasObjects():
+            if vat.hasTurns():
+                count = len(vat._pending)
+                print "Taking", count, "turn(s) on", vat.repr()
+                for _ in range(count):
+                    try:
+                        recorder.record("Time spent in vats", vat.takeTurn)
+                    except UserException as ue:
+                        print "Caught exception:", ue.formatError()
 
-        if reactor.hasObjects():
-            print "Performing I/O..."
-            reactor.spin(vat.hasTurns())
+            if reactor.hasObjects():
+                print "Performing I/O..."
+                with recorder.context("Time spent in I/O"):
+                    reactor.spin(vat.hasTurns())
+    finally:
+        recorder.stop()
+        recorder.printResults()
 
     return 0
 
@@ -67,4 +119,4 @@ def target(*args):
 
 
 if __name__ == "__main__":
-    entryPoint(sys.argv)
+    sys.exit(entryPoint(sys.argv))
