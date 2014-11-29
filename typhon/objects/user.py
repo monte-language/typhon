@@ -61,7 +61,7 @@ class ScriptMap(object):
             self.matchers.append((matcher._pattern, matcher._block))
 
     def repr(self):
-        ms = [verb.repr() for verb in self._methods.keys()]
+        ms = [verb.encode("utf-8") for verb in self._methods.keys()]
         return "ScriptMap(%s, {%s})" % (self.name, ", ".join(ms))
 
     @elidable

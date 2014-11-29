@@ -14,6 +14,8 @@
 
 import sys
 
+from rpython.jit.codewriter.policy import JitPolicy
+
 from typhon.env import Environment, finalize
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, obtainModule
@@ -24,6 +26,10 @@ from typhon.objects.vats import Vat, vatScope
 from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
 from typhon.simple import simpleScope
+
+
+def jitPolicy(driver):
+    return JitPolicy()
 
 
 def loadPrelude(recorder, vat):
