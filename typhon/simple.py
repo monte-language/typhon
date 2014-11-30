@@ -14,11 +14,48 @@
 
 from typhon.errors import Refused, UserException
 from typhon.objects.equality import Equalizer
-from typhon.objects.collections import ConstList
-from typhon.objects.constants import NullObject, wrapBool
+from typhon.objects.collections import ConstList, ConstMap
+from typhon.objects.constants import BoolObject, NullObject, wrapBool
+from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import throw
+from typhon.objects.guards import predGuard
 from typhon.objects.iteration import accumulateList, loop
 from typhon.objects.root import Object
+
+
+@predGuard
+def boolGuard(specimen):
+    return isinstance(specimen, BoolObject)
+
+
+@predGuard
+def charGuard(specimen):
+    return isinstance(specimen, CharObject)
+
+
+@predGuard
+def doubleGuard(specimen):
+    return isinstance(specimen, DoubleObject)
+
+
+@predGuard
+def intGuard(specimen):
+    return isinstance(specimen, IntObject)
+
+
+@predGuard
+def strGuard(specimen):
+    return isinstance(specimen, StrObject)
+
+
+@predGuard
+def listGuard(specimen):
+    return isinstance(specimen, ConstList)
+
+
+@predGuard
+def mapGuard(specimen):
+    return isinstance(specimen, ConstMap)
 
 
 class makeList(Object):
@@ -48,6 +85,14 @@ def simpleScope():
 
         u"false": wrapBool(False),
         u"true": wrapBool(True),
+
+        u"Bool": boolGuard(),
+        u"Char": charGuard(),
+        u"Double": doubleGuard(),
+        u"Int": intGuard(),
+        u"List": listGuard(),
+        u"Map": mapGuard(),
+        u"Str": strGuard(),
 
         u"__accumulateList": accumulateList(),
         u"__equalizer": Equalizer(),
