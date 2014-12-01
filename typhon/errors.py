@@ -47,7 +47,7 @@ class UserException(Exception):
         return "\n".join(pieces)
 
     def error(self):
-        return "Error"
+        return "Error: " + self.payload.repr()
 
 
 def userError(s):

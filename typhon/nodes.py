@@ -275,6 +275,7 @@ class Call(Node):
         # Once we do all that, we make the actual call.
         target = evaluate(self._target, env)
         verb = evaluate(self._verb, env)
+        # XXX figure out a better runtime exception for this
         assert isinstance(verb, StrObject), "non-Str verb"
         args = evaluate(self._args, env)
 
@@ -512,6 +513,7 @@ class Matcher(Node):
 
     def transform(self, f):
         return f(Matcher(self._pattern, self._block.transform(f)))
+
 
 class Method(Node):
 

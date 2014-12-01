@@ -15,9 +15,10 @@
 from rpython.rlib.objectmodel import specialize
 
 from typhon.errors import Refused, userError
-from typhon.objects.constants import NullObject
+from typhon.objects.constants import wrapBool
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object
+from typhon.prelude import getGlobal
 
 
 class listIterator(Object):
@@ -32,8 +33,7 @@ class listIterator(Object):
     def recv(self, verb, args):
         if verb == u"next" and len(args) == 1:
             if self._index < len(self.objects):
-                rv = [IntObject(self._index), self.objects[self._index],
-                        NullObject]
+                rv = [IntObject(self._index), self.objects[self._index]]
                 self._index += 1
                 return ConstList(rv)
             else:
@@ -55,7 +55,7 @@ class mapIterator(Object):
         if verb == u"next" and len(args) == 1:
             if self._index < len(self.objects):
                 k, v = self.objects[self._index]
-                rv = [k, v, NullObject]
+                rv = [k, v]
                 self._index += 1
                 return ConstList(rv)
             else:
@@ -117,24 +117,47 @@ class ConstList(Object, Collection):
             other = args[0]
             return ConstList(self.objects + unwrapList(other))
 
+        if verb == u"contains" and len(args) == 1:
+            from typhon.objects.equality import EQUAL, optSame
+            needle = args[0]
+            for specimen in self.objects:
+                if optSame(needle, specimen) is EQUAL:
+                    return wrapBool(True)
+            return wrapBool(False)
+
+        if verb == u"diverge" and len(args) == 0:
+            _flexList = getGlobal(u"_flexList")
+            return _flexList.recv(u"run", [self])
+
         if verb == u"get" and len(args) == 1:
             # Lookup by index.
             index = args[0]
             if isinstance(index, IntObject):
                 return self.objects[index.getInt()]
+
         if verb == u"multiply" and len(args) == 1:
             # multiply/1: Create a new list by repeating this list's contents.
             index = args[0]
             if isinstance(index, IntObject):
                 return ConstList(self.objects * index._i)
 
-        if verb == u"with" and len(args) == 2:
+        if verb == u"reverse" and len(args) == 0:
+            # This might seem slightly inefficient, and it might be, but I
+            # want to make it very clear to RPython that we are not mutating
+            # the list after we assign it to the new object.
+            new = self.objects[:]
+            new.reverse()
+            return ConstList(new)
+
+        if verb == u"with" and len(args) == 1:
+            # with/1: Create a new list with an appended object.
+            return ConstList(self.objects + args)
+
+        if verb in u"with" and len(args) == 2:
             # Replace by index.
             index = args[0]
             if isinstance(index, IntObject):
-                new = self.objects[:]
-                new[index.getInt()] = args[1]
-                return ConstList(new)
+                return self.put(index.getInt(), args[1])
 
         if verb == u"asMap" and len(args) == 0:
             return ConstMap([(IntObject(i), o)
@@ -144,6 +167,11 @@ class ConstList(Object, Collection):
 
     def _makeIterator(self):
         return listIterator(self.objects)
+
+    def put(self, index, value):
+        new = self.objects[:]
+        new[index] = value
+        return ConstList(new)
 
     def slice(self, start, stop=-1):
         assert start >= 0

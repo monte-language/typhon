@@ -340,8 +340,9 @@ class Promise(Object):
         # to _whenMoreResolved(callback): callback<-(self)
         # However, we can't do that in Python land without a vat. So, here we
         # are; this will be better someday. Perhaps. ~ C.
-        # XXX vats are not yet backported!
-        # vat.sendOnly((callback, u"run", [self]))
+        from typhon.objects.vats import Vat
+        assert isinstance(vat, Vat)
+        vat.sendOnly((callback, u"run", [self]))
         return NullObject
 
 

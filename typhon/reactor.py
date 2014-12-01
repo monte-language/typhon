@@ -66,6 +66,7 @@ class Reactor(object):
             timeout = -1
 
         results = poll(self._pollDict, timeout)
+        print "Polled", len(self.pollDict), "and got", len(results), "events"
         for fd, event in results:
             socket = self._sockets[fd]
             # Write before reading. This seems like the correct order of

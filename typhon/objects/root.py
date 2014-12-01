@@ -18,15 +18,10 @@ from typhon.errors import Refused
 class Object(object):
 
     # The attributes that all Objects have in common.
-    _attrs_ = "stamps", "isList", "isMap"
+    _attrs_ = "stamps",
 
     # The auditor stamps on objects.
     stamps = []
-
-    # Whether this object is a list or a map. Nearly all object types will
-    # have this set to False.
-    isList = False
-    isMap = False
 
     def __repr__(self):
         return self.repr()

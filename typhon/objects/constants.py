@@ -13,6 +13,7 @@
 # under the License.
 
 from typhon.errors import Refused, userError
+from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.root import Object
 
 
@@ -20,7 +21,7 @@ class _NullObject(Object):
 
     _immutable_ = True
 
-    stamps = []
+    stamps = [DeepFrozenStamp]
 
     def repr(self):
         return "<null>"
@@ -36,7 +37,7 @@ class BoolObject(Object):
 
     _immutable_ = True
 
-    stamps = []
+    stamps = [DeepFrozenStamp]
 
     def __init__(self, b):
         self._b = b

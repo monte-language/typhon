@@ -13,14 +13,15 @@
 # under the License.
 
 from typhon.errors import Refused, UserException
-from typhon.objects.equality import Equalizer
 from typhon.objects.collections import ConstList, ConstMap
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import throw
+from typhon.objects.equality import Equalizer
 from typhon.objects.guards import predGuard
-from typhon.objects.iteration import accumulateList, loop
-from typhon.objects.root import Object
+from typhon.objects.iteration import accumulateList, accumulateMap, loop
+from typhon.objects.root import Object, runnable
+from typhon.objects.slots import Binding
 
 
 @predGuard
@@ -58,11 +59,40 @@ def mapGuard(specimen):
     return isinstance(specimen, ConstMap)
 
 
-class makeList(Object):
+@runnable
+def trace(args):
+    print "TRACE:",
+    for obj in args:
+        print obj.repr(),
+
+    return NullObject
+
+
+@runnable
+def traceln(args):
+    print "TRACE:",
+    for obj in args:
+        print obj.repr(),
+    print ""
+    return NullObject
+
+
+@runnable
+def makeList(args):
+    return ConstList(args)
+
+
+class makeMap(Object):
+    """
+    Create maps.
+    """
+
+    def repr(self):
+        return "<makeMap>"
 
     def recv(self, verb, args):
-        if verb == u"run":
-            return ConstList(args)
+        if verb == u"fromPairs" and len(args) == 1:
+            return ConstMap.fromPairs(args[0])
         raise Refused(verb, args)
 
 
@@ -79,6 +109,16 @@ class Throw(Object):
         raise Refused(verb, args)
 
 
+@runnable
+def slotToBinding(args):
+    if len(args) == 2:
+        # XXX don't really care much about this right now
+        specimen = args[0]
+        # ej = args[1]
+        return Binding(specimen)
+    raise Refused(u"run", args)
+
+
 def simpleScope():
     return {
         u"null": NullObject,
@@ -93,10 +133,17 @@ def simpleScope():
         u"List": listGuard(),
         u"Map": mapGuard(),
         u"Str": strGuard(),
+        u"boolean": boolGuard(),
+        u"int": intGuard(),
 
         u"__accumulateList": accumulateList(),
+        u"__accumulateMap": accumulateMap(),
         u"__equalizer": Equalizer(),
         u"__loop": loop(),
         u"__makeList": makeList(),
+        u"__makeMap": makeMap(),
+        u"__slotToBinding": slotToBinding(),
         u"throw": Throw(),
+        u"trace": trace(),
+        u"traceln": traceln(),
     }

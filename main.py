@@ -12,20 +12,33 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import os
 import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
+from rpython.rlib.rpath import rjoin, rabspath
 
 from typhon.env import Environment, finalize
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, obtainModule
 from typhon.metrics import Recorder
 from typhon.objects.collections import ConstMap, unwrapMap
+from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.vats import Vat, vatScope
 from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
 from typhon.simple import simpleScope
+
+
+def dirname(p):
+    """Returns the directory component of a pathname"""
+    i = p.rfind('/') + 1
+    assert i >= 0, "Proven above but not detectable"
+    head = p[:i]
+    if head and head != '/'*len(head):
+        head = head.rstrip('/')
+    return head
 
 
 def jitPolicy(driver):
@@ -67,8 +80,6 @@ def entryPoint(argv):
     recorder = Recorder()
     recorder.start()
 
-    terms = obtainModule(argv[1], recorder)
-
     # Intialize our vat.
     reactor = Reactor()
     vat = Vat(reactor)
@@ -87,15 +98,18 @@ def entryPoint(argv):
         print lf
         return 1
 
+    basedir = rabspath(dirname(argv[1]))
     scope = simpleScope()
     scope.update(prelude)
     scope.update(vatScope(vat))
     env = Environment(finalize(scope), None)
 
+    result = NullObject
     with recorder.context("Time spent in vats"):
         result = evaluateTerms(terms, env)
     if result is None:
         return 1
+    print result.repr()
 
     try:
         # Run any remaining turns.
