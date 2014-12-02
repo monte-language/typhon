@@ -24,6 +24,7 @@ from typhon.objects.root import Object
 BROKEN_0 = getAtom(u"broken", 0)
 FAILURELIST_1 = getAtom(u"failureList", 1)
 SEND_3 = getAtom(u"send", 3)
+TOSTRING_1 = getAtom(u"toString", 1)
 
 
 class Vat(Object):
@@ -82,6 +83,9 @@ class MObject(Object):
                 atom = getAtom(sendVerb._s, len(sendArgs))
                 package = target, atom, sendArgs
                 return self._vat.send(package)
+
+        if atom is TOSTRING_1:
+            return StrObject(args[0].toString())
 
         raise Refused(atom, args)
 

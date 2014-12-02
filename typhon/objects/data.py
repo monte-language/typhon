@@ -82,6 +82,9 @@ class CharObject(Object):
     def repr(self):
         return "'%s'" % (self._c.encode("utf-8"))
 
+    def toString(self):
+        return unicode(self._c)
+
     def recv(self, atom, args):
         if atom is ADD_1:
             other = args[0]
@@ -364,6 +367,9 @@ class StrObject(Object):
     def repr(self):
         return '"%s"' % self._s.encode("utf-8")
 
+    def toString(self):
+        return self._s
+
     def recv(self, atom, args):
         if atom is ADD_1:
             other = args[0]
@@ -390,11 +396,13 @@ class StrObject(Object):
             l = args[0]
             from typhon.objects.collections import ConstList, unwrapList
             if isinstance(l, ConstList):
+                ub = UnicodeBuilder()
                 strs = []
                 for s in unwrapList(l):
-                    assert isinstance(s, StrObject)
-                    strs.append(s._s)
-                return StrObject(self._s.join(strs))
+                    if not isinstance(s, StrObject):
+                        raise userError(u"Not a string!")
+                    ub.append(s.getString())
+                return StrObject(ub.build())
 
         if atom is MULTIPLY_1:
             amount = args[0]

@@ -32,6 +32,9 @@ class Object(object):
     def repr(self):
         return "<object>"
 
+    def toString(self):
+        return self.repr().decode("utf-8")
+
     def call(self, verb, arguments):
         """
         Pass a message immediately to this object.
