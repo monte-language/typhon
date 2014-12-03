@@ -23,6 +23,7 @@ from typhon.objects.guards import predGuard
 from typhon.objects.iteration import accumulateList, accumulateMap, loop
 from typhon.objects.root import Object, runnable
 from typhon.objects.slots import Binding
+from typhon.objects.tests import UnitTest
 
 
 VALUEMAKER_1 = getAtom(u"valueMaker", 1)
@@ -157,4 +158,6 @@ def simpleScope():
         u"throw": Throw(),
         u"trace": Trace(),
         u"traceln": TraceLn(),
+
+        u"unittest": UnitTest(),
     }

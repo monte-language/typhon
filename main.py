@@ -113,6 +113,10 @@ def entryPoint(argv):
         return 1
     print result.repr()
 
+    # Run unit tests.
+    unittest = scope[u"unittest"]
+    unittest.test()
+
     try:
         # Run any remaining turns.
         while vat.hasTurns() or reactor.hasObjects():
