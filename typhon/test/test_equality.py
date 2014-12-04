@@ -70,6 +70,16 @@ class TestOptSame(TestCase):
         second.objects.append(second)
         self.assertEqual(optSame(first, second), EQUAL)
 
+    def testListInequality(self):
+        first = ConstList([IntObject(42)])
+        second = ConstList([IntObject(41)])
+        self.assertEqual(optSame(first, second), INEQUAL)
+
+    def testListInequalityLength(self):
+        first = ConstList([IntObject(42)])
+        second = ConstList([IntObject(42), IntObject(5)])
+        self.assertEqual(optSame(first, second), INEQUAL)
+
     def testStrEquality(self):
         first = StrObject(u"cs")
         second = StrObject(u"cs")

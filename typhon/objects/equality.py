@@ -29,10 +29,16 @@ SAMEYET_2 = getAtom(u"sameYet", 2)
 
 
 class Equality(object):
-    pass
+    def __init__(self, label):
+        self._label = label
+
+    def __repr__(self):
+        return self._label
 
 
-EQUAL, INEQUAL, NOTYET = Equality(), Equality(), Equality()
+EQUAL = Equality("EQUAL")
+INEQUAL = Equality("INEQUAL")
+NOTYET = Equality("NOTYET")
 
 
 def eq(b):
@@ -110,7 +116,7 @@ def optSame(first, second, cache=None):
         if cache is None:
             cache = {}
 
-        cache[first, second] = INEQUAL
+        cache[first, second] = EQUAL
 
         # I miss zip().
         for i, x in enumerate(firstList):
@@ -123,8 +129,8 @@ def optSame(first, second, cache=None):
             cache[x, y] = equal
 
             # And terminate on the first failure.
-            if not equal:
-                return INEQUAL
+            if equal is not EQUAL:
+                return equal
         # Well, nothing failed, so it would seem that they must be equal.
         return EQUAL
 
