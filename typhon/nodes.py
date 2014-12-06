@@ -781,7 +781,7 @@ class BindingPattern(Pattern):
         out.write(self._noun.encode("utf-8"))
 
     def unify(self, specimen, ejector, env):
-        env.recordSlot(self._noun, specimen)
+        env.recordBinding(self._noun, specimen)
 
 
 class FinalPattern(Pattern):

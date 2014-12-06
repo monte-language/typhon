@@ -48,6 +48,10 @@ class Environment(object):
     def recordSlot(self, noun, value):
         self._frame[noun] = value
 
+    def recordBinding(self, noun, binding):
+        assert isinstance(binding, Binding)
+        self.recordSlot(noun, binding.slot)
+
     def _find(self, noun):
         # XXX the compiler needs to have proven this operation's safety
         # beforehand, because the JIT will not. We should look into some sort
