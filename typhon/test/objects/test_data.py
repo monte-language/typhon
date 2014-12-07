@@ -190,6 +190,24 @@ class TestInt(TestCase):
         self.assertTrue(isinstance(result, DoubleObject))
         self.assertEqual(result.getDouble(), 8.4)
 
+    def testOr(self):
+
+        i = IntObject(0x3)
+        result = i.call(u"or", [IntObject(0x5)])
+        self.assertEqual(result.getInt(), 0x7)
+
+    def testShiftLeft(self):
+
+        i = IntObject(0xf0)
+        result = i.call(u"shiftLeft", [IntObject(5)])
+        self.assertEqual(result.getInt(), 0x1e00)
+
+    def testShiftRight(self):
+
+        i = IntObject(0xf0)
+        result = i.call(u"shiftRight", [IntObject(5)])
+        self.assertEqual(result.getInt(), 0x7)
+
     def testSubtract(self):
         i = IntObject(5)
         result = i.call(u"subtract", [IntObject(15)])

@@ -52,8 +52,11 @@ NEGATE_0 = getAtom(u"negate", 0)
 NEXT_0 = getAtom(u"next", 0)
 NEXT_1 = getAtom(u"next", 1)
 OP__CMP_1 = getAtom(u"op__cmp", 1)
+OR_1 = getAtom(u"or", 1)
 POW_1 = getAtom(u"pow", 1)
 PREVIOUS_0 = getAtom(u"previous", 0)
+SHIFTLEFT_1 = getAtom(u"shiftLeft", 1)
+SHIFTRIGHT_1 = getAtom(u"shiftRight", 1)
 SIN_0 = getAtom(u"sin", 0)
 SIZE_0 = getAtom(u"size", 0)
 SLICE_1 = getAtom(u"slice", 1)
@@ -291,12 +294,24 @@ class IntObject(Object):
         if atom is NEXT_0:
             return IntObject(self._i + 1)
 
+        if atom is OR_1:
+            other = unwrapInt(args[0])
+            return IntObject(self._i | other)
+
         if atom is POW_1:
             other = unwrapInt(args[0])
             return self.intPow(other)
 
         if atom is PREVIOUS_0:
             return IntObject(self._i - 1)
+
+        if atom is SHIFTLEFT_1:
+            other = unwrapInt(args[0])
+            return IntObject(self._i << other)
+
+        if atom is SHIFTRIGHT_1:
+            other = unwrapInt(args[0])
+            return IntObject(self._i >> other)
 
         if atom is SUBTRACT_1:
             other = args[0]
