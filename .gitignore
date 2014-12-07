@@ -54,3 +54,6 @@ docs/_build/
 
 # RPython artifacts
 *-c
+
+# Typhon binaries
+*.ty
