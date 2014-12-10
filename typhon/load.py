@@ -284,10 +284,12 @@ def load(data):
     terms = []
     while not stream.done():
         term = loadTerm(stream)
-        print "Loaded term:"
-        b = Buffer()
-        term.pretty(LineWriter(b))
-        print b.get()
+
+        # print "Loaded term:"
+        # b = Buffer()
+        # term.pretty(LineWriter(b))
+        # print b.get()
+
         terms.append(term)
     return terms
 
@@ -312,9 +314,9 @@ def loadModule(data):
         exports.append(export.name)
     body = loadTerm(stream)
 
-    print "Loaded term:"
-    b = Buffer()
-    body.pretty(LineWriter(b))
-    print b.get()
+    # print "Loaded term:"
+    # b = Buffer()
+    # body.pretty(LineWriter(b))
+    # print b.get()
 
     return imports, exports, body
