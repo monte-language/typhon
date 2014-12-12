@@ -1,0 +1,8 @@
+language: python
+python: 2.7
+install:
+    - wget https://bitbucket.org/pypy/pypy/downloads/pypy-2.4.0-src.tar.bz2 -O `pwd`/../pypy.tar.bz2
+    - tar xjf `pwd`/../pypy.tar.bz2 -C `pwd`
+script: PYTHONPATH=pypy-2.4.0-src:. python -m unittest discover
+notifications:
+    irc: "irc.freenode.org#monte"
