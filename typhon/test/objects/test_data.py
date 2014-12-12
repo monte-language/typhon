@@ -86,6 +86,20 @@ class TestStr(TestCase):
         s = StrObject(u"index")
         self.assertRaises(UserException, s.call, u"get", [IntObject(6)])
 
+    def testSliceStart(self):
+        s = StrObject(u"slice of lemon")
+        result = s.call(u"slice", [IntObject(9)])
+        self.assertEqual(result._s, u"lemon")
+
+    def testSliceStartStop(self):
+        s = StrObject(u"the lime in the coconut")
+        result = s.call(u"slice", [IntObject(4), IntObject(8)])
+        self.assertEqual(result._s, u"lime")
+
+    def testSliceStartNegative(self):
+        s = StrObject(u"nope")
+        self.assertRaises(UserException, s.call, u"slice", [IntObject(-2)])
+
     def testSplit(self):
         """
         Strings can be split.

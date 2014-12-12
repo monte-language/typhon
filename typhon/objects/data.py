@@ -60,6 +60,7 @@ SHIFTRIGHT_1 = getAtom(u"shiftRight", 1)
 SIN_0 = getAtom(u"sin", 0)
 SIZE_0 = getAtom(u"size", 0)
 SLICE_1 = getAtom(u"slice", 1)
+SLICE_2 = getAtom(u"slice", 2)
 SPLIT_1 = getAtom(u"split", 1)
 SPLIT_2 = getAtom(u"split", 2)
 SQRT_0 = getAtom(u"sqrt", 0)
@@ -428,11 +429,19 @@ class StrObject(Object):
             return IntObject(len(self._s))
 
         if atom is SLICE_1:
-            index = args[0]
-            if isinstance(index, IntObject):
-                start = index._i
-                if start >= 0:
-                    return StrObject(self._s[start:])
+            start = unwrapInt(args[0])
+            if start < 0:
+                raise userError(u"Slice start cannot be negative")
+            return StrObject(self._s[start:])
+
+        if atom is SLICE_2:
+            start = unwrapInt(args[0])
+            stop = unwrapInt(args[1])
+            if start < 0:
+                raise userError(u"Slice start cannot be negative")
+            if stop < 0:
+                raise userError(u"Slice stop cannot be negative")
+            return StrObject(self._s[start:stop])
 
         if atom is SPLIT_1:
             splitter = args[0]
