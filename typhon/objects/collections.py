@@ -200,8 +200,16 @@ class ConstList(Collection, Object):
         return listIterator(self.objects)
 
     def put(self, index, value):
-        new = self.objects[:]
-        new[index] = value
+        top = len(self.objects)
+        if 0 <= index < top:
+            new = self.objects[:]
+            new[index] = value
+        elif index == top:
+            new = self.objects + [value]
+        else:
+            raise userError(u"Index %d out of bounds for list of length %d" %
+                           (index, len(self.objects)))
+
         return ConstList(new)
 
     def slice(self, start, stop=-1):
