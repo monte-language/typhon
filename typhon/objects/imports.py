@@ -16,7 +16,7 @@ from typhon.atoms import getAtom
 from typhon.env import Environment, finalize
 from typhon.errors import Refused
 from typhon.objects.constants import NullObject
-from typhon.objects.data import StrObject
+from typhon.objects.data import unwrapStr
 from typhon.objects.root import Object
 from typhon.importing import evaluateTerms, obtainModule
 
@@ -31,11 +31,9 @@ class Import(Object):
 
     def recv(self, atom, args):
         if atom is RUN_1:
-            path = args[0]
-            if not isinstance(path, StrObject):
-                raise Refused(RUN_1, args)
+            path = unwrapStr(args[0])
 
-            p = path.getString().encode("utf-8")
+            p = path.encode("utf-8")
             p += ".ty"
 
             # Attempt the import.

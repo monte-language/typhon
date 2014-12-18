@@ -91,9 +91,8 @@ class CharObject(Object):
 
     def recv(self, atom, args):
         if atom is ADD_1:
-            other = args[0]
-            if isinstance(other, IntObject):
-                return self.withOffset(other.getInt())
+            other = unwrapInt(args[0])
+            return self.withOffset(other)
 
         if atom is ASINTEGER_0:
             return IntObject(ord(self._c))
@@ -105,14 +104,12 @@ class CharObject(Object):
             return StrObject(unicode(unicodedb.category(ord(self._c))))
 
         if atom is MAX_1:
-            other = args[0]
-            if isinstance(other, CharObject):
-                return self if self._c > other._c else other
+            other = unwrapChar(args[0])
+            return self if self._c > other else args[0]
 
         if atom is MIN_1:
-            other = args[0]
-            if isinstance(other, CharObject):
-                return self if self._c < other._c else other
+            other = unwrapChar(args[0])
+            return self if self._c < other else args[0]
 
         if atom is NEXT_0:
             return self.withOffset(1)
@@ -121,14 +118,24 @@ class CharObject(Object):
             return self.withOffset(-1)
 
         if atom is SUBTRACT_1:
-            other = args[0]
-            if isinstance(other, IntObject):
-                return self.withOffset(-other.getInt())
+            other = unwrapInt(args[0])
+            return self.withOffset(-other)
 
         raise Refused(atom, args)
 
     def withOffset(self, offset):
         return CharObject(unichr(ord(self._c) + offset))
+
+    def getChar(self):
+        return self._c
+
+
+def unwrapChar(o):
+    from typhon.objects.refs import resolution
+    c = resolution(o)
+    if isinstance(c, CharObject):
+        return c.getChar()
+    raise userError(u"Not a char!")
 
 
 def promoteToDouble(o):
@@ -415,9 +422,8 @@ class StrObject(Object):
                 ub = UnicodeBuilder()
                 strs = []
                 for s in unwrapList(l):
-                    if not isinstance(s, StrObject):
-                        raise userError(u"Not a string!")
-                    ub.append(s.getString())
+                    string = unwrapStr(s)
+                    ub.append(string)
                 return StrObject(ub.build())
 
         if atom is MULTIPLY_1:
@@ -444,22 +450,17 @@ class StrObject(Object):
             return StrObject(self._s[start:stop])
 
         if atom is SPLIT_1:
-            splitter = args[0]
-            if isinstance(splitter, StrObject):
-                from typhon.objects.collections import ConstList
-                strings = [StrObject(s) for s in split(self._s, splitter._s)]
-                return ConstList(strings)
+            from typhon.objects.collections import ConstList
+            splitter = unwrapStr(args[0])
+            strings = [StrObject(s) for s in split(self._s, splitter)]
+            return ConstList(strings)
 
         if atom is SPLIT_2:
-            splitter = args[0]
-            splits = args[1]
-            if isinstance(splitter, StrObject):
-                if isinstance(splits, IntObject):
-                    from typhon.objects.collections import ConstList
-                    strings = [StrObject(s)
-                            for s in split(self._s, splitter._s,
-                                splits.getInt())]
-                    return ConstList(strings)
+            splitter = unwrapStr(args[0])
+            splits = unwrapInt(args[1])
+            from typhon.objects.collections import ConstList
+            strings = [StrObject(s) for s in split(self._s, splitter, splits)]
+            return ConstList(strings)
 
         if atom is TOLOWERCASE_0:
             # Use current size as a size hint. In the best case, characters
@@ -483,3 +484,11 @@ class StrObject(Object):
 
     def getString(self):
         return self._s
+
+
+def unwrapStr(o):
+    from typhon.objects.refs import resolution
+    s = resolution(o)
+    if isinstance(s, StrObject):
+        return s.getString()
+    raise userError(u"Not a string!")

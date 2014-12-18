@@ -17,7 +17,7 @@ from rpython.rlib.objectmodel import specialize
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
 from typhon.objects.constants import wrapBool
-from typhon.objects.data import IntObject, StrObject
+from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.root import Object
 from typhon.prelude import getGlobal
 
@@ -111,17 +111,14 @@ class Collection(object):
 
         # slice/1 and slice/2: Select a subrange of this collection.
         if atom is SLICE_1:
-            start = args[0]
-            if isinstance(start, IntObject):
-                return self.slice(start.getInt())
+            start = unwrapInt(args[0])
+            return self.slice(start)
 
         # slice/1 and slice/2: Select a subrange of this collection.
         if atom is SLICE_2:
-            start = args[0]
-            stop = args[1]
-            if isinstance(start, IntObject):
-                if isinstance(stop, IntObject):
-                    return self.slice(start.getInt(), stop.getInt())
+            start = unwrapInt(args[0])
+            stop = unwrapInt(args[1])
+            return self.slice(start, stop)
 
         # snapshot/0: Create a new constant collection with a copy of the
         # current collection's contents.
@@ -160,9 +157,8 @@ class ConstList(Collection, Object):
 
         if atom is GET_1:
             # Lookup by index.
-            index = args[0]
-            if isinstance(index, IntObject):
-                return self.objects[index.getInt()]
+            index = unwrapInt(args[0])
+            return self.objects[index]
 
         if atom is INDEXOF_1:
             from typhon.objects.equality import EQUAL, optSame
@@ -174,9 +170,8 @@ class ConstList(Collection, Object):
 
         if atom is MULTIPLY_1:
             # multiply/1: Create a new list by repeating this list's contents.
-            index = args[0]
-            if isinstance(index, IntObject):
-                return ConstList(self.objects * index._i)
+            index = unwrapInt(args[0])
+            return ConstList(self.objects * index)
 
         if atom is REVERSE_0:
             # This might seem slightly inefficient, and it might be, but I
@@ -192,9 +187,8 @@ class ConstList(Collection, Object):
 
         if atom is WITH_2:
             # Replace by index.
-            index = args[0]
-            if isinstance(index, IntObject):
-                return self.put(index.getInt(), args[1])
+            index = unwrapInt(args[0])
+            return self.put(index, args[1])
 
         if atom is ASMAP_0:
             return ConstMap([(IntObject(i), o)
