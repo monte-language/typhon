@@ -34,18 +34,25 @@ class Atom(object):
         return self.__repr__()
 
 
-atoms = {}
+class _AtomHolder(object):
+
+    _immutable_ = True
+
+    def __init__(self):
+        self.atoms = {}
+
+    @elidable
+    def getAtom(self, verb, arity):
+        """
+        Return the one and only atom for a given verb and arity.
+
+        Idempotent and safe to call at both translation and runtime.
+        """
+
+        key = verb, arity
+        if key not in self.atoms:
+            self.atoms[key] = Atom(verb, arity)
+        return self.atoms[key]
 
 
-@elidable
-def getAtom(verb, arity):
-    """
-    Return the one and only atom for a given verb and arity.
-
-    Idempotent and safe to call at both translation and runtime.
-    """
-
-    key = verb, arity
-    if key not in atoms:
-        atoms[key] = Atom(verb, arity)
-    return atoms[key]
+getAtom = _AtomHolder().getAtom
