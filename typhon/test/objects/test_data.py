@@ -18,6 +18,7 @@ import math
 from unittest import TestCase
 
 from typhon.errors import Ejecting, UserException
+from typhon.objects.collections import ConstList
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import Ejector
 
@@ -85,6 +86,12 @@ class TestStr(TestCase):
     def testGetOutOfBounds(self):
         s = StrObject(u"index")
         self.assertRaises(UserException, s.call, u"get", [IntObject(6)])
+
+    def testJoin(self):
+        s = StrObject(u"|")
+        result = s.call(u"join",
+                [ConstList([StrObject(u"5"), StrObject(u"42")])])
+        self.assertEqual(result._s, u"5|42")
 
     def testSliceStart(self):
         s = StrObject(u"slice of lemon")

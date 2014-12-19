@@ -421,7 +421,15 @@ class StrObject(Object):
             if isinstance(l, ConstList):
                 ub = UnicodeBuilder()
                 strs = []
+                first = True
                 for s in unwrapList(l):
+                    # For all iterations except the first, append a copy of
+                    # ourselves.
+                    if first:
+                        first = False
+                    else:
+                        ub.append(self._s)
+
                     string = unwrapStr(s)
                     ub.append(string)
                 return StrObject(ub.build())
