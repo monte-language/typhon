@@ -29,6 +29,7 @@ BROKEN, EVENTUAL, NEAR = RefState(), RefState(), RefState()
 
 BROKEN_1 = getAtom(u"broken", 1)
 ISBROKEN_1 = getAtom(u"isBroken", 1)
+PROMISE_0 = getAtom(u"promise", 0)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RESOLVE_2 = getAtom(u"resolve", 2)
 RUN_0 = getAtom(u"run", 0)
@@ -70,6 +71,9 @@ class RefOps(Object):
         return "<Ref>"
 
     def recv(self, atom, args):
+        if atom is PROMISE_0:
+            return self.promise()
+
         if atom is WHENRESOLVED_2:
             return self.whenResolved(args[0], args[1])
 
