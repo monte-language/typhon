@@ -261,6 +261,10 @@ class ConstMap(Collection, Object):
             rv = ConstList([ConstList([k, v]) for k, v in self.objects])
             return ConstList([StrObject(u"fromPairs"), rv])
 
+        if atom is DIVERGE_0:
+            _flexMap = getGlobal(u"_flexMap")
+            return _flexMap.call(u"run", [self])
+
         if atom is GET_1:
             key = args[0]
             for (k, v) in self.objects:
