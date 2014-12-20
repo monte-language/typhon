@@ -24,8 +24,8 @@ class _NullObject(Object):
 
     stamps = [DeepFrozenStamp]
 
-    def repr(self):
-        return "<null>"
+    def toString(self):
+        return u"<null>"
 
 
 NullObject = _NullObject()
@@ -46,8 +46,8 @@ class BoolObject(Object):
     def __init__(self, b):
         self._b = b
 
-    def repr(self):
-        return "true" if self._b else "false"
+    def toString(self):
+        return u"true" if self._b else u"false"
 
     def recv(self, atom, args):
 

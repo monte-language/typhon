@@ -41,13 +41,13 @@ class UserException(Exception):
     def formatError(self):
         pieces = [self.error()]
         for crumb, code in self.trail:
-            pieces.append("In %s:\n    %s" % (crumb, code))
-        pieces.append("Exception in user code:")
+            pieces.append(u"In %s:\n    %s" % (crumb, code))
+        pieces.append(u"Exception in user code:")
         pieces.reverse()
-        return "\n".join(pieces)
+        return u"\n".join(pieces)
 
     def error(self):
-        return "Error: " + self.payload.repr()
+        return u"Error: " + self.payload.toQuote()
 
 
 def userError(s):
@@ -69,8 +69,9 @@ class Refused(UserException):
         l = []
         for arg in self.args:
             if arg is None:
-                l.append("None")
+                l.append(u"None")
             else:
-                l.append(arg.repr())
-        args = ", ".join(l)
-        return "Message refused: (%s, [%s])" % (self.atom.repr(), args)
+                l.append(arg.toQuote())
+        args = u", ".join(l)
+        return (u"Message refused: (%s, [%s])" %
+                (self.atom.repr().decode("utf-8"), args))

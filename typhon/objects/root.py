@@ -27,13 +27,13 @@ class Object(object):
     stamps = []
 
     def __repr__(self):
-        return self.repr()
+        return self.toQuote().encode("utf-8")
 
-    def repr(self):
-        return "<object>"
+    def toQuote(self):
+        return self.toString()
 
     def toString(self):
-        return self.repr().decode("utf-8")
+        return u"<object>"
 
     def call(self, verb, arguments):
         """
@@ -61,8 +61,8 @@ def runnable(singleAtom):
         name = f.__name__
 
         class runnableObject(Object):
-            def repr(self):
-                return "<%s>" % name
+            def toString(self):
+                return u"<%s>" % name.decode("utf-8")
 
             def recv(self, atom, args):
                 if atom is singleAtom:

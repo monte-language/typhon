@@ -15,10 +15,10 @@
 import weakref
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused
+from typhon.errors import Refused, userError
 from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
-from typhon.objects.data import StrObject
+from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.root import Object, runnable
 
 
@@ -67,8 +67,8 @@ class RefOps(Object):
     def __init__(self, vat):
         self._vat = vat
 
-    def repr(self):
-        return "<Ref>"
+    def toString(self):
+        return u"<Ref>"
 
     def recv(self, atom, args):
         if atom is PROMISE_0:
@@ -81,7 +81,7 @@ class RefOps(Object):
             return self.isBroken(args[0])
 
         if atom is BROKEN_1:
-            return self.broken(args[0])
+            return self.broken(unwrapStr(args[0]))
 
         raise Refused(atom, args)
 
@@ -96,7 +96,7 @@ class RefOps(Object):
         if optProblem is NullObject:
             return NullObject
         else:
-            return self.broken(optProblem.repr())
+            return self.broken(optProblem.toString())
 
     def isNear(self, ref):
         if isinstance(ref, Promise):
@@ -250,8 +250,8 @@ class LocalResolver(Object):
         self._ref = ref
         self._buf = buf
 
-    def repr(self):
-        return "<Ref$Resolver>"
+    def toString(self):
+        return u"<Ref$Resolver>"
 
     def recv(self, atom, args):
         if atom is RESOLVE_1:
@@ -265,7 +265,7 @@ class LocalResolver(Object):
     def resolve(self, target, strict=True):
         if self._ref is None:
             if strict:
-                raise RuntimeError("Already resolved")
+                raise userError(u"Already resolved")
             return False
         else:
             self._ref.setTarget(_toRef(target, self._vat))
@@ -338,13 +338,13 @@ class Promise(Object):
         else:
             msg.resolver.resolve(self.sendAll(msg.verb, msg.args))
 
-    def repr(self):
-        return "<promise>"
+    def toString(self):
+        return u"<promise>"
 
     def recv(self, atom, args):
         if atom is _PRINTON_1:
             out = args[0]
-            return out.call(u"write", [StrObject(self.repr().decode("utf-8"))])
+            return out.call(u"write", [StrObject(self.toString())])
 
         if atom is _WHENMORERESOLVED_2:
             return self._whenMoreResolved(args[0], args[1])
@@ -373,12 +373,12 @@ class SwitchableRef(Promise):
     def __init__(self, target):
         self._target = target
 
-    def repr(self):
+    def toString(self):
         if self.isSwitchable:
-            return "<Promise>"
+            return u"<promise>"
         else:
             self.resolutionRef()
-            return self._target.repr()
+            return self._target.toString()
 
     def optProblem(self):
         if self.isSwitchable:
@@ -403,8 +403,8 @@ class SwitchableRef(Promise):
 
     def callAll(self, atom, args):
         if self.isSwitchable:
-            raise RuntimeError("not synchronously callable (%s)" %
-                    atom.repr())
+            raise userError(u"not synchronously callable (%s)" %
+                    atom.repr().decode("utf-8"))
         else:
             self.resolutionRef()
             return self._target.callAll(atom, args)
@@ -432,9 +432,9 @@ class SwitchableRef(Promise):
         if self.isSwitchable:
            self._target = newTarget.resolutionRef()
            if self is self._target:
-               raise RuntimeError("Ref loop")
+               raise userError(u"Ref loop")
         else:
-            raise RuntimeError("No longer switchable")
+            raise userError(u"No longer switchable")
 
     def commit(self):
         if not self.isSwitchable:
@@ -444,13 +444,13 @@ class SwitchableRef(Promise):
         self.isSwitchable = False
         newTarget = newTarget.resolutionRef()
         if newTarget is None:
-            raise RuntimeError("Ref loop")
+            raise userError(u"Ref loop")
         else:
             self._target = newTarget
 
     def hash(self):
         if self.isSwitchable:
-            raise RuntimeError("must be settled")
+            raise userError(u"must be settled")
         else:
             return self._target.hash()
 
@@ -472,7 +472,8 @@ class BufferingRef(Promise):
         return EVENTUAL
 
     def callAll(self, atom, args):
-        raise RuntimeError("not synchronously callable (%s)" % atom.repr())
+        raise userError(u"not synchronously callable (%s)" %
+                atom.repr().decode("utf-8"))
 
     def sendAll(self, atom, args):
         optMsgs = self._buf()
@@ -502,8 +503,8 @@ class NearRef(Promise):
         self._target = target
         self._vat = vat
 
-    def repr(self):
-        return self._target.repr()
+    def toString(self):
+        return self._target.toString()
 
     def optProblem(self):
         return NullObject
@@ -542,11 +543,12 @@ class NearRef(Promise):
 class UnconnectedRef(Promise):
 
     def __init__(self, problem, vat):
+        assert isinstance(problem, unicode)
         self._problem = problem
         self._vat = vat
 
-    def repr(self):
-        return "<ref broken by %s>" % (self._problem)
+    def toString(self):
+        return u"<ref broken by %s>" % (self._problem,)
 
     def state(self):
         return BROKEN
@@ -560,7 +562,7 @@ class UnconnectedRef(Promise):
 
     def callAll(self, atom, args):
         self._doBreakage(atom, args)
-        raise RuntimeError(self._problem)
+        raise userError(self._problem)
 
     def sendAll(self, atom, args):
         self._doBreakage(atom, args)

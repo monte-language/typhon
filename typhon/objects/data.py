@@ -67,7 +67,6 @@ SQRT_0 = getAtom(u"sqrt", 0)
 SUBTRACT_1 = getAtom(u"subtract", 1)
 TAN_0 = getAtom(u"tan", 0)
 TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
-TOSTRING_0 = getAtom(u"toString", 0)
 TOUPPERCASE_0 = getAtom(u"toUpperCase", 0)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 
@@ -83,11 +82,12 @@ class CharObject(Object):
         # using a single character here.
         self._c = c[0]
 
-    def repr(self):
-        return "'%s'" % (self._c.encode("utf-8"))
-
     def toString(self):
         return unicode(self._c)
+
+    def toQuote(self):
+        # XXX come back and do escapes
+        return u"'%s'" % (self._c,)
 
     def recv(self, atom, args):
         if atom is ADD_1:
@@ -167,8 +167,8 @@ class DoubleObject(Object):
     def __init__(self, d):
         self._d = d
 
-    def repr(self):
-        return "%f" % (self._d,)
+    def toString(self):
+        return u"%f" % (self._d,)
 
     def recv(self, atom, args):
         # Doubles can be compared.
@@ -234,8 +234,8 @@ class IntObject(Object):
     def __init__(self, i=0):
         self._i = i
 
-    def repr(self):
-        return "%d" % self._i
+    def toString(self):
+        return u"%d" % self._i
 
     def recv(self, atom, args):
         # Ints can be compared.
@@ -328,9 +328,6 @@ class IntObject(Object):
                 return DoubleObject(float(self._i)).subtract(other)
             return IntObject(self._i - unwrapInt(other))
 
-        if atom is TOSTRING_0:
-            return StrObject(u"%d" % self._i)
-
         raise Refused(atom, args)
 
     def getInt(self):
@@ -387,11 +384,12 @@ class StrObject(Object):
     def __init__(self, s):
         self._s = s
 
-    def repr(self):
-        return '"%s"' % self._s.encode("utf-8")
-
     def toString(self):
         return self._s
+
+    def toQuote(self):
+        # XXX escape characters
+        return u'"%s"' % self._s
 
     def recv(self, atom, args):
         if atom is ADD_1:

@@ -60,7 +60,7 @@ def loadPrelude(recorder, vat):
         print "Prelude returned None!?"
         return {}
 
-    print "Prelude result:", result.repr()
+    print "Prelude result:", result.toQuote()
 
     if isinstance(result, ConstMap):
         prelude = {}
@@ -111,7 +111,7 @@ def entryPoint(argv):
         result = evaluateTerms(terms, env)
     if result is None:
         return 1
-    print result.repr()
+    print result.toQuote()
 
     # Run unit tests.
     unittest = scope[u"unittest"]
@@ -122,7 +122,7 @@ def entryPoint(argv):
         while vat.hasTurns() or reactor.hasObjects():
             if vat.hasTurns():
                 count = len(vat._pending)
-                print "Taking", count, "turn(s) on", vat.repr()
+                print "Taking", count, "turn(s) on", vat.toQuote()
                 for _ in range(count):
                     try:
                         recorder.record("Time spent in vats", vat.takeTurn)

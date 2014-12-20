@@ -59,9 +59,8 @@ class Environment(object):
         # environment names and slots at the beginning of the frame.
         v = self._frame.get(noun, None)
         if v is None:
-            from typhon.objects.data import StrObject
-            from typhon.errors import UserException
-            raise UserException(StrObject(u"Noun %s not in frame" % noun))
+            from typhon.errors import userError
+            raise userError(u"Noun %s not in frame" % noun)
         return v
 
     def bindingFor(self, noun):

@@ -87,8 +87,8 @@ class ScriptObject(Object):
     def env(self):
         return self._env
 
-    def repr(self):
-        return "<%s>" % self.displayName
+    def toString(self):
+        return u"<%s>" % self.displayName
 
     @unroll_safe
     def recv(self, atom, args):

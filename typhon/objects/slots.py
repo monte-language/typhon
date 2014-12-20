@@ -44,8 +44,8 @@ class Slot(Object):
     A storage space.
     """
 
-    def repr(self):
-        return "<slot>"
+    def toString(self):
+        return u"<slot>"
 
     def recv(self, verb, args):
         if verb is GET_0:

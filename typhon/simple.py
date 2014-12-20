@@ -71,33 +71,33 @@ def mapGuard(specimen):
 
 
 class Trace(Object):
-    def repr(self):
-        return "<trace>"
+    def toString(self):
+        return u"<trace>"
 
     def call(self, verb, args):
         print "TRACE:",
         for obj in args:
-            print obj.repr(),
+            print obj.toQuote(),
 
         return NullObject
 
 
 class TraceLn(Object):
-    def repr(self):
-        return "<traceln>"
+    def toString(self):
+        return u"<traceln>"
 
     def call(self, verb, args):
         print "TRACE:",
         for obj in args:
-            print obj.repr(),
+            print obj.toQuote(),
         print ""
 
         return NullObject
 
 
 class MakeList(Object):
-    def repr(self):
-        return "<makeList>"
+    def toString(self):
+        return u"<makeList>"
 
     def call(self, verb, args):
         return ConstList(args)
@@ -110,8 +110,8 @@ def makeMap(args):
 
 class Throw(Object):
 
-    def repr(self):
-        return "<throw>"
+    def toString(self):
+        return u"<throw>"
 
     def recv(self, atom, args):
         if atom is RUN_1:

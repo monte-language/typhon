@@ -45,5 +45,5 @@ def evaluateTerms(terms, env):
         if result is None:
             print "Evaluation returned None!"
         else:
-            print result.repr()
+            print result.toQuote()
     return result

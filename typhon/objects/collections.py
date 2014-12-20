@@ -135,8 +135,9 @@ class ConstList(Collection, Object):
     def __init__(self, objects):
         self.objects = objects
 
-    def repr(self):
-        return "[" + ", ".join([obj.repr() for obj in self.objects]) + "]"
+    def toString(self):
+        guts = u", ".join([obj.toString() for obj in self.objects])
+        return u"[%s]" % (guts,)
 
     def _recv(self, atom, args):
         if atom is ADD_1:
@@ -225,7 +226,7 @@ class ConstList(Collection, Object):
 
 def pairRepr(pair):
     key, value = pair
-    return key.repr() + " => " + value.repr()
+    return key.toString() + u" => " + value.toString()
 
 
 class ConstMap(Collection, Object):
@@ -241,8 +242,9 @@ class ConstMap(Collection, Object):
             d[k] = v
         return d
 
-    def repr(self):
-        return "[" + ", ".join([pairRepr(pair) for pair in self.objects]) + "]"
+    def toString(self):
+        guts = u", ".join([pairRepr(pair) for pair in self.objects])
+        return u"[%s]" % (guts,)
 
     @staticmethod
     def fromPairs(wrappedPairs):

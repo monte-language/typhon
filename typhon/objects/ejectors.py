@@ -32,8 +32,8 @@ class Ejector(Object):
 
     active = True
 
-    def repr(self):
-        return "<ejector>" if self.active else "<ejector (inert)>"
+    def toString(self):
+        return u"<ejector>" if self.active else u"<ejector (inert)>"
 
     def recv(self, atom, args):
         if atom is RUN_0:

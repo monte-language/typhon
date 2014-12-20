@@ -31,10 +31,10 @@ def evaluate(node, env):
     try:
         return node.evaluate(env)
     except UserException as ue:
-        crumb = node.__class__.__name__
+        crumb = node.__class__.__name__.decode("utf-8")
         out = OneLine()
         node.pretty(out)
-        ue.trail.append((crumb, out.getLine()))
+        ue.trail.append((crumb, out.getLine().decode("utf-8")))
         raise
 
 
@@ -945,5 +945,5 @@ class ViaPattern(Pattern):
 
 def formatName(p):
     if isinstance(p, FinalPattern):
-        return p._n.encode("utf-8")
-    return "_"
+        return p._n
+    return u"_"

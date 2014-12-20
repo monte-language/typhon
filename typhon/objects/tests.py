@@ -46,7 +46,7 @@ class Asserter(Object):
                     args[0].call(u"run", [ej])
                 except Ejecting as e:
                     if e.ejector is ej:
-                        self.log("Ejector was fired")
+                        self.log(u"Ejector was fired")
                     else:
                         raise
             return NullObject
@@ -54,14 +54,14 @@ class Asserter(Object):
         if atom is EQUAL_2:
             result = optSame(args[0], args[1])
             if result is NOTYET:
-                self.log("Equality not yet decidable: %s ?= %s" %
-                        (args[0].repr(), args[1].repr()))
+                self.log(u"Equality not yet decidable: %s ?= %s" %
+                        (args[0].toString(), args[1].toString()))
             if result is INEQUAL:
-                self.log("Not equal: %s != %s" %
-                        (args[0].repr(), args[1].repr()))
+                self.log(u"Not equal: %s != %s" %
+                        (args[0].toString(), args[1].toString()))
             return NullObject
 
-        self.log("Unknown assertion made: %s" % atom.repr())
+        self.log(u"Unknown assertion made: %s" % atom.repr().decode("utf-8"))
         return NullObject
 
     def log(self, message):
@@ -103,10 +103,11 @@ class UnitTest(Object):
         print "Running unit tests..."
         asserter = Asserter()
         for test in self._tests:
-            asserter.startTest(test.repr())
+            asserter.startTest(test.toString())
             try:
                 test.call(u"run", [asserter])
             except UserException as ue:
-                asserter.log("Caught exception: " + ue.formatError())
+                asserter.log(u"Caught exception: " +
+                        ue.formatError())
         print "Unit test output:"
         asserter.dump()
