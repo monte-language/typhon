@@ -18,6 +18,8 @@ from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
 
 escapes = {
+    # Not technically an escape, but special-cased.
+    u' ': u" ",
     u'\\': u"\\\\",
     u'\b': u"\\b",
     u'\f': u"\\f",

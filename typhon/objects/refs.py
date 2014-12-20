@@ -81,7 +81,7 @@ class RefOps(Object):
             return self.isBroken(args[0])
 
         if atom is BROKEN_1:
-            return self.broken(unwrapStr(args[0]))
+            return self.broken(args[0].toString())
 
         raise Refused(atom, args)
 

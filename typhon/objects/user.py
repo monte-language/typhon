@@ -19,6 +19,7 @@ from typhon.errors import Ejecting, Refused
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector
+from typhon.objects.printers import Printer
 from typhon.objects.root import Object
 
 
@@ -88,7 +89,12 @@ class ScriptObject(Object):
         return self._env
 
     def toString(self):
-        return u"<%s>" % self.displayName
+        try:
+            printer = Printer()
+            self.call(u"_printOn", [printer])
+            return printer.value()
+        except Refused:
+            return u"<%s>" % self.displayName
 
     @unroll_safe
     def recv(self, atom, args):
