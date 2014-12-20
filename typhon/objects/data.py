@@ -25,6 +25,7 @@ from typhon.errors import Refused, userError
 from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.constants import wrapBool
 from typhon.objects.root import Object
+from typhon.quoting import quoteChar, quoteStr
 
 
 ABOVEZERO_0 = getAtom(u"aboveZero", 0)
@@ -86,8 +87,7 @@ class CharObject(Object):
         return unicode(self._c)
 
     def toQuote(self):
-        # XXX come back and do escapes
-        return u"'%s'" % (self._c,)
+        return quoteChar(self._c)
 
     def recv(self, atom, args):
         if atom is ADD_1:
@@ -388,8 +388,7 @@ class StrObject(Object):
         return self._s
 
     def toQuote(self):
-        # XXX escape characters
-        return u'"%s"' % self._s
+        return quoteStr(self._s)
 
     def recv(self, atom, args):
         if atom is ADD_1:
