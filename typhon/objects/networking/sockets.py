@@ -178,7 +178,7 @@ class SocketUnpauser(Object):
                 self.fount.unpause()
                 self.fount = None
             return NullObject
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
 
 class SocketFount(Object):
@@ -210,7 +210,7 @@ class SocketFount(Object):
             self.terminate()
             return NullObject
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def pause(self):
         self.pauses += 1
@@ -264,4 +264,4 @@ class SocketDrain(Object):
             self.sock.close()
             return NullObject
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)

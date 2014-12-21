@@ -63,7 +63,7 @@ class listIterator(Object):
                 ej = args[0]
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
 
 class mapIterator(Object):
@@ -195,7 +195,7 @@ class ConstList(Collection, Object):
             return ConstMap([(IntObject(i), o)
                 for i, o in enumerate(self.objects)])
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def _makeIterator(self):
         return listIterator(self.objects)
@@ -295,7 +295,7 @@ class ConstMap(Collection, Object):
             return ConstMap([(k, v) for (k, v) in self.objects
                 if optSame(key, k) is not EQUAL])
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def _makeIterator(self):
         return mapIterator(self.objects)

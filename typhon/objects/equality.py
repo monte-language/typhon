@@ -185,4 +185,4 @@ class Equalizer(Object):
             result = optSame(first, second)
             return wrapBool(result is EQUAL)
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)

@@ -60,7 +60,8 @@ class Refused(UserException):
     An object refused to accept a message passed to it.
     """
 
-    def __init__(self, atom, args):
+    def __init__(self, target, atom, args):
+        self.target = target
         self.atom = atom
         self.args = args
         self.trail = []
@@ -73,5 +74,6 @@ class Refused(UserException):
             else:
                 l.append(arg.toQuote())
         args = u", ".join(l)
-        return (u"Message refused: (%s, [%s])" %
-                (self.atom.repr().decode("utf-8"), args))
+        return (u"Message refused: (%s, %s, [%s])" %
+                (self.target.toString(), self.atom.repr().decode("utf-8"),
+                    args))

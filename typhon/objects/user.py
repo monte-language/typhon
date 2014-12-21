@@ -149,4 +149,4 @@ class ScriptObject(Object):
 
         # print "I am", self.repr(), "and I am refusing", atom
         # print "I would have accepted", self._map.repr()
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)

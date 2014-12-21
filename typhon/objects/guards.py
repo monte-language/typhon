@@ -57,7 +57,7 @@ def predGuard(f):
                     raise Exception("Coercion failed")
                 return NullObject
 
-            raise Refused(atom, args)
+            raise Refused(self, atom, args)
 
     class PredicateGuard(Object):
 
@@ -82,6 +82,6 @@ def predGuard(f):
                 initial = args[0]
                 return PredicateSlot(initial)
 
-            raise Refused(atom, args)
+            raise Refused(self, atom, args)
 
     return PredicateGuard

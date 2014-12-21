@@ -40,7 +40,7 @@ class TCP4ClientEndpoint(Object):
         if atom is CONNECT_1:
             return self.connect(args[0])
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def connect(self, handler):
         # Apologies. You're probably here to make GAI into a non-blocking
@@ -72,4 +72,4 @@ class MakeTCP4ClientEndpoint(Object):
             # XXX this should be IDNA, not UTF-8.
             return TCP4ClientEndpoint(self.vat, host.encode("utf-8"), port)
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)

@@ -83,7 +83,7 @@ class RefOps(Object):
         if atom is BROKEN_1:
             return self.broken(args[0].toString())
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def promise(self):
         p, r = makePromise(self._vat)
@@ -240,7 +240,7 @@ class _whenResolvedReactor(Object):
                     ConstList([_whenResolvedReactor])))
 
             return NullObject
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
 
 class LocalResolver(Object):
@@ -260,7 +260,7 @@ class LocalResolver(Object):
         if atom is RESOLVE_2:
             return wrapBool(self.resolve(args[0], unwrapBool(args[1])))
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def resolve(self, target, strict=True):
         if self._ref is None:
@@ -310,7 +310,7 @@ class _Buffer(object):
 class Promise(Object):
 
     def callAll(self, atom, args):
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def resolutionRef(self):
         # XXX mostly just here to sate RPython

@@ -49,7 +49,7 @@ class Import(Object):
                 return NullObject
             return result
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
 
 def addImportToScope(scope, recorder):

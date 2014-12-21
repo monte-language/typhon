@@ -97,7 +97,7 @@ class UnitTest(Object):
                 self._tests.append(test)
             return NullObject
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def test(self):
         print "Running unit tests..."

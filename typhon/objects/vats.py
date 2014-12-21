@@ -99,7 +99,7 @@ class MObject(Object):
         if atom is TOSTRING_1:
             return StrObject(args[0].toString())
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
 
 class BooleanFlow(Object):
@@ -120,7 +120,7 @@ class BooleanFlow(Object):
             refs = [self.broken()] * length
             return ConstList([wrapBool(False)] + refs)
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def broken(self):
         return UnconnectedRef(u"Boolean flow expression failed", self._vat)

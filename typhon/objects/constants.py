@@ -71,7 +71,7 @@ class BoolObject(Object):
         if atom is XOR_1:
             return wrapBool(self._b ^ unwrapBool(args[0]))
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def isTrue(self):
         return self._b

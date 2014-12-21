@@ -40,7 +40,7 @@ class Printer(Object):
             self.ub.append(unwrapStr(args[0]))
             return NullObject
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def value(self):
         return self.ub.build()

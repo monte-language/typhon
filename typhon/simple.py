@@ -120,7 +120,7 @@ class Throw(Object):
         if atom is EJECT_2:
             return throw(args[0], args[1])
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
 
 @runnable(RUN_2)

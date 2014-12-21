@@ -121,7 +121,7 @@ class CharObject(Object):
             other = unwrapInt(args[0])
             return self.withOffset(-other)
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def withOffset(self, offset):
         return CharObject(unichr(ord(self._c) + offset))
@@ -205,7 +205,7 @@ class DoubleObject(Object):
         if atom is TAN_0:
             return DoubleObject(math.tan(self._d))
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     @elidable
     def add(self, other):
@@ -328,7 +328,7 @@ class IntObject(Object):
                 return DoubleObject(float(self._i)).subtract(other)
             return IntObject(self._i - unwrapInt(other))
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def getInt(self):
         return self._i
@@ -372,7 +372,7 @@ class strIterator(Object):
                 ej = args[0]
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
 
 class StrObject(Object):
@@ -485,7 +485,7 @@ class StrObject(Object):
         if atom is _MAKEITERATOR_0:
             return strIterator(self._s)
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def getString(self):
         return self._s

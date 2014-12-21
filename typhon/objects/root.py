@@ -46,7 +46,7 @@ class Object(object):
         return self.recv(atom, arguments)
 
     def recv(self, atom, args):
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
 
 def runnable(singleAtom):
@@ -67,7 +67,7 @@ def runnable(singleAtom):
             def recv(self, atom, args):
                 if atom is singleAtom:
                     return f(args)
-                raise Refused(atom, args)
+                raise Refused(self, atom, args)
 
         return runnableObject
 

@@ -36,7 +36,7 @@ class Binding(Object):
         if atom is GET_0:
             return self.slot
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
 
 class Slot(Object):

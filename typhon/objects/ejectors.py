@@ -48,7 +48,7 @@ class Ejector(Object):
             self.disable()
             return NullObject
 
-        raise Refused(atom, args)
+        raise Refused(self, atom, args)
 
     def fire(self, payload=NullObject):
         raise Ejecting(self, payload)
