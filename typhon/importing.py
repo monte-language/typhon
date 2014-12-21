@@ -17,11 +17,14 @@ from typhon.load import load
 from typhon.nodes import evaluate
 from typhon.objects.constants import NullObject
 from typhon.optimizer import optimize
+from typhon.scope import Scope
 
 
 def obtainModule(path, recorder):
     with recorder.context("Deserialization"):
         terms = load(open(path, "rb").read())
+    with recorder.context("Scope cleanup"):
+        terms = [term.rewriteScope(Scope(), Scope()) for term in terms]
     with recorder.context("Optimization"):
         terms = [optimize(term) for term in terms]
     for term in terms:
