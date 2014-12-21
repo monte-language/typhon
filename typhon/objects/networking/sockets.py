@@ -96,7 +96,8 @@ class Socket(object):
         if self._listener is not None:
             fd, _ = self.rsock.accept()
             sock = Socket(self._vat, RSocket(fd=fd))
-            self._vat.reactor.addSocket(sock)
+            # XXX demeter
+            self._vat._reactor.addSocket(sock)
             self._listener.call(u"run", [sock.createFount(),
                                          SocketDrain(sock)])
             return

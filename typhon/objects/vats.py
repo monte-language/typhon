@@ -17,7 +17,8 @@ from typhon.errors import Refused
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import StrObject, unwrapInt, unwrapStr
-from typhon.objects.networking.endpoints import MakeTCP4ClientEndpoint
+from typhon.objects.networking.endpoints import (MakeTCP4ClientEndpoint,
+                                                 MakeTCP4ServerEndpoint)
 from typhon.objects.refs import UnconnectedRef, RefOps, makePromise
 from typhon.objects.root import Object
 
@@ -132,4 +133,5 @@ def vatScope(vat):
         u"Ref": RefOps(vat),
         u"__booleanFlow": BooleanFlow(vat),
         u"makeTCP4ClientEndpoint": MakeTCP4ClientEndpoint(vat),
+        u"makeTCP4ServerEndpoint": MakeTCP4ServerEndpoint(vat),
     }

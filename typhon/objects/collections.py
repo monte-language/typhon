@@ -75,8 +75,8 @@ class mapIterator(Object):
     def __init__(self, objects):
         self.objects = objects
 
-    def recv(self, verb, args):
-        if verb is NEXT_1:
+    def recv(self, atom, args):
+        if atom is NEXT_1:
             if self._index < len(self.objects):
                 k, v = self.objects[self._index]
                 rv = [k, v]
@@ -86,7 +86,7 @@ class mapIterator(Object):
                 ej = args[0]
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
-        raise Refused(verb, args)
+        raise Refused(self, atom, args)
 
 
 class Collection(object):

@@ -13,7 +13,7 @@
 # under the License.
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused
+from typhon.errors import Refused, userError
 from typhon.objects.constants import NullObject
 from typhon.objects.root import Object
 
@@ -47,14 +47,14 @@ class Slot(Object):
     def toString(self):
         return u"<slot>"
 
-    def recv(self, verb, args):
-        if verb is GET_0:
+    def recv(self, atom, args):
+        if atom is GET_0:
             return self.get()
 
-        if verb is PUT_1:
+        if atom is PUT_1:
             return self.put(args[0])
 
-        raise Refused(verb, args)
+        raise Refused(self, atom, args)
 
 
 class FinalSlot(Slot):
@@ -68,7 +68,7 @@ class FinalSlot(Slot):
         return self._obj
 
     def put(self, value):
-        raise RuntimeError("Can't put into a FinalSlot!")
+        raise userError(u"Can't put into a FinalSlot!")
 
 
 class VarSlot(Slot):
