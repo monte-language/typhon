@@ -18,7 +18,7 @@ from typhon.objects.slots import Binding, FinalSlot
 def finalize(scope):
     rv = {}
     for key in scope:
-        rv[key] = FinalSlot(scope[key])
+        rv[key] = Binding(FinalSlot(scope[key]))
     return rv
 
 
@@ -46,11 +46,10 @@ class Environment(object):
         pass
 
     def recordSlot(self, noun, value):
-        self._frame[noun] = value
+        self._frame[noun] = Binding(value)
 
     def recordBinding(self, noun, binding):
-        assert isinstance(binding, Binding)
-        self.recordSlot(noun, binding.slot)
+        self._frame[noun] = binding
 
     def _find(self, noun):
         # XXX the compiler needs to have proven this operation's safety
@@ -68,17 +67,19 @@ class Environment(object):
         Create a binding object for a given name.
         """
 
-        return Binding(self._find(noun))
+        return self._find(noun)
 
     def final(self, noun, value):
         self.recordSlot(noun, FinalSlot(value))
 
     def update(self, noun, value):
-        slot = self._find(noun)
+        binding = self._find(noun)
+        slot = binding.call(u"get", [])
         slot.call(u"put", [value])
 
     def get(self, noun):
-        slot = self._find(noun)
+        binding = self._find(noun)
+        slot = binding.call(u"get", [])
         return slot.call(u"get", [])
 
     def freeze(self):
