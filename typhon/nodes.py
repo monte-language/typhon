@@ -26,8 +26,8 @@ from typhon.pretty import Buffer, LineWriter, OneLine
 
 def evaluate(node, env):
     # Want to see nodes in JIT traces? Uncomment these two lines. ~ C.
-    # assert_green(node)
-    # jit_debug(node.repr())
+    assert_green(node)
+    jit_debug(node.repr())
     try:
         return node.evaluate(env)
     except UserException as ue:

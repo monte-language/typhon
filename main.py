@@ -122,7 +122,7 @@ def entryPoint(argv):
         while vat.hasTurns() or reactor.hasObjects():
             if vat.hasTurns():
                 count = len(vat._pending)
-                print "Taking", count, "turn(s) on", vat.toQuote()
+                # print "Taking", count, "turn(s) on", vat.toQuote()
                 for _ in range(count):
                     try:
                         recorder.record("Time spent in vats", vat.takeTurn)
@@ -130,7 +130,7 @@ def entryPoint(argv):
                         print "Caught exception:", ue.formatError()
 
             if reactor.hasObjects():
-                print "Performing I/O..."
+                # print "Performing I/O..."
                 with recorder.context("Time spent in I/O"):
                     reactor.spin(vat.hasTurns())
     finally:
