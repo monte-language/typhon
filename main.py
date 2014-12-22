@@ -51,10 +51,10 @@ def loadPrelude(recorder, vat):
     scope.update(vatScope(vat))
     env = Environment(finalize(scope), None)
 
-    terms = obtainModule("prelude.ty", recorder)
+    term = obtainModule("prelude.ty", recorder)
 
     with recorder.context("Time spent in prelude"):
-        result = evaluateTerms(terms, env)
+        result = evaluateTerms([term], env)
 
     if result is None:
         print "Prelude returned None!?"
@@ -94,7 +94,7 @@ def entryPoint(argv):
     registerGlobals(prelude)
 
     try:
-        terms = obtainModule(argv[1], recorder)
+        term = obtainModule(argv[1], recorder)
     except LoadFailed as lf:
         print lf
         return 1
@@ -108,7 +108,7 @@ def entryPoint(argv):
 
     result = NullObject
     with recorder.context("Time spent in vats"):
-        result = evaluateTerms(terms, env)
+        result = evaluateTerms([term], env)
     if result is None:
         return 1
     print result.toQuote()

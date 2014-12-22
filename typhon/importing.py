@@ -14,7 +14,7 @@
 
 from typhon.errors import UserException
 from typhon.load import load
-from typhon.nodes import evaluate
+from typhon.nodes import Sequence, evaluate
 from typhon.objects.constants import NullObject
 from typhon.optimizer import optimize
 from typhon.scope import Scope
@@ -22,15 +22,15 @@ from typhon.scope import Scope
 
 def obtainModule(path, recorder):
     with recorder.context("Deserialization"):
-        terms = load(open(path, "rb").read())
+        term = Sequence(load(open(path, "rb").read())[:])
     with recorder.context("Scope cleanup"):
-        terms = [term.rewriteScope(Scope(), Scope()) for term in terms]
+        term = term.rewriteScope(Scope(), Scope())
     with recorder.context("Optimization"):
-        terms = [optimize(term) for term in terms]
-    for term in terms:
-        print "Optimized node:"
-        print term.repr()
-    return terms
+        term = optimize(term)
+
+    print "Optimized node:"
+    print term.repr()
+    return term
 
 
 def evaluateWithTraces(term, env):

@@ -37,12 +37,12 @@ class Import(Object):
             p += ".ty"
 
             # Attempt the import.
-            terms = obtainModule(p, self.recorder)
+            term = obtainModule(p, self.recorder)
 
             # Get results.
             env = Environment(finalize(self.scope), None)
             with self.recorder.context("Time spent in vats"):
-                result = evaluateTerms(terms, env)
+                result = evaluateTerms([term], env)
 
             if result is None:
                 print "Result was None :c"

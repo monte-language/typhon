@@ -2,6 +2,7 @@ from functools import wraps
 
 from typhon.nodes import (Call, Def, Escape, FinalPattern, IgnorePattern,
                           Noun, Sequence, Tuple)
+from typhon.scope import Scope
 
 
 def matches(ty):
@@ -56,6 +57,36 @@ def flattenSequence(sequence):
     # list.
     return Sequence(rv[:])
 
+
+def _isPlainDef(node):
+    if not isinstance(node, Def):
+        return False
+    if not isinstance(node._p, FinalPattern):
+        return False
+    return node._p._g is None and isinstance(node._v, Noun)
+
+
+@matches(Sequence)
+def simplifyPlainDefs(sequence):
+    for i, node in enumerate(sequence._l):
+        if _isPlainDef(node):
+            # Hit! Unwrap everything and cry a little inside.
+            assert isinstance(node, Def)
+            p = node._p
+            v = node._v
+            assert isinstance(p, FinalPattern)
+            assert isinstance(v, Noun)
+            src = p._n
+            dest = v.name
+            # Use shadows to rewrite the scope.
+            seen = Scope()
+            shadows = Scope()
+            shadows.put(src, dest)
+            tail = Sequence(sequence._l[i + 1:])
+            tail = tail.rewriteScope(seen, shadows)
+            # Reassemble the sequence, omitting the now-useless Def.
+            return Sequence(sequence._l[:i] + tail._l)
+    return None
 
 @matches(Sequence)
 def elideBareNouns(sequence):
@@ -202,6 +233,7 @@ class Optimizer(object):
 def optimize(node):
     changes = [
         flattenSequence,
+        simplifyPlainDefs,
         elideBareNouns,
         narrowEscape,
         elideSingleEscape,

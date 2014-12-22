@@ -246,7 +246,7 @@ class Assign(Node):
         # Read.
         newTarget = shadows.get(self.target)
         if newTarget is None:
-            return self
+            newTarget = self.target
         return Assign(newTarget, self.rvalue.rewriteScope(seen, shadows))
 
     def usesName(self, name):
