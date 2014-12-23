@@ -1129,7 +1129,7 @@ def formatName(p):
 
 
 def shadowName(name, shadows):
-    shadowed = name
+    shadowed = name + u"_"
     while shadows.get(shadowed) is not None:
         shadowed += u"_"
     shadows.put(name, shadowed)
