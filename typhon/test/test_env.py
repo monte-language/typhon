@@ -17,11 +17,12 @@ from unittest import TestCase
 from typhon.env import Environment
 from typhon.errors import UserException
 from typhon.objects.constants import NullObject
+from typhon.objects.slots import FinalSlot
 
 
 class TestEnv(TestCase):
 
     def testFinalImmutability(self):
         env = Environment({}, None)
-        env.final(u"test", NullObject)
-        self.assertRaises(UserException, env.update, u"test", NullObject)
+        env.createSlot(u"test", FinalSlot(NullObject))
+        self.assertRaises(UserException, env.putValue, u"test", NullObject)

@@ -32,6 +32,9 @@ class Binding(Object):
     def __init__(self, slot):
         self.slot = slot
 
+    def toString(self):
+        return u"<binding for %s>" % self.slot.toString()
+
     def recv(self, atom, args):
         if atom is GET_0:
             return self.slot
@@ -43,9 +46,6 @@ class Slot(Object):
     """
     A storage space.
     """
-
-    def toString(self):
-        return u"<slot>"
 
     def recv(self, atom, args):
         if atom is GET_0:
@@ -64,6 +64,9 @@ class FinalSlot(Slot):
     def __init__(self, obj):
         self._obj = obj
 
+    def toString(self):
+        return u"<FinalSlot(%s)>" % self._obj.toString()
+
     def get(self):
         return self._obj
 
@@ -75,6 +78,9 @@ class VarSlot(Slot):
 
     def __init__(self, obj):
         self._obj = obj
+
+    def toString(self):
+        return u"<VarSlot(%s)>" % self._obj.toString()
 
     def get(self):
         return self._obj

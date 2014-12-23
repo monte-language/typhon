@@ -19,7 +19,7 @@ from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import Ejector, throw
-from typhon.objects.slots import VarSlot
+from typhon.objects.slots import FinalSlot, VarSlot
 from typhon.objects.user import ScriptMap, ScriptObject
 from typhon.pretty import Buffer, LineWriter, OneLine
 
@@ -236,7 +236,7 @@ class Assign(Node):
 
     def evaluate(self, env):
         value = evaluate(self.rvalue, env)
-        env.update(self.target, value)
+        env.putValue(self.target, value)
         return value
 
     def transform(self, f):
@@ -269,7 +269,7 @@ class Binding(Node):
         out.write(self.name.encode("utf-8"))
 
     def evaluate(self, env):
-        return env.bindingFor(self.name)
+        return env.getBinding(self.name)
 
     def transform(self, f):
         return f(self)
@@ -668,7 +668,7 @@ class Noun(Node):
         out.write(self.name.encode("utf-8"))
 
     def evaluate(self, env):
-        return env.get(self.name)
+        return env.getValue(self.name)
 
     def rewriteScope(self, seen, shadows):
         # Read.
@@ -907,7 +907,7 @@ class BindingPattern(Pattern):
         out.write(self._noun.encode("utf-8"))
 
     def unify(self, specimen, ejector, env):
-        env.recordBinding(self._noun, specimen)
+        env.createBinding(self._noun, specimen)
 
     def rewriteScope(self, seen, shadows):
         # Write.
@@ -946,7 +946,8 @@ class FinalPattern(Pattern):
             # the guard once and for all, right now.
             rv = guard.call(u"coerce", [specimen, ejector])
 
-        env.final(self._n, rv)
+        slot = FinalSlot(rv)
+        env.createSlot(self._n, slot)
 
     def rewriteScope(self, seen, shadows):
         if self._g is None:
@@ -1076,7 +1077,7 @@ class VarPattern(Pattern):
             rv = guard.call(u"makeSlot", [specimen])
 
         # Add the slot to the environment.
-        env.recordSlot(self._n, rv)
+        env.createSlot(self._n, rv)
 
     def rewriteScope(self, seen, shadows):
         if self._g is None:

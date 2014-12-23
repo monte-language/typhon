@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.errors import userError
 from typhon.objects.slots import Binding, FinalSlot
 
 
@@ -32,12 +33,23 @@ class Environment(object):
 
     _immutable_ = True
 
-    def __init__(self, initialScope, parent):
+    def __init__(self, initialScope, parent, size=-1):
+        self.size = size
+
         if parent is None:
-            self._frame = {}
+            self._mapping = {}
+            if self.size == -1:
+                self.frame = []
+            else:
+                self.frame = [None] * size
         else:
-            self._frame = parent._frame.copy()
-        self._frame.update(initialScope)
+            self._mapping = parent._mapping.copy()
+            self.frame = parent.frame[:]
+            if self.size != -1:
+                self.frame += [None] * size
+
+        for k, v in initialScope.items():
+            self.createBinding(k, v)
 
     def __enter__(self):
         return Environment({}, self)
@@ -45,42 +57,39 @@ class Environment(object):
     def __exit__(self, *args):
         pass
 
-    def recordSlot(self, noun, value):
-        self._frame[noun] = Binding(value)
+    def createBinding(self, noun, binding):
+        if noun in self._mapping:
+            # raise userError(
+            #     u"Noun %s already in frame; cannot make new binding" % noun)
+            print u"Warning: Replacing binding %s" % noun
 
-    def recordBinding(self, noun, binding):
-        self._frame[noun] = binding
+        offset = len(self.frame)
+        self._mapping[noun] = offset
+        self.frame.append(binding)
 
-    def _find(self, noun):
-        # XXX the compiler needs to have proven this operation's safety
-        # beforehand, because the JIT will not. We should look into some sort
-        # of safe append-only situation here that will let us construct
-        # environment names and slots at the beginning of the frame.
-        v = self._frame.get(noun, None)
-        if v is None:
-            from typhon.errors import userError
+    def createSlot(self, noun, slot):
+        self.createBinding(noun, Binding(slot))
+
+    def findKey(self, noun):
+        offset = self._mapping.get(noun, -1)
+        if offset == -1:
             raise userError(u"Noun %s not in frame" % noun)
-        return v
+        return offset
 
-    def bindingFor(self, noun):
-        """
-        Create a binding object for a given name.
-        """
+    def getBinding(self, noun):
+        return self.frame[self.findKey(noun)]
 
-        return self._find(noun)
+    def getSlot(self, noun):
+        binding = self.getBinding(noun)
+        return binding.call(u"get", [])
 
-    def final(self, noun, value):
-        self.recordSlot(noun, FinalSlot(value))
-
-    def update(self, noun, value):
-        binding = self._find(noun)
-        slot = binding.call(u"get", [])
-        slot.call(u"put", [value])
-
-    def get(self, noun):
-        binding = self._find(noun)
-        slot = binding.call(u"get", [])
+    def getValue(self, noun):
+        slot = self.getSlot(noun)
         return slot.call(u"get", [])
+
+    def putValue(self, noun, value):
+        slot = self.getSlot(noun)
+        return slot.call(u"put", [value])
 
     def freeze(self):
         """
@@ -92,7 +101,4 @@ class Environment(object):
 
         # Allow me to break the ice. My name is Freeze. Learn it well, for it
         # is the chilling sound of your doom.
-
-        # But wait, what's this? It's okay, kids; freezing is no longer
-        # necessary.
-        return self
+        return Environment({}, self)
