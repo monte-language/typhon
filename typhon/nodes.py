@@ -658,7 +658,11 @@ class Noun(Node):
     _immutable_ = True
 
     def __init__(self, noun):
-        self.name = strToString(noun)
+        self.name = noun
+
+    @staticmethod
+    def fromAST(noun):
+        return Noun(strToString(noun))
 
     def pretty(self, out):
         out.write(self.name.encode("utf-8"))
@@ -671,7 +675,7 @@ class Noun(Node):
         newName = shadows.get(self.name)
         if newName is None:
             return self
-        return Noun(Str(newName))
+        return Noun(newName)
 
     def usesName(self, name):
         return self.name == name
@@ -910,7 +914,7 @@ class BindingPattern(Pattern):
         if seen.get(self._noun):
             # Shadow.
             shadowed = shadowName(self._noun, shadows)
-            return BindingPattern(Noun(Str(shadowed)))
+            return BindingPattern(Noun(shadowed))
         else:
             seen.put(self._noun, self._noun)
             return self
@@ -954,7 +958,7 @@ class FinalPattern(Pattern):
         if seen.get(self._n):
             # Shadow.
             shadowed = shadowName(self._n, shadows)
-            return FinalPattern(Noun(Str(shadowed)), g)
+            return FinalPattern(Noun(shadowed), g)
         else:
             seen.put(self._n, self._n)
             return self
@@ -1084,7 +1088,7 @@ class VarPattern(Pattern):
         if seen.get(self._n):
             # Shadow.
             shadowed = shadowName(self._n, shadows)
-            return VarPattern(Noun(Str(shadowed)), g)
+            return VarPattern(Noun(shadowed), g)
         else:
             seen.put(self._n, self._n)
             return self

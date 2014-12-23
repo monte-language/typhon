@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.nonconst import NonConstant
 from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
 
 from typhon.atoms import getAtom
@@ -103,7 +104,8 @@ class Socket(object):
             return
 
         try:
-            buf = self.rsock.recv(8192)
+            # XXX RPython bug requires NC here
+            buf = self.rsock.recv(NonConstant(8192))
         except:
             # No reads for us today. Error out.
             self.terminate()

@@ -261,7 +261,7 @@ def loadTerm(stream):
         return Call(loadTerm(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "NounExpr":
-        return Noun(loadTerm(stream))
+        return Noun.fromAST(loadTerm(stream))
 
     elif tag == "Object":
         return Obj.fromAST(loadTerm(stream), loadPattern(stream),
