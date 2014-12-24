@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import hint
+from rpython.rlib.jit import elidable, hint, unroll_safe
 
 from typhon.errors import userError
 from typhon.objects.slots import Binding, FinalSlot
@@ -38,6 +38,7 @@ class Environment(object):
 
     depth = 0
 
+    @unroll_safe
     def __init__(self, initialScope, parent, size):
         self = hint(self, access_directly=True, fresh_virtualizable=True)
 
@@ -64,6 +65,9 @@ class Environment(object):
     def new(self, size):
         return Environment({}, self, size)
 
+    def createBindingFast(self, index, binding):
+        self.frame[index] = binding
+
     def createBinding(self, noun, binding):
         if noun in self._mapping:
             # raise userError(
@@ -77,25 +81,48 @@ class Environment(object):
         self.frame[offset] = binding
         self.depth += 1
 
+    def createSlotFast(self, index, slot):
+        self.createBindingFast(index, Binding(slot))
+
     def createSlot(self, noun, slot):
         self.createBinding(noun, Binding(slot))
 
+    @elidable
     def findKey(self, noun):
         offset = self._mapping.get(noun, -1)
         if offset == -1:
             raise userError(u"Noun %s not in frame" % noun)
         return offset
 
+    @elidable
+    def getBindingFast(self, index):
+        return self.frame[index]
+
+    @elidable
     def getBinding(self, noun):
         return self.frame[self.findKey(noun)]
 
+    @elidable
+    def getSlotFast(self, index):
+        binding = self.getBindingFast(index)
+        return binding.call(u"get", [])
+
+    @elidable
     def getSlot(self, noun):
         binding = self.getBinding(noun)
         return binding.call(u"get", [])
 
+    def getValueFast(self, index):
+        slot = self.getSlotFast(index)
+        return slot.call(u"get", [])
+
     def getValue(self, noun):
         slot = self.getSlot(noun)
         return slot.call(u"get", [])
+
+    def putValueFast(self, index, value):
+        slot = self.getSlotFast(index)
+        return slot.call(u"put", [value])
 
     def putValue(self, noun, value):
         slot = self.getSlot(noun)

@@ -75,6 +75,7 @@ class ScriptMap(object):
         return self._methods.get(atom, (None, None, -1))
 
 
+@unroll_safe
 def runBlock(patterns, block, args, ej, env):
     """
     Run a block with an environment.
