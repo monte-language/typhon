@@ -40,7 +40,7 @@ class Import(Object):
             term = obtainModule(p, self.recorder)
 
             # Get results.
-            env = Environment(finalize(self.scope), None)
+            env = Environment(finalize(self.scope), None, len(self.scope))
             with self.recorder.context("Time spent in vats"):
                 result = evaluateTerms([term], env)
 

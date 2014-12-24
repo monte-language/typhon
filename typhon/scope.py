@@ -41,3 +41,6 @@ class Scope(object):
 
     def put(self, key, value):
         self.scope[-1][key] = value
+
+    def size(self):
+        return len(self.scope[-1])

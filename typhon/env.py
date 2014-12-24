@@ -33,29 +33,27 @@ class Environment(object):
 
     _immutable_ = True
 
-    def __init__(self, initialScope, parent, size=-1):
+    def __init__(self, initialScope, parent, size):
         self.size = size
 
         if parent is None:
             self._mapping = {}
-            if self.size == -1:
-                self.frame = []
-            else:
-                self.frame = [None] * size
+            self.frame = [None] * size
         else:
             self._mapping = parent._mapping.copy()
-            self.frame = parent.frame[:]
-            if self.size != -1:
-                self.frame += [None] * size
+            self.frame = parent.frame[:] + [None] * size
 
         for k, v in initialScope.items():
             self.createBinding(k, v)
 
     def __enter__(self):
-        return Environment({}, self)
+        return self
 
     def __exit__(self, *args):
         pass
+
+    def new(self, size):
+        return Environment({}, self, size)
 
     def createBinding(self, noun, binding):
         if noun in self._mapping:
@@ -101,4 +99,4 @@ class Environment(object):
 
         # Allow me to break the ice. My name is Freeze. Learn it well, for it
         # is the chilling sound of your doom.
-        return Environment({}, self)
+        return self.new(0)

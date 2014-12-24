@@ -51,18 +51,20 @@ class ScriptMap(object):
             verb = method._verb
             patterns = method._ps
             block = method._b
+            size = method.frameSize
             arity = len(patterns)
 
             atom = getAtom(verb, arity)
 
-            self._methods[atom] = patterns, block
+            self._methods[atom] = patterns, block, size
 
         self.matchers = []
         for matcher in script._matchers:
             # Stupid RPython. :T
             from typhon.nodes import Matcher
             assert isinstance(matcher, Matcher)
-            self.matchers.append((matcher._pattern, matcher._block))
+            self.matchers.append((matcher._pattern, matcher._block,
+                matcher.frameSize))
 
     def repr(self):
         ms = [atom.repr() for atom in self._methods.keys()]
@@ -70,7 +72,7 @@ class ScriptMap(object):
 
     @elidable
     def lookup(self, atom):
-        return self._methods.get(atom, (None, None))
+        return self._methods.get(atom, (None, None, -1))
 
 
 class ScriptObject(Object):
@@ -85,8 +87,8 @@ class ScriptObject(Object):
         self._map = scriptMap
         self._env = env
 
-    def env(self):
-        return self._env
+    def env(self, size):
+        return self._env.new(size)
 
     def toString(self):
         try:
@@ -101,7 +103,7 @@ class ScriptObject(Object):
         # Circular import here to get at the evaluation function.
         from typhon.nodes import evaluate
 
-        patterns, block = self._map.lookup(atom)
+        patterns, block, frameSize = self._map.lookup(atom)
 
         if patterns is not None and block is not None:
             block = promote(block)
@@ -111,7 +113,7 @@ class ScriptObject(Object):
             # message, we don't want to give up if the method fails to match.
             with Ejector() as ej:
                 try:
-                    with self._env as env:
+                    with self.env(frameSize) as env:
                         # Set up parameters from arguments.
                         # We are assured that the counts line up by the atom
                         # generation system.
@@ -131,8 +133,8 @@ class ScriptObject(Object):
         matchers = self._map.matchers
         message = ConstList([StrObject(atom.verb), ConstList(args)])
 
-        for pattern, block in matchers:
-            with self._env as env:
+        for pattern, block, frameSize in matchers:
+            with self.env(frameSize) as env:
                 with Ejector() as ej:
                     try:
                         pattern.unify(message, ej, env)

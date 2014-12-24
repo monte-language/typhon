@@ -38,7 +38,7 @@ loopDriver = JitDriver(greens=["consumerAST"],
 
 def loopJIT(consumer, ejector, iterator):
     if isinstance(consumer, ScriptObject):
-        patterns, ast = consumer._map.lookup(RUN_2)
+        patterns, ast, frameSize = consumer._map.lookup(RUN_2)
         loopDriver.jit_merge_point(consumerAST=ast,
                                    consumer=consumer, ejector=ejector,
                                    iterator=iterator)

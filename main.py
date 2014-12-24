@@ -49,7 +49,7 @@ def jitPolicy(driver):
 def loadPrelude(recorder, vat):
     scope = simpleScope()
     scope.update(vatScope(vat))
-    env = Environment(finalize(scope), None)
+    env = Environment(finalize(scope), None, len(scope))
 
     term = obtainModule("prelude.ty", recorder)
 
@@ -104,7 +104,7 @@ def entryPoint(argv):
     scope.update(prelude)
     scope.update(vatScope(vat))
     addImportToScope(scope, recorder)
-    env = Environment(finalize(scope), None)
+    env = Environment(finalize(scope), None, len(scope))
 
     result = NullObject
     with recorder.context("Time spent in vats"):

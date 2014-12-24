@@ -383,6 +383,9 @@ class Escape(Node):
 
     _immutable_ = True
 
+    frameSize = -1
+    catchFrameSize = -1
+
     def __init__(self, pattern, node, catchPattern, catchNode):
         self._pattern = pattern
         self._node = node
@@ -404,7 +407,7 @@ class Escape(Node):
         with Ejector() as ej:
             rv = None
 
-            with env as newEnv:
+            with env.new(self.frameSize) as newEnv:
                 self._pattern.unify(ej, None, newEnv)
 
                 try:
@@ -424,7 +427,7 @@ class Escape(Node):
                 return rv
 
             # Else, let's set up another frame and handle the catch block.
-            with env as newEnv:
+            with env.new(self.catchFrameSize) as newEnv:
                 self._catchPattern.unify(rv, None, newEnv)
                 return evaluate(self._catchNode, newEnv)
 
@@ -443,6 +446,7 @@ class Escape(Node):
             with shadows:
                 p = self._pattern.rewriteScope(seen, shadows)
                 n = self._node.rewriteScope(seen, shadows)
+            self.frameSize = seen.size()
 
         with seen:
             with shadows:
@@ -454,6 +458,7 @@ class Escape(Node):
                     cn = None
                 else:
                     cn = self._catchNode.rewriteScope(seen, shadows)
+            self.catchFrameSize = seen.size()
 
         return Escape(p, n, cp, cn)
 
@@ -467,6 +472,9 @@ class Escape(Node):
 class Finally(Node):
 
     _immutable_ = True
+
+    frameSize = -1
+    finallyFrameSize = -1
 
     def __init__(self, block, atLast):
         self._block = block
@@ -483,11 +491,11 @@ class Finally(Node):
         # Use RPython's exception handling system to ensure the execution of
         # the atLast block after exiting the main block.
         try:
-            with env as env:
+            with env.new(self.frameSize) as env:
                 rv = evaluate(self._block, env)
             return rv
         finally:
-            with env as env:
+            with env.new(self.finallyFrameSize) as env:
                 evaluate(self._atLast, env)
 
     def transform(self, f):
@@ -496,8 +504,15 @@ class Finally(Node):
     def rewriteScope(self, seen, shadows):
         with seen:
             with shadows:
-                return Finally(self._block.rewriteScope(seen, shadows),
-                               self._atLast.rewriteScope(seen, shadows))
+                block = self._block.rewriteScope(seen, shadows)
+            self.frameSize = seen.size()
+
+        with seen:
+            with shadows:
+                atLast = self._atLast.rewriteScope(seen, shadows)
+            self.finallyFrameSize = seen.size()
+
+        return Finally(block, atLast)
 
     def usesName(self, name):
         return self._block.usesName(name) or self._atLast.usesName(name)
@@ -507,6 +522,8 @@ class Hide(Node):
 
     _immutable_ = True
 
+    frameSize = -1
+
     def __init__(self, inner):
         self._inner = inner
 
@@ -515,7 +532,7 @@ class Hide(Node):
         self._inner.pretty(out.indent())
 
     def evaluate(self, env):
-        with env as env:
+        with env.new(self.frameSize) as env:
             return evaluate(self._inner, env)
 
     def transform(self, f):
@@ -524,7 +541,10 @@ class Hide(Node):
     def rewriteScope(self, seen, shadows):
         with seen:
             with shadows:
-                return Hide(self._inner.rewriteScope(seen, shadows))
+                rv = Hide(self._inner.rewriteScope(seen, shadows))
+            self.frameSize = seen.size()
+
+        return rv
 
     def usesName(self, name):
         # XXX not technically correct due to Hide intentionally altering
@@ -535,6 +555,8 @@ class Hide(Node):
 class If(Node):
 
     _immutable_ = True
+
+    frameSize = -1
 
     def __init__(self, test, then, otherwise):
         self._test = test
@@ -553,7 +575,7 @@ class If(Node):
     def evaluate(self, env):
         # If is a short-circuiting expression. We construct zero objects in
         # the branch that is not chosen.
-        with env as env:
+        with env.new(self.frameSize) as env:
             whether = evaluate(self._test, env)
 
             if unwrapBool(whether):
@@ -568,9 +590,12 @@ class If(Node):
     def rewriteScope(self, seen, shadows):
         with seen:
             with shadows:
-                return If(self._test.rewriteScope(seen, shadows),
-                          self._then.rewriteScope(seen, shadows),
-                          self._otherwise.rewriteScope(seen, shadows))
+                rv = If(self._test.rewriteScope(seen, shadows),
+                        self._then.rewriteScope(seen, shadows),
+                        self._otherwise.rewriteScope(seen, shadows))
+            self.frameSize = seen.size()
+
+        return rv
 
     def usesName(self, name):
         rv = self._test.usesName(name) or self._then.usesName(name)
@@ -580,6 +605,8 @@ class If(Node):
 class Matcher(Node):
 
     _immutable_ = True
+
+    frameSize = -1
 
     def __init__(self, pattern, block):
         self._pattern = pattern
@@ -598,8 +625,11 @@ class Matcher(Node):
     def rewriteScope(self, seen, shadows):
         with seen:
             with shadows:
-                return Matcher(self._pattern.rewriteScope(seen, shadows),
-                               self._block.rewriteScope(seen, shadows))
+                rv = Matcher(self._pattern.rewriteScope(seen, shadows),
+                             self._block.rewriteScope(seen, shadows))
+            self.frameSize = seen.size()
+
+        return rv
 
 
 class Method(Node):
@@ -607,6 +637,8 @@ class Method(Node):
     _immutable_ = True
 
     _immutable_fields_ = "_ps[*]",
+
+    frameSize = -1
 
     def __init__(self, doc, verb, params, guard, block):
         self._d = doc
@@ -645,9 +677,12 @@ class Method(Node):
         with seen:
             with shadows:
                 ps = [p.rewriteScope(seen, shadows) for p in self._ps]
-                return Method(self._d, self._verb, ps,
-                              self._g.rewriteScope(seen, shadows),
-                              self._b.rewriteScope(seen, shadows))
+                rv = Method(self._d, self._verb, ps,
+                            self._g.rewriteScope(seen, shadows),
+                            self._b.rewriteScope(seen, shadows))
+            self.frameSize = seen.size()
+
+        return rv
 
     def usesName(self, name):
         return self._b.usesName(name)
@@ -725,7 +760,7 @@ class Obj(Node):
         # ...but fortunately, objects don't contain any evaluations while
         # being created, and it's always possible to perform the assignment
         # into the environment afterwards.
-        self._n.unify(rv, None, rv.env())
+        self._n.unify(rv, None, rv._env)
         # Oh, and assign it into the outer environment too.
         self._n.unify(rv, None, env)
         return rv
@@ -835,6 +870,9 @@ class Try(Node):
 
     _immutable_ = True
 
+    frameSize = -1
+    catchFrameSize = -1
+
     def __init__(self, first, pattern, then):
         self._first = first
         self._pattern = pattern
@@ -853,10 +891,10 @@ class Try(Node):
         # Try the first block, and if an exception is raised, pattern-match it
         # against the catch-pattern in the then-block.
         try:
-            with env as env:
+            with env.new(self.frameSize) as env:
                 return evaluate(self._first, env)
         except UserException:
-            with env as env:
+            with env.new(self.catchFrameSize) as env:
                 # XXX Exception information can't be leaked back into Monte;
                 # seal it properly instead of using null here.
                 if self._pattern.unify(NullObject, None, env):
@@ -872,11 +910,15 @@ class Try(Node):
         with seen:
             with shadows:
                 first = self._first.rewriteScope(seen, shadows)
+            self.frameSize = seen.size()
 
         with seen:
             with shadows:
-                return Try(first, self._pattern.rewriteScope(seen, shadows),
-                           self._then.rewriteScope(seen, shadows))
+                rv = Try(first, self._pattern.rewriteScope(seen, shadows),
+                         self._then.rewriteScope(seen, shadows))
+            self.catchFrameSize = seen.size()
+
+        return rv
 
     def usesName(self, name):
         return self._first.usesName(name) or self._then.usesName(name)
