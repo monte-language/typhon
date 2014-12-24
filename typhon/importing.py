@@ -25,20 +25,18 @@ def obtainModule(path, recorder):
         term = Sequence(load(open(path, "rb").read())[:])
     # First pass: Unshadow.
     with recorder.context("Scope analysis"):
-        seen = Scope()
-        term = term.rewriteScope(seen, Scope())
-        print "I anticipate an initial stack of", seen.size()
+        scope = Scope()
+        term = term.rewriteScope(scope)
     with recorder.context("Optimization"):
         term = optimize(term)
     # Second pass: Collect the initial scope size.
     with recorder.context("Scope analysis"):
-        seen = Scope()
-        term = term.rewriteScope(seen, Scope())
-        print "Actual initial stack size", seen.size()
+        scope = Scope()
+        term = term.rewriteScope(scope)
 
     print "Optimized node:"
     print term.repr()
-    term.frameSize = seen.size()
+    term.frameSize = scope.size()
     return term
 
 

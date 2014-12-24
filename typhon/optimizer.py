@@ -79,11 +79,10 @@ def simplifyPlainDefs(sequence):
             src = p._n
             dest = v.name
             # Use shadows to rewrite the scope.
-            seen = Scope()
-            shadows = Scope()
-            shadows.put(src, dest)
+            scope = Scope()
+            scope.putShadow(src, dest)
             tail = Sequence(sequence._l[i + 1:])
-            tail = tail.rewriteScope(seen, shadows)
+            tail = tail.rewriteScope(scope)
             # Reassemble the sequence, omitting the now-useless Def.
             return Sequence(sequence._l[:i] + tail._l)
     return None

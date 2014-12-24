@@ -18,8 +18,11 @@ class Scope(object):
     A stack of namespaces.
     """
 
+    index = 0
+
     def __init__(self):
-        self.scope = [{}]
+        self.seen = [(0, {})]
+        self.shadows = [{}]
 
     def __enter__(self):
         self.push()
@@ -28,19 +31,41 @@ class Scope(object):
         self.pop()
 
     def push(self):
-        self.scope.append({})
+        self.seen.append((self.index, {}))
+        self.shadows.append({})
 
     def pop(self):
-        self.scope.pop()
+        self.index, _ = self.seen.pop()
+        self.shadows.pop()
 
-    def get(self, key):
-        for d in reversed(self.scope):
+    def getSeen(self, key):
+        for _, d in reversed(self.seen):
+            if key in d:
+                return d[key]
+        return -1
+
+    def getShadow(self, key):
+        for d in reversed(self.shadows):
             if key in d:
                 return d[key]
         return None
 
-    def put(self, key, value):
-        self.scope[-1][key] = value
+    def putSeen(self, key):
+        value = self.index
+        print "Setting", key, "to", value
+        self.seen[-1][1][key] = value
+        self.index += 1
+        return value
+
+    def putShadow(self, key, value):
+        self.shadows[-1][key] = value
 
     def size(self):
-        return len(self.scope[-1])
+        return len(self.seen[-1][1])
+
+    def shadowName(self, name):
+        shadowed = name + u"_"
+        while self.getShadow(shadowed) is not None:
+            shadowed += u"_"
+        self.putShadow(name, shadowed)
+        return shadowed

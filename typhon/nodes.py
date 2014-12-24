@@ -78,12 +78,9 @@ class Node(object):
 
         return f(self)
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         """
         Rewrite the scope definitions by altering names.
-
-        Nodes should use the `seen` scope to determine whether they are
-        shadowing, and the `shadows` scope to fix old shadows.
         """
 
         return self
@@ -206,8 +203,8 @@ class Tuple(Node):
         # I don't care if it's cheating. It's elegant and simple and pretty.
         return f(Tuple([node.transform(f) for node in self._t]))
 
-    def rewriteScope(self, seen, shadows):
-        return Tuple([node.rewriteScope(seen, shadows) for node in self._t])
+    def rewriteScope(self, scope):
+        return Tuple([node.rewriteScope(scope) for node in self._t])
 
     def usesName(self, name):
         uses = False
@@ -248,12 +245,12 @@ class Assign(Node):
     def transform(self, f):
         return f(Assign(self.target, self.rvalue.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         # Read.
-        newTarget = shadows.get(self.target)
+        newTarget = scope.getShadow(self.target)
         if newTarget is None:
             newTarget = self.target
-        return Assign(newTarget, self.rvalue.rewriteScope(seen, shadows))
+        return Assign(newTarget, self.rvalue.rewriteScope(scope))
 
     def usesName(self, name):
         return self.rvalue.usesName(name)
@@ -280,9 +277,9 @@ class Binding(Node):
     def transform(self, f):
         return f(self)
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         # Read.
-        newName = shadows.get(self.name)
+        newName = scope.getShadow(self.name)
         if newName is None:
             return self
         return Binding(newName)
@@ -321,10 +318,10 @@ class Call(Node):
         return f(Call(self._target.transform(f), self._verb.transform(f),
             self._args.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
-        return Call(self._target.rewriteScope(seen, shadows),
-                    self._verb.rewriteScope(seen, shadows),
-                    self._args.rewriteScope(seen, shadows))
+    def rewriteScope(self, scope):
+        return Call(self._target.rewriteScope(scope),
+                    self._verb.rewriteScope(scope),
+                    self._args.rewriteScope(scope))
 
     def usesName(self, name):
         rv = self._target.usesName(name) or self._verb.usesName(name)
@@ -369,14 +366,14 @@ class Def(Node):
     def transform(self, f):
         return f(Def(self._p, self._e, self._v.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         # Delegate to patterns.
-        p = self._p.rewriteScope(seen, shadows)
+        p = self._p.rewriteScope(scope)
         if self._e is None:
             e = None
         else:
-            e = self._e.rewriteScope(seen, shadows)
-        return Def(p, e, self._v.rewriteScope(seen, shadows))
+            e = self._e.rewriteScope(scope)
+        return Def(p, e, self._v.rewriteScope(scope))
 
     def usesName(self, name):
         rv = self._v.usesName(name)
@@ -447,24 +444,22 @@ class Escape(Node):
         return f(Escape(self._pattern, self._node.transform(f),
             self._catchPattern, catchNode))
 
-    def rewriteScope(self, seen, shadows):
-        with seen:
-            with shadows:
-                p = self._pattern.rewriteScope(seen, shadows)
-                n = self._node.rewriteScope(seen, shadows)
-            frameSize = seen.size()
+    def rewriteScope(self, scope):
+        with scope:
+            p = self._pattern.rewriteScope(scope)
+            n = self._node.rewriteScope(scope)
+            frameSize = scope.size()
 
-        with seen:
-            with shadows:
-                if self._catchPattern is None:
-                    cp = None
-                else:
-                    cp = self._catchPattern.rewriteScope(seen, shadows)
-                if self._catchNode is None:
-                    cn = None
-                else:
-                    cn = self._catchNode.rewriteScope(seen, shadows)
-            catchFrameSize = seen.size()
+        with scope:
+            if self._catchPattern is None:
+                cp = None
+            else:
+                cp = self._catchPattern.rewriteScope(scope)
+            if self._catchNode is None:
+                cn = None
+            else:
+                cn = self._catchNode.rewriteScope(scope)
+            catchFrameSize = scope.size()
 
         rv = Escape(p, n, cp, cn)
         rv.frameSize = frameSize
@@ -510,16 +505,14 @@ class Finally(Node):
     def transform(self, f):
         return f(Finally(self._block.transform(f), self._atLast.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
-        with seen:
-            with shadows:
-                block = self._block.rewriteScope(seen, shadows)
-            frameSize = seen.size()
+    def rewriteScope(self, scope):
+        with scope:
+            block = self._block.rewriteScope(scope)
+            frameSize = scope.size()
 
-        with seen:
-            with shadows:
-                atLast = self._atLast.rewriteScope(seen, shadows)
-            finallyFrameSize = seen.size()
+        with scope:
+            atLast = self._atLast.rewriteScope(scope)
+            finallyFrameSize = scope.size()
 
         rv = Finally(block, atLast)
         rv.frameSize = frameSize
@@ -550,11 +543,10 @@ class Hide(Node):
     def transform(self, f):
         return f(Hide(self._inner.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
-        with seen:
-            with shadows:
-                rv = Hide(self._inner.rewriteScope(seen, shadows))
-            frameSize = seen.size()
+    def rewriteScope(self, scope):
+        with scope:
+            rv = Hide(self._inner.rewriteScope(scope))
+            frameSize = scope.size()
 
         rv.frameSize = frameSize
         return rv
@@ -600,13 +592,12 @@ class If(Node):
         return f(If(self._test.transform(f), self._then.transform(f),
             self._otherwise.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
-        with seen:
-            with shadows:
-                rv = If(self._test.rewriteScope(seen, shadows),
-                        self._then.rewriteScope(seen, shadows),
-                        self._otherwise.rewriteScope(seen, shadows))
-            frameSize = seen.size()
+    def rewriteScope(self, scope):
+        with scope:
+            rv = If(self._test.rewriteScope(scope),
+                    self._then.rewriteScope(scope),
+                    self._otherwise.rewriteScope(scope))
+            frameSize = scope.size()
 
         rv.frameSize = frameSize
         return rv
@@ -636,12 +627,11 @@ class Matcher(Node):
     def transform(self, f):
         return f(Matcher(self._pattern, self._block.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
-        with seen:
-            with shadows:
-                rv = Matcher(self._pattern.rewriteScope(seen, shadows),
-                             self._block.rewriteScope(seen, shadows))
-            frameSize = seen.size()
+    def rewriteScope(self, scope):
+        with scope:
+            rv = Matcher(self._pattern.rewriteScope(scope),
+                         self._block.rewriteScope(scope))
+            frameSize = scope.size()
 
         rv.frameSize = frameSize
         return rv
@@ -688,14 +678,13 @@ class Method(Node):
         return f(Method(self._d, self._verb, self._ps, self._g,
             self._b.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
-        with seen:
-            with shadows:
-                ps = [p.rewriteScope(seen, shadows) for p in self._ps]
-                rv = Method(self._d, self._verb, ps,
-                            self._g.rewriteScope(seen, shadows),
-                            self._b.rewriteScope(seen, shadows))
-            frameSize = seen.size()
+    def rewriteScope(self, scope):
+        with scope:
+            ps = [p.rewriteScope(scope) for p in self._ps]
+            rv = Method(self._d, self._verb, ps,
+                        self._g.rewriteScope(scope),
+                        self._b.rewriteScope(scope))
+            frameSize = scope.size()
 
         rv.frameSize = frameSize
         return rv
@@ -721,9 +710,9 @@ class Noun(Node):
     def evaluate(self, env):
         return env.getValue(self.name)
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         # Read.
-        newName = shadows.get(self.name)
+        newName = scope.getShadow(self.name)
         if newName is None:
             return self
         return Noun(newName)
@@ -785,10 +774,10 @@ class Obj(Node):
         return f(Obj(self._d, self._n, self._as, self._implements,
             self._script.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         # XXX as, implements
-        return Obj(self._d, self._n.rewriteScope(seen, shadows), self._as,
-                   self._implements, self._script.rewriteScope(seen, shadows))
+        return Obj(self._d, self._n.rewriteScope(scope), self._as,
+                   self._implements, self._script.rewriteScope(scope))
 
     def usesName(self, name):
         return self._script.usesName(name)
@@ -829,9 +818,9 @@ class Script(Node):
         methods = [method.transform(f) for method in self._methods]
         return f(Script(self._extends, methods, self._matchers))
 
-    def rewriteScope(self, seen, shadows):
-        methods = [m.rewriteScope(seen, shadows) for m in self._methods]
-        matchers = [m.rewriteScope(seen, shadows) for m in self._matchers]
+    def rewriteScope(self, scope):
+        methods = [m.rewriteScope(scope) for m in self._methods]
+        matchers = [m.rewriteScope(scope) for m in self._matchers]
         return Script(self._extends, methods, matchers)
 
     def usesName(self, name):
@@ -872,8 +861,8 @@ class Sequence(Node):
     def transform(self, f):
         return f(Sequence([node.transform(f) for node in self._l]))
 
-    def rewriteScope(self, seen, shadows):
-        return Sequence([n.rewriteScope(seen, shadows) for n in self._l])
+    def rewriteScope(self, scope):
+        return Sequence([n.rewriteScope(scope) for n in self._l])
 
     def usesName(self, name):
         for node in self._l:
@@ -922,17 +911,15 @@ class Try(Node):
         return f(Try(self._first.transform(f), self._pattern,
             self._then.transform(f)))
 
-    def rewriteScope(self, seen, shadows):
-        with seen:
-            with shadows:
-                first = self._first.rewriteScope(seen, shadows)
-            frameSize = seen.size()
+    def rewriteScope(self, scope):
+        with scope:
+            first = self._first.rewriteScope(scope)
+            frameSize = scope.size()
 
-        with seen:
-            with shadows:
-                rv = Try(first, self._pattern.rewriteScope(seen, shadows),
-                         self._then.rewriteScope(seen, shadows))
-            catchFrameSize = seen.size()
+        with scope:
+            rv = Try(first, self._pattern.rewriteScope(scope),
+                     self._then.rewriteScope(scope))
+            catchFrameSize = scope.size()
 
         rv.frameSize = frameSize
         rv.catchFrameSize = catchFrameSize
@@ -959,6 +946,8 @@ class BindingPattern(Pattern):
 
     _immutable_ = True
 
+    frameIndex = -1
+
     def __init__(self, noun):
         self._noun = nounToString(noun)
 
@@ -969,20 +958,22 @@ class BindingPattern(Pattern):
     def unify(self, specimen, ejector, env):
         env.createBinding(self._noun, specimen)
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         # Write.
-        if seen.get(self._noun):
+        if scope.getSeen(self._noun) != -1:
             # Shadow.
-            shadowed = shadowName(self._noun, shadows)
+            shadowed = scope.shadowName(self._noun)
             return BindingPattern(Noun(shadowed))
         else:
-            seen.put(self._noun, self._noun)
+            self.frameIndex = scope.putSeen(self._noun)
             return self
 
 
 class FinalPattern(Pattern):
 
     _immutable_ = True
+
+    frameIndex = -1
 
     def __init__(self, noun, guard):
         self._n = nounToString(noun)
@@ -1009,19 +1000,19 @@ class FinalPattern(Pattern):
         slot = FinalSlot(rv)
         env.createSlot(self._n, slot)
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         if self._g is None:
             g = None
         else:
-            g = self._g.rewriteScope(seen, shadows)
+            g = self._g.rewriteScope(scope)
 
         # Write.
-        if seen.get(self._n):
+        if scope.getSeen(self._n) != -1:
             # Shadow.
-            shadowed = shadowName(self._n, shadows)
+            shadowed = scope.shadowName(self._n)
             return FinalPattern(Noun(shadowed), g)
         else:
-            seen.put(self._n, self._n)
+            self.frameIndex = scope.putSeen(self._n)
             return self
 
 
@@ -1045,10 +1036,10 @@ class IgnorePattern(Pattern):
             guard = evaluate(self._g, env)
             guard.call(u"coerce", [specimen, ejector])
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         if self._g is None:
             return self
-        return IgnorePattern(self._g.rewriteScope(seen, shadows))
+        return IgnorePattern(self._g.rewriteScope(scope))
 
 
 class ListPattern(Pattern):
@@ -1102,18 +1093,20 @@ class ListPattern(Pattern):
             remainder = ConstList(items[len(patterns):])
             tail.unify(remainder, ejector, env)
 
-    def rewriteScope(self, seen, shadows):
-        ps = [p.rewriteScope(seen, shadows) for p in self._ps]
+    def rewriteScope(self, scope):
+        ps = [p.rewriteScope(scope) for p in self._ps]
         if self._t is None:
             t = None
         else:
-            t = self._t.rewriteScope(seen, shadows)
+            t = self._t.rewriteScope(scope)
         return ListPattern(ps, t)
 
 
 class VarPattern(Pattern):
 
     _immutable_ = True
+
+    frameIndex = -1
 
     def __init__(self, noun, guard):
         self._n = nounToString(noun)
@@ -1139,19 +1132,19 @@ class VarPattern(Pattern):
         # Add the slot to the environment.
         env.createSlot(self._n, rv)
 
-    def rewriteScope(self, seen, shadows):
+    def rewriteScope(self, scope):
         if self._g is None:
             g = None
         else:
-            g = self._g.rewriteScope(seen, shadows)
+            g = self._g.rewriteScope(scope)
 
         # Write.
-        if seen.get(self._n):
+        if scope.getSeen(self._n) != -1:
             # Shadow.
-            shadowed = shadowName(self._n, shadows)
+            shadowed = scope.shadowName(self._n)
             return VarPattern(Noun(shadowed), g)
         else:
-            seen.put(self._n, self._n)
+            self.frameIndex = scope.putSeen(self._n)
             return self
 
 
@@ -1182,20 +1175,12 @@ class ViaPattern(Pattern):
         self._pattern.unify(examiner.call(u"run", [specimen, ejector]),
                 ejector, env)
 
-    def rewriteScope(self, seen, shadows):
-        return ViaPattern(self._expr.rewriteScope(seen, shadows),
-                          self._pattern.rewriteScope(seen, shadows))
+    def rewriteScope(self, scope):
+        return ViaPattern(self._expr.rewriteScope(scope),
+                          self._pattern.rewriteScope(scope))
 
 
 def formatName(p):
     if isinstance(p, FinalPattern):
         return p._n
     return u"_"
-
-
-def shadowName(name, shadows):
-    shadowed = name + u"_"
-    while shadows.get(shadowed) is not None:
-        shadowed += u"_"
-    shadows.put(name, shadowed)
-    return shadowed
