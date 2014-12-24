@@ -31,52 +31,6 @@ def getLocation(ast):
     return ast.repr()
 
 
-accumDriver = JitDriver(greens=["mapperAST"],
-                        reds=["mapper", "ejector", "iterator", "accumulator",
-                              "skipper"],
-                        get_printable_location=getLocation)
-
-
-def accumJIT(mapper, ejector, iterator, accumulator, skipper):
-    if isinstance(mapper, ScriptObject):
-        patterns, ast = mapper._map.lookup(RUN_3)
-        accumDriver.jit_merge_point(mapperAST=ast, mapper=mapper,
-                                    ejector=ejector, iterator=iterator,
-                                    accumulator=accumulator, skipper=skipper)
-    values = iterator.call(u"next", [ejector])
-    args = unwrapList(values) + [skipper]
-    accumulator.append(mapper.call(u"run", args))
-
-
-@runnable(RUN_2)
-def accumulateList(args):
-    rv = []
-
-    iterable = args[0]
-    mapper = args[1]
-    iterator = iterable.call(u"_makeIterator", [])
-
-    with Ejector() as ej:
-        while True:
-            with Ejector() as skip:
-                try:
-                    accumJIT(mapper, ej, iterator, rv, skip)
-                except Ejecting as e:
-                    if e.ejector is ej:
-                        break
-                    if e.ejector is skip:
-                        continue
-                    raise
-
-    return ConstList(rv[:])
-
-
-@runnable(RUN_2)
-def accumulateMap(args):
-    rv = accumulateList().call(u"run", args)
-    return ConstMap.fromPairs(rv)
-
-
 loopDriver = JitDriver(greens=["consumerAST"],
                        reds=["consumer", "ejector", "iterator"],
                        get_printable_location=getLocation)

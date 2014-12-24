@@ -20,7 +20,7 @@ from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.guards import predGuard
-from typhon.objects.iteration import accumulateList, accumulateMap, loop
+from typhon.objects.iteration import loop
 from typhon.objects.root import Object, runnable
 from typhon.objects.slots import Binding
 from typhon.objects.tests import UnitTest
@@ -148,8 +148,6 @@ def simpleScope():
         u"boolean": boolGuard(),
         u"int": intGuard(),
 
-        u"__accumulateList": accumulateList(),
-        u"__accumulateMap": accumulateMap(),
         u"__equalizer": Equalizer(),
         u"__loop": loop(),
         u"__makeList": MakeList(),
