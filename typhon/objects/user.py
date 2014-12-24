@@ -52,8 +52,8 @@ class ScriptMap(object):
             patterns = method._ps
             block = method._b
             size = method.frameSize
-            arity = len(patterns)
 
+            arity = len(patterns)
             atom = getAtom(verb, arity)
 
             self._methods[atom] = patterns, block, size
@@ -73,6 +73,24 @@ class ScriptMap(object):
     @elidable
     def lookup(self, atom):
         return self._methods.get(atom, (None, None, -1))
+
+
+def runBlock(patterns, block, args, ej, env):
+    """
+    Run a block with an environment.
+    """
+
+    from typhon.nodes import evaluate
+
+    with env as env:
+        # Set up parameters from arguments.
+        # We are assured that the counts line up by our caller.
+        assert len(patterns) == len(args), "runBlock() called with bad args"
+        for i, pattern in enumerate(patterns):
+            promote(pattern).unify(args[i], ej, env)
+
+        # Run the block.
+        return evaluate(block, env)
 
 
 class ScriptObject(Object):
@@ -113,17 +131,8 @@ class ScriptObject(Object):
             # message, we don't want to give up if the method fails to match.
             with Ejector() as ej:
                 try:
-                    with self.env(frameSize) as env:
-                        # Set up parameters from arguments.
-                        # We are assured that the counts line up by the atom
-                        # generation system.
-                        for i, pattern in enumerate(patterns):
-                            promote(pattern).unify(args[i], ej, env)
-
-                        # Run the block.
-                        rv = evaluate(block, env)
-
-                    return rv
+                    return runBlock(patterns, block, args, ej,
+                            self.env(frameSize))
                 except Ejecting as e:
                     if e.ejector is not ej:
                         # Oops, we caught another ejector! Let it go.

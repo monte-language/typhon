@@ -23,13 +23,22 @@ from typhon.scope import Scope
 def obtainModule(path, recorder):
     with recorder.context("Deserialization"):
         term = Sequence(load(open(path, "rb").read())[:])
-    with recorder.context("Scope cleanup"):
-        term = term.rewriteScope(Scope(), Scope())
+    # First pass: Unshadow.
+    with recorder.context("Scope analysis"):
+        seen = Scope()
+        term = term.rewriteScope(seen, Scope())
+        print "I anticipate an initial stack of", seen.size()
     with recorder.context("Optimization"):
         term = optimize(term)
+    # Second pass: Collect the initial scope size.
+    with recorder.context("Scope analysis"):
+        seen = Scope()
+        term = term.rewriteScope(seen, Scope())
+        print "Actual initial stack size", seen.size()
 
     print "Optimized node:"
     print term.repr()
+    term.frameSize = seen.size()
     return term
 
 
@@ -44,7 +53,7 @@ def evaluateWithTraces(term, env):
 def evaluateTerms(terms, env):
     result = NullObject
     for term in terms:
-        result = evaluateWithTraces(term, env)
+        result = evaluateWithTraces(term, env.new(term.frameSize))
         if result is None:
             print "Evaluation returned None!"
         else:

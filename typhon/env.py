@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.jit import hint
+
 from typhon.errors import userError
 from typhon.objects.slots import Binding, FinalSlot
 
@@ -31,9 +33,15 @@ class Environment(object):
     nested to provide scoping.
     """
 
-    _immutable_ = True
+    # _immutable_ = True
+    _virtualizable_ = "frame[*]"
+
+    depth = 0
 
     def __init__(self, initialScope, parent, size):
+        self = hint(self, access_directly=True, fresh_virtualizable=True)
+
+        assert size >= 0, "Negative frame size not allowed!"
         self.size = size
 
         if parent is None:
@@ -42,6 +50,7 @@ class Environment(object):
         else:
             self._mapping = parent._mapping.copy()
             self.frame = parent.frame[:] + [None] * size
+            self.depth = parent.depth
 
         for k, v in initialScope.items():
             self.createBinding(k, v)
@@ -61,9 +70,12 @@ class Environment(object):
             #     u"Noun %s already in frame; cannot make new binding" % noun)
             print u"Warning: Replacing binding %s" % noun
 
-        offset = len(self.frame)
+        offset = self.depth
+        assert offset >= 0, "Frame index was negative!?"
+        assert offset < len(self.frame), "Frame index out-of-bounds :c"
         self._mapping[noun] = offset
-        self.frame.append(binding)
+        self.frame[offset] = binding
+        self.depth += 1
 
     def createSlot(self, noun, slot):
         self.createBinding(noun, Binding(slot))

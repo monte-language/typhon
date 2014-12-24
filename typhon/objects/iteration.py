@@ -16,32 +16,41 @@ from rpython.rlib.jit import JitDriver
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting
-from typhon.objects.collections import ConstList, ConstMap, unwrapList
+from typhon.objects.collections import unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.root import runnable
-from typhon.objects.user import ScriptObject
+from typhon.objects.user import ScriptObject, runBlock
 
 
 RUN_2 = getAtom(u"run", 2)
 RUN_3 = getAtom(u"run", 3)
 
 
-def getLocation(ast):
-    return ast.repr()
+def getLocation(node, patterns):
+    return node.repr()
 
 
-loopDriver = JitDriver(greens=["consumerAST"],
-                       reds=["consumer", "ejector", "iterator"],
+loopDriver = JitDriver(greens=["node", "patterns"],
+                       reds=["consumer", "ejector", "iterator", "env"],
+                       virtualizables=["env"],
                        get_printable_location=getLocation)
 
 
 def loopJIT(consumer, ejector, iterator):
     if isinstance(consumer, ScriptObject):
-        patterns, ast, frameSize = consumer._map.lookup(RUN_2)
-        loopDriver.jit_merge_point(consumerAST=ast,
-                                   consumer=consumer, ejector=ejector,
-                                   iterator=iterator)
+        patterns, block, frameSize = consumer._map.lookup(RUN_2)
+        if patterns is not None and block is not None:
+            env = consumer.env(frameSize)
+            loopDriver.jit_merge_point(node=block, patterns=patterns,
+                                       consumer=consumer, ejector=ejector,
+                                       iterator=iterator, env=env)
+            values = iterator.call(u"next", [ejector])
+            # The patterns here cannot fail to unify. We guarantee it.
+            runBlock(patterns, block, unwrapList(values), None, env)
+            return
+
+    # Relatively slow path here. This should be exceedingly rare, actually!
     values = iterator.call(u"next", [ejector])
     consumer.call(u"run", unwrapList(values))
 

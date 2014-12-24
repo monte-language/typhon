@@ -47,7 +47,13 @@ class InvalidAST(LoadFailed):
 class Node(object):
 
     _immutable_ = True
-    _attrs_ = ()
+    _attrs_ = "frameSize",
+
+    # The frame size hack is as follows: Whatever the top node is, regardless
+    # of type, it needs to be able to store frame size for evaluation since it
+    # might not necessarily be a type of node which introduces a new scope.
+    # The correct fix is to wrap all nodes in Hide before evaluating them.
+    frameSize = -1
 
     def __repr__(self):
         b = Buffer()
@@ -446,7 +452,7 @@ class Escape(Node):
             with shadows:
                 p = self._pattern.rewriteScope(seen, shadows)
                 n = self._node.rewriteScope(seen, shadows)
-            self.frameSize = seen.size()
+            frameSize = seen.size()
 
         with seen:
             with shadows:
@@ -458,9 +464,12 @@ class Escape(Node):
                     cn = None
                 else:
                     cn = self._catchNode.rewriteScope(seen, shadows)
-            self.catchFrameSize = seen.size()
+            catchFrameSize = seen.size()
 
-        return Escape(p, n, cp, cn)
+        rv = Escape(p, n, cp, cn)
+        rv.frameSize = frameSize
+        rv.catchFrameSize = catchFrameSize
+        return rv
 
     def usesName(self, name):
         rv = self._node.usesName(name)
@@ -505,14 +514,17 @@ class Finally(Node):
         with seen:
             with shadows:
                 block = self._block.rewriteScope(seen, shadows)
-            self.frameSize = seen.size()
+            frameSize = seen.size()
 
         with seen:
             with shadows:
                 atLast = self._atLast.rewriteScope(seen, shadows)
-            self.finallyFrameSize = seen.size()
+            finallyFrameSize = seen.size()
 
-        return Finally(block, atLast)
+        rv = Finally(block, atLast)
+        rv.frameSize = frameSize
+        rv.finallyFrameSize = finallyFrameSize
+        return rv
 
     def usesName(self, name):
         return self._block.usesName(name) or self._atLast.usesName(name)
@@ -542,8 +554,9 @@ class Hide(Node):
         with seen:
             with shadows:
                 rv = Hide(self._inner.rewriteScope(seen, shadows))
-            self.frameSize = seen.size()
+            frameSize = seen.size()
 
+        rv.frameSize = frameSize
         return rv
 
     def usesName(self, name):
@@ -593,8 +606,9 @@ class If(Node):
                 rv = If(self._test.rewriteScope(seen, shadows),
                         self._then.rewriteScope(seen, shadows),
                         self._otherwise.rewriteScope(seen, shadows))
-            self.frameSize = seen.size()
+            frameSize = seen.size()
 
+        rv.frameSize = frameSize
         return rv
 
     def usesName(self, name):
@@ -627,8 +641,9 @@ class Matcher(Node):
             with shadows:
                 rv = Matcher(self._pattern.rewriteScope(seen, shadows),
                              self._block.rewriteScope(seen, shadows))
-            self.frameSize = seen.size()
+            frameSize = seen.size()
 
+        rv.frameSize = frameSize
         return rv
 
 
@@ -680,8 +695,9 @@ class Method(Node):
                 rv = Method(self._d, self._verb, ps,
                             self._g.rewriteScope(seen, shadows),
                             self._b.rewriteScope(seen, shadows))
-            self.frameSize = seen.size()
+            frameSize = seen.size()
 
+        rv.frameSize = frameSize
         return rv
 
     def usesName(self, name):
@@ -910,14 +926,16 @@ class Try(Node):
         with seen:
             with shadows:
                 first = self._first.rewriteScope(seen, shadows)
-            self.frameSize = seen.size()
+            frameSize = seen.size()
 
         with seen:
             with shadows:
                 rv = Try(first, self._pattern.rewriteScope(seen, shadows),
                          self._then.rewriteScope(seen, shadows))
-            self.catchFrameSize = seen.size()
+            catchFrameSize = seen.size()
 
+        rv.frameSize = frameSize
+        rv.catchFrameSize = catchFrameSize
         return rv
 
     def usesName(self, name):
