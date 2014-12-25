@@ -20,9 +20,13 @@ class Scope(object):
 
     index = 0
 
-    def __init__(self):
+    def __init__(self, initial=None):
         self.seen = [(0, {})]
         self.shadows = [{}]
+
+        if initial is not None:
+            for k in initial:
+                self.putSeen(k)
 
     def __enter__(self):
         self.push()
@@ -52,7 +56,6 @@ class Scope(object):
 
     def putSeen(self, key):
         value = self.index
-        print "Setting", key, "to", value
         self.seen[-1][1][key] = value
         self.index += 1
         return value

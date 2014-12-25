@@ -224,6 +224,8 @@ class Assign(Node):
 
     _immutable_ = True
 
+    frameIndex = -1
+
     def __init__(self, target, rvalue):
         self.target = target
         self.rvalue = rvalue
@@ -239,7 +241,7 @@ class Assign(Node):
 
     def evaluate(self, env):
         value = evaluate(self.rvalue, env)
-        env.putValue(self.target, value)
+        env.putValue(self.frameIndex, value)
         return value
 
     def transform(self, f):
@@ -250,7 +252,9 @@ class Assign(Node):
         newTarget = scope.getShadow(self.target)
         if newTarget is None:
             newTarget = self.target
-        return Assign(newTarget, self.rvalue.rewriteScope(scope))
+        self = Assign(newTarget, self.rvalue.rewriteScope(scope))
+        self.frameIndex = scope.getSeen(newTarget)
+        return self
 
     def usesName(self, name):
         return self.rvalue.usesName(name)
@@ -259,6 +263,8 @@ class Assign(Node):
 class Binding(Node):
 
     _immutable_ = True
+
+    frameIndex = -1
 
     def __init__(self, name):
         self.name = name
@@ -272,7 +278,7 @@ class Binding(Node):
         out.write(self.name.encode("utf-8"))
 
     def evaluate(self, env):
-        return env.getBinding(self.name)
+        return env.getBinding(self.frameIndex)
 
     def transform(self, f):
         return f(self)
@@ -280,9 +286,10 @@ class Binding(Node):
     def rewriteScope(self, scope):
         # Read.
         newName = scope.getShadow(self.name)
-        if newName is None:
-            return self
-        return Binding(newName)
+        if newName is not None:
+            self = Binding(newName)
+        self.frameIndex = scope.getSeen(self.name)
+        return self
 
 
 class Call(Node):
@@ -697,6 +704,8 @@ class Noun(Node):
 
     _immutable_ = True
 
+    frameIndex = -1
+
     def __init__(self, noun):
         self.name = noun
 
@@ -708,14 +717,15 @@ class Noun(Node):
         out.write(self.name.encode("utf-8"))
 
     def evaluate(self, env):
-        return env.getValue(self.name)
+        return env.getValue(self.frameIndex)
 
     def rewriteScope(self, scope):
         # Read.
         newName = scope.getShadow(self.name)
-        if newName is None:
-            return self
-        return Noun(newName)
+        if newName is not None:
+            self = Noun(newName)
+        self.frameIndex = scope.getSeen(self.name)
+        return self
 
     def usesName(self, name):
         return self.name == name
@@ -956,17 +966,16 @@ class BindingPattern(Pattern):
         out.write(self._noun.encode("utf-8"))
 
     def unify(self, specimen, ejector, env):
-        env.createBinding(self._noun, specimen)
+        env.createBinding(self.frameIndex, specimen)
 
     def rewriteScope(self, scope):
         # Write.
         if scope.getSeen(self._noun) != -1:
             # Shadow.
             shadowed = scope.shadowName(self._noun)
-            return BindingPattern(Noun(shadowed))
-        else:
-            self.frameIndex = scope.putSeen(self._noun)
-            return self
+            self = BindingPattern(Noun(shadowed))
+        self.frameIndex = scope.putSeen(self._noun)
+        return self
 
 
 class FinalPattern(Pattern):
@@ -998,7 +1007,7 @@ class FinalPattern(Pattern):
             rv = guard.call(u"coerce", [specimen, ejector])
 
         slot = FinalSlot(rv)
-        env.createSlot(self._n, slot)
+        env.createSlot(self.frameIndex, slot)
 
     def rewriteScope(self, scope):
         if self._g is None:
@@ -1010,10 +1019,9 @@ class FinalPattern(Pattern):
         if scope.getSeen(self._n) != -1:
             # Shadow.
             shadowed = scope.shadowName(self._n)
-            return FinalPattern(Noun(shadowed), g)
-        else:
-            self.frameIndex = scope.putSeen(self._n)
-            return self
+            self = FinalPattern(Noun(shadowed), g)
+        self.frameIndex = scope.putSeen(self._n)
+        return self
 
 
 class IgnorePattern(Pattern):
@@ -1130,7 +1138,7 @@ class VarPattern(Pattern):
             rv = guard.call(u"makeSlot", [specimen])
 
         # Add the slot to the environment.
-        env.createSlot(self._n, rv)
+        env.createSlot(self.frameIndex, rv)
 
     def rewriteScope(self, scope):
         if self._g is None:
@@ -1142,10 +1150,9 @@ class VarPattern(Pattern):
         if scope.getSeen(self._n) != -1:
             # Shadow.
             shadowed = scope.shadowName(self._n)
-            return VarPattern(Noun(shadowed), g)
-        else:
-            self.frameIndex = scope.putSeen(self._n)
-            return self
+            self = VarPattern(Noun(shadowed), g)
+        self.frameIndex = scope.putSeen(self._n)
+        return self
 
 
 class ViaPattern(Pattern):

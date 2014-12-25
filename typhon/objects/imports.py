@@ -37,7 +37,7 @@ class Import(Object):
             p += ".ty"
 
             # Attempt the import.
-            term = obtainModule(p, self.recorder)
+            term = obtainModule(p, self.scope.keys(), self.recorder)
 
             # Get results.
             env = Environment(finalize(self.scope), None, len(self.scope))

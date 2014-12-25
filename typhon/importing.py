@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.listsort import TimSort
+
 from typhon.errors import UserException
 from typhon.load import load
 from typhon.nodes import Sequence, evaluate
@@ -20,18 +22,19 @@ from typhon.optimizer import optimize
 from typhon.scope import Scope
 
 
-def obtainModule(path, recorder):
+def obtainModule(path, inputScope, recorder):
     with recorder.context("Deserialization"):
         term = Sequence(load(open(path, "rb").read())[:])
     # First pass: Unshadow.
     with recorder.context("Scope analysis"):
-        scope = Scope()
+        TimSort(inputScope).sort()
+        scope = Scope(inputScope)
         term = term.rewriteScope(scope)
     with recorder.context("Optimization"):
         term = optimize(term)
     # Second pass: Collect the initial scope size.
     with recorder.context("Scope analysis"):
-        scope = Scope()
+        scope = Scope(inputScope)
         term = term.rewriteScope(scope)
 
     print "Optimized node:"

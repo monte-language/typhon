@@ -51,7 +51,7 @@ def loadPrelude(recorder, vat):
     scope.update(vatScope(vat))
     env = Environment(finalize(scope), None, len(scope))
 
-    term = obtainModule("prelude.ty", recorder)
+    term = obtainModule("prelude.ty", scope.keys(), recorder)
 
     with recorder.context("Time spent in prelude"):
         result = evaluateTerms([term], env)
@@ -93,18 +93,18 @@ def entryPoint(argv):
 
     registerGlobals(prelude)
 
-    try:
-        term = obtainModule(argv[1], recorder)
-    except LoadFailed as lf:
-        print lf
-        return 1
-
     basedir = rabspath(dirname(argv[1]))
     scope = simpleScope()
     scope.update(prelude)
     scope.update(vatScope(vat))
     addImportToScope(scope, recorder)
     env = Environment(finalize(scope), None, len(scope))
+
+    try:
+        term = obtainModule(argv[1], scope.keys(), recorder)
+    except LoadFailed as lf:
+        print lf
+        return 1
 
     result = NullObject
     with recorder.context("Time spent in vats"):

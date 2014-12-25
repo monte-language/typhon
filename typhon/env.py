@@ -12,16 +12,19 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import elidable, hint, unroll_safe
+from rpython.rlib.jit import elidable, hint, promote, unroll_safe
+from rpython.rlib.listsort import TimSort
 
 from typhon.errors import userError
 from typhon.objects.slots import Binding, FinalSlot
 
 
 def finalize(scope):
-    rv = {}
-    for key in scope:
-        rv[key] = Binding(FinalSlot(scope[key]))
+    rv = []
+    sortedScope = scope.keys()
+    TimSort(sortedScope).sort()
+    for i, key in enumerate(sortedScope):
+        rv.append((i, Binding(FinalSlot(scope[key]))))
     return rv
 
 
@@ -29,8 +32,7 @@ class Environment(object):
     """
     An execution context.
 
-    Environments are append-only mappings of nouns to slots. They may be
-    nested to provide scoping.
+    Environments are fixed-size frames of bindings.
     """
 
     # _immutable_ = True
@@ -46,14 +48,12 @@ class Environment(object):
         self.size = size
 
         if parent is None:
-            self._mapping = {}
             self.frame = [None] * size
         else:
-            self._mapping = parent._mapping.copy()
             self.frame = parent.frame[:] + [None] * size
             self.depth = parent.depth
 
-        for k, v in initialScope.items():
+        for k, v in initialScope:
             self.createBinding(k, v)
 
     def __enter__(self):
@@ -63,69 +63,46 @@ class Environment(object):
         pass
 
     def new(self, size):
-        return Environment({}, self, size)
+        return Environment([], self, size)
 
-    def createBindingFast(self, index, binding):
-        self.frame[index] = binding
-
-    def createBinding(self, noun, binding):
-        if noun in self._mapping:
+    def createBinding(self, index, binding):
+        if self.frame[index] is not None:
             # raise userError(
             #     u"Noun %s already in frame; cannot make new binding" % noun)
-            print u"Warning: Replacing binding %s" % noun
+            print u"Warning: Replacing binding %d" % index
 
-        offset = self.depth
-        assert offset >= 0, "Frame index was negative!?"
-        assert offset < len(self.frame), "Frame index out-of-bounds :c"
-        self._mapping[noun] = offset
-        self.frame[offset] = binding
-        self.depth += 1
+        assert index >= 0, "Frame index was negative!?"
+        assert index < len(self.frame), "Frame index out-of-bounds :c"
 
-    def createSlotFast(self, index, slot):
-        self.createBindingFast(index, Binding(slot))
+        self.frame[index] = binding
 
-    def createSlot(self, noun, slot):
-        self.createBinding(noun, Binding(slot))
+    def createSlot(self, index, slot):
+        self.createBinding(index, Binding(slot))
 
     @elidable
-    def findKey(self, noun):
-        offset = self._mapping.get(noun, -1)
-        if offset == -1:
-            raise userError(u"Noun %s not in frame" % noun)
-        return offset
+    def getBinding(self, index):
+        # Elidability is based on bindings only being assigned once.
+        assert index >= 0, "Frame index was negative!?"
+        assert index < len(self.frame), "Frame index out-of-bounds :c"
 
-    @elidable
-    def getBindingFast(self, index):
+        # The promotion here is justified by a lack of ability for any node to
+        # dynamically alter its frame index. If the node is green (and they're
+        # always green), then the index is green as well. That said, the JIT
+        # is currently good enough at figuring this out that no annotation is
+        # currently needed.
         return self.frame[index]
 
-    @elidable
-    def getBinding(self, noun):
-        return self.frame[self.findKey(noun)]
-
-    @elidable
-    def getSlotFast(self, index):
-        binding = self.getBindingFast(index)
+    def getSlot(self, index):
+        # Elidability is based on bindings not allowing reassignment of slots.
+        binding = self.getBinding(index)
         return binding.call(u"get", [])
 
-    @elidable
-    def getSlot(self, noun):
-        binding = self.getBinding(noun)
-        return binding.call(u"get", [])
-
-    def getValueFast(self, index):
-        slot = self.getSlotFast(index)
+    def getValue(self, index):
+        slot = self.getSlot(index)
         return slot.call(u"get", [])
 
-    def getValue(self, noun):
-        slot = self.getSlot(noun)
-        return slot.call(u"get", [])
-
-    def putValueFast(self, index, value):
-        slot = self.getSlotFast(index)
-        return slot.call(u"put", [value])
-
-    def putValue(self, noun, value):
-        slot = self.getSlot(noun)
+    def putValue(self, index, value):
+        slot = self.getSlot(index)
         return slot.call(u"put", [value])
 
     def freeze(self):
