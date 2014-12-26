@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.rpath import rjoin
+
 from typhon.atoms import getAtom
 from typhon.env import Environment, finalize
 from typhon.errors import Refused
@@ -25,7 +27,8 @@ RUN_1 = getAtom(u"run", 1)
 
 class Import(Object):
 
-    def __init__(self, scope, recorder):
+    def __init__(self, path, scope, recorder):
+        self.path = path
         self.scope = scope
         self.recorder = recorder
 
@@ -37,7 +40,8 @@ class Import(Object):
             p += ".ty"
 
             # Attempt the import.
-            term = obtainModule(p, self.scope.keys(), self.recorder)
+            term = obtainModule(rjoin(self.path, p), self.scope.keys(),
+                                self.recorder)
 
             # Get results.
             env = Environment(finalize(self.scope), None, len(self.scope))
@@ -52,5 +56,5 @@ class Import(Object):
         raise Refused(self, atom, args)
 
 
-def addImportToScope(scope, recorder):
-    scope[u"import"] = Import(scope.copy(), recorder)
+def addImportToScope(path, scope, recorder):
+    scope[u"import"] = Import(path, scope.copy(), recorder)

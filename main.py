@@ -18,6 +18,7 @@ import sys
 from rpython.jit.codewriter.policy import JitPolicy
 from rpython.rlib.rpath import rjoin, rabspath
 
+from typhon.arguments import Configuration
 from typhon.env import Environment, finalize
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, obtainModule
@@ -46,12 +47,13 @@ def jitPolicy(driver):
     return JitPolicy()
 
 
-def loadPrelude(recorder, vat):
+def loadPrelude(config, recorder, vat):
     scope = simpleScope()
     scope.update(vatScope(vat))
     env = Environment(finalize(scope), None, len(scope))
 
-    term = obtainModule("prelude.ty", scope.keys(), recorder)
+    term = obtainModule(rjoin(config.libraryPath, "prelude.ty"), scope.keys(),
+                        recorder)
 
     with recorder.context("Time spent in prelude"):
         result = evaluateTerms([term], env)
@@ -74,12 +76,14 @@ def loadPrelude(recorder, vat):
 
 
 def entryPoint(argv):
-    if len(argv) < 2:
-        print "No file provided?"
-        return 1
-
     recorder = Recorder()
     recorder.start()
+
+    config = Configuration(argv)
+
+    if len(config.argv) < 2:
+        print "No file provided?"
+        return 1
 
     # Intialize our vat.
     reactor = Reactor()
@@ -87,25 +91,29 @@ def entryPoint(argv):
     vat = Vat(reactor)
 
     try:
-        prelude = loadPrelude(recorder, vat)
+        prelude = loadPrelude(config, recorder, vat)
     except LoadFailed as lf:
         print lf
         return 1
 
     registerGlobals(prelude)
 
-    basedir = rabspath(dirname(argv[1]))
+    basedir = rabspath(dirname(config.argv[1]))
     scope = simpleScope()
     scope.update(prelude)
     scope.update(vatScope(vat))
-    addImportToScope(scope, recorder)
+    addImportToScope(config.libraryPath, scope, recorder)
     env = Environment(finalize(scope), None, len(scope))
 
     try:
-        term = obtainModule(argv[1], scope.keys(), recorder)
+        term = obtainModule(config.argv[1], scope.keys(), recorder)
     except LoadFailed as lf:
         print lf
         return 1
+
+    if config.loadOnly:
+        # We are finished.
+        return 0
 
     result = NullObject
     with recorder.context("Time spent in vats"):
