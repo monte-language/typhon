@@ -64,6 +64,10 @@ def loadPrelude(config, recorder, vat):
 
     print "Prelude result:", result.toQuote()
 
+    # Run unit tests.
+    unittest = scope[u"unittest"]
+    unittest.test()
+
     if isinstance(result, ConstMap):
         prelude = {}
         for key, value in unwrapMap(result):
