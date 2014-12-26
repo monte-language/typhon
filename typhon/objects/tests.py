@@ -55,10 +55,10 @@ class Asserter(Object):
             result = optSame(args[0], args[1])
             if result is NOTYET:
                 self.log(u"Equality not yet decidable: %s ?= %s" %
-                        (args[0].toString(), args[1].toString()))
+                        (args[0].toQuote(), args[1].toQuote()))
             if result is INEQUAL:
                 self.log(u"Not equal: %s != %s" %
-                        (args[0].toString(), args[1].toString()))
+                        (args[0].toQuote(), args[1].toQuote()))
             return NullObject
 
         self.log(u"Unknown assertion made: %s" % atom.repr().decode("utf-8"))

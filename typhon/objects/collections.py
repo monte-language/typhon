@@ -144,6 +144,10 @@ class ConstList(Collection, Object):
             other = args[0]
             return ConstList(self.objects + unwrapList(other))
 
+        if atom is ASMAP_0:
+            return ConstMap([(IntObject(i), o)
+                for i, o in enumerate(self.objects)])
+
         if atom is CONTAINS_1:
             from typhon.objects.equality import EQUAL, optSame
             needle = args[0]
@@ -190,10 +194,6 @@ class ConstList(Collection, Object):
             # Replace by index.
             index = unwrapInt(args[0])
             return self.put(index, args[1])
-
-        if atom is ASMAP_0:
-            return ConstMap([(IntObject(i), o)
-                for i, o in enumerate(self.objects)])
 
         raise Refused(self, atom, args)
 
@@ -243,6 +243,11 @@ class ConstMap(Collection, Object):
         return d
 
     def toString(self):
+        # If this map is empty, return a string that distinguishes it from a
+        # list. E does the same thing.
+        if not self.objects:
+            return u"[].asMap()"
+
         guts = u", ".join([pairRepr(pair) for pair in self.objects])
         return u"[%s]" % (guts,)
 
