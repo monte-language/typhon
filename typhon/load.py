@@ -24,6 +24,10 @@ from typhon.nodes import (Assign, Binding, BindingPattern, Call, Char, Def,
 from typhon.pretty import Buffer, LineWriter
 
 
+# The largest tuple arity that we'll willingly decode.
+MAX_ARITY = 1024
+
+
 def unshift(byte):
     return chr((ord(byte[0]) - 32) % 256)
 
@@ -65,15 +69,16 @@ class Stream(object):
         return ord(unshift(self.nextItem()))
 
     def slice(self, count):
-
         if self._counter + count > len(self._items):
             raise InvalidStream("Buffer underrun while streaming")
 
         # RPython non-negative slice proofs.
         start = self._counter
         end = start + count
-        assert end > 0, "Negative count while slicing: %d" % count
-        assert start >= 0, "Inconceivable!"
+        if end <= 0:
+            raise InvalidStream("Negative count while slicing: %d" % count)
+        if start < 0:
+            raise InvalidStream("Inconceivable!")
 
         rv = self._items[start:end]
         self._counter += count
@@ -143,6 +148,9 @@ def loadPatternList(stream):
         raise InvalidStream("Pattern list was not actually a list!")
 
     arity = stream.nextVarInt()
+    if arity > MAX_ARITY:
+        raise LoadFailed("Arity %d is unreasonable" % arity)
+
     return [loadPattern(stream) for _ in range(arity)]
 
 
@@ -187,21 +195,31 @@ def loadTerm(stream):
         # Special-case zero-length strings to avoid confusing Stream.slice().
         if size == 0:
             return Str(u"")
-        rv = stream.slice(size).decode('utf-8')
+        s = stream.slice(size)
+        try:
+            rv = s.decode('utf-8')
+        except UnicodeDecodeError:
+            raise LoadFailed("Couldn't decode string %s" % s)
         return Str(rv)
     elif kind == FLOAT:
         return Double(stream.nextDouble())
     elif kind == CHAR:
         buf = stream.nextItem()
-        rv, count = str_decode_utf_8(buf, len(buf), None)
-        while rv == u'':
-            buf += stream.nextItem()
+        try:
             rv, count = str_decode_utf_8(buf, len(buf), None)
+            while rv == u'':
+                buf += stream.nextItem()
+                rv, count = str_decode_utf_8(buf, len(buf), None)
+        except UnicodeDecodeError:
+            raise LoadFailed("Couldn't decode char %s" % buf)
         return Char(rv)
     elif kind == INT:
         return Int(zzd(stream.nextVarInt()))
     elif kind == TUPLE:
         arity = stream.nextVarInt()
+        if arity > MAX_ARITY:
+            raise LoadFailed("Arity %d is unreasonable" % arity)
+
         return Tuple([loadTerm(stream) for _ in range(arity)])
 
     # Well, that's it for the primitives. Let's lookup the tag.

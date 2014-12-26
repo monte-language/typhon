@@ -346,6 +346,9 @@ class Def(Node):
 
     @staticmethod
     def fromAST(pattern, ejector, value):
+        if pattern is None:
+            raise InvalidAST("Def pattern cannot be None")
+
         return Def(pattern, nullToNone(ejector),
                 value if value is not None else Null)
 
@@ -621,6 +624,9 @@ class Matcher(Node):
     frameSize = -1
 
     def __init__(self, pattern, block):
+        if pattern is None:
+            raise InvalidAST("Matcher pattern cannot be None")
+
         self._pattern = pattern
         self._block = block
 
@@ -661,6 +667,10 @@ class Method(Node):
 
     @staticmethod
     def fromAST(doc, verb, params, guard, block):
+        for param in params:
+            if param is None:
+                raise InvalidAST("Parameter patterns cannot be None")
+
         return Method(doc, strToString(verb), params, guard, block)
 
     def pretty(self, out):
@@ -756,6 +766,9 @@ class Obj(Node):
 
     @staticmethod
     def fromAST(doc, name, auditors, script):
+        if name is None:
+            raise InvalidAST("Object pattern cannot be None")
+
         auditors = tupleToList(auditors)
         if not isinstance(script, Script):
             raise InvalidAST("Object's script isn't a Script")
@@ -815,6 +828,9 @@ class Script(Node):
             matchers = []
         else:
             matchers = tupleToList(matchers)
+        for matcher in matchers:
+            if not isinstance(matcher, Matcher):
+                raise InvalidAST("Script matcher isn't a Matcher")
 
         return Script(extends, methods, matchers)
 
