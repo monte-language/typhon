@@ -83,6 +83,7 @@ def entryPoint(argv):
 
     # Intialize our vat.
     reactor = Reactor()
+    reactor.usurpSignals()
     vat = Vat(reactor)
 
     try:

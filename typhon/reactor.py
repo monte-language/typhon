@@ -14,6 +14,7 @@
 
 from rpython.rlib.rpoll import (POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT,
                                 poll)
+from rpython.rlib.rsignal import SIGPIPE, pypysig_ignore
 
 
 class Reactor(object):
@@ -24,6 +25,17 @@ class Reactor(object):
     def __init__(self):
         self._sockets = {}
         self._pollDict = {}
+
+    def usurpSignals(self):
+        """
+        Take control of all signal handling.
+
+        It is expected that SIGTERM will still be respected.
+        """
+
+        # SIGPIPE: A pipe of some sort was broken. Normally handled by a more
+        # proximate cause of the signal.
+        pypysig_ignore(SIGPIPE)
 
     def hasObjects(self):
         return bool(self._pollDict)
