@@ -16,7 +16,7 @@ from rpython.rlib.nonconst import NonConstant
 from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused
+from typhon.errors import Refused, userError
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, unwrapInt
@@ -69,12 +69,15 @@ class Socket(object):
         self._connectHandler = handler
 
         self.rsock.setblocking(False)
+
         try:
             self.rsock.connect(addr)
         except CSocketError as cse:
-            # Expected; the system is telling us that the socket is
-            # non-blocking and will complete the connection later.
-            if cse.errno != _c.EINPROGRESS:
+            if cse.errno == _c.EINPROGRESS:
+                # Expected; the system is telling us that the socket is
+                # non-blocking and will complete the connection later.
+                pass
+            else:
                 raise
 
     def listen(self, port, handler):
@@ -103,13 +106,8 @@ class Socket(object):
                                          SocketDrain(sock)])
             return
 
-        try:
-            # XXX RPython bug requires NC here
-            buf = self.rsock.recv(NonConstant(8192))
-        except:
-            # No reads for us today. Error out.
-            self.terminate()
-            return
+        # XXX RPython bug requires NC here
+        buf = self.rsock.recv(NonConstant(8192))
 
         if not buf:
             # Looks like we've died. Let's disconnect, right?
@@ -139,7 +137,16 @@ class Socket(object):
             self._vat.sendOnly((handler, RUN_2, [fount, drain]))
 
         for i, item in enumerate(self._outbound):
-            size = self.rsock.send(item)
+            try:
+                size = self.rsock.send(item)
+            except CSocketError as cse:
+                if cse.errno == _c.EPIPE:
+                    # Broken pipe. The local end of the socket was already
+                    # closed; it will be impossible to send this data through.
+                    raise userError(u"Can't write to already-closed socket")
+                else:
+                    raise
+
             if size < len(item):
                 # Short write; trim the outgoing chunk and the entire outbound
                 # list, and then give up on writing for now.
