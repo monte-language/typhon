@@ -410,7 +410,7 @@ class Escape(Node):
         self._pattern.pretty(out)
         out.writeLine(":")
         self._node.pretty(out.indent())
-        if self._catchNode is not None:
+        if self._catchPattern is not None and self._catchNode is not None:
             out.write("catch ")
             self._catchPattern.pretty(out)
             out.writeLine(":")
@@ -436,7 +436,7 @@ class Escape(Node):
 
             # If we have no catch block, then let's just return the value that
             # we captured earlier.
-            if self._catchNode is None:
+            if self._catchPattern is None or self._catchNode is None:
                 return rv
 
             # Else, let's set up another frame and handle the catch block.
@@ -727,6 +727,7 @@ class Noun(Node):
         out.write(self.name.encode("utf-8"))
 
     def evaluate(self, env):
+        assert self.frameIndex >= 0, u"Noun not in frame: %s" % self.name
         return env.getValue(self.frameIndex)
 
     def rewriteScope(self, scope):
@@ -1073,6 +1074,10 @@ class ListPattern(Pattern):
     _immutable_fields_ = "_ps[*]",
 
     def __init__(self, patterns, tail):
+        for p in patterns:
+            if p is None:
+                raise InvalidAST("List subpattern cannot be None")
+
         self._ps = patterns
         self._t = tail
 

@@ -13,7 +13,7 @@
 # under the License.
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused
+from typhon.errors import Refused, userError
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import throw
@@ -54,7 +54,8 @@ def predGuard(f):
                 if f(value):
                     self._slot = value
                 else:
-                    raise Exception("Coercion failed")
+                    raise userError(u"Failed to coerce assignment to %s" %
+                                    self.toString())
                 return NullObject
 
             raise Refused(self, atom, args)
