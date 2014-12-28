@@ -18,7 +18,7 @@ from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
 from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
-from typhon.objects.data import StrObject, unwrapStr
+from typhon.objects.data import StrObject
 from typhon.objects.root import Object, runnable
 
 
@@ -29,6 +29,7 @@ BROKEN, EVENTUAL, NEAR = RefState(), RefState(), RefState()
 
 BROKEN_1 = getAtom(u"broken", 1)
 ISBROKEN_1 = getAtom(u"isBroken", 1)
+ISRESOLVED_1 = getAtom(u"isResolved", 1)
 PROMISE_0 = getAtom(u"promise", 0)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RESOLVE_2 = getAtom(u"resolve", 2)
@@ -59,6 +60,13 @@ def resolution(o):
     return o
 
 
+def isResolved(o):
+    if isinstance(o, Promise):
+        return o.isResolved()
+    else:
+        return True
+
+
 class RefOps(Object):
     """
     Public functions for ref manipulation. Exposed in safescope as 'Ref'.
@@ -71,17 +79,20 @@ class RefOps(Object):
         return u"<Ref>"
 
     def recv(self, atom, args):
+        if atom is BROKEN_1:
+            return self.broken(args[0].toString())
+
+        if atom is ISBROKEN_1:
+            return self.isBroken(args[0])
+
+        if atom is ISRESOLVED_1:
+            return wrapBool(isResolved(args[0]))
+
         if atom is PROMISE_0:
             return self.promise()
 
         if atom is WHENRESOLVED_2:
             return self.whenResolved(args[0], args[1])
-
-        if atom is ISBROKEN_1:
-            return self.isBroken(args[0])
-
-        if atom is BROKEN_1:
-            return self.broken(args[0].toString())
 
         raise Refused(self, atom, args)
 
@@ -137,12 +148,6 @@ class RefOps(Object):
 #                raise p
 #        else:
 #            raise RuntimeError("Not resolved: %r" % (ref,))
-#
-#    def isResolved(self, ref):
-#        if isinstance(ref, Promise):
-#            return wrapBool(ref.isResolved())
-#        else:
-#            return wrapBool(True)
 
     def isFar(self, ref):
         return self.isEventual(ref) and self.isResolved(ref)
@@ -236,8 +241,7 @@ class _whenResolvedReactor(Object):
                     self._resolver.resolve(outcome)
                 self.done = True
             else:
-                self._vat.sendOnly((self._ref, _WHENMORERESOLVED_1,
-                    ConstList([_whenResolvedReactor])))
+                self._vat.sendOnly((self._ref, _WHENMORERESOLVED_1, [self]))
 
             return NullObject
         raise Refused(self, atom, args)
@@ -423,7 +427,7 @@ class SwitchableRef(Promise):
 
     def isResolved(self):
         if self.isSwitchable:
-            return wrapBool(False)
+            return False
         else:
             self.resolutionRef()
             return self._target.isResolved()
@@ -491,7 +495,7 @@ class BufferingRef(Promise):
         return NullObject
 
     def isResolved(self):
-        return wrapBool(False)
+        return False
 
     def commit(self):
         pass
@@ -528,7 +532,7 @@ class NearRef(Promise):
         return self._vat.sendAllOnly(self._target, atom, args)
 
     def isResolved(self):
-        return wrapBool(True)
+        return True
 
     def sendMsg(self, msg):
         self.vat.qSendMsg(self._target, msg)
@@ -572,7 +576,7 @@ class UnconnectedRef(Promise):
         return self._doBreakage(atom, args)
 
     def isResolved(self):
-        return wrapBool(True)
+        return True
 
     def commit(self):
         pass

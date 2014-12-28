@@ -16,16 +16,49 @@ from rpython.rlib.rsocket import INETAddress, RSocket
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused
+from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapInt, unwrapStr
-from typhon.objects.networking.sockets import Socket
+from typhon.objects.networking.sockets import Socket, SocketDrain
+from typhon.objects.refs import makePromise
 from typhon.objects.root import Object
 
 
-CONNECT_1 = getAtom(u"connect", 1)
+CONNECT_0 = getAtom(u"connect", 0)
 LISTEN_1 = getAtom(u"listen", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
+
+
+class TCP4ClientPending(object):
+
+    socket = None
+
+    def __init__(self, vat, host, port):
+        self.vat = vat
+        self.host = host
+        self.port = port
+
+        self.fount, self.fountResolver = makePromise(vat)
+        self.drain, self.drainResolver = makePromise(vat)
+
+    def createSocket(self):
+        # Hint: The following line is where GAI is called.
+        # XXX this should be IDNA, not UTF-8.
+        addr = INETAddress(self.host.encode("utf-8"), self.port)
+        self.socket = Socket(self.vat, RSocket())
+        # XXX demeter violation?
+        self.vat._reactor.addSocket(self.socket)
+        self.socket.connect(addr, self)
+
+    def failSocket(self, reason):
+        u = reason.decode("utf-8")
+        self.fountResolver.smash(u)
+        self.drainResolver.smash(u)
+
+    def fulfillSocket(self):
+        self.fountResolver.resolve(self.socket.createFount())
+        self.drainResolver.resolve(SocketDrain(self.socket))
 
 
 class TCP4ClientEndpoint(Object):
@@ -39,25 +72,15 @@ class TCP4ClientEndpoint(Object):
         return u"<endpoint (IPv4, TCP): %s:%d>" % (self.host, self.port)
 
     def recv(self, atom, args):
-        if atom is CONNECT_1:
-            return self.connect(args[0])
+        if atom is CONNECT_0:
+            return self.connect()
 
         raise Refused(self, atom, args)
 
-    def connect(self, handler):
-        # Apologies. You're probably here to make GAI into a non-blocking
-        # operation. Best of luck!
-        # Hint: The following line is where GAI is called.
-        # XXX this should be IDNA, not UTF-8.
-        addr = INETAddress(self.host.encode("utf-8"), self.port)
-        socket = Socket(self.vat, RSocket())
-        # XXX demeter violation?
-        self.vat._reactor.addSocket(socket)
-        # XXX this shouldn't block, but not guaranteed
-        socket.connect(addr, handler)
-
-        # XXX should a promise be returned here?
-        return NullObject
+    def connect(self):
+        pending = TCP4ClientPending(self.vat, self.host, self.port)
+        self.vat.afterTurn(pending.createSocket)
+        return ConstList([pending.fount, pending.drain])
 
 
 class MakeTCP4ClientEndpoint(Object):

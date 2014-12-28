@@ -19,13 +19,36 @@ from typhon.objects.collections import (ConstList, ConstMap, unwrapList,
 from typhon.objects.constants import unwrapBool, wrapBool
 from typhon.objects.data import (DoubleObject, IntObject, promoteToDouble,
                                  unwrapInt)
-from typhon.objects.refs import makePromise, resolution
+from typhon.objects.refs import isResolved, makePromise, resolution
 
 
 def makeNear(o):
     p, r = makePromise(None)
     r.resolve(o)
     return p
+
+
+class TestIsResolved(TestCase):
+
+    def testNearIsResolved(self):
+        self.assertTrue(isResolved(IntObject(42)))
+
+    def testSwitchableBecomesResolved(self):
+        p, r = makePromise(None)
+        self.assertFalse(isResolved(p))
+
+        r.resolve(IntObject(42))
+        self.assertTrue(isResolved(p))
+
+    def testSwitchableChains(self):
+        p, r = makePromise(None)
+        p2, r2 = makePromise(None)
+
+        r.resolve(p2)
+        self.assertFalse(isResolved(p))
+
+        r2.resolve(IntObject(42))
+        self.assertTrue(isResolved(p))
 
 
 class TestRefs(TestCase):

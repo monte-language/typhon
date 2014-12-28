@@ -13,13 +13,14 @@
 # under the License.
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused
+from typhon.errors import Refused, UserException
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import StrObject, unwrapInt, unwrapStr
 from typhon.objects.networking.endpoints import (MakeTCP4ClientEndpoint,
                                                  MakeTCP4ServerEndpoint)
-from typhon.objects.refs import UnconnectedRef, RefOps, makePromise
+from typhon.objects.refs import (Promise, RefOps, UnconnectedRef, makePromise,
+                                 resolution)
 from typhon.objects.root import Object
 
 
@@ -38,6 +39,8 @@ class Vat(Object):
     """
 
     def __init__(self, reactor):
+        self._callbacks = []
+
         # XXX should define a lock here
         # XXX should lock all accesses of _pending
         self._pending = []
@@ -62,9 +65,45 @@ class Vat(Object):
     def takeTurn(self):
         resolver, message = self._pending.pop(0)
         target, atom, args = message
+
+        # Ensure that the target is resolved.
+        target = resolution(target)
+        if isinstance(target, Promise):
+            if not target.isResolved():
+                # Not resolved! Put it back on the turn list.
+                # print target, "is not quite resolved yet, so I'm deferring"
+                self._pending.append((resolver, (target, atom, args)))
+                return
+
         result = target.call(atom.verb, args)
         if resolver is not None:
             resolver.resolve(result)
+
+    def afterTurn(self, callback):
+        """
+        After the current turn, run this callback.
+
+        The callback must guarantee that it will *not* take turns on the vat!
+        """
+
+        self._callbacks.append(callback)
+
+    def runCallbacks(self):
+        for callback in self._callbacks:
+            callback()
+        self._callbacks = []
+
+    def takeSomeTurns(self, recorder):
+        # Limit the number of continuous turns to keep network latency low.
+        count = min(3, len(self._pending))
+        # print "Taking", count, "turn(s) on", self.toString()
+        for _ in range(count):
+            try:
+                recorder.record("Time spent in vats", self.takeTurn)
+            except UserException as ue:
+                print "Caught exception while taking turn:", ue.formatError()
+
+        self.runCallbacks()
 
 
 class MObject(Object):

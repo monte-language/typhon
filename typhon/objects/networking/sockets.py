@@ -126,15 +126,14 @@ class Socket(object):
             # Did we have an error connecting?
             err = self.rsock.getsockopt_int(_c.SOL_SOCKET, _c.SO_ERROR)
             if err:
-                raise CSocketError(err)
+                self._connectHandler.failSocket(CSocketError(err).get_msg())
+                self.terminate()
+            else:
+                # We just finished connecting.
+                self._connectHandler.fulfillSocket()
 
-            # We just finished connecting. Activate the handler. We can still
-            # try to write, but it's not likely that anything will actually be
-            # waiting for us to write.
-            handler, self._connectHandler = self._connectHandler, None
-            fount = self.createFount()
-            drain = SocketDrain(self)
-            self._vat.sendOnly((handler, RUN_2, [fount, drain]))
+            self._connectHandler = None
+            return
 
         for i, item in enumerate(self._outbound):
             try:
