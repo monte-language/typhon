@@ -168,25 +168,25 @@ class RefOps(Object):
 
     def whenResolved(self, o, callback):
         p, r = makePromise(self._vat)
-        self._vat.sendOnly((o, _WHENMORERESOLVED_1,
-            [WhenResolvedReactor(callback, o, r, self._vat)]))
+        self._vat.sendOnly(o, u"_whenMoreResolved",
+                [WhenResolvedReactor(callback, o, r, self._vat)])
         return p
 
     def whenResolvedOnly(self, o, callback):
-        p, r = makePromise(self._vat)
-        return self._vat.sendOnly((o, _WHENMORERESOLVED_1,
-            [WhenResolvedReactor(callback, o, r, self._vat)]))
+        self._vat.sendOnly(o, u"_whenMoreResolved",
+                [WhenResolvedReactor(callback, o, None, self._vat)])
+        return NullObject
 
     def whenBroken(self, o, callback):
         p, r = makePromise(self._vat)
-        self._vat.sendOnly((o, _WHENMORERESOLVED_1,
-            [WhenBrokenReactor(callback, o, r, self._vat)]))
+        self._vat.sendOnly(o, u"_whenMoreResolved",
+                [WhenBrokenReactor(callback, o, r, self._vat)])
         return p
 
     def whenBrokenOnly(self, o, callback):
-        p, r = makePromise(self._vat)
-        return self._vat.sendOnly((o, _WHENMORERESOLVED_1,
-            [WhenBrokenReactor(callback, o, r, self._vat)]))
+        return self._vat.sendOnly(o, u"_whenMoreResolved",
+                [WhenBrokenReactor(callback, o, None, self._vat)])
+        return NullObject
 
     def isDeepFrozen(self, o):
         # XXX
@@ -217,7 +217,7 @@ class WhenBrokenReactor(Object):
                 return NullObject
 
             if self._ref.state() is EVENTUAL:
-                self._vat.sendOnly((self._ref, _WHENMORERESOLVED_1, [self]))
+                self._vat.sendOnly(self._ref, u"_whenMoreResolved", [self])
             elif self._ref.state() is BROKEN:
                 try:
                     outcome = self._cb.call(u"run", [self._ref])
@@ -226,7 +226,7 @@ class WhenBrokenReactor(Object):
                     # outcome = e
                     raise
 
-                if self._resolver is not NullObject:
+                if self._resolver is not None:
                     self._resolver.resolve(outcome)
 
             return NullObject
@@ -259,11 +259,12 @@ class WhenResolvedReactor(Object):
                     raise
                     # outcome = e
 
-                if self._resolver is not NullObject:
+                if self._resolver is not None:
                     self._resolver.resolve(outcome)
+
                 self.done = True
             else:
-                self._vat.sendOnly((self._ref, _WHENMORERESOLVED_1, [self]))
+                self._vat.sendOnly(self._ref, u"_whenMoreResolved", [self])
 
             return NullObject
         raise Refused(self, atom, args)
@@ -324,20 +325,35 @@ class MessageBuffer(object):
         self._vat = vat
         self._buf = []
 
+    def enqueue(self, resolver, atom, args):
+        self._buf.append((resolver, atom, args))
+
     def deliverAll(self, target):
         #XXX record sending-context information for causality tracing
         msgs = self._buf
+        # XXX Huh. Why do we have to do things in this convoluted way?
         del self._buf[:]
         targRef = _toRef(target, self._vat)
-        for msg in msgs:
-            targRef.sendMsg(msg)
+        for resolver, atom, args in msgs:
+            if resolver is None:
+                targRef.sendAllOnly(atom, args)
+            else:
+                result = targRef.sendAll(atom, args)
+                resolver.resolve(result)
         return len(msgs)
 
 
 class Promise(Object):
+    """
+    A promised reference.
+
+    All methods on this class are helpers; this class cannot be instantiated
+    directly.
+    """
+
+    # Monte core.
 
     def recv(self, atom, args):
-        # XXX do we really need this?
         if atom is _PRINTON_1:
             out = args[0]
             return out.call(u"print", [StrObject(self.toString())])
@@ -347,8 +363,27 @@ class Promise(Object):
 
         return self.callAll(atom, args)
 
-    def callAll(self, atom, args):
-        raise Refused(self, atom, args)
+    def _whenMoreResolved(self, callback):
+        # Welcome to _whenMoreResolved.
+        # This method's implementation, in Monte, should be:
+        # to _whenMoreResolved(callback): callback<-(self)
+        self.vat.sendOnly(callback, u"run", [self])
+        return NullObject
+
+    # Synchronous calls.
+
+    # Eventual sends.
+
+    def send(self, verb, args):
+        # Resolution is done by the vat here; we don't get to access the
+        # resolver ourselves.
+        return self.sendAll(getAtom(verb, len(args)), args)
+
+    def sendOnly(self, verb, args):
+        self.sendAllOnly(getAtom(verb, len(args)), args)
+        return NullObject
+
+    # Promise API.
 
     def resolutionRef(self):
         return self
@@ -369,19 +404,6 @@ class Promise(Object):
         else:
             return target.state()
 
-    def sendMsg(self, msg):
-        if msg.resolver is None:
-            self.sendAllOnly(msg.verb, msg.args)
-        else:
-            msg.resolver.resolve(self.sendAll(msg.verb, msg.args))
-
-    def _whenMoreResolved(self, callback):
-        # Welcome to _whenMoreResolved.
-        # This method's implementation, in Monte, should be:
-        # to _whenMoreResolved(callback): callback<-(self)
-        self.vat.sendOnly((callback, RUN_1, [self]))
-        return NullObject
-
 
 class SwitchableRef(Promise):
     """
@@ -400,6 +422,22 @@ class SwitchableRef(Promise):
         else:
             self.resolutionRef()
             return self._target.toString()
+
+    def callAll(self, atom, args):
+        if self.isSwitchable:
+            raise userError(u"not synchronously callable (%s)" %
+                    atom.repr().decode("utf-8"))
+        else:
+            self.resolutionRef()
+            return self._target.callAll(atom, args)
+
+    def sendAll(self, atom, args):
+        self.resolutionRef()
+        return self._target.sendAll(atom, args)
+
+    def sendAllOnly(self, atom, args):
+        self.resolutionRef()
+        return self._target.sendAllOnly(atom, args)
 
     def optProblem(self):
         if self.isSwitchable:
@@ -421,26 +459,6 @@ class SwitchableRef(Promise):
         else:
             self.resolutionRef()
             return self._target.state()
-
-    def callAll(self, atom, args):
-        if self.isSwitchable:
-            raise userError(u"not synchronously callable (%s)" %
-                    atom.repr().decode("utf-8"))
-        else:
-            self.resolutionRef()
-            return self._target.callAll(atom, args)
-
-    def sendMsg(self, msg):
-        self.resolutionRef()
-        self._target.sendMsg(msg)
-
-    def sendAll(self, atom, args):
-        self.resolutionRef()
-        return self._target.sendAll(atom, args)
-
-    def sendAllOnly(self, atom, args):
-        self.resolutionRef()
-        return self._target.sendAllOnly(atom, args)
 
     def isResolved(self):
         if self.isSwitchable:
@@ -480,6 +498,26 @@ class BufferingRef(Promise):
     def toString(self):
         return u"<bufferingRef>"
 
+    def callAll(self, atom, args):
+        raise userError(u"not synchronously callable (%s)" %
+                atom.repr().decode("utf-8"))
+
+    def sendAll(self, atom, args):
+        optMsgs = self._buf()
+        if optMsgs is None:
+            # XXX what does it mean for us to have no more buffer?
+            return self
+        else:
+            p, r = makePromise(self.vat)
+            optMsgs.enqueue(r, atom, args)
+            return p
+
+    def sendAllOnly(self, atom, args):
+        optMsgs = self._buf()
+        if optMsgs is not None:
+            optMsgs.enqueue(None, atom, args)
+        return NullObject
+
     def optProblem(self):
         return NullObject
 
@@ -488,25 +526,6 @@ class BufferingRef(Promise):
 
     def state(self):
         return EVENTUAL
-
-    def callAll(self, atom, args):
-        raise userError(u"not synchronously callable (%s)" %
-                atom.repr().decode("utf-8"))
-
-    def sendAll(self, atom, args):
-        optMsgs = self._buf()
-        if optMsgs is None:
-            return self
-        else:
-            p, r = makePromise(self.vat)
-            optMsgs.buf.append((r, atom, args))
-            return ConstList([p, r])
-
-    def sendAllOnly(self, atom, args):
-        optMsgs = self._buf()
-        if optMsgs is not None:
-            optMsgs.buf.append((NullObject, atom, args))
-        return NullObject
 
     def isResolved(self):
         return False
@@ -518,11 +537,20 @@ class BufferingRef(Promise):
 class NearRef(Promise):
 
     def __init__(self, target, vat):
-        self._target = target
+        self.target = target
         self.vat = vat
 
     def toString(self):
-        return self._target.toString()
+        return self.target.toString()
+
+    def callAll(self, atom, args):
+        return self.target.call(atom.verb, args)
+
+    def sendAll(self, atom, args):
+        return self.vat.send(self.target, atom.verb, args)
+
+    def sendAllOnly(self, atom, args):
+        return self.vat.sendOnly(self.target, atom.verb, args)
 
     def optProblem(self):
         return NullObject
@@ -531,25 +559,13 @@ class NearRef(Promise):
         return NEAR
 
     def resolution(self):
-        return self._target
+        return self.target
 
     def resolutionRef(self):
         return self
 
-    def callAll(self, atom, args):
-        return self._target.call(atom.verb, args)
-
-    def sendAll(self, atom, args):
-        return self._vat.sendAll(self._target, atom, args)
-
-    def sendAllOnly(self, atom, args):
-        return self._vat.sendAllOnly(self._target, atom, args)
-
     def isResolved(self):
         return True
-
-    def sendMsg(self, msg):
-        self.vat.qSendMsg(self._target, msg)
 
     def commit(self):
         pass
@@ -565,16 +581,6 @@ class UnconnectedRef(Promise):
     def toString(self):
         return u"<ref broken by %s>" % (self._problem,)
 
-    def state(self):
-        return BROKEN
-
-    def resolutionRef(self):
-        return self
-
-    def _doBreakage(self, atom, args):
-        if atom in (_WHENMORERESOLVED_1, _WHENBROKEN_1):
-            return self._vat.sendOnly((args[0], RUN_1, [self]))
-
     def callAll(self, atom, args):
         self._doBreakage(atom, args)
         raise userError(self._problem)
@@ -585,6 +591,16 @@ class UnconnectedRef(Promise):
 
     def sendAllOnly(self, atom, args):
         return self._doBreakage(atom, args)
+
+    def state(self):
+        return BROKEN
+
+    def resolutionRef(self):
+        return self
+
+    def _doBreakage(self, atom, args):
+        if atom in (_WHENMORERESOLVED_1, _WHENBROKEN_1):
+            return self._vat.sendOnly(args[0], u"run", [self])
 
     def isResolved(self):
         return True

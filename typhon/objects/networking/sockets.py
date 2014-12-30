@@ -236,7 +236,7 @@ class SocketFount(Object):
     def flush(self):
         if not self.pauses and self._drain is not None:
             rv = [IntObject(ord(byte)) for byte in self.buf]
-            self._vat.sendOnly((self._drain, RECEIVE_1, [ConstList(rv)]))
+            self._vat.sendOnly(self._drain, u"receive", [ConstList(rv)])
             self.buf = ""
 
     def terminate(self):

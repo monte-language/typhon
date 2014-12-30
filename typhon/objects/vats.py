@@ -27,56 +27,61 @@ from typhon.objects.root import Object
 BROKEN_0 = getAtom(u"broken", 0)
 CALL_3 = getAtom(u"call", 3)
 FAILURELIST_1 = getAtom(u"failureList", 1)
+SENDONLY_3 = getAtom(u"sendOnly", 3)
 SEND_3 = getAtom(u"send", 3)
 TOQUOTE_1 = getAtom(u"toQuote", 1)
 TOSTRING_1 = getAtom(u"toString", 1)
 
 
-# XXX Vat really shouldn't be an object!
-class Vat(Object):
+class Vat(object):
     """
     Turn management and object isolation.
     """
 
     def __init__(self, reactor):
+        self._reactor = reactor
+
         self._callbacks = []
 
         # XXX should define a lock here
         # XXX should lock all accesses of _pending
         self._pending = []
 
-        self._reactor = reactor
-
     def toString(self):
         return u"<vat (%d pending)>" % (len(self._pending),)
 
-    def send(self, message):
+    def send(self, target, verb, args):
         promise, resolver = makePromise(self)
-        self._pending.append((resolver, message))
+        self._pending.append((resolver, target, verb, args))
         return promise
 
-    def sendOnly(self, message):
-        self._pending.append((None, message))
+    def sendOnly(self, target, verb, args):
+        self._pending.append((None, target, verb, args))
         return NullObject
 
     def hasTurns(self):
         return len(self._pending) != 0
 
     def takeTurn(self):
-        resolver, message = self._pending.pop(0)
-        target, atom, args = message
+        resolver, target, verb, args = self._pending.pop(0)
 
-        # Ensure that the target is resolved.
+        # If the target is a promise, then we should send to it instead of
+        # calling. Try to resolve it as much as possible first, though.
         target = resolution(target)
-        if isinstance(target, Promise):
-            if not target.isResolved():
-                # Not resolved! Put it back on the turn list.
-                # print target, "is not quite resolved yet, so I'm deferring"
-                self._pending.append((resolver, (target, atom, args)))
-                return
 
-        result = target.call(atom.verb, args)
-        if resolver is not None:
+        if resolver is None:
+            # callOnly/sendOnly.
+            if isinstance(target, Promise):
+                target.sendOnly(verb, args)
+            else:
+                # Oh, that's right; we don't do callOnly since it's silly.
+                target.call(verb, args)
+        else:
+            # call/send.
+            if isinstance(target, Promise):
+                result = target.send(verb, args)
+            else:
+                result = target.call(verb, args)
             resolver.resolve(result)
 
     def afterTurn(self, callback):
@@ -124,14 +129,19 @@ class MObject(Object):
             sendArgs = unwrapList(args[2])
             return target.call(sendVerb, sendArgs)
 
+        if atom is SENDONLY_3:
+            target = args[0]
+            sendVerb = unwrapStr(args[1])
+            sendArgs = unwrapList(args[2])
+            # Signed, sealed, delivered, I'm yours.
+            return self._vat.sendOnly(target, sendVerb, sendArgs)
+
         if atom is SEND_3:
             target = args[0]
             sendVerb = unwrapStr(args[1])
             sendArgs = unwrapList(args[2])
             # Signed, sealed, delivered, I'm yours.
-            atom = getAtom(sendVerb, len(sendArgs))
-            package = target, atom, sendArgs
-            return self._vat.send(package)
+            return self._vat.send(target, sendVerb, sendArgs)
 
         if atom is TOQUOTE_1:
             return StrObject(args[0].toQuote())
