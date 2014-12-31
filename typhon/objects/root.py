@@ -18,6 +18,9 @@ from typhon.atoms import getAtom
 from typhon.errors import Refused
 
 
+_WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
+
+
 class Object(object):
 
     # The attributes that all Objects have in common.
@@ -43,7 +46,20 @@ class Object(object):
         arity = len(arguments)
         atom = promote(getAtom(verb, arity))
         jit_debug(atom.repr())
-        return self.recv(atom, arguments)
+
+        try:
+            return self.recv(atom, arguments)
+        except:
+            if atom is _WHENMORERESOLVED_1:
+                # Welcome to _whenMoreResolved.
+                # This method's implementation, in Monte, should be:
+                # to _whenMoreResolved(callback): callback<-(self)
+                from typhon.vats import currentVat
+                vat = currentVat.get()
+                vat.sendOnly(arguments[0], u"run", [self])
+                from typhon.objects.constants import NullObject
+                return NullObject
+            raise
 
     def recv(self, atom, args):
         raise Refused(self, atom, args)

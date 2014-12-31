@@ -13,14 +13,13 @@
 # under the License.
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused, UserException
+from typhon.errors import Refused
 from typhon.objects.collections import ConstList, unwrapList
-from typhon.objects.constants import NullObject, wrapBool
+from typhon.objects.constants import wrapBool
 from typhon.objects.data import StrObject, unwrapInt, unwrapStr
 from typhon.objects.networking.endpoints import (MakeTCP4ClientEndpoint,
                                                  MakeTCP4ServerEndpoint)
-from typhon.objects.refs import (Promise, RefOps, UnconnectedRef, makePromise,
-                                 resolution)
+from typhon.objects.refs import RefOps, UnconnectedRef
 from typhon.objects.root import Object
 
 
@@ -31,84 +30,6 @@ SENDONLY_3 = getAtom(u"sendOnly", 3)
 SEND_3 = getAtom(u"send", 3)
 TOQUOTE_1 = getAtom(u"toQuote", 1)
 TOSTRING_1 = getAtom(u"toString", 1)
-
-
-class Vat(object):
-    """
-    Turn management and object isolation.
-    """
-
-    def __init__(self, reactor):
-        self._reactor = reactor
-
-        self._callbacks = []
-
-        # XXX should define a lock here
-        # XXX should lock all accesses of _pending
-        self._pending = []
-
-    def toString(self):
-        return u"<vat (%d pending)>" % (len(self._pending),)
-
-    def send(self, target, verb, args):
-        promise, resolver = makePromise(self)
-        self._pending.append((resolver, target, verb, args))
-        return promise
-
-    def sendOnly(self, target, verb, args):
-        self._pending.append((None, target, verb, args))
-        return NullObject
-
-    def hasTurns(self):
-        return len(self._pending) != 0
-
-    def takeTurn(self):
-        resolver, target, verb, args = self._pending.pop(0)
-
-        # If the target is a promise, then we should send to it instead of
-        # calling. Try to resolve it as much as possible first, though.
-        target = resolution(target)
-
-        if resolver is None:
-            # callOnly/sendOnly.
-            if isinstance(target, Promise):
-                target.sendOnly(verb, args)
-            else:
-                # Oh, that's right; we don't do callOnly since it's silly.
-                target.call(verb, args)
-        else:
-            # call/send.
-            if isinstance(target, Promise):
-                result = target.send(verb, args)
-            else:
-                result = target.call(verb, args)
-            resolver.resolve(result)
-
-    def afterTurn(self, callback):
-        """
-        After the current turn, run this callback.
-
-        The callback must guarantee that it will *not* take turns on the vat!
-        """
-
-        self._callbacks.append(callback)
-
-    def runCallbacks(self):
-        for callback in self._callbacks:
-            callback()
-        self._callbacks = []
-
-    def takeSomeTurns(self, recorder):
-        # Limit the number of continuous turns to keep network latency low.
-        count = min(3, len(self._pending))
-        # print "Taking", count, "turn(s) on", self.toString()
-        for _ in range(count):
-            try:
-                recorder.record("Time spent in vats", self.takeTurn)
-            except UserException as ue:
-                print "Caught exception while taking turn:", ue.formatError()
-
-        self.runCallbacks()
 
 
 class MObject(Object):

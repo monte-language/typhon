@@ -33,7 +33,6 @@ ISRESOLVED_1 = getAtom(u"isResolved", 1)
 PROMISE_0 = getAtom(u"promise", 0)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RESOLVE_2 = getAtom(u"resolve", 2)
-RUN_0 = getAtom(u"run", 0)
 RUN_1 = getAtom(u"run", 1)
 STATE_1 = getAtom(u"state", 1)
 WHENBROKEN_2 = getAtom(u"whenBroken", 2)
@@ -212,7 +211,7 @@ class WhenBrokenReactor(Object):
         return u"<whenBrokenReactor>"
 
     def recv(self, atom, args):
-        if atom is RUN_0:
+        if atom is RUN_1:
             if not isinstance(self._ref, Promise):
                 return NullObject
 
@@ -239,7 +238,7 @@ class WhenResolvedReactor(Object):
 
     def __init__(self, callback, ref, resolver, vat):
         self._cb = callback
-        self._ref = ref
+        self._ref = _toRef(ref, vat)
         self._resolver = resolver
         self._vat = vat
 
@@ -247,7 +246,7 @@ class WhenResolvedReactor(Object):
         return u"<whenResolvedReactor>"
 
     def recv(self, atom, args):
-        if atom is RUN_0:
+        if atom is RUN_1:
             if self.done:
                 return NullObject
 
@@ -278,7 +277,10 @@ class LocalResolver(Object):
         self._buf = buf
 
     def toString(self):
-        return u"<Ref$Resolver>"
+        if self._ref is None:
+            return u"<closed resolver>"
+        else:
+            return u"<resolver>"
 
     def recv(self, atom, args):
         if atom is RESOLVE_1:
@@ -297,8 +299,8 @@ class LocalResolver(Object):
         else:
             self._ref.setTarget(_toRef(target, self._vat))
             self._ref.commit()
-            if self._buf is not None:
-                self._buf.deliverAll(target)
+            self._buf.deliverAll(target)
+
             self._ref = None
             self._buf = None
             return True
@@ -312,12 +314,6 @@ class LocalResolver(Object):
     def isDone(self):
         return wrapBool(self._ref is None)
 
-    def _printOn(self, out):
-        if self.ref is None:
-            out.raw_print(u'<Closed Resolver>')
-        else:
-            out.raw_print(u'<Resolver>')
-
 
 class MessageBuffer(object):
 
@@ -330,17 +326,16 @@ class MessageBuffer(object):
 
     def deliverAll(self, target):
         #XXX record sending-context information for causality tracing
-        msgs = self._buf
-        # XXX Huh. Why do we have to do things in this convoluted way?
-        del self._buf[:]
         targRef = _toRef(target, self._vat)
-        for resolver, atom, args in msgs:
+        for resolver, atom, args in self._buf:
             if resolver is None:
                 targRef.sendAllOnly(atom, args)
             else:
                 result = targRef.sendAll(atom, args)
                 resolver.resolve(result)
-        return len(msgs)
+        rv = len(self._buf)
+        self._buf = []
+        return rv
 
 
 class Promise(Object):
@@ -418,7 +413,7 @@ class SwitchableRef(Promise):
 
     def toString(self):
         if self.isSwitchable:
-            return u"<promise>"
+            return u"<switchable promise>"
         else:
             self.resolutionRef()
             return self._target.toString()
@@ -541,7 +536,7 @@ class NearRef(Promise):
         self.vat = vat
 
     def toString(self):
-        return self.target.toString()
+        return u"<nearref: %s>" % self.target.toString()
 
     def callAll(self, atom, args):
         return self.target.call(atom.verb, args)

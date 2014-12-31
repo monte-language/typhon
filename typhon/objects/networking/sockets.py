@@ -55,7 +55,7 @@ class Socket(object):
         self._outbound = []
 
     def repr(self):
-        return "<Socket(%d)>" % self.rsock.fd
+        return u"<Socket(%d)>" % self.rsock.fd
 
     def wantsWrite(self):
         return bool(self._outbound) or self._connectHandler is not None
@@ -203,8 +203,8 @@ class SocketFount(Object):
     def __init__(self, vat):
         self._vat = vat
 
-    def repr(self):
-        return "<SocketFount>"
+    def toString(self):
+        return u"<SocketFount>"
 
     def recv(self, atom, args):
         if atom is FLOWTO_1:
@@ -255,8 +255,8 @@ class SocketDrain(Object):
         self.sock = socket
         self._buf = []
 
-    def repr(self):
-        return "<SocketDrain(%s)>" % self.sock.repr()
+    def toString(self):
+        return u"<SocketDrain(%s)>" % self.sock.repr()
 
     def recv(self, atom, args):
         if atom is FLOWINGFROM_1:

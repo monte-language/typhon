@@ -27,10 +27,11 @@ from typhon.objects.collections import ConstMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.imports import addImportToScope
-from typhon.objects.vats import Vat, vatScope
+from typhon.objects.vats import vatScope
 from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
 from typhon.simple import simpleScope
+from typhon.vats import Vat, currentVat
 
 
 def dirname(p):
@@ -93,6 +94,7 @@ def entryPoint(argv):
     reactor = Reactor()
     reactor.usurpSignals()
     vat = Vat(reactor)
+    currentVat.set(vat)
 
     try:
         prelude = loadPrelude(config, recorder, vat)
