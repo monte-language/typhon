@@ -1,0 +1,113 @@
+def [=> simple__quasiParser] := import("lib/simple")
+def [=> b__quasiParser, => Bytes] | _ := import("lib/bytes")
+def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
+def [=> makeMapPump] := import("lib/tubes/mapPump")
+def [=> makePumpTube] := import("lib/tubes/pumpTube")
+
+
+def bytesToStatus(bytes :Bytes) :Int:
+    var rv :Int := 0
+    for byte in bytes:
+        rv := rv * 10 + (byte - 48)
+    return rv
+
+def testBytesToStatus(assert):
+    assert.equal(bytesToStatus([50, 48, 48]), 200)
+
+unittest([
+    testBytesToStatus,
+])
+
+
+def makeResponse(status :Int, headers):
+    return object response:
+        to _printOn(out):
+            out.print(`<response($status)>`)
+
+
+def makeResponseDrain(resolver):
+    var state := 0
+    var buf := []
+    var headers := null
+    var status := null
+    var label := null
+
+    return object responseDrain:
+        to receive(bytes):
+            buf += bytes
+            responseDrain.parse()
+
+        to flowingFrom(fount):
+            return responseDrain
+
+        to parseStatus(ej):
+            def b`HTTP/1.1 @code @label$\r$\n@tail` exit ej := buf
+            status := bytesToStatus(code)
+            traceln(`Status: $status (${UTF8Decode(label)})`)
+            buf := tail
+            state := 1
+            headers := [].asMap().diverge()
+
+        to parseHeader(ej):
+            escape final:
+                def b`@key: @value$\r$\n@tail` exit final := buf
+                buf := tail
+                headers[UTF8Decode(key)] := UTF8Decode(value)
+            catch _:
+                def b`$\r$\n@tail` exit ej := buf
+                buf := tail
+                state := 2
+
+        to parse():
+            while (true):
+                switch (state):
+                    match ==0:
+                        responseDrain.parseStatus(__break)
+                    match ==1:
+                        responseDrain.parseHeader(__break)
+                    match ==2:
+                        state := 0
+                        responseDrain.issueResponse()
+                        break
+
+        to issueResponse():
+            resolver.resolve(makeResponse(status, headers))
+
+
+def makeRequest(host :String, resource :String):
+    var port :Int := 80
+    def headers := [
+        "Host" => host,
+        "Connection" => "close",
+    ].diverge()
+
+    return object request:
+        to put(key, value):
+            headers[key] := value
+
+        to write(verb, drain):
+            drain.receive(UTF8Encode(`$verb $resource HTTP/1.1$\r$\n`))
+            for k => v in headers:
+                drain.receive(UTF8Encode(`$k: $v$\r$\n`))
+            drain.receive(b`$\r$\n`)
+
+        to send(verb :String):
+            def endpoint := makeTCP4ClientEndpoint(host, port)
+            def [fount, drain] := endpoint.connect()
+            def [p, r] := Ref.promise()
+
+            # Write request.
+            when (drain) ->
+                request.write(verb, drain)
+            # Read response.
+            fount<-flowTo(makeResponseDrain(r))
+
+            return p
+
+        to get():
+            return request.send("GET")
+
+
+def response := makeRequest("example.com", "/").get()
+when (response) ->
+    traceln("Finished request with response", response)
