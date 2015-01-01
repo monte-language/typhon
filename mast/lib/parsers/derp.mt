@@ -1,3 +1,5 @@
+def [=> simple__quasiParser] | _ := import("lib/simple")
+
 def any(l :List[Bool]) :Bool:
     for x in l:
         if (x):
@@ -22,11 +24,11 @@ object nullSet:
 
 object anything:
     to _printOn(out):
-        out.print("any")
+        out.print("∀")
 
 object exactly:
     to _printOn(out):
-        out.print("ex")
+        out.print("≡")
 
 object term:
     to _printOn(out):
@@ -38,11 +40,11 @@ object reduction:
 
 object alternation:
     to _printOn(out):
-        out.print("alt")
+        out.print("∨")
 
 object catenation:
     to _printOn(out):
-        out.print("cat")
+        out.print("∧")
 
 object repeat:
     to _printOn(out):
@@ -224,8 +226,6 @@ def derive(l, c):
         match [==alternation, ls]:
             return [alternation, _filterEmpty([derive(l, c) for l in ls])]
 
-        # This had been split with a very elegant `a ? nullable(a)` pattern,
-        # but it didn't work on Typhon for some reason. Very strange.
         match [==catenation, a ? nullable(a), b]:
             def da := derive(a, c)
             def db := derive(b, c)
@@ -416,7 +416,7 @@ def makeDerp(language):
 
         to _printOn(out):
             out.print(`Parser (${parserSize(language)}): `)
-            showParser(language, out)
+            out.print(M.toString(language))
 
         # EDSL wrapper methods.
 
@@ -477,4 +477,5 @@ def ex(x):
 [
     => makeDerp,
     => ex,
+    "anything" => fn {makeDerp(anything)},
 ]

@@ -39,6 +39,9 @@ class Import(Object):
             p = path.encode("utf-8")
             p += ".ty"
 
+            # Transitive imports.
+            addImportToScope(self.path, self.scope, self.recorder)
+
             # Attempt the import.
             term = obtainModule(rjoin(self.path, p), self.scope.keys(),
                                 self.recorder)
