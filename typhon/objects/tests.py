@@ -22,6 +22,7 @@ from typhon.objects.root import Object
 
 
 DOESNOTEJECT_1 = getAtom(u"doesNotEject", 1)
+EJECTS_1 = getAtom(u"ejects", 1)
 EQUAL_2 = getAtom(u"equal", 2)
 RUN_1 = getAtom(u"run", 1)
 
@@ -49,6 +50,20 @@ class Asserter(Object):
                         self.log(u"Ejector was fired")
                     else:
                         raise
+            return NullObject
+
+        if atom is EJECTS_1:
+            success = False
+            with Ejector() as ej:
+                try:
+                    args[0].call(u"run", [ej])
+                except Ejecting as e:
+                    if e.ejector is ej:
+                        success = True
+                    else:
+                        raise
+            if not success:
+                self.log(u"Ejector was not fired")
             return NullObject
 
         if atom is EQUAL_2:
