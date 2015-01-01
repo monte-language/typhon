@@ -184,13 +184,30 @@ def __quasiMatcher(matchMaker, values):
 
 
 object __suchThat:
-    to run(specimen, _):
-        return specimen
     to run(specimen :Bool):
         def suchThat(_, ej):
             if (!specimen):
                 throw.eject(ej, "suchThat failed")
         return suchThat
+
+    to run(specimen, _):
+        return [specimen, null]
+
+
+def testSuchThatTrue(assert):
+    def f(ej):
+        def x ? true exit ej := 42
+        assert.equal(x, 42)
+    assert.doesNotEject(f)
+
+def testSuchThatFalse(assert):
+    assert.ejects(fn ej {def x ? false exit ej := 42})
+
+
+unittest([
+    testSuchThatTrue,
+    testSuchThatFalse,
+])
 
 
 object __switchFailed:
@@ -227,7 +244,9 @@ def _flexList(var l):
             return _flexList(l | other)
 
         to pop():
+            def rv := l[l.size() - 1]
             l := l.slice(0, l.size() - 1)
+            return rv
 
         to push(value):
             l := l.with(value)
@@ -252,13 +271,21 @@ def _flexList(var l):
             l := l.with(index, value)
 
 
+def testFlexListPop(assert):
+    assert.equal(_flexList([42]).pop(), 42)
+    assert.equal(_flexList([42, 5]).pop(), 5)
+
+
 def testFlexListPrinting(assert):
     assert.equal(M.toString(_flexList([])), "[].diverge()")
     assert.equal(M.toString(_flexList([42])), "[42].diverge()")
     assert.equal(M.toString(_flexList([5, 42])), "[5, 42].diverge()")
 
 
-unittest([testFlexListPrinting])
+unittest([
+    testFlexListPop,
+    testFlexListPrinting,
+])
 
 
 def _flexMap(var m):
