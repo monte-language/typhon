@@ -1,4 +1,4 @@
-# Copyright (C) 2014 Google Inc. All rights reserved.
+# Copyright (C) 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
 # use this file except in compliance with the License. You may obtain a copy
@@ -63,6 +63,13 @@ def parseMonte(tokens, ej):
         to patt():
             return monteParser.pattern(0)
 
+        to noun():
+            if (token.label() == "noun"):
+                def rv := token.noun()
+                monteParser.next()
+                return rv
+            monteParser.error(`expected noun, not $token`)
+
         to advance(t, err):
             if (t != token):
                 monteParser.error(err)
@@ -76,7 +83,7 @@ def parseMonte(tokens, ej):
             return false
 
         to error(err):
-            throw.eject(ej, err)
+            throw.eject(ej, [err, token])
 
     # Prime the parser.
     token := monteParser.next()
@@ -84,8 +91,11 @@ def parseMonte(tokens, ej):
 
 # Declare some tokens.
 
+def closeParen
 def openBracket
+def openParen
 def colon
+def dot
 
 # Core stuff.
 
@@ -126,40 +136,7 @@ def literal(value):
         to nud(parser):
             return term`LiteralExpr($value)`
 
-# QLs.
-
-object backtick extends token:
-    to nup(parser):
-        var pieces := []
-        while (!parser.choose(backtick)):
-            def piece := parser.next().nud(parser)
-            if (piece =~ term`LiteralExpr(@lit)`):
-                pieces := pieces.with(term`QuasiText($lit)`)
-        return term`QuasiPattern(null, $pieces)`
-
-def noun(value):
-    return object nounToken extends token:
-        to label():
-            return "noun"
-
-        to term():
-            return term`NounExpr($value)`
-
-        to nud(parser):
-            return nounToken.term()
-
-        to pbp():
-            return 5
-
-        to nup(parser):
-            if (parser.choose(backtick)):
-                def term`QuasiPattern(null, @pieces)` := backtick.nup(parser)
-                return term`QuasiPattern(NounExpr($value), $pieces)`
-            else if (parser.choose(colon)):
-                # Looks like there's a guard.
-                def guard := parser.expr()
-                return term`FinalPattern(NounExpr($value), Guard($guard))`
-            return term`FinalPattern(NounExpr($value), null)`
+# Comma and combinator.
 
 object comma extends token:
     pass
@@ -180,26 +157,38 @@ def commaSep(parser, action, terminal):
                 "Expected comma-separated item or end symbol")
             return rv
 
-object closeParen extends token:
+# Tokens and helpers for blocks.
+
+object closeBrace extends token:
     pass
 
-object openParen extends token:
-    to lbp():
-        return 15
-
+object openBrace extends token:
     to nud(parser):
-        def rv := parser.expr()
-        parser.advance(closeParen, "XXX not finished")
-        return rv
+        if (parser.choose(closeBrace)):
+            # Empty hide expression. Legal and often an alternative to pass.
+            return term`HideExpr(SeqExpr([]))`
+        def expr := parser.expr()
+        parser.advance(closeBrace, "Runaway hide expression")
+        return term`HideExpr($expr)`
 
-    to led(parser, left):
-        # Call.
-        var args := commaSep(parser, fn p {p.expr()}, closeParen)
-        # Methods are not parsed as such; stitch curried verbs and function
-        # calls together into method calls.
-        if (left =~ term`VerbCurryExpr(@target, @verb)`):
-             return term`MethodCallExpr($target, $verb, $args)`
-        return term`FunctionCallExpr($left, $args)`
+object indent extends token:
+    pass
+
+object dedent extends token:
+    pass
+
+def block(parser):
+    if (parser.choose(colon)):
+        parser.advance(indent, "colon implies indented block")
+        def body := parser.expr()
+        parser.advance(dedent, "didn't dedent after indented block")
+        return body
+    else:
+        parser.advance(openBrace, "block body must be inside braces")
+        def body := parser.expr()
+        parser.advance(closeBrace,
+            "runaway block body; expected closing brace")
+        return body
 
 # Guards.
 
@@ -230,6 +219,89 @@ bind colon extends token:
     to led(parser, left):
         def g := guard(parser)
         return term`Coerce($left, $g)`
+
+42
+
+# QLs.
+
+object backtick extends token:
+    to nup(parser):
+        var pieces := []
+        while (!parser.choose(backtick)):
+            def piece := parser.next().nud(parser)
+            if (piece =~ term`LiteralExpr(@lit)`):
+                pieces := pieces.with(term`QuasiText($lit)`)
+        return term`QuasiPattern(null, $pieces)`
+
+def noun(value):
+    return object nounToken extends token:
+        to label():
+            return "noun"
+
+        to noun():
+            return value
+
+        to term():
+            return term`NounExpr($value)`
+
+        to nud(parser):
+            if (value == "meta"):
+                # It's time for meta! Who likes meta? We like meta! I think.
+                parser.advance(dot, "meta expression should start 'meta.'")
+                def metaNoun := parser.noun()
+                def metaType := switch (metaNoun) {
+                    match =="getState" {"State"}
+                    match =="scope" {"Scope"}
+                    match =="context" {"Context"}
+                }
+                parser.advance(openParen, "meta expression can't be curried")
+                parser.advance(closeParen,
+                    "meta expression takes no arguments")
+                return term`Meta($metaType)`
+
+            return nounToken.term()
+
+        to pbp():
+            return 5
+
+        to nup(parser):
+            if (parser.choose(backtick)):
+                def term`QuasiPattern(null, @pieces)` := backtick.nup(parser)
+                return term`QuasiPattern(NounExpr($value), $pieces)`
+            else if (parser.choose(colon)):
+                # Looks like there's a guard.
+                def g := guard(parser)
+                if (value == "_"):
+                    return term`IgnorePattern($g)`
+                return term`FinalPattern(NounExpr($value), $g)`
+            if (value == "_"):
+                return term`IgnorePattern(null)`
+            return term`FinalPattern(NounExpr($value), null)`
+
+bind closeParen extends token:
+    pass
+
+42
+
+bind openParen extends token:
+    to lbp():
+        return 15
+
+    to nud(parser):
+        def rv := parser.expr()
+        parser.advance(closeParen, "XXX not finished")
+        return rv
+
+    to led(parser, left):
+        # Call.
+        var args := commaSep(parser, fn p {p.expr()}, closeParen)
+        # Methods are not parsed as such; stitch curried verbs and function
+        # calls together into method calls.
+        if (left =~ term`VerbCurryExpr(@target, @verb)`):
+             return term`MethodCallExpr($target, $verb, $args)`
+        return term`FunctionCallExpr($left, $args)`
+
+42
 
 # Current tentative tower for patterns:
 # 1, na: Such-that.
@@ -416,8 +488,8 @@ object amp extends token:
         parser.next()
         if (parser.choose(colon)):
             # Binds can have guards too.
-            def guard := parser.expr()
-            return term`SlotPattern($name, Guard($guard))`
+            def g := guard(parser)
+            return term`SlotPattern($name, $g)`
         return term`SlotPattern($name, null)`
 
 object ampAmp extends token:
@@ -435,7 +507,11 @@ object ampAmp extends token:
     to nup(parser):
         def name := parser.current().term()
         parser.next()
-        return term`BindingPattern($name)`
+        if (parser.choose(colon)):
+            # Binds can have guards too.
+            def g := guard(parser)
+            return term`BindingPattern($name, $g)`
+        return term`BindingPattern($name, null)`
 
 object minus extends token:
     to lbp():
@@ -447,10 +523,22 @@ object minus extends token:
         def right := parser.expression(10)
         return term`Subtract($left, $right)`
 
-# For loops.
+# If/else.
+
+object kwElse extends token:
+    pass
 
 object kwIf extends token:
-    pass
+    to nud(parser):
+        parser.advance(openParen,
+            "if expression's condition must be parenthesized")
+        def condition := parser.expr()
+        parser.advance(closeParen, "runaway if expression condition")
+        def consequent := block(parser)
+        def alternative := if (parser.choose(kwElse)) {block(parser)}
+        return term`If($condition, $consequent, $alternative)`
+
+# For loops.
 
 object kwIn extends token:
     pass
@@ -567,15 +655,19 @@ bind openBracket extends token:
         def tail := if (parser.choose(plus)) {parser.patt()} else {null}
         return term`ListPattern($patts, $tail)`
 
+42
+
 # And some other uncategorized stuff.
 
-object dot extends token:
+bind dot extends token:
     to lbp():
         return 14
 
     to led(parser, left):
         var right := parser.expression(15)
         return term`VerbCurryExpr($left, $right)`
+
+42
 
 object leftArrow extends token:
     to lbp():
@@ -584,18 +676,6 @@ object leftArrow extends token:
     to led(parser, left):
         var right := parser.expression(15)
         return term`SendCurryExpr($left, $right)`
-
-object closeBrace extends token:
-    pass
-
-object openBrace extends token:
-    to nud(parser):
-        if (parser.choose(closeBrace)):
-            # Empty hide expression. Legal and often an alternative to pass.
-            return term`HideExpr(SeqExpr([]))`
-        def expr := parser.expr()
-        parser.advance(closeBrace, "Runaway hide expression")
-        return term`HideExpr($expr)`
 
 object kwVia extends token:
     to nup(parser):
@@ -611,8 +691,8 @@ object kwBind extends token:
         parser.next()
         if (parser.choose(colon)):
             # Binds can have guards too.
-            def guard := parser.expr()
-            return term`BindPattern($name, Guard($guard))`
+            def g := guard(parser)
+            return term`BindPattern($name, $g)`
         return term`BindPattern($name, null)`
 
 object kwVar extends token:
@@ -621,8 +701,8 @@ object kwVar extends token:
         parser.next()
         if (parser.choose(colon)):
             # Looks like there's a guard.
-            def guard := parser.expr()
-            return term`VarPattern($name, Guard($guard))`
+            def g := guard(parser)
+            return term`VarPattern($name, $g)`
         return term`VarPattern($name, null)`
 
 # break, continue, and return.
@@ -678,27 +758,6 @@ object kwFn extends token:
         parser.advance(closeBrace, "runaway fn is missing closing brace")
         return term`Lambda(null, $args, $body)`
 
-# Tokens and helpers for blocks.
-
-object indent extends token:
-    pass
-
-object dedent extends token:
-    pass
-
-def block(parser):
-    if (parser.choose(colon)):
-        parser.advance(indent, "colon implies indented block")
-        def body := parser.expr()
-        parser.advance(dedent, "didn't dedent after indented block")
-        return body
-    else:
-        parser.advance(openBrace, "block body must be inside braces")
-        def body := parser.expr()
-        parser.advance(closeBrace,
-            "runaway block body; expected closing brace")
-        return body
-
 # While loops.
 
 object kwWhile extends token:
@@ -719,8 +778,20 @@ object kwWhen extends token:
         parser.advance(openParen, "when objects must be parenthesized")
         def target := parser.expr()
         parser.advance(closeParen, "runaway object list in when expression")
-        def body := block(parser)
-        return term`When([$target], $body, [], null)`
+        parser.advance(slimArrow, "slim arrow required in when expression")
+        # We can't use the block() combinator because when-exprs don't have
+        # colons and I don't want to specialize block() for this single case.
+        if (parser.choose(openBrace)):
+            def body := parser.expr()
+            parser.advance(closeBrace,
+                "runaway when expression body; expected closing brace")
+            return term`When([$target], $body, [], null)`
+        else:
+            parser.advance(indent,
+                "when expression's block must be indented or braced")
+            def body := parser.expr()
+            parser.advance(dedent, "didn't dedent after indented block")
+            return term`When([$target], $body, [], null)`
 
 # Tests.
 
@@ -842,7 +913,7 @@ def testPattern():
     testPatt([noun("a"), colon, noun("int")],
         term`FinalPattern(NounExpr("a"), Guard(NounExpr("int"), []))`)
     testPatt([noun("a"), colon, noun("list"), openBracket, noun("int"), closeBracket],
-        term`FinalPattern(NounExpr("a"), Guard(NounExpr("int"), [[NounExpr("int")]]))`)
+        term`FinalPattern(NounExpr("a"), Guard(NounExpr("list"), [[NounExpr("int")]]))`)
     testPatt([backtick, literal("foo"), backtick],
         term`QuasiPattern(null, [QuasiText("foo")])`)
     testPatt([noun("baz"), backtick, literal("foo"), backtick],
@@ -861,14 +932,14 @@ def testPattern():
     testPatt([amp, noun("z"), colon, noun("Foo")],
         term`SlotPattern(NounExpr("z"), Guard(NounExpr("Foo"), []))`)
     testPatt([kwVia, openParen, noun("foo"), closeParen, openBracket, noun("x"), closeBracket],
-        term`ViaPattern(NounExpr("foo"), ListPattern([FinalPattern(NounExpr("x"), null)]))`)
+        term`ViaPattern(NounExpr("foo"), ListPattern([FinalPattern(NounExpr("x"), null)], null))`)
     testPatt([noun("x"), question, openParen, noun("y"), closeParen],
         term`SuchThatPattern(FinalPattern(NounExpr("x"), null), NounExpr("y"))`)
 
 def testMatch():
     testParse([noun("x"), equalTilde, openBracket, noun("a"), comma, noun("b"), closeBracket],
         term`MatchBind(NounExpr("x"),
-            ListPattern([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)]))`)
+            ListPattern([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], null))`)
     testParse([noun("x"), bangTilde, noun("y"), colon, noun("String")],
         term`Mismatch(NounExpr("x"), FinalPattern(NounExpr("y"), Guard(NounExpr("String"), [])))`)
 
@@ -998,7 +1069,7 @@ def testLambda():
         term`Lambda(null,
             [FinalPattern(NounExpr("a"), null),
                 ListPattern([FinalPattern(NounExpr("b"), null),
-                    FinalPattern(NounExpr("c"), null)])],
+                    FinalPattern(NounExpr("c"), null)], null)],
             LiteralExpr(1))`)
 
 def testWhile():
@@ -1037,6 +1108,48 @@ def testListComp():
             kwIf, noun("y"), closeBracket],
         term`ListComp(null, FinalPattern(NounExpr("v"), null), NounExpr("x"), NounExpr("y"), LiteralExpr(1))`)
 
+def testIf():
+    testParse([kwIf, openParen, noun("true"), closeParen,
+            openBrace, literal(1), closeBrace],
+        term`If(NounExpr("true"), LiteralExpr(1), null)`)
+    testParse([kwIf, openParen, noun("true"), closeParen,
+            colon, indent, literal(1), dedent],
+        term`If(NounExpr("true"), LiteralExpr(1), null)`)
+    testParse([kwIf, openParen, noun("true"), closeParen,
+            openBrace, literal(1), closeBrace,
+            kwElse, openBrace, literal(2), closeBrace],
+        term`If(NounExpr("true"), LiteralExpr(1), LiteralExpr(2))`)
+    testParse([kwIf, openParen, noun("true"), closeParen,
+            colon, indent, literal(1), dedent,
+            kwElse, colon, indent, literal(2), dedent],
+        term`If(NounExpr("true"), LiteralExpr(1), LiteralExpr(2))`)
+
+def testTopSeq():
+    testParse([noun("x"), colonEqual, literal(1), semicolon,
+            noun("y")],
+        term`SeqExpr([
+            Assign(NounExpr("x"), LiteralExpr(1)),
+            NounExpr("y")])`)
+    testParse([kwDef, noun("foo"), openParen, closeParen,
+            colon, indent, kwReturn, literal(3), dedent,
+            kwDef, noun("baz"), openParen, closeParen,
+            colon, indent, kwReturn, literal(4), dedent,
+            noun("foo"), openParen, closeParen, plus, noun("baz"), openParen, closeParen],
+        term`SeqExpr([
+            Object(null, FinalPattern(NounExpr("foo"), null), [null],
+                Function([], null, Return(LiteralExpr(3)))),
+            Object(null, FinalPattern(NounExpr("baz"), null), [null],
+                Function([], null, Return(LiteralExpr(4)))),
+            Add(FunctionCallExpr(NounExpr("foo"), []), FunctionCallExpr(NounExpr("baz"), []))])`)
+
+def testMeta():
+    testParse([noun("meta"), dot, noun("getState"), openParen, closeParen],
+        term`Meta("State")`)
+    testParse([noun("meta"), dot, noun("scope"), openParen, closeParen],
+        term`Meta("Scope")`)
+    testParse([noun("meta"), dot, noun("context"), openParen, closeParen],
+        term`Meta("Context")`)
+
 testLiteral()
 testNoun()
 testCollections()
@@ -1053,3 +1166,6 @@ testLambda()
 testWhile()
 testWhen()
 testListComp()
+testIf()
+testTopSeq()
+testMeta()
