@@ -12,15 +12,50 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+# Typhon/Monte compatibility; reference runtime doesn't support the new type
+# guard names yet.
+
 def Bool := boolean
 def Int := int
 def String := str
+
+# Declare some tokens.
+
+def closeParen
+def openBracket
+def openParen
+def colon
+def colonIndent
+def dot
+def indent
+
+# Restitch some tokens into some other tokens. We have only one token of
+# lookahead, so this is a kludge to fix some lookahead situations.
+def restitch(tokens):
+    def rv := [].diverge()
+    def iter := tokens._makeIterator()
+    escape ej:
+        while (true):
+            switch (iter.next(ej)[1]):
+                # Turn [colon, indent] into [colonIndent].
+                match ==colon:
+                    switch (iter.next(ej)[1]):
+                        match ==indent:
+                            rv.push(colonIndent)
+                        match t:
+                            rv.push(colon)
+                            rv.push(t)
+                match t:
+                    rv.push(t)
+    return rv.snapshot()
+
+# The main parser function.
 
 def parseMonte(tokens, ej):
     # An ejection means failed parse. It'll generally come with some sort of
     # error report.
 
-    def iterator := tokens._makeIterator()
+    def iterator := restitch(tokens)._makeIterator()
     var token := null
 
     object monteParser:
@@ -63,9 +98,16 @@ def parseMonte(tokens, ej):
         to patt():
             return monteParser.pattern(0)
 
+        to literal(ej):
+            if (token.label() == "literal"):
+                def rv := token.term()
+                monteParser.next()
+                return rv
+            throw.eject(ej, "Not a literal")
+
         to noun():
             if (token.label() == "noun"):
-                def rv := token.noun()
+                def rv := token.term()
                 monteParser.next()
                 return rv
             monteParser.error(`expected noun, not $token`)
@@ -88,14 +130,6 @@ def parseMonte(tokens, ej):
     # Prime the parser.
     token := monteParser.next()
     return monteParser
-
-# Declare some tokens.
-
-def closeParen
-def openBracket
-def openParen
-def colon
-def dot
 
 # Core stuff.
 
@@ -122,16 +156,25 @@ object token:
         parser.error("Invalid mid-pattern token")
 
 object end extends token:
-    to lbp():
-        return 0
-    to pbp():
-        # Mostly just for testing purposes.
-        return 0
+    to nud(parser):
+        parser.error("End of stream")
+
+    to led(parser, left):
+        parser.error("End of stream")
+
+    to nup(parser):
+        parser.error("End of stream")
+
+    to lep(parser, left):
+        parser.error("End of stream")
 
 def literal(value):
     return object literalToken extends token:
         to label():
             return "literal"
+
+        to term():
+            return term`LiteralExpr($value)`
 
         to nud(parser):
             return term`LiteralExpr($value)`
@@ -171,15 +214,21 @@ object openBrace extends token:
         parser.advance(closeBrace, "Runaway hide expression")
         return term`HideExpr($expr)`
 
-object indent extends token:
+bind indent extends token:
     pass
+
+42
 
 object dedent extends token:
     pass
 
+bind colonIndent extends token:
+    pass
+
+42
+
 def block(parser):
-    if (parser.choose(colon)):
-        parser.advance(indent, "colon implies indented block")
+    if (parser.choose(colonIndent)):
         def body := parser.expr()
         parser.advance(dedent, "didn't dedent after indented block")
         return body
@@ -200,16 +249,10 @@ def guard(parser):
         def expr := parser.expr()
         parser.advance(closeParen, "Guard expression not terminated")
         expr
-    } else {
-        def expr := parser.current().term()
-        parser.next()
-        expr
-    }
+    } else {parser.noun()}
     def ps := if (parser.choose(openBracket)) {
         commaSep(parser, fn p {p.expr()}, closeBracket)
-    } else {
-        []
-    }
+    } else {[]}
     return term`Guard($g, $ps)`
 
 bind colon extends token:
@@ -235,6 +278,9 @@ object backtick extends token:
 
 def noun(value):
     return object nounToken extends token:
+        to _printOn(out):
+            out.print(`<noun($value)>`)
+
         to label():
             return "noun"
 
@@ -248,21 +294,19 @@ def noun(value):
             if (value == "meta"):
                 # It's time for meta! Who likes meta? We like meta! I think.
                 parser.advance(dot, "meta expression should start 'meta.'")
-                def metaNoun := parser.noun()
-                def metaType := switch (metaNoun) {
-                    match =="getState" {"State"}
-                    match =="scope" {"Scope"}
-                    match =="context" {"Context"}
+                def metaType :String := switch (parser.noun()) {
+                    match term`NounExpr("getState")` {"State"}
+                    match term`NounExpr("scope")` {"Scope"}
+                    match term`NounExpr("context")` {"Context"}
+                    match m {parser.error(`Unknown meta action: $m`)}
                 }
-                parser.advance(openParen, "meta expression can't be curried")
+                parser.advance(openParen,
+                    "meta expression can't be curried")
                 parser.advance(closeParen,
                     "meta expression takes no arguments")
                 return term`Meta($metaType)`
 
-            return nounToken.term()
-
-        to pbp():
-            return 5
+            return term`NounExpr($value)`
 
         to nup(parser):
             if (parser.choose(backtick)):
@@ -299,16 +343,18 @@ bind openParen extends token:
         # calls together into method calls.
         if (left =~ term`VerbCurryExpr(@target, @verb)`):
              return term`MethodCallExpr($target, $verb, $args)`
+        # Ditto for sends.
+        if (left =~ term`SendCurryExpr(@target, @verb)`):
+             return term`MethodSendExpr($target, $verb, $args)`
+        # A function is fine too.
         return term`FunctionCallExpr($left, $args)`
 
 42
 
-# Current tentative tower for patterns:
+# Current tower for patterns:
 # 1, na: Such-that.
-# 2, ri: Lists, maps.
-# 3, na: Exact-match.
-# 4, na: QLs.
-# 5, na: Namers.
+# Such-that patterns are the only patterns that bind like this; all other
+# patterns have prefix markers.
 
 object question extends token:
     to pbp():
@@ -409,6 +455,36 @@ def unary(tag, bp :Int):
 def bang := unary("LogicalNot", 13)
 def tilde := unary("BinaryNot", 13)
 
+def augAssign(tag):
+    return object augmentedAssignment extends token:
+        to _printOn(out):
+            out.print(`<augmented assignment $tag>`)
+
+        to lbp():
+            return 3
+
+        to led(parser, left):
+            # Right-associative.
+            def right := parser.expression(3 - 1)
+            return term`AugAssign($tag($left, $right))`
+
+        to nup(parser):
+            parser.error(
+                `Tried to find pattern, but found augmented assignment $tag`)
+
+def ampEqual := augAssign("BinaryAnd")
+def caratEqual := augAssign("BinaryXor")
+def gtGtEqual := augAssign("ShiftRight")
+def ltLtEqual := augAssign("ShiftLeft")
+def minusEqual := augAssign("Subtract")
+def percentEqual := augAssign("Mod")
+def pipeEqual := augAssign("BinaryOr")
+def plusEqual := augAssign("Add")
+def slashEqual := augAssign("Divide")
+def slashSlashEqual := augAssign("FloorDivide")
+def starEqual := augAssign("Multiply")
+def starStarEqual := augAssign("Pow")
+
 # This requires more thought. Lots more thought.
 def nonAssoc := leftBin
 
@@ -484,8 +560,7 @@ object amp extends token:
         return term`BinaryAnd($left, $right)`
 
     to nup(parser):
-        def name := parser.current().term()
-        parser.next()
+        def name := parser.noun()
         if (parser.choose(colon)):
             # Binds can have guards too.
             def g := guard(parser)
@@ -505,8 +580,7 @@ object ampAmp extends token:
         return term`LogicalAnd($left, $right)`
 
     to nup(parser):
-        def name := parser.current().term()
-        parser.next()
+        def name := parser.noun()
         if (parser.choose(colon)):
             # Binds can have guards too.
             def g := guard(parser)
@@ -540,16 +614,89 @@ object kwIf extends token:
 
 # For loops.
 
+object fatArrow extends token:
+    pass
+
+object kwPass extends token:
+    to nud(parser):
+        return term`SeqExpr([])`
+
 object kwIn extends token:
     pass
 
 object kwFor extends token:
-    pass
+    to nud(parser):
+        var keyPatt := parser.patt()
+        def valuePatt := if (parser.choose(fatArrow)) {parser.patt()} else {
+            def rv := keyPatt
+            keyPatt := null
+            rv
+        }
+        parser.advance(kwIn, "for expression needs 'in' keyword here")
+        def iterable := parser.expr()
+        def body := block(parser)
+        return term`For($keyPatt, $valuePatt, $iterable, $body, null)`
 
 # Lists and maps.
 
-object fatArrow extends token:
-    pass
+def innerMapExpr(parser):
+    # If the next token is a fat arrow, then choose an export
+    # expression and continue.
+    if (parser.choose(fatArrow)):
+        # => ...
+        def expr := parser.expr()
+        # => expr
+        return term`MapExprExport($expr)`
+    else:
+        def key := parser.expr()
+        # key ...
+        parser.advance(fatArrow,
+            "Fat arrow expected for map expression")
+        # key => ...
+        def value := parser.expr()
+        # key => value
+        return term`MapExprAssoc($key, $value)`
+
+def innerListPatt(parser):
+    if (parser.choose(fatArrow)):
+        # => patt ...
+        def patt := parser.patt()
+        if (parser.choose(colonEqual)):
+            # => patt := ...
+            def default := parser.expr()
+            # => patt := default
+            return term`MapPatternOptional(MapPatternImport($patt), $default)`
+        # => patt
+        return term`MapPatternRequired(MapPatternImport($patt))`
+    else:
+        escape ej:
+            def expr := if (parser.choose(openParen)) {
+                def rv := parser.expr()
+                parser.advance(closeParen,
+                    "runaway expression inside list/map pattern")
+                rv
+            } else {parser.literal(ej)}
+            # expr ...
+            if (parser.choose(fatArrow)):
+                # expr => ...
+                def patt := parser.patt()
+                # expr => patt ...
+                if (parser.choose(colonEqual)):
+                    # expr => patt := ...
+                    def default := parser.expr()
+                    # expr => patt := default
+                    return term`MapPatternOptional(MapPatternAssoc($expr,
+                            $patt),
+                        $default)`
+                # expr => patt
+                return term`MapPatternRequired(MapPatternAssoc($expr, $patt))`
+            else:
+                # expr
+                return term`SamePattern($expr)`
+        catch _:
+            def patt := parser.patt()
+            # patt
+            return patt
 
 bind openBracket extends token:
     to lbp():
@@ -611,34 +758,19 @@ bind openBracket extends token:
                 return term`MapExpr($args)`
             else:
                 return term`ListExpr($args)`
-
-        # Now, the general two-or-more case.
-        while (!parser.choose(closeBracket)):
+        else if (parser.choose(closeBracket)):
             if (mapMode):
-                # If the next token is a fat arrow, then choose an export
-                # expression and continue.
-                if (parser.choose(fatArrow)):
-                    def expr := parser.expr()
-                    args := args.with(term`MapExprExport($expr)`)
-                else:
-                    def key := parser.expr()
-                    parser.advance(fatArrow,
-                        "Fat arrow expected for map expression")
-                    def value := parser.expr()
-                    args := args.with(term`MapExprAssoc($key, $value)`)
+                return term`MapExpr($args)`
             else:
-                args := args.with(parser.expr())
+                return term`ListExpr($args)`
 
-            # Try to eat a comma. If we can't eat a comma, then there can't be
-            # any more items, so it's time to return. This includes a partial
-            # unroll of the while loop's condition.
-            if (!parser.choose(comma)):
-                if (mapMode):
-                    parser.advance(closeBracket, "Runaway map expression")
-                    return term`MapExpr($args)`
-                else:
-                    parser.advance(closeBracket, "Runaway list expression")
-                    return term`ListExpr($args)`
+        # Use commaSep to vacuum up the remaining elements.
+        if (mapMode):
+            args += commaSep(parser, fn p {innerMapExpr(p)}, closeBracket)
+            return term`MapExpr($args)`
+        else:
+            args += commaSep(parser, fn p {p.expr()}, closeBracket)
+            return term`ListExpr($args)`
 
     to led(parser, left):
         # At current, get expressions only permit lists of arguments, due to
@@ -650,22 +782,54 @@ bind openBracket extends token:
         return term`GetExpr($left, $args)`
 
     to nup(parser):
-        # XXX should also do map patterns
-        def patts := commaSep(parser, fn p {p.patt()}, closeBracket)
-        def tail := if (parser.choose(plus)) {parser.patt()} else {null}
-        return term`ListPattern($patts, $tail)`
+        # Unroll the first argument to figure out whether we're matching a
+        # map or a list.
+        def first := innerListPatt(parser)
+        def mapMode :Bool := switch (first.getTag().getName()) {
+            match =="MapPatternOptional" {true}
+            match =="MapPatternRequired" {true}
+            match _ {false}
+        }
+
+        var patts := [first]
+
+        if (!parser.choose(comma)):
+            parser.advance(closeBracket, "Runaway list/map pattern")
+        else if (!parser.choose(closeBracket)):
+            # More arguments await; commaSep to victory.
+            # XXX these should be differentiated
+            if (mapMode):
+                patts += commaSep(parser, fn p {innerListPatt(p)},
+                    closeBracket)
+            else:
+                patts += commaSep(parser, fn p {innerListPatt(p)},
+                    closeBracket)
+
+        def tail := if (parser.choose(mapMode.pick(pipe, plus))) {
+            parser.patt()
+        }
+        def tag := mapMode.pick("MapPattern", "ListPattern")
+        return term`$tag($patts, $tail)`
 
 42
 
-# And some other uncategorized stuff.
+# Calls and sends.
+
+def extractVerb(parser, t):
+    return switch (t) {
+        match term`LiteralExpr(@s)` {s}
+        match term`NounExpr(@n)` {n}
+        match _ {parser.error("Expected verb")}
+    }
 
 bind dot extends token:
     to lbp():
         return 14
 
     to led(parser, left):
-        var right := parser.expression(15)
-        return term`VerbCurryExpr($left, $right)`
+        def right := parser.expression(15)
+        def verb := extractVerb(parser, right)
+        return term`VerbCurryExpr($left, $verb)`
 
 42
 
@@ -674,8 +838,41 @@ object leftArrow extends token:
         return 13
 
     to led(parser, left):
-        var right := parser.expression(15)
-        return term`SendCurryExpr($left, $right)`
+        def right := parser.expression(15)
+        def verb := extractVerb(parser, right)
+        return term`SendCurryExpr($left, $verb)`
+
+# Object literals.
+
+def script(parser):
+    # XXX methods
+    # XXX matchers
+    return term`Script(null, [], [])`
+
+def completeObject(parser, patt):
+    # XXX extends
+    # XXX as
+    # XXX implements
+    def s := if (parser.choose(colonIndent)) {
+        def rv := script(parser)
+        parser.advance(dedent, "didn't dedent after indented block")
+        rv
+    } else {
+        parser.advance(openBrace, "block body must be inside braces")
+        def rv := script(parser)
+        parser.advance(closeBrace,
+            "runaway block body; expected closing brace")
+        rv
+    }
+    return term`Object(null, $patt, [null], $s)`
+    
+
+object kwObject extends token:
+    to nud(parser):
+        def name := parser.noun()
+        return completeObject(parser, term`FinalPattern($name, null)`)
+
+# patterns.
 
 object kwVia extends token:
     to nup(parser):
@@ -686,9 +883,19 @@ object kwVia extends token:
         return term`ViaPattern($expr, $patt)`
 
 object kwBind extends token:
+    to nud(parser):
+        # Single-noun variable binding.
+        def name := parser.noun()
+        # Check for guard.
+        def g := if (parser.choose(colon)) {guard(parser)}
+        def ej := if (parser.choose(kwExit)) {parser.noun()}
+        parser.advance(colonEqual,
+            "'bind' expressions can only have a single noun")
+        def rvalue := parser.expr()
+        return term`Def(BindPattern($name, $g), $ej, $rvalue)`
+
     to nup(parser):
-        def name := parser.current().term()
-        parser.next()
+        def name := parser.noun()
         if (parser.choose(colon)):
             # Binds can have guards too.
             def g := guard(parser)
@@ -696,9 +903,19 @@ object kwBind extends token:
         return term`BindPattern($name, null)`
 
 object kwVar extends token:
+    to nud(parser):
+        # Single-noun variable binding.
+        def name := parser.noun()
+        # Check for guard.
+        def g := if (parser.choose(colon)) {guard(parser)}
+        def ej := if (parser.choose(kwExit)) {parser.noun()}
+        parser.advance(colonEqual,
+            "'var' expressions can only have a single noun")
+        def rvalue := parser.expr()
+        return term`Def(VarPattern($name, $g), $ej, $rvalue)`
+
     to nup(parser):
-        def name := parser.current().term()
-        parser.next()
+        def name := parser.noun()
         if (parser.choose(colon)):
             # Looks like there's a guard.
             def g := guard(parser)
@@ -776,22 +993,39 @@ object slimArrow extends token:
 object kwWhen extends token:
     to nud(parser):
         parser.advance(openParen, "when objects must be parenthesized")
-        def target := parser.expr()
-        parser.advance(closeParen, "runaway object list in when expression")
+        def args := commaSep(parser, fn p {p.expr()}, closeParen)
         parser.advance(slimArrow, "slim arrow required in when expression")
         # We can't use the block() combinator because when-exprs don't have
         # colons and I don't want to specialize block() for this single case.
-        if (parser.choose(openBrace)):
-            def body := parser.expr()
+        def body := if (parser.choose(openBrace)) {
+            def rv := parser.expr()
             parser.advance(closeBrace,
                 "runaway when expression body; expected closing brace")
-            return term`When([$target], $body, [], null)`
-        else:
+            rv
+        } else {
             parser.advance(indent,
                 "when expression's block must be indented or braced")
-            def body := parser.expr()
+            def rv := parser.expr()
             parser.advance(dedent, "didn't dedent after indented block")
-            return term`When([$target], $body, [], null)`
+            rv
+        }
+        return term`When($args, $body, [], null)`
+
+# Escapes.
+
+object kwCatch extends token:
+    pass
+
+object kwEscape extends token:
+    to nud(parser):
+        def escapePatt := parser.patt()
+        def escapeBlock := block(parser)
+        if (parser.choose(kwCatch)):
+            def catchPatt := parser.patt()
+            def catchBlock := block(parser)
+            return term`Escape($escapePatt, $escapeBlock,
+                $catchPatt, $catchBlock)`
+        return term`Escape($escapePatt, $escapeBlock, null, null)`
 
 # Tests.
 
@@ -844,25 +1078,25 @@ def testBody():
 
 def testCall():
     testParse([noun("x"), dot, noun("y"), openParen, closeParen],
-        term`MethodCallExpr(NounExpr(x), "y", [])`)
+        term`MethodCallExpr(NounExpr("x"), "y", [])`)
     testParse([noun("x"), dot, noun("y")],
-        term`VerbCurryExpr(NounExpr(x), "y")`)
+        term`VerbCurryExpr(NounExpr("x"), "y")`)
     testParse([noun("x"), openParen, closeParen],
-        term`FunctionCallExpr(NounExpr(x), [])`)
+        term`FunctionCallExpr(NounExpr("x"), [])`)
     testParse([openBrace, literal(1), closeBrace, dot, noun("x"), openParen, closeParen],
         term`MethodCallExpr(HideExpr(LiteralExpr(1)), "x", [])`)
     testParse([noun("x"), openParen, noun("a"), comma, noun("b"), closeParen],
-        term`FunctionCallExpr(NounExpr(x), [NounExpr(a), NounExpr(b)])`)
+        term`FunctionCallExpr(NounExpr("x"), [NounExpr("a"), NounExpr("b")])`)
     testParse([noun("x"), dot, noun("foo"), openParen, noun("a"), comma, noun("b"), closeParen],
-        term`MethodCallExpr(NounExpr(x), "foo", [NounExpr(a), NounExpr(b)])`)
+        term`MethodCallExpr(NounExpr("x"), "foo", [NounExpr("a"), NounExpr("b")])`)
     testParse([noun("x"), openParen, noun("a"), comma, noun("b"), closeParen],
-        term`FunctionCallExpr(NounExpr(x), [NounExpr(a), NounExpr(b)])`)
+        term`FunctionCallExpr(NounExpr("x"), [NounExpr("a"), NounExpr("b")])`)
     testParse([noun("x"), leftArrow, openParen, noun("a"), comma, noun("b"), closeParen],
-        term`FunctionSendExpr(NounExpr(x), [NounExpr(a), NounExpr(b)])`)
+        term`FunctionSendExpr(NounExpr("x"), [NounExpr("a"), NounExpr("b")])`)
     testParse([noun("x"), leftArrow, noun("foo"), openParen, noun("a"), comma, noun("b"), closeParen],
-        term`MethodSendExpr(NounExpr(x), "foo", [NounExpr(a), NounExpr(b)])`)
+        term`MethodSendExpr(NounExpr("x"), "foo", [NounExpr("a"), NounExpr("b")])`)
     testParse([noun("x"), leftArrow, noun("foo")],
-        term`SendCurryExpr(NounExpr(x), "foo")`)
+        term`SendCurryExpr(NounExpr("x"), "foo")`)
     testParse([noun("x"), openBracket, noun("a"), comma, noun("b"), closeBracket],
         term`GetExpr(NounExpr("x"), [NounExpr("a"), NounExpr("b")])`)
     testParse([noun("x"), openBracket, noun("a"), comma, noun("b"), closeBracket, dot, noun("foo"), openParen, noun("c"), closeParen],
@@ -906,8 +1140,9 @@ def testPattern():
         null)`)
     testPatt([openBracket, literal("a"), fatArrow, noun("b"), closeBracket,
             pipe, noun("c")],
-        term`MapPattern([MapPatternRequired(MapPatternAssoc, LiteralExpr("a"), FinalPattern(NounExpr("b"), null))],
-        FinalPattern(NounExpr("c"), null))`)
+        term`MapPattern([
+                MapPatternRequired(MapPatternAssoc(LiteralExpr("a"), FinalPattern(NounExpr("b"), null)))],
+            FinalPattern(NounExpr("c"), null))`)
     testPatt([noun("_")], term`IgnorePattern(null)`)
     testPatt([noun("__foo")], term`FinalPattern(NounExpr("__foo"), null)`)
     testPatt([noun("a"), colon, noun("int")],
@@ -941,7 +1176,8 @@ def testMatch():
         term`MatchBind(NounExpr("x"),
             ListPattern([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], null))`)
     testParse([noun("x"), bangTilde, noun("y"), colon, noun("String")],
-        term`Mismatch(NounExpr("x"), FinalPattern(NounExpr("y"), Guard(NounExpr("String"), [])))`)
+        term`Mismatch(NounExpr("x"),
+            FinalPattern(NounExpr("y"), Guard(NounExpr("String"), [])))`)
 
 def testOperators():
     testParse([noun("x"), starStar, minus, noun("y")],
@@ -1020,28 +1256,98 @@ def testAssign():
     #self.assertEqual(parse("x foo= (y, z)"), ["VerbAssign", "foo", ["NounExpr", "x"], [["NounExpr", "y"], ["NounExpr", "z"]]])
     #self.assertEqual(parse("x[i] := y"), ["Assign", ["GetExpr", ["NounExpr", "x"], [["NounExpr", "i"]]], ["NounExpr", "y"]])
     #self.assertEqual(parse("x(i) := y"), ["Assign", ["FunctionCallExpr", ["NounExpr", "x"], [["NounExpr", "i"]]], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x += y"), ["AugAssign", "Add", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x -= y"), ["AugAssign", "Subtract", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x *= y"), ["AugAssign", "Multiply", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x /= y"), ["AugAssign", "Divide", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x //= y"), ["AugAssign", "FloorDivide", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x %= y"), ["AugAssign", "Mod", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x **= y"), ["AugAssign", "Pow", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x >>= y"), ["AugAssign", "ShiftRight", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x <<= y"), ["AugAssign", "ShiftLeft", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x &= y"), ["AugAssign", "BinaryAnd", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x |= y"), ["AugAssign", "BinaryOr", ["NounExpr", "x"], ["NounExpr", "y"]])
-    #self.assertEqual(parse("x ^= y"), ["AugAssign", "BinaryXor", ["NounExpr", "x"], ["NounExpr", "y"]])
+    testParse([noun("x"), plusEqual, noun("y")],
+        term`AugAssign(Add(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), minusEqual, noun("y")],
+        term`AugAssign(Subtract(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), starEqual, noun("y")],
+        term`AugAssign(Multiply(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), slashEqual, noun("y")],
+        term`AugAssign(Divide(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), slashSlashEqual, noun("y")],
+        term`AugAssign(FloorDivide(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), percentEqual, noun("y")],
+        term`AugAssign(Mod(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), starStarEqual, noun("y")],
+        term`AugAssign(Pow(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), gtGtEqual, noun("y")],
+        term`AugAssign(ShiftRight(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), ltLtEqual, noun("y")],
+        term`AugAssign(ShiftLeft(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), ampEqual, noun("y")],
+        term`AugAssign(BinaryAnd(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), pipeEqual, noun("y")],
+        term`AugAssign(BinaryOr(NounExpr("x"), NounExpr("y")))`)
+    testParse([noun("x"), caratEqual, noun("y")],
+        term`AugAssign(BinaryXor(NounExpr("x"), NounExpr("y")))`)
 
 def testDef():
     testParse([kwDef, noun("x"), colonEqual, literal(1)],
         term`Def(FinalPattern(NounExpr("x"), null), null, LiteralExpr(1))`)
     testParse([kwDef, noun("x"), kwExit, noun("e"), colonEqual, literal(1)],
         term`Def(FinalPattern(NounExpr("x"), null), NounExpr("e"), LiteralExpr(1))`)
+    testParse([kwDef, openBracket, noun("a"), comma, noun("b"), closeBracket,
+            colonEqual, literal(1)],
+        term`Def(ListPattern([FinalPattern(NounExpr("a"), null),
+                FinalPattern(NounExpr("b"), null)], null),
+            null, LiteralExpr(1))`)
     #self.assertEqual(parse("def [a, b] := 1"), ["Def", ["ListPattern", [["FinalPattern", ["NounExpr", "a"], None],["FinalPattern", ["NounExpr", "b"], None]], None], None, ["LiteralExpr", 1]])
     #self.assertEqual(parse("def x"), ["Forward", ["NounExpr", "x"]])
-    #self.assertEqual(parse("var x := 1"), ["Def", ["VarPattern", ["NounExpr", "x"], None], None, ["LiteralExpr", 1]])
-    #self.assertEqual(parse("bind x := 1"), ["Def", ["BindPattern", ["NounExpr", "x"], None], None, ["LiteralExpr", 1]])
+    testParse([kwVar, noun("x"), colonEqual, literal(1)],
+        term`Def(VarPattern(NounExpr("x"), null), null, LiteralExpr(1))`)
+    testParse([kwBind, noun("x"), colonEqual, literal(1)],
+        term`Def(BindPattern(NounExpr("x"), null), null, LiteralExpr(1))`)
+
+def testObject():
+    testParse([kwObject, noun("foo"), openBrace, closeBrace],
+        term`Object(null, FinalPattern(NounExpr("foo"), null)), [null],
+            Script(null, [], []))`)
+    testParse([kwObject, noun("foo"), colonIndent, kwPass, dedent],
+        term`Object(null, FinalPattern(NounExpr("foo"), null)), [null],
+            Script(null, [], []))`)
+    testParse([kwObject, noun("_"), openBrace, closeBrace],
+        term`Object(null, IgnorePattern(null)), [null],
+            Script(null, [], []))`)
+    testParse([kwObject, noun("_"), colonIndent, kwPass, dedent],
+        term`Object(null, IgnorePattern(null)), [null],
+            Script(null, [], []))`)
+    #self.assertEqual(parse("object bind foo {}"), ["Object", None, ["BindPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], []]])
+    #self.assertEqual(parse("object bind foo:\n pass"), ["Object", None, ["BindPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], []]])
+    #self.assertEqual(parse("object var foo {}"), ["Object", None, ["VarPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], []]])
+    #self.assertEqual(parse("object var foo:\n pass"), ["Object", None, ["VarPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], []]])
+    #self.assertEqual(parse("bind foo {}"), ["Object", None, ["BindPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], []]])
+    #self.assertEqual(parse("bind foo:\n pass"), ["Object", None, ["BindPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], []]])
+    #self.assertEqual(parse("var foo {}"), ["Object", None, ["VarPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], []]])
+    #self.assertEqual(parse("var foo:\n pass"), ["Object", None, ["VarPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], []]])
+    #self.assertEqual(parse("/** yes */ object foo {}"),  ["Object", "yes", ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], []]])
+    #self.assertEqual(parse("object foo implements A {}"),  ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None],  [None, ["NounExpr", "A"]], ["Script", None, [], []]])
+    #self.assertEqual(parse("object foo implements A:\n pass"),  ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None, ["NounExpr", "A"]], ["Script", None, [], []]])
+    #self.assertEqual(parse("object foo extends B {}"),  ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", ["NounExpr", "B"], [], []]])
+    #self.assertEqual(parse("object foo extends B:\n pass"),  ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", ["NounExpr", "B"], [], []]])
+    #self.assertEqual(parse("object foo extends B.get() {}"),  ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", ["MethodCallExpr", ["NounExpr", "B"], "get", []], [], []]])
+    #self.assertEqual(parse("object foo extends B implements A {}"),  ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None],  [None, ["NounExpr", "A"]], ["Script", ["NounExpr", "B"], [], []]])
+    #self.assertEqual(parse("object foo extends B implements A:\n pass"),  ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None],  [None, ["NounExpr", "A"]], ["Script", ["NounExpr", "B"], [], []]])
+
+    #self.assertEqual(parse("object foo as X implements A, B {}"),  ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [["NounExpr", "X"], ["NounExpr", "A"], ["NounExpr", "B"]], ["Script", None, [], []]])
+    #self.assertEqual(parse("object foo as X implements A, B:\n pass"),  ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [["NounExpr", "X"], ["NounExpr", "A"], ["NounExpr", "B"]], ["Script", None, [], []]])
+    #self.assertEqual(parse("object foo {to baz(x) {1}}"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["To", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo:\n to baz(x):\n  1"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["To", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo {/** woot */ to baz(x) {1}}"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["To", "woot", "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo:\n /** woot */\n to baz(x):\n  1"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["To", "woot", "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo {\nto baz(x) {\n1}}"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["To", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo {\nto baz() {\n1}}"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["To", None, "baz", [], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo {method baz(x) {1}}"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["Method", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo:\n method baz(x):\n  1"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["Method", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo {match [verb, args] {1}}"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], [["Matcher", ["ListPattern", [["FinalPattern", ["NounExpr", "verb"], None], ["FinalPattern", ["NounExpr", "args"], None]], None], ["LiteralExpr", 1]]]]])
+    #self.assertEqual(parse("object foo:\n match [verb, args]:\n  1"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [], [["Matcher", ["ListPattern", [["FinalPattern", ["NounExpr", "verb"], None], ["FinalPattern", ["NounExpr", "args"], None]], None], ["LiteralExpr", 1]]]]])
+    #self.assertEqual(parse("def foo(x) {}"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Function", [["FinalPattern", ["NounExpr", "x"], None]], None, ["SeqExpr", []]]])
+    #self.assertEqual(parse("def foo(x):\n pass"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Function", [["FinalPattern", ["NounExpr", "x"], None]], None, ["SeqExpr", []]]])
+    #self.assertEqual(parse("bind foo {method baz(x) {1}}"), ["Object", None, ["BindPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["Method", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("bind foo:\n method baz(x):\n  1\n"), ["Object", None, ["BindPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["Method", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("var foo {method baz(x) {1}}"), ["Object", None, ["VarPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["Method", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("var foo:\n method baz(x):\n  1"), ["Object", None, ["VarPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["Method", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], None, ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo {to baz(x) :any {1}}"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["To", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], ["Guard", ["NounExpr", "any"], []], ["LiteralExpr", 1]]], []]])
+    #self.assertEqual(parse("object foo:\n to baz(x) :any:\n  1"), ["Object", None, ["FinalPattern", ["NounExpr", "foo"], None], [None], ["Script", None, [["To", None, "baz", [["FinalPattern", ["NounExpr", "x"], None]], ["Guard", ["NounExpr", "any"], []], ["LiteralExpr", 1]]], []]])
 
 def testEjector():
     testParse([kwReturn, noun("x"), plus, noun("y")],
@@ -1090,8 +1396,12 @@ def testWhen():
     #    self.assertEqual(parse("when (d) ->\n 1\ncatch p:\n 2"), ["When", [["NounExpr", "d"]], ["LiteralExpr", 1], [[["FinalPattern", ["NounExpr", "p"], None], ["LiteralExpr", 2]]], None])
     #    self.assertEqual(parse("when (d) -> {1} finally {3}"), ["When", [["NounExpr", "d"]], ["LiteralExpr", 1], [], ["LiteralExpr", 3]])
     #    self.assertEqual(parse("when (d) ->\n 1\nfinally:\n 3"), ["When", [["NounExpr", "d"]], ["LiteralExpr", 1], [], ["LiteralExpr", 3]])
-    #    self.assertEqual(parse("when (e, d) -> {1}"), ["When", [["NounExpr", "e"], ["NounExpr", "d"]], ["LiteralExpr", 1], [], None])
-    #    self.assertEqual(parse("when (e, d) ->\n 1"), ["When", [["NounExpr", "e"], ["NounExpr", "d"]], ["LiteralExpr", 1], [], None])
+    testParse([kwWhen, openParen, noun("e"), comma, noun("d"), closeParen,
+            slimArrow, openBrace, literal(1), closeBrace],
+        term`When([NounExpr("e"), NounExpr("d")], LiteralExpr(1), [], null)`)
+    testParse([kwWhen, openParen, noun("e"), comma, noun("d"), closeParen,
+            slimArrow, indent, literal(1), dedent],
+        term`When([NounExpr("e"), NounExpr("d")], LiteralExpr(1), [], null)`)
 
 def testListComp():
     testParse([openBracket, literal(1),
@@ -1108,6 +1418,23 @@ def testListComp():
             kwIf, noun("y"), closeBracket],
         term`ListComp(null, FinalPattern(NounExpr("v"), null), NounExpr("x"), NounExpr("y"), LiteralExpr(1))`)
 
+def testFor():
+    testParse([kwFor, noun("k"), fatArrow, noun("v"), kwIn, noun("x"),
+            openBrace, closeBrace],
+        term`For(FinalPattern(NounExpr("k"), null),
+            FinalPattern(NounExpr("v"), null),
+            NounExpr("x"), SeqExpr([]), null)`)
+    testParse([kwFor, noun("k"), fatArrow, noun("v"), kwIn, noun("x"),
+            colon, indent, kwPass, dedent],
+        term`For(FinalPattern(NounExpr("k"), null),
+            FinalPattern(NounExpr("v"), null),
+            NounExpr("x"), SeqExpr([]), null)`)
+
+    #     self.assertEqual(parse("for v in x {}"), ["For", None, ["FinalPattern", ["NounExpr", "v"], None], ["NounExpr", "x"], ["SeqExpr", []], [None, None]])
+    #     self.assertEqual(parse("for v in x:\n pass"), ["For", None, ["FinalPattern", ["NounExpr", "v"], None], ["NounExpr", "x"], ["SeqExpr", []], [None, None]])
+    #     self.assertEqual(parse("for v in x {1} catch p {2}"), ["For", None, ["FinalPattern", ["NounExpr", "v"], None], ["NounExpr", "x"], ["LiteralExpr", 1], [["FinalPattern", ["NounExpr", "p"], None], ["LiteralExpr", 2]]])
+    #     self.assertEqual(parse("for v in x:\n 1\ncatch p:\n 2"), ["For", None, ["FinalPattern", ["NounExpr", "v"], None], ["NounExpr", "x"], ["LiteralExpr", 1], [["FinalPattern", ["NounExpr", "p"], None], ["LiteralExpr", 2]]])
+
 def testIf():
     testParse([kwIf, openParen, noun("true"), closeParen,
             openBrace, literal(1), closeBrace],
@@ -1123,6 +1450,22 @@ def testIf():
             colon, indent, literal(1), dedent,
             kwElse, colon, indent, literal(2), dedent],
         term`If(NounExpr("true"), LiteralExpr(1), LiteralExpr(2))`)
+
+def testEscape():
+    testParse([kwEscape, noun("e"), openBrace, literal(1), closeBrace],
+        term`Escape(FinalPattern(NounExpr("e"), null), LiteralExpr(1),
+            null, null)`)
+    testParse([kwEscape, noun("e"), openBrace, literal(1), closeBrace,
+            kwCatch, noun("p"), openBrace, literal(2), closeBrace],
+        term`Escape(FinalPattern(NounExpr("e"), null), LiteralExpr(1),
+            FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
+    testParse([kwEscape, noun("e"), colon, indent, literal(1), dedent],
+        term`Escape(FinalPattern(NounExpr("e"), null), LiteralExpr(1),
+            null, null)`)
+    testParse([kwEscape, noun("e"), colon, indent, literal(1), dedent,
+            kwCatch, noun("p"), colon, indent, literal(2), dedent],
+        term`Escape(FinalPattern(NounExpr("e"), null), LiteralExpr(1),
+            FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
 
 def testTopSeq():
     testParse([noun("x"), colonEqual, literal(1), semicolon,
@@ -1166,6 +1509,8 @@ testLambda()
 testWhile()
 testWhen()
 testListComp()
+testFor()
 testIf()
+testEscape()
 testTopSeq()
 testMeta()
