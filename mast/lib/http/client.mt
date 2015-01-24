@@ -26,7 +26,7 @@ def bytesToStatus(bytes :Bytes) :Int:
     return rv
 
 def testBytesToStatus(assert):
-    assert.equal(bytesToStatus([50, 48, 48]), 200)
+    assert.equal(bytesToStatus(b`200`), 200)
 
 unittest([
     testBytesToStatus,
