@@ -15,7 +15,6 @@
 from rpython.rlib.rthread import ThreadLocalReference
 
 from typhon.errors import UserException
-from typhon.objects.refs import Promise, makePromise, resolution
 
 
 class Vat(object):
@@ -36,7 +35,8 @@ class Vat(object):
         return u"<vat (%d pending)>" % (len(self._pending),)
 
     def send(self, target, verb, args):
-        promise, resolver = makePromise(self)
+        from typhon.objects.refs import makePromise
+        promise, resolver = makePromise()
         self._pending.append((resolver, target, verb, args))
         return promise
 
@@ -47,6 +47,8 @@ class Vat(object):
         return len(self._pending) != 0
 
     def takeTurn(self):
+        from typhon.objects.refs import Promise, resolution
+
         resolver, target, verb, args = self._pending.pop(0)
 
         # If the target is a promise, then we should send to it instead of

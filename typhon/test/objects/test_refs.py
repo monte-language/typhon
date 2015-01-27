@@ -23,7 +23,7 @@ from typhon.objects.refs import isResolved, makePromise, resolution
 
 
 def makeNear(o):
-    p, r = makePromise(None)
+    p, r = makePromise()
     r.resolve(o)
     return p
 
@@ -34,15 +34,15 @@ class TestIsResolved(TestCase):
         self.assertTrue(isResolved(IntObject(42)))
 
     def testSwitchableBecomesResolved(self):
-        p, r = makePromise(None)
+        p, r = makePromise()
         self.assertFalse(isResolved(p))
 
         r.resolve(IntObject(42))
         self.assertTrue(isResolved(p))
 
     def testSwitchableChains(self):
-        p, r = makePromise(None)
-        p2, r2 = makePromise(None)
+        p, r = makePromise()
+        p2, r2 = makePromise()
 
         r.resolve(p2)
         self.assertFalse(isResolved(p))

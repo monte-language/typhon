@@ -27,7 +27,6 @@ from typhon.objects.collections import ConstMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.imports import addImportToScope
-from typhon.objects.vats import vatScope
 from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
 from typhon.simple import simpleScope
@@ -50,7 +49,6 @@ def jitPolicy(driver):
 
 def loadPrelude(config, recorder, vat):
     scope = simpleScope()
-    scope.update(vatScope(vat))
     env = Environment(finalize(scope), None, len(scope))
 
     term = obtainModule(rjoin(config.libraryPath, "prelude.ty"), scope.keys(),
@@ -107,7 +105,6 @@ def entryPoint(argv):
     basedir = rabspath(dirname(config.argv[1]))
     scope = simpleScope()
     scope.update(prelude)
-    scope.update(vatScope(vat))
     addImportToScope(config.libraryPath, scope, recorder)
     env = Environment(finalize(scope), None, len(scope))
 

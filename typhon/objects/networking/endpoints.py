@@ -21,7 +21,8 @@ from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapInt, unwrapStr
 from typhon.objects.networking.sockets import Socket, SocketDrain
 from typhon.objects.refs import makePromise
-from typhon.objects.root import Object
+from typhon.objects.root import Object, runnable
+from typhon.vats import currentVat
 
 
 CONNECT_0 = getAtom(u"connect", 0)
@@ -34,21 +35,21 @@ class TCP4ClientPending(object):
 
     socket = None
 
-    def __init__(self, vat, host, port):
-        self.vat = vat
+    def __init__(self, host, port):
         self.host = host
         self.port = port
 
-        self.fount, self.fountResolver = makePromise(vat)
-        self.drain, self.drainResolver = makePromise(vat)
+        self.fount, self.fountResolver = makePromise()
+        self.drain, self.drainResolver = makePromise()
 
     def createSocket(self):
         # Hint: The following line is where GAI is called.
         # XXX this should be IDNA, not UTF-8.
         addr = INETAddress(self.host.encode("utf-8"), self.port)
-        self.socket = Socket(self.vat, RSocket())
-        # XXX demeter violation?
-        self.vat._reactor.addSocket(self.socket)
+        self.socket = Socket(RSocket())
+        # XXX demeter violation! Definitely.
+        vat = currentVat.get()
+        vat._reactor.addSocket(self.socket)
         self.socket.connect(addr, self)
 
     def failSocket(self, reason):
@@ -63,8 +64,7 @@ class TCP4ClientPending(object):
 
 class TCP4ClientEndpoint(Object):
 
-    def __init__(self, vat, host, port):
-        self.vat = vat
+    def __init__(self, host, port):
         self.host = host
         self.port = port
 
@@ -78,32 +78,22 @@ class TCP4ClientEndpoint(Object):
         raise Refused(self, atom, args)
 
     def connect(self):
-        pending = TCP4ClientPending(self.vat, self.host, self.port)
-        self.vat.afterTurn(pending.createSocket)
+        pending = TCP4ClientPending(self.host, self.port)
+        vat = currentVat.get()
+        vat.afterTurn(pending.createSocket)
         return ConstList([pending.fount, pending.drain])
 
 
-class MakeTCP4ClientEndpoint(Object):
-
-    def __init__(self, vat):
-        self.vat = vat
-
-    def toString(self):
-        return u"<makeTCP4ClientEndpoint>"
-
-    def recv(self, atom, args):
-        if atom is RUN_2:
-            host = unwrapStr(args[0])
-            port = unwrapInt(args[1])
-            return TCP4ClientEndpoint(self.vat, host, port)
-
-        raise Refused(self, atom, args)
+@runnable(RUN_2)
+def makeTCP4ClientEndpoint(args):
+    host = unwrapStr(args[0])
+    port = unwrapInt(args[1])
+    return TCP4ClientEndpoint(host, port)
 
 
 class TCP4ServerEndpoint(Object):
 
-    def __init__(self, vat, port):
-        self.vat = vat
+    def __init__(self, port):
         self.port = port
 
     def toString(self):
@@ -116,9 +106,10 @@ class TCP4ServerEndpoint(Object):
         raise Refused(self, atom, args)
 
     def listen(self, handler):
-        socket = Socket(self.vat, RSocket())
-        # XXX demeter violation?
-        self.vat._reactor.addSocket(socket)
+        socket = Socket(RSocket())
+        # XXX demeter violation!
+        vat = currentVat.get()
+        vat._reactor.addSocket(socket)
         # XXX this shouldn't block, but not guaranteed
         socket.listen(self.port, handler)
 
@@ -126,17 +117,7 @@ class TCP4ServerEndpoint(Object):
         return NullObject
 
 
-class MakeTCP4ServerEndpoint(Object):
-
-    def __init__(self, vat):
-        self.vat = vat
-
-    def toString(self):
-        return u"<makeTCP4ServerEndpoint>"
-
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            port = unwrapInt(args[0])
-            return TCP4ServerEndpoint(self.vat, port)
-
-        raise Refused(self, atom, args)
+@runnable(RUN_1)
+def makeTCP4ServerEndpoint(args):
+    port = unwrapInt(args[0])
+    return TCP4ServerEndpoint(port)

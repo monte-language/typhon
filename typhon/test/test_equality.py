@@ -27,11 +27,11 @@ class TestIsSettled(TestCase):
         self.assertTrue(isSettled(i))
 
     def testPromise(self):
-        p, r = makePromise(None)
+        p, r = makePromise()
         self.assertFalse(isSettled(p))
 
     def testPromiseResolved(self):
-        p, r = makePromise(None)
+        p, r = makePromise()
         r.resolve(IntObject(42))
         self.assertTrue(isSettled(p))
 
@@ -86,17 +86,17 @@ class TestOptSame(TestCase):
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testRefEqualityReflexive(self):
-        p, r = makePromise(None)
+        p, r = makePromise()
         self.assertEqual(optSame(p, p), EQUAL)
 
     def testRefEquality(self):
-        first, r = makePromise(None)
-        second, r = makePromise(None)
+        first, r = makePromise()
+        second, r = makePromise()
         self.assertEqual(optSame(first, second), NOTYET)
 
     def testRefEqualitySettled(self):
-        first, r = makePromise(None)
+        first, r = makePromise()
         r.resolve(IntObject(42))
-        second, r = makePromise(None)
+        second, r = makePromise()
         r.resolve(IntObject(42))
         self.assertEqual(optSame(first, second), EQUAL)

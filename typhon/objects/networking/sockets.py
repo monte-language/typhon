@@ -21,6 +21,7 @@ from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, unwrapInt
 from typhon.objects.root import Object
+from typhon.vats import currentVat
 
 
 CLOSE_0 = getAtom(u"close", 0)
@@ -46,8 +47,7 @@ class Socket(object):
     _connectHandler = None
     _listener = None
 
-    def __init__(self, vat, rsocket):
-        self._vat = vat
+    def __init__(self, rsocket):
         self.rsock = rsocket
         self.fd = self.rsock.fd
 
@@ -61,7 +61,7 @@ class Socket(object):
         return bool(self._outbound) or self._connectHandler is not None
 
     def createFount(self):
-        fount = SocketFount(self._vat)
+        fount = SocketFount()
         self._founts.append(fount)
         return fount
 
@@ -99,9 +99,10 @@ class Socket(object):
         # instead accept and spin off a new connection.
         if self._listener is not None:
             fd, _ = self.rsock.accept()
-            sock = Socket(self._vat, RSocket(fd=fd))
-            # XXX demeter
-            self._vat._reactor.addSocket(sock)
+            sock = Socket(RSocket(fd=fd))
+            # XXX demeter!
+            vat = currentVat.get()
+            vat._reactor.addSocket(sock)
             self._listener.call(u"run", [sock.createFount(),
                                          SocketDrain(sock)])
             return
@@ -200,9 +201,6 @@ class SocketFount(Object):
 
     _drain = None
 
-    def __init__(self, vat):
-        self._vat = vat
-
     def toString(self):
         return u"<SocketFount>"
 
@@ -236,7 +234,8 @@ class SocketFount(Object):
     def flush(self):
         if not self.pauses and self._drain is not None:
             rv = [IntObject(ord(byte)) for byte in self.buf]
-            self._vat.sendOnly(self._drain, u"receive", [ConstList(rv)])
+            vat = currentVat.get()
+            vat.sendOnly(self._drain, u"receive", [ConstList(rv)])
             self.buf = ""
 
     def terminate(self):

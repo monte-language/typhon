@@ -14,25 +14,37 @@
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException
-from typhon.objects.collections import ConstList, ConstMap
+from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
-from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
+from typhon.objects.data import (CharObject, DoubleObject, IntObject,
+                                 StrObject, unwrapInt, unwrapStr)
 from typhon.objects.ejectors import throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.guards import predGuard
 from typhon.objects.iteration import loop
+from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
+                                                 makeTCP4ServerEndpoint)
+from typhon.objects.refs import RefOps, UnconnectedRef
 from typhon.objects.root import Object, runnable
 from typhon.objects.slots import Binding
 from typhon.objects.tests import UnitTest
+from typhon.vats import currentVat
 
 
-VALUEMAKER_1 = getAtom(u"valueMaker", 1)
-MATCHMAKER_1 = getAtom(u"matchMaker", 1)
+BROKEN_0 = getAtom(u"broken", 0)
+CALL_3 = getAtom(u"call", 3)
+EJECT_2 = getAtom(u"eject", 2)
+FAILURELIST_1 = getAtom(u"failureList", 1)
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
+MATCHMAKER_1 = getAtom(u"matchMaker", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
-EJECT_2 = getAtom(u"eject", 2)
+SENDONLY_3 = getAtom(u"sendOnly", 3)
+SEND_3 = getAtom(u"send", 3)
 SUBSTITUTE_1 = getAtom(u"substitute", 1)
+TOQUOTE_1 = getAtom(u"toQuote", 1)
+TOSTRING_1 = getAtom(u"toString", 1)
+VALUEMAKER_1 = getAtom(u"valueMaker", 1)
 
 
 @predGuard
@@ -131,6 +143,68 @@ def slotToBinding(args):
     return Binding(specimen)
 
 
+# XXX could probably move to prelude now?
+class BooleanFlow(Object):
+
+    def toString(self):
+        return u"<booleanFlow>"
+
+    def recv(self, atom, args):
+        if atom is BROKEN_0:
+            # broken/*: Create an UnconnectedRef.
+            return self.broken()
+
+        if atom is FAILURELIST_1:
+            length = unwrapInt(args[0])
+            refs = [self.broken()] * length
+            return ConstList([wrapBool(False)] + refs)
+
+        raise Refused(self, atom, args)
+
+    def broken(self):
+        return UnconnectedRef(u"Boolean flow expression failed")
+
+
+class MObject(Object):
+    """
+    Miscellaneous vat management and quoting services.
+    """
+
+    def toString(self):
+        return u"<M>"
+
+    def recv(self, atom, args):
+        if atom is CALL_3:
+            target = args[0]
+            sendVerb = unwrapStr(args[1])
+            sendArgs = unwrapList(args[2])
+            return target.call(sendVerb, sendArgs)
+
+        if atom is SENDONLY_3:
+            target = args[0]
+            sendVerb = unwrapStr(args[1])
+            sendArgs = unwrapList(args[2])
+            # Signed, sealed, delivered, I'm yours.
+            vat = currentVat.get()
+            return vat.sendOnly(target, sendVerb, sendArgs)
+
+        if atom is SEND_3:
+            target = args[0]
+            sendVerb = unwrapStr(args[1])
+            sendArgs = unwrapList(args[2])
+            # Signed, sealed, delivered, I'm yours.
+            vat = currentVat.get()
+            return vat.send(target, sendVerb, sendArgs)
+
+        if atom is TOQUOTE_1:
+            return StrObject(args[0].toQuote())
+
+        if atom is TOSTRING_1:
+            return StrObject(args[0].toString())
+
+        raise Refused(self, atom, args)
+
+
 def simpleScope():
     return {
         u"null": NullObject,
@@ -148,6 +222,9 @@ def simpleScope():
         u"boolean": boolGuard(),
         u"int": intGuard(),
 
+        u"M": MObject(),
+        u"Ref": RefOps(),
+        u"__booleanFlow": BooleanFlow(),
         u"__equalizer": Equalizer(),
         u"__loop": loop(),
         u"__makeList": MakeList(),
@@ -158,4 +235,7 @@ def simpleScope():
         u"traceln": TraceLn(),
 
         u"unittest": UnitTest(),
+
+        u"makeTCP4ClientEndpoint": makeTCP4ClientEndpoint(),
+        u"makeTCP4ServerEndpoint": makeTCP4ServerEndpoint(),
     }

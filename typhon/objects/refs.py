@@ -20,6 +20,7 @@ from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object
+from typhon.vats import currentVat
 
 
 class RefState(object):
@@ -42,16 +43,16 @@ _WHENBROKEN_1 = getAtom(u"_whenBroken", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 
-def makePromise(vat):
-    buf = MessageBuffer(vat)
-    sref = SwitchableRef(BufferingRef(buf, vat), vat)
-    return sref, LocalResolver(vat, sref, buf)
+def makePromise():
+    buf = MessageBuffer()
+    sref = SwitchableRef(BufferingRef(buf))
+    return sref, LocalResolver(sref, buf)
 
 
-def _toRef(o, vat):
+def _toRef(o):
     if isinstance(o, Promise):
         return o
-    return NearRef(o, vat)
+    return NearRef(o)
 
 
 def resolution(o):
@@ -71,9 +72,6 @@ class RefOps(Object):
     """
     Public functions for ref manipulation. Exposed in safescope as 'Ref'.
     """
-
-    def __init__(self, vat):
-        self._vat = vat
 
     def toString(self):
         return u"<Ref>"
@@ -116,11 +114,11 @@ class RefOps(Object):
         raise Refused(self, atom, args)
 
     def promise(self):
-        p, r = makePromise(self._vat)
+        p, r = makePromise()
         return ConstList([p, r])
 
     def broken(self, problem):
-        return UnconnectedRef(problem, self._vat)
+        return UnconnectedRef(problem)
 
     def optBroken(self, optProblem):
         if optProblem is NullObject:
@@ -166,26 +164,28 @@ class RefOps(Object):
         return self.isEventual(ref) and self.isResolved(ref)
 
     def whenResolved(self, o, callback):
-        p, r = makePromise(self._vat)
-        self._vat.sendOnly(o, u"_whenMoreResolved",
-                [WhenResolvedReactor(callback, o, r, self._vat)])
+        p, r = makePromise()
+        vat = currentVat.get()
+        vat.sendOnly(o, u"_whenMoreResolved",
+                [WhenResolvedReactor(callback, o, r)])
         return p
 
     def whenResolvedOnly(self, o, callback):
-        self._vat.sendOnly(o, u"_whenMoreResolved",
-                [WhenResolvedReactor(callback, o, None, self._vat)])
-        return NullObject
+        vat = currentVat.get()
+        return vat.sendOnly(o, u"_whenMoreResolved",
+                [WhenResolvedReactor(callback, o, None)])
 
     def whenBroken(self, o, callback):
-        p, r = makePromise(self._vat)
-        self._vat.sendOnly(o, u"_whenMoreResolved",
-                [WhenBrokenReactor(callback, o, r, self._vat)])
+        p, r = makePromise()
+        vat = currentVat.get()
+        vat.sendOnly(o, u"_whenMoreResolved",
+                [WhenBrokenReactor(callback, o, r)])
         return p
 
     def whenBrokenOnly(self, o, callback):
-        return self._vat.sendOnly(o, u"_whenMoreResolved",
-                [WhenBrokenReactor(callback, o, None, self._vat)])
-        return NullObject
+        vat = currentVat.get()
+        return vat.sendOnly(o, u"_whenMoreResolved",
+                [WhenBrokenReactor(callback, o, None)])
 
     def isDeepFrozen(self, o):
         # XXX
@@ -201,11 +201,10 @@ class RefOps(Object):
 
 class WhenBrokenReactor(Object):
 
-    def __init__(self, callback, ref, resolver, vat):
+    def __init__(self, callback, ref, resolver):
         self._cb = callback
         self._ref = ref
         self._resolver = resolver
-        self._vat = vat
 
     def toString(self):
         return u"<whenBrokenReactor>"
@@ -216,14 +215,11 @@ class WhenBrokenReactor(Object):
                 return NullObject
 
             if self._ref.state() is EVENTUAL:
-                self._vat.sendOnly(self._ref, u"_whenMoreResolved", [self])
+                vat = currentVat.get()
+                vat.sendOnly(self._ref, u"_whenMoreResolved", [self])
             elif self._ref.state() is BROKEN:
-                try:
-                    outcome = self._cb.call(u"run", [self._ref])
-                except Exception, e:
-                    # XXX reify and raise?
-                    # outcome = e
-                    raise
+                # XXX this could raise; we might need to reflect to user
+                outcome = self._cb.call(u"run", [self._ref])
 
                 if self._resolver is not None:
                     self._resolver.resolve(outcome)
@@ -236,11 +232,10 @@ class WhenResolvedReactor(Object):
 
     done = False
 
-    def __init__(self, callback, ref, resolver, vat):
+    def __init__(self, callback, ref, resolver):
         self._cb = callback
-        self._ref = _toRef(ref, vat)
+        self._ref = _toRef(ref)
         self._resolver = resolver
-        self._vat = vat
 
     def toString(self):
         return u"<whenResolvedReactor>"
@@ -251,19 +246,16 @@ class WhenResolvedReactor(Object):
                 return NullObject
 
             if self._ref.isResolved():
-                try:
-                    outcome = self._cb.call(u"run", [self._ref])
-                except Exception, e:
-                    # XXX reify the exception and raise it in Monte
-                    raise
-                    # outcome = e
+                # XXX should reflect to user if exception?
+                outcome = self._cb.call(u"run", [self._ref])
 
                 if self._resolver is not None:
                     self._resolver.resolve(outcome)
 
                 self.done = True
             else:
-                self._vat.sendOnly(self._ref, u"_whenMoreResolved", [self])
+                vat = currentVat.get()
+                vat.sendOnly(self._ref, u"_whenMoreResolved", [self])
 
             return NullObject
         raise Refused(self, atom, args)
@@ -271,8 +263,7 @@ class WhenResolvedReactor(Object):
 
 class LocalResolver(Object):
 
-    def __init__(self, vat, ref, buf):
-        self._vat = vat
+    def __init__(self, ref, buf):
         self._ref = ref
         self._buf = buf
 
@@ -297,7 +288,7 @@ class LocalResolver(Object):
                 raise userError(u"Already resolved")
             return False
         else:
-            self._ref.setTarget(_toRef(target, self._vat))
+            self._ref.setTarget(_toRef(target))
             self._ref.commit()
             self._buf.deliverAll(target)
 
@@ -309,7 +300,7 @@ class LocalResolver(Object):
         return self.resolve(target, False)
 
     def smash(self, problem):
-        return self.resolve(UnconnectedRef(problem, self._vat), False)
+        return self.resolve(UnconnectedRef(problem), False)
 
     def isDone(self):
         return wrapBool(self._ref is None)
@@ -317,8 +308,7 @@ class LocalResolver(Object):
 
 class MessageBuffer(object):
 
-    def __init__(self, vat):
-        self._vat = vat
+    def __init__(self):
         self._buf = []
 
     def enqueue(self, resolver, atom, args):
@@ -326,7 +316,7 @@ class MessageBuffer(object):
 
     def deliverAll(self, target):
         #XXX record sending-context information for causality tracing
-        targRef = _toRef(target, self._vat)
+        targRef = _toRef(target)
         for resolver, atom, args in self._buf:
             if resolver is None:
                 targRef.sendAllOnly(atom, args)
@@ -362,7 +352,8 @@ class Promise(Object):
         # Welcome to _whenMoreResolved.
         # This method's implementation, in Monte, should be:
         # to _whenMoreResolved(callback): callback<-(self)
-        self.vat.sendOnly(callback, u"run", [self])
+        vat = currentVat.get()
+        vat.sendOnly(callback, u"run", [self])
         return NullObject
 
     # Synchronous calls.
@@ -407,9 +398,8 @@ class SwitchableRef(Promise):
 
     isSwitchable = True
 
-    def __init__(self, target, vat):
+    def __init__(self, target):
         self._target = target
-        self.vat = vat
 
     def toString(self):
         if self.isSwitchable:
@@ -485,10 +475,9 @@ class SwitchableRef(Promise):
 
 class BufferingRef(Promise):
 
-    def __init__(self, buf, vat):
+    def __init__(self, buf):
         # Note to self: Weakref.
         self._buf = weakref.ref(buf)
-        self.vat = buf._vat
 
     def toString(self):
         return u"<bufferingRef>"
@@ -503,7 +492,7 @@ class BufferingRef(Promise):
             # XXX what does it mean for us to have no more buffer?
             return self
         else:
-            p, r = makePromise(self.vat)
+            p, r = makePromise()
             optMsgs.enqueue(r, atom, args)
             return p
 
@@ -531,9 +520,8 @@ class BufferingRef(Promise):
 
 class NearRef(Promise):
 
-    def __init__(self, target, vat):
+    def __init__(self, target):
         self.target = target
-        self.vat = vat
 
     def toString(self):
         return u"<nearref: %s>" % self.target.toString()
@@ -542,10 +530,12 @@ class NearRef(Promise):
         return self.target.call(atom.verb, args)
 
     def sendAll(self, atom, args):
-        return self.vat.send(self.target, atom.verb, args)
+        vat = currentVat.get()
+        return vat.send(self.target, atom.verb, args)
 
     def sendAllOnly(self, atom, args):
-        return self.vat.sendOnly(self.target, atom.verb, args)
+        vat = currentVat.get()
+        return vat.sendOnly(self.target, atom.verb, args)
 
     def optProblem(self):
         return NullObject
@@ -568,10 +558,9 @@ class NearRef(Promise):
 
 class UnconnectedRef(Promise):
 
-    def __init__(self, problem, vat):
+    def __init__(self, problem):
         assert isinstance(problem, unicode)
         self._problem = problem
-        self._vat = vat
 
     def toString(self):
         return u"<ref broken by %s>" % (self._problem,)
@@ -595,7 +584,8 @@ class UnconnectedRef(Promise):
 
     def _doBreakage(self, atom, args):
         if atom in (_WHENMORERESOLVED_1, _WHENBROKEN_1):
-            return self._vat.sendOnly(args[0], u"run", [self])
+            vat = currentVat.get()
+            return vat.sendOnly(args[0], u"run", [self])
 
     def isResolved(self):
         return True
