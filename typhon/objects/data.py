@@ -15,8 +15,8 @@
 import math
 
 from rpython.rlib.jit import elidable
-from rpython.rlib.objectmodel import specialize
-from rpython.rlib.rarithmetic import ovfcheck
+from rpython.rlib.objectmodel import _hash_float, specialize
+from rpython.rlib.rarithmetic import intmask, ovfcheck
 from rpython.rlib.rstring import UnicodeBuilder, split
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
@@ -88,6 +88,10 @@ class CharObject(Object):
 
     def toQuote(self):
         return quoteChar(self._c)
+
+    def hash(self):
+        # Don't waste time with the traditional string hash.
+        return ord(self._c)
 
     def recv(self, atom, args):
         if atom is ADD_1:
@@ -170,6 +174,9 @@ class DoubleObject(Object):
     def toString(self):
         return u"%f" % (self._d,)
 
+    def hash(self):
+        return _hash_float(self._d)
+
     def recv(self, atom, args):
         # Doubles can be compared.
         if atom is OP__CMP_1:
@@ -236,6 +243,10 @@ class IntObject(Object):
 
     def toString(self):
         return u"%d" % self._i
+
+    def hash(self):
+        # This is what CPython and RPython do.
+        return self._i
 
     def recv(self, atom, args):
         # Ints can be compared.
@@ -389,6 +400,19 @@ class StrObject(Object):
 
     def toQuote(self):
         return quoteStr(self._s)
+
+    def hash(self):
+        # Cribbed from RPython's _hash_string.
+        length = len(self._s)
+        if length == 0:
+            return -1
+        x = ord(self._s[0]) << 7
+        i = 0
+        while i < length:
+            x = intmask((1000003 * x) ^ ord(self._s[i]))
+            i += 1
+        x ^= length
+        return intmask(x)
 
     def recv(self, atom, args):
         if atom is ADD_1:

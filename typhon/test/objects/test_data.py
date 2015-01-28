@@ -61,6 +61,16 @@ class TestCharObject(TestCase):
         result = c.call(u"next", [])
         self.assertEqual(result._c, u'¢')
 
+    def testHashEqual(self):
+        a = CharObject(u'a')
+        b = CharObject(u'a')
+        self.assertEqual(a.hash(), b.hash())
+
+    def testHashInequal(self):
+        a = CharObject(u'a')
+        b = CharObject(u'b')
+        self.assertNotEqual(a.hash(), b.hash())
+
 
 class TestStr(TestCase):
 
@@ -150,6 +160,16 @@ class TestStr(TestCase):
             self.assertEqual(objs[1]._c, u's')
             self.assertRaises(Ejecting, iterator.call, u"next", [ej])
 
+    def testHashEqual(self):
+        a = StrObject("acidic")
+        b = StrObject("acidic")
+        self.assertEqual(a.hash(), b.hash())
+
+    def testHashInequal(self):
+        a = StrObject("acerbic")
+        b = StrObject("bitter")
+        self.assertNotEqual(a.hash(), b.hash())
+
 
 class TestDouble(TestCase):
 
@@ -172,6 +192,16 @@ class TestDouble(TestCase):
         d = DoubleObject(5.5)
         result = d.call(u"subtract", [DoubleObject(1.3)])
         self.assertAlmostEqual(result.getDouble(), 4.2)
+
+    def testHashEqual(self):
+        a = DoubleObject(42.0)
+        b = DoubleObject(42.0)
+        self.assertEqual(a.hash(), b.hash())
+
+    def testHashInequal(self):
+        a = DoubleObject(42.0)
+        b = DoubleObject(5.0)
+        self.assertNotEqual(a.hash(), b.hash())
 
 
 class TestInt(TestCase):
@@ -238,3 +268,13 @@ class TestInt(TestCase):
         i = IntObject(5)
         result = i.call(u"subtract", [DoubleObject(1.5)])
         self.assertAlmostEqual(result.getDouble(), 3.5)
+
+    def testHashEqual(self):
+        a = DoubleObject(42)
+        b = DoubleObject(42)
+        self.assertEqual(a.hash(), b.hash())
+
+    def testHashInequal(self):
+        a = DoubleObject(42)
+        b = DoubleObject(5)
+        self.assertNotEqual(a.hash(), b.hash())

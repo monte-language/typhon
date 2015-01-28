@@ -12,7 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.objectmodel import specialize
+from rpython.rlib.objectmodel import r_ordereddict, specialize
+from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
@@ -26,6 +27,7 @@ ADD_1 = getAtom(u"add", 1)
 ASMAP_0 = getAtom(u"asMap", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 DIVERGE_0 = getAtom(u"diverge", 0)
+FETCH_2 = getAtom(u"fetch", 2)
 GET_1 = getAtom(u"get", 1)
 INDEXOF_1 = getAtom(u"indexOf", 1)
 INDEXOF_2 = getAtom(u"indexOf", 2)
@@ -71,6 +73,7 @@ class mapIterator(Object):
     _immutable_fields_ = "objects",
 
     _index = 0
+    _iter = None
 
     def __init__(self, objects):
         self.objects = objects
@@ -96,14 +99,14 @@ class Collection(object):
 
     _mixin_ = True
 
-    @specialize.argtype(0)
-    def size(self):
-        return len(self.objects)
-
     def recv(self, atom, args):
         # _makeIterator/0: Create an iterator for this collection's contents.
         if atom is _MAKEITERATOR_0:
             return self._makeIterator()
+
+        # contains/1: Determine whether an element is in this collection.
+        if atom is CONTAINS_1:
+            return wrapBool(self.contains(args[0]))
 
         # size/0: Get the number of elements in the collection.
         if atom is SIZE_0:
@@ -139,22 +142,24 @@ class ConstList(Collection, Object):
         guts = u", ".join([obj.toString() for obj in self.objects])
         return u"[%s]" % (guts,)
 
+    def hash(self):
+        # Use the same sort of hashing as CPython's tuple hash.
+        x = 0x345678
+        for obj in self.objects:
+            y = obj.hash()
+            x = intmask((1000003 * x) ^ y)
+        return x
+
     def _recv(self, atom, args):
         if atom is ADD_1:
             other = args[0]
             return ConstList(self.objects + unwrapList(other))
 
         if atom is ASMAP_0:
-            return ConstMap([(IntObject(i), o)
-                for i, o in enumerate(self.objects)])
-
-        if atom is CONTAINS_1:
-            from typhon.objects.equality import EQUAL, optSame
-            needle = args[0]
-            for specimen in self.objects:
-                if optSame(needle, specimen) is EQUAL:
-                    return wrapBool(True)
-            return wrapBool(False)
+            d = monteDict()
+            for i, o in enumerate(self.objects):
+                d[IntObject(i)] = o
+            return ConstMap(d)
 
         if atom is DIVERGE_0:
             _flexList = getGlobal(u"_flexList")
@@ -200,6 +205,13 @@ class ConstList(Collection, Object):
     def _makeIterator(self):
         return listIterator(self.objects)
 
+    def contains(self, needle):
+        from typhon.objects.equality import EQUAL, optSame
+        for specimen in self.objects:
+            if optSame(needle, specimen) is EQUAL:
+                return True
+        return False
+
     def put(self, index, value):
         top = len(self.objects)
         if 0 <= index < top:
@@ -213,6 +225,9 @@ class ConstList(Collection, Object):
 
         return ConstList(new)
 
+    def size(self):
+        return len(self.objects)
+
     def slice(self, start, stop=-1):
         assert start >= 0
         if stop < 0:
@@ -224,116 +239,153 @@ class ConstList(Collection, Object):
         return ConstList(self.objects[:])
 
 
-def pairRepr(pair):
-    key, value = pair
+# Let's talk about maps for a second.
+# Maps are backed by ordered dictionaries. This is an RPython-level hash table
+# that is ordered, using insertion order, and has predictable
+# insertion-order-based iteration order. Therefore, they should back Monte
+# maps perfectly.
+# The ordered dictionary at RPython level requires a few extra pieces of
+# plumbing. We are asked to provide `key_eq` and `key_hash`. These are
+# functions. `key_eq` is a key equality function which determines whether two
+# keys are equal. `key_hash` is a key hashing function which returns a hash
+# for a key.
+# If two objects are equal, then they hash equal.
+# We forbid unsettled refs from being used as keys, since their equality can
+# change at any time.
+
+
+def pairRepr(key, value):
     return key.toString() + u" => " + value.toString()
+
+
+def resolveKey(key):
+    from typhon.objects.refs import Promise, isResolved
+    if isinstance(key, Promise):
+        key = key.resolution()
+    if not isResolved(key):
+        raise userError(u"Unresolved promises cannot be used as map keys")
+    return key
+
+
+def keyEq(first, second):
+    from typhon.objects.equality import optSame, EQUAL
+    first = resolveKey(first)
+    second = resolveKey(second)
+    return optSame(first, second) is EQUAL
+
+
+def keyHash(key):
+    return resolveKey(key).hash()
+
+
+def monteDict():
+    return r_ordereddict(keyEq, keyHash)
 
 
 class ConstMap(Collection, Object):
 
-    _immutable_fields_ = "objects[*]",
+    _immutable_fields_ = "objectMap",
 
-    def __init__(self, objects):
-        self.objects = objects
+    def __init__(self, objectMap):
+        self.objectMap = objectMap
 
     def asDict(self):
-        d = {}
-        for k, v in self.objects:
-            d[k] = v
-        return d
+        return self.objectMap
 
     def toString(self):
         # If this map is empty, return a string that distinguishes it from a
         # list. E does the same thing.
-        if not self.objects:
+        if not self.objectMap:
             return u"[].asMap()"
 
-        guts = u", ".join([pairRepr(pair) for pair in self.objects])
+        guts = u", ".join([pairRepr(k, v) for k, v in self.objectMap.items()])
         return u"[%s]" % (guts,)
 
     @staticmethod
     def fromPairs(wrappedPairs):
-        pairs = []
+        d = monteDict()
         for obj in unwrapList(wrappedPairs):
             pair = unwrapList(obj)
             assert len(pair) == 2, "Not a pair!"
-            pairs.append((pair[0], pair[1]))
-        return ConstMap(pairs)
+            d[pair[0]] = pair[1]
+        return ConstMap(d)
 
     def _recv(self, atom, args):
-        # XXX we should be using hashing here, not equality, right?
-        from typhon.objects.equality import optSame, EQUAL
-
         if atom is _UNCALL_0:
-            rv = ConstList([ConstList([k, v]) for k, v in self.objects])
+            rv = ConstList([ConstList([k, v])
+                for k, v in self.objectMap.items()])
             return ConstList([StrObject(u"fromPairs"), rv])
 
         if atom is DIVERGE_0:
             _flexMap = getGlobal(u"_flexMap")
             return _flexMap.call(u"run", [self])
 
+        if atom is FETCH_2:
+            key = args[0]
+            thunk = args[1]
+            rv = self.objectMap.get(key, None)
+            if rv is None:
+                rv = thunk.call(u"run", [])
+            return rv
+
         if atom is GET_1:
             key = args[0]
-            for (k, v) in self.objects:
-                if optSame(key, k) is EQUAL:
-                    return v
+            try:
+                return self.objectMap[key]
+            except KeyError:
+                raise userError(u"Key not found: %s" % (key.toString(),))
 
         # or/1: Unify the elements of this collection with another.
         if atom is OR_1:
             return self._or(args[0])
 
         if atom is WITH_2:
-            # Replace by index.
+            # Replace by key.
             key = args[0]
             value = args[1]
-            rv = [(key, value)]
-            for (k, v) in self.objects:
-                if optSame(key, k) is EQUAL:
-                    # Hit!
-                    continue
-                else:
-                    rv.append((k, v))
-            return ConstMap(rv[:])
+            d = self.objectMap.copy()
+            d[key] = value
+            return ConstMap(d)
 
         if atom is WITHOUT_1:
             key = args[0]
-            return ConstMap([(k, v) for (k, v) in self.objects
-                if optSame(key, k) is not EQUAL])
+            d = self.objectMap.copy()
+            del d[key]
+            return ConstMap(d)
 
         raise Refused(self, atom, args)
 
     def _makeIterator(self):
-        return mapIterator(self.objects)
+        return mapIterator(self.objectMap.items())
+
+    def contains(self, needle):
+        return needle in self.objectMap
 
     def _or(self, other):
-        # XXX quadratic time is not my friend
-        rv = self.objects[:]
-        for ok, ov in unwrapMap(other):
-            found = False
-            for i, (k, v) in enumerate(rv):
-                from typhon.objects.equality import optSame, EQUAL
-                if optSame(k, ok) is EQUAL:
-                    found = True
-            if not found:
-                rv.append((ok, ov))
-        return ConstMap(rv[:])
+        # XXX This is currently linear time. Can it be better? If not, prove
+        # it, please.
+        rv = self.objectMap.copy()
+        for ok, ov in unwrapMap(other).items():
+            if ok not in rv:
+                rv[ok] = ov
+        return ConstMap(rv)
 
     def slice(self, start, stop=-1):
         assert start >= 0
         if stop < 0:
-            return ConstMap(self.objects[start:])
+            items = self.objectMap.items()[start:]
         else:
-            return ConstMap(self.objects[start:stop])
+            items = self.objectMap.items()[start:stop]
+        rv = monteDict()
+        for k, v in items:
+            rv[k] = v
+        return ConstMap(rv)
+
+    def size(self):
+        return len(self.objectMap)
 
     def snapshot(self):
-        return ConstMap(self.objects[:])
-
-
-def dictToMap(d):
-    l = []
-    for k in d:
-        l.append((k, d[k]))
-    return ConstMap(l)
+        return ConstMap(self.objectMap.copy())
 
 
 def unwrapList(o):
@@ -348,5 +400,5 @@ def unwrapMap(o):
     from typhon.objects.refs import resolution
     m = resolution(o)
     if isinstance(m, ConstMap):
-        return m.objects
+        return m.objectMap
     raise userError(u"Not a map!")

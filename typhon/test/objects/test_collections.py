@@ -1,3 +1,5 @@
+# encoding: utf-8
+#
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -14,10 +16,36 @@
 
 from unittest import TestCase
 
-from typhon.objects.collections import ConstMap
+from typhon.objects.collections import ConstList, ConstMap, monteDict
+from typhon.objects.data import CharObject, IntObject
 
 
 class TestConstMap(TestCase):
 
+    def testContains(self):
+        d = monteDict()
+        d[IntObject(42)] = IntObject(5)
+        m = ConstMap(d)
+        self.assertTrue(m.contains(IntObject(42)))
+        self.assertFalse(m.contains(IntObject(7)))
+
     def testToString(self):
-        self.assertEqual(ConstMap([]).toString(), u"[].asMap()")
+        self.assertEqual(ConstMap({}).toString(), u"[].asMap()")
+
+
+class TestConstList(TestCase):
+
+    def testHashEqual(self):
+        a = ConstList([IntObject(42), CharObject(u'é')])
+        b = ConstList([IntObject(42), CharObject(u'é')])
+        self.assertEqual(a.hash(), b.hash())
+
+    def testHashInequalLength(self):
+        a = ConstList([IntObject(42), CharObject(u'é')])
+        b = ConstList([IntObject(42)])
+        self.assertNotEqual(a.hash(), b.hash())
+
+    def testHashInequalItems(self):
+        a = ConstList([IntObject(42), CharObject(u'é')])
+        b = ConstList([IntObject(42), CharObject(u'e')])
+        self.assertNotEqual(a.hash(), b.hash())

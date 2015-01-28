@@ -77,5 +77,5 @@ class TestUnwrappers(TestCase):
         self.assertEqual(unwrapList(p), [])
 
     def testUnwrapMapPromise(self):
-        p = makeNear(ConstMap([]))
-        self.assertEqual(unwrapMap(p), [])
+        p = makeNear(ConstMap({}))
+        self.assertEqual(unwrapMap(p).items(), [])

@@ -25,7 +25,7 @@ from typhon.importing import evaluateTerms, obtainModule
 from typhon.metrics import Recorder
 from typhon.objects.collections import ConstMap, unwrapMap
 from typhon.objects.constants import NullObject
-from typhon.objects.data import StrObject
+from typhon.objects.data import unwrapStr
 from typhon.objects.imports import addImportToScope
 from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
@@ -69,9 +69,8 @@ def loadPrelude(config, recorder, vat):
 
     if isinstance(result, ConstMap):
         prelude = {}
-        for key, value in unwrapMap(result):
-            assert isinstance(key, StrObject)
-            prelude[key._s] = value
+        for key, value in unwrapMap(result).items():
+            prelude[unwrapStr(key)] = value
         return prelude
 
     print "Prelude didn't return map!?"

@@ -13,6 +13,7 @@
 # under the License.
 
 from rpython.rlib.jit import jit_debug, promote
+from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused
@@ -37,6 +38,15 @@ class Object(object):
 
     def toString(self):
         return u"<object>"
+
+    def hash(self):
+        """
+        Create a conservative integer hash of this object.
+
+        If two objects are equal, then they must hash equal.
+        """
+
+        return compute_identity_hash(self)
 
     def call(self, verb, arguments):
         """

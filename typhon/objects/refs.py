@@ -526,6 +526,9 @@ class NearRef(Promise):
     def toString(self):
         return u"<nearref: %s>" % self.target.toString()
 
+    def hash(self):
+        return self.target.hash()
+
     def callAll(self, atom, args):
         return self.target.call(atom.verb, args)
 
