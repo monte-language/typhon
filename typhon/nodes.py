@@ -1006,7 +1006,6 @@ class FinalPattern(Pattern):
         self._g = nullToNone(guard)
 
     def pretty(self, out):
-        out.write("def ")
         out.write(self._n.encode("utf-8"))
         if self._g is not None:
             out.write(" :")
