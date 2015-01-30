@@ -12,7 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.nonconst import NonConstant
 from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
 
 from typhon.atoms import getAtom
@@ -37,6 +36,10 @@ UNPAUSE_0 = getAtom(u"unpause", 0)
 # The number of connections that can be backlogged. Tune as needed.
 # XXX this should be tunable at runtime!
 BACKLOG =1024
+
+# The maximum amount of data to receive from a single packet.
+# XXX this should be a runtime tunable too, probably.
+MAX_RECV = 8192
 
 
 class Socket(object):
@@ -107,8 +110,8 @@ class Socket(object):
                                          SocketDrain(sock)])
             return
 
-        # XXX RPython bug requires NC here
-        buf = self.rsock.recv(NonConstant(8192))
+        # Perform the actual recv call.
+        buf = self.rsock.recv(MAX_RECV)
 
         if not buf:
             # Looks like we've died. Let's disconnect, right?
