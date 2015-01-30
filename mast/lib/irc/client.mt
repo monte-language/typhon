@@ -78,7 +78,7 @@ def makeIRCClient(handler):
     var drain := null
     var pauses :Int := 0
     var nick :String := handler.getNick()
-    def channels := [].diverge()
+    var channels := [].asMap()
     var outgoing := []
 
     def line(l :String):
@@ -90,6 +90,8 @@ def makeIRCClient(handler):
             outgoing := []
 
     return object IRCTube:
+        # Tube methods.
+
         to flowTo(newDrain):
             drain := newDrain
             def rv := drain.flowingFrom(IRCTube)
@@ -112,18 +114,38 @@ def makeIRCClient(handler):
                     drain.receive(line + "\r\n")
                 outgoing := []
 
-        to pong(ping):
-            traceln("Ping! (Pong!)")
-            line(" ".join(["PONG ", ping]))
+        # IRC wire stuff.
 
         to receive(item):
-            traceln("Received:", item)
-
             switch (item):
                 match `:@source PRIVMSG @channel :@message`:
                     handler.privmsg(IRCTube, source, channel, message)
 
+                match `:@nick!@{_} JOIN @channel`:
+                    channels[channel][nick] := []
+                    traceln(`$nick joined $channel`)
+
+                match `:@nick!@{_} QUIT @{_}`:
+                    for channel in channels:
+                        if (channel.contains(nick)):
+                            channel.removeKey(nick)
+                    traceln(`$nick has quit`)
+
+                match `:@nick!@{_} PART @channel @{_}`:
+                    if (channels[channel].contains(nick)):
+                        channels[channel].removeKey(nick)
+                    traceln(`$nick has parted $channel`)
+
+                match `:@oldNick!@{_} NICK :@newNick`:
+                    for channel in channels:
+                        escape ej:
+                            def mode := channel.fetch(oldNick, ej)
+                            channel.removeKey(oldNick)
+                            channel[newNick] := mode
+                    traceln(`$oldNick is now known as $newNick`)
+
                 match `PING @ping`:
+                    traceln(`Server ping/pong: $ping`)
                     IRCTube.pong(ping)
 
                 # XXX @_
@@ -134,14 +156,26 @@ def makeIRCClient(handler):
                     traceln(`Channel modes: $channelModes`)
                     handler.loggedIn(IRCTube)
 
+                match `@{_} 353 $nick @{_} @channel :@nicks`:
+                    def channelNicks := channels[channel]
+                    def nickList := nicks.split(" ")
+                    for nick in nickList:
+                        channelNicks[nick] := null
+                    traceln(`Current nicks on $channel: $channelNicks`)
+
                 match _:
-                    pass
+                    traceln(item)
+
+        # Call these to make stuff happen.
+
+        to pong(ping):
+            line(`PONG $ping`)
 
         to part(channel :String, message :String):
             line(`PART $channel :$message`)
 
         to quit(message :String):
-            for channel in channels:
+            for channel => _ in channels:
                 IRCTube.part(channel, message)
             line(`QUIT :$message`)
 
@@ -154,10 +188,15 @@ def makeIRCClient(handler):
             if (channel[0] != '#'):
                 channel := "#" + channel
             line(`JOIN $channel`)
-            channels.push(channel)
+            channels := channels.with(channel, [].asMap().diverge())
 
         to say(channel, message):
             line(`PRIVMSG $channel :$message`)
+
+        # Data accessors.
+
+        to getUsers(channel, ej):
+            return channels.fetch(channel, ej)
 
 
 def chain([var fount] + drains):
