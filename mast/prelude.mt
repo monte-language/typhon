@@ -311,14 +311,23 @@ def _flexMap(var m):
             out.print(M.toString(m))
             out.print(".diverge()")
 
+        to contains(k) :Bool:
+            return m.contains(k)
+
         to diverge():
             return _flexMap(m)
+
+        to fetch(k, thunk):
+            return m.fetch(k, thunk)
 
         to or(other):
             return _flexMap(m | other)
 
         to put(k, v):
             m := m.with(k, v)
+
+        to removeKey(k):
+            m := m.without(k)
 
         to size():
             return m.size()
@@ -338,8 +347,16 @@ def testFlexMapPrinting(assert):
     assert.equal(M.toString(_flexMap([].asMap())), "[].asMap().diverge()")
     assert.equal(M.toString(_flexMap([5 => 42])), "[5 => 42].diverge()")
 
+def testFlexMapRemoveKey(assert):
+    def m := _flexMap([1 => 2])
+    m.removeKey(1)
+    assert.equal(m.contains(1), false)
 
-unittest([testFlexMapPrinting])
+
+unittest([
+    testFlexMapPrinting,
+    testFlexMapRemoveKey,
+])
 
 
 object __makeMap:
