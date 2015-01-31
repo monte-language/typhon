@@ -25,6 +25,7 @@ from typhon.prelude import getGlobal
 
 ADD_1 = getAtom(u"add", 1)
 ASMAP_0 = getAtom(u"asMap", 0)
+ASSET_0 = getAtom(u"asSet", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 DIVERGE_0 = getAtom(u"diverge", 0)
 FETCH_2 = getAtom(u"fetch", 2)
@@ -160,6 +161,12 @@ class ConstList(Collection, Object):
             for i, o in enumerate(self.objects):
                 d[IntObject(i)] = o
             return ConstMap(d)
+
+        if atom is ASSET_0:
+            d = monteDict()
+            for o in self.objects:
+                d[o] = None
+            return ConstSet(d)
 
         if atom is DIVERGE_0:
             _flexList = getGlobal(u"_flexList")
@@ -301,6 +308,16 @@ class ConstMap(Collection, Object):
         guts = u", ".join([pairRepr(k, v) for k, v in self.objectMap.items()])
         return u"[%s]" % (guts,)
 
+    def hash(self):
+        # Nest each item, hand-unwrapping the nested "tuple" of items.
+        x = 0x345678
+        for k, v in self.objectMap.items():
+            y = 0x345678
+            y = intmask((1000003 * y) ^ k.hash())
+            y = intmask((1000003 * y) ^ v.hash())
+            x = intmask((1000003 * x) ^ y)
+        return x
+
     @staticmethod
     def fromPairs(wrappedPairs):
         d = monteDict()
@@ -350,7 +367,9 @@ class ConstMap(Collection, Object):
         if atom is WITHOUT_1:
             key = args[0]
             d = self.objectMap.copy()
-            del d[key]
+            # Ignore the case where the key wasn't in the map.
+            if key in d:
+                del d[key]
             return ConstMap(d)
 
         raise Refused(self, atom, args)
@@ -388,6 +407,98 @@ class ConstMap(Collection, Object):
         return ConstMap(self.objectMap.copy())
 
 
+class ConstSet(Collection, Object):
+    """
+    Like a map, but with only keys.
+
+    The actual implementation is an RPython-style set, which is a dictionary
+    with None for the values.
+    """
+
+    _immutable_fields_ = "objectMap",
+
+    def __init__(self, objectMap):
+        self.objectMap = objectMap
+
+    def asDict(self):
+        return self.objectMap
+
+    def hash(self):
+        # Hash as if we were a list.
+        x = 0x345678
+        for obj in self.objectMap.keys():
+            y = obj.hash()
+            x = intmask((1000003 * x) ^ y)
+        return x
+
+    def toString(self):
+        # We always have to remind the user that we are a set, not a list.
+        guts = u", ".join([k.toString() for k in self.objectMap.keys()])
+        return u"[%s].asSet()" % (guts,)
+
+    def _recv(self, atom, args):
+        if atom is _UNCALL_0:
+            # [1,2,3].asSet() -> [[1,2,3], "asSet"]
+            rv = ConstList(self.objectMap.keys())
+            return ConstList([rv, StrObject(u"asSet")])
+
+        if atom is DIVERGE_0:
+            _flexSet = getGlobal(u"_flexSet")
+            return _flexSet.call(u"run", [self])
+
+        # or/1: Unify the elements of this collection with another.
+        if atom is OR_1:
+            return self._or(args[0])
+
+        if atom is WITH_1:
+            key = args[0]
+            d = self.objectMap.copy()
+            d[key] = None
+            return ConstSet(d)
+
+        if atom is WITHOUT_1:
+            key = args[0]
+            d = self.objectMap.copy()
+            # Ignore the case where the key wasn't in the map.
+            if key in d:
+                del d[key]
+            return ConstSet(d)
+
+        raise Refused(self, atom, args)
+
+    def _makeIterator(self):
+        return listIterator(self.objectMap.keys())
+
+    def contains(self, needle):
+        return needle in self.objectMap
+
+    def _or(self, other):
+        # XXX This is currently linear time. Can it be better? If not, prove
+        # it, please.
+        rv = self.objectMap.copy()
+        for ok in unwrapSet(other).keys():
+            if ok not in rv:
+                rv[ok] = None
+        return ConstSet(rv)
+
+    def slice(self, start, stop=-1):
+        assert start >= 0
+        if stop < 0:
+            keys = self.objectMap.keys()[start:]
+        else:
+            keys = self.objectMap.keys()[start:stop]
+        rv = monteDict()
+        for k in keys:
+            rv[k] = None
+        return ConstSet(rv)
+
+    def size(self):
+        return len(self.objectMap)
+
+    def snapshot(self):
+        return ConstSet(self.objectMap.copy())
+
+
 def unwrapList(o):
     from typhon.objects.refs import resolution
     l = resolution(o)
@@ -402,3 +513,11 @@ def unwrapMap(o):
     if isinstance(m, ConstMap):
         return m.objectMap
     raise userError(u"Not a map!")
+
+
+def unwrapSet(o):
+    from typhon.objects.refs import resolution
+    m = resolution(o)
+    if isinstance(m, ConstSet):
+        return m.objectMap
+    raise userError(u"Not a set!")

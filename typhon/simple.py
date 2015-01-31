@@ -14,7 +14,8 @@
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException
-from typhon.objects.collections import ConstList, ConstMap, unwrapList
+from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
+                                        unwrapList)
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import (CharObject, DoubleObject, IntObject,
                                  StrObject, unwrapInt, unwrapStr)
@@ -80,6 +81,11 @@ def listGuard(specimen):
 @predGuard
 def mapGuard(specimen):
     return isinstance(specimen, ConstMap)
+
+
+@predGuard
+def setGuard(specimen):
+    return isinstance(specimen, ConstSet)
 
 
 class Trace(Object):
@@ -218,9 +224,8 @@ def simpleScope():
         u"Int": intGuard(),
         u"List": listGuard(),
         u"Map": mapGuard(),
+        u"Set": setGuard(),
         u"Str": strGuard(),
-        u"boolean": boolGuard(),
-        u"int": intGuard(),
 
         u"M": MObject(),
         u"Ref": RefOps(),
