@@ -15,6 +15,9 @@
 # An implementation of the Mafia party game state machine.
 
 def [=> simple__quasiParser] | _ := import("lib/simple")
+def [=> makeEnum] | _ := import("lib/enum")
+
+def [MafiaState, DAY, NIGHT] := makeEnum(["day", "night"])
 
 def makeMafia(var players :Set):
     # We don't keep this value updated during play; it's just to make it
@@ -23,7 +26,7 @@ def makeMafia(var players :Set):
     var mafiosos :Set := players.slice(0, mafiosoCount)
     var innocents :Set := players.slice(mafiosoCount)
 
-    var state :Str := "day"
+    var state :MafiaState := DAY
     var votes :Map := [].asMap()
     var lynched :Bool := false
 
@@ -38,13 +41,13 @@ def makeMafia(var players :Set):
             else:
                 out.print(`winner $winner>`)
 
-        to getState() :Str:
+        to getState() :MafiaState:
             return state
 
         to getQuorum() :Int:
             def voters :Int := switch (state) {
-                match =="day" {mafiosos.size() + innocents.size()}
-                match =="night" {mafiosos.size()}
+                match ==DAY {mafiosos.size() + innocents.size()}
+                match ==NIGHT {mafiosos.size()}
             }
             return voters // 2
 
@@ -60,17 +63,17 @@ def makeMafia(var players :Set):
 
         to advance() :Void:
             state := switch (state) {
-                match =="day" {"night"}
-                match =="night" {"day"}
+                match ==DAY {NIGHT}
+                match ==NIGHT {DAY}
             }
             lynched := false
 
         to vote(player ? (players.contains(player)),
                 choice ? (players.contains(choice))) :Void:
             switch (state):
-                match =="day":
+                match ==DAY:
                     votes := votes.with(player, choice)
-                match =="night":
+                match ==NIGHT:
                     if (mafiosos.contains(player)):
                         votes := votes.with(player, choice)
 
