@@ -26,8 +26,8 @@ object tag:
         `<$tagType>$guts</$tagType>`
 
 
-def [HTTPState, RESPONSE, HEADER, BODY] := makeEnum(
-    ["response", "header", "body"])
+def [HTTPState, RESPONSE, HEADER, BODY, DONE] := makeEnum(
+    ["response", "header", "body", "done"])
 
 
 def makeRequestDrain(callback):
@@ -67,7 +67,6 @@ def makeRequestDrain(callback):
                 # traceln("End of headers")
                 buf := tail
                 state := BODY
-                callback()
 
         to parse():
             # traceln(`entering parse with buf $buf`)
@@ -80,9 +79,10 @@ def makeRequestDrain(callback):
                     match ==BODY:
                         # XXX we don't handle any encodings or deal with the
                         # body in any way.
-                        state := RESPONSE
+                        state := DONE
                         callback()
-                        # fount.stopFlow()
+                        # XXX should respect connection-close
+                        fount.stopFlow()
                         break
 
 
@@ -121,8 +121,8 @@ def responder(fount, drain):
         strDrain.receive("HTTP/1.1 200 OK\r\n")
         sendHeaders(strDrain, headers)
         drain.receive(body)
+        strDrain<-flowStopped()
 
-        # strDrain<-close()
     fount.flowTo(makeRequestDrain(callback))
 
 
