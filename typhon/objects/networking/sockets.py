@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from errno import EBADF, EPIPE
+
 from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
 
 from typhon.atoms import getAtom
@@ -23,8 +25,8 @@ from typhon.objects.root import Object
 from typhon.vats import currentVat
 
 
-CLOSE_0 = getAtom(u"close", 0)
 FLOWINGFROM_1 = getAtom(u"flowingFrom", 1)
+FLOWSTOPPED_0 = getAtom(u"flowStopped", 0)
 FLOWTO_1 = getAtom(u"flowTo", 1)
 PAUSEFLOW_0 = getAtom(u"pauseFlow", 0)
 RECEIVE_1 = getAtom(u"receive", 1)
@@ -47,7 +49,7 @@ class Socket(object):
     An encapsulation for RSockets.
     """
 
-    _connectHandler = None
+    _connector = None
     _listener = None
 
     def __init__(self, rsocket):
@@ -61,7 +63,7 @@ class Socket(object):
         return u"<Socket(%d)>" % self.rsock.fd
 
     def wantsWrite(self):
-        return bool(self._outbound) or self._connectHandler is not None
+        return bool(self._outbound) or self._connector is not None
 
     def createFount(self):
         fount = SocketFount()
@@ -69,7 +71,7 @@ class Socket(object):
         return fount
 
     def connect(self, addr, handler):
-        self._connectHandler = handler
+        self._connector = handler
 
         self.rsock.setblocking(False)
 
@@ -115,7 +117,9 @@ class Socket(object):
 
         if not buf:
             # Looks like we've died. Let's disconnect, right?
-            self.rsock.close()
+            self.close()
+            return
+
         for fount in self._founts:
             fount.receive(buf)
 
@@ -126,27 +130,33 @@ class Socket(object):
         We should have been assured that we will not block.
         """
 
-        if self._connectHandler is not None:
+        if self._connector is not None:
             # Did we have an error connecting?
             err = self.rsock.getsockopt_int(_c.SOL_SOCKET, _c.SO_ERROR)
             if err:
-                self._connectHandler.failSocket(CSocketError(err).get_msg())
+                self._connector.failSocket(CSocketError(err).get_msg())
                 self.terminate()
             else:
                 # We just finished connecting.
-                self._connectHandler.fulfillSocket()
+                self._connector.fulfillSocket()
 
-            self._connectHandler = None
+            self._connector = None
             return
 
         for i, item in enumerate(self._outbound):
             try:
                 size = self.rsock.send(item)
             except CSocketError as cse:
-                if cse.errno == _c.EPIPE:
+                if cse.errno == EPIPE:
                     # Broken pipe. The local end of the socket was already
                     # closed; it will be impossible to send this data through.
+                    self.terminate()
                     raise userError(u"Can't write to already-closed socket")
+                elif cse.errno == EBADF:
+                    # Bad file descriptor. The FD of the socket went bad
+                    # somehow.
+                    self.terminate()
+                    raise userError(u"Can't write to invalidated socket")
                 else:
                     raise
 
@@ -154,8 +164,7 @@ class Socket(object):
                 # Short write; trim the outgoing chunk and the entire outbound
                 # list, and then give up on writing for now.
                 item = item[:size]
-                self._outbound = self._outbound[:i]
-                self._outbound[i] = item
+                self._outbound = [item] + self._outbound[i + 1:]
                 return
         self._outbound = []
 
@@ -163,6 +172,11 @@ class Socket(object):
         """
         Stop writing.
         """
+
+        # XXX yet more demeter
+        vat = currentVat.get()
+        vat._reactor.dropSocket(self)
+        self.rsock.close()
 
     def terminate(self):
         """
@@ -174,7 +188,7 @@ class Socket(object):
 
         self._founts = []
 
-        self.rsock.close()
+        self.close()
 
 
 class SocketUnpauser(Object):
@@ -253,6 +267,8 @@ class SocketDrain(Object):
     A drain which sends received data out on a socket.
     """
 
+    _closed = False
+
     def __init__(self, socket):
         self.sock = socket
         self._buf = []
@@ -262,17 +278,20 @@ class SocketDrain(Object):
 
     def recv(self, atom, args):
         if atom is FLOWINGFROM_1:
-            # XXX flowingFrom
             return self
 
         if atom is RECEIVE_1:
+            if self._closed:
+                raise userError(u"Can't send data to a closed socket!")
+
             data = unwrapList(args[0])
             s = "".join([chr(unwrapInt(byte)) for byte in data])
             self.sock._outbound.append(s)
             return NullObject
 
-        if atom is CLOSE_0:
-            self.sock.close()
+        if atom is FLOWSTOPPED_0:
+            self._closed = True
+            # self.sock.close()
             return NullObject
 
         raise Refused(self, atom, args)
