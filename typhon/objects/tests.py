@@ -17,13 +17,14 @@ from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.collections import unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
-from typhon.objects.equality import INEQUAL, NOTYET, optSame
+from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, optSame
 from typhon.objects.root import Object
 
 
 DOESNOTEJECT_1 = getAtom(u"doesNotEject", 1)
 EJECTS_1 = getAtom(u"ejects", 1)
 EQUAL_2 = getAtom(u"equal", 2)
+NOTEQUAL_2 = getAtom(u"notEqual", 2)
 RUN_1 = getAtom(u"run", 1)
 
 
@@ -73,6 +74,16 @@ class Asserter(Object):
                         (args[0].toQuote(), args[1].toQuote()))
             if result is INEQUAL:
                 self.log(u"Not equal: %s != %s" %
+                        (args[0].toQuote(), args[1].toQuote()))
+            return NullObject
+
+        if atom is NOTEQUAL_2:
+            result = optSame(args[0], args[1])
+            if result is NOTYET:
+                self.log(u"Equality not yet decidable: %s ?= %s" %
+                        (args[0].toQuote(), args[1].toQuote()))
+            if result is EQUAL:
+                self.log(u"Equal: %s == %s" %
                         (args[0].toQuote(), args[1].toQuote()))
             return NullObject
 

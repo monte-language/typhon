@@ -89,7 +89,7 @@ def _listIterator(list):
                 throw.eject(ej, "Iterator exhausted")
 
 
-def __splitList(position :int):
+def __splitList(position :Int):
     # XXX could use `return fn ...`
     # We use the List guard from the implementation rather than the one that
     # will be defined shortly, in order to avoid indefinite recursion on the
