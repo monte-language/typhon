@@ -14,6 +14,7 @@
 
 def [=> simple__quasiParser] | _ := import("lib/simple")
 def [=> b__quasiParser] | _ := import("lib/bytes")
+def [=> makeEnum] | _ := import("lib/enum")
 def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
@@ -25,9 +26,12 @@ object tag:
         `<$tagType>$guts</$tagType>`
 
 
+def [HTTPState, RESPONSE, HEADER, BODY] := makeEnum(
+    ["response", "header", "body"])
+
+
 def makeRequestDrain(callback):
-    # XXX y'know what would be nice? Enums.
-    var state := 0
+    var state :HTTPState := RESPONSE
     var buf := []
     var fount := null
     var headers := [].asMap().diverge()
@@ -49,7 +53,7 @@ def makeRequestDrain(callback):
             def b`@meth @url HTTP/@version$\r$\n@tail` exit ej := buf
             if (version != b`1.1`):
                 throw(`Bad HTTP version: $version`)
-            state := 1
+            state := HEADER
             return [UTF8Decode(meth), url, tail]
 
         to parseHeader(ej):
@@ -62,18 +66,21 @@ def makeRequestDrain(callback):
                 def b`$\r$\n@tail` exit ej := buf
                 # traceln("End of headers")
                 buf := tail
-                state := 0
+                state := BODY
                 callback()
 
         to parse():
+            # traceln(`entering parse with buf $buf`)
             while (true):
                 switch (state):
-                    match ==0:
+                    match ==RESPONSE:
                         requestDrain.parseStart(__break)
-                    match ==1:
+                    match ==HEADER:
                         requestDrain.parseHeader(__break)
-                    match ==2:
-                        state := 0
+                    match ==BODY:
+                        # XXX we don't handle any encodings or deal with the
+                        # body in any way.
+                        state := RESPONSE
                         callback()
                         # fount.stopFlow()
                         break

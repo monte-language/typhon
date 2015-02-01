@@ -14,6 +14,7 @@
 
 def [=> simple__quasiParser] := import("lib/simple")
 def [=> b__quasiParser, => Bytes] | _ := import("lib/bytes")
+def [=> makeEnum] | _ := import("lib/enum")
 def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
@@ -39,8 +40,12 @@ def makeResponse(status :Int, headers):
             out.print(`<response($status)>`)
 
 
+def [HTTPState, REQUEST, HEADER, BODY] := makeEnum(
+    ["request", "header", "body"])
+
+
 def makeResponseDrain(resolver):
-    var state := 0
+    var state :HTTPState := REQUEST
     var buf := []
     var headers := null
     var status := null
@@ -59,7 +64,7 @@ def makeResponseDrain(resolver):
             status := bytesToStatus(code)
             traceln(`Status: $status (${UTF8Decode(label)})`)
             buf := tail
-            state := 1
+            state := HEADER
             headers := [].asMap().diverge()
 
         to parseHeader(ej):
@@ -70,17 +75,18 @@ def makeResponseDrain(resolver):
             catch _:
                 def b`$\r$\n@tail` exit ej := buf
                 buf := tail
-                state := 2
+                state := BODY
 
         to parse():
             while (true):
                 switch (state):
-                    match ==0:
+                    match ==REQUEST:
                         responseDrain.parseStatus(__break)
-                    match ==1:
+                    match ==HEADER:
                         responseDrain.parseHeader(__break)
-                    match ==2:
-                        state := 0
+                    match ==BODY:
+                        # XXX we don't currently parse the body
+                        state := REQUEST
                         responseDrain.issueResponse()
                         break
 
