@@ -2,7 +2,8 @@ all: prelude.ty lib/bytes.ty lib/netstring.ty lib/simple.ty \
 	lib/parsers/derp.ty lib/regex.ty lib/utf8.ty \
 	http \
 	irc \
-	tubes
+	tubes \
+	games
 
 tubes: lib/tubes/nullPump.ty lib/tubes/mapPump.ty \
 	lib/tubes/pumpTube.ty \
@@ -13,6 +14,8 @@ http: lib/http/client.ty lib/http/server.ty \
 
 irc: lib/irc/client.ty \
 	tubes
+
+games: games/mafia.ty
 
 %.ty: %.mt
 	~/monte/local-monte/bin/python ~/monte/bin/monte -c $< > $@

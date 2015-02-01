@@ -320,6 +320,9 @@ def _flexMap(var m):
         to fetch(k, thunk):
             return m.fetch(k, thunk)
 
+        to get(k):
+            return m.get(k)
+
         to or(other):
             return _flexMap(m | other)
 
