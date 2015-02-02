@@ -18,9 +18,9 @@ from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
-from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, unwrapInt
+from typhon.objects.lists import ConstList, unwrapList
 from typhon.objects.root import Object
 from typhon.vats import currentVat
 
@@ -250,9 +250,9 @@ class SocketFount(Object):
 
     def flush(self):
         if not self.pauses and self._drain is not None:
-            rv = [IntObject(ord(byte)) for byte in self.buf]
+            data = ConstList.ints([ord(byte) for byte in self.buf])
             vat = currentVat.get()
-            vat.sendOnly(self._drain, u"receive", [ConstList(rv)])
+            vat.sendOnly(self._drain, u"receive", [data])
             self.buf = ""
 
     def terminate(self):

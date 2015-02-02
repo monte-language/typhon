@@ -16,9 +16,9 @@ from rpython.rlib.rsocket import INETAddress, RSocket
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused
-from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapInt, unwrapStr
+from typhon.objects.lists import ConstList
 from typhon.objects.networking.sockets import Socket, SocketDrain
 from typhon.objects.refs import makePromise
 from typhon.objects.root import Object, runnable
@@ -81,7 +81,7 @@ class TCP4ClientEndpoint(Object):
         pending = TCP4ClientPending(self.host, self.port)
         vat = currentVat.get()
         vat.afterTurn(pending.createSocket)
-        return ConstList([pending.fount, pending.drain])
+        return ConstList.pair(pending.fount, pending.drain)
 
 
 @runnable(RUN_2)

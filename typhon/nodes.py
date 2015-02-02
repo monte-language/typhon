@@ -15,10 +15,10 @@
 from rpython.rlib.jit import assert_green, elidable, jit_debug, unroll_safe
 
 from typhon.errors import Ejecting, LoadFailed, UserException
-from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import Ejector, throw
+from typhon.objects.lists import ConstList, makeList, unwrapList
 from typhon.objects.slots import FinalSlot, VarSlot
 from typhon.objects.user import ScriptMap, ScriptObject
 from typhon.pretty import Buffer, LineWriter, OneLine
@@ -197,7 +197,7 @@ class Tuple(Node):
 
     @unroll_safe
     def evaluate(self, env):
-        return ConstList([evaluate(item, env) for item in self._t])
+        return makeList([evaluate(item, env) for item in self._t])
 
     def transform(self, f):
         # I don't care if it's cheating. It's elegant and simple and pretty.
@@ -1118,7 +1118,7 @@ class ListPattern(Pattern):
 
         # And unify the tail as well.
         if tail is not None:
-            remainder = ConstList(items[len(patterns):])
+            remainder = makeList(items[len(patterns):])
             tail.unify(remainder, ejector, env)
 
     def rewriteScope(self, scope):

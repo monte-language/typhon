@@ -14,8 +14,7 @@
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException
-from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
-                                        unwrapList)
+from typhon.objects.collections import ConstMap, ConstSet
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import (CharObject, DoubleObject, IntObject,
                                  StrObject, unwrapInt, unwrapStr)
@@ -23,6 +22,7 @@ from typhon.objects.ejectors import throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.guards import predGuard
 from typhon.objects.iteration import loop
+from typhon.objects.lists import ConstList, makeList, unwrapList
 from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
                                                  makeTCP4ServerEndpoint)
 from typhon.objects.refs import RefOps, UnconnectedRef
@@ -118,7 +118,7 @@ class MakeList(Object):
         return u"<makeList>"
 
     def call(self, verb, args):
-        return ConstList(args)
+        return makeList(args)
 
 
 @runnable(FROMPAIRS_1)
@@ -163,7 +163,7 @@ class BooleanFlow(Object):
         if atom is FAILURELIST_1:
             length = unwrapInt(args[0])
             refs = [self.broken()] * length
-            return ConstList([wrapBool(False)] + refs)
+            return makeList([wrapBool(False)] + refs)
 
         raise Refused(self, atom, args)
 

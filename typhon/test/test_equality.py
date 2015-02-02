@@ -14,9 +14,9 @@
 
 from unittest import TestCase
 
-from typhon.objects.collections import ConstList
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, isSettled, optSame
+from typhon.objects.lists import makeList
 from typhon.objects.refs import makePromise
 
 
@@ -54,30 +54,36 @@ class TestOptSame(TestCase):
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListEquality(self):
-        first = ConstList([IntObject(42)])
-        second = ConstList([IntObject(42)])
+        first = makeList([IntObject(42)])
+        second = makeList([IntObject(42)])
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListEqualityRecursionReflexive(self):
-        first = ConstList([IntObject(42)])
-        first.objects.append(first)
+        first = makeList([makeList([]), IntObject(42)])
+        # This nasty incantation is required to mutate constant lists.
+        first.storage = first.strategy.stash(
+                first.strategy.unstash(first.storage) + [first])
         self.assertEqual(optSame(first, first), EQUAL)
 
     def testListEqualityRecursion(self):
-        first = ConstList([IntObject(42)])
-        first.objects.append(first)
-        second = ConstList([IntObject(42)])
-        second.objects.append(second)
+        first = makeList([makeList([]), IntObject(42)])
+        # This nasty incantation is required to mutate constant lists.
+        first.storage = first.strategy.stash(
+                first.strategy.unstash(first.storage) + [first])
+        second = makeList([makeList([]), IntObject(42)])
+        # And again here.
+        second.storage = second.strategy.stash(
+                second.strategy.unstash(second.storage) + [second])
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListInequality(self):
-        first = ConstList([IntObject(42)])
-        second = ConstList([IntObject(41)])
+        first = makeList([IntObject(42)])
+        second = makeList([IntObject(41)])
         self.assertEqual(optSame(first, second), INEQUAL)
 
     def testListInequalityLength(self):
-        first = ConstList([IntObject(42)])
-        second = ConstList([IntObject(42), IntObject(5)])
+        first = makeList([IntObject(42)])
+        second = makeList([IntObject(42), IntObject(5)])
         self.assertEqual(optSame(first, second), INEQUAL)
 
     def testStrEquality(self):

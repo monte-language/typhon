@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.objectmodel import r_ordereddict, specialize
+from rpython.rlib.objectmodel import r_ordereddict
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
@@ -47,28 +47,6 @@ _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 _UNCALL_0 = getAtom(u"_uncall", 0)
 
 
-class listIterator(Object):
-
-    _immutable_fields_ = "objects",
-
-    _index = 0
-
-    def __init__(self, objects):
-        self.objects = objects
-
-    def recv(self, atom, args):
-        if atom is NEXT_1:
-            if self._index < len(self.objects):
-                rv = [IntObject(self._index), self.objects[self._index]]
-                self._index += 1
-                return ConstList(rv)
-            else:
-                ej = args[0]
-                ej.call(u"run", [StrObject(u"Iterator exhausted")])
-
-        raise Refused(self, atom, args)
-
-
 class mapIterator(Object):
 
     _immutable_fields_ = "objects",
@@ -82,10 +60,11 @@ class mapIterator(Object):
     def recv(self, atom, args):
         if atom is NEXT_1:
             if self._index < len(self.objects):
+                from typhon.objects.lists import ConstList
                 k, v = self.objects[self._index]
-                rv = [k, v]
+                rv = ConstList.pair(k, v)
                 self._index += 1
-                return ConstList(rv)
+                return rv
             else:
                 ej = args[0]
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
@@ -111,7 +90,7 @@ class Collection(object):
 
         # size/0: Get the number of elements in the collection.
         if atom is SIZE_0:
-            return IntObject(self.size())
+            return IntObject(self.size)
 
         # slice/1 and slice/2: Select a subrange of this collection.
         if atom is SLICE_1:
@@ -130,120 +109,6 @@ class Collection(object):
             return self.snapshot()
 
         return self._recv(atom, args)
-
-
-class ConstList(Collection, Object):
-
-    _immutable_fields_ = "objects[*]",
-
-    def __init__(self, objects):
-        self.objects = objects
-
-    def toString(self):
-        guts = u", ".join([obj.toString() for obj in self.objects])
-        return u"[%s]" % (guts,)
-
-    def hash(self):
-        # Use the same sort of hashing as CPython's tuple hash.
-        x = 0x345678
-        for obj in self.objects:
-            y = obj.hash()
-            x = intmask((1000003 * x) ^ y)
-        return x
-
-    def _recv(self, atom, args):
-        if atom is ADD_1:
-            other = args[0]
-            return ConstList(self.objects + unwrapList(other))
-
-        if atom is ASMAP_0:
-            d = monteDict()
-            for i, o in enumerate(self.objects):
-                d[IntObject(i)] = o
-            return ConstMap(d)
-
-        if atom is ASSET_0:
-            d = monteDict()
-            for o in self.objects:
-                d[o] = None
-            return ConstSet(d)
-
-        if atom is DIVERGE_0:
-            _flexList = getGlobal(u"_flexList")
-            return _flexList.call(u"run", [self])
-
-        if atom is GET_1:
-            # Lookup by index.
-            index = unwrapInt(args[0])
-            return self.objects[index]
-
-        if atom is INDEXOF_1:
-            from typhon.objects.equality import EQUAL, optSame
-            needle = args[0]
-            for index, specimen in enumerate(self.objects):
-                if optSame(needle, specimen) is EQUAL:
-                    return IntObject(index)
-            return IntObject(-1)
-
-        if atom is MULTIPLY_1:
-            # multiply/1: Create a new list by repeating this list's contents.
-            index = unwrapInt(args[0])
-            return ConstList(self.objects * index)
-
-        if atom is REVERSE_0:
-            # This might seem slightly inefficient, and it might be, but I
-            # want to make it very clear to RPython that we are not mutating
-            # the list after we assign it to the new object.
-            new = self.objects[:]
-            new.reverse()
-            return ConstList(new)
-
-        if atom is WITH_1:
-            # with/1: Create a new list with an appended object.
-            return ConstList(self.objects + args)
-
-        if atom is WITH_2:
-            # Replace by index.
-            index = unwrapInt(args[0])
-            return self.put(index, args[1])
-
-        raise Refused(self, atom, args)
-
-    def _makeIterator(self):
-        return listIterator(self.objects)
-
-    def contains(self, needle):
-        from typhon.objects.equality import EQUAL, optSame
-        for specimen in self.objects:
-            if optSame(needle, specimen) is EQUAL:
-                return True
-        return False
-
-    def put(self, index, value):
-        top = len(self.objects)
-        if 0 <= index < top:
-            new = self.objects[:]
-            new[index] = value
-        elif index == top:
-            new = self.objects + [value]
-        else:
-            raise userError(u"Index %d out of bounds for list of length %d" %
-                           (index, len(self.objects)))
-
-        return ConstList(new)
-
-    def size(self):
-        return len(self.objects)
-
-    def slice(self, start, stop=-1):
-        assert start >= 0
-        if stop < 0:
-            return ConstList(self.objects[start:])
-        else:
-            return ConstList(self.objects[start:stop])
-
-    def snapshot(self):
-        return ConstList(self.objects[:])
 
 
 # Let's talk about maps for a second.
@@ -291,10 +156,11 @@ def monteDict():
 
 class ConstMap(Collection, Object):
 
-    _immutable_fields_ = "objectMap",
+    _immutable_fields_ = "objectMap", "size"
 
     def __init__(self, objectMap):
         self.objectMap = objectMap
+        self.size = len(self.objectMap)
 
     def asDict(self):
         return self.objectMap
@@ -321,6 +187,7 @@ class ConstMap(Collection, Object):
     @staticmethod
     def fromPairs(wrappedPairs):
         d = monteDict()
+        from typhon.objects.lists import unwrapList
         for obj in unwrapList(wrappedPairs):
             pair = unwrapList(obj)
             assert len(pair) == 2, "Not a pair!"
@@ -329,9 +196,10 @@ class ConstMap(Collection, Object):
 
     def _recv(self, atom, args):
         if atom is _UNCALL_0:
-            rv = ConstList([ConstList([k, v])
+            from typhon.objects.lists import ConstList
+            rv = makeList([ConstList.pair(k, v)
                 for k, v in self.objectMap.items()])
-            return ConstList([StrObject(u"fromPairs"), rv])
+            return ConstList.pair(StrObject(u"fromPairs"), rv)
 
         if atom is DIVERGE_0:
             _flexMap = getGlobal(u"_flexMap")
@@ -400,9 +268,6 @@ class ConstMap(Collection, Object):
             rv[k] = v
         return ConstMap(rv)
 
-    def size(self):
-        return len(self.objectMap)
-
     def snapshot(self):
         return ConstMap(self.objectMap.copy())
 
@@ -415,10 +280,11 @@ class ConstSet(Collection, Object):
     with None for the values.
     """
 
-    _immutable_fields_ = "objectMap",
+    _immutable_fields_ = "objectMap", "size"
 
     def __init__(self, objectMap):
         self.objectMap = objectMap
+        self.size = len(self.objectMap)
 
     def asDict(self):
         return self.objectMap
@@ -438,9 +304,10 @@ class ConstSet(Collection, Object):
 
     def _recv(self, atom, args):
         if atom is _UNCALL_0:
+            from typhon.objects.lists import ConstList
             # [1,2,3].asSet() -> [[1,2,3], "asSet"]
-            rv = ConstList(self.objectMap.keys())
-            return ConstList([rv, StrObject(u"asSet")])
+            rv = makeList(self.objectMap.keys())
+            return ConstList.pair(rv, StrObject(u"asSet"))
 
         if atom is DIVERGE_0:
             _flexSet = getGlobal(u"_flexSet")
@@ -467,7 +334,8 @@ class ConstSet(Collection, Object):
         raise Refused(self, atom, args)
 
     def _makeIterator(self):
-        return listIterator(self.objectMap.keys())
+        from typhon.objects.lists import listIterator
+        return listIterator(makeList(self.objectMap.keys()))
 
     def contains(self, needle):
         return needle in self.objectMap
@@ -492,19 +360,8 @@ class ConstSet(Collection, Object):
             rv[k] = None
         return ConstSet(rv)
 
-    def size(self):
-        return len(self.objectMap)
-
     def snapshot(self):
         return ConstSet(self.objectMap.copy())
-
-
-def unwrapList(o):
-    from typhon.objects.refs import resolution
-    l = resolution(o)
-    if isinstance(l, ConstList):
-        return l.objects
-    raise userError(u"Not a list!")
 
 
 def unwrapMap(o):
@@ -521,3 +378,8 @@ def unwrapSet(o):
     if isinstance(m, ConstSet):
         return m.objectMap
     raise userError(u"Not a set!")
+
+
+def makeList(objects):
+    from typhon.objects.lists import ConstList
+    return ConstList.withoutStrategy(objects)

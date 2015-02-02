@@ -14,11 +14,11 @@
 
 from unittest import TestCase
 
-from typhon.objects.collections import (ConstList, ConstMap, unwrapList,
-                                        unwrapMap)
+from typhon.objects.collections import ConstMap, unwrapMap
 from typhon.objects.constants import unwrapBool, wrapBool
 from typhon.objects.data import (DoubleObject, IntObject, promoteToDouble,
                                  unwrapInt)
+from typhon.objects.lists import makeList, unwrapList
 from typhon.objects.refs import isResolved, makePromise, resolution
 
 
@@ -73,7 +73,7 @@ class TestUnwrappers(TestCase):
         self.assertEqual(unwrapInt(p), 42)
 
     def testUnwrapListPromise(self):
-        p = makeNear(ConstList([]))
+        p = makeNear(makeList([]))
         self.assertEqual(unwrapList(p), [])
 
     def testUnwrapMapPromise(self):

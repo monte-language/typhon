@@ -16,8 +16,7 @@
 
 from unittest import TestCase
 
-from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
-                                        monteDict)
+from typhon.objects.collections import ConstMap, ConstSet, monteDict
 from typhon.objects.data import CharObject, IntObject
 
 
@@ -33,24 +32,6 @@ class TestConstMap(TestCase):
     def testToString(self):
         d = monteDict()
         self.assertEqual(ConstMap(d).toString(), u"[].asMap()")
-
-
-class TestConstList(TestCase):
-
-    def testHashEqual(self):
-        a = ConstList([IntObject(42), CharObject(u'é')])
-        b = ConstList([IntObject(42), CharObject(u'é')])
-        self.assertEqual(a.hash(), b.hash())
-
-    def testHashInequalLength(self):
-        a = ConstList([IntObject(42), CharObject(u'é')])
-        b = ConstList([IntObject(42)])
-        self.assertNotEqual(a.hash(), b.hash())
-
-    def testHashInequalItems(self):
-        a = ConstList([IntObject(42), CharObject(u'é')])
-        b = ConstList([IntObject(42), CharObject(u'e')])
-        self.assertNotEqual(a.hash(), b.hash())
 
 
 class TestConstSet(TestCase):

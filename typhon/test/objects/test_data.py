@@ -18,8 +18,8 @@ import math
 from unittest import TestCase
 
 from typhon.errors import Ejecting, UserException
-from typhon.objects.collections import ConstList
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
+from typhon.objects.lists import makeList
 from typhon.objects.ejectors import Ejector
 
 
@@ -100,7 +100,7 @@ class TestStr(TestCase):
     def testJoin(self):
         s = StrObject(u"|")
         result = s.call(u"join",
-                [ConstList([StrObject(u"5"), StrObject(u"42")])])
+                [makeList([StrObject(u"5"), StrObject(u"42")])])
         self.assertEqual(result._s, u"5|42")
 
     def testSliceStart(self):
@@ -124,7 +124,7 @@ class TestStr(TestCase):
 
         s = StrObject(u"first second")
         result = s.call(u"split", [StrObject(u" ")])
-        pieces = [obj._s for obj in result.objects]
+        pieces = [obj._s for obj in result.asList()]
         self.assertEqual(pieces, [u"first", u"second"])
 
     def testToLowerCaseUnicode(self):
@@ -151,11 +151,11 @@ class TestStr(TestCase):
         iterator = s.call(u"_makeIterator", [])
         with Ejector() as ej:
             result = iterator.call(u"next", [ej])
-            objs = result.objects
+            objs = result.asList()
             self.assertEqual(objs[0].getInt(), 0)
             self.assertEqual(objs[1]._c, u'c')
             result = iterator.call(u"next", [ej])
-            objs = result.objects
+            objs = result.asList()
             self.assertEqual(objs[0].getInt(), 1)
             self.assertEqual(objs[1]._c, u's')
             self.assertRaises(Ejecting, iterator.call, u"next", [ej])

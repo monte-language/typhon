@@ -375,10 +375,10 @@ class strIterator(Object):
     def recv(self, atom, args):
         if atom is NEXT_1:
             if self._index < len(self.s):
-                from typhon.objects.collections import ConstList
+                from typhon.objects.collections import makeList
                 rv = [IntObject(self._index), CharObject(self.s[self._index])]
                 self._index += 1
-                return ConstList(rv)
+                return makeList(rv)
             else:
                 ej = args[0]
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
@@ -437,23 +437,22 @@ class StrObject(Object):
             return CharObject(self._s[index])
 
         if atom is JOIN_1:
+            from typhon.objects.lists import unwrapList
             l = args[0]
-            from typhon.objects.collections import ConstList, unwrapList
-            if isinstance(l, ConstList):
-                ub = UnicodeBuilder()
-                strs = []
-                first = True
-                for s in unwrapList(l):
-                    # For all iterations except the first, append a copy of
-                    # ourselves.
-                    if first:
-                        first = False
-                    else:
-                        ub.append(self._s)
+            ub = UnicodeBuilder()
+            strs = []
+            first = True
+            for s in unwrapList(l):
+                # For all iterations except the first, append a copy of
+                # ourselves.
+                if first:
+                    first = False
+                else:
+                    ub.append(self._s)
 
-                    string = unwrapStr(s)
-                    ub.append(string)
-                return StrObject(ub.build())
+                string = unwrapStr(s)
+                ub.append(string)
+            return StrObject(ub.build())
 
         if atom is MULTIPLY_1:
             amount = args[0]
@@ -479,17 +478,19 @@ class StrObject(Object):
             return StrObject(self._s[start:stop])
 
         if atom is SPLIT_1:
-            from typhon.objects.collections import ConstList
+            # XXX use strategy
+            from typhon.objects.collections import makeList
             splitter = unwrapStr(args[0])
             strings = [StrObject(s) for s in split(self._s, splitter)]
-            return ConstList(strings)
+            return makeList(strings)
 
         if atom is SPLIT_2:
+            # XXX use strategy
             splitter = unwrapStr(args[0])
             splits = unwrapInt(args[1])
-            from typhon.objects.collections import ConstList
+            from typhon.objects.collections import makeList
             strings = [StrObject(s) for s in split(self._s, splitter, splits)]
-            return ConstList(strings)
+            return makeList(strings)
 
         if atom is TOLOWERCASE_0:
             # Use current size as a size hint. In the best case, characters

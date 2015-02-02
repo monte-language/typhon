@@ -14,10 +14,10 @@
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException
-from typhon.objects.collections import unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, optSame
+from typhon.objects.lists import unwrapList
 from typhon.objects.root import Object
 
 

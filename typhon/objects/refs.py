@@ -16,9 +16,9 @@ import weakref
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
-from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
+from typhon.objects.lists import ConstList
 from typhon.objects.root import Object
 from typhon.vats import currentVat
 
@@ -115,7 +115,7 @@ class RefOps(Object):
 
     def promise(self):
         p, r = makePromise()
-        return ConstList([p, r])
+        return ConstList.pair(p, r)
 
     def broken(self, problem):
         return UnconnectedRef(problem)

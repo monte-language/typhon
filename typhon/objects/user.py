@@ -16,9 +16,9 @@ from rpython.rlib.jit import elidable, promote, unroll_safe
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused
-from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector
+from typhon.objects.lists import ConstList, makeList
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
 
@@ -141,7 +141,7 @@ class ScriptObject(Object):
 
         # Well, let's try the matchers.
         matchers = self._map.matchers
-        message = ConstList([StrObject(atom.verb), ConstList(args)])
+        message = ConstList.pair(StrObject(atom.verb), makeList(args))
 
         for pattern, block, frameSize in matchers:
             with self.env(frameSize) as env:
