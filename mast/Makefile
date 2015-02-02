@@ -3,7 +3,8 @@ all: prelude.ty lib/bytes.ty lib/enum.ty lib/netstring.ty lib/simple.ty \
 	http \
 	irc \
 	tubes \
-	games
+	games \
+	bench
 
 tubes: lib/tubes/nullPump.ty lib/tubes/mapPump.ty \
 	lib/tubes/pumpTube.ty \
@@ -16,6 +17,8 @@ irc: lib/irc/client.ty \
 	tubes
 
 games: games/mafia.ty
+
+bench: bench/nqueens.ty
 
 %.ty: %.mt
 	~/monte/local-monte/bin/python ~/monte/bin/monte -c $< > $@
