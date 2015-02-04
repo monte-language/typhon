@@ -14,6 +14,7 @@
 
 from errno import EBADF, EPIPE
 
+from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
 
 from typhon.atoms import getAtom
@@ -70,6 +71,7 @@ class Socket(object):
         self._founts.append(fount)
         return fount
 
+    @dont_look_inside
     def connect(self, addr, handler):
         self._connector = handler
 
@@ -85,6 +87,7 @@ class Socket(object):
             else:
                 raise
 
+    @dont_look_inside
     def listen(self, port, handler):
         self._listener = handler
 
@@ -93,6 +96,7 @@ class Socket(object):
         self.rsock.bind(addr)
         self.rsock.listen(BACKLOG)
 
+    @dont_look_inside
     def read(self):
         """
         Get some data and send it to interested founts.
@@ -123,6 +127,7 @@ class Socket(object):
         for fount in self._founts:
             fount.receive(buf)
 
+    @dont_look_inside
     def write(self):
         """
         Send buffered data.
@@ -168,6 +173,7 @@ class Socket(object):
                 return
         self._outbound = []
 
+    @dont_look_inside
     def close(self):
         """
         Stop writing.

@@ -16,98 +16,28 @@ from rpython.rlib.jit import elidable, promote, unroll_safe
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused
+from typhon.objects.constants import NullObject
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
-
-
-class ScriptMap(object):
-    """
-    A template for scripts.
-
-    This is called a "map" because of the use of this sort of caching template
-    structure in the classic optimizing Self compiler.
-    """
-
-    _immutable_ = True
-
-    _immutable_fields_ = "_methods[*]",
-
-    def __init__(self, name, script):
-        self.name = name
-
-        self._methods = {}
-
-        # Dammit, RPython.
-        from typhon.nodes import Script
-        assert isinstance(script, Script)
-        for method in script._methods:
-            # God *dammit*, RPython.
-            from typhon.nodes import Method
-            assert isinstance(method, Method)
-
-            verb = method._verb
-            patterns = method._ps
-            block = method._b
-            size = method.frameSize
-
-            arity = len(patterns)
-            atom = getAtom(verb, arity)
-
-            self._methods[atom] = patterns, block, size
-
-        self.matchers = []
-        for matcher in script._matchers:
-            # Stupid RPython. :T
-            from typhon.nodes import Matcher
-            assert isinstance(matcher, Matcher)
-            self.matchers.append((matcher._pattern, matcher._block,
-                matcher.frameSize))
-
-    def repr(self):
-        ms = [atom.repr() for atom in self._methods.keys()]
-        return "ScriptMap(%s, {%s})" % (self.name, ", ".join(ms))
-
-    @elidable
-    def lookup(self, atom):
-        return self._methods.get(atom, (None, None, -1))
-
-
-@unroll_safe
-def runBlock(patterns, block, args, ej, env):
-    """
-    Run a block with an environment.
-    """
-
-    from typhon.nodes import evaluate
-
-    with env as env:
-        # Set up parameters from arguments.
-        # We are assured that the counts line up by our caller.
-        assert len(patterns) == len(args), "runBlock() called with bad args"
-        for i, pattern in enumerate(patterns):
-            promote(pattern).unify(args[i], ej, env)
-
-        # Run the block.
-        return evaluate(block, env)
+from typhon.smallcaps import SmallCaps
 
 
 class ScriptObject(Object):
-    """
-    A user-defined object.
-    """
 
-    _immutable_fields_ = "displayName", "_map"
-
-    def __init__(self, displayName, scriptMap, env):
+    def __init__(self, codeScript, closure, displayName):
+        self.codeScript = codeScript
+        self.closure = {}
+        closureNames = self.codeScript.closureNames.keys()
+        for i in range(len(closureNames)):
+            self.closure[closureNames[i]] = closure[i]
         self.displayName = displayName
-        self._map = scriptMap
-        self._env = env
 
-    def env(self, size):
-        return self._env.new(size)
+    def patchSelf(self, binding):
+        if self.displayName in self.codeScript.closureNames:
+            self.closure[self.displayName] = binding
 
     def toString(self):
         try:
@@ -119,46 +49,20 @@ class ScriptObject(Object):
 
     @unroll_safe
     def recv(self, atom, args):
-        # Circular import here to get at the evaluation function.
-        from typhon.nodes import evaluate
+        code = self.codeScript.methods.get(atom, None)
+        if code is None:
+            raise Refused(self, atom, args)
 
-        patterns, block, frameSize = self._map.lookup(atom)
-
-        if patterns is not None and block is not None:
-            block = promote(block)
-            # This ejector will be used to signal that the method was not
-            # usable due to failed pattern matching of arguments to
-            # parameters. Since it's possible that a matcher will match the
-            # message, we don't want to give up if the method fails to match.
-            with Ejector() as ej:
-                try:
-                    return runBlock(patterns, block, args, ej,
-                            self.env(frameSize))
-                except Ejecting as e:
-                    if e.ejector is not ej:
-                        # Oops, we caught another ejector! Let it go.
-                        raise
-
-        # Well, let's try the matchers.
-        matchers = self._map.matchers
-        message = ConstList([StrObject(atom.verb), ConstList(args)])
-
-        for pattern, block, frameSize in matchers:
-            with self.env(frameSize) as env:
-                with Ejector() as ej:
-                    try:
-                        pattern.unify(message, ej, env)
-
-                        # Run the block.
-                        rv = evaluate(block, env)
-                        return rv
-                    except Ejecting as e:
-                        # Is it the ejector that we created in this frame? If
-                        # not, reraise.
-                        if e.ejector is ej:
-                            continue
-                        raise
-
-        # print "I am", self.repr(), "and I am refusing", atom
-        # print "I would have accepted", self._map.repr()
-        raise Refused(self, atom, args)
+        frame = {}
+        for key in code.frame:
+            frame[key] = self.closure[key]
+        machine = SmallCaps(code, frame)
+        # print "--- Running", self.displayName, atom, args
+        # Push the arguments onto the stack, backwards.
+        args.reverse()
+        for arg in args:
+            machine.push(arg)
+            # XXX is this the right ejector?
+            machine.push(NullObject)
+        machine.run()
+        return machine.pop()

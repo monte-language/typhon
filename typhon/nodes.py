@@ -12,30 +12,93 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from collections import OrderedDict
+
 from rpython.rlib.jit import assert_green, elidable, jit_debug, unroll_safe
 
+from typhon.atoms import getAtom
 from typhon.errors import Ejecting, LoadFailed, UserException
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.slots import FinalSlot, VarSlot
-from typhon.objects.user import ScriptMap, ScriptObject
+from typhon.objects.user import ScriptObject
 from typhon.pretty import Buffer, LineWriter, OneLine
+from typhon.smallcaps import Code, ops
 
 
-def evaluate(node, env):
-    # Want to see nodes in JIT traces? Uncomment these two lines. ~ C.
-    assert_green(node)
-    jit_debug(node.repr())
-    try:
-        return node.evaluate(env)
-    except UserException as ue:
-        crumb = node.__class__.__name__.decode("utf-8")
-        out = OneLine()
-        node.pretty(out)
-        ue.trail.append((crumb, out.getLine().decode("utf-8")))
-        raise
+class Compiler(object):
+
+    def __init__(self):
+        self.instructions = []
+
+        self.atoms = OrderedDict()
+        self.frame = OrderedDict()
+        self.literals = OrderedDict()
+        self.locals = OrderedDict()
+        self.scripts = []
+
+    def makeCode(self):
+        atoms = self.atoms.keys()
+        frame = self.frame.keys()
+        literals = self.literals.keys()
+        locals = self.locals.keys()
+
+        return Code(self.instructions, atoms, literals, frame, locals,
+                    self.scripts)
+
+    def addInstruction(self, name, index):
+        self.instructions.append((ops[name], index))
+
+    def addAtom(self, verb, arity):
+        atom = getAtom(verb, arity)
+        if atom not in self.atoms:
+            self.atoms[atom] = len(self.atoms)
+        return self.atoms[atom]
+
+    def addFrame(self, name):
+        if name not in self.frame:
+            self.frame[name] = len(self.frame)
+        return self.frame[name]
+
+    def addLiteral(self, literal):
+        if literal not in self.literals:
+            self.literals[literal] = len(self.literals)
+        return self.literals[literal]
+
+    def addLocal(self, name):
+        if name not in self.locals:
+            self.locals[name] = len(self.locals)
+        return self.locals[name]
+
+    def addScript(self, script):
+        index = len(self.scripts)
+        self.scripts.append(script)
+        return index
+
+    def literal(self, literal):
+        index = self.addLiteral(literal)
+        self.addInstruction("LITERAL", index)
+
+    def call(self, verb, arity):
+        atom = self.addAtom(verb, arity)
+        self.addInstruction("CALL", atom)
+
+    def markInstruction(self, name):
+        index = len(self.instructions)
+        self.addInstruction(name, 0)
+        return index
+
+    def patch(self, index):
+        inst, _ = self.instructions[index]
+        self.instructions[index] = inst, len(self.instructions)
+
+
+def compile(node):
+    compiler = Compiler()
+    node.compile(compiler)
+    return compiler.makeCode()
 
 
 class InvalidAST(LoadFailed):
@@ -65,9 +128,6 @@ class Node(object):
         return self.__repr__()
 
     def pretty(self, out):
-        raise NotImplementedError
-
-    def evaluate(self, env):
         raise NotImplementedError
 
     def transform(self, f):
@@ -101,8 +161,8 @@ class _Null(Node):
     def pretty(self, out):
         out.write("null")
 
-    def evaluate(self, env):
-        return NullObject
+    def compile(self, compiler):
+        compiler.literal(NullObject)
 
 
 Null = _Null()
@@ -122,8 +182,8 @@ class Int(Node):
     def pretty(self, out):
         out.write("%d" % self._i)
 
-    def evaluate(self, env):
-        return IntObject(self._i)
+    def compile(self, compiler):
+        index = compiler.literal(IntObject(self._i))
 
 
 class Str(Node):
@@ -136,8 +196,8 @@ class Str(Node):
     def pretty(self, out):
         out.write('"%s"' % (self._s.encode("utf-8")))
 
-    def evaluate(self, env):
-        return StrObject(self._s)
+    def compile(self, compiler):
+        index = compiler.literal(StrObject(self._s))
 
 
 def strToString(s):
@@ -156,8 +216,8 @@ class Double(Node):
     def pretty(self, out):
         out.write("%f" % self._d)
 
-    def evaluate(self, env):
-        return DoubleObject(self._d)
+    def compile(self, compiler):
+        index = compiler.literal(DoubleObject(self._d))
 
 
 class Char(Node):
@@ -170,8 +230,8 @@ class Char(Node):
     def pretty(self, out):
         out.write("'%s'" % (self._c.encode("utf-8")))
 
-    def evaluate(self, env):
-        return CharObject(self._c)
+    def compile(self, compiler):
+        index = compiler.literal(CharObject(self._c))
 
 
 class Tuple(Node):
@@ -195,10 +255,6 @@ class Tuple(Node):
                 item.pretty(out)
         out.write("]")
 
-    @unroll_safe
-    def evaluate(self, env):
-        return ConstList([evaluate(item, env) for item in self._t])
-
     def transform(self, f):
         # I don't care if it's cheating. It's elegant and simple and pretty.
         return f(Tuple([node.transform(f) for node in self._t]))
@@ -212,6 +268,17 @@ class Tuple(Node):
             if node.usesName(name):
                 uses = True
         return uses
+
+    def compile(self, compiler):
+        size = len(self._t)
+        makeList = compiler.addFrame(u"__makeList")
+        compiler.addInstruction("NOUN_FRAME", makeList)
+        # [__makeList]
+        for node in self._t:
+            node.compile(compiler)
+            # [__makeList x0 x1 ...]
+        compiler.call(u"run", size)
+        # [ConstList]
 
 
 def tupleToList(t):
@@ -239,11 +306,6 @@ class Assign(Node):
         out.write(" := ")
         self.rvalue.pretty(out)
 
-    def evaluate(self, env):
-        value = evaluate(self.rvalue, env)
-        env.putValue(self.frameIndex, value)
-        return value
-
     def transform(self, f):
         return f(Assign(self.target, self.rvalue.transform(f)))
 
@@ -258,6 +320,23 @@ class Assign(Node):
 
     def usesName(self, name):
         return self.rvalue.usesName(name)
+
+    def compile(self, compiler):
+        self.rvalue.compile(compiler)
+        # [rvalue]
+        compiler.addInstruction("DUP", 0)
+        # [rvalue rvalue]
+        # It's unknown yet whether the assignment is to a local slot or an
+        # (outer) frame slot. Check to see whether the name is already known
+        # to be local; if not, then it must be in the outer frame.
+        if self.target in compiler.locals:
+            index = compiler.locals[self.target]
+            compiler.addInstruction("ASSIGN_LOCAL", index)
+            # [rvalue]
+        else:
+            index = compiler.addFrame(self.target)
+            compiler.addInstruction("ASSIGN_FRAME", index)
+            # [rvalue]
 
 
 class Binding(Node):
@@ -277,9 +356,6 @@ class Binding(Node):
         out.write("&&")
         out.write(self.name.encode("utf-8"))
 
-    def evaluate(self, env):
-        return env.getBinding(self.frameIndex)
-
     def transform(self, f):
         return f(self)
 
@@ -290,6 +366,16 @@ class Binding(Node):
             self = Binding(newName)
         self.frameIndex = scope.getSeen(self.name)
         return self
+
+    def compile(self, compiler):
+        if self.name in compiler.locals:
+            index = compiler.addLocal(self.name)
+            compiler.addInstruction("BINDING_LOCAL", index)
+            # [binding]
+        else:
+            index = compiler.addFrame(self.name)
+            compiler.addInstruction("BINDING_FRAME", index)
+            # [binding]
 
 
 class Call(Node):
@@ -309,18 +395,6 @@ class Call(Node):
         self._args.pretty(out)
         out.write(")")
 
-    def evaluate(self, env):
-        # There's a careful order of operations here. First we have to
-        # evaluate the target, then the verb, and finally the arguments.
-        # Once we do all that, we make the actual call.
-        target = evaluate(self._target, env)
-        verb = evaluate(self._verb, env)
-        # XXX figure out a better runtime exception for this
-        assert isinstance(verb, StrObject), "non-Str verb"
-        args = evaluate(self._args, env)
-
-        return target.call(verb._s, unwrapList(args))
-
     def transform(self, f):
         return f(Call(self._target.transform(f), self._verb.transform(f),
             self._args.transform(f)))
@@ -334,6 +408,17 @@ class Call(Node):
         rv = self._target.usesName(name) or self._verb.usesName(name)
         return rv or self._args.usesName(name)
 
+    def compile(self, compiler):
+        self._target.compile(compiler)
+        # [target]
+        verb = strToString(self._verb)
+        args = tupleToList(self._args)
+        arity = len(args)
+        for node in args:
+            node.compile(compiler)
+            # [target x0 x1 ...]
+        compiler.call(verb, arity)
+        # [retval]
 
 class Def(Node):
 
@@ -362,17 +447,6 @@ class Def(Node):
         self._v.pretty(out)
         out.writeLine("")
 
-    def evaluate(self, env):
-        rval = evaluate(self._v, env)
-
-        if self._e is None:
-            ejector = None
-        else:
-            ejector = evaluate(self._e, env)
-
-        self._p.unify(rval, ejector, env)
-        return rval
-
     def transform(self, f):
         return f(Def(self._p, self._e, self._v.transform(f)))
 
@@ -390,6 +464,20 @@ class Def(Node):
         if self._e is not None:
             rv = rv or self._e.usesName(name)
         return rv
+
+    def compile(self, compiler):
+        self._v.compile(compiler)
+        # [value]
+        compiler.addInstruction("DUP", 0)
+        # [value value]
+        if self._e is None:
+            compiler.literal(NullObject)
+            # [value value null]
+        else:
+            self._e.compile(compiler)
+            # [value value ej]
+        self._p.compile(compiler)
+        # [value]
 
 
 class Escape(Node):
@@ -415,34 +503,6 @@ class Escape(Node):
             self._catchPattern.pretty(out)
             out.writeLine(":")
             self._catchNode.pretty(out.indent())
-
-    def evaluate(self, env):
-        with Ejector() as ej:
-            rv = None
-
-            with env.new(self.frameSize) as newEnv:
-                self._pattern.unify(ej, None, newEnv)
-
-                try:
-                    return evaluate(self._node, newEnv)
-                except Ejecting as e:
-                    # Is it the ejector that we created in this frame? If not,
-                    # reraise.
-                    if e.ejector is ej:
-                        # If no catch, then return as-is.
-                        rv = e.value
-                    else:
-                        raise
-
-            # If we have no catch block, then let's just return the value that
-            # we captured earlier.
-            if self._catchPattern is None or self._catchNode is None:
-                return rv
-
-            # Else, let's set up another frame and handle the catch block.
-            with env.new(self.catchFrameSize) as newEnv:
-                self._catchPattern.unify(rv, None, newEnv)
-                return evaluate(self._catchNode, newEnv)
 
     def transform(self, f):
         # We have to write some extra code here since catchNode could be None.
@@ -482,6 +542,28 @@ class Escape(Node):
             rv = rv or self._catchNode.usesName(name)
         return rv
 
+    def compile(self, compiler):
+        ejector = compiler.markInstruction("EJECTOR")
+        # [ej]
+        compiler.literal(NullObject)
+        # [ej null]
+        self._pattern.compile(compiler)
+        # []
+        self._node.compile(compiler)
+        # [retval]
+        if self._catchNode is not None:
+            jump = compiler.markInstruction("JUMP")
+            compiler.patch(ejector)
+            compiler.literal(NullObject)
+            # [retval null]
+            self._catchPattern.compile(compiler)
+            # []
+            self._catchNode.compile(compiler)
+            # [retval]
+            compiler.patch(jump)
+        else:
+            compiler.patch(ejector)
+
 
 class Finally(Node):
 
@@ -500,17 +582,6 @@ class Finally(Node):
         out.writeLine("")
         out.writeLine("finally:")
         self._atLast.pretty(out.indent())
-
-    def evaluate(self, env):
-        # Use RPython's exception handling system to ensure the execution of
-        # the atLast block after exiting the main block.
-        try:
-            with env.new(self.frameSize) as env:
-                rv = evaluate(self._block, env)
-            return rv
-        finally:
-            with env.new(self.finallyFrameSize) as env:
-                evaluate(self._atLast, env)
 
     def transform(self, f):
         return f(Finally(self._block.transform(f), self._atLast.transform(f)))
@@ -532,6 +603,17 @@ class Finally(Node):
     def usesName(self, name):
         return self._block.usesName(name) or self._atLast.usesName(name)
 
+    def compile(self, compiler):
+        unwind = compiler.markInstruction("UNWIND")
+        self._block.compile(compiler)
+        handler = compiler.markInstruction("END_HANDLER")
+        compiler.patch(unwind)
+        self._atLast.compile(compiler)
+        compiler.addInstruction("POP", 0)
+        dropper = compiler.markInstruction("END_HANDLER")
+        compiler.patch(handler)
+        compiler.patch(dropper)
+
 
 class Hide(Node):
 
@@ -545,10 +627,6 @@ class Hide(Node):
     def pretty(self, out):
         out.writeLine("hide:")
         self._inner.pretty(out.indent())
-
-    def evaluate(self, env):
-        with env.new(self.frameSize) as env:
-            return evaluate(self._inner, env)
 
     def transform(self, f):
         return f(Hide(self._inner.transform(f)))
@@ -565,6 +643,9 @@ class Hide(Node):
         # XXX not technically correct due to Hide intentionally altering
         # scope resolution.
         return self._inner.usesName(name)
+
+    def compile(self, compiler):
+        self._inner.compile(compiler)
 
 
 class If(Node):
@@ -587,17 +668,6 @@ class If(Node):
         out.writeLine("else:")
         self._otherwise.pretty(out.indent())
 
-    def evaluate(self, env):
-        # If is a short-circuiting expression. We construct zero objects in
-        # the branch that is not chosen.
-        with env.new(self.frameSize) as env:
-            whether = evaluate(self._test, env)
-
-            if unwrapBool(whether):
-                return evaluate(self._then, env)
-            else:
-                return evaluate(self._otherwise, env)
-
     def transform(self, f):
         return f(If(self._test.transform(f), self._then.transform(f),
             self._otherwise.transform(f)))
@@ -615,6 +685,21 @@ class If(Node):
     def usesName(self, name):
         rv = self._test.usesName(name) or self._then.usesName(name)
         return rv or self._otherwise.usesName(name)
+
+    def compile(self, compiler):
+        # BRANCH otherwise
+        # ...
+        # JUMP end
+        # otherwise: ...
+        # end: ...
+        self._test.compile(compiler)
+        # [condition]
+        branch = compiler.markInstruction("BRANCH")
+        self._then.compile(compiler)
+        jump = compiler.markInstruction("JUMP")
+        compiler.patch(branch)
+        self._otherwise.compile(compiler)
+        compiler.patch(jump)
 
 
 class Matcher(Node):
@@ -726,10 +811,6 @@ class Noun(Node):
     def pretty(self, out):
         out.write(self.name.encode("utf-8"))
 
-    def evaluate(self, env):
-        assert self.frameIndex >= 0, u"Noun not in frame: %s" % self.name
-        return env.getValue(self.frameIndex)
-
     def rewriteScope(self, scope):
         # Read.
         newName = scope.getShadow(self.name)
@@ -740,6 +821,14 @@ class Noun(Node):
 
     def usesName(self, name):
         return self.name == name
+
+    def compile(self, compiler):
+        if self.name in compiler.locals:
+            index = compiler.addLocal(self.name)
+            compiler.addInstruction("NOUN_LOCAL", index)
+        else:
+            index = compiler.addFrame(self.name)
+            compiler.addInstruction("NOUN_FRAME", index)
 
 
 def nounToString(n):
@@ -761,9 +850,9 @@ class Obj(Node):
         self._implements = implements
         self._script = script
 
-        # Create a cached map which will be reused for all objects created
-        # from this node.
-        self._cachedMap = ScriptMap(name.__repr__(), self._script)
+        # Create a cached code object for this object.
+        self.codeScript = CodeScript(formatName(name))
+        self.codeScript.addScript(self._script)
 
     @staticmethod
     def fromAST(doc, name, auditors, script):
@@ -783,17 +872,6 @@ class Obj(Node):
         out.writeLine(":")
         self._script.pretty(out.indent())
 
-    def evaluate(self, env):
-        # Hmm. Objects need to have access to themselves within their scope...
-        rv = ScriptObject(formatName(self._n), self._cachedMap, env.freeze())
-        # ...but fortunately, objects don't contain any evaluations while
-        # being created, and it's always possible to perform the assignment
-        # into the environment afterwards.
-        self._n.unify(rv, None, rv._env)
-        # Oh, and assign it into the outer environment too.
-        self._n.unify(rv, None, env)
-        return rv
-
     def transform(self, f):
         return f(Obj(self._d, self._n, self._as, self._implements,
             self._script.transform(f)))
@@ -805,6 +883,64 @@ class Obj(Node):
 
     def usesName(self, name):
         return self._script.usesName(name)
+
+    def compile(self, compiler):
+        for name in self.codeScript.closureNames:
+            if name == self.codeScript.displayName:
+                # Put in a null and patch it later via UserObject.patchSelf().
+                compiler.literal(NullObject)
+            elif name in compiler.locals:
+                index = compiler.addLocal(name)
+                compiler.addInstruction("BINDING_LOCAL", index)
+            else:
+                index = compiler.addFrame(name)
+                compiler.addInstruction("BINDING_FRAME", index)
+        index = compiler.addScript(self.codeScript)
+        compiler.addInstruction("BINDOBJECT", index)
+        compiler.addInstruction("DUP", 0)
+        compiler.literal(NullObject)
+        self._n.compile(compiler)
+
+
+class CodeScript(object):
+
+    def __init__(self, displayName):
+        self.displayName = displayName
+
+        self.methods = {}
+        self.matchers = []
+        self.closureNames = {}
+
+    def makeObject(self, closure):
+        return ScriptObject(self, closure, self.displayName)
+
+    def addScript(self, script):
+        assert isinstance(script, Script)
+        for method in script._methods:
+            assert isinstance(method, Method)
+            self.addMethod(method)
+        for matcher in script._matchers:
+            self.addMatcher(matcher)
+
+    def addMethod(self, method):
+        verb = method._verb
+        arity = len(method._ps)
+        compiler = Compiler()
+        for param in method._ps:
+            param.compile(compiler)
+        method._b.compile(compiler)
+        # XXX guard
+
+        code = compiler.makeCode()
+        atom = getAtom(verb, arity)
+        self.methods[atom] = code
+
+        for name in code.frame:
+            self.closureNames[name] = None
+
+    def addMatcher(self, matcher):
+        # XXX
+        pass
 
 
 class Script(Node):
@@ -878,13 +1014,6 @@ class Sequence(Node):
             item.pretty(out)
             out.writeLine("")
 
-    @unroll_safe
-    def evaluate(self, env):
-        rv = NullObject
-        for node in self._l:
-            rv = evaluate(node, env)
-        return rv
-
     def transform(self, f):
         return f(Sequence([node.transform(f) for node in self._l]))
 
@@ -896,6 +1025,12 @@ class Sequence(Node):
             if node.usesName(name):
                 return True
         return False
+
+    def compile(self, compiler):
+        for node in self._l[:-1]:
+            node.compile(compiler)
+            compiler.addInstruction("POP", 0)
+        self._l[-1].compile(compiler)
 
 
 class Try(Node):
@@ -919,21 +1054,6 @@ class Try(Node):
         out.writeLine(":")
         self._then.pretty(out.indent())
 
-    def evaluate(self, env):
-        # Try the first block, and if an exception is raised, pattern-match it
-        # against the catch-pattern in the then-block.
-        try:
-            with env.new(self.frameSize) as env:
-                return evaluate(self._first, env)
-        except UserException:
-            with env.new(self.catchFrameSize) as env:
-                # XXX Exception information can't be leaked back into Monte;
-                # seal it properly instead of using null here.
-                if self._pattern.unify(NullObject, None, env):
-                    return evaluate(self._then, env)
-                else:
-                    raise
-
     def transform(self, f):
         return f(Try(self._first.transform(f), self._pattern,
             self._then.transform(f)))
@@ -954,6 +1074,15 @@ class Try(Node):
 
     def usesName(self, name):
         return self._first.usesName(name) or self._then.usesName(name)
+
+    def compile(self, compiler):
+        index = compiler.markInstruction("TRY")
+        self._first.compile(compiler)
+        end = compiler.markInstruction("END_HANDLER")
+        compiler.patch(index)
+        self._pattern.compile(compiler)
+        self._then.compile(compiler)
+        compiler.patch(end)
 
 
 class Pattern(object):
@@ -993,6 +1122,11 @@ class BindingPattern(Pattern):
             self = BindingPattern(Noun(shadowed))
         self.frameIndex = scope.putSeen(self._noun)
         return self
+
+    def compile(self, compiler):
+        index = compiler.addLocal(self._noun)
+        compiler.addInstruction("POP", 0)
+        compiler.addInstruction("BIND", index)
 
 
 class FinalPattern(Pattern):
@@ -1039,6 +1173,27 @@ class FinalPattern(Pattern):
         self.frameIndex = scope.putSeen(self._n)
         return self
 
+    def compile(self, compiler):
+        # [specimen ej]
+        if self._g is None:
+            compiler.addInstruction("POP", 0)
+            # [specimen]
+        else:
+            self._g.compile(compiler)
+            # [specimen ej guard]
+            compiler.addInstruction("ROT", 0)
+            compiler.addInstruction("ROT", 0)
+            # [guard specimen ej]
+            compiler.call(u"coerce", 2)
+            # [specimen]
+        index = compiler.addFrame(u"_makeFinalSlot")
+        compiler.addInstruction("NOUN_FRAME", index)
+        compiler.addInstruction("SWAP", 0)
+        # [_makeFinalSlot specimen]
+        compiler.call(u"run", 1)
+        index = compiler.addLocal(self._n)
+        compiler.addInstruction("BINDSLOT", index)
+
 
 class IgnorePattern(Pattern):
 
@@ -1064,6 +1219,19 @@ class IgnorePattern(Pattern):
         if self._g is None:
             return self
         return IgnorePattern(self._g.rewriteScope(scope))
+
+    def compile(self, compiler):
+        # [specimen ej]
+        if self._g is None:
+            compiler.addInstruction("POP", 0)
+            compiler.addInstruction("POP", 0)
+        else:
+            self._g.compile(compiler)
+            # [specimen ej guard]
+            compiler.addInstruction("ROT", 0)
+            compiler.addInstruction("ROT", 0)
+            # [guard specimen ej]
+            compiler.call(u"coerce", 2)
 
 
 class ListPattern(Pattern):
@@ -1129,6 +1297,14 @@ class ListPattern(Pattern):
             t = self._t.rewriteScope(scope)
         return ListPattern(ps, t)
 
+    def compile(self, compiler):
+        # XXX tail is assumed to be null/none
+        # [specimen ej]
+        compiler.addInstruction("LIST_PATT", len(self._ps))
+        for patt in self._ps:
+            # [specimen ej]
+            patt.compile(compiler)
+
 
 class VarPattern(Pattern):
 
@@ -1174,6 +1350,25 @@ class VarPattern(Pattern):
         self.frameIndex = scope.putSeen(self._n)
         return self
 
+    def compile(self, compiler):
+        # [specimen ej]
+        if self._g is None:
+            compiler.addInstruction("POP", 0)
+        else:
+            self._g.compile(compiler)
+            # [specimen ej guard]
+            compiler.addInstruction("ROT", 0)
+            compiler.addInstruction("ROT", 0)
+            # [guard specimen ej]
+            compiler.call(u"coerce", 2)
+        index = compiler.addFrame(u"_makeVarSlot")
+        compiler.addInstruction("NOUN_FRAME", index)
+        compiler.addInstruction("SWAP", 0)
+        # [_makeVarSlot specimen]
+        compiler.call(u"run", 1)
+        index = compiler.addLocal(self._n)
+        compiler.addInstruction("BINDSLOT", index)
+
 
 class ViaPattern(Pattern):
 
@@ -1205,6 +1400,25 @@ class ViaPattern(Pattern):
     def rewriteScope(self, scope):
         return ViaPattern(self._expr.rewriteScope(scope),
                           self._pattern.rewriteScope(scope))
+
+    def compile(self, compiler):
+        # [specimen ej]
+        compiler.addInstruction("DUP", 0)
+        # [specimen ej ej]
+        compiler.addInstruction("ROT", 0)
+        # [ej ej specimen]
+        compiler.addInstruction("SWAP", 0)
+        # [ej specimen ej]
+        self._expr.compile(compiler)
+        # [ej specimen ej examiner]
+        compiler.addInstruction("ROT", 0)
+        compiler.addInstruction("ROT", 0)
+        # [ej examiner specimen ej]
+        compiler.call(u"run", 2)
+        # [ej specimen]
+        compiler.addInstruction("SWAP", 0)
+        # [specimen ej]
+        self._pattern.compile(compiler)
 
 
 def formatName(p):

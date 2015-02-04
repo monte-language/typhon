@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.debug import debug_print
+
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.collections import unwrapList
@@ -100,11 +102,11 @@ class Asserter(Object):
     def dump(self):
         for label, errors in self._errors.items():
             if errors:
-                print label, "FAIL"
+                debug_print(label, "FAIL")
                 for error in errors:
-                    print "    ERROR:", error
+                    debug_print("    ERROR:", error)
             else:
-                print label, "PASS"
+                debug_print(label, "PASS")
 
 
 class UnitTest(Object):

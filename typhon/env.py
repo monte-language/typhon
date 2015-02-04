@@ -12,19 +12,16 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import elidable, hint, promote, unroll_safe
-from rpython.rlib.listsort import TimSort
+from rpython.rlib.debug import debug_print
+from rpython.rlib.jit import elidable, hint, unroll_safe
 
-from typhon.errors import userError
 from typhon.objects.slots import Binding, FinalSlot
 
 
 def finalize(scope):
-    rv = []
-    sortedScope = scope.keys()
-    TimSort(sortedScope).sort()
-    for i, key in enumerate(sortedScope):
-        rv.append((i, Binding(FinalSlot(scope[key]))))
+    rv = {}
+    for key in scope:
+        rv[key] = Binding(FinalSlot(scope[key]))
     return rv
 
 
@@ -66,10 +63,11 @@ class Environment(object):
         return Environment([], self, size)
 
     def createBinding(self, index, binding):
-        if self.frame[index] is not None:
-            # raise userError(
-            #     u"Noun %s already in frame; cannot make new binding" % noun)
-            print u"Warning: Replacing binding %d" % index
+        # Commented out because binding replacement is not that weird and also
+        # because the JIT doesn't permit doing this without making this
+        # function dont_look_inside.
+        # if self.frame[index] is not None:
+        #     debug_print(u"Warning: Replacing binding %d" % index)
 
         assert index >= 0, "Frame index was negative!?"
         assert index < len(self.frame), "Frame index out-of-bounds :c"

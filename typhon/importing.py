@@ -12,51 +12,55 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.debug import debug_print
+from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.listsort import TimSort
 
 from typhon.errors import UserException
 from typhon.load import load
-from typhon.nodes import Sequence, evaluate
+from typhon.nodes import Sequence, compile
 from typhon.objects.constants import NullObject
 from typhon.optimizer import optimize
 from typhon.scope import Scope
+from typhon.smallcaps import SmallCaps
 
 
+@dont_look_inside
 def obtainModule(path, inputScope, recorder):
     with recorder.context("Deserialization"):
         term = Sequence(load(open(path, "rb").read())[:])
-    # First pass: Unshadow.
+
+    # Unshadow.
     with recorder.context("Scope analysis"):
         TimSort(inputScope).sort()
         scope = Scope(inputScope)
         term = term.rewriteScope(scope)
+
     with recorder.context("Optimization"):
         term = optimize(term)
-    # Second pass: Collect the initial scope size.
-    with recorder.context("Scope analysis"):
-        scope = Scope(inputScope)
-        term = term.rewriteScope(scope)
+    # debug_print("Optimized node:", term.repr())
 
-    print "Optimized node:"
-    print term.repr()
-    term.frameSize = scope.size()
-    return term
+    with recorder.context("Compilation"):
+        code = compile(term)
+    debug_print("Compiled code:", code.disassemble())
+
+    return code
 
 
-def evaluateWithTraces(term, env):
+def evaluateWithTraces(code, scope):
     try:
-        return evaluate(term, env)
+        machine = SmallCaps(code, scope)
+        machine.run()
+        return machine.pop()
     except UserException as ue:
-        print "Caught exception:", ue.formatError()
+        debug_print("Caught exception:", ue.formatError())
         return None
 
 
-def evaluateTerms(terms, env):
+def evaluateTerms(codes, scope):
     result = NullObject
-    for term in terms:
-        result = evaluateWithTraces(term, env.new(term.frameSize))
+    for code in codes:
+        result = evaluateWithTraces(code, scope)
         if result is None:
-            print "Evaluation returned None!"
-        else:
-            print result.toQuote()
+            debug_print("Evaluation returned None!")
     return result

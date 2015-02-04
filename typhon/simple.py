@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.debug import debug_print
+
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
@@ -27,7 +29,7 @@ from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
                                                  makeTCP4ServerEndpoint)
 from typhon.objects.refs import RefOps, UnconnectedRef
 from typhon.objects.root import Object, runnable
-from typhon.objects.slots import Binding
+from typhon.objects.slots import Binding, FinalSlot, VarSlot
 from typhon.objects.tests import UnitTest
 from typhon.vats import currentVat
 
@@ -88,27 +90,13 @@ def setGuard(specimen):
     return isinstance(specimen, ConstSet)
 
 
-class Trace(Object):
-    def toString(self):
-        return u"<trace>"
-
-    def call(self, verb, args):
-        print "TRACE:",
-        for obj in args:
-            print obj.toQuote(),
-
-        return NullObject
-
-
 class TraceLn(Object):
     def toString(self):
         return u"<traceln>"
 
     def call(self, verb, args):
-        print "TRACE:",
-        for obj in args:
-            print obj.toQuote(),
-        print ""
+        reprs = [obj.toQuote() for obj in args]
+        debug_print(u"TRACE:", reprs)
 
         return NullObject
 
@@ -211,6 +199,16 @@ class MObject(Object):
         raise Refused(self, atom, args)
 
 
+@runnable(RUN_1)
+def makeVarSlot(args):
+    return VarSlot(args[0])
+
+
+@runnable(RUN_1)
+def makeFinalSlot(args):
+    return FinalSlot(args[0])
+
+
 def simpleScope():
     return {
         u"null": NullObject,
@@ -235,8 +233,10 @@ def simpleScope():
         u"__makeList": MakeList(),
         u"__makeMap": makeMap(),
         u"__slotToBinding": slotToBinding(),
+        u"_makeFinalSlot": makeFinalSlot(),
+        u"_makeVarSlot": makeVarSlot(),
         u"throw": Throw(),
-        u"trace": Trace(),
+        u"trace": TraceLn(),
         u"traceln": TraceLn(),
 
         u"unittest": UnitTest(),

@@ -56,6 +56,9 @@ class listIterator(Object):
     def __init__(self, objects):
         self.objects = objects
 
+    def toString(self):
+        return u"<listIterator>"
+
     def recv(self, atom, args):
         if atom is NEXT_1:
             if self._index < len(self.objects):
@@ -74,10 +77,12 @@ class mapIterator(Object):
     _immutable_fields_ = "objects",
 
     _index = 0
-    _iter = None
 
     def __init__(self, objects):
         self.objects = objects
+
+    def toString(self):
+        return u"<mapIterator>"
 
     def recv(self, atom, args):
         if atom is NEXT_1:

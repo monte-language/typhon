@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rsocket import INETAddress, RSocket
 
 from typhon.atoms import getAtom
@@ -42,6 +43,7 @@ class TCP4ClientPending(object):
         self.fount, self.fountResolver = makePromise()
         self.drain, self.drainResolver = makePromise()
 
+    @dont_look_inside
     def createSocket(self):
         # Hint: The following line is where GAI is called.
         # XXX this should be IDNA, not UTF-8.
@@ -105,6 +107,7 @@ class TCP4ServerEndpoint(Object):
 
         raise Refused(self, atom, args)
 
+    @dont_look_inside
     def listen(self, handler):
         socket = Socket(RSocket())
         # XXX demeter violation!

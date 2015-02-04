@@ -94,18 +94,19 @@ def testQuasiValues(assert):
     def v := `value`
     assert.equal(`such value`, `such $v`)
 
-def testQuasiPatterns(assert):
-    def v := `123`
-
-    def `@{head}23` := v
+def testQuasiPatternHead(assert):
+    def `@{head}23` := `123`
     assert.equal(head, `1`)
 
-    def `1@{middle}3` := v
+def testQuasiPatternMid(assert):
+    def `1@{middle}3` := `123`
     assert.equal(middle, `2`)
 
-    def `12@{tail}` := v
+def testQuasiPatternTail(assert):
+    def `12@{tail}` := `123`
     assert.equal(tail, `3`)
 
+def testQuasiPatternSep(assert):
     def sep := `\r\n`
     def `@car$sep@cdr` := `first\r\nsecond\r\nthird`
     assert.equal(car, `first`)
@@ -113,7 +114,10 @@ def testQuasiPatterns(assert):
 
 unittest([
     testQuasiValues,
-    testQuasiPatterns,
+    testQuasiPatternHead,
+    testQuasiPatternMid,
+    testQuasiPatternTail,
+    testQuasiPatternSep,
 ])
 
 [=> simple__quasiParser]

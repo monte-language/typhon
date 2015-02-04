@@ -12,10 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.debug import debug_print
+from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rpath import rjoin
 
 from typhon.atoms import getAtom
-from typhon.env import Environment, finalize
+from typhon.env import finalize
 from typhon.errors import Refused
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapStr
@@ -32,6 +34,7 @@ class Import(Object):
         self.scope = scope
         self.recorder = recorder
 
+    @dont_look_inside
     def recv(self, atom, args):
         if atom is RUN_1:
             path = unwrapStr(args[0])
@@ -47,12 +50,11 @@ class Import(Object):
                                 self.recorder)
 
             # Get results.
-            env = Environment(finalize(self.scope), None, len(self.scope))
             with self.recorder.context("Time spent in vats"):
-                result = evaluateTerms([term], env)
+                result = evaluateTerms([term], finalize(self.scope))
 
             if result is None:
-                print "Result was None :c"
+                debug_print("Result was None :c")
                 return NullObject
             return result
 

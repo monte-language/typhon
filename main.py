@@ -12,20 +12,19 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import os
 import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
 from rpython.rlib.rpath import rjoin, rabspath
 
 from typhon.arguments import Configuration
-from typhon.env import Environment, finalize
-from typhon.errors import LoadFailed, UserException
+from typhon.env import finalize
+from typhon.errors import LoadFailed
 from typhon.importing import evaluateTerms, obtainModule
 from typhon.metrics import Recorder
 from typhon.objects.collections import ConstMap, unwrapMap
 from typhon.objects.constants import NullObject
-from typhon.objects.data import unwrapStr
+from typhon.objects.data import unwrapStr, StrObject
 from typhon.objects.imports import addImportToScope
 from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
@@ -49,13 +48,11 @@ def jitPolicy(driver):
 
 def loadPrelude(config, recorder, vat):
     scope = simpleScope()
-    env = Environment(finalize(scope), None, len(scope))
-
-    term = obtainModule(rjoin(config.libraryPath, "prelude.ty"), scope.keys(),
+    code = obtainModule(rjoin(config.libraryPath, "prelude.ty"), scope.keys(),
                         recorder)
 
     with recorder.context("Time spent in prelude"):
-        result = evaluateTerms([term], env)
+        result = evaluateTerms([code], finalize(scope))
 
     if result is None:
         print "Prelude returned None!?"
@@ -70,7 +67,10 @@ def loadPrelude(config, recorder, vat):
     if isinstance(result, ConstMap):
         prelude = {}
         for key, value in unwrapMap(result).items():
-            prelude[unwrapStr(key)] = value
+            if isinstance(key, StrObject):
+                prelude[unwrapStr(key)] = value
+            else:
+                print "Prelude map key", key, "isn't a string"
         return prelude
 
     print "Prelude didn't return map!?"
@@ -101,14 +101,12 @@ def entryPoint(argv):
 
     registerGlobals(prelude)
 
-    basedir = rabspath(dirname(config.argv[1]))
     scope = simpleScope()
     scope.update(prelude)
     addImportToScope(config.libraryPath, scope, recorder)
-    env = Environment(finalize(scope), None, len(scope))
 
     try:
-        term = obtainModule(config.argv[1], scope.keys(), recorder)
+        code = obtainModule(config.argv[1], scope.keys(), recorder)
     except LoadFailed as lf:
         print lf
         return 1
@@ -119,7 +117,7 @@ def entryPoint(argv):
 
     result = NullObject
     with recorder.context("Time spent in vats"):
-        result = evaluateTerms([term], env)
+        result = evaluateTerms([code], finalize(scope))
     if result is None:
         return 1
     print result.toQuote()

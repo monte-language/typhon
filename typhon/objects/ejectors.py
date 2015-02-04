@@ -15,6 +15,7 @@
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.constants import NullObject
+from typhon.objects.data import StrObject
 from typhon.objects.root import Object
 
 DISABLE_0 = getAtom(u"disable", 0)
@@ -52,6 +53,9 @@ class Ejector(Object):
 
     def fire(self, payload=NullObject):
         raise Ejecting(self, payload)
+
+    def fireString(self, message):
+        return self.fire(StrObject(message))
 
     def disable(self):
         self.active = False
