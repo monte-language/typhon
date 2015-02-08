@@ -129,8 +129,7 @@ class SmallCaps(object):
         frame = [(i, scope[key]) for i, key in enumerate(code.frame)]
 
         self.code = code
-        self.frame = Environment(frame, None, len(frame))
-        self.locals = Environment([], None, len(self.code.locals))
+        self.env = Environment(frame, len(frame), len(self.code.locals))
 
         self.valueStack = []
         self.handlerStack = []
@@ -166,37 +165,37 @@ class SmallCaps(object):
             return pc + 1
         elif instruction == ASSIGN_FRAME:
             value = self.pop()
-            slot = self.frame.putValue(index, value)
+            slot = self.env.putValueFrame(index, value)
             return pc + 1
         elif instruction == ASSIGN_LOCAL:
             value = self.pop()
-            slot = self.locals.putValue(index, value)
+            slot = self.env.putValueLocal(index, value)
             return pc + 1
         elif instruction == BIND:
             binding = self.pop()
-            self.locals.createBinding(index, binding)
+            self.env.createBindingLocal(index, binding)
             return pc + 1
         elif instruction == BINDSLOT:
             slot = self.pop()
-            self.locals.createSlot(index, slot)
+            self.env.createSlotLocal(index, slot)
             return pc + 1
         elif instruction == SLOT_FRAME:
-            self.push(self.frame.getSlot(index))
+            self.push(self.env.getSlotFrame(index))
             return pc + 1
         elif instruction == SLOT_LOCAL:
-            self.push(self.locals.getSlot(index))
+            self.push(self.env.getSlotLocal(index))
             return pc + 1
         elif instruction == NOUN_FRAME:
-            self.push(self.frame.getValue(index))
+            self.push(self.env.getValueFrame(index))
             return pc + 1
         elif instruction == NOUN_LOCAL:
-            self.push(self.locals.getValue(index))
+            self.push(self.env.getValueLocal(index))
             return pc + 1
         elif instruction == BINDING_FRAME:
-            self.push(self.frame.getBinding(index))
+            self.push(self.env.getBindingFrame(index))
             return pc + 1
         elif instruction == BINDING_LOCAL:
-            self.push(self.locals.getBinding(index))
+            self.push(self.env.getBindingLocal(index))
             return pc + 1
         elif instruction == LIST_PATT:
             ej = self.pop()

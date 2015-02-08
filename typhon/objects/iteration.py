@@ -34,8 +34,8 @@ def getLocation(code):
 
 loopDriver = JitDriver(greens=["code"],
                        reds=["consumer", "ejector", "iterator", "machine",
-                             "locals"],
-                       virtualizables=["locals"],
+                             "env"],
+                       virtualizables=["env"],
                        get_printable_location=getLocation)
 
 
@@ -51,7 +51,7 @@ def loopJIT(consumer, ejector, iterator):
             # JIT merge point.
             loopDriver.jit_merge_point(code=code,
                     consumer=consumer, ejector=ejector, iterator=iterator,
-                    machine=machine, locals=machine.locals)
+                    machine=machine, env=machine.env)
             values = unwrapList(iterator.call(u"next", [ejector]))
             # Push the arguments onto the stack, backwards.
             values.reverse()

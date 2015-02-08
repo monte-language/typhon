@@ -29,40 +29,28 @@ class Environment(object):
     """
     An execution context.
 
-    Environments are fixed-size frames of bindings.
+    Environments have two fixed-size frames of bindings, one for outer
+    closed-over bindings and one for local names.
     """
 
-    # _immutable_ = True
-    _virtualizable_ = "frame[*]"
+    _virtualizable_ = "frame[*]", "local[*]"
 
     depth = 0
 
     @unroll_safe
-    def __init__(self, initialScope, parent, size):
+    def __init__(self, initialScope, frameSize, localSize):
         self = hint(self, access_directly=True, fresh_virtualizable=True)
 
-        assert size >= 0, "Negative frame size not allowed!"
-        self.size = size
+        assert frameSize >= 0, "Negative frame size not allowed!"
+        assert localSize >= 0, "Negative local size not allowed!"
 
-        if parent is None:
-            self.frame = [None] * size
-        else:
-            self.frame = parent.frame[:] + [None] * size
-            self.depth = parent.depth
+        self.frame = [None] * frameSize
+        self.local = [None] * localSize
 
         for k, v in initialScope:
-            self.createBinding(k, v)
+            self.createBindingFrame(k, v)
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        pass
-
-    def new(self, size):
-        return Environment([], self, size)
-
-    def createBinding(self, index, binding):
+    def createBindingFrame(self, index, binding):
         # Commented out because binding replacement is not that weird and also
         # because the JIT doesn't permit doing this without making this
         # function dont_look_inside.
@@ -74,11 +62,10 @@ class Environment(object):
 
         self.frame[index] = binding
 
-    def createSlot(self, index, slot):
-        self.createBinding(index, Binding(slot))
+    def createSlotFrame(self, index, slot):
+        self.createBindingFrame(index, Binding(slot))
 
-    @elidable
-    def getBinding(self, index):
+    def getBindingFrame(self, index):
         # Elidability is based on bindings only being assigned once.
         assert index >= 0, "Frame index was negative!?"
         assert index < len(self.frame), "Frame index out-of-bounds :c"
@@ -90,27 +77,55 @@ class Environment(object):
         # currently needed.
         return self.frame[index]
 
-    def getSlot(self, index):
+    def getSlotFrame(self, index):
         # Elidability is based on bindings not allowing reassignment of slots.
-        binding = self.getBinding(index)
+        binding = self.getBindingFrame(index)
         return binding.call(u"get", [])
 
-    def getValue(self, index):
-        slot = self.getSlot(index)
+    def getValueFrame(self, index):
+        slot = self.getSlotFrame(index)
         return slot.call(u"get", [])
 
-    def putValue(self, index, value):
-        slot = self.getSlot(index)
+    def putValueFrame(self, index, value):
+        slot = self.getSlotFrame(index)
         return slot.call(u"put", [value])
 
-    def freeze(self):
-        """
-        Return a copy of this environment with the scope flattened for easy
-        lookup.
+    def createBindingLocal(self, index, binding):
+        # Commented out because binding replacement is not that weird and also
+        # because the JIT doesn't permit doing this without making this
+        # function dont_look_inside.
+        # if self.frame[index] is not None:
+        #     debug_print(u"Warning: Replacing binding %d" % index)
 
-        Meant to generate closures for objects.
-        """
+        assert index >= 0, "Frame index was negative!?"
+        assert index < len(self.local), "Frame index out-of-bounds :c"
 
-        # Allow me to break the ice. My name is Freeze. Learn it well, for it
-        # is the chilling sound of your doom.
-        return self.new(0)
+        self.local[index] = binding
+
+    def createSlotLocal(self, index, slot):
+        self.createBindingLocal(index, Binding(slot))
+
+    def getBindingLocal(self, index):
+        # Elidability is based on bindings only being assigned once.
+        assert index >= 0, "Frame index was negative!?"
+        assert index < len(self.local), "Frame index out-of-bounds :c"
+
+        # The promotion here is justified by a lack of ability for any node to
+        # dynamically alter its frame index. If the node is green (and they're
+        # always green), then the index is green as well. That said, the JIT
+        # is currently good enough at figuring this out that no annotation is
+        # currently needed.
+        return self.local[index]
+
+    def getSlotLocal(self, index):
+        # Elidability is based on bindings not allowing reassignment of slots.
+        binding = self.getBindingLocal(index)
+        return binding.call(u"get", [])
+
+    def getValueLocal(self, index):
+        slot = self.getSlotLocal(index)
+        return slot.call(u"get", [])
+
+    def putValueLocal(self, index, value):
+        slot = self.getSlotLocal(index)
+        return slot.call(u"put", [value])
