@@ -55,6 +55,13 @@ class Object(object):
 
         arity = len(arguments)
         atom = promote(getAtom(verb, arity))
+        return self.callAtom(atom, arguments)
+
+    def callAtom(self, atom, arguments):
+        """
+        This method is used to reuse atoms without having to rebuild them.
+        """
+
         jit_debug(atom.repr())
 
         try:

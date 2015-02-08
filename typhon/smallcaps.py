@@ -259,7 +259,7 @@ class SmallCaps(object):
             args = [self.pop() for _ in range(atom.arity)]
             args.reverse()
             target = self.pop()
-            self.push(target.call(atom.verb, args))
+            self.push(target.callAtom(atom, args))
             return pc + 1
         elif instruction == JUMP:
             return index

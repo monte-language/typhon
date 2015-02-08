@@ -530,7 +530,7 @@ class NearRef(Promise):
         return self.target.hash()
 
     def callAll(self, atom, args):
-        return self.target.call(atom.verb, args)
+        return self.target.callAtom(atom, args)
 
     def sendAll(self, atom, args):
         vat = currentVat.get()

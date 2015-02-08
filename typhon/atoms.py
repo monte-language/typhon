@@ -22,6 +22,8 @@ class Atom(object):
     Only compare by identity.
     """
 
+    _immutable_ = True
+
     def __init__(self, verb, arity):
         self.verb = verb
         self.arity = arity

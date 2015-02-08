@@ -94,19 +94,22 @@ class TraceLn(Object):
     def toString(self):
         return u"<traceln>"
 
-    def call(self, verb, args):
-        reprs = [obj.toQuote() for obj in args]
-        debug_print(u"TRACE:", reprs)
-
-        return NullObject
+    def callAtom(self, atom, args):
+        if atom.verb == u"run":
+            reprs = [obj.toQuote() for obj in args]
+            debug_print(u"TRACE:", reprs)
+            return NullObject
+        raise Refused(self, atom, args)
 
 
 class MakeList(Object):
     def toString(self):
         return u"<makeList>"
 
-    def call(self, verb, args):
-        return ConstList(args)
+    def callAtom(self, atom, args):
+        if atom.verb == u"run":
+            return ConstList(args)
+        raise Refused(self, atom, args)
 
 
 @runnable(FROMPAIRS_1)
