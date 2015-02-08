@@ -77,6 +77,8 @@ class Code(object):
                           "frame[*]", "literals[*]", "locals[*]",
                           "scripts[*]")
 
+    maxDepth = 0
+
     def __init__(self, instructions, atoms, literals, frame, locals, scripts):
         # Copy all of the lists on construction, to satisfy RPython's need for
         # these lists to be immutable.
@@ -117,6 +119,11 @@ class Code(object):
             rv.append("%d: %s" % (i, self.dis(instruction, index)))
         return "\n".join(rv)
 
+    def figureMaxDepth(self):
+        ai = AbstractInterpreter(self)
+        ai.run()
+        self.maxDepth = ai.maxDepth
+
 
 class SmallCaps(object):
     """
@@ -129,16 +136,19 @@ class SmallCaps(object):
         frame = [(i, scope[key]) for i, key in enumerate(code.frame)]
 
         self.code = code
-        self.env = Environment(frame, len(frame), len(self.code.locals))
+        self.env = Environment(frame, len(frame), len(self.code.locals),
+                               self.code.maxDepth)
 
-        self.valueStack = []
         self.handlerStack = []
 
     def pop(self):
-        return self.valueStack.pop()
+        return self.env.pop()
 
     def push(self, value):
-        self.valueStack.append(value)
+        self.env.push(value)
+
+    def peek(self):
+        return self.env.peek()
 
     @unroll_safe
     def runInstruction(self, instruction, pc):
@@ -146,22 +156,24 @@ class SmallCaps(object):
         jit_debug(reverseOps[instruction], index, pc)
 
         if instruction == DUP:
-            self.push(self.valueStack[-1])
+            self.push(self.peek())
             return pc + 1
         elif instruction == ROT:
-            (self.valueStack[-1],
-             self.valueStack[-3],
-             self.valueStack[-2]) = (self.valueStack[-3],
-                                     self.valueStack[-2],
-                                     self.valueStack[-1])
+            z = self.pop()
+            y = self.pop()
+            x = self.pop()
+            self.push(y)
+            self.push(z)
+            self.push(x)
             return pc + 1
         elif instruction == POP:
             self.pop()
             return pc + 1
         elif instruction == SWAP:
-            (self.valueStack[-1],
-             self.valueStack[-2]) = (self.valueStack[-2],
-                                     self.valueStack[-1])
+            y = self.pop()
+            x = self.pop()
+            self.push(y)
+            self.push(x)
             return pc + 1
         elif instruction == ASSIGN_FRAME:
             value = self.pop()
@@ -315,7 +327,7 @@ class Handler(object):
 class Eject(Handler):
 
     def __init__(self, machine, ejector, index):
-        self.valueHeight = len(machine.valueStack)
+        self.valueDepth = machine.env.depth
         self.handlerHeight = len(machine.handlerStack)
         self.ejector = ejector
         self.index = index
@@ -325,7 +337,7 @@ class Eject(Handler):
 
     def eject(self, machine, ex):
         if ex.ejector is self.ejector:
-            machine.valueStack = machine.valueStack[:self.valueHeight]
+            machine.env.depth = self.valueDepth
             machine.handlerStack = machine.handlerStack[:self.handlerHeight]
             machine.push(ex.value)
             return self.index
@@ -336,7 +348,7 @@ class Eject(Handler):
 class Catch(Handler):
 
     def __init__(self, machine, index):
-        self.valueHeight = len(machine.valueStack)
+        self.valueDepth = machine.env.depth
         self.handlerHeight = len(machine.handlerStack)
         self.index = index
 
@@ -344,7 +356,7 @@ class Catch(Handler):
         return "Catch(%d)" % self.index
 
     def unwind(self, machine, ex):
-        machine.valueStack = machine.valueStack[:self.valueHeight]
+        machine.env.depth = self.valueDepth
         machine.handlerStack = machine.handlerStack[:self.handlerHeight]
         machine.push(StrObject(u"Uninformative exception"))
         return self.index
@@ -353,7 +365,7 @@ class Catch(Handler):
 class Unwind(Handler):
 
     def __init__(self, machine, index):
-        self.valueHeight = len(machine.valueStack)
+        self.valueDepth = machine.env.depth
         self.handlerHeight = len(machine.handlerStack)
         self.index = index
 
@@ -371,7 +383,7 @@ class Unwind(Handler):
         return rv
 
     def carryOn(self, machine):
-        machine.valueStack = machine.valueStack[:self.valueHeight]
+        machine.env.depth = self.valueDepth
         machine.handlerStack = machine.handlerStack[:self.handlerHeight]
         return self.index
 
@@ -402,3 +414,127 @@ class Returner(Handler):
 
     def drop(self, machine, index):
         machine.pc = index
+
+
+class AbstractInterpreter(object):
+    """
+    An abstract interpreter for precalculating facts about code.
+    """
+
+    _immutable_fields_ = "code"
+
+    currentDepth = 0
+    maxDepth = 0
+    underflow = 0
+
+    def __init__(self, code):
+        self.code = code
+        self.branches = [(0, 0)]
+
+    def checkMaxDepth(self):
+        if self.currentDepth + self.underflow > self.maxDepth:
+            self.maxDepth = self.currentDepth + self.underflow
+
+    def addBranch(self, depth, pc):
+        self.branches.append((depth, pc))
+
+    def pop(self):
+        # Overestimates but that's fine.
+        if self.currentDepth == 0:
+            self.underflow += 1
+
+    def runInstruction(self, instruction, pc):
+        index = self.code.indices[pc]
+
+        if instruction == DUP:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == ROT:
+            return pc + 1
+        elif instruction == POP:
+            self.pop()
+            return pc + 1
+        elif instruction == SWAP:
+            return pc + 1
+        elif instruction == ASSIGN_FRAME:
+            self.pop()
+            return pc + 1
+        elif instruction == ASSIGN_LOCAL:
+            self.pop()
+            return pc + 1
+        elif instruction == BIND:
+            self.pop()
+            return pc + 1
+        elif instruction == BINDSLOT:
+            self.pop()
+            return pc + 1
+        elif instruction == SLOT_FRAME:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == SLOT_LOCAL:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == NOUN_FRAME:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == NOUN_LOCAL:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == BINDING_FRAME:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == BINDING_LOCAL:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == LIST_PATT:
+            self.pop()
+            self.pop()
+            self.currentDepth += index * 2
+            return pc + 1
+        elif instruction == LITERAL:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == BINDOBJECT:
+            for i in range(len(self.code.scripts[index].closureNames)):
+                self.pop()
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == EJECTOR:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == TRY:
+            return pc + 1
+        elif instruction == UNWIND:
+            return pc + 1
+        elif instruction == END_HANDLER:
+            return pc + 1
+        elif instruction == BRANCH:
+            self.pop()
+            self.addBranch(self.currentDepth, index)
+            return pc + 1
+        elif instruction == CALL:
+            arity = self.code.atoms[index].arity
+            for i in range(arity):
+                self.pop()
+            return pc + 1
+        elif instruction == JUMP:
+            return index
+        else:
+            raise RuntimeError("Unknown instruction %d" % instruction)
+
+    def run(self):
+        i = 0
+        while i < len(self.branches):
+            depth, pc = self.branches[i]
+            self.completeBranch(depth, pc)
+            i += 1
+
+    def completeBranch(self, depth, pc):
+        self.currentDepth = depth
+
+        while pc < len(self.code.instructions):
+            instruction = self.code.instructions[pc]
+            # print ">", pc, self.code.dis(instruction,
+            #                              self.code.indices[pc])
+            pc = self.runInstruction(instruction, pc)
+            self.checkMaxDepth()

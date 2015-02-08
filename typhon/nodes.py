@@ -45,8 +45,10 @@ class Compiler(object):
         literals = self.literals.keys()
         locals = self.locals.keys()
 
-        return Code(self.instructions, atoms, literals, frame, locals,
+        code = Code(self.instructions, atoms, literals, frame, locals,
                     self.scripts)
+        code.figureMaxDepth()
+        return code
 
     def addInstruction(self, name, index):
         self.instructions.append((ops[name], index))

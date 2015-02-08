@@ -23,11 +23,11 @@ from typhon.objects.slots import FinalSlot
 class TestEnv(TestCase):
 
     def testFinalImmutabilityFrame(self):
-        env = Environment([], 1, 0)
+        env = Environment([], 1, 0, 0)
         env.createSlotFrame(0, FinalSlot(NullObject))
         self.assertRaises(UserException, env.putValueFrame, 0, NullObject)
 
     def testFinalImmutabilityLocal(self):
-        env = Environment([], 0, 1)
+        env = Environment([], 0, 1, 0)
         env.createSlotLocal(0, FinalSlot(NullObject))
         self.assertRaises(UserException, env.putValueLocal, 0, NullObject)

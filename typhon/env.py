@@ -29,26 +29,46 @@ class Environment(object):
     """
     An execution context.
 
-    Environments have two fixed-size frames of bindings, one for outer
-    closed-over bindings and one for local names.
+    Environments encapsulate and manage the value stack for SmallCaps. In
+    addition, environments have two fixed-size frames of bindings, one for
+    outer closed-over bindings and one for local names.
     """
 
-    _virtualizable_ = "frame[*]", "local[*]"
+    _virtualizable_ = "frame[*]", "local[*]", "valueStack[*]"
 
+    # The stack pointer. Always points to the *empty* cell above the top of
+    # the stack.
     depth = 0
 
     @unroll_safe
-    def __init__(self, initialScope, frameSize, localSize):
+    def __init__(self, initialScope, frameSize, localSize, stackSize):
         self = hint(self, access_directly=True, fresh_virtualizable=True)
 
         assert frameSize >= 0, "Negative frame size not allowed!"
         assert localSize >= 0, "Negative local size not allowed!"
+        assert stackSize >= 0, "Negative stack size not allowed!"
 
         self.frame = [None] * frameSize
         self.local = [None] * localSize
+        # Plus one extra empty cell to ease stack pointer math.
+        self.stack = [None] * (stackSize + 1)
 
         for k, v in initialScope:
             self.createBindingFrame(k, v)
+
+    def push(self, obj):
+        assert self.depth < len(self.stack), "Stack overflow!"
+        self.stack[self.depth] = obj
+        self.depth += 1
+
+    def pop(self):
+        assert self.depth >= 0, "Stack underflow!"
+        self.depth -= 1
+        return self.stack[self.depth]
+
+    def peek(self):
+        assert self.depth >= 0, "Stack underflow!"
+        return self.stack[self.depth - 1]
 
     def createBindingFrame(self, index, binding):
         # Commented out because binding replacement is not that weird and also
