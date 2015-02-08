@@ -12,8 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.debug import debug_print
-from rpython.rlib.jit import elidable, hint, unroll_safe
+from rpython.rlib.jit import hint, promote, unroll_safe
 
 from typhon.objects.slots import Binding, FinalSlot
 
@@ -34,7 +33,7 @@ class Environment(object):
     outer closed-over bindings and one for local names.
     """
 
-    _virtualizable_ = "frame[*]", "local[*]", "valueStack[*]"
+    _virtualizable_ = "depth", "frame[*]", "local[*]", "valueStack[*]"
 
     # The stack pointer. Always points to the *empty* cell above the top of
     # the stack.
@@ -77,6 +76,7 @@ class Environment(object):
         # if self.frame[index] is not None:
         #     debug_print(u"Warning: Replacing binding %d" % index)
 
+        index = promote(index)
         assert index >= 0, "Frame index was negative!?"
         assert index < len(self.frame), "Frame index out-of-bounds :c"
 
@@ -86,15 +86,13 @@ class Environment(object):
         self.createBindingFrame(index, Binding(slot))
 
     def getBindingFrame(self, index):
-        # Elidability is based on bindings only being assigned once.
+        # The promotion here is justified by a lack of ability for any code
+        # object to dynamically alter its frame index. If the code is green
+        # (and they're always green), then the index is green as well.
+        index = promote(index)
         assert index >= 0, "Frame index was negative!?"
         assert index < len(self.frame), "Frame index out-of-bounds :c"
 
-        # The promotion here is justified by a lack of ability for any node to
-        # dynamically alter its frame index. If the node is green (and they're
-        # always green), then the index is green as well. That said, the JIT
-        # is currently good enough at figuring this out that no annotation is
-        # currently needed.
         return self.frame[index]
 
     def getSlotFrame(self, index):

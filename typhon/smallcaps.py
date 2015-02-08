@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import jit_debug, unroll_safe
+from rpython.rlib.jit import assert_green, jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import specialize
 
 from typhon.env import Environment
@@ -152,7 +152,12 @@ class SmallCaps(object):
 
     @unroll_safe
     def runInstruction(self, instruction, pc):
-        index = self.code.indices[pc]
+        pc = promote(pc)
+        index = promote(self.code.indices[pc])
+        instruction = promote(instruction)
+        assert_green(pc)
+        assert_green(instruction)
+        assert_green(index)
         jit_debug(reverseOps[instruction], index, pc)
 
         if instruction == DUP:

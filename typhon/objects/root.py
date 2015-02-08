@@ -54,7 +54,7 @@ class Object(object):
         """
 
         arity = len(arguments)
-        atom = promote(getAtom(verb, arity))
+        atom = getAtom(verb, arity)
         return self.callAtom(atom, arguments)
 
     def callAtom(self, atom, arguments):
@@ -62,6 +62,7 @@ class Object(object):
         This method is used to reuse atoms without having to rebuild them.
         """
 
+        atom = promote(atom)
         jit_debug(atom.repr())
 
         try:
