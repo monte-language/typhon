@@ -264,7 +264,16 @@ class SmallCaps(object):
             args = [self.pop() for _ in range(atom.arity)]
             args.reverse()
             target = self.pop()
-            self.push(target.callAtom(atom, args))
+
+            try:
+                self.push(target.callAtom(atom, args))
+            except UserException as ue:
+                argString = u", ".join([arg.toQuote() for arg in args])
+                atomRepr = atom.repr().decode("utf-8")
+                ue.trail.append(u"In %s.%s [%s]:" % (target.toString(),
+                                                     atomRepr, argString))
+                raise
+
             return pc + 1
         elif instruction == JUMP:
             return index

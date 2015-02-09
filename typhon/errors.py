@@ -39,9 +39,7 @@ class UserException(Exception):
         self.trail = []
 
     def formatError(self):
-        pieces = [self.error()]
-        for crumb, code in self.trail:
-            pieces.append(u"In %s:\n    %s" % (crumb, code))
+        pieces = [self.error()] + self.trail
         pieces.append(u"Exception in user code:")
         pieces.reverse()
         return u"\n".join(pieces)
