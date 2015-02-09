@@ -19,6 +19,7 @@ from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
 from typhon.objects.constants import wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
+from typhon.objects.ejectors import throw
 from typhon.objects.root import Object
 from typhon.prelude import getGlobal
 
@@ -524,12 +525,12 @@ class ConstSet(Collection, Object):
         return ConstSet(self.objectMap.copy())
 
 
-def unwrapList(o):
+def unwrapList(o, ej=None):
     from typhon.objects.refs import resolution
     l = resolution(o)
     if isinstance(l, ConstList):
         return l.objects
-    raise userError(u"Not a list!")
+    throw(ej, StrObject(u"Not a list!"))
 
 
 def unwrapMap(o):

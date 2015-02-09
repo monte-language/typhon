@@ -42,7 +42,7 @@ def obtainModule(path, inputScope, recorder):
 
     with recorder.context("Compilation"):
         code = compile(term)
-    debug_print("Compiled code:", code.disassemble())
+    # debug_print("Compiled code:", code.disassemble())
 
     return code
 

@@ -216,7 +216,7 @@ class SmallCaps(object):
             return pc + 1
         elif instruction == LIST_PATT:
             ej = self.pop()
-            xs = unwrapList(self.pop())
+            xs = unwrapList(self.pop(), ej)
             if len(xs) < index:
                 throw(ej,
                       StrObject(u"Failed list pattern (needed %d, got %d)" %
@@ -292,7 +292,7 @@ class SmallCaps(object):
                 jit_debug("Before run")
                 pc = self.runInstruction(instruction, pc)
                 jit_debug("After run")
-                # print "Stack:", self.valueStack
+                # print "Stack:", self.env.stack[:self.env.depth]
                 # if self.handlerStack:
                 #     print "Handlers:", self.handlerStack
             except Ejecting as e:
