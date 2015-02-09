@@ -143,6 +143,10 @@ class ConstList(Collection, Object):
         guts = u", ".join([obj.toString() for obj in self.objects])
         return u"[%s]" % (guts,)
 
+    def toQuote(self):
+        guts = u", ".join([obj.toQuote() for obj in self.objects])
+        return u"[%s]" % (guts,)
+
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.
         x = 0x345678
@@ -265,6 +269,10 @@ def pairRepr(key, value):
     return key.toString() + u" => " + value.toString()
 
 
+def pairQuote(key, value):
+    return key.toQuote() + u" => " + value.toQuote()
+
+
 def resolveKey(key):
     from typhon.objects.refs import Promise, isResolved
     if isinstance(key, Promise):
@@ -306,6 +314,13 @@ class ConstMap(Collection, Object):
             return u"[].asMap()"
 
         guts = u", ".join([pairRepr(k, v) for k, v in self.objectMap.items()])
+        return u"[%s]" % (guts,)
+
+    def toQuote(self):
+        if not self.objectMap:
+            return u"[].asMap()"
+
+        guts = u", ".join([pairQuote(k, v) for k, v in self.objectMap.items()])
         return u"[%s]" % (guts,)
 
     def hash(self):
@@ -434,6 +449,11 @@ class ConstSet(Collection, Object):
     def toString(self):
         # We always have to remind the user that we are a set, not a list.
         guts = u", ".join([k.toString() for k in self.objectMap.keys()])
+        return u"[%s].asSet()" % (guts,)
+
+    def toQuote(self):
+        # We always have to remind the user that we are a set, not a list.
+        guts = u", ".join([k.toQuote() for k in self.objectMap.keys()])
         return u"[%s].asSet()" % (guts,)
 
     def _recv(self, atom, args):
