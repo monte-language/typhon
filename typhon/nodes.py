@@ -922,6 +922,7 @@ class CodeScript(object):
             assert isinstance(method, Method)
             self.addMethod(method)
         for matcher in script._matchers:
+            assert isinstance(matcher, Matcher)
             self.addMatcher(matcher)
 
     def addMethod(self, method):
@@ -941,8 +942,15 @@ class CodeScript(object):
             self.closureNames[name] = None
 
     def addMatcher(self, matcher):
-        # XXX
-        pass
+        compiler = Compiler()
+        matcher._pattern.compile(compiler)
+        matcher._block.compile(compiler)
+
+        code = compiler.makeCode()
+        self.matchers.append(code)
+
+        for name in code.frame:
+            self.closureNames[name] = None
 
 
 class Script(Node):

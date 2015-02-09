@@ -51,11 +51,36 @@ class ScriptObject(Object):
     def recv(self, atom, args):
         code = self.codeScript.methods.get(atom, None)
         if code is None:
+            # No atoms matched, so there's no prebuilt methods. Instead, we'll
+            # use our matchers.
+            for matcher in self.codeScript.matchers:
+                with Ejector() as ej:
+                    frame = {}
+                    for key in matcher.frame:
+                        frame[key] = self.closure[key]
+
+                    machine = SmallCaps(matcher, frame)
+                    machine.push(ConstList([StrObject(atom.verb),
+                                            ConstList(args)]))
+                    machine.push(ej)
+                    try:
+                        machine.run()
+                        return machine.pop()
+                    except Ejecting as e:
+                        if e.ejector is ej:
+                            # Looks like unification failed. On to the next
+                            # matcher!
+                            continue
+                        else:
+                            # It's not ours, cap'n.
+                            raise
+
             raise Refused(self, atom, args)
 
         frame = {}
         for key in code.frame:
             frame[key] = self.closure[key]
+
         machine = SmallCaps(code, frame)
         # print "--- Running", self.displayName, atom, args
         # Push the arguments onto the stack, backwards.
