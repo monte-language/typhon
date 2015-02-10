@@ -76,15 +76,24 @@ class FinalSlot(Slot):
 
 class VarSlot(Slot):
 
-    def __init__(self, obj):
-        self._obj = obj
+    def __init__(self, obj, guard, ej):
+        self._guard = guard
+        self._ej = ej
+
+        # The initial coercion has not yet been done; we are responsible for
+        # performing it here. Cheat and reuse the put() method.
+        self.put(obj)
 
     def toString(self):
-        return u"<VarSlot(%s)>" % self._obj.toString()
+        return u"<VarSlot(%s, %s)>" % (self._obj.toString(),
+                                       self._guard.toString())
 
     def get(self):
         return self._obj
 
     def put(self, value):
-        self._obj = value
+        if self._guard is NullObject:
+            self._obj = value
+        else:
+            self._obj = self._guard.call(u"coerce", [value, self._ej])
         return NullObject

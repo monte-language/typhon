@@ -40,6 +40,7 @@ FROMPAIRS_1 = getAtom(u"fromPairs", 1)
 MATCHMAKER_1 = getAtom(u"matchMaker", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
+RUN_3 = getAtom(u"run", 3)
 SENDONLY_3 = getAtom(u"sendOnly", 3)
 SEND_3 = getAtom(u"send", 3)
 SUBSTITUTE_1 = getAtom(u"substitute", 1)
@@ -200,9 +201,9 @@ class MObject(Object):
         raise Refused(self, atom, args)
 
 
-@runnable(RUN_1)
+@runnable(RUN_3)
 def makeVarSlot(args):
-    return VarSlot(args[0])
+    return VarSlot(args[0], args[1], args[2])
 
 
 @runnable(RUN_1)

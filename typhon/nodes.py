@@ -1121,9 +1121,6 @@ class BindingPattern(Pattern):
         out.write("&&")
         out.write(self._noun.encode("utf-8"))
 
-    def unify(self, specimen, ejector, env):
-        env.createBinding(self.frameIndex, specimen)
-
     def rewriteScope(self, scope):
         # Write.
         if scope.getSeen(self._noun) != -1:
@@ -1154,20 +1151,6 @@ class FinalPattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
-
-    def unify(self, specimen, ejector, env):
-        if self._g is None:
-            rv = specimen
-        else:
-            # Get the guard.
-            guard = evaluate(self._g, env)
-
-            # Since this is a final assignment, we can run the specimen through
-            # the guard once and for all, right now.
-            rv = guard.call(u"coerce", [specimen, ejector])
-
-        slot = FinalSlot(rv)
-        env.createSlot(self.frameIndex, slot)
 
     def rewriteScope(self, scope):
         if self._g is None:
@@ -1218,13 +1201,6 @@ class IgnorePattern(Pattern):
             out.write(" :")
             self._g.pretty(out)
 
-    def unify(self, specimen, ejector, env):
-        # We don't have to do anything, unless somebody put a guard on an
-        # ignore pattern. Who would do such a thing?
-        if self._g is not None:
-            guard = evaluate(self._g, env)
-            guard.call(u"coerce", [specimen, ejector])
-
     def rewriteScope(self, scope):
         if self._g is None:
             return self
@@ -1235,6 +1211,7 @@ class IgnorePattern(Pattern):
         if self._g is None:
             compiler.addInstruction("POP", 0)
             compiler.addInstruction("POP", 0)
+            # []
         else:
             self._g.compile(compiler)
             # [specimen ej guard]
@@ -1242,6 +1219,9 @@ class IgnorePattern(Pattern):
             compiler.addInstruction("ROT", 0)
             # [guard specimen ej]
             compiler.call(u"coerce", 2)
+            # [result]
+            compiler.addInstruction("POP", 0)
+            # []
 
 
 class ListPattern(Pattern):
@@ -1268,37 +1248,6 @@ class ListPattern(Pattern):
             out.write(" | ")
             self._t.pretty(out)
 
-    @unroll_safe
-    def unify(self, specimen, ejector, env):
-        patterns = self._ps
-        tail = self._t
-
-        # Can't unify lists and non-lists.
-        if not isinstance(specimen, ConstList):
-            throw(ejector, StrObject(u"Can't unify lists and non-lists"))
-
-        items = unwrapList(specimen)
-
-        # If we have no tail, then unification isn't going to work if the
-        # lists are of differing lengths.
-        if tail is None and len(patterns) != len(items):
-            throw(ejector, StrObject(u"Lists are different lengths"))
-
-        # Even if there's a tail, there must be at least as many elements in
-        # the pattern list as there are in the specimen list.
-        elif len(patterns) > len(items):
-            throw(ejector, StrObject(u"List is too short"))
-
-        # Actually unify. Because of the above checks, this shouldn't run
-        # ragged.
-        for i, pattern in enumerate(patterns):
-            pattern.unify(items[i], ejector, env)
-
-        # And unify the tail as well.
-        if tail is not None:
-            remainder = ConstList(items[len(patterns):])
-            tail.unify(remainder, ejector, env)
-
     def rewriteScope(self, scope):
         ps = [p.rewriteScope(scope) for p in self._ps]
         if self._t is None:
@@ -1308,7 +1257,7 @@ class ListPattern(Pattern):
         return ListPattern(ps, t)
 
     def compile(self, compiler):
-        # XXX tail is assumed to be null/none
+        assert self._t is None
         # [specimen ej]
         compiler.addInstruction("LIST_PATT", len(self._ps))
         for patt in self._ps:
@@ -1333,19 +1282,6 @@ class VarPattern(Pattern):
             out.write(" :")
             self._g.pretty(out)
 
-    def unify(self, specimen, ejector, env):
-        if self._g is None:
-            rv = VarSlot(specimen)
-        else:
-            # Get the guard.
-            guard = evaluate(self._g, env)
-
-            # Generate a slot.
-            rv = guard.call(u"makeSlot", [specimen])
-
-        # Add the slot to the environment.
-        env.createSlot(self.frameIndex, rv)
-
     def rewriteScope(self, scope):
         if self._g is None:
             g = None
@@ -1362,20 +1298,21 @@ class VarPattern(Pattern):
 
     def compile(self, compiler):
         # [specimen ej]
-        if self._g is None:
-            compiler.addInstruction("POP", 0)
-        else:
-            self._g.compile(compiler)
-            # [specimen ej guard]
-            compiler.addInstruction("ROT", 0)
-            compiler.addInstruction("ROT", 0)
-            # [guard specimen ej]
-            compiler.call(u"coerce", 2)
         index = compiler.addFrame(u"_makeVarSlot")
         compiler.addInstruction("NOUN_FRAME", index)
+        # [specimen ej _makeVarSlot]
+        compiler.addInstruction("ROT", 0)
+        compiler.addInstruction("ROT", 0)
+        # [_makeVarSlot specimen ej]
+        if self._g is None:
+            compiler.literal(NullObject)
+        else:
+            self._g.compile(compiler)
+        # [_makeVarSlot specimen ej guard]
         compiler.addInstruction("SWAP", 0)
-        # [_makeVarSlot specimen]
-        compiler.call(u"run", 1)
+        # [_makeVarSlot specimen guard ej]
+        compiler.call(u"run", 3)
+        # [slot]
         index = compiler.addLocal(self._n)
         compiler.addInstruction("BINDSLOT", index)
 
@@ -1395,17 +1332,6 @@ class ViaPattern(Pattern):
         self._expr.pretty(out)
         out.write(") ")
         self._pattern.pretty(out)
-
-    def unify(self, specimen, ejector, env):
-        # This one always bamboozles me, so I'll spell out what it's doing.
-        # The via pattern takes an expression and another pattern, and passes
-        # the specimen into the expression along with an ejector. The
-        # expression can reject the specimen by escaping, or it can transform
-        # the specimen and return a new specimen which is then applied to the
-        # inner pattern.
-        examiner = evaluate(self._expr, env)
-        self._pattern.unify(examiner.call(u"run", [specimen, ejector]),
-                ejector, env)
 
     def rewriteScope(self, scope):
         return ViaPattern(self._expr.rewriteScope(scope),
