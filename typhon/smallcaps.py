@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import assert_green, jit_debug, promote, unroll_safe
+from rpython.rlib.jit import elidable_promote, jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import specialize
 
 from typhon.env import Environment
@@ -90,6 +90,30 @@ class Code(object):
         self.locals = locals[:]
         self.scripts = scripts[:]
 
+    @elidable_promote()
+    def inst(self, i):
+        return self.instructions[i]
+
+    @elidable_promote()
+    def index(self, i):
+        return self.indices[i]
+
+    @elidable_promote()
+    def atom(self, i):
+        return self.atoms[i]
+
+    @elidable_promote()
+    def literal(self, i):
+        return self.literals[i]
+
+    @elidable_promote()
+    def frameAt(self, i):
+        return self.frame[i]
+
+    @elidable_promote()
+    def script(self, i):
+        return self.scripts[i]
+
     def dis(self, instruction, index):
         base = "%s %d" % (reverseOps[instruction], index)
         if instruction == CALL:
@@ -130,7 +154,8 @@ class SmallCaps(object):
     A SmallCaps abstract bytecode interpreter.
     """
 
-    _immutable_fields_ = "code"
+    _immutable_ = True
+    _immutable_fields_ = "code", "env"
 
     def __init__(self, code, scope):
         frame = [(i, scope[key]) for i, key in enumerate(code.frame)]
@@ -152,12 +177,7 @@ class SmallCaps(object):
 
     @unroll_safe
     def runInstruction(self, instruction, pc):
-        pc = promote(pc)
-        index = promote(self.code.indices[pc])
-        instruction = promote(instruction)
-        assert_green(pc)
-        assert_green(instruction)
-        assert_green(index)
+        index = self.code.index(pc)
         jit_debug(reverseOps[instruction], index, pc)
 
         if instruction == DUP:
@@ -227,10 +247,10 @@ class SmallCaps(object):
                 self.push(ej)
             return pc + 1
         elif instruction == LITERAL:
-            self.push(self.code.literals[index])
+            self.push(self.code.literal(index))
             return pc + 1
         elif instruction == BINDOBJECT:
-            script = self.code.scripts[index]
+            script = self.code.script(index)
             closure = [self.pop() for _ in script.closureNames]
             closure.reverse()
             obj = script.makeObject(closure)
@@ -260,7 +280,7 @@ class SmallCaps(object):
             else:
                 return index
         elif instruction == CALL:
-            atom = self.code.atoms[index]
+            atom = self.code.atom(index)
             args = [self.pop() for _ in range(atom.arity)]
             args.reverse()
             target = self.pop()
@@ -285,7 +305,7 @@ class SmallCaps(object):
         # print ">" * 10
         pc = 0
         while pc < len(self.code.instructions):
-            instruction = self.code.instructions[pc]
+            instruction = self.code.inst(promote(pc))
             try:
                 # print ">", pc, self.code.dis(instruction,
                 #                              self.code.indices[pc])
