@@ -15,7 +15,7 @@
 import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
-from rpython.rlib.rpath import rjoin, rabspath
+from rpython.rlib.rpath import rjoin
 
 from typhon.arguments import Configuration
 from typhon.env import finalize
@@ -28,7 +28,8 @@ from typhon.objects.data import unwrapStr, StrObject
 from typhon.objects.imports import addImportToScope
 from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
-from typhon.simple import simpleScope
+from typhon.scopes.safe import safeScope
+from typhon.scopes.unsafe import unsafeScope
 from typhon.vats import Vat, currentVat
 
 
@@ -47,7 +48,7 @@ def jitPolicy(driver):
 
 
 def loadPrelude(config, recorder, vat):
-    scope = simpleScope()
+    scope = safeScope()
     code = obtainModule(rjoin(config.libraryPath, "prelude.ty"), scope.keys(),
                         recorder)
 
@@ -101,9 +102,14 @@ def entryPoint(argv):
 
     registerGlobals(prelude)
 
-    scope = simpleScope()
+    scope = safeScope()
     scope.update(prelude)
+    # Note the order of operations. addImportToScope() copies the scope that
+    # it receives, so the unsafe scope will only be available to the
+    # top-level script and not to any library code which is indirectly loaded
+    # via import().
     addImportToScope(config.libraryPath, scope, recorder)
+    scope.update(unsafeScope())
 
     try:
         code = obtainModule(config.argv[1], scope.keys(), recorder)

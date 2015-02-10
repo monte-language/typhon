@@ -25,8 +25,6 @@ from typhon.objects.ejectors import throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.guards import predGuard
 from typhon.objects.iteration import loop
-from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
-                                                 makeTCP4ServerEndpoint)
 from typhon.objects.refs import RefOps, UnconnectedRef
 from typhon.objects.root import Object, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
@@ -212,7 +210,7 @@ def makeFinalSlot(args):
     return FinalSlot(args[0])
 
 
-def simpleScope():
+def safeScope():
     return {
         u"null": NullObject,
 
@@ -239,11 +237,9 @@ def simpleScope():
         u"_makeFinalSlot": makeFinalSlot(),
         u"_makeVarSlot": makeVarSlot(),
         u"throw": Throw(),
+
         u"trace": TraceLn(),
         u"traceln": TraceLn(),
 
         u"unittest": UnitTest(),
-
-        u"makeTCP4ClientEndpoint": makeTCP4ClientEndpoint(),
-        u"makeTCP4ServerEndpoint": makeTCP4ServerEndpoint(),
     }
