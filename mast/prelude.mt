@@ -110,13 +110,22 @@ def makeGuardedSlot(guard, var value :guard):
 
 
 object Void:
-    to coerce(specimen, ej):
-        if (specimen != null):
-            throw.eject(ej, ["Not null:", specimen])
-        return specimen
+    to coerce(_, _):
+        return null
 
     to makeSlot(value):
         return makeGuardedSlot(Void, value)
+
+
+def testVoid(assert):
+    var x :Void := 42
+    assert.equal(x, null)
+    x := 'o'
+    assert.equal(x, null)
+
+unittest([
+    testVoid,
+])
 
 
 # Must come before List.
@@ -134,6 +143,11 @@ object Any:
 
 
 object NullOk:
+    to coerce(specimen, ej):
+        if (specimen != null):
+            throw.eject(ej, ["Not null:", specimen])
+        return specimen
+
     to get(subGuard):
         return object SubNullOk:
             to coerce(specimen, ej):
@@ -143,6 +157,24 @@ object NullOk:
 
             to makeSlot(value):
                 return makeGuardedSlot(SubNullOk, value)
+
+    to makeSlot(value):
+        return makeGuardedSlot(NullOk, value)
+
+
+def testNullOkUnsubbed(assert):
+    assert.ejects(fn ej {def x :NullOk exit ej := 42})
+    assert.doesNotEject(fn ej {def x :NullOk exit ej := null})
+
+def testNullOkInt(assert):
+    assert.ejects(fn ej {def x :NullOk[Int] exit ej := "42"})
+    assert.doesNotEject(fn ej {def x :NullOk[Int] exit ej := 42})
+    assert.doesNotEject(fn ej {def x :NullOk[Int] exit ej := null})
+
+unittest([
+    testNullOkUnsubbed,
+    testNullOkInt,
+])
 
 
 object Empty:
@@ -217,7 +249,6 @@ def testSuchThatTrue(assert):
 def testSuchThatFalse(assert):
     assert.ejects(fn ej {def x ? false exit ej := 42})
 
-
 unittest([
     testSuchThatTrue,
     testSuchThatFalse,
@@ -289,12 +320,10 @@ def testFlexListPop(assert):
     assert.equal(_flexList([42]).pop(), 42)
     assert.equal(_flexList([42, 5]).pop(), 5)
 
-
 def testFlexListPrinting(assert):
     assert.equal(M.toString(_flexList([])), "[].diverge()")
     assert.equal(M.toString(_flexList([42])), "[42].diverge()")
     assert.equal(M.toString(_flexList([5, 42])), "[5, 42].diverge()")
-
 
 unittest([
     testFlexListPop,
@@ -377,10 +406,10 @@ def __accumulateMap(iterable, mapper):
 
 [
     "List" => BetterList,
-    "String" => Str,
     "__mapEmpty" => Empty,
     => Any,
     => NullOk,
+    => Void,
     => __accumulateList,
     => __accumulateMap,
     => __comparer,
