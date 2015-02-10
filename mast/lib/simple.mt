@@ -14,7 +14,7 @@
 
 def _makeString(chunks):
     return object stringMaker:
-        to substitute(values) :String:
+        to substitute(values) :Str:
             def rv := [].diverge()
             for chunk in chunks:
                 switch (chunk):

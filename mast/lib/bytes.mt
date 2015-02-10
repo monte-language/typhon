@@ -92,7 +92,7 @@ object b__quasiParser:
     to valueMaker(pieces):
         def rv := [].diverge()
         for piece in pieces:
-            if (piece =~ _ :String):
+            if (piece =~ _ :Str):
                 rv.push([c.asInteger() for c in piece])
             else:
                 rv.push(piece)

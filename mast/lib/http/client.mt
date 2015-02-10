@@ -94,7 +94,7 @@ def makeResponseDrain(resolver):
             resolver.resolve(makeResponse(status, headers))
 
 
-def makeRequest(host :String, resource :String):
+def makeRequest(host :Str, resource :Str):
     var port :Int := 80
     def headers := [
         "Host" => host,
@@ -111,7 +111,7 @@ def makeRequest(host :String, resource :String):
                 drain.receive(UTF8Encode(`$k: $v$\r$\n`))
             drain.receive(b`$\r$\n`)
 
-        to send(verb :String):
+        to send(verb :Str):
             def endpoint := makeTCP4ClientEndpoint(host, port)
             def [fount, drain] := endpoint.connect()
             def [p, r] := Ref.promise()

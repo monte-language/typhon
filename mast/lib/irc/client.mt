@@ -77,11 +77,11 @@ def makeOutgoing():
 def makeIRCClient(handler):
     var drain := null
     var pauses :Int := 0
-    var nick :String := handler.getNick()
+    var nick :Str := handler.getNick()
     var channels := [].asMap()
     var outgoing := []
 
-    def line(l :String):
+    def line(l :Str):
         outgoing := outgoing.with(l)
         if (drain != null && pauses == 0):
             for line in outgoing:
@@ -171,10 +171,10 @@ def makeIRCClient(handler):
         to pong(ping):
             line(`PONG $ping`)
 
-        to part(channel :String, message :String):
+        to part(channel :Str, message :Str):
             line(`PART $channel :$message`)
 
-        to quit(message :String):
+        to quit(message :Str):
             for channel => _ in channels:
                 IRCTube.part(channel, message)
             line(`QUIT :$message`)
@@ -184,7 +184,7 @@ def makeIRCClient(handler):
             line("USER monte localhost irc.freenode.net :Monte")
             line("PING :suchPing") 
 
-        to join(var channel :String):
+        to join(var channel :Str):
             if (channel[0] != '#'):
                 channel := "#" + channel
             line(`JOIN $channel`)
