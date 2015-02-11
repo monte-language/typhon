@@ -12,14 +12,20 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
-                                                 makeTCP4ServerEndpoint)
-from typhon.objects.timers import Timer
+from typhon.atoms import getAtom
+from typhon.objects.data import promoteToDouble
+from typhon.objects.refs import makePromise
+from typhon.objects.root import runnable
+from typhon.vats import currentVat
 
 
-def unsafeScope():
-    return {
-        u"Timer": Timer(),
-        u"makeTCP4ClientEndpoint": makeTCP4ClientEndpoint(),
-        u"makeTCP4ServerEndpoint": makeTCP4ServerEndpoint(),
-    }
+FROMNOW_1 = getAtom(u"fromNow", 1)
+
+
+@runnable(FROMNOW_1)
+def Timer(args):
+    duration = promoteToDouble(args[0])
+    p, r = makePromise()
+    vat = currentVat.get()
+    vat._reactor.addTimer(duration, r)
+    return p
