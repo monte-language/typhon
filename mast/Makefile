@@ -1,5 +1,5 @@
-all: prelude.ty lib/bytes.ty lib/enum.ty lib/netstring.ty lib/simple.ty \
-	lib/parsers/derp.ty lib/regex.ty lib/utf8.ty \
+all: prelude.ty lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
+	lib/simple.ty lib/parsers/derp.ty lib/regex.ty lib/utf8.ty \
 	http \
 	irc \
 	tubes \
