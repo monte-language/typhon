@@ -19,6 +19,7 @@ def [=> nullPump] := import("lib/tubes/nullPump")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
 def [=> makeUnpauser] := import("lib/tubes/unpauser")
+def [=> makeTokenBucket] := import("lib/tokenBucket")
 
 
 def splitAt(needle, var haystack):
@@ -81,13 +82,27 @@ def makeIRCClient(handler):
     var channels := [].asMap()
     var outgoing := []
 
-    def line(l :Str):
-        outgoing := outgoing.with(l)
+    # Five lines of burst and a new line every two seconds.
+    def tokenBucket := makeTokenBucket(5, 2.0)
+    tokenBucket.start(Timer)
+
+    def flush() :Void:
         if (drain != null && pauses == 0):
-            for line in outgoing:
+            for i => line in outgoing:
                 traceln("Sending line: " + line)
-                drain.receive(line + "\r\n")
+                if (tokenBucket.deduct(1)):
+                    drain.receive(line + "\r\n")
+                else:
+                    traceln("Rate-limited")
+                    outgoing := outgoing.slice(i)
+                    when (tokenBucket.ready()) ->
+                        flush()
+                    return
             outgoing := []
+
+    def line(l :Str) :Void:
+        outgoing := outgoing.with(l)
+        flush()
 
     return object IRCTube:
         # Tube methods.
@@ -178,6 +193,7 @@ def makeIRCClient(handler):
             for channel => _ in channels:
                 IRCTube.part(channel, message)
             line(`QUIT :$message`)
+            tokenBucket.stop()
 
         to login():
             line(`NICK $nick`)
