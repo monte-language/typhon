@@ -161,14 +161,35 @@ class TestStr(TestCase):
             self.assertRaises(Ejecting, iterator.call, u"next", [ej])
 
     def testHashEqual(self):
-        a = StrObject("acidic")
-        b = StrObject("acidic")
+        a = StrObject(u"acidic")
+        b = StrObject(u"acidic")
         self.assertEqual(a.hash(), b.hash())
 
     def testHashInequal(self):
-        a = StrObject("acerbic")
-        b = StrObject("bitter")
+        a = StrObject(u"acerbic")
+        b = StrObject(u"bitter")
         self.assertNotEqual(a.hash(), b.hash())
+
+    def testIndexOf(self):
+        s = StrObject(u"needle")
+        result = s.call(u"indexOf", [StrObject(u"e")])
+        self.assertEqual(result.getInt(), 1)
+
+    def testIndexOfFail(self):
+        s = StrObject(u"needle")
+        result = s.call(u"indexOf", [StrObject(u"z")])
+        self.assertEqual(result.getInt(), -1)
+
+    def testLastIndexOf(self):
+        s = StrObject(u"needle")
+        result = s.call(u"lastIndexOf", [StrObject(u"e")])
+        self.assertEqual(result.getInt(), 5)
+
+    def testLastIndexOfFail(self):
+        s = StrObject(u"needle")
+        result = s.call(u"lastIndexOf", [StrObject(u"x")])
+        self.assertEqual(result.getInt(), -1)
+
 
 
 class TestDouble(TestCase):

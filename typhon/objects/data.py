@@ -43,8 +43,10 @@ COS_0 = getAtom(u"cos", 0)
 FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
 GETCATEGORY_0 = getAtom(u"getCategory", 0)
 GET_1 = getAtom(u"get", 1)
+INDEXOF_1 = getAtom(u"indexOf", 1)
 ISZERO_0 = getAtom(u"isZero", 0)
 JOIN_1 = getAtom(u"join", 1)
+LASTINDEXOF_1 = getAtom(u"lastIndexOf", 1)
 MAX_1 = getAtom(u"max", 1)
 MIN_1 = getAtom(u"min", 1)
 MOD_1 = getAtom(u"mod", 1)
@@ -436,6 +438,10 @@ class StrObject(Object):
                                 index)
             return CharObject(self._s[index])
 
+        if atom is INDEXOF_1:
+            needle = unwrapStr(args[0])
+            return IntObject(self._s.find(needle))
+
         if atom is JOIN_1:
             l = args[0]
             from typhon.objects.collections import ConstList, unwrapList
@@ -454,6 +460,10 @@ class StrObject(Object):
                     string = unwrapStr(s)
                     ub.append(string)
                 return StrObject(ub.build())
+
+        if atom is LASTINDEXOF_1:
+            needle = unwrapStr(args[0])
+            return IntObject(self._s.rfind(needle))
 
         if atom is MULTIPLY_1:
             amount = args[0]
