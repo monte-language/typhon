@@ -190,8 +190,17 @@ def makeIRCClient(handler):
             line(`JOIN $channel`)
             channels := channels.with(channel, [].asMap().diverge())
 
-        to say(channel, message):
-            line(`PRIVMSG $channel :$message`)
+        to say(channel, var message):
+            def privmsg := `PRIVMSG $channel :`
+            # XXX add in source
+            def availableLen := 256
+            while (message.size() > availableLen):
+                def slice := message.slice(0, availableLen)
+                def i := slice.lastIndexOf(" ")
+                def snippet := slice.slice(0, i)
+                line(privmsg + snippet)
+                message := message.slice(i + 1)
+            line(privmsg + message)
 
         # Data accessors.
 
