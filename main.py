@@ -108,7 +108,7 @@ def entryPoint(argv):
     # it receives, so the unsafe scope will only be available to the
     # top-level script and not to any library code which is indirectly loaded
     # via import().
-    addImportToScope(config.libraryPath, scope, recorder)
+    scope = addImportToScope(config.libraryPath, scope, recorder)
     scope.update(unsafeScope())
 
     try:

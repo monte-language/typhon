@@ -19,12 +19,15 @@ from rpython.rlib.rpath import rjoin
 from typhon.atoms import getAtom
 from typhon.env import finalize
 from typhon.errors import Refused
+from typhon.objects.collections import unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapStr
 from typhon.objects.root import Object
 from typhon.importing import evaluateTerms, obtainModule
 
+
 RUN_1 = getAtom(u"run", 1)
+RUN_2 = getAtom(u"run", 2)
 
 
 class Import(Object):
@@ -35,31 +38,47 @@ class Import(Object):
         self.recorder = recorder
 
     @dont_look_inside
+    def performImport(self, path, extraScope=None):
+        p = path.encode("utf-8")
+        p += ".ty"
+
+        # Transitive imports.
+        scope = addImportToScope(self.path, self.scope, self.recorder)
+        if extraScope is not None:
+            scope.update(extraScope)
+
+        # Attempt the import.
+        term = obtainModule(rjoin(self.path, p), scope.keys(),
+                            self.recorder)
+
+        # Get results.
+        with self.recorder.context("Time spent in vats"):
+            result = evaluateTerms([term], finalize(scope))
+
+        if result is None:
+            debug_print("Result was None :c")
+            return NullObject
+        return result
+
     def recv(self, atom, args):
         if atom is RUN_1:
             path = unwrapStr(args[0])
+            return self.performImport(path, None)
 
-            p = path.encode("utf-8")
-            p += ".ty"
+        if atom is RUN_2:
+            path = unwrapStr(args[0])
+            scope = unwrapMap(args[1])
 
-            # Transitive imports.
-            addImportToScope(self.path, self.scope, self.recorder)
+            d = {}
+            for k, v in scope.items():
+                d[unwrapStr(k)] = scope[k]
 
-            # Attempt the import.
-            term = obtainModule(rjoin(self.path, p), self.scope.keys(),
-                                self.recorder)
-
-            # Get results.
-            with self.recorder.context("Time spent in vats"):
-                result = evaluateTerms([term], finalize(self.scope))
-
-            if result is None:
-                debug_print("Result was None :c")
-                return NullObject
-            return result
+            return self.performImport(path, d)
 
         raise Refused(self, atom, args)
 
 
 def addImportToScope(path, scope, recorder):
-    scope[u"import"] = Import(path, scope.copy(), recorder)
+    scope = scope.copy()
+    scope[u"import"] = Import(path, scope, recorder)
+    return scope
