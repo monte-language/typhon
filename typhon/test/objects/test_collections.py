@@ -17,7 +17,7 @@
 from unittest import TestCase
 
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
-                                        monteDict)
+                                        FlexList, monteDict)
 from typhon.objects.data import CharObject, IntObject
 
 
@@ -51,6 +51,31 @@ class TestConstList(TestCase):
         a = ConstList([IntObject(42), CharObject(u'é')])
         b = ConstList([IntObject(42), CharObject(u'e')])
         self.assertNotEqual(a.hash(), b.hash())
+
+
+class TestFlexList(TestCase):
+
+    def testPop(self):
+        l = FlexList([IntObject(42)])
+        result = l.call(u"pop", [])
+        self.assertEqual(result.getInt(), 42)
+
+    def testPopMany(self):
+        l = FlexList([IntObject(42), IntObject(5)])
+        result = l.call(u"pop", [])
+        self.assertEqual(result.getInt(), 5)
+
+    def testToStringEmpty(self):
+        l = FlexList([])
+        self.assertEqual(l.toString(), u"[].diverge()")
+
+    def testToStringOne(self):
+        l = FlexList([IntObject(42)])
+        self.assertEqual(l.toString(), u"[42].diverge()")
+
+    def testToStringMany(self):
+        l = FlexList([IntObject(5), IntObject(42)])
+        self.assertEqual(l.toString(), u"[5, 42].diverge()")
 
 
 class TestConstSet(TestCase):

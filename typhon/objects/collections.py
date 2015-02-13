@@ -17,7 +17,7 @@ from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
-from typhon.objects.constants import wrapBool
+from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import throw
 from typhon.objects.root import Object
@@ -36,6 +36,8 @@ INDEXOF_2 = getAtom(u"indexOf", 2)
 MULTIPLY_1 = getAtom(u"multiply", 1)
 NEXT_1 = getAtom(u"next", 1)
 OR_1 = getAtom(u"or", 1)
+POP_0 = getAtom(u"pop", 0)
+PUSH_1 = getAtom(u"push", 1)
 REVERSE_0 = getAtom(u"reverse", 0)
 SIZE_0 = getAtom(u"size", 0)
 SLICE_1 = getAtom(u"slice", 1)
@@ -179,8 +181,7 @@ class ConstList(Collection, Object):
             return ConstSet(d)
 
         if atom is DIVERGE_0:
-            _flexList = getGlobal(u"_flexList")
-            return _flexList.call(u"run", [self])
+            return FlexList(self.objects)
 
         if atom is GET_1:
             # Lookup by index.
@@ -254,6 +255,124 @@ class ConstList(Collection, Object):
 
     def snapshot(self):
         return ConstList(self.objects[:])
+
+
+class FlexList(Collection, Object):
+
+    def __init__(self, flexObjects):
+        self.flexObjects = flexObjects
+
+    def toString(self):
+        guts = u", ".join([obj.toString() for obj in self.flexObjects])
+        return u"[%s].diverge()" % (guts,)
+
+    def toQuote(self):
+        guts = u", ".join([obj.toQuote() for obj in self.flexObjects])
+        return u"[%s].diverge()" % (guts,)
+
+    def hash(self):
+        # Use the same sort of hashing as CPython's tuple hash.
+        x = 0x345678
+        for obj in self.flexObjects:
+            y = obj.hash()
+            x = intmask((1000003 * x) ^ y)
+        return x
+
+    def _recv(self, atom, args):
+        if atom is ADD_1:
+            other = args[0]
+            return ConstList(self.flexObjects + unwrapList(other))
+
+        if atom is ASMAP_0:
+            d = monteDict()
+            for i, o in enumerate(self.flexObjects):
+                d[IntObject(i)] = o
+            return ConstMap(d)
+
+        if atom is ASSET_0:
+            d = monteDict()
+            for o in self.flexObjects:
+                d[o] = None
+            return ConstSet(d)
+
+        if atom is DIVERGE_0:
+            return FlexList(self.flexObjects)
+
+        if atom is GET_1:
+            # Lookup by index.
+            index = unwrapInt(args[0])
+            return self.flexObjects[index]
+
+        if atom is INDEXOF_1:
+            from typhon.flexObjects.equality import EQUAL, optSame
+            needle = args[0]
+            for index, specimen in enumerate(self.flexObjects):
+                if optSame(needle, specimen) is EQUAL:
+                    return IntObject(index)
+            return IntObject(-1)
+
+        if atom is MULTIPLY_1:
+            # multiply/1: Create a new list by repeating this list's contents.
+            index = unwrapInt(args[0])
+            return ConstList(self.flexObjects * index)
+
+        if atom is POP_0:
+            return self.flexObjects.pop()
+
+        if atom is PUSH_1:
+            self.flexObjects.append(args[0])
+            return NullObject
+
+        if atom is REVERSE_0:
+            self.flexObjects.reverse()
+            return NullObject
+
+        if atom is WITH_1:
+            # with/1: Create a new list with an appended object.
+            return ConstList(self.flexObjects + args)
+
+        if atom is WITH_2:
+            # Replace by index.
+            index = unwrapInt(args[0])
+            return self.put(index, args[1])
+
+        raise Refused(self, atom, args)
+
+    def _makeIterator(self):
+        return listIterator(self.flexObjects)
+
+    def contains(self, needle):
+        from typhon.flexObjects.equality import EQUAL, optSame
+        for specimen in self.flexObjects:
+            if optSame(needle, specimen) is EQUAL:
+                return True
+        return False
+
+    def put(self, index, value):
+        top = len(self.flexObjects)
+        if 0 <= index < top:
+            new = self.flexObjects[:]
+            new[index] = value
+        elif index == top:
+            new = self.flexObjects + [value]
+        else:
+            raise userError(u"Index %d out of bounds for list of length %d" %
+                           (index, len(self.flexObjects)))
+
+        return ConstList(new)
+
+    def size(self):
+        return len(self.flexObjects)
+
+    def slice(self, start, stop=-1):
+        assert start >= 0
+        if stop < 0:
+            return ConstList(self.flexObjects[start:])
+        else:
+            return ConstList(self.flexObjects[start:stop])
+
+    def snapshot(self):
+        return ConstList(self.flexObjects[:])
 
 
 # Let's talk about maps for a second.
@@ -530,6 +649,8 @@ def unwrapList(o, ej=None):
     l = resolution(o)
     if isinstance(l, ConstList):
         return l.objects
+    if isinstance(l, FlexList):
+        return l.flexObjects
     throw(ej, StrObject(u"Not a list!"))
 
 

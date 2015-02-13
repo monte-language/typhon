@@ -267,70 +267,6 @@ object __makeVerbFacet:
                 M.call(target, verb, args)
 
 
-def _flexList(var l):
-    return object flexList:
-        to _makeIterator():
-            return l._makeIterator()
-
-        to _printOn(out):
-            out.print(M.toString(l))
-            out.print(".diverge()")
-
-        to contains(value):
-            return l.contains(value)
-
-        to diverge():
-            return _flexList(l)
-
-        to get(index):
-            return l[index]
-
-        to or(other):
-            return _flexList(l | other)
-
-        to pop():
-            def rv := l[l.size() - 1]
-            l := l.slice(0, l.size() - 1)
-            return rv
-
-        to push(value):
-            l := l.with(value)
-
-        to put(index, value):
-            l := l.with(index, value)
-
-        to size():
-            return l.size()
-
-        to slice(start):
-            return flexList.slice(start, flexList.size())
-
-        # XXX need to guard non-negative
-        to slice(start, stop):
-            return _flexList(l.slice(start, stop))
-
-        to snapshot():
-            return l
-
-        to with(index, value):
-            l := l.with(index, value)
-
-
-def testFlexListPop(assert):
-    assert.equal(_flexList([42]).pop(), 42)
-    assert.equal(_flexList([42, 5]).pop(), 5)
-
-def testFlexListPrinting(assert):
-    assert.equal(M.toString(_flexList([])), "[].diverge()")
-    assert.equal(M.toString(_flexList([42])), "[42].diverge()")
-    assert.equal(M.toString(_flexList([5, 42])), "[5, 42].diverge()")
-
-unittest([
-    testFlexListPop,
-    testFlexListPrinting,
-])
-
-
 def _flexMap(var m):
     return object flexMap:
         to _makeIterator():
@@ -424,7 +360,6 @@ def __accumulateMap(iterable, mapper):
     => __suchThat,
     => __switchFailed,
     => __validateFor,
-    => _flexList,
     => _flexMap,
     => _listIterator,
 ]
