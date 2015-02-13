@@ -181,7 +181,7 @@ class ConstList(Collection, Object):
             return ConstSet(d)
 
         if atom is DIVERGE_0:
-            return FlexList(self.objects)
+            return FlexList(self.objects[:])
 
         if atom is GET_1:
             # Lookup by index.
@@ -304,7 +304,7 @@ class FlexList(Collection, Object):
             return self.flexObjects[index]
 
         if atom is INDEXOF_1:
-            from typhon.flexObjects.equality import EQUAL, optSame
+            from typhon.objects.equality import EQUAL, optSame
             needle = args[0]
             for index, specimen in enumerate(self.flexObjects):
                 if optSame(needle, specimen) is EQUAL:
@@ -339,10 +339,12 @@ class FlexList(Collection, Object):
         raise Refused(self, atom, args)
 
     def _makeIterator(self):
-        return listIterator(self.flexObjects)
+        # This is the behavior we choose: Iterating over a FlexList grants
+        # iteration over a snapshot of the list's contents at that point.
+        return listIterator(self.flexObjects[:])
 
     def contains(self, needle):
-        from typhon.flexObjects.equality import EQUAL, optSame
+        from typhon.objects.equality import EQUAL, optSame
         for specimen in self.flexObjects:
             if optSame(needle, specimen) is EQUAL:
                 return True
@@ -650,7 +652,8 @@ def unwrapList(o, ej=None):
     if isinstance(l, ConstList):
         return l.objects
     if isinstance(l, FlexList):
-        return l.flexObjects
+        # XXX this isn't ideal.
+        return l.flexObjects[:]
     throw(ej, StrObject(u"Not a list!"))
 
 

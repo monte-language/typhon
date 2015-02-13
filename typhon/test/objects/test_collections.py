@@ -77,6 +77,12 @@ class TestFlexList(TestCase):
         l = FlexList([IntObject(5), IntObject(42)])
         self.assertEqual(l.toString(), u"[5, 42].diverge()")
 
+    def testContains(self):
+        l = FlexList([IntObject(5), CharObject(u'a')])
+        self.assertTrue(l.contains(IntObject(5)))
+        self.assertFalse(l.contains(IntObject(42)))
+        self.assertFalse(l.contains(l))
+
 
 class TestConstSet(TestCase):
 
