@@ -112,12 +112,17 @@ def testQuasiPatternSep(assert):
     assert.equal(car, `first`)
     assert.equal(cdr, `second\r\nthird`)
 
+def testQuasiPatternEmptyTail(assert):
+    def `1234@tail` := "1234"
+    assert.equal(tail, "")
+
 unittest([
     testQuasiValues,
     testQuasiPatternHead,
     testQuasiPatternMid,
     testQuasiPatternTail,
     testQuasiPatternSep,
+    testQuasiPatternEmptyTail,
 ])
 
 [=> simple__quasiParser]

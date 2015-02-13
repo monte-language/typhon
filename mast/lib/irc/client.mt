@@ -78,7 +78,12 @@ def makeOutgoing():
 def makeIRCClient(handler):
     var drain := null
     var pauses :Int := 0
-    var nick :Str := handler.getNick()
+
+    var nickname :Str := handler.getNick()
+    # This hostname will be refined later as the IRC server gives us more
+    # feedback on what our reverse hostname looks like.
+    var hostname :Str := "localhost"
+    def username :Str := "monte"
     var channels := [].asMap()
     var outgoing := []
 
@@ -136,8 +141,11 @@ def makeIRCClient(handler):
                 match `:@source PRIVMSG @channel :@message`:
                     handler.privmsg(IRCTube, source, channel, message)
 
-                match `:@nick!@{_} JOIN @channel`:
+                match `:@nick!@{_}@@@host JOIN @channel`:
                     channels[channel][nick] := []
+                    if (nickname == nick):
+                        traceln(`Refined hostname from $hostname to $host`)
+                        hostname := host
                     traceln(`$nick joined $channel`)
 
                 match `:@nick!@{_} QUIT @{_}`:
@@ -147,6 +155,11 @@ def makeIRCClient(handler):
                     traceln(`$nick has quit`)
 
                 match `:@nick!@{_} PART @channel @{_}`:
+                    if (channels[channel].contains(nick)):
+                        channels[channel].removeKey(nick)
+                    traceln(`$nick has parted $channel`)
+
+                match `:@nick!@{_} PART @channel`:
                     if (channels[channel].contains(nick)):
                         channels[channel].removeKey(nick)
                     traceln(`$nick has parted $channel`)
@@ -164,14 +177,14 @@ def makeIRCClient(handler):
                     IRCTube.pong(ping)
 
                 # XXX @_
-                match `:@{_} 004 $nick @hostname @version @userModes @channelModes`:
-                    traceln(`Logged in as $nick!`)
+                match `:@{_} 004 $nickname @hostname @version @userModes @channelModes`:
+                    traceln(`Logged in as $nickname!`)
                     traceln(`Server $hostname ($version)`)
                     traceln(`User modes: $userModes`)
                     traceln(`Channel modes: $channelModes`)
                     handler.loggedIn(IRCTube)
 
-                match `@{_} 353 $nick @{_} @channel :@nicks`:
+                match `@{_} 353 $nickname @{_} @channel :@nicks`:
                     def channelNicks := channels[channel]
                     def nickList := nicks.split(" ")
                     for nick in nickList:
@@ -196,8 +209,8 @@ def makeIRCClient(handler):
             tokenBucket.stop()
 
         to login():
-            line(`NICK $nick`)
-            line("USER monte localhost irc.freenode.net :Monte")
+            line(`NICK $nickname`)
+            line(`USER $username $hostname irc.freenode.net :Monte`)
             line("PING :suchPing") 
 
         to join(var channel :Str):
@@ -208,8 +221,11 @@ def makeIRCClient(handler):
 
         to say(channel, var message):
             def privmsg := `PRIVMSG $channel :`
-            # XXX add in source
-            def availableLen := 256
+            # nick!user@host
+            def sourceLen := 4 + username.size() + nickname.size() + hostname.size()
+            def paddingLen := 6 + 6 + 3 + 2 + 2
+            # Not 512, because \r\n is 2 and will be added by line().
+            def availableLen := 510 - sourceLen - paddingLen
             while (message.size() > availableLen):
                 def slice := message.slice(0, availableLen)
                 def i := slice.lastIndexOf(" ")
