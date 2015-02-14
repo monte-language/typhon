@@ -55,9 +55,8 @@ class TCP4ClientPending(object):
         self.socket.connect(addr, self)
 
     def failSocket(self, reason):
-        u = reason.decode("utf-8")
-        self.fountResolver.smash(u)
-        self.drainResolver.smash(u)
+        self.fountResolver.smash(reason)
+        self.drainResolver.smash(reason)
 
     def fulfillSocket(self):
         self.fountResolver.resolve(self.socket.createFount())

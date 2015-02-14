@@ -117,11 +117,18 @@ class Socket(object):
             return
 
         # Perform the actual recv call.
-        buf = self.rsock.recv(MAX_RECV)
+        try:
+            buf = self.rsock.recv(MAX_RECV)
+        except CSocketError as cse:
+            if cse.errno == EBADF:
+                self.terminate(u"Can't write to invalidated socket")
+                return
+            else:
+                raise
 
         if not buf:
             # Looks like we've died. Let's disconnect, right?
-            self.close()
+            self.terminate(u"End of stream")
             return
 
         for fount in self._founts:
@@ -139,8 +146,9 @@ class Socket(object):
             # Did we have an error connecting?
             err = self.rsock.getsockopt_int(_c.SOL_SOCKET, _c.SO_ERROR)
             if err:
-                self._connector.failSocket(CSocketError(err).get_msg())
-                self.terminate()
+                message = CSocketError(err).get_msg().decode("utf-8")
+                self._connector.failSocket(message)
+                self.terminate(message)
             else:
                 # We just finished connecting.
                 self._connector.fulfillSocket()
@@ -155,13 +163,13 @@ class Socket(object):
                 if cse.errno == EPIPE:
                     # Broken pipe. The local end of the socket was already
                     # closed; it will be impossible to send this data through.
-                    self.terminate()
-                    raise userError(u"Can't write to already-closed socket")
+                    self.terminate(u"Can't write to already-closed socket")
+                    return
                 elif cse.errno == EBADF:
                     # Bad file descriptor. The FD of the socket went bad
                     # somehow.
-                    self.terminate()
-                    raise userError(u"Can't write to invalidated socket")
+                    self.terminate(u"Can't write to invalidated socket")
+                    return
                 else:
                     raise
 
@@ -184,13 +192,13 @@ class Socket(object):
         vat._reactor.dropSocket(self)
         self.rsock.close()
 
-    def terminate(self):
+    def terminate(self, reason):
         """
         Recover from errors by gracefully cleaning up.
         """
 
         for fount in self._founts:
-            fount.terminate()
+            fount.terminate(reason)
 
         self._founts = []
 
@@ -237,7 +245,7 @@ class SocketFount(Object):
             return self.pause()
 
         if atom is STOPFLOW_0:
-            self.terminate()
+            self.terminate(u"Flow stopped")
             return NullObject
 
         raise Refused(self, atom, args)
@@ -261,8 +269,9 @@ class SocketFount(Object):
             vat.sendOnly(self._drain, u"receive", [ConstList(rv)])
             self.buf = ""
 
-    def terminate(self):
+    def terminate(self, reason):
         if self._drain is not None:
+            # XXX should flowStopped take a reason as arg?
             self._drain.call(u"flowStopped", [])
             # Release the drain. They should have released us as well.
             self._drain = None

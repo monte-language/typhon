@@ -126,8 +126,10 @@ class Reactor(object):
         Remove a socket from the list of interesting sockets.
         """
 
-        del self._sockets[socket.fd]
-        del self._pollDict[socket.fd]
+        if socket.fd in self._sockets:
+            del self._sockets[socket.fd]
+        if socket.fd in self._pollDict:
+            del self._pollDict[socket.fd]
 
     def addTimer(self, duration, resolver):
         timestamp = time.time() + duration
