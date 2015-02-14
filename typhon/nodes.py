@@ -932,7 +932,15 @@ class CodeScript(object):
         for param in method._ps:
             param.compile(compiler)
         method._b.compile(compiler)
-        # XXX guard
+        if method._g is not Null:
+            # [retval]
+            method._g.compile(compiler)
+            # [retval guard]
+            compiler.addInstruction("SWAP", 0)
+            # [guard retval]
+            compiler.literal(NullObject)
+            compiler.call(u"coerce", 2)
+            # [coerced]
 
         code = compiler.makeCode()
         atom = getAtom(verb, arity)
