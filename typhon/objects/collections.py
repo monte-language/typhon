@@ -38,6 +38,7 @@ NEXT_1 = getAtom(u"next", 1)
 OR_1 = getAtom(u"or", 1)
 POP_0 = getAtom(u"pop", 0)
 PUSH_1 = getAtom(u"push", 1)
+PUT_2 = getAtom(u"put", 2)
 REVERSE_0 = getAtom(u"reverse", 0)
 SIZE_0 = getAtom(u"size", 0)
 SLICE_1 = getAtom(u"slice", 1)
@@ -323,6 +324,11 @@ class FlexList(Collection, Object):
             self.flexObjects.append(args[0])
             return NullObject
 
+        if atom is PUT_2:
+            # Replace by index.
+            index = unwrapInt(args[0])
+            return self.put(index, args[1])
+
         if atom is REVERSE_0:
             self.flexObjects.reverse()
             return NullObject
@@ -332,9 +338,8 @@ class FlexList(Collection, Object):
             return ConstList(self.flexObjects + args)
 
         if atom is WITH_2:
-            # Replace by index.
-            index = unwrapInt(args[0])
-            return self.put(index, args[1])
+            # Make a new ConstList.
+            return self.snapshot().put(unwrapInt(args[0]), args[1])
 
         raise Refused(self, atom, args)
 
@@ -353,15 +358,14 @@ class FlexList(Collection, Object):
     def put(self, index, value):
         top = len(self.flexObjects)
         if 0 <= index < top:
-            new = self.flexObjects[:]
-            new[index] = value
+            self.flexObjects[index] = value
         elif index == top:
-            new = self.flexObjects + [value]
+            self.flexObjects.append(value)
         else:
             raise userError(u"Index %d out of bounds for list of length %d" %
                            (index, len(self.flexObjects)))
 
-        return ConstList(new)
+        return NullObject
 
     def size(self):
         return len(self.flexObjects)
