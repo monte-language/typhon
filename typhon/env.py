@@ -40,20 +40,16 @@ class Environment(object):
     depth = 0
 
     @unroll_safe
-    def __init__(self, initialScope, frameSize, localSize, stackSize):
+    def __init__(self, frame, localSize, stackSize):
         self = hint(self, access_directly=True, fresh_virtualizable=True)
 
-        assert frameSize >= 0, "Negative frame size not allowed!"
         assert localSize >= 0, "Negative local size not allowed!"
         assert stackSize >= 0, "Negative stack size not allowed!"
 
-        self.frame = [None] * frameSize
+        self.frame = frame
         self.local = [None] * localSize
         # Plus one extra empty cell to ease stack pointer math.
         self.stack = [None] * (stackSize + 1)
-
-        for k, v in initialScope:
-            self.createBindingFrame(k, v)
 
     def push(self, obj):
         assert self.depth < len(self.stack), "Stack overflow!"

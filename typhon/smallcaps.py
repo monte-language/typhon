@@ -158,10 +158,10 @@ class SmallCaps(object):
     _immutable_fields_ = "code", "env"
 
     def __init__(self, code, scope):
-        frame = [(i, scope[key]) for i, key in enumerate(code.frame)]
+        frame = [scope[key] for key in code.frame]
 
         self.code = code
-        self.env = Environment(frame, len(frame), len(self.code.locals),
+        self.env = Environment(frame, len(self.code.locals),
                                self.code.maxDepth)
 
         self.handlerStack = []
