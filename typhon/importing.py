@@ -49,7 +49,7 @@ def obtainModule(path, inputScope, recorder):
 
 def evaluateWithTraces(code, scope):
     try:
-        machine = SmallCaps(code, scope)
+        machine = SmallCaps.withDictScope(code, scope)
         machine.run()
         return machine.pop()
     except UserException as ue:

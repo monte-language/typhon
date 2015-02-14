@@ -44,10 +44,7 @@ def loopJIT(consumer, ejector, iterator):
         # Just copy and inline here.
         code = consumer.codeScript.methods.get(RUN_2, None)
         if code is not None:
-            frame = {}
-            for key in code.frame:
-                frame[key] = consumer.closure[key]
-            machine = SmallCaps(code, frame)
+            machine = SmallCaps(code, consumer.closure)
             # JIT merge point.
             loopDriver.jit_merge_point(code=code,
                     consumer=consumer, ejector=ejector, iterator=iterator,

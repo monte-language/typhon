@@ -15,7 +15,7 @@
 from rpython.rlib.jit import elidable, promote, unroll_safe
 
 from typhon.atoms import getAtom
-from typhon.errors import Ejecting, Refused
+from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.constants import NullObject
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject
@@ -29,15 +29,14 @@ class ScriptObject(Object):
 
     def __init__(self, codeScript, closure, displayName):
         self.codeScript = codeScript
-        self.closure = {}
-        closureNames = self.codeScript.closureNames.keys()
-        for i in range(len(closureNames)):
-            self.closure[closureNames[i]] = closure[i]
+        self.closure = closure
         self.displayName = displayName
 
     def patchSelf(self, binding):
         if self.displayName in self.codeScript.closureNames:
-            self.closure[self.displayName] = binding
+            # I am so very sorry.
+            index = self.codeScript.closureNames.keys().index(self.displayName)
+            self.closure[index] = binding
 
     def toString(self):
         try:
@@ -46,6 +45,8 @@ class ScriptObject(Object):
             return printer.value()
         except Refused:
             return u"<%s>" % self.displayName
+        except UserException:
+            return u"<%s (threw exception when printed)>" % self.displayName
 
     @unroll_safe
     def recv(self, atom, args):
@@ -55,11 +56,7 @@ class ScriptObject(Object):
             # use our matchers.
             for matcher in self.codeScript.matchers:
                 with Ejector() as ej:
-                    frame = {}
-                    for key in matcher.frame:
-                        frame[key] = self.closure[key]
-
-                    machine = SmallCaps(matcher, frame)
+                    machine = SmallCaps(matcher, self.closure)
                     machine.push(ConstList([StrObject(atom.verb),
                                             ConstList(args)]))
                     machine.push(ej)
@@ -77,11 +74,7 @@ class ScriptObject(Object):
 
             raise Refused(self, atom, args)
 
-        frame = {}
-        for key in code.frame:
-            frame[key] = self.closure[key]
-
-        machine = SmallCaps(code, frame)
+        machine = SmallCaps(code, self.closure)
         # print "--- Running", self.displayName, atom, args
         # Push the arguments onto the stack, backwards.
         args.reverse()

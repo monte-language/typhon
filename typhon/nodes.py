@@ -30,11 +30,14 @@ from typhon.smallcaps import Code, ops
 
 class Compiler(object):
 
-    def __init__(self):
+    def __init__(self, initialFrame=None):
         self.instructions = []
 
         self.atoms = OrderedDict()
-        self.frame = OrderedDict()
+        if initialFrame is None:
+            self.frame = OrderedDict()
+        else:
+            self.frame = initialFrame
         self.literals = OrderedDict()
         self.locals = OrderedDict()
         self.scripts = []
@@ -911,7 +914,7 @@ class CodeScript(object):
 
         self.methods = {}
         self.matchers = []
-        self.closureNames = {}
+        self.closureNames = OrderedDict()
 
     def makeObject(self, closure):
         return ScriptObject(self, closure, self.displayName)
@@ -928,7 +931,7 @@ class CodeScript(object):
     def addMethod(self, method):
         verb = method._verb
         arity = len(method._ps)
-        compiler = Compiler()
+        compiler = Compiler(self.closureNames)
         for param in method._ps:
             param.compile(compiler)
         method._b.compile(compiler)
@@ -939,6 +942,7 @@ class CodeScript(object):
             compiler.addInstruction("SWAP", 0)
             # [guard retval]
             compiler.literal(NullObject)
+            # [guard retval null]
             compiler.call(u"coerce", 2)
             # [coerced]
 
@@ -946,19 +950,13 @@ class CodeScript(object):
         atom = getAtom(verb, arity)
         self.methods[atom] = code
 
-        for name in code.frame:
-            self.closureNames[name] = None
-
     def addMatcher(self, matcher):
-        compiler = Compiler()
+        compiler = Compiler(self.closureNames)
         matcher._pattern.compile(compiler)
         matcher._block.compile(compiler)
 
         code = compiler.makeCode()
         self.matchers.append(code)
-
-        for name in code.frame:
-            self.closureNames[name] = None
 
 
 class Script(Node):

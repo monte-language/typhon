@@ -157,14 +157,16 @@ class SmallCaps(object):
     _immutable_ = True
     _immutable_fields_ = "code", "env"
 
-    def __init__(self, code, scope):
-        frame = [scope[key] for key in code.frame]
-
+    def __init__(self, code, frame):
         self.code = code
         self.env = Environment(frame, len(self.code.locals),
                                self.code.maxDepth)
-
         self.handlerStack = []
+
+    @staticmethod
+    def withDictScope(code, scope):
+        frame = [scope[key] for key in code.frame]
+        return SmallCaps(code, frame)
 
     def pop(self):
         return self.env.pop()
