@@ -12,6 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+# This is a hack. It is unabashedly, unashamedly, a hack. It is an essential
+# hack, for now, but it is not permanent.
+# The reference implementation uses "boolean" for the name of Bool when
+# expanding while-expressions.
+def boolean := Bool
+
 object __comparer:
     to asBigAs(left, right):
         try:
@@ -341,6 +347,9 @@ def __accumulateMap(iterable, mapper):
 
 
 [
+    # This is 100% hack. See the matching comment near the top of the prelude.
+    "boolean" => Bool,
+
     "List" => BetterList,
     "__mapEmpty" => Empty,
     => Any,
