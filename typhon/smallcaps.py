@@ -177,6 +177,7 @@ class SmallCaps(object):
     def peek(self):
         return self.env.peek()
 
+    @unroll_safe
     def bindObject(self, index):
         script = self.code.script(index)
         closure = [self.pop() for _ in script.closureNames]
@@ -186,6 +187,7 @@ class SmallCaps(object):
         obj.patchSelf(Binding(FinalSlot(obj)))
         self.push(obj)
 
+    @unroll_safe
     def listPattern(self, size):
         ej = self.pop()
         xs = unwrapList(self.pop(), ej)
@@ -197,6 +199,7 @@ class SmallCaps(object):
             self.push(xs[size])
             self.push(ej)
 
+    @unroll_safe
     def call(self, index):
         atom = self.code.atom(index)
         args = [self.pop() for _ in range(atom.arity)]

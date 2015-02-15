@@ -33,9 +33,13 @@ class Environment(object):
     outer closed-over bindings and one for local names.
     """
 
-    _virtualizable_ = ("depth", "handlerDepth",
-                       "frame[*]", "local[*]",
-                       "valueStack[*]", "handlerStack[*]")
+    # Note that we could eventually virtualize the handler stack, but it
+    # causes far too many virtualizable escapes.
+    _virtualizable_ = (
+        "local[*]",
+        "frame[*]",
+        "valueStack[*]", "depth",
+    )
 
     # The stack pointer. Always points to the *empty* cell above the top of
     # the stack.
