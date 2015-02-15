@@ -1,11 +1,14 @@
 all: prelude.ty lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
-	lib/simple.ty lib/parsers/derp.ty lib/regex.ty lib/utf8.ty \
+	lib/simple.ty lib/regex.ty \
 	lib/tokenBucket.ty lib/loopingCall.ty \
+	lib/comp.ty \
 	http \
 	irc \
 	tubes \
 	games \
 	bench
+	# These are broken
+	# lib/parsers/derp.ty lib/utf8.ty
 
 tubes: lib/tubes/nullPump.ty lib/tubes/mapPump.ty \
 	lib/tubes/pumpTube.ty \
@@ -22,4 +25,7 @@ games: games/mafia.ty
 bench: bench/nqueens.ty
 
 %.ty: %.mt
-	~/monte/local-monte/bin/python ~/monte/bin/monte -c $< > $@
+	~/src/monte/venv/bin/python ~/src/monte/bin/monte -c $< > $@
+
+clean:
+	find -name '*.ty' -delete
