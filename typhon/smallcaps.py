@@ -147,6 +147,7 @@ class Code(object):
         ai = AbstractInterpreter(self)
         ai.run()
         self.maxDepth = ai.maxDepth
+        self.maxHandlerDepth = ai.maxHandlerDepth
 
 
 class SmallCaps(object):
@@ -160,8 +161,7 @@ class SmallCaps(object):
     def __init__(self, code, frame):
         self.code = code
         self.env = Environment(frame, len(self.code.locals),
-                               self.code.maxDepth)
-        self.handlerStack = []
+                               self.code.maxDepth, self.code.maxHandlerDepth)
 
     @staticmethod
     def withDictScope(code, scope):
@@ -177,7 +177,41 @@ class SmallCaps(object):
     def peek(self):
         return self.env.peek()
 
-    @unroll_safe
+    def bindObject(self, index):
+        script = self.code.script(index)
+        closure = [self.pop() for _ in script.closureNames]
+        closure.reverse()
+        obj = script.makeObject(closure)
+        # Make sure that the object has access to itself, if necessary.
+        obj.patchSelf(Binding(FinalSlot(obj)))
+        self.push(obj)
+
+    def listPattern(self, size):
+        ej = self.pop()
+        xs = unwrapList(self.pop(), ej)
+        if len(xs) < size:
+            throw(ej, StrObject(u"Failed list pattern (needed %d, got %d)" %
+                                (size, len(xs))))
+        while size:
+            size -= 1
+            self.push(xs[size])
+            self.push(ej)
+
+    def call(self, index):
+        atom = self.code.atom(index)
+        args = [self.pop() for _ in range(atom.arity)]
+        args.reverse()
+        target = self.pop()
+
+        try:
+            self.push(target.callAtom(atom, args))
+        except UserException as ue:
+            argString = u", ".join([arg.toQuote() for arg in args])
+            atomRepr = atom.repr().decode("utf-8")
+            ue.trail.append(u"In %s.%s [%s]:" % (target.toString(),
+                                                 atomRepr, argString))
+            raise
+
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)
         jit_debug(reverseOps[instruction], index, pc)
@@ -237,42 +271,27 @@ class SmallCaps(object):
             self.push(self.env.getBindingLocal(index))
             return pc + 1
         elif instruction == LIST_PATT:
-            ej = self.pop()
-            xs = unwrapList(self.pop(), ej)
-            if len(xs) < index:
-                throw(ej,
-                      StrObject(u"Failed list pattern (needed %d, got %d)" %
-                          (index, len(xs))))
-            while index:
-                index -= 1
-                self.push(xs[index])
-                self.push(ej)
+            self.listPattern(index)
             return pc + 1
         elif instruction == LITERAL:
             self.push(self.code.literal(index))
             return pc + 1
         elif instruction == BINDOBJECT:
-            script = self.code.script(index)
-            closure = [self.pop() for _ in script.closureNames]
-            closure.reverse()
-            obj = script.makeObject(closure)
-            # Make sure that the object has access to itself, if necessary.
-            obj.patchSelf(Binding(FinalSlot(obj)))
-            self.push(obj)
+            self.bindObject(index)
             return pc + 1
         elif instruction == EJECTOR:
             ej = Ejector()
             self.push(ej)
-            self.handlerStack.append(Eject(self, ej, index))
+            self.env.pushHandler(Eject(self, ej, index))
             return pc + 1
         elif instruction == TRY:
-            self.handlerStack.append(Catch(self, index))
+            self.env.pushHandler(Catch(self, index))
             return pc + 1
         elif instruction == UNWIND:
-            self.handlerStack.append(Unwind(self, index))
+            self.env.pushHandler(Unwind(self, index))
             return pc + 1
         elif instruction == END_HANDLER:
-            handler = self.handlerStack.pop()
+            handler = self.env.popHandler()
             handler.drop(self, index)
             return pc + 1
         elif instruction == BRANCH:
@@ -282,20 +301,7 @@ class SmallCaps(object):
             else:
                 return index
         elif instruction == CALL:
-            atom = self.code.atom(index)
-            args = [self.pop() for _ in range(atom.arity)]
-            args.reverse()
-            target = self.pop()
-
-            try:
-                self.push(target.callAtom(atom, args))
-            except UserException as ue:
-                argString = u", ".join([arg.toQuote() for arg in args])
-                atomRepr = atom.repr().decode("utf-8")
-                ue.trail.append(u"In %s.%s [%s]:" % (target.toString(),
-                                                     atomRepr, argString))
-                raise
-
+            self.call(index)
             return pc + 1
         elif instruction == JUMP:
             return index
@@ -314,31 +320,31 @@ class SmallCaps(object):
                 jit_debug("Before run")
                 pc = self.runInstruction(instruction, pc)
                 jit_debug("After run")
-                # print "Stack:", self.env.stack[:self.env.depth]
-                # if self.handlerStack:
-                #     print "Handlers:", self.handlerStack
+                # print "Stack:", self.env.valueStack[:self.env.depth]
+                # if self.env.handlerDepth:
+                #     print "Handlers:", self.env.handlerStack[:self.env.handlerDepth]
             except Ejecting as e:
                 pc = self.unwindEjector(e)
             except UserException as ue:
                 pc = self.unwindEx(ue)
         # If there is a final handler, drop it; it may cause exceptions to
         # propagate or perform some additional stack unwinding.
-        if self.handlerStack:
-            finalHandler = self.handlerStack.pop()
+        if self.env.handlerDepth:
+            finalHandler = self.env.popHandler()
             finalHandler.drop(self, pc)
         # print "<" * 10
 
     def unwindEjector(self, ex):
-        while self.handlerStack:
-            handler = self.handlerStack.pop()
+        while self.env.handlerDepth:
+            handler = self.env.popHandler()
             rv = handler.eject(self, ex)
             if rv != -1:
                 return rv
         raise ex
 
     def unwindEx(self, ex):
-        while self.handlerStack:
-            handler = self.handlerStack.pop()
+        while self.env.handlerDepth:
+            handler = self.env.popHandler()
             rv = handler.unwind(self, ex)
             if rv != -1:
                 return rv
@@ -364,7 +370,7 @@ class Eject(Handler):
 
     def __init__(self, machine, ejector, index):
         self.valueDepth = machine.env.depth
-        self.handlerHeight = len(machine.handlerStack)
+        self.handlerDepth = machine.env.handlerDepth
         self.ejector = ejector
         self.index = index
 
@@ -374,7 +380,7 @@ class Eject(Handler):
     def eject(self, machine, ex):
         if ex.ejector is self.ejector:
             machine.env.depth = self.valueDepth
-            machine.handlerStack = machine.handlerStack[:self.handlerHeight]
+            machine.env.handlerDepth = self.handlerDepth
             machine.push(ex.value)
             return self.index
         else:
@@ -385,7 +391,7 @@ class Catch(Handler):
 
     def __init__(self, machine, index):
         self.valueDepth = machine.env.depth
-        self.handlerHeight = len(machine.handlerStack)
+        self.handlerDepth = machine.env.handlerDepth
         self.index = index
 
     def repr(self):
@@ -393,7 +399,7 @@ class Catch(Handler):
 
     def unwind(self, machine, ex):
         machine.env.depth = self.valueDepth
-        machine.handlerStack = machine.handlerStack[:self.handlerHeight]
+        machine.env.handlerDepth = self.handlerDepth
         machine.push(StrObject(u"Uninformative exception"))
         return self.index
 
@@ -402,7 +408,7 @@ class Unwind(Handler):
 
     def __init__(self, machine, index):
         self.valueDepth = machine.env.depth
-        self.handlerHeight = len(machine.handlerStack)
+        self.handlerDepth = machine.env.handlerDepth
         self.index = index
 
     def repr(self):
@@ -410,21 +416,21 @@ class Unwind(Handler):
 
     def eject(self, machine, ex):
         rv = self.carryOn(machine)
-        machine.handlerStack.append(Rethrower(ex))
+        machine.env.pushHandler(Rethrower(ex))
         return rv
 
     def unwind(self, machine, ex):
         rv = self.carryOn(machine)
-        machine.handlerStack.append(Rethrower(ex))
+        machine.env.pushHandler(Rethrower(ex))
         return rv
 
     def carryOn(self, machine):
         machine.env.depth = self.valueDepth
-        machine.handlerStack = machine.handlerStack[:self.handlerHeight]
+        machine.env.handlerDepth = self.handlerDepth
         return self.index
 
     def drop(self, machine, index):
-        machine.handlerStack.append(Returner(index))
+        machine.env.pushHandler(Returner(index))
 
 
 class Rethrower(Handler):
@@ -460,19 +466,24 @@ class AbstractInterpreter(object):
     _immutable_fields_ = "code"
 
     currentDepth = 0
+    currentHandlerDepth = 0
     maxDepth = 0
+    maxHandlerDepth = 0
     underflow = 0
 
     def __init__(self, code):
         self.code = code
-        self.branches = [(0, 0)]
+        # pc, depth, handlerDepth
+        self.branches = [(0, 0, 0)]
 
     def checkMaxDepth(self):
         if self.currentDepth + self.underflow > self.maxDepth:
             self.maxDepth = self.currentDepth + self.underflow
+        if self.currentHandlerDepth > self.maxHandlerDepth:
+            self.maxHandlerDepth = self.currentHandlerDepth
 
-    def addBranch(self, depth, pc):
-        self.branches.append((depth, pc))
+    def addBranch(self, pc, depth, handlerDepth):
+        self.branches.append((pc, depth, handlerDepth))
 
     def pop(self):
         # Overestimates but that's fine.
@@ -537,16 +548,20 @@ class AbstractInterpreter(object):
             return pc + 1
         elif instruction == EJECTOR:
             self.currentDepth += 1
+            self.currentHandlerDepth += 1
             return pc + 1
         elif instruction == TRY:
+            self.currentHandlerDepth += 1
             return pc + 1
         elif instruction == UNWIND:
+            self.currentHandlerDepth += 1
             return pc + 1
         elif instruction == END_HANDLER:
+            self.currentHandlerDepth -= 1
             return pc + 1
         elif instruction == BRANCH:
             self.pop()
-            self.addBranch(self.currentDepth, index)
+            self.addBranch(index, self.currentDepth, self.currentHandlerDepth)
             return pc + 1
         elif instruction == CALL:
             arity = self.code.atoms[index].arity
@@ -561,12 +576,13 @@ class AbstractInterpreter(object):
     def run(self):
         i = 0
         while i < len(self.branches):
-            depth, pc = self.branches[i]
-            self.completeBranch(depth, pc)
+            pc, depth, handlerDepth = self.branches[i]
+            self.completeBranch(pc, depth, handlerDepth)
             i += 1
 
-    def completeBranch(self, depth, pc):
+    def completeBranch(self, pc, depth, handlerDepth):
         self.currentDepth = depth
+        self.currentHandlerDepth = handlerDepth
 
         while pc < len(self.code.instructions):
             instruction = self.code.instructions[pc]

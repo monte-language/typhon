@@ -33,37 +33,69 @@ class Environment(object):
     outer closed-over bindings and one for local names.
     """
 
-    _virtualizable_ = "depth", "frame[*]", "local[*]", "valueStack[*]"
+    _virtualizable_ = ("depth", "handlerDepth",
+                       "frame[*]", "local[*]",
+                       "valueStack[*]", "handlerStack[*]")
 
     # The stack pointer. Always points to the *empty* cell above the top of
     # the stack.
     depth = 0
 
-    @unroll_safe
-    def __init__(self, frame, localSize, stackSize):
+    # The handler stack pointer. Same rules as stack pointer.
+    handlerDepth = 0
+
+    def __init__(self, frame, localSize, stackSize, handlerSize):
         self = hint(self, access_directly=True, fresh_virtualizable=True)
 
         assert localSize >= 0, "Negative local size not allowed!"
         assert stackSize >= 0, "Negative stack size not allowed!"
+        assert handlerSize >= 0, "Negative handler stack size not allowed!"
 
         self.frame = frame
         self.local = [None] * localSize
         # Plus one extra empty cell to ease stack pointer math.
-        self.stack = [None] * (stackSize + 1)
+        self.stackSize = stackSize + 1
+        self.valueStack = [None] * self.stackSize
+        self.handlerSize = handlerSize + 1
+        self.handlerStack = [None] * self.handlerSize
 
     def push(self, obj):
-        assert self.depth < len(self.stack), "Stack overflow!"
-        self.stack[self.depth] = obj
+        i = self.depth
+        assert i >= 0, "Stack underflow!"
+        assert i < self.stackSize, "Stack overflow!"
+        self.valueStack[i] = obj
         self.depth += 1
 
     def pop(self):
-        assert self.depth >= 0, "Stack underflow!"
         self.depth -= 1
-        return self.stack[self.depth]
+        i = self.depth
+        assert i >= 0, "Stack underflow!"
+        assert i < self.stackSize, "Stack overflow!"
+        rv = self.valueStack[i]
+        self.valueStack[i] = None
+        return rv
 
     def peek(self):
-        assert self.depth >= 0, "Stack underflow!"
-        return self.stack[self.depth - 1]
+        i = self.depth - 1
+        assert i >= 0, "Stack underflow!"
+        assert i < self.stackSize, "Stack overflow!"
+        return self.valueStack[i]
+
+    def pushHandler(self, handler):
+        i = self.handlerDepth
+        assert i >= 0, "Stack underflow!"
+        assert i < self.handlerSize, "Stack overflow!"
+        self.handlerStack[i] = handler
+        self.handlerDepth += 1
+
+    def popHandler(self):
+        self.handlerDepth -= 1
+        i = self.handlerDepth
+        assert i >= 0, "Stack underflow!"
+        assert i < self.handlerSize, "Stack overflow!"
+        rv = self.handlerStack[i]
+        self.handlerStack[i] = None
+        return rv
 
     def createBindingFrame(self, index, binding):
         # Commented out because binding replacement is not that weird and also
