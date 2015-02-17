@@ -102,11 +102,11 @@ class Asserter(Object):
     def dump(self):
         for label, errors in self._errors.items():
             if errors:
-                debug_print(label, "FAIL")
+                debug_print(label.encode("utf-8"), "FAIL")
                 for error in errors:
-                    debug_print("    ERROR:", error)
+                    debug_print("    ERROR:", error.encode("utf-8"))
             else:
-                debug_print(label, "PASS")
+                debug_print(label.encode("utf-8"), "PASS")
 
 
 class UnitTest(Object):
@@ -136,6 +136,6 @@ class UnitTest(Object):
                 test.call(u"run", [asserter])
             except UserException as ue:
                 asserter.log(u"Caught exception: " +
-                        ue.formatError())
+                        ue.formatError().decode("utf-8"))
         print "Unit test output:"
         asserter.dump()

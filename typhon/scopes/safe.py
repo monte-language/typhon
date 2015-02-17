@@ -95,8 +95,10 @@ class TraceLn(Object):
 
     def callAtom(self, atom, args):
         if atom.verb == u"run":
-            reprs = [obj.toQuote() for obj in args]
-            debug_print(u"TRACE:", reprs)
+            debug_print("TRACE: [")
+            for obj in args:
+                debug_print("    ", obj.toQuote().encode("utf-8"))
+            debug_print("]")
             return NullObject
         raise Refused(self, atom, args)
 

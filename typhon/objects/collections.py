@@ -479,6 +479,9 @@ class ConstMap(Collection, Object):
                 for k, v in self.objectMap.items()])
             return ConstList([StrObject(u"fromPairs"), rv])
 
+        if atom is ASSET_0:
+            return ConstSet(self.objectMap)
+
         if atom is DIVERGE_0:
             _flexMap = getGlobal(u"_flexMap")
             return _flexMap.call(u"run", [self])

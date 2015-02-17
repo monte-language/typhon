@@ -42,7 +42,7 @@ class UserException(Exception):
         pieces = [self.error()] + self.trail
         pieces.append(u"Exception in user code:")
         pieces.reverse()
-        return u"\n".join(pieces)
+        return u"\n".join(pieces).encode("utf-8")
 
     def error(self):
         return u"Error: " + self.payload.toQuote()
