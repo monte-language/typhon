@@ -282,6 +282,9 @@ def _flexMap(var m):
             out.print(M.toString(m))
             out.print(".diverge()")
 
+        to asSet() :Set:
+            return m.asSet()
+
         to contains(k) :Bool:
             return m.contains(k)
 
