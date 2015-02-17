@@ -87,6 +87,9 @@ def makeIRCClient(handler):
     var channels := [].asMap()
     var outgoing := []
 
+    # Pending events.
+    def pendingChannels := [].asMap().diverge()
+
     # Five lines of burst and a new line every two seconds.
     def tokenBucket := makeTokenBucket(5, 2.0)
     tokenBucket.start(Timer)
@@ -134,6 +137,9 @@ def makeIRCClient(handler):
                     drain.receive(line + "\r\n")
                 outgoing := []
 
+        to flowStopped():
+            drain := null
+
         # IRC wire stuff.
 
         to receive(item):
@@ -142,10 +148,15 @@ def makeIRCClient(handler):
                     handler.privmsg(IRCTube, source, channel, message)
 
                 match `:@nick!@{_}@@@host JOIN @channel`:
-                    channels[channel][nick] := []
                     if (nickname == nick):
+                        # This is pretty much the best way to find out what
+                        # our reflected hostname is.
                         traceln(`Refined hostname from $hostname to $host`)
                         hostname := host
+
+                        IRCTube.joined(channel)
+                    # We have to call joined() prior to accessing this map.
+                    channels[channel][nick] := []
                     traceln(`$nick joined $channel`)
 
                 match `:@nick!@{_} QUIT @{_}`:
@@ -217,7 +228,6 @@ def makeIRCClient(handler):
             if (channel[0] != '#'):
                 channel := "#" + channel
             line(`JOIN $channel`)
-            channels := channels.with(channel, [].asMap().diverge())
 
         to say(channel, var message):
             def privmsg := `PRIVMSG $channel :`
@@ -238,6 +248,27 @@ def makeIRCClient(handler):
 
         to getUsers(channel, ej):
             return channels.fetch(channel, ej)
+
+        # Low-level events.
+
+        to joined(channel :Str):
+            traceln(`I joined $channel`)
+            channels := channels.with(channel, [].asMap().diverge())
+
+            if (pendingChannels.contains(channel)):
+                pendingChannels[channel].resolve(null)
+                pendingChannels.removeKey(channel)
+
+        # High-level events.
+
+        to hasJoined(channel :Str):
+            if (channels.contains(channel)):
+                return null
+            else:
+                IRCTube.join(channel)
+                def [p, r] := Ref.promise()
+                pendingChannels[channel] := r
+                return p
 
 
 def chain([var fount] + drains):
