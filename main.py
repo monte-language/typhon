@@ -15,11 +15,12 @@
 import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
+from rpython.rlib.debug import debug_print
 from rpython.rlib.rpath import rjoin
 
 from typhon.arguments import Configuration
 from typhon.env import finalize
-from typhon.errors import LoadFailed
+from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, obtainModule
 from typhon.metrics import Recorder
 from typhon.objects.collections import ConstMap, unwrapMap
@@ -141,7 +142,11 @@ def entryPoint(argv):
             if reactor.hasObjects():
                 # print "Performing I/O..."
                 with recorder.context("Time spent in I/O"):
-                    reactor.spin(vat.hasTurns())
+                    try:
+                        reactor.spin(vat.hasTurns())
+                    except UserException as ue:
+                        debug_print("Caught exception while reacting:",
+                                ue.formatError())
     finally:
         recorder.stop()
         recorder.printResults()
