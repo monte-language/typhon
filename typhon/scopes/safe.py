@@ -33,6 +33,7 @@ from typhon.vats import currentVat
 
 
 BROKEN_0 = getAtom(u"broken", 0)
+CALLWITHPAIR_2 = getAtom(u"callWithPair", 2)
 CALL_3 = getAtom(u"call", 3)
 EJECT_2 = getAtom(u"eject", 2)
 FAILURELIST_1 = getAtom(u"failureList", 1)
@@ -172,6 +173,15 @@ class MObject(Object):
         return u"<M>"
 
     def recv(self, atom, args):
+        if atom is CALLWITHPAIR_2:
+            target = args[0]
+            pair = unwrapList(args[1])
+            if len(pair) != 2:
+                raise userError(u"callWithPair/2 requires a pair!")
+            sendVerb = unwrapStr(pair[0])
+            sendArgs = unwrapList(pair[1])
+            return target.call(sendVerb, sendArgs)
+
         if atom is CALL_3:
             target = args[0]
             sendVerb = unwrapStr(args[1])
