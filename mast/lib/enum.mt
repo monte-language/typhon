@@ -14,13 +14,16 @@
 
 def [=> simple__quasiParser] | _ := import("lib/simple")
 
-def makeEnumObject(name):
+def makeEnumObject(i :Int, name):
     return object enumObject:
         to _printOn(out):
             out.print(name)
 
+        to asInteger() :Int:
+            return i
+
 def makeEnum(names :List):
-    def enums := [makeEnumObject(name) for name in names]
+    def enums := [makeEnumObject(i, name) for i => name in names]
     def enumSet := enums.asSet()
 
     object EnumGuard:
