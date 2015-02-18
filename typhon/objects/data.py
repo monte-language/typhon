@@ -71,6 +71,7 @@ SUBTRACT_1 = getAtom(u"subtract", 1)
 TAN_0 = getAtom(u"tan", 0)
 TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
 TOUPPERCASE_0 = getAtom(u"toUpperCase", 0)
+XOR_1 = getAtom(u"xor", 1)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 
 
@@ -340,6 +341,10 @@ class IntObject(Object):
                 # Promote ourselves to double and retry.
                 return DoubleObject(float(self._i)).subtract(other)
             return IntObject(self._i - unwrapInt(other))
+
+        if atom is XOR_1:
+            other = unwrapInt(args[0])
+            return IntObject(self._i ^ other)
 
         raise Refused(self, atom, args)
 
