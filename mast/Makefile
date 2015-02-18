@@ -19,7 +19,7 @@ irc: lib/irc/client.ty \
 
 games: games/mafia.ty
 
-bench: bench/nqueens.ty
+bench: bench/nqueens.ty bench/richards.ty
 
 %.ty: %.mt
 	~/monte/local-monte/bin/python ~/monte/bin/monte -c $< > $@
