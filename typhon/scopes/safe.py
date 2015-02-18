@@ -15,7 +15,7 @@
 from rpython.rlib.debug import debug_print
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused, UserException
+from typhon.errors import Refused, UserException, userError
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
                                         unwrapList)
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
