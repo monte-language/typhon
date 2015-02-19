@@ -124,7 +124,7 @@ class Code(object):
     def dis(self, instruction, index):
         base = "%s %d" % (reverseOps[instruction], index)
         if instruction == CALL:
-            base += " (%s)" % self.atoms[index].repr()
+            base += " (%s)" % self.atoms[index].repr
         # XXX enabling this requires the JIT to be able to traverse a lot of
         # otherwise-unsafe code. You're free to try to fix it, but you've been
         # warned.
@@ -218,7 +218,7 @@ class SmallCaps(object):
             self.push(target.callAtom(atom, args))
         except UserException as ue:
             argString = u", ".join([arg.toQuote() for arg in args])
-            atomRepr = atom.repr().decode("utf-8")
+            atomRepr = atom.repr.decode("utf-8")
             ue.trail.append(u"In %s.%s [%s]:" % (target.toString(),
                                                  atomRepr, argString))
             raise

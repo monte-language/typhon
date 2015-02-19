@@ -62,8 +62,10 @@ class Object(object):
         This method is used to reuse atoms without having to rebuild them.
         """
 
+        # Promote the atom, on the basis that atoms are generally reused.
         atom = promote(atom)
-        jit_debug(atom.repr())
+        # Log the atom to the JIT log. This line is not cheap.
+        jit_debug(atom.repr)
 
         try:
             return self.recv(atom, arguments)

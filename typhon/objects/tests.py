@@ -89,7 +89,7 @@ class Asserter(Object):
                         (args[0].toQuote(), args[1].toQuote()))
             return NullObject
 
-        self.log(u"Unknown assertion made: %s" % atom.repr().decode("utf-8"))
+        self.log(u"Unknown assertion made: %s" % atom.repr.decode("utf-8"))
         return NullObject
 
     def log(self, message):

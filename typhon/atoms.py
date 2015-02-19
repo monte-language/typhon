@@ -27,13 +27,10 @@ class Atom(object):
     def __init__(self, verb, arity):
         self.verb = verb
         self.arity = arity
+        self.repr = "Atom(%s/%d)" % (self.verb.encode("utf-8"), self.arity)
 
     def __repr__(self):
-        return "Atom(%s/%d)" % (self.verb.encode("utf-8"), self.arity)
-
-    @elidable
-    def repr(self):
-        return self.__repr__()
+        return repr
 
 
 class _AtomHolder(object):

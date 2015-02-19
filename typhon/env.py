@@ -14,7 +14,12 @@
 
 from rpython.rlib.jit import hint, promote, unroll_safe
 
+from typhon.atoms import getAtom
 from typhon.objects.slots import Binding, FinalSlot
+
+
+GET_0 = getAtom(u"get", 0)
+PUT_1 = getAtom(u"put", 1)
 
 
 def finalize(scope):
@@ -130,15 +135,15 @@ class Environment(object):
     def getSlotFrame(self, index):
         # Elidability is based on bindings not allowing reassignment of slots.
         binding = self.getBindingFrame(index)
-        return binding.call(u"get", [])
+        return binding.callAtom(GET_0, [])
 
     def getValueFrame(self, index):
         slot = self.getSlotFrame(index)
-        return slot.call(u"get", [])
+        return slot.callAtom(GET_0, [])
 
     def putValueFrame(self, index, value):
         slot = self.getSlotFrame(index)
-        return slot.call(u"put", [value])
+        return slot.callAtom(PUT_1, [value])
 
     def createBindingLocal(self, index, binding):
         # Commented out because binding replacement is not that weird and also
@@ -170,12 +175,12 @@ class Environment(object):
     def getSlotLocal(self, index):
         # Elidability is based on bindings not allowing reassignment of slots.
         binding = self.getBindingLocal(index)
-        return binding.call(u"get", [])
+        return binding.callAtom(GET_0, [])
 
     def getValueLocal(self, index):
         slot = self.getSlotLocal(index)
-        return slot.call(u"get", [])
+        return slot.callAtom(GET_0, [])
 
     def putValueLocal(self, index, value):
         slot = self.getSlotLocal(index)
-        return slot.call(u"put", [value])
+        return slot.callAtom(PUT_1, [value])

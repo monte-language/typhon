@@ -411,7 +411,7 @@ class SwitchableRef(Promise):
     def callAll(self, atom, args):
         if self.isSwitchable:
             raise userError(u"not synchronously callable (%s)" %
-                    atom.repr().decode("utf-8"))
+                    atom.repr.decode("utf-8"))
         else:
             self.resolutionRef()
             return self._target.callAll(atom, args)
@@ -484,7 +484,7 @@ class BufferingRef(Promise):
 
     def callAll(self, atom, args):
         raise userError(u"not synchronously callable (%s)" %
-                atom.repr().decode("utf-8"))
+                atom.repr.decode("utf-8"))
 
     def sendAll(self, atom, args):
         optMsgs = self._buf()
