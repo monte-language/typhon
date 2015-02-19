@@ -33,7 +33,7 @@ var traces := ""
 def trace(c :Char):
     traces += c
     if (traces.size() >= 50):
-        traceln(traces)
+        # traceln(traces)
         traces := ""
 
 
@@ -88,71 +88,16 @@ def makePacket(var link, var ident :TaskType, kind :PacketType):
 # Task records.
 
 def makeDeviceTaskRecord():
-    var pending := null
-
-    return object deviceTaskRecord:
-        to getPending():
-            return pending
-
-        to setPending(p):
-            pending := p
+    return ["pending" => null].diverge()
 
 def makeIdleTaskRecord():
-    var control :Int := 1
-    var count :Int := 10000
-
-    return object idleTaskRecord:
-        to getControl() :Int:
-            return control
-
-        to setControl(c :Int):
-            control := c
-
-        to getCount() :Int:
-            return count
-
-        to setCount(c :Int):
-            count := c
+    return ["control" => 1, "count" => 10000].diverge()
 
 def makeHandlerTaskRecord():
-    var workIn := null
-    var deviceIn := null
-
-    return object handlerTaskRecord:
-        to getWorkIn():
-            return workIn
-
-        to setWorkIn(work):
-            workIn := work
-
-        to getDeviceIn():
-            return deviceIn
-
-        to setDeviceIn(device):
-            deviceIn := device
-
-        to addWorkIn(packet):
-            return workIn := packet.appendTo(workIn)
-
-        to addDeviceIn(packet):
-            return deviceIn := packet.appendTo(deviceIn)
+    return ["workIn" => null, "deviceIn" => null].diverge()
 
 def makeWorkerTaskRecord():
-    var destination :TaskType := HANDLERA
-    var count :Int := 0
-
-    return object workerTaskRecord:
-        to getDestination() :TaskType:
-            return destination
-
-        to setDestination(d :TaskType):
-            destination := d
-
-        to getCount() :Int:
-            return count
-
-        to setCount(c :Int):
-            count := c
+    return ["destination" => HANDLERA, "count" => 0].diverge()
 
 
 def makeTaskState():
@@ -224,7 +169,8 @@ def findtcb(id :TaskType):
 
 # Tasks.
 def makeTaskMaker(runner):
-    def makeTask(var ident :TaskType, priority, var input, state, handle):
+    def makeTask(var ident :TaskType, priority :Int, var input, state,
+                 handle):
         var link := taskList
 
         object task extends state:
@@ -305,14 +251,14 @@ def makeTaskMaker(runner):
 
 def runDeviceTask(task, packet, r):
     if (packet == null):
-        packet := r.getPending()
+        packet := r["pending"]
         if (packet == null):
             return task.waitTask()
         else:
-            r.setPending(null)
+            r["pending"] := null
             return task.qpkt(packet)
     else:
-        r.setPending(packet)
+        r["pending"] := packet
         trace(`${packet.getDatum()}`[0])
         return task.hold()
 
@@ -322,23 +268,24 @@ def makeDeviceTask := makeTaskMaker(runDeviceTask)
 def runHandlerTask(task, packet, r):
     if (packet != null):
         if (packet.getKind() == KWORK):
-            r.addWorkIn(packet)
+            r["workIn"] := packet.appendTo(r["workIn"])
         else:
-            r.addDeviceIn(packet)
+            r["deviceIn"] := packet.appendTo(r["deviceIn"])
 
-    def work := r.getWorkIn()
+    def work := r["workIn"]
     if (work == null):
         return task.waitTask()
+
     def count := work.getDatum()
     if (count >= BUFSIZE):
         r.setWorkIn(work.getLink())
         return task.qpkt(work)
 
-    def dev := r.getDeviceIn()
+    def dev := r["deviceIn"]
     if (dev == null):
         return task.waitTask()
 
-    r.setDeviceIn(dev.getLink())
+    r["deviceIn"] := dev.getLink()
     dev.setDatum(work.getData(count))
     work.setDatum(count + 1)
     return task.qpkt(dev)
@@ -347,14 +294,14 @@ def makeHandlerTask := makeTaskMaker(runHandlerTask)
 
 
 def runIdleTask(task, packet, r):
-    r.setCount(r.getCount() - 1)
-    if (r.getCount() == 0):
+    r["count"] -= 1
+    if (r["count"] == 0):
         return task.hold()
-    else if ((r.getControl() & 1) == 0):
-        r.setControl(r.getControl() // 2)
+    else if ((r["control"] & 1) == 0):
+        r["control"] //= 2
         return task.release(DEVA)
     else:
-        r.setControl((r.getControl() // 2) ^ 0xd008)
+        r["control"] := (r["control"] // 2) ^ 0xd008
         return task.release(DEVB)
 
 def makeIdleTask := makeTaskMaker(runIdleTask)
@@ -364,21 +311,21 @@ def runWorkTask(task, packet, r):
     if (packet == null):
         return task.waitTask()
 
-    def dest := if (r.getDestination() == HANDLERA) {
+    def dest := if (r["destination"] == HANDLERA) {
         HANDLERB
     } else {
         HANDLERA
     }
 
-    r.setDestination(dest)
+    r["destination"] := dest
     packet.setIdent(dest)
     packet.setDatum(0)
 
     for i in 0..!BUFSIZE:
-        r.setCount(r.getCount() + 1)
-        if (r.getCount() > 26):
-            r.setCount(1)
-        packet.setData(i, 'A'.asInteger() + r.getCount() - 1)
+        r["count"] += 1
+        if (r["count"] > 26):
+            r["count"] := 1
+        packet.setData(i, 'A'.asInteger() + r["count"] - 1)
 
     return task.qpkt(packet)
 
