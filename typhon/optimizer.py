@@ -232,7 +232,8 @@ class Optimizer(object):
 def optimize(node):
     changes = [
         flattenSequence,
-        simplifyPlainDefs,
+        # This just isn't reasonable as long as we can't rewrite patterns.
+        # simplifyPlainDefs,
         elideBareNouns,
         narrowEscape,
         elideSingleEscape,
