@@ -18,7 +18,7 @@ from rpython.rlib.objectmodel import specialize
 from typhon.env import Environment
 from typhon.errors import Ejecting, UserException
 from typhon.objects.collections import unwrapList
-from typhon.objects.constants import unwrapBool
+from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.slots import Binding, FinalSlot
@@ -403,7 +403,10 @@ class Catch(Handler):
     def unwind(self, machine, ex):
         machine.env.depth = self.valueDepth
         machine.env.handlerDepth = self.handlerDepth
+        # Push the caught value.
         machine.push(StrObject(u"Uninformative exception"))
+        # And the ejector.
+        machine.push(NullObject)
         return self.index
 
 
