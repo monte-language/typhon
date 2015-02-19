@@ -18,7 +18,7 @@
 
 def [=> makeEnum] := import("lib/enum")
 
-def LOOPS :Int := 500000
+def LOOPS :Int := 5000 # 500000
 
 def [Enumeration, Ident1, Ident2, Ident3, Ident4, Ident5] := makeEnum(
     ["Ident1", "Ident2", "Ident3", "Ident4", "Ident5"])
@@ -35,6 +35,9 @@ def makeRecord(var PtrComp, var Discr :Enumeration, var EnumComp :Enumeration,
     return object Record:
         to getPtrComp():
             return PtrComp
+
+        to getPtrCompSlot():
+            return &PtrComp
 
         to setPtrComp(x):
             PtrComp := x
@@ -173,7 +176,7 @@ def Proc4():
     BoolLoc |= BoolGlob
     Char2Glob := 'B'
 
-def Proc3(PtrParOut):
+def Proc3(&PtrParOut):
     if (PtrGlb != null):
         PtrParOut := PtrGlb.getPtrComp()
     else:
@@ -197,7 +200,7 @@ def Proc1(PtrParIn):
     PtrParIn.setIntComp(5)
     PtrParIn.getPtrComp().setIntComp(PtrParIn.getIntComp())
     PtrParIn.getPtrComp().setPtrComp(PtrParIn.getPtrComp())
-    Proc3(PtrParIn.getPtrComp())
+    Proc3(PtrParIn.getPtrCompSlot())
     if (PtrParIn.getPtrComp().getDiscr() == Ident1):
         PtrParIn.getPtrComp().setIntComp(6)
         Proc6(PtrParIn.getEnumComp(), PtrParIn.getPtrComp().getEnumCompSlot())
