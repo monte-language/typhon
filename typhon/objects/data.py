@@ -75,6 +75,16 @@ XOR_1 = getAtom(u"xor", 1)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 
 
+@specialize.argtype(0, 1)
+def polyCmp(l, r):
+    if l < r:
+        return IntObject(-1)
+    elif l > r:
+        return IntObject(1)
+    else:
+        return IntObject(0)
+
+
 class CharObject(Object):
 
     _immutable_fields_ = "stamps", "_c"
@@ -121,6 +131,9 @@ class CharObject(Object):
         if atom is NEXT_0:
             return self.withOffset(1)
 
+        if atom is OP__CMP_1:
+            return polyCmp(self._c, unwrapChar(args[0]))
+
         if atom is PREVIOUS_0:
             return self.withOffset(-1)
 
@@ -153,16 +166,6 @@ def promoteToDouble(o):
     if isinstance(n, DoubleObject):
         return n.getDouble()
     raise userError(u"Failed to promote to double")
-
-
-@specialize.argtype(0, 1)
-def polyCmp(l, r):
-    if l < r:
-        return IntObject(-1)
-    elif l > r:
-        return IntObject(1)
-    else:
-        return IntObject(0)
 
 
 class DoubleObject(Object):
@@ -474,6 +477,9 @@ class StrObject(Object):
             amount = args[0]
             if isinstance(amount, IntObject):
                 return StrObject(self._s * amount._i)
+
+        if atom is OP__CMP_1:
+            return polyCmp(self._s, unwrapStr(args[0]))
 
         if atom is SIZE_0:
             return IntObject(len(self._s))
