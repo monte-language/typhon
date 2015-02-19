@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from errno import EBADF, EPIPE
+from errno import EADDRINUSE, EBADF, EPIPE
 
 from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
@@ -93,8 +93,16 @@ class Socket(object):
 
         self.rsock.setblocking(False)
         addr = INETAddress("0.0.0.0", port)
-        self.rsock.bind(addr)
-        self.rsock.listen(BACKLOG)
+
+        try:
+            self.rsock.bind(addr)
+        except CSocketError as cse:
+            if cse.errno == EADDRINUSE:
+                self.terminate(u"Address is already in use")
+            else:
+                raise
+        else:
+            self.rsock.listen(BACKLOG)
 
     @dont_look_inside
     def read(self):
