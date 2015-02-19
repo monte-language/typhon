@@ -379,6 +379,8 @@ class Handler(object):
 
 class Eject(Handler):
 
+    _immutable_ = True
+
     def __init__(self, machine, ejector, index):
         self.valueDepth = machine.env.depth
         self.handlerDepth = machine.env.handlerDepth
@@ -400,6 +402,8 @@ class Eject(Handler):
 
 class Catch(Handler):
 
+    _immutable_ = True
+
     def __init__(self, machine, index):
         self.valueDepth = machine.env.depth
         self.handlerDepth = machine.env.handlerDepth
@@ -419,6 +423,8 @@ class Catch(Handler):
 
 
 class Unwind(Handler):
+
+    _immutable_ = True
 
     def __init__(self, machine, index):
         self.valueDepth = machine.env.depth
@@ -449,6 +455,8 @@ class Unwind(Handler):
 
 class Rethrower(Handler):
 
+    _immutable_ = True
+
     @specialize.argtype(1)
     def __init__(self, ex):
         self.ex = ex
@@ -461,6 +469,8 @@ class Rethrower(Handler):
 
 
 class Returner(Handler):
+
+    _immutable_ = True
 
     def __init__(self, index):
         self.index = index
