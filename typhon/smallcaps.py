@@ -75,9 +75,8 @@ class Code(object):
     _immutable_ = True
     _immutable_fields_ = ("instructions[*]", "indices[*]", "atoms[*]",
                           "frame[*]", "literals[*]", "locals[*]",
-                          "scripts[*]")
-
-    maxDepth = 0
+                          "scripts[*]",
+                          "maxDepth", "maxHandlerDepth")
 
     def __init__(self, instructions, atoms, literals, frame, locals, scripts):
         # Copy all of the lists on construction, to satisfy RPython's need for
@@ -89,6 +88,14 @@ class Code(object):
         self.frame = frame[:]
         self.locals = locals[:]
         self.scripts = scripts[:]
+
+    @elidable_promote()
+    def instSize(self):
+        return len(self.instructions)
+
+    @elidable_promote()
+    def localSize(self):
+        return len(self.locals)
 
     @elidable_promote()
     def inst(self, i):
@@ -160,8 +167,9 @@ class SmallCaps(object):
 
     def __init__(self, code, frame):
         self.code = code
-        self.env = Environment(frame, len(self.code.locals),
-                               self.code.maxDepth, self.code.maxHandlerDepth)
+        self.env = Environment(frame, self.code.localSize(),
+                               promote(self.code.maxDepth),
+                               promote(self.code.maxHandlerDepth))
 
     @staticmethod
     def withDictScope(code, scope):
@@ -315,7 +323,7 @@ class SmallCaps(object):
     def run(self):
         # print ">" * 10
         pc = 0
-        while pc < len(self.code.instructions):
+        while pc < self.code.instSize():
             instruction = self.code.inst(promote(pc))
             try:
                 # print ">", pc, self.code.dis(instruction,
