@@ -27,6 +27,7 @@ from typhon.objects.user import ScriptObject
 from typhon.pretty import Buffer, LineWriter, OneLine
 from typhon.smallcaps.code import Code
 from typhon.smallcaps.ops import ops
+from typhon.smallcaps.peephole import peephole
 
 
 class Compiler(object):
@@ -51,7 +52,8 @@ class Compiler(object):
 
         code = Code(self.instructions, atoms, literals, frame, locals,
                     self.scripts)
-        code.figureMaxDepth()
+        # Run optimizations on code, including inner code.
+        peephole(code)
         return code
 
     def addInstruction(self, name, index):

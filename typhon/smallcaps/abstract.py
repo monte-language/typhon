@@ -12,17 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-(
-    DUP, ROT, POP, SWAP,
-    ASSIGN_FRAME, ASSIGN_LOCAL, BIND, BINDSLOT,
-    SLOT_FRAME, SLOT_LOCAL, NOUN_FRAME, NOUN_LOCAL,
-    BINDING_FRAME, BINDING_LOCAL,
-    LIST_PATT,
-    LITERAL,
-    BINDOBJECT, SCOPE,
-    EJECTOR, TRY, UNWIND, END_HANDLER,
-    BRANCH, CALL, JUMP,
-) = range(25)
+from typhon.smallcaps.ops import (DUP, ROT, POP, SWAP, ASSIGN_FRAME,
+                                  ASSIGN_LOCAL, BIND, BINDSLOT, SLOT_FRAME,
+                                  SLOT_LOCAL, NOUN_FRAME, NOUN_LOCAL,
+                                  BINDING_FRAME, BINDING_LOCAL, LIST_PATT,
+                                  LITERAL, BINDOBJECT, SCOPE, EJECTOR, TRY,
+                                  UNWIND, END_HANDLER, BRANCH, CALL, JUMP)
 
 
 class AbstractInterpreter(object):
@@ -157,4 +152,3 @@ class AbstractInterpreter(object):
             #                              self.code.indices[pc])
             pc = self.runInstruction(instruction, pc)
             self.checkMaxDepth()
-

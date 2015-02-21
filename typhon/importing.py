@@ -23,6 +23,7 @@ from typhon.objects.constants import NullObject
 from typhon.optimizer import optimize
 from typhon.scope import Scope
 from typhon.smallcaps.machine import SmallCaps
+from typhon.smallcaps.peephole import peephole
 
 
 @dont_look_inside
@@ -43,6 +44,10 @@ def obtainModule(path, inputScope, recorder):
     with recorder.context("Compilation"):
         code = compile(term)
     # debug_print("Compiled code:", code.disassemble())
+
+    with recorder.context("Optimization"):
+        peephole(code)
+    # debug_print("Optimized code:", code.disassemble())
 
     return code
 

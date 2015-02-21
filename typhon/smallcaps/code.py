@@ -27,8 +27,8 @@ class Code(object):
     """
 
     _immutable_ = True
-    _immutable_fields_ = ("instructions[*]", "indices[*]", "atoms[*]",
-                          "frame[*]", "literals[*]", "locals[*]",
+    _immutable_fields_ = ("instructions[*]?", "indices[*]?", "atoms[*]",
+                          "frame[*]", "literals[*]", "locals[*]?",
                           "scripts[*]",
                           "maxDepth", "maxHandlerDepth")
 
