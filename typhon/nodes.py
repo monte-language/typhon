@@ -25,7 +25,8 @@ from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.slots import FinalSlot, VarSlot
 from typhon.objects.user import ScriptObject
 from typhon.pretty import Buffer, LineWriter, OneLine
-from typhon.smallcaps import Code, ops
+from typhon.smallcaps.code import Code
+from typhon.smallcaps.ops import ops
 
 
 class Compiler(object):

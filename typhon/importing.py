@@ -22,7 +22,7 @@ from typhon.nodes import Sequence, compile
 from typhon.objects.constants import NullObject
 from typhon.optimizer import optimize
 from typhon.scope import Scope
-from typhon.smallcaps import SmallCaps
+from typhon.smallcaps.machine import SmallCaps
 
 
 @dont_look_inside

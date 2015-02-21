@@ -22,7 +22,7 @@ from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
-from typhon.smallcaps import SmallCaps
+from typhon.smallcaps.machine import SmallCaps
 
 
 class ScriptObject(Object):

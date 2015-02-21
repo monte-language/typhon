@@ -21,7 +21,7 @@ from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.root import runnable
 from typhon.objects.user import ScriptObject
-from typhon.smallcaps import SmallCaps
+from typhon.smallcaps.machine import SmallCaps
 
 
 RUN_2 = getAtom(u"run", 2)
