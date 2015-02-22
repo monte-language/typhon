@@ -451,23 +451,22 @@ class StrObject(Object):
             return IntObject(self._s.find(needle))
 
         if atom is JOIN_1:
-            l = args[0]
-            from typhon.objects.collections import ConstList, unwrapList
-            if isinstance(l, ConstList):
-                ub = UnicodeBuilder()
-                strs = []
-                first = True
-                for s in unwrapList(l):
-                    # For all iterations except the first, append a copy of
-                    # ourselves.
-                    if first:
-                        first = False
-                    else:
-                        ub.append(self._s)
+            from typhon.objects.collections import unwrapList
+            l = unwrapList(args[0])
+            ub = UnicodeBuilder()
+            strs = []
+            first = True
+            for s in l:
+                # For all iterations except the first, append a copy of
+                # ourselves.
+                if first:
+                    first = False
+                else:
+                    ub.append(self._s)
 
-                    string = unwrapStr(s)
-                    ub.append(string)
-                return StrObject(ub.build())
+                string = unwrapStr(s)
+                ub.append(string)
+            return StrObject(ub.build())
 
         if atom is LASTINDEXOF_1:
             needle = unwrapStr(args[0])
