@@ -1,12 +1,15 @@
 all: prelude.ty lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
-	lib/simple.ty lib/parsers/derp.ty lib/regex.ty lib/utf8.ty \
+	lib/parsers/derp.ty lib/regex.ty lib/utf8.ty \
 	lib/tokenBucket.ty lib/loopingCall.ty \
 	lib/paths.ty \
+	builtin \
 	http \
 	irc \
 	tubes \
 	games \
 	bench
+
+builtin: lib/brand.ty lib/simple.ty
 
 tubes: lib/tubes/nullPump.ty lib/tubes/mapPump.ty \
 	lib/tubes/pumpTube.ty \
