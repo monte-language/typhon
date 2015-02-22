@@ -28,6 +28,7 @@ EJECTS_1 = getAtom(u"ejects", 1)
 EQUAL_2 = getAtom(u"equal", 2)
 NOTEQUAL_2 = getAtom(u"notEqual", 2)
 RUN_1 = getAtom(u"run", 1)
+THROWS_1 = getAtom(u"throws", 1)
 
 
 class Asserter(Object):
@@ -87,6 +88,16 @@ class Asserter(Object):
             if result is EQUAL:
                 self.log(u"Equal: %s == %s" %
                         (args[0].toQuote(), args[1].toQuote()))
+            return NullObject
+
+        if atom is THROWS_1:
+            success = False
+            try:
+                args[0].call(u"run", [])
+            except UserException as ue:
+                success = True
+            if not success:
+                self.log(u"No exception was thrown")
             return NullObject
 
         self.log(u"Unknown assertion made: %s" % atom.repr.decode("utf-8"))
