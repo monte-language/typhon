@@ -37,9 +37,9 @@ def makePumpTube(pump):
             if (downstream != null):
                 downstream.progress(amount)
 
-        to flowStopped():
+        to flowStopped(reason):
             if (downstream != null):
-                downstream.flowStopped()
+                downstream.flowStopped(reason)
 
         to flowTo(drain):
             # Be aware that the drain could be a promise.

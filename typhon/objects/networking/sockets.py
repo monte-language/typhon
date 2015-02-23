@@ -16,13 +16,13 @@ from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
-from typhon.objects.data import IntObject, unwrapInt
+from typhon.objects.data import IntObject, StrObject, unwrapInt, unwrapStr
 from typhon.objects.root import Object
 from typhon.vats import currentVat
 
 
 FLOWINGFROM_1 = getAtom(u"flowingFrom", 1)
-FLOWSTOPPED_0 = getAtom(u"flowStopped", 0)
+FLOWSTOPPED_1 = getAtom(u"flowStopped", 1)
 FLOWTO_1 = getAtom(u"flowTo", 1)
 PAUSEFLOW_0 = getAtom(u"pauseFlow", 0)
 RECEIVE_1 = getAtom(u"receive", 1)
@@ -97,8 +97,7 @@ class SocketFount(Object):
 
     def terminate(self, reason):
         if self._drain is not None:
-            # XXX should flowStopped take a reason as arg?
-            self._drain.call(u"flowStopped", [])
+            self._drain.call(u"flowStopped", [StrObject(reason)])
             # Release the drain. They should have released us as well.
             self._drain = None
 
@@ -130,9 +129,10 @@ class SocketDrain(Object):
             self.sock._outbound.append(s)
             return NullObject
 
-        if atom is FLOWSTOPPED_0:
+        if atom is FLOWSTOPPED_1:
             self._closed = True
-            # self.sock.close()
+            vat = currentVat.get()
+            self.sock.error(vat._reactor, unwrapStr(args[0]))
             return NullObject
 
         raise Refused(self, atom, args)

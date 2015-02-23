@@ -41,7 +41,8 @@ def makeRequestDrain(callback):
             fount := newFount
             return requestDrain
 
-        to flowStopped():
+        to flowStopped(reason):
+            # traceln(`$requestDrain flow stopped: $reason`)
             pass
 
         to receive(bytes):
@@ -121,7 +122,7 @@ def responder(fount, drain):
         strDrain.receive("HTTP/1.1 200 OK\r\n")
         sendHeaders(strDrain, headers)
         drain.receive(body)
-        strDrain<-flowStopped()
+        strDrain<-flowStopped("End of response")
 
     fount.flowTo(makeRequestDrain(callback))
 
