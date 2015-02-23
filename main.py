@@ -133,6 +133,9 @@ def entryPoint(argv):
     unittest = scope[u"unittest"]
     unittest.test()
 
+    # Exit status code.
+    rv = 0
+
     try:
         # Run any remaining turns.
         while vat.hasTurns() or reactor.hasObjects():
@@ -147,6 +150,8 @@ def entryPoint(argv):
                     except UserException as ue:
                         debug_print("Caught exception while reacting:",
                                 ue.formatError())
+    except SystemExit as se:
+        rv = se.code
     finally:
         recorder.stop()
         recorder.printResults()

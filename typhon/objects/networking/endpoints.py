@@ -20,9 +20,10 @@ from typhon.errors import Refused
 from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapInt, unwrapStr
-from typhon.objects.networking.sockets import Socket, SocketDrain
+from typhon.objects.networking.sockets import SocketDrain
 from typhon.objects.refs import makePromise
 from typhon.objects.root import Object, runnable
+from typhon.selectables import Socket
 from typhon.vats import currentVat
 
 
@@ -51,7 +52,7 @@ class TCP4ClientPending(object):
         self.socket = Socket(RSocket())
         # XXX demeter violation! Definitely.
         vat = currentVat.get()
-        vat._reactor.addSocket(self.socket)
+        self.socket.addToReactor(vat._reactor)
         self.socket.connect(addr, self)
 
     def failSocket(self, reason):
@@ -111,7 +112,7 @@ class TCP4ServerEndpoint(Object):
         socket = Socket(RSocket())
         # XXX demeter violation!
         vat = currentVat.get()
-        vat._reactor.addSocket(socket)
+        socket.addToReactor(vat._reactor)
         # XXX this shouldn't block, but not guaranteed
         socket.listen(self.port, handler)
 

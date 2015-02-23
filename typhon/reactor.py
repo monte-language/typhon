@@ -12,12 +12,15 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from errno import EINTR
 import time
 
 from rpython.rlib.rpoll import (POLLERR, POLLHUP, POLLIN, POLLNVAL, POLLOUT,
-                                poll)
-from rpython.rlib.rsignal import SIGPIPE, pypysig_ignore
+                                PollError, poll)
+from rpython.rlib.rsignal import (SIGINT, SIGPIPE, pypysig_ignore,
+                                  pypysig_setflag)
 
+from typhon.selectables import Wakeup
 from typhon.timers import Alarm
 
 
@@ -92,7 +95,7 @@ class Reactor(object):
     timerSerial = 0
 
     def __init__(self):
-        self._sockets = {}
+        self._selectables = {}
         self._pollDict = {}
         self.alarmQueue = AlarmQueue()
 
@@ -103,33 +106,47 @@ class Reactor(object):
         It is expected that SIGTERM will still be respected.
         """
 
+        wakeup = Wakeup()
+        wakeup.addToReactor(self)
+
         # SIGPIPE: A pipe of some sort was broken. Normally handled by a more
         # proximate cause of the signal.
         pypysig_ignore(SIGPIPE)
 
+        # SIGINT: We were interrupted, generally at the request of a user.
+        # We'll allow it to wake us up and we can handle it then.
+        pypysig_setflag(SIGINT)
+
+    def handleSignal(self, signal):
+        """
+        Receive and act on a signal.
+        """
+
+        if signal == SIGINT:
+            print "Got SIGINT; closing down."
+            raise SystemExit(0)
+        else:
+            print "Got unknown signal", signal
+
     def hasObjects(self):
         return bool(self._pollDict) or bool(self.alarmQueue.heap)
 
-    def addSocket(self, socket):
+    def addFD(self, fd, selectable):
         """
-        Add a socket to the list of interesting sockets.
+        Register a file descriptor.
         """
 
         flags = POLLIN | POLLERR | POLLHUP | POLLNVAL
-        if socket.wantsWrite():
-            flags |= POLLOUT
-        self._sockets[socket.fd] = socket
-        self._pollDict[socket.fd] = flags
+        self._selectables[fd] = selectable
+        self._pollDict[fd] = flags
 
-    def dropSocket(self, socket):
+    def dropFD(self, fd):
         """
-        Remove a socket from the list of interesting sockets.
+        Unregister a file descriptor.
         """
 
-        if socket.fd in self._sockets:
-            del self._sockets[socket.fd]
-        if socket.fd in self._pollDict:
-            del self._pollDict[socket.fd]
+        del self._selectables[fd]
+        del self._pollDict[fd]
 
     def addTimer(self, duration, resolver):
         timestamp = time.time() + duration
@@ -161,10 +178,10 @@ class Reactor(object):
         possible, rather than sleeping and waiting for I/O.
         """
 
-        for fd, socket in self._sockets.iteritems():
-            # Only ask about writing to sockets if we actually have a serious
-            # desire to write to them.
-            if socket.wantsWrite():
+        for fd, selectable in self._selectables.iteritems():
+            # Only ask about writing to selectables if we actually have a
+            # serious desire to write to them.
+            if selectable.wantsWrite():
                 self._pollDict[fd] |= POLLOUT
             else:
                 self._pollDict[fd] &= ~POLLOUT
@@ -174,19 +191,29 @@ class Reactor(object):
         else:
             timeout = self.getSoonestAlarm()
 
-        results = poll(self._pollDict, timeout)
-        # print "Polled", len(self._pollDict), "and got", len(results), "events"
+        try:
+            results = poll(self._pollDict, timeout)
+        except PollError as pe:
+            if pe.errno == EINTR:
+                # poll() was interrupted by a signal. Abandon this iteration.
+                print "Interrupted poll; will try again later."
+                return
+            raise
+
+        print "Polled", len(self._pollDict), "and got", len(results), "events"
         for fd, event in results:
-            socket = self._sockets[fd]
+            selectable = self._selectables[fd]
             # Write before reading. This seems like the correct order of
             # operations.
             if event & POLLOUT:
-                socket.write()
+                selectable.write(self)
             if event & POLLIN:
-                socket.read()
-            if event & (POLLERR | POLLHUP | POLLNVAL):
-                # Looks like this socket's met with a bad end. We'll go ahead
-                # and discard it.
-                self.dropSocket(socket)
+                selectable.read(self)
+            if event & POLLHUP:
+                selectable.error(self, u"Hang up")
+            if event & POLLNVAL:
+                selectable.error(self, u"Invalid file descriptor")
+            if event & POLLERR:
+                selectable.error(self, u"Poll error")
 
         self.fireAlarms()
