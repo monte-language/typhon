@@ -84,13 +84,15 @@ class Vat(object):
             callback()
         self._callbacks = []
 
-    def takeSomeTurns(self, recorder):
+    def takeSomeTurns(self):
         # Limit the number of continuous turns to keep network latency low.
-        count = min(3, len(self._pending))
+        # It's possible that more turns will be queued while we're taking
+        # these turns, after all.
+        count = len(self._pending)
         # print "Taking", count, "turn(s) on", self.repr()
         for _ in range(count):
             try:
-                recorder.record("Time spent in vats", self.takeTurn)
+                self.takeTurn()
             except UserException as ue:
                 print "Caught exception while taking turn:", ue.formatError()
 

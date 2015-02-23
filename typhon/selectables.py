@@ -192,10 +192,10 @@ class Socket(Selectable):
         Stop reading and writing, and gracefully clean up.
         """
 
-        print "Socket terminating:", reason
+        # print "Socket terminating:", reason
 
         if self.closed:
-            print "Socket already closed"
+            # print "Socket already closed"
             return
 
         self.closed = True

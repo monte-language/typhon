@@ -93,6 +93,7 @@ class Reactor(object):
     """
 
     timerSerial = 0
+    wakeup = None
 
     def __init__(self):
         self._selectables = {}
@@ -106,8 +107,8 @@ class Reactor(object):
         It is expected that SIGTERM will still be respected.
         """
 
-        wakeup = Wakeup()
-        wakeup.addToReactor(self)
+        self.wakeup = Wakeup()
+        self.wakeup.addToReactor(self)
 
         # SIGPIPE: A pipe of some sort was broken. Normally handled by a more
         # proximate cause of the signal.
@@ -129,7 +130,22 @@ class Reactor(object):
             print "Got unknown signal", signal
 
     def hasObjects(self):
-        return bool(self._pollDict) or bool(self.alarmQueue.heap)
+        # Any alarms pending?
+        if self.alarmQueue.heap:
+            return True
+
+        # No selectables?
+        if not self._selectables:
+            return False
+
+        # If the only selectable is our wakeup FD, then we're not actually
+        # waiting on anything.
+        if (len(self._selectables) == 1
+                and self._selectables.values()[0] is self.wakeup):
+            return False
+
+        # We have at least one selectable which is not the wakeup FD.
+        return True
 
     def addFD(self, fd, selectable):
         """
@@ -196,11 +212,11 @@ class Reactor(object):
         except PollError as pe:
             if pe.errno == EINTR:
                 # poll() was interrupted by a signal. Abandon this iteration.
-                print "Interrupted poll; will try again later."
+                # print "Interrupted poll; will try again later."
                 return
             raise
 
-        print "Polled", len(self._pollDict), "and got", len(results), "events"
+        # print "Polled", len(self._pollDict), "and got", len(results), "events"
         for fd, event in results:
             selectable = self._selectables[fd]
             # Write before reading. This seems like the correct order of

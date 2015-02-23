@@ -137,13 +137,13 @@ def entryPoint(argv):
     rv = 0
 
     try:
-        # Run any remaining turns.
+        # Run any remaining turns. This may take a while.
         while vat.hasTurns() or reactor.hasObjects():
             if vat.hasTurns():
-                vat.takeSomeTurns(recorder)
+                with recorder.context("Time spent in vats"):
+                    vat.takeSomeTurns()
 
             if reactor.hasObjects():
-                # print "Performing I/O..."
                 with recorder.context("Time spent in I/O"):
                     try:
                         reactor.spin(vat.hasTurns())
