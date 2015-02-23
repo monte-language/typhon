@@ -14,17 +14,14 @@
 
 from collections import OrderedDict
 
-from rpython.rlib.jit import assert_green, elidable, jit_debug, unroll_safe
+from rpython.rlib.jit import elidable
 
 from typhon.atoms import getAtom
-from typhon.errors import Ejecting, LoadFailed, UserException
-from typhon.objects.collections import ConstList, unwrapList
-from typhon.objects.constants import NullObject, unwrapBool
+from typhon.errors import LoadFailed
+from typhon.objects.constants import NullObject
 from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
-from typhon.objects.ejectors import Ejector, throw
-from typhon.objects.slots import FinalSlot, VarSlot
 from typhon.objects.user import ScriptObject
-from typhon.pretty import Buffer, LineWriter, OneLine
+from typhon.pretty import Buffer, LineWriter
 from typhon.smallcaps.code import Code
 from typhon.smallcaps.ops import ops
 from typhon.smallcaps.peephole import peephole
@@ -191,7 +188,7 @@ class Int(Node):
         out.write("%d" % self._i)
 
     def compile(self, compiler):
-        index = compiler.literal(IntObject(self._i))
+        compiler.literal(IntObject(self._i))
 
 
 class Str(Node):
@@ -205,7 +202,7 @@ class Str(Node):
         out.write('"%s"' % (self._s.encode("utf-8")))
 
     def compile(self, compiler):
-        index = compiler.literal(StrObject(self._s))
+        compiler.literal(StrObject(self._s))
 
 
 def strToString(s):
@@ -225,7 +222,7 @@ class Double(Node):
         out.write("%f" % self._d)
 
     def compile(self, compiler):
-        index = compiler.literal(DoubleObject(self._d))
+        compiler.literal(DoubleObject(self._d))
 
 
 class Char(Node):
@@ -239,7 +236,7 @@ class Char(Node):
         out.write("'%s'" % (self._c.encode("utf-8")))
 
     def compile(self, compiler):
-        index = compiler.literal(CharObject(self._c))
+        compiler.literal(CharObject(self._c))
 
 
 class Tuple(Node):

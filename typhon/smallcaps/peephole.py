@@ -14,12 +14,11 @@
 
 from collections import OrderedDict
 
-from typhon.smallcaps.ops import (DUP, ROT, POP, SWAP, ASSIGN_FRAME,
-                                  ASSIGN_LOCAL, BIND, BINDSLOT, SLOT_FRAME,
-                                  SLOT_LOCAL, NOUN_FRAME, NOUN_LOCAL,
-                                  BINDING_FRAME, BINDING_LOCAL, LIST_PATT,
-                                  LITERAL, BINDOBJECT, SCOPE, EJECTOR, TRY,
-                                  UNWIND, END_HANDLER, BRANCH, CALL, JUMP)
+from typhon.smallcaps.ops import (DUP, POP, SWAP, ASSIGN_FRAME, ASSIGN_LOCAL,
+                                  BIND, BINDSLOT, SLOT_FRAME, SLOT_LOCAL,
+                                  NOUN_FRAME, NOUN_LOCAL, BINDING_FRAME,
+                                  BINDING_LOCAL, LITERAL, EJECTOR, TRY,
+                                  UNWIND, END_HANDLER, BRANCH, JUMP)
 
 
 def peephole(code):
@@ -151,9 +150,6 @@ class PeepholeOptimizer(object):
                     localSize += 1
                 self.code.indices[pc] = newLocalMap[index]
 
-        changed = False
-        if self.code.locals != newLocal:
-            changed = True
         self.code.locals = newLocal
 
     def run(self):

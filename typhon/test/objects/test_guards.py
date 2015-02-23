@@ -29,7 +29,7 @@ class TestPredGuard(TestCase):
 
         i = IntObject(42)
         result = g().call(u"coerce", [i, None])
-        self.assertEqual(i.getInt(), 42)
+        self.assertEqual(result.getInt(), 42)
 
     def testCoerceIntFailure(self):
         @predGuard

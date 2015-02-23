@@ -94,7 +94,7 @@ class Asserter(Object):
             success = False
             try:
                 args[0].call(u"run", [])
-            except UserException as ue:
+            except UserException:
                 success = True
             if not success:
                 self.log(u"No exception was thrown")

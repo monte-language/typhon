@@ -108,6 +108,9 @@ class AbstractInterpreter(object):
                 self.pop()
             self.currentDepth += 1
             return pc + 1
+        elif instruction == SCOPE:
+            self.currentDepth += 1
+            return pc + 1
         elif instruction == EJECTOR:
             self.currentDepth += 1
             self.currentHandlerDepth += 1

@@ -12,9 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import elidable, promote, unroll_safe
+from rpython.rlib.jit import unroll_safe
 
-from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.constants import NullObject
 from typhon.objects.collections import ConstList

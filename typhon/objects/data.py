@@ -454,7 +454,6 @@ class StrObject(Object):
             from typhon.objects.collections import unwrapList
             l = unwrapList(args[0])
             ub = UnicodeBuilder()
-            strs = []
             first = True
             for s in l:
                 # For all iterations except the first, append a copy of

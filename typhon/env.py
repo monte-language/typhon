@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import hint, promote, unroll_safe
+from rpython.rlib.jit import hint, promote
 
 from typhon.atoms import getAtom
 from typhon.objects.slots import Binding, FinalSlot

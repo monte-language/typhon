@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.objectmodel import r_ordereddict, specialize
+from rpython.rlib.objectmodel import r_ordereddict
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom

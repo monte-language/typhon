@@ -21,7 +21,6 @@ from typhon.nodes import (Assign, Binding, BindingPattern, Call, Char, Def,
                           Int, IgnorePattern, ListPattern, Matcher, Method,
                           Noun, Null, Obj, Script, Sequence, Str, Try, Tuple,
                           VarPattern, ViaPattern)
-from typhon.pretty import Buffer, LineWriter
 
 
 # The largest tuple arity that we'll willingly decode.
