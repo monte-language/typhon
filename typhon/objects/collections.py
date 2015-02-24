@@ -166,8 +166,11 @@ class ConstList(Collection, Object):
 
     def _recv(self, atom, args):
         if atom is ADD_1:
-            other = args[0]
-            return ConstList(self.objects + unwrapList(other))
+            other = unwrapList(args[0])
+            if len(other):
+                return ConstList(self.objects + other)
+            else:
+                return self
 
         if atom is ASMAP_0:
             d = monteDict()
