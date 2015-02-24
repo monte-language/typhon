@@ -214,6 +214,25 @@ object BetterList:
                 return makeGuardedSlot(SubList, value)
 
 
+object BetterSet:
+    to coerce(specimen, ej):
+        return Set.coerce(specimen, ej)
+
+    to makeSlot(value):
+        return makeGuardedSlot(BetterSet, value)
+
+    to get(subguard):
+        return object SubSet:
+            to coerce(specimen, ej):
+                def set := Set.coerce(specimen, ej)
+                for element in set:
+                    subguard.coerce(element, ej)
+                return specimen
+
+            to makeSlot(value):
+                return makeGuardedSlot(SubSet, value)
+
+
 def __matchSame(expected):
     # XXX could use `return fn ...`
     def sameMatcher(specimen, ej):
@@ -354,6 +373,7 @@ def __accumulateMap(iterable, mapper):
     "boolean" => Bool,
 
     "List" => BetterList,
+    "Set" => BetterSet,
     "__mapEmpty" => Empty,
     => Any,
     => NullOk,
