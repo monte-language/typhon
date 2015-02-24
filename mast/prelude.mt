@@ -368,6 +368,15 @@ def __accumulateMap(iterable, mapper):
     return __makeMap.fromPairs(l)
 
 
+def __bind(resolver, guard):
+    def viaBinder(specimen, ej):
+        if (guard == null):
+            resolver.resolve(specimen)
+        else:
+            resolver.resolve(guard.coerce(specimen, ej))
+    return viaBinder
+
+
 [
     # This is 100% hack. See the matching comment near the top of the prelude.
     "boolean" => Bool,
@@ -380,6 +389,7 @@ def __accumulateMap(iterable, mapper):
     => Void,
     => __accumulateList,
     => __accumulateMap,
+    => __bind,
     => __comparer,
     => __iterWhile,
     => __makeMap,
