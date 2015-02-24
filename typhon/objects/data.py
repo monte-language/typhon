@@ -34,6 +34,8 @@ ADD_1 = getAtom(u"add", 1)
 AND_1 = getAtom(u"and", 1)
 APPROXDIVIDE_1 = getAtom(u"approxDivide", 1)
 ASINTEGER_0 = getAtom(u"asInteger", 0)
+ASLIST_0 = getAtom(u"asList", 0)
+ASSET_0 = getAtom(u"asSet", 0)
 ASSTRING_0 = getAtom(u"asString", 0)
 ATLEASTZERO_0 = getAtom(u"atLeastZero", 0)
 ATMOSTZERO_0 = getAtom(u"atMostZero", 0)
@@ -432,6 +434,17 @@ class StrObject(Object):
             if isinstance(other, CharObject):
                 return StrObject(self._s + unicode(other._c))
 
+        if atom is ASLIST_0:
+            from typhon.objects.collections import ConstList
+            return ConstList([CharObject(c) for c in self._s])
+
+        if atom is ASSET_0:
+            from typhon.objects.collections import ConstSet, monteDict
+            d = monteDict()
+            for c in self._s:
+                d[CharObject(c)] = None
+            return ConstSet(d)
+
         if atom is CONTAINS_1:
             needle = args[0]
             if isinstance(needle, CharObject):
@@ -464,6 +477,7 @@ class StrObject(Object):
                     ub.append(self._s)
 
                 string = unwrapStr(s)
+
                 ub.append(string)
             return StrObject(ub.build())
 
