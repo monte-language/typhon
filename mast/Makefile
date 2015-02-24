@@ -1,8 +1,9 @@
 all: prelude.ty lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
-	lib/parsers/derp.ty lib/regex.ty lib/utf8.ty \
+	lib/regex.ty lib/utf8.ty \
 	lib/tokenBucket.ty lib/loopingCall.ty \
 	lib/paths.ty \
 	builtin \
+	parsers \
 	http \
 	irc \
 	tubes \
@@ -10,6 +11,8 @@ all: prelude.ty lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	bench
 
 builtin: lib/brand.ty lib/simple.ty
+
+parsers: lib/parsers/derp.ty lib/parsers/html.ty
 
 tubes: lib/tubes/nullPump.ty lib/tubes/mapPump.ty \
 	lib/tubes/pumpTube.ty \
