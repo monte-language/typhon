@@ -1,3 +1,7 @@
+MONTE = ~/monte
+MONTE_VENV = ~/monte/local_monte
+
+
 all: prelude.ty lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	lib/regex.ty lib/utf8.ty \
 	lib/tokenBucket.ty lib/loopingCall.ty \
@@ -29,4 +33,4 @@ games: games/mafia.ty
 bench: bench/nqueens.ty bench/richards.ty bench/montstone.ty
 
 %.ty: %.mt
-	~/monte/local-monte/bin/python ~/monte/bin/monte -c $< > $@
+	$(MONTE_VENV)/bin/python $(MONTE)/bin/monte -c $< > $@
