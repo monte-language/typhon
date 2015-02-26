@@ -18,7 +18,7 @@
 
 def [=> makeEnum] := import("lib/enum")
 
-def LOOPS :Int := 5000 # 500000
+def LOOPS :Int := 50000 # 500000
 
 def [Enumeration, Ident1, Ident2, Ident3, Ident4, Ident5] := makeEnum(
     ["Ident1", "Ident2", "Ident3", "Ident4", "Ident5"])
