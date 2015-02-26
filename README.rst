@@ -27,7 +27,8 @@ The JIT can be enabled with a switch::
 
     $ path/to/your/pypy/rpython/bin/rpython -Ojit main
 
-The resulting executable is immediately usable::
+The resulting executable is immediately usable for any scripts that don't use
+prelude features::
 
     $ ./main-c your/awesome/script.ty
 
@@ -42,6 +43,10 @@ Without a prelude, Typhon doesn't do much. Most Monte applications have a
 reasonable expectation of certain non-kernel features, which are implemented
 in Monte via a prelude and library.
 
+Edit ``mast/Makefile`` to point ``MONTE`` to the location of your `reference
+Monte`_ checkout, and ``MONTE_VENV`` to the virtualenv in which you've
+installed Monte's ``requirements.txt``. 
+
 To build the MAST library::
 
     $ make -C mast
@@ -52,3 +57,5 @@ with other Monte code running on Typhon.
 Then, you can use the prelude::
 
     $ ./main-c -l mast another/awesome/script.ty
+
+.. _reference Monte: https://github.com/monte-language/monte
