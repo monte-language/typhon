@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.jit import unroll_safe
+
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import DeepFrozenStamp
@@ -51,6 +53,7 @@ def isSettled(o):
     return True
 
 
+@unroll_safe
 def optSame(first, second, cache=None):
     """
     Determine whether two objects are equal, returning None if a decision
@@ -59,13 +62,12 @@ def optSame(first, second, cache=None):
     This is a complex topic; expect lots of comments.
     """
 
-    # Two identical objects are equal. This includes null.
-    if first is second:
-        return EQUAL
-
     # We need to see whether our objects are settled. If not, then give up.
     if not isSettled(first) or not isSettled(second):
-        return NOTYET
+        # Well, actually, there's one chance that they could be equal, if
+        # they're the same object. But if they aren't, then we can't tell
+        # anything else about them, so we'll call it quits.
+        return EQUAL if first is second else NOTYET
 
     # Our objects are settled. Thus, we should be able to ask for their
     # resolutions.
@@ -77,33 +79,39 @@ def optSame(first, second, cache=None):
     if cache is not None and (first, second) in cache:
         return cache[first, second]
 
-    # Two identical objects are equal; we need to ask post-resolution.
-    if first is second:
-        return EQUAL
+    # Null.
+    if first is NullObject:
+        return eq(second is NullObject)
 
     # Bools. This should probably be covered by the identity case already,
     # but it's included for completeness.
-    if isinstance(first, BoolObject) and isinstance(second, BoolObject):
-        return eq(first.isTrue() == second.isTrue())
+    if isinstance(first, BoolObject):
+        return eq(isinstance(second, BoolObject)
+                and first.isTrue() == second.isTrue())
 
     # Chars.
-    if isinstance(first, CharObject) and isinstance(second, CharObject):
-        return eq(first._c == second._c)
+    if isinstance(first, CharObject):
+        return eq(isinstance(second, CharObject) and first._c == second._c)
 
     # Doubles.
-    if isinstance(first, DoubleObject) and isinstance(second, DoubleObject):
-        return eq(first.getDouble() == second.getDouble())
+    if isinstance(first, DoubleObject):
+        return eq(isinstance(second, DoubleObject)
+                and first.getDouble() == second.getDouble())
 
     # Ints.
-    if isinstance(first, IntObject) and isinstance(second, IntObject):
-        return eq(first.getInt() == second.getInt())
+    if isinstance(first, IntObject):
+        return eq(isinstance(second, IntObject)
+                and first.getInt() == second.getInt())
 
     # Strings.
-    if isinstance(first, StrObject) and isinstance(second, StrObject):
-        return eq(first._s == second._s)
+    if isinstance(first, StrObject):
+        return eq(isinstance(second, StrObject) and first._s == second._s)
 
     # Lists.
-    if isinstance(first, ConstList) and isinstance(second, ConstList):
+    if isinstance(first, ConstList):
+        if not isinstance(second, ConstList):
+            return INEQUAL
+
         firstList = unwrapList(first)
         secondList = unwrapList(second)
 
@@ -150,6 +158,10 @@ def optSame(first, second, cache=None):
         return rv
     except Refused:
         pass
+
+    # Two identical objects are equal.
+    if first is second:
+        return EQUAL
 
     # By default, objects are not equal.
     return INEQUAL
