@@ -12,10 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import os
 import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
 from rpython.rlib.debug import debug_print
+from rpython.rlib.jit import JitHookInterface
 from rpython.rlib.rpath import rjoin
 
 from typhon.arguments import Configuration
@@ -42,10 +44,6 @@ def dirname(p):
     if head and head != '/'*len(head):
         head = head.rstrip('/')
     return head
-
-
-def jitPolicy(driver):
-    return JitPolicy()
 
 
 def loadPrelude(config, recorder, vat):
@@ -157,6 +155,32 @@ def entryPoint(argv):
         recorder.printResults()
 
     return 0
+
+
+def writePerfMap(s):
+    path = "/tmp/perf-%d.map" % os.getpid()
+    fd = os.open(path, os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0777)
+    os.write(fd, s)
+    os.close(fd)
+
+
+class TyphonJitHooks(JitHookInterface):
+
+    def after_compile(self, debug_info):
+        s = "%x %x %s\n" % (debug_info.asminfo.asmaddr,
+                            debug_info.asminfo.asmlen,
+                            "<Typhon JIT trace>")
+        writePerfMap(s)
+
+    def after_compile_bridge(self, debug_info):
+        s = "%x %x %s\n" % (debug_info.asminfo.asmaddr,
+                            debug_info.asminfo.asmlen,
+                            "<Typhon JIT bridge>")
+        writePerfMap(s)
+
+
+def jitpolicy(driver):
+    return JitPolicy(TyphonJitHooks())
 
 
 def target(*args):
