@@ -22,6 +22,7 @@ from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.slots import Binding, FinalSlot
+from typhon.profile import csp
 from typhon.smallcaps.ops import *
 
 
@@ -83,7 +84,8 @@ class SmallCaps(object):
         target = self.pop()
 
         try:
-            self.push(target.callAtom(atom, args))
+            with csp.startCall(target, atom):
+                self.push(target.callAtom(atom, args))
         except UserException as ue:
             argString = u", ".join([arg.toQuote() for arg in args])
             atomRepr = atom.repr.decode("utf-8")

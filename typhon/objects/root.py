@@ -25,7 +25,14 @@ _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 class Object(object):
 
     # The attributes that all Objects have in common.
-    _attrs_ = "stamps",
+    _attrs_ = "displayName", "stamps",
+
+    # The attributes that are not mutable.
+    _immutable_fields_ = "displayName",
+
+    # The "display" name, used in fast/imprecise/classy debugging dumps.
+    # Primary use of this attribute is for profiling.
+    displayName = u"Object"
 
     # The auditor stamps on objects.
     stamps = []
@@ -94,11 +101,13 @@ def runnable(singleAtom):
     """
 
     def inner(f):
-        name = f.__name__
+        name = f.__name__.decode("utf-8")
 
         class runnableObject(Object):
+            displayName = name
+
             def toString(self):
-                return u"<%s>" % name.decode("utf-8")
+                return u"<%s>" % name
 
             def recv(self, atom, args):
                 if atom is singleAtom:

@@ -47,6 +47,9 @@ class Configuration(object):
     # Whether to exit after loading the script file. Useful for testing.
     loadOnly = False
 
+    # Whether to collect precise profiling statistics.
+    profile = False
+
     def __init__(self, argv):
         self.argv = []
 
@@ -61,5 +64,7 @@ class Configuration(object):
                 self.libraryPath = stream.nextItem()
             elif item == "-load":
                 self.loadOnly = True
+            elif item == "-p":
+                self.profile = True
             else:
                 self.argv.append(item)

@@ -30,6 +30,7 @@ from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapStr, StrObject
 from typhon.objects.imports import addImportToScope
 from typhon.prelude import registerGlobals
+from typhon.profile import csp
 from typhon.reactor import Reactor
 from typhon.scopes.safe import safeScope
 from typhon.scopes.unsafe import unsafeScope
@@ -120,6 +121,9 @@ def entryPoint(argv):
         # We are finished.
         return 0
 
+    if not config.profile:
+        csp.disable()
+
     result = NullObject
     with recorder.context("Time spent in vats"):
         result = evaluateTerms([code], finalize(scope))
@@ -152,7 +156,13 @@ def entryPoint(argv):
         rv = se.code
     finally:
         recorder.stop()
-        recorder.printResults()
+
+        if config.profile:
+            recorder.printResults()
+
+            # Print out flame graph information.
+            with open("flames.txt", "wb") as handle:
+                csp.writeFlames(handle)
 
     return 0
 
