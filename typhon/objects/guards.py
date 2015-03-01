@@ -33,15 +33,17 @@ def predGuard(f):
     Predicate guards include slot creation methods.
     """
 
-    name = f.__name__
+    name = f.__name__.decode("utf-8")
 
     class PredicateSlot(Object):
+
+        displayName = u"%sSlot" % name
 
         def __init__(self, initial):
             self._slot = initial
 
         def toString(self):
-            return u"<predicateSlot(%s)>" % name.decode("utf-8")
+            return u"<predicateSlot(%s)>" % name
 
         def recv(self, atom, args):
             # get/0: Obtain the contents of the slot.
@@ -64,8 +66,10 @@ def predGuard(f):
 
         _immutable_ = True
 
+        displayName = u"%sGuard" % name
+
         def toString(self):
-            return u"<predicateGuard(%s)>" % name.decode("utf-8")
+            return u"<predicateGuard(%s)>" % name
 
         def recv(self, atom, args):
             # coerce/2: Coercion of specimens.

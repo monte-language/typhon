@@ -91,6 +91,8 @@ class CharObject(Object):
 
     _immutable_fields_ = "stamps", "_c"
 
+    displayName = u"CharObject"
+
     stamps = [DeepFrozenStamp]
 
     def __init__(self, c):
@@ -174,6 +176,8 @@ class DoubleObject(Object):
 
     _immutable_fields_ = "stamps", "_d"
 
+    displayName = u"DoubleObject"
+
     stamps = [DeepFrozenStamp]
 
     def __init__(self, d):
@@ -241,6 +245,8 @@ class DoubleObject(Object):
 class IntObject(Object):
 
     _immutable_fields_ = "stamps", "_i"
+
+    displayName = u"IntObject"
 
     _i = 0
 
@@ -401,6 +407,8 @@ class strIterator(Object):
 class StrObject(Object):
 
     _immutable_fields_ = "stamps[*]", "_s"
+
+    displayName = u"StrObject"
 
     stamps = [DeepFrozenStamp]
 

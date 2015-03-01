@@ -22,6 +22,8 @@ class _NullObject(Object):
 
     _immutable_ = True
 
+    displayName = u"NullObject"
+
     stamps = [DeepFrozenStamp]
 
     def toString(self):
@@ -40,6 +42,8 @@ XOR_1 = getAtom(u"xor", 1)
 class BoolObject(Object):
 
     _immutable_ = True
+
+    displayName = u"BoolObject"
 
     stamps = [DeepFrozenStamp]
 
