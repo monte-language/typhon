@@ -20,6 +20,8 @@ from rpython.rlib.objectmodel import specialize
 
 class CallStackProfiler(object):
 
+    _immutable_fields_ = "enabled?",
+
     # XXX is this backwards?
     enabled = True
 
@@ -38,26 +40,23 @@ class CallStackProfiler(object):
         # want to incur the cost of the syscall before avoiding work.
         end = time.time()
 
-        stack = ";".join([pair[0] for pair in self.currentStack])
+        stack = u";".join([pair[0] for pair in self.currentStack])
         label, start = self.currentStack.pop()
-        if stack in self.stacks:
-            self.stacks[stack] += end - start
-        else:
-            self.stacks[stack] = end - start
+        newTime = self.stacks.get(stack, 0.0) + end - start
+        self.stacks[stack] = newTime
 
     def startCall(self, obj, atom):
         if not self.enabled:
             return self
 
-        label = "%s.%s/%d" % (obj.displayName.encode("utf-8"),
-                              atom.verb.encode("utf-8"), atom.arity)
+        label = u"%s.%s/%d" % (obj.displayName, atom.verb, atom.arity)
         # Replace ; with , in names. Semicolons are used to separate stack
         # frames later.
-        label = label.replace(";", ",")
+        label = label.replace(u";", u",")
         if we_are_jitted():
             # It's nice to know how much time is spent in the JIT. It's also
             # nice to know which methods have been compiled.
-            label += " (JIT)"
+            label += u" (JIT)"
 
         # Start as late as possible.
         start = time.time()
@@ -66,7 +65,9 @@ class CallStackProfiler(object):
 
     def writeFlames(self, handle):
         for stack, count in self.stacks.items():
-            handle.write("%s %d\n" % (stack, int(count * 100000)))
+            microCount = int(count * 100000)
+            if microCount:
+                handle.write("%s %d\n" % (stack.encode("utf-8"), microCount))
 
     def disable(self):
         self.enabled = False
