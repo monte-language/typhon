@@ -12,8 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> simple__quasiParser] | _ := import("lib/simple")
-
 def makeEnumObject(i :Int, name):
     return object enumObject:
         to _printOn(out):

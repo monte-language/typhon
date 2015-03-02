@@ -12,7 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> simple__quasiParser] := import("lib/simple")
 def [=> Bytes, => b__quasiParser] | _ := import("lib/bytes")
 def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
 def [=> nullPump] := import("lib/tubes/nullPump")

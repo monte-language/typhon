@@ -17,7 +17,6 @@
 # any choices that would speed things up by cheating.
 
 def [=> makeEnum] := import("lib/enum")
-def [=> simple__quasiParser] := import("lib/simple")
 
 # Task states.
 def [TaskType, BLANK, IDLE, WORK, HANDLERA, HANDLERB, DEVA, DEVB] := makeEnum(

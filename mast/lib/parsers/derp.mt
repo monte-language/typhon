@@ -12,8 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> simple__quasiParser] | _ := import("lib/simple")
-
 def any(l :List[Bool]) :Bool:
     for x in l:
         if (x):

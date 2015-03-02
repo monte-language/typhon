@@ -12,8 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> simple__quasiParser] := import("lib/simple")
-
 def lowercase :Set[Char] := "abcdefghijklmnopqrstuvwxyz".asSet()
 def uppercase :Set[Char] := "ABCDEFGHIJKLMNOPQRSTUVWXYZ".asSet()
 def digits :Set[Char] := "0123456789".asSet()

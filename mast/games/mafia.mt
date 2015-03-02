@@ -14,7 +14,6 @@
 
 # An implementation of the Mafia party game state machine.
 
-def [=> simple__quasiParser] | _ := import("lib/simple")
 def [=> makeEnum] | _ := import("lib/enum")
 
 def [MafiaState, DAY, NIGHT] := makeEnum(["day", "night"])
