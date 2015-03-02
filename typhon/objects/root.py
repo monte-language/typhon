@@ -19,6 +19,7 @@ from typhon.atoms import getAtom
 from typhon.errors import Refused
 
 
+_CONFORMTO_1 = getAtom(u"_conformTo", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 
@@ -77,6 +78,10 @@ class Object(object):
         try:
             return self.recv(atom, arguments)
         except:
+            if atom is _CONFORMTO_1:
+                # Welcome to _conformTo/1.
+                # to _conformTo(_): return self
+                return self
             if atom is _WHENMORERESOLVED_1:
                 # Welcome to _whenMoreResolved.
                 # This method's implementation, in Monte, should be:
