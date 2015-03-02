@@ -12,12 +12,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-# This is a hack. It is unabashedly, unashamedly, a hack. It is an essential
-# hack, for now, but it is not permanent.
-# The reference implementation uses "boolean" for the name of Bool when
-# expanding while-expressions.
-def boolean := Bool
+# Basic layout: Core guards, core expression syntax, core pattern syntax, and
+# finally extra stuff like brands and simple QP.
 
+# The comparer can come before guards, since it is extremely polymorphic and
+# doesn't care much about the types of the values that it is manipulating.
 object __comparer:
     to asBigAs(left, right):
         try:
@@ -46,67 +45,6 @@ object __comparer:
             return right.op__cmp(left).aboveZero()
 
 
-def __iterWhile(obj):
-    return object iterWhile:
-        to _makeIterator():
-            return iterWhile
-        to next(ej):
-            def rv := obj()
-            if (rv == false):
-                throw.eject(ej, "End of iteration")
-            return [null, rv]
-
-
-def __accumulateList(iterable, mapper):
-    def iterator := iterable._makeIterator()
-    var rv := []
-
-    escape ej:
-        while (true):
-            escape skip:
-                def [key, value] := iterator.next(ej)
-                def result := mapper(key, value, skip)
-                rv := rv.with(result)
-
-    return rv
-
-
-object __makeOrderedSpace:
-    to op__thru(var start, stop):
-        var l := []
-        while (start <= stop):
-            l := l.with(start)
-            start := start.next()
-        return l
-
-    to op__till(start, stop):
-        return __makeOrderedSpace.op__thru(start, stop.previous())
-
-
-def _listIterator(list):
-    var index := 0
-    return object iterator:
-        to next(ej):
-            if (list.size() > index):
-                def rv := [index, list[index]]
-                index += 1
-                return rv
-            else:
-                throw.eject(ej, "Iterator exhausted")
-
-
-def __splitList(position :Int):
-    # XXX could use `return fn ...`
-    # We use the List guard from the implementation rather than the one that
-    # will be defined shortly, in order to avoid indefinite recursion on the
-    # definition of listiness.
-    def listSplitter(specimen, ej):
-        if (specimen.size() < position):
-            throw.eject(ej, ["List is too short:", specimen])
-        return specimen.slice(0, position).with(specimen.slice(position))
-    return listSplitter
-
-
 def makeGuardedSlot(guard, var value :guard):
     return object guardedSlot:
         to get():
@@ -132,12 +70,6 @@ def testVoid(assert):
 unittest([
     testVoid,
 ])
-
-
-# Must come before List.
-def __validateFor(flag :Bool) :Void:
-    if (!flag):
-        throw("Failed to validate loop!")
 
 
 object Any:
@@ -170,12 +102,22 @@ def makePredicateGuard(predicate, label):
         to makeSlot(value):
             return makeGuardedSlot(predicateGuard, value)
 
+# Data guards. These must come before any while-expressions.
+def Bool := makePredicateGuard(isBool, "Bool")
 def Char := makePredicateGuard(isChar, "Char")
 def Double := makePredicateGuard(isDouble, "Double")
 def Int := makePredicateGuard(isInt, "Int")
 def Str := makePredicateGuard(isStr, "Str")
 
+# This is a hack. It is unabashedly, unashamedly, a hack. It is an essential
+# hack, for now, but it is not permanent.
+# The reference implementation uses "boolean" for the name of Bool when
+# expanding while-expressions.
+def boolean := Bool
+
 def Empty := makePredicateGuard(fn specimen {specimen.size() == 0}, "Empty")
+# Alias for map patterns.
+def __mapEmpty := Empty
 
 # XXX haven't decided how this one should be structured
 def Map := makePredicateGuard(isMap, "Map")
@@ -193,6 +135,12 @@ unittest([
     testIntGuard,
     testEmptyGuard,
 ])
+
+
+# Must come before List. Must come after Void and Bool.
+def __validateFor(flag :Bool) :Void:
+    if (!flag):
+        throw("Failed to validate loop!")
 
 
 object List:
@@ -309,6 +257,52 @@ unittest([
     testNullOkUnsubbed,
     testNullOkInt,
 ])
+
+
+def __iterWhile(obj):
+    return object iterWhile:
+        to _makeIterator():
+            return iterWhile
+        to next(ej):
+            def rv := obj()
+            if (rv == false):
+                throw.eject(ej, "End of iteration")
+            return [null, rv]
+
+
+def __splitList(position :Int):
+    # XXX could use `return fn ...`
+    def listSplitter(specimen, ej):
+        if (specimen.size() < position):
+            throw.eject(ej, ["List is too short:", specimen])
+        return specimen.slice(0, position).with(specimen.slice(position))
+    return listSplitter
+
+
+def __accumulateList(iterable, mapper):
+    def iterator := iterable._makeIterator()
+    var rv := []
+
+    escape ej:
+        while (true):
+            escape skip:
+                def [key, value] := iterator.next(ej)
+                def result := mapper(key, value, skip)
+                rv := rv.with(result)
+
+    return rv
+
+
+object __makeOrderedSpace:
+    to op__thru(var start, stop):
+        var l := []
+        while (start <= stop):
+            l := l.with(start)
+            start := start.next()
+        return l
+
+    to op__till(start, stop):
+        return __makeOrderedSpace.op__thru(start, stop.previous())
 
 
 def __matchSame(expected):
@@ -455,12 +449,29 @@ def __bind(resolver, guard):
     return viaBinder
 
 
+# Simple QP needs patterns, some loops, some other syntax, and a few guards.
+def [=> simple__quasiParser] := import("prelude/simple", ["boolean" => Bool,
+                                                          => Bool, => Str,
+                                                          => __comparer,
+                                                          => __iterWhile,
+                                                          => __matchSame,
+                                                          => __quasiMatcher,
+                                                          => __suchThat,
+                                                          => __validateFor])
+
+
+# Brands need a bunch of guards and also the simple QP.
+def [=> makeBrandPair] := import("prelude/brand", [=> NullOk, => Str, => Void,
+                                                   => simple__quasiParser])
+
+
 [
     # This is 100% hack. See the matching comment near the top of the prelude.
     "boolean" => Bool,
 
     "__mapEmpty" => Empty,
     => Any,
+    => Bool,
     => Char,
     => Double,
     => Int,
@@ -486,5 +497,6 @@ def __bind(resolver, guard):
     => __switchFailed,
     => __validateFor,
     => _flexMap,
-    => _listIterator,
+    => makeBrandPair,
+    => simple__quasiParser,
 ]

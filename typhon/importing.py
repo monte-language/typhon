@@ -28,6 +28,8 @@ from typhon.smallcaps.peephole import peephole
 
 @dont_look_inside
 def obtainModule(path, inputScope, recorder):
+    debug_print("Importing:", path)
+
     with recorder.context("Deserialization"):
         term = Sequence(load(open(path, "rb").read())[:])
 

@@ -12,8 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> simple__quasiParser] := import("lib/simple")
-
 
 def makeBrand(nickname :NullOk[Str]):
     return object brand:

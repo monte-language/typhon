@@ -2,11 +2,11 @@ MONTE = ~/monte
 MONTE_VENV = ~/monte/local_monte
 
 
-all: prelude.ty lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
+all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	lib/regex.ty lib/utf8.ty \
 	lib/tokenBucket.ty lib/loopingCall.ty \
 	lib/paths.ty \
-	builtin \
+	prelude \
 	parsers \
 	http \
 	irc \
@@ -14,7 +14,7 @@ all: prelude.ty lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	games \
 	bench
 
-builtin: lib/brand.ty lib/simple.ty
+prelude: prelude.ty prelude/brand.ty prelude/simple.ty
 
 parsers: lib/parsers/derp.ty lib/parsers/html.ty
 

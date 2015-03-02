@@ -50,46 +50,6 @@ TOSTRING_1 = getAtom(u"toString", 1)
 VALUEMAKER_1 = getAtom(u"valueMaker", 1)
 
 
-@predGuard
-def boolGuard(specimen):
-    return isinstance(specimen, BoolObject)
-
-
-@predGuard
-def charGuard(specimen):
-    return isinstance(specimen, CharObject)
-
-
-@predGuard
-def doubleGuard(specimen):
-    return isinstance(specimen, DoubleObject)
-
-
-@predGuard
-def intGuard(specimen):
-    return isinstance(specimen, IntObject)
-
-
-@predGuard
-def strGuard(specimen):
-    return isinstance(specimen, StrObject)
-
-
-@predGuard
-def listGuard(specimen):
-    return isinstance(specimen, ConstList)
-
-
-@predGuard
-def mapGuard(specimen):
-    return isinstance(specimen, ConstMap)
-
-
-@predGuard
-def setGuard(specimen):
-    return isinstance(specimen, ConstSet)
-
-
 class TraceLn(Object):
     def toString(self):
         return u"<traceln>"
@@ -229,15 +189,6 @@ def safeScope():
 
         u"false": wrapBool(False),
         u"true": wrapBool(True),
-
-        u"Bool": boolGuard(),
-        u"Char": charGuard(),
-        u"Double": doubleGuard(),
-        u"Int": intGuard(),
-        u"List": listGuard(),
-        u"Map": mapGuard(),
-        u"Set": setGuard(),
-        u"Str": strGuard(),
 
         u"M": MObject(),
         u"Ref": RefOps(),

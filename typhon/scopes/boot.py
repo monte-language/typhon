@@ -14,6 +14,7 @@
 
 from typhon.atoms import getAtom
 from typhon.objects.collections import ConstList, ConstMap, ConstSet
+from typhon.objects.constants import BoolObject
 from typhon.objects.data import (CharObject, DoubleObject, IntObject,
                                  StrObject, wrapBool)
 from typhon.objects.root import runnable
@@ -21,6 +22,10 @@ from typhon.objects.root import runnable
 
 RUN_1 = getAtom(u"run", 1)
 
+
+@runnable(RUN_1)
+def isBool(args):
+    return wrapBool(isinstance(args[0], BoolObject))
 
 @runnable(RUN_1)
 def isChar(args):
@@ -53,6 +58,7 @@ def isSet(args):
 
 def bootScope():
     return {
+        u"isBool": isBool(),
         u"isChar": isChar(),
         u"isDouble": isDouble(),
         u"isInt": isInt(),

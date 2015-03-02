@@ -53,6 +53,9 @@ def loadPrelude(config, recorder, vat):
     # For the prelude (and only the prelude), permit the boot scope.
     scope.update(bootScope())
 
+    # Boot imports.
+    scope = addImportToScope(config.libraryPath, scope, recorder)
+
     code = obtainModule(rjoin(config.libraryPath, "prelude.ty"), scope.keys(),
                         recorder)
 
