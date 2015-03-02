@@ -141,6 +141,9 @@ def __validateFor(flag :Bool) :Void:
 
 
 object Any:
+    to _printOn(out):
+        out.print("Any")
+
     to coerce(specimen, _):
         return specimen
 
@@ -148,11 +151,137 @@ object Any:
         return makeGuardedSlot(Any, value)
 
 
+def makePredicateGuard(predicate, label):
+    return object predicateGuard:
+        to _printOn(out):
+            out.print(label)
+
+        to coerce(specimen, ej):
+            if (predicate(specimen)):
+                return specimen
+
+            def conformed := specimen._conformTo(predicateGuard)
+
+            if (predicate(conformed)):
+                return conformed
+
+            throw.eject(ej, ["Failed guard:", specimen])
+
+        to makeSlot(value):
+            return makeGuardedSlot(predicateGuard, value)
+
+def Char := makePredicateGuard(isChar, "Char")
+def Double := makePredicateGuard(isDouble, "Double")
+def Int := makePredicateGuard(isInt, "Int")
+def Str := makePredicateGuard(isStr, "Str")
+
+def Empty := makePredicateGuard(fn specimen {specimen.size() == 0}, "Empty")
+
+# XXX haven't decided how this one should be structured
+def Map := makePredicateGuard(isMap, "Map")
+
+
+def testIntGuard(assert):
+    assert.ejects(fn ej {def x :Int exit ej := 5.0})
+    assert.doesNotEject(fn ej {def x :Int exit ej := 42})
+
+def testEmptyGuard(assert):
+    assert.ejects(fn ej {def x :Empty exit ej := [7]})
+    assert.doesNotEject(fn ej {def x :Empty exit ej := []})
+
+unittest([
+    testIntGuard,
+    testEmptyGuard,
+])
+
+
+object List:
+    to _printOn(out):
+        out.print("List")
+
+    to coerce(specimen, ej):
+        if (isList(specimen)):
+            return specimen
+
+        def conformed := specimen._conformTo(List)
+
+        if (isList(conformed)):
+            return conformed
+
+        throw.eject(ej, ["(Probably) not a list:", specimen])
+
+    to makeSlot(value):
+        return makeGuardedSlot(List, value)
+
+    to get(subGuard):
+        return object SubList:
+            to _printOn(out):
+                out.print("List[")
+                subGuard._printOn(out)
+                out.print("]")
+
+            to coerce(var specimen, ej):
+                if (!isList(specimen)):
+                    specimen := specimen._conformTo(SubList)
+
+                if (isList(specimen)):
+                    for element in specimen:
+                        subGuard.coerce(element, ej)
+                    return specimen
+
+                throw.eject(ej,
+                            ["(Probably) not a conforming list:", specimen])
+
+
+object Set:
+    to _printOn(out):
+        out.print("Set")
+
+    to coerce(specimen, ej):
+        if (isSet(specimen)):
+            return specimen
+
+        def conformed := specimen._conformTo(Set)
+
+        if (isSet(conformed)):
+            return conformed
+
+        throw.eject(ej, ["(Probably) not a list:", specimen])
+
+    to makeSlot(value):
+        return makeGuardedSlot(Set, value)
+
+    to get(subGuard):
+        return object SubSet:
+            to _printOn(out):
+                out.print("Set[")
+                subGuard._printOn(out)
+                out.print("]")
+
+            to coerce(var specimen, ej):
+                if (!isSet(specimen)):
+                    specimen := specimen._conformTo(SubSet)
+
+                if (isSet(specimen)):
+                    for element in specimen:
+                        subGuard.coerce(element, ej)
+                    return specimen
+
+                throw.eject(ej,
+                            ["(Probably) not a conforming list:", specimen])
+
+
 object NullOk:
     to coerce(specimen, ej):
-        if (specimen != null):
-            throw.eject(ej, ["Not null:", specimen])
-        return specimen
+        if (specimen == null):
+            return specimen
+
+        def conformed := specimen._conformTo(NullOk)
+
+        if (conformed == null):
+            return conformed
+
+        throw.eject(ej, ["Not null:", specimen])
 
     to get(subGuard):
         return object SubNullOk:
@@ -167,7 +296,6 @@ object NullOk:
     to makeSlot(value):
         return makeGuardedSlot(NullOk, value)
 
-
 def testNullOkUnsubbed(assert):
     assert.ejects(fn ej {def x :NullOk exit ej := 42})
     assert.doesNotEject(fn ej {def x :NullOk exit ej := null})
@@ -181,56 +309,6 @@ unittest([
     testNullOkUnsubbed,
     testNullOkInt,
 ])
-
-
-object Empty:
-    to coerce(specimen, ej):
-        if (specimen.size() != 0):
-            throw.eject(ej, ["Not empty:", specimen])
-        return specimen
-
-    to makeSlot(value):
-        return makeGuardedSlot(Empty, value)
-
-
-object BetterList:
-    to coerce(specimen, ej):
-        if (specimen !~ [] + _):
-            throw.eject(ej, ["Not a list:", specimen])
-        return specimen
-
-    to makeSlot(value):
-        return makeGuardedSlot(BetterList, value)
-
-    to get(subguard):
-        return object SubList:
-            to coerce(specimen, ej):
-                def [] + l exit ej := specimen
-                for element in l:
-                    subguard.coerce(element, ej)
-                return specimen
-
-            to makeSlot(value):
-                return makeGuardedSlot(SubList, value)
-
-
-object BetterSet:
-    to coerce(specimen, ej):
-        return Set.coerce(specimen, ej)
-
-    to makeSlot(value):
-        return makeGuardedSlot(BetterSet, value)
-
-    to get(subguard):
-        return object SubSet:
-            to coerce(specimen, ej):
-                def set := Set.coerce(specimen, ej)
-                for element in set:
-                    subguard.coerce(element, ej)
-                return specimen
-
-            to makeSlot(value):
-                return makeGuardedSlot(SubSet, value)
 
 
 def __matchSame(expected):
@@ -381,11 +459,16 @@ def __bind(resolver, guard):
     # This is 100% hack. See the matching comment near the top of the prelude.
     "boolean" => Bool,
 
-    "List" => BetterList,
-    "Set" => BetterSet,
     "__mapEmpty" => Empty,
     => Any,
+    => Char,
+    => Double,
+    => Int,
+    => List,
+    => Map,
     => NullOk,
+    => Set,
+    => Str,
     => Void,
     => __accumulateList,
     => __accumulateMap,

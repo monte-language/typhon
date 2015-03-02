@@ -32,6 +32,7 @@ from typhon.objects.imports import addImportToScope
 from typhon.prelude import registerGlobals
 from typhon.profile import csp
 from typhon.reactor import Reactor
+from typhon.scopes.boot import bootScope
 from typhon.scopes.safe import safeScope
 from typhon.scopes.unsafe import unsafeScope
 from typhon.vats import Vat, currentVat
@@ -49,6 +50,9 @@ def dirname(p):
 
 def loadPrelude(config, recorder, vat):
     scope = safeScope()
+    # For the prelude (and only the prelude), permit the boot scope.
+    scope.update(bootScope())
+
     code = obtainModule(rjoin(config.libraryPath, "prelude.ty"), scope.keys(),
                         recorder)
 
