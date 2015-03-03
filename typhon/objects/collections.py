@@ -12,11 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import r_ordereddict
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused, userError
+from typhon.errors import Refused, UserException, userError
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import throw
@@ -44,11 +45,23 @@ SIZE_0 = getAtom(u"size", 0)
 SLICE_1 = getAtom(u"slice", 1)
 SLICE_2 = getAtom(u"slice", 2)
 SNAPSHOT_0 = getAtom(u"snapshot", 0)
+SORT_0 = getAtom(u"sort", 0)
 WITHOUT_1 = getAtom(u"without", 1)
 WITH_1 = getAtom(u"with", 1)
 WITH_2 = getAtom(u"with", 2)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 _UNCALL_0 = getAtom(u"_uncall", 0)
+
+
+def monteLessThan(left, right):
+    # Yes, this is ugly.
+    try:
+        return unwrapInt(left.call(u"op__cmp", [right])) < 0
+    except UserException:
+        return unwrapInt(right.call(u"op__cmp", [left])) > 0
+
+
+MonteSorter = make_timsort_class(lt=monteLessThan)
 
 
 class listIterator(Object):
@@ -213,6 +226,9 @@ class ConstList(Collection, Object):
             new.reverse()
             return ConstList(new)
 
+        if atom is SORT_0:
+            return self.sort()
+
         if atom is WITH_1:
             # with/1: Create a new list with an appended object.
             return ConstList(self.objects + args)
@@ -259,6 +275,11 @@ class ConstList(Collection, Object):
 
     def snapshot(self):
         return ConstList(self.objects[:])
+
+    def sort(self):
+        l = self.objects[:]
+        MonteSorter(l).sort()
+        return ConstList(l)
 
 
 class FlexList(Collection, Object):
