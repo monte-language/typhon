@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.objects.files import makeFileResource
 from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
                                                  makeTCP4ServerEndpoint)
 from typhon.objects.timers import Timer
@@ -20,6 +21,7 @@ from typhon.objects.timers import Timer
 def unsafeScope():
     return {
         u"Timer": Timer(),
+        u"makeFileResource": makeFileResource(),
         u"makeTCP4ClientEndpoint": makeTCP4ClientEndpoint(),
         u"makeTCP4ServerEndpoint": makeTCP4ServerEndpoint(),
     }

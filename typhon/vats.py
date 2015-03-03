@@ -75,14 +75,21 @@ class Vat(object):
         After the current turn, run this callback.
 
         The callback must guarantee that it will *not* take turns on the vat!
+
+        It is acceptable for the callback to queue more turns; in fact, it's
+        expected.
         """
 
         self._callbacks.append(callback)
 
     def runCallbacks(self):
-        for callback in self._callbacks:
-            callback()
+        # Reallocate the callback list so that callbacks can queue more
+        # callbacks for after the next turn.
+        callbacks = self._callbacks
         self._callbacks = []
+
+        for callback in callbacks:
+            callback()
 
     def takeSomeTurns(self):
         # Limit the number of continuous turns to keep network latency low.
