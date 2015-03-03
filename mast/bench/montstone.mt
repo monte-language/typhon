@@ -23,12 +23,14 @@ def LOOPS :Int := 50000 # 500000
 def [Enumeration, Ident1, Ident2, Ident3, Ident4, Ident5] := makeEnum(
     ["Ident1", "Ident2", "Ident3", "Ident4", "Ident5"])
 
+# XXX we should have Ada-style guards for these four
 def OneToThirty := Int
 def OneToFifty := Int
 def CapitalLetter := Char
 def String30 := Str
-def Array1Dim := List[Int]
-def Array2Dim := List[List[Int]]
+# XXX we can't do FlexList guards
+def Array1Dim := Any # List[Int]
+def Array2Dim := Any # List[List[Int]]
 
 def makeRecord(var PtrComp, var Discr :Enumeration, var EnumComp :Enumeration,
                var IntComp :OneToFifty, var StringComp :String30):
