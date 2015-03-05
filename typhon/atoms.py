@@ -30,7 +30,7 @@ class Atom(object):
         self.repr = "Atom(%s/%d)" % (self.verb.encode("utf-8"), self.arity)
 
     def __repr__(self):
-        return repr
+        return self.repr
 
 
 class _AtomHolder(object):
