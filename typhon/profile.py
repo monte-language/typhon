@@ -40,10 +40,16 @@ class CallStackProfiler(object):
         # want to incur the cost of the syscall before avoiding work.
         end = time.time()
 
-        stack = u";".join([pair[0] for pair in self.currentStack])
+        stack = self.formatStack()
         label, start = self.currentStack.pop()
         newTime = self.stacks.get(stack, 0.0) + end - start
         self.stacks[stack] = newTime
+
+    def formatStack(self):
+        # This is split out in order to make __exit__ visible to the JIT, so
+        # that the JIT can totally remove the call to __exit__ when profiling
+        # is disabled.
+        return u";".join([pair[0] for pair in self.currentStack])
 
     def startCall(self, obj, atom):
         if not self.enabled:
