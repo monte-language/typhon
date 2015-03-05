@@ -19,6 +19,7 @@ from typhon.atoms import getAtom
 from typhon.errors import Refused
 
 
+RUN_1 = getAtom(u"run", 1)
 _CONFORMTO_1 = getAtom(u"_conformTo", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
@@ -88,7 +89,7 @@ class Object(object):
                 # to _whenMoreResolved(callback): callback<-(self)
                 from typhon.vats import currentVat
                 vat = currentVat.get()
-                vat.sendOnly(arguments[0], u"run", [self])
+                vat.sendOnly(arguments[0], RUN_1, [self])
                 from typhon.objects.constants import NullObject
                 return NullObject
             raise

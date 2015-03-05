@@ -78,7 +78,7 @@ class FileFount(Object):
         self.handle.close()
         if self.drain is not None:
             vat = currentVat.get()
-            vat.sendOnly(self.drain, u"flowStopped",
+            vat.sendOnly(self.drain, FLOWSTOPPED_1,
                          [StrObject(u"End of file")])
 
     def pause(self):
@@ -102,7 +102,7 @@ class FileFount(Object):
             buf = self.handle.read(16384)
             rv = [IntObject(ord(byte)) for byte in buf]
             vat = currentVat.get()
-            vat.sendOnly(self.drain, u"receive", [ConstList(rv)])
+            vat.sendOnly(self.drain, RECEIVE_1, [ConstList(rv)])
 
             if len(buf) < 16384:
                 # Short read; this will be the last chunk.

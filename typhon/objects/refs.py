@@ -166,25 +166,25 @@ class RefOps(Object):
     def whenResolved(self, o, callback):
         p, r = makePromise()
         vat = currentVat.get()
-        vat.sendOnly(o, u"_whenMoreResolved",
+        vat.sendOnly(o, _WHENMORERESOLVED_1,
                 [WhenResolvedReactor(callback, o, r)])
         return p
 
     def whenResolvedOnly(self, o, callback):
         vat = currentVat.get()
-        return vat.sendOnly(o, u"_whenMoreResolved",
+        return vat.sendOnly(o, _WHENMORERESOLVED_1,
                 [WhenResolvedReactor(callback, o, None)])
 
     def whenBroken(self, o, callback):
         p, r = makePromise()
         vat = currentVat.get()
-        vat.sendOnly(o, u"_whenMoreResolved",
+        vat.sendOnly(o, _WHENMORERESOLVED_1,
                 [WhenBrokenReactor(callback, o, r)])
         return p
 
     def whenBrokenOnly(self, o, callback):
         vat = currentVat.get()
-        return vat.sendOnly(o, u"_whenMoreResolved",
+        return vat.sendOnly(o, _WHENMORERESOLVED_1,
                 [WhenBrokenReactor(callback, o, None)])
 
     def isDeepFrozen(self, o):
@@ -216,7 +216,7 @@ class WhenBrokenReactor(Object):
 
             if self._ref.state() is EVENTUAL:
                 vat = currentVat.get()
-                vat.sendOnly(self._ref, u"_whenMoreResolved", [self])
+                vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
             elif self._ref.state() is BROKEN:
                 # XXX this could raise; we might need to reflect to user
                 outcome = self._cb.call(u"run", [self._ref])
@@ -255,7 +255,7 @@ class WhenResolvedReactor(Object):
                 self.done = True
             else:
                 vat = currentVat.get()
-                vat.sendOnly(self._ref, u"_whenMoreResolved", [self])
+                vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
 
             return NullObject
         raise Refused(self, atom, args)
@@ -353,20 +353,20 @@ class Promise(Object):
         # This method's implementation, in Monte, should be:
         # to _whenMoreResolved(callback): callback<-(self)
         vat = currentVat.get()
-        vat.sendOnly(callback, u"run", [self])
+        vat.sendOnly(callback, RUN_1, [self])
         return NullObject
 
     # Synchronous calls.
 
     # Eventual sends.
 
-    def send(self, verb, args):
+    def send(self, atom, args):
         # Resolution is done by the vat here; we don't get to access the
         # resolver ourselves.
-        return self.sendAll(getAtom(verb, len(args)), args)
+        return self.sendAll(atom, args)
 
-    def sendOnly(self, verb, args):
-        self.sendAllOnly(getAtom(verb, len(args)), args)
+    def sendOnly(self, atom, args):
+        self.sendAllOnly(atom, args)
         return NullObject
 
     # Promise API.
@@ -534,11 +534,11 @@ class NearRef(Promise):
 
     def sendAll(self, atom, args):
         vat = currentVat.get()
-        return vat.send(self.target, atom.verb, args)
+        return vat.send(self.target, atom, args)
 
     def sendAllOnly(self, atom, args):
         vat = currentVat.get()
-        return vat.sendOnly(self.target, atom.verb, args)
+        return vat.sendOnly(self.target, atom, args)
 
     def optProblem(self):
         return NullObject
@@ -588,7 +588,7 @@ class UnconnectedRef(Promise):
     def _doBreakage(self, atom, args):
         if atom in (_WHENMORERESOLVED_1, _WHENBROKEN_1):
             vat = currentVat.get()
-            return vat.sendOnly(args[0], u"run", [self])
+            return vat.sendOnly(args[0], RUN_1, [self])
 
     def isResolved(self):
         return True

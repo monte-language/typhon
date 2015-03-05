@@ -153,16 +153,18 @@ class MObject(Object):
             sendVerb = unwrapStr(args[1])
             sendArgs = unwrapList(args[2])
             # Signed, sealed, delivered, I'm yours.
+            sendAtom = getAtom(sendVerb, len(sendArgs))
             vat = currentVat.get()
-            return vat.sendOnly(target, sendVerb, sendArgs)
+            return vat.sendOnly(target, sendAtom, sendArgs)
 
         if atom is SEND_3:
             target = args[0]
             sendVerb = unwrapStr(args[1])
             sendArgs = unwrapList(args[2])
             # Signed, sealed, delivered, I'm yours.
+            sendAtom = getAtom(sendVerb, len(sendArgs))
             vat = currentVat.get()
-            return vat.send(target, sendVerb, sendArgs)
+            return vat.send(target, sendAtom, sendArgs)
 
         if atom is TOQUOTE_1:
             return StrObject(args[0].toQuote())

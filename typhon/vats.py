@@ -50,14 +50,14 @@ class Vat(object):
     def repr(self):
         return u"<vat (%d pending)>" % (len(self._pending),)
 
-    def send(self, target, verb, args):
+    def send(self, target, atom, args):
         from typhon.objects.refs import makePromise
         promise, resolver = makePromise()
-        self._pending.append((resolver, target, verb, args))
+        self._pending.append((resolver, target, atom, args))
         return promise
 
-    def sendOnly(self, target, verb, args):
-        self._pending.append((None, target, verb, args))
+    def sendOnly(self, target, atom, args):
+        self._pending.append((None, target, atom, args))
 
     def hasTurns(self):
         return len(self._pending) != 0
@@ -65,7 +65,7 @@ class Vat(object):
     def takeTurn(self):
         from typhon.objects.refs import Promise, resolution
 
-        resolver, target, verb, args = self._pending.pop(0)
+        resolver, target, atom, args = self._pending.pop(0)
 
         # If the target is a promise, then we should send to it instead of
         # calling. Try to resolve it as much as possible first, though.
@@ -74,16 +74,16 @@ class Vat(object):
         if resolver is None:
             # callOnly/sendOnly.
             if isinstance(target, Promise):
-                target.sendOnly(verb, args)
+                target.sendOnly(atom, args)
             else:
                 # Oh, that's right; we don't do callOnly since it's silly.
-                target.call(verb, args)
+                target.callAtom(atom, args)
         else:
             # call/send.
             if isinstance(target, Promise):
-                result = target.send(verb, args)
+                result = target.send(atom, args)
             else:
-                result = target.call(verb, args)
+                result = target.callAtom(atom, args)
             resolver.resolve(result)
 
     def afterTurn(self, callback):
