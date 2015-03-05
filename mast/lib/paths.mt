@@ -14,6 +14,9 @@
 
 def makePath(segments :List[Str]):
     return object path:
+        to _uncall():
+            return [makePath, segments]
+
         to _printOn(out):
             out.print("path`")
             out.print("/".join(segments))
@@ -21,6 +24,34 @@ def makePath(segments :List[Str]):
 
         to segments() :List[Str]:
             return segments
+
+        to parent():
+            return makePath(segments.slice(0, segments.size() - 1))
+
+        to sibling(name :Str):
+            return makePath(segments.with(segments.size() - 1, name))
+
+        to child(name :Str):
+            return makePath(segments.with(name))
+
+
+def testPathParent(assert):
+    def path := makePath(["first"])
+    assert.equal(path.parent(), makePath([]))
+
+def testPathSibling(assert):
+    def path := makePath(["first", "second"])
+    assert.equal(path.sibling("other"), makePath(["first", "other"]))
+
+def testPathChild(assert):
+    def path := makePath(["first"])
+    assert.equal(path.child("second"), makePath(["first", "second"]))
+
+unittest([
+    testPathParent,
+    testPathSibling,
+    testPathChild,
+])
 
 
 object pathPattern:
@@ -61,5 +92,19 @@ object path__quasiParser:
                 return makePath(segments.snapshot())
 
 
-traceln(def x := path`testing/path/qls`)
-traceln(path`and/$x/and/this`)
+def testPathQL(assert):
+    def p := path`first/second`
+    assert.equal(p, makePath(["first", "second"]))
+
+    def leadingSlash := path`/first/second`
+    assert.equal(leadingSlash, makePath(["first", "second"]))
+
+def testPathQLValue(assert):
+    def inner := path`second`
+    def p := path`first/$inner/third`
+    assert.equal(p, path`first/second/third`)
+
+unittest([
+    testPathQL,
+    testPathQLValue,
+])
