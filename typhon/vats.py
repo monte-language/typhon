@@ -17,6 +17,22 @@ from rpython.rlib.rthread import ThreadLocalReference
 from typhon.errors import UserException
 
 
+class Callable(object):
+    """
+    One of the ugliest hacks I've ever written.
+
+    RPython is not good. Today, RPython is not good in that RPython cannot
+    unify bound methods that are disjoint. This means that "zero-argument
+    callable" is not a possible type to achieve in RPython. I am very
+    disappointed.
+    """
+
+    def call(self):
+        """
+        Feel bad about life.
+        """
+
+
 class Vat(object):
     """
     Turn management and object isolation.
@@ -89,7 +105,7 @@ class Vat(object):
         self._callbacks = []
 
         for callback in callbacks:
-            callback()
+            callback.call()
 
     def takeSomeTurns(self):
         # Limit the number of continuous turns to keep network latency low.

@@ -19,7 +19,7 @@ from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapInt, unwrapStr
 from typhon.objects.refs import makePromise
 from typhon.objects.root import Object, runnable
-from typhon.vats import currentVat
+from typhon.vats import Callable, currentVat
 
 
 GETCONTENTS_0 = getAtom(u"getContents", 0)
@@ -154,6 +154,34 @@ class FileDrain(Object):
         del self.chunks[:]
 
 
+class GetContents(Callable):
+
+    def __init__(self, path, resolver):
+        self.path = path
+        self.resolver = resolver
+
+    def call(self):
+        with open(self.path, "rb") as handle:
+            s = handle.read()
+
+        data = ConstList([IntObject(ord(c)) for c in s])
+        self.resolver.resolve(data)
+
+
+class SetContents(Callable):
+
+    def __init__(self, path, data, resolver):
+        self.path = path
+        self.data = data
+        self.resolver = resolver
+
+    def call(self):
+        with open(self.path, "wb") as handle:
+            handle.write(self.data)
+
+        self.resolver.resolve(NullObject)
+
+
 class FileResource(Object):
     """
     A Resource which provides access to the file system of the current node.
@@ -163,19 +191,16 @@ class FileResource(Object):
     order, though.
     """
 
+    _immutable_ = True
+
     def __init__(self, path):
         self.path = path
-
-        self.getContentsResolvers = []
-        self.setContentsResolvers = []
 
     def recv(self, atom, args):
         if atom is GETCONTENTS_0:
             p, r = makePromise()
-            if not self.getContentsResolvers:
-                vat = currentVat.get()
-                vat.afterTurn(self.getContents)
-            self.getContentsResolvers.append(r)
+            vat = currentVat.get()
+            vat.afterTurn(GetContents(self.path, r))
             return p
 
         if atom is SETCONTENTS_1:
@@ -183,40 +208,11 @@ class FileResource(Object):
             data = "".join([chr(unwrapInt(i)) for i in l])
 
             p, r = makePromise()
-            if not self.setContentsResolvers:
-                vat = currentVat.get()
-                vat.afterTurn(self.setContents)
-            self.setContentsResolvers.append((data, r))
+            vat = currentVat.get()
+            vat.afterTurn(SetContents(self.path, data, r))
             return p
 
         raise Refused(self, atom, args)
-
-    def getContents(self):
-        # XXX handle errors by breaking the promise
-        with open(self.path, "rb") as handle:
-            s = handle.read()
-
-        data = ConstList([IntObject(ord(c)) for c in s])
-
-        for resolver in self.getContentsResolvers:
-            resolver.resolve(data)
-
-        del self.getContentsResolvers[:]
-
-    def setContents(self):
-        # XXX handle errors
-        # XXX port atomic setContents from betterpath
-
-        # Yes, for each setContents/1 call, we perform at least one write.
-        # Any attempt to elide intermediate content-setting operations will
-        # make somebody unhappy, I bet. ~ C.
-        for contents, resolver in self.setContentsResolvers:
-            with open(self.path, "wb") as handle:
-                handle.write(contents)
-
-            resolver.resolve(NullObject)
-
-        del self.setContentsResolvers[:]
 
 
 @runnable(RUN_1)

@@ -24,7 +24,7 @@ from typhon.objects.networking.sockets import SocketDrain
 from typhon.objects.refs import makePromise
 from typhon.objects.root import Object, runnable
 from typhon.selectables import Socket
-from typhon.vats import currentVat
+from typhon.vats import Callable, currentVat
 
 
 CONNECT_0 = getAtom(u"connect", 0)
@@ -33,7 +33,7 @@ RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 
 
-class TCP4ClientPending(object):
+class TCP4ClientPending(Callable):
 
     socket = None
 
@@ -59,9 +59,16 @@ class TCP4ClientPending(object):
         self.fountResolver.smash(reason)
         self.drainResolver.smash(reason)
 
-    def fulfillSocket(self):
-        self.fountResolver.resolve(self.socket.createFount())
-        self.drainResolver.resolve(SocketDrain(self.socket))
+    def call(self):
+        """
+        Fulfill the sockets.
+        """
+
+        socket = self.socket
+        assert socket is not None, "Bad socket"
+
+        self.fountResolver.resolve(socket.createFount())
+        self.drainResolver.resolve(SocketDrain(socket))
 
 
 class TCP4ClientEndpoint(Object):
@@ -82,7 +89,7 @@ class TCP4ClientEndpoint(Object):
     def connect(self):
         pending = TCP4ClientPending(self.host, self.port)
         vat = currentVat.get()
-        vat.afterTurn(pending.createSocket)
+        vat.afterTurn(pending)
         return ConstList([pending.fount, pending.drain])
 
 

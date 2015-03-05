@@ -156,7 +156,7 @@ class Socket(Selectable):
                 self.error(reactor, message)
             else:
                 # We just finished connecting.
-                self._connector.fulfillSocket()
+                self._connector.call()
 
             self._connector = None
             return
