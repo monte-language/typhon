@@ -22,13 +22,15 @@ from typhon.objects.root import Object, runnable
 from typhon.vats import Callable, currentVat
 
 
-GETCONTENTS_0 = getAtom(u"getContents", 0)
-SETCONTENTS_1 = getAtom(u"setContents", 1)
 FLOWINGFROM_1 = getAtom(u"flowingFrom", 1)
 FLOWSTOPPED_1 = getAtom(u"flowStopped", 1)
 FLOWTO_1 = getAtom(u"flowTo", 1)
+GETCONTENTS_0 = getAtom(u"getContents", 0)
+OPENDRAIN_0 = getAtom(u"openDrain", 0)
+OPENFOUNT_0 = getAtom(u"openFount", 0)
 PAUSEFLOW_0 = getAtom(u"pauseFlow", 0)
 RECEIVE_1 = getAtom(u"receive", 1)
+SETCONTENTS_1 = getAtom(u"setContents", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 STOPFLOW_0 = getAtom(u"stopFlow", 0)
@@ -53,7 +55,35 @@ class FileUnpauser(Object):
         raise Refused(self, atom, args)
 
 
+class Read(Callable):
+
+    def __init__(self, fount):
+        self.fount = fount
+
+    def call(self):
+        # XXX What do you know about POSIX and file systems? This function is
+        # totally wrong and the wrongness isn't removable without
+        # rearchitecting a fair amount of reactor code. I apologize for doing
+        # it this way, but it is non-trivial and I don't know how I would fix
+        # it at this point in time. ~ C.
+        if not self.fount.pauses and self.fount.drain is not None:
+            # 16KiB reads. There is no justification for this; 4KiB seemed too
+            # small and 1MiB seemed too large.
+            buf = self.fount.handle.read(16384)
+            rv = [IntObject(ord(byte)) for byte in buf]
+            vat = currentVat.get()
+            vat.sendOnly(self.fount.drain, RECEIVE_1, [ConstList(rv)])
+
+            if len(buf) < 16384:
+                # Short read; this will be the last chunk.
+                self.fount.close()
+            else:
+                self.fount.queueRead()
+
+
 class FileFount(Object):
+
+    pauses = 0
 
     def __init__(self, handle):
         self.handle = handle
@@ -62,6 +92,7 @@ class FileFount(Object):
         if atom is FLOWTO_1:
             self.drain = drain = args[0]
             rv = drain.call(u"flowingFrom", [self])
+            self.queueRead()
             return rv
 
         if atom is PAUSEFLOW_0:
@@ -69,7 +100,7 @@ class FileFount(Object):
 
         if atom is STOPFLOW_0:
             vat = currentVat.get()
-            vat.afterTurn(self.close)
+            vat.afterTurn(Close(self.handle))
             return NullObject
 
         raise Refused(self, atom, args)
@@ -87,28 +118,34 @@ class FileFount(Object):
 
     def unpause(self):
         self.pauses -= 1
+        self.queueRead()
+
+    def queueRead(self):
         vat = currentVat.get()
-        vat.afterTurn(self.read)
+        vat.afterTurn(Read(self))
 
-    def read(self):
-        # XXX What do you know about POSIX and file systems? This function is
-        # totally wrong and the wrongness isn't removable without
-        # rearchitecting a fair amount of reactor code. I apologize for doing
-        # it this way, but it is non-trivial and I don't know how I would fix
-        # it at this point in time. ~ C.
-        if not self.pauses and self.drain is not None:
-            # 16KiB reads. There is no justification for this; 4KiB seemed too
-            # small and 1MiB seemed too large.
-            buf = self.handle.read(16384)
-            rv = [IntObject(ord(byte)) for byte in buf]
-            vat = currentVat.get()
-            vat.sendOnly(self.drain, RECEIVE_1, [ConstList(rv)])
 
-            if len(buf) < 16384:
-                # Short read; this will be the last chunk.
-                vat.afterTurn(self.close)
-            else:
-                vat.afterTurn(self.read)
+class Write(Callable):
+
+    def __init__(self, drain):
+        self.drain = drain
+
+    def call(self):
+        for chunk in self.drain.chunks:
+            self.drain.handle.write(chunk)
+
+        # Reuse the allocated list; we'll probably use around the same number
+        # of chunks per iteration.
+        del self.drain.chunks[:]
+
+
+class Close(Callable):
+
+    def __init__(self, handle):
+        self.handle = handle
+
+    def call(self):
+        self.handle.close()
 
 
 class FileDrain(Object):
@@ -130,28 +167,17 @@ class FileDrain(Object):
             # then prepare to flush after the turn.
             if not self.chunks:
                 vat = currentVat.get()
-                vat.afterTurn(self.flush)
+                vat.afterTurn(Write(self))
 
             self.chunks.append(s)
             return NullObject
 
         if atom is FLOWSTOPPED_1:
             vat = currentVat.get()
-            vat.afterTurn(self.close)
+            vat.afterTurn(Close(self.handle))
             return NullObject
 
         raise Refused(self, atom, args)
-
-    def close(self):
-        self.handle.close()
-
-    def flush(self):
-        for chunk in self.chunks:
-            self.handle.write(chunk)
-
-        # Reuse the allocated list; we'll probably use around the same number
-        # of chunks per iteration.
-        del self.chunks[:]
 
 
 class GetContents(Callable):
@@ -211,6 +237,12 @@ class FileResource(Object):
             vat = currentVat.get()
             vat.afterTurn(SetContents(self.path, data, r))
             return p
+
+        if atom is OPENFOUNT_0:
+            return FileFount(open(self.path, "rb"))
+
+        if atom is OPENDRAIN_0:
+            return FileDrain(open(self.path, "wb"))
 
         raise Refused(self, atom, args)
 
