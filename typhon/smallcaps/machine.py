@@ -37,7 +37,7 @@ class SmallCaps(object):
     def __init__(self, code, frame):
         self.code = code
         self.env = Environment(frame, self.code.localSize(),
-                               promote(self.code.maxDepth),
+                               promote(self.code.maxDepth + 5),
                                promote(self.code.maxHandlerDepth))
 
     @staticmethod

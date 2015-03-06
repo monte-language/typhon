@@ -44,8 +44,7 @@ class TCP4ClientPending(Callable):
         self.fount, self.fountResolver = makePromise()
         self.drain, self.drainResolver = makePromise()
 
-    @dont_look_inside
-    def createSocket(self):
+    def call(self):
         # Hint: The following line is where GAI is called.
         # XXX this should be IDNA, not UTF-8.
         addr = INETAddress(self.host.encode("utf-8"), self.port)
@@ -59,7 +58,7 @@ class TCP4ClientPending(Callable):
         self.fountResolver.smash(reason)
         self.drainResolver.smash(reason)
 
-    def call(self):
+    def fulfillSocket(self):
         """
         Fulfill the sockets.
         """
