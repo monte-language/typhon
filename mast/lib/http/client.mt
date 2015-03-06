@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+def [=> bytesToInt] | _ := import("lib/atoi")
 def [=> b__quasiParser, => Bytes] | _ := import("lib/bytes")
 def [=> makeEnum] | _ := import("lib/enum")
 def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
@@ -19,36 +20,46 @@ def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
 
 
-def bytesToStatus(bytes :Bytes) :Int:
-    var rv :Int := 0
-    for byte in bytes:
-        rv := rv * 10 + (byte - 48)
-    return rv
-
-def testBytesToStatus(assert):
-    assert.equal(bytesToStatus(b`200`), 200)
-
-unittest([
-    testBytesToStatus,
-])
+def lowercase(s :Str, _):
+    return s.toLowerCase()
 
 
-def makeResponse(status :Int, headers):
+def makeCommonHeaders(contentLength :NullOk[Int]):
+    return object commonHeaders:
+        to _printOn(out):
+            out.print("<common HTTP headers: ")
+            out.print(`Content length: $contentLength`)
+            out.print(">")
+
+        to finiteBody() :Bool:
+            return contentLength != null
+
+        to smallBody() :Bool:
+            return contentLength != null && contentLength < 1024 * 1024
+
+
+def makeResponse(status :Int, commonHeaders, extraHeaders, body):
     return object response:
         to _printOn(out):
-            out.print(`<response($status)>`)
+            out.print(`<response $status: $commonHeaders ($extraHeaders)>`)
+
+        to getBody():
+            return body
 
 
-def [HTTPState, REQUEST, HEADER, BODY] := makeEnum(
-    ["request", "header", "body"])
+def [HTTPState, REQUEST, HEADER, BODY, BUFFERBODY, FOUNTBODY] := makeEnum(
+    ["request", "header", "body", "body (buffered)", "body (streaming)"])
 
 
 def makeResponseDrain(resolver):
     var state :HTTPState := REQUEST
     var buf := []
     var headers := null
-    var status := null
+    var status :NullOk[Int] := null
     var label := null
+
+    var contentLength :NullOk[Int] := null
+    var commonHeaders := null
 
     return object responseDrain:
         to receive(bytes):
@@ -58,9 +69,12 @@ def makeResponseDrain(resolver):
         to flowingFrom(fount):
             return responseDrain
 
+        to flowStopped(reason):
+            traceln(`End of response: $reason`)
+
         to parseStatus(ej):
-            def b`HTTP/1.1 @code @label$\r$\n@tail` exit ej := buf
-            status := bytesToStatus(code)
+            def b`HTTP/1.1 @{via (bytesToInt) statusCode} @label$\r$\n@tail` exit ej := buf
+            status := statusCode
             traceln(`Status: $status (${UTF8Decode(label)})`)
             buf := tail
             state := HEADER
@@ -70,7 +84,11 @@ def makeResponseDrain(resolver):
             escape final:
                 def b`@key: @value$\r$\n@tail` exit final := buf
                 buf := tail
-                headers[UTF8Decode(key)] := UTF8Decode(value)
+                switch (UTF8Decode(key)):
+                    match via (lowercase) =="content-length":
+                        contentLength := bytesToInt(value, ej)
+                    match header:
+                        headers[header] := UTF8Decode(value)
             catch _:
                 def b`$\r$\n@tail` exit ej := buf
                 buf := tail
@@ -84,13 +102,30 @@ def makeResponseDrain(resolver):
                     match ==HEADER:
                         responseDrain.parseHeader(__break)
                     match ==BODY:
-                        # XXX we don't currently parse the body
-                        state := REQUEST
-                        responseDrain.issueResponse()
-                        break
+                        commonHeaders := makeCommonHeaders(contentLength)
+                        if (commonHeaders.finiteBody()):
+                            traceln("Currently expecting finite body")
+                            if (commonHeaders.smallBody()):
+                                traceln("Body is small; will buffer in memory")
+                                state := BUFFERBODY
+                            else:
+                                traceln("Body isn't small")
+                                state := FOUNTBODY
+                    match ==BUFFERBODY:
+                        if (buf.size() >= contentLength):
+                            def body := buf.slice(0, contentLength)
+                            buf := buf.slice(contentLength, buf.size())
+                            responseDrain.finalize(body)
+                        else:
+                            break
+                    match ==FOUNTBODY:
+                        traceln("I'm not prepared to do this yet!")
+                        throw("Couldn't do fount body!")
 
-        to issueResponse():
-            resolver.resolve(makeResponse(status, headers))
+        to finalize(body):
+            def response := makeResponse(status, commonHeaders,
+                                         headers.snapshot(), body)
+            resolver.resolve(response)
 
 
 def makeRequest(host :Str, resource :Str):
@@ -130,3 +165,4 @@ def makeRequest(host :Str, resource :Str):
 def response := makeRequest("example.com", "/").get()
 when (response) ->
     traceln("Finished request with response", response)
+    traceln(UTF8Decode(response.getBody()))

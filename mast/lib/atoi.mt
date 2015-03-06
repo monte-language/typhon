@@ -43,4 +43,25 @@ unittest([
     testStrToIntFail,
 ])
 
-[=> strToInt]
+
+def [=> Bytes, => b__quasiParser] | _ := import("lib/bytes")
+
+def bytesToInt(bs :List[Int], ej) :Int:
+    # XXX this sequence would be much easier with range guards
+    var rv :Int := 0
+    for b in bs:
+        def i := b - 48
+        if (i < 0 || i >= 10):
+            throw.eject(ej, "Digit out of range")
+        rv := rv * 10 + i
+    return rv
+
+def testBytesToInt(assert):
+    assert.equal(bytesToInt(b`200`, null), 200)
+
+unittest([
+    testBytesToInt,
+])
+
+
+[=> strToInt, => bytesToInt]
