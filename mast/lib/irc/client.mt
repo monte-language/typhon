@@ -17,7 +17,7 @@ def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
 def [=> nullPump] := import("lib/tubes/nullPump")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
-def [=> makeUnpauser] := import("lib/tubes/unpauser")
+def [=> makeSingleUse] := import("lib/singleUse")
 def [=> makeTokenBucket] := import("lib/tokenBucket")
 
 
@@ -126,7 +126,10 @@ def makeIRCClient(handler):
 
         to pauseFlow():
             pauses += 1
-            return makeUnpauser(IRCTube.unpause)
+            def singleUse := makeSingleUse(IRCTube.unpause)
+            return object unpauser:
+                to unpause():
+                    singleUse()
 
         to unpause():
             pauses -= 1

@@ -12,28 +12,27 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def makeUnpauser(thunk):
+def makeSingleUse(thunk):
     var called :Bool := false
-    return object unpauser:
-        to unpause():
-            if (!called):
-                called := true
-                thunk()
+    def singleUse() :Void:
+        if (!called):
+            called := true
+            thunk()
+    return singleUse
 
-def testUnpauser(assert):
+def testSingleUse(assert):
     var cell := 5
     def thunk():
         cell := 42
 
-    def unpauser := makeUnpauser(thunk)
-    unpauser.unpause()
+    def singleUse := makeSingleUse(thunk)
+    singleUse()
     assert.equal(cell, 42)
 
     cell := 31
-    unpauser.unpause()
+    singleUse()
     assert.equal(cell, 31)
 
-unittest([testUnpauser])
+unittest([testSingleUse])
 
-
-[=> makeUnpauser]
+[=> makeSingleUse]
