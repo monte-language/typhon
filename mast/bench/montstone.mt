@@ -18,8 +18,6 @@
 
 def [=> makeEnum] := import("lib/enum")
 
-def LOOPS :Int := 50000 # 500000
-
 def [Enumeration, Ident1, Ident2, Ident3, Ident4, Ident5] := makeEnum(
     ["Ident1", "Ident2", "Ident3", "Ident4", "Ident5"])
 
@@ -231,27 +229,27 @@ def Proc0():
     String1Loc := "DHRYSTONE PROGRAM, 1'ST STRING"
     Array2Glob[8][7] := 10
 
-    for i in 0..!LOOPS:
-        Proc5()
-        Proc4()
-        IntLoc1 := 2
-        IntLoc2 := 3
-        String2Loc := "DHRYSTONE PROGRAM, 2'ND STRING"
-        EnumLoc := Ident2
-        BoolGlob := !Func2(String1Loc, String2Loc)
+    # for i in 0..!LOOPS:
+    Proc5()
+    Proc4()
+    IntLoc1 := 2
+    IntLoc2 := 3
+    String2Loc := "DHRYSTONE PROGRAM, 2'ND STRING"
+    EnumLoc := Ident2
+    BoolGlob := !Func2(String1Loc, String2Loc)
 
-        while (IntLoc1 < IntLoc2):
-            IntLoc3 := 5 * IntLoc1 - IntLoc2
-            Proc7(IntLoc1, IntLoc2, &IntLoc3)
-            IntLoc1 += 1
-        Proc8(Array1Glob, Array2Glob, IntLoc1, IntLoc3)
-        Proc1(PtrGlb)
-        for CharIndex in 'A'..Char2Glob:
-            if (EnumLoc == Func1(CharIndex, 'C')):
-                Proc6(Ident1, &EnumLoc)
-        IntLoc3 := IntLoc2 * IntLoc1
-        IntLoc2 := IntLoc3 // IntLoc1
-        IntLoc2 := 7 * (IntLoc3 - IntLoc2) - IntLoc1
-        Proc2(&IntLoc1)
+    while (IntLoc1 < IntLoc2):
+        IntLoc3 := 5 * IntLoc1 - IntLoc2
+        Proc7(IntLoc1, IntLoc2, &IntLoc3)
+        IntLoc1 += 1
+    Proc8(Array1Glob, Array2Glob, IntLoc1, IntLoc3)
+    Proc1(PtrGlb)
+    for CharIndex in 'A'..Char2Glob:
+        if (EnumLoc == Func1(CharIndex, 'C')):
+            Proc6(Ident1, &EnumLoc)
+    IntLoc3 := IntLoc2 * IntLoc1
+    IntLoc2 := IntLoc3 // IntLoc1
+    IntLoc2 := 7 * (IntLoc3 - IntLoc2) - IntLoc1
+    Proc2(&IntLoc1)
 
-Proc0()
+bench(Proc0)

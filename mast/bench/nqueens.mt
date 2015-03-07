@@ -41,9 +41,4 @@ def showBoard(ranks):
         traceln(s)
 
 
-var i := 0
-var result := null
-while (i < 100):
-    result := nQueen(8)
-    i += 1
-showBoard(result)
+bench(fn {nQueen(8)})

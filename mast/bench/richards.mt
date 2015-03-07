@@ -380,4 +380,4 @@ def runRichards() :Bool:
     traceln(`holdCount $holdCount qpktCount $qpktCount`)
     return holdCount == 9297 & qpktCount == 23246
 
-traceln(runRichards())
+bench(runRichards)
