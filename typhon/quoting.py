@@ -77,7 +77,6 @@ def quoteChar(c):
 
 
 @elidable
-@unroll_safe
 def quoteStr(s):
     """
     Quote an entire string.
