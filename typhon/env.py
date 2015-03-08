@@ -44,6 +44,7 @@ class Environment(object):
         "local[*]",
         "frame[*]",
         "valueStack[*]", "depth",
+        "handlerStack[*]", "handlerDepth",
     )
 
     # The stack pointer. Always points to the *empty* cell above the top of
