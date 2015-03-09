@@ -26,6 +26,7 @@ from typhon.prelude import getGlobal
 
 
 ADD_1 = getAtom(u"add", 1)
+ASLIST_0 = getAtom(u"asList", 0)
 ASMAP_0 = getAtom(u"asMap", 0)
 ASSET_0 = getAtom(u"asSet", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
@@ -627,6 +628,9 @@ class ConstSet(Collection, Object):
         # or/1: Unify the elements of this collection with another.
         if atom is OR_1:
             return self._or(args[0])
+
+        if atom is ASLIST_0:
+            return ConstList(self.objectMap.keys())
 
         if atom is WITH_1:
             key = args[0]
