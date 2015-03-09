@@ -24,6 +24,11 @@ def all(l :List[Bool]) :Bool:
             return false
     return true
 
+def singletonSet(s, ej):
+    if (s.size() != 1):
+        throw.eject(ej, "Not a singleton set")
+    return s.asList()[0]
+
 # The core.
 
 object empty:
@@ -120,7 +125,7 @@ def nullable(l) :Bool:
         match [==alternation, ls]:
             return any([nullable(l) for l in ls])
         match [==catenation, a, b]:
-            return nullable(a) & nullable(b)
+            return nullable(a) && nullable(b)
 
         match [==repeat, _]:
             return true
@@ -138,7 +143,7 @@ def isEmpty(l) :Bool:
         match [==alternation, ls]:
             return all([isEmpty(l) for l in ls])
         match [==catenation, a, b]:
-            return isEmpty(a) | isEmpty(b)
+            return isEmpty(a) || isEmpty(b)
         match [==repeat, l]:
             return isEmpty(l)
 
@@ -146,70 +151,70 @@ def isEmpty(l) :Bool:
             return false
 
 
-def trees(l):
+def trees(l) :Set:
     switch (l):
         match ==nullSet:
-            return [null]
+            return [null].asSet()
         match [==term, ts]:
             return ts
         match [==reduction, inner, f]:
-            var rv := []
+            var rv := [].asSet()
             def ts := trees(inner)
             for tree in ts:
-                rv += f(tree)
+                rv |= f(tree)
             return rv
         match [==alternation, ls]:
-            var ts := []
+            var ts := [].asSet()
             for l in ls:
-                ts += trees(l)
+                ts |= trees(l)
             return ts
         match [==catenation, a, b]:
-            def ts := [].diverge()
+            var ts := [].asSet()
             for x in trees(a):
                 for y in trees(b):
-                    ts.push([x, y])
-            return ts.snapshot()
+                    ts with= [x, y]
+            return ts
         match [==repeat, _]:
-            return [null]
+            return [null].asSet()
 
         match _:
-            return []
+            return [].asSet()
 
 
-def _leaders(l):
+def _leaders(l) :Set:
     switch (l):
         match ==nullSet:
-            return [null]
+            return [null].asSet()
         match [==term, _]:
-            return [null]
+            return [null].asSet()
 
         match ==anything:
-            return [anything]
+            return [anything].asSet()
         match [==exactly, c]:
-            return [c]
+            return [c].asSet()
 
         match [==reduction, inner, _]:
             return _leaders(inner)
 
         match [==alternation, ls]:
-            var rv := []
+            var rv := [].asSet()
             for inner in ls:
-                rv += _leaders(inner)
+                rv |= _leaders(inner)
             return rv
 
         match [==catenation, a ? nullable(a), b]:
             if (onlyNull(a)):
                 return _leaders(b)
             else:
-                return _leaders(a) + _leaders(b)
+                return _leaders(a) | _leaders(b)
         match [==catenation, a, b]:
             return _leaders(a)
 
         match [==repeat, l]:
-            return [null] + _leaders(l)
+            return [null] | _leaders(l)
 
         match _:
-            return []
+            return [].asSet()
 
 
 def _filterEmpty(xs):
@@ -227,23 +232,24 @@ def derive(l, c):
             return empty
 
         match ==anything:
-            return [term, [c]]
+            return [term, [c].asSet()]
         match [==exactly, ==c]:
-            return [term, [c]]
+            return [term, [c].asSet()]
         match [==exactly, _]:
             return empty
 
         match [==reduction, inner, f]:
             return [reduction, derive(inner, c), f]
         match [==alternation, ls]:
-            return [alternation, _filterEmpty([derive(l, c) for l in ls])]
+            return [alternation,
+                    _filterEmpty([derive(l, c) for l in ls]).asSet()]
 
         match [==catenation, a ? nullable(a), b]:
             def da := derive(a, c)
             def db := derive(b, c)
             def rv := [alternation,
                 [[catenation, da, b],
-                 [catenation, [term, trees(a)], db]]]
+                 [catenation, [term, trees(a)], db]].asSet()]
             return rv
         match [==catenation, a, b]:
             def rv := [catenation, derive(a, c), b]
@@ -262,27 +268,33 @@ def compact(l):
             return empty
 
         match [==reduction, inner ? onlyNull(inner), f]:
-            var reduced := []
+            var reduced := [].asSet()
             for tree in trees(inner):
-                reduced += f(tree)
+                reduced |= f(tree)
             return [term, reduced]
 
         match [==reduction, [==reduction, inner, f], g]:
-            def compose(x):
-                var rv := []
+            def compose(x) :Set:
+                var rv := [].asSet()
                 for item in f(x):
-                    rv += g(item)
+                    rv |= g(item)
                 return rv
-            return compact([reduction, inner, compose], j)
+            return compact([reduction, inner, compose])
 
         match [==reduction, inner, f]:
             return [reduction, compact(inner), f]
+
+        match [==alternation, _ :Empty]:
+            return empty
+
+        match [==alternation, via (singletonSet) inner]:
+            return compact(inner)
 
         match [==alternation, ls]:
             # First, recurse into the subordinate parse trees, and look for
             # more alternations. We're going to flatten all of them out.
             def leaves := [].diverge()
-            def stack := ls.diverge()
+            def stack := ls.asList().diverge()
             while (stack.size() > 0):
                 switch (stack.pop()):
                     match [==alternation, more]:
@@ -294,30 +306,24 @@ def compact(l):
             # Now, compact and filter away empty leaves, and return the
             # remainder.
             def compacted := _filterEmpty([compact(l) for l in leaves])
-            switch (compacted):
-                match []:
-                    return empty
-                match [inner]:
-                    return inner
-                match x:
-                    return [alternation, x]
+            return [alternation, compacted.asSet()]
 
-        match [==catenation, a ? onlyNull(a), b]:
+        match [==catenation, a ? (onlyNull(a)), b]:
             def xs := trees(a)
-            def curry(y):
-                def ts := [].diverge()
+            def curry(y) :Set:
+                var ts := [].asSet()
                 for x in xs:
-                    ts.push([x, y])
-                return ts.snapshot()
+                    ts with= [x, y]
+                return ts
             return compact([reduction, b, curry])
 
         match [==catenation, a, b]:
-            if (isEmpty(a) | isEmpty(b)):
+            if (isEmpty(a) || isEmpty(b)):
                 return empty
             return [catenation, compact(a), compact(b)]
 
-        match [==repeat, x ? isEmpty(x)]:
-            return [term, [null]]
+        match [==repeat, x ? (isEmpty(x))]:
+            return [term, [null].asSet()]
 
         match [==repeat, inner]:
             return [repeat, compact(inner)]
@@ -332,49 +338,50 @@ def testEmptyDerive(assert):
 unittest([testEmptyDerive])
 
 def testExactlyDerive(assert):
-    assert.equal(trees(derive([exactly, 'x'], 'x')), ['x'])
+    assert.equal(trees(derive([exactly, 'x'], 'x')), ['x'].asSet())
 
 unittest([testExactlyDerive])
 
 def testReduceDerive(assert):
     def plusOne(x):
-        return [x + 1]
+        return [x + 1].asSet()
     assert.equal(trees(derive([reduction, [exactly, 'x'], plusOne], 'x')),
-                 ['y'])
+                 ['y'].asSet())
 
 unittest([testReduceDerive])
 
 def testAlternationOptimizationEmpty(assert):
-    def single := [alternation, [empty]]
+    def single := [alternation, [empty].asSet()]
     assert.equal(compact(single), empty)
 
 def testAlternationOptimizationTree(assert):
     def deep := [alternation, [
         [alternation, [
-            [alternation, [[exactly, 'x'], empty]],
-            [alternation, [empty]],
+            [alternation, [[exactly, 'x'], empty].asSet()],
+            [alternation, [empty].asSet()],
             [exactly, 'y'],
-        ]],
+        ].asSet()],
         [exactly, 'z'],
-    ]]
+    ].asSet()]
     # Note that the optimizing traversal inverts the tree, so the leaves
     # are listed here in backwards order from their original positions.
     assert.equal(compact(deep), [alternation, [
         [exactly, 'z'],
         [exactly, 'y'],
-        [exactly, 'x']]])
+        [exactly, 'x']].asSet()])
 
 def testAlternationPair(assert):
-    def l := [alternation, [[exactly, 'x'], [exactly, 'y']]]
-    assert.equal(trees(derive(l, 'x')), ['x'])
-    assert.equal(trees(derive(l, 'y')), ['y'])
+    def l := [alternation, [[exactly, 'x'], [exactly, 'y']].asSet()]
+    assert.equal(trees(derive(l, 'x')), ['x'].asSet())
+    assert.equal(trees(derive(l, 'y')), ['y'].asSet())
 
 def testAlternationMany(assert):
-    def l := [alternation, [[exactly, 'x'], [exactly, 'y'], [exactly, 'z']]]
-    assert.equal(trees(derive(l, 'x')), ['x'])
-    assert.equal(trees(derive(l, 'y')), ['y'])
-    assert.equal(trees(derive(l, 'z')), ['z'])
-    assert.equal(trees(derive(l, 'w')), [])
+    def l := [alternation,
+              [[exactly, 'x'], [exactly, 'y'], [exactly, 'z']].asSet()]
+    assert.equal(trees(derive(l, 'x')), ['x'].asSet())
+    assert.equal(trees(derive(l, 'y')), ['y'].asSet())
+    assert.equal(trees(derive(l, 'z')), ['z'].asSet())
+    assert.equal(trees(derive(l, 'w')), [].asSet())
 
 unittest([
     testAlternationOptimizationEmpty,
@@ -388,12 +395,12 @@ def testCatenationCompactEmpty(assert):
     assert.equal(compact(l), empty)
 
 def testCatenationCompactNull(assert):
-    def l := [catenation, [term, ['x']], [term, ['y']]]
-    assert.equal(trees(compact(l)), [['x', 'y']])
+    def l := [catenation, [term, ['x'].asSet()], [term, ['y'].asSet()]]
+    assert.equal(trees(compact(l)), [['x', 'y']].asSet())
 
 def testCatenationDerive(assert):
     def l := [catenation, [exactly, 'x'], [exactly, 'y']]
-    assert.equal(trees(derive(derive(l, 'x'), 'y')), [['x', 'y']])
+    assert.equal(trees(derive(derive(l, 'x'), 'y')), [['x', 'y']].asSet())
 
 unittest([
     testCatenationCompactEmpty,
@@ -408,16 +415,17 @@ def testRepeatNull(assert):
 
 def testRepeatDerive(assert):
     def l := [repeat, [exactly, 'x']]
-    assert.equal(trees(derive(l, 'x')), [['x', null]])
-    assert.equal(trees(derive(derive(l, 'x'), 'x')), [['x', ['x', null]]])
+    assert.equal(trees(derive(l, 'x')), [['x', null]].asSet())
+    assert.equal(trees(derive(derive(l, 'x'), 'x')),
+                 [['x', ['x', null]]].asSet())
 
 unittest([
     testRepeatNull,
     testRepeatDerive,
 ])
 
-def _pureToList(f):
-    return fn x { [f(x)] }
+def _pureToSet(f):
+    return fn x { [f(x)].asSet() }
 
 def makeDerp(language):
     return object parser:
@@ -438,12 +446,12 @@ def makeDerp(language):
 
         to or(other):
             # Alternation.
-            return makeDerp([alternation, [language, other.unwrap()]])
+            return makeDerp([alternation, [language, other.unwrap()].asSet()])
 
         to mod(other):
             # Inspired by lens, which uses `%` for its modification/map API.
             # Their mnemonic is *mod*ification, for *mod*ulus.
-            return makeDerp([reduction, language, _pureToList(other)])
+            return makeDerp([reduction, language, _pureToSet(other)])
 
         to repeated():
             # Repeat!
