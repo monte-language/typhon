@@ -194,7 +194,7 @@ object Set:
         if (isSet(conformed)):
             return conformed
 
-        throw.eject(ej, ["(Probably) not a list:", specimen])
+        throw.eject(ej, ["(Probably) not a set:", specimen])
 
     to makeSlot(value):
         return makeGuardedSlot(Set, value)
