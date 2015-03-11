@@ -16,7 +16,7 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 
 prelude: prelude.ty prelude/brand.ty prelude/simple.ty
 
-parsers: lib/parsers/derp.ty lib/parsers/html.ty
+parsers: lib/parsers/derp.ty lib/parsers/http.ty lib/parsers/html.ty
 
 tubes: lib/tubes/nullPump.ty lib/tubes/mapPump.ty \
 	lib/tubes/pumpTube.ty

@@ -427,6 +427,15 @@ unittest([
 def _pureToSet(f):
     return fn x { [f(x)].asSet() }
 
+def _unstackRepeats(xs):
+    switch (xs):
+        match ==null:
+            return []
+        match [x, ==null]:
+            return [x]
+        match [x, stack]:
+            return [x] + _unstackRepeats(stack)
+
 def makeDerp(language):
     return object parser:
         to unwrap():
@@ -455,7 +464,7 @@ def makeDerp(language):
 
         to repeated():
             # Repeat!
-            return makeDerp([repeat, language])
+            return makeDerp([repeat, language]) % _unstackRepeats
 
         # Parser API.
 
@@ -471,15 +480,15 @@ def makeDerp(language):
 
         to feed(c):
             # traceln(`Leaders: ${parser.leaders()}`)
-            traceln(`Character: $c`)
+            # traceln(`Character: $c`)
             def derived := derive(language, c)
-            traceln(`Raw size: ${parserSize(derived)}`)
+            # traceln(`Raw size: ${parserSize(derived)}`)
             def compacted := compact(derived)
-            if (isEmpty(compacted)):
-                traceln("Language is empty!")
-            traceln(`Compacted size: ${parserSize(compacted)}`)
+            # if (isEmpty(compacted)):
+            #     traceln("Language is empty!")
+            # traceln(`Compacted size: ${parserSize(compacted)}`)
             def p := makeDerp(compacted)
-            traceln(`Compacted: $p`)
+            # traceln(`Compacted: $p`)
             return p
 
         to feedMany(cs):
@@ -488,14 +497,23 @@ def makeDerp(language):
                 p := p.feed(c)
             return p
 
-        to results():
+        to results() :Set:
             return trees(language)
+
+        # The most convenient thing to do with run().
+
+        to run(cs) :Set:
+            return parser.feedMany(cs).results()
 
 def ex(x):
     return makeDerp([exactly, x])
+
+def set(xs):
+    return makeDerp([alternation, [[exactly, x] for x in xs].asSet()])
 
 [
     => makeDerp,
     => ex,
     "anything" => fn {makeDerp(anything)},
+    => set,
 ]
