@@ -472,7 +472,6 @@ def makeDerp(language):
             return parserSize(language)
 
         to leaders():
-            # XXX return _leaders(language).asSet()
             return _leaders(language)
 
         to compacted():

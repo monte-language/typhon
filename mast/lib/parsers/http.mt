@@ -156,4 +156,4 @@ def requestHeader := accept | host | userAgent
 var request := requestLine + requestHeader.repeated() + crlf
 request %= fn [[line, headers], _] {[line, headers]}
 
-[]
+[=> request]

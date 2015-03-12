@@ -13,10 +13,78 @@
 # under the License.
 
 def [=> b__quasiParser] | _ := import("lib/bytes")
-def [=> makeEnum] | _ := import("lib/enum")
-def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
+def [=> UTF8Encode] | _ := import("lib/utf8")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
+def ["request" => requestParser] | _ := import("lib/parsers/http")
+
+
+def makeRequestPump():
+    var parser := requestParser
+
+    return object requestPump:
+        to started():
+            pass
+        to progressed(amount):
+            pass
+        to stopped():
+            pass
+
+        to received(bytes):
+            # Update the parser with new data.
+            parser := parser.feedMany(bytes)
+            # Check whether the parser has any future leaders.
+            def leaders := parser.leaders()
+            if (leaders.size() == 0):
+                # Either we have finished, or we have an invalid parse; either
+                # case could cause there to be no leaders. Ask for a parse
+                # tree, and either return a request object or null, depending
+                # on which case it was.
+                def results := parser.results()
+                def rv := if (results.size() == 0) {null} else {results.asList()[0]}
+                # Reset the parser.
+                parser := requestParser
+                return [rv]
+            else:
+                # If there are leaders, then we have an incomplete parse.
+                return []
+
+
+def makeRequestTube():
+    return makePumpTube(makeRequestPump())
+
+
+def statusMap :Map := [
+    200 => "OK",
+    400 => "Bad Request",
+]
+
+
+def makeResponsePump():
+    return object responsePump:
+        to started():
+            pass
+        to progressed(amount):
+            pass
+        to stopped():
+            pass
+
+        to received(response):
+            def [statusCode, headers, body] := response
+            def status := `$statusCode ${statusMap[statusCode]}`
+            var rv := [b`HTTP/1.1 $status$\r$\n`]
+            for header => value in headers:
+                def headerLine := `$header: $value`
+                rv with= b`$headerLine$\r$\n`
+            rv with= b`$\r$\n`
+            return rv
+
+
+def makeResponseTube():
+    return makePumpTube(makeResponsePump())
+
+
+def constantHeaders := ["Server" => "Monte"]
 
 
 object tag:
@@ -25,105 +93,34 @@ object tag:
         `<$tagType>$guts</$tagType>`
 
 
-def [HTTPState, RESPONSE, HEADER, BODY, DONE] := makeEnum(
-    ["response", "header", "body", "done"])
+def process(request):
+    traceln(`request $request`)
+
+    if (request == null):
+        # Bad request.
+        return [400, [].asMap(), []]
+
+    def headers := constantHeaders.diverge()
+
+    headers["Connection"] := "close"
+
+    def body := UTF8Encode(tag.body(
+        tag.h2("Monte HTTP Demo"),
+        tag.p("This is Monte code running under Typhon."),
+        tag.p("No other support code is provided; this is a Monte webserver."),
+        tag.p("It is not intended for anything other than a demonstration.")))
+
+    headers["Content-Length"] := `${body.size()}`
+
+    return [200, headers.snapshot(), body]
 
 
-def makeRequestDrain(callback):
-    var state :HTTPState := RESPONSE
-    var buf := []
-    var fount := null
-    var headers := [].asMap().diverge()
-
-    return object requestDrain:
-        to flowingFrom(newFount):
-            fount := newFount
-            return requestDrain
-
-        to flowStopped(reason):
-            # traceln(`$requestDrain flow stopped: $reason`)
-            pass
-
-        to receive(bytes):
-            # traceln(`buf $buf bytes $bytes`)
-            buf += bytes
-            requestDrain.parse()
-
-        to parseStart(ej):
-            def b`@meth @url HTTP/@version$\r$\n@tail` exit ej := buf
-            if (version != b`1.1`):
-                throw(`Bad HTTP version: $version`)
-            state := HEADER
-            return [UTF8Decode(meth), url, tail]
-
-        to parseHeader(ej):
-            escape final:
-                def b`@key: @value$\r$\n@tail` exit final := buf
-                # traceln("Header:", key, value)
-                buf := tail
-                headers[key] := value
-            catch _:
-                def b`$\r$\n@tail` exit ej := buf
-                # traceln("End of headers")
-                buf := tail
-                state := BODY
-
-        to parse():
-            # traceln(`entering parse with buf $buf`)
-            while (true):
-                switch (state):
-                    match ==RESPONSE:
-                        requestDrain.parseStart(__break)
-                    match ==HEADER:
-                        requestDrain.parseHeader(__break)
-                    match ==BODY:
-                        # XXX we don't handle any encodings or deal with the
-                        # body in any way.
-                        state := DONE
-                        callback()
-                        # XXX should respect connection-close
-                        fount.stopFlow()
-                        break
-
-
-def sendHeaders(drain, headers):
-    for header => value in headers:
-        def packed := header + ": " + value + "\r\n"
-        drain.receive(packed)
-    drain.receive("\r\n")
-
-
-def constantHeaders := ["Server" => "Monte"]
-
-
-def makeUTF8EncodeTube():
-    return makePumpTube(makeMapPump(UTF8Encode))
+def makeProcessingTube():
+    return makePumpTube(makeMapPump(process))
 
 
 def responder(fount, drain):
-    def callback():
-        # traceln("in callback")
-        def strDrain := makeUTF8EncodeTube()
-        strDrain.flowTo(drain)
-
-        def headers := constantHeaders.diverge()
-
-        headers["Connection"] := "close"
-
-        def body := UTF8Encode(tag.body(
-            tag.h2("Monte HTTP Demo"),
-            tag.p("This is Monte code running under Typhon."),
-            tag.p("No other support code is provided; this is a Monte webserver."),
-            tag.p("It is not intended for anything other than a demonstration.")))
-
-        headers["Content-Length"] := `${body.size()}`
-
-        strDrain.receive("HTTP/1.1 200 OK\r\n")
-        sendHeaders(strDrain, headers)
-        drain.receive(body)
-        strDrain<-flowStopped("End of response")
-
-    fount.flowTo(makeRequestDrain(callback))
+    fount<-flowTo(makeRequestTube())<-flowTo(makeProcessingTube())<-flowTo(makeResponseTube())
 
 
 def endpoint := makeTCP4ServerEndpoint(8080)

@@ -22,7 +22,11 @@ def _makeBytes(chunks):
             for chunk in chunks:
                 switch (chunk):
                     match [=="valueHole", index]:
-                        rv += values[index]
+                        switch (values[index]):
+                            match s :Str:
+                                rv += [c.asInteger() for c in s]
+                            match x:
+                                rv += x
                     match _:
                         rv += chunk
             return rv
