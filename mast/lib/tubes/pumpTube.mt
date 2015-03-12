@@ -28,7 +28,8 @@ def makePumpTube(pump):
             # If we no longer have a downstream, then buffer the received item
             # and pause upstream. We'll unpause on the next flowTo().
             if (__equalizer.sameYet(downstream, null) && pause == null):
-                pause := upstream.pauseFlow()
+                if (upstream != null):
+                    pause := upstream.pauseFlow()
             else:
                 pumpTube.flush()
 

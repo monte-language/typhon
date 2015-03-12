@@ -181,37 +181,44 @@ def trees(l) :Set:
             return [].asSet()
 
 
-def _leaders(l) :Set:
+object nullLeader:
+    pass
+
+object anyLeader:
+    pass
+
+
+def leaders(l) :Set:
     switch (l):
         match ==nullSet:
-            return [null].asSet()
+            return [nullLeader].asSet()
         match [==term, _]:
-            return [null].asSet()
+            return [nullLeader].asSet()
 
         match ==anything:
-            return [anything].asSet()
+            return [anyLeader].asSet()
         match [==exactly, c]:
             return [c].asSet()
 
         match [==reduction, inner, _]:
-            return _leaders(inner)
+            return leaders(inner)
 
         match [==alternation, ls]:
             var rv := [].asSet()
             for inner in ls:
-                rv |= _leaders(inner)
+                rv |= leaders(inner)
             return rv
 
         match [==catenation, a ? nullable(a), b]:
             if (onlyNull(a)):
-                return _leaders(b)
+                return leaders(b)
             else:
-                return _leaders(a) | _leaders(b)
+                return leaders(a) | leaders(b)
         match [==catenation, a, b]:
-            return _leaders(a)
+            return leaders(a)
 
         match [==repeat, l]:
-            return [null] | _leaders(l)
+            return [nullLeader] | leaders(l)
 
         match _:
             return [].asSet()
@@ -472,7 +479,7 @@ def makeDerp(language):
             return parserSize(language)
 
         to leaders():
-            return _leaders(language)
+            return leaders(language)
 
         to compacted():
             return makeDerp(compact(language))
@@ -499,6 +506,12 @@ def makeDerp(language):
         to results() :Set:
             return trees(language)
 
+        to isEmpty() :Bool:
+            return isEmpty(language)
+
+        to canFinish() :Bool:
+            return leaders(language).contains(nullLeader)
+
         # The most convenient thing to do with run().
 
         to run(cs) :Set:
@@ -515,4 +528,6 @@ def set(xs):
     => ex,
     "anything" => fn {makeDerp(anything)},
     => set,
+    => nullLeader,
+    => anyLeader,
 ]

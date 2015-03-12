@@ -31,22 +31,23 @@ def makeRequestPump():
             pass
 
         to received(bytes):
+            traceln(`bytes $bytes`)
             # Update the parser with new data.
             parser := parser.feedMany(bytes)
-            # Check whether the parser has any future leaders.
-            def leaders := parser.leaders()
-            if (leaders.size() == 0):
-                # Either we have finished, or we have an invalid parse; either
-                # case could cause there to be no leaders. Ask for a parse
-                # tree, and either return a request object or null, depending
-                # on which case it was.
+            # Check whether the parser is ready to finish.
+            if (parser.isEmpty()):
+                # Reset the parser.
+                parser := requestParser
+                return [null]
+            else if (parser.canFinish()):
                 def results := parser.results()
-                def rv := if (results.size() == 0) {null} else {results.asList()[0]}
+                # XXX there should be a way to get only the first result.
+                def rv := results.asList()[0]
                 # Reset the parser.
                 parser := requestParser
                 return [rv]
             else:
-                # If there are leaders, then we have an incomplete parse.
+                # Parse is incomplete.
                 return []
 
 
@@ -70,6 +71,7 @@ def makeResponsePump():
             pass
 
         to received(response):
+            traceln(`preparing to send $response`)
             def [statusCode, headers, body] := response
             def status := `$statusCode ${statusMap[statusCode]}`
             var rv := [b`HTTP/1.1 $status$\r$\n`]
@@ -77,6 +79,7 @@ def makeResponsePump():
                 def headerLine := `$header: $value`
                 rv with= b`$headerLine$\r$\n`
             rv with= b`$\r$\n`
+            rv with= body
             return rv
 
 
@@ -120,7 +123,7 @@ def makeProcessingTube():
 
 
 def responder(fount, drain):
-    fount<-flowTo(makeRequestTube())<-flowTo(makeProcessingTube())<-flowTo(makeResponseTube())
+    fount<-flowTo(makeRequestTube())<-flowTo(makeProcessingTube())<-flowTo(makeResponseTube())<-flowTo(drain)
 
 
 def endpoint := makeTCP4ServerEndpoint(8080)
