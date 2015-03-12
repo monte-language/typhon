@@ -21,11 +21,15 @@ def [
 def [=> b__quasiParser] | _ := import("lib/bytes")
 def [=> makeEnum] | _ := import("lib/enum")
 
-def bytes([head] + tail):
+def bytes(bs):
+    # Flip the bytes around, and then build up a tree which leans in the
+    # opposite direction from normal. This will result in a tree which parses
+    # much faster, especially for head fails.
+    def [head] + tail := bs.reverse()
     var p := ex(head)
     for b in tail:
-        p := p + ex(b)
-    return p % fn _ {[head] + tail}
+        p := ex(b) + p
+    return p % fn _ {bs}
 
 def testBytes(assert):
     def p := bytes(b`asdf`)
@@ -33,39 +37,6 @@ def testBytes(assert):
     assert.equal(results, [b`asdf`].asSet())
 
 unittest([testBytes])
-
-# Case-insensitive byte recognition.
-def ibyte(b :Int):
-    # Oh, for ranges.
-    # Here's lowercase.
-    if (0x40 < b && b <= 0x5a): 
-        return ex(b) | ex(b + 0x20)
-    # And uppercase.
-    if (0x60 < b && b <= 0x7a): 
-        return ex(b) | ex(b - 0x20)
-    return ex(b)
-
-def ibytes([head] + tail):
-    var p := ibyte(head)
-    for b in tail:
-        p += ibyte(b)
-    return p % fn _ {[head] + tail}
-
-def testIBytes(assert):
-    def bs := b`Content-Length`
-    def p := ibytes(bs)
-    def expected := [bs].asSet()
-    def upper := p.feedMany(b`CONTENT-LENGTH`).results()
-    assert.equal(upper, expected)
-    def lower := p.feedMany(b`content-length`).results()
-    assert.equal(lower, expected)
-
-    def headFail := p.feedMany(b`kontent-length`).results()
-    assert.equal(headFail, [].asSet())
-    def tailFail := p.feedMany(b`content-len`).results()
-    assert.equal(tailFail, [].asSet())
-
-unittest([testIBytes])
 
 # RFC 2616 5.1.1
 def [
