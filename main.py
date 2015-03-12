@@ -48,6 +48,15 @@ def dirname(p):
     return head
 
 
+def runScopeTests(scope):
+    # Run unit tests.
+    if u"unittest" in scope:
+        unittest = scope[u"unittest"]
+        unittest.test()
+    else:
+        print "Tried to run scope tests, but 'unittest' wasn't in scope."
+
+
 def loadPrelude(config, recorder, vat):
     scope = safeScope()
     # For the prelude (and only the prelude), permit the boot scope.
@@ -66,11 +75,9 @@ def loadPrelude(config, recorder, vat):
         print "Prelude returned None!?"
         return {}
 
-    print "Prelude result:", result.toQuote()
+    runScopeTests(scope)
 
-    # Run unit tests.
-    unittest = scope[u"unittest"]
-    unittest.test()
+    print "Prelude result:", result.toQuote()
 
     if isinstance(result, ConstMap):
         prelude = {}
@@ -83,6 +90,22 @@ def loadPrelude(config, recorder, vat):
 
     print "Prelude didn't return map!?"
     return {}
+
+
+def runUntilDone(vat, reactor, recorder):
+    # Run any remaining turns. This may take a while.
+    while vat.hasTurns() or reactor.hasObjects():
+        if vat.hasTurns():
+            with recorder.context("Time spent in vats"):
+                vat.takeSomeTurns()
+
+        if reactor.hasObjects():
+            with recorder.context("Time spent in I/O"):
+                try:
+                    reactor.spin(vat.hasTurns())
+                except UserException as ue:
+                    debug_print("Caught exception while reacting:",
+                            ue.formatError())
 
 
 def entryPoint(argv):
@@ -131,6 +154,7 @@ def entryPoint(argv):
     if not config.profile:
         csp.disable()
 
+    print "Taking initial turn in script..."
     result = NullObject
     with recorder.context("Time spent in vats"):
         result = evaluateTerms([code], finalize(scope))
@@ -139,26 +163,13 @@ def entryPoint(argv):
     print result.toQuote()
 
     # Run unit tests.
-    unittest = scope[u"unittest"]
-    unittest.test()
+    runScopeTests(scope)
 
     # Exit status code.
     rv = 0
 
     try:
-        # Run any remaining turns. This may take a while.
-        while vat.hasTurns() or reactor.hasObjects():
-            if vat.hasTurns():
-                with recorder.context("Time spent in vats"):
-                    vat.takeSomeTurns()
-
-            if reactor.hasObjects():
-                with recorder.context("Time spent in I/O"):
-                    try:
-                        reactor.spin(vat.hasTurns())
-                    except UserException as ue:
-                        debug_print("Caught exception while reacting:",
-                                ue.formatError())
+        runUntilDone(vat, reactor, recorder)
     except SystemExit as se:
         rv = se.code
     finally:

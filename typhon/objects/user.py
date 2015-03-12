@@ -47,6 +47,8 @@ class ScriptObject(Object):
         except UserException:
             return u"<%s (threw exception when printed)>" % self.displayName
 
+    toQuote = toString
+
     @unroll_safe
     def recv(self, atom, args):
         code = self.codeScript.methods.get(atom, None)
