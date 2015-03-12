@@ -112,9 +112,32 @@ def testRequestLine(assert):
     def get := requestLine(b`GET /test HTTP/1.1$\r$\n`)
     assert.equal(get, [[GET, [[b`test`]]]].asSet())
 
+def notcr := set((0..!256).asSet().without(13).without(10))
+
+# RFC 2616 14.1
+# XXX incomplete
+var accept := bytes(b`Accept: `) + notcr.repeated() + crlf
+accept %= fn [[_, a], _] {a}
+
+def testAccept(assert):
+    def anything := accept(b`Accept: */*$\r$\n`)
+    assert.equal(anything, [b`*/*`].asSet())
+
+unittest([testAccept])
+
+# RFC 2616 14.23
+# XXX incomplete
+var host := bytes(b`Host: `) + notcr.repeated() + crlf
+host %= fn [[_, h], _] {h}
+
+def testHost(assert):
+    def localhost := host(b`Host: localhost:8080$\r$\n`)
+    assert.equal(localhost, [b`localhost:8080`].asSet())
+
+unittest([testHost])
+
 # RFC 2616 14.43
 # XXX incomplete
-def notcr := set((0..!256).asSet().without(13).without(10))
 var userAgent := bytes(b`User-Agent: `) + notcr.repeated() + crlf
 userAgent %= fn [[_, ua], _] {ua}
 
@@ -126,9 +149,11 @@ unittest([testUserAgent])
 
 # RFC 2616 5.3
 # XXX incomplete
-def requestHeader := userAgent
+def requestHeader := accept | host | userAgent
 
 # RFC 2616 5
 # XXX incomplete
 var request := requestLine + requestHeader.repeated() + crlf
 request %= fn [[line, headers], _] {[line, headers]}
+
+[]
