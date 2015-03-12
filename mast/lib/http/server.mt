@@ -31,7 +31,7 @@ def makeRequestPump():
             pass
 
         to received(bytes):
-            traceln(`bytes $bytes`)
+            # traceln(`bytes $bytes`)
             # Update the parser with new data.
             parser := parser.feedMany(bytes)
             # Check whether the parser is ready to finish.
@@ -71,7 +71,7 @@ def makeResponsePump():
             pass
 
         to received(response):
-            traceln(`preparing to send $response`)
+            # traceln(`preparing to send $response`)
             def [statusCode, headers, body] := response
             def status := `$statusCode ${statusMap[statusCode]}`
             var rv := [b`HTTP/1.1 $status$\r$\n`]
@@ -97,7 +97,7 @@ object tag:
 
 
 def process(request):
-    traceln(`request $request`)
+    # traceln(`request $request`)
 
     if (request == null):
         # Bad request.

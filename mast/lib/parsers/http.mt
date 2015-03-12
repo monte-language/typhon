@@ -49,14 +49,14 @@ methods |= bytes(b`PUT`) % fn _ {PUT} | bytes(b`DELETE`) % fn _ {DELETE}
 methods |= bytes(b`TRACE`) % fn _ {TRACE} | bytes(b`CONNECT`) % fn _ {CONNECT}
 
 # RFC 2396 2.3
-def mark := set(b`-_.!~*'()`)
-def lowercase := set(b`abcdefghijklmnopqrstuvwxyz`)
-def uppercase := set(b`ABCDEFGHIJKLMNOPQRSTUVWXYZ`)
-def digit := set(b`1234567890`)
+def mark := set(b`-_.!~*'()`.asSet())
+def lowercase := set(b`abcdefghijklmnopqrstuvwxyz`.asSet())
+def uppercase := set(b`ABCDEFGHIJKLMNOPQRSTUVWXYZ`.asSet())
+def digit := set(b`1234567890`.asSet())
 def unreserved := lowercase | uppercase | digit | mark
 
 # RFC 2396 3.3
-def pchar := unreserved | set(b`:@@&=+$$,`)
+def pchar := unreserved | set(b`:@@&=+$$,`.asSet())
 def param := pchar.repeated()
 var segment := pchar.repeated() + (bytes(b`;`) + param).repeated()
 segment %= fn [h, t] {[h] + t}

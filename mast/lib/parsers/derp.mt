@@ -43,6 +43,10 @@ object anything:
     to _printOn(out):
         out.print("∀")
 
+object anyOf:
+    to _printOn(out):
+        out.print("∈")
+
 object exactly:
     to _printOn(out):
         out.print("≡")
@@ -77,6 +81,8 @@ def parserSize(l) :Int:
         match ==anything:
             return 1
         match [==exactly, _]:
+            return 1
+        match [==anyOf, _]:
             return 1
 
         match [==term, ts]:
@@ -199,6 +205,8 @@ def leaders(l) :Set:
             return [anyLeader].asSet()
         match [==exactly, c]:
             return [c].asSet()
+        match [==anyOf, xs]:
+            return xs
 
         match [==reduction, inner, _]:
             return leaders(inner)
@@ -218,7 +226,7 @@ def leaders(l) :Set:
             return leaders(a)
 
         match [==repeat, l]:
-            return [nullLeader] | leaders(l)
+            return leaders(l).with(nullLeader)
 
         match _:
             return [].asSet()
@@ -229,6 +237,10 @@ def _filterEmpty(xs):
 
 
 def derive(l, c):
+    # Optimization in derive(): Do not permit cat(empty, _) to come into
+    # existence. It is too costly, since it preserves its second tree for far
+    # too long. Also watch out for cat(_, empty) in the rare case that it can
+    # form, when deriving cat.
     switch (l):
         match x ? isEmpty(x):
             return empty
@@ -244,6 +256,8 @@ def derive(l, c):
             return [term, [c].asSet()]
         match [==exactly, _]:
             return empty
+        match [==anyOf, xs]:
+            return if (xs.contains(c)) {[term, [c].asSet()]} else {empty}
 
         match [==reduction, inner, f]:
             return [reduction, derive(inner, c), f]
@@ -251,52 +265,81 @@ def derive(l, c):
             return [alternation,
                     _filterEmpty([derive(l, c) for l in ls]).asSet()]
 
-        match [==catenation, a ? nullable(a), b]:
+        match [==catenation, a ? (nullable(a)), b]:
             def da := derive(a, c)
-            def db := derive(b, c)
-            def rv := [alternation,
-                [[catenation, da, b],
-                 [catenation, [term, trees(a)], db]].asSet()]
-            return rv
-        match [==catenation, a, b]:
-            def rv := [catenation, derive(a, c), b]
-            return rv
+            if (da == empty):
+                def db := derive(b, c)
+                if (db == empty):
+                    return empty
+                # db cannot be empty, and a must be nullable.
+                return [catenation, [term, trees(a)], db]
 
-        match [==repeat, l]:
-            return [catenation, derive(l, c), [repeat, l]]
+            def db := derive(b, c)
+            if (db == empty):
+                # da cannot be empty.
+                return [catenation, da, b]
+
+            # The worst case. Completely legal, though.
+            return [alternation, [[catenation, da, b], [catenation, [term, trees(a)], db]].asSet()]
+
+        match [==catenation, a, b]:
+            # a cannot be nullable.
+            def da := derive(a, c)
+            if (da == empty):
+                return empty
+            return [catenation, da, b]
+
+        match [==repeat, a]:
+            def da := derive(a, c)
+            return if (da == empty) {empty} else {[catenation, da, l]}
 
         match _:
             return empty
 
 
 def compact(l):
+    # Perform zero or more graph reductions to the head of a parser.
+    # The body of the parser will generally not be reduced.
+    # Irreducable heads:
+    # ~ empty
+    # ~ term
+    # Conditionally reducable heads:
+    # ~ red, when its body is only null or empty
+    # ~ cat, when its front is only null or empty
+
     switch (l):
-        match [==reduction, x ? isEmpty(x), _]:
+        # Remove empty reds.
+        match [==reduction, x ? (isEmpty(x)), _]:
             return empty
 
-        match [==reduction, inner ? onlyNull(inner), f]:
+        # The red's inner expression can only accept null. We can apply the
+        # reduction and gain terminals.
+        match [==reduction, inner ? (onlyNull(inner)), f]:
             var reduced := [].asSet()
             for tree in trees(inner):
                 reduced |= f(tree)
             return [term, reduced]
 
+        # When red is inside red, we can compose their functions.
         match [==reduction, [==reduction, inner, f], g]:
             def compose(x) :Set:
                 var rv := [].asSet()
                 for item in f(x):
                     rv |= g(item)
                 return rv
+            # red is still compactable.
             return compact([reduction, inner, compose])
 
-        match [==reduction, inner, f]:
-            return [reduction, compact(inner), f]
-
+        # An alternation that has been defeated on every path is empty.
         match [==alternation, _ :Empty]:
             return empty
 
+        # An alternation with only one remaining path is equivalent to just
+        # that path.
         match [==alternation, via (singletonSet) inner]:
             return compact(inner)
 
+        # Alternations can be flattened.
         match [==alternation, ls]:
             # First, recurse into the subordinate parse trees, and look for
             # more alternations. We're going to flatten all of them out.
@@ -310,11 +353,12 @@ def compact(l):
                     match x:
                         leaves.push(x)
 
-            # Now, compact and filter away empty leaves, and return the
-            # remainder.
-            def compacted := _filterEmpty([compact(l) for l in leaves])
+            # Now, filter away empty leaves, and return the remainder.
+            def compacted := _filterEmpty(leaves)
             return [alternation, compacted.asSet()]
 
+        # If the front of a cat is null, then we can produce a red on its
+        # back and finish evaluating the front.
         match [==catenation, a ? (onlyNull(a)), b]:
             def xs := trees(a)
             def curry(y) :Set:
@@ -324,16 +368,16 @@ def compact(l):
                 return ts
             return compact([reduction, b, curry])
 
-        match [==catenation, a, b]:
-            if (isEmpty(a) || isEmpty(b)):
-                return empty
-            return [catenation, compact(a), compact(b)]
+        # If either part of a cat is empty, then the cat is empty.
+        match [==catenation, a ? (isEmpty(a)), b]:
+            return empty
+        match [==catenation, a, b ? (isEmpty(b))]:
+            return empty
 
+        # If a rep is empty, then it has one possible path: The path of zero
+        # matches. Simplify to that path.
         match [==repeat, x ? (isEmpty(x))]:
             return [term, [null].asSet()]
-
-        match [==repeat, inner]:
-            return [repeat, compact(inner)]
 
         match _:
             return l
@@ -520,8 +564,8 @@ def makeDerp(language):
 def ex(x):
     return makeDerp([exactly, x])
 
-def set(xs):
-    return makeDerp([alternation, [[exactly, x] for x in xs].asSet()])
+def set(xs :Set):
+    return makeDerp([anyOf, xs])
 
 [
     => makeDerp,
