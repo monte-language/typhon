@@ -96,6 +96,28 @@ def testAccept(assert):
 
 unittest([testAccept])
 
+# RFC 2616 14.3
+# XXX incomplete
+var acceptEncoding := bytes(b`Accept-Encoding: `) + notcr.repeated() + crlf
+acceptEncoding %= fn [[_, a], _] {a}
+
+def testAcceptEncoding(assert):
+    def gzip := acceptEncoding(b`Accept-Encoding: gzip$\r$\n`)
+    assert.equal(gzip, [b`gzip`].asSet())
+
+unittest([testAcceptEncoding])
+
+# RFC 2616 14.10
+# XXX incomplete, although not much remains
+var connection := bytes(b`Connection: `) + notcr.repeated() + crlf
+connection %= fn [[_, c], _] {c}
+
+def testConnection(assert):
+    def close := connection(b`Connection: close$\r$\n`)
+    assert.equal(close, [b`close`].asSet())
+
+unittest([testConnection])
+
 # RFC 2616 14.23
 # XXX incomplete
 var host := bytes(b`Host: `) + notcr.repeated() + crlf
@@ -120,7 +142,7 @@ unittest([testUserAgent])
 
 # RFC 2616 5.3
 # XXX incomplete
-def requestHeader := accept | host | userAgent
+def requestHeader := accept | acceptEncoding | connection | host | userAgent
 
 # RFC 2616 5
 # XXX incomplete
