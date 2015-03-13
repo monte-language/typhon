@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+def [=> makeLFU] | _ := import("lib/cache")
+
 def any(l :List[Bool]) :Bool:
     for x in l:
         if (x):
@@ -488,6 +490,9 @@ def _unstackRepeats(xs):
             return [x] + _unstackRepeats(stack)
 
 def makeDerp(language):
+    # There is zero rhyme or reason behind this particular constant.
+    def cache := makeLFU(7)
+
     return object parser:
         to unwrap():
             return language
@@ -529,6 +534,11 @@ def makeDerp(language):
             return makeDerp(compact(language))
 
         to feed(c):
+            # Check the cache first.
+            def cached := cache.get(c)
+            if (cached != null):
+                return cached
+
             # traceln(`Leaders: ${parser.leaders()}`)
             # traceln(`Character: $c`)
             def derived := derive(language, c)
@@ -539,6 +549,10 @@ def makeDerp(language):
             # traceln(`Compacted size: ${parserSize(compacted)}`)
             def p := makeDerp(compacted)
             # traceln(`Compacted: $p`)
+
+            # Feed the cache.
+            cache.put(c, p)
+
             return p
 
         to feedMany(cs):

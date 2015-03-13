@@ -5,7 +5,7 @@ MONTE_VENV = ~/monte/local_monte
 all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	lib/regex.ty lib/utf8.ty \
 	lib/tokenBucket.ty lib/loopingCall.ty lib/singleUse.ty \
-	lib/paths.ty \
+	lib/cache.ty lib/paths.ty \
 	prelude \
 	parsers \
 	http \
