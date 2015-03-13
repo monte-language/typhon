@@ -39,7 +39,7 @@ def makeRequestPump():
                 # Reset the parser.
                 parser := requestParser
                 return [null]
-            else if (parser.canFinish()):
+            else if (parser.nullable()):
                 def results := parser.results()
                 # XXX there should be a way to get only the first result.
                 def rv := results.asList()[0]

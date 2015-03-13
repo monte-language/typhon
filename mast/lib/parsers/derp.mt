@@ -117,7 +117,7 @@ def onlyNull(l) :Bool:
         match [==alternation, ls]:
             return all([onlyNull(l) for l in ls])
         match [==catenation, a, b]:
-            return onlyNull(a) & onlyNull(b)
+            return onlyNull(a) && onlyNull(b)
 
         match _:
             return false
@@ -493,6 +493,10 @@ def makeDerp(language):
     # There is zero rhyme or reason behind this particular constant.
     def cache := makeLFU(7)
 
+    # Caches for various properties.
+    var cachedLeaders :NullOk[Set] := null
+    var cachedNullable :NullOk[Bool] := null
+
     return object parser:
         to unwrap():
             return language
@@ -527,8 +531,10 @@ def makeDerp(language):
         to size() :Int:
             return parserSize(language)
 
-        to leaders():
-            return leaders(language)
+        to leaders() :Set:
+            if (cachedLeaders == null):
+                cachedLeaders := leaders(language)
+            return cachedLeaders
 
         to compacted():
             return makeDerp(compact(language))
@@ -567,8 +573,10 @@ def makeDerp(language):
         to isEmpty() :Bool:
             return isEmpty(language)
 
-        to canFinish() :Bool:
-            return leaders(language).contains(nullLeader)
+        to nullable() :Bool:
+            if (cachedNullable == null):
+                cachedNullable := nullable(language)
+            return cachedNullable
 
         # The most convenient thing to do with run().
 
