@@ -215,6 +215,7 @@ class SmallCaps(object):
             finalHandler.drop(self, pc)
         # print "<" * 10
 
+    @unroll_safe
     def unwindEjector(self, ex):
         while self.env.handlerDepth:
             handler = self.env.popHandler()
@@ -223,6 +224,7 @@ class SmallCaps(object):
                 return rv
         raise ex
 
+    @unroll_safe
     def unwindEx(self, ex):
         while self.env.handlerDepth:
             handler = self.env.popHandler()
