@@ -42,7 +42,11 @@ class SmallCaps(object):
 
     @staticmethod
     def withDictScope(code, scope):
-        frame = [scope[key] for key in code.frame]
+        try:
+            frame = [scope[key] for key in code.frame]
+        except KeyError:
+            print u"Key '%s' was not in scope!" % key
+            raise
         return SmallCaps(code, frame)
 
     def pop(self):
