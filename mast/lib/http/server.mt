@@ -87,44 +87,30 @@ def makeResponseTube():
     return makePumpTube(makeResponsePump())
 
 
-def constantHeaders := ["Server" => "Monte"]
+def serverHeader := ["Server" => "Monte (Typhon) (.i ma'a tarci pulce)"]
+
+def processorWrapper(app):
+    def wrappedProcessor(request):
+        # null means a bad request that was unparseable.
+        def [statusCode, headers, body] := if (request == null) {
+            # We must close the connection after a bad request, since a parse
+            # failure leaves the request tube in an indeterminate state.
+            [400, ["Connection" => "close"], []]
+        } else {app(request)}
+        return [statusCode, headers | serverHeader, body]
+    return wrappedProcessor
 
 
-object tag:
-    match [tagType, contents]:
-        def guts := " ".join(contents)
-        `<$tagType>$guts</$tagType>`
+def makeProcessingTube(app):
+    return makePumpTube(makeMapPump(processorWrapper(app)))
 
 
-def process(request):
-    # traceln(`request $request`)
-
-    if (request == null):
-        # Bad request.
-        return [400, [].asMap(), []]
-
-    def headers := constantHeaders.diverge()
-
-    headers["Connection"] := "close"
-
-    def body := UTF8Encode(tag.body(
-        tag.h2("Monte HTTP Demo"),
-        tag.p("This is Monte code running under Typhon."),
-        tag.p("No other support code is provided; this is a Monte webserver."),
-        tag.p("It is not intended for anything other than a demonstration.")))
-
-    headers["Content-Length"] := `${body.size()}`
-
-    return [200, headers.snapshot(), body]
+def makeHTTPEndpoint(endpoint):
+    return object HTTPEndpoint:
+        to listen(processor):
+            def responder(fount, drain):
+                fount<-flowTo(makeRequestTube())<-flowTo(makeProcessingTube(processor))<-flowTo(makeResponseTube())<-flowTo(drain)
+            endpoint.listen(responder)
 
 
-def makeProcessingTube():
-    return makePumpTube(makeMapPump(process))
-
-
-def responder(fount, drain):
-    fount<-flowTo(makeRequestTube())<-flowTo(makeProcessingTube())<-flowTo(makeResponseTube())<-flowTo(drain)
-
-
-def endpoint := makeTCP4ServerEndpoint(8080)
-endpoint.listen(responder)
+[=> makeHTTPEndpoint]
