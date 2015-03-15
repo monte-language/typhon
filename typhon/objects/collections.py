@@ -47,6 +47,7 @@ SLICE_1 = getAtom(u"slice", 1)
 SLICE_2 = getAtom(u"slice", 2)
 SNAPSHOT_0 = getAtom(u"snapshot", 0)
 SORT_0 = getAtom(u"sort", 0)
+STARTOF_1 = getAtom(u"startOf", 1)
 WITHOUT_1 = getAtom(u"without", 1)
 WITH_1 = getAtom(u"with", 1)
 WITH_2 = getAtom(u"with", 2)
@@ -229,6 +230,18 @@ class ConstList(Collection, Object):
 
         if atom is SORT_0:
             return self.sort()
+
+        if atom is STARTOF_1:
+            # This is quadratic. It could be better.
+            from typhon.objects.equality import EQUAL, optSame
+            needleList = unwrapList(args[0])
+            for index in range(len(self.objects)):
+                for needleIndex, needle in enumerate(needleList):
+                    offset = index + needleIndex
+                    if optSame(self.objects[offset], needle) is not EQUAL:
+                        break
+                    return IntObject(index)
+            return IntObject(-1)
 
         if atom is WITH_1:
             # with/1: Create a new list with an appended object.
