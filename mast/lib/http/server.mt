@@ -16,11 +16,17 @@ def [=> b__quasiParser] | _ := import("lib/bytes")
 def [=> UTF8Encode] | _ := import("lib/utf8")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
-def ["request" => requestParser] | _ := import("lib/parsers/http")
+def [=> makeEnum] | _ := import("lib/enum")
 
+def [RequestState, REQUEST, HEADER, BODY] := makeEnum(
+    ["request", "header", "body"])
 
 def makeRequestPump():
-    var parser := requestParser
+    var state :RequestState := REQUEST
+    var buf := []
+    var pendingRequest := null
+    var pendingRequestLine := null
+    var pendingHeaders := null
 
     return object requestPump:
         to started():
@@ -30,25 +36,59 @@ def makeRequestPump():
         to stopped():
             pass
 
-        to received(bytes):
-            # traceln(`bytes $bytes`)
-            # Update the parser with new data.
-            parser := parser.feedMany(bytes)
-            # Check whether the parser is ready to finish.
-            if (parser.isEmpty()):
-                # Reset the parser.
-                parser := requestParser
-                return [null]
-            else if (parser.nullable()):
-                def results := parser.results()
-                # XXX there should be a way to get only the first result.
-                def rv := results.asList()[0]
-                # Reset the parser.
-                parser := requestParser
-                return [rv]
-            else:
-                # Parse is incomplete.
-                return []
+        to received(bytes) :List:
+            # traceln(`received bytes $bytes`)
+            buf += bytes
+
+            var shouldParseMore :Bool := true
+
+            while (shouldParseMore):
+                escape badParse:
+                    shouldParseMore := requestPump.parse(badParse)
+                catch _:
+                    return [null]
+
+            if (pendingRequest != null):
+                def rv := [pendingRequest]
+                pendingRequest := null
+                return rv
+
+            return []
+
+        to parse(ej) :Bool:
+            # Return whether more parsing can take place.
+            # Eject if the parse fails.
+
+            switch (state):
+                match ==REQUEST:
+                    if (buf.startOf(b`$\r$\n`) == -1):
+                        return false
+
+                    def b`@verb @uri HTTP/1.1$\r$\n@t` exit ej := buf
+                    pendingRequestLine := [verb, uri]
+                    pendingHeaders := [].asMap()
+                    state := HEADER
+                    buf := t
+                    return true
+
+                match ==HEADER:
+                    if (buf.startOf(b`$\r$\n`) == -1):
+                        return false
+
+                    if (buf =~ b`$\r$\n@t`):
+                        state := BODY
+                        buf := t
+                        return true
+
+                    def b`@header:@value$\r$\n@t` exit ej := buf
+                    pendingHeaders |= [header => value]
+                    buf := t
+                    return true
+
+                match ==BODY:
+                    state := REQUEST
+                    pendingRequest := [pendingRequestLine, pendingHeaders]
+                    return true
 
 
 def makeRequestTube():
