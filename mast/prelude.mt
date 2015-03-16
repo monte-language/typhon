@@ -259,6 +259,33 @@ unittest([
 ])
 
 
+object Same:
+    to get(value):
+        return object SameGuard:
+            to _printOn(out):
+                out.print("Same[")
+                value._printOn(out)
+                out.print("]")
+
+            to coerce(specimen, ej):
+                if (!__equalizer.sameYet(value, specimen)):
+                    throw.eject(ej, [specimen, "is not", value])
+                return specimen
+
+            to makeSlot(v):
+                return makeGuardedSlot(SameGuard, v)
+
+def testSame(assert):
+    object o:
+        pass
+    object p:
+        pass
+    assert.ejects(fn ej {def x :Same[o] exit ej := p})
+    assert.doesNotEject(fn ej {def x :Same[o] exit ej := o})
+
+unittest([testSame])
+
+
 def __iterWhile(obj):
     return object iterWhile:
         to _makeIterator():
@@ -464,6 +491,26 @@ def [=> simple__quasiParser] := import("prelude/simple", ["boolean" => Bool,
 def [=> makeBrandPair] := import("prelude/brand", [=> NullOk, => Str, => Void,
                                                    => simple__quasiParser])
 
+# Regions need some guards. And simple QP. And a bunch of other stuff.
+def [
+    => OrderedRegionMaker,
+    => OrderedSpaceMaker
+] := import("prelude/region", [=> Bool, => Double, => Int, => List, => NullOk,
+                               => Same, => Str, => __accumulateList,
+                               => __comparer, => __iterWhile,
+                               => __validateFor, => simple__quasiParser,
+                               "boolean" => Bool])
+
+# Spaces need some guards, and also regions.
+def [
+    "Char" => SpaceChar,
+    "Double" => SpaceDouble,
+    "Int" => SpaceInt,
+    => __makeOrderedSpace
+] := import("prelude/space", [=> Char, => Double, => Int,
+                              => OrderedRegionMaker, => OrderedSpaceMaker,
+                              => __comparer])
+
 
 [
     # This is 100% hack. See the matching comment near the top of the prelude.
@@ -479,6 +526,7 @@ def [=> makeBrandPair] := import("prelude/brand", [=> NullOk, => Str, => Void,
     => List,
     => Map,
     => NullOk,
+    => Same,
     => Set,
     => Str,
     => Void,

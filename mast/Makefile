@@ -14,7 +14,8 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	games \
 	bench
 
-prelude: prelude.ty prelude/brand.ty prelude/simple.ty
+prelude: prelude.ty prelude/brand.ty prelude/region.ty prelude/simple.ty \
+	prelude/space.ty
 
 parsers: lib/parsers/derp.ty lib/parsers/http.ty lib/parsers/html.ty
 
