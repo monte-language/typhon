@@ -21,10 +21,9 @@ def [=> makeEnum] := import("lib/enum")
 def [Enumeration, Ident1, Ident2, Ident3, Ident4, Ident5] := makeEnum(
     ["Ident1", "Ident2", "Ident3", "Ident4", "Ident5"])
 
-# XXX we should have Ada-style guards for these four
-def OneToThirty := Int
-def OneToFifty := Int
-def CapitalLetter := Char
+def OneToThirty := 1..30
+def OneToFifty := 1..50
+def CapitalLetter := 'A'..'Z'
 def String30 := Str
 # XXX we can't do FlexList guards
 def Array1Dim := Any # List[Int]
@@ -73,7 +72,7 @@ def makeRecord(var PtrComp, var Discr :Enumeration, var EnumComp :Enumeration,
             StringComp := x
 
 def mallocRecord():
-    return makeRecord(null, Ident1, Ident1, 0, "")
+    return makeRecord(null, Ident1, Ident1, 1, "")
 
 def structAssign(d, s):
     d.setPtrComp(s.getPtrComp())
@@ -211,9 +210,9 @@ def Proc1(PtrParIn):
         structAssign(PtrParIn, PtrParIn.getParComp())
 
 def Proc0():
-    var IntLoc1 :OneToFifty := 0
-    var IntLoc2 :OneToFifty := 0
-    var IntLoc3 :OneToFifty := 0
+    var IntLoc1 :OneToFifty := 1
+    var IntLoc2 :OneToFifty := 1
+    var IntLoc3 :OneToFifty := 1
     var CharLoc :Char := '\x00'
     var EnumLoc :Enumeration := Ident1
     var String1Loc :String30 := ""
