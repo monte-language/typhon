@@ -16,14 +16,12 @@ from rpython.rlib.debug import debug_print
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException, userError
-from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
-                                        unwrapList)
-from typhon.objects.constants import BoolObject, NullObject, wrapBool
-from typhon.objects.data import (CharObject, DoubleObject, IntObject,
-                                 StrObject, unwrapInt, unwrapStr)
+from typhon.objects.collections import ConstList, ConstMap, unwrapList
+from typhon.objects.constants import NullObject, wrapBool
+from typhon.objects.data import (DoubleObject, StrObject, unwrapInt,
+                                 unwrapStr)
 from typhon.objects.ejectors import throw
 from typhon.objects.equality import Equalizer
-from typhon.objects.guards import predGuard
 from typhon.objects.iteration import loop
 from typhon.objects.refs import RefOps, UnconnectedRef
 from typhon.objects.root import Object, runnable
@@ -185,10 +183,15 @@ def makeFinalSlot(args):
     return FinalSlot(args[0])
 
 
+# Prebuild, since building on-the-fly NaN doesn't work in RPython.
+NaN = DoubleObject(float("nan"))
+
+
 def safeScope():
     return {
         u"null": NullObject,
 
+        u"NaN": NaN,
         u"false": wrapBool(False),
         u"true": wrapBool(True),
 
