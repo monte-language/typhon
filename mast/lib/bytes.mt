@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def Bytes := List[Int]
+def Bytes := List[0..!256]
 
 
 def _makeBytes(chunks):
@@ -45,9 +45,8 @@ object b__quasiParser:
                 # The strategy: Lay down "railroad" segments one at a time,
                 # matching against the specimen.
                 # XXX var position :(0..!specimen.size()) exit ej := 0
-                var position := 0
-                # XXX var inPattern :Boolean := false
-                var inPattern := false
+                var position :Int := 0
+                var inPattern :Bool := false
                 def patterns := [].diverge()
                 var patternMarker := 0
 
@@ -125,9 +124,8 @@ def testQuasiPatterns(assert):
     assert.equal(cdr, b`second\r\nthird`)
 
 def testBytesGuard(assert):
-    def f(ej):
-        def bs :Bytes exit ej := [42, 5, 0, 255]
-    assert.doesNotEject(f)
+    assert.ejects(fn ej {def bs :Bytes exit ej := [0, 256, 4242]})
+    assert.doesNotEject(fn ej {def bs :Bytes exit ej := [42, 5, 0, 255]})
 
 unittest([
     testQuasiValues,
