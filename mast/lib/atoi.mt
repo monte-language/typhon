@@ -17,12 +17,9 @@ def strToInt(var cs :Str, ej) :Int:
     if (neg):
         cs := cs.slice(1)
 
-    # XXX this sequence would be much easier with range guards
-    def ns :List[Int] := [c.asInteger() - 48 for c in cs]
+    def ns :List[0..!10] exit ej := [c.asInteger() - 48 for c in cs]
     var rv :Int := 0
     for n in ns:
-        if (n < 0 || n >= 10):
-            throw.eject(ej, "Digit out of range")
         rv := rv * 10 + n
     if (neg):
         rv *= -1
@@ -47,20 +44,21 @@ unittest([
 def [=> Bytes, => b__quasiParser] | _ := import("lib/bytes")
 
 def bytesToInt(bs :List[Int], ej) :Int:
-    # XXX this sequence would be much easier with range guards
     var rv :Int := 0
     for b in bs:
-        def i := b - 48
-        if (i < 0 || i >= 10):
-            throw.eject(ej, "Digit out of range")
+        def i :(0..!10) exit ej := b - 48
         rv := rv * 10 + i
     return rv
 
 def testBytesToInt(assert):
     assert.equal(bytesToInt(b`200`, null), 200)
 
+def testBytesToIntFailure(assert):
+    assert.ejects(fn ej {def via (bytesToInt) x exit ej := b`20xx`})
+
 unittest([
     testBytesToInt,
+    testBytesToIntFailure,
 ])
 
 
