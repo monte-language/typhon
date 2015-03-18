@@ -320,18 +320,6 @@ def __accumulateList(iterable, mapper):
     return rv
 
 
-object __makeOrderedSpace:
-    to op__thru(var start, stop):
-        var l := []
-        while (start <= stop):
-            l := l.with(start)
-            start := start.next()
-        return l
-
-    to op__till(start, stop):
-        return __makeOrderedSpace.op__thru(start, stop.previous())
-
-
 def __matchSame(expected):
     # XXX could use `return fn ...`
     def sameMatcher(specimen, ej):
@@ -519,10 +507,10 @@ def [
     "__mapEmpty" => Empty,
     => Any,
     => Bool,
-    => Char,
-    => Double,
+    "Char" => SpaceChar,
+    "Double" => SpaceDouble,
     => Empty,
-    => Int,
+    "Int" => SpaceInt,
     => List,
     => Map,
     => NullOk,
