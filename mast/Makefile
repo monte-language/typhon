@@ -6,6 +6,7 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	lib/regex.ty lib/utf8.ty \
 	lib/tokenBucket.ty lib/loopingCall.ty lib/singleUse.ty \
 	lib/cache.ty lib/paths.ty \
+	lib/amp.ty \
 	prelude \
 	parsers \
 	http \
@@ -20,7 +21,7 @@ prelude: prelude.ty prelude/brand.ty prelude/region.ty prelude/simple.ty \
 parsers: lib/parsers/derp.ty lib/parsers/http.ty lib/parsers/html.ty
 
 tubes: lib/tubes/nullPump.ty lib/tubes/mapPump.ty \
-	lib/tubes/pumpTube.ty
+	lib/tubes/pumpTube.ty lib/tubes/statefulPump.ty
 
 http: lib/http/client.ty lib/http/server.ty \
 	tubes
