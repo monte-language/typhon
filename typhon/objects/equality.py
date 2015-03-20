@@ -19,7 +19,8 @@ from typhon.errors import Refused, userError
 from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
-from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
+from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
+                                 StrObject)
 from typhon.objects.refs import EVENTUAL, Promise, resolution
 from typhon.objects.root import Object
 
@@ -100,8 +101,15 @@ def optSame(first, second, cache=None):
 
     # Ints.
     if isinstance(first, IntObject):
-        return eq(isinstance(second, IntObject)
-                and first.getInt() == second.getInt())
+        if isinstance(second, IntObject):
+            return eq(first.getInt() == second.getInt())
+        if isinstance(second, BigInt):
+            return eq(second.bi.int_eq(first.getInt()))
+    if isinstance(first, BigInt):
+        if isinstance(second, IntObject):
+            return eq(first.bi.int_eq(second.getInt()))
+        if isinstance(second, BigInt):
+            return eq(first.bi.eq(second.bi))
 
     # Strings.
     if isinstance(first, StrObject):

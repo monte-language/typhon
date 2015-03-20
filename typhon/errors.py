@@ -75,3 +75,15 @@ class Refused(UserException):
         return (u"Message refused: (%s, %s, [%s])" %
                 (self.target.toString(), self.atom.repr.decode("utf-8"),
                     args))
+
+
+class WrongType(UserException):
+    """
+    An object was not unwrappable.
+    """
+
+    def __init__(self, message):
+        self.message = message
+
+    def error(self):
+        return u"Object was wrong type: %s" % self.message

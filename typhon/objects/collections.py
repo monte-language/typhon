@@ -17,7 +17,7 @@ from rpython.rlib.objectmodel import r_ordereddict
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused, UserException, userError
+from typhon.errors import Refused, UserException, WrongType, userError
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import throw
@@ -710,7 +710,7 @@ def unwrapMap(o):
     m = resolution(o)
     if isinstance(m, ConstMap):
         return m.objectMap
-    raise userError(u"Not a map!")
+    raise WrongType(u"Not a map!")
 
 
 def unwrapSet(o):
@@ -718,4 +718,4 @@ def unwrapSet(o):
     m = resolution(o)
     if isinstance(m, ConstSet):
         return m.objectMap
-    raise userError(u"Not a set!")
+    raise WrongType(u"Not a set!")

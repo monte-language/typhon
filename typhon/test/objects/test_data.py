@@ -17,9 +17,12 @@
 import math
 from unittest import TestCase
 
+from rpython.rlib.rbigint import rbigint
+
 from typhon.errors import Ejecting, UserException
 from typhon.objects.collections import ConstList
-from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
+from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
+                                 StrObject)
 from typhon.objects.ejectors import Ejector
 
 
@@ -263,19 +266,16 @@ class TestInt(TestCase):
         self.assertEqual(result.getDouble(), 8.4)
 
     def testOr(self):
-
         i = IntObject(0x3)
         result = i.call(u"or", [IntObject(0x5)])
         self.assertEqual(result.getInt(), 0x7)
 
     def testShiftLeft(self):
-
         i = IntObject(0xf0)
         result = i.call(u"shiftLeft", [IntObject(5)])
         self.assertEqual(result.getInt(), 0x1e00)
 
     def testShiftRight(self):
-
         i = IntObject(0xf0)
         result = i.call(u"shiftRight", [IntObject(5)])
         self.assertEqual(result.getInt(), 0x7)
@@ -299,3 +299,21 @@ class TestInt(TestCase):
         a = DoubleObject(42)
         b = DoubleObject(5)
         self.assertNotEqual(a.hash(), b.hash())
+
+
+class TestBigInt(TestCase):
+
+    def testShiftLeft(self):
+        bi = BigInt(rbigint.fromint(42))
+        result = bi.call(u"shiftLeft", [IntObject(2)])
+        self.assertTrue(result.bi.int_eq(168))
+
+    def testShiftRight(self):
+        bi = BigInt(rbigint.fromint(42))
+        result = bi.call(u"shiftRight", [IntObject(2)])
+        self.assertTrue(result.bi.int_eq(10))
+
+    def testXorInt(self):
+        bi = BigInt(rbigint.fromint(0xcccc))
+        result = bi.call(u"xor", [IntObject(0xaaaa)])
+        self.assertTrue(result.bi.int_eq(0x6666))

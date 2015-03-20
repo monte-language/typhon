@@ -14,8 +14,11 @@
 
 from unittest import TestCase
 
+from rpython.rlib.rbigint import rbigint
+
 from typhon.objects.collections import ConstList
-from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
+from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
+                                 StrObject)
 from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, isSettled, optSame
 from typhon.objects.refs import makePromise
 
@@ -50,6 +53,21 @@ class TestOptSame(TestCase):
 
     def testIntEquality(self):
         first = IntObject(42)
+        second = IntObject(42)
+        self.assertEqual(optSame(first, second), EQUAL)
+
+    def testBigIntEquality(self):
+        first = BigInt(rbigint.fromint(42))
+        second = BigInt(rbigint.fromint(42))
+        self.assertEqual(optSame(first, second), EQUAL)
+
+    def testIntAndBigIntEquality(self):
+        first = IntObject(42)
+        second = BigInt(rbigint.fromint(42))
+        self.assertEqual(optSame(first, second), EQUAL)
+
+    def testBigIntAndIntEquality(self):
+        first = BigInt(rbigint.fromint(42))
         second = IntObject(42)
         self.assertEqual(optSame(first, second), EQUAL)
 

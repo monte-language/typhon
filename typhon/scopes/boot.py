@@ -15,7 +15,7 @@
 from typhon.atoms import getAtom
 from typhon.objects.collections import ConstList, ConstMap, ConstSet
 from typhon.objects.constants import BoolObject
-from typhon.objects.data import (CharObject, DoubleObject, IntObject,
+from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, wrapBool)
 from typhon.objects.root import runnable
 
@@ -37,7 +37,8 @@ def isDouble(args):
 
 @runnable(RUN_1)
 def isInt(args):
-    return wrapBool(isinstance(args[0], IntObject))
+    return wrapBool(isinstance(args[0], IntObject)
+                 or isinstance(args[0], BigInt))
 
 @runnable(RUN_1)
 def isStr(args):

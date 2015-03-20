@@ -14,6 +14,7 @@
 
 import math
 
+from rpython.rlib.rbigint import BASE10, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
 from rpython.rlib.rarithmetic import intmask, ovfcheck
@@ -21,7 +22,7 @@ from rpython.rlib.rstring import UnicodeBuilder, split
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused, userError
+from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.constants import wrapBool
 from typhon.objects.root import Object
@@ -159,17 +160,7 @@ def unwrapChar(o):
     c = resolution(o)
     if isinstance(c, CharObject):
         return c.getChar()
-    raise userError(u"Not a char!")
-
-
-def promoteToDouble(o):
-    from typhon.objects.refs import resolution
-    n = resolution(o)
-    if isinstance(n, IntObject):
-        return float(n.getInt())
-    if isinstance(n, DoubleObject):
-        return n.getDouble()
-    raise userError(u"Failed to promote to double")
+    raise WrongType(u"Not a char!")
 
 
 class DoubleObject(Object):
@@ -242,6 +233,24 @@ class DoubleObject(Object):
         return self._d
 
 
+def unwrapDouble(o):
+    from typhon.objects.refs import resolution
+    d = resolution(o)
+    if isinstance(d, DoubleObject):
+        return d.getDouble()
+    raise WrongType(u"Not a double!")
+
+
+def promoteToDouble(o):
+    from typhon.objects.refs import resolution
+    n = resolution(o)
+    if isinstance(n, IntObject):
+        return float(n.getInt())
+    if isinstance(n, DoubleObject):
+        return n.getDouble()
+    raise WrongType(u"Failed to promote to double")
+
+
 class IntObject(Object):
 
     _immutable_fields_ = "stamps", "_i"
@@ -252,7 +261,7 @@ class IntObject(Object):
 
     stamps = [DeepFrozenStamp]
 
-    def __init__(self, i=0):
+    def __init__(self, i):
         self._i = i
 
     def toString(self):
@@ -282,10 +291,18 @@ class IntObject(Object):
 
         if atom is ADD_1:
             other = args[0]
-            if isinstance(other, DoubleObject):
-                # Addition commutes.
-                return other.add(self)
-            return IntObject(self._i + unwrapInt(other))
+            try:
+                i = unwrapInt(other)
+                return IntObject(ovfcheck(self._i + i))
+            except OverflowError:
+                i = unwrapInt(other)
+                return BigInt(rbigint.fromint(self._i).int_add(i))
+            except WrongType:
+                try:
+                    # Addition commutes.
+                    return BigInt(unwrapBigInt(other).int_add(self._i))
+                except WrongType:
+                    return DoubleObject(self._i + unwrapDouble(other))
 
         if atom is AND_1:
             other = unwrapInt(args[0])
@@ -316,10 +333,18 @@ class IntObject(Object):
 
         if atom is MULTIPLY_1:
             other = args[0]
-            if isinstance(other, DoubleObject):
-                # Multiplication commutes.
-                return other.mul(self)
-            return IntObject(self._i * unwrapInt(other))
+            try:
+                i = unwrapInt(other)
+                return IntObject(ovfcheck(self._i * i))
+            except OverflowError:
+                i = unwrapInt(other)
+                return BigInt(rbigint.fromint(self._i).int_mul(i))
+            except WrongType:
+                try:
+                    # Multiplication commutes.
+                    return BigInt(unwrapBigInt(other).int_mul(self._i))
+                except WrongType:
+                    return DoubleObject(self._i * unwrapDouble(other))
 
         if atom is NEGATE_0:
             return IntObject(-self._i)
@@ -348,10 +373,20 @@ class IntObject(Object):
 
         if atom is SUBTRACT_1:
             other = args[0]
-            if isinstance(other, DoubleObject):
-                # Promote ourselves to double and retry.
-                return DoubleObject(float(self._i)).subtract(other)
-            return IntObject(self._i - unwrapInt(other))
+            try:
+                i = unwrapInt(other)
+                return IntObject(ovfcheck(self._i - i))
+            except OverflowError:
+                i = unwrapInt(other)
+                return BigInt(rbigint.fromint(self._i).int_sub(i))
+            except WrongType:
+                try:
+                    # Subtraction doesn't commute, so we have to work a little
+                    # harder.
+                    bi = unwrapBigInt(other)
+                    return BigInt(rbigint.fromint(self._i).sub(bi))
+                except WrongType:
+                    return DoubleObject(self._i - unwrapDouble(other))
 
         if atom is XOR_1:
             other = unwrapInt(args[0])
@@ -378,7 +413,193 @@ def unwrapInt(o):
     i = resolution(o)
     if isinstance(i, IntObject):
         return i.getInt()
-    raise userError(u"Not an integer!")
+    raise WrongType(u"Not an integer!")
+
+
+class BigInt(Object):
+    """
+    An arbitrarily large integer object which is indistinguishable from an
+    ordinary IntObject at the Monte application level.
+    """
+
+    _immutable_ = True
+    _immutable_fields_ = "stamps[*]", "bi"
+
+    displayName = u"BigInt"
+    stamps = [DeepFrozenStamp]
+
+    def __init__(self, bi):
+        self.bi = bi
+
+    def toString(self):
+        return self.bi.format(BASE10).decode("utf-8")
+
+    def hash(self):
+        return self.bi.hash()
+
+    def recv(self, atom, args):
+        # Bigints can be compared with bigints and ints.
+        if atom is OP__CMP_1:
+            other = args[0]
+            try:
+                return IntObject(self.cmp(unwrapBigInt(other)))
+            except WrongType:
+                return IntObject(self.cmpInt(unwrapInt(other)))
+
+        # Nothing prevents bigints from being returned from comparisons, but
+        # I'd like to avoid generating this code for now. ~ C.
+        # if atom is ABOVEZERO_0:
+        #     return wrapBool(self._i > 0)
+        # if atom is ATLEASTZERO_0:
+        #     return wrapBool(self._i >= 0)
+        # if atom is ATMOSTZERO_0:
+        #     return wrapBool(self._i <= 0)
+        # if atom is BELOWZERO_0:
+        #     return wrapBool(self._i < 0)
+        # if atom is ISZERO_0:
+        #     return wrapBool(self._i == 0)
+
+        if atom is ABS_0:
+            return BigInt(self.bi.abs())
+
+        if atom is ADD_1:
+            other = args[0]
+            try:
+                return BigInt(self.bi.add(unwrapBigInt(other)))
+            except WrongType:
+                try:
+                    return BigInt(self.bi.int_add(unwrapInt(other)))
+                except WrongType:
+                    return DoubleObject(self.bi.tofloat() +
+                                        unwrapDouble(other))
+
+        if atom is AND_1:
+            other = args[0]
+            try:
+                return BigInt(self.bi.and_(unwrapBigInt(other)))
+            except WrongType:
+                return BigInt(self.bi.int_and_(unwrapInt(other)))
+
+        if atom is APPROXDIVIDE_1:
+            # approxDivide/1: Promote both this int and its argument to
+            # double, then perform division.
+            other = promoteToBigInt(args[0])
+            # The actual division is performed within the bigint.
+            d = self.bi.truediv(other)
+            return DoubleObject(d)
+
+        if atom is FLOORDIVIDE_1:
+            other = promoteToBigInt(args[0])
+            return BigInt(self.bi.floordiv(other))
+
+        if atom is MAX_1:
+            # XXX could specialize for ints
+            other = promoteToBigInt(args[0])
+            return self if self.bi.gt(other) else args[0]
+
+        if atom is MIN_1:
+            # XXX could specialize for ints
+            other = promoteToBigInt(args[0])
+            return self if self.bi.lt(other) else args[0]
+
+        if atom is MOD_1:
+            other = args[0]
+            try:
+                return BigInt(self.bi.mod(unwrapBigInt(other)))
+            except WrongType:
+                return BigInt(self.bi.int_mod(unwrapInt(other)))
+
+        if atom is MULTIPLY_1:
+            # XXX doubles
+            other = args[0]
+            try:
+                return BigInt(self.bi.mul(unwrapBigInt(other)))
+            except WrongType:
+                return BigInt(self.bi.int_mul(unwrapInt(other)))
+
+        if atom is NEGATE_0:
+            return BigInt(self.bi.neg())
+
+        if atom is NEXT_0:
+            return BigInt(self.bi.int_add(1))
+
+        if atom is OR_1:
+            other = args[0]
+            try:
+                return BigInt(self.bi.or_(unwrapBigInt(other)))
+            except WrongType:
+                return BigInt(self.bi.int_or_(unwrapInt(other)))
+
+        if atom is POW_1:
+            other = promoteToBigInt(args[0])
+            return BigInt(self.bi.pow(other))
+
+        if atom is PREVIOUS_0:
+            return BigInt(self.bi.int_sub(1))
+
+        if atom is SHIFTLEFT_1:
+            other = unwrapInt(args[0])
+            return BigInt(self.bi.lshift(other))
+
+        if atom is SHIFTRIGHT_1:
+            other = unwrapInt(args[0])
+            return BigInt(self.bi.rshift(other))
+
+        if atom is SUBTRACT_1:
+            other = args[0]
+            try:
+                return BigInt(self.bi.sub(unwrapBigInt(other)))
+            except WrongType:
+                try:
+                    return BigInt(self.bi.int_sub(unwrapInt(other)))
+                except WrongType:
+                    return DoubleObject(self.bi.tofloat() -
+                                        unwrapDouble(other))
+
+        if atom is XOR_1:
+            other = args[0]
+            try:
+                return BigInt(self.bi.xor(unwrapBigInt(other)))
+            except WrongType:
+                return BigInt(self.bi.int_xor(unwrapInt(other)))
+
+        raise Refused(self, atom, args)
+
+    def cmp(self, other):
+        if self.bi.lt(other):
+            return -1
+        elif self.bi.gt(other):
+            return 1
+        else:
+            # Using a property of integers here.
+            return 0
+
+    def cmpInt(self, other):
+        if self.bi.int_lt(other):
+            return -1
+        elif self.bi.int_gt(other):
+            return 1
+        else:
+            # Using a property of integers here.
+            return 0
+
+
+def unwrapBigInt(o):
+    from typhon.objects.refs import resolution
+    bi = resolution(o)
+    if isinstance(bi, BigInt):
+        return bi.bi
+    raise WrongType(u"Not a big integer!")
+
+
+def promoteToBigInt(o):
+    from typhon.objects.refs import resolution
+    i = resolution(o)
+    if isinstance(i, BigInt):
+        return i.bi
+    if isinstance(i, IntObject):
+        return rbigint.fromint(i.getInt())
+    raise WrongType(u"Not promotable to big integer!")
 
 
 class strIterator(Object):
@@ -561,4 +782,4 @@ def unwrapStr(o):
     s = resolution(o)
     if isinstance(s, StrObject):
         return s.getString()
-    raise userError(u"Not a string!")
+    raise WrongType(u"Not a string!")
