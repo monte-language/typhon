@@ -19,7 +19,7 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 prelude: prelude.ty prelude/brand.ty prelude/region.ty prelude/simple.ty \
 	prelude/space.ty
 
-entropy: lib/entropy/xorshift.ty
+entropy: lib/entropy/pool.ty lib/entropy/xorshift.ty
 
 parsers: lib/parsers/derp.ty lib/parsers/http.ty lib/parsers/html.ty
 
