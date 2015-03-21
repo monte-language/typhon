@@ -115,13 +115,7 @@ class InvalidAST(LoadFailed):
 class Node(object):
 
     _immutable_ = True
-    _attrs_ = "frameSize",
-
-    # The frame size hack is as follows: Whatever the top node is, regardless
-    # of type, it needs to be able to store frame size for evaluation since it
-    # might not necessarily be a type of node which introduces a new scope.
-    # The correct fix is to wrap all nodes in Hide before evaluating them.
-    frameSize = -1
+    _attrs_ = ()
 
     def __repr__(self):
         b = Buffer()
@@ -489,9 +483,6 @@ class Escape(Node):
 
     _immutable_ = True
 
-    frameSize = -1
-    catchFrameSize = -1
-
     def __init__(self, pattern, node, catchPattern, catchNode):
         self._pattern = pattern
         self._node = node
@@ -523,7 +514,6 @@ class Escape(Node):
         with scope:
             p = self._pattern.rewriteScope(scope)
             n = self._node.rewriteScope(scope)
-            frameSize = scope.size()
 
         with scope:
             if self._catchPattern is None:
@@ -534,11 +524,8 @@ class Escape(Node):
                 cn = None
             else:
                 cn = self._catchNode.rewriteScope(scope)
-            catchFrameSize = scope.size()
 
         rv = Escape(p, n, cp, cn)
-        rv.frameSize = frameSize
-        rv.catchFrameSize = catchFrameSize
         return rv
 
     def usesName(self, name):
@@ -574,9 +561,6 @@ class Finally(Node):
 
     _immutable_ = True
 
-    frameSize = -1
-    finallyFrameSize = -1
-
     def __init__(self, block, atLast):
         self._block = block
         self._atLast = atLast
@@ -594,15 +578,11 @@ class Finally(Node):
     def rewriteScope(self, scope):
         with scope:
             block = self._block.rewriteScope(scope)
-            frameSize = scope.size()
 
         with scope:
             atLast = self._atLast.rewriteScope(scope)
-            finallyFrameSize = scope.size()
 
         rv = Finally(block, atLast)
-        rv.frameSize = frameSize
-        rv.finallyFrameSize = finallyFrameSize
         return rv
 
     def usesName(self, name):
@@ -624,8 +604,6 @@ class Hide(Node):
 
     _immutable_ = True
 
-    frameSize = -1
-
     def __init__(self, inner):
         self._inner = inner
 
@@ -639,9 +617,7 @@ class Hide(Node):
     def rewriteScope(self, scope):
         with scope:
             rv = Hide(self._inner.rewriteScope(scope))
-            frameSize = scope.size()
 
-        rv.frameSize = frameSize
         return rv
 
     def usesName(self, name):
@@ -656,8 +632,6 @@ class Hide(Node):
 class If(Node):
 
     _immutable_ = True
-
-    frameSize = -1
 
     def __init__(self, test, then, otherwise):
         self._test = test
@@ -682,9 +656,7 @@ class If(Node):
             rv = If(self._test.rewriteScope(scope),
                     self._then.rewriteScope(scope),
                     self._otherwise.rewriteScope(scope))
-            frameSize = scope.size()
 
-        rv.frameSize = frameSize
         return rv
 
     def usesName(self, name):
@@ -711,8 +683,6 @@ class Matcher(Node):
 
     _immutable_ = True
 
-    frameSize = -1
-
     def __init__(self, pattern, block):
         if pattern is None:
             raise InvalidAST("Matcher pattern cannot be None")
@@ -734,9 +704,7 @@ class Matcher(Node):
         with scope:
             rv = Matcher(self._pattern.rewriteScope(scope),
                          self._block.rewriteScope(scope))
-            frameSize = scope.size()
 
-        rv.frameSize = frameSize
         return rv
 
 
@@ -745,8 +713,6 @@ class Method(Node):
     _immutable_ = True
 
     _immutable_fields_ = "_ps[*]",
-
-    frameSize = -1
 
     def __init__(self, doc, verb, params, guard, block):
         self._d = doc
@@ -791,9 +757,7 @@ class Method(Node):
             rv = Method(self._d, self._verb, ps,
                         self._g.rewriteScope(scope),
                         self._b.rewriteScope(scope))
-            frameSize = scope.size()
 
-        rv.frameSize = frameSize
         return rv
 
     def usesName(self, name):
@@ -1053,9 +1017,6 @@ class Try(Node):
 
     _immutable_ = True
 
-    frameSize = -1
-    catchFrameSize = -1
-
     def __init__(self, first, pattern, then):
         self._first = first
         self._pattern = pattern
@@ -1077,15 +1038,11 @@ class Try(Node):
     def rewriteScope(self, scope):
         with scope:
             first = self._first.rewriteScope(scope)
-            frameSize = scope.size()
 
         with scope:
             rv = Try(first, self._pattern.rewriteScope(scope),
                      self._then.rewriteScope(scope))
-            catchFrameSize = scope.size()
 
-        rv.frameSize = frameSize
-        rv.catchFrameSize = catchFrameSize
         return rv
 
     def usesName(self, name):
