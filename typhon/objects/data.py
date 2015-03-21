@@ -365,7 +365,10 @@ class IntObject(Object):
 
         if atom is SHIFTLEFT_1:
             other = unwrapInt(args[0])
-            return IntObject(self._i << other)
+            try:
+                return IntObject(ovfcheck(self._i << other))
+            except OverflowError:
+                return BigInt(rbigint.fromint(self._i).lshift(other))
 
         if atom is SHIFTRIGHT_1:
             other = unwrapInt(args[0])

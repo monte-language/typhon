@@ -275,6 +275,12 @@ class TestInt(TestCase):
         result = i.call(u"shiftLeft", [IntObject(5)])
         self.assertEqual(result.getInt(), 0x1e00)
 
+    def testShiftLeftLarge(self):
+        i = IntObject(0x5c5c)
+        result = i.call(u"shiftLeft", [IntObject(64)])
+        bi = rbigint.fromint(0x5c5c).lshift(64)
+        self.assertTrue(result.bi.eq(bi))
+
     def testShiftRight(self):
         i = IntObject(0xf0)
         result = i.call(u"shiftRight", [IntObject(5)])
