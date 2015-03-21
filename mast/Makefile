@@ -8,6 +8,7 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	lib/cache.ty lib/paths.ty \
 	lib/amp.ty \
 	prelude \
+	entropy \
 	parsers \
 	http \
 	irc \
@@ -17,6 +18,8 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 
 prelude: prelude.ty prelude/brand.ty prelude/region.ty prelude/simple.ty \
 	prelude/space.ty
+
+entropy: lib/entropy/xorshift.ty
 
 parsers: lib/parsers/derp.ty lib/parsers/http.ty lib/parsers/html.ty
 
