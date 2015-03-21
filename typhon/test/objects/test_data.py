@@ -280,6 +280,11 @@ class TestInt(TestCase):
         result = i.call(u"shiftRight", [IntObject(5)])
         self.assertEqual(result.getInt(), 0x7)
 
+    def testShiftRightLarge(self):
+        i = IntObject(0x7fffffffffffffff)
+        result = i.call(u"shiftRight", [IntObject(64)])
+        self.assertEqual(result.getInt(), 0x0)
+
     def testSubtract(self):
         i = IntObject(5)
         result = i.call(u"subtract", [IntObject(15)])

@@ -17,7 +17,7 @@ import math
 from rpython.rlib.rbigint import BASE10, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
-from rpython.rlib.rarithmetic import intmask, ovfcheck
+from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
 from rpython.rlib.rstring import UnicodeBuilder, split
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
@@ -369,6 +369,12 @@ class IntObject(Object):
 
         if atom is SHIFTRIGHT_1:
             other = unwrapInt(args[0])
+            if other >= LONG_BIT:
+                # This'll underflow, returning who-knows-what when translated.
+                # To keep things reasonable, we define an int that has been
+                # right-shifted past word width to be 0, since every bit has
+                # been shifted off.
+                return IntObject(0)
             return IntObject(self._i >> other)
 
         if atom is SUBTRACT_1:
