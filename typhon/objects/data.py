@@ -306,8 +306,12 @@ class IntObject(Object):
                     return DoubleObject(self._i + unwrapDouble(other))
 
         if atom is AND_1:
-            other = unwrapInt(args[0])
-            return IntObject(self._i & other)
+            try:
+                other = unwrapInt(args[0])
+                return IntObject(self._i & other)
+            except WrongType:
+                other = unwrapBigInt(args[0])
+                return BigInt(other.int_and_(self._i))
 
         if atom is APPROXDIVIDE_1:
             # approxDivide/1: Promote both this int and its argument to
@@ -367,8 +371,12 @@ class IntObject(Object):
             return IntObject(self._i + 1)
 
         if atom is OR_1:
-            other = unwrapInt(args[0])
-            return IntObject(self._i | other)
+            try:
+                other = unwrapInt(args[0])
+                return IntObject(self._i | other)
+            except WrongType:
+                other = unwrapBigInt(args[0])
+                return BigInt(other.int_or_(self._i))
 
         if atom is POW_1:
             other = unwrapInt(args[0])
@@ -412,8 +420,12 @@ class IntObject(Object):
                     return DoubleObject(self._i - unwrapDouble(other))
 
         if atom is XOR_1:
-            other = unwrapInt(args[0])
-            return IntObject(self._i ^ other)
+            try:
+                other = unwrapInt(args[0])
+                return IntObject(self._i ^ other)
+            except WrongType:
+                other = unwrapBigInt(args[0])
+                return BigInt(other.int_xor(self._i))
 
         raise Refused(self, atom, args)
 

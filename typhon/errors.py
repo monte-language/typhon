@@ -84,6 +84,7 @@ class WrongType(UserException):
 
     def __init__(self, message):
         self.message = message
+        self.trail = []
 
     def error(self):
         return u"Object was wrong type: %s" % self.message
