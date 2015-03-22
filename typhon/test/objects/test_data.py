@@ -311,6 +311,11 @@ class TestInt(TestCase):
         b = DoubleObject(5)
         self.assertNotEqual(a.hash(), b.hash())
 
+    def testBitLength(self):
+        i = IntObject(42)
+        result = i.call(u"bitLength", [])
+        self.assertEqual(result.getInt(), 6)
+
 
 class TestBigInt(TestCase):
 
@@ -328,3 +333,8 @@ class TestBigInt(TestCase):
         bi = BigInt(rbigint.fromint(0xcccc))
         result = bi.call(u"xor", [IntObject(0xaaaa)])
         self.assertTrue(result.bi.int_eq(0x6666))
+
+    def testBitLength(self):
+        bi = BigInt(rbigint.fromint(42))
+        result = bi.call(u"bitLength", [])
+        self.assertEqual(result.getInt(), 6)

@@ -41,6 +41,7 @@ ASSTRING_0 = getAtom(u"asString", 0)
 ATLEASTZERO_0 = getAtom(u"atLeastZero", 0)
 ATMOSTZERO_0 = getAtom(u"atMostZero", 0)
 BELOWZERO_0 = getAtom(u"belowZero", 0)
+BITLENGTH_0 = getAtom(u"bitLength", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 COS_0 = getAtom(u"cos", 0)
 FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
@@ -315,6 +316,19 @@ class IntObject(Object):
             other = promoteToDouble(args[0])
             return DoubleObject(d / other)
 
+        if atom is BITLENGTH_0:
+            # bitLength/0: The number of bits required to store this integer.
+            # Cribbed from PyPy.
+            i = self._i
+            rv = 0
+            if i < 0:
+                i = -((i + 1) >> 1)
+                rv = 1
+            while i:
+                rv += 1
+                i >>= 1
+            return IntObject(rv)
+
         if atom is FLOORDIVIDE_1:
             other = unwrapInt(args[0])
             return IntObject(self._i // other)
@@ -496,6 +510,9 @@ class BigInt(Object):
             # The actual division is performed within the bigint.
             d = self.bi.truediv(other)
             return DoubleObject(d)
+
+        if atom is BITLENGTH_0:
+            return IntObject(self.bi.bit_length())
 
         if atom is FLOORDIVIDE_1:
             other = promoteToBigInt(args[0])
