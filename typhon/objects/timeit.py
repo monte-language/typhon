@@ -16,13 +16,17 @@ import time
 
 from typhon.atoms import getAtom
 from typhon.objects.constants import NullObject
+from typhon.objects.data import unwrapStr
 from typhon.objects.root import runnable
 
-RUN_1 = getAtom(u"run", 1)
+RUN_2 = getAtom(u"run", 2)
 
-@runnable(RUN_1)
+@runnable(RUN_2)
 def bench(args):
     obj = args[0]
+    name = unwrapStr(args[1])
+
+    print "Benchmarking", name
 
     # Step 1: Calibrate timing loop.
     print "Calibrating timing loop..."
@@ -31,7 +35,8 @@ def bench(args):
     taken = time.time()
     obj.call(u"run", [])
     taken = time.time() - taken
-    while taken < 0.2:
+    while taken < 0.2 and loops < 100000000:
+        print "Trying", loops, "loops"
         loops *= 10
         acc = 0
         taken = time.time()
@@ -39,6 +44,7 @@ def bench(args):
             acc += 1
             obj.call(u"run", [])
         taken = time.time() - taken
+        print "Took", taken, "seconds to run", loops, "loops"
     print "Will take", loops, "loops at", taken, "seconds"
 
     # Step 2: Take trials.

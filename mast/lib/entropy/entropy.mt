@@ -39,17 +39,11 @@ def makeEntropy(generator):
         to nextDouble() :Double:
             return pool.getSomeBits(53) / (1 << 53)
 
-# def [=>makeXORShift] := import("lib/entropy/xorshift")
-# def e := makeEntropy(makeXORShift(0x88888888))
-# traceln(e.getAlgorithm())
-# traceln(e.nextBool())
-# traceln(e.nextBool())
-# traceln(e.nextBool())
-# traceln(e.nextInt(1025))
-# traceln(e.nextInt(1025))
-# traceln(e.nextInt(1025))
-# traceln(e.nextDouble())
-# traceln(e.nextDouble())
-# traceln(e.nextDouble())
+def [=>makeXORShift] := import("lib/entropy/xorshift")
+def e := makeEntropy(makeXORShift(0x88888888))
+bench(e.nextBool, "entropy nextBool")
+bench(fn {e.nextInt(1048576)}, "entropy nextInt (best case)")
+bench(fn {e.nextInt(1048577)}, "entropy nextInt (worst case)")
+bench(e.nextDouble, "entropy nextDouble")
 
 [=> makeEntropy]

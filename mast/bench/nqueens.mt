@@ -41,4 +41,4 @@ def showBoard(ranks):
         traceln(s)
 
 
-bench(fn {nQueen(8)})
+bench(fn {nQueen(8)}, "n queens (8)")

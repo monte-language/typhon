@@ -251,4 +251,4 @@ def Proc0():
     IntLoc2 := 7 * (IntLoc3 - IntLoc2) - IntLoc1
     Proc2(&IntLoc1)
 
-bench(Proc0)
+bench(Proc0, "montstone")
