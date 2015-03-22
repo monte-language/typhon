@@ -33,6 +33,11 @@ def makePool(entropy):
             bits -= k
             return rv
 
+        to availableEntropy() :Int:
+            # Not total available entropy, just current entropy that can be
+            # grabbed right at this moment.
+            return bits
+
 def testPool(assert):
     object entropy:
         to getEntropy():

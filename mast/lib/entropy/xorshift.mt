@@ -17,6 +17,9 @@ def makeXORShift(seed :Int ? (seed != 0)):
     var s1 :Int := seed & 0xffffffffffffffff
 
     return object XORShift:
+        to getAlgorithm() :Str:
+            return "XORshift+"
+
         to getEntropy():
             var x := s0
             def y := s1
