@@ -15,11 +15,13 @@
 from collections import OrderedDict
 
 from rpython.rlib.jit import elidable
+from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
 from typhon.errors import LoadFailed
 from typhon.objects.constants import NullObject
-from typhon.objects.data import CharObject, DoubleObject, IntObject, StrObject
+from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
+                                 StrObject)
 from typhon.objects.user import ScriptObject
 from typhon.pretty import Buffer, LineWriter
 from typhon.smallcaps.code import Code
@@ -175,14 +177,17 @@ class Int(Node):
 
     _immutable_ = True
 
-    def __init__(self, i):
-        self._i = i
+    def __init__(self, bi):
+        self.bi = bi
 
     def pretty(self, out):
-        out.write("%d" % self._i)
+        out.write(self.bi.format(BASE10))
 
     def compile(self, compiler):
-        compiler.literal(IntObject(self._i))
+        try:
+            compiler.literal(IntObject(self.bi.toint()))
+        except OverflowError:
+            compiler.literal(BigInt(self.bi))
 
 
 class Str(Node):

@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.rbigint import rbigint
 from rpython.rlib.rstruct.ieee import unpack_float
 from rpython.rlib.runicode import str_decode_utf_8
 
@@ -93,18 +94,22 @@ class Stream(object):
 
     def nextVarInt(self):
         shift = 0
-        i = 0
+        bi = rbigint.fromint(0)
         cont = True
         while cont:
             b = self.nextByte()
-            i |= (b & 0x7f) << shift
+            bi = bi.or_(rbigint.fromint(b & 0x7f).lshift(shift))
             shift += 7
             cont = bool(b & 0x80)
-        return i
+        return bi
 
 
-def zzd(i):
-    return (i // 2) ^ -1 if i & 1 else i // 2
+def zzd(bi):
+    shifted = bi.rshift(1)
+    if bi.int_and_(1).toint():
+        return shifted.int_xor(-1)
+    else:
+        return shifted
 
 
 # The kinds for primitive nodes.
@@ -146,7 +151,11 @@ def loadPatternList(stream):
     if kind != TUPLE:
         raise InvalidStream("Pattern list was not actually a list!")
 
-    arity = stream.nextVarInt()
+    try:
+        arity = stream.nextVarInt().toint()
+    except OverflowError:
+        raise LoadFailed("Arity overflows integer bounds")
+
     if arity > MAX_ARITY:
         raise LoadFailed("Arity %d is unreasonable" % arity)
 
@@ -190,7 +199,11 @@ def loadTerm(stream):
     if kind == NULL:
         return Null
     elif kind == STR:
-        size = stream.nextVarInt()
+        try:
+            size = stream.nextVarInt().toint()
+        except OverflowError:
+            raise LoadFailed("String length overflows integer bounds")
+
         # Special-case zero-length strings to avoid confusing Stream.slice().
         if size == 0:
             return Str(u"")
@@ -215,7 +228,11 @@ def loadTerm(stream):
     elif kind == INT:
         return Int(zzd(stream.nextVarInt()))
     elif kind == TUPLE:
-        arity = stream.nextVarInt()
+        try:
+            arity = stream.nextVarInt().toint()
+        except OverflowError:
+            raise LoadFailed("Tuple arity overflows integer bounds")
+
         if arity > MAX_ARITY:
             raise LoadFailed("Arity %d is unreasonable" % arity)
 

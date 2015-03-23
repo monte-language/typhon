@@ -338,3 +338,8 @@ class TestBigInt(TestCase):
         bi = BigInt(rbigint.fromint(42))
         result = bi.call(u"bitLength", [])
         self.assertEqual(result.getInt(), 6)
+
+    def testAndInt(self):
+        bi = BigInt(rbigint.fromint(0x3fffffffffffffff).int_mul(3))
+        result = bi.call(u"and", [IntObject(0xffff)])
+        self.assertTrue(result.bi.int_eq(0xfffd))

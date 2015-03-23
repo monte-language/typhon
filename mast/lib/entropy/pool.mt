@@ -19,6 +19,7 @@ def makePool(entropy):
 
     def fill():
         def [size, data] := entropy.getEntropy()
+        # traceln(`fill $pool $bits $data $size`)
         pool |= data << bits
         bits += size
 
@@ -31,6 +32,7 @@ def makePool(entropy):
             def rv := pool & ((1 << k) - 1)
             pool >>= k
             bits -= k
+            # traceln(`getSomeBits $pool $bits $rv`)
             return rv
 
         to availableEntropy() :Int:

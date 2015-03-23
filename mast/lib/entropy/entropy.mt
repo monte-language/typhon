@@ -32,18 +32,20 @@ def makeEntropy(generator):
             # then discard it and take another one.
             def k := n.bitLength()
             var rv := pool.getSomeBits(k)
+            # traceln(`nextInt $n $rv`)
             while (rv >= n):
                 rv := pool.getSomeBits(k)
+                # traceln(`nextInt too big; $n $rv`)
             return rv
 
         to nextDouble() :Double:
             return pool.getSomeBits(53) / (1 << 53)
 
 def [=>makeXORShift] := import("lib/entropy/xorshift")
-def e := makeEntropy(makeXORShift(0x88888888))
+def e := makeEntropy(makeXORShift(0x12345678))
 bench(e.nextBool, "entropy nextBool")
-bench(fn {e.nextInt(1048576)}, "entropy nextInt (best case)")
-bench(fn {e.nextInt(1048577)}, "entropy nextInt (worst case)")
+bench(fn {e.nextInt(4096)}, "entropy nextInt (best case)")
+bench(fn {e.nextInt(4097)}, "entropy nextInt (worst case)")
 bench(e.nextDouble, "entropy nextDouble")
 
 [=> makeEntropy]
