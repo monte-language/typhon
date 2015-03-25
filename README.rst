@@ -13,7 +13,7 @@ JIT. Regardless of mode of operation, you will need RPython. Since RPython
 doesn't come on its own, you will need to grab a PyPy source tarball and add
 its contents to your ``PYTHONPATH`` environment variable::
 
-    $ export PYTHONPATH=path/to/your/pypy:.
+    $ export PYTHONPATH=$(which pypy):.
 
 Once that's done, Typhon can be run untranslated::
 
