@@ -205,6 +205,8 @@ class ConstList(Collection, Object):
         if atom is GET_1:
             # Lookup by index.
             index = unwrapInt(args[0])
+            if index >= len(self.objects):
+                raise userError(u"Index %d is out of bounds" % index)
             return self.objects[index]
 
         if atom is INDEXOF_1:
@@ -340,6 +342,8 @@ class FlexList(Collection, Object):
         if atom is GET_1:
             # Lookup by index.
             index = unwrapInt(args[0])
+            if index >= len(self.flexObjects):
+                raise userError(u"Index %d is out of bounds" % index)
             return self.flexObjects[index]
 
         if atom is INDEXOF_1:
