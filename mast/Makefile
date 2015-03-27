@@ -21,7 +21,8 @@ prelude: prelude.ty prelude/brand.ty prelude/region.ty prelude/simple.ty \
 
 entropy: lib/entropy/pool.ty lib/entropy/xorshift.ty lib/entropy/entropy.ty
 
-parsers: lib/parsers/derp.ty lib/parsers/http.ty lib/parsers/html.ty
+parsers: lib/parsers/derp.ty lib/parsers/http.ty lib/parsers/html.ty \
+	lib/parsers/marley.ty
 
 tubes: lib/tubes/nullPump.ty lib/tubes/mapPump.ty \
 	lib/tubes/pumpTube.ty lib/tubes/statefulPump.ty
