@@ -464,6 +464,25 @@ def __bind(resolver, guard):
     return viaBinder
 
 
+def __makeParamDesc(name, guard):
+    return object paramDesc:
+        pass
+
+
+def __makeMessageDesc(unknown, name, params, guard):
+    return object messageDesc:
+        pass
+
+
+object __makeProtocolDesc:
+    to run(unknown, name, alsoUnknown, stillUnknown, messages):
+        return object protocolDesc:
+            pass
+
+    to makePair():
+        pass
+
+
 # Simple QP needs patterns, some loops, some other syntax, and a few guards.
 def [=> simple__quasiParser] := import("prelude/simple", ["boolean" => Bool,
                                                           => Bool, => Str,
@@ -501,6 +520,9 @@ def [
 
 
 [
+    # Needed for interface expansions with ref Monte. :T
+    "any" => Any,
+    "void" => Void,
     # This is 100% hack. See the matching comment near the top of the prelude.
     "boolean" => Bool,
 
@@ -524,7 +546,10 @@ def [
     => __comparer,
     => __iterWhile,
     => __makeMap,
+    => __makeMessageDesc,
     => __makeOrderedSpace,
+    => __makeParamDesc,
+    => __makeProtocolDesc,
     => __makeVerbFacet,
     => __mapExtract,
     => __matchSame,
