@@ -128,9 +128,6 @@ class Node(object):
     def repr(self):
         return self.__repr__()
 
-    def pretty(self, out):
-        raise NotImplementedError
-
     def transform(self, f):
         """
         Apply the given transformation to all children of this node, and this
@@ -449,7 +446,6 @@ class Def(Node):
             self._e.pretty(out)
         out.write(" := ")
         self._v.pretty(out)
-        out.writeLine("")
 
     def transform(self, f):
         return f(Def(self._p, self._e, self._v.transform(f)))
@@ -497,13 +493,14 @@ class Escape(Node):
     def pretty(self, out):
         out.write("escape ")
         self._pattern.pretty(out)
-        out.writeLine(":")
+        out.writeLine("{")
         self._node.pretty(out.indent())
         if self._catchPattern is not None and self._catchNode is not None:
-            out.write("catch ")
+            out.write("} catch ")
             self._catchPattern.pretty(out)
-            out.writeLine(":")
+            out.writeLine("{")
             self._catchNode.pretty(out.indent())
+        out.writeLine("}")
 
     def transform(self, f):
         # We have to write some extra code here since catchNode could be None.
@@ -571,11 +568,11 @@ class Finally(Node):
         self._atLast = atLast
 
     def pretty(self, out):
-        out.writeLine("try:")
+        out.writeLine("try {")
         self._block.pretty(out.indent())
-        out.writeLine("")
-        out.writeLine("finally:")
+        out.writeLine("} finally {")
         self._atLast.pretty(out.indent())
+        out.writeLine("}")
 
     def transform(self, f):
         return f(Finally(self._block.transform(f), self._atLast.transform(f)))
@@ -613,8 +610,9 @@ class Hide(Node):
         self._inner = inner
 
     def pretty(self, out):
-        out.writeLine("hide:")
+        out.writeLine("hide {")
         self._inner.pretty(out.indent())
+        out.writeLine("}")
 
     def transform(self, f):
         return f(Hide(self._inner.transform(f)))
@@ -646,11 +644,11 @@ class If(Node):
     def pretty(self, out):
         out.write("if (")
         self._test.pretty(out)
-        out.writeLine("):")
+        out.writeLine(") {")
         self._then.pretty(out.indent())
-        out.writeLine("")
-        out.writeLine("else:")
+        out.writeLine("} else {")
         self._otherwise.pretty(out.indent())
+        out.writeLine("}")
 
     def transform(self, f):
         return f(If(self._test.transform(f), self._then.transform(f),
@@ -698,9 +696,9 @@ class Matcher(Node):
     def pretty(self, out):
         out.write("match ")
         self._pattern.pretty(out)
-        out.writeLine(":")
+        out.writeLine(" {")
         self._block.pretty(out.indent())
-        out.writeLine("")
+        out.writeLine("}")
 
     def transform(self, f):
         return f(Matcher(self._pattern, self._block.transform(f)))
@@ -748,9 +746,9 @@ class Method(Node):
                 item.pretty(out)
         out.write(") :")
         self._g.pretty(out)
-        out.writeLine(":")
+        out.writeLine(" {")
         self._b.pretty(out.indent())
-        out.writeLine("")
+        out.writeLine("}")
 
     def transform(self, f):
         return f(Method(self._d, self._verb, self._ps, self._g,
@@ -843,8 +841,9 @@ class Obj(Node):
         out.write("object ")
         self._n.pretty(out)
         # XXX doc, as, implements
-        out.writeLine(":")
+        out.writeLine(" {")
         self._script.pretty(out.indent())
+        out.writeLine("}")
 
     def transform(self, f):
         return f(Obj(self._d, self._n, self._as, self._implements,
@@ -997,7 +996,7 @@ class Sequence(Node):
     def pretty(self, out):
         for item in self._l:
             item.pretty(out)
-            out.writeLine("")
+            out.writeLine(";")
 
     def transform(self, f):
         return f(Sequence([node.transform(f) for node in self._l]))
@@ -1028,13 +1027,13 @@ class Try(Node):
         self._then = then
 
     def pretty(self, out):
-        out.writeLine("try:")
+        out.writeLine("try {")
         self._first.pretty(out.indent())
-        out.writeLine("")
-        out.write("catch ")
+        out.write("} catch ")
         self._pattern.pretty(out)
-        out.writeLine(":")
+        out.writeLine("{")
         self._then.pretty(out.indent())
+        out.writeLine("}")
 
     def transform(self, f):
         return f(Try(self._first.transform(f), self._pattern,
@@ -1208,9 +1207,14 @@ class ListPattern(Pattern):
 
     def pretty(self, out):
         out.write("[")
-        for pattern in self._ps:
-            pattern.pretty(out)
-            out.write(", ")
+        l = self._ps
+        if l:
+            head = l[0]
+            tail = l[1:]
+            head.pretty(out)
+            for item in tail:
+                out.write(", ")
+                item.pretty(out)
         out.write("]")
         if self._t is not None:
             out.write(" | ")
