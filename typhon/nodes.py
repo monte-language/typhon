@@ -22,6 +22,7 @@ from typhon.errors import LoadFailed
 from typhon.objects.constants import NullObject
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
+from typhon.objects.meta import MetaContext
 from typhon.objects.user import ScriptObject
 from typhon.pretty import Buffer, LineWriter
 from typhon.smallcaps.code import Code
@@ -709,6 +710,25 @@ class Matcher(Node):
                          self._block.rewriteScope(scope))
 
         return rv
+
+
+class Meta(Node):
+
+    _immutable_ = True
+
+    _immutable_fields_ = "nature",
+
+    def __init__(self, nature):
+        self.nature = strToString(nature)
+        if self.nature != u"Context":
+            raise InvalidAST("Can't handle meta: %s" %
+                             self.nature.encode("utf-8"))
+
+    def pretty(self, out):
+        out.write("meta.context()")
+
+    def compile(self, compiler):
+        compiler.literal(MetaContext())
 
 
 class Method(Node):

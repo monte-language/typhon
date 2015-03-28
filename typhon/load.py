@@ -19,9 +19,9 @@ from rpython.rlib.runicode import str_decode_utf_8
 from typhon.errors import LoadFailed
 from typhon.nodes import (Assign, Binding, BindingPattern, Call, Char, Def,
                           Double, Escape, FinalPattern, Finally, Hide, If,
-                          Int, IgnorePattern, ListPattern, Matcher, Method,
-                          Noun, Null, Obj, Script, Sequence, Str, Try, Tuple,
-                          VarPattern, ViaPattern)
+                          Int, IgnorePattern, ListPattern, Matcher, Meta,
+                          Method, Noun, Null, Obj, Script, Sequence, Str, Try,
+                          Tuple, VarPattern, ViaPattern)
 
 
 # The largest tuple arity that we'll willingly decode.
@@ -132,6 +132,7 @@ kernelNodeInfo = {
     23: 'KernelTry',
     24: 'HideExpr',
     25: 'If',
+    26: 'Meta',
     33: 'Character',
 }
 
@@ -286,6 +287,9 @@ def loadTerm(stream):
 
     elif tag == "Matcher":
         return Matcher(loadPattern(stream), loadTerm(stream))
+
+    elif tag == "Meta":
+        return Meta(loadTerm(stream))
 
     elif tag == "Method":
         return Method.fromAST(loadTerm(stream), loadTerm(stream),
