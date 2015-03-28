@@ -556,12 +556,20 @@ def __makeMessageDesc(unknown, name, params, guard):
 
 
 object __makeProtocolDesc:
-    to run(unknown, name, alsoUnknown, stillUnknown, messages):
+    to run(doc, name, supers, auditors, messages):
         return object protocolDesc:
+            to audit(audition) :Bool:
+                return true
+
+            to coerce(specimen, _):
+                return specimen
+
+    to makePair(doc, name, supers, auditors, messages):
+        object stamp:
             pass
 
-    to makePair():
-        pass
+        return [__makeProtocolDesc(doc, name, supers, auditors, messages),
+                stamp]
 
 
 # Simple QP needs patterns, some loops, some other syntax, and a few guards.
@@ -598,6 +606,51 @@ def [
 ] := import("prelude/space", [=> Char, => Double, => Int,
                               => OrderedRegionMaker, => OrderedSpaceMaker,
                               => __comparer])
+
+
+# I am unhappy, to say the least, with this.
+def [=> Tag, => makeTag, => optMakeTagFromData
+] := import("prelude/terml/tag", [=> Any, => Bool, => Char, => Double, => Int,
+                                  => NullOk, => Str, => __makeProtocolDesc,
+                                  => __matchSame])
+def [=> Term, => makeTerm, => termBuilder
+] := import("prelude/terml/term", [=> Any, => Bool, => Char, => Double,
+                                   => Int, => List, => NullOk, => Str, => Tag,
+                                   => __comparer, => __matchSame,
+                                   => __validateFor, => makeTag,
+                                   => optMakeTagFromData,
+                                   => simple__quasiParser])
+def [=> convertToTerm
+] := import("prelude/terml/convertToTerm", [=> Any, => Char, => Double,
+                                            => Int, => List, => Map, => Str,
+                                            => Term, => __accumulateList,
+                                            => __matchSame, => __validateFor,
+                                            => makeTerm, => makeTag,
+                                            => optMakeTagFromData,
+                                            => simple__quasiParser])
+def [=> termFactory
+] := import("prelude/terml/termFactory", [=> Any, => __accumulateList,
+                                          => __validateFor, => makeTerm,
+                                          => makeTag, => optMakeTagFromData,
+                                          => convertToTerm])
+def [=> makeTermLexer
+] := import("prelude/terml/termLexer", [=> __makeOrderedSpace, => makeTag,
+                                        => makeTerm, => termBuilder])
+def [=> makeQFunctor, => makeQTerm, => makeQSome, => makeQDollarHole,
+     => makeQAtHole, => qEmptySeq, => makeQPairSeq
+] := import("prelude/terml/quasiterm", [=> __makeOrderedSpace,
+                                        => convertToTerm, => makeTerm,
+                                        => makeTag, => termBuilder, => Term,
+                                        => optMakeTagFromData])
+def [=> parseTerm, => quasitermParser
+] := import("prelude/terml/termParser", [=> __makeOrderedSpace, => makeTag,
+                                         => makeTerm, => makeTermLexer,
+                                         => convertToTerm, => makeQFunctor,
+                                         => makeQTerm, => makeQSome,
+                                         => makeQDollarHole, => makeQAtHole,
+                                         => qEmptySeq, => makeQPairSeq,
+                                         => termBuilder,
+                                         => optMakeTagFromData])
 
 
 [
@@ -641,5 +694,6 @@ def [
     => __validateFor,
     => _flexMap,
     => makeBrandPair,
+    "term__quasiParser" => quasitermParser,
     => simple__quasiParser,
 ]

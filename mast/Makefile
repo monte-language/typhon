@@ -19,8 +19,14 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	games \
 	bench
 
+terml: prelude/terml/convertToTerm.ty prelude/terml/quasiterm.ty \
+	prelude/terml/schema.ty prelude/terml/tag.ty prelude/terml/term.ty \
+	prelude/terml/termFactory.ty prelude/terml/termLexer.ty \
+	prelude/terml/termParser.ty
+
 prelude: prelude.ty prelude/brand.ty prelude/region.ty prelude/simple.ty \
-	prelude/space.ty
+	prelude/space.ty \
+	terml
 
 codec: lib/codec/utf8.ty
 
