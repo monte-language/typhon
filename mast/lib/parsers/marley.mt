@@ -23,7 +23,7 @@ def makeTable(grammar, startRule):
     var queue := [].diverge()
 
     for production in grammar[startRule]:
-        tableList[0] with= [startRule, production, 0]
+        tableList[0] with= [startRule, production, 0, [startRule]]
 
     def grow(k):
         while (tableList.size() <= k):
@@ -61,9 +61,9 @@ def makeTable(grammar, startRule):
 
         to headsAt(position :Int) :List:
             def rv := [].diverge()
-            for [head, rules, j] in tableList[position]:
+            for [head, rules, j, result] in tableList[position]:
                 if (rules == [] && j == 0):
-                    rv.push(head)
+                    rv.push([head, result])
             return rv.snapshot()
 
 def advance(position, token, grammar, table):
@@ -72,22 +72,25 @@ def advance(position, token, grammar, table):
         def [k, state] exit __break := table.nextState()
         # traceln(`Twiddling $state with k $k at position $position`)
         switch (state):
-            match [head, ==[], j]:
+            match [head, ==[], j, result]:
                 # Completion.
                 for oldState in table[j]:
-                    if (oldState =~ [oldHead, [==[nonterminal, head]] + tail, i]):
-                        table.addState(k, [oldHead, tail, i])
-            match [head, [[==nonterminal, rule]] + tail, j]:
+                    if (oldState =~
+                        [oldHead, [==[nonterminal, head]] + tail, i, tree]):
+                        table.addState(k,
+                                       [oldHead, tail, i, tree.with(result)])
+            match [_, [[==nonterminal, rule]] + _, _, _]:
                 # Prediction.
                 for production in grammar[rule]:
-                    table.addState(k, [rule, production, k])
-            match [head, [[==terminal, literal]] + tail, j]:
+                    table.addState(k, [rule, production, k, [rule]])
+            match [head, [[==terminal, literal]] + tail, j, result]:
                 # Scan.
                 # Scans can only take place when the token is in the position
                 # immediately following the position of the scanning rule.
                 if (k == position - 1):
                     if (literal == token):
-                        table.addState(k + 1, [head, tail, j])
+                        table.addState(k + 1,
+                                       [head, tail, j, result.with(token)])
 
 def makeMarley(grammar, startRule):
     def table := makeTable(grammar, startRule)
@@ -95,7 +98,13 @@ def makeMarley(grammar, startRule):
 
     return object marley:
         to finished() :Bool:
-            return table.headsAt(position).indexOf(startRule) != -1
+            for [head, result] in table.headsAt(position):
+                if (head == startRule):
+                    return true
+            return false
+
+        to results() :List:
+            return [result for [head, result] in table.headsAt(position)]
 
         to feed(token):
             position += 1
