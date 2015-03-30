@@ -245,6 +245,11 @@ class TestInt(TestCase):
         result = i.call(u"approxDivide", [IntObject(2)])
         self.assertAlmostEqual(result.getDouble(), 2.0)
 
+    def testComplement(self):
+        i = IntObject(5)
+        result = i.call(u"complement", [])
+        self.assertEqual(result.getInt(), -6)
+
     def testMax(self):
         i = IntObject(3)
         result = i.call(u"max", [IntObject(5)])
@@ -343,3 +348,8 @@ class TestBigInt(TestCase):
         bi = BigInt(rbigint.fromint(0x3fffffffffffffff).int_mul(3))
         result = bi.call(u"and", [IntObject(0xffff)])
         self.assertTrue(result.bi.int_eq(0xfffd))
+
+    def testComplement(self):
+        bi = BigInt(rbigint.fromint(6))
+        result = bi.call(u"complement", [])
+        self.assertTrue(result.bi.int_eq(-7))

@@ -42,6 +42,7 @@ ATLEASTZERO_0 = getAtom(u"atLeastZero", 0)
 ATMOSTZERO_0 = getAtom(u"atMostZero", 0)
 BELOWZERO_0 = getAtom(u"belowZero", 0)
 BITLENGTH_0 = getAtom(u"bitLength", 0)
+COMPLEMENT_0 = getAtom(u"complement", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 COS_0 = getAtom(u"cos", 0)
 FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
@@ -333,6 +334,9 @@ class IntObject(Object):
                 i >>= 1
             return IntObject(rv)
 
+        if atom is COMPLEMENT_0:
+            return IntObject(~self._i)
+
         if atom is FLOORDIVIDE_1:
             other = unwrapInt(args[0])
             return IntObject(self._i // other)
@@ -530,6 +534,9 @@ class BigInt(Object):
 
         if atom is BITLENGTH_0:
             return IntObject(self.bi.bit_length())
+
+        if atom is COMPLEMENT_0:
+            return BigInt(self.bi.invert())
 
         if atom is FLOORDIVIDE_1:
             other = promoteToBigInt(args[0])
