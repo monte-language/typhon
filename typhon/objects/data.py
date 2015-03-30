@@ -448,6 +448,11 @@ def unwrapInt(o):
     i = resolution(o)
     if isinstance(i, IntObject):
         return i.getInt()
+    if isinstance(i, BigInt):
+        try:
+            return i.bi.toint()
+        except OverflowError:
+            pass
     raise WrongType(u"Not an integer!")
 
 
