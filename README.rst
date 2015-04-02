@@ -10,12 +10,24 @@ How To Monte
 
 Typhon operates in both untranslated and translated modes, with an optional
 JIT. Regardless of mode of operation, you will need RPython. Since RPython
-doesn't come on its own, you will need to grab a PyPy source tarball and add
+doesn't come on its own, you will need to grab a `PyPy source tarball`_ and add
 its contents to your ``PYTHONPATH`` environment variable::
 
-    $ export PYTHONPATH=$(which pypy):.
+    $ wget https://bitbucket.org/pypy/pypy/downloads/pypy-2.5.1-src.tar.bz2
+    $ tar -xvf pypy-2.5.1-src.tar.bz2
+    $ export PYTHONPATH=path/to/pypy-2.5.1-src:.
 
-Once that's done, Typhon can be run untranslated::
+Note that simply installing pypy from your system package manager will
+probably not work. If RPython is unavailable, attempting to run Typhon will
+result in an error like::
+
+    RPython traceback:
+        File "implement.c", line 3285, in entryPoint
+        ...
+    Aborted (core dumped)
+
+Once you have a pypy with rpython in your ``PYTHONPATH``, Typhon can be run
+untranslated::
 
     $ python main.py your/awesome/script.ty
 
@@ -26,7 +38,7 @@ Translation is done via the RPython toolchain::
 The JIT can be enabled with a switch::
 
     $ path/to/your/pypy/rpython/bin/rpython -Ojit main
-
+ 
 The resulting executable is immediately usable for any scripts that don't use
 prelude features::
 
@@ -58,4 +70,5 @@ Then, you can use the prelude::
 
     $ ./main-c -l mast another/awesome/script.ty
 
+.. _PyPy source tarball: https://bitbucket.org/pypy/pypy/downloads/pypy-2.5.1-src.tar.bz2
 .. _reference Monte: https://github.com/monte-language/monte
