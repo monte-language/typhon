@@ -54,6 +54,7 @@ JOIN_1 = getAtom(u"join", 1)
 LASTINDEXOF_1 = getAtom(u"lastIndexOf", 1)
 MAX_1 = getAtom(u"max", 1)
 MIN_1 = getAtom(u"min", 1)
+MODPOW_2 = getAtom(u"modPow", 2)
 MOD_1 = getAtom(u"mod", 1)
 MULTIPLY_1 = getAtom(u"multiply", 1)
 NEGATE_0 = getAtom(u"negate", 0)
@@ -349,6 +350,15 @@ class IntObject(Object):
             other = unwrapInt(args[0])
             return self if self._i < other else args[0]
 
+        if atom is MODPOW_2:
+            exponent = unwrapInt(args[0])
+            modulus = unwrapInt(args[1])
+            try:
+                return self.intModPow(exponent, modulus)
+            except OverflowError:
+                return BigInt(rbigint.fromint(self._i).pow(rbigint.fromint(exponent),
+                                                           rbigint.fromint(modulus)))
+
         if atom is MOD_1:
             other = unwrapInt(args[0])
             return IntObject(self._i % other)
@@ -384,7 +394,10 @@ class IntObject(Object):
 
         if atom is POW_1:
             other = unwrapInt(args[0])
-            return self.intPow(other)
+            try:
+                return self.intPow(other)
+            except OverflowError:
+                return BigInt(rbigint.fromint(self._i).pow(rbigint.fromint(other)))
 
         if atom is PREVIOUS_0:
             return IntObject(self._i - 1)
@@ -437,13 +450,29 @@ class IntObject(Object):
         return self._i
 
     def intPow(self, exponent):
-        # XXX implement the algo in pypy.objspace.std.intobject, or
-        # port it to rlib (per arigato)
         accumulator = 1
-        # XXX only correct for positive exponents
-        while (exponent > 0):
-            accumulator = ovfcheck(accumulator * self._i)
-            exponent -= 1
+        multiplier = self._i
+        while exponent > 0:
+            if exponent & 1:
+                # Odd bit.
+                accumulator = ovfcheck(accumulator * multiplier)
+            exponent >>= 1
+            if not exponent:
+                break
+            multiplier = ovfcheck(multiplier * multiplier)
+        return IntObject(accumulator)
+
+    def intModPow(self, exponent, modulus):
+        accumulator = 1
+        multiplier = self._i % modulus
+        while exponent > 0:
+            if exponent & 1:
+                # Odd bit.
+                accumulator = ovfcheck(accumulator * multiplier) % modulus
+            exponent >>= 1
+            if not exponent:
+                break
+            multiplier = ovfcheck(multiplier * multiplier) % modulus
         return IntObject(accumulator)
 
 

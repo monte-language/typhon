@@ -275,6 +275,21 @@ class TestInt(TestCase):
         result = i.call(u"or", [IntObject(0x5)])
         self.assertEqual(result.getInt(), 0x7)
 
+    def testPowSmall(self):
+        i = IntObject(5)
+        result = i.call(u"pow", [IntObject(7)])
+        self.assertEqual(result.getInt(), 78125)
+
+    def testPow(self):
+        i = IntObject(3)
+        result = i.call(u"pow", [IntObject(100)])
+        self.assertTrue(result.bi.eq(rbigint.fromint(3).pow(rbigint.fromint(100))))
+
+    def testModPow(self):
+        i = IntObject(3)
+        result = i.call(u"modPow", [IntObject(1000000), IntObject(255)])
+        self.assertEqual(result.getInt(), 171)
+
     def testShiftLeft(self):
         i = IntObject(0xf0)
         result = i.call(u"shiftLeft", [IntObject(5)])
