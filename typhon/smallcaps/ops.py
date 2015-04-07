@@ -52,5 +52,6 @@ ops = {
     "JUMP": JUMP,
 }
 
-
-reverseOps = {v:k for k, v in ops.iteritems()}
+reverseOps = [""] * 25
+for k, v in ops.iteritems():
+    reverseOps[v] = k

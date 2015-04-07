@@ -38,8 +38,8 @@ class Environment(object):
     outer closed-over bindings and one for local names.
     """
 
-    # Note that we could eventually virtualize the handler stack, but it
-    # causes far too many virtualizable escapes.
+    _immutable_fields_ = "frame[*]",
+
     _virtualizable_ = (
         "local[*]",
         "frame[*]",
@@ -106,22 +106,6 @@ class Environment(object):
         rv = self.handlerStack[i]
         self.handlerStack[i] = None
         return rv
-
-    def createBindingFrame(self, index, binding):
-        # Commented out because binding replacement is not that weird and also
-        # because the JIT doesn't permit doing this without making this
-        # function dont_look_inside.
-        # if self.frame[index] is not None:
-        #     debug_print(u"Warning: Replacing binding %d" % index)
-
-        index = promote(index)
-        assert index >= 0, "Frame index was negative!?"
-        assert index < len(self.frame), "Frame index out-of-bounds :c"
-
-        self.frame[index] = binding
-
-    def createSlotFrame(self, index, slot):
-        self.createBindingFrame(index, Binding(slot))
 
     def getBindingFrame(self, index):
         # The promotion here is justified by a lack of ability for any code

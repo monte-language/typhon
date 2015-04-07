@@ -202,9 +202,9 @@ class SmallCaps(object):
             try:
                 # print ">", pc, self.code.dis(instruction,
                 #                              self.code.indices[pc])
-                jit_debug("Before run")
+                # jit_debug("Before run")
                 pc = self.runInstruction(instruction, pc)
-                jit_debug("After run")
+                # jit_debug("After run")
                 # print "Stack:", self.env.valueStack[:self.env.depth]
                 # if self.env.handlerDepth:
                 #     print "Handlers:", self.env.handlerStack[:self.env.handlerDepth]
