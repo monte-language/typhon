@@ -7,6 +7,7 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	lib/tokenBucket.ty lib/loopingCall.ty lib/singleUse.ty \
 	lib/cache.ty lib/paths.ty \
 	lib/amp.ty \
+	lib/slow/exp.ty \
 	prelude \
 	entropy \
 	parsers \
