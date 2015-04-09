@@ -70,8 +70,7 @@ def bench(args):
             result = taken
 
     # Step 3: Calculate results.
-    taken /= loops
-    usec = taken * 1000000
+    usec = taken * 1000000 / loops
     if usec < 1000:
         timing = "%f us/iteration" % usec
     else:
@@ -79,7 +78,8 @@ def bench(args):
         if msec < 1000:
             timing = "%f ms/iteration" % msec
         else:
-            timing = "%f s/iteration" % taken
+            sec = msec / 1000
+            timing = "%f s/iteration" % sec
 
     print "Took %d loops in %f seconds (%s)" % (loops, taken, timing)
 
