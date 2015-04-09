@@ -6,5 +6,7 @@ env:
     - OPT=-O2
     - OPT=-Ojit
 script: trial typhon && python -m rpython $OPT main
+matrix:
+    fast_finish: true
 notifications:
     irc: "irc.freenode.org#monte"
