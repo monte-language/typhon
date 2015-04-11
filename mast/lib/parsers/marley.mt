@@ -12,11 +12,20 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+# Earley's algorithm. Some slight improvements have been made here; it's not
+# as good as Marpa but it's slightly better than original Earley due to
+# better-behaved data structures.
+
+# This version of Earley is fully incremental and token-at-a-time. It is
+# polymorphic over the token and input types and can support non-character
+# parses.
+
 object terminal:
     pass
 
 object nonterminal:
     pass
+
 
 def makeTable(grammar, startRule):
     def tableList := [[].asSet()].diverge()
@@ -60,14 +69,28 @@ def makeTable(grammar, startRule):
             return tableList[index]
 
         to headsAt(position :Int) :List:
+            if (position >= tableList.size()):
+                # We have no results (yet) at this position.
+                return []
+
             def rv := [].diverge()
             for [head, rules, j, result] in tableList[position]:
                 if (rules == [] && j == 0):
                     rv.push([head, result])
             return rv.snapshot()
 
+        to hasQueuedStates() :Bool:
+            return queue.size() > 0
+
+
 def advance(position, token, grammar, table):
     table.queueStates(position - 1)
+    if (!table.hasQueuedStates()):
+        # The table isn't going to advance at all from this token; the parse
+        # failed.
+        # XXX eject
+        return
+
     while (true):
         def [k, state] exit __break := table.nextState()
         # traceln(`Twiddling $state with k $k at position $position`)
@@ -88,9 +111,10 @@ def advance(position, token, grammar, table):
                 # Scans can only take place when the token is in the position
                 # immediately following the position of the scanning rule.
                 if (k == position - 1):
-                    if (literal == token):
+                    if (literal.matches(token)):
                         table.addState(k + 1,
                                        [head, tail, j, result.with(token)])
+
 
 def makeMarley(grammar, startRule):
     def table := makeTable(grammar, startRule)
@@ -104,7 +128,11 @@ def makeMarley(grammar, startRule):
             return false
 
         to results() :List:
-            return [result for [head, result] in table.headsAt(position)]
+            def rv := [].diverge()
+            for [head, result] in table.headsAt(position):
+                if (head == startRule):
+                    rv.push(result)
+            return rv.snapshot()
 
         to feed(token):
             position += 1
@@ -114,11 +142,19 @@ def makeMarley(grammar, startRule):
             for token in tokens:
                 marley.feed(token)
 
+
+def exactly(token):
+    return object exactlyMatcher:
+        to matches(specimen) :Bool:
+            return token == specimen
+
+
 def testMarleyParens(assert):
     def parens := [
         "parens" => [
             [],
-            [[terminal, '('], [nonterminal, "parens"], [terminal, ')']],
+            [[terminal, exactly('(')], [nonterminal, "parens"],
+             [terminal, exactly(')')]],
         ],
     ]
     def parenParser := makeMarley(parens, "parens")
@@ -131,18 +167,20 @@ def testMarleyWP(assert):
             [[nonterminal, "S"]],
         ],
         "S" => [
-            [[nonterminal, "S"], [terminal, '+'], [nonterminal, "M"]],
+            [[nonterminal, "S"], [terminal, exactly('+')],
+             [nonterminal, "M"]],
             [[nonterminal, "M"]],
         ],
         "M" => [
-            [[nonterminal, "M"], [terminal, '*'], [nonterminal, "T"]],
+            [[nonterminal, "M"], [terminal, exactly('*')],
+             [nonterminal, "T"]],
             [[nonterminal, "T"]],
         ],
         "T" => [
-            [[terminal, '1']],
-            [[terminal, '2']],
-            [[terminal, '3']],
-            [[terminal, '4']],
+            [[terminal, exactly('1')]],
+            [[terminal, exactly('2')]],
+            [[terminal, exactly('3')]],
+            [[terminal, exactly('4')]],
         ],
     ]
     def wpParser := makeMarley(wp, "P")
@@ -150,5 +188,114 @@ def testMarleyWP(assert):
     assert.equal(wpParser.finished(), true)
 
 unittest([testMarleyParens, testMarleyWP])
+
+def alphanumeric := 'a'..'z' | 'A'..'Z' | '0'..'9'
+
+def makeScanner(characters):
+    var pos :Int := 0
+
+    return object scanner:
+        to advance():
+            pos += 1
+
+        to peek():
+            return if (pos < characters.size()) {
+                characters[pos]
+            } else {null}
+
+        to expect(c):
+            if (characters[pos] != c):
+                throw("Problem here")
+            scanner.advance()
+
+        to nextChar():
+            def rv := characters[pos]
+            pos += 1
+            return rv
+
+        to eatWhitespace():
+            while (scanner.peek() == ' '):
+                scanner.advance()
+
+        to nextToken():
+            scanner.eatWhitespace()
+            while (true):
+                switch (scanner.nextChar()):
+                    match c :alphanumeric:
+                        # Identifier.
+                        var s := c.asString()
+                        while (true):
+                            if (scanner.peek() =~ c :alphanumeric):
+                                s += c.asString()
+                            else:
+                                return ["identifier", s]
+                            scanner.advance()
+                    match =='<':
+                        scanner.expect('-')
+                        return ["arrow"]
+                    match =='\'':
+                        var c := scanner.nextChar()
+                        scanner.expect('\'')
+                        return ["character", c]
+
+        to hasTokens() :Bool:
+            return pos < characters.size()
+
+
+def tag(t :Str):
+    return object tagMatcher:
+        to matches(specimen) :Bool:
+            return switch (specimen) {
+                match [==t, _] {true}
+                match [==t] {true}
+                match _ {false}
+            }
+
+
+def marleyQLGrammar := [
+    "charLiteral" => [
+        [[terminal, tag("character")]],
+    ],
+    "identifier" => [
+        [[terminal, tag("identifier")]],
+    ],
+    "rule" => [
+        [[nonterminal, "charLiteral"], [nonterminal, "rule"]],
+        [[nonterminal, "identifier"], [nonterminal, "rule"]],
+        [],
+    ],
+    "arrow" => [
+        [[terminal, tag("arrow")]],
+    ],
+    "production" => [
+        [[nonterminal, "identifier"], [nonterminal, "arrow"],
+         [nonterminal, "rule"]],
+    ],
+]
+
+def marleyQLReducer(t):
+    switch (t):
+        match [=="charLiteral", [_, c]]:
+            return [terminal, exactly(c)]
+        match [=="identifier", [_, i]]:
+            return [nonterminal, i]
+        match [=="rule", r, inner]:
+            return [marleyQLReducer(r)] + marleyQLReducer(inner)
+        match [=="rule"]:
+            return []
+        match [=="arrow", _]:
+            return null
+        match [=="production", head, _, rule]:
+            return [marleyQLReducer(head)[1] => marleyQLReducer(rule)]
+
+def p := makeMarley(marleyQLGrammar, "production")
+def s := makeScanner("rule <- first '&' second")
+while (s.hasTokens()):
+    p.feed(s.nextToken())
+def r := p.results()
+traceln(r)
+def t := marleyQLReducer(r[0])
+traceln(t)
+
 
 [=> makeMarley]
