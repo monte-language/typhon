@@ -163,6 +163,10 @@ object OrderedRegionMaker as DeepFrozen:
                 # bounded right
                 return myLen % 2 != myInParity
 
+            /** Alias for run/1. */
+            to contains(pos :myType) :Bool:
+                return self(pos)
+
             /**
              * All Regions are also Guards, either coercing a
              * specimen to a position in the region, or rejecting it.
