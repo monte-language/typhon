@@ -145,8 +145,17 @@ def makeMarley(grammar, startRule):
 
 def exactly(token):
     return object exactlyMatcher:
+        to _uncall():
+            return [exactly, [token]]
+
         to matches(specimen) :Bool:
             return token == specimen
+
+def testExactlyEquality(assert):
+    assert.equal(exactly('c'), exactly('c'))
+    assert.notEqual(exactly('c'), exactly('d'))
+
+unittest([testExactlyEquality])
 
 
 def testMarleyParens(assert):
@@ -230,13 +239,15 @@ def makeScanner(characters):
                             else:
                                 return ["identifier", s]
                             scanner.advance()
-                    match =='<':
-                        scanner.expect('-')
+                    match =='-':
+                        scanner.expect('>')
                         return ["arrow"]
                     match =='\'':
                         var c := scanner.nextChar()
                         scanner.expect('\'')
                         return ["character", c]
+                    match =='|':
+                        return ["pipe"]
 
         to hasTokens() :Bool:
             return pos < characters.size()
@@ -244,6 +255,9 @@ def makeScanner(characters):
 
 def tag(t :Str):
     return object tagMatcher:
+        to _uncall():
+            return [tag, [t]]
+
         to matches(specimen) :Bool:
             return switch (specimen) {
                 match [==t, _] {true}
@@ -264,12 +278,17 @@ def marleyQLGrammar := [
         [[nonterminal, "identifier"], [nonterminal, "rule"]],
         [],
     ],
+    "alternation" => [
+        [[nonterminal, "rule"], [terminal, tag("pipe")],
+         [nonterminal, "alternation"]],
+        [[nonterminal, "rule"]],
+    ],
     "arrow" => [
         [[terminal, tag("arrow")]],
     ],
     "production" => [
         [[nonterminal, "identifier"], [nonterminal, "arrow"],
-         [nonterminal, "rule"]],
+         [nonterminal, "alternation"]],
     ],
 ]
 
@@ -283,19 +302,55 @@ def marleyQLReducer(t):
             return [marleyQLReducer(r)] + marleyQLReducer(inner)
         match [=="rule"]:
             return []
+        match [=="alternation", r, _, inner]:
+            return [marleyQLReducer(r)] + marleyQLReducer(inner)
+        match [=="alternation", r]:
+            return [marleyQLReducer(r)]
         match [=="arrow", _]:
             return null
         match [=="production", head, _, rule]:
             return [marleyQLReducer(head)[1] => marleyQLReducer(rule)]
 
-def p := makeMarley(marleyQLGrammar, "production")
-def s := makeScanner("rule <- first '&' second")
-while (s.hasTokens()):
-    p.feed(s.nextToken())
-def r := p.results()
-traceln(r)
-def t := marleyQLReducer(r[0])
-traceln(t)
+
+# It's assumed that left is the bigger of the two.
+def combineProductions(left :Map, right :Map) :Map:
+    var rv := left
+    for head => rules in right:
+        if (rv.contains(head)):
+            rv := rv.with(head, rv[head] + rules)
+        else:
+            rv |= [head => rules]
+    return rv
+
+def testCombineProductions(assert):
+    def left := ["head" => ["first"]]
+    def right := ["head" => ["second"], "tail" => ["third"]]
+    def expected := ["head" => ["first", "second"], "tail" => ["third"]]
+    assert.equal(combineProductions(left, right), expected)
+
+unittest([testCombineProductions])
 
 
-[=> makeMarley]
+object rule__quasiParser:
+    to valueMaker([piece]):
+        def scanner := makeScanner(piece)
+        def parser := makeMarley(marleyQLGrammar, "production")
+        while (scanner.hasTokens()):
+            parser.feed(scanner.nextToken())
+        def r := parser.results()[0]
+        return object ruleSubstituter:
+            to substitute(_):
+                return marleyQLReducer(r)
+
+
+def testRuleQP(assert):
+    def handwritten := ["breakfast" => [[[nonterminal, "eggs"],
+                                         [terminal, exactly('&')],
+                                         [nonterminal, "bacon"]]]]
+    def generated := rule`breakfast -> eggs '&' bacon`
+    assert.equal(handwritten, generated)
+
+unittest([testRuleQP])
+
+
+[=> makeMarley, => rule__quasiParser]
