@@ -223,7 +223,8 @@ def makeScanner(characters):
             return rv
 
         to eatWhitespace():
-            while (scanner.peek() == ' '):
+            def whitespace := [' ', '\n'].asSet()
+            while (whitespace.contains(scanner.peek())):
                 scanner.advance()
 
         to nextToken():
@@ -241,15 +242,18 @@ def makeScanner(characters):
                             scanner.advance()
                     match =='-':
                         scanner.expect('>')
-                        return ["arrow"]
+                        return "arrow"
                     match =='\'':
                         var c := scanner.nextChar()
                         scanner.expect('\'')
                         return ["character", c]
                     match =='|':
-                        return ["pipe"]
+                        return "pipe"
+                    match _:
+                        return ["unknown", c]
 
         to hasTokens() :Bool:
+            scanner.eatWhitespace()
             return pos < characters.size()
 
 
@@ -261,7 +265,7 @@ def tag(t :Str):
         to matches(specimen) :Bool:
             return switch (specimen) {
                 match [==t, _] {true}
-                match [==t] {true}
+                match ==t {true}
                 match _ {false}
             }
 
@@ -290,26 +294,11 @@ def marleyQLGrammar := [
         [[nonterminal, "identifier"], [nonterminal, "arrow"],
          [nonterminal, "alternation"]],
     ],
+    "grammar" => [
+        [[nonterminal, "production"], [nonterminal, "grammar"]],
+        [[nonterminal, "production"]],
+    ],
 ]
-
-def marleyQLReducer(t):
-    switch (t):
-        match [=="charLiteral", [_, c]]:
-            return [terminal, exactly(c)]
-        match [=="identifier", [_, i]]:
-            return [nonterminal, i]
-        match [=="rule", r, inner]:
-            return [marleyQLReducer(r)] + marleyQLReducer(inner)
-        match [=="rule"]:
-            return []
-        match [=="alternation", r, _, inner]:
-            return [marleyQLReducer(r)] + marleyQLReducer(inner)
-        match [=="alternation", r]:
-            return [marleyQLReducer(r)]
-        match [=="arrow", _]:
-            return null
-        match [=="production", head, _, rule]:
-            return [marleyQLReducer(head)[1] => marleyQLReducer(rule)]
 
 
 # It's assumed that left is the bigger of the two.
@@ -331,26 +320,66 @@ def testCombineProductions(assert):
 unittest([testCombineProductions])
 
 
-object rule__quasiParser:
+def marleyQLReducer(t):
+    switch (t):
+        match [=="charLiteral", [_, c]]:
+            return [terminal, exactly(c)]
+        match [=="identifier", [_, i]]:
+            return [nonterminal, i]
+        match [=="rule", r, inner]:
+            return [marleyQLReducer(r)] + marleyQLReducer(inner)
+        match [=="rule"]:
+            return []
+        match [=="alternation", r, _, inner]:
+            return [marleyQLReducer(r)] + marleyQLReducer(inner)
+        match [=="alternation", r]:
+            return [marleyQLReducer(r)]
+        match [=="arrow", _]:
+            return null
+        match [=="production", head, _, rule]:
+            return [marleyQLReducer(head)[1] => marleyQLReducer(rule)]
+        match [=="grammar", p, g]:
+            return combineProductions(marleyQLReducer(p), marleyQLReducer(g))
+        match [=="grammar", p]:
+            return marleyQLReducer(p)
+
+
+object marley__quasiParser:
     to valueMaker([piece]):
         def scanner := makeScanner(piece)
-        def parser := makeMarley(marleyQLGrammar, "production")
+        def parser := makeMarley(marleyQLGrammar, "grammar")
         while (scanner.hasTokens()):
-            parser.feed(scanner.nextToken())
+            def token := scanner.nextToken()
+            # traceln(`Next token: $token`)
+            parser.feed(token)
         def r := parser.results()[0]
         return object ruleSubstituter:
             to substitute(_):
                 return marleyQLReducer(r)
 
 
-def testRuleQP(assert):
+def testMarleyQPSingle(assert):
     def handwritten := ["breakfast" => [[[nonterminal, "eggs"],
                                          [terminal, exactly('&')],
                                          [nonterminal, "bacon"]]]]
-    def generated := rule`breakfast -> eggs '&' bacon`
+    def generated := marley`breakfast -> eggs '&' bacon`
     assert.equal(handwritten, generated)
 
-unittest([testRuleQP])
+def testMarleyQPDouble(assert):
+    def handwritten := [
+        "empty" => [[]],
+        "nonempty" => [[[nonterminal, "empty"]]],
+    ]
+    def generated := marley`
+        empty ->
+        nonempty -> empty
+    `
+    assert.equal(handwritten, generated)
+
+unittest([
+    testMarleyQPSingle,
+    testMarleyQPDouble,
+])
 
 
-[=> makeMarley, => rule__quasiParser]
+[=> makeMarley, => marley__quasiParser]
