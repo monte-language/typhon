@@ -32,12 +32,13 @@ def bench(args):
     print "Calibrating timing loop..."
     # Unroll do-while iteration.
     loops = 1
+    print "Trying 1 loop..."
     taken = time.time()
     obj.call(u"run", [])
     taken = time.time() - taken
-    while taken < 0.2 and loops < 100000000:
-        print "Trying", loops, "loops"
+    while taken < 1.0 and loops < 100000000:
         loops *= 10
+        print "Trying", loops, "loops..."
         acc = 0
         taken = time.time()
         while acc < loops:
@@ -45,7 +46,7 @@ def bench(args):
             obj.call(u"run", [])
         taken = time.time() - taken
         print "Took", taken, "seconds to run", loops, "loops"
-    print "Will take", loops, "loops at", taken, "seconds"
+    print "Okay! Will take", loops, "loops at", taken, "seconds"
 
     # Step 2: Take trials.
     print "Taking trials..."
@@ -81,7 +82,8 @@ def bench(args):
             sec = msec / 1000
             timing = "%f s/iteration" % sec
 
-    print "Took %d loops in %f seconds (%s)" % (loops, taken, timing)
+    print name + u":", "Took %d loops in %f seconds (%s)" % (loops, taken,
+                                                             timing)
 
     # All done!
     return NullObject
