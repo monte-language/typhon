@@ -14,7 +14,7 @@
 
 import os
 
-from errno import EADDRINUSE, EBADF, EPIPE
+from errno import EADDRINUSE, EBADF, ECONNRESET, EPIPE
 
 from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rsignal import pypysig_poll, pypysig_set_wakeup_fd
@@ -128,7 +128,11 @@ class Socket(Selectable):
             if cse.errno == EBADF:
                 self.error(reactor, u"Can't read from invalidated socket")
                 return
+            elif cse.errno == ECONNRESET:
+                self.error(reactor, u"Can't read from reset socket")
+                return
             else:
+                print "Not prepared to handle errno:", cse.errno
                 raise
 
         if not buf:
