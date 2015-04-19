@@ -25,10 +25,10 @@ def _makeBytes(chunks):
                         switch (values[index]):
                             match s :Str:
                                 rv += [c.asInteger() for c in s]
-                            match x:
-                                rv += x
-                    match _:
-                        rv += chunk
+                            match bs :Bytes:
+                                rv += bs
+                    match bs :Bytes:
+                        rv += bs
             return rv
 
 
