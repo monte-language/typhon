@@ -76,10 +76,10 @@ def makePumpTube(pump):
             return upstream.stopFlow()
 
         to flush():
-            if (__equalizer.optSame(downstream, null) == false):
-                for item in stash:
-                    downstream.receive(item)
-                stash := []
+            while (stash.size() > 0 &! __equalizer.optSame(downstream, null)):
+                def [piece] + newStash := stash
+                stash := newStash
+                downstream.receive(piece)
 
 
 [=> makePumpTube]
