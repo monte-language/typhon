@@ -33,6 +33,7 @@ class _NullObject(Object):
 NullObject = _NullObject()
 
 AND_1 = getAtom(u"and", 1)
+BUTNOT_1 = getAtom(u"butNot", 1)
 NOT_0 = getAtom(u"not", 0)
 OR_1 = getAtom(u"or", 1)
 PICK_2 = getAtom(u"pick", 2)
@@ -58,6 +59,9 @@ class BoolObject(Object):
         # and/1
         if atom is AND_1:
             return wrapBool(self._b and unwrapBool(args[0]))
+
+        if atom is BUTNOT_1:
+            return wrapBool(self._b and not unwrapBool(args[0]))
 
         # not/0
         if atom is NOT_0:
