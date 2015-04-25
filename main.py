@@ -174,9 +174,9 @@ def entryPoint(argv):
         rv = se.code
     finally:
         recorder.stop()
+        recorder.printResults()
 
         if config.profile:
-            recorder.printResults()
 
             # Print out flame graph information.
             with open("flames.txt", "wb") as handle:
