@@ -27,7 +27,7 @@ def makePumpTube(pump):
             stash += pumped
             # If we no longer have a downstream, then buffer the received item
             # and pause upstream. We'll unpause on the next flowTo().
-            if (__equalizer.sameYet(downstream, null) && pause == null):
+            if (downstream == null && pause == null):
                 if (upstream != null):
                     pause := upstream.pauseFlow()
             else:
@@ -43,29 +43,28 @@ def makePumpTube(pump):
                 downstream.flowStopped(reason)
 
         to flowTo(drain):
-            # Be aware that the drain could be a promise.
+            # The drain must be fulfilled. We handle flow control, not
+            # asynchrony.
 
             # Disconnect.
-            if (__equalizer.sameYet(drain, null)):
+            if (drain == null):
                 downstream := null
                 return null
 
+            # Contractual obligation: Fire flowingFrom() callback.
+            def rv := drain.flowingFrom(pumpTube)
             downstream := drain
 
-            def [p, r] := Ref.promise()
-            when (downstream) ->
-                r.resolve(drain.flowingFrom(pumpTube))
+            # If there's any stashed output (leftovers, pushback, etc.) reflow
+            # to the new drain.
+            pumpTube.flush()
 
-                # If there's any stashed output (leftovers, pushback, etc.) reflow
-                # to the new drain.
-                pumpTube.flush()
+            # If we asked upstream to pause, ask them to unpause now.
+            if (pause != null):
+                pause.unpause()
+                pause := null
 
-                # If we asked upstream to pause, ask them to unpause now.
-                if (pause != null):
-                    pause.unpause()
-                    pause := null
-
-            return p
+            return rv
 
         to pauseFlow():
             return upstream.pauseFlow()
@@ -76,7 +75,7 @@ def makePumpTube(pump):
             return upstream.stopFlow()
 
         to flush():
-            while (stash.size() > 0 &! __equalizer.optSame(downstream, null)):
+            while (stash.size() > 0 &! downstream == null):
                 def [piece] + newStash := stash
                 stash := newStash
                 downstream.receive(piece)
