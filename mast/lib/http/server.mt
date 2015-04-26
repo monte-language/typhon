@@ -13,7 +13,7 @@
 # under the License.
 
 def [=> b__quasiParser] | _ := import("lib/bytes")
-def [=> UTF8Encode] | _ := import("lib/utf8")
+def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
 def [=> makeEnum] | _ := import("lib/enum")
@@ -65,7 +65,8 @@ def makeRequestPump():
                         return false
 
                     def b`@verb @uri HTTP/1.1$\r$\n@t` exit ej := buf
-                    pendingRequestLine := [verb, uri]
+                    # XXX URI should be decoded with URI decoder
+                    pendingRequestLine := [UTF8Decode(verb), UTF8Decode(uri)]
                     pendingHeaders := [].asMap()
                     state := HEADER
                     buf := t
@@ -81,7 +82,7 @@ def makeRequestPump():
                         return true
 
                     def b`@header:@value$\r$\n@t` exit ej := buf
-                    pendingHeaders |= [header => value]
+                    pendingHeaders |= [UTF8Decode(header) => UTF8Decode(value)]
                     buf := t
                     return true
 
