@@ -26,6 +26,8 @@ from typhon.smallcaps.machine import SmallCaps
 
 class ScriptObject(Object):
 
+    _immutable_fields_ = "codeScript", "closure[*]"
+
     def __init__(self, codeScript, closure, displayName):
         self.codeScript = codeScript
         self.closure = closure
@@ -51,7 +53,7 @@ class ScriptObject(Object):
 
     @unroll_safe
     def recv(self, atom, args):
-        code = self.codeScript.methods.get(atom, None)
+        code = self.codeScript.lookupMethod(atom)
         if code is None:
             # No atoms matched, so there's no prebuilt methods. Instead, we'll
             # use our matchers.

@@ -14,7 +14,7 @@
 
 from collections import OrderedDict
 
-from rpython.rlib.jit import elidable
+from rpython.rlib.jit import elidable, elidable_promote
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
@@ -945,6 +945,10 @@ class CodeScript(object):
 
         code = compiler.makeCode()
         self.matchers.append(code)
+
+    @elidable_promote()
+    def lookupMethod(self, atom):
+        return self.methods.get(atom, None)
 
 
 class Script(Node):
