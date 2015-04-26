@@ -44,11 +44,11 @@ def loopJIT(consumer, ejector, iterator):
         # Just copy and inline here.
         code = consumer.codeScript.methods.get(RUN_2, None)
         if code is not None:
-            machine = SmallCaps(code, consumer.closure)
+            machine = SmallCaps(code, consumer.closure, consumer.globals)
             # JIT merge point.
-            loopDriver.jit_merge_point(code=code,
-                    consumer=consumer, ejector=ejector, iterator=iterator,
-                    machine=machine, env=machine.env)
+            loopDriver.jit_merge_point(code=code, consumer=consumer,
+                                       ejector=ejector, iterator=iterator,
+                                       machine=machine, env=machine.env)
             values = unwrapList(iterator.call(u"next", [ejector]))
             # Push the arguments onto the stack, backwards.
             values.reverse()

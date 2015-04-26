@@ -38,11 +38,12 @@ class Environment(object):
     outer closed-over bindings and one for local names.
     """
 
-    _immutable_fields_ = "frame[*]",
+    _immutable_fields_ = "frame[*]", "globals[*]"
 
     _virtualizable_ = (
         "local[*]",
         "frame[*]",
+        "globals[*]",
         "valueStack[*]", "depth",
         "handlerStack[*]", "handlerDepth",
     )
@@ -54,7 +55,7 @@ class Environment(object):
     # The handler stack pointer. Same rules as stack pointer.
     handlerDepth = 0
 
-    def __init__(self, frame, localSize, stackSize, handlerSize):
+    def __init__(self, frame, globals, localSize, stackSize, handlerSize):
         self = hint(self, access_directly=True, fresh_virtualizable=True)
 
         assert localSize >= 0, "Negative local size not allowed!"
@@ -62,6 +63,7 @@ class Environment(object):
         assert handlerSize >= 0, "Negative handler stack size not allowed!"
 
         self.frame = frame
+        self.globals = globals
         self.local = [None] * localSize
         # Plus one extra empty cell to ease stack pointer math.
         self.stackSize = stackSize + 1
@@ -107,13 +109,36 @@ class Environment(object):
         self.handlerStack[i] = None
         return rv
 
+    def getBindingGlobal(self, index):
+        # The promotion here is justified by a lack of ability for any code
+        # object to dynamically alter its frame index. If the code is green
+        # (and they're always green), then the index is green as well.
+        index = promote(index)
+        assert index >= 0, "Global index was negative!?"
+        assert index < len(self.globals), "Global index out-of-bounds (%d, %d)" % (index, len(self.globals))
+
+        # Oh, and we can promote globals too.
+        return promote(self.globals[index])
+
+    def getSlotGlobal(self, index):
+        binding = self.getBindingGlobal(index)
+        return binding.callAtom(GET_0, [])
+
+    def getValueGlobal(self, index):
+        slot = self.getSlotGlobal(index)
+        return slot.callAtom(GET_0, [])
+
+    def putValueGlobal(self, index, value):
+        slot = self.getSlotGlobal(index)
+        return slot.callAtom(PUT_1, [value])
+
     def getBindingFrame(self, index):
         # The promotion here is justified by a lack of ability for any code
         # object to dynamically alter its frame index. If the code is green
         # (and they're always green), then the index is green as well.
         index = promote(index)
         assert index >= 0, "Frame index was negative!?"
-        assert index < len(self.frame), "Frame index out-of-bounds :c"
+        assert index < len(self.frame), "Frame index out-of-bounds (%d, %d)" % (index, len(self.frame))
 
         return self.frame[index]
 

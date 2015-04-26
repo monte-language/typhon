@@ -12,9 +12,10 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import jit_debug, promote, unroll_safe
+from rpython.rlib.jit import elidable_promote, jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import specialize
 
+from typhon.atoms import getAtom
 from typhon.env import Environment
 from typhon.errors import Ejecting, UserException
 from typhon.objects.collections import unwrapList
@@ -26,6 +27,10 @@ from typhon.profile import csp
 from typhon.smallcaps.ops import *
 
 
+GET_0 = getAtom(u"get", 0)
+PUT_1 = getAtom(u"put", 1)
+
+
 class SmallCaps(object):
     """
     A SmallCaps abstract bytecode interpreter.
@@ -34,9 +39,9 @@ class SmallCaps(object):
     _immutable_ = True
     _immutable_fields_ = "code", "env"
 
-    def __init__(self, code, frame):
+    def __init__(self, code, frame, globals):
         self.code = code
-        self.env = Environment(frame, self.code.localSize(),
+        self.env = Environment(frame, globals, self.code.localSize(),
                                promote(self.code.maxDepth + 5),
                                promote(self.code.maxHandlerDepth))
 
@@ -44,10 +49,11 @@ class SmallCaps(object):
     def withDictScope(code, scope):
         try:
             frame = [scope[key] for key in code.frame]
+            globals = [scope[key] for key in code.globals]
         except KeyError:
             print u"Key '%s' was not in scope!" % key
             raise
-        return SmallCaps(code, frame)
+        return SmallCaps(code, frame, globals)
 
     def pop(self):
         return self.env.pop()
@@ -61,9 +67,11 @@ class SmallCaps(object):
     @unroll_safe
     def bindObject(self, index):
         script = self.code.script(index)
+        globals = [self.pop() for _ in script.globalNames]
+        globals.reverse()
         closure = [self.pop() for _ in script.closureNames]
         closure.reverse()
-        obj = script.makeObject(closure)
+        obj = script.makeObject(closure, globals)
         # Make sure that the object has access to itself, if necessary.
         obj.patchSelf(Binding(FinalSlot(obj)))
         self.push(obj)
@@ -99,7 +107,7 @@ class SmallCaps(object):
 
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)
-        # jit_debug(reverseOps[instruction], index, pc)
+        jit_debug(reverseOps[instruction], index, pc)
 
         if instruction == DUP:
             self.push(self.peek())
@@ -121,13 +129,17 @@ class SmallCaps(object):
             self.push(y)
             self.push(x)
             return pc + 1
+        elif instruction == ASSIGN_GLOBAL:
+            value = self.pop()
+            self.env.putValueGlobal(index, value)
+            return pc + 1
         elif instruction == ASSIGN_FRAME:
             value = self.pop()
-            slot = self.env.putValueFrame(index, value)
+            self.env.putValueFrame(index, value)
             return pc + 1
         elif instruction == ASSIGN_LOCAL:
             value = self.pop()
-            slot = self.env.putValueLocal(index, value)
+            self.env.putValueLocal(index, value)
             return pc + 1
         elif instruction == BIND:
             binding = self.pop()
@@ -137,17 +149,26 @@ class SmallCaps(object):
             slot = self.pop()
             self.env.createSlotLocal(index, slot)
             return pc + 1
+        elif instruction == SLOT_GLOBAL:
+            self.push(self.env.getSlotGlobal(index))
+            return pc + 1
         elif instruction == SLOT_FRAME:
             self.push(self.env.getSlotFrame(index))
             return pc + 1
         elif instruction == SLOT_LOCAL:
             self.push(self.env.getSlotLocal(index))
             return pc + 1
+        elif instruction == NOUN_GLOBAL:
+            self.push(self.env.getValueGlobal(index))
+            return pc + 1
         elif instruction == NOUN_FRAME:
             self.push(self.env.getValueFrame(index))
             return pc + 1
         elif instruction == NOUN_LOCAL:
             self.push(self.env.getValueLocal(index))
+            return pc + 1
+        elif instruction == BINDING_GLOBAL:
+            self.push(self.env.getBindingGlobal(index))
             return pc + 1
         elif instruction == BINDING_FRAME:
             self.push(self.env.getBindingFrame(index))

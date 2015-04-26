@@ -32,14 +32,29 @@ from typhon.smallcaps.peephole import peephole
 
 class Compiler(object):
 
-    def __init__(self, initialFrame=None):
+    def __init__(self, initialFrame=None, initialGlobals=None,
+                 availableClosure=None):
         self.instructions = []
 
-        self.atoms = OrderedDict()
         if initialFrame is None:
             self.frame = OrderedDict()
         else:
             self.frame = initialFrame
+
+        if initialGlobals is None:
+            self.globals = OrderedDict()
+        else:
+            self.globals = initialGlobals
+        # print "Initial frame:", self.frame.keys()
+        # print "Initial globals:", self.globals.keys()
+
+        if availableClosure is None:
+            self.availableClosure = OrderedDict()
+        else:
+            self.availableClosure = availableClosure
+            # print "Available closure:", self.availableClosure.keys()
+
+        self.atoms = OrderedDict()
         self.literals = OrderedDict()
         self.locals = OrderedDict()
         self.scripts = []
@@ -48,13 +63,17 @@ class Compiler(object):
         atoms = self.atoms.keys()
         frame = self.frame.keys()
         literals = self.literals.keys()
+        globals = self.globals.keys()
         locals = self.locals.keys()
 
-        code = Code(self.instructions, atoms, literals, frame, locals,
-                    self.scripts)
+        code = Code(self.instructions, atoms, literals, globals, frame,
+                    locals, self.scripts)
         # Run optimizations on code, including inner code.
         peephole(code)
         return code
+
+    def canCloseOver(self, name):
+        return name in self.frame or name in self.availableClosure
 
     def addInstruction(self, name, index):
         self.instructions.append((ops[name], index))
@@ -64,6 +83,11 @@ class Compiler(object):
         if atom not in self.atoms:
             self.atoms[atom] = len(self.atoms)
         return self.atoms[atom]
+
+    def addGlobal(self, name):
+        if name not in self.globals:
+            self.globals[name] = len(self.globals)
+        return self.globals[name]
 
     def addFrame(self, name):
         if name not in self.frame:
@@ -273,7 +297,7 @@ class Tuple(Node):
 
     def compile(self, compiler):
         size = len(self._t)
-        makeList = compiler.addFrame(u"__makeList")
+        makeList = compiler.addGlobal(u"__makeList")
         compiler.addInstruction("NOUN_FRAME", makeList)
         # [__makeList]
         for node in self._t:
@@ -329,15 +353,21 @@ class Assign(Node):
         compiler.addInstruction("DUP", 0)
         # [rvalue rvalue]
         # It's unknown yet whether the assignment is to a local slot or an
-        # (outer) frame slot. Check to see whether the name is already known
-        # to be local; if not, then it must be in the outer frame.
+        # (outer) frame slot, or even to a global frame slot. Check to see
+        # whether the name is already known to be local; if not, then it must
+        # be in the outer frame. Unless it's not in there, in which case it
+        # must be global.
         if self.target in compiler.locals:
             index = compiler.locals[self.target]
             compiler.addInstruction("ASSIGN_LOCAL", index)
             # [rvalue]
-        else:
+        elif compiler.canCloseOver(self.target):
             index = compiler.addFrame(self.target)
             compiler.addInstruction("ASSIGN_FRAME", index)
+            # [rvalue]
+        else:
+            index = compiler.addGlobal(self.target)
+            compiler.addInstruction("ASSIGN_GLOBAL", index)
             # [rvalue]
 
 
@@ -374,9 +404,13 @@ class Binding(Node):
             index = compiler.addLocal(self.name)
             compiler.addInstruction("BINDING_LOCAL", index)
             # [binding]
-        else:
+        elif compiler.canCloseOver(self.name):
             index = compiler.addFrame(self.name)
             compiler.addInstruction("BINDING_FRAME", index)
+            # [binding]
+        else:
+            index = compiler.addGlobal(self.name)
+            compiler.addInstruction("BINDING_GLOBAL", index)
             # [binding]
 
 
@@ -818,9 +852,15 @@ class Noun(Node):
         if self.name in compiler.locals:
             index = compiler.addLocal(self.name)
             compiler.addInstruction("NOUN_LOCAL", index)
-        else:
+            # print "I think", self.name, "is local"
+        elif compiler.canCloseOver(self.name):
             index = compiler.addFrame(self.name)
             compiler.addInstruction("NOUN_FRAME", index)
+            # print "I think", self.name, "is frame"
+        else:
+            index = compiler.addGlobal(self.name)
+            compiler.addInstruction("NOUN_GLOBAL", index)
+            # print "I think", self.name, "is global"
 
 
 def nounToString(n):
@@ -841,10 +881,6 @@ class Obj(Node):
         self._as = objectAs
         self._implements = implements
         self._script = script
-
-        # Create a cached code object for this object.
-        self.codeScript = CodeScript(formatName(name))
-        self.codeScript.addScript(self._script)
 
     @staticmethod
     def fromAST(doc, name, auditors, script):
@@ -878,6 +914,13 @@ class Obj(Node):
         return self._script.usesName(name)
 
     def compile(self, compiler):
+        # Create a code object for this object.
+        availableClosure = compiler.frame.copy()
+        availableClosure.update(compiler.locals)
+        self.codeScript = CodeScript(formatName(self._n), availableClosure)
+        self.codeScript.addScript(self._script)
+
+        # The local closure is first to be pushed and last to be popped.
         for name in self.codeScript.closureNames:
             if name == self.codeScript.displayName:
                 # Put in a null and patch it later via UserObject.patchSelf().
@@ -885,9 +928,25 @@ class Obj(Node):
             elif name in compiler.locals:
                 index = compiler.addLocal(name)
                 compiler.addInstruction("BINDING_LOCAL", index)
-            else:
+            elif compiler.canCloseOver(name):
                 index = compiler.addFrame(name)
                 compiler.addInstruction("BINDING_FRAME", index)
+            else:
+                index = compiler.addGlobal(name)
+                compiler.addInstruction("BINDING_GLOBAL", index)
+
+        # Globals are pushed after closure, so they'll be popped first.
+        for name in self.codeScript.globalNames:
+            if name in compiler.locals:
+                index = compiler.addLocal(name)
+                compiler.addInstruction("BINDING_LOCAL", index)
+            elif compiler.canCloseOver(name):
+                index = compiler.addFrame(name)
+                compiler.addInstruction("BINDING_FRAME", index)
+            else:
+                index = compiler.addGlobal(name)
+                compiler.addInstruction("BINDING_GLOBAL", index)
+
         index = compiler.addScript(self.codeScript)
         compiler.addInstruction("BINDOBJECT", index)
         compiler.addInstruction("DUP", 0)
@@ -897,15 +956,20 @@ class Obj(Node):
 
 class CodeScript(object):
 
-    def __init__(self, displayName):
+    def __init__(self, displayName, availableClosure):
         self.displayName = displayName
+        self.availableClosure = availableClosure
+        # Objects can close over themselves.
+        self.availableClosure[displayName] = 42
 
         self.methods = {}
         self.matchers = []
-        self.closureNames = OrderedDict()
 
-    def makeObject(self, closure):
-        return ScriptObject(self, closure, self.displayName)
+        self.closureNames = OrderedDict()
+        self.globalNames = OrderedDict()
+
+    def makeObject(self, closure, globals):
+        return ScriptObject(self, globals, closure, self.displayName)
 
     def addScript(self, script):
         assert isinstance(script, Script)
@@ -919,7 +983,8 @@ class CodeScript(object):
     def addMethod(self, method):
         verb = method._verb
         arity = len(method._ps)
-        compiler = Compiler(self.closureNames)
+        compiler = Compiler(self.closureNames, self.globalNames,
+                            self.availableClosure)
         for param in method._ps:
             param.compile(compiler)
         method._b.compile(compiler)
@@ -939,7 +1004,7 @@ class CodeScript(object):
         self.methods[atom] = code
 
     def addMatcher(self, matcher):
-        compiler = Compiler(self.closureNames)
+        compiler = Compiler(self.closureNames, self.globalNames)
         matcher._pattern.compile(compiler)
         matcher._block.compile(compiler)
 
@@ -1170,8 +1235,8 @@ class FinalPattern(Pattern):
             # [guard specimen ej]
             compiler.call(u"coerce", 2)
             # [specimen]
-        index = compiler.addFrame(u"_makeFinalSlot")
-        compiler.addInstruction("NOUN_FRAME", index)
+        index = compiler.addGlobal(u"_makeFinalSlot")
+        compiler.addInstruction("NOUN_GLOBAL", index)
         compiler.addInstruction("SWAP", 0)
         # [_makeFinalSlot specimen]
         compiler.call(u"run", 1)
@@ -1294,8 +1359,8 @@ class VarPattern(Pattern):
 
     def compile(self, compiler):
         # [specimen ej]
-        index = compiler.addFrame(u"_makeVarSlot")
-        compiler.addInstruction("NOUN_FRAME", index)
+        index = compiler.addGlobal(u"_makeVarSlot")
+        compiler.addInstruction("NOUN_GLOBAL", index)
         # [specimen ej _makeVarSlot]
         compiler.addInstruction("ROT", 0)
         compiler.addInstruction("ROT", 0)

@@ -26,10 +26,11 @@ from typhon.smallcaps.machine import SmallCaps
 
 class ScriptObject(Object):
 
-    _immutable_fields_ = "codeScript", "closure[*]"
+    _immutable_fields_ = "codeScript", "globals[*]", "closure[*]"
 
-    def __init__(self, codeScript, closure, displayName):
+    def __init__(self, codeScript, globals, closure, displayName):
         self.codeScript = codeScript
+        self.globals = globals
         self.closure = closure
         self.displayName = displayName
 
@@ -59,7 +60,7 @@ class ScriptObject(Object):
             # use our matchers.
             for matcher in self.codeScript.matchers:
                 with Ejector() as ej:
-                    machine = SmallCaps(matcher, self.closure)
+                    machine = SmallCaps(matcher, self.closure, self.globals)
                     machine.push(ConstList([StrObject(atom.verb),
                                             ConstList(args)]))
                     machine.push(ej)
@@ -77,7 +78,7 @@ class ScriptObject(Object):
 
             raise Refused(self, atom, args)
 
-        machine = SmallCaps(code, self.closure)
+        machine = SmallCaps(code, self.closure, self.globals)
         # print "--- Running", self.displayName, atom, args
         # Push the arguments onto the stack, backwards.
         args.reverse()

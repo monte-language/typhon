@@ -13,11 +13,13 @@
 # under the License.
 
 from typhon.smallcaps.ops import (DUP, ROT, POP, SWAP, ASSIGN_FRAME,
-                                  ASSIGN_LOCAL, BIND, BINDSLOT, SLOT_FRAME,
-                                  SLOT_LOCAL, NOUN_FRAME, NOUN_LOCAL,
-                                  BINDING_FRAME, BINDING_LOCAL, LIST_PATT,
-                                  LITERAL, BINDOBJECT, SCOPE, EJECTOR, TRY,
-                                  UNWIND, END_HANDLER, BRANCH, CALL, JUMP)
+                                  ASSIGN_GLOBAL, ASSIGN_LOCAL, BIND, BINDSLOT,
+                                  SLOT_FRAME, SLOT_GLOBAL, SLOT_LOCAL,
+                                  NOUN_FRAME, NOUN_GLOBAL, NOUN_LOCAL,
+                                  BINDING_FRAME, BINDING_GLOBAL,
+                                  BINDING_LOCAL, LIST_PATT, LITERAL,
+                                  BINDOBJECT, SCOPE, EJECTOR, TRY, UNWIND,
+                                  END_HANDLER, BRANCH, CALL, JUMP)
 
 
 class AbstractInterpreter(object):
@@ -68,6 +70,9 @@ class AbstractInterpreter(object):
         elif instruction == ASSIGN_FRAME:
             self.pop()
             return pc + 1
+        elif instruction == ASSIGN_GLOBAL:
+            self.pop()
+            return pc + 1
         elif instruction == ASSIGN_LOCAL:
             self.pop()
             return pc + 1
@@ -80,16 +85,25 @@ class AbstractInterpreter(object):
         elif instruction == SLOT_FRAME:
             self.currentDepth += 1
             return pc + 1
+        elif instruction == SLOT_GLOBAL:
+            self.currentDepth += 1
+            return pc + 1
         elif instruction == SLOT_LOCAL:
             self.currentDepth += 1
             return pc + 1
         elif instruction == NOUN_FRAME:
             self.currentDepth += 1
             return pc + 1
+        elif instruction == NOUN_GLOBAL:
+            self.currentDepth += 1
+            return pc + 1
         elif instruction == NOUN_LOCAL:
             self.currentDepth += 1
             return pc + 1
         elif instruction == BINDING_FRAME:
+            self.currentDepth += 1
+            return pc + 1
+        elif instruction == BINDING_GLOBAL:
             self.currentDepth += 1
             return pc + 1
         elif instruction == BINDING_LOCAL:

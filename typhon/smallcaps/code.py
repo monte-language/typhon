@@ -15,10 +15,11 @@
 from rpython.rlib.jit import elidable_promote
 
 from typhon.smallcaps.abstract import AbstractInterpreter
-from typhon.smallcaps.ops import (reverseOps, ASSIGN_FRAME, ASSIGN_LOCAL,
-                                  BIND, BINDSLOT, SLOT_FRAME, SLOT_LOCAL,
-                                  NOUN_FRAME, NOUN_LOCAL, BINDING_FRAME,
-                                  BINDING_LOCAL, CALL)
+from typhon.smallcaps.ops import (reverseOps, ASSIGN_GLOBAL, ASSIGN_FRAME,
+                                  ASSIGN_LOCAL, BIND, BINDSLOT, SLOT_GLOBAL,
+                                  SLOT_FRAME, SLOT_LOCAL, NOUN_GLOBAL,
+                                  NOUN_FRAME, NOUN_LOCAL, BINDING_GLOBAL,
+                                  BINDING_FRAME, BINDING_LOCAL, CALL)
 
 
 class Code(object):
@@ -28,17 +29,19 @@ class Code(object):
 
     _immutable_ = True
     _immutable_fields_ = ("instructions[*]?", "indices[*]?", "atoms[*]",
-                          "frame[*]", "literals[*]", "locals[*]?",
-                          "scripts[*]",
+                          "globals[*]", "frame[*]", "literals[*]",
+                          "locals[*]", "scripts[*]",
                           "maxDepth", "maxHandlerDepth")
 
-    def __init__(self, instructions, atoms, literals, frame, locals, scripts):
+    def __init__(self, instructions, atoms, literals, globals, frame, locals,
+                 scripts):
         # Copy all of the lists on construction, to satisfy RPython's need for
         # these lists to be immutable.
         self.instructions = [pair[0] for pair in instructions]
         self.indices = [pair[1] for pair in instructions]
         self.atoms = atoms[:]
         self.literals = literals[:]
+        self.globals = globals[:]
         self.frame = frame[:]
         self.locals = locals[:]
         self.scripts = scripts[:]
@@ -84,11 +87,14 @@ class Code(object):
         # warned.
         # elif instruction == LITERAL:
         #     base += " (%s)" % self.literals[index].toString().encode("utf-8")
+        elif instruction in (NOUN_GLOBAL, ASSIGN_GLOBAL, SLOT_GLOBAL,
+                             BINDING_GLOBAL):
+            base += " (%s)" % self.globals[index].encode("utf-8")
         elif instruction in (NOUN_FRAME, ASSIGN_FRAME, SLOT_FRAME,
-                BINDING_FRAME):
+                             BINDING_FRAME):
             base += " (%s)" % self.frame[index].encode("utf-8")
         elif instruction in (NOUN_LOCAL, ASSIGN_LOCAL, SLOT_LOCAL,
-                BINDING_LOCAL, BIND, BINDSLOT):
+                             BINDING_LOCAL, BIND, BINDSLOT):
             base += " (%s)" % self.locals[index].encode("utf-8")
         return base
 
