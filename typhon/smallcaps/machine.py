@@ -99,7 +99,7 @@ class SmallCaps(object):
 
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)
-        jit_debug(reverseOps[instruction], index, pc)
+        # jit_debug(reverseOps[instruction], index, pc)
 
         if instruction == DUP:
             self.push(self.peek())

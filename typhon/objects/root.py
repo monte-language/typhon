@@ -74,7 +74,7 @@ class Object(object):
         # Promote the atom, on the basis that atoms are generally reused.
         atom = promote(atom)
         # Log the atom to the JIT log. This line is not cheap.
-        jit_debug(atom.repr)
+        # jit_debug(atom.repr)
 
         try:
             return self.recv(atom, arguments)
