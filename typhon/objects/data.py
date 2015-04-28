@@ -325,15 +325,7 @@ class IntObject(Object):
         if atom is BITLENGTH_0:
             # bitLength/0: The number of bits required to store this integer.
             # Cribbed from PyPy.
-            i = self._i
-            rv = 0
-            if i < 0:
-                i = -((i + 1) >> 1)
-                rv = 1
-            while i:
-                rv += 1
-                i >>= 1
-            return IntObject(rv)
+            return IntObject(self.bitLength())
 
         if atom is COMPLEMENT_0:
             return IntObject(~self._i)
@@ -448,6 +440,18 @@ class IntObject(Object):
 
     def getInt(self):
         return self._i
+
+    @elidable
+    def bitLength(self):
+        i = self._i
+        rv = 0
+        if i < 0:
+            i = -((i + 1) >> 1)
+            rv = 1
+        while i:
+            rv += 1
+            i >>= 1
+        return rv
 
     def intPow(self, exponent):
         accumulator = 1
@@ -744,14 +748,11 @@ class StrObject(Object):
 
         if atom is ASLIST_0:
             from typhon.objects.collections import ConstList
-            return ConstList([CharObject(c) for c in self._s])
+            return ConstList(self.asList())
 
         if atom is ASSET_0:
-            from typhon.objects.collections import ConstSet, monteDict
-            d = monteDict()
-            for c in self._s:
-                d[CharObject(c)] = None
-            return ConstSet(d)
+            from typhon.objects.collections import ConstSet
+            return ConstSet(self.asSet())
 
         if atom is CONTAINS_1:
             needle = args[0]
@@ -773,21 +774,7 @@ class StrObject(Object):
 
         if atom is JOIN_1:
             from typhon.objects.collections import unwrapList
-            l = unwrapList(args[0])
-            ub = UnicodeBuilder()
-            first = True
-            for s in l:
-                # For all iterations except the first, append a copy of
-                # ourselves.
-                if first:
-                    first = False
-                else:
-                    ub.append(self._s)
-
-                string = unwrapStr(s)
-
-                ub.append(string)
-            return StrObject(ub.build())
+            return StrObject(self.join(unwrapList(args[0])))
 
         if atom is LASTINDEXOF_1:
             needle = unwrapStr(args[0])
@@ -821,31 +808,18 @@ class StrObject(Object):
 
         if atom is SPLIT_1:
             from typhon.objects.collections import ConstList
-            splitter = unwrapStr(args[0])
-            strings = [StrObject(s) for s in split(self._s, splitter)]
-            return ConstList(strings)
+            return ConstList(self.split(unwrapStr(args[0])))
 
         if atom is SPLIT_2:
-            splitter = unwrapStr(args[0])
-            splits = unwrapInt(args[1])
             from typhon.objects.collections import ConstList
-            strings = [StrObject(s) for s in split(self._s, splitter, splits)]
-            return ConstList(strings)
+            return ConstList(self.split(unwrapStr(args[0]),
+                                        unwrapInt(args[1])))
 
         if atom is TOLOWERCASE_0:
-            # Use current size as a size hint. In the best case, characters
-            # are one-to-one; in the next-best case, we overestimate and end
-            # up with a couple bytes of slop.
-            ub = UnicodeBuilder(len(self._s))
-            for char in self._s:
-                ub.append(unichr(unicodedb.tolower(ord(char))))
-            return StrObject(ub.build())
+            return StrObject(self.toLowerCase())
 
         if atom is TOUPPERCASE_0:
-            ub = UnicodeBuilder(len(self._s))
-            for char in self._s:
-                ub.append(unichr(unicodedb.toupper(ord(char))))
-            return StrObject(ub.build())
+            return StrObject(self.toUpperCase())
 
         if atom is _MAKEITERATOR_0:
             return strIterator(self._s)
@@ -854,6 +828,54 @@ class StrObject(Object):
 
     def getString(self):
         return self._s
+
+    def asList(self):
+        return [CharObject(c) for c in self._s]
+
+    def asSet(self):
+        from typhon.objects.collections import monteDict
+        d = monteDict()
+        for c in self._s:
+            d[CharObject(c)] = None
+        return d
+
+    def join(self, pieces):
+        ub = UnicodeBuilder()
+        first = True
+        for s in pieces:
+            # For all iterations except the first, append a copy of
+            # ourselves.
+            if first:
+                first = False
+            else:
+                ub.append(self._s)
+
+            string = unwrapStr(s)
+
+            ub.append(string)
+        return ub.build()
+
+    def split(self, splitter, splits=-1):
+        if splits == -1:
+            return [StrObject(s) for s in split(self._s, splitter)]
+        else:
+            return [StrObject(s) for s in split(self._s, splitter, splits)]
+
+    def toLowerCase(self):
+        # Use current size as a size hint. In the best case, characters
+        # are one-to-one; in the next-best case, we overestimate and end
+        # up with a couple bytes of slop.
+        ub = UnicodeBuilder(len(self._s))
+        for char in self._s:
+            ub.append(unichr(unicodedb.tolower(ord(char))))
+        return ub.build()
+
+    def toUpperCase(self):
+        # Same as toLowerCase().
+        ub = UnicodeBuilder(len(self._s))
+        for char in self._s:
+            ub.append(unichr(unicodedb.toupper(ord(char))))
+        return ub.build()
 
 
 def unwrapStr(o):

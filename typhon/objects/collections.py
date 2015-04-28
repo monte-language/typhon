@@ -188,16 +188,10 @@ class ConstList(Collection, Object):
                 return self
 
         if atom is ASMAP_0:
-            d = monteDict()
-            for i, o in enumerate(self.objects):
-                d[IntObject(i)] = o
-            return ConstMap(d)
+            return ConstMap(self.asMap())
 
         if atom is ASSET_0:
-            d = monteDict()
-            for o in self.objects:
-                d[o] = None
-            return ConstSet(d)
+            return ConstSet(self.asSet())
 
         if atom is DIVERGE_0:
             return FlexList(self.objects[:])
@@ -210,12 +204,7 @@ class ConstList(Collection, Object):
             return self.objects[index]
 
         if atom is INDEXOF_1:
-            from typhon.objects.equality import EQUAL, optSame
-            needle = args[0]
-            for index, specimen in enumerate(self.objects):
-                if optSame(needle, specimen) is EQUAL:
-                    return IntObject(index)
-            return IntObject(-1)
+            return IntObject(self.indexOf(args[0]))
 
         if atom is MULTIPLY_1:
             # multiply/1: Create a new list by repeating this list's contents.
@@ -234,16 +223,7 @@ class ConstList(Collection, Object):
             return self.sort()
 
         if atom is STARTOF_1:
-            # This is quadratic. It could be better.
-            from typhon.objects.equality import EQUAL, optSame
-            needleList = unwrapList(args[0])
-            for index in range(len(self.objects)):
-                for needleIndex, needle in enumerate(needleList):
-                    offset = index + needleIndex
-                    if optSame(self.objects[offset], needle) is not EQUAL:
-                        break
-                    return IntObject(index)
-            return IntObject(-1)
+            return IntObject(self.startOf(unwrapList(args[0])))
 
         if atom is WITH_1:
             # with/1: Create a new list with an appended object.
@@ -259,12 +239,31 @@ class ConstList(Collection, Object):
     def _makeIterator(self):
         return listIterator(self.objects)
 
+    def asMap(self):
+        d = monteDict()
+        for i, o in enumerate(self.objects):
+            d[IntObject(i)] = o
+        return d
+
+    def asSet(self):
+        d = monteDict()
+        for o in self.objects:
+            d[o] = None
+        return d
+
     def contains(self, needle):
         from typhon.objects.equality import EQUAL, optSame
         for specimen in self.objects:
             if optSame(needle, specimen) is EQUAL:
                 return True
         return False
+
+    def indexOf(self, needle):
+        from typhon.objects.equality import EQUAL, optSame
+        for index, specimen in enumerate(self.objects):
+            if optSame(needle, specimen) is EQUAL:
+                return index
+        return -1
 
     def put(self, index, value):
         top = len(self.objects)
@@ -297,6 +296,17 @@ class ConstList(Collection, Object):
         MonteSorter(l).sort()
         return ConstList(l)
 
+    def startOf(self, needleList):
+        # This is quadratic. It could be better.
+        from typhon.objects.equality import EQUAL, optSame
+        for index in range(len(self.objects)):
+            for needleIndex, needle in enumerate(needleList):
+                offset = index + needleIndex
+                if optSame(self.objects[offset], needle) is not EQUAL:
+                    break
+                return index
+        return -1
+
 
 class FlexList(Collection, Object):
 
@@ -325,16 +335,10 @@ class FlexList(Collection, Object):
             return ConstList(self.flexObjects + unwrapList(other))
 
         if atom is ASMAP_0:
-            d = monteDict()
-            for i, o in enumerate(self.flexObjects):
-                d[IntObject(i)] = o
-            return ConstMap(d)
+            return ConstMap(self.asMap())
 
         if atom is ASSET_0:
-            d = monteDict()
-            for o in self.flexObjects:
-                d[o] = None
-            return ConstSet(d)
+            return ConstSet(self.asSet())
 
         if atom is DIVERGE_0:
             return FlexList(self.flexObjects)
@@ -347,12 +351,7 @@ class FlexList(Collection, Object):
             return self.flexObjects[index]
 
         if atom is INDEXOF_1:
-            from typhon.objects.equality import EQUAL, optSame
-            needle = args[0]
-            for index, specimen in enumerate(self.flexObjects):
-                if optSame(needle, specimen) is EQUAL:
-                    return IntObject(index)
-            return IntObject(-1)
+            return IntObject(self.indexOf(args[0]))
 
         if atom is MULTIPLY_1:
             # multiply/1: Create a new list by repeating this list's contents.
@@ -390,12 +389,31 @@ class FlexList(Collection, Object):
         # iteration over a snapshot of the list's contents at that point.
         return listIterator(self.flexObjects[:])
 
+    def asMap(self):
+        d = monteDict()
+        for i, o in enumerate(self.flexObjects):
+            d[IntObject(i)] = o
+        return d
+
+    def asSet(self):
+        d = monteDict()
+        for o in self.flexObjects:
+            d[o] = None
+        return d
+
     def contains(self, needle):
         from typhon.objects.equality import EQUAL, optSame
         for specimen in self.flexObjects:
             if optSame(needle, specimen) is EQUAL:
                 return True
         return False
+
+    def indexOf(self, needle):
+        from typhon.objects.equality import EQUAL, optSame
+        for index, specimen in enumerate(self.flexObjects):
+            if optSame(needle, specimen) is EQUAL:
+                return index
+        return -1
 
     def put(self, index, value):
         top = len(self.flexObjects)
@@ -517,9 +535,7 @@ class ConstMap(Collection, Object):
 
     def _recv(self, atom, args):
         if atom is _UNCALL_0:
-            rv = ConstList([ConstList([k, v])
-                for k, v in self.objectMap.items()])
-            return ConstList([StrObject(u"fromPairs"), rv])
+            return ConstList(self._uncall())
 
         if atom is ASSET_0:
             return ConstSet(self.objectMap)
@@ -567,6 +583,10 @@ class ConstMap(Collection, Object):
 
     def _makeIterator(self):
         return mapIterator(self.objectMap.items())
+
+    def _uncall(self):
+        rv = ConstList([ConstList([k, v]) for k, v in self.objectMap.items()])
+        return [StrObject(u"fromPairs"), rv]
 
     def contains(self, needle):
         return needle in self.objectMap
