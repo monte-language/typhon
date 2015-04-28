@@ -17,6 +17,7 @@ def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
 def [=> makeEnum] | _ := import("lib/enum")
+def [=> percentDecode] | _ := import("lib/percent")
 
 def [RequestState, REQUEST, HEADER, BODY] := makeEnum(
     ["request", "header", "body"])
@@ -64,9 +65,10 @@ def makeRequestPump():
                     if (buf.startOf(b`$\r$\n`) == -1):
                         return false
 
+                    # XXX it'd be swell if these were subpatterns
                     def b`@verb @uri HTTP/1.1$\r$\n@t` exit ej := buf
-                    # XXX URI should be decoded with URI decoder
-                    pendingRequestLine := [UTF8Decode(verb), UTF8Decode(uri)]
+                    pendingRequestLine := [UTF8Decode(verb),
+                                           percentDecode(uri)]
                     pendingHeaders := [].asMap()
                     state := HEADER
                     buf := t

@@ -2,7 +2,8 @@ MONTE = ~/repos/monte/monte
 MONTE_VENV = ~/repos/monte/monte/v
 
 all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
-	lib/regex.ty lib/utf8.ty lib/words.ty \
+	lib/regex.ty lib/words.ty \
+	lib/percent.ty lib/utf8.ty \
 	lib/continued.ty \
 	lib/tokenBucket.ty lib/loopingCall.ty lib/singleUse.ty \
 	lib/cache.ty lib/paths.ty \
