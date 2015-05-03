@@ -193,6 +193,21 @@ class TestStr(TestCase):
         result = s.call(u"lastIndexOf", [StrObject(u"x")])
         self.assertEqual(result.getInt(), -1)
 
+    def testTrimEmpty(self):
+        s = StrObject(u"")
+        result = s.call(u"trim", [])
+        self.assertEqual(result._s, u"")
+
+    def testTrimSpaces(self):
+        s = StrObject(u"    ")
+        result = s.call(u"trim", [])
+        self.assertEqual(result._s, u"")
+
+    def testTrimWord(self):
+        s = StrObject(u"  testing  ")
+        result = s.call(u"trim", [])
+        self.assertEqual(result._s, u"testing")
+
 
 
 class TestDouble(TestCase):

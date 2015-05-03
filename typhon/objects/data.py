@@ -77,6 +77,7 @@ SUBTRACT_1 = getAtom(u"subtract", 1)
 TAN_0 = getAtom(u"tan", 0)
 TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
 TOUPPERCASE_0 = getAtom(u"toUpperCase", 0)
+TRIM_0 = getAtom(u"trim", 0)
 XOR_1 = getAtom(u"xor", 1)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 
@@ -821,6 +822,9 @@ class StrObject(Object):
         if atom is TOUPPERCASE_0:
             return StrObject(self.toUpperCase())
 
+        if atom is TRIM_0:
+            return StrObject(self.trim())
+
         if atom is _MAKEITERATOR_0:
             return strIterator(self._s)
 
@@ -876,6 +880,22 @@ class StrObject(Object):
         for char in self._s:
             ub.append(unichr(unicodedb.toupper(ord(char))))
         return ub.build()
+
+    def trim(self):
+        if len(self._s) == 0:
+            return u""
+
+        left = 0
+        right = len(self._s)
+
+        while left < right and unicodedb.isspace(ord(self._s[left])):
+            left += 1
+
+        while left < right and unicodedb.isspace(ord(self._s[right - 1])):
+            right -= 1
+
+        assert right >= 0, "StrObject.trim/0: Proven impossible"
+        return self._s[left:right]
 
 
 def unwrapStr(o):
