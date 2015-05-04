@@ -21,7 +21,13 @@ from rpython.rlib.rsignal import pypysig_poll, pypysig_set_wakeup_fd
 from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
 
 from typhon.objects.networking.sockets import SocketDrain, SocketFount
+from typhon.objects.networking.stdio import InputFount
 from typhon.vats import currentVat
+
+
+# The maximum amount of data to receive from a single packet.
+# XXX this should be a runtime tunable too, probably.
+MAX_RECV = 8192
 
 
 class Selectable(object):
@@ -65,13 +71,86 @@ class Wakeup(Selectable):
         pass
 
 
+class StandardInput(Selectable):
+    """
+    Standard input.
+    """
+
+    def __init__(self):
+        self._founts = []
+
+    def addToReactor(self, reactor):
+        reactor.addFD(0, self)
+
+    def removeFromReactor(self, reactor):
+        reactor.dropFD(0)
+
+    def wantsWrite(self):
+        return False
+
+    def read(self, reactor):
+        buf = os.read(0, MAX_RECV)
+        if not buf:
+            self.error(reactor, u"End of stream")
+            return
+
+        for fount in self._founts:
+            fount.receive(buf)
+
+    def error(self, reactor, reason):
+        # We don't terminate the founts immediately; they need to drain.
+        self.removeFromReactor(reactor)
+
+    def createFount(self):
+        fount = InputFount()
+        self._founts.append(fount)
+        return fount
+
+
+class StandardOutput(Selectable):
+    """
+    Standard output. Also standard error.
+    """
+
+    def __init__(self, reactor, fd):
+        self.reactor = reactor
+        self.fd = fd
+
+        self._outbound = []
+
+    def addToReactor(self, reactor):
+        reactor.addFD(self.fd, self)
+
+    def removeFromReactor(self, reactor):
+        reactor.dropFD(self.fd)
+
+    def wantsWrite(self):
+        return bool(self._outbound)
+
+    def write(self, reactor):
+        for buf in self._outbound:
+            written = os.write(self.fd, buf)
+            assert written == len(buf), "Can't deal with short writes to stdout yet!"
+
+        self._outbound = []
+        self.removeFromReactor(reactor)
+
+    def read(self, reactor):
+        pass
+
+    def error(self, reactor, reason):
+        print "stdout error", reason
+        self.removeFromReactor(reactor)
+
+    def enqueue(self, buf):
+        self._outbound.append(buf)
+        self.addToReactor(self.reactor)
+
+
+
 # The number of connections that can be backlogged. Tune as needed.
 # XXX this should be tunable at runtime!
 BACKLOG =1024
-
-# The maximum amount of data to receive from a single packet.
-# XXX this should be a runtime tunable too, probably.
-MAX_RECV = 8192
 
 
 class Socket(Selectable):

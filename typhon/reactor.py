@@ -218,7 +218,14 @@ class Reactor(object):
 
         # print "Polled", len(self._pollDict), "and got", len(results), "events"
         for fd, event in results:
-            selectable = self._selectables[fd]
+            selectable = self._selectables.get(fd, None)
+            # print "FD:", fd, "Event:", event, "Selectable:", selectable
+
+            # This can happen if multiple events happened on an FD but one of
+            # them caused the FD to become unregistered.
+            if selectable is None:
+                continue
+
             # Write before reading. This seems like the correct order of
             # operations.
             if event & POLLOUT:
