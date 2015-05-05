@@ -179,8 +179,7 @@ class Equalizer(Object):
 
     stamps = [DeepFrozenStamp]
 
-    def toString(self):
-        return u"<equalizer>"
+    displayName = u"equalizer"
 
     def recv(self, atom, args):
         if atom is ISSETTLED_1:
