@@ -1,7 +1,7 @@
 from functools import wraps
 
 from typhon.nodes import (Call, Def, Escape, FinalPattern, IgnorePattern,
-                          Noun, Sequence, Tuple)
+                          Noun, Sequence, Str, Tuple)
 from typhon.scope import Scope
 
 
@@ -220,6 +220,39 @@ def elideUnusedDef(define):
     return None
 
 
+def isNullNoun(n):
+    return isinstance(n, Noun) and n.name == u"null"
+
+
+@matches(Call)
+def swapEquality(call):
+    target = call._target
+    if not isinstance(target, Noun) or target.name != u"__equalizer":
+        return None
+
+    # It's definitely a call to the equalizer. Let's check which method's
+    # being called. Probably sameEver/2.
+
+    verb = call._verb
+    if not isinstance(verb, Str) or verb._s != u"sameEver":
+        return None
+    if len(call._args._t) != 2:
+        return None
+
+    # Okay. Let's look at those arguments. If one of them is null, then put it
+    # on the left.
+
+    # XXX more generally, we should rank them based on which one will cause
+    # less work inside optSame().
+
+    if isNullNoun(call._args._t[1]):
+        args = call._args._t[:]
+        args.reverse()
+        return Call(call._target, call._verb, Tuple(args))
+
+    return None
+
+
 class Optimizer(object):
 
     def __init__(self, changes):
@@ -239,6 +272,7 @@ def optimize(node):
         elideSingleEscape,
         elideUnusedDef,
         elideUnusedEscape,
+        swapEquality,
     ]
     f = Optimizer(changes).rewrite
     return node.transform(f)

@@ -421,6 +421,7 @@ class Call(Node):
     def __init__(self, target, verb, args):
         self._target = target
         self._verb = verb
+        assert isinstance(args, Tuple), "XXX should be fromAST instead"
         self._args = args
 
     def pretty(self, out):
@@ -824,6 +825,7 @@ class Method(Node):
 class Noun(Node):
 
     _immutable_ = True
+    _immutable_Fields_ = "noun",
 
     frameIndex = -1
 
