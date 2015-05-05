@@ -119,9 +119,6 @@ def Empty := makePredicateGuard(fn specimen {specimen.size() == 0}, "Empty")
 # Alias for map patterns.
 def __mapEmpty := Empty
 
-# XXX haven't decided how this one should be structured
-def Map := makePredicateGuard(isMap, "Map")
-
 
 def testIntGuard(assert):
     assert.ejects(fn ej {def x :Int exit ej := 5.0})
@@ -217,6 +214,61 @@ object Set:
 
                 throw.eject(ej,
                             ["(Probably) not a conforming list:", specimen])
+
+
+object Map:
+    to _printOn(out):
+        out.print("Map")
+
+    to coerce(specimen, ej):
+        if (isMap(specimen)):
+            return specimen
+
+        def conformed := specimen._conformTo(Map)
+
+        if (isMap(conformed)):
+            return conformed
+
+        throw.eject(ej, ["(Probably) not a map:", specimen])
+
+    to makeSlot(value):
+        return makeGuardedSlot(Map, value)
+
+    to get(keyGuard, valueGuard):
+        return object SubMap:
+            to _printOn(out):
+                out.print("Map[")
+                keyGuard._printOn(out)
+                out.print(", ")
+                valueGuard._printOn(out)
+                out.print("]")
+
+            to coerce(var specimen, ej):
+                if (!isMap(specimen)):
+                    specimen := specimen._conformTo(SubMap)
+
+                if (isMap(specimen)):
+                    for key => value in specimen:
+                        keyGuard.coerce(key, ej)
+                        valueGuard.coerce(value, ej)
+                    return specimen
+
+                throw.eject(ej,
+                            ["(Probably) not a conforming map:", specimen])
+
+
+def testMapGuard(assert):
+    assert.ejects(fn ej {def x :Map exit ej := 42})
+    assert.doesNotEject(fn ej {def x :Map exit ej := [].asMap()})
+
+def testMapGuardIntStr(assert):
+    assert.ejects(fn ej {def x :Map[Int, Str] exit ej := ["lue" => 42]})
+    assert.doesNotEject(fn ej {def x :Map[Int, Str] exit ej := [42 => "lue"]})
+
+unittest([
+    testMapGuard,
+    testMapGuardIntStr,
+])
 
 
 object NullOk:
