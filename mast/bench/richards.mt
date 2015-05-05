@@ -154,9 +154,7 @@ def makeTaskState():
             return packetPending & taskWaiting & !taskHolding
 
 
-# XXX map guard isn't expressive enough
-# XXX :Map[TaskType, Any] ?
-var taskTab :Map := [].asMap()
+var taskTab :Map[TaskType, Any] := [].asMap()
 var taskList := null
 var holdCount :Int := 0
 var qpktCount :Int := 0
@@ -240,7 +238,7 @@ def makeTaskMaker(runner):
                 return t.addPacket(pkt, task)
 
         taskList := task 
-        taskTab := taskTab.with(ident, task)
+        taskTab with= (ident, task)
 
         return task
 
@@ -248,7 +246,7 @@ def makeTaskMaker(runner):
     return makeTask
 
 
-def runDeviceTask(task, packet, r):
+def runDeviceTask(task, var packet, r):
     if (packet == null):
         packet := r["pending"]
         if (packet == null):
@@ -277,7 +275,7 @@ def runHandlerTask(task, packet, r):
 
     def count := work.getDatum()
     if (count >= BUFSIZE):
-        r.setWorkIn(work.getLink())
+        r["workIn"] := work.getLink()
         return task.qpkt(work)
 
     def dev := r["deviceIn"]
@@ -377,7 +375,6 @@ def runRichards() :Bool:
     
     schedule()
 
-    traceln(`holdCount $holdCount qpktCount $qpktCount`)
     return holdCount == 9297 & qpktCount == 23246
 
-bench(runRichards, "richards (broken)")
+bench(runRichards, "richards")
