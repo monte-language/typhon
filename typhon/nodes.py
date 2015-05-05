@@ -317,8 +317,6 @@ class Assign(Node):
 
     _immutable_ = True
 
-    frameIndex = -1
-
     def __init__(self, target, rvalue):
         self.target = target
         self.rvalue = rvalue
@@ -341,7 +339,6 @@ class Assign(Node):
         if newTarget is None:
             newTarget = self.target
         self = Assign(newTarget, self.rvalue.rewriteScope(scope))
-        self.frameIndex = scope.getSeen(newTarget)
         return self
 
     def usesName(self, name):
@@ -375,8 +372,6 @@ class Binding(Node):
 
     _immutable_ = True
 
-    frameIndex = -1
-
     def __init__(self, name):
         self.name = name
 
@@ -396,7 +391,6 @@ class Binding(Node):
         newName = scope.getShadow(self.name)
         if newName is not None:
             self = Binding(newName)
-        self.frameIndex = scope.getSeen(self.name)
         return self
 
     def compile(self, compiler):
@@ -827,8 +821,6 @@ class Noun(Node):
     _immutable_ = True
     _immutable_Fields_ = "noun",
 
-    frameIndex = -1
-
     def __init__(self, noun):
         self.name = noun
 
@@ -844,7 +836,6 @@ class Noun(Node):
         newName = scope.getShadow(self.name)
         if newName is not None:
             self = Noun(newName)
-        self.frameIndex = scope.getSeen(self.name)
         return self
 
     def usesName(self, name):
@@ -1170,8 +1161,6 @@ class BindingPattern(Pattern):
 
     _immutable_ = True
 
-    frameIndex = -1
-
     def __init__(self, noun):
         self._noun = nounToString(noun)
 
@@ -1185,7 +1174,6 @@ class BindingPattern(Pattern):
             # Shadow.
             shadowed = scope.shadowName(self._noun)
             self = BindingPattern(Noun(shadowed))
-        self.frameIndex = scope.putSeen(self._noun)
         return self
 
     def compile(self, compiler):
@@ -1197,8 +1185,6 @@ class BindingPattern(Pattern):
 class FinalPattern(Pattern):
 
     _immutable_ = True
-
-    frameIndex = -1
 
     def __init__(self, noun, guard):
         self._n = nounToString(noun)
@@ -1221,7 +1207,6 @@ class FinalPattern(Pattern):
             # Shadow.
             shadowed = scope.shadowName(self._n)
             self = FinalPattern(Noun(shadowed), g)
-        self.frameIndex = scope.putSeen(self._n)
         return self
 
     def compile(self, compiler):
@@ -1332,8 +1317,6 @@ class VarPattern(Pattern):
 
     _immutable_ = True
 
-    frameIndex = -1
-
     def __init__(self, noun, guard):
         self._n = nounToString(noun)
         self._g = nullToNone(guard)
@@ -1356,7 +1339,6 @@ class VarPattern(Pattern):
             # Shadow.
             shadowed = scope.shadowName(self._n)
             self = VarPattern(Noun(shadowed), g)
-        self.frameIndex = scope.putSeen(self._n)
         return self
 
     def compile(self, compiler):
