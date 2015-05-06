@@ -199,6 +199,7 @@ def testMarleyWP(assert):
 unittest([testMarleyParens, testMarleyWP])
 
 def alphanumeric := 'a'..'z' | 'A'..'Z' | '0'..'9'
+def escapeTable := ['n' => '\n']
 
 def makeScanner(characters):
     var pos :Int := 0
@@ -245,6 +246,9 @@ def makeScanner(characters):
                         return "arrow"
                     match =='\'':
                         var c := scanner.nextChar()
+                        if (c == '\\'):
+                            # Escape character.
+                            c := escapeTable[scanner.nextChar()]
                         scanner.expect('\'')
                         return ["character", c]
                     match =='|':
