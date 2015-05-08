@@ -15,7 +15,7 @@
 def [=> bytesToInt] | _ := import("lib/atoi")
 def [=> b__quasiParser, => Bytes] | _ := import("lib/bytes")
 def [=> makeEnum] | _ := import("lib/enum")
-def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
+def [=> UTF8] | _ := import("lib/codec/utf8")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
 
@@ -73,22 +73,22 @@ def makeResponseDrain(resolver):
             traceln(`End of response: $reason`)
 
         to parseStatus(ej):
-            def b`HTTP/1.1 @{via (bytesToInt) statusCode} @label$\r$\n@tail` exit ej := buf
+            def b`HTTP/1.1 @{via (bytesToInt) statusCode} @{via (UTF8.decode) label}$\r$\n@tail` exit ej := buf
             status := statusCode
-            traceln(`Status: $status (${UTF8Decode(label)})`)
+            traceln(`Status: $status ($label)`)
             buf := tail
             state := HEADER
             headers := [].asMap().diverge()
 
         to parseHeader(ej):
             escape final:
-                def b`@key: @value$\r$\n@tail` exit final := buf
+                def b`@{via (UTF8.decode) key}: @value$\r$\n@tail` exit final := buf
                 buf := tail
-                switch (UTF8Decode(key)):
+                switch (key):
                     match via (lowercase) =="content-length":
                         contentLength := bytesToInt(value, ej)
                     match header:
-                        headers[header] := UTF8Decode(value)
+                        headers[header] := UTF8.decode(value, null)
             catch _:
                 def b`$\r$\n@tail` exit ej := buf
                 buf := tail
@@ -140,9 +140,9 @@ def makeRequest(host :Str, resource :Str):
             headers[key] := value
 
         to write(verb, drain):
-            drain.receive(UTF8Encode(`$verb $resource HTTP/1.1$\r$\n`))
+            drain.receive(UTF8.encode(`$verb $resource HTTP/1.1$\r$\n`, null))
             for k => v in headers:
-                drain.receive(UTF8Encode(`$k: $v$\r$\n`))
+                drain.receive(UTF8.encode(`$k: $v$\r$\n`, null))
             drain.receive(b`$\r$\n`)
 
         to send(verb :Str):
@@ -165,4 +165,4 @@ def makeRequest(host :Str, resource :Str):
 def response := makeRequest("example.com", "/").get()
 when (response) ->
     traceln("Finished request with response", response)
-    traceln(UTF8Decode(response.getBody()))
+    traceln(UTF8.decode(response.getBody(), null))

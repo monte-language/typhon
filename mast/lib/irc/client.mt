@@ -13,7 +13,11 @@
 # under the License.
 
 def [=> Bytes, => b__quasiParser] | _ := import("lib/bytes")
-def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
+def [=> UTF8] | _ := import("lib/codec/utf8")
+def [
+    => makeUTF8DecodePump,
+    => makeUTF8EncodePump
+] | _ := import("lib/tubes/utf8")
 def [=> nullPump] := import("lib/tubes/nullPump")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
@@ -67,11 +71,11 @@ def makeLineTube():
 
 
 def makeIncoming():
-    return makePumpTube(makeMapPump(UTF8Decode))
+    return makePumpTube(makeUTF8DecodePump())
 
 
 def makeOutgoing():
-    return makePumpTube(makeMapPump(UTF8Encode))
+    return makePumpTube(makeUTF8EncodePump())
 
 
 def makeIRCClient(handler):

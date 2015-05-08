@@ -14,7 +14,7 @@
 
 def [=> strToInt] | _ := import("lib/atoi")
 def [=> makeEnum] | _ := import("lib/enum")
-def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
+def [=> UTF8] | _ := import("lib/codec/utf8")
 def [=> nullPump] := import("lib/tubes/nullPump")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makeStatefulPump] := import("lib/tubes/statefulPump")
@@ -57,7 +57,7 @@ def makeAMPPacketMachine():
                     return [STRING, len]
                 match ==STRING:
                     # First, decode.
-                    def s := UTF8Decode(data)
+                    def s := UTF8.decode(data, null)
                     # Was this for a key or a value? We'll guess based on
                     # whether there's a pending key.
                     if (pendingKey == ""):
@@ -76,15 +76,13 @@ def makeAMPPacketMachine():
 
 def packAMPPacket(packet):
     var buf := []
-    for key => value in packet:
-        def encodedKey := UTF8Encode(key)
-        def keySize :(Int <= 0xff) := encodedKey.size()
+    for via (UTF8.encode) key => via (UTF8.encode) value in packet:
+        def keySize :(Int <= 0xff) := key.size()
         buf += [0x00, keySize]
-        buf += encodedKey
-        def encodedValue := UTF8Encode(value)
-        def valueSize :(Int <= 0xffff) := encodedValue.size()
+        buf += key
+        def valueSize :(Int <= 0xffff) := value.size()
         buf += [valueSize >> 8, valueSize & 0xff]
-        buf += encodedValue
+        buf += value
     buf += [0x00, 0x00]
     return buf
 

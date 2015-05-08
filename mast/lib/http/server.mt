@@ -13,7 +13,7 @@
 # under the License.
 
 def [=> b__quasiParser] | _ := import("lib/bytes")
-def [=> UTF8Decode, => UTF8Encode] | _ := import("lib/utf8")
+def [=> UTF8] | _ := import("lib/codec/utf8")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
 def [=> makeEnum] | _ := import("lib/enum")
@@ -66,9 +66,8 @@ def makeRequestPump():
                         return false
 
                     # XXX it'd be swell if these were subpatterns
-                    def b`@verb @uri HTTP/1.1$\r$\n@t` exit ej := buf
-                    pendingRequestLine := [UTF8Decode(verb),
-                                           percentDecode(uri)]
+                    def b`@{via (UTF8.decode) verb} @uri HTTP/1.1$\r$\n@t` exit ej := buf
+                    pendingRequestLine := [verb, percentDecode(uri)]
                     pendingHeaders := [].asMap()
                     state := HEADER
                     buf := t
@@ -83,8 +82,8 @@ def makeRequestPump():
                         buf := t
                         return true
 
-                    def b`@header:@value$\r$\n@t` exit ej := buf
-                    pendingHeaders |= [UTF8Decode(header) => UTF8Decode(value)]
+                    def b`@{via (UTF8.decode) header}:@{via (UTF8.decode) value}$\r$\n@t` exit ej := buf
+                    pendingHeaders |= [header => value]
                     buf := t
                     return true
 
