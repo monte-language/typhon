@@ -78,6 +78,7 @@ TAN_0 = getAtom(u"tan", 0)
 TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
 TOUPPERCASE_0 = getAtom(u"toUpperCase", 0)
 TRIM_0 = getAtom(u"trim", 0)
+WITH_1 = getAtom(u"with", 1)
 XOR_1 = getAtom(u"xor", 1)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 
@@ -824,6 +825,9 @@ class StrObject(Object):
 
         if atom is TRIM_0:
             return StrObject(self.trim())
+
+        if atom is WITH_1:
+            return StrObject(self._s + unwrapChar(args[0]))
 
         if atom is _MAKEITERATOR_0:
             return strIterator(self._s)
