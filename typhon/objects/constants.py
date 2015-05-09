@@ -18,6 +18,15 @@ from typhon.objects.auditors import DeepFrozenStamp
 from typhon.objects.root import Object
 
 
+AND_1 = getAtom(u"and", 1)
+BUTNOT_1 = getAtom(u"butNot", 1)
+NOT_0 = getAtom(u"not", 0)
+OP__CMP_1 = getAtom(u"op__cmp", 1)
+OR_1 = getAtom(u"or", 1)
+PICK_2 = getAtom(u"pick", 2)
+XOR_1 = getAtom(u"xor", 1)
+
+
 class _NullObject(Object):
 
     _immutable_ = True
@@ -31,13 +40,6 @@ class _NullObject(Object):
 
 
 NullObject = _NullObject()
-
-AND_1 = getAtom(u"and", 1)
-BUTNOT_1 = getAtom(u"butNot", 1)
-NOT_0 = getAtom(u"not", 0)
-OR_1 = getAtom(u"or", 1)
-PICK_2 = getAtom(u"pick", 2)
-XOR_1 = getAtom(u"xor", 1)
 
 
 class BoolObject(Object):
@@ -60,12 +62,18 @@ class BoolObject(Object):
         if atom is AND_1:
             return wrapBool(self._b and unwrapBool(args[0]))
 
+        # butNot/1
         if atom is BUTNOT_1:
             return wrapBool(self._b and not unwrapBool(args[0]))
 
         # not/0
         if atom is NOT_0:
             return wrapBool(not self._b)
+
+        # op__cmp/1
+        if atom is OP__CMP_1:
+            from typhon.objects.data import IntObject
+            return IntObject(self._b - unwrapBool(args[0]))
 
         # or/1
         if atom is OR_1:

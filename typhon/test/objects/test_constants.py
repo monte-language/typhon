@@ -31,6 +31,10 @@ class TestBoolObject(TestCase):
         result = FalseObject.call(u"and", [TrueObject])
         self.assertEqual(result, FalseObject)
 
+    def testOpCmp(self):
+        result = FalseObject.call(u"op__cmp", [TrueObject])
+        self.assertEqual(result.getInt(), -1)
+
     def testOr(self):
         result = FalseObject.call(u"or", [TrueObject])
         self.assertEqual(result, TrueObject)
