@@ -50,6 +50,9 @@ class Configuration(object):
     # Whether to collect precise profiling statistics.
     profile = False
 
+    # Whether to run benchmarks.
+    benchmark = False
+
     def __init__(self, argv):
         self.argv = []
 
@@ -66,5 +69,7 @@ class Configuration(object):
                 self.loadOnly = True
             elif item == "-p":
                 self.profile = True
+            elif item == "-b":
+                self.benchmark = True
             else:
                 self.argv.append(item)

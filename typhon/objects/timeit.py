@@ -26,6 +26,10 @@ def bench(args):
     obj = args[0]
     name = unwrapStr(args[1])
 
+    if not benchmarkSettings.enabled:
+        print "Not running benchmark", name, "since benchmarking is disabled"
+        return
+
     print "Benchmarking", name
 
     # Step 1: Calibrate timing loop.
@@ -87,3 +91,14 @@ def bench(args):
 
     # All done!
     return NullObject
+
+
+class BenchmarkSettings(object):
+
+    enabled = True
+
+    def disable(self):
+        self.enabled = False
+
+
+benchmarkSettings = BenchmarkSettings()

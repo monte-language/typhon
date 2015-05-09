@@ -29,6 +29,7 @@ from typhon.objects.collections import ConstMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapStr, StrObject
 from typhon.objects.imports import addImportToScope
+from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
 from typhon.profile import csp
 from typhon.reactor import Reactor
@@ -153,6 +154,9 @@ def entryPoint(argv):
 
     if not config.profile:
         csp.disable()
+
+    if not config.benchmark:
+        benchmarkSettings.disable()
 
     print "Taking initial turn in script..."
     result = NullObject
