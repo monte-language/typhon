@@ -76,7 +76,10 @@ def makeAMPPacketMachine():
 
 def packAMPPacket(packet):
     var buf := []
-    for via (UTF8.encode) key => via (UTF8.encode) value in packet:
+    # XXX for via (UTF8.encode) key => via (UTF8.encode) value in packet:
+    for var key => var value in packet:
+        key := UTF8.encode(key, null)
+        value := UTF8.encode(value, null)
         def keySize :(Int <= 0xff) := key.size()
         buf += [0x00, keySize]
         buf += key
