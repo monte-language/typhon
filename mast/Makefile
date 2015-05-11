@@ -41,7 +41,7 @@ irc: lib/irc/client.ty \
 
 games: games/mafia.ty
 
-fun: fun/elements.ty
+fun: fun/elements.ty fun/repl.ty
 
 bench: bench/nqueens.ty bench/richards.ty bench/montstone.ty
 

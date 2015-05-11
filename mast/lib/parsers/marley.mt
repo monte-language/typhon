@@ -113,6 +113,10 @@ def advance(position, token, grammar, table, ej):
                     if (literal.matches(token)):
                         table.addState(k + 1,
                                        [head, tail, j, result.with(token)])
+            match _:
+                # This usually means that the table got corrupted somehow.
+                # Double imports can cause this.
+                pass
 
 
 def makeMarley(grammar, startRule):
