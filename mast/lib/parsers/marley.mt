@@ -83,13 +83,12 @@ def makeTable(grammar, startRule):
             return queue.size() > 0
 
 
-def advance(position, token, grammar, table):
+def advance(position, token, grammar, table, ej):
     table.queueStates(position - 1)
     if (!table.hasQueuedStates()):
         # The table isn't going to advance at all from this token; the parse
-        # failed.
-        # XXX eject
-        return
+        # has failed.
+        throw.eject(ej, "Parse failed")
 
     while (true):
         def [k, state] exit __break := table.nextState()
@@ -119,8 +118,15 @@ def advance(position, token, grammar, table):
 def makeMarley(grammar, startRule):
     def table := makeTable(grammar, startRule)
     var position :Int := 0
+    var failure :NullOk[Str] := null
 
     return object marley:
+        to getFailure() :NullOk[Str]:
+            return failure
+
+        to failed() :Bool:
+            return failure != null
+
         to finished() :Bool:
             for [head, result] in table.headsAt(position):
                 if (head == startRule):
@@ -135,8 +141,14 @@ def makeMarley(grammar, startRule):
             return rv.snapshot()
 
         to feed(token):
+            if (failure != null):
+                return
+
             position += 1
-            advance(position, token, grammar, table)
+            escape ej:
+                advance(position, token, grammar, table, ej)
+            catch reason:
+                failure := reason
 
         to feedMany(tokens):
             for token in tokens:
@@ -158,17 +170,31 @@ def testExactlyEquality(assert):
 unittest([testExactlyEquality])
 
 
-def testMarleyParens(assert):
-    def parens := [
-        "parens" => [
-            [],
-            [[terminal, exactly('(')], [nonterminal, "parens"],
-             [terminal, exactly(')')]],
-        ],
-    ]
+def parens := [
+    "parens" => [
+        [],
+        [[terminal, exactly('(')], [nonterminal, "parens"],
+         [terminal, exactly(')')]],
+    ],
+]
+
+def testMarleyParensFailed(assert):
+    def parenParser := makeMarley(parens, "parens")
+    parenParser.feedMany("asdf")
+    assert.equal(parenParser.failed(), true)
+    assert.equal(parenParser.finished(), false)
+
+def testMarleyParensFinished(assert):
     def parenParser := makeMarley(parens, "parens")
     parenParser.feedMany("((()))")
+    assert.equal(parenParser.failed(), false)
     assert.equal(parenParser.finished(), true)
+
+def testMarleyParensPartial(assert):
+    def parenParser := makeMarley(parens, "parens")
+    parenParser.feedMany("(()")
+    assert.equal(parenParser.failed(), false)
+    assert.equal(parenParser.finished(), false)
 
 def testMarleyWP(assert):
     def wp := [
@@ -196,7 +222,12 @@ def testMarleyWP(assert):
     wpParser.feedMany("2+3*4")
     assert.equal(wpParser.finished(), true)
 
-unittest([testMarleyParens, testMarleyWP])
+unittest([
+    testMarleyParensFailed,
+    testMarleyParensFinished,
+    testMarleyParensPartial,
+    testMarleyWP,
+])
 
 def alphanumeric := 'a'..'z' | 'A'..'Z' | '0'..'9'
 def escapeTable := ['n' => '\n']
