@@ -72,17 +72,6 @@ unittest([
 ])
 
 
-object Any:
-    to _printOn(out):
-        out.print("Any")
-
-    to coerce(specimen, _):
-        return specimen
-
-    to makeSlot(value):
-        return makeGuardedSlot(Any, value)
-
-
 def makePredicateGuard(predicate, label):
     return object predicateGuard:
         to _printOn(out):
@@ -417,6 +406,46 @@ unittest([
     testSuchThatTrue,
     testSuchThatFalse,
 ])
+
+
+object Any:
+    to _printOn(out):
+        out.print("Any")
+
+    to coerce(specimen, _):
+        return specimen
+
+    to makeSlot(value):
+        return makeGuardedSlot(Any, value)
+
+    match [=="get", subGuards ? (subGuards.size() != 0)]:
+        object subAny:
+            to _printOn(out):
+                out.print("Any[")
+                def [head] + tail := subGuards
+                head._printOn(out)
+                for subGuard in tail:
+                    out.print(", ")
+                    subGuard._printOn(out)
+                out.print("]")
+
+            to coerce(specimen, ej):
+                for subGuard in subGuards:
+                    escape subEj:
+                        return subGuard.coerce(specimen, subEj)
+                    catch _:
+                        continue
+                throw.eject(ej, "Specimen didn't match any subguard")
+
+            to makeSlot(value):
+                return makeGuardedSlot(subAny, value)
+
+def testAnySubGuard(assert):
+    assert.ejects(fn ej {def x :Any[Int, Char] exit ej := "test"})
+    assert.doesNotEject(fn ej {def x :Any[Int, Char] exit ej := 42})
+    assert.doesNotEject(fn ej {def x :Any[Int, Char] exit ej := 'x'})
+
+unittest([testAnySubGuard])
 
 
 object __switchFailed:
