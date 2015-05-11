@@ -88,7 +88,9 @@ def advance(position, token, grammar, table, ej):
     if (!table.hasQueuedStates()):
         # The table isn't going to advance at all from this token; the parse
         # has failed.
-        throw.eject(ej, "Parse failed")
+        throw.eject(ej, "Parser cannot advance")
+
+    var heads := []
 
     while (true):
         def [k, state] exit __break := table.nextState()
@@ -113,10 +115,16 @@ def advance(position, token, grammar, table, ej):
                     if (literal.matches(token)):
                         table.addState(k + 1,
                                        [head, tail, j, result.with(token)])
+                    else:
+                        heads with= literal.error()
             match _:
                 # This usually means that the table got corrupted somehow.
                 # Double imports can cause this.
                 pass
+
+    if (table[position].size() == 0):
+        # Parse error: No progress was made.
+        throw.eject(ej, `Expected one of $heads`)
 
 
 def makeMarley(grammar, startRule):
@@ -166,6 +174,9 @@ def exactly(token):
 
         to matches(specimen) :Bool:
             return token == specimen
+
+        to error() :Str:
+            return `exactly $token`
 
 def testExactlyEquality(assert):
     assert.equal(exactly('c'), exactly('c'))
@@ -307,6 +318,9 @@ def tag(t :Str):
                 match ==t {true}
                 match _ {false}
             }
+
+        to error() :Str:
+            return `tag $t`
 
 
 def marleyQLGrammar := [
