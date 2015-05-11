@@ -98,6 +98,10 @@ class Object(object):
     def recv(self, atom, args):
         raise Refused(self, atom, args)
 
+    def auditedBy(self, stamp):
+        from typhon.objects.constants import wrapBool
+        return wrapBool(False)
+
 
 def runnable(singleAtom):
     """

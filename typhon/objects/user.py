@@ -15,7 +15,7 @@
 from rpython.rlib.jit import unroll_safe
 
 from typhon.errors import Ejecting, Refused, UserException
-from typhon.objects.constants import NullObject
+from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector
@@ -28,11 +28,15 @@ class ScriptObject(Object):
 
     _immutable_fields_ = "codeScript", "globals[*]", "closure[*]"
 
-    def __init__(self, codeScript, globals, closure, displayName):
+    def __init__(self, codeScript, globals, closure, displayName, stamps):
         self.codeScript = codeScript
         self.globals = globals
         self.closure = closure
         self.displayName = displayName
+        self.stamps = stamps
+
+    def auditedBy(self, stamp):
+        return wrapBool(stamp in self.stamps)
 
     def patchSelf(self, binding):
         if self.displayName in self.codeScript.closureNames:

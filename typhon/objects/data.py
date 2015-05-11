@@ -19,6 +19,7 @@ from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
 from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
 from rpython.rlib.rstring import UnicodeBuilder, split
+from rpython.rlib.rstruct.ieee import pack_float
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
 from typhon.atoms import getAtom
@@ -77,6 +78,7 @@ SUBTRACT_1 = getAtom(u"subtract", 1)
 TAN_0 = getAtom(u"tan", 0)
 TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
 TOUPPERCASE_0 = getAtom(u"toUpperCase", 0)
+TOBYTES_0 = getAtom(u"toBytes", 0)
 TRIM_0 = getAtom(u"trim", 0)
 WITH_1 = getAtom(u"with", 1)
 XOR_1 = getAtom(u"xor", 1)
@@ -219,6 +221,12 @@ class DoubleObject(Object):
 
         if atom is TAN_0:
             return DoubleObject(math.tan(self._d))
+
+        if atom is TOBYTES_0:
+            from typhon.objects.collections import ConstList
+            result = []
+            pack_float(result, self._d, 8, True)
+            return ConstList([IntObject(ord(c)) for c in result[0]])
 
         raise Refused(self, atom, args)
 

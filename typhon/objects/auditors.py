@@ -20,12 +20,10 @@ RUN_2 = getAtom(u"run", 2)
 
 @runnable(RUN_2)
 def auditedBy(args):
-    from typhon.objects.constants import wrapBool
-
     auditor = args[0]
     specimen = args[1]
 
-    return wrapBool(False)
+    return specimen.auditedBy(auditor)
 
 
 class Stamp(object):
