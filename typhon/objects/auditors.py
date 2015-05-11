@@ -12,6 +12,22 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.atoms import getAtom
+from typhon.objects.root import runnable
+
+RUN_2 = getAtom(u"run", 2)
+
+
+@runnable(RUN_2)
+def auditedBy(args):
+    from typhon.objects.constants import wrapBool
+
+    auditor = args[0]
+    specimen = args[1]
+
+    return wrapBool(False)
+
+
 class Stamp(object):
     """
     A proof that an object has been audited.

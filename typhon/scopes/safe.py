@@ -16,6 +16,7 @@ from rpython.rlib.debug import debug_print
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException, userError
+from typhon.objects.auditors import auditedBy
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (DoubleObject, StrObject, unwrapInt,
@@ -197,6 +198,7 @@ def safeScope():
 
         u"M": MObject(),
         u"Ref": RefOps(),
+        u"__auditedBy": auditedBy(),
         u"__booleanFlow": BooleanFlow(),
         u"__equalizer": Equalizer(),
         u"__loop": loop(),
