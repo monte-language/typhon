@@ -67,11 +67,12 @@ class SmallCaps(object):
     @unroll_safe
     def bindObject(self, index):
         script = self.code.script(index)
+        stamps = [self.pop() for _ in range(script.numStamps)]
         globals = [self.pop() for _ in script.globalNames]
         globals.reverse()
         closure = [self.pop() for _ in script.closureNames]
         closure.reverse()
-        obj = script.makeObject(closure, globals)
+        obj = script.makeObject(closure, globals, stamps)
         # Make sure that the object has access to itself, if necessary.
         obj.patchSelf(Binding(FinalSlot(obj)))
         self.push(obj)

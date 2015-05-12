@@ -13,14 +13,15 @@
 # under the License.
 
 from rpython.rlib.debug import debug_print
+from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException, userError
 from typhon.objects.auditors import auditedBy
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import (DoubleObject, StrObject, unwrapInt,
-                                 unwrapStr)
+from typhon.objects.data import (DoubleObject, IntObject, StrObject, unwrapInt,
+                                 unwrapStr, unwrapChar)
 from typhon.objects.ejectors import throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
@@ -76,6 +77,55 @@ class MakeList(Object):
 @runnable(FROMPAIRS_1)
 def makeMap(args):
     return ConstMap.fromPairs(args[0])
+
+
+class MakeDouble(Object):
+    def toString(self):
+        return u"<makeDouble>"
+
+    def callAtom(self, atom, args):
+        if atom.verb == u"run":
+            return DoubleObject(float(unwrapStr(args[0]).encode('utf-8')))
+        elif atom.verb == u"fromBytes":
+            data = unwrapList(args[0])
+            x = unpack_float("".join([chr(unwrapInt(byte)) for byte in data]),
+                             True)
+            return DoubleObject(x)
+
+        raise Refused(self, atom, args)
+
+class MakeInt(Object):
+    def toString(self):
+        return u"<makeInt>"
+
+    def callAtom(self, atom, args):
+        if atom.verb == u"run":
+            if len(args) == 1:
+                return IntObject(int(unwrapStr(args[0]).encode('utf-8')))
+            else:
+                return IntObject(int(unwrapStr(args[0]).encode('utf-8'), unwrapInt(args[1])))
+        elif atom.verb == u"fromBytes":
+            data = unwrapList(args[0])
+            x = unpack_float("".join([chr(unwrapInt(byte)) for byte in data]),
+                             True)
+            return DoubleObject(x)
+
+        raise Refused(self, atom, args)
+
+
+class MakeString(Object):
+    def toString(self):
+        return u"<makeString>"
+
+    def callAtom(self, atom, args):
+        if atom.verb == u"fromString":
+            # XXX handle twineishness
+            return args[0]
+        elif atom.verb == u"fromChars":
+            data = unwrapList(args[0])
+            return StrObject(u"".join([unwrapChar(c) for c in data]))
+
+        raise Refused(self, atom, args)
 
 
 class Throw(Object):
@@ -204,6 +254,9 @@ def safeScope():
         u"__loop": loop(),
         u"__makeList": MakeList(),
         u"__makeMap": makeMap(),
+        u"__makeInt": MakeInt(),
+        u"__makeDouble": MakeDouble(),
+        u"__makeString": MakeString(),
         u"__slotToBinding": slotToBinding(),
         u"_makeFinalSlot": makeFinalSlot(),
         u"_makeVarSlot": makeVarSlot(),

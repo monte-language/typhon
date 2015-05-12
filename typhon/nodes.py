@@ -896,7 +896,7 @@ class Obj(Node):
 
     def transform(self, f):
         return f(Obj(self._d, self._n, self._as, self._implements,
-            self._script.transform(f)))
+                     self._script.transform(f)))
 
     def rewriteScope(self, scope):
         # XXX as, implements
@@ -910,9 +910,12 @@ class Obj(Node):
         # Create a code object for this object.
         availableClosure = compiler.frame.copy()
         availableClosure.update(compiler.locals)
-        self.codeScript = CodeScript(formatName(self._n), availableClosure)
+        numStamps = len(self._implements)
+        if self._as is not None:
+            numStamps += 1
+        self.codeScript = CodeScript(
+            formatName(self._n), numStamps, availableClosure)
         self.codeScript.addScript(self._script)
-
         # The local closure is first to be pushed and last to be popped.
         for name in self.codeScript.closureNames:
             if name == self.codeScript.displayName:
@@ -939,7 +942,10 @@ class Obj(Node):
             else:
                 index = compiler.addGlobal(name)
                 compiler.addInstruction("BINDING_GLOBAL", index)
-
+        for stamp in reversed(self._implements):
+            stamp.compile(compiler)
+        if self._as is not None:
+            self._as.compile(compiler)
         index = compiler.addScript(self.codeScript)
         compiler.addInstruction("BINDOBJECT", index)
         compiler.addInstruction("DUP", 0)
@@ -949,9 +955,10 @@ class Obj(Node):
 
 class CodeScript(object):
 
-    def __init__(self, displayName, availableClosure):
+    def __init__(self, displayName, numStamps, availableClosure):
         self.displayName = displayName
         self.availableClosure = availableClosure
+        self.numStamps = numStamps
         # Objects can close over themselves.
         self.availableClosure[displayName] = 42
 
@@ -961,8 +968,9 @@ class CodeScript(object):
         self.closureNames = OrderedDict()
         self.globalNames = OrderedDict()
 
-    def makeObject(self, closure, globals):
-        return ScriptObject(self, globals, closure, self.displayName)
+    def makeObject(self, closure, globals, stamps):
+        return ScriptObject(self, globals, closure, self.displayName,
+                            stamps)
 
     def addScript(self, script):
         assert isinstance(script, Script)

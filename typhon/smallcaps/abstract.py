@@ -118,6 +118,9 @@ class AbstractInterpreter(object):
             self.currentDepth += 1
             return pc + 1
         elif instruction == BINDOBJECT:
+            self.pop()
+            for i in range(self.code.scripts[index].numStamps):
+                self.pop()
             for i in range(len(self.code.scripts[index].closureNames)):
                 self.pop()
             self.currentDepth += 1
