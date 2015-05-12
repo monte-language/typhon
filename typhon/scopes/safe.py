@@ -37,7 +37,10 @@ CALLWITHPAIR_2 = getAtom(u"callWithPair", 2)
 CALL_3 = getAtom(u"call", 3)
 EJECT_2 = getAtom(u"eject", 2)
 FAILURELIST_1 = getAtom(u"failureList", 1)
+FROMBYTES_1 = getAtom(u"fromBytes", 1)
+FROMCHARS_1 = getAtom(u"fromChars", 1)
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
+FROMSTRING_1 = getAtom(u"fromString", 1)
 MATCHMAKER_1 = getAtom(u"matchMaker", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
@@ -84,9 +87,10 @@ class MakeDouble(Object):
         return u"<makeDouble>"
 
     def callAtom(self, atom, args):
-        if atom.verb == u"run":
+        if atom is RUN_1:
             return DoubleObject(float(unwrapStr(args[0]).encode('utf-8')))
-        elif atom.verb == u"fromBytes":
+
+        if atom is FROMBYTES_1:
             data = unwrapList(args[0])
             x = unpack_float("".join([chr(unwrapInt(byte)) for byte in data]),
                              True)
@@ -99,12 +103,14 @@ class MakeInt(Object):
         return u"<makeInt>"
 
     def callAtom(self, atom, args):
-        if atom.verb == u"run":
-            if len(args) == 1:
-                return IntObject(int(unwrapStr(args[0]).encode('utf-8')))
-            else:
-                return IntObject(int(unwrapStr(args[0]).encode('utf-8'), unwrapInt(args[1])))
-        elif atom.verb == u"fromBytes":
+        if atom is RUN_1:
+            return IntObject(int(unwrapStr(args[0]).encode('utf-8')))
+
+        if atom is RUN_2:
+            return IntObject(int(unwrapStr(args[0]).encode('utf-8'),
+                                 unwrapInt(args[1])))
+
+        if atom is FROMBYTES_1:
             data = unwrapList(args[0])
             x = unpack_float("".join([chr(unwrapInt(byte)) for byte in data]),
                              True)
@@ -118,10 +124,11 @@ class MakeString(Object):
         return u"<makeString>"
 
     def callAtom(self, atom, args):
-        if atom.verb == u"fromString":
+        if atom is FROMSTRING_1:
             # XXX handle twineishness
             return args[0]
-        elif atom.verb == u"fromChars":
+
+        if atom is FROMCHARS_1:
             data = unwrapList(args[0])
             return StrObject(u"".join([unwrapChar(c) for c in data]))
 
