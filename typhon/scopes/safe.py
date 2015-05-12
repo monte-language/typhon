@@ -158,28 +158,6 @@ def slotToBinding(args):
     return Binding(specimen)
 
 
-# XXX could probably move to prelude now?
-class BooleanFlow(Object):
-
-    def toString(self):
-        return u"<booleanFlow>"
-
-    def recv(self, atom, args):
-        if atom is BROKEN_0:
-            # broken/*: Create an UnconnectedRef.
-            return self.broken()
-
-        if atom is FAILURELIST_1:
-            length = unwrapInt(args[0])
-            refs = [self.broken()] * length
-            return ConstList([wrapBool(False)] + refs)
-
-        raise Refused(self, atom, args)
-
-    def broken(self):
-        return UnconnectedRef(u"Boolean flow expression failed")
-
-
 class MObject(Object):
     """
     Miscellaneous vat management and quoting services.
@@ -256,7 +234,6 @@ def safeScope():
         u"M": MObject(),
         u"Ref": RefOps(),
         u"__auditedBy": auditedBy(),
-        u"__booleanFlow": BooleanFlow(),
         u"__equalizer": Equalizer(),
         u"__loop": loop(),
         u"__makeList": MakeList(),

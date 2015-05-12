@@ -564,6 +564,14 @@ object __makeProtocolDesc:
         pass
 
 
+object __booleanFlow:
+    to broken():
+        return Ref.broken("Boolean flow expression failed")
+
+    to failureList(count :Int) :List:
+        return [false] + [__booleanFlow.broken()] * count
+
+
 # Simple QP needs patterns, some loops, some other syntax, and a few guards.
 def [=> simple__quasiParser] := import("prelude/simple", ["boolean" => Bool,
                                                           => Bool, => Str,
@@ -585,8 +593,9 @@ def [
     => OrderedSpaceMaker
 ] := import("prelude/region", [=> Bool, => Double, => Int, => List, => NullOk,
                                => Same, => Str, => __accumulateList,
-                               => __comparer, => __iterWhile,
-                               => __validateFor, => simple__quasiParser,
+                               => __booleanFlow, => __comparer,
+                               => __iterWhile, => __validateFor,
+                               => simple__quasiParser,
                                "boolean" => Bool])
 
 # Spaces need some guards, and also regions.
@@ -625,6 +634,7 @@ def [
     => __accumulateList,
     => __accumulateMap,
     => __bind,
+    => __booleanFlow,
     => __comparer,
     => __iterWhile,
     => __makeMap,
