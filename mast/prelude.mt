@@ -604,6 +604,7 @@ def [
     # Needed for interface expansions with ref Monte. :T
     "any" => Any,
     "void" => Void,
+    "DeepFrozen" => Any,
     # This is 100% hack. See the matching comment near the top of the prelude.
     "boolean" => Bool,
 

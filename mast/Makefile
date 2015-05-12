@@ -17,7 +17,8 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	irc \
 	tubes \
 	games \
-	bench
+	bench \
+        monte
 
 prelude: prelude.ty prelude/brand.ty prelude/region.ty prelude/simple.ty \
 	prelude/space.ty
@@ -44,6 +45,10 @@ games: games/mafia.ty
 fun: fun/elements.ty fun/repl.ty
 
 bench: bench/nqueens.ty bench/richards.ty bench/montstone.ty
+
+monte: lib/monte/monte_ast.ty lib/monte/monte_lexer.ty \
+	lib/monte/monte_parser.ty lib/monte/monte_expander.ty \
+	lib/monte/termParser.ty
 
 %.ty: %.mt
 	$(MONTE_VENV)/bin/python $(MONTE)/bin/monte -c $< > $@
