@@ -1093,10 +1093,14 @@ class Sequence(Node):
         return False
 
     def compile(self, compiler):
-        for node in self._l[:-1]:
-            node.compile(compiler)
-            compiler.addInstruction("POP", 0)
-        self._l[-1].compile(compiler)
+        if self._l:
+            for node in self._l[:-1]:
+                node.compile(compiler)
+                compiler.addInstruction("POP", 0)
+            self._l[-1].compile(compiler)
+        else:
+            # If the sequence is empty, then it evaluates to null.
+            compiler.literal(NullObject)
 
 
 class Try(Node):
