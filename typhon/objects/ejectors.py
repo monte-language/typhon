@@ -38,12 +38,10 @@ class Ejector(Object):
 
     def recv(self, atom, args):
         if atom is RUN_0:
-            if self.active:
-                self.fire()
+            self.fire()
 
         if atom is RUN_1:
-            if self.active:
-                self.fire(args[0])
+            self.fire(args[0])
 
         if atom is DISABLE_0:
             self.disable()
@@ -52,7 +50,8 @@ class Ejector(Object):
         raise Refused(self, atom, args)
 
     def fire(self, payload=NullObject):
-        raise Ejecting(self, payload)
+        if self.active:
+            raise Ejecting(self, payload)
 
     def fireString(self, message):
         return self.fire(StrObject(message))
