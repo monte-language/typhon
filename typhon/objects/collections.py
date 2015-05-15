@@ -35,6 +35,7 @@ FETCH_2 = getAtom(u"fetch", 2)
 GET_1 = getAtom(u"get", 1)
 INDEXOF_1 = getAtom(u"indexOf", 1)
 INDEXOF_2 = getAtom(u"indexOf", 2)
+LAST_0 = getAtom(u"last", 0)
 MULTIPLY_1 = getAtom(u"multiply", 1)
 NEXT_1 = getAtom(u"next", 1)
 OR_1 = getAtom(u"or", 1)
@@ -206,6 +207,11 @@ class ConstList(Collection, Object):
         if atom is INDEXOF_1:
             return IntObject(self.indexOf(args[0]))
 
+        if atom is LAST_0:
+            if self.objects:
+                return self.objects[-1]
+            raise userError(u"Empty list has no last element")
+
         if atom is MULTIPLY_1:
             # multiply/1: Create a new list by repeating this list's contents.
             index = unwrapInt(args[0])
@@ -352,6 +358,11 @@ class FlexList(Collection, Object):
 
         if atom is INDEXOF_1:
             return IntObject(self.indexOf(args[0]))
+
+        if atom is LAST_0:
+            if self.flexObjects:
+                return self.flexObjects[-1]
+            raise userError(u"Empty list has no last element")
 
         if atom is MULTIPLY_1:
             # multiply/1: Create a new list by repeating this list's contents.
