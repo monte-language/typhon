@@ -1,4 +1,4 @@
-def [=> term__quasiParser] := import("lib/monte/termParser.mt")
+def [=> term__quasiParser] := import("lib/monte/termParser")
 
 object VALUE_HOLE {}
 object PATTERN_HOLE {}
