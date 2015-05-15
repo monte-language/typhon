@@ -16,13 +16,13 @@ from rpython.rlib.debug import debug_print
 from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused, UserException, userError
+from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.objects.auditors import auditedBy
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (DoubleObject, IntObject, StrObject, unwrapInt,
                                  unwrapStr, unwrapChar)
-from typhon.objects.ejectors import throw
+from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
 from typhon.objects.refs import RefOps, UnconnectedRef
@@ -39,6 +39,7 @@ EJECT_2 = getAtom(u"eject", 2)
 FAILURELIST_1 = getAtom(u"failureList", 1)
 FROMBYTES_1 = getAtom(u"fromBytes", 1)
 FROMCHARS_1 = getAtom(u"fromChars", 1)
+FROMITERABLE_1 = getAtom(u"fromIterable", 1)
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
 FROMSTRING_1 = getAtom(u"fromString", 1)
 MATCHMAKER_1 = getAtom(u"matchMaker", 1)
@@ -74,7 +75,27 @@ class MakeList(Object):
     def callAtom(self, atom, args):
         if atom.verb == u"run":
             return ConstList(args)
+
+        if atom is FROMITERABLE_1:
+            return ConstList(self.fromIterable(args[0]))
+
         raise Refused(self, atom, args)
+
+    def fromIterable(self, obj):
+        rv = []
+        iterator = obj.call(u"_makeIterator", [])
+        ej = Ejector()
+        while True:
+            try:
+                l = unwrapList(iterator.call(u"next", [ej]))
+                if len(l) != 2:
+                    raise userError(u"makeList.fromIterable/1: Invalid iterator")
+                rv.append(l[1])
+            except Ejecting as ex:
+                if ex.ejector is ej:
+                    ej.disable()
+                    return rv
+                raise
 
 
 @runnable(FROMPAIRS_1)
