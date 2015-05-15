@@ -32,6 +32,7 @@ class AbstractInterpreter(object):
     currentDepth = 0
     currentHandlerDepth = 0
     maxDepth = 0
+    minDepth = 0
     maxHandlerDepth = 0
 
     suspended = False
@@ -45,11 +46,13 @@ class AbstractInterpreter(object):
         # print "Adding a branch", pc
         self.branches[pc] = self.currentDepth, self.currentHandlerDepth
 
-    def pop(self):
-        self.currentDepth -= 1
+    def pop(self, count=1):
+        self.currentDepth -= count
+        if self.currentDepth < self.minDepth:
+            self.minDepth = self.currentDepth
 
-    def push(self):
-        self.currentDepth += 1
+    def push(self, count=1):
+        self.currentDepth += count
         if self.currentDepth > self.maxDepth:
             self.maxDepth = self.currentDepth
 
@@ -60,6 +63,12 @@ class AbstractInterpreter(object):
         self.currentHandlerDepth += 1
         if self.currentHandlerDepth > self.maxHandlerDepth:
             self.maxHandlerDepth = self.currentHandlerDepth
+
+    def getDepth(self):
+        depth = self.maxDepth
+        if self.minDepth < 0:
+            depth -= self.minDepth
+        return depth, self.maxHandlerDepth
 
     def runInstruction(self, instruction, pc):
         index = self.code.indices[pc]
@@ -74,17 +83,13 @@ class AbstractInterpreter(object):
                              BIND, BINDSLOT):
             self.pop()
         elif instruction == LIST_PATT:
-            self.pop()
-            self.pop()
-            self.currentDepth += index * 2
+            self.pop(2)
+            self.push(index * 2)
         elif instruction == BINDOBJECT:
-            for i in range(self.code.scripts[index].numStamps):
-                self.pop()
-            for i in range(len(self.code.scripts[index].globalNames)):
-                self.pop()
-            for i in range(len(self.code.scripts[index].closureNames)):
-                self.pop()
-            self.currentDepth += 1
+            self.pop(self.code.scripts[index].numStamps)
+            self.pop(len(self.code.scripts[index].globalNames))
+            self.pop(len(self.code.scripts[index].closureNames))
+            self.push()
         elif instruction == EJECTOR:
             self.push()
             self.pushHandler()
@@ -96,9 +101,9 @@ class AbstractInterpreter(object):
             self.pop()
             self.addBranch(index)
         elif instruction == CALL:
-            arity = self.code.atoms[index].arity
-            for i in range(arity):
-                self.pop()
+            self.pop(self.code.atoms[index].arity)
+            self.pop()
+            self.push()
         elif instruction == JUMP:
             self.addBranch(index)
             self.suspended = True

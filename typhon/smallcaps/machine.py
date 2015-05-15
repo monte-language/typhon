@@ -43,7 +43,7 @@ class SmallCaps(object):
         self.code = code
         # XXX improve abstract interpreter, shrink frame size
         self.env = Environment(frame, globals, self.code.localSize(),
-                               promote(self.code.maxDepth + 20),
+                               promote(self.code.maxDepth + 10),
                                promote(self.code.maxHandlerDepth))
 
     @staticmethod

@@ -113,5 +113,4 @@ class Code(object):
     def figureMaxDepth(self):
         ai = AbstractInterpreter(self)
         ai.run()
-        self.maxDepth = ai.maxDepth
-        self.maxHandlerDepth = ai.maxHandlerDepth
+        self.maxDepth, self.maxHandlerDepth = ai.getDepth()
