@@ -1,6 +1,3 @@
-def [=> simple__quasiParser] | _ := import("lib/simple")
-def [=> makeEnum] | _ := import("lib/enum")
-
 # TODO: How to guard on iterable?
 def comp(src):
 
@@ -77,6 +74,11 @@ def comp(src):
                 return M.call(x, message, args)
             compObject.map(func)
 
+        match [=="filterMessage", [message] + args]:
+            def func(x):
+                return M.call(x, message, args)
+            compObject.filter(func)
+
 
 def testIter(assert):
     def src := [1, 2, 3]
@@ -144,6 +146,19 @@ def testMapMessage(assert):
         acc with= obj
     assert.equal(acc, expected)
 
+def testFilterMessage(assert):
+    def makeIsEven(x):
+        return object p:
+            to isEven():
+                return x % 2 == 0
+
+    def src := [makeIsEven(0), makeIsEven(1), makeIsEven(2), makeIsEven(3)]
+    def expected := [src[0], src[2]]
+    var acc := []
+    for obj in comp(src).filterMessage("isEven"):
+        acc with= obj
+    assert.equal(acc, expected)
+
 unittest([
     testIter,
     testMap,
@@ -153,6 +168,7 @@ unittest([
     testFlatten,
     testFlattenMapFilterChain,
     testMapMessage,
+    testFilterMessage,
 ])
 
 [=> comp]
