@@ -37,10 +37,11 @@ class AbstractInterpreter(object):
 
     def __init__(self, code):
         self.code = code
-        # pc, depth, handlerDepth
-        self.branches = [(0, 0, 0)]
+        # pc: depth, handlerDepth
+        self.branches = {0: (0, 0)}
 
     def addBranch(self, pc, depth, handlerDepth):
+        print "Adding a branch", pc
         self.branches.append((pc, depth, handlerDepth))
 
     def pop(self):
@@ -117,6 +118,7 @@ class AbstractInterpreter(object):
             pc, depth, handlerDepth = self.branches[i]
             self.completeBranch(pc, depth, handlerDepth)
             i += 1
+        print "Completed all", len(self.branches), "branches"
 
     def completeBranch(self, pc, depth, handlerDepth):
         self.currentDepth = depth
