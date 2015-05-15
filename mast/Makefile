@@ -1,6 +1,3 @@
-MONTE = ~/repos/monte/monte
-MONTE_VENV = ~/repos/monte/monte/v
-
 all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	lib/regex.ty lib/words.ty \
 	lib/percent.ty \
@@ -18,7 +15,7 @@ all: lib/atoi.ty lib/bytes.ty lib/enum.ty lib/netstring.ty \
 	tubes \
 	games \
 	bench \
-        monte
+	monte
 
 prelude: prelude.ty prelude/brand.ty prelude/region.ty prelude/simple.ty \
 	prelude/space.ty
@@ -51,7 +48,7 @@ monte: lib/monte/monte_ast.ty lib/monte/monte_lexer.ty \
 	lib/monte/termParser.ty
 
 %.ty: %.mt
-	$(MONTE_VENV)/bin/python $(MONTE)/bin/monte -c $< > $@
+	monte -c $< > $@
 
-clean: 
+clean:
 	find -iname \*.ty -delete
