@@ -33,16 +33,17 @@ class AbstractInterpreter(object):
     currentHandlerDepth = 0
     maxDepth = 0
     maxHandlerDepth = 0
-    underflow = 0
+
+    suspended = False
 
     def __init__(self, code):
         self.code = code
         # pc: depth, handlerDepth
-        self.branches = {0: (0, 0)}
+        self.branches = {}
 
-    def addBranch(self, pc, depth, handlerDepth):
-        print "Adding a branch", pc
-        self.branches.append((pc, depth, handlerDepth))
+    def addBranch(self, pc):
+        # print "Adding a branch", pc
+        self.branches[pc] = self.currentDepth, self.currentHandlerDepth
 
     def pop(self):
         self.currentDepth -= 1
@@ -67,18 +68,15 @@ class AbstractInterpreter(object):
                            NOUN_FRAME, NOUN_GLOBAL, NOUN_LOCAL, BINDING_FRAME,
                            BINDING_GLOBAL, BINDING_LOCAL, LITERAL, SCOPE):
             self.push()
-            return pc + 1
         elif instruction in (ROT, SWAP):
-            return pc + 1
+            pass
         elif instruction in (POP, ASSIGN_FRAME, ASSIGN_GLOBAL, ASSIGN_LOCAL,
                              BIND, BINDSLOT):
             self.pop()
-            return pc + 1
         elif instruction == LIST_PATT:
             self.pop()
             self.pop()
             self.currentDepth += index * 2
-            return pc + 1
         elif instruction == BINDOBJECT:
             for i in range(self.code.scripts[index].numStamps):
                 self.pop()
@@ -87,45 +85,38 @@ class AbstractInterpreter(object):
             for i in range(len(self.code.scripts[index].closureNames)):
                 self.pop()
             self.currentDepth += 1
-            return pc + 1
         elif instruction == EJECTOR:
             self.push()
             self.pushHandler()
-            return pc + 1
         elif instruction in (TRY, UNWIND):
             self.pushHandler()
-            return pc + 1
         elif instruction == END_HANDLER:
             self.popHandler()
-            return pc + 1
         elif instruction == BRANCH:
             self.pop()
-            self.addBranch(index, self.currentDepth, self.currentHandlerDepth)
-            return pc + 1
+            self.addBranch(index)
         elif instruction == CALL:
             arity = self.code.atoms[index].arity
             for i in range(arity):
                 self.pop()
-            return pc + 1
         elif instruction == JUMP:
-            return index
+            self.addBranch(index)
+            self.suspended = True
+            # print "Suspending at pc", pc
         else:
             raise RuntimeError("Unknown instruction %d" % instruction)
 
     def run(self):
-        i = 0
-        while i < len(self.branches):
-            pc, depth, handlerDepth = self.branches[i]
-            self.completeBranch(pc, depth, handlerDepth)
-            i += 1
-        print "Completed all", len(self.branches), "branches"
+        for pc, instruction in enumerate(self.code.instructions):
+            if self.suspended and pc in self.branches:
+                # print "Unsuspending at pc", pc
+                depth, handlerDepth = self.branches[pc]
+                self.currentDepth = max(self.currentDepth, depth)
+                self.currentHandlerDepth = max(self.currentHandlerDepth,
+                                               handlerDepth)
+                self.suspended = False
 
-    def completeBranch(self, pc, depth, handlerDepth):
-        self.currentDepth = depth
-        self.currentHandlerDepth = handlerDepth
-
-        while pc < len(self.code.instructions):
-            instruction = self.code.instructions[pc]
-            # print ">", pc, self.code.dis(instruction,
-            #                              self.code.indices[pc])
-            pc = self.runInstruction(instruction, pc)
+                self.runInstruction(instruction, pc)
+            elif not self.suspended:
+                self.runInstruction(instruction, pc)
+        # print "Completed all", len(self.branches), "branches"
