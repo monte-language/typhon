@@ -41,8 +41,9 @@ class SmallCaps(object):
 
     def __init__(self, code, frame, globals):
         self.code = code
+        # XXX improve abstract interpreter, shrink frame size
         self.env = Environment(frame, globals, self.code.localSize(),
-                               promote(self.code.maxDepth + 5),
+                               promote(self.code.maxDepth + 20),
                                promote(self.code.maxHandlerDepth))
 
     @staticmethod

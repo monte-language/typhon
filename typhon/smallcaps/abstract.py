@@ -40,82 +40,43 @@ class AbstractInterpreter(object):
         # pc, depth, handlerDepth
         self.branches = [(0, 0, 0)]
 
-    def checkMaxDepth(self):
-        if self.currentDepth + self.underflow > self.maxDepth:
-            self.maxDepth = self.currentDepth + self.underflow
-        if self.currentHandlerDepth > self.maxHandlerDepth:
-            self.maxHandlerDepth = self.currentHandlerDepth
-
     def addBranch(self, pc, depth, handlerDepth):
         self.branches.append((pc, depth, handlerDepth))
 
     def pop(self):
-        # Overestimates but that's fine.
-        if self.currentDepth == 0:
-            self.underflow += 1
+        self.currentDepth -= 1
+
+    def push(self):
+        self.currentDepth += 1
+        if self.currentDepth > self.maxDepth:
+            self.maxDepth = self.currentDepth
+
+    def popHandler(self):
+        self.currentHandlerDepth -= 1
+
+    def pushHandler(self):
+        self.currentHandlerDepth += 1
+        if self.currentHandlerDepth > self.maxHandlerDepth:
+            self.maxHandlerDepth = self.currentHandlerDepth
 
     def runInstruction(self, instruction, pc):
         index = self.code.indices[pc]
 
-        if instruction == DUP:
-            self.currentDepth += 1
+        if instruction in (DUP, SLOT_FRAME, SLOT_GLOBAL, SLOT_LOCAL,
+                           NOUN_FRAME, NOUN_GLOBAL, NOUN_LOCAL, BINDING_FRAME,
+                           BINDING_GLOBAL, BINDING_LOCAL, LITERAL, SCOPE):
+            self.push()
             return pc + 1
-        elif instruction == ROT:
+        elif instruction in (ROT, SWAP):
             return pc + 1
-        elif instruction == POP:
+        elif instruction in (POP, ASSIGN_FRAME, ASSIGN_GLOBAL, ASSIGN_LOCAL,
+                             BIND, BINDSLOT):
             self.pop()
-            return pc + 1
-        elif instruction == SWAP:
-            return pc + 1
-        elif instruction == ASSIGN_FRAME:
-            self.pop()
-            return pc + 1
-        elif instruction == ASSIGN_GLOBAL:
-            self.pop()
-            return pc + 1
-        elif instruction == ASSIGN_LOCAL:
-            self.pop()
-            return pc + 1
-        elif instruction == BIND:
-            self.pop()
-            return pc + 1
-        elif instruction == BINDSLOT:
-            self.pop()
-            return pc + 1
-        elif instruction == SLOT_FRAME:
-            self.currentDepth += 1
-            return pc + 1
-        elif instruction == SLOT_GLOBAL:
-            self.currentDepth += 1
-            return pc + 1
-        elif instruction == SLOT_LOCAL:
-            self.currentDepth += 1
-            return pc + 1
-        elif instruction == NOUN_FRAME:
-            self.currentDepth += 1
-            return pc + 1
-        elif instruction == NOUN_GLOBAL:
-            self.currentDepth += 1
-            return pc + 1
-        elif instruction == NOUN_LOCAL:
-            self.currentDepth += 1
-            return pc + 1
-        elif instruction == BINDING_FRAME:
-            self.currentDepth += 1
-            return pc + 1
-        elif instruction == BINDING_GLOBAL:
-            self.currentDepth += 1
-            return pc + 1
-        elif instruction == BINDING_LOCAL:
-            self.currentDepth += 1
             return pc + 1
         elif instruction == LIST_PATT:
             self.pop()
             self.pop()
             self.currentDepth += index * 2
-            return pc + 1
-        elif instruction == LITERAL:
-            self.currentDepth += 1
             return pc + 1
         elif instruction == BINDOBJECT:
             for i in range(self.code.scripts[index].numStamps):
@@ -126,21 +87,15 @@ class AbstractInterpreter(object):
                 self.pop()
             self.currentDepth += 1
             return pc + 1
-        elif instruction == SCOPE:
-            self.currentDepth += 1
-            return pc + 1
         elif instruction == EJECTOR:
-            self.currentDepth += 1
-            self.currentHandlerDepth += 1
+            self.push()
+            self.pushHandler()
             return pc + 1
-        elif instruction == TRY:
-            self.currentHandlerDepth += 1
-            return pc + 1
-        elif instruction == UNWIND:
-            self.currentHandlerDepth += 1
+        elif instruction in (TRY, UNWIND):
+            self.pushHandler()
             return pc + 1
         elif instruction == END_HANDLER:
-            self.currentHandlerDepth -= 1
+            self.popHandler()
             return pc + 1
         elif instruction == BRANCH:
             self.pop()
@@ -172,4 +127,3 @@ class AbstractInterpreter(object):
             # print ">", pc, self.code.dis(instruction,
             #                              self.code.indices[pc])
             pc = self.runInstruction(instruction, pc)
-            self.checkMaxDepth()
