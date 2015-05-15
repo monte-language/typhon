@@ -698,7 +698,7 @@ def promoteToBigInt(o):
 def makeSourceSpan(uri, isOneToOne, startLine, startCol,
                    endLine, endCol):
     return SourceSpan(
-        bareTwine(uri), unwrapBool(isOneToOne),
+        theTwineMaker.fromString(uri), unwrapBool(isOneToOne),
         unwrapInt(startLine), unwrapInt(startCol),
         unwrapInt(endLine), unwrapInt(endCol))
 
@@ -840,14 +840,18 @@ class TwineMaker(Object):
             return theEmptyTwine
         elif len(parts) == 1:
             return parts[0]
-        elif all(isinstance(p, StrObject) for p in parts):
-            return StrObject(u''.join(p._s for p in parts))
         else:
-            return CompositeTwine(parts)
+            all_strs = True
+            for p in parts:
+                if not isinstance(p, StrObject):
+                    all_strs = False
+                    break
+            if all_strs:
+                return StrObject(u''.join([p.getString() for p in parts]))
+            else:
+                return CompositeTwine(parts)
 
-    def fromString(self, t, span=None):
-
-        s = bareTwine(t)
+    def fromString(self, s, span=None):
         if span is None:
             return StrObject(s)
         else:
@@ -862,10 +866,14 @@ theTwineMaker = TwineMaker()
 
 
 class Twine(Object):
+    """An abstract class providing base implementations of many Twine methods."""
+
     def add(self, other):
+        """Return a new Twine consisting of all the parts from ``self`` and ``other``."""
         from typhon.objects.collections import ConstList, unwrapList
         mine = unwrapList(self.getParts())
         his = unwrapList(self.getParts())
+        # XXX: Why do we smush them together like this?
         if len(mine) > 1 and len(his) > 1:
             # Smush the last and first segments together, if they'll fit.
             mine = mine[:-1] + unwrapList(mine[-1].mergedParts(his[0]))
@@ -894,24 +902,55 @@ class Twine(Object):
             j = s.find(u'\n', i)
         return theTwineMaker.fromParts(ConstList(parts))
 
+    def asList(self):
+        return [CharObject(c) for c in self.getString()]
+
+    def asSet(self):
+        from typhon.objects.collections import monteDict
+        d = monteDict()
+        for c in self.getString():
+            d[CharObject(c)] = None
+        return d
+
     def endsWith(self, other):
         return wrapBool(self.getString().endswith(bareTwine(other)))
 
+    def get(self, index):
+        if not 0 <= index < self.getLength():
+            raise userError(u"string.get/1: Index out of bounds: %d" % index)
+        return self.getString()[index]
+
+    def getLength(self):
+        return len(self.getString())
+
     def getPartAt(self, posI):
+        """
+        Get a part index and offset of a position.
+
+        If ``posI`` is within this Twine, return a pair consisting of the index
+        in ``getParts()`` that holds the ``posI``, and an offset within that
+        part to get ``posI``.
+
+        Example: If a Twine consists of two parts, which represent the strings
+        "abc" and "def", then getPartsAt(4) would return [1, 1].
+        """
         from typhon.objects.collections import ConstList, unwrapList
         pos = unwrapInt(posI)
-        if pos < 0:
+        if pos < 0 or pos >= self.getLength():
             raise userError(u"string.getPartAt/1: Index out of bounds: %d" %
                             pos)
         parts = unwrapList(self.getParts())
         sofar = 0
         for (i, atom) in enumerate(parts):
             part = atom.getString()
-            siz = len(part)
+            siz = part.getLength()
             if pos < sofar + siz:
                 return ConstList([IntObject(i), IntObject(pos - sofar)])
             sofar += siz
         raise userError("%s not in 0..!%s" % (pos, sofar))
+
+    def getParts(self):
+        raise NotImplementedError
 
     def getSourceMap(self):
         from typhon.objects.collections import ConstList, ConstMap, unwrapList
@@ -928,6 +967,9 @@ class Twine(Object):
                 result.append((k, span))
             offset += partSize
         return ConstMap(dict(result), [x[0] for x in result])
+
+    def getString(self):
+        raise NotImplementedError
 
     def infect(self, other, oneToOne=False):
         other = ensureTwine(other)
@@ -948,73 +990,19 @@ class Twine(Object):
         items = unwrapList(itemsL)
         segments = []
         for piece in items:
-            segments.append(ensureTwine(piece))
-            segments.append(self)
+            segments = segments + [ensureTwine(piece), self]
         if segments:
-            del segments[-1]
+            segments = segments[:-1]
         return theTwineMaker.fromParts(ConstList(segments))
-
-
-class EmptyTwine(Twine):
-    def size(self):
-        return IntObject(0)
-
-    def bare(self):
-        return self
-
-    def get(self, idx):
-        raise userError(u"string.get/1: Index out of bounds: %d" %
-                        idx)
-
-
-theEmptyTwine = EmptyTwine()
-
-
-class LocatedTwine(Twine):
-    pass
-
-
-class CompositeTwine(Twine):
-    pass
-
-
-class StrObject(Twine):
-
-    _immutable_fields_ = "stamps[*]", "_s"
-
-    displayName = u"StrObject"
-
-    stamps = [DeepFrozenStamp]
-
-    def __init__(self, s):
-        self._s = s
-
-    def toString(self):
-        return self._s
-
-    def toQuote(self):
-        return quoteStr(self._s)
-
-    def hash(self):
-        # Cribbed from RPython's _hash_string.
-        length = len(self._s)
-        if length == 0:
-            return -1
-        x = ord(self._s[0]) << 7
-        i = 0
-        while i < length:
-            x = intmask((1000003 * x) ^ ord(self._s[i]))
-            i += 1
-        x ^= length
-        return intmask(x)
 
     def recv(self, atom, args):
         if atom is ADD_1:
+            from typhon.objects.collections import ConstList
             other = args[0]
-            if isinstance(other, StrObject):
-                return StrObject(self._s + other._s)
+            if isinstance(other, Twine):
+                return theTwineMaker.fromParts(ConstList([self, other]))
             if isinstance(other, CharObject):
-                return StrObject(self._s + unicode(other._c))
+                return theTwineMaker.fromString(self.getString() + unicode(other._c))
 
         if atom is ASLIST_0:
             from typhon.objects.collections import ConstList
@@ -1026,148 +1014,201 @@ class StrObject(Twine):
 
         if atom is CONTAINS_1:
             needle = args[0]
+            if isinstance(needle, Twine):
+                return wrapBool(needle.getString() in self.getString())
             if isinstance(needle, CharObject):
-                return wrapBool(needle._c in self._s)
-            if isinstance(needle, StrObject):
-                return wrapBool(needle._s in self._s)
+                return wrapBool(needle._c in self.getString())
 
         if atom is GET_1:
             index = unwrapInt(args[0])
-            if not 0 <= index < len(self._s):
-                raise userError(u"string.get/1: Index out of bounds: %d" %
-                                index)
-            return CharObject(self._s[index])
+            return CharObject(self.get(index))
 
         if atom is INDEXOF_1:
             needle = unwrapStr(args[0])
-            return IntObject(self._s.find(needle))
+            return IntObject(self.getString().find(needle))
 
         if atom is JOIN_1:
-            from typhon.objects.collections import unwrapList
-            return StrObject(self.join(unwrapList(args[0])))
+            return self.join(args[0])
+
+        if atom is MULTIPLY_1:
+            from typhon.objects.collections import ConstList
+            multiplier = unwrapInt(args[0])
+            return theTwineMaker.fromParts(ConstList([self for _ in range(multiplier)]))
 
         if atom is LASTINDEXOF_1:
             needle = unwrapStr(args[0])
-            return IntObject(self._s.rfind(needle))
-
-        if atom is MULTIPLY_1:
-            amount = args[0]
-            if isinstance(amount, IntObject):
-                return StrObject(self._s * amount._i)
+            return IntObject(self.getString().rfind(needle))
 
         if atom is OP__CMP_1:
-            return polyCmp(self._s, unwrapStr(args[0]))
+            other = args[0]
+            if isinstance(other, Twine):
+                return polyCmp(self.getString(), other.getString())
 
         if atom is SIZE_0:
-            return IntObject(len(self._s))
+            return IntObject(self.getLength())
 
         if atom is SLICE_1:
             start = unwrapInt(args[0])
-            if start < 0:
-                raise userError(u"Slice start cannot be negative")
-            return StrObject(self._s[start:])
+            stop = self.getLength()
+            return theTwineMaker.fromString(self.slice(start, stop))
 
         if atom is SLICE_2:
             start = unwrapInt(args[0])
             stop = unwrapInt(args[1])
-            if start < 0:
-                raise userError(u"Slice start cannot be negative")
-            if stop < 0:
-                raise userError(u"Slice stop cannot be negative")
-            return StrObject(self._s[start:stop])
+            return theTwineMaker.fromString(self.slice(start, stop))
 
         if atom is SPLIT_1:
             from typhon.objects.collections import ConstList
-            return ConstList(self.split(unwrapStr(args[0])))
+            splitter = unwrapStr(args[0])
+            return ConstList(self.split(splitter))
 
         if atom is SPLIT_2:
             from typhon.objects.collections import ConstList
-            return ConstList(self.split(unwrapStr(args[0]),
-                                        unwrapInt(args[1])))
+            splitter = unwrapStr(args[0])
+            splits = unwrapInt(args[1])
+            return ConstList(self.split(splitter, splits))
 
         if atom is TOLOWERCASE_0:
-            return StrObject(self.toLowerCase())
+            return theTwineMaker.fromString(self.toLowerCase())
 
         if atom is TOUPPERCASE_0:
-            return StrObject(self.toUpperCase())
+            return theTwineMaker.fromString(self.toUpperCase())
 
         if atom is TRIM_0:
-            return StrObject(self.trim())
+            return theTwineMaker.fromString(self.trim())
 
         if atom is WITH_1:
-            return StrObject(self._s + unwrapChar(args[0]))
+            char = unwrapChar(args[0])
+            return theTwineMaker.fromString(self.getString() + char)
 
         if atom is _MAKEITERATOR_0:
-            return strIterator(self._s)
+            return strIterator(self.getString())
 
         raise Refused(self, atom, args)
 
-    def getString(self):
-        return self._s
-
-    def asList(self):
-        return [CharObject(c) for c in self._s]
-
-    def asSet(self):
-        from typhon.objects.collections import monteDict
-        d = monteDict()
-        for c in self._s:
-            d[CharObject(c)] = None
-        return d
-
-    def join(self, pieces):
-        ub = UnicodeBuilder()
-        first = True
-        for s in pieces:
-            # For all iterations except the first, append a copy of
-            # ourselves.
-            if first:
-                first = False
-            else:
-                ub.append(self._s)
-
-            string = unwrapStr(s)
-
-            ub.append(string)
-        return ub.build()
+    def slice(self, start, stop):
+        if start < 0:
+            raise userError(u"Slice start cannot be negative")
+        if stop < 0:
+            raise userError(u"Slice stop cannot be negative")
+        # XXX: is start > stop fine?
+        return self.getString()[start:stop]
 
     def split(self, splitter, splits=-1):
         if splits == -1:
-            return [StrObject(s) for s in split(self._s, splitter)]
+            parts = split(self.getString(), splitter)
         else:
-            return [StrObject(s) for s in split(self._s, splitter, splits)]
+            parts = split(self.getString(), splitter, splits)
+        return [theTwineMaker.fromString(p) for p in parts]
 
     def toLowerCase(self):
-        # Use current size as a size hint. In the best case, characters
-        # are one-to-one; in the next-best case, we overestimate and end
-        # up with a couple bytes of slop.
-        ub = UnicodeBuilder(len(self._s))
-        for char in self._s:
+        # Use current size as a size hint. This is often exactly correct,
+        # but can be a bit off in either direction in some locales, where
+        # the number of bytes in a uppercase string is different than
+        # the number of bytes in a lower case string.
+        ub = UnicodeBuilder(self.getLength())
+        for char in self.toString():
             ub.append(unichr(unicodedb.tolower(ord(char))))
         return ub.build()
 
+    def toQuote(self):
+        return quoteStr(self.getString())
+
     def toUpperCase(self):
-        # Same as toLowerCase().
-        ub = UnicodeBuilder(len(self._s))
-        for char in self._s:
+        # Same as toLowerCase
+        ub = UnicodeBuilder(self.getLength())
+        for char in self.toString():
             ub.append(unichr(unicodedb.toupper(ord(char))))
         return ub.build()
 
     def trim(self):
-        if len(self._s) == 0:
+        left = 0
+        right = self.getLength()
+
+        if right == 0:
             return u""
 
-        left = 0
-        right = len(self._s)
-
-        while left < right and unicodedb.isspace(ord(self._s[left])):
+        while left < right and unicodedb.isspace(ord(self.get(left))):
             left += 1
 
-        while left < right and unicodedb.isspace(ord(self._s[right - 1])):
+        while right > left and unicodedb.isspace(ord(self.get(right - 1))):
             right -= 1
 
         assert right >= 0, "StrObject.trim/0: Proven impossible"
-        return self._s[left:right]
+        return self.slice(left, right)
+
+class EmptyTwine(Twine):
+    def size(self):
+        return IntObject(0)
+
+    def bare(self):
+        return self
+
+    def get(self, idx):
+        raise userError(u"string.get/1: Index out of bounds: %d" % idx)
+
+
+theEmptyTwine = EmptyTwine()
+
+
+class LocatedTwine(Twine):
+    """A Twine that knows where it came from."""
+
+    _immutable_fields_ = ("stamps[*]", "_s", "_span")
+
+    displayName = u"StrObject"
+
+    def __init__(self, s, span):
+        self._s = s
+        self._span = span
+
+        if span._isOneToOne and len(s) != span.endCol.n - span.startCol.n + 1:
+            raise userError(u"LocatedTwine with oneToOne span must have matching sizes.")
+
+    def getString(self):
+        return self._s
+
+    def getParts(self):
+        return [self]
+
+
+class CompositeTwine(Twine):
+    def __init__(self, parts):
+        pass
+
+
+class StrObject(Twine):
+
+    _immutable_fields_ = ("stamps[*]", "_s")
+
+    displayName = u"StrObject"
+
+    stamps = [DeepFrozenStamp]
+
+    def __init__(self, s):
+        self._s = s
+
+    def getString(self):
+        return self._s
+
+    def getParts(self):
+        return [self]
+
+    def hash(self):
+        # Cribbed from RPython's _hash_string.
+        length = self.getLength()
+        if length == 0:
+            return -1
+        x = ord(self.get(0)) << 7
+        i = 0
+        while i < length:
+            x = intmask((1000003 * x) ^ ord(self.get(i)))
+            i += 1
+        x ^= length
+        return intmask(x)
+
+    def toString(self):
+        return self._s
 
 
 def unwrapStr(o):
@@ -1178,17 +1219,9 @@ def unwrapStr(o):
     raise WrongType(u"Not a string!")
 
 
-def bareTwine(o):
+def ensureTwine(o):
     from typhon.objects.refs import resolution
     s = resolution(o)
-    if isinstance(s, Twine):
-        return s.getString()
-    raise WrongType(u"Not a string!")
-
-
-def ensureTwine(o):
-        from typhon.objects.refs import resolution
-        s = resolution(other)
-        if not isinstance(s, Twine):
-            raise WrongType(u"Not a string!")
-        return s
+    if not isinstance(s, Twine):
+        raise WrongType(u"Not a string!")
+    return s
