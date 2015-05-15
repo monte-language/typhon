@@ -25,7 +25,7 @@ from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 from typhon.atoms import getAtom
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import DeepFrozenStamp
-from typhon.objects.constants import wrapBool
+from typhon.objects.constants import unwrapBool, wrapBool, NullObject
 from typhon.objects.root import Object
 from typhon.quoting import quoteChar, quoteStr
 
@@ -695,6 +695,118 @@ def promoteToBigInt(o):
     raise WrongType(u"Not promotable to big integer!")
 
 
+def makeSourceSpan(uri, isOneToOne, startLine, startCol,
+                   endLine, endCol):
+    return SourceSpan(
+        bareTwine(uri), unwrapBool(isOneToOne),
+        unwrapInt(startLine), unwrapInt(startCol),
+        unwrapInt(endLine), unwrapInt(endCol))
+
+
+class SourceSpan(Object):
+    """
+    Information about the original location of a span of text. Twines use
+    this to remember where they came from.
+
+    uri: Name of document this text came from.
+
+    isOneToOne: Whether each character in that Twine maps to the
+    corresponding source character position.
+
+    startLine, endLine: Line numbers for the beginning and end of the
+    span. Line numbers start at 1.
+
+    startCol, endCol: Column numbers for the beginning and end of the
+    span. Column numbers start at 0.
+
+    """
+    def __init__(self, uri, isOneToOne, startLine, startCol,
+                 endLine, endCol):
+        self.uri = uri
+        self._isOneToOne = isOneToOne
+        self.startLine = startLine
+        self.startCol = startCol
+        self.endLine = endLine
+        self.endCol = endCol
+
+    def notOneToOne(self):
+        """
+        Return a new SourceSpan for the same text that doesn't claim
+        one-to-one correspondence.
+        """
+        return SourceSpan(self.uri, False,
+                          self.startLine, self.startCol,
+                          self.endLine, self.endCol)
+
+    def isOneToOne(self):
+        return wrapBool(self._isOneToOne)
+
+    def getStartLine(self):
+        return IntObject(self.startLine)
+
+    def getStartCol(self):
+        return IntObject(self.startCol)
+
+    def getEndLine(self):
+        return IntObject(self.endLine)
+
+    def getEndCol(self):
+        return IntObject(self.endCol)
+
+    def toString(self):
+        return u"<%s#:%s::%s>" % (
+            self.uri,
+            u"span" if self._isOneToOne else u"blob",
+            u":".join(self.startLine, self.startCol,
+                      self.endLine, self.endCol))
+
+    def combine(self, other):
+        return spanCover(self, other)
+
+
+def spanCover(a, b):
+    """
+    Create a new SourceSpan that covers spans `a` and `b`.
+    """
+    if a is NullObject or b is NullObject:
+        return NullObject
+    assert isinstance(a, SourceSpan)
+    assert isinstance(b, SourceSpan)
+    if a.uri != b.uri:
+        return NullObject
+    if ((a._isOneToOne and b._isOneToOne
+         and a.endLine == b.startLine
+         and a.endCol + 1) == b.startCol):
+        # These spans are adjacent.
+        return SourceSpan(a.uri, True,
+                          a.startLine, a.startCol,
+                          b.endLine, b.endCol)
+
+    # find the earlier start point
+    if a.startLine < b.startLine:
+        startLine = a.startLine
+        startCol = a.startCol
+    elif a.startLine == b.startLine:
+        startLine = a.startLine
+        startCol = min(a.startCol, b.startCol)
+    else:
+        startLine = b.startLine
+        startCol = b.startCol
+
+    # find the later end point
+    if b.endLine > a.endLine:
+        endLine = b.endLine
+        endCol = b.endCol
+    elif a.endLine == b.endLine:
+        endLine = a.endLine
+        endCol = max(a.endCol, b.endCol)
+    else:
+        endLine = a.endLine
+        endCol = a.endCol
+
+    return SourceSpan(a.uri, False, startLine, startCol, endLine, endCol)
+
+
 class strIterator(Object):
 
     _immutable_fields_ = "s",
@@ -718,7 +830,155 @@ class strIterator(Object):
         raise Refused(self, atom, args)
 
 
-class StrObject(Object):
+class TwineMaker(Object):
+    _m_fqn = "__makeString"
+
+    def fromParts(self, partsList):
+        from typhon.objects.collections import unwrapList
+        parts = unwrapList(partsList)
+        if len(parts) == 0:
+            return theEmptyTwine
+        elif len(parts) == 1:
+            return parts[0]
+        elif all(isinstance(p, StrObject) for p in parts):
+            return StrObject(u''.join(p._s for p in parts))
+        else:
+            return CompositeTwine(parts)
+
+    def fromString(self, t, span=None):
+
+        s = bareTwine(t)
+        if span is None:
+            return StrObject(s)
+        else:
+            return LocatedTwine(s, span)
+
+    def fromChars(self, charsList):
+        from typhon.objects.collections import unwrapList
+        chars = unwrapList(charsList)
+        return StrObject(u''.join([unwrapChar(c) for c in chars]))
+
+theTwineMaker = TwineMaker()
+
+
+class Twine(Object):
+    def add(self, other):
+        from typhon.objects.collections import ConstList, unwrapList
+        mine = unwrapList(self.getParts())
+        his = unwrapList(self.getParts())
+        if len(mine) > 1 and len(his) > 1:
+            # Smush the last and first segments together, if they'll fit.
+            mine = mine[:-1] + unwrapList(mine[-1].mergedParts(his[0]))
+            his = his[1:]
+        return theTwineMaker.fromParts(ConstList(mine + his))
+
+    def asFrom(self, origin, startLineI=IntObject(1), startColI=IntObject(0)):
+        from typhon.objects.collections import ConstList
+        startLine = unwrapInt(startLineI)
+        startCol = unwrapInt(startColI)
+        parts = []
+        s = self.getString()
+        end = len(s)
+        i = 0
+        j = s.find(u'\n')
+        while i < end:
+            if j == -1:
+                j = end - 1
+            endCol = IntObject(startCol.n + j - i)
+            span = SourceSpan(origin, True, startLine, startCol,
+                              startLine, endCol)
+            parts.append(LocatedTwine(s[i:j + 1], span))
+            startLine = IntObject(startLine.n + 1)
+            startCol = IntObject(0)
+            i = j + 1
+            j = s.find(u'\n', i)
+        return theTwineMaker.fromParts(ConstList(parts))
+
+    def endsWith(self, other):
+        return wrapBool(self.getString().endswith(bareTwine(other)))
+
+    def getPartAt(self, posI):
+        from typhon.objects.collections import ConstList, unwrapList
+        pos = unwrapInt(posI)
+        if pos < 0:
+            raise userError(u"string.getPartAt/1: Index out of bounds: %d" %
+                            pos)
+        parts = unwrapList(self.getParts())
+        sofar = 0
+        for (i, atom) in enumerate(parts):
+            part = atom.getString()
+            siz = len(part)
+            if pos < sofar + siz:
+                return ConstList([IntObject(i), IntObject(pos - sofar)])
+            sofar += siz
+        raise userError("%s not in 0..!%s" % (pos, sofar))
+
+    def getSourceMap(self):
+        from typhon.objects.collections import ConstList, ConstMap, unwrapList
+        parts = unwrapList(self.getParts())
+        result = []
+        offset = 0
+        for partStr in parts:
+            part = partStr.getString()
+            partSize = len(part)
+            span = partStr.getSpan()
+            if span is not NullObject:
+                k = ConstList([IntObject(offset),
+                               IntObject(offset + partSize)])
+                result.append((k, span))
+            offset += partSize
+        return ConstMap(dict(result), [x[0] for x in result])
+
+    def infect(self, other, oneToOne=False):
+        other = ensureTwine(other)
+        if oneToOne:
+            if unwrapInt(self.size()) == unwrapInt(other.size()):
+                return self.infectOneToOne(other)
+            else:
+                raise userError("%r and %r must be the same size" % (
+                    other, self))
+        else:
+            span = self.getSpan()
+            if span is not NullObject:
+                span = span.notOneToOne()
+            return theTwineMaker.fromString(other, span)
+
+    def join(self, itemsL):
+        from typhon.objects.collections import ConstList, unwrapList
+        items = unwrapList(itemsL)
+        segments = []
+        for piece in items:
+            segments.append(ensureTwine(piece))
+            segments.append(self)
+        if segments:
+            del segments[-1]
+        return theTwineMaker.fromParts(ConstList(segments))
+
+
+class EmptyTwine(Twine):
+    def size(self):
+        return IntObject(0)
+
+    def bare(self):
+        return self
+
+    def get(self, idx):
+        raise userError(u"string.get/1: Index out of bounds: %d" %
+                        idx)
+
+
+theEmptyTwine = EmptyTwine()
+
+
+class LocatedTwine(Twine):
+    pass
+
+
+class CompositeTwine(Twine):
+    pass
+
+
+class StrObject(Twine):
 
     _immutable_fields_ = "stamps[*]", "_s"
 
@@ -916,3 +1176,19 @@ def unwrapStr(o):
     if isinstance(s, StrObject):
         return s.getString()
     raise WrongType(u"Not a string!")
+
+
+def bareTwine(o):
+    from typhon.objects.refs import resolution
+    s = resolution(o)
+    if isinstance(s, Twine):
+        return s.getString()
+    raise WrongType(u"Not a string!")
+
+
+def ensureTwine(o):
+        from typhon.objects.refs import resolution
+        s = resolution(other)
+        if not isinstance(s, Twine):
+            raise WrongType(u"Not a string!")
+        return s
