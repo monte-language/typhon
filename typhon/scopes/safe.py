@@ -77,7 +77,7 @@ class MakeList(Object):
             return ConstList(args)
 
         if atom is FROMITERABLE_1:
-            return ConstList(self.fromIterable(args[0]))
+            return ConstList(self.fromIterable(args[0])[:])
 
         raise Refused(self, atom, args)
 
