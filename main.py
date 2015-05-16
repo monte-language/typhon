@@ -215,7 +215,8 @@ def jitpolicy(driver):
     return JitPolicy(TyphonJitHooks())
 
 
-def target(*args):
+def target(driver, *args):
+    driver.exe_name = "mt-typhon"
     return entryPoint, None
 
 

@@ -32,7 +32,7 @@ The JIT can be enabled with a switch::
 The resulting executable is immediately usable for any scripts that don't use
 prelude features::
 
-    $ ./main-c your/awesome/script.ty
+    $ ./mt-typhon your/awesome/script.ty
 
 Note that translation is not cheap. It will require approximately 0.5GiB
 memory and 2min CPU time on a 64-bit x86 system to translate a non-JIT Typhon
@@ -58,12 +58,12 @@ with other Monte code running on Typhon.
 
 Then, you can use the prelude::
 
-    $ ./main-c -l mast another/awesome/script.ty
+    $ ./mt-typhon -l mast another/awesome/script.ty
 
 Contributing
 ============
 
-Contributions are welcome.
+Contributions are welcome. Please ensure that you're okay with the license!
 
 Unit tests are tested by Travis. You can run them yourself; I recommend the
 Trial test runner::
