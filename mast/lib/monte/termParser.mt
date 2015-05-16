@@ -1289,15 +1289,15 @@ def test_qtermSubstitute(assert):
     }
     {
         def x := parseTerm("foo(3)")
-        assert.raises(fn { qt`$x(3)` })
+        assert.throws(fn { qt`$x(3)` })
     }
     {
         def args := [qt`foo`, qt`bar(3)`]
         assert.equal(qt`zip($args*)`, qt`zip(foo, bar(3))`)
         assert.equal(qt`zip($args+)`, qt`zip(foo, bar(3))`)
         assert.equal(qt`zip(${[]}*)`, qt`zip`)
-        assert.raises(fn {qt`zip($args?)`})
-        assert.raises(fn {qt`zip(${[]}+)`})
+        assert.throws(fn {qt`zip($args?)`})
+        assert.throws(fn {qt`zip(${[]}+)`})
     }
 
 
@@ -1312,7 +1312,7 @@ def test_qtermMatch(assert):
         assert.equal(bar, parseTerm("hello"))
     }
     {
-        assert.raises(fn {def qt`hello@foo` := "hello"})
+        assert.throws(fn {def qt`hello@foo` := "hello"})
     }
     {
         def qt`hello@foo` := parseTerm("hello(3, 4)")
@@ -1328,7 +1328,7 @@ def test_qtermMatch(assert):
         assert.equal(bar, parseTerm("hello"))
     }
     {
-        assert.raises(fn {
+        assert.throws(fn {
             def qt`hello@bar()` := "hello world"
         })
     }

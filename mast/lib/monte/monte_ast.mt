@@ -2697,7 +2697,7 @@ def test_valueHolePattern(assert):
 
 def test_finalPattern(assert):
     def [name, guard] := [makeNounExpr("blee", null), makeNounExpr("Int", null)]
-    assert.raises(fn {makeFinalPattern(name, name, null)})
+    assert.throws(fn {makeFinalPattern(name, name, null)})
     def patt := makeFinalPattern(name, guard, null)
     assert.equal(patt._uncall(), [makeFinalPattern, "run", [name, guard, null]])
     assert.equal(M.toString(patt), "blee :Int")

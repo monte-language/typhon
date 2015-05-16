@@ -965,11 +965,11 @@ def test_indent_multi(assert):
          tt("EOL", null), tt("IDENTIFIER", "blee")])
 
 def test_indent_unbalanced(assert):
-    assert.raises(fn {lex(UNBALANCED)})
-    assert.raises(fn {lex(UNBALANCED2)})
+    assert.throws(fn {lex(UNBALANCED)})
+    assert.throws(fn {lex(UNBALANCED2)})
 
 def test_indent_inexpr(assert):
-    assert.raises(fn {lex(PARENS)})
+    assert.throws(fn {lex(PARENS)})
 
 def test_indent_continuation(assert):
     assert.equal(
