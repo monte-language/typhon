@@ -49,6 +49,7 @@ SLICE_2 = getAtom(u"slice", 2)
 SNAPSHOT_0 = getAtom(u"snapshot", 0)
 SORT_0 = getAtom(u"sort", 0)
 STARTOF_1 = getAtom(u"startOf", 1)
+SUBTRACT_1 = getAtom(u"subtract", 1)
 WITHOUT_1 = getAtom(u"without", 1)
 WITH_1 = getAtom(u"with", 1)
 WITH_2 = getAtom(u"with", 2)
@@ -680,6 +681,9 @@ class ConstSet(Collection, Object):
         if atom is ASLIST_0:
             return ConstList(self.objectMap.keys())
 
+        if atom is SUBTRACT_1:
+            return self.subtract(args[0])
+
         if atom is WITH_1:
             key = args[0]
             d = self.objectMap.copy()
@@ -727,6 +731,13 @@ class ConstSet(Collection, Object):
 
     def snapshot(self):
         return ConstSet(self.objectMap.copy())
+
+    def subtract(self, other):
+        rv = self.objectMap.copy()
+        for ok in unwrapSet(other).keys():
+            if ok in rv:
+                del rv[ok]
+        return ConstSet(rv)
 
 
 def unwrapList(o, ej=None):
