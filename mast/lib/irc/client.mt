@@ -23,6 +23,7 @@ def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
 def [=> makeSingleUse] := import("lib/singleUse")
 def [=> makeTokenBucket] := import("lib/tokenBucket")
+def [=> makeUser, => sourceToUser] | _ := import("lib/irc/user")
 
 
 def splitAt(needle, var haystack):
@@ -112,7 +113,7 @@ def makeIRCClient(handler):
             outgoing := []
 
     def line(l :Str) :Void:
-        outgoing := outgoing.with(l)
+        outgoing with= l
         flush()
 
     return object IRCTube:
@@ -151,13 +152,20 @@ def makeIRCClient(handler):
 
         to receive(item):
             switch (item):
-                match `:@source PRIVMSG @channel :@message`:
-                    handler.privmsg(IRCTube, source, channel, message)
+                match `:@{via (sourceToUser) user} PRIVMSG @channel :@message`:
+                    if (message[0] == '\x01'):
+                        # CTCP.
+                        handler.ctcp(IRCTube, user,
+                                     message.slice(1, message.size() - 1))
+                    else:
+                        handler.privmsg(IRCTube, user, channel, message)
 
-                match `:@nick!@{_}@@@host JOIN @channel`:
+                match `:@{via (sourceToUser) user} JOIN @channel`:
+                    def nick := user.getNick()
                     if (nickname == nick):
                         # This is pretty much the best way to find out what
                         # our reflected hostname is.
+                        def host := user.getHost()
                         traceln(`Refined hostname from $hostname to $host`)
                         hostname := host
 
@@ -250,6 +258,25 @@ def makeIRCClient(handler):
                 line(privmsg + snippet)
                 message := message.slice(i + 1)
             line(privmsg + message)
+
+        to notice(channel, var message):
+            def notice := `NOTICE $channel :`
+            # nick!user@host
+            def sourceLen := 4 + username.size() + nickname.size() + hostname.size()
+            def paddingLen := 6 + 6 + 3 + 2 + 2
+            # Not 512, because \r\n is 2 and will be added by line().
+            def availableLen := 510 - sourceLen - paddingLen
+            while (message.size() > availableLen):
+                def slice := message.slice(0, availableLen)
+                def i := slice.lastIndexOf(" ")
+                def snippet := slice.slice(0, i)
+                line(notice + snippet)
+                message := message.slice(i + 1)
+            line(notice + message)
+
+        to ctcp(nick, message):
+            # XXX CTCP quoting
+            IRCTube.notice(nick, `$\x01$message$\x01`)
 
         # Data accessors.
 

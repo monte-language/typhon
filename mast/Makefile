@@ -37,7 +37,7 @@ tubes: lib/tubes/nullPump.ty lib/tubes/mapPump.ty \
 http: lib/http/client.ty lib/http/server.ty \
 	tubes
 
-irc: lib/irc/client.ty \
+irc: lib/irc/client.ty lib/irc/user.ty \
 	tubes
 
 games: games/mafia.ty
