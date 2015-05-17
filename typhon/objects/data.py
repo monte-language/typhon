@@ -46,10 +46,12 @@ BITLENGTH_0 = getAtom(u"bitLength", 0)
 COMPLEMENT_0 = getAtom(u"complement", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 COS_0 = getAtom(u"cos", 0)
+ENDSWITH_1 = getAtom(u"endsWith", 1)
 FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
 GETCATEGORY_0 = getAtom(u"getCategory", 0)
 GET_1 = getAtom(u"get", 1)
 INDEXOF_1 = getAtom(u"indexOf", 1)
+INFECT_2 = getAtom(u"infect", 2)
 ISZERO_0 = getAtom(u"isZero", 0)
 JOIN_1 = getAtom(u"join", 1)
 LASTINDEXOF_1 = getAtom(u"lastIndexOf", 1)
@@ -74,6 +76,7 @@ SLICE_2 = getAtom(u"slice", 2)
 SPLIT_1 = getAtom(u"split", 1)
 SPLIT_2 = getAtom(u"split", 2)
 SQRT_0 = getAtom(u"sqrt", 0)
+STARTSWITH_1 = getAtom(u"startsWith", 1)
 SUBTRACT_1 = getAtom(u"subtract", 1)
 TAN_0 = getAtom(u"tan", 0)
 TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
@@ -738,20 +741,29 @@ class SourceSpan(Object):
                           self.startLine, self.startCol,
                           self.endLine, self.endCol)
 
+    def oneToOne(self):
+        """
+        Return a new SourceSpan for the same text that claims one-to-one
+        correspondence.
+        """
+        return SourceSpan(self.uri, True,
+                          self.startLine, self.startCol,
+                          self.endLine, self.endCol)
+
     def isOneToOne(self):
         return self._isOneToOne
 
     def getStartLine(self):
-        return IntObject(self.startLine)
+        return self.startLine
 
     def getStartCol(self):
-        return IntObject(self.startCol)
+        return self.startCol
 
     def getEndLine(self):
-        return IntObject(self.endLine)
+        return self.endLine
 
     def getEndCol(self):
-        return IntObject(self.endCol)
+        return self.endCol
 
     def toString(self):
         return u"<%s#:%s::%s>" % (
@@ -878,25 +890,26 @@ class Twine(Object):
         # I didn't understand it, so I took it out. ~M
         return theTwineMaker.fromParts(ConstList(self_parts + other_parts))
 
-    def asFrom(self, origin, startLineI=IntObject(1), startColI=IntObject(0)):
-        """Return a new Twine tagged with the same contents, tagged at a location."""
+    def asFrom(self, origin, startLine=1, startCol=0):
+        """
+        Return a new Twine tagged with the same contents, tagged at a location.
+
+        ``origin`` should be the URI of the origin.
+        """
         from typhon.objects.collections import ConstList
-        startLine = unwrapInt(startLineI)
-        startCol = unwrapInt(startColI)
         parts = []
         s = self.getString()
         end = len(s)
         i = 0
-        j = s.find(u'\n')
+        j = s.find(u"\n")
         while i < end:
             if j == -1:
                 j = end - 1
-            endCol = IntObject(startCol.n + j - i)
-            span = SourceSpan(origin, True, startLine, startCol,
-                              startLine, endCol)
+            endCol = startCol + j - i
+            span = SourceSpan(origin, True, startLine, startCol, startLine, endCol)
             parts.append(LocatedTwine(s[i:j + 1], span))
-            startLine = IntObject(startLine.n + 1)
-            startCol = IntObject(0)
+            startLine = startLine + 1
+            startCol = 0
             i = j + 1
             j = s.find(u'\n', i)
         return theTwineMaker.fromParts(ConstList(parts))
@@ -941,7 +954,7 @@ class Twine(Object):
         """
         if pos < 0 or pos >= self.getLength():
             raise userError(u"string.getPartAt/1: Index out of bounds: %d" % pos)
-        parts = unwrapList(self.getParts())
+        parts = self.getParts()
         sofar = 0
         for (i, atom) in enumerate(parts):
             part = atom.getString()
@@ -967,13 +980,13 @@ class Twine(Object):
         for part in parts:
             span = part.getSpan()
             if span is not NullObject:
-                k = (offset, offset + partSize)
+                k = (offset, offset + part.getLength())
                 result[k] = span
-            offset += partSize
+            offset += part.getLength()
         return result
 
     def getSpan(self):
-        return NotImplementedError
+        raise NotImplementedError
 
     def getString(self):
         """Return a unicode object that represents the same text as this Twine."""
@@ -1002,19 +1015,15 @@ class Twine(Object):
         from typhon.objects.collections import ConstList
         segments = []
         for piece in items:
-            segments += [ensureTwine(piece), self]
+            segments = segments + [ensureTwine(piece), self]
         if segments:
             segments = segments[:-1]
         return theTwineMaker.fromParts(ConstList(segments))
 
     def recv(self, atom, args):
         if atom is ADD_1:
-            from typhon.objects.collections import ConstList
             other = args[0]
-            if isinstance(other, Twine):
-                return theTwineMaker.fromParts(ConstList([self, other]))
-            if isinstance(other, CharObject):
-                return theTwineMaker.fromString(self.getString() + unicode(other._c))
+            return self.add(other)
 
         if atom is ASLIST_0:
             from typhon.objects.collections import ConstList
@@ -1031,6 +1040,10 @@ class Twine(Object):
             if isinstance(needle, CharObject):
                 return wrapBool(needle._c in self.getString())
 
+        if atom is ENDSWITH_1:
+            needle = args[0]
+            return self.endsWith(needle)
+
         if atom is GET_1:
             index = unwrapInt(args[0])
             return CharObject(self.get(index))
@@ -1038,6 +1051,11 @@ class Twine(Object):
         if atom is INDEXOF_1:
             needle = unwrapStr(args[0])
             return IntObject(self.getString().find(needle))
+
+        if atom is INFECT_2:
+            other = args[0]
+            oneToOne = unwrapBool(args[1])
+            return self.infect(other, oneToOne)
 
         if atom is JOIN_1:
             from typhon.objects.collections import unwrapList
@@ -1082,6 +1100,10 @@ class Twine(Object):
             splits = unwrapInt(args[1])
             return ConstList(self.split(splitter, splits))
 
+        if atom is STARTSWITH_1:
+            other = args[0]
+            return self.startsWith(other)
+
         if atom is TOLOWERCASE_0:
             return theTwineMaker.fromString(self.toLowerCase())
 
@@ -1107,7 +1129,7 @@ class Twine(Object):
         if stop < 0:
             raise userError(u"Slice stop cannot be negative")
         # XXX: is start > stop fine?
-        return self.getString()[start:stop]
+        return theTwineMaker.fromString(self.getString()[start:stop])
 
     def split(self, splitter, splits=-1):
         """Return a list of Twines, split on ``splitter``."""
@@ -1116,6 +1138,11 @@ class Twine(Object):
         else:
             parts = split(self.getString(), splitter, splits)
         return [theTwineMaker.fromString(p) for p in parts]
+
+    def startsWith(self, other):
+        """Check if this twine starts with another Twine."""
+        other = ensureTwine(other)
+        return self.getString().startswith(other.getString())
 
     def toLowerCase(self):
         """Return a Twine with the lower case version of this Twine."""
@@ -1171,6 +1198,9 @@ class EmptyTwine(Twine):
     def getLength(self):
         return 0
 
+    def getSpan(self):
+        return NullObject
+
     def getString(self):
         return u""
 
@@ -1183,14 +1213,26 @@ class LocatedTwine(Twine):
 
     _immutable_fields_ = ("stamps[*]", "_s", "_span")
 
-    displayName = u"StrObject"
+    displayName = u"LocatedTwine"
 
     def __init__(self, s, span):
         self._s = s
         self._span = span
 
-        if span._isOneToOne and len(s) != span.endCol.n - span.startCol.n + 1:
-            raise userError(u"LocatedTwine with oneToOne span must have matching sizes.")
+        if span is NullObject:
+            raise userError(u"Can't make LocatedTwine with null span.")
+
+        spanSize = span.getEndCol() - span.getStartCol() + 1
+        if span.isOneToOne():
+            if len(s) != spanSize:
+                raise userError(u"LocatedTwine with oneToOne span must have matching sizes.")
+            if span.getStartLine() != span.getEndLine():
+                # XXX: Count newlines and what not to see if ``s`` matches the
+                # given span.
+                raise NotImplementedError(u"LocatedTwine can't yet be oneToOne and multiline.")
+
+    def getSpan(self):
+        return self._span
 
     def getString(self):
         return self._s
@@ -1208,6 +1250,16 @@ class CompositeTwine(Twine):
 
     def __init__(self, parts):
         self._parts = parts
+
+    def getSpan(self):
+        if not self._parts:
+            return NullObject
+        result = self._parts[0].getSpan()
+        for part in self._parts[1:]:
+            if result is NullObject:
+                return NullObject
+            result = spanCover(result, part.getSpan())
+        return result
 
     def getString(self):
         return u"".join([p.getString() for p in self._parts])
@@ -1227,11 +1279,14 @@ class StrObject(Twine):
     def __init__(self, s):
         self._s = s
 
-    def getString(self):
-        return self._s
-
     def getParts(self):
         return [self]
+
+    def getSpan(self):
+        return NullObject
+
+    def getString(self):
+        return self._s
 
     def hash(self):
         # Cribbed from RPython's _hash_string.
@@ -1245,6 +1300,9 @@ class StrObject(Twine):
             i += 1
         x ^= length
         return intmask(x)
+
+    def infectOneToOne(self, other):
+        return theTwineMaker.fromString(other.toString())
 
 
 def unwrapStr(o):

@@ -19,10 +19,12 @@ from unittest import TestCase
 
 from rpython.rlib.rbigint import rbigint
 
-from typhon.errors import Ejecting, UserException
+from typhon.errors import Ejecting, UserException, WrongType
 from typhon.objects.collections import ConstList
-from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
-                                 StrObject)
+from typhon.objects.constants import BoolObject
+from typhon.objects.data import (
+    BigInt, CharObject, DoubleObject, IntObject, StrObject, LocatedTwine,
+    CompositeTwine)
 from typhon.objects.ejectors import Ejector
 
 
@@ -73,6 +75,139 @@ class TestCharObject(TestCase):
         a = CharObject(u'a')
         b = CharObject(u'b')
         self.assertNotEqual(a.hash(), b.hash())
+
+
+class _TwineTests(object):
+    """
+    Holds abstract tests for various Twine types.
+
+    Because Twine is an abstract class this doesn't run anything itself. There
+    should be a base case that implements ``makeTwine`` appropriately and
+    subclasses TestCase, to run these tests for a specific subclass of Twine.
+    """
+
+    def makeTwine(self, s, id):
+        """Makes an instance of the class under test.
+
+        The ``id`` param can be used to create unique internal structure,
+        such as locations in the case of LocatedTwine. If not internal
+        structure needs to be created, ignore the ``id`` param.
+
+        Every call of ``makeTwine`` in a test will use a unique value for
+        ``id``.
+        """
+        raise NotImplementedError
+
+    def test_endsWith(self):
+        haystack = self.makeTwine(u"foo bar", 1)
+
+        needle1 = self.makeTwine(u"bar", 2)
+        self.assertTrue(haystack.call(u"endsWith", [needle1]))
+        needle2 = self.makeTwine(u"baz", 3)
+        self.assertFalse(haystack.call(u"endsWith", [needle2]))
+
+    def test_startsWith(self):
+        haystack = self.makeTwine(u"foo bar", 1)
+
+        needle1 = self.makeTwine(u"foo", 2)
+        self.assertTrue(haystack.call(u"startsWith", [needle1]))
+        needle2 = self.makeTwine(u"foz", 3)
+        self.assertFalse(haystack.call(u"startsWith", [needle2]))
+
+    def test_add(self):
+        t1 = self.makeTwine(u"foo ", 1)
+        t2 = self.makeTwine(u"bar", 2)
+
+        res = t1.call(u"add", [t2])
+        self.assertEqual(res.getString(), u"foo bar")
+        self.assertEqual(res.slice(0, 4).getSpan(), t1.getSpan())
+        self.assertEqual(res.slice(4, 7).getSpan(), t2.getSpan())
+
+    def test_join(self):
+        joiner = self.makeTwine(", ", 1)
+        t1 = self.makeTwine("foo", 2)
+        t2 = self.makeTwine("bar", 3)
+        t3 = self.makeTwine("qux", 3)
+
+        res = joiner.call("join", [ConstList([t1, t2, t3])])
+        self.assertEqual(res.getString(), u"foo, bar, qux")
+        self.assertEqual(res.slice(0, 3).getSpan(), t1.getSpan())
+        self.assertEqual(res.slice(5, 8).getSpan(), t2.getSpan())
+        self.assertEqual(res.slice(10, 13).getSpan(), t3.getSpan())
+
+    def test_asFrom_singleLine(self):
+        t1 = self.makeTwine(u"foo", 1)
+
+        res = t1.call('asFrom', [StrObject(u"file:///serious_business.mt"), IntObject(2), IntObject(4)])
+        self.assertEqual(res.getString(), u"foo")
+
+        span = res.getSpan()
+        self.assertTrue(span.isOneToOne())
+        self.assertEqual(span.getStartLine(), 2)
+        self.assertEqual(span.getEndLine(), 2)
+        self.assertEqual(span.getStartCol(), 4)
+        self.assertEqual(span.getEndCol(), 6)
+
+    def test_asFrom_multiLine(self):
+        t1 = self.makeTwine(u"foo bar\nbaz qux", 1)
+
+        res = t1.call('asFrom', [StrObject(u"file:///ircbot/parser.mt"), IntObject(2), IntObject(4)])
+        self.assertEqual(res.getString(), u"foo bar\nbaz qux")
+
+        span = res.getSpan()
+        self.assertTrue(span.isOneToOne())
+        self.assertEqual(span.getStartLine(), 2)
+        self.assertEqual(span.getEndLine(), 3)
+        self.assertEqual(span.getStartCol(), 4)
+        self.assertEqual(span.getEndCol(), 6)
+
+        self.assertEqual(len(res.getParts()), 2)
+        part1, part2 = res.getParts()
+
+        self.assertEqual(part1.getString(), u"foo bar\n")
+        span1 = part1.getSpan()
+        self.assertTrue(span1.isOneToOne())
+        self.assertEqual(span1.getStartLine(), 2)
+        self.assertEqual(span1.getEndLine(), 2)
+        self.assertEqual(span1.getStartCol(), 4)
+        self.assertEqual(span1.getEndCol(), 11)
+
+        self.assertEqual(part2.getString(), u"baz qux")
+        span2 = part2.getSpan()
+        self.assertTrue(span2.isOneToOne())
+        self.assertEqual(span2.getStartLine(), 3)
+        self.assertEqual(span2.getEndLine(), 3)
+        self.assertEqual(span2.getStartCol(), 0)
+        self.assertEqual(span2.getEndCol(), 6)
+
+    def test_infect_oneToOne(self):
+        t1 = self.makeTwine(u"foo", 1)
+        t2 = self.makeTwine(u"bar", 2)
+
+        res = t1.call('infect', [t2, BoolObject(True)])
+        self.assertEqual(res.getString(), u"bar")
+        self.assertEqual(res.getSpan(), t1.getSpan())
+
+    def test_infect_notOneToOne(self):
+        t1 = self.makeTwine(u"foo", 1)
+        t2 = self.makeTwine(u"frob", 2)
+
+        res = t1.call('infect', [t2, BoolObject(False)])
+        self.assertEqual(res.getString(), u"frob")
+        self.assertEqual(res.getSpan(), t1.getSpan())
+
+    def test_infect_badCalls(self):
+        t1 = self.makeTwine(u"foo", 1)
+        # Bad type
+        self.assertRaises(WrongType, t1.call, u"infect", [0, BoolObject(True)])
+        # asked for oneToOne without having the same length.
+        self.assertRaises(UserException, t1.call, u"infect", [StrObject(u"xy"), BoolObject(True)])
+
+
+class TestTwineStr(_TwineTests, TestCase):
+
+    def makeTwine(self, s, _):
+        return StrObject(s)
 
 
 class TestStr(TestCase):
