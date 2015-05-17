@@ -45,9 +45,10 @@ Without a prelude, Typhon doesn't do much. Most Monte applications have a
 reasonable expectation of certain non-kernel features, which are implemented
 in Monte via a prelude and library.
 
-Edit ``mast/Makefile`` to point ``MONTE`` to the location of your `reference
-Monte`_ checkout, and ``MONTE_VENV`` to the virtualenv in which you've
-installed Monte's ``requirements.txt``. 
+``mast/Makefile`` assumes that ``monte`` and ``python`` are on your PATH,
+and that the ``python`` binary references the one in which you installed
+Monte's ``requirements.txt``. The easiest way to do this is to make sure
+that the ``bin`` directory of Monte's virtualenv comes early in your PATH.
 
 To build the MAST library::
 
