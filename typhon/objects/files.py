@@ -118,7 +118,8 @@ class FileFount(Object):
 
     def unpause(self):
         self.pauses -= 1
-        self.queueRead()
+        if not self.pauses:
+            self.queueRead()
 
     def queueRead(self):
         vat = currentVat.get()
