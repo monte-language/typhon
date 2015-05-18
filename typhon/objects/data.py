@@ -18,18 +18,19 @@ from rpython.rlib.rbigint import BASE10, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
 from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
-from rpython.rlib.rstring import UnicodeBuilder, split
+from rpython.rlib.rstring import UnicodeBuilder, replace, split
 from rpython.rlib.rstruct.ieee import pack_float
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import DeepFrozenStamp
-from typhon.objects.constants import wrapBool
+from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.root import Object
 from typhon.quoting import quoteChar, quoteStr
 
 
+_PRINTON_1 = getAtom(u"_printOn", 1)
 ABOVEZERO_0 = getAtom(u"aboveZero", 0)
 ABS_0 = getAtom(u"abs", 0)
 ADD_1 = getAtom(u"add", 1)
@@ -49,6 +50,7 @@ COS_0 = getAtom(u"cos", 0)
 FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
 GETCATEGORY_0 = getAtom(u"getCategory", 0)
 GET_1 = getAtom(u"get", 1)
+GETSPAN_0 = getAtom(u"getSpan", 0)
 INDEXOF_1 = getAtom(u"indexOf", 1)
 ISZERO_0 = getAtom(u"isZero", 0)
 JOIN_1 = getAtom(u"join", 1)
@@ -65,6 +67,8 @@ OP__CMP_1 = getAtom(u"op__cmp", 1)
 OR_1 = getAtom(u"or", 1)
 POW_1 = getAtom(u"pow", 1)
 PREVIOUS_0 = getAtom(u"previous", 0)
+REPLACE_2 = getAtom(u"replace", 2)
+QUOTE_0 = getAtom(u"quote", 0)
 SHIFTLEFT_1 = getAtom(u"shiftLeft", 1)
 SHIFTRIGHT_1 = getAtom(u"shiftRight", 1)
 SIN_0 = getAtom(u"sin", 0)
@@ -152,7 +156,8 @@ class CharObject(Object):
         if atom is SUBTRACT_1:
             other = unwrapInt(args[0])
             return self.withOffset(-other)
-
+        if atom is _PRINTON_1:
+            return args[0].call(u"print", [StrObject(self.toString())])
         raise Refused(self, atom, args)
 
     def withOffset(self, offset):
@@ -227,6 +232,9 @@ class DoubleObject(Object):
             result = []
             pack_float(result, self._d, 8, True)
             return ConstList([IntObject(ord(c)) for c in result[0]])
+
+        if atom is _PRINTON_1:
+            return args[0].call(u"print", [StrObject(self.toString())])
 
         raise Refused(self, atom, args)
 
@@ -446,6 +454,9 @@ class IntObject(Object):
                 other = unwrapBigInt(args[0])
                 return BigInt(other.int_xor(self._i))
 
+        if atom is _PRINTON_1:
+            return args[0].call(u"print", [StrObject(self.toString())])
+
         raise Refused(self, atom, args)
 
     def getInt(self):
@@ -655,6 +666,8 @@ class BigInt(Object):
                 return BigInt(self.bi.xor(unwrapBigInt(other)))
             except WrongType:
                 return BigInt(self.bi.int_xor(unwrapInt(other)))
+        if atom is _PRINTON_1:
+            return args[0].call(u"print", [StrObject(self.toString())])
 
         raise Refused(self, atom, args)
 
@@ -778,6 +791,9 @@ class StrObject(Object):
                                 index)
             return CharObject(self._s[index])
 
+        if atom is GETSPAN_0:
+            return NullObject
+
         if atom is INDEXOF_1:
             needle = unwrapStr(args[0])
             return IntObject(self._s.find(needle))
@@ -797,6 +813,14 @@ class StrObject(Object):
 
         if atom is OP__CMP_1:
             return polyCmp(self._s, unwrapStr(args[0]))
+
+        if atom is REPLACE_2:
+            return StrObject(replace(self._s,
+                                     unwrapStr(args[0]),
+                                     unwrapStr(args[1])))
+
+        if atom is QUOTE_0:
+            return StrObject(quoteStr(self._s))
 
         if atom is SIZE_0:
             return IntObject(len(self._s))
@@ -839,6 +863,9 @@ class StrObject(Object):
 
         if atom is _MAKEITERATOR_0:
             return strIterator(self._s)
+
+        if atom is _PRINTON_1:
+            return args[0].call(u"print", [self])
 
         raise Refused(self, atom, args)
 

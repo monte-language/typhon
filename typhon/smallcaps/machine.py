@@ -100,10 +100,16 @@ class SmallCaps(object):
             with csp.startCall(target, atom):
                 self.push(target.callAtom(atom, args))
         except UserException as ue:
-            argString = u", ".join([arg.toQuote() for arg in args])
+            argStringList = []
+            for arg in args:
+                try:
+                    argStringList.append(arg.toQuote())
+                except UserException as ue2:
+                    argStringList.append(u"<**%s throws %r when printed**>" % (
+                        arg.displayName, ue2))
+            argString = u", ".join(argStringList)
             atomRepr = atom.repr.decode("utf-8")
-            ue.trail.append(u"In %s.%s [%s]:" % (target.toString(),
-                                                 atomRepr, argString))
+            ue.trail.append(u"In %s.%s [%s]:" % (target.displayName, atomRepr, argString))
             raise
 
     def runInstruction(self, instruction, pc):

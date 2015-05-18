@@ -25,16 +25,19 @@ from typhon.objects.root import Object
 from typhon.prelude import getGlobal
 
 
+AND_1 = getAtom(u"and", 1)
 ADD_1 = getAtom(u"add", 1)
 ASLIST_0 = getAtom(u"asList", 0)
 ASMAP_0 = getAtom(u"asMap", 0)
 ASSET_0 = getAtom(u"asSet", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 DIVERGE_0 = getAtom(u"diverge", 0)
+EXTEND_1 = getAtom(u"extend", 1)
 FETCH_2 = getAtom(u"fetch", 2)
 GET_1 = getAtom(u"get", 1)
 INDEXOF_1 = getAtom(u"indexOf", 1)
 INDEXOF_2 = getAtom(u"indexOf", 2)
+INSERT_2 = getAtom(u"insert", 2)
 LAST_0 = getAtom(u"last", 0)
 MULTIPLY_1 = getAtom(u"multiply", 1)
 NEXT_1 = getAtom(u"next", 1)
@@ -350,15 +353,26 @@ class FlexList(Collection, Object):
         if atom is DIVERGE_0:
             return FlexList(self.flexObjects)
 
+        if atom is EXTEND_1:
+            self.flexObjects.extend(unwrapList(args[0]))
+            return NullObject
         if atom is GET_1:
             # Lookup by index.
             index = unwrapInt(args[0])
-            if index >= len(self.flexObjects):
+            if index >= len(self.flexObjects) or index < 0:
                 raise userError(u"Index %d is out of bounds" % index)
             return self.flexObjects[index]
 
         if atom is INDEXOF_1:
             return IntObject(self.indexOf(args[0]))
+
+        if atom is INSERT_2:
+            index = unwrapInt(args[0])
+            value = args[1]
+            if index < 0:
+                raise userError(u"Index %d is out of bounds" % index)
+            self.flexObjects.insert(index, value)
+            return NullObject
 
         if atom is LAST_0:
             if self.flexObjects:
@@ -670,13 +684,22 @@ class ConstSet(Collection, Object):
             rv = ConstList(self.objectMap.keys())
             return ConstList([rv, StrObject(u"asSet")])
 
+        if atom is ASSET_0:
+            return self
+
         if atom is DIVERGE_0:
             _flexSet = getGlobal(u"_flexSet")
             return _flexSet.call(u"run", [self])
 
+        if atom is AND_1:
+            return self._and(args[0])
+
         # or/1: Unify the elements of this collection with another.
         if atom is OR_1:
             return self._or(args[0])
+
+        if atom is SUBTRACT_1:
+            return self.subtract(args[0])
 
         if atom is ASLIST_0:
             return ConstList(self.objectMap.keys())
@@ -706,6 +729,21 @@ class ConstSet(Collection, Object):
     def contains(self, needle):
         return needle in self.objectMap
 
+    def _and(self, otherSet):
+        other = unwrapSet(otherSet)
+        if (len(self.objectMap) > len(other)):
+            bigger = self.objectMap
+            smaller = other
+        else:
+            bigger = other
+            smaller = self.objectMap
+
+        rv = monteDict()
+        for k in smaller:
+            if k in bigger:
+                rv[k] = None
+        return ConstSet(rv)
+
     def _or(self, other):
         # XXX This is currently linear time. Can it be better? If not, prove
         # it, please.
@@ -713,6 +751,14 @@ class ConstSet(Collection, Object):
         for ok in unwrapSet(other).keys():
             if ok not in rv:
                 rv[ok] = None
+        return ConstSet(rv)
+
+    def subtract(self, otherSet):
+        other = unwrapSet(otherSet)
+        rv = self.objectMap.copy()
+        for ok in other.keys():
+            if ok in rv:
+                del rv[ok]
         return ConstSet(rv)
 
     def slice(self, start, stop=-1):

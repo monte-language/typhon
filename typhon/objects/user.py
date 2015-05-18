@@ -51,8 +51,8 @@ class ScriptObject(Object):
             return printer.value()
         except Refused:
             return u"<%s>" % self.displayName
-        except UserException:
-            return u"<%s (threw exception when printed)>" % self.displayName
+        except UserException, e:
+            return u"<%s (threw exception %s when printed)>" % (self.displayName, e.error())
 
     toQuote = toString
 

@@ -42,6 +42,7 @@ FROMCHARS_1 = getAtom(u"fromChars", 1)
 FROMITERABLE_1 = getAtom(u"fromIterable", 1)
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
 FROMSTRING_1 = getAtom(u"fromString", 1)
+FROMSTRING_2 = getAtom(u"fromString", 2)
 MATCHMAKER_1 = getAtom(u"matchMaker", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
@@ -146,6 +147,10 @@ class MakeString(Object):
 
     def callAtom(self, atom, args):
         if atom is FROMSTRING_1:
+            # XXX handle twineishness
+            return args[0]
+
+        if atom is FROMSTRING_2:
             # XXX handle twineishness
             return args[0]
 

@@ -92,6 +92,8 @@ class StandardInput(Selectable):
         buf = os.read(0, MAX_RECV)
         if not buf:
             self.error(reactor, u"End of stream")
+            for f in self._founts:
+                f.terminate(u"End of stream")
             return
 
         for fount in self._founts:
