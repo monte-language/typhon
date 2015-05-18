@@ -60,7 +60,12 @@ class Vat(object):
         self._pending.append((None, target, atom, args))
 
     def hasTurns(self):
-        return len(self._pending) != 0
+        # Note that if we have pending callbacks but no pending turns, we
+        # should still indicate that we have work to do. In takeSomeTurns(),
+        # we'll take zero turns and then run our callbacks. This prevents
+        # callbacks prepared in the initial turn from being skipped in the
+        # event that there are no queued turns.
+        return len(self._pending) or len(self._callbacks)
 
     def takeTurn(self):
         from typhon.objects.refs import Promise, resolution
