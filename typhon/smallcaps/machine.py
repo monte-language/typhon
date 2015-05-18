@@ -41,9 +41,8 @@ class SmallCaps(object):
 
     def __init__(self, code, frame, globals):
         self.code = code
-        # XXX improve abstract interpreter, shrink frame size
         self.env = Environment(frame, globals, self.code.localSize(),
-                               promote(self.code.maxDepth + 20),
+                               promote(self.code.maxDepth),
                                promote(self.code.maxHandlerDepth))
 
     @staticmethod
@@ -319,6 +318,9 @@ class Catch(Handler):
         # And the ejector.
         machine.push(NullObject)
         return self.index
+
+    def drop(self, machine, index):
+        machine.pc = index
 
 
 class Unwind(Handler):
