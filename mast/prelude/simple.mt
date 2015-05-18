@@ -98,6 +98,9 @@ def testQuasiPatternHead(assert):
     def `@{head}23` := `123`
     assert.equal(head, `1`)
 
+def testQuasiPatternHeadFail(assert):
+    assert.ejects(fn j {def `@{head}23` exit j  := `1234`})
+
 def testQuasiPatternMid(assert):
     def `1@{middle}3` := `123`
     assert.equal(middle, `2`)
@@ -106,11 +109,21 @@ def testQuasiPatternTail(assert):
     def `12@{tail}` := `123`
     assert.equal(tail, `3`)
 
+def testQuasiPatternDoubleTail(assert):
+    def `12@x@y` := `1234`
+    assert.equal(x, "")
+    assert.equal(y, "34")
+
 def testQuasiPatternSep(assert):
     def sep := `\r\n`
     def `@car$sep@cdr` := `first\r\nsecond\r\nthird`
     assert.equal(car, `first`)
     assert.equal(cdr, `second\r\nthird`)
+
+def testQuasiPatternEmptySep(assert):
+    def a := "baz"
+    def `foo @x$a` := "foo baz"
+    assert.equal(x, "")
 
 def testQuasiPatternEmptyTail(assert):
     def `1234@tail` := "1234"
@@ -119,9 +132,12 @@ def testQuasiPatternEmptyTail(assert):
 unittest([
     testQuasiValues,
     testQuasiPatternHead,
+    testQuasiPatternHeadFail,
     testQuasiPatternMid,
     testQuasiPatternTail,
+    testQuasiPatternDoubleTail,
     testQuasiPatternSep,
+    testQuasiPatternEmptySep,
     testQuasiPatternEmptyTail,
 ])
 
