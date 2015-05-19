@@ -163,6 +163,8 @@ class MakeString(Object):
 
 class Throw(Object):
 
+    displayName = u"throw"
+
     def toString(self):
         return u"<throw>"
 
@@ -188,6 +190,8 @@ class MObject(Object):
     """
     Miscellaneous vat management and quoting services.
     """
+
+    displayName = u"M"
 
     def toString(self):
         return u"<M>"

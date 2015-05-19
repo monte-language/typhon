@@ -31,6 +31,8 @@ class Ejector(Object):
     handle. If a different ejector was caught, the catcher must reraise it.
     """
 
+    displayName = u"ejector"
+
     active = True
 
     def toString(self):
