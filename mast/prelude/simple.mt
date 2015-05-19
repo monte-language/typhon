@@ -1,4 +1,4 @@
-# Copyright (C) 2014 Google Inc. All rights reserved.
+# Copyright (C) 2015 the Monte authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
 # use this file except in compliance with the License. You may obtain a copy
@@ -12,13 +12,17 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+object LITERAL {}
+object PATTERN_HOLE {}
+object VALUE_HOLE {}
+
 def _makeString(chunks):
     return object stringMaker:
         to substitute(values) :Str:
             def rv := [].diverge()
             for chunk in chunks:
                 switch (chunk):
-                    match [=="valueHole", index]:
+                    match [==VALUE_HOLE, index]:
                         rv.push(M.toString(values[index]))
                     match _:
                         rv.push(M.toString(chunk))
@@ -27,64 +31,67 @@ def _makeString(chunks):
 
 object simple__quasiParser:
     to patternHole(index):
-        return ["patternHole", index]
+        return [PATTERN_HOLE, index]
 
     to valueHole(index):
-        return ["valueHole", index]
+        return [VALUE_HOLE, index]
 
-    to matchMaker(pieces):
+    to matchMaker(segments):
+        def pieces := [].diverge()
+        for p in segments:
+            escape e:
+                def _ :Str exit e := p
+                pieces.push([LITERAL, p])
+            catch _:
+                pieces.push(p)
         return object simpleMatcher:
-            to matchBind(values, specimen, ej):
-                # The strategy: Lay down "railroad" segments one at a time,
-                # matching against the specimen.
-                # XXX var position :(0..!specimen.size()) exit ej := 0
-                var position := 0
-                var inPattern :Bool := false
-                def patterns := [].diverge()
-                var patternMarker := 0
-
-                for var piece in pieces:
-                    if (piece =~ [=="patternHole", index]):
-                        if (inPattern):
+            to matchBind(values, specimen :Str, ej):
+                var i := 0
+                var j := 0
+                def bindings := [].diverge()
+                for n => piece in pieces:
+                    def [typ, val] := piece
+                    if (typ == LITERAL):
+                        j := i + val.size()
+                        if (specimen.slice(i, j) != val):
                             throw.eject(ej,
-                                "Can't catenate patterns with patterns!")
-                        inPattern := true
-                        patternMarker := position
+                                 "expected " +  M.toQuote(val) +
+                                 "..., found " +
+                                 M.toQuote(specimen.slice(i, j)))
 
-                        continue
+                    else if (typ == VALUE_HOLE):
+                        def s := M.toString(values[val])
+                        j := i + s.size()
+                        if (specimen.slice(i, j) != s):
+                            throw.eject(ej,
+                                 "expected " + M.toQuote(s) + "... ($-hole " +
+                                  M.toQuote(val) + ", found " +
+                                  M.toQuote(specimen.slice(i, j)))
+                    else if (typ == PATTERN_HOLE):
+                        if (n == pieces.size() - 1):
+                            bindings.push(specimen.slice(i, specimen.size()))
+                            i := specimen.size()
+                            continue
+                        def [nextType, var nextVal] := pieces[n + 1]
+                        if (nextType == VALUE_HOLE):
+                            nextVal := values[nextVal]
+                        else if (nextType == PATTERN_HOLE):
+                            bindings.push("")
+                            continue
 
-                    if (piece =~ [=="valueHole", index]):
-                        # XXX should be index, bindings/slots busted
-                        piece := values[piece[1]]
+                        j := specimen.indexOf(nextVal)
+                        if (j == -1):
+                            throw.eject(ej,
+                                 "expected " + M.toQuote(nextVal) +
+                                  "..., found " + M.toQuote(specimen.slice(i,
+                                                            specimen.size())))
+                        bindings.push(specimen.slice(i, j))
+                    i := j
 
-                    # Convert to string.
-                    piece := M.toString(piece)
+                if (i == specimen.size()):
+                    return bindings.snapshot()
+                throw.eject(ej, "Excess unmatched: " + M.toQuote(specimen.slice(i, j)))
 
-                    def len := piece.size()
-                    if (inPattern):
-                        # Let's go find a match, and then slice off a pattern.
-                        while (specimen.slice(position, position + len) != piece):
-                            position += 1
-                            if (position >= specimen.size()):
-                                throw.eject(ej, "Length mismatch")
-
-                        # Found a match! Mark the pattern, then jump ahead.
-                        patterns.push(specimen.slice(patternMarker, position))
-                        position += len
-                        inPattern := false
-
-                    else:
-                        if (specimen.slice(position, position + len) == piece):
-                            position += len
-                        else:
-                            throw.eject(ej, "Couldn't match literal/value")
-
-                if (inPattern):
-                    # The final piece was a pattern.
-                    patterns.push(specimen.slice(patternMarker,
-                                                 specimen.size()))
-
-                return patterns.snapshot()
 
     to valueMaker(pieces):
         return _makeString(pieces)
