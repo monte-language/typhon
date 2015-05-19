@@ -86,7 +86,8 @@ def makePredicateGuard(predicate, label):
             if (predicate(conformed)):
                 return conformed
 
-            throw.eject(ej, ["Failed guard:", specimen])
+            def error := "Failed guard (" + label + "):"
+            throw.eject(ej, [error, specimen])
 
         to makeSlot(value):
             return makeGuardedSlot(predicateGuard, value)
