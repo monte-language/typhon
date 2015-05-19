@@ -986,9 +986,13 @@ class CodeScript(object):
         arity = len(method._ps)
         compiler = Compiler(self.closureNames, self.globalNames,
                             self.availableClosure)
+        # [... specimen1 ej1 specimen0 ej0]
         for param in method._ps:
+            # [... specimen1 ej1]
             param.compile(compiler)
+            # []
         method._b.compile(compiler)
+        # [retval]
         if method._g is not Null:
             # [retval]
             method._g.compile(compiler)
@@ -1006,8 +1010,11 @@ class CodeScript(object):
 
     def addMatcher(self, matcher):
         compiler = Compiler(self.closureNames, self.globalNames)
+        # [[verb, args] ej]
         matcher._pattern.compile(compiler)
+        # []
         matcher._block.compile(compiler)
+        # [retval]
 
         code = compiler.makeCode()
         self.matchers.append(code)
@@ -1236,11 +1243,14 @@ class FinalPattern(Pattern):
             # [specimen]
         index = compiler.addGlobal(u"_makeFinalSlot")
         compiler.addInstruction("NOUN_GLOBAL", index)
+        # [specimen _makeFinalSlot]
         compiler.addInstruction("SWAP", 0)
         # [_makeFinalSlot specimen]
         compiler.call(u"run", 1)
+        # [slot]
         index = compiler.addLocal(self._n)
         compiler.addInstruction("BINDSLOT", index)
+        # []
 
 
 class IgnorePattern(Pattern):
@@ -1265,6 +1275,7 @@ class IgnorePattern(Pattern):
         # [specimen ej]
         if self._g is None:
             compiler.addInstruction("POP", 0)
+            # [specimen]
             compiler.addInstruction("POP", 0)
             # []
         else:

@@ -54,7 +54,6 @@ def loopJIT(consumer, ejector, iterator):
             values.reverse()
             for arg in values:
                 machine.push(arg)
-                # XXX is this the right ejector?
                 machine.push(NullObject)
             # print "--- Entering JIT loop", RUN_2
             machine.run()

@@ -85,10 +85,8 @@ class ScriptObject(Object):
         machine = SmallCaps(code, self.closure, self.globals)
         # print "--- Running", self.displayName, atom, args
         # Push the arguments onto the stack, backwards.
-        args.reverse()
-        for arg in args:
+        for arg in reversed(args):
             machine.push(arg)
-            # XXX is this the right ejector?
             machine.push(NullObject)
         machine.run()
         return machine.pop()
