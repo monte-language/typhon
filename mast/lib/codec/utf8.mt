@@ -31,34 +31,49 @@ def decodeCore(var bs :Bytes, ej):
     def iterator := bs._makeIterator()
     var rv :Str := ""
     while (true):
-        switch (bs):
-            match [b ? ((b & 0x80) == 0x00)] + rest:
-                # One byte.
-                rv with= chr(b)
-                bs := rest
-            match [b ? ((b & 0xe0) == 0xc0), x] + rest:
-                # Two bytes.
-                var c := (b & 0x1f) << 6
-                c |= x & 0x3f
-                rv with= chr(c)
-                bs := rest
-            match [b ? ((b & 0xf0) == 0xe0), x, y] + rest:
-                # Three bytes.
-                var c := (b & 0x0f) << 12
-                c |= (x & 0x3f) << 6
-                c |= y & 0x3f
-                rv with= chr(c)
-                bs := rest
-            match [b ? ((b & 0xf7) == 0xf0), x, y, z] + rest:
-                # Four bytes.
-                var c := (b & 0x07) << 18
-                c |= (x & 0x3f) << 12
-                c |= (y & 0x3f) << 6
-                c |= z & 0x3f
-                rv with= chr(c)
-                bs := rest
-            match _:
+        if (bs.size() == 0):
+            # End of input.
+            break
+
+        def b := bs[0]
+        if ((b & 0x80) == 0x00):
+            # One byte.
+            rv with= chr(b)
+            bs := bs.slice(1, bs.size())
+        else if ((b & 0xe0) == 0xc0):
+            # Two bytes.
+            if (bs.size() < 2):
                 break
+
+            var c := (b & 0x1f) << 6
+            c |= bs[1] & 0x3f
+            rv with= chr(c)
+            bs := bs.slice(2, bs.size())
+        else if ((b & 0xf0) == 0xe0):
+            # Three bytes.
+            if (bs.size() < 3):
+                break
+
+            var c := (b & 0x0f) << 12
+            c |= (bs[1] & 0x3f) << 6
+            c |= bs[2] & 0x3f
+            rv with= chr(c)
+            bs := bs.slice(3, bs.size())
+        else if ((b & 0xf7) == 0xf0):
+            # Four bytes.
+            if (bs.size() < 4):
+                break
+
+            var c := (b & 0x07) << 18
+            c |= (bs[1] & 0x3f) << 12
+            c |= (bs[2] & 0x3f) << 6
+            c |= bs[3] & 0x3f
+            rv with= chr(c)
+            bs := bs.slice(4, bs.size())
+        else:
+            # Invalid sequence. Move forward and try again.
+            rv with= '\ufffd'
+            bs := bs.slice(1, bs.size())
     return [rv, bs]
 
 def testDecodeCore(assert):
