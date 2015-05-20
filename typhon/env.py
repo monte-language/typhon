@@ -118,6 +118,7 @@ class Environment(object):
         assert index < len(self.globals), "Global index out-of-bounds (%d, %d)" % (index, len(self.globals))
 
         # Oh, and we can promote globals too.
+        assert self.globals[index] is not None, "Global binding never defined?"
         return promote(self.globals[index])
 
     def getSlotGlobal(self, index):
@@ -140,6 +141,7 @@ class Environment(object):
         assert index >= 0, "Frame index was negative!?"
         assert index < len(self.frame), "Frame index out-of-bounds (%d, %d)" % (index, len(self.frame))
 
+        assert self.frame[index] is not None, "Frame binding never defined?"
         return self.frame[index]
 
     def getSlotFrame(self, index):
@@ -180,6 +182,7 @@ class Environment(object):
         # always green), then the index is green as well. That said, the JIT
         # is currently good enough at figuring this out that no annotation is
         # currently needed.
+        assert self.local[index] is not None, "Local binding use-before-define"
         return self.local[index]
 
     def getSlotLocal(self, index):
