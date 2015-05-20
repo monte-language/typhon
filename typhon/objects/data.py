@@ -886,8 +886,8 @@ class Twine(Object):
         other = ensureTwine(other)
         self_parts = self.getParts()
         other_parts = other.getParts()
-        # XXX The reference implementation had a "smush" bit here, but I
-        # I didn't understand it, so I took it out. ~M
+        # XXX The reference implementation had a "smush" bit here, but I didn't
+        # understand why it would be desired, so I took it out. ~M
         return theTwineMaker.fromParts(ConstList(self_parts + other_parts))
 
     def asFrom(self, origin, startLine=1, startCol=0):
