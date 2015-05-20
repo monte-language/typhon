@@ -42,7 +42,7 @@ class SmallCaps(object):
     def __init__(self, code, frame, globals):
         self.code = code
         self.env = Environment(frame, globals, self.code.localSize(),
-                               promote(self.code.maxDepth + 10),
+                               promote(self.code.maxDepth + 20),
                                promote(self.code.maxHandlerDepth))
 
     @staticmethod
@@ -205,8 +205,7 @@ class SmallCaps(object):
             return pc + 1
         elif instruction == END_HANDLER:
             handler = self.env.popHandler()
-            handler.drop(self, index)
-            return pc + 1
+            return handler.drop(self, pc, index)
         elif instruction == BRANCH:
             cond = unwrapBool(self.pop())
             if cond:
@@ -244,7 +243,8 @@ class SmallCaps(object):
         # propagate or perform some additional stack unwinding.
         if self.env.handlerDepth:
             finalHandler = self.env.popHandler()
-            finalHandler.drop(self, pc)
+            # Return value ignored here.
+            finalHandler.drop(self, pc, pc)
         # print "<" * 10
 
     @unroll_safe
@@ -277,7 +277,7 @@ class Handler(object):
     def unwind(self, machine, ex):
         return -1
 
-    def drop(self, machine, index):
+    def drop(self, machine, pc, index):
         pass
 
 
@@ -325,8 +325,8 @@ class Catch(Handler):
         machine.push(NullObject)
         return self.index
 
-    def drop(self, machine, index):
-        machine.pc = index
+    def drop(self, machine, pc, index):
+        return index
 
 
 class Unwind(Handler):
@@ -356,8 +356,10 @@ class Unwind(Handler):
         machine.env.handlerDepth = self.handlerDepth
         return self.index
 
-    def drop(self, machine, index):
+    def drop(self, machine, pc, index):
         machine.env.pushHandler(Returner(index))
+        # As you were, then.
+        return pc + 1
 
 
 class Rethrower(Handler):
@@ -371,7 +373,7 @@ class Rethrower(Handler):
     def repr(self):
         return "Rethrower"
 
-    def drop(self, machine, index):
+    def drop(self, machine, pc, index):
         raise self.ex
 
 
@@ -385,5 +387,5 @@ class Returner(Handler):
     def repr(self):
         return "Returner"
 
-    def drop(self, machine, index):
-        machine.pc = index
+    def drop(self, machine, pc, index):
+        return index
