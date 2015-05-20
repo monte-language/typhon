@@ -278,7 +278,7 @@ class Handler(object):
         return -1
 
     def drop(self, machine, pc, index):
-        pass
+        return pc + 1
 
 
 class Eject(Handler):
