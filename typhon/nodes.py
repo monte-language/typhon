@@ -959,7 +959,11 @@ class CodeScript(object):
         self.displayName = displayName
         self.availableClosure = availableClosure
         self.numStamps = numStamps
-        # Objects can close over themselves.
+        # Objects can close over themselves. Here we merely make sure that the
+        # display name is in the available closure, but we don't close over
+        # ourselves unless requested during compilation. (If we don't make the
+        # display name available, then the compiler will think that it's not
+        # in scope!)
         self.availableClosure[displayName] = 42
 
         self.methods = {}
@@ -969,8 +973,17 @@ class CodeScript(object):
         self.globalNames = OrderedDict()
 
     def makeObject(self, closure, globals, stamps):
-        return ScriptObject(self, globals, closure, self.displayName,
-                            stamps)
+        obj = ScriptObject(self, globals, closure, self.displayName, stamps)
+        return obj
+
+    @elidable
+    def selfIndex(self):
+        """
+        The index at which this codescript's objects should reference
+        themselves, or -1 if the objects are not self-referential.
+        """
+
+        return self.closureNames.get(self.displayName, -1)
 
     def addScript(self, script):
         assert isinstance(script, Script)

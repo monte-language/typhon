@@ -21,6 +21,7 @@ from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
+from typhon.objects.slots import Binding, FinalSlot
 from typhon.smallcaps.machine import SmallCaps
 
 
@@ -35,14 +36,16 @@ class ScriptObject(Object):
         self.displayName = displayName
         self.stamps = stamps
 
+        # Make sure that we can access ourselves.
+        self.patchSelf()
+
+    def patchSelf(self):
+        selfIndex = self.codeScript.selfIndex()
+        if selfIndex != -1:
+            self.closure[selfIndex] = Binding(FinalSlot(self))
+
     def auditedBy(self, stamp):
         return wrapBool(stamp in self.stamps)
-
-    def patchSelf(self, binding):
-        if self.displayName in self.codeScript.closureNames:
-            # I am so very sorry.
-            index = self.codeScript.closureNames.keys().index(self.displayName)
-            self.closure[index] = binding
 
     def toString(self):
         try:

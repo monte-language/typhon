@@ -73,8 +73,6 @@ class SmallCaps(object):
         closure = [self.pop() for _ in script.closureNames]
         closure.reverse()
         obj = script.makeObject(closure, globals, stamps)
-        # Make sure that the object has access to itself, if necessary.
-        obj.patchSelf(Binding(FinalSlot(obj)))
         self.push(obj)
 
     @unroll_safe
