@@ -29,52 +29,53 @@ unittest([testChr])
 
 def decodeCore(var bs :Bytes, ej):
     def iterator := bs._makeIterator()
+    var offset :Int := 0
     var rv :Str := ""
     while (true):
-        if (bs.size() == 0):
+        if (offset >= bs.size()):
             # End of input.
             break
 
-        def b := bs[0]
+        def b := bs[offset]
         if ((b & 0x80) == 0x00):
             # One byte.
             rv with= chr(b)
-            bs := bs.slice(1, bs.size())
+            offset += 1
         else if ((b & 0xe0) == 0xc0):
             # Two bytes.
-            if (bs.size() < 2):
+            if (bs.size() - offset < 2):
                 break
 
             var c := (b & 0x1f) << 6
-            c |= bs[1] & 0x3f
+            c |= bs[offset + 1] & 0x3f
             rv with= chr(c)
-            bs := bs.slice(2, bs.size())
+            offset += 2
         else if ((b & 0xf0) == 0xe0):
             # Three bytes.
-            if (bs.size() < 3):
+            if (bs.size() - offset < 3):
                 break
 
             var c := (b & 0x0f) << 12
-            c |= (bs[1] & 0x3f) << 6
-            c |= bs[2] & 0x3f
+            c |= (bs[offset + 1] & 0x3f) << 6
+            c |= bs[offset + 2] & 0x3f
             rv with= chr(c)
-            bs := bs.slice(3, bs.size())
+            offset += 3
         else if ((b & 0xf7) == 0xf0):
             # Four bytes.
-            if (bs.size() < 4):
+            if (bs.size() - offset < 4):
                 break
 
             var c := (b & 0x07) << 18
-            c |= (bs[1] & 0x3f) << 12
-            c |= (bs[2] & 0x3f) << 6
-            c |= bs[3] & 0x3f
+            c |= (bs[offset + 1] & 0x3f) << 12
+            c |= (bs[offset + 2] & 0x3f) << 6
+            c |= bs[offset + 3] & 0x3f
             rv with= chr(c)
-            bs := bs.slice(4, bs.size())
+            offset += 4
         else:
             # Invalid sequence. Move forward and try again.
             rv with= '\ufffd'
-            bs := bs.slice(1, bs.size())
-    return [rv, bs]
+            offset += 1
+    return [rv, bs.slice(offset)]
 
 def testDecodeCore(assert):
     # One byte.
