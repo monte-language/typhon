@@ -955,6 +955,9 @@ class Obj(Node):
 
 class CodeScript(object):
 
+    _immutable_fields_ = ("displayName", "numStamps", "closureNames",
+                          "globalNames")
+
     def __init__(self, displayName, numStamps, availableClosure):
         self.displayName = displayName
         self.availableClosure = availableClosure

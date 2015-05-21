@@ -68,9 +68,9 @@ class SmallCaps(object):
     def bindObject(self, index):
         script = self.code.script(index)
         stamps = [self.pop() for _ in range(script.numStamps)]
-        globals = [self.pop() for _ in script.globalNames]
+        globals = [self.pop() for _ in range(promote(len(script.globalNames)))]
         globals.reverse()
-        closure = [self.pop() for _ in script.closureNames]
+        closure = [self.pop() for _ in range(promote(len(script.closureNames)))]
         closure.reverse()
         obj = script.makeObject(closure, globals, stamps)
         self.push(obj)
