@@ -140,7 +140,7 @@ def entryPoint(argv):
     # top-level script and not to any library code which is indirectly loaded
     # via import().
     scope = addImportToScope(config.libraryPath, scope, recorder)
-    scope.update(unsafeScope())
+    scope.update(unsafeScope(config))
 
     try:
         code = obtainModule(config.argv[1], scope.keys(), recorder)
