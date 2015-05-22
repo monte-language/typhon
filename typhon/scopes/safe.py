@@ -129,8 +129,15 @@ class MakeInt(Object):
             return IntObject(int(unwrapStr(args[0]).encode('utf-8')))
 
         if atom is RUN_2:
-            return IntObject(int(unwrapStr(args[0]).encode('utf-8'),
-                                 unwrapInt(args[1])))
+            inp = unwrapStr(args[0]).encode('utf-8')
+            radix = unwrapInt(args[1])
+            try:
+                v = int(inp, radix)
+            except ValueError:
+                raise UserException(
+                    StrObject("Invalid literal for base %s: %s" % (
+                        radix, inp)))
+            return IntObject(v)
 
         if atom is FROMBYTES_1:
             data = unwrapList(args[0])
