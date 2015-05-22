@@ -20,7 +20,7 @@ object zip:
 
 def reversed(it):
     def items := __makeList.fromIterable(it)
-    return items.reversed()
+    return items.reverse()
 
 def buildQuasi(builder, name, inputs):
     def parts := ["parts" => [].diverge(),
@@ -43,7 +43,10 @@ def buildQuasi(builder, name, inputs):
             parts["patt"].push(node)
         else if (typ == "text"):
             parts["parts"].push(node)
-    return [p.snapshot() for p in parts]
+    var ps := []
+    for p in parts:
+        ps with= (p.snapshot())
+    return ps
 
 def putVerb(verb, fail, span):
     switch (verb):
@@ -66,7 +69,10 @@ def renameCycles(node, renamings, builder):
         }
     return node.transform(renamer)
 
+var ii := 0
+
 def expand(node, builder, fail):
+    ii += 1
     def emitList(items, span):
         return builder.MethodCallExpr(
             builder.NounExpr("__makeList", span),
@@ -82,22 +88,32 @@ def expand(node, builder, fail):
         def specScope := spec.getStaticScope()
         if ((pattScope.outNames() & specScope.namesUsed()).size() > 0):
             fail(["Use on left isn't really in scope of matchbind pattern: ${conflicts.getKeys()}", span])
-        def [sp, ejector, result, problem, broken] := [builder.TempNounExpr(n, span)
-            for n in ["sp", "fail", "ok", "problem", "broken"]]
+        def [sp, ejector, result, problem, broken] :=  [
+            builder.TempNounExpr("sp", span),
+            builder.TempNounExpr("fail", span),
+            builder.TempNounExpr("ok", span),
+            builder.TempNounExpr("problem", span),
+            builder.TempNounExpr("broken", span)
+            ]
 
-        def patternNouns := [builder.NounExpr(n, span) for n in pattScope.outNames()]
+        var bindingpatts := []
+        var bindingexprs := []
+        for n in pattScope.outNames():
+            def nn := builder.NounExpr(n, span)
+            bindingpatts with= (builder.BindingPattern(nn, span))
+            bindingexprs with= (builder.BindingExpr(nn, span))
+
         return builder.SeqExpr([
             builder.DefExpr(builder.FinalPattern(sp, null, span), null, spec, span),
             builder.DefExpr(builder.ListPattern([builder.FinalPattern(result, null, span)] +
-                                        [builder.BindingPattern(n, span) for n in patternNouns], null, span),
+                                        bindingpatts, null, span),
                 null,
                 builder.EscapeExpr(
                     builder.FinalPattern(ejector, null, span),
                     builder.SeqExpr([
                         builder.DefExpr(patt, ejector, sp, span),
                         emitList([builder.NounExpr("true", span)] +
-                            [builder.BindingExpr(n, span) for n in patternNouns],
-                            span)], span),
+                            bindingexprs, span)], span),
                     builder.FinalPattern(problem, null, span),
                     builder.SeqExpr([
                         builder.DefExpr(builder.ViaPattern(
@@ -107,7 +123,7 @@ def expand(node, builder, fail):
                             builder.MethodCallExpr(builder.NounExpr("Ref", span),
                                 "broken", [problem], span), span),
                             emitList([builder.NounExpr("false", span)] +
-                                [builder.BindingExpr(broken, span)] * patternNouns.size(), span)],
+                                [builder.BindingExpr(broken, span)] * bindingexprs.size(), span)],
                                 span),
                     span),
                 span),
@@ -115,16 +131,22 @@ def expand(node, builder, fail):
             span)
 
     def expandLogical(leftNames, rightNames, f, span):
-        def both := [builder.NounExpr(n, span) for n in leftNames | rightNames]
+        var bindingpatts := []
+        var bindingexprs := []
+        for n in leftNames | rightNames:
+            def nn := builder.NounExpr(n, span)
+            bindingpatts with= (builder.BindingPattern(nn, span))
+            bindingexprs with= (builder.BindingExpr(nn, span))
+
         def result := builder.TempNounExpr("ok", span)
         def success := emitList([builder.NounExpr("true", span)] +
-            [builder.BindingExpr(n, span) for n in both], span)
+            bindingexprs, span)
         def failure := builder.MethodCallExpr(builder.NounExpr("__booleanFlow", span),
-            "failureList", [builder.LiteralExpr(both.size(), span)], span)
+            "failureList", [builder.LiteralExpr(bindingexprs.size(), span)], span)
         return builder.SeqExpr([
             builder.DefExpr(
                 builder.ListPattern([builder.FinalPattern(result, null, span)] +
-                    [builder.BindingPattern(n, span) for n in both], null, span),
+                    bindingpatts, null, span),
                 null,
                 f(success, failure), span),
                 result], span)
@@ -302,1051 +324,514 @@ def expand(node, builder, fail):
             ], span)
 
     def expandTransformer(node, maker, args, span):
-        switch (node.getNodeName()):
-            match =="LiteralExpr":
-                return builder.LiteralExpr(args[0], span)
+        def nodeName := node.getNodeName()
+        if (nodeName == "LiteralExpr"):
+            return builder.LiteralExpr(args[0], span)
 
-            match =="NounExpr":
-                def [name] := args
-                return builder.NounExpr(name, span)
-            match =="SlotExpr":
-                def [noun] := args
-                return builder.MethodCallExpr(builder.BindingExpr(noun, span), "get", [], span)
-            match =="BindingExpr":
-                def [noun] := args
-                return builder.BindingExpr(noun, span)
-            match =="MethodCallExpr":
-                def [rcvr, verb, arglist] := args
-                return builder.MethodCallExpr(rcvr, verb, arglist, span)
+        else if (nodeName == "NounExpr"):
+            def [name] := args
+            return builder.NounExpr(name, span)
+        else if (nodeName == "SlotExpr"):
+            def [noun] := args
+            return builder.MethodCallExpr(builder.BindingExpr(noun, span), "get", [], span)
+        else if (nodeName == "BindingExpr"):
+            def [noun] := args
+            return builder.BindingExpr(noun, span)
+        else if (nodeName == "MethodCallExpr"):
+            def [rcvr, verb, arglist] := args
+            return builder.MethodCallExpr(rcvr, verb, arglist, span)
 
-            match =="ListExpr":
-                def [items] := args
-                return emitList(items, span)
-            match =="MapExpr":
-                def [assocs] := args
-                return builder.MethodCallExpr(
-                    builder.NounExpr("__makeMap", span), "fromPairs",
-                    [emitList([emitList(a, span) for a in assocs], span)],
-                    span)
-            match =="MapExprAssoc":
-                return args
-            match =="MapExprExport":
-                def [subnode] := args
-                def [submaker, subargs, subspan] := subnode._uncall()
-                def n := node.getValue()
-                switch (n.getNodeName()):
-                    match =="NounExpr":
-                        return [builder.LiteralExpr(n.getName(), span), subnode]
-                    match =="SlotExpr":
-                        return [builder.LiteralExpr("&" + n.getNoun().getName(), span), subnode]
-                    match =="BindingExpr":
-                        return [builder.LiteralExpr("&&" + n.getNoun().getName(), span), subnode]
+        else if (nodeName == "ListExpr"):
+            def [items] := args
+            return emitList(items, span)
+        else if (nodeName == "MapExpr"):
+            def [assocs] := args
+            var lists := []
+            for a in assocs:
+                lists with= (emitList(a, span))
+            return builder.MethodCallExpr(
+                builder.NounExpr("__makeMap", span), "fromPairs",
+                [emitList(lists, span)], span)
+        else if (nodeName == "MapExprAssoc"):
+            return args
+        else if (nodeName == "MapExprExport"):
+            def [subnode] := args
+            def [submaker, subargs, subspan] := subnode._uncall()
+            def n := node.getValue()
+            def subnodeName := n.getNodeName()
+            if (subnodeName == "NounExpr"):
+                return [builder.LiteralExpr(n.getName(), span), subnode]
+            else if (subnodeName == "SlotExpr"):
+                return [builder.LiteralExpr("&" + n.getNoun().getName(), span), subnode]
+            else if (subnodeName == "BindingExpr"):
+                return [builder.LiteralExpr("&&" + n.getNoun().getName(), span), subnode]
 
-            match =="QuasiText":
-                def [text] := args
-                return ["text", builder.LiteralExpr(text, span), span]
-            match =="QuasiExprHole":
-                def [expr] := args
-                return ["expr", expr, span]
-            match =="QuasiPatternHole":
-                def [patt] := args
-                return ["patt", patt, span]
-            match =="QuasiParserExpr":
-                def [name, quasis] := args
-                def qprefix := if (name == null) {"simple"} else {name}
-                def qname := qprefix + "__quasiParser"
-                def [parts, exprs, _] := buildQuasi(builder, qname, quasis)
-                return builder.MethodCallExpr(
-                    builder.MethodCallExpr(
-                        builder.NounExpr(qname, span), "valueMaker",
-                        [emitList(parts, span)], span),
-                    "substitute",
-                    [emitList(exprs, span)], span)
-            match =="Module":
-                def [imports, exports, expr] := args
-                return builder."Module"(imports, exports, expr, span)
-            match =="SeqExpr":
-                def [exprs] := args
-                #XXX some parsers have emitted nested SeqExprs, should that
-                #flattening be done here or in the parser?
-                return builder.SeqExpr(exprs, span)
-            match =="VerbCurryExpr":
-                def [receiver, verb] := args
-                return builder.MethodCallExpr(
-                    builder.NounExpr("__makeVerbFacet", span),
-                    "curryCall",
-                    [receiver, builder.LiteralExpr(verb, span)],
-                    span)
-            match =="GetExpr":
-                def [receiver, index] := args
-                return builder.MethodCallExpr(receiver, "get", index, span)
-            match =="FunCallExpr":
-                def [receiver, fargs] := args
-                return builder.MethodCallExpr(receiver, "run", fargs, span)
-            match =="FunctionSendExpr":
-                def [receiver, fargs] := args
-                return builder.MethodCallExpr(builder.NounExpr("M", span),
-                    "send", [receiver, "run", fargs], span)
-            match =="SendExpr":
-                 def [receiver, verb, margs] := args
-                 return builder.MethodCallExpr(builder.NounExpr("M", span),
-                     "send", [receiver, builder.LiteralExpr(verb, span),
-                              emitList(margs, span)],
-                      span)
-            match =="SendCurryExpr":
-                def [receiver, verb] := args
-                return builder.MethodCallExpr(
+        else if (nodeName == "QuasiText"):
+            def [text] := args
+            return ["text", builder.LiteralExpr(text, span), span]
+        else if (nodeName == "QuasiExprHole"):
+            def [expr] := args
+            return ["expr", expr, span]
+        else if (nodeName == "QuasiPatternHole"):
+            def [patt] := args
+            return ["patt", patt, span]
+        else if (nodeName == "QuasiParserExpr"):
+            def [name, quasis] := args
+            def qprefix := if (name == null) {"simple"} else {name}
+            def qname := qprefix + "__quasiParser"
+            def [parts, exprs, _] := buildQuasi(builder, qname, quasis)
+            return builder.MethodCallExpr(
+                builder.MethodCallExpr(
+                    builder.NounExpr(qname, span), "valueMaker",
+                    [emitList(parts, span)], span),
+                "substitute",
+                [emitList(exprs, span)], span)
+        else if (nodeName == "Module"):
+            def [imports, exports, expr] := args
+            return builder."Module"(imports, exports, expr, span)
+        else if (nodeName == "SeqExpr"):
+            def [exprs] := args
+            #XXX some parsers have emitted nested SeqExprs, should that
+            #flattening be done here or in the parser?
+            return builder.SeqExpr(exprs, span)
+        else if (nodeName == "CurryExpr"):
+            def [receiver, verb] := args
+            return builder.MethodCallExpr(
                 builder.NounExpr("__makeVerbFacet", span),
-                    "currySend", [receiver, builder.LiteralExpr(verb, span)],
-                    span)
-            match =="PrefixExpr":
-                return builder.MethodCallExpr(args[1], node.getOpName(), [], span)
-            match =="BinaryExpr":
-                return builder.MethodCallExpr(args[0], node.getOpName(), [args[2]], span)
-            match =="RangeExpr":
-                return builder.MethodCallExpr(builder.NounExpr("__makeOrderedSpace", span),
-                    "op__" + node.getOpName(), [args[0], args[2]], span)
-            match =="CompareExpr":
-                return builder.MethodCallExpr(builder.NounExpr("__comparer", span),
-                    node.getOpName(), [args[0], args[2]], span)
-            match =="CoerceExpr":
-                def [spec, guard] := args
-                return builder.MethodCallExpr(
-                    builder.MethodCallExpr(
-                        builder.NounExpr("ValueGuard", span),
-                            "coerce",
-                            [guard, builder.NounExpr("throw", span)], span),
-                         "coerce", [spec, builder.NounExpr("throw", span)], span)
-            match =="MatchBindExpr":
-                return expandMatchBind(args, span, fail)
-            match =="MismatchExpr":
-                return builder.MethodCallExpr(expandMatchBind(args, span, fail), "not", [], span)
-            match =="SameExpr":
-                def [left, right, same] := args
-                if (same):
-                    return builder.MethodCallExpr(builder.NounExpr("__equalizer", span), "sameEver",
-                        [left, right], span)
-                else:
-                    return builder.MethodCallExpr(builder.MethodCallExpr(builder.NounExpr("__equalizer", span), "sameEver", [left, right], span), "not", [], span)
-            match =="AndExpr":
-                def [left, right] := args
-                return expandLogical(
-                    left.getStaticScope().outNames(),
-                    right.getStaticScope().outNames(),
-                    fn s, f {builder.IfExpr(left, builder.IfExpr(right, s, f, span), f, span)},
-                    span)
-            match =="OrExpr":
-                def [left, right] := args
+                "curryCall",
+                [receiver, builder.LiteralExpr(verb, span)],
+                span)
+        else if (nodeName == "GetExpr"):
+            def [receiver, index] := args
+            return builder.MethodCallExpr(receiver, "get", index, span)
+        else if (nodeName == "FunCallExpr"):
+            def [receiver, fargs] := args
+            return builder.MethodCallExpr(receiver, "run", fargs, span)
+        else if (nodeName == "FunctionSendExpr"):
+            def [receiver, fargs] := args
+            return builder.MethodCallExpr(builder.NounExpr("M", span),
+                "send", [receiver, "run", fargs], span)
+        else if (nodeName == "SendExpr"):
+             def [receiver, verb, margs] := args
+             return builder.MethodCallExpr(builder.NounExpr("M", span),
+                 "send", [receiver, builder.LiteralExpr(verb, span),
+                          emitList(margs, span)],
+                  span)
+        else if (nodeName == "SendCurryExpr"):
+            def [receiver, verb] := args
+            return builder.MethodCallExpr(
+            builder.NounExpr("__makeVerbFacet", span),
+                "currySend", [receiver, builder.LiteralExpr(verb, span)],
+                span)
+        else if (nodeName == "PrefixExpr"):
+            return builder.MethodCallExpr(args[1], node.getOpName(), [], span)
+        else if (nodeName == "BinaryExpr"):
+            return builder.MethodCallExpr(args[0], node.getOpName(), [args[2]], span)
+        else if (nodeName == "RangeExpr"):
+            return builder.MethodCallExpr(builder.NounExpr("__makeOrderedSpace", span),
+                "op__" + node.getOpName(), [args[0], args[2]], span)
+        else if (nodeName == "CompareExpr"):
+            return builder.MethodCallExpr(builder.NounExpr("__comparer", span),
+                node.getOpName(), [args[0], args[2]], span)
+        else if (nodeName == "CoerceExpr"):
+            def [spec, guard] := args
+            return builder.MethodCallExpr(
+                builder.MethodCallExpr(
+                    builder.NounExpr("ValueGuard", span),
+                        "coerce",
+                        [guard, builder.NounExpr("throw", span)], span),
+                     "coerce", [spec, builder.NounExpr("throw", span)], span)
+        else if (nodeName == "MatchBindExpr"):
+            return expandMatchBind(args, span, fail)
+        else if (nodeName == "MismatchExpr"):
+            return builder.MethodCallExpr(expandMatchBind(args, span, fail), "not", [], span)
+        else if (nodeName == "SameExpr"):
+            def [left, right, same] := args
+            if (same):
+                return builder.MethodCallExpr(builder.NounExpr("__equalizer", span), "sameEver",
+                    [left, right], span)
+            else:
+                return builder.MethodCallExpr(builder.MethodCallExpr(builder.NounExpr("__equalizer", span), "sameEver", [left, right], span), "not", [], span)
+        else if (nodeName == "AndExpr"):
+            def [left, right] := args
+            return expandLogical(
+                left.getStaticScope().outNames(),
+                right.getStaticScope().outNames(),
+                fn s, f {builder.IfExpr(left, builder.IfExpr(right, s, f, span), f, span)},
+                span)
+        else if (nodeName == "OrExpr"):
+            def [left, right] := args
 
-                def leftmap := left.getStaticScope().outNames()
-                def rightmap := right.getStaticScope().outNames()
-                def partialFail(failed, s, broken):
-                    return builder.SeqExpr([
-                        builder.DefExpr(builder.BindingPattern(n, span), null, broken, span)
-                        for n in failed] + [s], span)
-                return expandLogical(
-                    leftmap, rightmap,
-                    fn s, f {
-                        def broken := builder.MethodCallExpr(
-                            builder.NounExpr("__booleanFlow", span),
-                            "broken", [], span)
-                        def rightOnly := [builder.NounExpr(n, span) for n in rightmap - leftmap]
-                        def leftOnly := [builder.NounExpr(n, span) for n in leftmap - rightmap]
-                        builder.IfExpr(left, partialFail(rightOnly, s, broken),
-                            builder.IfExpr(right, partialFail(leftOnly, s, broken), f, span), span)},
-                    span)
-            match =="DefExpr":
-                def [patt, ej, rval] := args
-                def pattScope := patt.getStaticScope()
-                def defPatts := pattScope.getDefNames()
-                def varPatts := pattScope.getVarNames()
-                def rvalScope := if (ej == null) {
-                    rval.getStaticScope()
-                } else {
-                    ej.getStaticScope() + rval.getStaticScope()
-                }
-                def rvalUsed := rvalScope.namesUsed()
-                if ((varPatts & rvalUsed).size() != 0):
-                    fail(["Circular 'var' definition not allowed", span])
-                if ((pattScope.namesUsed() & rvalScope.outNames()).size() != 0):
-                    fail(["Pattern may not used var defined on the right", span])
-                def conflicts := pattScope.outNames() & rvalUsed
-                if (conflicts.size() == 0):
-                    return builder.DefExpr(patt, ej, rval, span)
-                else:
-                    def promises := [].diverge()
-                    def resolvers := [].diverge()
-                    def renamings := [].asMap().diverge()
-                    for oldname in conflicts:
-                        def newname := builder.TempNounExpr(oldname, span)
-                        def newnameR := builder.TempNounExpr(oldname + "R", span)
-                        renamings[oldname] := newname
-                        def pair := [builder.FinalPattern(newname, null, span),
-                                     builder.FinalPattern(newnameR, null, span)]
-                        promises.push(builder.DefExpr(builder.ListPattern(pair, null, span),
-                            null, builder.MethodCallExpr(builder.NounExpr("Ref", span), "promise",
-                                [], span), span))
-                        resolvers.push(builder.MethodCallExpr(newnameR, "resolve",
-                             [builder.NounExpr(oldname, span)], span))
-                    def resName := builder.TempNounExpr("value", span)
-                    resolvers.push(resName)
-                    def renamedEj := if (ej == null) {null} else {renameCycles(ej, renamings, builder)}
-                    def renamedRval := renameCycles(rval, renamings, builder)
-                    def resPatt := builder.FinalPattern(resName, null, span)
-                    def resDef := builder.DefExpr(resPatt, null,
-                         builder.DefExpr(patt, renamedEj, renamedRval, span), span)
-                    return builder.SeqExpr(promises.snapshot() + [resDef] + resolvers.snapshot(), span)
-            match =="ForwardExpr":
-                def [patt] := args
-                def rname := builder.NounExpr(patt.getNoun().getName() + "__Resolver", span)
-                return builder.SeqExpr([
-                    builder.DefExpr(builder.ListPattern([
-                            patt,
-                            builder.FinalPattern(rname, null, span)],
-                        null, span),
-                        null,
-                        builder.MethodCallExpr(builder.NounExpr("Ref", span), "promise", [], span), span),
-                        rname], span)
-            match =="AssignExpr":
-                def [left, right] := args
-                def [_, _, leftargs] := left._uncall()
-                switch (left.getNodeName()):
-                    match =="NounExpr":
-                        return builder.AssignExpr(left, right, span)
-                    match =="MethodCallExpr":
-                        return expandCallAssign(leftargs.slice(0, 3), right, fail, span)
-                    match _:
-                        fail(["Assignment can only be done to nouns and collection elements",
-                             span])
-            match =="VerbAssignExpr":
-                def [verb, target, vargs] := args
-                return expandVerbAssign(verb, target, vargs, fail, span)
-            match =="AugAssignExpr":
-                def [op, left, right] := args
-                return expandVerbAssign(node.getOpName(), left, [right], fail, span)
-            match =="ExitExpr":
-                if (args[1] == null):
-                    return builder.MethodCallExpr(builder.NounExpr("__" + args[0], span), "run", [], span)
-                else:
-                    return builder.MethodCallExpr(builder.NounExpr("__" + args[0], span), "run", [args[1]], span)
-            match =="IgnorePattern":
-                return builder.IgnorePattern(args[0], span)
-            match =="FinalPattern":
-                def [noun, guard] := args
-                return builder.FinalPattern(noun, guard, span)
-            match =="SamePattern":
-                def [value, isSame] := args
-                if (isSame):
-                    return builder.ViaPattern(
-                        builder.MethodCallExpr(builder.NounExpr("__matchSame", span),
-                            "run", [value], span),
-                        builder.IgnorePattern(null, span), span)
-                else:
-                    return builder.ViaPattern(
-                        builder.MethodCallExpr(builder.NounExpr("__matchSame", span),
-                            "different", [value], span),
-                        builder.IgnorePattern(null, span). span)
-            match =="VarPattern":
-                return builder.VarPattern(args[0], args[1], span)
-            match =="BindPattern":
-                def [noun, guard] := args
+            def leftmap := left.getStaticScope().outNames()
+            def rightmap := right.getStaticScope().outNames()
+            def partialFail(failed, s, broken):
+                var failedDefs := []
+                for n in failed:
+                    failedDefs with= (builder.DefExpr(
+                        builder.BindingPattern(n, span), null, broken, span))
+                return builder.SeqExpr(failedDefs + [s], span)
+            return expandLogical(
+                leftmap, rightmap,
+                fn s, f {
+                    def broken := builder.MethodCallExpr(
+                        builder.NounExpr("__booleanFlow", span),
+                        "broken", [], span)
+                    var rightOnly := []
+                    for n in rightmap - leftmap {
+                        rightOnly with= (builder.NounExpr(n, span))
+                    }
+                    var leftOnly := []
+                    for n in leftmap - rightmap {
+                        leftOnly with= (builder.NounExpr(n, span))
+                    }
+                    builder.IfExpr(left, partialFail(rightOnly, s, broken),
+                        builder.IfExpr(right, partialFail(leftOnly, s, broken), f, span), span)},
+                span)
+        else if (nodeName == "DefExpr"):
+            def [patt, ej, rval] := args
+            def pattScope := patt.getStaticScope()
+            def defPatts := pattScope.getDefNames()
+            def varPatts := pattScope.getVarNames()
+            def rvalScope := if (ej == null) {
+                rval.getStaticScope()
+            } else {
+                ej.getStaticScope() + rval.getStaticScope()
+            }
+            def rvalUsed := rvalScope.namesUsed()
+            if ((varPatts & rvalUsed).size() != 0):
+                fail(["Circular 'var' definition not allowed", span])
+            if ((pattScope.namesUsed() & rvalScope.outNames()).size() != 0):
+                fail(["Pattern may not used var defined on the right", span])
+            def conflicts := pattScope.outNames() & rvalUsed
+            if (conflicts.size() == 0):
+                return builder.DefExpr(patt, ej, rval, span)
+            else:
+                def promises := [].diverge()
+                def resolvers := [].diverge()
+                def renamings := [].asMap().diverge()
+                for oldname in conflicts:
+                    def newname := builder.TempNounExpr(oldname, span)
+                    def newnameR := builder.TempNounExpr(oldname + "R", span)
+                    renamings[oldname] := newname
+                    def pair := [builder.FinalPattern(newname, null, span),
+                                 builder.FinalPattern(newnameR, null, span)]
+                    promises.push(builder.DefExpr(builder.ListPattern(pair, null, span),
+                        null, builder.MethodCallExpr(builder.NounExpr("Ref", span), "promise",
+                            [], span), span))
+                    resolvers.push(builder.MethodCallExpr(newnameR, "resolve",
+                         [builder.NounExpr(oldname, span)], span))
+                def resName := builder.TempNounExpr("value", span)
+                resolvers.push(resName)
+                def renamedEj := if (ej == null) {null} else {renameCycles(ej, renamings, builder)}
+                def renamedRval := renameCycles(rval, renamings, builder)
+                def resPatt := builder.FinalPattern(resName, null, span)
+                def resDef := builder.DefExpr(resPatt, null,
+                     builder.DefExpr(patt, renamedEj, renamedRval, span), span)
+                return builder.SeqExpr(promises.snapshot() + [resDef] + resolvers.snapshot(), span)
+        else if (nodeName == "ForwardExpr"):
+            def [patt] := args
+            def rname := builder.NounExpr(patt.getNoun().getName() + "__Resolver", span)
+            return builder.SeqExpr([
+                builder.DefExpr(builder.ListPattern([
+                        patt,
+                        builder.FinalPattern(rname, null, span)],
+                    null, span),
+                    null,
+                    builder.MethodCallExpr(builder.NounExpr("Ref", span), "promise", [], span), span),
+                    rname], span)
+        else if (nodeName == "AssignExpr"):
+            def [left, right] := args
+            def [_, _, leftargs] := left._uncall()
+            def leftNodeName := left.getNodeName()
+            if (leftNodeName == "NounExpr"):
+                return builder.AssignExpr(left, right, span)
+            else if (leftNodeName == "MethodCallExpr"):
+                return expandCallAssign(leftargs.slice(0, 3), right, fail, span)
+            else:
+                fail(["Assignment can only be done to nouns and collection elements",
+                     span])
+        else if (nodeName == "VerbAssignExpr"):
+            def [verb, target, vargs] := args
+            return expandVerbAssign(verb, target, vargs, fail, span)
+        else if (nodeName == "AugAssignExpr"):
+            def [op, left, right] := args
+            return expandVerbAssign(node.getOpName(), left, [right], fail, span)
+        else if (nodeName == "ExitExpr"):
+            if (args[1] == null):
+                return builder.MethodCallExpr(builder.NounExpr("__" + args[0], span), "run", [], span)
+            else:
+                return builder.MethodCallExpr(builder.NounExpr("__" + args[0], span), "run", [args[1]], span)
+        else if (nodeName == "IgnorePattern"):
+            return builder.IgnorePattern(args[0], span)
+        else if (nodeName == "FinalPattern"):
+            def [noun, guard] := args
+            return builder.FinalPattern(noun, guard, span)
+        else if (nodeName == "SamePattern"):
+            def [value, isSame] := args
+            if (isSame):
                 return builder.ViaPattern(
-                    builder.MethodCallExpr(builder.NounExpr("__bind", span),
-                        "run", [builder.NounExpr(noun.getName() + "__Resolver", span), guard],
+                    builder.MethodCallExpr(builder.NounExpr("__matchSame", span),
+                        "run", [value], span),
+                    builder.IgnorePattern(null, span), span)
+            else:
+                return builder.ViaPattern(
+                    builder.MethodCallExpr(builder.NounExpr("__matchSame", span),
+                        "different", [value], span),
+                    builder.IgnorePattern(null, span). span)
+        else if (nodeName == "VarPattern"):
+            return builder.VarPattern(args[0], args[1], span)
+        else if (nodeName == "BindPattern"):
+            def [noun, guard] := args
+            def g := if (guard == null) {builder.NounExpr("null", span)} else {guard}
+            return builder.ViaPattern(
+                builder.MethodCallExpr(builder.NounExpr("__bind", span),
+                    "run", [builder.NounExpr(noun.getName() + "__Resolver", span), g],
+                    span),
+                builder.FinalPattern(noun, null, span), span)
+        else if (nodeName == "SlotPattern"):
+            def [noun, guard] := args
+            if (guard == null):
+                return builder.ViaPattern(builder.NounExpr("__slotToBinding", span),
+                    builder.BindingPattern(noun, span), span)
+            else:
+                return builder.ViaPattern(
+                    builder.MethodCallExpr(builder.NounExpr("__slotToBinding", span),
+                        "run", [guard],
                         span),
                     builder.BindingPattern(noun, span), span)
-            match =="SlotPattern":
-                def [noun, guard] := args
-                if (guard == null):
-                    return builder.ViaPattern(builder.NounExpr("__slotToBinding", span),
-                        builder.BindingPattern(noun, span), span)
-                else:
-                    return builder.ViaPattern(
-                        builder.MethodCallExpr(builder.NounExpr("__slotToBinding", span),
-                            "run", [guard],
-                            span),
-                        builder.BindingPattern(noun, span), span)
-            match =="MapPattern":
-                def [assocs, tail] := args
-                var nub := if (tail == null) {
-                      builder.IgnorePattern(builder.NounExpr("__mapEmpty", span), span)
-                      } else {tail}
-                for [left, right] in assocs.reversed():
-                    nub := builder.ViaPattern(
-                        left,
-                        builder.ListPattern([right, nub], null, span), span)
-                return nub
-            match =="MapPatternAssoc":
-                return args
-            match =="MapPatternImport":
-                def [subnode] := args
-                switch (node.getPattern().getNodeName()):
-                    match =="FinalPattern":
-                        return [builder.LiteralExpr(node.getPattern().getNoun().getName(), span), subnode]
-                    match =="SlotPattern":
-                        return [builder.LiteralExpr("&" + node.getPattern().getNoun().getName(), span), subnode]
-                    match =="BindingPattern":
-                        return [builder.LiteralExpr("&&" + node.getPattern().getNoun().getName(), span), subnode]
-            match =="MapPatternOptional":
-                def [[k, v], default] := args
-                return [builder.MethodCallExpr(builder.NounExpr("__mapExtract", span),
-                        "depr", [k, default], span), v]
-            match =="MapPatternRequired":
-                def [[k, v]] := args
-                return [builder.MethodCallExpr(builder.NounExpr("__mapExtract", span),
-                        "run", [k], span), v]
-            match =="ListPattern":
-                def [patterns, tail] := args
-                if (tail == null):
-                    return builder.ListPattern(patterns, null, span)
-                else:
-                    return builder.ViaPattern(
-                        builder.MethodCallExpr(builder.NounExpr("__splitList", span), "run",
-                            [builder.LiteralExpr(patterns.size())], span),
-                        builder.ListPattern(patterns + [tail], null, span), span)
-            match =="SuchThatPattern":
-                def [pattern, expr] := args
-                return builder.ViaPattern(builder.NounExpr("__suchThat", span),
-                    builder.ListPattern([pattern, builder.ViaPattern(
-                        builder.MethodCallExpr(builder.NounExpr("__suchThat", span), "run",
-                             [expr], span),
-                        builder.IgnorePattern(null, span), span)], null, span), span)
-            match =="QuasiParserPattern":
-                def [name, quasis] := args
-                def qprefix := if (name == null) {"simple"} else {name}
-                def qname := qprefix + "__quasiParser"
-                def [parts, exprs, patterns] := buildQuasi(builder, qname, quasis)
+        else if (nodeName == "MapPattern"):
+            def [assocs, tail] := args
+            var nub := if (tail == null) {
+                  builder.IgnorePattern(builder.NounExpr("__mapEmpty", span), span)
+                  } else {tail}
+            for [left, right] in assocs.reverse():
+                nub := builder.ViaPattern(
+                    left,
+                    builder.ListPattern([right, nub], null, span), span)
+            return nub
+        else if (nodeName == "MapPatternAssoc"):
+            return args
+        else if (nodeName == "MapPatternImport"):
+            def [subnode] := args
+            def pattName := node.getPattern().getNodeName()
+            if (pattName == "FinalPattern"):
+                return [builder.LiteralExpr(node.getPattern().getNoun().getName(), span), subnode]
+            else if (pattName == "SlotPattern"):
+                return [builder.LiteralExpr("&" + node.getPattern().getNoun().getName(), span), subnode]
+            else if (pattName == "BindingPattern"):
+                return [builder.LiteralExpr("&&" + node.getPattern().getNoun().getName(), span), subnode]
+        else if (nodeName == "MapPatternOptional"):
+            def [[k, v], default] := args
+            return [builder.MethodCallExpr(builder.NounExpr("__mapExtract", span),
+                    "depr", [k, default], span), v]
+        else if (nodeName == "MapPatternRequired"):
+            def [[k, v]] := args
+            return [builder.MethodCallExpr(builder.NounExpr("__mapExtract", span),
+                    "run", [k], span), v]
+        else if (nodeName == "ListPattern"):
+            def [patterns, tail] := args
+            if (tail == null):
+                return builder.ListPattern(patterns, null, span)
+            else:
                 return builder.ViaPattern(
-                    builder.MethodCallExpr(
-                        builder.NounExpr("__quasiMatcher", span), "run",
-                        [builder.MethodCallExpr(builder.NounExpr(qname, span), "matchMaker",
-                            [emitList(parts, span), emitList(exprs, span)], span)], span),
-                    builder.ListPattern(patterns, null, span), span)
-            match =="FunctionInterfaceExpr":
-                def [doco, name, guard, xtends, mplements, messageDesc] := args
-                return expandInterface(doco, name, guard, xtends,
-                    mplements, [messageDesc], span)
-            match =="InterfaceExpr":
-                def [doco, name, guard, xtends, mplements, messages] := args
-                return expandInterface(doco, name, guard, xtends,
-                    mplements, messages, span)
-            match =="MessageDesc":
-                def [doco, verb, params, resultGuard] := args
-                return expandMessageDesc(doco, verb, params, resultGuard, span)
-            match =="ParamDesc":
-                def [name, guard] := args
-                return builder.MethodCallExpr(builder.NounExpr("__makeParamDesc", span),
-                    "run", [builder.LiteralExpr(name, span),
-                        if (guard == null) {builder.NounExpr("Any", span)} else {guard}], span)
-            match =="FunctionExpr":
-                def [patterns, block] := args
-                return builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
-                    builder.Script(null,
-                         [builder."Method"(null, "run", patterns, null, block, span)],
-                         span), span)
-            match =="ObjectExpr":
-                def [doco, patt, asExpr, auditors, script] := args
-                def pattKind := patt.getNodeName()
-                if (pattKind == "BindPattern"):
-                    def name := builder.FinalPattern(node.getName().getName(), null, span)
-                    def o := expandObject(doco, name, asExpr, auditors, script, span)
-                    return builder.DefExpr(patt, null, builder.HideExpr(o, span), span)
-                if (pattKind == "FinalPattern" || pattKind == "IgnorePattern"):
-                    return expandObject(doco, patt, asExpr, auditors, script, span)
-                fail(["Unknown pattern type in object expr", patt.getSpan()])
-            match =="Script":
-                #def [xtends, methods, matchers] := args
-                return args
-            match =="FunctionScript":
-                def [params, guard, block] := args
-                return [null, [builder."Method"(null, "run", params, guard,
-                    builder.EscapeExpr(builder.FinalPattern(builder.NounExpr("__return", span), null, span),
-                        builder.SeqExpr([block, builder.NounExpr("null", span)], span), null, null, span),
-                            span)], []]
-            match =="To":
-                def [doco, verb, params, guard, block] := args
-                return builder."Method"(doco, verb, params, guard,
-                    builder.EscapeExpr(builder.FinalPattern(builder.NounExpr("__return", span), null, span),
-                        builder.SeqExpr([block, builder.NounExpr("null", span)], span), null, null, span),
-                            span)
-            match =="Method":
-                def [doco, verb, params, guard, block] := args
-                return builder."Method"(doco, verb, params, guard, block, span)
-            match =="ForExpr":
-                def [coll, key, value, block, catchPatt, catchBlock] := args
-                return expandFor(key, value, coll, block, catchPatt, catchBlock, span)
-            match =="ListComprehensionExpr":
-                def [coll, filter, key, value, exp] := args
-                return expandComprehension(key, value, coll, filter, exp, "__accumulateList", span)
-            match =="MapComprehensionExpr":
-                def [coll, filter, key, value, kExp, vExp] := args
-                return expandComprehension(key, value, coll, filter,
-                    emitList([kExp, vExp], span), "__accumulateMap", span)
-            match =="SwitchExpr":
-                def [expr, matchers] := args
-                def sp := builder.TempNounExpr("specimen", span)
-                def failures := [builder.TempNounExpr("failure", span) for _ in matchers]
-                def ejs := [builder.TempNounExpr("ej", span) for _ in matchers]
-                var block := builder.MethodCallExpr(builder.NounExpr("__switchFailed", span), "run",
-                    [sp] + failures, span)
-                for [m, fail, ej] in reversed(zip(matchers, failures, ejs)):
-                    block := builder.EscapeExpr(
-                        builder.FinalPattern(ej, null, span),
-                        builder.SeqExpr([
-                            builder.DefExpr(m.getPattern(), ej, sp, span),
-                            m.getBody()], span),
-                        builder.FinalPattern(fail, null, span),
-                        block, span)
-                return builder.HideExpr(builder.SeqExpr([
-                    builder.DefExpr(builder.FinalPattern(sp, null, span), null, expr, span),
-                    block], span), span)
-            match =="TryExpr":
-                def [tryblock, catchers, finallyblock] := args
-                var block := tryblock
-                for cat in catchers:
-                    block := builder.CatchExpr(block, cat.getPattern(), cat.getBody(), span)
-                if (finallyblock != null):
-                    block := builder.FinallyExpr(block, finallyblock, span)
-                return block
-            match =="WhileExpr":
-                def [test, block, catcher] := args
-                return builder.EscapeExpr(
-                    builder.FinalPattern(builder.NounExpr("__break", span), null, span),
-                        builder.MethodCallExpr(builder.NounExpr("__loop", span), "run",
-                            [builder.MethodCallExpr(builder.NounExpr("__iterWhile", span), "run",
-                                [builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
-                                    builder.Script(null,
-                                        [builder."Method"(null, "run", [], null, test, span)],
-                                        [], span), span)], span),
-                            builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
+                    builder.MethodCallExpr(builder.NounExpr("__splitList", span), "run",
+                        [builder.LiteralExpr(patterns.size(), span)], span),
+                    builder.ListPattern(patterns + [tail], null, span), span)
+        else if (nodeName == "SuchThatPattern"):
+            def [pattern, expr] := args
+            return builder.ViaPattern(builder.NounExpr("__suchThat", span),
+                builder.ListPattern([pattern, builder.ViaPattern(
+                    builder.MethodCallExpr(builder.NounExpr("__suchThat", span), "run",
+                         [expr], span),
+                    builder.IgnorePattern(null, span), span)], null, span), span)
+        else if (nodeName == "QuasiParserPattern"):
+            def [name, quasis] := args
+            def qprefix := if (name == null) {"simple"} else {name}
+            def qname := qprefix + "__quasiParser"
+            def [parts, exprs, patterns] := buildQuasi(builder, qname, quasis)
+            return builder.ViaPattern(
+                builder.MethodCallExpr(
+                    builder.NounExpr("__quasiMatcher", span), "run",
+                    [builder.MethodCallExpr(builder.NounExpr(qname, span), "matchMaker",
+                        [emitList(parts, span)], span), emitList(exprs, span)], span),
+                builder.ListPattern(patterns, null, span), span)
+        else if (nodeName == "FunctionInterfaceExpr"):
+            def [doco, name, guard, xtends, mplements, messageDesc] := args
+            return expandInterface(doco, name, guard, xtends,
+                mplements, [messageDesc], span)
+        else if (nodeName == "InterfaceExpr"):
+            def [doco, name, guard, xtends, mplements, messages] := args
+            return expandInterface(doco, name, guard, xtends,
+                mplements, messages, span)
+        else if (nodeName == "MessageDesc"):
+            def [doco, verb, params, resultGuard] := args
+            return expandMessageDesc(doco, verb, params, resultGuard, span)
+        else if (nodeName == "ParamDesc"):
+            def [name, guard] := args
+            return builder.MethodCallExpr(builder.NounExpr("__makeParamDesc", span),
+                "run", [builder.LiteralExpr(name, span),
+                    if (guard == null) {builder.NounExpr("Any", span)} else {guard}], span)
+        else if (nodeName == "FunctionExpr"):
+            def [patterns, block] := args
+            return builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
+                builder.Script(null,
+                     [builder."Method"(null, "run", patterns, null, block, span)],
+                     [],
+                     span), span)
+        else if (nodeName == "ObjectExpr"):
+            def [doco, patt, asExpr, auditors, script] := args
+            def pattKind := node.getName().getNodeName()
+            if (pattKind == "BindPattern"):
+                def name := builder.FinalPattern(node.getName().getNoun(), null, span)
+                def o := expandObject(doco, name, asExpr, auditors, script, span)
+                return builder.DefExpr(patt, null, builder.HideExpr(o, span), span)
+            if (pattKind == "FinalPattern" || pattKind == "IgnorePattern"):
+                return expandObject(doco, patt, asExpr, auditors, script, span)
+            fail(["Unknown pattern type in object expr: " + pattKind, patt.getSpan()])
+        else if (nodeName == "Script"):
+            #def [xtends, methods, matchers] := args
+            return args
+        else if (nodeName == "FunctionScript"):
+            def [params, guard, block] := args
+            return [null, [builder."Method"(null, "run", params, guard,
+                builder.EscapeExpr(builder.FinalPattern(builder.NounExpr("__return", span), null, span),
+                    builder.SeqExpr([block, builder.NounExpr("null", span)], span), null, null, span),
+                        span)], []]
+        else if (nodeName == "To"):
+            def [doco, verb, params, guard, block] := args
+            return builder."Method"(doco, verb, params, guard,
+                builder.EscapeExpr(builder.FinalPattern(builder.NounExpr("__return", span), null, span),
+                    builder.SeqExpr([block, builder.NounExpr("null", span)], span), null, null, span),
+                        span)
+        else if (nodeName == "Method"):
+            def [doco, verb, params, guard, block] := args
+            return builder."Method"(doco, verb, params, guard, block, span)
+        else if (nodeName == "ForExpr"):
+            def [coll, key, value, block, catchPatt, catchBlock] := args
+            return expandFor(key, value, coll, block, catchPatt, catchBlock, span)
+        else if (nodeName == "ListComprehensionExpr"):
+            def [coll, filter, key, value, exp] := args
+            return expandComprehension(key, value, coll, filter, exp, "__accumulateList", span)
+        else if (nodeName == "MapComprehensionExpr"):
+            def [coll, filter, key, value, kExp, vExp] := args
+            return expandComprehension(key, value, coll, filter,
+                emitList([kExp, vExp], span), "__accumulateMap", span)
+        else if (nodeName == "SwitchExpr"):
+            def [expr, matchers] := args
+            def sp := builder.TempNounExpr("specimen", span)
+            var failures := []
+            var ejs := []
+            for _ in matchers:
+                failures with= (builder.TempNounExpr("failure", span))
+                ejs with= (builder.TempNounExpr("ej", span))
+            var block := builder.MethodCallExpr(builder.NounExpr("__switchFailed", span), "run",
+                [sp] + failures, span)
+            for [m, fail, ej] in reversed(zip(matchers, failures, ejs)):
+                block := builder.EscapeExpr(
+                    builder.FinalPattern(ej, null, span),
+                    builder.SeqExpr([
+                        builder.DefExpr(m.getPattern(), ej, sp, span),
+                        m.getBody()], span),
+                    builder.FinalPattern(fail, null, span),
+                    block, span)
+            return builder.HideExpr(builder.SeqExpr([
+                builder.DefExpr(builder.FinalPattern(sp, null, span), null, expr, span),
+                block], span), span)
+        else if (nodeName == "TryExpr"):
+            def [tryblock, catchers, finallyblock] := args
+            var block := tryblock
+            for cat in catchers:
+                block := builder.CatchExpr(block, cat.getPattern(), cat.getBody(), span)
+            if (finallyblock != null):
+                block := builder.FinallyExpr(block, finallyblock, span)
+            return block
+        else if (nodeName == "WhileExpr"):
+            def [test, block, catcher] := args
+            return builder.EscapeExpr(
+                builder.FinalPattern(builder.NounExpr("__break", span), null, span),
+                    builder.MethodCallExpr(builder.NounExpr("__loop", span), "run",
+                        [builder.MethodCallExpr(builder.NounExpr("__iterWhile", span), "run",
+                            [builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
                                 builder.Script(null,
-                                    [builder."Method"(null, "run",
-                                         [builder.IgnorePattern(null, span),
-                                         builder.IgnorePattern(null, span)],
-                                         builder.NounExpr("Bool", span),
-                                         builder.SeqExpr([
-                                             builder.EscapeExpr(
-                                                 builder.FinalPattern(
-                                                     builder.NounExpr("__continue", span),
-                                                     null, span),
-                                                 block, null, null, span),
-                                             builder.NounExpr("true", span)], span), span)],
-                                     [], span), span)], span),
-                    if (catcher !=null) {catcher.getPattern()},
-                     if (catcher !=null) {catcher.getBody()}, span)
-            match =="WhenExpr":
-                def [var promiseExprs, var block, catchers, finallyblock] := args
-                def expr := if (promiseExprs.size() > 1) {
-                    builder.MethodCallExpr(builder.NounExpr("promiseAllFulfilled", span), "run",
-                        [emitList(args, span)], span)
-                } else {promiseExprs[0]}
-                def resolution := builder.TempNounExpr("resolution", span)
-                block := builder.IfExpr(
-                    builder.MethodCallExpr(builder.NounExpr("Ref", span), "isBroken",
-                         [resolution], span),
-                    builder.MethodCallExpr(builder.NounExpr("Ref", span), "broken",
-                        [builder.MethodCallExpr(builder.NounExpr("Ref", span), "optProblem",
-                            [resolution], span)], span), block, span)
-                for cat in catchers:
-                    block := builder.CatchExpr(block, cat.getPattern(), cat.getBody(), span)
-                if (finallyblock != null):
-                    block := builder.FinallyExpr(block, finallyblock, span)
-                return builder.HideExpr(builder.MethodCallExpr(builder.NounExpr("Ref", span),
-                    "whenResolved", [expr,
-                         builder.ObjectExpr("when-catch 'done' function",
-                              builder.IgnorePattern(null, span), null, [],
-                              builder.Script(null,
-                                  [builder."Method"(null, "run",
-                                      [builder.FinalPattern(resolution, null, span)],
-                                      null, block, span)], [], span),
-                              span)], span), span)
-            match unknownNode:
-                throw(`No expansion for $unknownNode`)
-    return node.transform(expandTransformer)
-
-
-def tests := [].asMap().diverge()
-def fixedPointSpecimens := [
-    "x",
-    "x := y",
-    "x := y := z",
-    "foo.bar(x, y)",
-    "def [x, y] := z",
-    "def x :y exit z := w",
-    "def &&x := y",
-    "def via (x) y := z",
-    "
-    if (x):
-        y
-    else:
-        z",
-    "
-    if (x):
-        y
-    else if (z):
-        w",
-    "
-    object x:
-        method y():
-            z
-    ",
-    "
-    object x:
-        match y:
-            z
-    ",
-]
-
-def specimens := [
-    ["x[i] := y",
-     "
-     x.put(i, def $<temp ares> := y)
-     $<temp ares>"],
-
-    ["x[i] := y; ares__1",
-     "
-     x.put(i, def $<temp ares> := y)
-     $<temp ares>
-     ares__1"],
-
-    ["x foo= (y, z)", "x := x.foo(y, z)"],
-
-    ["x[i] foo= (y)",
-     "
-     def $<temp recip> := x
-     def $<temp arg> := i
-     $<temp recip>.put($<temp arg>, def $<temp ares> := $<temp recip>.get($<temp arg>).foo(y))
-     $<temp ares>"],
-    ["x[i] += y",
-     "
-     def $<temp recip> := x
-     def $<temp arg> := i
-     $<temp recip>.put($<temp arg>, def $<temp ares> := $<temp recip>.get($<temp arg>).add(y))
-     $<temp ares>"],
-
-    ["x + y",
-     "x.add(y)"],
-
-    ["x - y",
-     "x.subtract(y)"],
-
-    ["x * y",
-     "x.multiply(y)"],
-
-    ["x / y",
-     "x.approxDivide(y)"],
-
-    ["x // y",
-     "x.floorDivide(y)"],
-
-    ["x % y",
-     "x.mod(y)"],
-
-    ["x ** y",
-     "x.pow(y)"],
-
-    ["x >> y",
-     "x.shiftRight(y)"],
-
-    ["x << y",
-     "x.shiftLeft(y)"],
-
-    ["x & y",
-     "x.and(y)"],
-
-    ["x | y",
-     "x.or(y)"],
-
-    ["x ^ y",
-     "x.xor(y)"],
-
-    ["x += y",
-     "x := x.add(y)"],
-
-    ["x -= y",
-     "x := x.subtract(y)"],
-
-    ["x *= y",
-     "x := x.multiply(y)"],
-
-    ["x /= y",
-     "x := x.approxDivide(y)"],
-
-    ["x //= y",
-     "x := x.floorDivide(y)"],
-
-    ["x %= y",
-     "x := x.mod(y)"],
-
-    ["x **= y",
-     "x := x.pow(y)"],
-
-    ["x >>= y",
-     "x := x.shiftRight(y)"],
-
-    ["x <<= y",
-     "x := x.shiftLeft(y)"],
-
-    ["x &= y",
-     "x := x.and(y)"],
-
-    ["x |= y",
-     "x := x.or(y)"],
-
-    ["x ^= y",
-     "x := x.xor(y)"],
-
-    ["!x", "x.not()"],
-    ["-x", "x.negate()"],
-    ["~x", "x.complement()"],
-
-    ["x < y", "__comparer.lessThan(x, y)"],
-    ["x <= y", "__comparer.leq(x, y)"],
-    ["x > y", "__comparer.greaterThan(x, y)"],
-    ["x >= y", "__comparer.geq(x, y)"],
-    ["x <=> y", "__comparer.asBigAs(x, y)"],
-
-    ["x == y", "__equalizer.sameEver(x, y)"],
-    ["x != y", "__equalizer.sameEver(x, y).not()"],
-
-    ["x..y", "__makeOrderedSpace.op__thru(x, y)"],
-    ["x..!y", "__makeOrderedSpace.op__till(x, y)"],
-
-    ["foo <- bar(x, y)",
-     "M.send(foo, \"bar\", __makeList.run(x, y))"],
-
-    ["def [x, y] := [1, x]",
-     "
-     def [$<temp x>, $<temp xR>] := Ref.promise()
-     def $<temp value> := def [x, y] := __makeList.run(1, $<temp x>)
-     $<temp xR>.resolve(x)
-     $<temp value>"],
-
-    ["def x",
-     "
-     def [x, x__Resolver] := Ref.promise()
-     x__Resolver"],
-
-    ["x :y",
-     "ValueGuard.coerce(y, throw).coerce(x, throw)"],
-
-    ["def &x := y",
-     "def via (__slotToBinding) &&x := y"],
-
-    ["return",
-     "__return.run()"],
-
-    ["return 1",
-     "__return.run(1)"],
-
-    ["break",
-     "__break.run()"],
-
-    ["break 1",
-     "__break.run(1)"],
-
-    ["continue",
-     "__continue.run()"],
-
-    ["continue 1",
-     "__continue.run(1)"],
-
-    ["x && y",
-     "
-     def [$<temp ok>] := if (x) {
-         if (y) {
-             __makeList.run(true)
-         } else {
-             __booleanFlow.failureList(0)
-         }
-     } else {
-         __booleanFlow.failureList(0)
-     }
-     $<temp ok>"],
-
-    ["(def x := 1) && (def y := 2)",
-     "
-     def [$<temp ok>, &&y, &&x] := if (def x := 1) {
-         if (def y := 2) {
-             __makeList.run(true, &&y, &&x)
-         } else {
-             __booleanFlow.failureList(2)
-         }
-     } else {
-         __booleanFlow.failureList(2)
-     }
-     $<temp ok>"],
-
-    ["x || y",
-     "
-     def [$<temp ok>] := if (x) {
-         __makeList.run(true)
-     } else if (y) {
-         __makeList.run(true)
-     } else {
-         __booleanFlow.failureList(0)
-     }
-     $<temp ok>"],
-
-    ["(def x := 1) || (def y := 2)",
-     "
-     def [$<temp ok>, &&y, &&x] := if (def x := 1) {
-         def &&y := __booleanFlow.broken()
-         __makeList.run(true, &&y, &&x)
-     } else if (def y := 2) {
-         def &&x := __booleanFlow.broken()
-         __makeList.run(true, &&y, &&x)
-     } else {
-         __booleanFlow.failureList(2)
-     }
-     $<temp ok>"],
-
-    ["x =~ y",
-     "
-     def $<temp sp> := x
-     def [$<temp ok>, &&y] := escape $<temp fail> {
-         def y exit $<temp fail> := $<temp sp>
-         __makeList.run(true, &&y)
-     } catch $<temp problem> {
-         def via (__slotToBinding) &&$<temp broken> := Ref.broken($<temp problem>)
-         __makeList.run(false, &&$<temp broken>)
-     }
-     $<temp ok>"],
-
-    ["def x ? (e) := z",
-     "def via (__suchThat) [x, via (__suchThat.run(e)) _] := z"],
-
-    ["def x ? (f(x) =~ y) := z",
-     "
-     def via (__suchThat) [x, via (__suchThat.run(def $<temp sp> := f.run(x)
-     def [$<temp ok>, &&y] := escape $<temp fail> {
-         def y exit $<temp fail> := $<temp sp>
-         __makeList.run(true, &&y)
-     } catch $<temp problem> {
-         def via (__slotToBinding) &&$<temp broken> := Ref.broken($<temp problem>)
-         __makeList.run(false, &&$<temp broken>)
-     }
-     $<temp ok>)) _] := z"],
-
-    [`def ["a" => b, "c" => d] := x`,
-     `def via (__mapExtract.run("a")) [b, via (__mapExtract.run("c")) [d, _ :__mapEmpty]] := x`],
-
-    ["def [(a) => b] | c := x",
-     "def via (__mapExtract.run(a)) [b, c] := x"],
-
-    ["def [=> b] := x",
-     "def via (__mapExtract.run(\"b\")) [b, _ :__mapEmpty] := x"],
-
-    ["def [=> &b] := x",
-     "def via (__mapExtract.run(\"&b\")) [via (__slotToBinding) &&b, _ :__mapEmpty] := x"],
-
-    [`["a" => b, "c" => d]`,
-     `__makeMap.fromPairs(__makeList.run(__makeList.run("a", b), __makeList.run("c", d)))`],
-
-    [`[=> a, => &b]`,
-     `__makeMap.fromPairs(__makeList.run(__makeList.run("a", a), __makeList.run("&b", &&b.get())))`],
-
-    ["
-     for x in y:
-          z
-     ",
-     "
-     escape __break:
-         var $<temp validFlag> := true
-         try:
-             __loop.run(y, object _ {
-                 \"For-loop body\"
-                 method run($<temp key>, $<temp value>) {
-                     __validateFor.run($<temp validFlag>)
-                     escape __continue {
-                         def _ := $<temp key>
-                         def x := $<temp value>
-                         z
-                         null
-                     }
-                 }
-
-             })
-         finally:
-             $<temp validFlag> := false
-         null"],
-    ["[for x in (y) if (a) z]",
-     "
-     var $<temp validFlag> := true
-     try:
-         __accumulateList.run(y, object _ {
-             \"For-loop body\"
-             method run($<temp key>, $<temp value>, $<temp skip>) {
-                 __validateFor.run($<temp validFlag>)
-                 def _ := $<temp key>
-                 def x := $<temp value>
-                 if (a) {
-                     z
-                 } else {
-                     $<temp skip>.run()
-                 }
-             }
-
-         })
-     finally:
-         $<temp validFlag> := false"],
-
-    ["[for x in (y) if (a) k => v]",
-     "
-     var $<temp validFlag> := true
-     try:
-         __accumulateMap.run(y, object _ {
-             \"For-loop body\"
-             method run($<temp key>, $<temp value>, $<temp skip>) {
-                 __validateFor.run($<temp validFlag>)
-                 def _ := $<temp key>
-                 def x := $<temp value>
-                 if (a) {
-                     __makeList.run(k, v)
-                 } else {
-                     $<temp skip>.run()
-                 }
-             }
-
-         })
-     finally:
-         $<temp validFlag> := false"],
-
-    ["
-     while (x):
-         y
-     ",
-
-     "
-     escape __break:
-         __loop.run(__iterWhile.run(object _ {
-             method run() {
-                 x
-             }
-
-         }), object _ {
-             method run(_, _) :Bool {
-                 escape __continue {
-                     y
-                 }
-                 true
-             }
-
-         })"],
-    ["
-     object foo extends (baz.get()):
-         pass
-     ",
-     "
-     def foo := {
-         def super := baz.get()
-         object foo {
-             match $<temp pair> {
-                 M.callWithPair(super, $<temp pair>)
-             }
-
-         }
-     }"],
-    ["
-     object foo:
-         to baz():
-             x
-     ",
-     "
-     object foo:
-         method baz():
-             escape __return:
-                 x
-                 null
-     "],
-    ["
-     def foo():
-         x
-     ",
-     "
-     object foo:
-         method run():
-             escape __return:
-                 x
-                 null
-     "],
-    ["
-     switch (x):
-         match [a, b]:
-             c
-         match x:
-             y
-     ",
-     "
-     {
-         def $<temp specimen> := x
-         escape $<temp ej> {
-             def [a, b] exit $<temp ej> := $<temp specimen>
-             c
-         } catch $<temp failure> {
-             escape $<temp ej> {
-                 def x exit $<temp ej> := $<temp specimen>
-                 y
-             } catch $<temp failure> {
-                 __switchFailed.run($<temp specimen>, $<temp failure>, $<temp failure>)
-             }
-         }
-     }"],
-    ["
-     switch (x):
-         match ==2:
-             'a'
-     ",
-     "
-     {
-         def $<temp specimen> := x
-         escape $<temp ej> {
-             def via (__matchSame.run(2)) _ exit $<temp ej> := $<temp specimen>
-             'a'
-         } catch $<temp failure> {
-             __switchFailed.run($<temp specimen>, $<temp failure>)
-         }
-     }"],
-     ["
-      interface foo:
-          pass
-      ",
-      "
-      def foo := {
-          __makeProtocolDesc.run(null, meta.context().getFQNPrefix().add(\"foo__T\"), __makeList.run(), __makeList.run(), __makeList.run())
-      }"],
-     [`
-      interface foo extends x, y implements a, b:
-          "yay"
-          to baz(c :Int):
-              "blee"
-          to boz(d) :Double
-      `,
-      `
-      def foo := {
-          __makeProtocolDesc.run("yay", meta.context().getFQNPrefix().add("foo__T"), __makeList.run(x, y), __makeList.run(a, b), __makeList.run({
-              __makeMessageDesc.run("blee", "baz", __makeList.run(__makeParamDesc.run("c", Int)), Any)
-          }, {
-              __makeMessageDesc.run(null, "boz", __makeList.run(__makeParamDesc.run("d", Any)), Double)
-          }))
-      }`],
-     ["
-      try:
-          x
-      catch p:
-          y
-      catch q:
-          z
-      ",
-      "
-      try:
-          try:
-              x
-          catch p:
-              y
-      catch q:
-          z"],
-     ["
-      try:
-          x
-      catch p:
-          y
-      finally:
-          z
-      ",
-      "
-      try:
-          try:
-              x
-          catch p:
-              y
-      finally:
-          z"],
-    ["
-     when (x) ->
-         y
-     ",
-     "
-     {
-         Ref.whenResolved(x, object _ {
-             \"when-catch 'done' function\"
-             method run($<temp resolution>) {
-                 if (Ref.isBroken($<temp resolution>)) {
-                     Ref.broken(Ref.optProblem($<temp resolution>))
-                 } else {
-                     y
-                 }
-             }
-
-         })
-     }"],
-    ["
-     when (x) ->
-         y
-     catch p:
-         z
-     ",
-     "
-     {
-         Ref.whenResolved(x, object _ {
-             \"when-catch 'done' function\"
-             method run($<temp resolution>) {
-                 try {
-                     if (Ref.isBroken($<temp resolution>)) {
-                         Ref.broken(Ref.optProblem($<temp resolution>))
-                     } else {
-                         y
-                     }
-                 } catch p {
-                     z
-                 }
-             }
-
-         })
-     }"],
-     ["`hello $x world`",
-      `simple__quasiParser.valueMaker(__makeList.run("hello ", simple__quasiParser.valueHole(0), " world")).substitute(__makeList.run(x))`],
-     ["def foo`(@x)` := 1",
-      `def via (__quasiMatcher.run(foo__quasiParser.matchMaker(__makeList.run("(", foo__quasiParser.patternHole(0), ")"), __makeList.run()))) [x] := 1`],
-     ["def foo`(@x:$y)` := 1",
-      `def via (__quasiMatcher.run(foo__quasiParser.matchMaker(__makeList.run("(", foo__quasiParser.patternHole(0), ":", foo__quasiParser.valueHole(0), ")"), __makeList.run(y)))) [x] := 1`],
-]
-
-def trim(var s):
-    if (s.startsWith("\n")):
-        s := s.slice(1, s.size())
-    def lines := s.split("\n")
-    var dent := 0
-    for line in lines:
-        for i => c in line:
-            if (c != ' '):
-                dent := i
-                break
-        break
-    def trimmedLines := [].diverge()
-    for line in lines:
-        trimmedLines.push(line.slice(dent, line.size()))
-    return "\n".join(trimmedLines)
-
-def expandit(code):
-    def parseModule := null
-    def astBuilder := null
-    def makeMonteLexer := null
-    def node := parseModule(makeMonteLexer(trim(code)), astBuilder, throw)
-    return expand(node, astBuilder, throw)
-
-for item in fixedPointSpecimens:
-    tests.put(item, fn assert {
-        traceln(`expanding $item`)
-        assert.equal(M.toString(expandit(item + "\n")), trim(item))
-    })
-
-for [specimen, result] in specimens:
-    tests.put(specimen, fn assert {
-        traceln(`expanding $specimen`)
-        assert.equal(M.toString(expandit(specimen)), trim(result))
-    })
-
-unittest(tests.snapshot())
+                                    [builder."Method"(null, "run", [], null, test, span)],
+                                    [], span), span)], span),
+                        builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
+                            builder.Script(null,
+                                [builder."Method"(null, "run",
+                                     [builder.IgnorePattern(null, span),
+                                     builder.IgnorePattern(null, span)],
+                                     builder.NounExpr("Bool", span),
+                                     builder.SeqExpr([
+                                         builder.EscapeExpr(
+                                             builder.FinalPattern(
+                                                 builder.NounExpr("__continue", span),
+                                                 null, span),
+                                             block, null, null, span),
+                                         builder.NounExpr("true", span)], span), span)],
+                                 [], span), span)], span),
+                if (catcher !=null) {catcher.getPattern()},
+                 if (catcher !=null) {catcher.getBody()}, span)
+        else if (nodeName == "WhenExpr"):
+            def [var promiseExprs, var block, catchers, finallyblock] := args
+            def expr := if (promiseExprs.size() > 1) {
+                builder.MethodCallExpr(builder.NounExpr("promiseAllFulfilled", span), "run",
+                    [emitList(args, span)], span)
+            } else {promiseExprs[0]}
+            def resolution := builder.TempNounExpr("resolution", span)
+            block := builder.IfExpr(
+                builder.MethodCallExpr(builder.NounExpr("Ref", span), "isBroken",
+                     [resolution], span),
+                builder.MethodCallExpr(builder.NounExpr("Ref", span), "broken",
+                    [builder.MethodCallExpr(builder.NounExpr("Ref", span), "optProblem",
+                        [resolution], span)], span), block, span)
+            for cat in catchers:
+                block := builder.CatchExpr(block, cat.getPattern(), cat.getBody(), span)
+            if (finallyblock != null):
+                block := builder.FinallyExpr(block, finallyblock, span)
+            return builder.HideExpr(builder.MethodCallExpr(builder.NounExpr("Ref", span),
+                "whenResolved", [expr,
+                     builder.ObjectExpr("when-catch 'done' function",
+                          builder.IgnorePattern(null, span), null, [],
+                          builder.Script(null,
+                              [builder."Method"(null, "run",
+                                  [builder.FinalPattern(resolution, null, span)],
+                                  null, block, span)], [], span),
+                          span)], span), span)
+        else:
+            return M.call(builder, nodeName, args + [span])
+
+    def reifyTemporaries(tree):
+        def nameList := [].diverge()
+        def seen := [].asMap().diverge()
+        var i := 0
+        def nameFinder(node, maker, args, span):
+            if (node.getNodeName() == "NounExpr"):
+                nameList.push(args[0])
+            return node
+
+        tree.transform(nameFinder)
+        def names := nameList.asSet()
+
+        def renameTransformer(node, maker, args, span):
+            def nodeName := node.getNodeName()
+            if (nodeName == "TempNounExpr"):
+                return seen.fetch(node, fn {
+                    var noun := null
+                    while (true) {
+                        i += 1
+                        def name := `${args[0]}__$i`
+                        if (!names.contains(name)) {
+                             noun := builder.NounExpr(name, span)
+                            break
+                        }
+                    }
+                    seen[node] := noun
+                    noun
+                })
+            else:
+                return M.call(builder, nodeName, args + [span])
+        return tree.transform(renameTransformer)
+
+    return reifyTemporaries(node.transform(expandTransformer))
 
 [=> expand]

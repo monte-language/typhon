@@ -39,7 +39,7 @@ def decodeCore(var bs :Bytes, ej):
         def b := bs[offset]
         if ((b & 0x80) == 0x00):
             # One byte.
-            rv with= chr(b)
+            rv with= (chr(b))
             offset += 1
         else if ((b & 0xe0) == 0xc0):
             # Two bytes.
@@ -48,7 +48,7 @@ def decodeCore(var bs :Bytes, ej):
 
             var c := (b & 0x1f) << 6
             c |= bs[offset + 1] & 0x3f
-            rv with= chr(c)
+            rv with= (chr(c))
             offset += 2
         else if ((b & 0xf0) == 0xe0):
             # Three bytes.
@@ -58,7 +58,7 @@ def decodeCore(var bs :Bytes, ej):
             var c := (b & 0x0f) << 12
             c |= (bs[offset + 1] & 0x3f) << 6
             c |= bs[offset + 2] & 0x3f
-            rv with= chr(c)
+            rv with= (chr(c))
             offset += 3
         else if ((b & 0xf7) == 0xf0):
             # Four bytes.
@@ -69,11 +69,11 @@ def decodeCore(var bs :Bytes, ej):
             c |= (bs[offset + 1] & 0x3f) << 12
             c |= (bs[offset + 2] & 0x3f) << 6
             c |= bs[offset + 3] & 0x3f
-            rv with= chr(c)
+            rv with= (chr(c))
             offset += 4
         else:
             # Invalid sequence. Move forward and try again.
-            rv with= '\ufffd'
+            rv with= ('\ufffd')
             offset += 1
     return [rv, bs.slice(offset)]
 

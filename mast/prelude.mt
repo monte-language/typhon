@@ -396,12 +396,12 @@ object __suchThat:
 
 def testSuchThatTrue(assert):
     def f(ej):
-        def x ? true exit ej := 42
+        def x ? (true) exit ej := 42
         assert.equal(x, 42)
     assert.doesNotEject(f)
 
 def testSuchThatFalse(assert):
-    assert.ejects(fn ej {def x ? false exit ej := 42})
+    assert.ejects(fn ej {def x ? (false) exit ej := 42})
 
 unittest([
     testSuchThatTrue,
@@ -541,8 +541,11 @@ def __bind(resolver, guard):
     def viaBinder(specimen, ej):
         if (guard == null):
             resolver.resolve(specimen)
+            return specimen
         else:
-            resolver.resolve(guard.coerce(specimen, ej))
+            def coerced := guard.coerce(specimen, ej)
+            resolver.resolve(coerced)
+            return coerced
     return viaBinder
 
 
@@ -562,7 +565,7 @@ object __makeProtocolDesc:
             pass
 
     to makePair():
-        pass
+        null
 
 
 object __booleanFlow:

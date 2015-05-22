@@ -48,8 +48,10 @@ def _makeMonteLexer(input, braceStack, var nestLevel):
         return position == input.size()
 
     def spanAtPoint():
+        return position
         def inp := if (input.getSpan() == null) {
             input.asFrom("<input>")
+            input
         } else {
             input
         }
@@ -174,29 +176,31 @@ def _makeMonteLexer(input, braceStack, var nestLevel):
         if (currentChar == '\\'):
             def nex := advance()
             if (nex == 'U'):
-                def hexstr := __makeString.fromChars([advance(), advance(), advance(), advance(), advance(), advance(), advance(), advance(), advance()])
-                def v
-                try:
-                    bind v := __makeInt(hexstr, 16)
-                catch _:
-                    throw.eject(fail, ["\\U escape must be eight hex digits", spanAtPoint()])
+                def hexstr := __makeString.fromChars([
+                    advance(), advance(), advance(), advance(),
+                    advance(), advance(), advance(), advance()])
+                def v := try {
+                    __makeInt(hexstr, 16)
+                } catch _ {
+                    throw.eject(fail, ["\\U escape must be eight hex digits, not " + hexstr, spanAtPoint()])
+                }
                 advance()
                 return '\x00' + v
             if (nex == 'u'):
                 def hexstr := __makeString.fromChars([advance(), advance(), advance(), advance()])
-                def v
-                try:
-                    bind v := __makeInt(hexstr, 16)
-                catch _:
+                def v := try {
+                    __makeInt(hexstr, 16)
+                } catch _ {
                     throw.eject(fail, ["\\u escape must be four hex digits", spanAtPoint()])
+                }
                 advance()
                 return '\x00' + v
             else if (nex == 'x'):
-                def v
-                try:
-                    bind v := __makeInt(__makeString.fromChars([advance(), advance()]), 16)
-                catch _:
+                def v := try {
+                    __makeInt(__makeString.fromChars([advance(), advance()]), 16)
+                } catch _ {
                     throw.eject(fail, ["\\x escape must be two hex digits", spanAtPoint()])
+                }
                 advance()
                 return '\x00' + v
             else if (nex == EOF):
@@ -705,287 +709,5 @@ object makeMonteLexer:
     to holes():
         return [VALUE_HOLE, PATTERN_HOLE]
 
-
-def lex(s):
-    def l := makeMonteLexer(s)
-    def toks := __makeList.fromIterable(l)
-    if ((def err := l.getSyntaxError()) != null):
-        throw(err)
-    if (toks.size() > 0 && toks.last().getTag().getName() == "EOL"):
-       return toks.slice(0, toks.size() - 1)
-    return toks
-
-def tt(tagname, data):
-    return term__quasiParser.makeTerm(term__quasiParser.makeTag(null, tagname, Any),
-                                      data, [], null)
-
-def test_ident(assert):
-    assert.equal(lex("foo_bar9"), [tt("IDENTIFIER", "foo_bar9")])
-    assert.equal(lex("foo"), [tt("IDENTIFIER", "foo")])
-
-def test_char(assert):
-    assert.equal(lex("'z'"), [tt(".char.", 'z')])
-    assert.equal(lex("'\\n'"), [tt(".char.", '\n')])
-    assert.equal(lex("'\\u0061'"), [tt(".char.", 'a')])
-    assert.equal(lex("'\\x61'"), [tt(".char.", 'a')])
-
-def test_string(assert):
-    assert.equal(lex(`"foo\$\nbar"`), [tt(".String.", "foobar")])
-    assert.equal(lex(`"foo"`),        [tt(".String.", "foo")])
-    assert.equal(lex(`"foo bar 9"`),  [tt(".String.", "foo bar 9")])
-    assert.equal(lex(`"foo\nbar"`),  [tt(".String.", "foo\nbar")])
-
-def test_integer(assert):
-    assert.equal(lex("0"), [tt(".int.", 0)])
-    assert.equal(lex("7"), [tt(".int.", 7)])
-    assert.equal(lex("3_000"), [tt(".int.", 3000)])
-    assert.equal(lex("0xABad1dea"), [tt(".int.", 2880249322)])
-
-def test_float(assert):
-    assert.equal(lex("1e9"), [tt(".float64.", 1e9)])
-    assert.equal(lex("3.1415E17"), [tt(".float64.", 3.1415E17)])
-    assert.equal(lex("0.91"), [tt(".float64.", 0.91)])
-    assert.equal(lex("3e-2"), [tt(".float64.", 3e-2)])
-
-def test_holes(assert):
-    assert.equal(lex("${"), [tt("${", null)])
-    assert.equal(lex("$blee"), [tt("DOLLAR_IDENT", "blee")])
-    assert.equal(lex("@{"), [tt("@{", null)])
-    assert.equal(lex("@blee"), [tt("AT_IDENT", "blee")])
-    assert.equal(lex("@_fred"), [tt("AT_IDENT", "_fred")])
-    assert.equal(lex("@_"), [tt("AT_IDENT", "_")])
-
-def test_braces(assert):
-    assert.equal(lex("[a, 1]"),
-                 [tt("[", null),
-                  tt("IDENTIFIER", "a"),
-                  tt(",", null),
-                  tt(".int", 1),
-                  tt("]", null)])
-    assert.equal(lex("{1}"),
-                 [tt("{", null),
-                  tt(".int.", 1),
-                  tt("}", null)])
-    assert.equal(lex("(a)"),
-                 [tt("(", null),
-                  tt("IDENTIFIER", "a"),
-                  tt(")", null)])
-
-def test_dot(assert):
-    assert.equal(lex("."), [tt(".", null)])
-    assert.equal(lex(".."), [tt("..", null)])
-    assert.equal(lex("..!"), [tt("..!", null)])
-
-def test_caret(assert):
-    assert.equal(lex("^"), [tt("^", null)])
-    assert.equal(lex("^="), [tt("^=", null)])
-
-def test_plus(assert):
-    assert.equal(lex("+"), [tt("+", null)])
-    assert.equal(lex("+="), [tt("+=", null)])
-
-def test_minus(assert):
-    assert.equal(lex("-"), [tt("-", null)])
-    assert.equal(lex("-="), [tt("-=", null)])
-    assert.equal(lex("-> {"), [tt("->", null), tt("{", null)])
-
-def test_colon(assert):
-    assert.equal(lex(":x"), [tt(":", null), tt("IDENTIFIER", "x")])
-    assert.equal(lex(":="), [tt(":=", null)])
-    assert.equal(lex("::"), [tt("::", null)])
-
-def test_crunch(assert):
-    assert.equal(lex("<"), [tt("<", null)])
-    assert.equal(lex("<-"), [tt("<-", null)])
-    assert.equal(lex("<="), [tt("<=", null)])
-    assert.equal(lex("<<="), [tt("<<=", null)])
-    assert.equal(lex("<=>"), [tt("<=>", null)])
-
-def test_zap(assert):
-    assert.equal(lex(">"), [tt(">", null)])
-    assert.equal(lex(">="), [tt(">=", null)])
-    assert.equal(lex(">>="), [tt(">>=", null)])
-
-def test_star(assert):
-    assert.equal(lex("*"), [tt("*", null)])
-    assert.equal(lex("*="), [tt("*=", null)])
-    assert.equal(lex("**"), [tt("**", null)])
-    assert.equal(lex("**="), [tt("**=", null)])
-
-def test_slash(assert):
-    assert.equal(lex("/"), [tt("/", null)])
-    assert.equal(lex("/="), [tt("/=", null)])
-    assert.equal(lex("//"), [tt("//", null)])
-    assert.equal(lex("//="), [tt("//=", null)])
-
-def test_mod(assert):
-    assert.equal(lex("%"), [tt("%", null)])
-    assert.equal(lex("%="), [tt("%=", null)])
-
-def test_comment(assert):
-    assert.equal(lex("# yes\n1"), [tt("#", " yes"), tt("EOL", null),
-                                   tt(".int.", 1)])
-
-def test_bang(assert):
-    assert.equal(lex("!"), [tt("!", null)])
-    assert.equal(lex("!="), [tt("!=", null)])
-    assert.equal(lex("!~"), [tt("!~", null)])
-
-def test_eq(assert):
-    assert.equal(lex("=="), [tt("==", null)])
-    assert.equal(lex("=~"), [tt("=~", null)])
-    assert.equal(lex("=>"), [tt("=>", null)])
-
-def test_and(assert):
-    assert.equal(lex("&"), [tt("&", null)])
-    assert.equal(lex("&="), [tt("&=", null)])
-    assert.equal(lex("&!"), [tt("&!", null)])
-    assert.equal(lex("&&"), [tt("&&", null)])
-
-def test_or(assert):
-    assert.equal(lex("|"), [tt("|", null)])
-    assert.equal(lex("|="), [tt("|=", null)])
-
-
-def SIMPLE_INDENT := "
-foo:
-  baz
-
-
-"
-
-def ARROW_INDENT := "
-foo ->
-  baz
-
-
-"
-
-def SIMPLE_DEDENT := "
-foo:
-  baz
-blee
-"
-
-def VERTICAL_SPACE := "
-foo:
-
-  baz
-
-
-blee
-"
-
-def HORIZ_SPACE := "
-foo:    
-  baz
-blee
-"
-
-def MULTI_INDENT := "
-foo:
-  baz:
-     biz
-blee
-"
-
-def UNBALANCED := "
-foo:
-  baz:
-     biz
- blee
-"
-
-def UNBALANCED2 := "
-foo:
-  baz
-   blee
-"
-
-def PARENS := "
-(foo,
- baz:
-  blee
- )
-"
-
-#TODO decide whether to follow python's "no indent tokens inside
-#parens" strategy or have ways to jump in/out of indentation-awareness
-def CONTINUATION := "
-foo (
-  baz
-    biz
- )
-blee
-"
-def test_indent_simple(assert):
-    assert.equal(
-        lex(SIMPLE_INDENT),
-        [tt("EOL", null), tt("IDENTIFIER", "foo"), tt(":", null), tt("EOL", null),
-         tt("INDENT", null), tt("IDENTIFIER", "baz"), tt("DEDENT", null),
-         tt("EOL", null), tt("EOL", null)])
-
-def test_indent_arrow(assert):
-    assert.equal(
-        lex(ARROW_INDENT),
-        [tt("EOL", null), tt("IDENTIFIER", "foo"), tt("->", null), tt("EOL", null),
-         tt("INDENT", null), tt("IDENTIFIER", "baz"), tt("DEDENT", null),
-         tt("EOL", null), tt("EOL", null)])
-
-def test_indent_dedent(assert):
-    assert.equal(
-        lex(SIMPLE_DEDENT),
-        [tt("EOL", null), tt("IDENTIFIER", "foo"), tt(":", null), tt("EOL", null),
-         tt("INDENT", null), tt("IDENTIFIER", "baz"), tt("DEDENT", null),
-         tt("EOL", null), tt("IDENTIFIER", "blee")])
-
-def test_indent_vertical(assert):
-    assert.equal(
-        lex(VERTICAL_SPACE),
-        [tt("EOL", null), tt("IDENTIFIER", "foo"), tt(":", null), tt("EOL", null),
-         tt("EOL", null), tt("INDENT", null), tt("IDENTIFIER", "baz"),
-         tt("DEDENT", null), tt("EOL", null), tt("EOL", null), tt("EOL", null),
-         tt("IDENTIFIER", "blee")])
-
-def test_indent_horiz(assert):
-    assert.equal(
-        lex(HORIZ_SPACE),
-        [tt("EOL", null), tt("IDENTIFIER", "foo"), tt(":", null), tt("EOL", null),
-         tt("INDENT", null), tt("IDENTIFIER", "baz"), tt("DEDENT", null),
-         tt("EOL", null), tt("IDENTIFIER", "blee")])
-
-
-def test_indent_multi(assert):
-    assert.equal(
-        lex(MULTI_INDENT),
-        [tt("EOL", null), tt("IDENTIFIER", "foo"), tt(":", null),
-         tt("EOL", null), tt("INDENT", null), tt("IDENTIFIER", "baz"),
-         tt(":", null), tt("EOL", null), tt("INDENT", null),
-         tt("IDENTIFIER", "biz"), tt("DEDENT", null), tt("DEDENT", null),
-         tt("EOL", null), tt("IDENTIFIER", "blee")])
-
-def test_indent_unbalanced(assert):
-    assert.throws(fn {lex(UNBALANCED)})
-    assert.throws(fn {lex(UNBALANCED2)})
-
-def test_indent_inexpr(assert):
-    assert.throws(fn {lex(PARENS)})
-
-def test_indent_continuation(assert):
-    assert.equal(
-        lex(CONTINUATION),
-        [tt("EOL", null), tt("IDENTIFIER", "foo"), tt("(", null),
-         tt("EOL", null), tt("IDENTIFIER", "baz"), tt("EOL", null),
-         tt("IDENTIFIER", "biz"), tt("EOL", null), tt(")", null),
-         tt("IDENTIFIER", "blee"), tt("EOL", null)])
-
-unittest([test_ident, test_char, test_string, test_integer, test_float,
-          test_holes, test_braces, test_dot, test_caret, test_plus, test_minus,
-          test_colon, test_crunch, test_zap, test_star, test_slash, test_mod,
-          test_comment, test_bang, test_eq, test_and, test_or,
-
-          test_indent_simple, test_indent_arrow, test_indent_dedent,
-           test_indent_vertical, test_indent_horiz, test_indent_multi,
-           test_indent_unbalanced, test_indent_inexpr, test_indent_continuation])
 
 [=> makeMonteLexer]

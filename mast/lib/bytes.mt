@@ -24,7 +24,7 @@ def _makeBytes(chunks):
                     match [=="valueHole", index]:
                         switch (values[index]):
                             match s :Str:
-                                rv += [c.asInteger() for c in s]
+                                rv += [for c in (s) c.asInteger()]
                             match bs :Bytes:
                                 rv += bs
                     match bs :Bytes:
@@ -64,7 +64,7 @@ object b__quasiParser:
                         # XXX should be index, bindings/slots busted
                         piece := values[piece[1]]
                     else:
-                        piece := [c.asInteger() for c in piece]
+                        piece := [for c in (piece) c.asInteger()]
 
                     def len := piece.size()
                     if (inPattern):
@@ -96,7 +96,7 @@ object b__quasiParser:
         def rv := [].diverge()
         for piece in pieces:
             if (piece =~ _ :Str):
-                rv.push([c.asInteger() for c in piece])
+                rv.push([for c in (piece) c.asInteger()])
             else:
                 rv.push(piece)
         return _makeBytes(rv.snapshot())

@@ -1,4 +1,4 @@
-def [=> term__quasiParser] := import("lib/monte/termParser.mt")
+def [=> term__quasiParser] := import("lib/monte/termParser")
 
 def spanCover(left, right):
     if (left == null || right == null):
@@ -162,6 +162,7 @@ def parseMonte(lex, builder, mode, err):
 
     def expr
     def order
+    def comp
     def blockExpr
     def prim
     def pattern
@@ -272,7 +273,9 @@ def parseMonte(lex, builder, mode, err):
             return builder.BindingPattern(noun(ej), spanFrom(spanStart))
         else if (nex == "bind"):
             advance(ej)
-            return builder.BindPattern(noun(ej), spanFrom(spanStart))
+            def n := noun(ej)
+            def g := maybeGuard()
+            return builder.BindPattern(n, g, spanFrom(spanStart))
         throw.eject(ej, [`Unrecognized name pattern $nex`, spanHere()])
 
     def mapPatternItemInner(ej):
@@ -462,7 +465,7 @@ def parseMonte(lex, builder, mode, err):
             acceptEOLs()
             acceptTag("(", ej)
             acceptEOLs()
-        def it := order(ej)
+        def it := comp(ej)
         if (needParens):
             acceptEOLs()
             acceptTag(")", ej)
@@ -821,7 +824,9 @@ def parseMonte(lex, builder, mode, err):
         if (tag == "bind"):
             def spanStart := spanHere()
             advance(ej)
-            def name := builder.BindPattern(noun(ej), spanFrom(spanStart))
+            def n := noun(ej)
+            def g := maybeGuard()
+            def name := builder.BindPattern(n, g, spanFrom(spanStart))
             if (peekTag() == "("):
                 return objectFunction(name, indent, tryAgain, ej, spanStart)
             else if (peekTag() == ":="):
@@ -835,7 +840,9 @@ def parseMonte(lex, builder, mode, err):
             advance(ej)
             def name := if (peekTag() == "bind") {
                 advance(ej)
-                builder.BindPattern(noun(ej), spanFrom(spanStart))
+            def n := noun(ej)
+            def g := maybeGuard()
+                builder.BindPattern(n, g, spanFrom(spanStart))
             } else if (peekTag() == "_") {
                 advance(ej)
                 builder.IgnorePattern(null, spanHere())
@@ -854,7 +861,14 @@ def parseMonte(lex, builder, mode, err):
             def name := if (peekTag() == "bind") {
                 advance(ej)
                 isBind := true
-                builder.BindPattern(noun(ej), spanFrom(spanStart))
+                def n := noun(ej)
+                def g := if (peekTag() == ":") {
+                    advance(ej)
+                    guard(ej)
+                } else {
+                    null
+                }
+                builder.BindPattern(n, g, spanFrom(spanStart))
             } else {
                 builder.FinalPattern(noun(ej), null, spanFrom(spanStart))
             }
@@ -1139,6 +1153,8 @@ def parseMonte(lex, builder, mode, err):
                 output.push(builder.RangeExpr(lhs, opName, rhs, tehSpan))
             else if (opName == "=~"):
                 output.push(builder.MatchBindExpr(lhs, rhs, tehSpan))
+            else if (opName == "!~"):
+                output.push(builder.MismatchExpr(lhs, rhs, tehSpan))
             else if ([">", "<", ">=", "<=", "<=>"].contains(opName)):
                 output.push(builder.CompareExpr(lhs, opName, rhs, tehSpan))
             else:
@@ -1175,6 +1191,10 @@ def parseMonte(lex, builder, mode, err):
 
     def infix(ej):
         return convertInfix(10, ej)
+
+    bind comp(ej):
+        return convertInfix(8, ej)
+    "XXX buggy expander eats this line"
 
     def _assign(ej):
         def spanStart := spanHere()
@@ -1316,364 +1336,5 @@ def parsePattern(lex, builder, err):
 #                 catch blee:
 #                     ej(`$q doesn't match $specimen: $blee`)
 
-# Tests.
-
-def expr(s):
-    def astBuilder := null
-    def makeMonteLexer := null
-    return parseExpression(makeMonteLexer(s + "\n"), astBuilder, throw).asTerm()
-
-def pattern(s):
-    def astBuilder := null
-    def makeMonteLexer := null
-    return parsePattern(makeMonteLexer(s), astBuilder, throw).asTerm()
-
-def test_Literal(assert):
-    assert.equal(expr("\"foo bar\""), term`LiteralExpr("foo bar")`)
-    assert.equal(expr("'z'"), term`LiteralExpr('z')`)
-    assert.equal(expr("7"), term`LiteralExpr(7)`)
-    assert.equal(expr("(7)"), term`LiteralExpr(7)`)
-    assert.equal(expr("0.5"), term`LiteralExpr(0.5)`)
-
-def test_Noun(assert):
-    assert.equal(expr("foo"), term`NounExpr("foo")`)
-    assert.equal(expr("::\"object\""), term`NounExpr("object")`)
-
-def test_QuasiliteralExpr(assert):
-    assert.equal(expr("`foo`"), term`QuasiParserExpr(null, [QuasiText("foo")])`)
-    assert.equal(expr("bob`foo`"), term`QuasiParserExpr("bob", [QuasiText("foo")])`)
-    assert.equal(expr("bob`foo`` $x baz`"), term`QuasiParserExpr("bob", [QuasiText("foo`` "), QuasiExprHole(NounExpr("x")), QuasiText(" baz")])`)
-    assert.equal(expr("`($x)`"), term`QuasiParserExpr(null, [QuasiText("("), QuasiExprHole(NounExpr("x")), QuasiText(")")])`)
-
-def test_Hide(assert):
-    assert.equal(expr("{}"), term`HideExpr(SeqExpr([]))`)
-    assert.equal(expr("{1}"), term`HideExpr(LiteralExpr(1))`)
-
-def test_List(assert):
-    assert.equal(expr("[]"), term`ListExpr([])`)
-    assert.equal(expr("[a, b]"), term`ListExpr([NounExpr("a"), NounExpr("b")])`)
-
-def test_Map(assert):
-    assert.equal(expr("[k => v, => a]"),
-         term`MapExpr([MapExprAssoc(NounExpr("k"), NounExpr("v")),
-                       MapExprExport(NounExpr("a"))])`)
-    assert.equal(expr("[=> b, k => v]"),
-         term`MapExpr([MapExprExport(NounExpr("b")),
-                       MapExprAssoc(NounExpr("k"), NounExpr("v"))])`)
-
-def test_ListComprehensionExpr(assert):
-    assert.equal(expr("[for k => v in (a) if (b) c]"), term`ListComprehensionExpr(NounExpr("a"), NounExpr("b"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), NounExpr("c"))`)
-    assert.equal(expr("[for v in (a) c]"), term`ListComprehensionExpr(NounExpr("a"), null, null, FinalPattern(NounExpr("v"), null), NounExpr("c"))`)
-
-def test_MapComprehensionExpr(assert):
-    assert.equal(expr("[for k => v in (a) if (b) k1 => v1]"), term`MapComprehensionExpr(NounExpr("a"), NounExpr("b"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), NounExpr("k1"), NounExpr("v1"))`)
-    assert.equal(expr("[for v in (a) k1 => v1]"), term`MapComprehensionExpr(NounExpr("a"), null, null, FinalPattern(NounExpr("v"), null), NounExpr("k1"), NounExpr("v1"))`)
-
-def test_IfExpr(assert):
-    assert.equal(expr("if (1) {2} else if (3) {4} else {5}"),
-        term`IfExpr(LiteralExpr(1), LiteralExpr(2), IfExpr(LiteralExpr(3), LiteralExpr(4), LiteralExpr(5)))`)
-    assert.equal(expr("if (1) {2} else {3}"), term`IfExpr(LiteralExpr(1), LiteralExpr(2), LiteralExpr(3))`)
-    assert.equal(expr("if (1) {2}"), term`IfExpr(LiteralExpr(1), LiteralExpr(2), null)`)
-    assert.equal(expr("if (1):\n  2\nelse if (3):\n  4\nelse:\n  5"),
-        term`IfExpr(LiteralExpr(1), LiteralExpr(2), IfExpr(LiteralExpr(3), LiteralExpr(4), LiteralExpr(5)))`)
-    assert.equal(expr("if (1):\n  2\nelse:\n  3"), term`IfExpr(LiteralExpr(1), LiteralExpr(2), LiteralExpr(3))`)
-    assert.equal(expr("if (1):\n  2"), term`IfExpr(LiteralExpr(1), LiteralExpr(2), null)`)
-
-
-def test_EscapeExpr(assert):
-    assert.equal(expr("escape e {1} catch p {2}"),
-        term`EscapeExpr(FinalPattern(NounExpr("e"), null), LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
-    assert.equal(expr("escape e {1}"),
-        term`EscapeExpr(FinalPattern(NounExpr("e"), null), LiteralExpr(1), null, null)`)
-    assert.equal(expr("escape e:\n  1\ncatch p:\n  2"),
-        term`EscapeExpr(FinalPattern(NounExpr("e"), null), LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
-    assert.equal(expr("escape e:\n  1"),
-        term`EscapeExpr(FinalPattern(NounExpr("e"), null), LiteralExpr(1), null, null)`)
-
-def test_ForExpr(assert):
-    assert.equal(expr("for v in foo {1}"), term`ForExpr(NounExpr("foo"), null, FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
-    assert.equal(expr("for k => v in foo {1}"), term`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
-    assert.equal(expr("for k => v in foo {1} catch p {2}"), term`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
-    assert.equal(expr("for v in foo:\n  1"), term`ForExpr(NounExpr("foo"), null, FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
-    assert.equal(expr("for k => v in foo:\n  1"), term`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
-    assert.equal(expr("for k => v in foo:\n  1\ncatch p:\n  2"), term`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
-
-
-def test_FunctionExpr(assert):
-    assert.equal(expr("fn {1}"), term`FunctionExpr([], LiteralExpr(1))`)
-    assert.equal(expr("fn a, b {1}"), term`FunctionExpr([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], LiteralExpr(1))`)
-
-def test_SwitchExpr(assert):
-    assert.equal(expr("switch (1) {match p {2} match q {3}}"), term`SwitchExpr(LiteralExpr(1), [Matcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2)), Matcher(FinalPattern(NounExpr("q"), null), LiteralExpr(3))])`)
-    assert.equal(expr("switch (1):\n  match p:\n    2\n  match q:\n    3"), term`SwitchExpr(LiteralExpr(1), [Matcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2)), Matcher(FinalPattern(NounExpr("q"), null), LiteralExpr(3))])`)
-
-def test_TryExpr(assert):
-    assert.equal(expr("try {1} catch p {2} catch q {3} finally {4}"),
-        term`TryExpr(LiteralExpr(1), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2)), Catcher(FinalPattern(NounExpr("q"), null), LiteralExpr(3))], LiteralExpr(4))`)
-    assert.equal(expr("try {1} finally {2}"),
-        term`TryExpr(LiteralExpr(1), [], LiteralExpr(2))`)
-    assert.equal(expr("try {1} catch p {2}"),
-        term`TryExpr(LiteralExpr(1), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2))], null)`)
-    assert.equal(expr("try:\n  1\ncatch p:\n  2\ncatch q:\n  3\nfinally:\n  4"),
-        term`TryExpr(LiteralExpr(1), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2)), Catcher(FinalPattern(NounExpr("q"), null), LiteralExpr(3))], LiteralExpr(4))`)
-    assert.equal(expr("try:\n  1\nfinally:\n  2"),
-        term`TryExpr(LiteralExpr(1), [], LiteralExpr(2))`)
-    assert.equal(expr("try:\n  1\ncatch p:\n  2"),
-        term`TryExpr(LiteralExpr(1), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2))], null)`)
-
-def test_WhileExpr(assert):
-    assert.equal(expr("while (1):\n  2"), term`WhileExpr(LiteralExpr(1), LiteralExpr(2), null)`)
-    assert.equal(expr("while (1):\n  2\ncatch p:\n  3"), term`WhileExpr(LiteralExpr(1), LiteralExpr(2), Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3)))`)
-
-def test_WhenExpr(assert):
-    assert.equal(expr("when (1) -> {2}"), term`WhenExpr([LiteralExpr(1)], LiteralExpr(2), [], null)`)
-    assert.equal(expr("when (1, 2) -> {3}"), term`WhenExpr([LiteralExpr(1), LiteralExpr(2)], LiteralExpr(3), [], null)`)
-    assert.equal(expr("when (1) -> {2} catch p {3}"), term`WhenExpr([LiteralExpr(1)], LiteralExpr(2), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3))], null)`)
-    assert.equal(expr("when (1) -> {2} finally {3}"), term`WhenExpr([LiteralExpr(1)], LiteralExpr(2), [], LiteralExpr(3))`)
-    assert.equal(expr("when (1) -> {2} catch p {3} finally {4}"), term`WhenExpr([LiteralExpr(1)], LiteralExpr(2), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3))], LiteralExpr(4))`)
-    assert.equal(expr("when (1) ->\n  2"), term`WhenExpr([LiteralExpr(1)], LiteralExpr(2), [], null)`)
-    assert.equal(expr("when (1, 2) ->\n  3"), term`WhenExpr([LiteralExpr(1), LiteralExpr(2)], LiteralExpr(3), [], null)`)
-    assert.equal(expr("when (1) ->\n  2\ncatch p:\n  3"), term`WhenExpr([LiteralExpr(1)], LiteralExpr(2), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3))], null)`)
-    assert.equal(expr("when (1) ->\n  2\nfinally:\n  3"), term`WhenExpr([LiteralExpr(1)], LiteralExpr(2), [], LiteralExpr(3))`)
-    assert.equal(expr("when (1) ->\n  2\ncatch p:\n  3\nfinally:\n  4"), term`WhenExpr([LiteralExpr(1)], LiteralExpr(2), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3))], LiteralExpr(4))`)
-
-def test_ObjectExpr(assert):
-    assert.equal(expr("object foo {}"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [], []))`)
-    assert.equal(expr("object _ {}"), term`ObjectExpr(null, IgnorePattern(null), null, [], Script(null, [], []))`)
-    assert.equal(expr("object ::\"object\" {}"), term`ObjectExpr(null, FinalPattern(NounExpr("object"), null), null, [], Script(null, [], []))`)
-    assert.equal(expr("bind foo {}"), term`ObjectExpr(null, BindPattern(NounExpr("foo")), null, [], Script(null, [], []))`)
-    assert.equal(expr("object bind foo {}"), term`ObjectExpr(null, BindPattern(NounExpr("foo")), null, [], Script(null, [], []))`)
-    assert.equal(expr("object foo { to doA(x, y) :z {0} method blee() {1} to \"object\"() {2} match p {3} match q {4}}"),
-        term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To(null, "doA", [FinalPattern(NounExpr("x"), null), FinalPattern(NounExpr("y"), null)], NounExpr("z"), LiteralExpr(0)), Method(null, "blee", [], null, LiteralExpr(1)), To(null, "object", [], null, LiteralExpr(2))], [Matcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3)), Matcher(FinalPattern(NounExpr("q"), null), LiteralExpr(4))]))`)
-    assert.equal(expr("object foo {\"hello\" to blee() {\"yes\"\n1}}"), term`ObjectExpr("hello", FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To("yes", "blee", [], null, LiteralExpr(1))], []))`)
-    assert.equal(expr("object foo as A implements B, C {}"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), NounExpr("A"), [NounExpr("B"), NounExpr("C")], Script(null, [], []))`)
-    assert.equal(expr("object foo extends baz {}"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(NounExpr("baz"), [], []))`)
-
-    assert.equal(expr("object foo:\n  pass"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [], []))`)
-    assert.equal(expr("object _:\n  pass"), term`ObjectExpr(null, IgnorePattern(null), null, [], Script(null, [], []))`)
-    assert.equal(expr("object ::\"object\":\n  pass"), term`ObjectExpr(null, FinalPattern(NounExpr("object"), null), null, [], Script(null, [], []))`)
-    assert.equal(expr("bind foo:\n  pass"), term`ObjectExpr(null, BindPattern(NounExpr("foo")), null, [], Script(null, [], []))`)
-    assert.equal(expr("object bind foo:\n  pass"), term`ObjectExpr(null, BindPattern(NounExpr("foo")), null, [], Script(null, [], []))`)
-    assert.equal(expr("object foo:\n  to doA(x, y) :z:\n    0\n  method blee():\n    1\n  to \"object\"():\n    2\n  match p:\n    3\n  match q:\n    4"),
-        term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To(null, "doA", [FinalPattern(NounExpr("x"), null), FinalPattern(NounExpr("y"), null)], NounExpr("z"), LiteralExpr(0)), Method(null, "blee", [], null, LiteralExpr(1)), To(null, "object", [], null, LiteralExpr(2))], [Matcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3)), Matcher(FinalPattern(NounExpr("q"), null), LiteralExpr(4))]))`)
-    assert.equal(expr("object foo:\n  \"hello\"\n  to blee():\n    \"yes\"\n    1"), term`ObjectExpr("hello", FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To("yes", "blee", [], null, LiteralExpr(1))], []))`)
-    assert.equal(expr("object foo as A implements B, C:\n  pass"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), NounExpr("A"), [NounExpr("B"), NounExpr("C")], Script(null, [], []))`)
-    assert.equal(expr("object foo extends baz:\n  pass"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(NounExpr("baz"), [], []))`)
-
-def test_Function(assert):
-    assert.equal(expr("def foo() {1}"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], null, LiteralExpr(1)))`)
-    assert.equal(expr("def foo(a, b) :c {1}"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], NounExpr("c"), LiteralExpr(1)))`)
-    assert.equal(expr("def foo():\n  1"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], null, LiteralExpr(1)))`)
-    assert.equal(expr("def foo(a, b) :c:\n  1"), term`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], NounExpr("c"), LiteralExpr(1)))`)
-
-def test_Interface(assert):
-    assert.equal(expr("interface foo {\"yes\"}"), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [], [])`)
-    assert.equal(expr("interface foo extends baz, blee {\"yes\"}"), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [NounExpr("baz"), NounExpr("blee")], [], [])`)
-    assert.equal(expr("interface foo implements bar {\"yes\"}"), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [NounExpr("bar")], [])`)
-    assert.equal(expr("interface foo extends baz implements boz, bar {}"), term`InterfaceExpr(null, FinalPattern(NounExpr("foo"), null), null, [NounExpr("baz")], [NounExpr("boz"), NounExpr("bar")], [])`)
-    assert.equal(expr("interface foo guards FooStamp extends boz, biz implements bar {}"), term`InterfaceExpr(null, FinalPattern(NounExpr("foo"), null), FinalPattern(NounExpr("FooStamp"), null), [NounExpr("boz"), NounExpr("biz")], [NounExpr("bar")], [])`)
-    assert.equal(expr("interface foo {\"yes\"\nto run(a :int, b :float64) :any}"), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [], [MessageDesc(null, "run", [ParamDesc("a", NounExpr("int")), ParamDesc("b", NounExpr("float64"))], NounExpr("any"))])`)
-    assert.equal(expr("interface foo {\"yes\"\nto run(a :int, b :float64) :any {\"msg docstring\"}}"), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [], [MessageDesc("msg docstring", "run", [ParamDesc("a", NounExpr("int")), ParamDesc("b", NounExpr("float64"))], NounExpr("any"))])`)
-    assert.equal(expr("interface foo(a :int, b :float64) :any {\"msg docstring\"}"), term`FunctionInterfaceExpr("msg docstring", FinalPattern(NounExpr("foo"), null), null, [], [], MessageDesc("msg docstring", "run", [ParamDesc("a", NounExpr("int")), ParamDesc("b", NounExpr("float64"))], NounExpr("any")))`)
-    assert.equal(expr("interface foo(a :int, b :float64) :any"), term`FunctionInterfaceExpr(null, FinalPattern(NounExpr("foo"), null), null, [], [], MessageDesc(null, "run", [ParamDesc("a", NounExpr("int")), ParamDesc("b", NounExpr("float64"))], NounExpr("any")))`)
-
-    assert.equal(expr("interface foo:\n  \"yes\""), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [], [])`)
-    assert.equal(expr("interface foo extends baz, blee:\n  \"yes\""), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [NounExpr("baz"), NounExpr("blee")], [], [])`)
-    assert.equal(expr("interface foo implements bar:\n  \"yes\""), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [NounExpr("bar")], [])`)
-    assert.equal(expr("interface foo extends baz implements boz, bar:\n  pass"), term`InterfaceExpr(null, FinalPattern(NounExpr("foo"), null), null, [NounExpr("baz")], [NounExpr("boz"), NounExpr("bar")], [])`)
-    assert.equal(expr("interface foo guards FooStamp extends boz, biz implements bar:\n  pass"), term`InterfaceExpr(null, FinalPattern(NounExpr("foo"), null), FinalPattern(NounExpr("FooStamp"), null), [NounExpr("boz"), NounExpr("biz")], [NounExpr("bar")], [])`)
-    assert.equal(expr("interface foo:\n  \"yes\"\n  to run(a :int, b :float64) :any"), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [], [MessageDesc(null, "run", [ParamDesc("a", NounExpr("int")), ParamDesc("b", NounExpr("float64"))], NounExpr("any"))])`)
-    assert.equal(expr("interface foo:\n  \"yes\"\n  to run(a :int, b :float64) :any:\n    \"msg docstring\""), term`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [], [MessageDesc("msg docstring", "run", [ParamDesc("a", NounExpr("int")), ParamDesc("b", NounExpr("float64"))], NounExpr("any"))])`)
-    assert.equal(expr("interface foo(a :int, b :float64) :any:\n  \"msg docstring\""), term`FunctionInterfaceExpr("msg docstring", FinalPattern(NounExpr("foo"), null), null, [], [], MessageDesc("msg docstring", "run", [ParamDesc("a", NounExpr("int")), ParamDesc("b", NounExpr("float64"))], NounExpr("any")))`)
-
-def test_Call(assert):
-    assert.equal(expr("a.b(c, d)"), term`MethodCallExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")])`)
-    assert.equal(expr("a.b()"), term`MethodCallExpr(NounExpr("a"), "b", [])`)
-    assert.equal(expr("a.b"), term`CurryExpr(NounExpr("a"), "b", false)`)
-    assert.equal(expr("a.b().c()"), term`MethodCallExpr(MethodCallExpr(NounExpr("a"), "b", []), "c", [])`)
-    assert.equal(expr("a.\"if\"()"), term`MethodCallExpr(NounExpr("a"), "if", [])`)
-    assert.equal(expr("a(b, c)"), term`FunCallExpr(NounExpr("a"), [NounExpr("b"), NounExpr("c")])`)
-
-def test_Send(assert):
-    assert.equal(expr("a <- b(c, d)"), term`SendExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")])`)
-    assert.equal(expr("a <- b()"), term`SendExpr(NounExpr("a"), "b", [])`)
-    assert.equal(expr("a <- b"), term`CurryExpr(NounExpr("a"), "b", true)`)
-    assert.equal(expr("a <- b() <- c()"), term`SendExpr(SendExpr(NounExpr("a"), "b", []), "c", [])`)
-    assert.equal(expr("a <- \"if\"()"), term`SendExpr(NounExpr("a"), "if", [])`)
-    assert.equal(expr("a <- (b, c)"), term`FunSendExpr(NounExpr("a"), [NounExpr("b"), NounExpr("c")])`)
-
-def test_Get(assert):
-    assert.equal(expr("a[b, c]"), term`GetExpr(NounExpr("a"), [NounExpr("b"), NounExpr("c")])`)
-    assert.equal(expr("a[]"), term`GetExpr(NounExpr("a"), [])`)
-    assert.equal(expr("a.b()[c].d()"), term`MethodCallExpr(GetExpr(MethodCallExpr(NounExpr("a"), "b", []), [NounExpr("c")]), "d", [])`)
-
-def test_Meta(assert):
-    assert.equal(expr("meta.context()"), term`MetaContextExpr()`)
-    assert.equal(expr("meta.getState()"), term`MetaStateExpr()`)
-
-def test_Def(assert):
-    assert.equal(expr("def a := b"), term`DefExpr(FinalPattern(NounExpr("a"), null), null, NounExpr("b"))`)
-    assert.equal(expr("def a exit b := c"), term`DefExpr(FinalPattern(NounExpr("a"), null), NounExpr("b"), NounExpr("c"))`)
-    assert.equal(expr("var a := b"), term`DefExpr(VarPattern(NounExpr("a"), null), null, NounExpr("b"))`)
-    assert.equal(expr("bind a := b"), term`DefExpr(BindPattern(NounExpr("a")), null, NounExpr("b"))`)
-
-def test_Assign(assert):
-    assert.equal(expr("a := b"), term`AssignExpr(NounExpr("a"), NounExpr("b"))`)
-    assert.equal(expr("a[b] := c"), term`AssignExpr(GetExpr(NounExpr("a"), [NounExpr("b")]), NounExpr("c"))`)
-    assert.equal(expr("a foo= (b)"), term`VerbAssignExpr("foo", NounExpr("a"), [NounExpr("b")])`)
-    assert.equal(expr("a += b"), term`AugAssignExpr("+", NounExpr("a"), NounExpr("b"))`)
-
-def test_Prefix(assert):
-    assert.equal(expr("-3"), term`PrefixExpr("-", LiteralExpr(3))`)
-    assert.equal(expr("!foo.baz()"), term`PrefixExpr("!", MethodCallExpr(NounExpr("foo"), "baz", []))`)
-    assert.equal(expr("~foo.baz()"), term`PrefixExpr("~", MethodCallExpr(NounExpr("foo"), "baz", []))`)
-    assert.equal(expr("&&foo"), term`BindingExpr(NounExpr("foo"))`)
-    assert.equal(expr("&foo"), term`SlotExpr(NounExpr("foo"))`)
-
-def test_Coerce(assert):
-    assert.equal(expr("foo :baz"), term`CoerceExpr(NounExpr("foo"), NounExpr("baz"))`)
-
-def test_Infix(assert):
-    assert.equal(expr("x ** -y"), term`BinaryExpr(NounExpr("x"), "**", PrefixExpr("-", NounExpr("y")))`)
-    assert.equal(expr("x * y"), term`BinaryExpr(NounExpr("x"), "*", NounExpr("y"))`)
-    assert.equal(expr("x / y"), term`BinaryExpr(NounExpr("x"), "/", NounExpr("y"))`)
-    assert.equal(expr("x // y"), term`BinaryExpr(NounExpr("x"), "//", NounExpr("y"))`)
-    assert.equal(expr("x % y"), term`BinaryExpr(NounExpr("x"), "%", NounExpr("y"))`)
-    assert.equal(expr("x + y"), term`BinaryExpr(NounExpr("x"), "+", NounExpr("y"))`)
-    assert.equal(expr("(x + y) + z"), term`BinaryExpr(BinaryExpr(NounExpr("x"), "+", NounExpr("y")), "+", NounExpr("z"))`)
-    assert.equal(expr("x - y"), term`BinaryExpr(NounExpr("x"), "-", NounExpr("y"))`)
-    assert.equal(expr("x - y + z"), term`BinaryExpr(BinaryExpr(NounExpr("x"), "-", NounExpr("y")), "+", NounExpr("z"))`)
-    assert.equal(expr("x..y"), term`RangeExpr(NounExpr("x"), "..", NounExpr("y"))`)
-    assert.equal(expr("x..!y"), term`RangeExpr(NounExpr("x"), "..!", NounExpr("y"))`)
-    assert.equal(expr("x < y"), term`CompareExpr(NounExpr("x"), "<", NounExpr("y"))`)
-    assert.equal(expr("x <= y"), term`CompareExpr(NounExpr("x"), "<=", NounExpr("y"))`)
-    assert.equal(expr("x <=> y"), term`CompareExpr(NounExpr("x"), "<=>", NounExpr("y"))`)
-    assert.equal(expr("x >= y"), term`CompareExpr(NounExpr("x"), ">=", NounExpr("y"))`)
-    assert.equal(expr("x > y"), term`CompareExpr(NounExpr("x"), ">", NounExpr("y"))`)
-    assert.equal(expr("x << y"), term`BinaryExpr(NounExpr("x"), "<<", NounExpr("y"))`)
-    assert.equal(expr("x >> y"), term`BinaryExpr(NounExpr("x"), ">>", NounExpr("y"))`)
-    assert.equal(expr("x << y >> z"), term`BinaryExpr(BinaryExpr(NounExpr("x"), "<<", NounExpr("y")), ">>", NounExpr("z"))`)
-    assert.equal(expr("x == y"), term`SameExpr(NounExpr("x"), NounExpr("y"), true)`)
-    assert.equal(expr("x != y"), term`SameExpr(NounExpr("x"), NounExpr("y"), false)`)
-    assert.equal(expr("x &! y"), term`BinaryExpr(NounExpr("x"), "&!", NounExpr("y"))`)
-    assert.equal(expr("x ^ y"), term`BinaryExpr(NounExpr("x"), "^", NounExpr("y"))`)
-    assert.equal(expr("x & y"), term`BinaryExpr(NounExpr("x"), "&", NounExpr("y"))`)
-    assert.equal(expr("x & y & z"), term`BinaryExpr(BinaryExpr(NounExpr("x"), "&", NounExpr("y")), "&", NounExpr("z"))`)
-    assert.equal(expr("x | y"), term`BinaryExpr(NounExpr("x"), "|", NounExpr("y"))`)
-    assert.equal(expr("x | y | z"), term`BinaryExpr(BinaryExpr(NounExpr("x"), "|", NounExpr("y")), "|", NounExpr("z"))`)
-    assert.equal(expr("x && y"), term`AndExpr(NounExpr("x"), NounExpr("y"))`)
-    assert.equal(expr("x && y && z"), term`AndExpr(NounExpr("x"), AndExpr(NounExpr("y"), NounExpr("z")))`)
-    assert.equal(expr("x || y"), term`OrExpr(NounExpr("x"), NounExpr("y"))`)
-    assert.equal(expr("x || y || z"), term`OrExpr(NounExpr("x"), OrExpr(NounExpr("y"), NounExpr("z")))`)
-    assert.equal(expr("x =~ y"), term`MatchBindExpr(NounExpr("x"), FinalPattern(NounExpr("y"), null))`)
-    assert.equal(expr("x && y || z"),  expr("(x && y) || z"))
-    assert.equal(expr("x || y && z"),  expr("x || (y && z)"))
-    assert.equal(expr("x =~ a || y == b && z != c"),
-                     expr("(x =~ a) || ((y == b) && (z != c))"))
-    assert.equal(expr("x | y > z"),  expr("x | (y > z)"))
-    assert.equal(expr("x < y | y > z"),  expr("(x < y) | (y > z)"))
-    assert.equal(expr("x & y > z"),  expr("x & (y > z)"))
-    assert.equal(expr("x < y & y > z"),  expr("(x < y) & (y > z)"))
-    assert.equal(expr("x..y <=> a..!b"),  expr("(x..y) <=> (a..!b)"))
-    assert.equal(expr("a << b..y >> z"),  expr("(a << b) .. (y >> z)"))
-    assert.equal(expr("x.y() :List[Int] > a..!b"),
-                 expr("(x.y() :List[Int]) > a..!b"))
-    assert.equal(expr("a + b >> z"),  expr("(a + b) >> z"))
-    assert.equal(expr("a >> b + z"),  expr("a >> (b + z)"))
-    assert.equal(expr("a + b * c"), expr("a + (b * c)"))
-    assert.equal(expr("a - b + c * d"), expr("(a - b) + (c * d)"))
-    assert.equal(expr("a / b + c - d"), expr("((a / b) + c) - d"))
-    assert.equal(expr("a / b * !c ** ~d"), expr("(a / b) * ((!c) ** (~d))"))
-
-def test_Exits(assert):
-    assert.equal(expr("return x + y"), term`ExitExpr("return", BinaryExpr(NounExpr("x"), "+", NounExpr("y")))`)
-    assert.equal(expr("continue x + y"), term`ExitExpr("continue", BinaryExpr(NounExpr("x"), "+", NounExpr("y")))`)
-    assert.equal(expr("break x + y"), term`ExitExpr("break", BinaryExpr(NounExpr("x"), "+", NounExpr("y")))`)
-    assert.equal(expr("return(x + y)"), term`ExitExpr("return", BinaryExpr(NounExpr("x"), "+", NounExpr("y")))`)
-    assert.equal(expr("continue(x + y)"), term`ExitExpr("continue", BinaryExpr(NounExpr("x"), "+", NounExpr("y")))`)
-    assert.equal(expr("break(x + y)"), term`ExitExpr("break", BinaryExpr(NounExpr("x"), "+", NounExpr("y")))`)
-    assert.equal(expr("return()"), term`ExitExpr("return", null)`)
-    assert.equal(expr("continue()"), term`ExitExpr("continue", null)`)
-    assert.equal(expr("break()"), term`ExitExpr("break", null)`)
-    assert.equal(expr("return"), term`ExitExpr("return", null)`)
-    assert.equal(expr("continue"), term`ExitExpr("continue", null)`)
-    assert.equal(expr("break"), term`ExitExpr("break", null)`)
-
-def test_IgnorePattern(assert):
-    assert.equal(pattern("_"), term`IgnorePattern(null)`)
-    assert.equal(pattern("_ :Int"), term`IgnorePattern(NounExpr("Int"))`)
-    assert.equal(pattern("_ :(1)"), term`IgnorePattern(LiteralExpr(1))`)
-
-def test_FinalPattern(assert):
-    assert.equal(pattern("foo"), term`FinalPattern(NounExpr("foo"), null)`)
-    assert.equal(pattern("foo :Int"), term`FinalPattern(NounExpr("foo"), NounExpr("Int"))`)
-    assert.equal(pattern("foo :(1)"), term`FinalPattern(NounExpr("foo"), LiteralExpr(1))`)
-    assert.equal(pattern("::\"foo baz\""), term`FinalPattern(NounExpr("foo baz"), null)`)
-    assert.equal(pattern("::\"foo baz\" :Int"), term`FinalPattern(NounExpr("foo baz"), NounExpr("Int"))`)
-    assert.equal(pattern("::\"foo baz\" :(1)"), term`FinalPattern(NounExpr("foo baz"), LiteralExpr(1))`)
-
-def test_SlotPattern(assert):
-    assert.equal(pattern("&foo"), term`SlotPattern(NounExpr("foo"), null)`)
-    assert.equal(pattern("&foo :Int"), term`SlotPattern(NounExpr("foo"), NounExpr("Int"))`)
-    assert.equal(pattern("&foo :(1)"), term`SlotPattern(NounExpr("foo"), LiteralExpr(1))`)
-    assert.equal(pattern("&::\"foo baz\""), term`SlotPattern(NounExpr("foo baz"), null)`)
-    assert.equal(pattern("&::\"foo baz\" :Int"), term`SlotPattern(NounExpr("foo baz"), NounExpr("Int"))`)
-    assert.equal(pattern("&::\"foo baz\" :(1)"), term`SlotPattern(NounExpr("foo baz"), LiteralExpr(1))`)
-
-def test_VarPattern(assert):
-    assert.equal(pattern("var foo"), term`VarPattern(NounExpr("foo"), null)`)
-    assert.equal(pattern("var foo :Int"), term`VarPattern(NounExpr("foo"), NounExpr("Int"))`)
-    assert.equal(pattern("var foo :(1)"), term`VarPattern(NounExpr("foo"), LiteralExpr(1))`)
-    assert.equal(pattern("var ::\"foo baz\""), term`VarPattern(NounExpr("foo baz"), null)`)
-    assert.equal(pattern("var ::\"foo baz\" :Int"), term`VarPattern(NounExpr("foo baz"), NounExpr("Int"))`)
-    assert.equal(pattern("var ::\"foo baz\" :(1)"), term`VarPattern(NounExpr("foo baz"), LiteralExpr(1))`)
-
-def test_BindPattern(assert):
-    assert.equal(pattern("bind foo"), term`BindPattern(NounExpr("foo"))`)
-    assert.equal(pattern("bind ::\"foo baz\""), term`BindPattern(NounExpr("foo baz"))`)
-
-def test_BindingPattern(assert):
-    assert.equal(pattern("&&foo"), term`BindingPattern(NounExpr("foo"))`)
-    assert.equal(pattern("&&::\"foo baz\""), term`BindingPattern(NounExpr("foo baz"))`)
-
-def test_SamePattern(assert):
-    assert.equal(pattern("==1"), term`SamePattern(LiteralExpr(1), true)`)
-    assert.equal(pattern("==(x)"), term`SamePattern(NounExpr("x"), true)`)
-
-def test_NotSamePattern(assert):
-    assert.equal(pattern("!=1"), term`SamePattern(LiteralExpr(1), false)`)
-    assert.equal(pattern("!=(x)"), term`SamePattern(NounExpr("x"), false)`)
-
-def test_ViaPattern(assert):
-    assert.equal(pattern("via (b) a"), term`ViaPattern(NounExpr("b"), FinalPattern(NounExpr("a"), null))`)
-
-def test_ListPattern(assert):
-    assert.equal(pattern("[]"), term`ListPattern([], null)`)
-    assert.equal(pattern("[a, b]"), term`ListPattern([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], null)`)
-    assert.equal(pattern("[a, b] + c"), term`ListPattern([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], FinalPattern(NounExpr("c"), null))`)
-
-def test_MapPattern(assert):
-     assert.equal(pattern("[\"k\" => v, (a) => b, => c]"), term`MapPattern([MapPatternRequired(MapPatternAssoc(LiteralExpr("k"), FinalPattern(NounExpr("v"), null))), MapPatternRequired(MapPatternAssoc(NounExpr("a"), FinalPattern(NounExpr("b"), null))), MapPatternRequired(MapPatternImport(FinalPattern(NounExpr("c"), null)))], null)`)
-     assert.equal(pattern("[\"a\" => b := 1] | c"), term`MapPattern([MapPatternDefault(MapPatternAssoc(LiteralExpr("a"), FinalPattern(NounExpr("b"), null)), LiteralExpr(1))], FinalPattern(NounExpr("c"), null))`)
-     assert.equal(pattern("[\"k\" => &v, => &&b, => ::\"if\"]"), term`MapPattern([MapPatternRequired(MapPatternAssoc(LiteralExpr("k"), SlotPattern(NounExpr("v"), null))), MapPatternRequired(MapPatternImport(BindingPattern(NounExpr("b")))), MapPatternRequired(MapPatternImport(FinalPattern(NounExpr("if"), null)))], null)`)
-
-def test_QuasiliteralPattern(assert):
-    assert.equal(pattern("`foo`"), term`QuasiParserPattern(null, [QuasiText("foo")])`)
-    assert.equal(pattern("bob`foo`"), term`QuasiParserPattern("bob", [QuasiText("foo")])`)
-    assert.equal(pattern("bob`foo`` $x baz`"), term`QuasiParserPattern("bob", [QuasiText("foo`` "), QuasiExprHole(NounExpr("x")), QuasiText(" baz")])`)
-    assert.equal(pattern("`($x)`"), term`QuasiParserPattern(null, [QuasiText("("), QuasiExprHole(NounExpr("x")), QuasiText(")")])`)
-    assert.equal(pattern("`foo @{w}@x $y${z} baz`"), term`QuasiParserPattern(null, [QuasiText("foo "), QuasiPatternHole(FinalPattern(NounExpr("w"), null)), QuasiPatternHole(FinalPattern(NounExpr("x"), null)), QuasiText(" "), QuasiExprHole(NounExpr("y")), QuasiExprHole(NounExpr("z")), QuasiText(" baz")])`)
-
-def test_SuchThatPattern(assert):
-    assert.equal(pattern("x :y ? (1)"), term`SuchThatPattern(FinalPattern(NounExpr("x"), NounExpr("y")), LiteralExpr(1))`)
-
-
-# def test_holes(assert):
-#     assert.equal(quasiMonteParser.valueMaker(["foo(", quasiMonteParser.valueHole(0), ")"]), term`ValueHoleExpr(0)`)
-#     assert.equal(expr("@{2}"), term`PatternHoleExpr(2)`)
-#     assert.equal(pattern("${2}"), term`ValueHoleExpr(0)`)
-#     assert.equal(pattern("@{2}"), term`PatternHoleExpr(0)`)
-
-unittest([test_Literal, test_Noun, test_QuasiliteralExpr, test_Hide, test_Call, test_Send, test_Get, test_Meta, test_List, test_Map, test_ListComprehensionExpr, test_MapComprehensionExpr, test_IfExpr, test_EscapeExpr, test_ForExpr, test_FunctionExpr, test_SwitchExpr, test_TryExpr, test_WhileExpr, test_WhenExpr, test_ObjectExpr, test_Function, test_Interface, test_Def, test_Assign, test_Prefix, test_Coerce, test_Infix, test_Exits, test_IgnorePattern, test_FinalPattern, test_VarPattern, test_BindPattern, test_SamePattern, test_NotSamePattern, test_SlotPattern, test_BindingPattern, test_ViaPattern, test_ListPattern, test_MapPattern, test_QuasiliteralPattern, test_SuchThatPattern])
 
 [=> parseModule, => parseExpression, => parsePattern]

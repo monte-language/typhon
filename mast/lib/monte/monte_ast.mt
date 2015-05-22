@@ -33,39 +33,11 @@ def priorities := [
      "prim" => 16,
 
      "pattern" => 0]
-
-object makeScopeSet:
-    to run(items):
-        def map := [].asMap().diverge()
-        for k in items:
-            map[k] := null
-        return makeScopeSet.fromKeys(map.snapshot())
-    to fromKeys(map):
-        return object scopeset extends map:
-            to _makeIterator():
-                return super.getKeys()._makeIterator()
-            to contains(k):
-                return super.maps(k)
-            to subtract(right):
-                def new := super.diverge()
-                for k in right:
-                    if (super.maps(k)):
-                        new.removeKey(k)
-                return makeScopeSet.fromKeys(new.snapshot())
-            to and(right):
-                return makeScopeSet.fromKeys(super.and(right))
-            to or(right):
-                return makeScopeSet.fromKeys(super.or(right))
-            to _conformTo(guard):
-                return super
-            to printOn(out):
-                out.print(super.getKeys())
-
 def makeStaticScope(read, set, defs, vars, metaStateExpr):
-    def namesRead := makeScopeSet(read)
-    def namesSet := makeScopeSet(set)
-    def defNames := makeScopeSet(defs)
-    def varNames := makeScopeSet(vars)
+    def namesRead := read.asSet()
+    def namesSet := set.asSet()
+    def defNames := defs.asSet()
+    def varNames := vars.asSet()
     return object staticScope:
         to getNamesRead():
             return namesRead
@@ -760,16 +732,19 @@ def makeVarPattern(noun, guard, span):
         scope, term`VarPattern`,
         fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
-def makeBindPattern(noun, span):
-    def scope := makeStaticScope([], [], [noun.getName()], [], false)
+def makeBindPattern(noun, guard, span):
+    def scope := makeStaticScope([], [], [noun.getName()], [], false) + scopeMaybe(guard)
     object bindPattern:
         to getNoun():
             return noun
         to subPrintOn(out, priority):
             out.print("bind ")
             noun.subPrintOn(out, priority)
-    return astWrapper(bindPattern, makeBindPattern, [noun], span,
-        scope, term`BindPattern`, fn f {[noun.transform(f)]})
+            if (guard != null):
+                out.print(" :")
+                guard.subPrintOn(out, priorities["order"])
+    return astWrapper(bindPattern, makeBindPattern, [noun, guard], span,
+        scope, term`BindPattern`, fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeDefExpr(pattern, exit_, expr, span):
     def scope := if (exit_ == null) {
@@ -1623,7 +1598,7 @@ def makePatternHolePattern(index, span):
 
 def makeFinalPattern(noun, guard, span):
     def gs := scopeMaybe(guard)
-    if (gs.namesUsed().maps(noun.getName())):
+    if (gs.namesUsed().contains(noun.getName())):
         throw("Kernel guard cycle not allowed")
     def scope := makeStaticScope([], [], [noun.getName()], [], false) + gs
     object finalPattern:
@@ -1642,7 +1617,7 @@ def makeFinalPattern(noun, guard, span):
 
 def makeSlotPattern(noun, guard, span):
     def gs := scopeMaybe(guard)
-    if (gs.namesUsed().maps(noun.getName())):
+    if (gs.namesUsed().contains(noun.getName())):
         throw("Kernel guard cycle not allowed")
     def scope := makeStaticScope([], [], [noun.getName()], [], false) + gs
     object slotPattern:
@@ -2033,8 +2008,8 @@ object astBuilder:
         return makeSlotPattern(noun, guard, span)
     to BindingPattern(noun, span):
         return makeBindingPattern(noun, span)
-    to BindPattern(noun, span):
-        return makeBindPattern(noun, span)
+    to BindPattern(noun, guard, span):
+        return makeBindPattern(noun, guard, span)
     to IgnorePattern(guard, span):
         return makeIgnorePattern(guard, span)
     to ListPattern(patterns, tail, span):
@@ -2072,17 +2047,17 @@ def astCodes := [
     "BindingExpr" => 12,
     "SeqExpr" => 13,
     "MethodCallExpr" => 14,
-    "Def" => 15,
-    "Escape" => 16,
-    "Object" => 17,
+    "DefExpr" => 15,
+    "EscapeExpr" => 16,
+    "ObjectExpr" => 17,
     "Script" => 18,
     "Method" => 19,
     "Matcher" => 20,
-    "Assign" => 21,
-    "Finally" => 22,
-    "KernelTry" => 23,
+    "AssignExpr" => 21,
+    "FinallyExpr" => 22,
+    "CatchExpr" => 23,
     "HideExpr" => 24,
-    "If" => 25,
+    "IfExpr" => 25,
     "Meta" => 26,
     "FinalPattern" => 27,
     "IgnorePattern" => 28,
@@ -2130,15 +2105,22 @@ def dump(item, write):
         match _ :Str:
             write(asciiShift([3]))
             def bs := UTF8.encode(item, throw)
-            write(dumpVarint(bs.size()))
+            dumpVarint(bs.size(), write)
             write(bs)
         match _ :Double:
             write(asciiShift([4]))
             write(asciiShift(item.toBytes()))
         match _ :Char:
             write(asciiShift([33]))
-            write(asciiShift([5]))
-            write(UTF8.encode(__makeString.fromChars([item]), throw))
+            write(asciiShift([3]))
+            def bs := UTF8.encode(__makeString.fromChars([item]), throw)
+            dumpVarint(bs.size(), write)
+            write(bs)
+        match _ :List:
+            write(asciiShift([7]))
+            dumpVarint(item.size(), write)
+            for val in item:
+                dump(val, write)
         match _:
             def [nodeMaker, _, arglist] := item._uncall()
             def name := item.getNodeName()
@@ -2148,685 +2130,17 @@ def dump(item, write):
             else if (name == "MetaStateExpr"):
                 write(asciiShift([astCodes["Meta"]]))
                 dump("getState", write)
+            else if (name == "ObjectExpr"):
+                write(asciiShift([astCodes[name]]))
+                dump(item.getDocstring(), write)
+                dump(item.getName(), write)
+                dump([item.getAsExpr()] + item.getAuditors(), write)
+                dump(item.getScript(), write)
             else:
                 write(asciiShift([astCodes[name]]))
                 def nodeArgs := arglist.slice(0, arglist.size() - 1)
                 for a in nodeArgs:
                     dump(a, write)
 
-
-def test_literalExpr(assert):
-    def expr := makeLiteralExpr("one", null)
-    assert.equal(expr._uncall(), [makeLiteralExpr, "run", ["one", null]])
-    assert.equal(M.toString(expr), "\"one\"")
-    assert.equal(expr.asTerm(), term`LiteralExpr("one")`)
-
-def test_nounExpr(assert):
-    def expr := makeNounExpr("foo", null)
-    assert.equal(expr._uncall(), [makeNounExpr, "run", ["foo", null]])
-    assert.equal(M.toString(expr), "foo")
-    assert.equal(expr.asTerm(), term`NounExpr("foo")`)
-    assert.equal(M.toString(makeNounExpr("unwind-protect", null)),
-                 "::\"unwind-protect\"")
-
-def test_tempNounExpr(assert):
-    def expr := makeTempNounExpr("foo", null)
-    assert.equal(M.toString(expr), "$<temp foo>")
-    assert.equal(expr.asTerm(), term`TempNounExpr("foo")`)
-
-def test_slotExpr(assert):
-    def noun := makeNounExpr("foo", null)
-    def expr := makeSlotExpr(noun, null)
-    assert.equal(expr._uncall(), [makeSlotExpr, "run", [noun, null]])
-    assert.equal(M.toString(expr), "&foo")
-    assert.equal(expr.asTerm(), term`SlotExpr(NounExpr("foo"))`)
-    assert.equal(M.toString(makeSlotExpr(makeNounExpr("unwind-protect", null), null)),
-                 "&::\"unwind-protect\"")
-
-def test_bindingExpr(assert):
-    def noun := makeNounExpr("foo", null)
-    def expr := makeBindingExpr(noun, null)
-    assert.equal(expr._uncall(), [makeBindingExpr, "run", [noun, null]])
-    assert.equal(M.toString(expr), "&&foo")
-    assert.equal(expr.asTerm(), term`BindingExpr(NounExpr("foo"))`)
-    assert.equal(M.toString(makeBindingExpr(makeNounExpr("unwind-protect", null), null)),
-                 "&&::\"unwind-protect\"")
-
-def test_metaContextExpr(assert):
-    def expr := makeMetaContextExpr(null)
-    assert.equal(expr._uncall(), [makeMetaContextExpr, "run", [null]])
-    assert.equal(M.toString(expr), "meta.context()")
-    assert.equal(expr.asTerm(), term`MetaContextExpr()`)
-
-def test_metaStateExpr(assert):
-    def expr := makeMetaStateExpr(null)
-    assert.equal(expr._uncall(), [makeMetaStateExpr, "run", [null]])
-    assert.equal(M.toString(expr), "meta.getState()")
-    assert.equal(expr.asTerm(), term`MetaStateExpr()`)
-
-def test_seqExpr(assert):
-    def exprs := [makeLiteralExpr(3, null), makeLiteralExpr("four", null)]
-    def expr := makeSeqExpr(exprs, null)
-    assert.equal(expr._uncall(), [makeSeqExpr, "run", [exprs, null]])
-    assert.equal(M.toString(expr), "3\n\"four\"")
-    assert.equal(expr.asTerm(), term`SeqExpr([LiteralExpr(3), LiteralExpr("four")])`)
-
-def test_module(assert):
-    def body := makeLiteralExpr(3, null)
-    def imports := [makeFinalPattern(makeNounExpr("a", null), null, null), makeFinalPattern(makeNounExpr("b", null), null, null)]
-    def exports := [makeNounExpr("c", null)]
-    def expr := makeModule(imports, exports, body, null)
-    assert.equal(expr._uncall(), [makeModule, "run", [imports, exports, body, null]])
-    assert.equal(M.toString(expr), "module a, b\nexport (c)\n3")
-    assert.equal(expr.asTerm(), term`Module([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], [NounExpr("c")], LiteralExpr(3))`)
-
-def test_methodCallExpr(assert):
-    def args := [makeLiteralExpr(1, null), makeLiteralExpr("two", null)]
-    def receiver := makeNounExpr("foo", null)
-    def expr := makeMethodCallExpr(receiver, "doStuff",
-         args, null)
-    assert.equal(expr._uncall(), [makeMethodCallExpr, "run", [receiver, "doStuff", args, null]])
-    assert.equal(M.toString(expr), "foo.doStuff(1, \"two\")")
-    assert.equal(expr.asTerm(), term`MethodCallExpr(NounExpr("foo"), "doStuff", [LiteralExpr(1), LiteralExpr("two")])`)
-    def fcall := makeMethodCallExpr(makeNounExpr("foo", null), "run",
-         [makeNounExpr("a", null)], null)
-    assert.equal(M.toString(fcall), "foo.run(a)")
-    assert.equal(M.toString(makeMethodCallExpr(makeNounExpr("a", null), "+",
-         [makeNounExpr("b", null)], null)),
-             "a.\"+\"(b)")
-
-def test_funCallExpr(assert):
-    def args := [makeLiteralExpr(1, null), makeLiteralExpr("two", null)]
-    def receiver := makeNounExpr("foo", null)
-    def expr := makeFunCallExpr(receiver, args, null)
-    assert.equal(expr._uncall(), [makeFunCallExpr, "run", [receiver, args, null]])
-    assert.equal(M.toString(expr), "foo(1, \"two\")")
-    assert.equal(expr.asTerm(), term`FunCallExpr(NounExpr("foo"), [LiteralExpr(1), LiteralExpr("two")])`)
-
-def test_sendExpr(assert):
-    def args := [makeLiteralExpr(1, null), makeLiteralExpr("two", null)]
-    def receiver := makeNounExpr("foo", null)
-    def expr := makeSendExpr(receiver, "doStuff",
-         args, null)
-    assert.equal(expr._uncall(), [makeSendExpr, "run", [receiver, "doStuff", args, null]])
-    assert.equal(M.toString(expr), "foo <- doStuff(1, \"two\")")
-    assert.equal(expr.asTerm(), term`SendExpr(NounExpr("foo"), "doStuff", [LiteralExpr(1), LiteralExpr("two")])`)
-    def fcall := makeSendExpr(makeNounExpr("foo", null), "run",
-         [makeNounExpr("a", null)], null)
-    assert.equal(M.toString(fcall), "foo <- run(a)")
-    assert.equal(M.toString(makeSendExpr(makeNounExpr("a", null), "+",
-         [makeNounExpr("b", null)], null)),
-             "a <- \"+\"(b)")
-
-def test_funSendExpr(assert):
-    def args := [makeLiteralExpr(1, null), makeLiteralExpr("two", null)]
-    def receiver := makeNounExpr("foo", null)
-    def expr := makeFunSendExpr(receiver, args, null)
-    assert.equal(expr._uncall(), [makeFunSendExpr, "run", [receiver, args, null]])
-    assert.equal(M.toString(expr), "foo <- (1, \"two\")")
-    assert.equal(expr.asTerm(), term`FunSendExpr(NounExpr("foo"), [LiteralExpr(1), LiteralExpr("two")])`)
-
-def test_compareExpr(assert):
-    def [left, right] := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def expr := makeCompareExpr(left, ">=", right, null)
-    assert.equal(expr._uncall(), [makeCompareExpr, "run", [left, ">=", right, null]])
-    assert.equal(M.toString(expr), "a >= b")
-    assert.equal(expr.asTerm(), term`CompareExpr(NounExpr("a"), ">=", NounExpr("b"))`)
-
-def test_rangeExpr(assert):
-    def [left, right] := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def expr := makeRangeExpr(left, "..!", right, null)
-    assert.equal(expr._uncall(), [makeRangeExpr, "run", [left, "..!", right, null]])
-    assert.equal(M.toString(expr), "a..!b")
-    assert.equal(expr.asTerm(), term`RangeExpr(NounExpr("a"), "..!", NounExpr("b"))`)
-
-def test_sameExpr(assert):
-    def [left, right] := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def expr := makeSameExpr(left, right, true, null)
-    assert.equal(expr._uncall(), [makeSameExpr, "run", [left, right, true, null]])
-    assert.equal(M.toString(expr), "a == b")
-    assert.equal(M.toString(makeSameExpr(left, right, false, null)), "a != b")
-    assert.equal(expr.asTerm(), term`SameExpr(NounExpr("a"), NounExpr("b"), true)`)
-
-def test_getExpr(assert):
-    def body := makeNounExpr("a", null)
-    def indices := [makeNounExpr("b", null), makeNounExpr("c", null)]
-    def expr := makeGetExpr(body, indices, null)
-    assert.equal(M.toString(expr), "a[b, c]")
-    assert.equal(expr.asTerm(), term`GetExpr(NounExpr("a"), [NounExpr("b"), NounExpr("c")])`)
-
-def test_andExpr(assert):
-    def [left, right] := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def expr := makeAndExpr(left, right, null)
-    assert.equal(expr._uncall(), [makeAndExpr, "run", [left, right, null]])
-    assert.equal(M.toString(expr), "a && b")
-    assert.equal(expr.asTerm(), term`AndExpr(NounExpr("a"), NounExpr("b"))`)
-
-def test_orExpr(assert):
-    def [left, right] := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def expr := makeOrExpr(left, right, null)
-    assert.equal(expr._uncall(), [makeOrExpr, "run", [left, right, null]])
-    assert.equal(M.toString(expr), "a || b")
-    assert.equal(expr.asTerm(), term`OrExpr(NounExpr("a"), NounExpr("b"))`)
-
-def test_matchBindExpr(assert):
-    def [spec, patt] := [makeNounExpr("a", null), makeFinalPattern(makeNounExpr("b", null), null, null)]
-    def expr := makeMatchBindExpr(spec, patt, null)
-    assert.equal(expr._uncall(), [makeMatchBindExpr, "run", [spec, patt, null]])
-    assert.equal(M.toString(expr), "a =~ b")
-    assert.equal(expr.asTerm(), term`MatchBindExpr(NounExpr("a"), FinalPattern(NounExpr("b"), null))`)
-
-def test_mismatchExpr(assert):
-    def [spec, patt] := [makeNounExpr("a", null), makeFinalPattern(makeNounExpr("b", null), null, null)]
-    def expr := makeMismatchExpr(spec, patt, null)
-    assert.equal(expr._uncall(), [makeMismatchExpr, "run", [spec, patt, null]])
-    assert.equal(M.toString(expr), "a !~ b")
-    assert.equal(expr.asTerm(), term`MismatchExpr(NounExpr("a"), FinalPattern(NounExpr("b"), null))`)
-
-def test_binaryExpr(assert):
-    def [left, right] := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def expr := makeBinaryExpr(left, "+", right, null)
-    assert.equal(expr._uncall(), [makeBinaryExpr, "run", [left, "+", right, null]])
-    assert.equal(M.toString(expr), "a + b")
-    assert.equal(expr.asTerm(), term`BinaryExpr(NounExpr("a"), "+", NounExpr("b"))`)
-
-def test_prefixExpr(assert):
-    def val := makeNounExpr("a", null)
-    def expr := makePrefixExpr("!", val, null)
-    assert.equal(expr._uncall(), [makePrefixExpr, "run", ["!", val, null]])
-    assert.equal(M.toString(expr), "!a")
-    assert.equal(expr.asTerm(), term`PrefixExpr("!", NounExpr("a"))`)
-
-def test_coerceExpr(assert):
-    def [specimen, guard] := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def expr := makeCoerceExpr(specimen, guard, null)
-    assert.equal(expr._uncall(), [makeCoerceExpr, "run", [specimen, guard, null]])
-    assert.equal(M.toString(expr), "a :b")
-    assert.equal(expr.asTerm(), term`CoerceExpr(NounExpr("a"), NounExpr("b"))`)
-
-def test_curryExpr(assert):
-    def receiver := makeNounExpr("a", null)
-    def expr := makeCurryExpr(receiver, "foo", false, null)
-    assert.equal(expr._uncall(), [makeCurryExpr, "run", [receiver, "foo", false, null]])
-    assert.equal(M.toString(expr), "a.foo")
-    assert.equal(M.toString(makeCurryExpr(receiver, "foo", true, null)), "a <- foo")
-    assert.equal(expr.asTerm(), term`CurryExpr(NounExpr("a"), "foo", false)`)
-
-def test_exitExpr(assert):
-    def val := makeNounExpr("a", null)
-    def expr := makeExitExpr("continue", val, null)
-    assert.equal(expr._uncall(), [makeExitExpr, "run", ["continue", val, null]])
-    assert.equal(M.toString(expr), "continue a")
-    assert.equal(expr.asTerm(), term`ExitExpr("continue", NounExpr("a"))`)
-    assert.equal(M.toString(makeExitExpr("break", null, null)), "break")
-
-def test_forwardExpr(assert):
-    def patt := makeFinalPattern(makeNounExpr("a", null), null, null)
-    def expr := makeForwardExpr(patt, null)
-    assert.equal(expr._uncall(), [makeForwardExpr, "run", [patt, null]])
-    assert.equal(M.toString(expr), "def a")
-    assert.equal(expr.asTerm(), term`ForwardExpr(FinalPattern(NounExpr("a"), null))`)
-
-def test_defExpr(assert):
-    def patt := makeFinalPattern(makeNounExpr("a", null), null, null)
-    def ej :=  makeNounExpr("ej", null)
-    def body := makeLiteralExpr(1, null)
-    def expr := makeDefExpr(patt, ej, body, null)
-    assert.equal(expr._uncall(), [makeDefExpr, "run", [patt, ej, body, null]])
-    assert.equal(M.toString(expr), "def a exit ej := 1")
-    assert.equal(M.toString(makeDefExpr(patt, null, body, null)), "def a := 1")
-    assert.equal(M.toString(makeDefExpr(makeVarPattern(makeNounExpr("a", null), null, null), null, body, null)), "var a := 1")
-    assert.equal(expr.asTerm(), term`DefExpr(FinalPattern(NounExpr("a"), null), NounExpr("ej"), LiteralExpr(1))`)
-
-def test_assignExpr(assert):
-    def lval := makeNounExpr("a", null)
-    def body := makeLiteralExpr(1, null)
-    def expr := makeAssignExpr(lval, body, null)
-    assert.equal(expr._uncall(), [makeAssignExpr, "run", [lval, body, null]])
-    assert.equal(M.toString(expr), "a := 1")
-    assert.equal(expr.asTerm(), term`AssignExpr(NounExpr("a"), LiteralExpr(1))`)
-    assert.equal(M.toString(makeAssignExpr(makeGetExpr(lval, [makeLiteralExpr(0, null)], null), body, null)), "a[0] := 1")
-
-
-def test_verbAssignExpr(assert):
-    def lval := makeNounExpr("a", null)
-    def body := makeLiteralExpr(1, null)
-    def expr := makeVerbAssignExpr("blee", lval, [body], null)
-    assert.equal(expr._uncall(), [makeVerbAssignExpr, "run", ["blee", lval, [body], null]])
-    assert.equal(M.toString(expr), "a blee= (1)")
-    assert.equal(expr.asTerm(), term`VerbAssignExpr("blee", NounExpr("a"), [LiteralExpr(1)])`)
-    assert.equal(M.toString(makeVerbAssignExpr("blee", makeGetExpr(lval, [makeLiteralExpr(0, null)], null), [body], null)), "a[0] blee= (1)")
-
-def test_augAssignExpr(assert):
-    def lval := makeNounExpr("a", null)
-    def body := makeLiteralExpr(1, null)
-    def expr := makeAugAssignExpr("+", lval, body, null)
-    assert.equal(expr._uncall(), [makeAugAssignExpr, "run", ["+", lval, body, null]])
-    assert.equal(M.toString(expr), "a += 1")
-    assert.equal(expr.asTerm(), term`AugAssignExpr("+", NounExpr("a"), LiteralExpr(1))`)
-    assert.equal(M.toString(makeAugAssignExpr(">>", makeGetExpr(lval, [makeLiteralExpr(0, null)], null), body, null)), "a[0] >>= 1")
-
-def test_ifExpr(assert):
-    def [test, consq, alt] := [makeNounExpr("a", null), makeNounExpr("b", null), makeNounExpr("c", null)]
-    def expr := makeIfExpr(test, consq, alt, null)
-    assert.equal(expr._uncall(), [makeIfExpr, "run", [test, consq, alt, null]])
-    assert.equal(M.toString(expr), "if (a):\n    b\nelse:\n    c")
-    assert.equal(M.toString(makeIfExpr(test, consq, null, null)), "if (a):\n    b")
-    assert.equal(M.toString(makeDefExpr(makeIgnorePattern(null, null), null, expr, null)),
-         "def _ := if (a) {\n    b\n} else {\n    c\n}")
-    assert.equal(expr.asTerm(), term`IfExpr(NounExpr("a"), NounExpr("b"), NounExpr("c"))`)
-
-def test_catchExpr(assert):
-    def [attempt, pattern, catcher] := [makeNounExpr("a", null), makeFinalPattern(makeNounExpr("b", null), null, null), makeNounExpr("c", null)]
-    def expr := makeCatchExpr(attempt, pattern, catcher, null)
-    assert.equal(expr._uncall(), [makeCatchExpr, "run", [attempt, pattern, catcher, null]])
-    assert.equal(M.toString(expr), "try:\n    a\ncatch b:\n    c")
-    assert.equal(M.toString(makeDefExpr(makeIgnorePattern(null, null), null, expr, null)),
-        "def _ := try {\n    a\n} catch b {\n    c\n}")
-    assert.equal(expr.asTerm(), term`CatchExpr(NounExpr("a"), FinalPattern(NounExpr("b"), null), NounExpr("c"))`)
-
-def test_finallyExpr(assert):
-    def [attempt, catcher] := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def expr := makeFinallyExpr(attempt, catcher, null)
-    assert.equal(expr._uncall(), [makeFinallyExpr, "run", [attempt, catcher, null]])
-    assert.equal(M.toString(expr), "try:\n    a\nfinally:\n    b")
-    assert.equal(M.toString(makeDefExpr(makeIgnorePattern(null, null), null, expr, null)),
-        "def _ := try {\n    a\n} finally {\n    b\n}")
-    assert.equal(expr.asTerm(), term`FinallyExpr(NounExpr("a"), NounExpr("b"))`)
-
-def test_tryExpr(assert):
-    def [body, catchers, fin] := [makeNounExpr("a", null),
-        [makeCatcher(makeFinalPattern(makeNounExpr("b", null), null, null),
-                     makeNounExpr("c", null), null),
-         makeCatcher(makeFinalPattern(makeNounExpr("d", null), null, null),
-                      makeNounExpr("e", null), null)],
-        makeNounExpr("f", null)]
-    def expr := makeTryExpr(body, catchers, fin, null)
-    assert.equal(expr._uncall(), [makeTryExpr, "run", [body, catchers, fin, null]])
-    assert.equal(M.toString(expr), "try:\n    a\ncatch b:\n    c\ncatch d:\n    e\nfinally:\n    f")
-    assert.equal(M.toString(makeTryExpr(body, catchers, null, null)), "try:\n    a\ncatch b:\n    c\ncatch d:\n    e")
-    assert.equal(M.toString(makeDefExpr(makeIgnorePattern(null, null), null, expr, null)),
-        "def _ := try {\n    a\n} catch b {\n    c\n} catch d {\n    e\n} finally {\n    f\n}")
-    assert.equal(expr.asTerm(), term`TryExpr(NounExpr("a"), [Catcher(FinalPattern(NounExpr("b"), null), NounExpr("c")), Catcher(FinalPattern(NounExpr("d"), null), NounExpr("e"))], NounExpr("f"))`)
-
-def test_escapeExpr(assert):
-    def [ejPatt, body, catchPattern, catchBlock] := [makeFinalPattern(makeNounExpr("a", null), null, null), makeNounExpr("b", null), makeFinalPattern(makeNounExpr("c", null), null, null), makeNounExpr("d", null)]
-    def expr := makeEscapeExpr(ejPatt, body, catchPattern, catchBlock, null)
-    assert.equal(expr._uncall(), [makeEscapeExpr, "run", [ejPatt, body, catchPattern, catchBlock, null]])
-    assert.equal(M.toString(expr), "escape a:\n    b\ncatch c:\n    d")
-    assert.equal(M.toString(makeDefExpr(makeIgnorePattern(null, null), null, expr, null)),
-        "def _ := escape a {\n    b\n} catch c {\n    d\n}")
-    assert.equal(M.toString(makeEscapeExpr(ejPatt, body, null, null, null)), "escape a:\n    b")
-    assert.equal(expr.asTerm(), term`EscapeExpr(FinalPattern(NounExpr("a"), null), NounExpr("b"), FinalPattern(NounExpr("c"), null), NounExpr("d"))`)
-
-def test_switchExpr(assert):
-    def matchers := [
-        makeMatcher(makeFinalPattern(makeNounExpr("b", null), makeNounExpr("c", null), null),
-                    makeLiteralExpr(1, null), null),
-        makeMatcher(makeFinalPattern(makeNounExpr("d", null), null, null),
-                    makeLiteralExpr(2, null), null)]
-    def specimen := makeNounExpr("a", null)
-    def expr := makeSwitchExpr(specimen, matchers, null)
-    assert.equal(expr._uncall(), [makeSwitchExpr, "run", [specimen, matchers, null]])
-    assert.equal(M.toString(expr), "switch (a):\n    match b :c:\n        1\n\n    match d:\n        2\n")
-    assert.equal(M.toString(makeDefExpr(makeIgnorePattern(null, null), null, expr, null)),
-        "def _ := switch (a) {\n    match b :c {\n        1\n    }\n\n    match d {\n        2\n    }\n}")
-    assert.e
-
-def test_whenExpr(assert):
-    def args := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def body := makeNounExpr("c", null)
-    def catchers := [makeCatcher(makeFinalPattern(makeNounExpr("d", null), null, null),
-                     makeNounExpr("e", null), null),
-         makeCatcher(makeFinalPattern(makeNounExpr("f", null), null, null),
-                      makeNounExpr("g", null), null)]
-    def finallyBlock := makeNounExpr("h", null)
-
-    def expr := makeWhenExpr(args, body, catchers, finallyBlock, null)
-    assert.equal(expr._uncall(), [makeWhenExpr, "run", [args, body, catchers, finallyBlock, null]])
-    assert.equal(M.toString(expr), "when (a, b) ->\n    c\ncatch d:\n    e\ncatch f:\n    g\nfinally:\n    h")
-    assert.equal(M.toString(makeDefExpr(makeIgnorePattern(null, null), null, expr, null)),
-                 "def _ := when (a, b) -> {\n    c\n} catch d {\n    e\n} catch f {\n    g\n} finally {\n    h\n}")
-    assert.equal(expr.asTerm(), term`WhenExpr([NounExpr("a"), NounExpr("b")], NounExpr("c"), [Catcher(FinalPattern(NounExpr("d"), null), NounExpr("e")), Catcher(FinalPattern(NounExpr("f"), null), NounExpr("g"))], NounExpr("h"))`)
-
-def test_whileExpr(assert):
-    def a := makeNounExpr("a", null)
-    def b := makeNounExpr("b", null)
-    def catcher := makeCatcher(makeFinalPattern(makeNounExpr("c", null), null, null),  makeNounExpr("d", null), null)
-    def expr := makeWhileExpr(a, b, catcher, null)
-    assert.equal(expr._uncall(), [makeWhileExpr, "run", [a, b, catcher, null]])
-    assert.equal(M.toString(expr), "while (a):\n    b\ncatch c:\n    d")
-    assert.equal(M.toString(makeDefExpr(makeIgnorePattern(null, null), null, expr, null)),
-        "def _ := while (a) {\n    b\n} catch c {\n    d\n}")
-    assert.equal(expr.asTerm(), term`WhileExpr(NounExpr("a"), NounExpr("b"), Catcher(FinalPattern(NounExpr("c"), null), NounExpr("d")))`)
-
-def test_hideExpr(assert):
-    def body := makeNounExpr("a", null)
-    def expr := makeHideExpr(body, null)
-    assert.equal(expr._uncall(), [makeHideExpr, "run", [body, null]])
-    assert.equal(M.toString(expr), "{\n    a\n}")
-    assert.equal(expr.asTerm(), term`HideExpr(NounExpr("a"))`)
-
-def test_listExpr(assert):
-    def items := [makeNounExpr("a", null), makeNounExpr("b", null)]
-    def expr := makeListExpr(items, null)
-    assert.equal(expr._uncall(), [makeListExpr, "run", [items, null]])
-    assert.equal(M.toString(expr), "[a, b]")
-    assert.equal(expr.asTerm(), term`ListExpr([NounExpr("a"), NounExpr("b")])`)
-
-def test_listComprehensionExpr(assert):
-    def iterable  := makeNounExpr("a", null)
-    def filter  := makeNounExpr("b", null)
-    def [k, v] := [makeFinalPattern(makeNounExpr("k", null), null, null), makeFinalPattern(makeNounExpr("v", null), null, null)]
-    def body  := makeNounExpr("c", null)
-    def expr := makeListComprehensionExpr(iterable, filter, k, v, body, null)
-    assert.equal(expr._uncall(), [makeListComprehensionExpr, "run", [iterable, filter, k, v, body, null]])
-    assert.equal(M.toString(expr), "[for k => v in (a) if (b) c]")
-    assert.equal(M.toString(makeListComprehensionExpr(iterable, null, null, v, body, null)),
-                 "[for v in (a) c]")
-    assert.equal(expr.asTerm(), term`ListComprehensionExpr(NounExpr("a"), NounExpr("b"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), NounExpr("c"))`)
-
-def test_mapExpr(assert):
-    def k := makeNounExpr("k", null)
-    def v := makeNounExpr("v", null)
-    def exprt := makeNounExpr("a", null)
-    def pair1 := makeMapExprAssoc(k, v, null)
-    def pair2 := makeMapExprExport(exprt, null)
-    def expr := makeMapExpr([pair1, pair2], null)
-    assert.equal(expr._uncall(), [makeMapExpr, "run", [[pair1, pair2], null]])
-    assert.equal(M.toString(expr), "[k => v, => a]")
-    assert.equal(expr.asTerm(), term`MapExpr([MapExprAssoc(NounExpr("k"), NounExpr("v")), MapExprExport(NounExpr("a"))])`)
-
-def test_mapComprehensionExpr(assert):
-    def iterable  := makeNounExpr("a", null)
-    def filter  := makeNounExpr("b", null)
-    def [k, v] := [makeFinalPattern(makeNounExpr("k", null), null, null), makeFinalPattern(makeNounExpr("v", null), null, null)]
-    def bodyk := makeNounExpr("k1", null)
-    def bodyv := makeNounExpr("v1", null)
-    def expr := makeMapComprehensionExpr(iterable, filter, k, v, bodyk, bodyv, null)
-    assert.equal(expr._uncall(), [makeMapComprehensionExpr, "run", [iterable, filter, k, v, bodyk,  bodyv, null]])
-    assert.equal(M.toString(expr), "[for k => v in (a) if (b) k1 => v1]")
-    assert.equal(expr.asTerm(), term`MapComprehensionExpr(NounExpr("a"), NounExpr("b"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), NounExpr("k1"), NounExpr("v1"))`)
-    assert.equal(M.toString(makeMapComprehensionExpr(iterable, null, null, v, bodyk, bodyv, null)),
-                 "[for v in (a) k1 => v1]")
-
-def test_forExpr(assert):
-    def iterable  := makeNounExpr("a", null)
-    def [k, v] := [makeFinalPattern(makeNounExpr("k", null), null, null), makeFinalPattern(makeNounExpr("v", null), null, null)]
-    def body  := makeNounExpr("b", null)
-    def expr := makeForExpr(iterable, k, v, body, null, null, null)
-    assert.equal(expr._uncall(), [makeForExpr, "run", [iterable, k, v, body, null, null, null]])
-    assert.equal(M.toString(expr), "for k => v in a:\n    b")
-    assert.equal(M.toString(makeForExpr(iterable, null, v, body, null, null, null)),
-                 "for v in a:\n    b")
-    assert.equal(M.toString(makeForExpr(iterable, null, v, body, makeFinalPattern(makeNounExpr("p", null), null, null), makeLiteralExpr(1, null), null)),
-                 "for v in a:\n    b\ncatch p:\n    1")
-    assert.equal(expr.asTerm(), term`ForExpr(NounExpr("a"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), NounExpr("b"), null, null)`)
-
-def test_objectExpr(assert):
-    def objName := makeFinalPattern(makeNounExpr("a", null), null, null)
-    def asExpr := makeNounExpr("x", null)
-    def auditors := [makeNounExpr("b", null), makeNounExpr("c", null)]
-    def methodParams := [makeFinalPattern(makeNounExpr("e", null), null, null),
-                         makeFinalPattern(makeNounExpr("f", null), null, null)]
-    def methGuard := makeNounExpr("g", null)
-    def methBody := makeNounExpr("h", null)
-    def method1 := makeMethod("method d", "d", methodParams, methGuard, methBody, null)
-    def method2 := makeTo(null, "i", [], null, makeNounExpr("j", null), null)
-    def matchPatt := makeFinalPattern(makeNounExpr("k", null), null, null)
-    def matchBody := makeNounExpr("l", null)
-    def matcher := makeMatcher(matchPatt, matchBody, null)
-    def script :=  makeScript(null, [method1, method2], [matcher], null)
-    def expr := makeObjectExpr("blee", objName, asExpr, auditors, script, null)
-    assert.equal(expr._uncall(),
-        [makeObjectExpr, "run", ["blee", objName, asExpr, auditors, script, null]])
-    assert.equal(script._uncall(),
-        [makeScript, "run", [null, [method1, method2], [matcher], null]])
-    assert.equal(method1._uncall(),
-        [makeMethod, "run", ["method d", "d", methodParams, methGuard, methBody, null]])
-    assert.equal(matcher._uncall(),
-        [makeMatcher, "run", [matchPatt, matchBody, null]])
-    assert.equal(M.toString(expr), "object a as x implements b, c:\n    \"blee\"\n    method d(e, f) :g:\n        \"method d\"\n        h\n\n    to i():\n        j\n\n    match k:\n        l\n")
-    def noDoco := makeObjectExpr(null, objName, asExpr, auditors, script, null)
-    assert.equal(M.toString(noDoco), "object a as x implements b, c:\n    method d(e, f) :g:\n        \"method d\"\n        h\n\n    to i():\n        j\n\n    match k:\n        l\n")
-    assert.equal(expr.asTerm(),
-                 term`ObjectExpr("blee",
-                                 FinalPattern(NounExpr("a"), null),
-                                 NounExpr("x"),
-                                 [NounExpr("b"), NounExpr("c")],
-                                 Script(null,
-                                        [Method("method d", "d",
-                                        [FinalPattern(NounExpr("e"), null), FinalPattern(NounExpr("f"), null)],
-                                        NounExpr("g"), NounExpr("h")),
-                                        To(null, "i", [], null,
-                                        NounExpr("j"))],
-                                        [Matcher(FinalPattern(NounExpr("k"), null), NounExpr("l"))]))`)
-
-def test_functionScript(assert):
-    def funName := makeFinalPattern(makeNounExpr("a", null), null, null)
-    def asExpr := makeNounExpr("x", null)
-    def auditors := [makeNounExpr("b", null), makeNounExpr("c", null)]
-    def patterns := [makeFinalPattern(makeNounExpr("d", null), null, null),
-                     makeFinalPattern(makeNounExpr("e", null), null, null)]
-    def guard := makeNounExpr("g", null)
-    def body := makeNounExpr("f", null)
-    def funBody := makeFunctionScript(patterns, guard, body, null)
-    def expr := makeObjectExpr("bloo", funName, asExpr, auditors, funBody, null)
-    assert.equal(funBody._uncall(), [makeFunctionScript, "run", [patterns, guard, body, null]])
-    assert.equal(M.toString(expr), "def a(d, e) :g as x implements b, c:\n    \"bloo\"\n    f\n")
-    assert.equal(expr.asTerm(), term`ObjectExpr("bloo", FinalPattern(NounExpr("a"), null), NounExpr("x"), [NounExpr("b"), NounExpr("c")], FunctionScript([FinalPattern(NounExpr("d"), null), FinalPattern(NounExpr("e"), null)], NounExpr("g"), NounExpr("f")))`)
-
-def test_functionExpr(assert):
-    def patterns := [makeFinalPattern(makeNounExpr("a", null), null, null),
-                     makeFinalPattern(makeNounExpr("b", null), null, null)]
-    def body := makeNounExpr("c", null)
-    def expr := makeFunctionExpr(patterns, body, null)
-    assert.equal(expr._uncall(), [makeFunctionExpr, "run", [patterns, body, null]])
-    assert.equal(M.toString(expr), "fn a, b {\n    c\n}")
-    assert.equal(M.toString(makeDefExpr(makeIgnorePattern(null, null), null, expr, null)),
-                 "def _ := fn a, b {\n    c\n}")
-
-
-def test_interfaceExpr(assert):
-    def name := makeFinalPattern(makeNounExpr("IA", null), null, null)
-    def guard := makeNounExpr("B", null)
-    def paramA := makeParamDesc("a", guard, null)
-    def paramC := makeParamDesc("c", null, null)
-    def messageD := makeMessageDesc("foo", "d", [paramA, paramC], guard, null)
-    def messageJ := makeMessageDesc(null, "j", [], null, null)
-    def stamp := makeFinalPattern(makeNounExpr("h", null), null, null)
-    def [e, f] := [makeNounExpr("e", null), makeNounExpr("f", null)]
-    def [ib, ic] := [makeNounExpr("IB", null), makeNounExpr("IC", null)]
-    def expr := makeInterfaceExpr("blee", name, stamp, [ib, ic], [e, f], [messageD, messageJ], null)
-    assert.equal(paramA._uncall(), [makeParamDesc, "run", ["a", guard, null]])
-    assert.equal(messageD._uncall(), [makeMessageDesc, "run", ["foo", "d", [paramA, paramC], guard, null]])
-    assert.equal(expr._uncall(), [makeInterfaceExpr, "run", ["blee", name, stamp, [ib, ic], [e, f], [messageD, messageJ], null]])
-    assert.equal(M.toString(expr), "interface IA guards h extends IB, IC implements e, f:\n    \"blee\"\n    to d(a :B, c) :B:\n        \"foo\"\n\n    to j()\n")
-    assert.equal(expr.asTerm(), term`InterfaceExpr("blee", FinalPattern(NounExpr("IA"), null), FinalPattern(NounExpr("h"), null), [NounExpr("IB"), NounExpr("IC")], [NounExpr("e"), NounExpr("f")], [MessageDesc("foo", "d", [ParamDesc("a", NounExpr("B")), ParamDesc("c", null)], NounExpr("B")), MessageDesc(null, "j", [], null)])`)
-
-def test_functionInterfaceExpr(assert):
-    def name := makeFinalPattern(makeNounExpr("IA", null), null, null)
-    def guard := makeNounExpr("B", null)
-    def paramA := makeParamDesc("a", guard, null)
-    def paramC := makeParamDesc("c", null, null)
-    def stamp := makeFinalPattern(makeNounExpr("d", null), null, null)
-    def [e, f] := [makeNounExpr("e", null), makeNounExpr("f", null)]
-    def [ib, ic] := [makeNounExpr("IB", null), makeNounExpr("IC", null)]
-    def msg := makeMessageDesc(null, "run", [paramA, paramC], guard, null)
-    def expr := makeFunctionInterfaceExpr("blee", name, stamp, [ib, ic], [e, f], msg, null)
-    assert.equal(expr._uncall(), [makeFunctionInterfaceExpr, "run", ["blee", name, stamp, [ib, ic], [e, f], msg, null]])
-    assert.equal(M.toString(expr), "interface IA guards d extends IB, IC implements e, f (a :B, c) :B:\n    \"blee\"\n")
-    assert.equal(expr.asTerm(), term`FunctionInterfaceExpr("blee", FinalPattern(NounExpr("IA"), null), FinalPattern(NounExpr("d"), null), [NounExpr("IB"), NounExpr("IC")], [NounExpr("e"), NounExpr("f")], MessageDesc(null, "run", [ParamDesc("a", NounExpr("B")), ParamDesc("c", null)], NounExpr("B")))`)
-
-def test_quasiParserExpr(assert):
-    def hole1 := makeQuasiExprHole(makeNounExpr("a", null), null)
-    def hole2 := makeQuasiExprHole(makeBinaryExpr(makeLiteralExpr(3, null), "+", makeLiteralExpr(4, null), null), null)
-    def hole3 := makeQuasiPatternHole(makeFinalPattern(makeNounExpr("b", null), null, null), null)
-    def text1 := makeQuasiText("hello ", null)
-    def text2 := makeQuasiText(", your number is ", null)
-    def text3 := makeQuasiText(". Also, ", null)
-    def expr := makeQuasiParserExpr("blee", [text1, hole1, text2, hole2, text3, hole3], null)
-    assert.equal(expr._uncall(), [makeQuasiParserExpr, "run", ["blee", [text1, hole1, text2, hole2, text3, hole3], null]])
-    assert.equal(M.toString(expr), "blee`hello $a, your number is ${3 + 4}. Also, @b`")
-    assert.equal(M.toString(makeQuasiParserExpr("blee", [makeQuasiExprHole(makeNounExpr("a", null), null), makeQuasiText("b", null)], null)), "blee`${a}b`")
-    assert.equal(expr.asTerm(), term`QuasiParserExpr("blee", [QuasiText("hello "), QuasiExprHole(NounExpr("a")), QuasiText(", your number is "), QuasiExprHole(BinaryExpr(LiteralExpr(3), "+", LiteralExpr(4))), QuasiText(". Also, "), QuasiPatternHole(FinalPattern(NounExpr("b"), null))])`)
-
-def test_valueHoleExpr(assert):
-    def expr := makeValueHoleExpr(2, null)
-    assert.equal(expr._uncall(), [makeValueHoleExpr, "run", [2, null]])
-    assert.equal(M.toString(expr), "${value-hole 2}")
-    assert.equal(expr.asTerm(), term`ValueHoleExpr(2)`)
-
-def test_patternHoleExpr(assert):
-    def expr := makePatternHoleExpr(2, null)
-    assert.equal(expr._uncall(), [makePatternHoleExpr, "run", [2, null]])
-    assert.equal(M.toString(expr), "${pattern-hole 2}")
-    assert.equal(expr.asTerm(), term`PatternHoleExpr(2)`)
-
-def test_patternHolePattern(assert):
-    def expr := makePatternHolePattern(2, null)
-    assert.equal(expr._uncall(), [makePatternHolePattern, "run", [2, null]])
-    assert.equal(M.toString(expr), "@{pattern-hole 2}")
-    assert.equal(expr.asTerm(), term`PatternHolePattern(2)`)
-
-def test_valueHolePattern(assert):
-    def expr := makeValueHolePattern(2, null)
-    assert.equal(expr._uncall(), [makeValueHolePattern, "run", [2, null]])
-    assert.equal(M.toString(expr), "@{value-hole 2}")
-    assert.equal(expr.asTerm(), term`ValueHolePattern(2)`)
-
-def test_finalPattern(assert):
-    def [name, guard] := [makeNounExpr("blee", null), makeNounExpr("Int", null)]
-    assert.throws(fn {makeFinalPattern(name, name, null)})
-    def patt := makeFinalPattern(name, guard, null)
-    assert.equal(patt._uncall(), [makeFinalPattern, "run", [name, guard, null]])
-    assert.equal(M.toString(patt), "blee :Int")
-    assert.equal(patt.asTerm(), term`FinalPattern(NounExpr("blee"), NounExpr("Int"))`)
-
-def test_bindPattern(assert):
-    def name := makeNounExpr("blee", null)
-    def patt := makeBindPattern(name, null)
-    assert.equal(patt._uncall(), [makeBindPattern, "run", [name, null]])
-    assert.equal(M.toString(patt), "bind blee")
-    assert.equal(patt.asTerm(), term`BindPattern(NounExpr("blee")))`)
-
-def test_bindingPattern(assert):
-    def name := makeNounExpr("blee", null)
-    def patt := makeBindingPattern(name, null)
-    assert.equal(patt._uncall(), [makeBindingPattern, "run", [name, null]])
-    assert.equal(M.toString(patt), "&&blee")
-    assert.equal(patt.asTerm(), term`BindingPattern(NounExpr("blee"))`)
-
-def test_slotPattern(assert):
-    def name := makeNounExpr("blee", null)
-    def guard := makeNounExpr("FinalSlot", null)
-    def patt := makeSlotPattern(name, guard, null)
-    assert.equal(patt._uncall(), [makeSlotPattern, "run", [name, guard, null]])
-    assert.equal(M.toString(patt), "&blee :FinalSlot")
-    assert.equal(patt.asTerm(), term`SlotPattern(NounExpr("blee"), NounExpr("FinalSlot"))`)
-
-def test_ignorePattern(assert):
-    def guard := makeNounExpr("List", null)
-    def patt := makeIgnorePattern(guard, null)
-    assert.equal(patt._uncall(), [makeIgnorePattern, "run", [guard, null]])
-    assert.equal(M.toString(patt), "_ :List")
-    assert.equal(patt.asTerm(), term`IgnorePattern(NounExpr("List"))`)
-    assert.equal(M.toString(makeIgnorePattern(null, null)), "_")
-
-def test_varPattern(assert):
-    def [name, guard] := [makeNounExpr("blee", null), makeNounExpr("Int", null)]
-    def patt := makeVarPattern(name, guard, null)
-    assert.equal(patt._uncall(), [makeVarPattern, "run", [name, guard, null]])
-    assert.equal(M.toString(patt), "var blee :Int")
-    assert.equal(patt.asTerm(), term`VarPattern(NounExpr("blee"), NounExpr("Int"))`)
-
-def test_listPattern(assert):
-    def patts := [makeFinalPattern(makeNounExpr("a", null), null, null), makeVarPattern(makeNounExpr("b", null), null, null)]
-    def tail := makeFinalPattern(makeNounExpr("tail", null), null, null)
-    def patt := makeListPattern(patts, tail, null)
-    assert.equal(patt._uncall(), [makeListPattern, "run", [patts, tail, null]])
-    assert.equal(M.toString(patt), "[a, var b] + tail")
-    assert.equal(M.toString(makeListPattern(patts, null, null)), "[a, var b]")
-    assert.equal(patt.asTerm(), term`ListPattern([FinalPattern(NounExpr("a"), null), VarPattern(NounExpr("b"), null)], FinalPattern(NounExpr("tail"), null))`)
-
-def test_mapPattern(assert):
-    def k1 := makeLiteralExpr("a", null)
-    def v1 := makeFinalPattern(makeNounExpr("b", null), null, null)
-    def k2 := makeNounExpr("c", null)
-    def v2 := makeFinalPattern(makeNounExpr("d", null), null, null)
-    def default := makeNounExpr("e", null)
-    def v3 := makeFinalPattern(makeNounExpr("f", null), null, null)
-    def pair1 := makeMapPatternRequired(makeMapPatternAssoc(k1, v1, null), null)
-    def pair2 := makeMapPatternDefault(makeMapPatternAssoc(k2, v2, null), default, null)
-    def pair3 := makeMapPatternRequired(makeMapPatternImport(v3, null), null)
-    def tail := makeFinalPattern(makeNounExpr("tail", null), null, null)
-    def patt := makeMapPattern([pair1, pair2, pair3], tail, null)
-    assert.equal(patt._uncall(), [makeMapPattern, "run", [[pair1, pair2, pair3], tail, null]])
-    assert.equal(M.toString(patt), "[\"a\" => b, (c) => d := (e), => f] | tail")
-    assert.equal(patt.asTerm(),
-                 term`MapPattern([
-                        MapPatternRequired(MapPatternAssoc(LiteralExpr("a"), FinalPattern(NounExpr("b"), null))),
-                        MapPatternDefault(MapPatternAssoc(NounExpr("c"), FinalPattern(NounExpr("d"), null)), NounExpr("e")),
-                        MapPatternRequired(MapPatternImport(FinalPattern(NounExpr("f"), null)))],
-                     FinalPattern(NounExpr("tail"), null))`)
-
-def test_viaPattern(assert):
-    def subpatt := makeFinalPattern(makeNounExpr("a", null), null, null)
-    def expr := makeNounExpr("b", null)
-    def patt := makeViaPattern(expr, subpatt, null)
-    assert.equal(patt._uncall(), [makeViaPattern, "run", [expr, subpatt, null]])
-    assert.equal(M.toString(patt), "via (b) a")
-    assert.equal(patt.asTerm(), term`ViaPattern(NounExpr("b"), FinalPattern(NounExpr("a"), null))`)
-
-def test_suchThatPattern(assert):
-    def subpatt := makeFinalPattern(makeNounExpr("a", null), null, null)
-    def expr := makeNounExpr("b", null)
-    def patt := makeSuchThatPattern(subpatt, expr, null)
-    assert.equal(patt._uncall(), [makeSuchThatPattern, "run", [subpatt, expr, null]])
-    assert.equal(M.toString(patt), "a ? (b)")
-    assert.equal(patt.asTerm(), term`SuchThatPattern(FinalPattern(NounExpr("a"), null), NounExpr("b"))`)
-
-def test_samePattern(assert):
-    def expr := makeNounExpr("a", null)
-    def patt := makeSamePattern(expr, true, null)
-    assert.equal(patt._uncall(), [makeSamePattern, "run", [expr, true, null]])
-    assert.equal(M.toString(patt), "==a")
-    assert.equal(M.toString(makeSamePattern(expr, false, null)), "!=a")
-    assert.equal(patt.asTerm(), term`SamePattern(NounExpr("a"), true)`)
-
-def test_quasiParserPattern(assert):
-    def hole1 := makeQuasiPatternHole(makeFinalPattern(makeNounExpr("a", null), null, null), null)
-    def hole2 := makeQuasiPatternHole(makeListPattern([makeFinalPattern(makeNounExpr("b", null), null, null), makeFinalPattern(makeNounExpr("c", null), null, null)], null, null), null)
-    def hole3 := makeQuasiExprHole(makeNounExpr("d", null), null)
-    def text1 := makeQuasiText("hello ", null)
-    def text2 := makeQuasiText(", your number is ", null)
-    def text3 := makeQuasiText(". Also, ", null)
-    def expr := makeQuasiParserPattern("blee", [text1, hole1, text2, hole2, text3, hole3], null)
-    assert.equal(expr._uncall(), [makeQuasiParserPattern, "run", ["blee", [text1, hole1, text2, hole2, text3, hole3], null]])
-    assert.equal(M.toString(expr), "blee`hello @a, your number is @{[b, c]}. Also, $d`")
-    assert.equal(M.toString(makeQuasiParserPattern("blee", [makeQuasiPatternHole(makeFinalPattern(makeNounExpr("a", null), null, null), null), makeQuasiText("b", null)], null)), "blee`@{a}b`")
-    assert.equal(expr.asTerm(), term`QuasiParserPattern("blee", [QuasiText("hello "), QuasiPatternHole(FinalPattern(NounExpr("a"), null)), QuasiText(", your number is "), QuasiPatternHole(ListPattern([FinalPattern(NounExpr("b"), null), FinalPattern(NounExpr("c"), null)], null)), QuasiText(". Also, "), QuasiExprHole(NounExpr("d"))])`)
-
-unittest([test_literalExpr, test_nounExpr, test_tempNounExpr, test_bindingExpr,
-          test_slotExpr, test_metaContextExpr, test_metaStateExpr,
-          test_seqExpr, test_module, test_defExpr, test_methodCallExpr,
-          test_funCallExpr, test_compareExpr, test_listExpr,
-          test_listComprehensionExpr, test_mapExpr, test_mapComprehensionExpr,
-          test_forExpr, test_functionScript, test_functionExpr,
-          test_sendExpr, test_funSendExpr,
-          test_interfaceExpr, test_functionInterfaceExpr,
-          test_assignExpr, test_verbAssignExpr, test_augAssignExpr,
-          test_andExpr, test_orExpr, test_matchBindExpr, test_mismatchExpr,
-          test_switchExpr, test_whenExpr, test_whileExpr,
-          test_binaryExpr, test_quasiParserExpr, test_rangeExpr, test_sameExpr,
-          test_ifExpr, test_catchExpr, test_finallyExpr, test_tryExpr,
-          test_escapeExpr, test_hideExpr, test_objectExpr, test_forwardExpr,
-          test_valueHoleExpr, test_patternHoleExpr, test_getExpr,
-          test_prefixExpr, test_coerceExpr, test_curryExpr, test_exitExpr,
-          test_finalPattern, test_ignorePattern, test_varPattern,
-          test_listPattern, test_mapPattern, test_bindingPattern,
-          test_slotPattern, test_samePattern, test_quasiParserPattern,
-          test_viaPattern, test_suchThatPattern, test_bindPattern,
-          test_valueHolePattern, test_patternHolePattern])
 
 [=> astBuilder, => dump]

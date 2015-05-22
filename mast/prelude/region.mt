@@ -12,9 +12,7 @@ object SubrangeGuard:
 # XXX yolo
 def primInt :DeepFrozen := Int
 
-/**
- * A min where null represents positive infinity
- */
+# A min where null represents positive infinity
 def min(a, b) as DeepFrozen:
     if (a == null):
         return b
@@ -24,9 +22,7 @@ def min(a, b) as DeepFrozen:
         return a.min(b)
 
 
-/**
- * A max where null represents negative infinity
- */
+# A max where null represents negative infinity
 def max(a, b) as DeepFrozen:
     if (a == null):
         return b
@@ -35,42 +31,36 @@ def max(a, b) as DeepFrozen:
     else:
         return a.max(b)
 
-/**
- * A get that returns null if index is out of bounds
- */
+# A get that returns null if index is out of bounds
 def get(list, index) as DeepFrozen:
     if (index < 0 || index >= list.size()):
         return null
     else:
         return list[index]
 
-/**
- * Makes inequality-based regions for fully ordered positions like
- * integers, float64s, and chars, where, for every position, there is a
- * 'next()' and 'previous()' operation.
+ # Makes inequality-based regions for fully ordered positions like
+ # integers, float64s, and chars, where, for every position, there is a
+ # 'next()' and 'previous()' operation.
 
- * If you want similar regions over, for example, Strings or rational numbers,
- * you'd have to do something else.
+ # If you want similar regions over, for example, Strings or rational numbers,
+ # you'd have to do something else.
 
- * The in edges are members of the region, as are the non-edges
- * immediately following them. The out edges are not in the region, as
- * are the non-edges immediately following them. Therefore, the empty
- * region has args (true, []) while the full region has args
- * (false, [])
- *
- * @param myBoundedLeft If true, then the even egdes are in-edges and the odd
- *                      edges are out-edges. Otherwise, vice verse.
- * @param myEdges is an ascending list of one-dimensional fully ordered
- *                positions.
- * @author Mark S. Miller
- */
+ # The in edges are members of the region, as are the non-edges
+ # immediately following them. The out edges are not in the region, as
+ # are the non-edges immediately following them. Therefore, the empty
+ # region has args (true, []) while the full region has args
+ # (false, [])
+ #
+ # @param myBoundedLeft If true, then the even egdes are in-edges and the odd
+ #                      edges are out-edges. Otherwise, vice verse.
+ # @param myEdges is an ascending list of one-dimensional fully ordered
+ #                positions.
+ # @author Mark S. Miller
 object OrderedRegionMaker as DeepFrozen:
     to run(myType :DeepFrozen, myName :Str, var initBoundedLeft :Bool,
            var initEdges):
 
-        /**
-         * Notational convenience
-         */
+        # Notational convenience
         def region(boundedLeft :Bool, edges) as DeepFrozen:
             return OrderedRegionMaker(myType, myName, boundedLeft, edges)
 
@@ -89,21 +79,17 @@ object OrderedRegionMaker as DeepFrozen:
         def myBoundedLeft :Bool := initBoundedLeft
         def myEdges :DeepFrozen := initEdges
 
-        /**
-         * As guards, regions only accept positions in the region.
-         */
+        # As guards, regions only accept positions in the region.
+
         # XXX needs "implements Guard", when that makes sense
         object self implements DeepFrozen, SubrangeGuard[myType], SubrangeGuard[DeepFrozen]:
 
-            /**
-             * Returns a ConstList of edge positions in ascending order
-             */
+            # Returns a ConstList of edge positions in ascending order
             to getEdges():
                 return myEdges
 
-            /**
-             * mostly prints in Monte sugared expression syntax
-             */
+             # mostly prints in Monte sugared expression syntax
+             #
             to _printOn(out):
                 def printEdge(boundedLeft, edge :myType):
                     out.print("(")
@@ -145,12 +131,10 @@ object OrderedRegionMaker as DeepFrozen:
                         out.print(" | ")
                         printEdge(true, myEdges[i])
 
-            /**
-             * Is pos in the region?
+            # Is pos in the region?
 
-             * If it's in the type but not in the region, the answer is false.
-             * If it's not in the type, a problem is thrown.
-             */
+            # If it's in the type but not in the region, the answer is false.
+            # If it's not in the type, a problem is thrown.
             to run(pos :myType) :Bool:
                 # XXX linear time algorithm. For long myEdges lists,
                 # it should do a binary search.
@@ -163,14 +147,12 @@ object OrderedRegionMaker as DeepFrozen:
                 # bounded right
                 return myLen % 2 != myInParity
 
-            /** Alias for run/1. */
+            # Alias for run/1.
             to contains(pos :myType) :Bool:
                 return self(pos)
 
-            /**
-             * All Regions are also Guards, either coercing a
-             * specimen to a position in the region, or rejecting it.
-             */
+            # All Regions are also Guards, either coercing a
+            # specimen to a position in the region, or rejecting it.
             to coerce(var specimen, optEjector) :myTypeR:
                 specimen := myType.coerce(specimen, optEjector)
                 if (self(specimen)):
@@ -179,98 +161,82 @@ object OrderedRegionMaker as DeepFrozen:
                     throw.eject(optEjector,
                                 `${M.toQuote(specimen)} is not in the region ${M.toQuote(self)}`)
 
-            /**
-             * Return the type's trivial value if it is in the region,
-             * otherwise fail.
-             */
+            # Return the type's trivial value if it is in the region,
+            # otherwise fail.
             to getTheTrivialValue():
                 return self.coerce(
                     def t := myType.getTheTrivialValue(),
                     def cantTrivialize(_) {
                         throw(`trivial value $t is not available in region $self`)})
-            /**
-             * Note that the empty region is bounded left, but it doesn't
-             * have a start
-             */
+
+            # Note that the empty region is bounded left, but it doesn't
+            #  have a start
             to isBoundedLeft() :Bool:
                 return myBoundedLeft
 
-            /**
-             * Note that the empty region is bounded left, but it doesn't
-             * have a start.
 
-             * Returns the start or null. The start is the least element
-             * which is *in* the region.
-             */
+            # Note that the empty region is bounded left, but it doesn't
+            # have a start.
+
+            # Returns the start or null. The start is the least element
+            # which is *in* the region.
             to getOptStart() :NullOk[myType]:
                 if (myBoundedLeft && myLen >= 1):
                     return myEdges[0]
                 else:
                     return null
 
-            /**
-             * Note that the empty region is bounded right, but it doesn't
-             * have a bound
-             */
+            # Note that the empty region is bounded right, but it doesn't
+            # have a bound
             to isBoundedRight() :Bool:
                 return myLen % 2 == myInParity
 
-            /**
-             * Note that the empty region is bounded right, but it doesn't
-             * have a bound.
+            # Note that the empty region is bounded right, but it doesn't
+            # have a bound.
 
-             * Returns the bound or null. The right bound is the least
-             * element greater than all elements in the region. Unlike the
-             * left bound, it is *not* in the region.
-             */
+            # Returns the bound or null. The right bound is the least
+            # element greater than all elements in the region. Unlike the
+            # left bound, it is *not* in the region.
             to getOptBound() :NullOk[myType]:
                 if (myLen >= 1 && myLen % 2 == myInParity):
                     return myEdges[myLen - 1]
                 else:
                     return null
 
-            /**
-             * Does this region contain no positions?
+            # Does this region contain no positions?
 
-             * An empty region can always be constructed by the intersection
-             * of a distinction and its complement, and is therefore an
-             * interval, but not a distinction.
-             */
+            # An empty region can always be constructed by the intersection
+            # of a distinction and its complement, and is therefore an
+            # interval, but not a distinction.
             to isEmpty() :Bool:
                 return myLen == 0 && myBoundedLeft
 
-            /**
-             * Does this region contain all positions?
+            # Does this region contain all positions?
 
-             * The full region is the intersection (and) of no regions, and
-             * is therefore a interval but not a distinction.
-             */
+            # The full region is the intersection (and) of no regions, and
+            # is therefore a interval but not a distinction.
             to isFull() :Bool:
                 return myLen == 0 && !myBoundedLeft
 
-            /**
-             * All regions of a coordinate space can be made by and/or/nots
-             * of distinctions.
+            # All regions of a coordinate space can be made by and/or/nots
+            # of distinctions.
 
-             * The not of a distinction must be a distinction. For this space,
-             * the distinctions are (myType < y) and (myType >= y).
-             */
+            # The not of a distinction must be a distinction. For this space,
+            # the distinctions are (myType < y) and (myType >= y).
             to isDistinction() :Bool:
                 return myLen == 1
 
-            /**
-             * The intersection of distinctions must be an interval (it may
-             * or may not also be a distinction).
+            # The intersection of distinctions must be an interval (it may
+            # or may not also be a distinction).
 
-             * Therefore, the
-             * intersection of intervals is also an interval. The
-             * intersection of no regions is the full region, which is a
-             * interval. The intersection of a distinction and its
-             * complement is the empty region, which is an interval. All
-             * distinctions are intervals. The complement of an interval
-             * need not be an interval. A non-interval is a complex
-             * region.
-             */
+            # Therefore, the
+            # intersection of intervals is also an interval. The
+            # intersection of no regions is the full region, which is a
+            # interval. The intersection of a distinction and its
+            # complement is the empty region, which is an interval. All
+            # distinctions are intervals. The complement of an interval
+            # need not be an interval. A non-interval is a complex
+            # region.
             to isSimpleRegion() :Bool:
                 if (myLen <= 1):
                     # distinctions, empty, and full are all intervals
@@ -282,18 +248,16 @@ object OrderedRegionMaker as DeepFrozen:
                     # nothing else is an interval
                     return false
 
-            /**
-             * A region can be asked to decompose itself into intervals.
+            # A region can be asked to decompose itself into intervals.
 
-             * The original region is the union (or) of these intervals.
-             * In the case of an OrderedRegion, the intervals returned are
-             * disjoint and ascending.
+            # The original region is the union (or) of these intervals.
+            # In the case of an OrderedRegion, the intervals returned are
+            # disjoint and ascending.
 
-             * If the region is full, this returns a singleton list
-             * containing the full interval. If this region is empty, then
-             * this return an empty list, since the empty region is the
-             * union of no regions.
-             */
+            # If the region is full, this returns a singleton list
+            # containing the full interval. If this region is empty, then
+            # this return an empty list, since the empty region is the
+            # union of no regions.
             to getSimpleRegions() :List:
                 def flex := [].diverge()
                 if (! myBoundedLeft):
@@ -307,16 +271,14 @@ object OrderedRegionMaker as DeepFrozen:
                     i += 2
                 return flex.snapshot()
 
-            /**
-             * An interval can be asked to decompose itself into distinctions.
+            # An interval can be asked to decompose itself into distinctions.
 
-             * The original interval is the intersection (and) of these
-             * distinctions.
+            # The original interval is the intersection (and) of these
+            # distinctions.
 
-             * The full interval returns a list of no distinctions. The
-             * empty interval return the list [(myType < 0), (myType >= 0)],
-             * ie, 0..!0.
-             */
+            # The full interval returns a list of no distinctions. The
+            # empty interval return the list [(myType < 0), (myType >= 0)],
+            # ie, 0..!0.
             to getDistinctions() :List:
                 if (myLen == 1):
                     # a distinctions is one inequality
@@ -340,35 +302,27 @@ object OrderedRegionMaker as DeepFrozen:
                 else:
                     throw("can only get distinctions from an interval")
 
-            /**
-             * the region you get if you displace all my positions by
-             * offset.
+            # the region you get if you displace all my positions by
+            # offset.
 
-             * Note that offset may not be of myType. For example,
-             * "(char > 'a') + 3" is fine.
-             */
+            # Note that offset may not be of myType. For example,
+            # "(char > 'a') + 3" is fine.
             to add(offset):
                 def flex := [].diverge()
                 for edge in myEdges:
                     flex.push(edge + offset)
                 return region(myBoundedLeft, flex)
 
-            /**
-             * the region you get if you displace all my positions by -offset
-             */
+            # the region you get if you displace all my positions by -offset
             to subtract(offset):
                 return self + -offset
 
 
-            /**
-             * A region whose membership is the opposite of this one.
-             */
+            # A region whose membership is the opposite of this one.
             to not():
                 return region(!myBoundedLeft, myEdges)
 
-            /**
-             * only those positions in both regions
-             */
+            # only those positions in both regions
             to and(other):
                 def otherEdges := other.getEdges()
                 def otherLen := otherEdges.size()
@@ -401,23 +355,17 @@ object OrderedRegionMaker as DeepFrozen:
                         j += 2
                 return region(newBoundedLeft, flex)
 
-            /**
-             * all positions in either region
-             */
+            # all positions in either region
             to or(other):
                 return !(!self & !other)
 
-            /**
-             * all position in me but not in other.
-             */
+            # all position in me but not in other.
             to butNot(other):
                 return self & !other
 
-            /**
-             * enumerates positions in ascending order.
+            # enumerates positions in ascending order.
 
-             * This doesn't necessarily terminate.
-             */
+            # This doesn't necessarily terminate.
             to _makeIterator():
                 if (! myBoundedLeft):
                     throw("No least position")
@@ -462,9 +410,7 @@ object OrderedRegionMaker as DeepFrozen:
                                 pos := nextPos
                             return val
 
-            /**
-             * returned object will enumerate positions in descending order
-             */
+            # returned object will enumerate positions in descending order
             to descending():
                 if (myLen == 0):
                     return []._makeIterator()
@@ -504,9 +450,7 @@ object OrderedRegionMaker as DeepFrozen:
                                 pos := prevPos
                             return val
 
-            /**
-             * As a region, my comparison is a subset test.
-             */
+            # As a region, my comparison is a subset test.
             to op__cmp(other) :Double:
                 def selfExtra := !(self & !other).isEmpty()
                 def otherExtra := !(other & !self).isEmpty()
@@ -530,51 +474,37 @@ object OrderedRegionMaker as DeepFrozen:
 
 object OrderedSpaceMaker as DeepFrozen:
 
-    /**
-     * Given a type whose reflexive (x <=> x) instances are fully
-     * ordered, this makes an OrderedSpace for making Regions and
-     * Twisters for those instances using operator notation.
-     */
+    # Given a type whose reflexive (x <=> x) instances are fully
+    # ordered, this makes an OrderedSpace for making Regions and
+    # Twisters for those instances using operator notation.
     to run(myType :DeepFrozen, myName :Str):
 
-        /**
-         * Notational convenience
-         */
+        # Notational convenience
         def region(boundedLeft :Bool, edges) as DeepFrozen:
             return OrderedRegionMaker(myType, myName, boundedLeft, edges)
 
 
-        /**
-         * The OrderedSpace delegates to the myType.
-         * <p>
-         * Of all normal guard messages, the only one it implements itself
-         * rather than delegating is _printOn/1.
-         */
+        # The OrderedSpace delegates to the myType.
+        # <p>
+        # Of all normal guard messages, the only one it implements itself
+        # rather than delegating is _printOn/1.
         object OrderedSpace extends myType as DeepFrozen:
 
-            /**
-             * Just uses the name used to construct this OrderedSpace
-             */
+            # Just uses the name used to construct this OrderedSpace
             to _printOn(out):
                 out.print(myName)
 
 
-            /**
-             * One step in executing the expansion of the relational
-             * operators
-             */
+            # One step in executing the expansion of the relational
+            # operators
             to op__cmp(myY :myType):
                 return object regionMaker:
 
-                    /**
-                     * (myType < myY)
-                     */
+                    # (myType < myY)
                     to belowZero():
                         return region(false, [myY])
 
-                    /**
-                     * (myType <= myY)
-                     */
+                    # (myType <= myY)
                     to atMostZero():
                         def nextY := myY.next()
                         if (myY <=> nextY):
@@ -584,9 +514,7 @@ object OrderedSpaceMaker as DeepFrozen:
                         else:
                             return region(false, [nextY])
 
-                    /**
-                     * (myType <=> myY)
-                     */
+                    # (myType <=> myY)
                     to isZero():
                         def nextY := myY.next()
                         if (myY <=> nextY):
@@ -596,15 +524,12 @@ object OrderedSpaceMaker as DeepFrozen:
                         else:
                             return region(true, [myY, nextY])
 
-                    /**
-                     * (myType >= myY)
-                     */
+
+                    # (myType >= myY)
                     to atLeastZero():
                         return region(true, [myY])
 
-                    /**
-                     * (myType > myY)
-                     */
+                    # (myType > myY)
                     to aboveZero():
                         def nextY := myY.next()
                         if (myY <=> nextY):
@@ -614,12 +539,10 @@ object OrderedSpaceMaker as DeepFrozen:
                         else:
                             return region(true, [nextY])
 
-            /**
-             * (myType + myOffset).
-             * <p>
-             * Note that myOffset doesn't have to be a member of myType. For
-             * example, "char + 3" is legal.
-             */
+            # (myType + myOffset).
+            # <p>
+            # Note that myOffset doesn't have to be a member of myType. For
+            # example, "char + 3" is legal.
             to add(myOffset):
                 object twister:
                     to _printOn(out):
@@ -637,9 +560,7 @@ object OrderedSpaceMaker as DeepFrozen:
                     to subtract(moreOffset):
                         return twister + -moreOffset
 
-            /**
-             * (myType - offset)
-             */
+            # (myType - offset)
             to subtract(offset):
                 return OrderedSpace + -offset
         return OrderedSpace
@@ -648,7 +569,7 @@ object OrderedSpaceMaker as DeepFrozen:
 def testIterable(assert):
     def intspace := OrderedSpaceMaker(Int, "Int")
     def reg := (intspace >= 0) & (intspace < 5)
-    assert.equal([x for x in reg], [0, 1, 2, 3, 4])
+    assert.equal(__makeList.fromIterable(reg), [0, 1, 2, 3, 4])
 
 def testContainment(assert):
     def intspace := OrderedSpaceMaker(Int, "Int")

@@ -1,15 +1,16 @@
 # interface Tag :DeepFrozen guards TagStamp :DeepFrozen:
 #     pass
-
+traceln(`in termParser`)
 object TagStamp:
     to audit(_):
         return true
 
 object Tag:
     to coerce(specimen, ej):
-        if (__auditedBy(specimen, TagStamp)):
-            return specimen
-        ej(null)
+        return specimen
+        #if (__auditedBy(specimen, TagStamp)):
+        #    return specimen
+        # ej(null)
 
 object makeTag as DeepFrozen:
     to asType():
@@ -388,7 +389,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel):
         if (currentChar == '\\'):
             def nex := advance()
             if (nex == 'u'):
-                def hexstr := __makeString.fromChars([advance() for _ in 0..!4])
+                def hexstr := __makeString.fromChars([advance(), advance(), advance(), advance()])
                 def v
                 try:
                     bind v := __makeInt(hexstr, 16)
@@ -599,7 +600,7 @@ object qEmptySeq:
         return shapeSoFar
 
     to endShape(bindings, prefix, shape):
-        pass
+        null
 
     to substSlice(values, indices):
         return []
@@ -764,7 +765,7 @@ def makeQFunctor(tag, data, span):
             return shapeSoFar
 
         to endShape(bindings, prefix, shape):
-            pass
+            null
 
         to substSlice(values, indices):
             if (data == null):
@@ -860,7 +861,7 @@ def makeQDollarHole(tag, holeNum, isFunctorHole):
             return shapeSoFar
 
         to endShape(bindings, prefix, shape):
-            pass
+            null
 
         to substSlice(values, indices):
             def termoid := multiget(values, holeNum, indices, true)
@@ -1236,129 +1237,5 @@ object quasitermParser:
     to makeTerm(tag, data, arglist, span):
         return makeTerm(tag, data, arglist, span)
 
-
-
-def test_literal(assert):
-    def mk(tag, val):
-        return makeTerm(makeTag(null, tag, Any), val, [], null)
-    assert.equal(parseTerm("0xDECAFC0FFEEBAD"), mk(".int.", 0xDECAFC0FFEEBAD))
-    assert.equal(parseTerm("3.14159E17"), mk(".float64.", 3.14159E17))
-    assert.equal(parseTerm("1e9"), mk(".float64.", 1e9))
-    assert.equal(parseTerm("0"), mk(".int.", 0))
-    assert.equal(parseTerm("7"), mk(".int.", 7))
-    assert.equal(parseTerm("-1"), mk(".int.", -1))
-    assert.equal(parseTerm("-3.14"), mk(".float64.", -3.14))
-    assert.equal(parseTerm("3_000"), mk(".int.", 3000))
-    assert.equal(parseTerm("0.91"), mk(".float64.", 0.91))
-    assert.equal(parseTerm("3e-2"), mk(".float64.", 3e-2))
-    assert.equal(parseTerm("\"foo\\nbar\""), mk(".String.", "foo\nbar"))
-    assert.equal(parseTerm("\"foo\\\nbar\""), mk(".String.", "foobar"))
-    assert.equal(parseTerm("\"z\\x61p\""), mk(".String.", "zap"))
-    assert.equal(parseTerm("'x'"), mk(".char.", 'x'))
-    assert.equal(parseTerm("'\\n'"), mk(".char.", '\n'))
-    assert.equal(parseTerm("'\\u0061'"), mk(".char.", 'a'))
-
-def test_simpleTerm(assert):
-    def mk(name, args):
-        return makeTerm(makeTag(null, name, Any), null, args, null)
-    assert.equal(parseTerm("x"), mk("x", []))
-    assert.equal(parseTerm("x()"), mk("x", []))
-    assert.equal(parseTerm("x(y)"), mk("x", [mk("y", [])]))
-    assert.equal(parseTerm("x(y, z)"), mk("x", [mk("y", []), mk("z", [])]))
-    assert.equal(parseTerm("x(y, z,)"), mk("x", [mk("y", []), mk("z", [])]))
-
-def test_fullTerm(assert):
-    assert.equal(parseTerm("[x, y, 1]"), parseTerm(".tuple.(x, y, 1)"))
-    assert.equal(parseTerm("{x, y, 1}"), parseTerm(".bag.(x, y, 1)"))
-    assert.equal(parseTerm("f {x, y, 1}"), parseTerm("f(.bag.(x, y, 1))"))
-    assert.equal(parseTerm("a: b"), parseTerm(".attr.(a, b)"))
-
-def test_qtermSubstitute(assert):
-    def qt__quasiParser := quasitermParser
-    {
-         def x := 1
-         def y := parseTerm("baz")
-         assert.equal(qt`foo($x, $y)`, parseTerm("foo(1, baz)"))
-
-    }
-    {
-        def x := parseTerm("foo")
-        assert.equal(qt`$x(3)`, parseTerm("foo(3)"))
-        def y := parseTerm("baz(3)")
-        assert.equal(qt`foo($y)`._uncall(), parseTerm("foo(baz(3))")._uncall())
-    }
-    {
-        def x := parseTerm("foo(3)")
-        assert.throws(fn { qt`$x(3)` })
-    }
-    {
-        def args := [qt`foo`, qt`bar(3)`]
-        assert.equal(qt`zip($args*)`, qt`zip(foo, bar(3))`)
-        assert.equal(qt`zip($args+)`, qt`zip(foo, bar(3))`)
-        assert.equal(qt`zip(${[]}*)`, qt`zip`)
-        assert.throws(fn {qt`zip($args?)`})
-        assert.throws(fn {qt`zip(${[]}+)`})
-    }
-
-
-def test_qtermMatch(assert):
-    def qt__quasiParser := quasitermParser
-    {
-        def qt`@foo` := "hello"
-        assert.equal(foo, parseTerm("\"hello\""))
-    }
-    {
-        def qt`@bar()` := "hello"
-        assert.equal(bar, parseTerm("hello"))
-    }
-    {
-        assert.throws(fn {def qt`hello@foo` := "hello"})
-    }
-    {
-        def qt`hello@foo` := parseTerm("hello(3, 4)")
-        assert.equal(foo, parseTerm("hello(3, 4)"))
-    }
-    {
-        def qt`.String.@foo` := "hello"
-        assert.equal(foo, qt`"hello"`)
-    }
-    {
-        # XXX WTF does this mean?
-        def qt`hello@bar()` := "hello"
-        assert.equal(bar, parseTerm("hello"))
-    }
-    {
-        assert.throws(fn {
-            def qt`hello@bar()` := "hello world"
-        })
-    }
-    {
-        def qt`${qt`foo`}(@args*)` := parseTerm("foo(2, 3)")
-        assert.equal(args, [qt`2`, qt`3`])
-    }
-    {
-        def t := qt`foo(bar, bar(3), zip(zap))`
-        def qt`foo(bar@bars*, zip@z)` := t
-        assert.equal(bars, [qt`bar`, qt`bar(3)`])
-        assert.equal(z, qt`zip(zap)`)
-    }
-    {
-        def qt`[@x*, @y, @z]` := qt`[4, 5, 6, 7, 8]`
-        assert.equal([x, y, z], [[qt`4`, qt`5`, qt`6`], qt`7`, qt`8`])
-    }
-    {
-        def qt`[@x*, @y?, @z]` := qt`[4, 5, 6, 7, 8]`
-        assert.equal([x, y, z], [[qt`4`, qt`5`, qt`6`, qt`7`], [], qt`8`])
-    }
-    {
-        def qt`[@x*, @y+, @z]` := qt`[4, 5, 6, 7, 8]`
-        assert.equal([x, y, z], [[qt`4`, qt`5`, qt`6`], [qt`7`], qt`8`])
-    }
-    {
-        def qt`[@x*, (@y, @z)+]` := qt`[4, 5, 6, 7, 8]`
-        assert.equal([x, y, z], [[qt`4`, qt`5`, qt`6`], [qt`7`], [qt`8`]])
-    }
-unittest([test_literal, test_simpleTerm, test_fullTerm, test_qtermSubstitute,
-          test_qtermMatch])
 
 [ "term__quasiParser" => quasitermParser]
