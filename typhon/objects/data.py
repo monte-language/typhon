@@ -153,6 +153,9 @@ class CharObject(Object):
         if atom is PREVIOUS_0:
             return self.withOffset(-1)
 
+        if atom is QUOTE_0:
+            return StrObject(quoteChar(self._c))
+
         if atom is SUBTRACT_1:
             other = unwrapInt(args[0])
             return self.withOffset(-other)

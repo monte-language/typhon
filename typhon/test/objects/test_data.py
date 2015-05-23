@@ -74,6 +74,11 @@ class TestCharObject(TestCase):
         b = CharObject(u'b')
         self.assertNotEqual(a.hash(), b.hash())
 
+    def testQuoteSlashes(self):
+        c = CharObject(u'\\')
+        result = c.call(u"quote", [])
+        self.assertEqual(result._s, u"'\\\\'")
+
 
 class TestStr(TestCase):
 
