@@ -53,6 +53,9 @@ class Configuration(object):
     # Whether to run benchmarks.
     benchmark = False
 
+    # User settings for the JIT.
+    jit = "default"
+
     def __init__(self, argv):
         self.argv = []
 
@@ -71,5 +74,7 @@ class Configuration(object):
                 self.profile = True
             elif item == "-b":
                 self.benchmark = True
+            elif item == "--jit":
+                self.jit = stream.nextItem()
             else:
                 self.argv.append(item)

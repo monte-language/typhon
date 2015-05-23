@@ -17,7 +17,7 @@ import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
 from rpython.rlib.debug import debug_print
-from rpython.rlib.jit import JitHookInterface
+from rpython.rlib.jit import JitHookInterface, set_user_param
 from rpython.rlib.rpath import rjoin
 
 from typhon.arguments import Configuration
@@ -118,6 +118,9 @@ def entryPoint(argv):
     if len(config.argv) < 2:
         print "No file provided?"
         return 1
+
+    # Pass user configuration to the JIT.
+    set_user_param(None, config.jit)
 
     # Intialize our vat.
     reactor = Reactor()
