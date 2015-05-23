@@ -9,8 +9,8 @@ mt-typhon:
 boot: $(boot_objects) | mt-typhon
 
 $(boot_objects): boot/%.ty: mast/%.mt
-	./mt-typhon -l boot boot/montec.ty $< $@
-
+	@ echo "MONTEC (boot scope) $<"
+	@ ./mt-typhon -l boot boot/montec.ty $< $@
 
 
 all: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty \
@@ -64,7 +64,9 @@ monte: mast/lib/monte/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/lib/monte/termParser.ty
 
 %.ty: %.mt
-	./mt-typhon -l boot boot/montec.ty $< $@
+	@ echo "MONTEC (boot scope) $<"
+	@ ./mt-typhon -l boot boot/montec.ty $< $@
 
 clean:
-	find -iname mast/\*.ty -delete
+	@ echo "CLEAN"
+	@ find -iname mast/\*.ty -delete
