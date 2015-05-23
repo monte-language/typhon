@@ -423,7 +423,14 @@ class Call(Node):
         out.write(".")
         self._verb.pretty(out)
         out.write("(")
-        self._args.pretty(out)
+        l = self._args._t
+        if l:
+            head = l[0]
+            tail = l[1:]
+            head.pretty(out)
+            for item in tail:
+                out.write(", ")
+                item.pretty(out)
         out.write(")")
 
     def transform(self, f):
@@ -469,7 +476,8 @@ class Def(Node):
                 value if value is not None else Null)
 
     def pretty(self, out):
-        out.write("def ")
+        if not isinstance(self._p, VarPattern):
+            out.write("def ")
         self._p.pretty(out)
         if self._e is not None:
             out.write(" exit ")
@@ -523,12 +531,12 @@ class Escape(Node):
     def pretty(self, out):
         out.write("escape ")
         self._pattern.pretty(out)
-        out.writeLine("{")
+        out.writeLine(" {")
         self._node.pretty(out.indent())
         if self._catchPattern is not None and self._catchNode is not None:
             out.write("} catch ")
             self._catchPattern.pretty(out)
-            out.writeLine("{")
+            out.writeLine(" {")
             self._catchNode.pretty(out.indent())
         out.writeLine("}")
 
@@ -1109,7 +1117,7 @@ class Sequence(Node):
     def pretty(self, out):
         for item in self._l:
             item.pretty(out)
-            out.writeLine(";")
+            out.writeLine("")
 
     def transform(self, f):
         return f(Sequence([node.transform(f) for node in self._l]))
