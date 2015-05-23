@@ -21,6 +21,7 @@ def [
 def [=> nullPump] := import("lib/tubes/nullPump")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
+def [=> chain] := import("lib/tubes/chain")
 def [=> makeSingleUse] := import("lib/singleUse")
 def [=> makeTokenBucket] := import("lib/tokenBucket")
 def [=> makeUser, => sourceToUser] | _ := import("lib/irc/user")

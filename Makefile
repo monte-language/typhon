@@ -44,7 +44,8 @@ parsers: mast/lib/parsers/derp.ty mast/lib/parsers/http.ty mast/lib/parsers/html
 
 tubes: mast/lib/tubes/nullPump.ty mast/lib/tubes/mapPump.ty \
 	mast/lib/tubes/pumpTube.ty mast/lib/tubes/statefulPump.ty \
-	mast/lib/tubes/utf8.ty
+	mast/lib/tubes/utf8.ty \
+	mast/lib/tubes/chain.ty
 
 http: mast/lib/http/client.ty mast/lib/http/server.ty \
 	tubes
