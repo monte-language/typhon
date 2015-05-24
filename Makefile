@@ -1,4 +1,4 @@
-boot_objects = boot/lib/bytes.ty boot/lib/monte/monte_lexer.ty boot/prelude.ty boot/prelude/space.ty boot/lib/codec/utf8.ty boot/lib/monte/monte_parser.ty boot/prelude/brand.ty boot/lib/monte/monte_ast.ty boot/lib/monte/termParser.ty boot/prelude/region.ty boot/lib/monte/monte_expander.ty boot/montec.ty boot/prelude/simple.ty
+boot_objects = boot/lib/bytes.ty boot/lib/monte/monte_lexer.ty boot/prelude.ty boot/prelude/space.ty boot/lib/codec/utf8.ty boot/lib/monte/monte_parser.ty boot/prelude/brand.ty boot/lib/monte/monte_ast.ty boot/lib/monte/termParser.ty boot/prelude/region.ty boot/lib/monte/monte_expander.ty boot/lib/monte/monte_optimizer.ty boot/montec.ty boot/prelude/simple.ty
 .PRECIOUS: $(boot_objects)
 
 PYTHON=venv/bin/python
@@ -61,10 +61,11 @@ bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty
 
 monte: mast/lib/monte/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/lib/monte/monte_parser.ty mast/lib/monte/monte_expander.ty \
+	mast/lib/monte/monte_optimizer.ty \
 	mast/lib/monte/termParser.ty
 
 %.ty: %.mt
-	@ echo "MONTEC (boot scope) $<"
+	@ echo "MONTEC $<"
 	@ ./mt-typhon -l boot boot/montec.ty $< $@
 
 clean:

@@ -55,4 +55,4 @@ docs/_build/
 *-c
 
 # Typhon binaries
-*.ty
+mast/**/*.ty
