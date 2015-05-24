@@ -535,10 +535,12 @@ class Escape(Node):
         out.writeLine(" {")
         self._node.pretty(out.indent())
         if self._catchPattern is not None and self._catchNode is not None:
+            out.writeLine("")
             out.write("} catch ")
             self._catchPattern.pretty(out)
             out.writeLine(" {")
             self._catchNode.pretty(out.indent())
+        out.writeLine("")
         out.writeLine("}")
 
     def transform(self, f):
@@ -609,8 +611,10 @@ class Finally(Node):
     def pretty(self, out):
         out.writeLine("try {")
         self._block.pretty(out.indent())
+        out.writeLine("")
         out.writeLine("} finally {")
         self._atLast.pretty(out.indent())
+        out.writeLine("")
         out.writeLine("}")
 
     def transform(self, f):
@@ -685,8 +689,10 @@ class If(Node):
         self._test.pretty(out)
         out.writeLine(") {")
         self._then.pretty(out.indent())
+        out.writeLine("")
         out.writeLine("} else {")
         self._otherwise.pretty(out.indent())
+        out.writeLine("")
         out.writeLine("}")
 
     def transform(self, f):
@@ -806,6 +812,7 @@ class Method(Node):
         self._g.pretty(out)
         out.writeLine(" {")
         self._b.pretty(out.indent())
+        out.writeLine("")
         out.writeLine("}")
 
     def transform(self, f):
@@ -1116,9 +1123,15 @@ class Sequence(Node):
         return Sequence(tupleToList(t))
 
     def pretty(self, out):
-        for item in self._l:
+        if not self._l:
+            return
+
+        init = self._l[:-1]
+        last = self._l[-1]
+        for item in init:
             item.pretty(out)
             out.writeLine("")
+        last.pretty(out)
 
     def transform(self, f):
         return f(Sequence([node.transform(f) for node in self._l]))
@@ -1155,10 +1168,12 @@ class Try(Node):
     def pretty(self, out):
         out.writeLine("try {")
         self._first.pretty(out.indent())
+        out.writeLine("")
         out.write("} catch ")
         self._pattern.pretty(out)
         out.writeLine("{")
         self._then.pretty(out.indent())
+        out.writeLine("")
         out.writeLine("}")
 
     def transform(self, f):
