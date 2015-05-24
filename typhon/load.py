@@ -296,7 +296,8 @@ def loadTerm(stream):
                 loadPatternList(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "MethodCallExpr":
-        return Call(loadTerm(stream), loadTerm(stream), loadTerm(stream))
+        return Call.fromAST(loadTerm(stream), loadTerm(stream),
+                            loadTerm(stream))
 
     elif tag == "NounExpr":
         return Noun.fromAST(loadTerm(stream))

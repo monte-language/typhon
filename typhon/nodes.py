@@ -418,10 +418,14 @@ class Call(Node):
         assert isinstance(args, Tuple), "XXX should be fromAST instead"
         self._args = args
 
+    @staticmethod
+    def fromAST(target, verb, args):
+        return Call(target, strToString(verb), args)
+
     def pretty(self, out):
         self._target.pretty(out)
         out.write(".")
-        self._verb.pretty(out)
+        out.write(self._verb.encode("utf-8"))
         out.write("(")
         l = self._args._t
         if l:
@@ -434,28 +438,25 @@ class Call(Node):
         out.write(")")
 
     def transform(self, f):
-        return f(Call(self._target.transform(f), self._verb.transform(f),
-            self._args.transform(f)))
+        return f(Call(self._target.transform(f), self._verb,
+                      self._args.transform(f)))
 
     def rewriteScope(self, scope):
-        return Call(self._target.rewriteScope(scope),
-                    self._verb.rewriteScope(scope),
+        return Call(self._target.rewriteScope(scope), self._verb,
                     self._args.rewriteScope(scope))
 
     def usesName(self, name):
-        rv = self._target.usesName(name) or self._verb.usesName(name)
-        return rv or self._args.usesName(name)
+        return self._target.usesName(name) or self._args.usesName(name)
 
     def compile(self, compiler):
         self._target.compile(compiler)
         # [target]
-        verb = strToString(self._verb)
         args = tupleToList(self._args)
         arity = len(args)
         for node in args:
             node.compile(compiler)
             # [target x0 x1 ...]
-        compiler.call(verb, arity)
+        compiler.call(self._verb, arity)
         # [retval]
 
 class Def(Node):

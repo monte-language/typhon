@@ -147,7 +147,7 @@ def elideSingleEscape(escape):
     if not isinstance(target, Noun) or target.name != name:
         return None
 
-    if node._verb.usesName(name) or node._args.usesName(name):
+    if node._args.usesName(name):
         return None
 
     # Elide both the Call and the Escape. This only works if the Call was
@@ -233,8 +233,7 @@ def swapEquality(call):
     # It's definitely a call to the equalizer. Let's check which method's
     # being called. Probably sameEver/2.
 
-    verb = call._verb
-    if not isinstance(verb, Str) or verb._s != u"sameEver":
+    if call._verb != u"sameEver":
         return None
     if len(call._args._t) != 2:
         return None
