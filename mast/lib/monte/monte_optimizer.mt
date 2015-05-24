@@ -1,3 +1,8 @@
+# Note that the identity "no-op" operation on ASTs is not `return ast` but
+# rather `return M.call(maker, "run", args + [span])`; the transformation has
+# to rebuild the AST.
+
+
 def removeUnusedBareNouns(ast, maker, args, span):
     "Remove unused bare nouns from sequences."
 
@@ -13,7 +18,8 @@ def removeUnusedBareNouns(ast, maker, args, span):
         traceln(`Reassembled sequence: $newExprs`)
         return maker(newExprs.snapshot(), span)
     else:
-        return ast
+        # No-op.
+        return M.call(maker, "run", args + [span])
 
 
 def optimizations := [
