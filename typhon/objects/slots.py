@@ -19,6 +19,7 @@ from typhon.objects.root import Object
 
 
 GET_0 = getAtom(u"get", 0)
+GETGUARD_0 = getAtom(u"getGuard", 0)
 PUT_1 = getAtom(u"put", 1)
 
 
@@ -31,6 +32,7 @@ class Binding(Object):
 
     def __init__(self, slot):
         self.slot = slot
+        self.guard = NullObject
 
     def toString(self):
         return u"<binding for %s>" % self.slot.toString()
@@ -38,6 +40,9 @@ class Binding(Object):
     def recv(self, atom, args):
         if atom is GET_0:
             return self.slot
+
+        if atom is GETGUARD_0:
+            return NullObject
 
         raise Refused(self, atom, args)
 

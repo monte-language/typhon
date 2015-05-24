@@ -15,9 +15,9 @@
 from rpython.rlib.jit import unroll_safe
 
 from typhon.errors import Ejecting, Refused, UserException
-from typhon.objects.constants import NullObject, wrapBool
+from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.collections import ConstList
-from typhon.objects.data import StrObject
+from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
@@ -25,19 +25,91 @@ from typhon.objects.slots import Binding, FinalSlot
 from typhon.smallcaps.machine import SmallCaps
 
 
+class Audition(Object):
+    def __init__(self, fqn, ast, guards, cache):
+        self.fqn = fqn
+        self.ast = ast
+        self.guards = guards
+        self.cache = None
+
+        self.active = True
+        self.approvers = []
+        self.askedLog = []
+        self.guardLog = []
+
+    def ask(self, auditor):
+
+        if not self.active:
+            raise UserException(StrObject(u"audition is out of scope"))
+        doCaching = False
+        cached = False
+
+        if doCaching:
+            if auditor in self.cache:
+                answer, asked, guards = self.cache[auditor]
+                for name, value in guards:
+                    # We remember what the binding guards for the previous
+                    # invocation were.
+                    if self.guards[name] != value:
+                        # If any of them have changed, we need to re-audit.
+                        break
+                else:
+                    cached = True
+
+        if cached:
+            for a in asked:
+                # We remember the other auditors invoked during this
+                # audition. Let's re-ask them since not all of them may have
+                # cacheable results.
+                self.ask(a)
+            if answer:
+                self.approvers.append(auditor)
+            return answer
+        else:
+            prevlogs = self.askedLog, self.guardLog
+            self.askedLog = []
+            self.guardLog = []
+            try:
+                result = unwrapBool(auditor.call(u"audit", [self]))
+                if doCaching and self.guardLog is not None:
+                    self.auditorCache[auditor] = (result, self.askedLog[:],
+                                                  self.guardLog[:])
+                if result:
+                    self.approvers.append(auditor)
+            finally:
+                self.askedLog, self.guardLog = prevlogs
+
+
 class ScriptObject(Object):
 
     _immutable_fields_ = "codeScript", "globals[*]", "closure[*]"
+    auditorCache = {}
 
-    def __init__(self, codeScript, globals, closure, displayName, stamps):
+    def __init__(self, codeScript, globals, globalsNames,
+                 closure, closureNames, displayName, auditors):
         self.codeScript = codeScript
         self.globals = globals
         self.closure = closure
         self.displayName = displayName
-        self.stamps = stamps
 
         # Make sure that we can access ourselves.
         self.patchSelf()
+        if auditors:
+            self.stamps = self.audit(auditors, self.codeScript.objectAst,
+                                     closureNames, globalsNames)
+
+    def audit(self, auditors, ast, closureNames, globalsNames):
+        guards = {}
+        for name, i in globalsNames.items():
+            guards[name] = self.globals[i].call(u"getGuard", [])
+        for name, i in closureNames.items():
+            guards[name] = self.closure[i].call(u"getGuard", [])
+
+        audition = Audition(self.displayName, ast, guards, {})
+        for a in auditors:
+            audition.ask(a)
+        audition.active = False
+        return audition.approvers
 
     def patchSelf(self):
         selfIndex = self.codeScript.selfIndex()
