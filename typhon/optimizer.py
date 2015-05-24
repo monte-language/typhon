@@ -87,33 +87,6 @@ def simplifyPlainDefs(sequence):
             return Sequence(sequence._l[:i] + tail._l)
     return None
 
-@matches(Sequence)
-def elideBareNouns(sequence):
-    # Remove any Nouns which are bare and not at the end of Sequences.
-    if len(sequence._l) < 2:
-        return None
-
-    tail = sequence._l[-1]
-    end = len(sequence._l) - 1
-    assert end >= 0, "Math is hard"
-
-    rv = []
-    changed = False
-    for node in sequence._l[:end]:
-        if isinstance(node, Noun):
-            changed = True
-        else:
-            rv.append(node)
-
-    if not changed:
-        return None
-
-    # Do the singleton Sequence check here.
-    if len(rv) == 0:
-        return tail
-    rv.append(tail)
-    return Sequence(rv[:])
-
 
 @matches(Escape)
 def elideUnusedEscape(escape):
@@ -266,7 +239,6 @@ def optimize(node):
         flattenSequence,
         # This just isn't reasonable as long as we can't rewrite patterns.
         # simplifyPlainDefs,
-        elideBareNouns,
         narrowEscape,
         elideSingleEscape,
         elideUnusedDef,
