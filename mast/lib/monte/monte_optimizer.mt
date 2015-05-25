@@ -7,7 +7,6 @@ def removeUnusedBareNouns(ast, maker, args, span):
     "Remove unused bare nouns from sequences."
 
     if (ast.getNodeName() == "SeqExpr"):
-        traceln(`Sequence args: $args`)
         def exprs := args[0]
         def last := exprs.last()
         def newExprs := [].diverge()
@@ -15,11 +14,18 @@ def removeUnusedBareNouns(ast, maker, args, span):
             if (expr.getNodeName() != "NounExpr"):
                 newExprs.push(expr)
         newExprs.push(last)
-        traceln(`Reassembled sequence: $newExprs`)
         return maker(newExprs.snapshot(), span)
     else:
         # No-op.
         return M.call(maker, "run", args + [span])
+
+def testRemoveUnusedBareNouns(assert):
+    def a := import("lib/monte/monte_ast")["astBuilder"]
+    def ast := a.SeqExpr([a.NounExpr("x", null), a.NounExpr("y", null)], null)
+    def result := a.SeqExpr([a.NounExpr("y", null)], null)
+    assert.equal(ast.transform(removeUnusedBareNouns), result)
+
+unittest([testRemoveUnusedBareNouns])
 
 
 def optimizations := [
