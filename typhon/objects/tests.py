@@ -139,7 +139,7 @@ class UnitTest(Object):
         raise Refused(self, atom, args)
 
     def test(self):
-        print "Running unit tests..."
+        debug_print("Running unit tests...")
         asserter = Asserter()
         for test in self._tests:
             asserter.startTest(test.toString())
@@ -148,5 +148,5 @@ class UnitTest(Object):
             except UserException as ue:
                 asserter.log(u"Caught exception: " +
                         ue.formatError().decode("utf-8"))
-        print "Unit test output:"
+        debug_print("Unit test output:")
         asserter.dump()

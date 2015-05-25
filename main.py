@@ -78,7 +78,7 @@ def loadPrelude(config, recorder, vat):
 
     runScopeTests(scope)
 
-    print "Prelude result:", result.toQuote()
+    # debug_print("Prelude result:", result.toQuote())
 
     if isinstance(result, ConstMap):
         prelude = {}
@@ -161,13 +161,13 @@ def entryPoint(argv):
     if not config.benchmark:
         benchmarkSettings.disable()
 
-    print "Taking initial turn in script..."
+    debug_print("Taking initial turn in script...")
     result = NullObject
     with recorder.context("Time spent in vats"):
         result = evaluateTerms([code], finalize(scope))
     if result is None:
         return 1
-    print result.toQuote()
+    # print result.toQuote()
 
     # Run unit tests.
     runScopeTests(scope)

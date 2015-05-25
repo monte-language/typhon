@@ -14,6 +14,8 @@
 
 import time
 
+from rpython.rlib.debug import debug_print
+
 from typhon.atoms import getAtom
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapStr
@@ -27,33 +29,34 @@ def bench(args):
     name = unwrapStr(args[1])
 
     if not benchmarkSettings.enabled:
-        print "Not running benchmark", name, "since benchmarking is disabled"
+        debug_print("Not running benchmark", name,
+                    "since benchmarking is disabled")
         return
 
-    print "Benchmarking", name
+    debug_print("Benchmarking", name)
 
     # Step 1: Calibrate timing loop.
-    print "Calibrating timing loop..."
+    debug_print("Calibrating timing loop...")
     # Unroll do-while iteration.
     loops = 1
-    print "Trying 1 loop..."
+    debug_print("Trying 1 loop...")
     taken = time.time()
     obj.call(u"run", [])
     taken = time.time() - taken
     while taken < 1.0 and loops < 100000000:
         loops *= 10
-        print "Trying", loops, "loops..."
+        debug_print("Trying", loops, "loops...")
         acc = 0
         taken = time.time()
         while acc < loops:
             acc += 1
             obj.call(u"run", [])
         taken = time.time() - taken
-        print "Took", taken, "seconds to run", loops, "loops"
-    print "Okay! Will take", loops, "loops at", taken, "seconds"
+        debug_print("Took", taken, "seconds to run", loops, "loops")
+    debug_print("Okay! Will take", loops, "loops at", taken, "seconds")
 
     # Step 2: Take trials.
-    print "Taking trials..."
+    debug_print("Taking trials...")
     trialCount = 3 - 1
     # Unroll first iteration to get maximum.
     acc = 0
@@ -86,8 +89,8 @@ def bench(args):
             sec = msec / 1000
             timing = "%f s/iteration" % sec
 
-    print name + u":", "Took %d loops in %f seconds (%s)" % (loops, taken,
-                                                             timing)
+    debug_print(name + u":",
+                "Took %d loops in %f seconds (%s)" % (loops, taken, timing))
 
     # All done!
     return NullObject

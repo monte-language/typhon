@@ -14,7 +14,7 @@ boot: $(boot_objects) | mt-typhon
 
 $(boot_objects): boot/%.ty: mast/%.mt
 	@ echo "MONTEC (boot scope) $<"
-	@ ./mt-typhon -l boot boot/montec.ty $< $@
+	@ ./mt-typhon -l boot boot/montec.ty $< $@ 2> /dev/null
 
 
 mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty \
@@ -70,7 +70,7 @@ monte: mast/lib/monte/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 
 %.ty: %.mt
 	@ echo "MONTEC $<"
-	@ ./mt-typhon -l boot boot/montec.ty $< $@
+	@ ./mt-typhon -l boot boot/montec.ty $< $@ 2> /dev/null
 
 clean:
 	@ echo "CLEAN"
