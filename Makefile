@@ -3,8 +3,12 @@ boot_objects = boot/lib/bytes.ty boot/lib/monte/monte_lexer.ty boot/prelude.ty b
 
 PYTHON=venv/bin/python
 
+# This, being the first rule in the file, will be the default rule to make. It
+# is *not* because of the name.
+default: mt-typhon mast
+
 mt-typhon:
-	$(PYTHON) -m rpython -Ojit main
+	$(PYTHON) -m rpython -O2 main
 
 boot: $(boot_objects) | mt-typhon
 
@@ -13,7 +17,7 @@ $(boot_objects): boot/%.ty: mast/%.mt
 	@ ./mt-typhon -l boot boot/montec.ty $< $@
 
 
-all: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty \
+mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty \
 	mast/lib/regex.ty mast/lib/words.ty \
 	mast/lib/percent.ty \
 	mast/lib/continued.ty \
