@@ -3,6 +3,12 @@ boot_objects = boot/lib/bytes.ty boot/lib/monte/monte_lexer.ty boot/prelude.ty b
 
 PYTHON=venv/bin/python
 
+ifdef PROFILE
+	PROFILE_FLAGS=-p
+else
+	PROFILE_FLAGS=
+endif
+
 # This, being the first rule in the file, will be the default rule to make. It
 # is *not* because of the name.
 default: mt-typhon mast
@@ -14,7 +20,7 @@ boot: $(boot_objects) | mt-typhon
 
 $(boot_objects): boot/%.ty: mast/%.mt
 	@ echo "MONTEC (boot scope) $<"
-	@ ./mt-typhon -l boot boot/montec.ty $< $@ 2> /dev/null
+	./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec.ty $< $@ 2> /dev/null
 
 
 mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty \
@@ -70,7 +76,7 @@ monte: mast/lib/monte/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 
 %.ty: %.mt
 	@ echo "MONTEC $<"
-	@ ./mt-typhon -l boot boot/montec.ty $< $@ 2> /dev/null
+	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec.ty $< $@ 2> /dev/null
 
 clean:
 	@ echo "CLEAN"
