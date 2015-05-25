@@ -26,8 +26,23 @@ from typhon.smallcaps.machine import SmallCaps
 from typhon.smallcaps.peephole import peephole
 
 
+class ModuleCache(object):
+    """
+    A necessary evil.
+    """
+
+    def __init__(self):
+        self.cache = {}
+
+moduleCache = ModuleCache()
+
+
 @dont_look_inside
 def obtainModule(path, inputScope, recorder):
+    if path in moduleCache.cache:
+        debug_print("Importing (cached):", path)
+        return moduleCache.cache[path]
+
     debug_print("Importing:", path)
 
     with recorder.context("Deserialization"):
@@ -51,6 +66,8 @@ def obtainModule(path, inputScope, recorder):
         peephole(code)
     # debug_print("Optimized code:", code.disassemble())
 
+    # Cache.
+    moduleCache.cache[path] = code
     return code
 
 
