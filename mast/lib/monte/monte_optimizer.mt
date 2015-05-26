@@ -6,7 +6,7 @@
 def removeUnusedBareNouns(ast, maker, args, span):
     "Remove unused bare nouns from sequences."
 
-    if (ast.getNodeName() == "SeqExpr"):
+    if (ast.getNodeName() == "SeqExpr" && args[0].size() > 0):
         def exprs := args[0]
         def last := exprs.last()
         def newExprs := [].diverge()
