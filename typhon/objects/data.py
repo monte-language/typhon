@@ -24,7 +24,7 @@ from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, WrongType, userError
-from typhon.objects.auditors import DeepFrozenStamp
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.root import Object
 from typhon.quoting import quoteChar, quoteStr
@@ -105,7 +105,7 @@ class CharObject(Object):
 
     displayName = u"CharObject"
 
-    stamps = [DeepFrozenStamp]
+    stamps = [deepFrozenStamp]
 
     def __init__(self, c):
         # RPython needs to be reminded that, no matter what, we are always
@@ -184,7 +184,7 @@ class DoubleObject(Object):
 
     displayName = u"DoubleObject"
 
-    stamps = [DeepFrozenStamp]
+    stamps = [deepFrozenStamp]
 
     def __init__(self, d):
         self._d = d
@@ -283,7 +283,7 @@ class IntObject(Object):
 
     _i = 0
 
-    stamps = [DeepFrozenStamp]
+    stamps = [deepFrozenStamp]
 
     def __init__(self, i):
         self._i = i
@@ -527,7 +527,7 @@ class BigInt(Object):
     _immutable_fields_ = "stamps[*]", "bi"
 
     displayName = u"BigInt"
-    stamps = [DeepFrozenStamp]
+    stamps = [deepFrozenStamp]
 
     def __init__(self, bi):
         self.bi = bi
@@ -740,7 +740,7 @@ class StrObject(Object):
 
     displayName = u"StrObject"
 
-    stamps = [DeepFrozenStamp]
+    stamps = [deepFrozenStamp]
 
     def __init__(self, s):
         self._s = s

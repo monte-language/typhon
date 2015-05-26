@@ -15,7 +15,7 @@
 (
     DUP, ROT, POP, SWAP,
     ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
-    BIND, BINDSLOT,
+    BIND, BINDFINALSLOT, BINDVARSLOT,
     SLOT_GLOBAL, SLOT_FRAME, SLOT_LOCAL,
     NOUN_GLOBAL, NOUN_FRAME, NOUN_LOCAL,
     BINDING_GLOBAL,  BINDING_FRAME, BINDING_LOCAL,
@@ -24,7 +24,7 @@
     BINDOBJECT, SCOPE,
     EJECTOR, TRY, UNWIND, END_HANDLER,
     BRANCH, CALL, JUMP,
-) = range(29)
+) = range(30)
 
 ops = {
     "DUP": DUP,
@@ -35,7 +35,8 @@ ops = {
     "ASSIGN_FRAME": ASSIGN_FRAME,
     "ASSIGN_LOCAL": ASSIGN_LOCAL,
     "BIND": BIND,
-    "BINDSLOT": BINDSLOT,
+    "BINDFINALSLOT": BINDFINALSLOT,
+    "BINDVARSLOT": BINDVARSLOT,
     "SLOT_GLOBAL": SLOT_GLOBAL,
     "SLOT_FRAME": SLOT_FRAME,
     "SLOT_LOCAL": SLOT_LOCAL,
@@ -58,6 +59,6 @@ ops = {
     "JUMP": JUMP,
 }
 
-reverseOps = [""] * 29
+reverseOps = [""] * 30
 for k, v in ops.iteritems():
     reverseOps[v] = k

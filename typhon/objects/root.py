@@ -30,7 +30,7 @@ class Object(object):
     _attrs_ = "displayName", "stamps",
 
     # The attributes that are not mutable.
-    _immutable_fields_ = "displayName",
+    _immutable_fields_ = "displayName", "stamps"
 
     # The "display" name, used in fast/imprecise/classy debugging dumps.
     # Primary use of this attribute is for profiling.
@@ -100,7 +100,7 @@ class Object(object):
 
     def auditedBy(self, stamp):
         from typhon.objects.constants import wrapBool
-        return wrapBool(False)
+        return wrapBool(stamp in self.stamps)
 
 
 def runnable(singleAtom):

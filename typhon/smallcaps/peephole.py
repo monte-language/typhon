@@ -15,10 +15,11 @@
 from collections import OrderedDict
 
 from typhon.smallcaps.ops import (DUP, POP, SWAP, ASSIGN_FRAME, ASSIGN_LOCAL,
-                                  BIND, BINDSLOT, SLOT_FRAME, SLOT_LOCAL,
-                                  NOUN_FRAME, NOUN_LOCAL, BINDING_FRAME,
-                                  BINDING_LOCAL, LITERAL, EJECTOR, TRY,
-                                  UNWIND, END_HANDLER, BRANCH, JUMP)
+                                  BIND, BINDFINALSLOT, BINDVARSLOT, SLOT_FRAME,
+                                  SLOT_LOCAL, NOUN_FRAME, NOUN_LOCAL,
+                                  BINDING_FRAME, BINDING_LOCAL, LITERAL,
+                                  EJECTOR, TRY, UNWIND, END_HANDLER, BRANCH,
+                                  JUMP)
 
 
 def peephole(code):
@@ -54,7 +55,6 @@ templates = [
     ([DUP, ASSIGN_FRAME, POP], [REMOVE, KEEP, REMOVE]),
     ([DUP, ASSIGN_LOCAL, POP], [REMOVE, KEEP, REMOVE]),
     ([DUP, BIND, POP], [REMOVE, KEEP, REMOVE]),
-    ([DUP, BINDSLOT, POP], [REMOVE, KEEP, REMOVE]),
 ]
 
 
@@ -141,7 +141,8 @@ class PeepholeOptimizer(object):
         newLocal = []
 
         for pc, instruction in enumerate(self.code.instructions):
-            if instruction in (ASSIGN_LOCAL, BIND, BINDSLOT, SLOT_LOCAL,
+            if instruction in (ASSIGN_LOCAL, BIND, BINDFINALSLOT,
+                               BINDVARSLOT, SLOT_LOCAL,
                                  NOUN_LOCAL, BINDING_LOCAL):
                 index = self.code.index(pc)
                 if index not in newLocalMap:

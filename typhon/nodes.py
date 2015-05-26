@@ -1273,25 +1273,14 @@ class FinalPattern(Pattern):
     def compile(self, compiler):
         # [specimen ej]
         if self._g is None:
-            compiler.addInstruction("POP", 0)
-            # [specimen]
+            index = compiler.addGlobal(u"Any")
+            compiler.addInstruction("NOUN_GLOBAL", index)
+            # [specimen ej guard]
         else:
             self._g.compile(compiler)
             # [specimen ej guard]
-            compiler.addInstruction("ROT", 0)
-            compiler.addInstruction("ROT", 0)
-            # [guard specimen ej]
-            compiler.call(u"coerce", 2)
-            # [specimen]
-        index = compiler.addGlobal(u"_makeFinalSlot")
-        compiler.addInstruction("NOUN_GLOBAL", index)
-        # [specimen _makeFinalSlot]
-        compiler.addInstruction("SWAP", 0)
-        # [_makeFinalSlot specimen]
-        compiler.call(u"run", 1)
-        # [slot]
         index = compiler.addLocal(self._n)
-        compiler.addInstruction("BINDSLOT", index)
+        compiler.addInstruction("BINDFINALSLOT", index)
         # []
 
 
@@ -1408,23 +1397,15 @@ class VarPattern(Pattern):
 
     def compile(self, compiler):
         # [specimen ej]
-        index = compiler.addGlobal(u"_makeVarSlot")
-        compiler.addInstruction("NOUN_GLOBAL", index)
-        # [specimen ej _makeVarSlot]
-        compiler.addInstruction("ROT", 0)
-        compiler.addInstruction("ROT", 0)
-        # [_makeVarSlot specimen ej]
         if self._g is None:
-            compiler.literal(NullObject)
+            index = compiler.addGlobal(u"Any")
+            compiler.addInstruction("NOUN_GLOBAL", index)
+            # [specimen ej guard]
         else:
             self._g.compile(compiler)
-        # [_makeVarSlot specimen ej guard]
-        compiler.addInstruction("SWAP", 0)
-        # [_makeVarSlot specimen guard ej]
-        compiler.call(u"run", 3)
-        # [slot]
+            # [specimen ej guard]
         index = compiler.addLocal(self._n)
-        compiler.addInstruction("BINDSLOT", index)
+        compiler.addInstruction("BINDVARSLOT", index)
 
 
 class ViaPattern(Pattern):

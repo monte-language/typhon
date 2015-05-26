@@ -22,7 +22,8 @@ from typhon.objects.collections import unwrapList
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
-from typhon.objects.slots import Binding, FinalSlot
+from typhon.objects.guards import FinalSlotGuard, VarSlotGuard
+from typhon.objects.slots import FinalSlot, VarSlot
 from typhon.profile import csp
 from typhon.smallcaps.ops import *
 
@@ -150,9 +151,21 @@ class SmallCaps(object):
             binding = self.pop()
             self.env.createBindingLocal(index, binding)
             return pc + 1
-        elif instruction == BINDSLOT:
-            slot = self.pop()
-            self.env.createSlotLocal(index, slot)
+        elif instruction == BINDFINALSLOT:
+            guard = self.pop()
+            ej = self.pop()
+            specimen = self.pop()
+            val = guard.call(u"coerce", [specimen, ej])
+            self.env.createSlotLocal(index, FinalSlot(val, guard),
+                                     FinalSlotGuard(guard))
+            return pc + 1
+        elif instruction == BINDVARSLOT:
+            guard = self.pop()
+            ej = self.pop()
+            specimen = self.pop()
+            val = guard.call(u"coerce", [specimen, ej])
+            self.env.createSlotLocal(index, VarSlot(val, guard),
+                                     VarSlotGuard(guard))
             return pc + 1
         elif instruction == SLOT_GLOBAL:
             self.push(self.env.getSlotGlobal(index))

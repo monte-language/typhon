@@ -16,7 +16,7 @@ from rpython.rlib.jit import unroll_safe
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
-from typhon.objects.auditors import DeepFrozenStamp
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
@@ -177,7 +177,7 @@ def optSame(first, second, cache=None):
 
 class Equalizer(Object):
 
-    stamps = [DeepFrozenStamp]
+    stamps = [deepFrozenStamp]
 
     displayName = u"equalizer"
 

@@ -13,8 +13,11 @@
 # under the License.
 
 from typhon.atoms import getAtom
-from typhon.objects.root import runnable
+from typhon.errors import Refused
+from typhon.objects.root import Object, runnable
 
+AUDIT_1 = getAtom(u"audit", 1)
+COERCE_2 = getAtom(u"coerce", 2)
 RUN_2 = getAtom(u"run", 2)
 
 
@@ -26,10 +29,12 @@ def auditedBy(args):
     return specimen.auditedBy(auditor)
 
 
-class Stamp(object):
-    """
-    A proof that an object has been audited.
-    """
+class DeepFrozenStamp(Object):
 
+    def recv(self, atom, args):
+        from typhon.objects.constants import wrapBool
+        if atom is AUDIT_1:
+            return wrapBool(True)
+        raise Refused(self, atom, args)
 
-DeepFrozenStamp = Stamp()
+deepFrozenStamp = DeepFrozenStamp()

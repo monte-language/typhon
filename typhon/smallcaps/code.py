@@ -16,10 +16,11 @@ from rpython.rlib.jit import elidable_promote
 
 from typhon.smallcaps.abstract import AbstractInterpreter
 from typhon.smallcaps.ops import (reverseOps, ASSIGN_GLOBAL, ASSIGN_FRAME,
-                                  ASSIGN_LOCAL, BIND, BINDSLOT, SLOT_GLOBAL,
-                                  SLOT_FRAME, SLOT_LOCAL, NOUN_GLOBAL,
-                                  NOUN_FRAME, NOUN_LOCAL, BINDING_GLOBAL,
-                                  BINDING_FRAME, BINDING_LOCAL, CALL)
+                                  ASSIGN_LOCAL, BIND, BINDFINALSLOT,
+                                  BINDVARSLOT, SLOT_GLOBAL, SLOT_FRAME,
+                                  SLOT_LOCAL, NOUN_GLOBAL, NOUN_FRAME,
+                                  NOUN_LOCAL, BINDING_GLOBAL, BINDING_FRAME,
+                                  BINDING_LOCAL, CALL)
 
 
 class Code(object):
@@ -94,7 +95,8 @@ class Code(object):
                              BINDING_FRAME):
             base += " (%s)" % self.frame[index].encode("utf-8")
         elif instruction in (NOUN_LOCAL, ASSIGN_LOCAL, SLOT_LOCAL,
-                             BINDING_LOCAL, BIND, BINDSLOT):
+                             BINDING_LOCAL, BIND, BINDFINALSLOT,
+                             BINDVARSLOT):
             base += " (%s)" % self.locals[index].encode("utf-8")
         return base
 

@@ -19,11 +19,13 @@ from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector
+from typhon.objects.guards import FinalSlotGuard, anyGuard
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
 from typhon.objects.slots import Binding, FinalSlot
 from typhon.smallcaps.machine import SmallCaps
 
+# XXX AuditionStamp, Audition guard
 
 class Audition(Object):
     def __init__(self, fqn, ast, guards, cache):
@@ -79,6 +81,20 @@ class Audition(Object):
             finally:
                 self.askedLog, self.guardLog = prevlogs
 
+    def getGuard(self, name):
+        n = unwrapStr(name)
+        if n not in self.frame:
+            self.guardLog = None
+            raise UserException('"%s" is not a free variable in %s' %
+                                (n, self.fqn))
+        answer = self.guards[n]
+        if self.guardLog is not None:
+            if False:  # DF check
+                self.guardLog.append((name, answer))
+            else:
+                self.guardLog = None
+        return answer
+
 
 class ScriptObject(Object):
 
@@ -93,12 +109,16 @@ class ScriptObject(Object):
         self.displayName = displayName
 
         # Make sure that we can access ourselves.
-        self.patchSelf()
+        self.patchSelf(auditors[0]
+                       if len(auditors) > 0 and auditors[0] != NullObject
+                       else anyGuard)
         if auditors:
-            self.stamps = self.audit(auditors, self.codeScript.objectAst,
-                                     closureNames, globalsNames)
+            self._stamps = self.audit(auditors, self.codeScript.objectAst,
+                                      closureNames, globalsNames)
 
     def audit(self, auditors, ast, closureNames, globalsNames):
+        if auditors[0] == NullObject:
+            del auditors[0]
         guards = {}
         for name, i in globalsNames.items():
             guards[name] = self.globals[i].call(u"getGuard", [])
@@ -111,13 +131,15 @@ class ScriptObject(Object):
         audition.active = False
         return audition.approvers
 
-    def patchSelf(self):
+    def patchSelf(self, guard):
         selfIndex = self.codeScript.selfIndex()
         if selfIndex != -1:
-            self.closure[selfIndex] = Binding(FinalSlot(self))
+            self.closure[selfIndex] = Binding(
+                FinalSlot(self, guard),
+                FinalSlotGuard(guard))
 
     def auditedBy(self, stamp):
-        return wrapBool(stamp in self.stamps)
+        return wrapBool(stamp in self._stamps)
 
     def toString(self):
         try:

@@ -58,8 +58,8 @@ object OrderedRegionMaker as DeepFrozen:
             initBoundedLeft := !initBoundedLeft
 
         initEdges := initEdges.snapshot()
-        def myInParity :primInt := if (initBoundedLeft) {0} else {1}
-        def myLen :primInt := initEdges.size()
+        def myInParity :Int := if (initBoundedLeft) {0} else {1}
+        def myLen :Int := initEdges.size()
         def myTypeR :Same[myType] := myType # for SubrangeGuard audit
 
         def myBoundedLeft :Bool := initBoundedLeft
