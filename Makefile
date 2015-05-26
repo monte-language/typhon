@@ -20,7 +20,7 @@ boot: $(boot_objects) | mt-typhon
 
 $(boot_objects): boot/%.ty: mast/%.mt
 	@ echo "MONTEC (boot scope) $<"
-	./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec.ty $< $@ 2> /dev/null
+	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec.ty $< $@ 2> /dev/null
 
 
 mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty \
