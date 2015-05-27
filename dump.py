@@ -9,4 +9,4 @@ path = sys.argv[1]
 
 term = Sequence(load(open(path, "rb").read())[:])
 for line in term.repr().split("\n"):
-    print line.strip()
+    print line.rstrip()
