@@ -6,6 +6,19 @@ def a := import("lib/monte/monte_ast")["astBuilder"]
 def [=> term__quasiParser] := import("lib/monte/termParser")
 
 
+def removeIgnoreDefs(ast, maker, args, span):
+    "Remove definitions that do nothing."
+
+    if (ast.getNodeName() == "DefExpr"):
+        def pattern := ast.getPattern()
+        if (pattern.getNodeName() == "IgnorePattern"):
+            # We don't handle the case with a guard yet.
+            if (pattern.getGuard() == null):
+                return ast.getExpr().transform(removeIgnoreDefs)
+
+    return M.call(maker, "run", args + [span])
+
+
 def removeUnusedEscapes(ast, maker, args, span):
     "Remove unused escape clauses."
 
@@ -82,6 +95,7 @@ def constantFoldLiterals(ast, maker, args, span):
 
 
 def optimizations := [
+    removeIgnoreDefs,
     removeUnusedEscapes,
     removeUnusedBareNouns,
     constantFoldLiterals,
