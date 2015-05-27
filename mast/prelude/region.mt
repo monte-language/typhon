@@ -1,17 +1,3 @@
-# XXX yolo
-object DeepFrozen:
-    to coerce(x, _):
-        return x
-
-# XXX yolo
-object SubrangeGuard:
-    to get(_):
-        return object SubrangeSubGuard:
-            pass
-
-# XXX yolo
-def primInt :DeepFrozen := Int
-
 # A min where null represents positive infinity
 def min(a, b) as DeepFrozen:
     if (a == null):
