@@ -3,6 +3,29 @@
 # to rebuild the AST.
 
 def a := import("lib/monte/monte_ast")["astBuilder"]
+def [=> term__quasiParser] := import("lib/monte/termParser")
+
+
+def removeUnusedEscapes(ast, maker, args, span):
+    "Remove unused escape clauses."
+
+    if (ast.getNodeName() == "EscapeExpr"):
+        def pattern := ast.getEjectorPattern()
+        def node := ast.getBody()
+        traceln(pattern.asTerm())
+        # This limitation could be lifted but only with lots of care.
+        if (pattern.getNodeName() == "FinalPattern" &&
+            pattern.getGuard() == null):
+            def name := pattern.getNoun().getName()
+            traceln(name)
+            def scope := node.getStaticScope()
+            traceln(scope.namesUsed())
+            if (!scope.namesUsed().contains(name)):
+                traceln(`Success, I think?`)
+                # We can just return the inner node directly.
+                return node
+
+    return M.call(maker, "run", args + [span])
 
 
 def removeUnusedBareNouns(ast, maker, args, span):
@@ -17,9 +40,9 @@ def removeUnusedBareNouns(ast, maker, args, span):
                 newExprs.push(expr)
         newExprs.push(last)
         return maker(newExprs.snapshot(), span)
-    else:
-        # No-op.
-        return M.call(maker, "run", args + [span])
+
+    # No-op.
+    return M.call(maker, "run", args + [span])
 
 def testRemoveUnusedBareNouns(assert):
     def ast := a.SeqExpr([a.NounExpr("x", null), a.NounExpr("y", null)], null)
@@ -63,13 +86,13 @@ def constantFoldLiterals(ast, maker, args, span):
 
 
 def optimizations := [
+    removeUnusedEscapes,
     removeUnusedBareNouns,
     constantFoldLiterals,
 ]
 
 
 def optimize(var ast):
-    traceln(`AST: $ast`)
     for optimization in optimizations:
         ast := ast.transform(optimization)
     return ast
