@@ -1,0 +1,103 @@
+Original at http://colinm.org/language_checklist.html
+
+You appear to be advocating a new:
+[x] functional  [ ] imperative  [x] object-oriented  [ ] procedural [ ] stack-based
+[ ] "multi-paradigm"  [ ] lazy  [x] eager  [ ] statically-typed  [x] dynamically-typed
+[ ] pure  [ ] impure  [ ] non-hygienic  [ ] visual  [ ] beginner-friendly
+[ ] non-programmer-friendly  [ ] completely incomprehensible
+programming language.  Your language will not work.  Here is why it will not work.
+
+You appear to believe that:
+[x] Syntax is what makes programming difficult
+[x] Garbage collection is free                [ ] Computers have infinite memory
+[x] Nobody really needs:
+    [ ] concurrency  [ ] a REPL  [ ] debugger support  [ ] IDE support  [ ] I/O
+    [x] to interact with code not written in your language
+[ ] The entire world speaks 7-bit ASCII
+[ ] Scaling up to large software projects will be easy
+[ ] Convincing programmers to adopt a new language will be easy
+[ ] Convincing programmers to adopt a language-specific IDE will be easy
+[ ] Programmers love writing lots of boilerplate
+[ ] Specifying behaviors as "undefined" means that programmers won't rely on them
+[ ] "Spooky action at a distance" makes programming more fun
+
+Unfortunately, your language (has/lacks):
+[x] comprehensible syntax  [x] semicolons  [x] significant whitespace  [ ] macros
+[ ] implicit type conversion  [x] explicit casting  [ ] type inference
+[ ] goto  [x] exceptions  [x] closures  [ ] tail recursion  [ ] coroutines
+[x] reflection  [x] subtyping  [ ] multiple inheritance  [x] operator overloading
+[ ] algebraic datatypes  [x] recursive types  [x] polymorphic types
+[ ] covariant array typing  [ ] monads  [x] dependent types
+[x] infix operators  [ ] nested comments  [x] multi-line strings  [ ] regexes
+[x] call-by-value  [ ] call-by-name  [ ] call-by-reference  [ ] call-cc
+
+The following philosophical objections apply:
+[ ] Programmers should not need to understand category theory to write "Hello, World!"
+[ ] Programmers should not develop RSI from writing "Hello, World!"
+[x] The most significant program written in your language is its own compiler
+[ ] The most significant program written in your language isn't even its own compiler
+[x] No language spec
+[x] "The implementation is the spec"
+   [ ] The implementation is closed-source  [ ] covered by patents  [ ] not owned by you
+[ ] Your type system is unsound  [ ] Your language cannot be unambiguously parsed
+   [ ] a proof of same is attached
+   [ ] invoking this proof crashes the compiler
+[x] The name of your language makes it impossible to find on Google
+[x] Interpreted languages will never be as fast as C
+[x] Compiled languages will never be "extensible"
+[ ] Writing a compiler that understands English is AI-complete
+[ ] Your language relies on an optimization which has never been shown possible
+[x] There are less than 100 programmers on Earth smart enough to use your language
+[ ] ____________________________ takes exponential time
+[ ] ____________________________ is known to be undecidable
+
+Your implementation has the following flaws:
+[ ] CPUs do not work that way
+[ ] RAM does not work that way
+[ ] VMs do not work that way
+[ ] Compilers do not work that way
+[ ] Compilers cannot work that way
+[ ] Shift-reduce conflicts in parsing seem to be resolved using rand()
+[x] You require the compiler to be present at runtime
+[x] You require the language runtime to be present at compile-time
+[x] Your compiler errors are completely inscrutable
+[x] Dangerous behavior is only a warning
+[x] The compiler crashes if you look at it funny
+[x] The VM crashes if you look at it funny
+[x] You don't seem to understand basic optimization techniques
+[x] You don't seem to understand basic systems programming
+[ ] You don't seem to understand pointers
+[ ] You don't seem to understand functions
+
+Additionally, your marketing has the following problems:
+[x] Unsupported claims of increased productivity
+[x] Unsupported claims of greater "ease of use"
+[x] Obviously rigged benchmarks
+   [ ] Graphics, simulation, or crypto benchmarks where your code just calls
+       handwritten assembly through your FFI
+   [ ] String-processing benchmarks where you just call PCRE
+   [ ] Matrix-math benchmarks where you just call BLAS
+[x] Noone really believes that your language is faster than:
+    [x] assembly  [x] C  [x] FORTRAN  [x] Java  [x] Ruby  [x] Prolog
+[x] Rejection of orthodox programming-language theory without justification
+[x] Rejection of orthodox systems programming without justification
+[ ] Rejection of orthodox algorithmic theory without justification
+[ ] Rejection of basic computer science without justification
+
+Taking the wider ecosystem into account, I would like to note that:
+[x] Your complex sample code would be one line in: Elixir, probably
+[ ] We already have an unsafe imperative language
+[x] We already have a safe imperative OO language
+[ ] We already have a safe statically-typed eager functional language
+[ ] You have reinvented Lisp but worse
+[x] You have reinvented Javascript but worse
+[x] You have reinvented Java but worse
+[ ] You have reinvented C++ but worse
+[ ] You have reinvented PHP but worse
+[x] You have reinvented PHP better, but that's still no justification
+[ ] You have reinvented Brainfuck but non-ironically
+
+In conclusion, this is what I think of you:
+[ ] You have some interesting ideas, but this won't fly.
+[ ] This is a bad language, and you should feel bad for inventing it.
+[x] Programming in this language is an adequate punishment for inventing it.
