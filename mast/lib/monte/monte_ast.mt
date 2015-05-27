@@ -1619,7 +1619,7 @@ def makeSlotPattern(noun, guard, span):
     def gs := scopeMaybe(guard)
     if (gs.namesUsed().contains(noun.getName())):
         throw("Kernel guard cycle not allowed")
-    def scope := makeStaticScope([], [], [noun.getName()], [], false) + gs
+    def scope := makeStaticScope([], [], [], [noun.getName()], false) + gs
     object slotPattern:
         to getNoun():
             return noun
