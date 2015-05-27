@@ -1,7 +1,7 @@
 from functools import wraps
 
-from typhon.nodes import (Call, Def, Escape, FinalPattern, IgnorePattern,
-                          Noun, Sequence, Str, Tuple)
+from typhon.nodes import (Call, Def, Escape, FinalPattern, Noun, Sequence,
+                          Tuple)
 from typhon.scope import Scope
 
 
@@ -89,18 +89,6 @@ def simplifyPlainDefs(sequence):
 
 
 @matches(Escape)
-def elideUnusedEscape(escape):
-    pattern = escape._pattern
-    # First, the binding pattern must be a FinalPattern with no guard.
-    if isinstance(pattern, FinalPattern) and pattern._g is None:
-        name = pattern._n
-        # Second, the internal node must not use the ejector.
-        if not escape._node.usesName(name):
-            return escape._node
-    return None
-
-
-@matches(Escape)
 def elideSingleEscape(escape):
     pattern = escape._pattern
     # First, the binding pattern must be a FinalPattern with no guard.
@@ -183,16 +171,6 @@ def narrowEscape(escape):
         escape._catchNode)
 
 
-@matches(Def)
-def elideUnusedDef(define):
-    pattern = define._p
-    # The pattern must be an IgnorePattern with no guard.
-    if isinstance(pattern, IgnorePattern) and pattern._g is None:
-        # There we go!
-        return define._v
-    return None
-
-
 def isNullNoun(n):
     return isinstance(n, Noun) and n.name == u"null"
 
@@ -241,8 +219,6 @@ def optimize(node):
         # simplifyPlainDefs,
         narrowEscape,
         elideSingleEscape,
-        elideUnusedDef,
-        elideUnusedEscape,
         swapEquality,
     ]
     f = Optimizer(changes).rewrite
