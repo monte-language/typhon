@@ -88,7 +88,7 @@ var BoolGlob :Bool := false
 var Char1Glob :Char := '\x00'
 var Char2Glob :Char := '\x00'
 var Array1Glob :Array1Dim := ([0] * 51).diverge()
-var Array2Glob :Array2Dim := [([0] * 51).diverge() for _ in 0..50].diverge()
+var Array2Glob :Array2Dim := [for _ in (0..50) ([0] * 51).diverge()].diverge()
 var PtrGlb := null
 var PtrGlbNext := null
 
