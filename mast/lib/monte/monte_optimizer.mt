@@ -12,18 +12,14 @@ def removeUnusedEscapes(ast, maker, args, span):
     if (ast.getNodeName() == "EscapeExpr"):
         def pattern := ast.getEjectorPattern()
         def node := ast.getBody()
-        traceln(pattern.asTerm())
         # This limitation could be lifted but only with lots of care.
         if (pattern.getNodeName() == "FinalPattern" &&
             pattern.getGuard() == null):
             def name := pattern.getNoun().getName()
-            traceln(name)
             def scope := node.getStaticScope()
-            traceln(scope.namesUsed())
             if (!scope.namesUsed().contains(name)):
-                traceln(`Success, I think?`)
                 # We can just return the inner node directly.
-                return node
+                return node.transform(removeUnusedEscapes)
 
     return M.call(maker, "run", args + [span])
 
