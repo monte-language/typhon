@@ -57,6 +57,7 @@ WITHOUT_1 = getAtom(u"without", 1)
 WITH_1 = getAtom(u"with", 1)
 WITH_2 = getAtom(u"with", 2)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
+_PRINTON_1 = getAtom(u"_printOn", 1)
 _UNCALL_0 = getAtom(u"_uncall", 0)
 
 
@@ -133,6 +134,11 @@ class Collection(object):
         # _makeIterator/0: Create an iterator for this collection's contents.
         if atom is _MAKEITERATOR_0:
             return self._makeIterator()
+
+        if atom is _PRINTON_1:
+            printer = args[0]
+            printer.call(u"print", [StrObject(self.toQuote())])
+            return NullObject
 
         # contains/1: Determine whether an element is in this collection.
         if atom is CONTAINS_1:
