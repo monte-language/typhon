@@ -20,24 +20,24 @@ def specialize(name, value):
 
         def scope := ast.getStaticScope()
         if (!scope.namesUsed().contains(name)):
-            traceln(`$ast doesn't use $name; skipping it`)
+            # traceln(`$ast doesn't use $name; skipping it`)
             return ast
 
         if (scope.outNames().contains(name)):
-            traceln(`$ast defines $name; I shouldn't examine it`)
+            # traceln(`$ast defines $name; I shouldn't examine it`)
             if (ast.getNodeName() == "SeqExpr"):
                 # We're going to delve into the sequence and try to only do
                 # replacements on the elements which don't have the name
                 # defined.
-                traceln(`Args: $args`)
+                # traceln(`Args: $args`)
                 var newExprs := []
                 var change := true
                 for i => expr in ast.getExprs():
                     if (expr.getStaticScope().outNames().contains(name)):
-                        traceln(`Found the offender!`)
+                        # traceln(`Found the offender!`)
                         change := false
                     newExprs with= (if (change) {args[0][i]} else {expr})
-                    traceln(`New exprs: $newExprs`)
+                    # traceln(`New exprs: $newExprs`)
                 return maker(newExprs, span)
             else:
                 return ast
@@ -62,6 +62,38 @@ def testSpecialize(assert):
                  result)
 
 unittest([testSpecialize])
+
+
+def propagateSimpleDefs(ast, maker, args, span):
+    "Propagate forward simple definitions."
+
+    if (ast.getNodeName() == "SeqExpr"):
+        var nameMap := [].asMap()
+        var newExprs := []
+        for var expr in args[0]:
+            # First, rewrite. This ensures that all propagations are
+            # fulfilled.
+            for name => rhs in nameMap:
+                expr transform= (specialize(name, rhs))
+
+            if (expr.getNodeName() == "DefExpr"):
+                def pattern := expr.getPattern()
+                if (pattern.getNodeName() == "FinalPattern" &&
+                    pattern.getGuard() == null):
+                    def name := pattern.getNoun().getName()
+                    def rhs := expr.getExpr()
+                    if (rhs.getNodeName() == "LiteralExpr" ||
+                        rhs.getNodeName() == "NounExpr"):
+                        nameMap with= (name, rhs)
+                        # If we found a simple definition, do *not* add it to
+                        # the list of new expressions to emit.
+                        continue
+
+            newExprs with= (expr)
+        # And rebuild.
+        return maker(newExprs, span)
+
+    return M.call(maker, "run", args + [span])
 
 
 def removeIgnoreDefs(ast, maker, args, span):
@@ -153,6 +185,7 @@ def constantFoldLiterals(ast, maker, args, span):
 
 
 def optimizations := [
+    propagateSimpleDefs,
     removeIgnoreDefs,
     removeUnusedEscapes,
     removeUnusedBareNouns,
