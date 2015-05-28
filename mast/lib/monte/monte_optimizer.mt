@@ -82,8 +82,10 @@ def propagateSimpleDefs(ast, maker, args, span):
                     pattern.getGuard() == null):
                     def name := pattern.getNoun().getName()
                     def rhs := expr.getExpr()
-                    if (rhs.getNodeName() == "LiteralExpr" ||
-                        rhs.getNodeName() == "NounExpr"):
+                    # XXX could rewrite nouns as well, but only if the noun is
+                    # known to be final! Otherwise bugs happen. For example,
+                    # the lexer is known to be miscompiled. So be careful.
+                    if (rhs.getNodeName() == "LiteralExpr"):
                         nameMap with= (name, rhs)
                         # If we found a simple definition, do *not* add it to
                         # the list of new expressions to emit.
