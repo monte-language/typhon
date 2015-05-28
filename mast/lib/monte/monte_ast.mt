@@ -77,7 +77,7 @@ def makeStaticScope(read, set, defs, vars, metaStateExpr):
         to outNames():
             return defNames | varNames
 
-        to printOn(out):
+        to _printOn(out):
             out.print("<")
             out.print(namesSet)
             out.print(" := ")
