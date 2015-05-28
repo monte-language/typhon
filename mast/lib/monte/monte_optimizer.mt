@@ -6,6 +6,64 @@ def a := import("lib/monte/monte_ast")["astBuilder"]
 def [=> term__quasiParser] := import("lib/monte/termParser")
 
 
+def specialize(name, value):
+    "Specialize the given name to the given AST value via substitution."
+
+    def specializeNameToValue(ast, maker, args, span):
+        if (ast.getNodeName() == "FinalPattern" ||
+            ast.getNodeName() == "VarPattern"):
+            def guard := ast.getGuard()
+            if (guard != null):
+                return maker(args[0], guard.transform(specializeNameToValue),
+                             span)
+            return ast
+
+        def scope := ast.getStaticScope()
+        if (!scope.namesUsed().contains(name)):
+            traceln(`$ast doesn't use $name; skipping it`)
+            return ast
+
+        if (scope.outNames().contains(name)):
+            traceln(`$ast defines $name; I shouldn't examine it`)
+            if (ast.getNodeName() == "SeqExpr"):
+                # We're going to delve into the sequence and try to only do
+                # replacements on the elements which don't have the name
+                # defined.
+                traceln(`Args: $args`)
+                var newExprs := []
+                var change := true
+                for i => expr in ast.getExprs():
+                    if (expr.getStaticScope().outNames().contains(name)):
+                        traceln(`Found the offender!`)
+                        change := false
+                    newExprs with= (if (change) {args[0][i]} else {expr})
+                    traceln(`New exprs: $newExprs`)
+                return maker(newExprs, span)
+            else:
+                return ast
+
+        if (ast.getNodeName() == "NounExpr" &&
+            ast.getName() == name):
+            return value
+        return M.call(maker, "run", args + [span])
+
+    return specializeNameToValue
+
+def testSpecialize(assert):
+    def ast := a.SeqExpr([
+        a.NounExpr("x", null),
+        a.DefExpr(a.FinalPattern(a.NounExpr("x", null), null, null), null, a.LiteralExpr(42, null), null),
+        a.NounExpr("x", null)], null)
+    def result := a.SeqExpr([
+        a.LiteralExpr(42, null),
+        a.DefExpr(a.FinalPattern(a.NounExpr("x", null), null, null), null, a.LiteralExpr(42, null), null),
+        a.NounExpr("x", null)], null)
+    assert.equal(ast.transform(specialize("x", a.LiteralExpr(42, null))),
+                 result)
+
+unittest([testSpecialize])
+
+
 def removeIgnoreDefs(ast, maker, args, span):
     "Remove definitions that do nothing."
 
