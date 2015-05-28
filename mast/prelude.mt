@@ -584,6 +584,7 @@ def [=> simple__quasiParser] := import("prelude/simple", ["boolean" => Bool,
                                                           => __matchSame,
                                                           => __quasiMatcher,
                                                           => __suchThat,
+                                                          => __switchFailed,
                                                           => __validateFor])
 
 
