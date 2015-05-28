@@ -19,30 +19,19 @@
 # doesn't care much about the types of the values that it is manipulating.
 object __comparer:
     to asBigAs(left, right):
-        try:
-            return left.op__cmp(right).isZero()
-        catch _:
-            return right.op__cmp(left).isZero()
+        return left.op__cmp(right).isZero()
+
     to geq(left, right):
-        try:
-            return left.op__cmp(right).atLeastZero()
-        catch _:
-            return right.op__cmp(left).atMostZero()
+        return left.op__cmp(right).atLeastZero()
+
     to greaterThan(left, right):
-        try:
-            return left.op__cmp(right).aboveZero()
-        catch _:
-            return right.op__cmp(left).belowZero()
+        return left.op__cmp(right).aboveZero()
+
     to leq(left, right):
-        try:
-            return left.op__cmp(right).atMostZero()
-        catch _:
-            return right.op__cmp(left).atLeastZero()
+        return left.op__cmp(right).atMostZero()
+
     to lessThan(left, right):
-        try:
-            return left.op__cmp(right).belowZero()
-        catch _:
-            return right.op__cmp(left).aboveZero()
+        return left.op__cmp(right).belowZero()
 
 
 def makeGuardedSlot(guard, var value :guard):
