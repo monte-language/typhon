@@ -62,8 +62,7 @@ def makeDigitExtractor(machine, base :Int):
 
             # a // c == b // d now, so we can extract a digit.
             def digit := a // c
-            # XXX compiler bug
-            if (digit == 0 & a == 0 & b == 0):
+            if (digit == 0 && a == 0 && b == 0):
                 # Finite number of digits in this base! We're done.
                 throw.eject(ej, "Finished with extraction")
 
@@ -114,7 +113,7 @@ def makeMachine(feed):
                     match [head] + ==[]:
                         out.print(`[$head]`)
                     match [head] + tail:
-                        def commaTail := ", ".join([`$i` for i in tail])
+                        def commaTail := ", ".join([for i in (tail) `$i`])
                         out.print(`[$head; $commaTail]`)
             else:
                 switch (terms):
@@ -123,7 +122,7 @@ def makeMachine(feed):
                     match [head] + ==[]:
                         out.print(`[$head; …]`)
                     match [head] + tail:
-                        def commaTail := ", ".join([`$i` for i in tail])
+                        def commaTail := ", ".join([for i in (tail) `$i`])
                         out.print(`[$head; $commaTail, …]`)
 
         to forceFeed(p, q):
@@ -140,7 +139,7 @@ def makeMachine(feed):
 
             def term := a // c
             egest(term)
-            terms with= term
+            terms with= (term)
             return term
 
         to getTerms() :List[Int]:
@@ -184,7 +183,7 @@ unittest([testPiDigits])
 
 def piBench():
     def pi := continued.pi().extractDigits(10)
-    return [pi.produceDigit(null) for _ in 0..!100]
+    return [for _ in (0..!100) pi.produceDigit(null)]
 
 
 bench(piBench, "100 digits of pi")
