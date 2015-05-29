@@ -19,6 +19,7 @@ def [=> nullPump] := import("lib/tubes/nullPump")
 def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makeStatefulPump] := import("lib/tubes/statefulPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
+def [=> chain] := import("lib/tubes/chain")
 
 # Either we await a key length, value length, or string.
 def [AMPState, KEY, VALUE, STRING] := makeEnum([
@@ -45,7 +46,7 @@ def makeAMPPacketMachine():
                     # If the length was zero, then it was the end-of-packet
                     # marker. Go ahead and snip the packet.
                     if (len == 0):
-                        results with= packetMap
+                        results with= (packetMap)
                         packetMap := [].asMap()
                         return [KEY, 2]
 
@@ -66,7 +67,7 @@ def makeAMPPacketMachine():
                         return [VALUE, 2]
                     else:
                         # This was a value.
-                        packetMap := packetMap.with(pendingKey, s)
+                        packetMap with= (pendingKey, s)
                         pendingKey := ""
                         return [KEY, 2]
 
@@ -96,14 +97,14 @@ def makeAMP(drain, responder):
     var pending := [].asMap()
 
     return object AMP:
-        to flowingFrom(_):
+        to flowingFrom(upstream):
             pass
 
-        to flowStopped(_):
+        to flowStopped(reason):
             pass
 
         to sendPacket(packet):
-            buf with= packet
+            buf with= (packet)
             when (drain) ->
                 if (drain != null):
                     for item in buf:
@@ -128,13 +129,13 @@ def makeAMP(drain, responder):
                     def via (strToInt) answer := _answer
                     if (pending.contains(answer)):
                         pending[answer].resolve(arguments)
-                        pending without= answer
+                        pending without= (answer)
                 match [=> _error] | arguments:
                     def via (strToInt) error := _error
                     if (pending.contains(error)):
                         def [=> _error_description := "unknown error"] | _ := arguments
                         pending[answer].smash(_error_description)
-                        pending without= answer
+                        pending without= (answer)
                 match _:
                     pass
 
@@ -154,8 +155,11 @@ def makeAMPServer(endpoint):
     return object AMPServerEndpoint:
         to listen(responder):
             def f(var fount, drain):
-                fount := fount<-flowTo(makePumpTube(makeStatefulPump(makeAMPPacketMachine())))
-                fount<-flowTo(makeAMP(drain, responder))
+                chain([
+                    fount,
+                    makePumpTube(makeStatefulPump(makeAMPPacketMachine())),
+                    makeAMP(drain, responder),
+                ])
             endpoint.listen(f)
 
 
