@@ -3,7 +3,7 @@ def [=> b__quasiParser, => Bytes] | _ := import("lib/bytes")
 def unreserved := b`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~/`.asSet()
 def percent := 0x25
 def hexDigits := b`0123456789abcdef`
-def digitToInt := [b => i for i => b in hexDigits] | [b => i + 10 for i => b in b`ABCDEF`]
+def digitToInt := [for i => b in (hexDigits) b => i] | [for i => b in (b`ABCDEF`) b => i + 10]
 
 def percentEncode(s :Str) :Bytes:
     def rv := [].diverge()
@@ -37,7 +37,7 @@ def percentDecode(bs :Bytes) :Str:
             match b:
                 rv.push('\x00' + b)
         i += 1
-    return "".join([c.asString() for c in rv])
+    return "".join([for c in (rv) c.asString()])
 
 def testPercentDecode(assert):
     assert.equal(percentDecode(b`/test%20stuff`), "/test stuff")
