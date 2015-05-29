@@ -51,7 +51,9 @@ def makeLFU(size :Int):
             var minKey := null
             var minFrequency := INF
             for key => [value, frequency] in storage:
-                if (frequency < minFrequency):
+                # Important ordering here. Since INF has custom comparison, it
+                # must be on the LHS of the comparison.
+                if (minFrequency > frequency):
                     minKey := key
                     minFrequency := minFrequency
             storage.removeKey(minKey)
