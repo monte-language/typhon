@@ -168,6 +168,36 @@ def map(f, xs):
     return rv.snapshot()
 
 
+def modPow(ast, maker, args, span):
+    "Coalesce modular exponentation from two calls into one."
+
+    escape badMatch:
+        if (ast.getNodeName() == "MethodCallExpr" &&
+            ast.getVerb() == "mod"):
+            def [m] exit badMatch := ast.getArgs()
+            def pow := ast.getReceiver()
+            if (pow.getNodeName() == "MethodCallExpr" &&
+                pow.getVerb() == "pow"):
+                def [e] exit badMatch := pow.getArgs()
+                return a.MethodCallExpr(pow.getReceiver(), "modPow", [e, m],
+                                        span)
+
+    # No-op.
+    return M.call(maker, "run", args + [span])
+
+def testModPow(assert):
+    def ast := a.MethodCallExpr(a.MethodCallExpr(a.LiteralExpr(7, null), "pow",
+                                                 [a.LiteralExpr(11, null)],
+                                                 null),
+                                "mod", [a.LiteralExpr(13, null)], null)
+    def result := a.MethodCallExpr(a.LiteralExpr(7, null), "modPow",
+                                   [a.LiteralExpr(11, null), a.LiteralExpr(13,
+                                   null)], null)
+    assert.equal(ast.transform(modPow), result)
+
+unittest([testModPow])
+
+
 def constantFoldLiterals(ast, maker, args, span):
     "Constant-fold calls to literals with literal arguments."
 
@@ -176,6 +206,7 @@ def constantFoldLiterals(ast, maker, args, span):
         def argNodes := ast.getArgs()
         if (receiver.getNodeName() == "LiteralExpr" &&
             allSatisfy(fn x {x.getNodeName() == "LiteralExpr"}, argNodes)):
+            # traceln(`Constant-folding $ast`)
             def receiverValue := receiver.getValue()
             def verb := ast.getVerb()
             def argValues := map(fn x {x.getValue()}, argNodes)
@@ -187,6 +218,7 @@ def constantFoldLiterals(ast, maker, args, span):
 
 
 def optimizations := [
+    modPow,
     propagateSimpleDefs,
     removeIgnoreDefs,
     removeUnusedEscapes,
@@ -197,7 +229,9 @@ def optimizations := [
 
 def optimize(var ast):
     for optimization in optimizations:
+        # traceln(`Performing optimization $optimization...`)
         ast := ast.transform(optimization)
+        # traceln(`Finished with $optimization!`)
     return ast
 
 
