@@ -21,7 +21,7 @@ def makeEnumObject(i :Int, name):
             return i
 
 def makeEnum(names :List):
-    def enums := [makeEnumObject(i, name) for i => name in names]
+    def enums := [for i => name in (names) makeEnumObject(i, name)]
     def enumSet := enums.asSet()
 
     object EnumGuard:
