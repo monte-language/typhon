@@ -21,7 +21,7 @@ def charsToInt(cs :Bytes) :int:
     return rv
 
 def toNetstring(cs :Bytes) :Bytes:
-    def header := [c.asInteger() for c in cs.size().toString()]
+    def header := [for c in (cs.size().toString()) c.asInteger()]
     return b`$header:$cs,`
 
 def findNetstring(cs :Bytes):
