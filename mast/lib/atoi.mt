@@ -17,7 +17,7 @@ def strToInt(var cs :Str, ej) :Int:
     if (neg):
         cs := cs.slice(1)
 
-    def ns :List[0..!10] exit ej := [c.asInteger() - 48 for c in cs]
+    def ns :List[0..!10] exit ej := [for c in (cs) c.asInteger() - 48]
     var rv :Int := 0
     for n in ns:
         rv := rv * 10 + n
