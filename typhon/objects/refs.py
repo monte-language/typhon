@@ -16,6 +16,7 @@ import weakref
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
@@ -188,8 +189,7 @@ class RefOps(Object):
                 [WhenBrokenReactor(callback, o, None)])
 
     def isDeepFrozen(self, o):
-        # XXX
-        return False
+        return o.auditedBy(deepFrozenStamp)
 
     def isSelfless(self, o):
         # XXX

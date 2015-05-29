@@ -18,15 +18,19 @@ from typhon.env import Environment
 from typhon.errors import UserException
 from typhon.objects.constants import NullObject
 from typhon.objects.slots import Binding, FinalSlot
+from typhon.scopes.safe import theFinalSlotGuardMaker
 
 
 class TestEnv(TestCase):
 
     def testFinalImmutabilityFrame(self):
-        env = Environment([Binding(FinalSlot(NullObject))], [], 0, 0, 0)
+        env = Environment([Binding(FinalSlot(NullObject, NullObject),
+                                   theFinalSlotGuardMaker)],
+                          [], 0, 0, 0)
         self.assertRaises(UserException, env.putValueFrame, 0, NullObject)
 
     def testFinalImmutabilityLocal(self):
         env = Environment([], [], 1, 0, 0)
-        env.createSlotLocal(0, FinalSlot(NullObject))
+        env.createSlotLocal(0, FinalSlot(NullObject, NullObject),
+                            theFinalSlotGuardMaker)
         self.assertRaises(UserException, env.putValueLocal, 0, NullObject)

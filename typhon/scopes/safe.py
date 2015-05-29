@@ -25,13 +25,15 @@ from typhon.objects.data import (DoubleObject, IntObject, StrObject, unwrapInt,
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
+from typhon.objects.guards import (anyGuard, FinalSlotGuardMaker,
+                                   VarSlotGuardMaker)
 from typhon.objects.refs import RefOps, UnconnectedRef
 from typhon.objects.root import Object, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 from typhon.objects.tests import UnitTest
 from typhon.vats import currentVat
 
-
+ASTYPE_0 = getAtom(u"asType", 0)
 BROKEN_0 = getAtom(u"broken", 0)
 CALLWITHPAIR_2 = getAtom(u"callWithPair", 2)
 CALL_3 = getAtom(u"call", 3)
@@ -43,6 +45,8 @@ FROMITERABLE_1 = getAtom(u"fromIterable", 1)
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
 FROMSTRING_1 = getAtom(u"fromString", 1)
 FROMSTRING_2 = getAtom(u"fromString", 2)
+MAKEFINALSLOT_2 = getAtom(u"makeFinalSlot", 2)
+MAKEVARSLOT_2 = getAtom(u"makeVarSlot", 2)
 MATCHMAKER_1 = getAtom(u"matchMaker", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
@@ -184,12 +188,23 @@ class Throw(Object):
         raise Refused(self, atom, args)
 
 
-@runnable(RUN_2)
-def slotToBinding(args):
-    # XXX don't really care much about this right now
-    specimen = args[0]
-    # ej = args[1]
-    return Binding(specimen)
+class SlotBinder(Object):
+    def recv(self, atom, args):
+        if atom is RUN_1:
+            return SpecializedSlotBinder(args[0])
+        if atom is RUN_2:
+            return Binding(args[0], anyGuard)
+        raise Refused(self, atom, args)
+
+
+class SpecializedSlotBinder(Object):
+    def __init__(self, guard):
+        self.guard = guard
+
+    def recv(self, atom, args):
+        if atom is RUN_2:
+            return Binding(args[0], self.guard)
+        raise Refused(self, atom, args)
 
 
 class MObject(Object):
@@ -244,15 +259,38 @@ class MObject(Object):
 
         raise Refused(self, atom, args)
 
-
-@runnable(RUN_3)
-def makeVarSlot(args):
-    return VarSlot(args[0], args[1], args[2])
+theFinalSlotGuardMaker = FinalSlotGuardMaker()
+theVarSlotGuardMaker = VarSlotGuardMaker()
 
 
-@runnable(RUN_1)
-def makeFinalSlot(args):
-    return FinalSlot(args[0])
+class FinalSlotMaker(Object):
+    def recv(self, atom, args):
+        if atom is MAKEFINALSLOT_2:
+            if args[1] != NullObject:
+                val = args[1].coerce(args[0], Throw())
+                g = args[1]
+            else:
+                val = args[0]
+                g = anyGuard
+            return FinalSlot(val, g)
+        if atom is ASTYPE_0:
+            return theFinalSlotGuardMaker
+        raise Refused(self, atom, args)
+
+
+class VarSlotMaker(Object):
+    def recv(self, atom, args):
+        if atom is MAKEFINALSLOT_2:
+            if args[1] != NullObject:
+                val = args[1].coerce(args[0], Throw())
+                g = args[1]
+            else:
+                val = args[0]
+                g = anyGuard
+            return VarSlot(val, g)
+        if atom is ASTYPE_0:
+            return theVarSlotGuardMaker
+        raise Refused(self, atom, args)
 
 
 # Prebuild, since building on-the-fly NaN doesn't work in RPython.
@@ -262,7 +300,8 @@ NaN = DoubleObject(float("nan"))
 def safeScope():
     return {
         u"null": NullObject,
-
+        u"any": anyGuard,
+        u"Any": anyGuard,
         u"NaN": NaN,
         u"false": wrapBool(False),
         u"true": wrapBool(True),
@@ -277,9 +316,9 @@ def safeScope():
         u"__makeInt": MakeInt(),
         u"__makeDouble": MakeDouble(),
         u"__makeString": MakeString(),
-        u"__slotToBinding": slotToBinding(),
-        u"_makeFinalSlot": makeFinalSlot(),
-        u"_makeVarSlot": makeVarSlot(),
+        u"__slotToBinding": SlotBinder(),
+        u"_makeFinalSlot": FinalSlotMaker(),
+        u"_makeVarSlot": VarSlotMaker(),
         u"throw": Throw(),
 
         u"trace": TraceLn(),

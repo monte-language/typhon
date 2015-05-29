@@ -13,8 +13,10 @@
 # under the License.
 
 from typhon.atoms import getAtom
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import ConstList, ConstMap, ConstSet
 from typhon.objects.constants import BoolObject
+from typhon.objects.guards import anyGuard
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, wrapBool)
 from typhon.objects.root import runnable
@@ -68,4 +70,5 @@ def bootScope():
         u"isList": isList(),
         u"isMap": isMap(),
         u"isSet": isSet(),
+        u"DeepFrozenStamp": deepFrozenStamp,
     }

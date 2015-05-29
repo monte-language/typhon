@@ -14,7 +14,7 @@
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
-from typhon.objects.auditors import DeepFrozenStamp
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object
 
 
@@ -33,7 +33,7 @@ class _NullObject(Object):
 
     displayName = u"NullObject"
 
-    stamps = [DeepFrozenStamp]
+    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<null>"
@@ -48,7 +48,7 @@ class BoolObject(Object):
 
     displayName = u"BoolObject"
 
-    stamps = [DeepFrozenStamp]
+    stamps = [deepFrozenStamp]
 
     def __init__(self, b):
         self._b = b

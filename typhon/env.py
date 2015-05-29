@@ -15,6 +15,7 @@
 from rpython.rlib.jit import hint, promote
 
 from typhon.atoms import getAtom
+from typhon.objects.guards import anyGuard
 from typhon.objects.slots import Binding, FinalSlot
 
 
@@ -23,9 +24,12 @@ PUT_1 = getAtom(u"put", 1)
 
 
 def finalize(scope):
+    from typhon.prelude import getGlobal
+    from typhon.scopes.safe import theFinalSlotGuardMaker
     rv = {}
     for key in scope:
-        rv[key] = Binding(FinalSlot(scope[key]))
+        rv[key] = Binding(FinalSlot(scope[key], anyGuard),
+                          theFinalSlotGuardMaker)
     return rv
 
 
@@ -169,8 +173,8 @@ class Environment(object):
 
         self.local[index] = binding
 
-    def createSlotLocal(self, index, slot):
-        self.createBindingLocal(index, Binding(slot))
+    def createSlotLocal(self, index, slot, bindingGuard):
+        self.createBindingLocal(index, Binding(slot, bindingGuard))
 
     def getBindingLocal(self, index):
         # Elidability is based on bindings only being assigned once.

@@ -81,6 +81,7 @@ def makePredicateGuard(predicate, label):
         to makeSlot(value):
             return makeGuardedSlot(predicateGuard, value)
 
+
 # Data guards. These must come before any while-expressions.
 def Bool := makePredicateGuard(isBool, "Bool")
 def Char := makePredicateGuard(isChar, "Char")
@@ -398,38 +399,6 @@ unittest([
 ])
 
 
-object Any:
-    to _printOn(out):
-        out.print("Any")
-
-    to coerce(specimen, _):
-        return specimen
-
-    to makeSlot(value):
-        return makeGuardedSlot(Any, value)
-
-    match [=="get", subGuards ? (subGuards.size() != 0)]:
-        object subAny:
-            to _printOn(out):
-                out.print("Any[")
-                def [head] + tail := subGuards
-                head._printOn(out)
-                for subGuard in tail:
-                    out.print(", ")
-                    subGuard._printOn(out)
-                out.print("]")
-
-            to coerce(specimen, ej):
-                for subGuard in subGuards:
-                    escape subEj:
-                        return subGuard.coerce(specimen, subEj)
-                    catch _:
-                        continue
-                throw.eject(ej, "Specimen didn't match any subguard")
-
-            to makeSlot(value):
-                return makeGuardedSlot(subAny, value)
-
 def testAnySubGuard(assert):
     assert.ejects(fn ej {def x :Any[Int, Char] exit ej := "test"})
     assert.doesNotEject(fn ej {def x :Any[Int, Char] exit ej := 42})
@@ -564,6 +533,20 @@ object __booleanFlow:
     to failureList(count :Int) :List:
         return [false] + [__booleanFlow.broken()] * count
 
+object DeepFrozen:
+    to audit(audition):
+        return true
+    to coerce(specimen, ej):
+        return specimen
+
+object SubrangeGuard:
+    to get(superguard):
+        return object SpecializedSubrangeGuard:
+            to audit(audition):
+                return true
+            to coerce(specimen, ej):
+                return specimen
+
 
 # Simple QP needs patterns, some loops, some other syntax, and a few guards.
 def [=> simple__quasiParser] := import("prelude/simple", ["boolean" => Bool,
@@ -590,6 +573,7 @@ def [
                                => __booleanFlow, => __comparer,
                                => __iterWhile, => __validateFor,
                                => simple__quasiParser,
+                               => DeepFrozen, => SubrangeGuard,
                                "boolean" => Bool])
 
 # Spaces need some guards, and also regions.
@@ -606,8 +590,9 @@ def [
 [
     # Needed for interface expansions with ref Monte. :T
     "any" => Any,
+    => Any,
     "void" => Void,
-    "DeepFrozen" => Any,
+    => DeepFrozen,
     # This is 100% hack. See the matching comment near the top of the prelude.
     "boolean" => Bool,
 

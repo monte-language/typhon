@@ -19,6 +19,7 @@ from typhon.objects.root import Object
 
 
 GET_0 = getAtom(u"get", 0)
+GETGUARD_0 = getAtom(u"getGuard", 0)
 PUT_1 = getAtom(u"put", 1)
 
 
@@ -29,8 +30,9 @@ class Binding(Object):
 
     _immutable_ = True
 
-    def __init__(self, slot):
+    def __init__(self, slot, guard):
         self.slot = slot
+        self.guard = guard
 
     def toString(self):
         return u"<binding for %s>" % self.slot.toString()
@@ -39,6 +41,9 @@ class Binding(Object):
         if atom is GET_0:
             return self.slot
 
+        if atom is GETGUARD_0:
+            return self.guard
+
         raise Refused(self, atom, args)
 
 
@@ -46,10 +51,14 @@ class Slot(Object):
     """
     A storage space.
     """
+    _immutable_fields_ = '_guard',
 
     def recv(self, atom, args):
         if atom is GET_0:
             return self.get()
+
+        if atom is GETGUARD_0:
+            return self._guard
 
         if atom is PUT_1:
             return self.put(args[0])
@@ -59,10 +68,11 @@ class Slot(Object):
 
 class FinalSlot(Slot):
 
-    _immutable_ = True
+    _immutable_fields_ = "_obj", "_guard"
 
-    def __init__(self, obj):
+    def __init__(self, obj, guard):
         self._obj = obj
+        self._guard = guard
 
     def toString(self):
         return u"<FinalSlot(%s)>" % self._obj.toString()
@@ -75,14 +85,10 @@ class FinalSlot(Slot):
 
 
 class VarSlot(Slot):
-
-    def __init__(self, obj, guard, ej):
+    _immutable_fields_ = "_guard",
+    def __init__(self, obj, guard):
+        self._obj = obj
         self._guard = guard
-        self._ej = ej
-
-        # The initial coercion has not yet been done; we are responsible for
-        # performing it here. Cheat and reuse the put() method.
-        self.put(obj)
 
     def toString(self):
         return u"<VarSlot(%s, %s)>" % (self._obj.toString(),
@@ -92,8 +98,9 @@ class VarSlot(Slot):
         return self._obj
 
     def put(self, value):
+        from typhon.scopes.safe import Throw
         if self._guard is NullObject:
             self._obj = value
         else:
-            self._obj = self._guard.call(u"coerce", [value, self._ej])
+            self._obj = self._guard.call(u"coerce", [value, Throw()])
         return NullObject

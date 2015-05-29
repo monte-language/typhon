@@ -13,7 +13,8 @@
 # under the License.
 
 from typhon.smallcaps.ops import (DUP, ROT, POP, SWAP, ASSIGN_FRAME,
-                                  ASSIGN_GLOBAL, ASSIGN_LOCAL, BIND, BINDSLOT,
+                                  ASSIGN_GLOBAL, ASSIGN_LOCAL, BIND,
+                                  BINDFINALSLOT, BINDVARSLOT,
                                   SLOT_FRAME, SLOT_GLOBAL, SLOT_LOCAL,
                                   NOUN_FRAME, NOUN_GLOBAL, NOUN_LOCAL,
                                   BINDING_FRAME, BINDING_GLOBAL,
@@ -80,13 +81,15 @@ class AbstractInterpreter(object):
         elif instruction in (ROT, SWAP):
             pass
         elif instruction in (POP, ASSIGN_FRAME, ASSIGN_GLOBAL, ASSIGN_LOCAL,
-                             BIND, BINDSLOT):
+                             BIND):
             self.pop()
+        elif instruction in (BINDFINALSLOT, BINDVARSLOT):
+            self.pop(3)
         elif instruction == LIST_PATT:
             self.pop(2)
             self.push(index * 2)
         elif instruction == BINDOBJECT:
-            self.pop(self.code.scripts[index].numStamps)
+            self.pop(self.code.scripts[index].numAuditors)
             self.pop(len(self.code.scripts[index].globalNames))
             self.pop(len(self.code.scripts[index].closureNames))
             self.push()

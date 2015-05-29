@@ -926,11 +926,11 @@ class Obj(Node):
         # Create a code object for this object.
         availableClosure = compiler.frame.copy()
         availableClosure.update(compiler.locals)
-        numStamps = len(self._implements)
+        numAuditors = len(self._implements)
         if self._as is not None:
-            numStamps += 1
+            numAuditors += 1
         self.codeScript = CodeScript(
-            formatName(self._n), numStamps, availableClosure)
+            formatName(self._n), self, numAuditors, availableClosure)
         self.codeScript.addScript(self._script)
         # The local closure is first to be pushed and last to be popped.
         for name in self.codeScript.closureNames:
@@ -971,13 +971,14 @@ class Obj(Node):
 
 class CodeScript(object):
 
-    _immutable_fields_ = ("displayName", "numStamps", "closureNames",
+    _immutable_fields_ = ("displayName", "objectAst", "numAuditors", "closureNames",
                           "globalNames")
 
-    def __init__(self, displayName, numStamps, availableClosure):
+    def __init__(self, displayName, objectAst, numAuditors, availableClosure):
         self.displayName = displayName
+        self.objectAst = objectAst
         self.availableClosure = availableClosure
-        self.numStamps = numStamps
+        self.numAuditors = numAuditors
         # Objects can close over themselves. Here we merely make sure that the
         # display name is in the available closure, but we don't close over
         # ourselves unless requested during compilation. (If we don't make the
@@ -991,8 +992,9 @@ class CodeScript(object):
         self.closureNames = OrderedDict()
         self.globalNames = OrderedDict()
 
-    def makeObject(self, closure, globals, stamps):
-        obj = ScriptObject(self, globals, closure, self.displayName, stamps)
+    def makeObject(self, closure, globals, auditors):
+        obj = ScriptObject(self, globals, self.globalNames, closure,
+                           self.closureNames, self.displayName, auditors)
         return obj
 
     @elidable
@@ -1271,25 +1273,14 @@ class FinalPattern(Pattern):
     def compile(self, compiler):
         # [specimen ej]
         if self._g is None:
-            compiler.addInstruction("POP", 0)
-            # [specimen]
+            index = compiler.addGlobal(u"Any")
+            compiler.addInstruction("NOUN_GLOBAL", index)
+            # [specimen ej guard]
         else:
             self._g.compile(compiler)
             # [specimen ej guard]
-            compiler.addInstruction("ROT", 0)
-            compiler.addInstruction("ROT", 0)
-            # [guard specimen ej]
-            compiler.call(u"coerce", 2)
-            # [specimen]
-        index = compiler.addGlobal(u"_makeFinalSlot")
-        compiler.addInstruction("NOUN_GLOBAL", index)
-        # [specimen _makeFinalSlot]
-        compiler.addInstruction("SWAP", 0)
-        # [_makeFinalSlot specimen]
-        compiler.call(u"run", 1)
-        # [slot]
         index = compiler.addLocal(self._n)
-        compiler.addInstruction("BINDSLOT", index)
+        compiler.addInstruction("BINDFINALSLOT", index)
         # []
 
 
@@ -1406,23 +1397,15 @@ class VarPattern(Pattern):
 
     def compile(self, compiler):
         # [specimen ej]
-        index = compiler.addGlobal(u"_makeVarSlot")
-        compiler.addInstruction("NOUN_GLOBAL", index)
-        # [specimen ej _makeVarSlot]
-        compiler.addInstruction("ROT", 0)
-        compiler.addInstruction("ROT", 0)
-        # [_makeVarSlot specimen ej]
         if self._g is None:
-            compiler.literal(NullObject)
+            index = compiler.addGlobal(u"Any")
+            compiler.addInstruction("NOUN_GLOBAL", index)
+            # [specimen ej guard]
         else:
             self._g.compile(compiler)
-        # [_makeVarSlot specimen ej guard]
-        compiler.addInstruction("SWAP", 0)
-        # [_makeVarSlot specimen guard ej]
-        compiler.call(u"run", 3)
-        # [slot]
+            # [specimen ej guard]
         index = compiler.addLocal(self._n)
-        compiler.addInstruction("BINDSLOT", index)
+        compiler.addInstruction("BINDVARSLOT", index)
 
 
 class ViaPattern(Pattern):

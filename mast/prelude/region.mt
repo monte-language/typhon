@@ -1,17 +1,3 @@
-# XXX yolo
-object DeepFrozen:
-    to coerce(x, _):
-        return x
-
-# XXX yolo
-object SubrangeGuard:
-    to get(_):
-        return object SubrangeSubGuard:
-            pass
-
-# XXX yolo
-def primInt :DeepFrozen := Int
-
 # A min where null represents positive infinity
 def min(a, b) as DeepFrozen:
     if (a == null):
@@ -72,8 +58,8 @@ object OrderedRegionMaker as DeepFrozen:
             initBoundedLeft := !initBoundedLeft
 
         initEdges := initEdges.snapshot()
-        def myInParity :primInt := if (initBoundedLeft) {0} else {1}
-        def myLen :primInt := initEdges.size()
+        def myInParity :Int := if (initBoundedLeft) {0} else {1}
+        def myLen :Int := initEdges.size()
         def myTypeR :Same[myType] := myType # for SubrangeGuard audit
 
         def myBoundedLeft :Bool := initBoundedLeft
