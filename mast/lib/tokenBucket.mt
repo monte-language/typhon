@@ -47,7 +47,7 @@ def makeTokenBucket(maximumSize :Int, refillRate :Double):
 
         to ready():
             def [p, r] := Ref.promise()
-            resolvers with= r
+            resolvers with= (r)
             return p
 
 [=> makeTokenBucket]
