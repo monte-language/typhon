@@ -22,6 +22,9 @@ $(boot_objects): boot/%.ty: mast/%.mt
 	@ echo "MONTEC (boot scope) $<"
 	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec.ty $< $@ 2> /dev/null
 
+test: default
+	trial typhon
+	find mast/lib -name \*.ty -exec ./mt-typhon -l mast {} \;
 
 mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty \
 	mast/lib/regex.ty mast/lib/words.ty \

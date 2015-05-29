@@ -7,7 +7,7 @@ install:
 env:
     - OPT=-O2
     - OPT=-Ojit
-script: trial typhon && python -m rpython $OPT main
+script: python -m rpython $OPT main && make test
 matrix:
     fast_finish: true
 notifications:
