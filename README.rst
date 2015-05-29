@@ -71,6 +71,17 @@ Trial test runner::
 
     $ trial typhon
 
+Diffing Typhon Binaries
+-----------------------
+
+By default, git won't show diffs of binary files. I don't especially blame it.
+However, with a bit of a filter, we can give git what it needs::
+
+    $ git config diff.typhon.textconv ./dump.py
+
+This configuration option, along with the ``.gitattributes`` in the
+repository, will let git display textual diffs of the binary ASTs.
+
 RPython Quirks
 --------------
 
