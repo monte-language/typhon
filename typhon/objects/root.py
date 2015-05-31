@@ -99,8 +99,7 @@ class Object(object):
         raise Refused(self, atom, args)
 
     def auditedBy(self, stamp):
-        from typhon.objects.constants import wrapBool
-        return wrapBool(stamp in self.stamps)
+        return stamp in self.stamps
 
 
 def runnable(singleAtom):

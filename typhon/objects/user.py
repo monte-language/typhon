@@ -139,7 +139,7 @@ class ScriptObject(Object):
                 FinalSlotGuard(guard))
 
     def auditedBy(self, stamp):
-        return wrapBool(stamp in self._stamps)
+        return stamp in self._stamps
 
     def toString(self):
         try:

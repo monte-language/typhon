@@ -31,7 +31,12 @@ BROKEN, EVENTUAL, NEAR = RefState(), RefState(), RefState()
 
 BROKEN_1 = getAtom(u"broken", 1)
 ISBROKEN_1 = getAtom(u"isBroken", 1)
+ISDEEPFROZEN_1 = getAtom(u"isDeepFrozen", 1)
+ISEVENTUAL_1 = getAtom(u"isEventual", 1)
+ISNEAR_1 = getAtom(u"isNear", 1)
 ISRESOLVED_1 = getAtom(u"isResolved", 1)
+ISSELFISH_1 = getAtom(u"isSelfish", 1)
+ISSELFLESS_1 = getAtom(u"isSelfless", 1)
 PROMISE_0 = getAtom(u"promise", 0)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RESOLVE_2 = getAtom(u"resolve", 2)
@@ -84,8 +89,23 @@ class RefOps(Object):
         if atom is ISBROKEN_1:
             return wrapBool(self.isBroken(args[0]))
 
+        if atom is ISDEEPFROZEN_1:
+            return wrapBool(self.isDeepFrozen(args[0]))
+
+        if atom is ISEVENTUAL_1:
+            return wrapBool(self.isEventual(args[0]))
+
+        if atom is ISNEAR_1:
+            return wrapBool(self.isNear(args[0]))
+
         if atom is ISRESOLVED_1:
             return wrapBool(isResolved(args[0]))
+
+        if atom is ISSELFISH_1:
+            return wrapBool(self.isSelfish(args[0]))
+
+        if atom is ISSELFLESS_1:
+            return wrapBool(self.isSelfless(args[0]))
 
         if atom is PROMISE_0:
             return self.promise()
@@ -153,7 +173,7 @@ class RefOps(Object):
 #    def fulfillment(self, ref):
 #        ref = self.resolution(ref)
 #        p = self.optProblem(ref)
-#        if self.isResolved(ref):
+#        if isResolved(ref):
 #            if p is NullObject:
 #                return ref
 #            else:
@@ -162,7 +182,7 @@ class RefOps(Object):
 #            raise RuntimeError("Not resolved: %r" % (ref,))
 
     def isFar(self, ref):
-        return self.isEventual(ref) and self.isResolved(ref)
+        return self.isEventual(ref) and isResolved(ref)
 
     def whenResolved(self, o, callback):
         p, r = makePromise()
@@ -192,7 +212,7 @@ class RefOps(Object):
         return o.auditedBy(deepFrozenStamp)
 
     def isSelfless(self, o):
-        # XXX
+        # XXX overly conservative.
         return False
 
     def isSelfish(self, o):

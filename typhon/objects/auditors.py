@@ -26,7 +26,8 @@ def auditedBy(args):
     auditor = args[0]
     specimen = args[1]
 
-    return specimen.auditedBy(auditor)
+    from typhon.objects.constants import wrapBool
+    return wrapBool(specimen.auditedBy(auditor))
 
 
 class DeepFrozenStamp(Object):
