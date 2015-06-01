@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.jit import elidable
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import r_ordereddict
 from rpython.rlib.rarithmetic import intmask
@@ -171,23 +172,31 @@ class Collection(object):
 
 class ConstList(Collection, Object):
 
-    _immutable_fields_ = "objects[*]",
+    _immutable_fields_ = "storage[*]",
+
+    rstrategies.make_accessors(strategy="strategy", storage="storage")
+
+    strategy = None
 
     def __init__(self, objects):
-        self.objects = objects
+        strategy = strategyFactory.strategy_type_for(objects)
+        strategyFactory.set_initial_strategy(self, strategy, len(objects),
+                                             objects)
 
     def toString(self):
-        guts = u", ".join([obj.toString() for obj in self.objects])
+        guts = u", ".join([obj.toString()
+                           for obj in self.strategy.fetch_all(self)])
         return u"[%s]" % (guts,)
 
     def toQuote(self):
-        guts = u", ".join([obj.toQuote() for obj in self.objects])
+        guts = u", ".join([obj.toQuote()
+                           for obj in self.strategy.fetch_all(self)])
         return u"[%s]" % (guts,)
 
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.
         x = 0x345678
-        for obj in self.objects:
+        for obj in self.strategy.fetch_all(self):
             y = obj.hash()
             x = intmask((1000003 * x) ^ y)
         return x
@@ -196,7 +205,7 @@ class ConstList(Collection, Object):
         if atom is ADD_1:
             other = unwrapList(args[0])
             if len(other):
-                return ConstList(self.objects + other)
+                return ConstList(self.strategy.fetch_all(self) + other)
             else:
                 return self
 
@@ -207,33 +216,34 @@ class ConstList(Collection, Object):
             return ConstSet(self.asSet())
 
         if atom is DIVERGE_0:
-            return FlexList(self.objects[:])
+            return FlexList(self.strategy.fetch_all(self)[:])
 
         if atom is GET_1:
             # Lookup by index.
             index = unwrapInt(args[0])
-            if index >= len(self.objects):
+            if index >= self.strategy.size(self):
                 raise userError(u"Index %d is out of bounds" % index)
-            return self.objects[index]
+            return self.strategy.fetch(self, index)
 
         if atom is INDEXOF_1:
             return IntObject(self.indexOf(args[0]))
 
         if atom is LAST_0:
-            if self.objects:
-                return self.objects[-1]
+            size = self.strategy.size(self)
+            if size:
+                return self.strategy.fetch(self, size - 1)
             raise userError(u"Empty list has no last element")
 
         if atom is MULTIPLY_1:
             # multiply/1: Create a new list by repeating this list's contents.
             index = unwrapInt(args[0])
-            return ConstList(self.objects * index)
+            return ConstList(self.strategy.fetch_all(self) * index)
 
         if atom is REVERSE_0:
             # This might seem slightly inefficient, and it might be, but I
             # want to make it very clear to RPython that we are not mutating
             # the list after we assign it to the new object.
-            new = self.objects[:]
+            new = self.strategy.fetch_all(self)[:]
             new.reverse()
             return ConstList(new)
 
@@ -245,7 +255,7 @@ class ConstList(Collection, Object):
 
         if atom is WITH_1:
             # with/1: Create a new list with an appended object.
-            return ConstList(self.objects + args)
+            return ConstList(self.strategy.fetch_all(self) + args)
 
         if atom is WITH_2:
             # Replace by index.
@@ -255,72 +265,74 @@ class ConstList(Collection, Object):
         raise Refused(self, atom, args)
 
     def _makeIterator(self):
-        return listIterator(self.objects)
+        return listIterator(self.strategy.fetch_all(self))
 
     def asMap(self):
         d = monteDict()
-        for i, o in enumerate(self.objects):
+        for i, o in enumerate(self.strategy.fetch_all(self)):
             d[IntObject(i)] = o
         return d
 
     def asSet(self):
         d = monteDict()
-        for o in self.objects:
+        for o in self.strategy.fetch_all(self):
             d[o] = None
         return d
 
     def contains(self, needle):
         from typhon.objects.equality import EQUAL, optSame
-        for specimen in self.objects:
+        for specimen in self.strategy.fetch_all(self):
             if optSame(needle, specimen) is EQUAL:
                 return True
         return False
 
     def indexOf(self, needle):
         from typhon.objects.equality import EQUAL, optSame
-        for index, specimen in enumerate(self.objects):
+        for index, specimen in enumerate(self.strategy.fetch_all(self)):
             if optSame(needle, specimen) is EQUAL:
                 return index
         return -1
 
     def put(self, index, value):
-        top = len(self.objects)
+        objects = self.strategy.fetch_all(self)
+        top = self.strategy.size(self)
         if 0 <= index < top:
-            new = self.objects[:]
+            new = objects[:]
             new[index] = value
         elif index == top:
-            new = self.objects + [value]
+            new = objects + [value]
         else:
             raise userError(u"Index %d out of bounds for list of length %d" %
-                           (index, len(self.objects)))
+                           (index, self.strategy.size(self)))
 
         return ConstList(new)
 
+    @elidable
     def size(self):
-        return len(self.objects)
+        return self.strategy.size(self)
 
     def slice(self, start, stop=-1):
         assert start >= 0
         if stop < 0:
-            return ConstList(self.objects[start:])
-        else:
-            return ConstList(self.objects[start:stop])
+            stop = self.strategy.size(self)
+
+        return ConstList(self.strategy.slice(self, start, stop))
 
     def snapshot(self):
-        return ConstList(self.objects[:])
+        return ConstList(self.strategy.fetch_all(self))
 
     def sort(self):
-        l = self.objects[:]
+        l = self.strategy.fetch_all(self)
         MonteSorter(l).sort()
         return ConstList(l)
 
     def startOf(self, needleList):
         # This is quadratic. It could be better.
         from typhon.objects.equality import EQUAL, optSame
-        for index in range(len(self.objects)):
+        for index in range(self.strategy.size(self)):
             for needleIndex, needle in enumerate(needleList):
                 offset = index + needleIndex
-                if optSame(self.objects[offset], needle) is not EQUAL:
+                if optSame(self.strategy.fetch(self, offset), needle) is not EQUAL:
                     break
                 return index
         return -1
@@ -808,7 +820,7 @@ def unwrapList(o, ej=None):
     from typhon.objects.refs import resolution
     l = resolution(o)
     if isinstance(l, ConstList):
-        return l.objects
+        return l.strategy.fetch_all(l)
     if isinstance(l, FlexList):
         return l.strategy.fetch_all(l)
     throw(ej, StrObject(u"Not a list!"))

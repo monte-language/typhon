@@ -78,14 +78,15 @@ class TestOptSame(TestCase):
 
     def testListEqualityRecursionReflexive(self):
         first = ConstList([IntObject(42)])
-        first.objects.append(first)
+        first.strategy.append(first, [first])
         self.assertEqual(optSame(first, first), EQUAL)
 
     def testListEqualityRecursion(self):
+        # Yes, this is very hacky.
         first = ConstList([IntObject(42)])
-        first.objects.append(first)
+        first.strategy.append(first, [first])
         second = ConstList([IntObject(42)])
-        second.objects.append(second)
+        second.strategy.append(second, [second])
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListInequality(self):
