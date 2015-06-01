@@ -371,7 +371,8 @@ class EmptyStrategy(AbstractStrategy):
     def fetch(self, w_self, index0):
         raise IndexError
     def store(self, w_self, index0, value):
-        self._cannot_handle_store(w_self, index0, [value])
+        # There was a bug in the original code.
+        self._cannot_handle_store(w_self, index0, value)
     def insert(self, w_self, index0, list_w):
         self._cannot_handle_insert(w_self, index0, list_w)
     def delete(self, w_self, start, end):
@@ -516,7 +517,8 @@ class SafeIndexingMixin(object):
         if end < start:
             raise IndexError
         self.check_index(w_self, start)
-        self.check_index(w_self, end)
+        # The original code has an off-by-one here.
+        self.check_index(w_self, end - 1)
     def check_index(self, w_self, index0):
         if index0 < 0 or index0 >= self.size(w_self):
             raise IndexError

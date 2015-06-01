@@ -23,6 +23,8 @@ from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import throw
 from typhon.objects.root import Object
 from typhon.prelude import getGlobal
+from typhon.rstrategies import rstrategies
+from typhon.strategies import strategyFactory
 
 
 AND_1 = getAtom(u"and", 1)
@@ -326,21 +328,29 @@ class ConstList(Collection, Object):
 
 class FlexList(Collection, Object):
 
+    rstrategies.make_accessors(strategy="strategy", storage="storage")
+
+    strategy = None
+
     def __init__(self, flexObjects):
-        self.flexObjects = flexObjects
+        strategy = strategyFactory.strategy_type_for(flexObjects)
+        strategyFactory.set_initial_strategy(self, strategy, len(flexObjects),
+                                             flexObjects)
 
     def toString(self):
-        guts = u", ".join([obj.toString() for obj in self.flexObjects])
+        guts = u", ".join([obj.toString()
+                           for obj in self.strategy.fetch_all(self)])
         return u"[%s].diverge()" % (guts,)
 
     def toQuote(self):
-        guts = u", ".join([obj.toQuote() for obj in self.flexObjects])
+        guts = u", ".join([obj.toQuote()
+                           for obj in self.strategy.fetch_all(self)])
         return u"[%s].diverge()" % (guts,)
 
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.
         x = 0x345678
-        for obj in self.flexObjects:
+        for obj in self.strategy.fetch_all(self):
             y = obj.hash()
             x = intmask((1000003 * x) ^ y)
         return x
@@ -348,7 +358,8 @@ class FlexList(Collection, Object):
     def _recv(self, atom, args):
         if atom is ADD_1:
             other = args[0]
-            return ConstList(self.flexObjects + unwrapList(other))
+            return ConstList(self.strategy.fetch_all(self) +
+                             unwrapList(other))
 
         if atom is ASMAP_0:
             return ConstMap(self.asMap())
@@ -357,17 +368,18 @@ class FlexList(Collection, Object):
             return ConstSet(self.asSet())
 
         if atom is DIVERGE_0:
-            return FlexList(self.flexObjects)
+            return FlexList(self.strategy.fetch_all(self))
 
         if atom is EXTEND_1:
-            self.flexObjects.extend(unwrapList(args[0]))
+            self.strategy.append(self, unwrapList(args[0]))
             return NullObject
+
         if atom is GET_1:
             # Lookup by index.
             index = unwrapInt(args[0])
-            if index >= len(self.flexObjects) or index < 0:
+            if index >= self.strategy.size(self) or index < 0:
                 raise userError(u"Index %d is out of bounds" % index)
-            return self.flexObjects[index]
+            return self.strategy.fetch(self, index)
 
         if atom is INDEXOF_1:
             return IntObject(self.indexOf(args[0]))
@@ -377,24 +389,26 @@ class FlexList(Collection, Object):
             value = args[1]
             if index < 0:
                 raise userError(u"Index %d is out of bounds" % index)
-            self.flexObjects.insert(index, value)
+            self.strategy.insert(self, index, [value])
             return NullObject
 
         if atom is LAST_0:
-            if self.flexObjects:
-                return self.flexObjects[-1]
+            size = self.strategy.size(self)
+            if size:
+                return self.strategy.fetch(self, size - 1)
             raise userError(u"Empty list has no last element")
 
         if atom is MULTIPLY_1:
             # multiply/1: Create a new list by repeating this list's contents.
             index = unwrapInt(args[0])
-            return ConstList(self.flexObjects * index)
+            return ConstList(self.strategy.fetch_all(self) * index)
 
         if atom is POP_0:
-            return self.flexObjects.pop()
+            if self.strategy.size(self):
+                return self.strategy.pop(self, self.strategy.size(self) - 1)
 
         if atom is PUSH_1:
-            self.flexObjects.append(args[0])
+            self.strategy.append(self, args)
             return NullObject
 
         if atom is PUT_2:
@@ -403,12 +417,12 @@ class FlexList(Collection, Object):
             return self.put(index, args[1])
 
         if atom is REVERSE_0:
-            self.flexObjects.reverse()
+            self.strategy.store_all(self, self.strategy.fetch_all(self))
             return NullObject
 
         if atom is WITH_1:
             # with/1: Create a new list with an appended object.
-            return ConstList(self.flexObjects + args)
+            return ConstList(self.strategy.fetch_all(self) + args)
 
         if atom is WITH_2:
             # Make a new ConstList.
@@ -419,58 +433,56 @@ class FlexList(Collection, Object):
     def _makeIterator(self):
         # This is the behavior we choose: Iterating over a FlexList grants
         # iteration over a snapshot of the list's contents at that point.
-        return listIterator(self.flexObjects[:])
+        return listIterator(self.strategy.fetch_all(self))
 
     def asMap(self):
         d = monteDict()
-        for i, o in enumerate(self.flexObjects):
+        for i, o in enumerate(self.strategy.fetch_all(self)):
             d[IntObject(i)] = o
         return d
 
     def asSet(self):
         d = monteDict()
-        for o in self.flexObjects:
+        for o in self.strategy.fetch_all(self):
             d[o] = None
         return d
 
     def contains(self, needle):
         from typhon.objects.equality import EQUAL, optSame
-        for specimen in self.flexObjects:
+        for specimen in self.strategy.fetch_all(self):
             if optSame(needle, specimen) is EQUAL:
                 return True
         return False
 
     def indexOf(self, needle):
         from typhon.objects.equality import EQUAL, optSame
-        for index, specimen in enumerate(self.flexObjects):
+        for index, specimen in enumerate(self.strategy.fetch_all(self)):
             if optSame(needle, specimen) is EQUAL:
                 return index
         return -1
 
     def put(self, index, value):
-        top = len(self.flexObjects)
-        if 0 <= index < top:
-            self.flexObjects[index] = value
-        elif index == top:
-            self.flexObjects.append(value)
+        top = self.strategy.size(self)
+        if 0 <= index <= top:
+            self.strategy.insert(self, index, [value])
         else:
             raise userError(u"Index %d out of bounds for list of length %d" %
-                           (index, len(self.flexObjects)))
+                           (index, top))
 
         return NullObject
 
     def size(self):
-        return len(self.flexObjects)
+        return self.strategy.size(self)
 
     def slice(self, start, stop=-1):
         assert start >= 0
         if stop < 0:
-            return ConstList(self.flexObjects[start:])
-        else:
-            return ConstList(self.flexObjects[start:stop])
+            stop = self.strategy.size(self)
+
+        return ConstList(self.strategy.slice(self, start, stop))
 
     def snapshot(self):
-        return ConstList(self.flexObjects[:])
+        return ConstList(self.strategy.fetch_all(self))
 
 
 # Let's talk about maps for a second.
@@ -798,8 +810,7 @@ def unwrapList(o, ej=None):
     if isinstance(l, ConstList):
         return l.objects
     if isinstance(l, FlexList):
-        # XXX this isn't ideal.
-        return l.flexObjects[:]
+        return l.strategy.fetch_all(l)
     throw(ej, StrObject(u"Not a list!"))
 
 
