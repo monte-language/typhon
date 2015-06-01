@@ -1,5 +1,7 @@
 from rpython.rlib.objectmodel import import_from_mixin
 
+from typhon.objects.constants import (BoolObject, FalseObject, NullObject,
+                                      unwrapBool, wrapBool)
 from typhon.objects.data import IntObject
 from typhon.rstrategies import rstrategies
 
@@ -31,6 +33,18 @@ class GenericListStrategy(Strategy):
 
 
 @rstrategies.strategy(generalize=[GenericListStrategy])
+class NullListStrategy(Strategy):
+    """
+    A list with only nulls.
+    """
+
+    import_from_mixin(rstrategies.SingleValueStrategy)
+
+    def value(self):
+        return NullObject
+
+
+@rstrategies.strategy(generalize=[GenericListStrategy])
 class SmallIntListStrategy(Strategy):
     """
     A list with only ints which are able to fit into machine words.
@@ -51,7 +65,28 @@ class SmallIntListStrategy(Strategy):
         return value.getInt()
 
 
-@rstrategies.strategy(generalize=[SmallIntListStrategy, GenericListStrategy])
+@rstrategies.strategy(generalize=[GenericListStrategy])
+class BoolListStrategy(Strategy):
+    """
+    A list with only booleans.
+    """
+
+    import_from_mixin(rstrategies.SingleTypeStrategy)
+
+    contained_type = BoolObject
+
+    def default_value(self):
+        return FalseObject
+
+    def wrap(self, value):
+        return wrapBool(value)
+
+    def unwrap(self, value):
+        return unwrapBool(value)
+
+
+@rstrategies.strategy(generalize=[NullListStrategy, SmallIntListStrategy,
+                                  BoolListStrategy, GenericListStrategy])
 class EmptyListStrategy(Strategy):
     """
     A list with no elements.
