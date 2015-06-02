@@ -3,6 +3,7 @@ from rpython.rlib.objectmodel import import_from_mixin
 from typhon.objects.constants import (BoolObject, FalseObject, NullObject,
                                       unwrapBool, wrapBool)
 from typhon.objects.data import IntObject
+from typhon.objects.refs import UnconnectedRef
 from typhon.rstrategies import rstrategies
 
 
@@ -61,11 +62,30 @@ class SmallIntListStrategy(Strategy):
         return IntObject(value)
 
     def unwrap(self, value):
-        assert isinstance(value, IntObject)
         return value.getInt()
 
 
 @rstrategies.strategy(generalize=[GenericListStrategy])
+class BooleanFlowStrategy(Strategy):
+    """
+    A list of unconnected refs.
+    """
+
+    import_from_mixin(rstrategies.SingleTypeStrategy)
+
+    contained_type = UnconnectedRef
+
+    def default_value(self):
+        return UnconnectedRef(u"Implementation detail leaked")
+
+    def wrap(self, value):
+        return UnconnectedRef(value)
+
+    def unwrap(self, value):
+        return value._problem
+
+
+@rstrategies.strategy(generalize=[BooleanFlowStrategy, GenericListStrategy])
 class BoolListStrategy(Strategy):
     """
     A list with only booleans.
@@ -86,7 +106,8 @@ class BoolListStrategy(Strategy):
 
 
 @rstrategies.strategy(generalize=[NullListStrategy, SmallIntListStrategy,
-                                  BoolListStrategy, GenericListStrategy])
+                                  BooleanFlowStrategy, BoolListStrategy,
+                                  GenericListStrategy])
 class EmptyListStrategy(Strategy):
     """
     A list with no elements.
@@ -100,3 +121,4 @@ class StrategyFactory(rstrategies.StrategyFactory):
 
 
 strategyFactory = StrategyFactory(Strategy)
+# strategyFactory.logger.activate()

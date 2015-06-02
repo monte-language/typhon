@@ -17,7 +17,6 @@ import weakref
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object
@@ -135,6 +134,7 @@ class RefOps(Object):
         raise Refused(self, atom, args)
 
     def promise(self):
+        from typhon.objects.collections import ConstList
         p, r = makePromise()
         return ConstList([p, r])
 
