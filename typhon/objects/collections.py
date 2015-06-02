@@ -236,8 +236,12 @@ class ConstList(Collection, Object):
 
         if atom is MULTIPLY_1:
             # multiply/1: Create a new list by repeating this list's contents.
-            index = unwrapInt(args[0])
-            return ConstList(self.strategy.fetch_all(self) * index)
+            count = unwrapInt(args[0])
+            if count < 0:
+                raise userError(u"Can't multiply list %d times" % count)
+            elif count == 0:
+                return ConstList([])
+            return ConstList(self.strategy.fetch_all(self) * count)
 
         if atom is REVERSE_0:
             # This might seem slightly inefficient, and it might be, but I
