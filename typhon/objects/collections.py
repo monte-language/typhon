@@ -172,7 +172,7 @@ class Collection(object):
 
 class ConstList(Collection, Object):
 
-    _immutable_fields_ = "storage[*]",
+    _immutable_fields_ = "storage[*]", "strategy[*]"
 
     rstrategies.make_accessors(strategy="strategy", storage="storage")
 
@@ -311,6 +311,7 @@ class ConstList(Collection, Object):
     def size(self):
         return self.strategy.size(self)
 
+    @elidable
     def slice(self, start, stop=-1):
         assert start >= 0
         if stop < 0:
@@ -318,6 +319,7 @@ class ConstList(Collection, Object):
 
         return ConstList(self.strategy.slice(self, start, stop))
 
+    @elidable
     def snapshot(self):
         return ConstList(self.strategy.fetch_all(self))
 

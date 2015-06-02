@@ -473,6 +473,8 @@ class StrategyWithStorage(AbstractStrategy):
             start = self.size(w_self)
         for i in range(len(list_w)):
             if self._check_can_handle(list_w[i]):
+                assert start >= 0
+                assert i >= 0
                 self.get_storage(w_self).insert(start + i, self._unwrap(list_w[i]))
             else:
                 self._cannot_handle_insert(w_self, start + i, list_w[i:])
