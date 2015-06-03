@@ -82,6 +82,7 @@ class BooleanFlowStrategy(Strategy):
         return UnconnectedRef(value)
 
     def unwrap(self, value):
+        assert isinstance(value, UnconnectedRef), "Implementation detail"
         return value._problem
 
 
