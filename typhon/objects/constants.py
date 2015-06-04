@@ -25,6 +25,7 @@ OP__CMP_1 = getAtom(u"op__cmp", 1)
 OR_1 = getAtom(u"or", 1)
 PICK_2 = getAtom(u"pick", 2)
 XOR_1 = getAtom(u"xor", 1)
+_PRINTON_1 = getAtom(u"_printOn", 1)
 
 
 class _NullObject(Object):
@@ -37,6 +38,16 @@ class _NullObject(Object):
 
     def toString(self):
         return u"<null>"
+
+    def recv(self, atom, args):
+        # XXX you know something's wrong when null has recv
+        if atom is _PRINTON_1:
+            out = args[0]
+            from typhon.objects.data import StrObject
+            out.call(u"print", [StrObject(u"null")])
+            return self
+
+        raise Refused(self, atom, args)
 
 
 NullObject = _NullObject()
@@ -86,6 +97,12 @@ class BoolObject(Object):
         # xor/1
         if atom is XOR_1:
             return wrapBool(self._b ^ unwrapBool(args[0]))
+
+        if atom is _PRINTON_1:
+            out = args[0]
+            from typhon.objects.data import StrObject
+            out.call(u"print", [StrObject(u"true" if self._b else u"false")])
+            return self
 
         raise Refused(self, atom, args)
 
