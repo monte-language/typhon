@@ -95,21 +95,10 @@ class SmallCaps(object):
         args.reverse()
         target = self.pop()
 
-        try:
-            with csp.startCall(target, atom):
-                self.push(target.callAtom(atom, args))
-        except UserException as ue:
-            argStringList = []
-            for arg in args:
-                try:
-                    argStringList.append(arg.toQuote())
-                except UserException as ue2:
-                    argStringList.append(u"<**%s throws %r when printed**>" % (
-                        arg.displayName, ue2))
-            argString = u", ".join(argStringList)
-            atomRepr = atom.repr.decode("utf-8")
-            ue.trail.append(u"In %s.%s [%s]:" % (target.displayName, atomRepr, argString))
-            raise
+        # We used to add the call trail for tracebacks here, but it's been
+        # moved to t.o.root. Happy bug hunting! ~ C.
+        with csp.startCall(target, atom):
+            self.push(target.callAtom(atom, args))
 
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)

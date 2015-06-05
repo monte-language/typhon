@@ -16,12 +16,25 @@ from rpython.rlib.jit import jit_debug, promote
 from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused
+from typhon.errors import Refused, UserException
 
 
 RUN_1 = getAtom(u"run", 1)
 _CONFORMTO_1 = getAtom(u"_conformTo", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
+
+
+def addTrail(ue, target, atom, args):
+    argStringList = []
+    for arg in args:
+        try:
+            argStringList.append(arg.toQuote())
+        except UserException as ue2:
+            argStringList.append(u"<**%s throws %r when printed**>" % (
+                arg.displayName, ue2))
+    argString = u", ".join(argStringList)
+    atomRepr = atom.repr.decode("utf-8")
+    ue.trail.append(u"In %s.%s [%s]:" % (target.displayName, atomRepr, argString))
 
 
 class Object(object):
@@ -79,7 +92,7 @@ class Object(object):
 
         try:
             return self.recv(atom, arguments)
-        except:
+        except Refused as r:
             if atom is _CONFORMTO_1:
                 # Welcome to _conformTo/1.
                 # to _conformTo(_): return self
@@ -93,6 +106,11 @@ class Object(object):
                 vat.sendOnly(arguments[0], RUN_1, [self])
                 from typhon.objects.constants import NullObject
                 return NullObject
+
+            addTrail(r, self, atom, arguments)
+            raise
+        except UserException as ue:
+            addTrail(ue, self, atom, arguments)
             raise
 
     def recv(self, atom, args):
