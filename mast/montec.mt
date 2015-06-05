@@ -20,16 +20,25 @@ def compile(inT, outputFile):
 
         to flowStopped(reason):
             traceln(`flowed!`)
+            # Our strategy here is to slurp the entire file into memory, and
+            # complete all of our transformative steps (each of which can
+            # fail) before we emit a file. This prevents trashing existing
+            # files with garbage or incomplete data.
             def tree := parseModule(makeMonteLexer("".join(buf)), astBuilder, throw)
             traceln(`parsed!`)
             def expandedTree := expand(tree, astBuilder, throw)
             traceln(`expanded!`)
             def optimizedTree := optimize(expandedTree)
             traceln("Optimized!")
-            # Opening file here so that it doesn't get overwritten when parsing fails.
-            def outT := makeFileResource(outputFile).openDrain()
-            dump(optimizedTree, outT.receive)
+
+            def data := [].diverge()
+            dump(optimizedTree, fn stuff {data.extend(stuff)})
             traceln(`dumped!`)
+
+            def outT := makeFileResource(outputFile).openDrain()
+            outT.receive(data.snapshot())
+            traceln("Wrote new file!")
+
     inT.flowTo(tyDumper)
 
 def argv := currentProcess.getArguments().diverge()
