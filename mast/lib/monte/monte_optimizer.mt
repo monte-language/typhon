@@ -6,6 +6,22 @@ def a := import("lib/monte/monte_ast")["astBuilder"]
 def [=> term__quasiParser] := import("lib/monte/termParser")
 
 
+def sequence(exprs, span):
+    if (exprs.size() == 0):
+        return a.LiteralExpr(null, span)
+    else if (exprs.size() == 1):
+        return exprs[0]
+    else:
+        return a.SeqExpr(exprs, span)
+
+
+def finalPatternToName(pattern, ej):
+    if (pattern.getNodeName() == "FinalPattern" &&
+        pattern.getGuard() == null):
+        return pattern.getNoun().getName()
+    ej("Not an unguarded final pattern")
+
+
 def specialize(name, value):
     "Specialize the given name to the given AST value via substitution."
 
@@ -107,6 +123,54 @@ def removeIgnoreDefs(ast, maker, args, span):
             # We don't handle the case with a guard yet.
             if (pattern.getGuard() == null):
                 return ast.getExpr().transform(removeIgnoreDefs)
+
+    return M.call(maker, "run", args + [span])
+
+
+def narrowEscapes(ast, maker, args, span):
+    "Remove unreachable code in escape expressions."
+
+    if (ast.getNodeName() == "EscapeExpr"):
+        def pattern := ast.getEjectorPattern()
+        escape nonFinalPattern:
+            def via (finalPatternToName) name exit nonFinalPattern := pattern
+            def node := ast.getBody()
+            if (node.getNodeName() == "SeqExpr"):
+                var slicePoint := -1
+                for i => expr in node.getExprs():
+                    if (expr.getNodeName() == "MethodCallExpr"):
+                        def receiver := expr.getReceiver()
+                        if (receiver.getNodeName() == "NounExpr" &&
+                            receiver.getName() == name):
+                            # The slice has to happen *after* this expression;
+                            # we want to keep the call to the ejector.
+                            slicePoint := i + 1
+                            break
+                if (slicePoint != -1):
+                    def newExprs := node.getExprs().slice(0, slicePoint)
+                    def newSeq := sequence(newExprs, node.getSpan())
+                    return maker(args[0], newSeq, args[2], args[3], span)
+
+    return M.call(maker, "run", args + [span])
+
+
+def removeSmallEscapes(ast, maker, args, span):
+    "Remove escape clauses that are definitely immediately called."
+
+    if (ast.getNodeName() == "EscapeExpr"):
+        def pattern := ast.getEjectorPattern()
+        escape nonFinalPattern:
+            def via (finalPatternToName) name exit nonFinalPattern := pattern
+            def expr := ast.getBody()
+            if (expr.getNodeName() == "MethodCallExpr"):
+                def receiver := expr.getReceiver()
+                if (receiver.getNodeName() == "NounExpr" &&
+                    receiver.getName() == name):
+                    # Looks like this escape qualifies! Let's check the catch.
+                    if (ast.getCatchPattern() == null):
+                        def args := expr.getArgs()
+                        if (args.size() == 1):
+                            return args[0]
 
     return M.call(maker, "run", args + [span])
 
@@ -218,11 +282,15 @@ def constantFoldLiterals(ast, maker, args, span):
 
 
 def optimizations := [
+    narrowEscapes,
+    # removeSmallEscapes :- narrowEscapes
+    removeSmallEscapes,
     modPow,
     propagateSimpleDefs,
     removeIgnoreDefs,
     removeUnusedEscapes,
     removeUnusedBareNouns,
+    # constantFoldLiterals :- modPow
     constantFoldLiterals,
 ]
 
