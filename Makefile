@@ -1,4 +1,22 @@
-boot_objects = boot/lib/bytes.ty boot/lib/monte/monte_lexer.ty boot/prelude.ty boot/prelude/space.ty boot/lib/codec/utf8.ty boot/lib/monte/monte_parser.ty boot/prelude/brand.ty boot/lib/monte/monte_ast.ty boot/lib/monte/termParser.ty boot/prelude/region.ty boot/lib/monte/monte_expander.ty boot/lib/monte/monte_optimizer.ty boot/montec.ty boot/prelude/simple.ty
+boot_objects = boot/montec.ty \
+	boot/lib/monte/termParser.ty \
+	boot/lib/monte/monte_lexer.ty \
+	boot/lib/monte/monte_parser.ty \
+	boot/lib/monte/monte_ast.ty \
+	boot/lib/monte/monte_expander.ty \
+	boot/lib/monte/monte_optimizer.ty \
+	boot/lib/bytes.ty \
+	boot/lib/codec/utf8.ty \
+	boot/lib/tubes/nullPump.ty \
+	boot/lib/tubes/mapPump.ty \
+	boot/lib/tubes/utf8.ty \
+	boot/lib/tubes/pumpTube.ty \
+	boot/prelude.ty \
+	boot/prelude/brand.ty \
+	boot/prelude/region.ty \
+	boot/prelude/simple.ty \
+	boot/prelude/space.ty
+
 .PRECIOUS: $(boot_objects)
 
 PYTHON=venv/bin/python

@@ -3,19 +3,18 @@ def makeMonteLexer := import("lib/monte/monte_lexer")["makeMonteLexer"]
 def parseModule := import("lib/monte/monte_parser")["parseModule"]
 def [=> expand] := import("lib/monte/monte_expander")
 def [=> optimize] := import("lib/monte/monte_optimizer")
-def [=> UTF8] | _ := import("lib/codec/utf8")
+def [=> makeUTF8DecodePump] | _ := import("lib/tubes/utf8")
+def [=> makePumpTube] | _ := import("lib/tubes/pumpTube")
 
 def compile(inT, outputFile):
     var bytebuf := []
     def buf := [].diverge()
+
     object tyDumper:
         to flowingFrom(upstream):
             null
 
-        to receive(bytes):
-            bytebuf += bytes
-            def [s, leftovers] := UTF8.decodeExtras(bytebuf, null)
-            bytebuf := leftovers
+        to receive(s):
             buf.push(s)
 
         to flowStopped(reason):
@@ -46,4 +45,7 @@ def argv := currentProcess.getArguments().diverge()
 # YOLO
 def [outputFile, inputFile] := [argv.pop(), argv.pop()]
 
-compile(makeFileResource(inputFile).openFount(), outputFile)
+def fileFount := makeFileResource(inputFile).openFount()
+def utf8Fount := fileFount.flowTo(makePumpTube(makeUTF8DecodePump()))
+
+compile(utf8Fount, outputFile)
