@@ -32,7 +32,7 @@ def makeTable(grammar, startRule):
     var queue := [].diverge()
 
     for production in grammar[startRule]:
-        tableList[0] with= [startRule, production, 0, [startRule]]
+        tableList[0] with= ([startRule, production, 0, [startRule]])
 
     def grow(k):
         while (tableList.size() <= k):
@@ -45,13 +45,13 @@ def makeTable(grammar, startRule):
             for i => states in tableList:
                 out.print(`State $i: `)
                 for [head, rules, j] in states:
-                    def formattedRules := [item for [_, item] in rules]
+                    def formattedRules := [for [_, item] in (rules) item]
                     out.print(`: $head → $formattedRules ($j) ;`)
 
         to addState(k :Int, state):
             grow(k)
             if (!tableList[k].contains(state)):
-                tableList[k] with= state
+                tableList[k] with= (state)
                 queue.push([k, state])
 
         to nextState():
@@ -116,7 +116,7 @@ def advance(position, token, grammar, table, ej):
                         table.addState(k + 1,
                                        [head, tail, j, result.with(token)])
                     else:
-                        heads with= literal.error()
+                        heads with= (literal.error())
             match _:
                 # This usually means that the table got corrupted somehow.
                 # Double imports can cause this.
@@ -359,7 +359,7 @@ def combineProductions(left :Map, right :Map) :Map:
     var rv := left
     for head => rules in right:
         if (rv.contains(head)):
-            rv := rv.with(head, rv[head] + rules)
+            rv with= (head, rv[head] + rules)
         else:
             rv |= [head => rules]
     return rv

@@ -115,7 +115,7 @@ def onlyNull(l) :Bool:
         match [==reduction, inner, _]:
             return onlyNull(inner)
         match [==alternation, ls]:
-            return all([onlyNull(l) for l in ls])
+            return all([for l in (ls) onlyNull(l)])
         match [==catenation, a, b]:
             return onlyNull(a) && onlyNull(b)
 
@@ -131,7 +131,7 @@ def nullable(l) :Bool:
         match [==reduction, inner, _]:
             return nullable(inner)
         match [==alternation, ls]:
-            return any([nullable(l) for l in ls])
+            return any([for l in (ls) nullable(l)])
         match [==catenation, a, b]:
             return nullable(a) && nullable(b)
 
@@ -149,7 +149,7 @@ def isEmpty(l) :Bool:
         match [==reduction, inner, _]:
             return isEmpty(inner)
         match [==alternation, ls]:
-            return all([isEmpty(l) for l in ls])
+            return all([for l in (ls) isEmpty(l)])
         match [==catenation, a, b]:
             return isEmpty(a) || isEmpty(b)
         match [==repeat, l]:
@@ -235,7 +235,7 @@ def leaders(l) :Set:
 
 
 def _filterEmpty(xs):
-    return [x for x in xs if x != empty]
+    return [for x in (xs) if (x != empty) x]
 
 
 def derive(l, c):
@@ -265,7 +265,7 @@ def derive(l, c):
             return [reduction, derive(inner, c), f]
         match [==alternation, ls]:
             return [alternation,
-                    _filterEmpty([derive(l, c) for l in ls]).asSet()]
+                    _filterEmpty([for l in (ls) derive(l, c)]).asSet()]
 
         match [==catenation, a ? (nullable(a)), b]:
             def da := derive(a, c)

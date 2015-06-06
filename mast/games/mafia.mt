@@ -71,10 +71,10 @@ def makeMafia(var players :Set):
                 choice ? (players.contains(choice))) :Void:
             switch (state):
                 match ==DAY:
-                    votes := votes.with(player, choice)
+                    votes with= (player, choice)
                 match ==NIGHT:
                     if (mafiosos.contains(player)):
-                        votes := votes.with(player, choice)
+                        votes with= (player, choice)
 
         to lynch(quorum :Int) :Str:
             if (lynched):
@@ -90,11 +90,11 @@ def makeMafia(var players :Set):
             traceln(`Counted votes as $counter`)
 
             escape ej:
-                def [victim] exit ej := [k for k => v in counter if v >= quorum]
+                def [victim] exit ej := [for k => v in (counter) if (v >= quorum) k]
                 def count := counter[victim]
-                players without= victim
-                mafiosos without= victim
-                innocents without= victim
+                players without= (victim)
+                mafiosos without= (victim)
+                innocents without= (victim)
                 return `With $count votes ($quorum needed), $victim was killed.`
             catch _:
                 return "Nobody was lynched."

@@ -98,10 +98,10 @@ def makeAMP(drain, responder):
 
     return object AMP:
         to flowingFrom(upstream):
-            pass
+            null
 
         to flowStopped(reason):
-            pass
+            null
 
         to sendPacket(packet):
             buf with= (packet)

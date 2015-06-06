@@ -18,6 +18,7 @@ def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makePumpTube] := import("lib/tubes/pumpTube")
 def [=> makeEnum] | _ := import("lib/enum")
 def [=> percentDecode] | _ := import("lib/percent")
+def [=> chain] | _ := import("lib/tubes/chain")
 
 def [RequestState, REQUEST, HEADER, BODY] := makeEnum(
     ["request", "header", "body"])
@@ -31,11 +32,13 @@ def makeRequestPump():
 
     return object requestPump:
         to started():
-            pass
+            null
+
         to progressed(amount):
-            pass
+            null
+
         to stopped():
-            pass
+            null
 
         to received(bytes) :List:
             # traceln(`received bytes $bytes`)
@@ -106,11 +109,13 @@ def statusMap :Map := [
 def makeResponsePump():
     return object responsePump:
         to started():
-            pass
+            null
+
         to progressed(amount):
-            pass
+            null
+
         to stopped():
-            pass
+            null
 
         to received(response):
             # traceln(`preparing to send $response`)
@@ -119,9 +124,9 @@ def makeResponsePump():
             var rv := [b`HTTP/1.1 $status$\r$\n`]
             for header => value in headers:
                 def headerLine := `$header: $value`
-                rv with= b`$headerLine$\r$\n`
-            rv with= b`$\r$\n`
-            rv with= body
+                rv with= (b`$headerLine$\r$\n`)
+            rv with= (b`$\r$\n`)
+            rv with= (body)
             return rv
 
 
@@ -151,7 +156,13 @@ def makeHTTPEndpoint(endpoint):
     return object HTTPEndpoint:
         to listen(processor):
             def responder(fount, drain):
-                fount<-flowTo(makeRequestTube())<-flowTo(makeProcessingTube(processor))<-flowTo(makeResponseTube())<-flowTo(drain)
+                chain([
+                    fount,
+                    makeRequestTube(),
+                    makeProcessingTube(processor),
+                    makeResponseTube(),
+                    drain,
+                ])
             endpoint.listen(responder)
 
 
