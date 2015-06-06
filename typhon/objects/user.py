@@ -101,6 +101,8 @@ class ScriptObject(Object):
     _immutable_fields_ = "codeScript", "globals[*]", "closure[*]"
     auditorCache = {}
 
+    stamps = []
+
     def __init__(self, codeScript, globals, globalsNames,
                  closure, closureNames, displayName, auditors):
         self.codeScript = codeScript
@@ -112,9 +114,10 @@ class ScriptObject(Object):
         self.patchSelf(auditors[0]
                        if len(auditors) > 0 and auditors[0] != NullObject
                        else anyGuard)
+
         if auditors:
-            self._stamps = self.audit(auditors, self.codeScript.objectAst,
-                                      closureNames, globalsNames)
+            self.stamps = self.audit(auditors, self.codeScript.objectAst,
+                                     closureNames, globalsNames)
 
     def audit(self, auditors, ast, closureNames, globalsNames):
         if auditors[0] == NullObject:
@@ -137,9 +140,6 @@ class ScriptObject(Object):
             self.closure[selfIndex] = Binding(
                 FinalSlot(self, guard),
                 FinalSlotGuard(guard))
-
-    def auditedBy(self, stamp):
-        return stamp in self._stamps
 
     def toString(self):
         try:

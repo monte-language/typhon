@@ -524,7 +524,7 @@ class BigInt(Object):
     """
 
     _immutable_ = True
-    _immutable_fields_ = "stamps[*]", "bi"
+    _immutable_fields_ = "stamps", "bi"
 
     displayName = u"BigInt"
     stamps = [deepFrozenStamp]
@@ -736,7 +736,7 @@ class strIterator(Object):
 
 class StrObject(Object):
 
-    _immutable_fields_ = "stamps[*]", "_s"
+    _immutable_fields_ = "stamps", "_s"
 
     displayName = u"StrObject"
 
