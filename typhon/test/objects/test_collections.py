@@ -17,7 +17,7 @@
 from unittest import TestCase
 
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
-                                        FlexList, monteDict)
+                                        FlexList, monteDict, unwrapList)
 from typhon.objects.data import CharObject, IntObject
 
 
@@ -51,6 +51,12 @@ class TestConstList(TestCase):
         a = ConstList([IntObject(42), CharObject(u'é')])
         b = ConstList([IntObject(42), CharObject(u'e')])
         self.assertNotEqual(a.hash(), b.hash())
+
+    def testSlice(self):
+        l = ConstList(map(CharObject, "abcdefg"))
+        result = l.call(u"slice", [IntObject(3), IntObject(6)])
+        chars = [char._c for char in unwrapList(result)]
+        self.assertEqual(chars, list("def"))
 
 
 class TestFlexList(TestCase):

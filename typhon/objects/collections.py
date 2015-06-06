@@ -154,13 +154,19 @@ class Collection(object):
         # slice/1 and slice/2: Select a subrange of this collection.
         if atom is SLICE_1:
             start = unwrapInt(args[0])
-            return self.slice(start)
+            try:
+                return self.slice(start)
+            except IndexError:
+                raise userError(u"slice/1: Index out of bounds")
 
         # slice/1 and slice/2: Select a subrange of this collection.
         if atom is SLICE_2:
             start = unwrapInt(args[0])
             stop = unwrapInt(args[1])
-            return self.slice(start, stop)
+            try:
+                return self.slice(start, stop)
+            except IndexError:
+                raise userError(u"slice/1: Index out of bounds")
 
         # snapshot/0: Create a new constant collection with a copy of the
         # current collection's contents.
