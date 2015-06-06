@@ -114,7 +114,7 @@ def makeIRCClient(handler):
             outgoing := []
 
     def line(l :Str) :Void:
-        outgoing with= l
+        outgoing with= (l)
         flush()
 
     return object IRCTube:

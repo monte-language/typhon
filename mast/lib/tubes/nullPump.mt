@@ -14,15 +14,15 @@
 
 object nullPump:
     to started():
-        pass
+        null
 
     to received(item):
         return []
 
     to progressed(amount):
-        pass
+        null
 
     to stopped():
-        pass
+        null
 
 [=> nullPump]

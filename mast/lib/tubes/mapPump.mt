@@ -15,12 +15,15 @@
 def makeMapPump(f):
     return object mapPump:
         to started():
-            pass
+            null
+
         to received(item):
             return [f(item)]
+
         to progressed(amount):
-            pass
+            null
+
         to stopped():
-            pass
+            null
 
 [=> makeMapPump]

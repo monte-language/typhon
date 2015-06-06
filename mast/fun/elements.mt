@@ -14,8 +14,8 @@ fr ra    rf db sg bh hs mt ds rg cn    fl    lv
 var elements :Set[Str] := [].asSet()
 for line in table.split("\n"):
     for element in line.split(" "):
-        elements with= element.trim()
-elements without= ""
+        elements with= (element.trim())
+elements without= ("")
 
 # traceln(`Elements: $elements`)
 
@@ -34,12 +34,12 @@ def elementsOf(word :Str):
         partials := rest
 
         if (remainder.size() == 0):
-            finished with= pieces
+            finished with= (pieces)
         else:
             for element in elements:
                 switch (remainder):
                     match `$element@rest`:
-                        partials with= [rest, pieces.with(element)]
+                        partials with= ([rest, pieces.with(element)])
                     match _:
                         pass
 
