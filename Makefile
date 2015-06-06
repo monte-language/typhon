@@ -71,7 +71,7 @@ codec: mast/lib/codec/utf8.ty
 entropy: mast/lib/entropy/pool.ty mast/lib/entropy/xorshift.ty mast/lib/entropy/entropy.ty
 
 parsers: mast/lib/parsers/derp.ty mast/lib/parsers/http.ty mast/lib/parsers/html.ty \
-	mast/lib/parsers/marley.ty
+	mast/lib/parsers/marley.ty mast/lib/parsers/monte.ty
 
 tubes: mast/lib/tubes/nullPump.ty mast/lib/tubes/mapPump.ty \
 	mast/lib/tubes/pumpTube.ty mast/lib/tubes/statefulPump.ty \
