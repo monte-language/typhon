@@ -147,8 +147,9 @@ def narrowEscapes(ast, maker, args, span):
                             slicePoint := i + 1
                             break
                 if (slicePoint != -1):
-                    def newExprs := node.getExprs().slice(0, slicePoint)
-                    def newSeq := sequence(newExprs, node.getSpan())
+                    def exprs := [for n in (node.getExprs().slice(0, slicePoint))
+                        n.transform(narrowEscapes)]
+                    def newSeq := sequence(exprs, node.getSpan())
                     return maker(args[0], newSeq, args[2], args[3], span)
 
     return M.call(maker, "run", args + [span])
@@ -170,7 +171,7 @@ def removeSmallEscapes(ast, maker, args, span):
                     if (ast.getCatchPattern() == null):
                         def args := expr.getArgs()
                         if (args.size() == 1):
-                            return args[0]
+                            return args[0].transform(removeSmallEscapes)
 
     return M.call(maker, "run", args + [span])
 
