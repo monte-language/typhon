@@ -519,8 +519,7 @@ class SafeIndexingMixin(object):
         if end < start:
             raise IndexError
         self.check_index(w_self, start)
-        # The original code has an off-by-one here.
-        self.check_index(w_self, end - 1)
+        self.check_index(w_self, end)
     def check_index(self, w_self, index0):
         if index0 < 0 or index0 >= self.size(w_self):
             raise IndexError
