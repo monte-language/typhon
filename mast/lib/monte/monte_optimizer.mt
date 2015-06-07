@@ -299,7 +299,7 @@ def optimizations := [
 def optimize(var ast):
     for optimization in optimizations:
         # traceln(`Performing optimization $optimization...`)
-        ast := ast.transform(optimization)
+        ast transform= (optimization)
         # traceln(`Finished with $optimization!`)
     return ast
 
