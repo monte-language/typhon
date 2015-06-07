@@ -14,6 +14,12 @@
 
 def Bytes := List[0..!256]
 
+object bytePattern:
+    pass
+
+object byteValue:
+    pass
+
 
 def _makeBytes(chunks):
     return object bytes:
@@ -21,7 +27,7 @@ def _makeBytes(chunks):
             var rv := []
             for chunk in chunks:
                 switch (chunk):
-                    match [=="valueHole", index]:
+                    match [==byteValue, index]:
                         switch (values[index]):
                             match s :Str:
                                 rv += [for c in (s) c.asInteger()]
@@ -34,10 +40,10 @@ def _makeBytes(chunks):
 
 object b__quasiParser:
     to patternHole(index):
-        return ["patternHole", index]
+        return [bytePattern, index]
 
     to valueHole(index):
-        return ["valueHole", index]
+        return [byteValue, index]
 
     to matchMaker(var pieces):
         # Filter out empty pieces. Sometimes the compiler generates them,
@@ -55,7 +61,7 @@ object b__quasiParser:
                 var patternMarker := 0
 
                 for var piece in pieces:
-                    if (piece =~ [=="patternHole", index]):
+                    if (piece =~ [==bytePattern, index]):
                         if (inPattern):
                             throw.eject(ej,
                                 "Can't catenate patterns with patterns!")
@@ -64,14 +70,18 @@ object b__quasiParser:
 
                         continue
 
-                    if (piece =~ [=="valueHole", index]):
-                        # XXX should be index, bindings/slots busted
-                        piece := values[piece[1]]
+                    if (piece =~ [==byteValue, index]):
+                        piece := values[index]
                     else:
                         piece := [for c in (piece) c.asInteger()]
 
                     def len := piece.size()
                     if (inPattern):
+                        # Before we look for a match, let's double-check that
+                        # finding a match is possible with a length check.
+                        if (position + len > specimen.size()):
+                            throw.eject(ej, "Specimen too short")
+
                         # Let's go find a match, and then slice off a pattern.
                         while (specimen.slice(position, position + len) != piece):
                             position += 1
