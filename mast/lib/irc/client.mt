@@ -29,11 +29,10 @@ def [=> makeUser, => sourceToUser] | _ := import("lib/irc/user")
 
 def splitAt(needle, var haystack):
     def pieces := [].diverge()
-    escape ej:
-        while (true):
-            def b`@head$needle@tail` exit ej := haystack
-            pieces.push(head)
-            haystack := tail
+    while (def offset := haystack.startOf(needle) && offset != -1):
+        def piece := haystack.slice(0, offset)
+        pieces.push(piece)
+        haystack := haystack.slice(offset, offset + needle.size())
     return [pieces.snapshot(), haystack]
 
 
