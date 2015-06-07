@@ -40,8 +40,9 @@ object simple__quasiParser:
         def pieces := [].diverge()
         for p in segments:
             escape e:
-                def _ :Str exit e := p
-                pieces.push([LITERAL, p])
+                def s :Str exit e := p
+                if (s.size() > 0):
+                    pieces.push([LITERAL, s])
             catch _:
                 pieces.push(p)
         return object simpleMatcher:
@@ -67,15 +68,18 @@ object simple__quasiParser:
                                  "expected " + M.toQuote(s) + "... ($-hole " +
                                   M.toQuote(val) + ", found " +
                                   M.toQuote(specimen.slice(i, j)))
+
                     else if (typ == PATTERN_HOLE):
                         if (n == pieces.size() - 1):
                             bindings.push(specimen.slice(i, specimen.size()))
                             i := specimen.size()
                             continue
                         def [nextType, var nextVal] := pieces[n + 1]
+
                         if (nextType == VALUE_HOLE):
                             nextVal := values[nextVal]
                         else if (nextType == PATTERN_HOLE):
+                            # Double pattern. Whoa. What does it mean?
                             bindings.push("")
                             continue
 
@@ -90,6 +94,7 @@ object simple__quasiParser:
 
                 if (i == specimen.size()):
                     return bindings.snapshot()
+
                 throw.eject(ej, "Excess unmatched: " + M.toQuote(specimen.slice(i, j)))
 
 
