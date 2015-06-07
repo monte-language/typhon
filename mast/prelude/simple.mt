@@ -141,6 +141,12 @@ def testQuasiPatternEmptyTail(assert):
     def `1234@tail` := "1234"
     assert.equal(tail, "")
 
+def testSampleIRCLine(assert):
+    def nick := "nick"
+    def `:@_ 353 $nick @_ @channel :@users` := ":host 353 nick = #channel :first second"
+    assert.equal(channel, "#channel")
+    assert.equal(users, "first second")
+
 unittest([
     testQuasiValues,
     testQuasiPatternHead,
@@ -151,6 +157,7 @@ unittest([
     testQuasiPatternSep,
     testQuasiPatternEmptySep,
     testQuasiPatternEmptyTail,
+    testSampleIRCLine,
 ])
 
 [=> simple__quasiParser]
