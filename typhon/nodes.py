@@ -586,9 +586,13 @@ class Escape(Node):
         # []
         self._node.compile(compiler)
         # [retval]
+
         if self._catchNode is not None:
             jump = compiler.markInstruction("JUMP")
+
+            # Control is resumed here by the ejector in case of ejection.
             compiler.patch(ejector)
+            # [retval]
             compiler.literal(NullObject)
             # [retval null]
             self._catchPattern.compile(compiler)
