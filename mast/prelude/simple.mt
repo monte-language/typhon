@@ -47,7 +47,8 @@ object simple__quasiParser:
                 pieces.push(p)
 
         return object simpleMatcher:
-            to matchBind(values, specimen :Str, ej):
+            to matchBind(values, rawSpecimen, ej):
+                def specimen :Str exit ej := rawSpecimen
                 var i := 0
                 var j := 0
                 def bindings := [].diverge()
