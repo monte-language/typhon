@@ -2,7 +2,8 @@ from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.objects.constants import (BoolObject, FalseObject, NullObject,
                                       unwrapBool, wrapBool)
-from typhon.objects.data import IntObject
+from typhon.objects.data import (CharObject, IntObject, StrObject, unwrapChar,
+                                 unwrapStr)
 from typhon.objects.refs import UnconnectedRef
 from typhon.rstrategies import rstrategies
 
@@ -86,6 +87,46 @@ class BooleanFlowStrategy(Strategy):
         return value._problem
 
 
+@rstrategies.strategy(generalize=[GenericListStrategy])
+class CharListStrategy(Strategy):
+    """
+    A list with only characters.
+    """
+
+    import_from_mixin(rstrategies.SingleTypeStrategy)
+
+    contained_type = CharObject
+
+    def default_value(self):
+        return CharObject(u'▲')
+
+    def wrap(self, value):
+        return CharObject(value)
+
+    def unwrap(self, value):
+        return unwrapChar(value)
+
+
+@rstrategies.strategy(generalize=[GenericListStrategy])
+class StrListStrategy(Strategy):
+    """
+    A list with only characters.
+    """
+
+    import_from_mixin(rstrategies.SingleTypeStrategy)
+
+    contained_type = StrObject
+
+    def default_value(self):
+        return StrObject(u"▲")
+
+    def wrap(self, value):
+        return StrObject(value)
+
+    def unwrap(self, value):
+        return unwrapStr(value)
+
+
 @rstrategies.strategy(generalize=[BooleanFlowStrategy, GenericListStrategy])
 class BoolListStrategy(Strategy):
     """
@@ -108,6 +149,7 @@ class BoolListStrategy(Strategy):
 
 @rstrategies.strategy(generalize=[NullListStrategy, SmallIntListStrategy,
                                   BooleanFlowStrategy, BoolListStrategy,
+                                  CharListStrategy, StrListStrategy,
                                   GenericListStrategy])
 class EmptyListStrategy(Strategy):
     """
