@@ -45,6 +45,7 @@ object simple__quasiParser:
                     pieces.push([LITERAL, s])
             catch _:
                 pieces.push(p)
+
         return object simpleMatcher:
             to matchBind(values, specimen :Str, ej):
                 var i := 0
@@ -83,7 +84,10 @@ object simple__quasiParser:
                             bindings.push("")
                             continue
 
-                        j := specimen.indexOf(nextVal)
+                        # Start the search at i, so that we don't accidentally
+                        # go backwards in the string. (I cursed for a good two
+                        # days over this.) ~ C.
+                        j := specimen.indexOf(nextVal, i)
                         if (j == -1):
                             throw.eject(ej,
                                  "expected " + M.toQuote(nextVal) +
