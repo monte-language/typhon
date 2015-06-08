@@ -428,8 +428,10 @@ class FlexList(Collection, Object):
             return ConstList(self.strategy.fetch_all(self) * index)
 
         if atom is POP_0:
-            if self.strategy.size(self):
+            try:
                 return self.strategy.pop(self, self.strategy.size(self) - 1)
+            except IndexError:
+                raise userError(u"pop/0: Pop from empty list")
 
         if atom is PUSH_1:
             self.strategy.append(self, args)

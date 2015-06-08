@@ -71,6 +71,11 @@ class TestFlexList(TestCase):
         result = l.call(u"pop", [])
         self.assertEqual(result.getInt(), 5)
 
+    def testPopManyHeterogenous(self):
+        l = FlexList([CharObject(u'm'), IntObject(5)])
+        result = l.call(u"pop", [])
+        self.assertEqual(result.getInt(), 5)
+
     def testToStringEmpty(self):
         l = FlexList([])
         self.assertEqual(l.toString(), u"[].diverge()")
