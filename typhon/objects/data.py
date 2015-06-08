@@ -52,6 +52,7 @@ GETCATEGORY_0 = getAtom(u"getCategory", 0)
 GET_1 = getAtom(u"get", 1)
 GETSPAN_0 = getAtom(u"getSpan", 0)
 INDEXOF_1 = getAtom(u"indexOf", 1)
+INDEXOF_2 = getAtom(u"indexOf", 2)
 ISZERO_0 = getAtom(u"isZero", 0)
 JOIN_1 = getAtom(u"join", 1)
 LASTINDEXOF_1 = getAtom(u"lastIndexOf", 1)
@@ -800,6 +801,14 @@ class StrObject(Object):
         if atom is INDEXOF_1:
             needle = unwrapStr(args[0])
             return IntObject(self._s.find(needle))
+
+        if atom is INDEXOF_2:
+            needle = unwrapStr(args[0])
+            offset = unwrapInt(args[1])
+            if offset < 0:
+                raise userError(u"indexOf/2: Negative offset %d not supported"
+                                % offset)
+            return IntObject(self._s.find(needle, offset))
 
         if atom is JOIN_1:
             from typhon.objects.collections import unwrapList
