@@ -1,6 +1,8 @@
 def [=> astBuilder] | _ := import("lib/monte/monte_ast")
 def [=> makeMonteLexer] | _ := import("lib/monte/monte_lexer")
 def [=> parseExpression] | _ := import("lib/monte/monte_parser")
+def [=> expand] := import("lib/monte/monte_expander")
+def [=> optimize] := import("lib/monte/monte_optimizer")
 
 
 def makeMonteParser():
@@ -29,7 +31,7 @@ def makeMonteParser():
             try:
                 def tree := parseExpression(makeMonteLexer(tokens),
                                             astBuilder, throw)
-                results := [tree]
+                results := [optimize(expand(tree, astBuilder, throw))]
             catch problem:
                 failure := `$problem`
 
