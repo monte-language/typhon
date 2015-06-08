@@ -29,11 +29,18 @@ def [=> makeUser, => sourceToUser] | _ := import("lib/irc/user")
 
 def splitAt(needle, var haystack):
     def pieces := [].diverge()
-    while (def offset := haystack.startOf(needle) && offset != -1):
-        def piece := haystack.slice(0, offset)
+    var offset := 0
+
+    while (offset < haystack.size()):
+        def nextNeedle := haystack.startOf(needle, offset)
+        if (nextNeedle == -1):
+            break
+
+        def piece := haystack.slice(offset, nextNeedle)
         pieces.push(piece)
-        haystack := haystack.slice(offset, offset + needle.size())
-    return [pieces.snapshot(), haystack]
+        offset := nextNeedle + needle.size()
+
+    return [pieces.snapshot(), haystack.slice(offset, haystack.size())]
 
 
 def testSplitAtColons(assert):
