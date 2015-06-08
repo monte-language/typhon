@@ -519,7 +519,9 @@ class SafeIndexingMixin(object):
         if end < start:
             raise IndexError
         self.check_index(w_self, start)
-        self.check_index(w_self, end)
+        # Off-by-one; the end of a range can validly be ==self.size() during
+        # slicing.
+        self.check_index(w_self, end - 1)
     def check_index(self, w_self, index0):
         if index0 < 0 or index0 >= self.size(w_self):
             raise IndexError
