@@ -36,7 +36,7 @@ from typhon.reactor import Reactor
 from typhon.scopes.boot import bootScope
 from typhon.scopes.safe import safeScope
 from typhon.scopes.unsafe import unsafeScope
-from typhon.vats import Vat, currentVat
+from typhon.vats import Vat, scopedVat
 
 
 def dirname(p):
@@ -122,14 +122,14 @@ def entryPoint(argv):
     # Pass user configuration to the JIT.
     set_user_param(None, config.jit)
 
-    # Intialize our vat.
+    # Intialize our first vat.
     reactor = Reactor()
     reactor.usurpSignals()
     vat = Vat(reactor)
-    currentVat.set(vat)
 
     try:
-        prelude = loadPrelude(config, recorder, vat)
+        with scopedVat(vat) as vat:
+            prelude = loadPrelude(config, recorder, vat)
     except LoadFailed as lf:
         print lf
         return 1
@@ -164,7 +164,8 @@ def entryPoint(argv):
     debug_print("Taking initial turn in script...")
     result = NullObject
     with recorder.context("Time spent in vats"):
-        result = evaluateTerms([code], finalize(scope))
+        with scopedVat(vat):
+            result = evaluateTerms([code], finalize(scope))
     if result is None:
         return 1
     # print result.toQuote()
@@ -176,7 +177,8 @@ def entryPoint(argv):
     rv = 0
 
     try:
-        runUntilDone(vat, reactor, recorder)
+        with scopedVat(vat) as vat:
+            runUntilDone(vat, reactor, recorder)
     except SystemExit as se:
         rv = se.code
     finally:

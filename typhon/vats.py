@@ -128,3 +128,22 @@ class Vat(object):
 
 
 currentVat = ThreadLocalReference(Vat)
+
+
+class scopedVat(object):
+
+    def __init__(self, vat):
+        self.vat = vat
+
+    def __enter__(self):
+        oldVat = currentVat.get()
+        if oldVat is not None:
+            raise RuntimeError("Implementation error: Attempted to nest vat")
+        currentVat.set(self.vat)
+        return self.vat
+
+    def __exit__(self, *args):
+        oldVat = currentVat.get()
+        if oldVat is not self.vat:
+            raise RuntimeError("Implementation error: Who touched my vat!?")
+        currentVat.set(None)
