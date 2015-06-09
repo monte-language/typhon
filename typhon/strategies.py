@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.objects.constants import (BoolObject, FalseObject, NullObject,
