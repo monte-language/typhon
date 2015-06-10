@@ -904,13 +904,25 @@ class Obj(Node):
         if not isinstance(script, Script):
             raise InvalidAST("Object's script isn't a Script")
 
+        doc = doc._s if isinstance(doc, Str) else None
+
         return Obj(doc, name, nullToNone(auditors[0]), auditors[1:], script)
 
     def pretty(self, out):
         out.write("object ")
         self._n.pretty(out)
-        # XXX doc, as, implements
+        if self._as is not None:
+            out.write(" as ")
+            self._as.pretty(out)
+        if self._implements:
+            out.write(" implements ")
+            self._implements[0].pretty(out)
+            for n in self._implements[1:]:
+                out.write(", ")
+                n.pretty(out)
         out.writeLine(" {")
+        if self._d:
+            out.indent().writeLine('"%s"' % self._d.encode("utf-8"))
         self._script.pretty(out.indent())
         out.writeLine("}")
 
