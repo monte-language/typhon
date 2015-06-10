@@ -79,19 +79,20 @@ MonteSorter = make_timsort_class(lt=monteLessThan)
 
 class listIterator(Object):
 
-    _immutable_fields_ = "objects",
+    _immutable_fields_ = "objects[*]", "size"
 
     _index = 0
 
     def __init__(self, objects):
         self.objects = objects
+        self.size = len(objects)
 
     def toString(self):
         return u"<listIterator>"
 
     def recv(self, atom, args):
         if atom is NEXT_1:
-            if self._index < len(self.objects):
+            if self._index < self.size:
                 rv = [IntObject(self._index), self.objects[self._index]]
                 self._index += 1
                 return ConstList(rv)
