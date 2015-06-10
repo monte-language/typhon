@@ -16,6 +16,7 @@ from rpython.rlib.jit import JitDriver
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
@@ -64,7 +65,7 @@ def loopJIT(consumer, ejector, iterator):
     consumer.call(u"run", unwrapList(values))
 
 
-@runnable(RUN_2)
+@runnable(RUN_2, [deepFrozenStamp])
 def loop(args):
     iterable = args[0]
     consumer = args[1]

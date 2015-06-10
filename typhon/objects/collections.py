@@ -19,6 +19,7 @@ from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException, WrongType, userError
+from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import throw
@@ -185,6 +186,8 @@ class ConstList(Collection, Object):
 
     strategy = None
 
+    stamps = [selfless, transparentStamp]
+
     def __init__(self, objects):
         strategy = strategyFactory.strategy_type_for(objects)
         strategyFactory.set_initial_strategy(self, strategy, len(objects),
@@ -279,6 +282,10 @@ class ConstList(Collection, Object):
             # Replace by index.
             index = unwrapInt(args[0])
             return self.put(index, args[1])
+
+        if atom is _UNCALL_0:
+            from typhon.scopes.safe import theMakeList
+            return ConstList([theMakeList, StrObject(u"run"), self])
 
         raise Refused(self, atom, args)
 
@@ -569,6 +576,7 @@ def monteDict():
 class ConstMap(Collection, Object):
 
     _immutable_fields_ = "objectMap",
+    stamps = [selfless, transparentStamp]
 
     def __init__(self, objectMap):
         self.objectMap = objectMap
@@ -663,8 +671,9 @@ class ConstMap(Collection, Object):
         return mapIterator(self.objectMap.items())
 
     def _uncall(self):
+        from typhon.scopes.safe import theMakeMap
         rv = ConstList([ConstList([k, v]) for k, v in self.objectMap.items()])
-        return [StrObject(u"fromPairs"), rv]
+        return [theMakeMap, StrObject(u"fromPairs"), rv]
 
     def contains(self, needle):
         return needle in self.objectMap
@@ -705,6 +714,7 @@ class ConstSet(Collection, Object):
     """
 
     _immutable_fields_ = "objectMap",
+    stamps = [selfless, transparentStamp]
 
     def __init__(self, objectMap):
         self.objectMap = objectMap
@@ -734,7 +744,7 @@ class ConstSet(Collection, Object):
         if atom is _UNCALL_0:
             # [1,2,3].asSet() -> [[1,2,3], "asSet"]
             rv = ConstList(self.objectMap.keys())
-            return ConstList([rv, StrObject(u"asSet")])
+            return ConstList([rv, StrObject(u"asSet"), ConstList([])])
 
         if atom is ASSET_0:
             return self

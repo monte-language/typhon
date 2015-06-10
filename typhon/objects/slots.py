@@ -14,10 +14,13 @@
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, userError
+from typhon.objects.auditors import selfless, transparentStamp
+from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject
+from typhon.objects.data import StrObject
 from typhon.objects.root import Object
 
-
+_UNCALL_0 = getAtom(u"_uncall", 0)
 GET_0 = getAtom(u"get", 0)
 GETGUARD_0 = getAtom(u"getGuard", 0)
 PUT_1 = getAtom(u"put", 1)
@@ -29,6 +32,7 @@ class Binding(Object):
     """
 
     _immutable_ = True
+    stamps = [selfless, transparentStamp]
 
     def __init__(self, slot, guard):
         self.slot = slot
@@ -43,6 +47,14 @@ class Binding(Object):
 
         if atom is GETGUARD_0:
             return self.guard
+
+        if atom is _UNCALL_0:
+            from typhon.scopes.safe import theSlotBinder
+            return ConstList([
+                ConstList([theSlotBinder, StrObject(u"run"),
+                           ConstList([self.guard])]),
+                StrObject(u"run"),
+                ConstList([self.slot, NullObject])])
 
         raise Refused(self, atom, args)
 
@@ -69,6 +81,7 @@ class Slot(Object):
 class FinalSlot(Slot):
 
     _immutable_fields_ = "_obj", "_guard"
+    stamps = [selfless, transparentStamp]
 
     def __init__(self, obj, guard):
         self._obj = obj
@@ -83,9 +96,17 @@ class FinalSlot(Slot):
     def put(self, value):
         raise userError(u"Can't put into a FinalSlot!")
 
+    def recv(self, atom, args):
+        if atom is _UNCALL_0:
+            from typhon.scopes.safe import theFinalSlotMaker
+            return ConstList([theFinalSlotMaker, StrObject(u"run"),
+                              ConstList([self._obj, self._guard, NullObject])])
+        return Slot.recv(self, atom, args)
+
 
 class VarSlot(Slot):
     _immutable_fields_ = "_guard",
+
     def __init__(self, obj, guard):
         self._obj = obj
         self._guard = guard

@@ -18,16 +18,8 @@ from typhon.objects.root import Object, runnable
 
 AUDIT_1 = getAtom(u"audit", 1)
 COERCE_2 = getAtom(u"coerce", 2)
+PASSES_1 = getAtom(u"passes", 1)
 RUN_2 = getAtom(u"run", 2)
-
-
-@runnable(RUN_2)
-def auditedBy(args):
-    auditor = args[0]
-    specimen = args[1]
-
-    from typhon.objects.constants import wrapBool
-    return wrapBool(specimen.auditedBy(auditor))
 
 
 class DeepFrozenStamp(Object):
@@ -39,3 +31,60 @@ class DeepFrozenStamp(Object):
         raise Refused(self, atom, args)
 
 deepFrozenStamp = DeepFrozenStamp()
+
+
+@runnable(RUN_2, [deepFrozenStamp])
+def auditedBy(args):
+    auditor = args[0]
+    specimen = args[1]
+
+    from typhon.objects.constants import wrapBool
+    return wrapBool(specimen.auditedBy(auditor))
+
+
+class TransparentStamp(Object):
+    stamps = [deepFrozenStamp]
+
+    def recv(self, atom, args):
+        from typhon.objects.constants import wrapBool
+        if atom is AUDIT_1:
+            return wrapBool(True)
+        raise Refused(self, atom, args)
+
+transparentStamp = TransparentStamp()
+
+
+class TransparentGuard(Object):
+    stamps = [deepFrozenStamp]
+
+    def recv(self, atom, args):
+        from typhon.objects.constants import wrapBool
+        from typhon.objects.constants import NullObject
+        if atom is PASSES_1:
+            return wrapBool(transparentStamp in args[0].stamps)
+        if atom is COERCE_2:
+            if transparentStamp in args[0].stamps:
+                return args[0]
+            args[1].call("run", [NullObject])
+            return NullObject
+        raise Refused(self, atom, args)
+
+
+class Selfless(Object):
+    stamps = [deepFrozenStamp]
+
+    def recv(self, atom, args):
+        from typhon.objects.constants import wrapBool
+        from typhon.objects.constants import NullObject
+        if atom is AUDIT_1:
+            return wrapBool(True)
+        if atom is PASSES_1:
+            return wrapBool(selfless in args[0].stamps)
+        if atom is COERCE_2:
+            if selfless in args[0].stamps:
+                return args[0]
+            args[1].call(u"run", [NullObject])
+            return NullObject
+        raise Refused(self, atom, args)
+
+selfless = Selfless()

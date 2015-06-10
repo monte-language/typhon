@@ -17,7 +17,7 @@ from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException, userError
-from typhon.objects.auditors import auditedBy
+from typhon.objects.auditors import auditedBy, deepFrozenStamp
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (DoubleObject, IntObject, StrObject, unwrapInt,
@@ -60,6 +60,8 @@ VALUEMAKER_1 = getAtom(u"valueMaker", 1)
 
 
 class TraceLn(Object):
+    stamps = [deepFrozenStamp]
+
     def toString(self):
         return u"<traceln>"
 
@@ -74,6 +76,8 @@ class TraceLn(Object):
 
 
 class MakeList(Object):
+    stamps = [deepFrozenStamp]
+
     def toString(self):
         return u"<makeList>"
 
@@ -102,13 +106,19 @@ class MakeList(Object):
                     return rv
                 raise
 
+theMakeList = MakeList()
 
-@runnable(FROMPAIRS_1)
+
+@runnable(FROMPAIRS_1, [deepFrozenStamp])
 def makeMap(args):
     return ConstMap.fromPairs(args[0])
 
+theMakeMap = makeMap()
+
 
 class MakeDouble(Object):
+    stamps = [deepFrozenStamp]
+
     def toString(self):
         return u"<makeDouble>"
 
@@ -124,7 +134,10 @@ class MakeDouble(Object):
 
         raise Refused(self, atom, args)
 
+
 class MakeInt(Object):
+    stamps = [deepFrozenStamp]
+
     def toString(self):
         return u"<makeInt>"
 
@@ -152,6 +165,8 @@ class MakeInt(Object):
 
 
 class MakeString(Object):
+    stamps = [deepFrozenStamp]
+
     def toString(self):
         return u"<makeString>"
 
@@ -174,6 +189,7 @@ class MakeString(Object):
 class Throw(Object):
 
     displayName = u"throw"
+    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<throw>"
@@ -189,6 +205,8 @@ class Throw(Object):
 
 
 class SlotBinder(Object):
+    stamps = [deepFrozenStamp]
+
     def recv(self, atom, args):
         if atom is RUN_1:
             return SpecializedSlotBinder(args[0])
@@ -196,10 +214,14 @@ class SlotBinder(Object):
             return Binding(args[0], anyGuard)
         raise Refused(self, atom, args)
 
+theSlotBinder = SlotBinder()
+
 
 class SpecializedSlotBinder(Object):
     def __init__(self, guard):
         self.guard = guard
+        if deepFrozenStamp in guard.stamps:
+            self.stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is RUN_2:
@@ -213,6 +235,7 @@ class MObject(Object):
     """
 
     displayName = u"M"
+    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<M>"
@@ -264,28 +287,36 @@ theVarSlotGuardMaker = VarSlotGuardMaker()
 
 
 class FinalSlotMaker(Object):
+    stamps = [deepFrozenStamp]
+
     def recv(self, atom, args):
-        if atom is MAKEFINALSLOT_2:
-            if args[1] != NullObject:
-                val = args[1].coerce(args[0], Throw())
-                g = args[1]
+        if atom is RUN_3:
+            guard, specimen, ej = args[0], args[1], args[2]
+            if guard != NullObject:
+                val = guard.coerce(specimen, ej)
+                g = guard
             else:
-                val = args[0]
+                val = specimen
                 g = anyGuard
             return FinalSlot(val, g)
         if atom is ASTYPE_0:
             return theFinalSlotGuardMaker
         raise Refused(self, atom, args)
 
+theFinalSlotMaker = FinalSlotMaker()
+
 
 class VarSlotMaker(Object):
+    stamps = [deepFrozenStamp]
+
     def recv(self, atom, args):
-        if atom is MAKEFINALSLOT_2:
-            if args[1] != NullObject:
-                val = args[1].coerce(args[0], Throw())
-                g = args[1]
+        if atom is RUN_3:
+            guard, specimen, ej = args[0], args[1], args[2]
+            if guard != NullObject:
+                val = guard.coerce(specimen, ej)
+                g = guard
             else:
-                val = args[0]
+                val = specimen
                 g = anyGuard
             return VarSlot(val, g)
         if atom is ASTYPE_0:
@@ -311,13 +342,13 @@ def safeScope():
         u"__auditedBy": auditedBy(),
         u"__equalizer": Equalizer(),
         u"__loop": loop(),
-        u"__makeList": MakeList(),
-        u"__makeMap": makeMap(),
+        u"__makeList": theMakeList,
+        u"__makeMap": theMakeMap,
         u"__makeInt": MakeInt(),
         u"__makeDouble": MakeDouble(),
         u"__makeString": MakeString(),
-        u"__slotToBinding": SlotBinder(),
-        u"_makeFinalSlot": FinalSlotMaker(),
+        u"__slotToBinding": theSlotBinder,
+        u"_makeFinalSlot": theFinalSlotMaker,
         u"_makeVarSlot": VarSlotMaker(),
         u"throw": Throw(),
 

@@ -19,6 +19,7 @@ from rpython.rlib.rpath import rjoin
 from typhon.atoms import getAtom
 from typhon.env import finalize
 from typhon.errors import Refused
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapStr
@@ -31,6 +32,7 @@ RUN_2 = getAtom(u"run", 2)
 
 
 class Import(Object):
+    stamps = [deepFrozenStamp]
 
     def __init__(self, path, scope, recorder):
         self.path = path

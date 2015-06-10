@@ -77,6 +77,7 @@ class RefOps(Object):
     """
     Public functions for ref manipulation. Exposed in safescope as 'Ref'.
     """
+    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<Ref>"

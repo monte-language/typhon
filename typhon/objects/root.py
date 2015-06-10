@@ -120,7 +120,7 @@ class Object(object):
         return stamp in self.stamps
 
 
-def runnable(singleAtom):
+def runnable(singleAtom, _stamps=[]):
     """
     Promote a function to a Monte object type.
 
@@ -133,7 +133,7 @@ def runnable(singleAtom):
 
         class runnableObject(Object):
             displayName = name
-
+            stamps = _stamps
             def toString(self):
                 return u"<%s>" % name
 

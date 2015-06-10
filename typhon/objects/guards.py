@@ -1,5 +1,7 @@
 from typhon.atoms import getAtom
 from typhon.errors import Refused
+from typhon.objects.auditors import deepFrozenStamp, selfless, transparentStamp
+from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
@@ -12,6 +14,7 @@ COERCE_2 = getAtom(u"coerce", 2)
 GET_1 = getAtom(u"get", 1)
 GETGUARD_0 = getAtom(u"getGuard", 0)
 SUPERSETOF_1 = getAtom(u"supersetOf", 1)
+_UNCALL_0 = getAtom(u"_uncall", 0)
 
 
 class Guard(Object):
@@ -34,10 +37,12 @@ class Guard(Object):
 
 
 class AnyGuard(Object):
+    stamps = [deepFrozenStamp]
+
     def recv(self, atom, args):
-        if atom == COERCE_2:
+        if atom is COERCE_2:
             return args[0]
-        if atom == SUPERSETOF_1:
+        if atom is SUPERSETOF_1:
             return wrapBool(True)
         if atom.verb == u"get":
             return AnyOfGuard(args)
@@ -47,11 +52,14 @@ anyGuard = AnyGuard()
 
 
 class AnyOfGuard(Object):
+    # XXX EventuallyDeepFrozen?
+    stamps = [selfless, transparentStamp]
+
     def __init__(self, subguards):
         self.subguards = subguards
 
     def recv(self, atom, args):
-        if atom == COERCE_2:
+        if atom is COERCE_2:
             for g in self.subguards:
                 with Ejector() as ej:
                     try:
@@ -60,17 +68,23 @@ class AnyOfGuard(Object):
                         if e.ejector is ej:
                             continue
             throw(args[1], StrObject(u"No subguards matched"))
-        if atom == SUPERSETOF_1:
+        if atom is SUPERSETOF_1:
             for g in self.subguards:
                 if not unwrapBool(g.call(u"supersetOf", [args[0]])):
                     return wrapBool(False)
             return wrapBool(True)
+        if atom is _UNCALL_0:
+            return ConstList([anyGuard, StrObject(u"get"),
+                              ConstList(self.subguards)])
         raise Refused(self, atom, args)
 
 
 class FinalSlotGuard(Guard):
+
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
+        if deepFrozenStamp in self.valueGuard.stamps:
+            self.stamps = [deepFrozenStamp]
 
     def subCoerce(self, specimen):
         if (isinstance(specimen, FinalSlot) and
@@ -94,6 +108,8 @@ class FinalSlotGuard(Guard):
 class VarSlotGuard(Guard):
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
+        if deepFrozenStamp in self.valueGuard.stamps:
+            self.stamps = [deepFrozenStamp]
 
     def subCoerce(self, specimen):
         if (isinstance(specimen, VarSlot) and
@@ -103,6 +119,7 @@ class VarSlotGuard(Guard):
 
 
 class FinalSlotGuardMaker(Guard):
+    stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is GETGUARD_0:
@@ -123,6 +140,7 @@ class FinalSlotGuardMaker(Guard):
 
 
 class VarSlotGuardMaker(Guard):
+    stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is GETGUARD_0:
