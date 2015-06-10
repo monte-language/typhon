@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.rthread import ThreadLocalReference
+from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 
 from typhon.errors import UserException
 
@@ -43,8 +43,7 @@ class Vat(object):
 
         self._callbacks = []
 
-        # XXX should define a lock here
-        # XXX should lock all accesses of _pending
+        self._pendingLock = allocate_lock()
         self._pending = []
 
     def repr(self):
@@ -53,11 +52,13 @@ class Vat(object):
     def send(self, target, atom, args):
         from typhon.objects.refs import makePromise
         promise, resolver = makePromise()
-        self._pending.append((resolver, target, atom, args))
+        with self._pendingLock:
+            self._pending.append((resolver, target, atom, args))
         return promise
 
     def sendOnly(self, target, atom, args):
-        self._pending.append((None, target, atom, args))
+        with self._pendingLock:
+            self._pending.append((None, target, atom, args))
 
     def hasTurns(self):
         # Note that if we have pending callbacks but no pending turns, we
@@ -70,7 +71,8 @@ class Vat(object):
     def takeTurn(self):
         from typhon.objects.refs import Promise, resolution
 
-        resolver, target, atom, args = self._pending.pop(0)
+        with self._pendingLock:
+            resolver, target, atom, args = self._pending.pop(0)
 
         # If the target is a promise, then we should send to it instead of
         # calling. Try to resolve it as much as possible first, though.
