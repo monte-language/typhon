@@ -86,7 +86,7 @@ irc: mast/lib/irc/client.ty mast/lib/irc/user.ty \
 
 games: mast/games/mafia.ty
 
-fun: mast/fun/elements.ty mast/fun/repl.ty
+fun: mast/fun/elements.ty mast/fun/repl.ty mast/fun/brot.ty
 
 bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty
 
