@@ -34,31 +34,11 @@ object __comparer:
         return left.op__cmp(right).belowZero()
 
 
-def makeGuardedSlot(guard, var value :guard):
-    return object guardedSlot:
-        to get():
-            return value
-        to put(v):
-            value := v
-
-
 object Void:
-    to coerce(_, _):
+    to coerce(specimen, ej):
+        if (specimen != null):
+            throw.eject(ej, "not null")
         return null
-
-    to makeSlot(value):
-        return makeGuardedSlot(Void, value)
-
-
-def testVoid(assert):
-    var x :Void := 42
-    assert.equal(x, null)
-    x := 'o'
-    assert.equal(x, null)
-
-unittest([
-    testVoid,
-])
 
 
 def makePredicateGuard(predicate, label):
@@ -78,9 +58,6 @@ def makePredicateGuard(predicate, label):
             def error := "Failed guard (" + label + "):"
             throw.eject(ej, [error, specimen])
 
-        to makeSlot(value):
-            return makeGuardedSlot(predicateGuard, value)
-
 
 # Data guards. These must come before any while-expressions.
 def Bool := makePredicateGuard(isBool, "Bool")
@@ -89,11 +66,6 @@ def Double := makePredicateGuard(isDouble, "Double")
 def Int := makePredicateGuard(isInt, "Int")
 def Str := makePredicateGuard(isStr, "Str")
 
-# This is a hack. It is unabashedly, unashamedly, a hack. It is an essential
-# hack, for now, but it is not permanent.
-# The reference implementation uses "boolean" for the name of Bool when
-# expanding while-expressions.
-def boolean := Bool
 
 def Empty := makePredicateGuard(fn specimen {specimen.size() == 0}, "Empty")
 # Alias for map patterns.
@@ -135,9 +107,6 @@ object List:
 
         throw.eject(ej, ["(Probably) not a list:", specimen])
 
-    to makeSlot(value):
-        return makeGuardedSlot(List, value)
-
     to get(subGuard):
         return object SubList:
             to _printOn(out):
@@ -173,9 +142,6 @@ object Set:
 
         throw.eject(ej, ["(Probably) not a set:", specimen])
 
-    to makeSlot(value):
-        return makeGuardedSlot(Set, value)
-
     to get(subGuard):
         return object SubSet:
             to _printOn(out):
@@ -193,7 +159,7 @@ object Set:
                     return specimen
 
                 throw.eject(ej,
-                            ["(Probably) not a conforming list:", specimen])
+                            ["(Probably) not a conforming set:", specimen])
 
 
 object Map:
@@ -210,9 +176,6 @@ object Map:
             return conformed
 
         throw.eject(ej, ["(Probably) not a map:", specimen])
-
-    to makeSlot(value):
-        return makeGuardedSlot(Map, value)
 
     to get(keyGuard, valueGuard):
         return object SubMap:
@@ -265,16 +228,16 @@ object NullOk:
 
     to get(subGuard):
         return object SubNullOk:
+            to _printOn(out):
+                out.print("NullOk[")
+                out.print(subGuard)
+                out.print("]")
+
             to coerce(specimen, ej):
                 if (specimen == null):
                     return specimen
                 return subGuard.coerce(specimen, ej)
 
-            to makeSlot(value):
-                return makeGuardedSlot(SubNullOk, value)
-
-    to makeSlot(value):
-        return makeGuardedSlot(NullOk, value)
 
 def testNullOkUnsubbed(assert):
     assert.ejects(fn ej {def x :NullOk exit ej := 42})
@@ -292,6 +255,9 @@ unittest([
 
 
 object Same:
+    to _printOn(out):
+        out.print("Same")
+
     to get(value):
         return object SameGuard:
             to _printOn(out):
@@ -304,8 +270,9 @@ object Same:
                     throw.eject(ej, [specimen, "is not", value])
                 return specimen
 
-            to makeSlot(v):
-                return makeGuardedSlot(SameGuard, v)
+            to getValue():
+                return value
+
 
 def testSame(assert):
     object o:
@@ -314,6 +281,7 @@ def testSame(assert):
         pass
     assert.ejects(fn ej {def x :Same[o] exit ej := p})
     assert.doesNotEject(fn ej {def x :Same[o] exit ej := o})
+    assert.equal(Same[o].getValue(), o)
 
 unittest([testSame])
 
@@ -593,12 +561,7 @@ preludeScope |= import("prelude/m", preludeScope)
 # The final scope exported from the prelude. This *must* be the final
 # expression in the module!
 preludeScope | [
-    # Needed for interface expansions with ref Monte. :T
-    "any" => Any,
     "void" => Void,
-    # This is 100% hack. See the matching comment near the top of the prelude.
-    "boolean" => Bool,
-
     "__mapEmpty" => Empty,
     => __accumulateMap,
     => __makeMessageDesc,
