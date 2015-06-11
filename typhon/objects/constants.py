@@ -33,7 +33,7 @@ class _NullObject(Object):
 
     stamps = [deepFrozenStamp]
 
-    def getPrintableName(self):
+    def toString(self):
         return u"null"
 
 
@@ -49,7 +49,7 @@ class BoolObject(Object):
     def __init__(self, b):
         self._b = b
 
-    def getPrintableName(self):
+    def toString(self):
         return u"true" if self._b else u"false"
 
     def recv(self, atom, args):

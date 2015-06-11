@@ -31,11 +31,10 @@ def addTrail(ue, target, atom, args):
         try:
             argStringList.append(arg.toQuote())
         except UserException as ue2:
-            argStringList.append(u"<**%s throws %r when printed**>" % (
-                arg.getPrintableName(), ue2))
+            argStringList.append(u"<**object throws %r when printed**>" % ue2)
     argString = u", ".join(argStringList)
     atomRepr = atom.repr.decode("utf-8")
-    ue.trail.append(u"In %s.%s [%s]:" % (target.getPrintableName(), atomRepr,
+    ue.trail.append(u"In %s.%s [%s]:" % (target.toQuote(), atomRepr,
                                          argString))
 
 
@@ -53,14 +52,12 @@ class Object(object):
     def __repr__(self):
         return self.toQuote().encode("utf-8")
 
+    def toQuote(self):
+        return self.toString()
+
     # @specialize.argtype(0)
-    def getPrintableName(self):
-        return self.__class__.__name__.decode("utf-8")
-
     def toString(self):
-        return u"<%s>" % self.getPrintableName()
-
-    toQuote = toString
+        return u"<%s>" % self.__class__.__name__.decode("utf-8")
 
     def hash(self):
         """
@@ -140,12 +137,12 @@ def runnable(singleAtom, _stamps=[]):
     """
 
     def inner(f):
-        name = f.__name__.decode("utf-8")
+        name = u"<%s>" % f.__name__.decode("utf-8")
 
         class runnableObject(Object):
             stamps = _stamps
 
-            def getPrintableName(self):
+            def toString(self):
                 return name
 
             def recv(self, atom, args):

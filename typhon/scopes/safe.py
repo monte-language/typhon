@@ -190,7 +190,7 @@ class Throw(Object):
 
     stamps = [deepFrozenStamp]
 
-    def getPrintableName(self):
+    def toString(self):
         return u"throw"
 
     def recv(self, atom, args):
@@ -235,7 +235,7 @@ class MObject(Object):
 
     stamps = [deepFrozenStamp]
 
-    def getPrintableName(self):
+    def toString(self):
         return u"M"
 
     def recv(self, atom, args):

@@ -143,25 +143,22 @@ class ScriptObject(Object):
                 FinalSlotGuard(guard))
 
     def toString(self):
+        # Easily the worst part of the entire stringifying experience. We must
+        # be careful to not recurse here.
         try:
             printer = Printer()
             self.call(u"_printOn", [printer])
             return printer.value()
         except Refused:
-            return u"<%s>" % self.getPrintableName()
+            return u"<%s>" % self.displayName
         except UserException, e:
             return u"<%s (threw exception %s when printed)>" % (self.displayName, e.error())
-
-    toQuote = toString
-
-    def getPrintableName(self):
-        return self.displayName
 
     def printOn(self, printer):
         # Note that the printer is a Monte-level object. Also note that, at
         # this point, we have had a bad day; we did not respond to _printOn/1.
         from typhon.objects.data import StrObject
-        printer.call(u"print", [StrObject(u"<%s>" % self.getPrintableName())])
+        printer.call(u"print", [StrObject(u"<%s>" % self.displayName)])
 
     @unroll_safe
     def recv(self, atom, args):
