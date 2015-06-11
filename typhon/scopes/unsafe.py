@@ -19,6 +19,7 @@ from typhon.objects.networking.stdio import makeStdErr, makeStdIn, makeStdOut
 from typhon.objects.processes import CurrentProcess
 from typhon.objects.timeit import bench
 from typhon.objects.timers import Timer
+from typhon.vats import CurrentVatProxy
 
 
 def unsafeScope(config):
@@ -32,4 +33,5 @@ def unsafeScope(config):
         u"makeStdOut": makeStdOut(),
         u"makeTCP4ClientEndpoint": makeTCP4ClientEndpoint(),
         u"makeTCP4ServerEndpoint": makeTCP4ServerEndpoint(),
+        u"currentVat": CurrentVatProxy(),
     }

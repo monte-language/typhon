@@ -15,6 +15,7 @@
 from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 
 from typhon.errors import UserException
+from typhon.objects.root import Object, runnable
 
 
 class Callable(object):
@@ -33,10 +34,12 @@ class Callable(object):
         """
 
 
-class Vat(object):
+class Vat(Object):
     """
     Turn management and object isolation.
     """
+
+    name = "pa"
 
     def __init__(self, reactor):
         self._reactor = reactor
@@ -46,8 +49,8 @@ class Vat(object):
         self._pendingLock = allocate_lock()
         self._pending = []
 
-    def repr(self):
-        return u"<vat (%d pending)>" % (len(self._pending),)
+    def toString(self):
+        return u"Vat %s (%d turns pending)" % (self.name, len(self._pending))
 
     def send(self, target, atom, args):
         from typhon.objects.refs import makePromise
@@ -149,3 +152,14 @@ class scopedVat(object):
         if oldVat is not self.vat:
             raise RuntimeError("Implementation error: Who touched my vat!?")
         currentVat.set(None)
+
+
+class CurrentVatProxy(Object):
+
+    def toString(self):
+        vat = currentVat.get()
+        return vat.toString()
+
+    def callAtom(self, atom, args):
+        vat = currentVat.get()
+        return vat.callAtom(atom, args)
