@@ -14,8 +14,13 @@
 
 from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 
-from typhon.errors import UserException
+from typhon.atoms import getAtom
+from typhon.errors import Refused, UserException
 from typhon.objects.root import Object, runnable
+from typhon.objects.data import unwrapStr
+
+
+SPROUT_1 = getAtom(u"sprout", 1)
 
 
 class Callable(object):
@@ -39,10 +44,13 @@ class Vat(Object):
     Turn management and object isolation.
     """
 
-    name = "pa"
+    name = u"pa"
 
-    def __init__(self, reactor):
+    def __init__(self, manager, reactor, name=None):
+        self._manager = manager
         self._reactor = reactor
+        if name is not None:
+            self.name = name
 
         self._callbacks = []
 
@@ -51,6 +59,15 @@ class Vat(Object):
 
     def toString(self):
         return u"Vat %s (%d turns pending)" % (self.name, len(self._pending))
+
+    def recv(self, atom, args):
+        if atom is SPROUT_1:
+            name = unwrapStr(args[0])
+            vat = Vat(self._manager, self._reactor, name)
+            self._manager.vats.append(vat)
+            return vat
+
+        raise Refused(self, atom, args)
 
     def send(self, target, atom, args):
         from typhon.objects.refs import makePromise
@@ -163,3 +180,12 @@ class CurrentVatProxy(Object):
     def callAtom(self, atom, args):
         vat = currentVat.get()
         return vat.callAtom(atom, args)
+
+
+class VatManager(object):
+    """
+    A collection of vats.
+    """
+
+    def __init__(self):
+        self.vats = []

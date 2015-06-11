@@ -36,7 +36,7 @@ from typhon.reactor import Reactor
 from typhon.scopes.boot import bootScope
 from typhon.scopes.safe import safeScope
 from typhon.scopes.unsafe import unsafeScope
-from typhon.vats import Vat, scopedVat
+from typhon.vats import Vat, VatManager, scopedVat
 
 
 def dirname(p):
@@ -125,7 +125,8 @@ def entryPoint(argv):
     # Intialize our first vat.
     reactor = Reactor()
     reactor.usurpSignals()
-    vat = Vat(reactor)
+    vatManager = VatManager()
+    vat = Vat(vatManager, reactor)
 
     try:
         with scopedVat(vat) as vat:
