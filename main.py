@@ -93,17 +93,24 @@ def loadPrelude(config, recorder, vat):
     return {}
 
 
-def runUntilDone(vat, reactor, recorder):
-    # Run any remaining turns. This may take a while.
-    while vat.hasTurns() or reactor.hasObjects():
-        if vat.hasTurns():
-            with recorder.context("Time spent in vats"):
-                vat.takeSomeTurns()
+def runUntilDone(vatManager, reactor, recorder):
+    # This may take a while.
+    anyVatHasTurns = vatManager.anyVatHasTurns()
+    while anyVatHasTurns or reactor.hasObjects():
+        # print "Vats:", vatManager.vats
+        for vat in vatManager.vats:
+            if vat.hasTurns():
+                # print "Vat", vat, "has some turns"
+                with scopedVat(vat) as vat:
+                    with recorder.context("Time spent in vats"):
+                        vat.takeSomeTurns()
+
+        anyVatHasTurns = vatManager.anyVatHasTurns()
 
         if reactor.hasObjects():
             with recorder.context("Time spent in I/O"):
                 try:
-                    reactor.spin(vat.hasTurns())
+                    reactor.spin(anyVatHasTurns)
                 except UserException as ue:
                     debug_print("Caught exception while reacting:",
                             ue.formatError())
@@ -127,6 +134,7 @@ def entryPoint(argv):
     reactor.usurpSignals()
     vatManager = VatManager()
     vat = Vat(vatManager, reactor)
+    vatManager.vats.append(vat)
 
     try:
         with scopedVat(vat) as vat:
@@ -178,8 +186,7 @@ def entryPoint(argv):
     rv = 0
 
     try:
-        with scopedVat(vat) as vat:
-            runUntilDone(vat, reactor, recorder)
+        runUntilDone(vatManager, reactor, recorder)
     except SystemExit as se:
         rv = se.code
     finally:

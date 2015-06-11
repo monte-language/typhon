@@ -49,15 +49,16 @@ _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 
 def makePromise():
-    buf = MessageBuffer()
+    vat = currentVat.get()
+    buf = MessageBuffer(vat)
     sref = SwitchableRef(BufferingRef(buf))
-    return sref, LocalResolver(sref, buf)
+    return sref, LocalResolver(sref, buf, vat)
 
 
-def _toRef(o):
+def _toRef(o, vat):
     if isinstance(o, Promise):
         return o
-    return NearRef(o)
+    return NearRef(o, vat)
 
 
 def resolution(o):
@@ -189,25 +190,25 @@ class RefOps(Object):
         p, r = makePromise()
         vat = currentVat.get()
         vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenResolvedReactor(callback, o, r)])
+                [WhenResolvedReactor(callback, o, r, vat)])
         return p
 
     def whenResolvedOnly(self, o, callback):
         vat = currentVat.get()
         return vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenResolvedReactor(callback, o, None)])
+                [WhenResolvedReactor(callback, o, None, vat)])
 
     def whenBroken(self, o, callback):
         p, r = makePromise()
         vat = currentVat.get()
         vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenBrokenReactor(callback, o, r)])
+                [WhenBrokenReactor(callback, o, r, vat)])
         return p
 
     def whenBrokenOnly(self, o, callback):
         vat = currentVat.get()
         return vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenBrokenReactor(callback, o, None)])
+                [WhenBrokenReactor(callback, o, None, vat)])
 
     def isDeepFrozen(self, o):
         return o.auditedBy(deepFrozenStamp)
@@ -222,10 +223,11 @@ class RefOps(Object):
 
 class WhenBrokenReactor(Object):
 
-    def __init__(self, callback, ref, resolver):
+    def __init__(self, callback, ref, resolver, vat):
         self._cb = callback
         self._ref = ref
         self._resolver = resolver
+        self.vat = vat
 
     def toString(self):
         return u"<whenBrokenReactor>"
@@ -236,8 +238,7 @@ class WhenBrokenReactor(Object):
                 return NullObject
 
             if self._ref.state() is EVENTUAL:
-                vat = currentVat.get()
-                vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
+                self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
             elif self._ref.state() is BROKEN:
                 # XXX this could raise; we might need to reflect to user
                 outcome = self._cb.call(u"run", [self._ref])
@@ -253,10 +254,11 @@ class WhenResolvedReactor(Object):
 
     done = False
 
-    def __init__(self, callback, ref, resolver):
+    def __init__(self, callback, ref, resolver, vat):
         self._cb = callback
-        self._ref = _toRef(ref)
+        self._ref = _toRef(ref, vat)
         self._resolver = resolver
+        self.vat = vat
 
     def toString(self):
         return u"<whenResolvedReactor>"
@@ -275,8 +277,7 @@ class WhenResolvedReactor(Object):
 
                 self.done = True
             else:
-                vat = currentVat.get()
-                vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
+                self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
 
             return NullObject
         raise Refused(self, atom, args)
@@ -284,9 +285,10 @@ class WhenResolvedReactor(Object):
 
 class LocalResolver(Object):
 
-    def __init__(self, ref, buf):
+    def __init__(self, ref, buf, vat):
         self._ref = ref
         self._buf = buf
+        self.vat = vat
 
     def toString(self):
         if self._ref is None:
@@ -309,7 +311,7 @@ class LocalResolver(Object):
                 raise userError(u"Already resolved")
             return False
         else:
-            self._ref.setTarget(_toRef(target))
+            self._ref.setTarget(_toRef(target, self.vat))
             self._ref.commit()
             self._buf.deliverAll(target)
 
@@ -329,7 +331,9 @@ class LocalResolver(Object):
 
 class MessageBuffer(object):
 
-    def __init__(self):
+    def __init__(self, vat):
+        self.vat = vat
+
         self._buf = []
 
     def enqueue(self, resolver, atom, args):
@@ -337,7 +341,7 @@ class MessageBuffer(object):
 
     def deliverAll(self, target):
         #XXX record sending-context information for causality tracing
-        targRef = _toRef(target)
+        targRef = _toRef(target, self.vat)
         for resolver, atom, args in self._buf:
             if resolver is None:
                 targRef.sendAllOnly(atom, args)
@@ -541,8 +545,9 @@ class BufferingRef(Promise):
 
 class NearRef(Promise):
 
-    def __init__(self, target):
+    def __init__(self, target, vat):
         self.target = target
+        self.vat = vat
 
     def toString(self):
         return u"<nearref: %s>" % self.target.toString()
@@ -554,12 +559,10 @@ class NearRef(Promise):
         return self.target.callAtom(atom, args)
 
     def sendAll(self, atom, args):
-        vat = currentVat.get()
-        return vat.send(self.target, atom, args)
+        return self.vat.send(self.target, atom, args)
 
     def sendAllOnly(self, atom, args):
-        vat = currentVat.get()
-        return vat.sendOnly(self.target, atom, args)
+        return self.vat.sendOnly(self.target, atom, args)
 
     def optProblem(self):
         return NullObject

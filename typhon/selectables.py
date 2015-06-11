@@ -20,9 +20,13 @@ from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rsignal import pypysig_poll, pypysig_set_wakeup_fd
 from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
 
+from typhon.atoms import getAtom
 from typhon.objects.networking.sockets import SocketDrain, SocketFount
 from typhon.objects.networking.stdio import InputFount
 from typhon.vats import currentVat
+
+
+RUN_2 = getAtom(u"run", 2)
 
 
 # The maximum amount of data to receive from a single packet.
@@ -141,7 +145,7 @@ class StandardOutput(Selectable):
         pass
 
     def error(self, reactor, reason):
-        print "stdout error", reason
+        # print "stdout error", reason
         self.removeFromReactor(reactor)
 
     def enqueue(self, buf):
@@ -165,15 +169,18 @@ class Socket(Selectable):
 
     closed = False
 
-    def __init__(self, rsocket):
+    def __init__(self, rsocket, vat):
+        self.vat = vat
         self.rsock = rsocket
         self.fd = self.rsock.fd
 
         self._founts = []
         self._outbound = []
 
+        self.addToReactor(vat._reactor)
+
     def repr(self):
-        return u"<Socket(%d)>" % self.rsock.fd
+        return u"<Socket(%d, %s)>" % (self.rsock.fd, self.vat.toString())
 
     def addToReactor(self, reactor):
         reactor.addFD(self.fd, self)
@@ -182,6 +189,7 @@ class Socket(Selectable):
         reactor.dropFD(self.fd)
 
     def wantsWrite(self):
+        # print "wantsWrite", bool(self._outbound)
         return bool(self._outbound) or self._connector is not None
 
     @dont_look_inside
@@ -196,10 +204,9 @@ class Socket(Selectable):
         # instead accept and spin off a new connection.
         if self._listener is not None:
             fd, _ = self.rsock.accept()
-            sock = Socket(RSocket(fd=fd))
-            sock.addToReactor(reactor)
-            self._listener.call(u"run", [sock.createFount(),
-                                         SocketDrain(sock)])
+            sock = Socket(RSocket(fd=fd), self.vat)
+            self.vat.sendOnly(self._listener, RUN_2, [sock.createFount(),
+                                                      SocketDrain(sock)])
             return
 
         # Perform the actual recv call.
@@ -294,7 +301,7 @@ class Socket(Selectable):
         self.rsock.close()
 
     def createFount(self):
-        fount = SocketFount()
+        fount = SocketFount(self)
         self._founts.append(fount)
         return fount
 
@@ -325,8 +332,7 @@ class Socket(Selectable):
             self.rsock.bind(addr)
         except CSocketError as cse:
             if cse.errno == EADDRINUSE:
-                vat = currentVat.get()
-                reactor = vat._reactor
+                reactor = self.vat._reactor
                 self.error(reactor, u"Address is already in use")
             else:
                 raise

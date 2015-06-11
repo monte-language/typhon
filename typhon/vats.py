@@ -58,7 +58,7 @@ class Vat(Object):
         self._pending = []
 
     def toString(self):
-        return u"Vat %s (%d turns pending)" % (self.name, len(self._pending))
+        return u"<vat(%s, %d turns pending)>" % (self.name, len(self._pending))
 
     def recv(self, atom, args):
         if atom is SPROUT_1:
@@ -74,11 +74,13 @@ class Vat(Object):
         promise, resolver = makePromise()
         with self._pendingLock:
             self._pending.append((resolver, target, atom, args))
+            # print "Planning to send", target, atom, args
         return promise
 
     def sendOnly(self, target, atom, args):
         with self._pendingLock:
             self._pending.append((None, target, atom, args))
+            # print "Planning to sendOnly", target, atom, args
 
     def hasTurns(self):
         # Note that if we have pending callbacks but no pending turns, we
@@ -97,6 +99,8 @@ class Vat(Object):
         # If the target is a promise, then we should send to it instead of
         # calling. Try to resolve it as much as possible first, though.
         target = resolution(target)
+
+        # print "Taking turn:", self, resolver, target, atom, args
 
         if resolver is None:
             # callOnly/sendOnly.
@@ -189,3 +193,9 @@ class VatManager(object):
 
     def __init__(self):
         self.vats = []
+
+    def anyVatHasTurns(self):
+        for vat in self.vats:
+            if vat.hasTurns():
+                return True
+        return False

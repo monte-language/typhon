@@ -57,13 +57,21 @@ class SocketFount(Object):
 
     _drain = None
 
+    def __init__(self, sock):
+        self.sock = sock
+
     def toString(self):
-        return u"<SocketFount>"
+        return u"<SocketFount(%s)>" % self.sock.repr()
 
     def recv(self, atom, args):
         if atom is FLOWTO_1:
             self._drain = drain = args[0]
-            rv = drain.call(u"flowingFrom", [self])
+            # We can't actually call receive/1 on the drain until
+            # flowingFrom/1 has been called, *but* flush() should be using
+            # sends to incant receive/1, so they'll all be done in subsequent
+            # turns to the one we're queueing. ~ C.
+            rv = self.sock.vat.send(drain, FLOWINGFROM_1, [self])
+            self.flush()
             return rv
 
         if atom is PAUSEFLOW_0:
@@ -88,15 +96,16 @@ class SocketFount(Object):
         self.flush()
 
     def flush(self):
+        # print "SocketFount flush", self.pauses, self._drain
         if not self.pauses and self._drain is not None:
             rv = [IntObject(ord(byte)) for byte in self.buf]
-            vat = currentVat.get()
-            vat.sendOnly(self._drain, RECEIVE_1, [ConstList(rv)])
+            self.sock.vat.sendOnly(self._drain, RECEIVE_1, [ConstList(rv)])
             self.buf = ""
 
     def terminate(self, reason):
         if self._drain is not None:
-            self._drain.call(u"flowStopped", [StrObject(reason)])
+            self.sock.vat.sendOnly(self._drain, FLOWSTOPPED_1,
+                                   [StrObject(reason)])
             # Release the drain. They should have released us as well.
             self._drain = None
 
@@ -130,8 +139,7 @@ class SocketDrain(Object):
 
         if atom is FLOWSTOPPED_1:
             self._closed = True
-            vat = currentVat.get()
-            self.sock.error(vat._reactor, unwrapStr(args[0]))
+            self.sock.error(self.sock.vat._reactor, unwrapStr(args[0]))
             return NullObject
 
         raise Refused(self, atom, args)

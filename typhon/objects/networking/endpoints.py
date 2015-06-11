@@ -48,10 +48,8 @@ class TCP4ClientPending(Callable):
         # Hint: The following line is where GAI is called.
         # XXX this should be IDNA, not UTF-8.
         addr = INETAddress(self.host.encode("utf-8"), self.port)
-        self.socket = Socket(RSocket())
-        # XXX demeter violation! Definitely.
         vat = currentVat.get()
-        self.socket.addToReactor(vat._reactor)
+        self.socket = Socket(RSocket(), vat)
         self.socket.connect(addr, self)
 
     def failSocket(self, reason):
@@ -115,10 +113,8 @@ class TCP4ServerEndpoint(Object):
 
     @dont_look_inside
     def listen(self, handler):
-        socket = Socket(RSocket())
-        # XXX demeter violation!
         vat = currentVat.get()
-        socket.addToReactor(vat._reactor)
+        socket = Socket(RSocket(), vat)
         # XXX this shouldn't block, but not guaranteed
         socket.listen(self.port, handler)
 
