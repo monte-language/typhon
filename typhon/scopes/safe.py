@@ -17,7 +17,7 @@ from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException, userError
-from typhon.objects.auditors import auditedBy, deepFrozenStamp
+from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (DoubleObject, IntObject, StrObject, unwrapInt,
@@ -340,6 +340,7 @@ def safeScope():
 
         u"M": MObject(),
         u"Ref": RefOps(),
+        u"Selfless": selfless,
         u"__auditedBy": auditedBy(),
         u"__equalizer": Equalizer(),
         u"__loop": loop(),

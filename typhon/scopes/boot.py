@@ -16,7 +16,7 @@ from typhon.atoms import getAtom
 from typhon.env import finalize
 from typhon.errors import Refused, userError
 from typhon.importing import evaluateTerms, obtainModuleFromSource
-from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
                                         unwrapList, unwrapMap)
 from typhon.objects.constants import BoolObject
@@ -98,6 +98,7 @@ def bootScope(recorder):
         u"isSet": isSet(),
 
         u"DeepFrozenStamp": deepFrozenStamp,
+        u"TransparentStamp": transparentStamp,
 
         u"typhonEval": TyphonEval(recorder),
     }
