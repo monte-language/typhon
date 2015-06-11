@@ -96,7 +96,7 @@ class Printer(Object):
             item.call(u"_printOn", [self])
         except UserException, e:
             self.ub.append(u"<** %s throws %s when printed**>" % (
-                item.displayName, e.error()))
+                item.getPrintableName(), e.error()))
         del self.context[item]
 
     def value(self):

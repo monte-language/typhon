@@ -26,7 +26,7 @@ class Guard(Object):
             val = self.subCoerce(newspec)
             if val is None:
                 throw(ej, StrObject(u"%s does not conform to %s" % (
-                    specimen.displayName, self.displayName)))
+                    specimen.getPrintableName(), self.getPrintableName())))
             else:
                 return val
         else:

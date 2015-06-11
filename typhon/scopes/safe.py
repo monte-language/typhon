@@ -188,11 +188,10 @@ class MakeString(Object):
 
 class Throw(Object):
 
-    displayName = u"throw"
     stamps = [deepFrozenStamp]
 
-    def toString(self):
-        return u"<throw>"
+    def getPrintableName(self):
+        return u"throw"
 
     def recv(self, atom, args):
         if atom is RUN_1:
@@ -234,11 +233,10 @@ class MObject(Object):
     Miscellaneous vat management and quoting services.
     """
 
-    displayName = u"M"
     stamps = [deepFrozenStamp]
 
-    def toString(self):
-        return u"<M>"
+    def getPrintableName(self):
+        return u"M"
 
     def recv(self, atom, args):
         if atom is CALLWITHPAIR_2:

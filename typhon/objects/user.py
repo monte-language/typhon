@@ -98,7 +98,8 @@ class Audition(Object):
 
 class ScriptObject(Object):
 
-    _immutable_fields_ = "codeScript", "globals[*]", "closure[*]"
+    _immutable_fields_ = ("codeScript", "displayName", "globals[*]",
+                          "closure[*]")
     auditorCache = {}
 
     stamps = []
@@ -147,11 +148,20 @@ class ScriptObject(Object):
             self.call(u"_printOn", [printer])
             return printer.value()
         except Refused:
-            return u"<%s>" % self.displayName
+            return u"<%s>" % self.getPrintableName()
         except UserException, e:
             return u"<%s (threw exception %s when printed)>" % (self.displayName, e.error())
 
     toQuote = toString
+
+    def getPrintableName(self):
+        return self.displayName
+
+    def printOn(self, printer):
+        # Note that the printer is a Monte-level object. Also note that, at
+        # this point, we have had a bad day; we did not respond to _printOn/1.
+        from typhon.objects.data import StrObject
+        printer.call(u"print", [StrObject(u"<%s>" % self.getPrintableName())])
 
     @unroll_safe
     def recv(self, atom, args):

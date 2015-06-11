@@ -30,7 +30,6 @@ from typhon.objects.root import Object
 from typhon.quoting import quoteChar, quoteStr
 
 
-_PRINTON_1 = getAtom(u"_printOn", 1)
 ABOVEZERO_0 = getAtom(u"aboveZero", 0)
 ABS_0 = getAtom(u"abs", 0)
 ADD_1 = getAtom(u"add", 1)
@@ -104,8 +103,6 @@ class CharObject(Object):
 
     _immutable_fields_ = "stamps", "_c"
 
-    displayName = u"CharObject"
-
     stamps = [selfless, deepFrozenStamp]
 
     def __init__(self, c):
@@ -160,8 +157,7 @@ class CharObject(Object):
         if atom is SUBTRACT_1:
             other = unwrapInt(args[0])
             return self.withOffset(-other)
-        if atom is _PRINTON_1:
-            return args[0].call(u"print", [StrObject(self.toString())])
+
         raise Refused(self, atom, args)
 
     def withOffset(self, offset):
@@ -182,8 +178,6 @@ def unwrapChar(o):
 class DoubleObject(Object):
 
     _immutable_fields_ = "stamps", "_d"
-
-    displayName = u"DoubleObject"
 
     stamps = [selfless, deepFrozenStamp]
 
@@ -237,9 +231,6 @@ class DoubleObject(Object):
             pack_float(result, self._d, 8, True)
             return ConstList([IntObject(ord(c)) for c in result[0]])
 
-        if atom is _PRINTON_1:
-            return args[0].call(u"print", [StrObject(self.toString())])
-
         raise Refused(self, atom, args)
 
     @elidable
@@ -279,8 +270,6 @@ def promoteToDouble(o):
 class IntObject(Object):
 
     _immutable_fields_ = "stamps", "_i"
-
-    displayName = u"IntObject"
 
     _i = 0
 
@@ -458,9 +447,6 @@ class IntObject(Object):
                 other = unwrapBigInt(args[0])
                 return BigInt(other.int_xor(self._i))
 
-        if atom is _PRINTON_1:
-            return args[0].call(u"print", [StrObject(self.toString())])
-
         raise Refused(self, atom, args)
 
     def getInt(self):
@@ -527,7 +513,6 @@ class BigInt(Object):
     _immutable_ = True
     _immutable_fields_ = "stamps", "bi"
 
-    displayName = u"BigInt"
     stamps = [selfless, deepFrozenStamp]
 
     def __init__(self, bi):
@@ -670,8 +655,6 @@ class BigInt(Object):
                 return BigInt(self.bi.xor(unwrapBigInt(other)))
             except WrongType:
                 return BigInt(self.bi.int_xor(unwrapInt(other)))
-        if atom is _PRINTON_1:
-            return args[0].call(u"print", [StrObject(self.toString())])
 
         raise Refused(self, atom, args)
 
@@ -738,8 +721,6 @@ class strIterator(Object):
 class StrObject(Object):
 
     _immutable_fields_ = "stamps", "_s"
-
-    displayName = u"StrObject"
 
     stamps = [selfless, deepFrozenStamp]
 
@@ -875,9 +856,6 @@ class StrObject(Object):
 
         if atom is _MAKEITERATOR_0:
             return strIterator(self._s)
-
-        if atom is _PRINTON_1:
-            return args[0].call(u"print", [self])
 
         raise Refused(self, atom, args)
 

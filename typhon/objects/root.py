@@ -13,7 +13,7 @@
 # under the License.
 
 from rpython.rlib.jit import jit_debug, promote
-from rpython.rlib.objectmodel import compute_identity_hash
+from rpython.rlib.objectmodel import compute_identity_hash, specialize
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException
@@ -21,6 +21,7 @@ from typhon.errors import Refused, UserException
 
 RUN_1 = getAtom(u"run", 1)
 _CONFORMTO_1 = getAtom(u"_conformTo", 1)
+_PRINTON_1 = getAtom(u"_printOn", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 
@@ -31,23 +32,20 @@ def addTrail(ue, target, atom, args):
             argStringList.append(arg.toQuote())
         except UserException as ue2:
             argStringList.append(u"<**%s throws %r when printed**>" % (
-                arg.displayName, ue2))
+                arg.getPrintableName(), ue2))
     argString = u", ".join(argStringList)
     atomRepr = atom.repr.decode("utf-8")
-    ue.trail.append(u"In %s.%s [%s]:" % (target.displayName, atomRepr, argString))
+    ue.trail.append(u"In %s.%s [%s]:" % (target.getPrintableName(), atomRepr,
+                                         argString))
 
 
 class Object(object):
 
     # The attributes that all Objects have in common.
-    _attrs_ = "displayName", "stamps",
+    _attrs_ = "stamps",
 
     # The attributes that are not mutable.
-    _immutable_fields_ = "displayName", "stamps"
-
-    # The "display" name, used in fast/imprecise/classy debugging dumps.
-    # Primary use of this attribute is for profiling.
-    displayName = u"Object"
+    _immutable_fields_ = "stamps",
 
     # The auditor stamps on objects.
     stamps = []
@@ -55,11 +53,14 @@ class Object(object):
     def __repr__(self):
         return self.toQuote().encode("utf-8")
 
-    def toQuote(self):
-        return self.toString()
+    # @specialize.argtype(0)
+    def getPrintableName(self):
+        return self.__class__.__name__.decode("utf-8")
 
     def toString(self):
-        return u"<object>"
+        return u"<%s>" % self.getPrintableName()
+
+    toQuote = toString
 
     def hash(self):
         """
@@ -97,6 +98,11 @@ class Object(object):
                 # Welcome to _conformTo/1.
                 # to _conformTo(_): return self
                 return self
+
+            if atom is _PRINTON_1:
+                # Welcome to _printOn/1.
+                return self.printOn(arguments[0])
+
             if atom is _WHENMORERESOLVED_1:
                 # Welcome to _whenMoreResolved.
                 # This method's implementation, in Monte, should be:
@@ -119,6 +125,11 @@ class Object(object):
     def auditedBy(self, stamp):
         return stamp in self.stamps
 
+    def printOn(self, printer):
+        # Note that the printer is a Monte-level object.
+        from typhon.objects.data import StrObject
+        printer.call(u"print", [StrObject(self.toString())])
+
 
 def runnable(singleAtom, _stamps=[]):
     """
@@ -132,10 +143,10 @@ def runnable(singleAtom, _stamps=[]):
         name = f.__name__.decode("utf-8")
 
         class runnableObject(Object):
-            displayName = name
             stamps = _stamps
-            def toString(self):
-                return u"<%s>" % name
+
+            def getPrintableName(self):
+                return name
 
             def recv(self, atom, args):
                 if atom is singleAtom:

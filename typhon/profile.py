@@ -55,7 +55,7 @@ class CallStackProfiler(object):
         if not self.enabled:
             return self
 
-        label = u"%s.%s/%d" % (obj.displayName, atom.verb, atom.arity)
+        label = u"%s.%s/%d" % (obj.getPrintableName(), atom.verb, atom.arity)
         # Replace ; with , in names. Semicolons are used to separate stack
         # frames later.
         label = label.replace(u";", u",")
