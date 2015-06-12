@@ -620,7 +620,7 @@ def expand(node, builder, fail):
                 return [builder.LiteralExpr("&" + node.getPattern().getNoun().getName(), span), subnode]
             else if (pattName == "BindingPattern"):
                 return [builder.LiteralExpr("&&" + node.getPattern().getNoun().getName(), span), subnode]
-        else if (nodeName == "MapPatternOptional"):
+        else if (nodeName == "MapPatternDefault"):
             def [[k, v], default] := args
             return [builder.MethodCallExpr(builder.NounExpr("__mapExtract", span),
                     "depr", [k, default], span), v]
