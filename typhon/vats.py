@@ -16,10 +16,13 @@ from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object, runnable
 from typhon.objects.data import unwrapStr
 
 
+RUN_0 = getAtom(u"run", 0)
+SEED_1 = getAtom(u"seed", 1)
 SPROUT_1 = getAtom(u"sprout", 1)
 
 
@@ -61,6 +64,12 @@ class Vat(Object):
         return u"<vat(%s, %d turns pending)>" % (self.name, len(self._pending))
 
     def recv(self, atom, args):
+        if atom is SEED_1:
+            f = args[0]
+            if not f.auditedBy(deepFrozenStamp):
+                print "seed/1: Warning: Seeded receiver is not DeepFrozen"
+            return self.send(f, RUN_0, [])
+
         if atom is SPROUT_1:
             name = unwrapStr(args[0])
             vat = Vat(self._manager, self._reactor, name)
