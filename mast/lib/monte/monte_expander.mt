@@ -407,16 +407,18 @@ def expand(node, builder, fail):
         else if (nodeName == "FunCallExpr"):
             def [receiver, fargs] := args
             return builder.MethodCallExpr(receiver, "run", fargs, span)
-        else if (nodeName == "FunctionSendExpr"):
+        else if (nodeName == "FunSendExpr"):
             def [receiver, fargs] := args
             return builder.MethodCallExpr(builder.NounExpr("M", span),
-                "send", [receiver, "run", fargs], span)
+                "send", [receiver, builder.LiteralExpr("run", span),
+                         emitList(fargs, span)],
+                span)
         else if (nodeName == "SendExpr"):
-             def [receiver, verb, margs] := args
-             return builder.MethodCallExpr(builder.NounExpr("M", span),
-                 "send", [receiver, builder.LiteralExpr(verb, span),
-                          emitList(margs, span)],
-                  span)
+            def [receiver, verb, margs] := args
+            return builder.MethodCallExpr(builder.NounExpr("M", span),
+                "send", [receiver, builder.LiteralExpr(verb, span),
+                         emitList(margs, span)],
+                 span)
         else if (nodeName == "SendCurryExpr"):
             def [receiver, verb] := args
             return builder.MethodCallExpr(

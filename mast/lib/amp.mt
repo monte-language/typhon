@@ -115,6 +115,7 @@ def makeAMP(drain, responder):
             # Either it's a new command, a successful reply, or a failure.
             switch (item):
                 match [=> _command] | var arguments:
+                    # New command.
                     def _answer := if (arguments.contains("_ask")) {
                         def [=> _ask] | args := arguments
                         arguments := args
@@ -126,11 +127,13 @@ def makeAMP(drain, responder):
                             def packet := result | [=> _answer]
                             AMP.sendPacket(packAMPPacket(packet))
                 match [=> _answer] | arguments:
+                    # Successful reply.
                     def via (strToInt) answer := _answer
                     if (pending.contains(answer)):
                         pending[answer].resolve(arguments)
                         pending without= (answer)
                 match [=> _error] | arguments:
+                    # Error reply.
                     def via (strToInt) error := _error
                     if (pending.contains(error)):
                         def [=> _error_description := "unknown error"] | _ := arguments
