@@ -62,7 +62,8 @@ def makeDigitExtractor(machine, base :Int):
 
             # a // c == b // d now, so we can extract a digit.
             def digit := a // c
-            if (digit == 0 && a == 0 && b == 0):
+            # XXX if (digit == 0 && a == 0 && b == 0):
+            if ([digit, a, b] == [0, 0, 0]):
                 # Finite number of digits in this base! We're done.
                 throw.eject(ej, "Finished with extraction")
 
