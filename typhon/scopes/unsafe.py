@@ -16,6 +16,7 @@ from typhon.objects.files import makeFileResource
 from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
                                                  makeTCP4ServerEndpoint)
 from typhon.objects.networking.stdio import makeStdErr, makeStdIn, makeStdOut
+from typhon.objects.networking.processes import makeProcess
 from typhon.objects.processes import CurrentProcess
 from typhon.objects.timeit import bench
 from typhon.objects.timers import Timer
@@ -28,6 +29,7 @@ def unsafeScope(config):
         u"bench": bench(),
         u"currentProcess": CurrentProcess(config),
         u"makeFileResource": makeFileResource(),
+        u"makeProcess": makeProcess(),
         u"makeStdErr": makeStdErr(),
         u"makeStdIn": makeStdIn(),
         u"makeStdOut": makeStdOut(),
