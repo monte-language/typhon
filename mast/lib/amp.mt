@@ -88,7 +88,8 @@ def packAMPPacket(packet):
     return buf
 
 
-def makeAMP(drain, responder):
+def makeAMP(drain):
+    var responder := null
     var buf := []
     var serial :Int := 0
     var pending := [].asMap()
@@ -113,6 +114,10 @@ def makeAMP(drain, responder):
             switch (item):
                 match [=> _command] | var arguments:
                     # New command.
+                    if (responder == null):
+                        traceln(`AMP: No responder to handle command`)
+                        return
+
                     def _answer := if (arguments.contains("_ask")) {
                         def [=> _ask] | args := arguments
                         arguments := args
@@ -122,6 +127,10 @@ def makeAMP(drain, responder):
                     if (serial != null):
                         when (result) ->
                             def packet := result | [=> _answer]
+                            AMP.sendPacket(packAMPPacket(packet))
+                        catch _error_description:
+                            def packet := result | [=> _answer,
+                                                    => _error_description]
                             AMP.sendPacket(packAMPPacket(packet))
                 match [=> _answer] | arguments:
                     # Successful reply.
@@ -139,28 +148,46 @@ def makeAMP(drain, responder):
                 match _:
                     pass
 
-        to send(var packet, expectReply :Bool):
+        to send(command :Str, var arguments :Map, expectReply :Bool):
             if (expectReply):
-                packet |= ["_ask" => serial]
+                arguments |= ["_command" => command, "_ask" => `$serial`]
                 def [p, r] := Ref.promise()
                 pending |= [serial => r]
                 serial += 1
-                AMP.sendPacket(packAMPPacket(packet))
+                AMP.sendPacket(packAMPPacket(arguments))
                 return p
             else:
-                AMP.sendPacket(packAMPPacket(packet))
+                AMP.sendPacket(packAMPPacket(arguments))
+
+        to setResponder(r):
+            responder := r
 
 
 def makeAMPServer(endpoint):
     return object AMPServerEndpoint:
-        to listen(responder):
-            def f(var fount, drain):
+        to listen(callback):
+            def f(fount, drain):
+                def amp := makeAMP(drain)
                 chain([
                     fount,
                     makePumpTube(makeStatefulPump(makeAMPPacketMachine())),
-                    makeAMP(drain, responder),
+                    amp,
                 ])
+                callback(amp)
             endpoint.listen(f)
 
 
-[=> makeAMPServer]
+def makeAMPClient(endpoint):
+    return object AMPClientEndpoint:
+        to connect():
+            def [fount, drain] := endpoint.connect()
+            def amp := makeAMP(drain)
+            chain([
+                fount,
+                makePumpTube(makeStatefulPump(makeAMPPacketMachine())),
+                amp,
+            ])
+            return amp
+
+
+[=> makeAMPServer, => makeAMPClient]
