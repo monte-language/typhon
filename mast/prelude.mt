@@ -362,8 +362,9 @@ def __matchSame(expected):
 
 def __mapExtract(key):
     def mapExtractor(specimen, ej):
-        # XXX use the ejector if key is not in specimen
-        return [specimen[key], specimen.without(key)]
+        if (specimen.contains(key)):
+            return [specimen[key], specimen.without(key)]
+        throw.eject(ej, "Key not in map")
     return mapExtractor
 
 
