@@ -7,7 +7,7 @@ object TagStamp:
 object Tag:
     to coerce(specimen, ej):
         return specimen
-        #if (__auditedBy(specimen, TagStamp)):
+        #if (__auditedBy(TagStamp, specimen)):
         #    return specimen
         # ej(null)
 

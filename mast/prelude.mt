@@ -91,6 +91,9 @@ def __validateFor(flag :Bool) :Void:
     if (!flag):
         throw("Failed to validate loop!")
 
+object _ListGuardStamp:
+    to audit(audition):
+        return true
 
 object List:
     to _printOn(out):
@@ -108,11 +111,14 @@ object List:
         throw.eject(ej, ["(Probably) not a list:", specimen])
 
     to get(subGuard):
-        return object SubList:
+        return object SubList implements _ListGuardStamp:
             to _printOn(out):
                 out.print("List[")
                 subGuard._printOn(out)
                 out.print("]")
+
+            to getGuard():
+                return subGuard
 
             to coerce(var specimen, ej):
                 if (!isList(specimen)):
@@ -126,6 +132,17 @@ object List:
                 throw.eject(ej,
                             ["(Probably) not a conforming list:", specimen])
 
+    to extractGuard(specimen, ej):
+        if (specimen == List):
+            return Any
+        else if (__auditedBy(_ListGuardStamp, specimen)):
+            return specimen.getGuard()
+        else:
+            throw.eject(ej, "Not a List guard")
+
+object _SetGuardStamp:
+    to audit(audition):
+        return true
 
 object Set:
     to _printOn(out):
@@ -143,11 +160,14 @@ object Set:
         throw.eject(ej, ["(Probably) not a set:", specimen])
 
     to get(subGuard):
-        return object SubSet:
+        return object SubSet implements _SetGuardStamp:
             to _printOn(out):
                 out.print("Set[")
                 subGuard._printOn(out)
                 out.print("]")
+
+            to getGuard():
+                return subGuard
 
             to coerce(var specimen, ej):
                 if (!isSet(specimen)):
@@ -161,6 +181,17 @@ object Set:
                 throw.eject(ej,
                             ["(Probably) not a conforming set:", specimen])
 
+    to extractGuard(specimen, ej):
+        if (specimen == Set):
+            return anyGuard
+        else if (__auditedBy(_SetGuardStamp, specimen)):
+            return specimen.getGuard()
+        else:
+            throw.eject(ej, "Not a Set guard")
+
+object _MapGuardStamp:
+    to audit(audition):
+        return true
 
 object Map:
     to _printOn(out):
@@ -178,7 +209,7 @@ object Map:
         throw.eject(ej, ["(Probably) not a map:", specimen])
 
     to get(keyGuard, valueGuard):
-        return object SubMap:
+        return object SubMap implements _MapGuardStamp:
             to _printOn(out):
                 out.print("Map[")
                 keyGuard._printOn(out)
@@ -186,6 +217,8 @@ object Map:
                 valueGuard._printOn(out)
                 out.print("]")
 
+            to getGuard():
+                return [keyGuard, valueGuard]
             to coerce(var specimen, ej):
                 if (!isMap(specimen)):
                     specimen := specimen._conformTo(SubMap)
@@ -199,6 +232,13 @@ object Map:
                 throw.eject(ej,
                             ["(Probably) not a conforming map:", specimen])
 
+    to extractGuard(specimen, ej):
+        if (specimen == Map):
+            return anyGuard
+        else if (__auditedBy(_MapGuardStamp, specimen)):
+            return specimen.getGuard()
+        else:
+            throw.eject(ej, "Not a Map guard")
 
 def testMapGuard(assert):
     assert.ejects(fn ej {def x :Map exit ej := 42})
@@ -253,13 +293,16 @@ unittest([
     testNullOkInt,
 ])
 
+object _SameGuardStamp:
+    to audit(audition):
+        return true
 
 object Same:
     to _printOn(out):
         out.print("Same")
 
     to get(value):
-        return object SameGuard:
+        return object SameGuard implements _SameGuardStamp:
             to _printOn(out):
                 out.print("Same[")
                 value._printOn(out)
@@ -272,6 +315,12 @@ object Same:
 
             to getValue():
                 return value
+
+    to extractValue(specimen, ej):
+        if (__auditedBy(_SameGuardStamp, specimen)):
+            return specimen.getValue()
+        else:
+            throw.eject(ej, "Not a Same guard")
 
 
 def testSame(assert):

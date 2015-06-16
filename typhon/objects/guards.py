@@ -11,6 +11,7 @@ from typhon.objects.root import Object
 from typhon.objects.slots import FinalSlot, VarSlot
 
 COERCE_2 = getAtom(u"coerce", 2)
+EXTRACTGUARD_2 = getAtom(u"extractGuard", 2)
 GET_1 = getAtom(u"get", 1)
 GETGUARD_0 = getAtom(u"getGuard", 0)
 SUPERSETOF_1 = getAtom(u"supersetOf", 1)
@@ -122,6 +123,14 @@ class FinalSlotGuardMaker(Guard):
     stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
+        if atom is EXTRACTGUARD_2:
+            specimen, ej = args[0], args[1]
+            if specimen is self:
+                return anyGuard
+            elif isinstance(specimen, FinalSlotGuard):
+                return specimen.valueGuard
+            else:
+                ej.call(u"run", [StrObject(u"Not a FinalSlot guard")])
         if atom is GETGUARD_0:
             return NullObject
         if atom is COERCE_2:
@@ -143,6 +152,14 @@ class VarSlotGuardMaker(Guard):
     stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
+        if atom is EXTRACTGUARD_2:
+            specimen, ej = args[0], args[1]
+            if specimen is self:
+                return anyGuard
+            elif isinstance(specimen, VarSlotGuard):
+                return specimen.valueGuard
+            else:
+                ej.call(u"run", [StrObject(u"Not a VarSlot guard")])
         if atom is GETGUARD_0:
             return NullObject
         if atom is COERCE_2:
