@@ -1,4 +1,5 @@
 import os
+import signal
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused
@@ -10,6 +11,7 @@ from typhon.objects.root import Object, runnable
 
 GETARGUMENTS_0 = getAtom(u"getArguments", 0)
 GETPID_0 = getAtom(u"getPID", 0)
+INTERRUPT_0 = getAtom(u"interrupt", 0)
 RUN_2 = getAtom(u"run", 2)
 
 
@@ -28,6 +30,10 @@ class CurrentProcess(Object):
 
         if atom is GETPID_0:
             return IntObject(os.getpid())
+
+        if atom is INTERRUPT_0:
+            os.kill(os.getpid(), signal.SIGINT)
+            return NullObject
 
         raise Refused(self, atom, args)
 
@@ -48,6 +54,10 @@ class SubProcess(Object):
 
         if atom is GETPID_0:
             return IntObject(self.pid)
+
+        if atom is INTERRUPT_0:
+            os.kill(self.pid, signal.SIGINT)
+            return NullObject
 
         raise Refused(self, atom, args)
 
