@@ -16,8 +16,7 @@ from typhon.objects.files import makeFileResource
 from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
                                                  makeTCP4ServerEndpoint)
 from typhon.objects.networking.stdio import makeStdErr, makeStdIn, makeStdOut
-from typhon.objects.networking.processes import makeProcess
-from typhon.objects.processes import CurrentProcess
+from typhon.objects.processes import CurrentProcess, makeProcess
 from typhon.objects.timeit import bench
 from typhon.objects.timers import Timer
 from typhon.vats import CurrentVatProxy
