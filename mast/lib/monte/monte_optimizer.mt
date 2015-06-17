@@ -102,6 +102,57 @@ def testSpecialize(assert):
 unittest([testSpecialize])
 
 
+def replaceBooleanFlow(ast, maker, args, span):
+    "Replace __booleanFlow.failureList(0) with __makeList.run(false)."
+
+    if (ast.getNodeName() == "MethodCallExpr"):
+        def receiver := ast.getReceiver()
+        def verb := ast.getVerb()
+        def arguments := ast.getArgs()
+        if (receiver.getNodeName() == "NounExpr" &&
+            receiver.getName() == "__booleanFlow"):
+            if (verb == "failureList" && arguments.size() == 1):
+                def node := arguments[0]
+                if (node.getNodeName() == "LiteralExpr" &&
+                    node.getValue() == 0):
+                    # Success!
+                    return a.MethodCallExpr(a.NounExpr("__makeList", span),
+                                            "run",
+                                            [a.NounExpr("false", span)],
+                                            span)
+
+    return M.call(maker, "run", args + [span])
+
+
+def liftMethodIf(ast, maker, args, span):
+    "Lift method calls through branches of if expressions."
+
+    escape failure:
+        if (ast.getNodeName() == "IfExpr"):
+            def cons ? (cons != null) exit failure := ast.getThen()
+            def alt ? (alt != null) exit failure := ast.getElse()
+            if (cons.getNodeName() == "MethodCallExpr" &&
+                alt.getNodeName() == "MethodCallExpr"):
+                def consReceiver := cons.getReceiver()
+                def altReceiver := alt.getReceiver()
+                if (consReceiver.getNodeName() == "NounExpr" &
+                    altReceiver.getNodeName() == "NounExpr" &&
+                    consReceiver.getName() == altReceiver.getName()):
+                    # Doing good. Just need to check the verb and args now.
+                    if (cons.getVerb() == alt.getVerb()):
+                        def consArgs := cons.getArgs()
+                        def altArgs := alt.getArgs()
+                        if (consArgs.size() == 1 && altArgs.size() == 1):
+                            return a.MethodCallExpr(consReceiver,
+                                                    cons.getVerb(),
+                                                    [maker(ast.getTest(),
+                                                     consArgs[0], altArgs[0],
+                                                     span)],
+                                                    span)
+
+    return M.call(maker, "run", args + [span])
+
+
 def propagateSimpleDefs(ast, maker, args, span):
     "Propagate forward simple definitions."
 
@@ -305,6 +356,9 @@ def constantFoldLiterals(ast, maker, args, span):
 
 
 def optimizations := [
+    replaceBooleanFlow,
+    # liftMethodIf :- replaceBooleanFlow
+    liftMethodIf,
     narrowEscapes,
     # removeSmallEscapes :- narrowEscapes
     removeSmallEscapes,
