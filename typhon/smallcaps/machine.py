@@ -52,7 +52,14 @@ class SmallCaps(object):
             frame = [scope[key] for key in code.frame]
             globals = [scope[key] for key in code.globals]
         except KeyError:
-            print u"Key '%s' was not in scope!" % key
+            missing = []
+            for key in code.frame:
+                if key not in scope:
+                    missing.append(key)
+            for key in code.globals:
+                if key not in scope:
+                    missing.append(key)
+            print u"Keys not in scope: %s" % u", ".join(missing)
             raise
         return SmallCaps(code, frame, globals)
 
