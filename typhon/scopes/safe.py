@@ -322,7 +322,9 @@ class VarSlotMaker(Object):
         raise Refused(self, atom, args)
 
 
-# Prebuild, since building on-the-fly NaN doesn't work in RPython.
+# Prebuild, since building on-the-fly floats from strings doesn't work in
+# RPython.
+Infinity = DoubleObject(float("inf"))
 NaN = DoubleObject(float("nan"))
 
 
@@ -331,6 +333,7 @@ def safeScope():
         u"null": NullObject,
         u"any": anyGuard,
         u"Any": anyGuard,
+        u"Infinity": Infinity,
         u"NaN": NaN,
         u"false": wrapBool(False),
         u"true": wrapBool(True),
