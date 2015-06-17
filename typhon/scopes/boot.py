@@ -13,16 +13,21 @@
 # under the License.
 
 from typhon.atoms import getAtom
+from typhon.env import finalize
+from typhon.errors import Refused, userError
+from typhon.importing import evaluateTerms, obtainModuleFromSource
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.collections import ConstList, ConstMap, ConstSet
+from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
+                                        unwrapList, unwrapMap)
 from typhon.objects.constants import BoolObject
 from typhon.objects.guards import anyGuard
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
-                                 StrObject, wrapBool)
-from typhon.objects.root import runnable
+                                 StrObject, unwrapInt, unwrapStr, wrapBool)
+from typhon.objects.root import Object, runnable
 
 
 RUN_1 = getAtom(u"run", 1)
+RUN_2 = getAtom(u"run", 2)
 
 
 @runnable(RUN_1)
@@ -59,7 +64,28 @@ def isSet(args):
     return wrapBool(isinstance(args[0], ConstSet))
 
 
-def bootScope():
+class TyphonEval(Object):
+
+    def __init__(self, recorder):
+        self.recorder = recorder
+
+    def recv(self, atom, args):
+        if atom is RUN_2:
+            source = "".join([chr(unwrapInt(i)) for i in unwrapList(args[0])])
+            environment = {}
+            for k, v in unwrapMap(args[1]).items():
+                environment[unwrapStr(k)] = v
+            code = obtainModuleFromSource(source, environment,
+                                            self.recorder)
+            result = evaluateTerms([code], finalize(environment))
+            if result is None:
+                raise userError(u"Error while evaluating dynamic source")
+            return result
+
+        raise Refused(self, atom, args)
+
+
+def bootScope(recorder):
     return {
         u"isBool": isBool(),
         u"isChar": isChar(),
@@ -70,5 +96,8 @@ def bootScope():
         u"isList": isList(),
         u"isMap": isMap(),
         u"isSet": isSet(),
+
         u"DeepFrozenStamp": deepFrozenStamp,
+
+        u"typhonEval": TyphonEval(recorder),
     }

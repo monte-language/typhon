@@ -61,7 +61,7 @@ def runScopeTests(scope):
 def loadPrelude(config, recorder, vat):
     scope = safeScope()
     # For the prelude (and only the prelude), permit the boot scope.
-    scope.update(bootScope())
+    scope.update(bootScope(recorder))
 
     # Boot imports.
     scope = addImportToScope(config.libraryPath, scope, recorder)
