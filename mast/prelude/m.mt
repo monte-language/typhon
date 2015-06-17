@@ -23,6 +23,6 @@ def eval(source, environment):
         throw(parser.getFailure())
     else:
         def result := parser.dump()
-        typhonEval(result, environment)
+        return typhonEval(result, environment)
 
 ["m__quasiParser" => m, => eval]

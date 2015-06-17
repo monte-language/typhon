@@ -554,7 +554,8 @@ object SubrangeGuard:
 # the other modules.
 var preludeScope := [
     => Any, => Bool, => Char, => DeepFrozen, => Double, => Empty, => Int,
-    => List, => Map, => NullOk, => Same, => Str, => SubrangeGuard, => Void,
+    => List, => Map, => NullOk, => Same, => Set, => Str, => SubrangeGuard,
+    => Void,
     => __mapEmpty, => __mapExtract,
     => __accumulateList, => __booleanFlow, => __iterWhile, => __validateFor,
     => __switchFailed, => __makeVerbFacet, => __comparer,
