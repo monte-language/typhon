@@ -38,15 +38,9 @@ moduleCache = ModuleCache()
 
 
 @dont_look_inside
-def obtainModule(path, inputScope, recorder):
-    if path in moduleCache.cache:
-        debug_print("Importing (cached):", path)
-        return moduleCache.cache[path]
-
-    debug_print("Importing:", path)
-
+def obtainModuleFromSource(source, inputScope, recorder):
     with recorder.context("Deserialization"):
-        term = Sequence(load(open(path, "rb").read())[:])
+        term = Sequence(load(source)[:])
 
     # Unshadow.
     with recorder.context("Scope analysis"):
@@ -66,9 +60,22 @@ def obtainModule(path, inputScope, recorder):
         peephole(code)
     # debug_print("Optimized code:", code.disassemble())
 
+    return code
+
+
+def obtainModule(path, inputScope, recorder):
+    if path in moduleCache.cache:
+        debug_print("Importing (cached):", path)
+        return moduleCache.cache[path]
+
+    debug_print("Importing:", path)
+    source = open(path, "rb").read()
+    code = obtainModuleFromSource(source, inputScope, recorder)
+
     # Cache.
     moduleCache.cache[path] = code
     return code
+
 
 
 def evaluateWithTraces(code, scope):
