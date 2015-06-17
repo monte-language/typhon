@@ -17,7 +17,7 @@ from rpython.rlib.objectmodel import specialize
 
 from typhon.atoms import getAtom
 from typhon.env import Environment
-from typhon.errors import Ejecting, UserException
+from typhon.errors import Ejecting, UserException, userError
 from typhon.objects.collections import unwrapList
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
@@ -59,8 +59,8 @@ class SmallCaps(object):
             for key in code.globals:
                 if key not in scope:
                     missing.append(key)
-            print u"Keys not in scope: %s" % u", ".join(missing)
-            raise
+            message = u"Keys not in scope: %s" % u", ".join(missing)
+            raise userError(message)
         return SmallCaps(code, frame, globals)
 
     def pop(self):
