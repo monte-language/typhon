@@ -153,6 +153,21 @@ def liftMethodIf(ast, maker, args, span):
     return M.call(maker, "run", args + [span])
 
 
+def removeTrivialIf(ast, maker, args, span):
+    "Change `if (test) {true} else {false}` to `test`."
+
+    escape failure:
+        if (ast.getNodeName() == "IfExpr"):
+            def cons ? (cons != null) exit failure := ast.getThen()
+            def alt ? (alt != null) exit failure := ast.getElse()
+            if (cons.getNodeName() == "NounExpr" && cons.getName() == "true"):
+                if (alt.getNodeName() == "NounExpr" &&
+                    alt.getName() == "false"):
+                    return ast.getTest()
+
+    return M.call(maker, "run", args + [span])
+
+
 def propagateSimpleDefs(ast, maker, args, span):
     "Propagate forward simple definitions."
 
@@ -359,6 +374,7 @@ def optimizations := [
     replaceBooleanFlow,
     # liftMethodIf :- replaceBooleanFlow
     liftMethodIf,
+    removeTrivialIf,
     narrowEscapes,
     # removeSmallEscapes :- narrowEscapes
     removeSmallEscapes,
