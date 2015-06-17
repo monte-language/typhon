@@ -22,8 +22,7 @@ class CallStackProfiler(object):
 
     _immutable_fields_ = "enabled?",
 
-    # XXX is this backwards?
-    enabled = True
+    enabled = False
 
     def __init__(self):
         self.currentStack = []
@@ -75,8 +74,8 @@ class CallStackProfiler(object):
             if microCount:
                 handle.write("%s %d\n" % (stack.encode("utf-8"), microCount))
 
-    def disable(self):
-        self.enabled = False
+    def enable(self):
+        self.enabled = True
 
 
 csp = CallStackProfiler()

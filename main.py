@@ -164,8 +164,8 @@ def entryPoint(argv):
         # We are finished.
         return 0
 
-    if not config.profile:
-        csp.disable()
+    if config.profile:
+        csp.enable()
 
     if not config.benchmark:
         benchmarkSettings.disable()
