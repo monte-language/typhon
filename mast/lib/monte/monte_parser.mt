@@ -1,4 +1,14 @@
-def [=> term__quasiParser] := import("lib/monte/termParser")
+def [=> term__quasiParser] := import("lib/monte/termParser",
+                                     [=> __mapExtract, => __mapEmpty,
+                                      => __booleanFlow, => __iterWhile,
+                                      => Bool, => __comparer,
+                                      => simple__quasiParser, => __bind,
+                                      => __makeVerbFacet, => __validateFor,
+                                      => __quasiMatcher, => NullOk, => Int,
+                                      => Str, => DeepFrozen, => __matchSame,
+                                      => Double, => Char, => List,
+                                      => __makeOrderedSpace, => Map,
+                                      => __switchFailed])
 
 def spanCover(left, right):
     if (left == null || right == null):

@@ -2,8 +2,30 @@
 # rather `return M.call(maker, "run", args + [span])`; the transformation has
 # to rebuild the AST.
 
-def a := import("lib/monte/monte_ast")["astBuilder"]
-def [=> term__quasiParser] := import("lib/monte/termParser")
+def ["astBuilder" => a] | _ := import("lib/monte/monte_ast",
+                                      [=> NullOk, => DeepFrozen,
+                                       => __matchSame, => __bind, => Map,
+                                       => __switchFailed, => Int, => Str,
+                                       => Bool, => Double, => Char,
+                                       => simple__quasiParser, => List,
+                                       => __booleanFlow, => __validateFor,
+                                       => __comparer, => __makeOrderedSpace,
+                                       => __iterWhile, => __mapExtract,
+                                       => bench, => __accumulateList,
+                                       => __quasiMatcher, => __suchThat,
+                                       => __makeVerbFacet])
+def [=> term__quasiParser] := import("lib/monte/termParser",
+                                     [=> NullOk, => DeepFrozen,
+                                      => __matchSame, => __bind, => Map,
+                                      => __switchFailed, => Int, => Str,
+                                      => Bool, => Double, => Char,
+                                      => simple__quasiParser, => List,
+                                      => __booleanFlow, => __validateFor,
+                                      => __comparer, => __makeOrderedSpace,
+                                      => __iterWhile, => __mapExtract,
+                                      => bench, => __accumulateList,
+                                      => __quasiMatcher, => __suchThat,
+                                      => __makeVerbFacet])
 
 
 def sequence(exprs, span):

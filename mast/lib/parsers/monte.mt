@@ -1,8 +1,20 @@
-def [=> astBuilder] | _ := import("lib/monte/monte_ast")
-def [=> makeMonteLexer] | _ := import("lib/monte/monte_lexer")
-def [=> parseExpression] | _ := import("lib/monte/monte_parser")
-def [=> expand] := import("lib/monte/monte_expander")
-def [=> optimize] := import("lib/monte/monte_optimizer")
+# Boot scope nonsense.
+def parserScope := [
+    => Any, => Bool, => Char, => DeepFrozen, => Double, => Empty, => Int,
+    => List, => Map, => NullOk, => Same, => Str, => SubrangeGuard, => Void,
+    => __mapEmpty, => __mapExtract,
+    => __accumulateList, => __booleanFlow, => __iterWhile, => __validateFor,
+    => __switchFailed, => __makeVerbFacet, => __comparer,
+    => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
+    => M, => import, => throw, => typhonEval,
+    => simple__quasiParser, => __makeOrderedSpace, => bench,
+]
+
+def [=> astBuilder, => dump] | _ := import("lib/monte/monte_ast", parserScope)
+def [=> makeMonteLexer] | _ := import("lib/monte/monte_lexer", parserScope)
+def [=> parseExpression] | _ := import("lib/monte/monte_parser", parserScope)
+def [=> expand] | _ := import("lib/monte/monte_expander", parserScope)
+def [=> optimize] | _ := import("lib/monte/monte_optimizer", parserScope)
 
 
 def makeMonteParser():
@@ -34,5 +46,11 @@ def makeMonteParser():
                 results := [optimize(expand(tree, astBuilder, throw))]
             catch problem:
                 failure := `$problem`
+
+        to dump():
+            def result := monteParser.results()[0]
+            def data := [].diverge()
+            dump(result, data.extend)
+            return data.snapshot()
 
 [=> makeMonteParser]

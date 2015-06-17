@@ -549,88 +549,60 @@ object SubrangeGuard:
                 return specimen
 
 
-# Simple QP needs patterns, some loops, some other syntax, and a few guards.
-def [=> simple__quasiParser] := import("prelude/simple", ["boolean" => Bool,
-                                                          => Bool, => Str,
-                                                          => __comparer,
-                                                          => __iterWhile,
-                                                          => __matchSame,
-                                                          => __quasiMatcher,
-                                                          => __suchThat,
-                                                          => __switchFailed,
-                                                          => __validateFor])
+# New approach to importing the rest of the prelude: Collate the entirety of
+# the module and boot scope into a single map which is then passed as-is to
+# the other modules.
+var preludeScope := [
+    => Any, => Bool, => Char, => DeepFrozen, => Double, => Empty, => Int,
+    => List, => Map, => NullOk, => Same, => Str, => SubrangeGuard, => Void,
+    => __mapEmpty, => __mapExtract,
+    => __accumulateList, => __booleanFlow, => __iterWhile, => __validateFor,
+    => __switchFailed, => __makeVerbFacet, => __comparer,
+    => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
+    => M, => import, => throw, => typhonEval,
+]
 
+# Simple QP.
+preludeScope |= import("prelude/simple", preludeScope)
 
-# Brands need a bunch of guards and also the simple QP.
-def [=> makeBrandPair] := import("prelude/brand", [=> NullOk, => Str, => Void,
-                                                   => simple__quasiParser])
+# Brands require simple QP.
+preludeScope |= import("prelude/brand", preludeScope)
 
-# Regions need some guards. And simple QP. And a bunch of other stuff.
+# Regions require simple QP.
 def [
     => OrderedRegionMaker,
     => OrderedSpaceMaker
-] := import("prelude/region", [=> Bool, => Double, => Int, => List, => NullOk,
-                               => Same, => Str, => __accumulateList,
-                               => __booleanFlow, => __comparer,
-                               => __iterWhile, => __validateFor,
-                               => simple__quasiParser,
-                               => DeepFrozen, => SubrangeGuard,
-                               "boolean" => Bool])
+] := import("prelude/region", preludeScope)
 
-# Spaces need some guards, and also regions.
-def [
-    "Char" => SpaceChar,
-    "Double" => SpaceDouble,
-    "Int" => SpaceInt,
-    => __makeOrderedSpace
-] := import("prelude/space", [=> Char, => Double, => Int,
-                              => OrderedRegionMaker, => OrderedSpaceMaker,
-                              => __comparer])
+# Spaces require regions.
+preludeScope |= import("prelude/space",
+                       preludeScope | [=> OrderedRegionMaker,
+                                       => OrderedSpaceMaker])
 
 
-[
+# Finally, the big kahuna: The Monte compiler and QL.
+# Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This
+# doesn't *have* to be the case, but it's the case we currently want to deal
+# with. Or, at least, this is what *I* want to deal with. The AST currently
+# doesn't support evaluation, and I'd expect it to be slow, so we're not doing
+# that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
+# hook, and that'll do for now. ~ C.
+preludeScope |= import("prelude/m", preludeScope)
+
+# The final scope exported from the prelude. This *must* be the final
+# expression in the module!
+preludeScope | [
     # Needed for interface expansions with ref Monte. :T
     "any" => Any,
-    => Any,
     "void" => Void,
-    => DeepFrozen,
     # This is 100% hack. See the matching comment near the top of the prelude.
     "boolean" => Bool,
 
     "__mapEmpty" => Empty,
-    => Any,
-    => Bool,
-    "Char" => SpaceChar,
-    "Double" => SpaceDouble,
-    => Empty,
-    "Int" => SpaceInt,
-    => List,
-    => Map,
-    => NullOk,
-    => Same,
-    => Set,
-    => Str,
-    => Void,
-    => __accumulateList,
     => __accumulateMap,
-    => __bind,
-    => __booleanFlow,
-    => __comparer,
-    => __iterWhile,
-    => __makeMap,
     => __makeMessageDesc,
-    => __makeOrderedSpace,
     => __makeParamDesc,
     => __makeProtocolDesc,
-    => __makeVerbFacet,
-    => __mapExtract,
-    => __matchSame,
-    => __quasiMatcher,
     => __splitList,
-    => __suchThat,
-    => __switchFailed,
-    => __validateFor,
     => _flexMap,
-    => makeBrandPair,
-    => simple__quasiParser,
 ]

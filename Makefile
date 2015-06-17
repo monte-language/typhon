@@ -5,6 +5,7 @@ boot_objects = boot/montec.ty \
 	boot/lib/monte/monte_ast.ty \
 	boot/lib/monte/monte_expander.ty \
 	boot/lib/monte/monte_optimizer.ty \
+	boot/lib/parsers/monte.ty \
 	boot/lib/bytes.ty \
 	boot/lib/codec/utf8.ty \
 	boot/lib/tubes/nullPump.ty \
@@ -13,6 +14,7 @@ boot_objects = boot/montec.ty \
 	boot/lib/tubes/pumpTube.ty \
 	boot/prelude.ty \
 	boot/prelude/brand.ty \
+	boot/prelude/m.ty \
 	boot/prelude/region.ty \
 	boot/prelude/simple.ty \
 	boot/prelude/space.ty
@@ -63,8 +65,8 @@ mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty 
 	bench \
 	monte
 
-prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/region.ty mast/prelude/simple.ty \
-	mast/prelude/space.ty
+prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/m.ty \
+	mast/prelude/region.ty mast/prelude/simple.ty mast/prelude/space.ty
 
 codec: mast/lib/codec/utf8.ty
 

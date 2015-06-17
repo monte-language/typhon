@@ -1,5 +1,21 @@
-def [=> term__quasiParser] := import("lib/monte/termParser")
-def [=> UTF8] | _ := import("lib/codec/utf8")
+def [=> term__quasiParser] | _ := import("lib/monte/termParser",
+                                         [=> NullOk, => DeepFrozen,
+                                          => __matchSame, => __bind, => Map,
+                                          => __switchFailed, => Int, => Str,
+                                          => Bool, => Double, => Char,
+                                          => simple__quasiParser, => List,
+                                          => __booleanFlow, => __validateFor,
+                                          => __comparer,
+                                          => __makeOrderedSpace,
+                                          => __iterWhile])
+def [=> UTF8] | _ := import("lib/codec/utf8",
+                            [=> bench, => __accumulateList,
+                             => __quasiMatcher, => __mapExtract, => Int,
+                             => Char, => Str, => __iterWhile, => __comparer,
+                             => Bool, => __suchThat, => __switchFailed,
+                             => __matchSame, => __validateFor,
+                             => __makeVerbFacet, => List,
+                             => __makeOrderedSpace])
 
 def MONTE_KEYWORDS := [
 "as", "bind", "break", "catch", "continue", "def", "else", "escape",

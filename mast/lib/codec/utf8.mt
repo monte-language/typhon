@@ -12,7 +12,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> Bytes] | _ := import("lib/bytes")
+# This module can be imported by the boot scope, so it explictly passes
+# dependencies to modules which it imports.
+def [=> Bytes] | _ := import("lib/bytes", [=> __accumulateList,
+                                           => __quasiMatcher, => List,
+                                           => __makeOrderedSpace])
 
 
 def chr(i :Int) :Char:

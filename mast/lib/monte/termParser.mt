@@ -1,6 +1,5 @@
 # interface Tag :DeepFrozen guards TagStamp :DeepFrozen:
 #     pass
-traceln(`in termParser`)
 object TagStamp:
     to audit(_):
         return true
