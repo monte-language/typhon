@@ -75,8 +75,8 @@ class TyphonEval(Object):
             environment = {}
             for k, v in unwrapMap(args[1]).items():
                 environment[unwrapStr(k)] = v
-            code = obtainModuleFromSource(source, environment,
-                                            self.recorder)
+            code = obtainModuleFromSource(source, environment.keys(),
+                                          self.recorder)
             result = evaluateTerms([code], finalize(environment))
             if result is None:
                 raise userError(u"Error while evaluating dynamic source")
