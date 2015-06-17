@@ -108,7 +108,8 @@ class StandardInput(Selectable):
         self.removeFromReactor(reactor)
 
     def createFount(self):
-        fount = InputFount()
+        vat = currentVat.get()
+        fount = InputFount(vat)
         self._founts.append(fount)
         return fount
 
