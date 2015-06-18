@@ -44,7 +44,7 @@ class SmallCaps(object):
         self.code = code
         self.env = Environment(frame, globals, self.code.localSize(),
                                promote(self.code.maxDepth + 20),
-                               promote(self.code.maxHandlerDepth))
+                               promote(self.code.maxHandlerDepth + 5))
 
     @staticmethod
     def withDictScope(code, scope):
