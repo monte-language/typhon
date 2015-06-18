@@ -1343,13 +1343,16 @@ class ListPattern(Pattern):
 
     _immutable_fields_ = "_ps[*]",
 
-    def __init__(self, patterns, tail):
+    def __init__(self, patterns):
+        self._ps = patterns
+
+    @staticmethod
+    def fromAST(patterns, tail):
         for p in patterns:
             if p is None:
                 raise InvalidAST("List subpattern cannot be None")
 
-        self._ps = patterns
-        self._t = tail
+        return ListPattern(patterns)
 
     def pretty(self, out):
         out.write("[")
@@ -1362,20 +1365,12 @@ class ListPattern(Pattern):
                 out.write(", ")
                 item.pretty(out)
         out.write("]")
-        if self._t is not None:
-            out.write(" | ")
-            self._t.pretty(out)
 
     def rewriteScope(self, scope):
         ps = [p.rewriteScope(scope) for p in self._ps]
-        if self._t is None:
-            t = None
-        else:
-            t = self._t.rewriteScope(scope)
-        return ListPattern(ps, t)
+        return ListPattern(ps)
 
     def compile(self, compiler):
-        assert self._t is None
         # [specimen ej]
         compiler.addInstruction("LIST_PATT", len(self._ps))
         for patt in self._ps:

@@ -183,7 +183,7 @@ def loadPattern(stream):
         return IgnorePattern(loadTerm(stream))
 
     elif tag == "List":
-        return ListPattern(loadPatternList(stream), loadPattern(stream))
+        return ListPattern.fromAST(loadPatternList(stream), loadPattern(stream))
 
     elif tag == "Var":
         return VarPattern(loadTerm(stream), loadTerm(stream))
