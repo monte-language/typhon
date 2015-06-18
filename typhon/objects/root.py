@@ -14,9 +14,10 @@
 
 from rpython.rlib.jit import jit_debug, promote
 from rpython.rlib.objectmodel import compute_identity_hash, specialize
+from rpython.rlib.rstackovf import StackOverflow, check_stack_overflow
 
 from typhon.atoms import getAtom
-from typhon.errors import Refused, UserException
+from typhon.errors import Refused, UserException, userError
 
 
 RUN_1 = getAtom(u"run", 1)
@@ -115,6 +116,15 @@ class Object(object):
         except UserException as ue:
             addTrail(ue, self, atom, arguments)
             raise
+        except MemoryError:
+            ue = userError(u"Memory corruption or exhausted heap")
+            addTrail(ue, self, atom, arguments)
+            raise ue
+        except StackOverflow:
+            check_stack_overflow()
+            ue = userError(u"Stack overflow")
+            addTrail(ue, self, atom, arguments)
+            raise ue
 
     def recv(self, atom, args):
         raise Refused(self, atom, args)
