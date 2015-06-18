@@ -211,6 +211,10 @@ class Int(Node):
         except OverflowError:
             compiler.literal(BigInt(self.bi))
 
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"LiteralExpr"),
+                               IntObject(self.bi.toint())])
+
 
 class Str(Node):
 
@@ -224,6 +228,9 @@ class Str(Node):
 
     def compile(self, compiler):
         compiler.literal(StrObject(self._s))
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"LiteralExpr"), StrObject(self._s)])
 
 
 def strToString(s):
@@ -245,6 +252,10 @@ class Double(Node):
     def compile(self, compiler):
         compiler.literal(DoubleObject(self._d))
 
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"LiteralExpr"),
+                               DoubleObject(self._d)])
+
 
 class Char(Node):
 
@@ -259,6 +270,9 @@ class Char(Node):
     def compile(self, compiler):
         compiler.literal(CharObject(self._c))
 
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"LiteralExpr"),
+                               CharObject(self._c)])
 
 class Tuple(Node):
 
@@ -284,6 +298,9 @@ class Tuple(Node):
     def transform(self, f):
         # I don't care if it's cheating. It's elegant and simple and pretty.
         return f(Tuple([node.transform(f) for node in self._t]))
+
+    def slowTransform(self, o):
+        return ConstList([node.slowTransform(o) for node in self._t])
 
     def rewriteScope(self, scope):
         return Tuple([node.rewriteScope(scope) for node in self._t])
@@ -332,6 +349,11 @@ class Assign(Node):
 
     def transform(self, f):
         return f(Assign(self.target, self.rvalue.transform(f)))
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"AssignExpr"),
+                               self.target.slowTransform(o),
+                               self.rvalue.slowTransform(o)])
 
     def rewriteScope(self, scope):
         # Read.
@@ -385,6 +407,10 @@ class Binding(Node):
 
     def transform(self, f):
         return f(self)
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"BindingExpr"),
+                               StrObject(self.name)])
 
     def rewriteScope(self, scope):
         # Read.
@@ -441,6 +467,13 @@ class Call(Node):
         return f(Call(self._target.transform(f), self._verb,
                       self._args.transform(f)))
 
+    def slowTransform(self, o):
+        return o.call(u"run",
+                      [StrObject(u"CallExpr"),
+                       self._target.slowTransform(o),
+                       StrObject(self._verb),
+                       self._args.slowTransform(o)])
+
     def rewriteScope(self, scope):
         return Call(self._target.rewriteScope(scope), self._verb,
                     self._args.rewriteScope(scope))
@@ -488,6 +521,14 @@ class Def(Node):
 
     def transform(self, f):
         return f(Def(self._p, self._e, self._v.transform(f)))
+
+    def slowTransform(self, o):
+        return o.call(
+            u"run",
+            [StrObject(u"DefExpr"), self._p.slowTransform(o),
+             (NullObject if self._e is None
+              else self._e.slowTransform(o)),
+             self._v.slowTransform(o)])
 
     def rewriteScope(self, scope):
         # Delegate to patterns.
@@ -552,6 +593,15 @@ class Escape(Node):
 
         return f(Escape(self._pattern, self._node.transform(f),
             self._catchPattern, catchNode))
+
+    def slowTransform(self, o):
+        return o.call(u"run",
+                      [StrObject(u"Escape"),
+                       self._pattern.slowTransform(o),
+                       (NullObject if self._catchPattern is None
+                        else self._catchPattern.slowTransform(o)),
+                       (NullObject if self._catchNode is None
+                        else self._catchNode.slowTransform(o))])
 
     def rewriteScope(self, scope):
         with scope:
@@ -624,6 +674,11 @@ class Finally(Node):
     def transform(self, f):
         return f(Finally(self._block.transform(f), self._atLast.transform(f)))
 
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"FinallyExpr"),
+                               self._block.slowTransform(o),
+                               self._atLast.slowTransform(o)])
+
     def rewriteScope(self, scope):
         with scope:
             block = self._block.rewriteScope(scope)
@@ -664,6 +719,10 @@ class Hide(Node):
     def transform(self, f):
         return f(Hide(self._inner.transform(f)))
 
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"HideExpr"),
+                               self._inner.slowTransform(o)])
+
     def rewriteScope(self, scope):
         with scope:
             rv = Hide(self._inner.rewriteScope(scope))
@@ -702,6 +761,12 @@ class If(Node):
     def transform(self, f):
         return f(If(self._test.transform(f), self._then.transform(f),
             self._otherwise.transform(f)))
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"IfExpr"),
+                               self._test.slowTransform(o),
+                               self._then.slowTransform(o),
+                               self._otherwise.slowTransform(o)])
 
     def rewriteScope(self, scope):
         with scope:
@@ -752,6 +817,11 @@ class Matcher(Node):
     def transform(self, f):
         return f(Matcher(self._pattern, self._block.transform(f)))
 
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"Matcher"),
+                               self._pattern.slowTransform(o),
+                               self._block.slowTransform(o)])
+
     def rewriteScope(self, scope):
         with scope:
             rv = Matcher(self._pattern.rewriteScope(scope),
@@ -777,6 +847,9 @@ class Meta(Node):
 
     def compile(self, compiler):
         compiler.literal(MetaContext())
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"Meta"), StrObject(self.nature)])
 
 
 class Method(Node):
@@ -822,6 +895,14 @@ class Method(Node):
     def transform(self, f):
         return f(Method(self._d, self._verb, self._ps, self._g,
             self._b.transform(f)))
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"Method"),
+                               StrObject(self._d),
+                               StrObject(self._verb),
+                               self._ps.slowTransform(o),
+                               self._g.slowTransform(o),
+                               self._b.slowTransform(o)])
 
     def rewriteScope(self, scope):
         with scope:
@@ -874,6 +955,9 @@ class Noun(Node):
             index = compiler.addGlobal(self.name)
             compiler.addInstruction("NOUN_GLOBAL", index)
             # print "I think", self.name, "is global"
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"NounExpr"), StrObject(self.name)])
 
 
 def nounToString(n):
@@ -929,6 +1013,14 @@ class Obj(Node):
     def transform(self, f):
         return f(Obj(self._d, self._n, self._as, self._implements,
                      self._script.transform(f)))
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"ObjectExpr"),
+                               StrObject(self._d),
+                               self._n.slowTransform(o),
+                               self._as.slowTransform(o),
+                               self._implements.slowTransform(o),
+                               self._script.slowTransform(o)])
 
     def rewriteScope(self, scope):
         # XXX as, implements
@@ -1084,6 +1176,7 @@ class Script(Node):
     _immutable_fields_ = "_methods[*]", "_matchers[*]"
 
     def __init__(self, extends, methods, matchers):
+        # XXX Expansion removes 'extends' so it will always be null here.
         self._extends = extends
         self._methods = methods
         self._matchers = matchers
@@ -1114,6 +1207,14 @@ class Script(Node):
     def transform(self, f):
         methods = [method.transform(f) for method in self._methods]
         return f(Script(self._extends, methods, self._matchers))
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"Script"),
+                               self._extends.slowTransform(o),
+                               ConstList([method.slowTransform(o)
+                                          for method in self._methods]),
+                               ConstList([method.slowTransform(o)
+                                          for method in self._methods])])
 
     def rewriteScope(self, scope):
         methods = [m.rewriteScope(scope) for m in self._methods]
@@ -1156,6 +1257,11 @@ class Sequence(Node):
 
     def transform(self, f):
         return f(Sequence([node.transform(f) for node in self._l]))
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"SeqExpr"),
+                               ConstList([node.slowTransform(o)
+                                          for node in self._l])])
 
     def rewriteScope(self, scope):
         return Sequence([n.rewriteScope(scope) for n in self._l])
@@ -1200,6 +1306,12 @@ class Try(Node):
     def transform(self, f):
         return f(Try(self._first.transform(f), self._pattern,
             self._then.transform(f)))
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"CatchExpr"),
+                               self._first.slowTransform(o),
+                               self._pattern.slowTransform(o),
+                               self._then.slowTransform(o)])
 
     def rewriteScope(self, scope):
         with scope:
@@ -1248,6 +1360,10 @@ class BindingPattern(Pattern):
         out.write("&&")
         out.write(self._noun.encode("utf-8"))
 
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"BindingPattern"),
+                               Noun(self._noun).slowTransform(o)])
+
     def rewriteScope(self, scope):
         # Write.
         if scope.getSeen(self._noun) != -1:
@@ -1275,6 +1391,12 @@ class FinalPattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"FinalPattern"),
+                               Noun(self._noun).slowTransform(o),
+                               (NullObject if self._g is None
+                                else self._g.slowTransform(o))])
 
     def rewriteScope(self, scope):
         if self._g is None:
@@ -1320,6 +1442,11 @@ class IgnorePattern(Pattern):
         if self._g is None:
             return self
         return IgnorePattern(self._g.rewriteScope(scope))
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"IgnorePattern"),
+                               (NullObject if self._g is None
+                                else self._g.slowTransform(o))])
 
     def compile(self, compiler):
         # [specimen ej]
@@ -1369,6 +1496,12 @@ class ListPattern(Pattern):
                 item.pretty(out)
         out.write("]")
 
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"ListPattern"),
+                               ConstList([item.slowTransform(o)
+                                          for item in self._ps]),
+                               NullObject])
+
     def rewriteScope(self, scope):
         ps = [p.rewriteScope(scope) for p in self._ps]
         return ListPattern(ps)
@@ -1395,6 +1528,12 @@ class VarPattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"VarPattern"),
+                               Noun(self._n).slowTransform(o),
+                               (NullObject if self._g is None
+                                else self._g.slowTransform(o))])
 
     def rewriteScope(self, scope):
         if self._g is None:
@@ -1437,6 +1576,11 @@ class ViaPattern(Pattern):
         self._expr.pretty(out)
         out.write(") ")
         self._pattern.pretty(out)
+
+    def slowTransform(self, o):
+        return o.call(u"run", [StrObject(u"ViaPattern"),
+                               self._expr.slowTransform(o),
+                               self._pattern.slowTransform(o)])
 
     def rewriteScope(self, scope):
         return ViaPattern(self._expr.rewriteScope(scope),
