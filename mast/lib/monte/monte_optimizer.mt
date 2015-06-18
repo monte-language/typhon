@@ -244,14 +244,16 @@ def optimize(ast, maker, args, span):
                                                 "modPow", [e, m], span)
 
             # m`2.add(2)` -> m`4`
-            if (receiver.getNodeName() == "LiteralExpr" &&
-                allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
-                           arguments)):
-                def receiverValue := receiver.getValue()
-                def verb := ast.getVerb()
-                def argValues := map(fn x {x.getValue()}, arguments)
-                def constant := M.call(receiverValue, verb, argValues)
-                return a.LiteralExpr(constant, span)
+            # XXX currently fails to interact correctly with ^^^ meaning that
+            # some files take unreasonably long to compile.
+            # if (receiver.getNodeName() == "LiteralExpr" &&
+            #     allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
+            #                arguments)):
+            #     def receiverValue := receiver.getValue()
+            #     def verb := ast.getVerb()
+            #     def argValues := map(fn x {x.getValue()}, arguments)
+            #     def constant := M.call(receiverValue, verb, argValues)
+            #     return a.LiteralExpr(constant, span)
 
         match =="SeqExpr":
             # m`expr; noun; lastNoun` -> m`expr; lastNoun`
