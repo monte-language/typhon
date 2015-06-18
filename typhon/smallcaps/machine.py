@@ -87,7 +87,7 @@ class SmallCaps(object):
     def listPattern(self, size):
         ej = self.pop()
         xs = unwrapList(self.pop(), ej)
-        if len(xs) < size:
+        if len(xs) != size:
             throw(ej, StrObject(u"Failed list pattern (needed %d, got %d)" %
                                 (size, len(xs))))
         while size:
