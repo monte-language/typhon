@@ -324,6 +324,8 @@ def expand(node, builder, fail):
             ], span)
 
     def expandTransformer(node, maker, args, span):
+        # traceln(`expander: ${node.getNodeName()}: Expanding $node`)
+
         def nodeName := node.getNodeName()
         if (nodeName == "LiteralExpr"):
             return builder.LiteralExpr(args[0], span)
@@ -395,7 +397,7 @@ def expand(node, builder, fail):
             #flattening be done here or in the parser?
             return builder.SeqExpr(exprs, span)
         else if (nodeName == "CurryExpr"):
-            def [receiver, verb] := args
+            def [receiver, verb, isSend] := args
             return builder.MethodCallExpr(
                 builder.NounExpr("__makeVerbFacet", span),
                 "curryCall",
