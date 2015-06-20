@@ -52,6 +52,20 @@ def sequence(exprs, span):
         return a.SeqExpr(exprs, span)
 
 
+def flattenSeq(exprs):
+    "Undo nesting of sequences."
+
+    var rv := []
+    for expr in exprs:
+        switch (expr.getNodeName()):
+            match =="SeqExpr":
+                # Recurse. Hopefully this isn't too terribly deep.
+                rv += flattenSeq(expr.getExprs())
+            match _:
+                rv with= (expr)
+    return rv
+
+
 def finalPatternToName(pattern, ej):
     if (pattern.getNodeName() == "FinalPattern" &&
         pattern.getGuard() == null):
@@ -162,25 +176,32 @@ def optimize(ast, maker, args, span):
                                     return args[0].transform(optimize)
 
                     match =="SeqExpr":
-                        # m`escape ej {ej.run(value); expr}` ->
-                        # m`escape ej {ej.run(value)}`
+                        # m`escape ej {before; ej.run(value); expr}` ->
+                        # m`escape ej {before; ej.run(value)}`
                         var slicePoint := -1
-                        for i => expr in body.getExprs():
-                            if (expr.getNodeName() == "MethodCallExpr"):
-                                def receiver := expr.getReceiver()
-                                if (receiver.getNodeName() == "NounExpr" &&
-                                    receiver.getName() == name):
-                                    # The slice has to happen *after* this
-                                    # expression; we want to keep the call to
-                                    # the ejector.
-                                    slicePoint := i + 1
-                                    break
+                        def flattenedExprs := flattenSeq(body.getExprs())
+
+                        for i => expr in flattenedExprs:
+                            switch (expr.getNodeName()):
+                                match =="MethodCallExpr":
+                                    def receiver := expr.getReceiver()
+                                    if (receiver.getNodeName() == "NounExpr" &&
+                                        receiver.getName() == name):
+                                        # The slice has to happen *after* this
+                                        # expression; we want to keep the call to
+                                        # the ejector.
+                                        slicePoint := i + 1
+                                        break
+                                match _:
+                                    pass
+
                         if (slicePoint != -1):
-                            def exprs := [for n in (body.getExprs().slice(0, slicePoint))
+                            def exprs := [for n
+                                          in (flattenedExprs.slice(0, slicePoint))
                                           n.transform(optimize)]
                             def newSeq := sequence(exprs, body.getSpan())
                             return maker(args[0], newSeq, args[2], args[3],
-                                         span).transform(optimize)
+                                         span) # XXX .transform(optimize)
 
                     match _:
                         pass
