@@ -16,7 +16,7 @@ from rpython.rlib.jit import unroll_safe
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException
-from typhon.objects.constants import NullObject, unwrapBool, wrapBool
+from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector
@@ -24,18 +24,33 @@ from typhon.objects.guards import FinalSlotGuard, anyGuard
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
 from typhon.objects.slots import Binding, FinalSlot
+from typhon.prelude import getGlobal
 from typhon.smallcaps.machine import SmallCaps
 
 # XXX AuditionStamp, Audition guard
 
 ASK_1 = getAtom(u"ask", 1)
 GETGUARD_1 = getAtom(u"getGuard", 1)
+GETOBJECTEXPR_0 = getAtom(u"getObjectExpr", 0)
+
+
+class AstInflator(Object):
+    def recv(self, atom, args):
+        if atom.verb == u"run" and atom.arity >= 1:
+            astBuilder = getGlobal(u"astBuilder")
+            if astBuilder is NullObject:
+                raise UserException(StrObject(u"node builder not yet installed"
+                                              u", AST not available"))
+            nodeName = unwrapStr(args[0])
+            return astBuilder.call(nodeName, args[1:])
+        raise Refused(self, atom, args)
 
 
 class Audition(Object):
     def __init__(self, fqn, ast, guards, cache):
         self.fqn = fqn
         self.ast = ast
+        self.fullAst = NullObject
         self.guards = guards
         self.cache = None
 
@@ -106,6 +121,10 @@ class Audition(Object):
             return self.ask(args[0])
         if atom is GETGUARD_1:
             return self.getGuard(args[0])
+        if atom is GETOBJECTEXPR_0:
+            if self.fullAst is NullObject:
+                self.fullAst = self.ast.slowTransform(AstInflator())
+            return self.fullAst
         raise Refused(self, atom, args)
 
 

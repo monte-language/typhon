@@ -19,12 +19,12 @@ from typhon.importing import evaluateTerms, obtainModuleFromSource
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
                                         unwrapList, unwrapMap)
-from typhon.objects.constants import BoolObject
+from typhon.objects.constants import BoolObject, NullObject
 from typhon.objects.guards import anyGuard
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, unwrapInt, unwrapStr, wrapBool)
 from typhon.objects.root import Object, runnable
-
+from typhon.prelude import registerGlobals
 
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
@@ -48,7 +48,8 @@ def isDouble(args):
 @runnable(RUN_1, [deepFrozenStamp])
 def isInt(args):
     return wrapBool(isinstance(args[0], IntObject)
-                 or isinstance(args[0], BigInt))
+                    or isinstance(args[0], BigInt))
+
 
 @runnable(RUN_1, [deepFrozenStamp])
 def isStr(args):
@@ -91,6 +92,14 @@ class TyphonEval(Object):
         raise Refused(self, atom, args)
 
 
+@runnable(RUN_1)
+def installAstBuilder(args):
+    registerGlobals({u"astBuilder": args[0]})
+    return NullObject
+
+registerGlobals({u"astBuilder": NullObject})
+
+
 def bootScope(recorder):
     return {
         u"isBool": isBool(),
@@ -107,4 +116,5 @@ def bootScope(recorder):
         u"TransparentStamp": transparentStamp,
 
         u"typhonEval": TyphonEval(recorder),
+        u"_installASTBuilder": installAstBuilder(),
     }

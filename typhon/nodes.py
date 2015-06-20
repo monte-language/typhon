@@ -20,6 +20,7 @@ from rpython.rlib.rbigint import BASE10
 from typhon.atoms import getAtom
 from typhon.errors import LoadFailed
 from typhon.objects.constants import NullObject
+from typhon.objects.collections import ConstList
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.meta import MetaContext
@@ -352,7 +353,7 @@ class Assign(Node):
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"AssignExpr"),
-                               self.target.slowTransform(o),
+                               Noun(self.target).slowTransform(o),
                                self.rvalue.slowTransform(o)])
 
     def rewriteScope(self, scope):
@@ -849,7 +850,7 @@ class Meta(Node):
         compiler.literal(MetaContext())
 
     def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"Meta"), StrObject(self.nature)])
+        return o.call(u"run", [StrObject(u"MetaContextExpr")])
 
 
 class Method(Node):
@@ -870,7 +871,7 @@ class Method(Node):
         for param in params:
             if param is None:
                 raise InvalidAST("Parameter patterns cannot be None")
-
+        doc = doc._s if isinstance(doc, Str) else None
         return Method(doc, strToString(verb), params, guard, block)
 
     def pretty(self, out):
@@ -894,13 +895,13 @@ class Method(Node):
 
     def transform(self, f):
         return f(Method(self._d, self._verb, self._ps, self._g,
-            self._b.transform(f)))
+                        self._b.transform(f)))
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"Method"),
-                               StrObject(self._d),
+                               NullObject if self._d is None else StrObject(self._d),
                                StrObject(self._verb),
-                               self._ps.slowTransform(o),
+                               ConstList([p.slowTransform(o) for p in self._ps]),
                                self._g.slowTransform(o),
                                self._b.slowTransform(o)])
 
@@ -1016,10 +1017,10 @@ class Obj(Node):
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"ObjectExpr"),
-                               StrObject(self._d),
+                               NullObject if self._d is None else StrObject(self._d),
                                self._n.slowTransform(o),
                                self._as.slowTransform(o),
-                               self._implements.slowTransform(o),
+                               ConstList([im.slowTransform(o) for im in  self._implements]),
                                self._script.slowTransform(o)])
 
     def rewriteScope(self, scope):
@@ -1394,7 +1395,7 @@ class FinalPattern(Pattern):
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"FinalPattern"),
-                               Noun(self._noun).slowTransform(o),
+                               Noun(self._n).slowTransform(o),
                                (NullObject if self._g is None
                                 else self._g.slowTransform(o))])
 
