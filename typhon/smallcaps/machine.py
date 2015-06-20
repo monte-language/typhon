@@ -200,9 +200,14 @@ class SmallCaps(object):
             self.bindObject(index)
             return pc + 1
         elif instruction == EJECTOR:
+            # Look carefully at the order of operations. The handler captures
+            # the depth of the stack, so it's important to create it *before*
+            # pushing the ejector onto the stack. Otherwise, the handler
+            # thinks that the stack started off with an extra level of depth.
             ej = Ejector()
+            handler = Eject(self, ej, index)
             self.push(ej)
-            self.env.pushHandler(Eject(self, ej, index))
+            self.env.pushHandler(handler)
             return pc + 1
         elif instruction == TRY:
             self.env.pushHandler(Catch(self, index))
@@ -293,8 +298,7 @@ class Eject(Handler):
     _immutable_ = True
 
     def __init__(self, machine, ejector, index):
-        self.valueDepth = machine.env.depth
-        self.handlerDepth = machine.env.handlerDepth
+        self.savedDepth = machine.env.saveDepth()
         self.ejector = ejector
         self.index = index
 
@@ -303,8 +307,7 @@ class Eject(Handler):
 
     def eject(self, machine, ex):
         if ex.ejector is self.ejector:
-            machine.env.depth = self.valueDepth
-            machine.env.handlerDepth = self.handlerDepth
+            machine.env.restoreDepth(self.savedDepth)
             machine.push(ex.value)
             return self.index
         else:
@@ -316,16 +319,14 @@ class Catch(Handler):
     _immutable_ = True
 
     def __init__(self, machine, index):
-        self.valueDepth = machine.env.depth
-        self.handlerDepth = machine.env.handlerDepth
+        self.savedDepth = machine.env.saveDepth()
         self.index = index
 
     def repr(self):
         return "Catch(%d)" % self.index
 
     def unwind(self, machine, ex):
-        machine.env.depth = self.valueDepth
-        machine.env.handlerDepth = self.handlerDepth
+        machine.env.restoreDepth(self.savedDepth)
         # Push the caught value.
         machine.push(StrObject(u"Uninformative exception"))
         # And the ejector.
@@ -341,26 +342,20 @@ class Unwind(Handler):
     _immutable_ = True
 
     def __init__(self, machine, index):
-        self.valueDepth = machine.env.depth
-        self.handlerDepth = machine.env.handlerDepth
+        self.savedDepth = machine.env.saveDepth()
         self.index = index
 
     def repr(self):
         return "Unwind(%d)" % self.index
 
     def eject(self, machine, ex):
-        rv = self.carryOn(machine)
+        machine.env.restoreDepth(self.savedDepth)
         machine.env.pushHandler(Rethrower(ex))
-        return rv
+        return self.index
 
     def unwind(self, machine, ex):
-        rv = self.carryOn(machine)
+        machine.env.restoreDepth(self.savedDepth)
         machine.env.pushHandler(Rethrower(ex))
-        return rv
-
-    def carryOn(self, machine):
-        machine.env.depth = self.valueDepth
-        machine.env.handlerDepth = self.handlerDepth
         return self.index
 
     def drop(self, machine, pc, index):

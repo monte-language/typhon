@@ -201,3 +201,16 @@ class Environment(object):
     def putValueLocal(self, index, value):
         slot = self.getSlotLocal(index)
         return slot.callAtom(PUT_1, [value])
+
+    def saveDepth(self):
+        return self.depth, self.handlerDepth
+
+    def restoreDepth(self, depthPair):
+        depth, handlerDepth = depthPair
+        # If these invariants are broken, then the stack can contain Nones, so
+        # we'll guard against it here.
+        assert depth <= self.depth, "Implementation error: Value stack UB"
+        assert (handlerDepth <= self.handlerDepth,
+                "Implementation error: Handler stack UB")
+        self.depth = depth
+        self.handlerDepth = handlerDepth
