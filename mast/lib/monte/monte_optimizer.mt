@@ -123,18 +123,24 @@ def optimize(ast, maker, args, span):
 
     switch (ast.getNodeName()):
         match =="DefExpr":
-            # m`def _ := expr` -> m`expr`
             def pattern := ast.getPattern()
             if (pattern.getNodeName() == "IgnorePattern"):
-                # We don't handle the case with a guard yet.
-                if (pattern.getGuard() == null):
-                    return ast.getExpr().transform(optimize)
+                def expr := ast.getExpr()
+                switch (pattern.getGuard()):
+                    match ==null:
+                        # m`def _ := expr` -> m`expr`
+                        return expr.transform(optimize)
+                    match guard:
+                        # m`def _ :Guard exit ej := expr` ->
+                        # m`Guard.coerce(expr, ej)`
+                        def ej := ast.getExit()
+                        return a.MethodCallExpr(guard, "coerce", [expr, ej],
+                                                span)
 
         match =="EscapeExpr":
             escape nonFinalPattern:
                 def via (finalPatternToName) name exit nonFinalPattern := ast.getEjectorPattern()
                 def body := ast.getBody()
-
 
                 # m`escape ej {expr}` ? ej not used by expr -> m`expr`
                 def scope := body.getStaticScope()
@@ -244,16 +250,17 @@ def optimize(ast, maker, args, span):
                                                 "modPow", [e, m], span)
 
             # m`2.add(2)` -> m`4`
-            # XXX currently fails to interact correctly with ^^^ meaning that
-            # some files take unreasonably long to compile.
-            # if (receiver.getNodeName() == "LiteralExpr" &&
-            #     allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
-            #                arguments)):
-            #     def receiverValue := receiver.getValue()
-            #     def verb := ast.getVerb()
-            #     def argValues := map(fn x {x.getValue()}, arguments)
-            #     def constant := M.call(receiverValue, verb, argValues)
-            #     return a.LiteralExpr(constant, span)
+            if (receiver.getNodeName() == "LiteralExpr" &&
+                allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
+                           arguments)):
+                def receiverValue := receiver.getValue()
+                def verb := ast.getVerb()
+                # Hack: Don't let .pow() get constant-folded, since it can be
+                # expensive to run.
+                if (verb != "pow"):
+                    def argValues := map(fn x {x.getValue()}, arguments)
+                    def constant := M.call(receiverValue, verb, argValues)
+                    return a.LiteralExpr(constant, span)
 
         match =="SeqExpr":
             # m`expr; noun; lastNoun` -> m`expr; lastNoun`
