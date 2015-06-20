@@ -195,13 +195,14 @@ def optimize(ast, maker, args, span):
                                 match _:
                                     pass
 
-                        if (slicePoint != -1):
+                        if (slicePoint != -1 &&
+                            slicePoint < flattenedExprs.size()):
                             def exprs := [for n
                                           in (flattenedExprs.slice(0, slicePoint))
                                           n.transform(optimize)]
                             def newSeq := sequence(exprs, body.getSpan())
                             return maker(args[0], newSeq, args[2], args[3],
-                                         span) # XXX .transform(optimize)
+                                         span).transform(optimize)
 
                     match _:
                         pass
