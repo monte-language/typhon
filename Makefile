@@ -1,11 +1,12 @@
-boot_objects = boot/montec.ty \
-	boot/lib/monte/termParser.ty \
+boot_objects = boot/lib/monte/termParser.ty \
 	boot/lib/monte/monte_lexer.ty \
 	boot/lib/monte/monte_parser.ty \
+        boot/lib/monte/ast_dumper.ty \
 	boot/lib/monte/monte_ast.ty \
 	boot/lib/monte/monte_expander.ty \
 	boot/lib/monte/monte_optimizer.ty \
 	boot/lib/parsers/monte.ty \
+        boot/montec.ty \
 	boot/lib/bytes.ty \
 	boot/lib/codec/utf8.ty \
 	boot/lib/tubes/nullPump.ty \

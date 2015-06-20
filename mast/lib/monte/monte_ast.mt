@@ -1,22 +1,3 @@
-def [=> term__quasiParser] | _ := import("lib/monte/termParser",
-                                         [=> NullOk, => DeepFrozen,
-                                          => __matchSame, => __bind, => Map,
-                                          => __switchFailed, => Int, => Str,
-                                          => Bool, => Double, => Char,
-                                          => simple__quasiParser, => List,
-                                          => __booleanFlow, => __validateFor,
-                                          => __comparer,
-                                          => __makeOrderedSpace,
-                                          => __iterWhile])
-def [=> UTF8] | _ := import("lib/codec/utf8",
-                            [=> bench, => __accumulateList,
-                             => __quasiMatcher, => __mapExtract, => Int,
-                             => Char, => Str, => __iterWhile, => __comparer,
-                             => Bool, => __suchThat, => __switchFailed,
-                             => __matchSame, => __validateFor,
-                             => __makeVerbFacet, => List,
-                             => __makeOrderedSpace])
-
 def MONTE_KEYWORDS := [
 "as", "bind", "break", "catch", "continue", "def", "else", "escape",
 "exit", "extends", "export", "finally", "fn", "for", "guards", "if",
@@ -206,18 +187,14 @@ def printObjectSuiteOn(leaderFn, docstring, suite, out, priority):
             suite.subPrintOn(o, p)
             }, false, true, out, priority)
 
-def astWrapper(node, maker, args, span, scope, termFunctor, transformArgs):
+def astWrapper(node, maker, args, span, scope, termName, transformArgs):
     return object astNode extends node:
         to getStaticScope():
             return scope
         to getSpan():
             return span
         to getNodeName():
-            return termFunctor.getTag().getName()
-        to asTerm():
-            def termit(subnode, maker, args, span):
-                return subnode.asTerm()
-            return term`$termFunctor(${transformArgs(termit)}*)`.withSpan(span)
+            return termName
         to transform(f):
             return f(astNode, maker, transformArgs(f), span)
         to _uncall():
@@ -232,7 +209,7 @@ def makeLiteralExpr(value, span):
         to subPrintOn(out, priority):
             out.quote(value)
     return astWrapper(literalExpr, makeLiteralExpr, [value], span,
-        emptyScope, term`LiteralExpr`, fn f {[value]})
+        emptyScope, "LiteralExpr", fn f {[value]})
 
 def makeNounExpr(name, span):
     def scope := makeStaticScope([name], [], [], [], false)
@@ -246,7 +223,7 @@ def makeNounExpr(name, span):
                 out.print("::")
                 out.quote(name)
     return astWrapper(nounExpr, makeNounExpr, [name], span,
-         scope, term`NounExpr`, fn f {[name]})
+         scope, "NounExpr", fn f {[name]})
 
 def makeTempNounExpr(namePrefix, span):
     object name extends namePrefix:
@@ -261,7 +238,7 @@ def makeTempNounExpr(namePrefix, span):
         to subPrintOn(out, priority):
             out.print(name)
     return astWrapper(tempNounExpr, makeTempNounExpr, [name], span,
-         scope, term`TempNounExpr`, fn f {[namePrefix]})
+         scope, "TempNounExpr", fn f {[namePrefix]})
 
 def makeSlotExpr(noun, span):
     def scope := noun.getStaticScope()
@@ -272,7 +249,7 @@ def makeSlotExpr(noun, span):
             out.print("&")
             out.print(noun)
     return astWrapper(slotExpr, makeSlotExpr, [noun], span,
-        scope, term`SlotExpr`, fn f {[noun.transform(f)]})
+        scope, "SlotExpr", fn f {[noun.transform(f)]})
 
 def makeMetaContextExpr(span):
     def scope := emptyScope
@@ -280,7 +257,7 @@ def makeMetaContextExpr(span):
         to subPrintOn(out, priority):
             out.print("meta.context()")
     return astWrapper(metaContextExpr, makeMetaContextExpr, [], span,
-        scope, term`MetaContextExpr`, fn f {[]})
+        scope, "MetaContextExpr", fn f {[]})
 
 def makeMetaStateExpr(span):
     def scope := makeStaticScope([], [], [], [], true)
@@ -288,7 +265,7 @@ def makeMetaStateExpr(span):
         to subPrintOn(out, priority):
             out.print("meta.getState()")
     return astWrapper(metaStateExpr, makeMetaStateExpr, [], span,
-        scope, term`MetaStateExpr`, fn f {[]})
+        scope, "MetaStateExpr", fn f {[]})
 
 def makeBindingExpr(noun, span):
     def scope := noun.getStaticScope()
@@ -299,7 +276,7 @@ def makeBindingExpr(noun, span):
             out.print("&&")
             out.print(noun)
     return astWrapper(bindingExpr, makeBindingExpr, [noun], span,
-        scope, term`BindingExpr`, fn f {[noun.transform(f)]})
+        scope, "BindingExpr", fn f {[noun.transform(f)]})
 
 def makeSeqExpr(exprs, span):
     def scope := sumScopes(exprs)
@@ -318,7 +295,7 @@ def makeSeqExpr(exprs, span):
                 first := false
                 e.subPrintOn(out, priority.min(priorities["braceExpr"]))
     return astWrapper(seqExpr, makeSeqExpr, [exprs], span,
-        scope, term`SeqExpr`, fn f {[transformAll(exprs, f)]})
+        scope, "SeqExpr", fn f {[transformAll(exprs, f)]})
 
 def makeModule(imports, exports, body, span):
     def scope := sumScopes(imports + exports)
@@ -341,7 +318,7 @@ def makeModule(imports, exports, body, span):
                 out.println("")
             body.subPrintOn(out, priorities["indentExpr"])
     return astWrapper(::"module", makeModule, [imports, exports, body], span,
-        scope, term`Module`, fn f {[
+        scope, "Module", fn f {[
             transformAll(imports, f),
             transformAll(exports, f),
             body.transform(f)]})
@@ -368,7 +345,7 @@ def makeMethodCallExpr(rcvr, verb, arglist, span):
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(methodCallExpr, makeMethodCallExpr,
-        [rcvr, verb, arglist], span, scope, term`MethodCallExpr`,
+        [rcvr, verb, arglist], span, scope, "MethodCallExpr",
         fn f {[rcvr.transform(f), verb, transformAll(arglist, f)]})
 
 def makeFunCallExpr(receiver, args, span):
@@ -386,7 +363,7 @@ def makeFunCallExpr(receiver, args, span):
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(funCallExpr, makeFunCallExpr, [receiver, args], span,
-        scope, term`FunCallExpr`, fn f {[receiver.transform(f), transformAll(args, f)]})
+        scope, "FunCallExpr", fn f {[receiver.transform(f), transformAll(args, f)]})
 
 def makeSendExpr(rcvr, verb, arglist, span):
     def scope := sumScopes(arglist + [rcvr])
@@ -410,7 +387,7 @@ def makeSendExpr(rcvr, verb, arglist, span):
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(sendExpr, makeSendExpr,
-        [rcvr, verb, arglist], span, scope, term`SendExpr`,
+        [rcvr, verb, arglist], span, scope, "SendExpr",
         fn f {[rcvr.transform(f), verb, transformAll(arglist, f)]})
 
 def makeFunSendExpr(receiver, args, span):
@@ -428,7 +405,7 @@ def makeFunSendExpr(receiver, args, span):
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(funSendExpr, makeFunSendExpr, [receiver, args], span,
-        scope, term`FunSendExpr`, fn f {[receiver.transform(f), transformAll(args, f)]})
+        scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f)]})
 
 def makeGetExpr(receiver, indices, span):
     def scope := sumScopes(indices + [receiver])
@@ -442,7 +419,7 @@ def makeGetExpr(receiver, indices, span):
             printListOn("[", indices, ", ", "]", out, priorities["braceExpr"])
 
     return astWrapper(getExpr, makeGetExpr, [receiver, indices], span,
-        scope, term`GetExpr`, fn f {[receiver.transform(f), transformAll(indices, f)]})
+        scope, "GetExpr", fn f {[receiver.transform(f), transformAll(indices, f)]})
 
 def makeAndExpr(left, right, span):
     def scope := left.getStaticScope() + right.getStaticScope()
@@ -460,7 +437,7 @@ def makeAndExpr(left, right, span):
             if (priorities["logicalAnd"] < priority):
                 out.print(")")
     return astWrapper(andExpr, makeAndExpr, [left, right], span,
-        scope, term`AndExpr`, fn f {[left.transform(f), right.transform(f)]})
+        scope, "AndExpr", fn f {[left.transform(f), right.transform(f)]})
 
 def makeOrExpr(left, right, span):
     def scope := left.getStaticScope() + right.getStaticScope()
@@ -478,7 +455,7 @@ def makeOrExpr(left, right, span):
             if (priorities["logicalOr"] < priority):
                 out.print(")")
     return astWrapper(orExpr, makeOrExpr, [left, right], span,
-        scope, term`OrExpr`, fn f {[left.transform(f), right.transform(f)]})
+        scope, "OrExpr", fn f {[left.transform(f), right.transform(f)]})
 
 def operatorsToNamePrio := [
     "+" => ["add", "addsub"],
@@ -518,7 +495,7 @@ def makeBinaryExpr(left, op, right, span):
             if (opPrio < priority):
                 out.print(")")
     return astWrapper(binaryExpr, makeBinaryExpr, [left, op, right], span,
-        scope, term`BinaryExpr`, fn f {[left.transform(f), op, right.transform(f)]})
+        scope, "BinaryExpr", fn f {[left.transform(f), op, right.transform(f)]})
 
 def comparatorsToName := [
     ">" => "greaterThan", "<" => "lessThan",
@@ -547,7 +524,7 @@ def makeCompareExpr(left, op, right, span):
             if (priorities["comp"] < priority):
                 out.print(")")
     return astWrapper(compareExpr, makeCompareExpr, [left, op, right], span,
-        scope, term`CompareExpr`, fn f {[left.transform(f), op, right.transform(f)]})
+        scope, "CompareExpr", fn f {[left.transform(f), op, right.transform(f)]})
 
 def makeRangeExpr(left, op, right, span):
     def scope := left.getStaticScope() + right.getStaticScope()
@@ -572,7 +549,7 @@ def makeRangeExpr(left, op, right, span):
             if (priorities["interval"] < priority):
                 out.print(")")
     return astWrapper(rangeExpr, makeRangeExpr, [left, op, right], span,
-        scope, term`RangeExpr`, fn f {[left.transform(f), op, right.transform(f)]})
+        scope, "RangeExpr", fn f {[left.transform(f), op, right.transform(f)]})
 
 def makeSameExpr(left, right, direction, span):
     def scope := left.getStaticScope() + right.getStaticScope()
@@ -595,7 +572,7 @@ def makeSameExpr(left, right, direction, span):
             if (priorities["comp"] < priority):
                 out.print(")")
     return astWrapper(sameExpr, makeSameExpr, [left, right, direction], span,
-        scope, term`SameExpr`, fn f {[left.transform(f), right.transform(f), direction]})
+        scope, "SameExpr", fn f {[left.transform(f), right.transform(f), direction]})
 
 def makeMatchBindExpr(specimen, pattern, span):
     def scope := specimen.getStaticScope() + pattern.getStaticScope()
@@ -613,7 +590,7 @@ def makeMatchBindExpr(specimen, pattern, span):
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(matchBindExpr, makeMatchBindExpr, [specimen, pattern], span,
-        scope, term`MatchBindExpr`, fn f {[specimen.transform(f), pattern.transform(f)]})
+        scope, "MatchBindExpr", fn f {[specimen.transform(f), pattern.transform(f)]})
 
 def makeMismatchExpr(specimen, pattern, span):
     def scope := specimen.getStaticScope() + pattern.getStaticScope()
@@ -631,7 +608,7 @@ def makeMismatchExpr(specimen, pattern, span):
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(mismatchExpr, makeMismatchExpr, [specimen, pattern], span,
-        scope, term`MismatchExpr`, fn f {[specimen.transform(f), pattern.transform(f)]})
+        scope, "MismatchExpr", fn f {[specimen.transform(f), pattern.transform(f)]})
 
 def unaryOperatorsToName := ["~" => "complement", "!" => "not", "-" => "negate"]
 
@@ -652,7 +629,7 @@ def makePrefixExpr(op, receiver, span):
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(prefixExpr, makePrefixExpr, [op, receiver], span,
-        scope, term`PrefixExpr`, fn f {[op, receiver.transform(f)]})
+        scope, "PrefixExpr", fn f {[op, receiver.transform(f)]})
 
 def makeCoerceExpr(specimen, guard, span):
     def scope := specimen.getStaticScope() + guard.getStaticScope()
@@ -670,7 +647,7 @@ def makeCoerceExpr(specimen, guard, span):
             if (priorities["coerce"] < priority):
                 out.print(")")
     return astWrapper(coerceExpr, makeCoerceExpr, [specimen, guard], span,
-        scope, term`CoerceExpr`, fn f {[specimen.transform(f), guard.transform(f)]})
+        scope, "CoerceExpr", fn f {[specimen.transform(f), guard.transform(f)]})
 
 def makeCurryExpr(receiver, verb, isSend, span):
     def scope := receiver.getStaticScope()
@@ -696,7 +673,7 @@ def makeCurryExpr(receiver, verb, isSend, span):
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(curryExpr, makeCurryExpr, [receiver, verb, isSend], span,
-        scope, term`CurryExpr`, fn f {[receiver.transform(f), verb, isSend]})
+        scope, "CurryExpr", fn f {[receiver.transform(f), verb, isSend]})
 
 def makeExitExpr(name, value, span):
     def scope := scopeMaybe(value)
@@ -715,7 +692,7 @@ def makeExitExpr(name, value, span):
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(exitExpr, makeExitExpr, [name, value], span,
-        scope, term`ExitExpr`, fn f {[name, maybeTransform(value, f)]})
+        scope, "ExitExpr", fn f {[name, maybeTransform(value, f)]})
 
 def makeForwardExpr(patt, span):
     def scope := patt.getStaticScope()
@@ -730,7 +707,7 @@ def makeForwardExpr(patt, span):
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(forwardExpr, makeForwardExpr, [patt], span,
-        scope, term`ForwardExpr`, fn f {[patt.transform(f)]})
+        scope, "ForwardExpr", fn f {[patt.transform(f)]})
 
 def makeVarPattern(noun, guard, span):
     def scope := makeStaticScope([], [], [], [noun.getName()], false)
@@ -746,7 +723,7 @@ def makeVarPattern(noun, guard, span):
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(varPattern, makeVarPattern, [noun, guard], span,
-        scope, term`VarPattern`,
+        scope, "VarPattern",
         fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeBindPattern(noun, guard, span):
@@ -761,7 +738,7 @@ def makeBindPattern(noun, guard, span):
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(bindPattern, makeBindPattern, [noun, guard], span,
-        scope, term`BindPattern`, fn f {[noun.transform(f), maybeTransform(guard, f)]})
+        scope, "BindPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeDefExpr(pattern, exit_, expr, span):
     def scope := if (exit_ == null) {
@@ -790,7 +767,7 @@ def makeDefExpr(pattern, exit_, expr, span):
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(defExpr, makeDefExpr, [pattern, exit_, expr], span,
-        scope, term`DefExpr`, fn f {[pattern.transform(f), if (exit_ == null) {null} else {exit_.transform(f)}, expr.transform(f)]})
+        scope, "DefExpr", fn f {[pattern.transform(f), if (exit_ == null) {null} else {exit_.transform(f)}, expr.transform(f)]})
 
 def makeAssignExpr(lvalue, rvalue, span):
     def [lmaker, _, largs] := lvalue._uncall()
@@ -814,7 +791,7 @@ def makeAssignExpr(lvalue, rvalue, span):
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(assignExpr, makeAssignExpr, [lvalue, rvalue], span,
-        scope, term`AssignExpr`, fn f {[lvalue.transform(f), rvalue.transform(f)]})
+        scope, "AssignExpr", fn f {[lvalue.transform(f), rvalue.transform(f)]})
 
 def makeVerbAssignExpr(verb, lvalue, rvalues, span):
     def [lmaker, _, largs] := lvalue._uncall()
@@ -843,7 +820,7 @@ def makeVerbAssignExpr(verb, lvalue, rvalues, span):
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(verbAssignExpr, makeVerbAssignExpr, [verb, lvalue, rvalues], span,
-        scope, term`VerbAssignExpr`, fn f {[verb, lvalue.transform(f), transformAll(rvalues, f)]})
+        scope, "VerbAssignExpr", fn f {[verb, lvalue.transform(f), transformAll(rvalues, f)]})
 
 
 def makeAugAssignExpr(op, lvalue, rvalue, span):
@@ -874,7 +851,7 @@ def makeAugAssignExpr(op, lvalue, rvalue, span):
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(augAssignExpr, makeAugAssignExpr, [op, lvalue, rvalue], span,
-        scope, term`AugAssignExpr`, fn f {[op, lvalue.transform(f), rvalue.transform(f)]})
+        scope, "AugAssignExpr", fn f {[op, lvalue.transform(f), rvalue.transform(f)]})
 
 def makeMethod(docstring, verb, patterns, resultGuard, body, span):
     def scope := sumScopes(patterns + [resultGuard, body]).hide()
@@ -904,7 +881,7 @@ def makeMethod(docstring, verb, patterns, resultGuard, body, span):
                 }
             }, docstring, body, out, priority)
     return astWrapper(::"method", makeMethod, [docstring, verb, patterns, resultGuard, body], span,
-        scope, term`Method`, fn f {[docstring, verb, transformAll(patterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
+        scope, "Method", fn f {[docstring, verb, transformAll(patterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeTo(docstring, verb, patterns, resultGuard, body, span):
     def scope := sumScopes(patterns + [resultGuard, body]).hide()
@@ -935,7 +912,7 @@ def makeTo(docstring, verb, patterns, resultGuard, body, span):
                 }
             }, docstring, body, out, priority)
     return astWrapper(::"to", makeTo, [docstring, verb, patterns, resultGuard, body], span,
-        scope, term`To`, fn f {[docstring, verb, transformAll(patterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
+        scope, "To", fn f {[docstring, verb, transformAll(patterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeMatcher(pattern, body, span):
     def scope := (pattern.getStaticScope() + body.getStaticScope()).hide()
@@ -950,7 +927,7 @@ def makeMatcher(pattern, body, span):
                 pattern.subPrintOn(out, priorities["pattern"]);
             }, body, false, out, priority)
     return astWrapper(matcher, makeMatcher, [pattern, body], span,
-        scope, term`Matcher`, fn f {[pattern.transform(f), body.transform(f)]})
+        scope, "Matcher", fn f {[pattern.transform(f), body.transform(f)]})
 
 def makeCatcher(pattern, body, span):
     def scope := (pattern.getStaticScope() + body.getStaticScope()).hide()
@@ -965,7 +942,7 @@ def makeCatcher(pattern, body, span):
                 pattern.subPrintOn(out, priorities["pattern"]);
             }, body, true, out, priority)
     return astWrapper(catcher, makeCatcher, [pattern, body], span,
-        scope, term`Catcher`, fn f {[pattern.transform(f), body.transform(f)]})
+        scope, "Catcher", fn f {[pattern.transform(f), body.transform(f)]})
 
 def makeScript(extend, methods, matchers, span):
     def scope := sumScopes(methods + matchers)
@@ -992,7 +969,7 @@ def makeScript(extend, methods, matchers, span):
                 m.subPrintOn(out, priority)
                 out.print("\n")
     return astWrapper(script, makeScript, [extend, methods, matchers], span,
-        scope, term`Script`, fn f {[maybeTransform(extend, f), transformAll(methods, f), transformAll(matchers, f)]})
+        scope, "Script", fn f {[maybeTransform(extend, f), transformAll(methods, f), transformAll(matchers, f)]})
 
 def makeFunctionScript(patterns, resultGuard, body, span):
     def scope := sumScopes(patterns + [resultGuard, body]).hide()
@@ -1019,7 +996,7 @@ def makeFunctionScript(patterns, resultGuard, body, span):
             body.subPrintOn(out, priority)
             out.print("\n")
     return astWrapper(functionScript, makeFunctionScript, [patterns, resultGuard, body], span,
-        scope, term`FunctionScript`, fn f {[transformAll(patterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
+        scope, "FunctionScript", fn f {[transformAll(patterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeFunctionExpr(patterns, body, span):
     def scope := (sumScopes(patterns) + body.getStaticScope()).hide()
@@ -1033,7 +1010,7 @@ def makeFunctionExpr(patterns, body, span):
                 printListOn("fn ", patterns, ", ", "", out, priorities["pattern"])
             }, body, false, out, priorities["assign"])
     return astWrapper(functionExpr, makeFunctionExpr, [patterns, body], span,
-        scope, term`FunctionExpr`, fn f {[transformAll(patterns, f), body.transform(f)]})
+        scope, "FunctionExpr", fn f {[transformAll(patterns, f), body.transform(f)]})
 
 def makeListExpr(items, span):
     def scope := sumScopes(items)
@@ -1043,7 +1020,7 @@ def makeListExpr(items, span):
         to subPrintOn(out, priority):
             printListOn("[", items, ", ", "]", out, priorities["braceExpr"])
     return astWrapper(listExpr, makeListExpr, [items], span,
-        scope, term`ListExpr`, fn f {[transformAll(items, f)]})
+        scope, "ListExpr", fn f {[transformAll(items, f)]})
 
 def makeListComprehensionExpr(iterable, filter, key, value, body, span):
     def scope := sumScopes([iterable, key, value, filter, body]).hide()
@@ -1074,7 +1051,7 @@ def makeListComprehensionExpr(iterable, filter, key, value, body, span):
             body.subPrintOn(out, priorities["braceExpr"])
             out.print("]")
     return astWrapper(listComprehensionExpr, makeListComprehensionExpr, [iterable, filter, key, value, body], span,
-        scope, term`ListComprehensionExpr`, fn f {[iterable.transform(f), maybeTransform(filter, f), maybeTransform(key, f), value.transform(f), body.transform(f)]})
+        scope, "ListComprehensionExpr", fn f {[iterable.transform(f), maybeTransform(filter, f), maybeTransform(key, f), value.transform(f), body.transform(f)]})
 
 def makeMapExprAssoc(key, value, span):
     def scope := key.getStaticScope() + value.getStaticScope()
@@ -1088,7 +1065,7 @@ def makeMapExprAssoc(key, value, span):
             out.print(" => ")
             value.subPrintOn(out, priorities["braceExpr"])
     return astWrapper(mapExprAssoc, makeMapExprAssoc, [key, value], span,
-        scope, term`MapExprAssoc`, fn f {[key.transform(f), value.transform(f)]})
+        scope, "MapExprAssoc", fn f {[key.transform(f), value.transform(f)]})
 
 def makeMapExprExport(value, span):
     def scope := value.getStaticScope()
@@ -1099,7 +1076,7 @@ def makeMapExprExport(value, span):
             out.print("=> ")
             value.subPrintOn(out, priorities["prim"])
     return astWrapper(mapExprExport, makeMapExprExport, [value], span,
-        scope, term`MapExprExport`, fn f {[value.transform(f)]})
+        scope, "MapExprExport", fn f {[value.transform(f)]})
 
 def makeMapExpr(pairs ? (pairs.size() > 0), span):
     def scope := sumScopes(pairs)
@@ -1109,7 +1086,7 @@ def makeMapExpr(pairs ? (pairs.size() > 0), span):
         to subPrintOn(out, priority):
             printListOn("[", pairs, ", ", "]", out, priorities["braceExpr"])
     return astWrapper(mapExpr, makeMapExpr, [pairs], span,
-        scope, term`MapExpr`, fn f {[transformAll(pairs, f)]})
+        scope, "MapExpr", fn f {[transformAll(pairs, f)]})
 
 def makeMapComprehensionExpr(iterable, filter, key, value, bodyk, bodyv, span):
     def scope := sumScopes([iterable, key, value, filter, bodyk, bodyv]).hide()
@@ -1144,7 +1121,7 @@ def makeMapComprehensionExpr(iterable, filter, key, value, bodyk, bodyv, span):
             bodyv.subPrintOn(out, priorities["braceExpr"])
             out.print("]")
     return astWrapper(mapComprehensionExpr, makeMapComprehensionExpr, [iterable, filter, key, value, bodyk, bodyv], span,
-        scope, term`MapComprehensionExpr`, fn f {[iterable.transform(f), maybeTransform(filter, f), maybeTransform(key, f), value.transform(f), bodyk.transform(f), bodyv.transform(f)]})
+        scope, "MapComprehensionExpr", fn f {[iterable.transform(f), maybeTransform(filter, f), maybeTransform(key, f), value.transform(f), bodyk.transform(f), bodyv.transform(f)]})
 
 def makeForExpr(iterable, key, value, body, catchPattern, catchBody, span):
     def scope := sumScopes([iterable, key, value, body]).hide()
@@ -1179,7 +1156,7 @@ def makeForExpr(iterable, key, value, body, catchPattern, catchBody, span):
                 }, catchBody, true, out, priority)
     return astWrapper(forExpr, makeForExpr, [iterable, key, value, body, catchPattern, catchBody],
         span,
-        scope, term`ForExpr`, fn f {[iterable.transform(f), maybeTransform(key, f), value.transform(f), body.transform(f), maybeTransform(catchPattern, f), maybeTransform(catchBody, f)]})
+        scope, "ForExpr", fn f {[iterable.transform(f), maybeTransform(key, f), value.transform(f), body.transform(f), maybeTransform(catchPattern, f), maybeTransform(catchBody, f)]})
 
 def makeObjectExpr(docstring, name, asExpr, auditors, script, span):
     def scope := name.getStaticScope() + sumScopes([asExpr] + auditors).hide() + script.getStaticScope()
@@ -1204,7 +1181,7 @@ def makeObjectExpr(docstring, name, asExpr, auditors, script, span):
                 script.printObjectHeadOn(name, asExpr, auditors, out, priority)
             }, docstring, script, out, priority)
     return astWrapper(ObjectExpr, makeObjectExpr, [docstring, name, asExpr, auditors, script], span,
-        scope, term`ObjectExpr`, fn f {[docstring, name.transform(f), maybeTransform(asExpr, f), transformAll(auditors, f), script.transform(f)]})
+        scope, "ObjectExpr", fn f {[docstring, name.transform(f), maybeTransform(asExpr, f), transformAll(auditors, f), script.transform(f)]})
 
 def makeParamDesc(name, guard, span):
     def scope := scopeMaybe(guard)
@@ -1222,7 +1199,7 @@ def makeParamDesc(name, guard, span):
                 out.print(" :")
                 guard.subPrintOn(out, priorities["call"])
     return astWrapper(paramDesc, makeParamDesc, [name, guard], span,
-        scope, term`ParamDesc`, fn f {[name, maybeTransform(guard, f)]})
+        scope, "ParamDesc", fn f {[name, maybeTransform(guard, f)]})
 
 def makeMessageDesc(docstring, verb, params, resultGuard, span):
     def scope := sumScopes(params + [resultGuard])
@@ -1261,7 +1238,7 @@ def makeMessageDesc(docstring, verb, params, resultGuard, span):
                     out.print("}")
 
     return astWrapper(messageDesc, makeMessageDesc, [docstring, verb, params, resultGuard], span,
-        scope, term`MessageDesc`, fn f {[docstring, verb, transformAll(params, f), maybeTransform(resultGuard, f)]})
+        scope, "MessageDesc", fn f {[docstring, verb, transformAll(params, f), maybeTransform(resultGuard, f)]})
 
 
 def makeInterfaceExpr(docstring, name, stamp, parents, auditors, messages, span):
@@ -1301,7 +1278,7 @@ def makeInterfaceExpr(docstring, name, stamp, parents, auditors, messages, span)
             if (priorities["braceExpr"] <= priority):
                 out.print("}")
     return astWrapper(interfaceExpr, makeInterfaceExpr, [docstring, name, stamp, parents, auditors, messages], span,
-        scope, term`InterfaceExpr`, fn f {[docstring, name.transform(f), maybeTransform(stamp, f), transformAll(parents, f), transformAll(auditors, f), transformAll(messages, f)]})
+        scope, "InterfaceExpr", fn f {[docstring, name.transform(f), maybeTransform(stamp, f), transformAll(parents, f), transformAll(auditors, f), transformAll(messages, f)]})
 
 def makeFunctionInterfaceExpr(docstring, name, stamp, parents, auditors, messageDesc, span):
     def scope := name.getStaticScope() + sumScopes(parents + [stamp] + auditors + [messageDesc])
@@ -1350,7 +1327,7 @@ def makeFunctionInterfaceExpr(docstring, name, stamp, parents, auditors, message
                     out.print("}")
             out.print("\n")
     return astWrapper(functionInterfaceExpr, makeFunctionInterfaceExpr, [docstring, name, stamp, parents, auditors, messageDesc], span,
-        scope, term`FunctionInterfaceExpr`, fn f {[docstring, name.transform(f), maybeTransform(stamp, f), transformAll(parents, f), transformAll(auditors, f), messageDesc.transform(f)]})
+        scope, "FunctionInterfaceExpr", fn f {[docstring, name.transform(f), maybeTransform(stamp, f), transformAll(parents, f), transformAll(auditors, f), messageDesc.transform(f)]})
 
 def makeCatchExpr(body, pattern, catcher, span):
     def scope := body.getStaticScope().hide() + (pattern.getStaticScope() + catcher.getStaticScope()).hide()
@@ -1368,7 +1345,7 @@ def makeCatchExpr(body, pattern, catcher, span):
                 pattern.subPrintOn(out, priorities["pattern"])
             }, catcher, true, out, priority)
     return astWrapper(catchExpr, makeCatchExpr, [body, pattern, catcher], span,
-        scope, term`CatchExpr`, fn f {[body.transform(f), pattern.transform(f),
+        scope, "CatchExpr", fn f {[body.transform(f), pattern.transform(f),
                                        catcher.transform(f)]})
 
 def makeFinallyExpr(body, unwinder, span):
@@ -1383,7 +1360,7 @@ def makeFinallyExpr(body, unwinder, span):
             printExprSuiteOn(fn {out.print("finally")}, unwinder, true, out,
                          priority)
     return astWrapper(finallyExpr, makeFinallyExpr, [body, unwinder], span,
-        scope, term`FinallyExpr`, fn f {[body.transform(f), unwinder.transform(f)]})
+        scope, "FinallyExpr", fn f {[body.transform(f), unwinder.transform(f)]})
 
 def makeTryExpr(body, catchers, finallyBlock, span):
     def baseScope := (body.getStaticScope() + sumScopes(catchers)).hide()
@@ -1407,7 +1384,7 @@ def makeTryExpr(body, catchers, finallyBlock, span):
                 printExprSuiteOn(fn {out.print("finally")},
                     finallyBlock, true, out, priority)
     return astWrapper(tryExpr, makeTryExpr, [body, catchers, finallyBlock], span,
-        scope, term`TryExpr`, fn f {[body.transform(f), transformAll(catchers, f),maybeTransform(finallyBlock, f)]})
+        scope, "TryExpr", fn f {[body.transform(f), transformAll(catchers, f),maybeTransform(finallyBlock, f)]})
 
 def makeEscapeExpr(ejectorPattern, body, catchPattern, catchBody, span):
     def baseScope := (ejectorPattern.getStaticScope() + body.getStaticScope()).hide()
@@ -1437,7 +1414,7 @@ def makeEscapeExpr(ejectorPattern, body, catchPattern, catchBody, span):
                 }, catchBody, true, out, priority)
     return astWrapper(escapeExpr, makeEscapeExpr,
          [ejectorPattern, body, catchPattern, catchBody], span,
-        scope, term`EscapeExpr`,
+        scope, "EscapeExpr",
          fn f {[ejectorPattern.transform(f), body.transform(f),
                 maybeTransform(catchPattern, f), maybeTransform(catchBody, f)]})
 
@@ -1463,7 +1440,7 @@ def makeSwitchExpr(specimen, matchers, span):
             if (priorities["braceExpr"] <= priority):
                 out.print("}")
     return astWrapper(switchExpr, makeSwitchExpr, [specimen, matchers], span,
-        scope, term`SwitchExpr`, fn f {[specimen.transform(f), transformAll(matchers, f)]})
+        scope, "SwitchExpr", fn f {[specimen.transform(f), transformAll(matchers, f)]})
 
 def makeWhenExpr(args, body, catchers, finallyBlock, span):
     def scope := sumScopes(args + [body]).hide() + sumScopes(catchers) + scopeMaybe(finallyBlock).hide()
@@ -1494,7 +1471,7 @@ def makeWhenExpr(args, body, catchers, finallyBlock, span):
                     out.print("finally")
                 }, finallyBlock, true, out, priority)
     return astWrapper(whenExpr, makeWhenExpr, [args, body, catchers, finallyBlock], span,
-        scope, term`WhenExpr`, fn f {[transformAll(args, f), body.transform(f), transformAll(catchers, f), maybeTransform(finallyBlock, f)]})
+        scope, "WhenExpr", fn f {[transformAll(args, f), body.transform(f), transformAll(catchers, f), maybeTransform(finallyBlock, f)]})
 
 def makeIfExpr(test, consq, alt, span):
     def baseScope := test.getStaticScope() + consq.getStaticScope().hide()
@@ -1528,7 +1505,7 @@ def makeIfExpr(test, consq, alt, span):
                     printExprSuiteOn(fn {out.print("else")}, alt, true, out, priority)
 
     return astWrapper(ifExpr, makeIfExpr, [test, consq, alt], span,
-        scope, term`IfExpr`, fn f {[test.transform(f), consq.transform(f), maybeTransform(alt, f)]})
+        scope, "IfExpr", fn f {[test.transform(f), consq.transform(f), maybeTransform(alt, f)]})
 
 def makeWhileExpr(test, body, catcher, span):
     def scope := sumScopes([test, body, catcher])
@@ -1548,7 +1525,7 @@ def makeWhileExpr(test, body, catcher, span):
             if (catcher != null):
                 catcher.subPrintOn(out, priority)
     return astWrapper(whileExpr, makeWhileExpr, [test, body, catcher], span,
-        scope, term`WhileExpr`, fn f {[test.transform(f), body.transform(f), maybeTransform(catcher, f)]})
+        scope, "WhileExpr", fn f {[test.transform(f), body.transform(f), maybeTransform(catcher, f)]})
 
 def makeHideExpr(body, span):
     def scope := body.getStaticScope().hide()
@@ -1563,7 +1540,7 @@ def makeHideExpr(body, span):
             out.print("}")
 
     return astWrapper(hideExpr, makeHideExpr, [body], span,
-        scope, term`HideExpr`, fn f {[body.transform(f)]})
+        scope, "HideExpr", fn f {[body.transform(f)]})
 
 def makeValueHoleExpr(index, span):
     def scope := null
@@ -1575,7 +1552,7 @@ def makeValueHoleExpr(index, span):
             out.print(index)
             out.print("}")
     return astWrapper(valueHoleExpr, makeValueHoleExpr, [index], span,
-        scope, term`ValueHoleExpr`, fn f {[index]})
+        scope, "ValueHoleExpr", fn f {[index]})
 
 def makePatternHoleExpr(index, span):
     def scope := null
@@ -1587,7 +1564,7 @@ def makePatternHoleExpr(index, span):
             out.print(index)
             out.print("}")
     return astWrapper(patternHoleExpr, makePatternHoleExpr, [index], span,
-        scope, term`PatternHoleExpr`, fn f {[index]})
+        scope, "PatternHoleExpr", fn f {[index]})
 
 def makeValueHolePattern(index, span):
     def scope := null
@@ -1599,7 +1576,7 @@ def makeValueHolePattern(index, span):
             out.print(index)
             out.print("}")
     return astWrapper(valueHolePattern, makeValueHolePattern, [index], span,
-        scope, term`ValueHolePattern`, fn f {[index]})
+        scope, "ValueHolePattern", fn f {[index]})
 
 def makePatternHolePattern(index, span):
     def scope := null
@@ -1611,7 +1588,7 @@ def makePatternHolePattern(index, span):
             out.print(index)
             out.print("}")
     return astWrapper(patternHolePattern, makePatternHolePattern, [index], span,
-        scope, term`PatternHolePattern`, fn f {[index]})
+        scope, "PatternHolePattern", fn f {[index]})
 
 def makeFinalPattern(noun, guard, span):
     def gs := scopeMaybe(guard)
@@ -1629,7 +1606,7 @@ def makeFinalPattern(noun, guard, span):
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(finalPattern, makeFinalPattern, [noun, guard], span,
-        scope, term`FinalPattern`,
+        scope, "FinalPattern",
         fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeSlotPattern(noun, guard, span):
@@ -1647,7 +1624,7 @@ def makeSlotPattern(noun, guard, span):
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(slotPattern, makeSlotPattern, [noun, guard], span,
-        scope, term`SlotPattern`, fn f {[noun.transform(f), maybeTransform(guard, f)]})
+        scope, "SlotPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeBindingPattern(noun, span):
     def scope := makeStaticScope([], [], [], [noun.getName()], false)
@@ -1658,7 +1635,7 @@ def makeBindingPattern(noun, span):
             out.print("&&")
             noun.subPrintOn(out, priority)
     return astWrapper(bindingPattern, makeBindingPattern, [noun], span,
-        scope, term`BindingPattern`, fn f {[noun.transform(f)]})
+        scope, "BindingPattern", fn f {[noun.transform(f)]})
 
 def makeIgnorePattern(guard, span):
     def scope := scopeMaybe(guard)
@@ -1671,7 +1648,7 @@ def makeIgnorePattern(guard, span):
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(ignorePattern, makeIgnorePattern, [guard], span,
-        scope, term`IgnorePattern`, fn f {[maybeTransform(guard, f)]})
+        scope, "IgnorePattern", fn f {[maybeTransform(guard, f)]})
 
 def makeListPattern(patterns, tail, span):
     def scope := sumScopes(patterns + [tail])
@@ -1686,7 +1663,7 @@ def makeListPattern(patterns, tail, span):
                 out.print(" + ")
                 tail.subPrintOn(out, priorities["pattern"])
     return astWrapper(listPattern, makeListPattern, [patterns, tail], span,
-        scope, term`ListPattern`, fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
+        scope, "ListPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
 
 def makeMapPatternAssoc(key, value, span):
     def scope := key.getStaticScope() + value.getStaticScope()
@@ -1705,7 +1682,7 @@ def makeMapPatternAssoc(key, value, span):
             out.print(" => ")
             value.subPrintOn(out, priority)
     return astWrapper(mapPatternAssoc, makeMapPatternAssoc, [key, value], span,
-        scope, term`MapPatternAssoc`, fn f {[key.transform(f), value.transform(f)]})
+        scope, "MapPatternAssoc", fn f {[key.transform(f), value.transform(f)]})
 
 def makeMapPatternImport(pattern, span):
     def scope := pattern.getStaticScope()
@@ -1716,7 +1693,7 @@ def makeMapPatternImport(pattern, span):
             out.print("=> ")
             pattern.subPrintOn(out, priority)
     return astWrapper(mapPatternImport, makeMapPatternImport, [pattern], span,
-        scope, term`MapPatternImport`, fn f {[pattern.transform(f)]})
+        scope, "MapPatternImport", fn f {[pattern.transform(f)]})
 
 def makeMapPatternRequired(keyer, span):
     def scope := keyer.getStaticScope()
@@ -1728,7 +1705,7 @@ def makeMapPatternRequired(keyer, span):
         to subPrintOn(out, priority):
             keyer.subPrintOn(out, priority)
     return astWrapper(mapPatternRequired, makeMapPatternRequired, [keyer], span,
-        scope, term`MapPatternRequired`, fn f {[keyer.transform(f)]})
+        scope, "MapPatternRequired", fn f {[keyer.transform(f)]})
 
 def makeMapPatternDefault(keyer, default, span):
     def scope := keyer.getStaticScope() + default.getStaticScope()
@@ -1743,7 +1720,7 @@ def makeMapPatternDefault(keyer, default, span):
             default.subPrintOn(out, priorities["braceExpr"])
             out.print(")")
     return astWrapper(mapPatternDefault, makeMapPatternDefault, [keyer, default], span,
-        scope, term`MapPatternDefault`, fn f {[keyer.transform(f), default.transform(f)]})
+        scope, "MapPatternDefault", fn f {[keyer.transform(f), default.transform(f)]})
 
 def makeMapPattern(patterns, tail, span):
     def scope := sumScopes(patterns + [tail])
@@ -1758,7 +1735,7 @@ def makeMapPattern(patterns, tail, span):
                 out.print(" | ")
                 tail.subPrintOn(out, priorities["pattern"])
     return astWrapper(mapPattern, makeMapPattern, [patterns, tail], span,
-        scope, term`MapPattern`, fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
+        scope, "MapPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
 
 def makeViaPattern(expr, subpattern, span):
     def scope := expr.getStaticScope() + subpattern.getStaticScope()
@@ -1773,7 +1750,7 @@ def makeViaPattern(expr, subpattern, span):
             out.print(") ")
             subpattern.subPrintOn(out, priority)
     return astWrapper(viaPattern, makeViaPattern, [expr, subpattern], span,
-        scope, term`ViaPattern`, fn f {[expr.transform(f), subpattern.transform(f)]})
+        scope, "ViaPattern", fn f {[expr.transform(f), subpattern.transform(f)]})
 
 def makeSuchThatPattern(subpattern, expr, span):
     def scope := expr.getStaticScope() + subpattern.getStaticScope()
@@ -1788,7 +1765,7 @@ def makeSuchThatPattern(subpattern, expr, span):
             expr.subPrintOn(out, priorities["braceExpr"])
             out.print(")")
     return astWrapper(suchThatPattern, makeSuchThatPattern, [subpattern, expr], span,
-        scope, term`SuchThatPattern`, fn f {[subpattern.transform(f), expr.transform(f)]})
+        scope, "SuchThatPattern", fn f {[subpattern.transform(f), expr.transform(f)]})
 
 def makeSamePattern(value, direction, span):
     def scope := value.getStaticScope()
@@ -1804,7 +1781,7 @@ def makeSamePattern(value, direction, span):
                 out.print("!=")
             value.subPrintOn(out, priorities["call"])
     return astWrapper(samePattern, makeSamePattern, [value, direction], span,
-        scope, term`SamePattern`, fn f {[value.transform(f), direction]})
+        scope, "SamePattern", fn f {[value.transform(f), direction]})
 
 def makeQuasiText(text, span):
     def scope := emptyScope
@@ -1814,7 +1791,7 @@ def makeQuasiText(text, span):
         to subPrintOn(out, priority):
             out.print(text)
     return astWrapper(quasiText, makeQuasiText, [text], span,
-        scope, term`QuasiText`, fn f {[text]})
+        scope, "QuasiText", fn f {[text]})
 
 def makeQuasiExprHole(expr, span):
     def scope := expr.getStaticScope()
@@ -1831,7 +1808,7 @@ def makeQuasiExprHole(expr, span):
             expr.subPrintOn(out, priorities["braceExpr"])
             out.print("}")
     return astWrapper(quasiExprHole, makeQuasiExprHole, [expr], span,
-        scope, term`QuasiExprHole`, fn f {[expr.transform(f)]})
+        scope, "QuasiExprHole", fn f {[expr.transform(f)]})
 
 
 def makeQuasiPatternHole(pattern, span):
@@ -1850,7 +1827,7 @@ def makeQuasiPatternHole(pattern, span):
             pattern.subPrintOn(out, priority)
             out.print("}")
     return astWrapper(quasiPatternHole, makeQuasiPatternHole, [pattern], span,
-        scope, term`QuasiPatternHole`, fn f {[pattern.transform(f)]})
+        scope, "QuasiPatternHole", fn f {[pattern.transform(f)]})
 
 def quasiPrint(name, quasis, out, priority):
     if (name != null):
@@ -1876,7 +1853,7 @@ def makeQuasiParserExpr(name, quasis, span):
         to subPrintOn(out, priority):
             quasiPrint(name, quasis, out, priority)
     return astWrapper(quasiParserExpr, makeQuasiParserExpr, [name, quasis], span,
-        scope, term`QuasiParserExpr`, fn f {[name, transformAll(quasis, f)]})
+        scope, "QuasiParserExpr", fn f {[name, transformAll(quasis, f)]})
 
 def makeQuasiParserPattern(name, quasis, span):
     def scope := if (name == null) {emptyScope} else {makeStaticScope([name + "__quasiParser"], [], [], [], false)} + sumScopes(quasis)
@@ -1888,7 +1865,7 @@ def makeQuasiParserPattern(name, quasis, span):
         to subPrintOn(out, priority):
             quasiPrint(name, quasis, out, priority)
     return astWrapper(quasiParserPattern, makeQuasiParserPattern, [name, quasis], span,
-        scope, term`QuasiParserPattern`, fn f {[name, transformAll(quasis, f)]})
+        scope, "QuasiParserPattern", fn f {[name, transformAll(quasis, f)]})
 
 object astBuilder:
     to LiteralExpr(value, span):
@@ -2058,110 +2035,4 @@ object astBuilder:
     to QuasiParserPattern(name, quasis, span):
         return makeQuasiParserPattern(name, quasis, span)
 
-def astCodes := [
-    "LiteralExpr" => 10,
-    "NounExpr" => 11,
-    "BindingExpr" => 12,
-    "SeqExpr" => 13,
-    "MethodCallExpr" => 14,
-    "DefExpr" => 15,
-    "EscapeExpr" => 16,
-    "ObjectExpr" => 17,
-    "Script" => 18,
-    "Method" => 19,
-    "Matcher" => 20,
-    "AssignExpr" => 21,
-    "FinallyExpr" => 22,
-    "CatchExpr" => 23,
-    "HideExpr" => 24,
-    "IfExpr" => 25,
-    "Meta" => 26,
-    "FinalPattern" => 27,
-    "IgnorePattern" => 28,
-    "VarPattern" => 29,
-    "ListPattern" => 30,
-    "ViaPattern" => 31,
-    "BindingPattern" => 32]
-
-def asciiShift(bs):
-    def result := [].diverge()
-    for c in bs:
-        result.push((c + 32) % 256)
-    return result.snapshot()
-
-def zze(val):
-    if (val < 0):
-        return ((val * 2) ^ -1) | 1
-    else:
-        return val * 2
-
-
-def dumpVarint(var value, write):
-    if (value == 0):
-        write(asciiShift([0]))
-    else:
-        def target := [].diverge()
-        while (value > 0):
-            def chunk := value & 0x7f
-            value >>= 7
-            if (value > 0):
-                target.push(chunk | 0x80)
-            else:
-                target.push(chunk)
-        write(asciiShift(target))
-
-
-def dump(item, write):
-    if (item == null):
-        write(asciiShift([0]))
-        return
-    switch (item):
-        match _ :Int:
-            write(asciiShift([6]))
-            dumpVarint(zze(item), write)
-        match _ :Str:
-            write(asciiShift([3]))
-            def bs := UTF8.encode(item, throw)
-            dumpVarint(bs.size(), write)
-            write(bs)
-        match _ :Double:
-            write(asciiShift([4]))
-            write(asciiShift(item.toBytes()))
-        match _ :Char:
-            write(asciiShift([33]))
-            write(asciiShift([3]))
-            def bs := UTF8.encode(__makeString.fromChars([item]), throw)
-            dumpVarint(bs.size(), write)
-            write(bs)
-        match _ :List:
-            write(asciiShift([7]))
-            dumpVarint(item.size(), write)
-            for val in item:
-                dump(val, write)
-        match _:
-            escape ej:
-                def [nodeMaker, _, arglist] exit ej := item._uncall()
-            catch failure:
-                throw(`$item had a misbehaving _uncall: ${item._uncall()}`)
-
-            def name := item.getNodeName()
-            if (name == "MetaContextExpr"):
-                write(asciiShift([astCodes["Meta"]]))
-                dump("context", write)
-            else if (name == "MetaStateExpr"):
-                write(asciiShift([astCodes["Meta"]]))
-                dump("getState", write)
-            else if (name == "ObjectExpr"):
-                write(asciiShift([astCodes[name]]))
-                dump(item.getDocstring(), write)
-                dump(item.getName(), write)
-                dump([item.getAsExpr()] + item.getAuditors(), write)
-                dump(item.getScript(), write)
-            else:
-                write(asciiShift([astCodes[name]]))
-                def nodeArgs := arglist.slice(0, arglist.size() - 1)
-                for a in nodeArgs:
-                    dump(a, write)
-
-
-[=> astBuilder, => dump]
+[=> astBuilder]

@@ -183,7 +183,7 @@ object Set:
 
     to extractGuard(specimen, ej):
         if (specimen == Set):
-            return anyGuard
+            return Any
         else if (__auditedBy(_SetGuardStamp, specimen)):
             return specimen.getGuard()
         else:
@@ -234,7 +234,7 @@ object Map:
 
     to extractGuard(specimen, ej):
         if (specimen == Map):
-            return anyGuard
+            return Any
         else if (__auditedBy(_MapGuardStamp, specimen)):
             return specimen.getGuard()
         else:
@@ -381,7 +381,7 @@ def __mapExtract(key):
     def mapExtractor(specimen, ej):
         if (specimen.contains(key)):
             return [specimen[key], specimen.without(key)]
-        throw.eject(ej, "Key not in map")
+        throw.eject(ej, "Key " + M.toQuote(specimen) + " not in map")
     return mapExtractor
 
 
