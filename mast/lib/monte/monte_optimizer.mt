@@ -138,18 +138,35 @@ def optimize(ast, maker, args, span):
     switch (ast.getNodeName()):
         match =="DefExpr":
             def pattern := ast.getPattern()
-            if (pattern.getNodeName() == "IgnorePattern"):
-                def expr := ast.getExpr()
-                switch (pattern.getGuard()):
-                    match ==null:
-                        # m`def _ := expr` -> m`expr`
-                        return expr.transform(optimize)
-                    match guard:
-                        # m`def _ :Guard exit ej := expr` ->
-                        # m`Guard.coerce(expr, ej)`
-                        def ej := ast.getExit()
-                        return a.MethodCallExpr(guard, "coerce", [expr, ej],
-                                                span)
+            switch (pattern.getNodeName()):
+                match =="IgnorePattern":
+                    def expr := ast.getExpr()
+                    switch (pattern.getGuard()):
+                        match ==null:
+                            # m`def _ := expr` -> m`expr`
+                            return expr.transform(optimize)
+                        match guard:
+                            # m`def _ :Guard exit ej := expr` ->
+                            # m`Guard.coerce(expr, ej)`
+                            def ej := ast.getExit()
+                            return a.MethodCallExpr(guard, "coerce", [expr, ej],
+                                                    span)
+                # The expander shouldn't ever give us list patterns with
+                # tails, but we'll filter them out here anyway.
+                match =="ListPattern" ? (pattern.getTail() == null):
+                    def expr := args[2]
+                    if (expr.getNodeName() == "MethodCallExpr"):
+                        def receiver := expr.getReceiver()
+                        if (receiver.getNodeName() == "NounExpr" &&
+                            receiver.getName() == "__makeList"):
+                            # m`def [name] := __makeList.run(item)` ->
+                            # m`def name := item`
+                            escape badLength:
+                                def [patt] exit badLength := pattern.getPatterns()
+                                def [value] exit badLength := expr.getArgs()
+                                return maker(patt, args[1], value, span)
+                match _:
+                    pass
 
         match =="EscapeExpr":
             escape nonFinalPattern:
@@ -231,16 +248,14 @@ def optimize(ast, maker, args, span):
                         # Doing good. Just need to check the verb and args
                         # now.
                         if (cons.getVerb() == alt.getVerb()):
-                            def consArgs := cons.getArgs()
-                            def altArgs := alt.getArgs()
-                            if (consArgs.size() == 1 && altArgs.size() == 1):
+                            escape badLength:
+                                def [consArg] exit badLength := cons.getArgs()
+                                def [altArg] exit badLength := alt.getArgs()
+                                def newIf := maker(ast.getTest(), consArg,
+                                                   altArg, span)
                                 return a.MethodCallExpr(consReceiver,
                                                         cons.getVerb(),
-                                                        [maker(ast.getTest(),
-                                                         consArgs[0],
-                                                         altArgs[0],
-                                                         span)],
-                                                        span)
+                                                        [newIf], span)
 
         match =="MethodCallExpr":
             def receiver := ast.getReceiver()
