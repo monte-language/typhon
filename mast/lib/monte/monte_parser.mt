@@ -1238,19 +1238,19 @@ def parseMonte(lex, builder, mode, err):
         def lval := infix(ej)
         if (peekTag() == ":="):
             advance(ej)
-            def lt := lval.asTerm().getTag().getName()
+            def lt := lval.getNodeName()
             if (["NounExpr", "GetExpr"].contains(lt)):
                 return builder.AssignExpr(lval, assign(ej), spanFrom(spanStart))
             throw.eject(ej, [`Invalid assignment target`, lt.getSpan()])
         if (peekTag() =~ `@op=`):
             advance(ej)
-            def lt := lval.asTerm().getTag().getName()
+            def lt := lval.getNodeName()
             if (["NounExpr", "GetExpr"].contains(lt)):
                 return builder.AugAssignExpr(op, lval, assign(ej), spanFrom(spanStart))
             throw.eject(ej, [`Invalid assignment target`, lt.getSpan()])
         if (peekTag() == "VERB_ASSIGN"):
             def verb := advance(ej).getData()
-            def lt := lval.asTerm().getTag().getName()
+            def lt := lval.getNodeName()
             if (["NounExpr", "GetExpr"].contains(lt)):
                 acceptTag("(", ej)
                 acceptEOLs()
