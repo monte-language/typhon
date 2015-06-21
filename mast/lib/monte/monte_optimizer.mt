@@ -73,6 +73,16 @@ def finalPatternToName(pattern, ej):
     ej("Not an unguarded final pattern")
 
 
+def normalizeBody(expr, _):
+    if (expr == null):
+        return null
+    if (expr.getNodeName() == "SeqExpr"):
+        def exprs := expr.getExprs()
+        if (exprs.size() == 1):
+            return exprs[0]
+    return expr
+
+
 def specialize(name, value):
     "Specialize the given name to the given AST value via substitution."
 
@@ -226,8 +236,8 @@ def optimize(ast, maker, args, span):
 
         match =="IfExpr":
             escape failure:
-                def cons ? (cons != null) exit failure := ast.getThen()
-                def alt ? (alt != null) exit failure := ast.getElse()
+                def via (normalizeBody) cons ? (cons != null) exit failure := args[1]
+                def via (normalizeBody) alt ? (alt != null) exit failure := args[2]
 
                 # m`if (test) {true} else {false}` -> m`test`
                 if (cons.getNodeName() == "NounExpr" &&
