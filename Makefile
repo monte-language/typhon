@@ -96,7 +96,7 @@ bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty
 
 monte: mast/lib/monte/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/lib/monte/monte_parser.ty mast/lib/monte/monte_expander.ty \
-	mast/lib/monte/monte_optimizer.ty \
+	mast/lib/monte/monte_optimizer.ty mast/lib/monte/ast_dumper.ty \
 	mast/lib/monte/termParser.ty
 
 %.ty: %.mt
