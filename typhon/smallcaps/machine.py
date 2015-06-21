@@ -22,6 +22,7 @@ from typhon.objects.collections import unwrapList
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
+from typhon.objects.exceptions import SealedException
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard
 from typhon.objects.slots import FinalSlot, VarSlot
 from typhon.profile import csp
@@ -328,7 +329,13 @@ class Catch(Handler):
     def unwind(self, machine, ex):
         machine.env.restoreDepth(self.savedDepth)
         # Push the caught value.
-        machine.push(StrObject(u"Uninformative exception"))
+        payload = ex.payload
+        if not isinstance(payload, SealedException):
+            # Sealed exceptions should not be nested. This is currently the
+            # only call site for SealedException, so this comment should serve
+            # as a good warning. ~ C.
+            payload = SealedException(payload)
+        machine.push(payload)
         # And the ejector.
         machine.push(NullObject)
         return self.index

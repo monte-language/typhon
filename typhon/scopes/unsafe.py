@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.objects.exceptions import unsealException
 from typhon.objects.files import makeFileResource
 from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
                                                  makeTCP4ServerEndpoint)
@@ -27,6 +28,7 @@ def unsafeScope(config):
         u"Timer": Timer(),
         u"bench": bench(),
         u"currentProcess": CurrentProcess(config),
+        u"currentVat": CurrentVatProxy(),
         u"makeFileResource": makeFileResource(),
         u"makeProcess": makeProcess(),
         u"makeStdErr": makeStdErr(),
@@ -34,5 +36,5 @@ def unsafeScope(config):
         u"makeStdOut": makeStdOut(),
         u"makeTCP4ClientEndpoint": makeTCP4ClientEndpoint(),
         u"makeTCP4ServerEndpoint": makeTCP4ServerEndpoint(),
-        u"currentVat": CurrentVatProxy(),
+        u"unsealException": unsealException(),
     }
