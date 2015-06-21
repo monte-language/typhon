@@ -35,6 +35,7 @@ var environment := [
     => Timer, => bench, => currentProcess, => currentVat, => makeFileResource,
     => makeProcess, => makeStdErr, => makeStdIn, => makeStdOut,
     => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
+    => unsealException,
 ]
 
 # We *could* use lib/parsers/monte, but it's got a flaw; it can't interoperate
@@ -63,7 +64,8 @@ def makeMonteParser():
         to feedMany(tokens):
             try:
                 result := eval(tokens, environment)
-            catch problem:
+            catch via (unsealException) problem:
+                traceln(problem)
                 failure := `$problem`
 
 def reduce(result):
