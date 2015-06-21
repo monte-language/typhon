@@ -5,9 +5,10 @@ def MONTE_KEYWORDS := [
 "object", "pass", "pragma", "return", "switch", "to", "try", "var",
 "via", "when", "while", "_"]
 
-def idStart := 'a'..'z' | 'A'..'Z' | '_'..'_'
-def idPart := idStart | '0'..'9'
+def idStart := __makeList.fromIterable("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
+def idPart := idStart + __makeList.fromIterable("0123456789")
 def INDENT := "    "
+
 # note to future drunk self: lower precedence number means add parens when
 # inside a higher-precedence-number expression
 def priorities := [
@@ -122,7 +123,7 @@ def transformAll(nodes, f):
 def isIdentifier(name):
     if (MONTE_KEYWORDS.contains(name.toLowerCase())):
         return false
-    return idStart(name[0]) && all(name.slice(1), idPart)
+    return idStart.contains(name[0]) && all(name.slice(1), idPart.contains)
 
 def printListOn(left, nodes, sep, right, out, priority):
     out.print(left)
@@ -1838,7 +1839,7 @@ def quasiPrint(name, quasis, out, priority):
         if (i + 1 < quasis.size()):
             def next := quasis[i + 1]
             if (next._uncall()[0] == makeQuasiText):
-                if (next.getText().size() > 0 && idPart(next.getText()[0])):
+                if (next.getText().size() > 0 && idPart.contains(next.getText()[0])):
                     p := priorities["braceExpr"]
         q.subPrintOn(out, p)
     out.print("`")
