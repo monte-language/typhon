@@ -49,6 +49,7 @@ def priorities := [
      "prim" => 16,
 
      "pattern" => 0]
+
 def makeStaticScope(read, set, defs, vars, metaStateExpr):
     def namesRead := read.asSet()
     def namesSet := set.asSet()
@@ -1649,7 +1650,7 @@ def makeSlotPattern(noun, guard, span):
         scope, term`SlotPattern`, fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeBindingPattern(noun, span):
-    def scope := makeStaticScope([], [], [noun.getName()], [], false)
+    def scope := makeStaticScope([], [], [], [noun.getName()], false)
     object bindingPattern:
         to getNoun():
             return noun
