@@ -253,26 +253,39 @@ def optimize(ast, maker, args, span):
                     alt.getNodeName() == "MethodCallExpr"):
                     def consReceiver := cons.getReceiver()
                     def altReceiver := alt.getReceiver()
-                    if (consReceiver.getNodeName() == "NounExpr" &
-                        altReceiver.getNodeName() == "NounExpr" &&
-                        consReceiver.getName() == altReceiver.getName()):
-                        # Doing good. Just need to check the verb and args
-                        # now.
-                        if (cons.getVerb() == alt.getVerb()):
-                            escape badLength:
-                                def [consArg] exit badLength := cons.getArgs()
-                                def [altArg] exit badLength := alt.getArgs()
-                                var newIf := maker(args[0], consArg, altArg,
-                                                   span)
-                                # This has, in the past, been a problematic
-                                # recursion. It *should* be quite safe, since
-                                # the node's known to be an IfExpr and thus
-                                # the available optimization list is short and
-                                # the recursion is (currently) well-founded.
-                                newIf transform= (optimize)
-                                return a.MethodCallExpr(consReceiver,
-                                                        cons.getVerb(),
-                                                        [newIf], span)
+                    if (consReceiver.getNodeName() == "NounExpr" &&
+                        altReceiver.getNodeName() == "NounExpr"):
+                        if (consReceiver.getName() == altReceiver.getName()):
+                            # Doing good. Just need to check the verb and args
+                            # now.
+                            if (cons.getVerb() == alt.getVerb()):
+                                escape badLength:
+                                    def [consArg] exit badLength := cons.getArgs()
+                                    def [altArg] exit badLength := alt.getArgs()
+                                    var newIf := maker(args[0], consArg, altArg,
+                                                       span)
+                                    # This has, in the past, been a
+                                    # problematic recursion. It *should* be
+                                    # quite safe, since the node's known to be
+                                    # an IfExpr and thus the available
+                                    # optimization list is short and the
+                                    # recursion is (currently) well-founded.
+                                    newIf transform= (optimize)
+                                    return a.MethodCallExpr(consReceiver,
+                                                            cons.getVerb(),
+                                                            [newIf], span)
+
+                # m`if (test) {x := cons} else {x := alt}` ->
+                # m`x := if (test) {cons} else {alt}`
+                if (cons.getNodeName() == "AssignExpr" &&
+                    alt.getNodeName() == "AssignExpr"):
+                    def consNoun := cons.getLvalue()
+                    def altNoun := alt.getLvalue()
+                    if (consNoun == altNoun):
+                        var newIf := maker(args[0], cons.getRvalue(),
+                                           alt.getRvalue(), span)
+                        newIf transform= (optimize)
+                        return a.AssignExpr(consNoun, newIf, span)
 
         match =="MethodCallExpr":
             def receiver := args[0]
