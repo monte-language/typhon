@@ -1,6 +1,11 @@
 # Note that the identity "no-op" operation on ASTs is not `return ast` but
 # rather `return M.call(maker, "run", args + [span])`; the transformation has
 # to rebuild the AST.
+# Also note that the AST node provided as part of the transformation is *not*
+# yet transformed; the transformed node is constructed by the no-op mentioned
+# above. This means that accessing properties of the AST node other than the
+# type of node is gonna lead to stale data, broken dreams, and summoning
+# Zalgo. Don't summon Zalgo.
 
 def ["astBuilder" => a] | _ := import("prelude/monte_ast",
                                       [=> NullOk, => DeepFrozen,
@@ -87,41 +92,35 @@ def specialize(name, value):
     "Specialize the given name to the given AST value via substitution."
 
     def specializeNameToValue(ast, maker, args, span):
-        if (ast.getNodeName() == "FinalPattern" ||
-            ast.getNodeName() == "VarPattern"):
-            def guard := ast.getGuard()
-            if (guard != null):
-                return maker(args[0], guard.transform(specializeNameToValue),
-                             span)
-            return ast
+        switch (ast.getNodeName()):
+            match =="NounExpr":
+                if (args[0] == name):
+                    return value
 
-        def scope := ast.getStaticScope()
-        if (!scope.namesUsed().contains(name)):
-            # traceln(`$ast doesn't use $name; skipping it`)
-            return ast
+            match =="SeqExpr":
+                # XXX summons zalgo :c
+                def scope := ast.getStaticScope()
+                if (scope.outNames().contains(name)):
+                    # We're going to delve into the sequence and try to only do
+                    # replacements on the elements which don't have the name
+                    # defined.
+                    var newExprs := []
+                    var change := true
+                    for i => expr in ast.getExprs():
+                        if (expr.getStaticScope().outNames().contains(name)):
+                            # traceln(`Found the offender!`)
+                            change := false
+                        newExprs with= (if (change) {args[0][i]} else {expr})
+                        # traceln(`New exprs: $newExprs`)
+                    return maker(newExprs, span)
 
-        if (scope.outNames().contains(name)):
-            # traceln(`$ast defines $name; I shouldn't examine it`)
-            if (ast.getNodeName() == "SeqExpr"):
-                # We're going to delve into the sequence and try to only do
-                # replacements on the elements which don't have the name
-                # defined.
-                # traceln(`Args: $args`)
-                var newExprs := []
-                var change := true
-                for i => expr in ast.getExprs():
-                    if (expr.getStaticScope().outNames().contains(name)):
-                        # traceln(`Found the offender!`)
-                        change := false
-                    newExprs with= (if (change) {args[0][i]} else {expr})
-                    # traceln(`New exprs: $newExprs`)
-                return maker(newExprs, span)
-            else:
-                return ast
+            match _:
+                # If it doesn't use the name, then there's no reason to visit
+                # it and we can just continue on our way.
+                def scope := ast.getStaticScope()
+                if (!scope.namesUsed().contains(name)):
+                    return ast
 
-        if (ast.getNodeName() == "NounExpr" &&
-            ast.getName() == name):
-            return value
         return M.call(maker, "run", args + [span])
 
     return specializeNameToValue
@@ -147,10 +146,10 @@ def optimize(ast, maker, args, span):
 
     switch (ast.getNodeName()):
         match =="DefExpr":
-            def pattern := ast.getPattern()
+            def pattern := args[0]
             switch (pattern.getNodeName()):
                 match =="IgnorePattern":
-                    def expr := ast.getExpr()
+                    def expr := args[2]
                     switch (pattern.getGuard()):
                         match ==null:
                             # m`def _ := expr` -> m`expr`
@@ -158,7 +157,7 @@ def optimize(ast, maker, args, span):
                         match guard:
                             # m`def _ :Guard exit ej := expr` ->
                             # m`Guard.coerce(expr, ej)`
-                            def ej := ast.getExit()
+                            def ej := args[1]
                             return a.MethodCallExpr(guard, "coerce", [expr, ej],
                                                     span)
                 # The expander shouldn't ever give us list patterns with
@@ -180,8 +179,8 @@ def optimize(ast, maker, args, span):
 
         match =="EscapeExpr":
             escape nonFinalPattern:
-                def via (finalPatternToName) name exit nonFinalPattern := ast.getEjectorPattern()
-                def body := ast.getBody()
+                def via (finalPatternToName) name exit nonFinalPattern := args[0]
+                def body := args[1]
 
                 # m`escape ej {expr}` ? ej not used by expr -> m`expr`
                 def scope := body.getStaticScope()
@@ -197,7 +196,11 @@ def optimize(ast, maker, args, span):
                             receiver.getName() == name):
                             # Looks like this escape qualifies! Let's check
                             # the catch.
-                            if (ast.getCatchPattern() == null):
+                            # XXX we can totally handle a catch, BTW; we just
+                            # currently don't. Catches aren't common on
+                            # ejectors, especially on the ones like __return
+                            # that are most affected by this optimization.
+                            if (args[2] == null):
                                 def args := body.getArgs()
                                 if (args.size() == 1):
                                     return args[0].transform(optimize)
@@ -244,7 +247,7 @@ def optimize(ast, maker, args, span):
                     cons.getName() == "true"):
                     if (alt.getNodeName() == "NounExpr" &&
                         alt.getName() == "false"):
-                        return ast.getTest().transform(optimize)
+                        return args[0].transform(optimize)
 
                 # m`if (test) {r.v(cons)} else {r.v(alt)}` ->
                 # m`r.v(if (test) {cons} else {alt})`
@@ -261,16 +264,16 @@ def optimize(ast, maker, args, span):
                             escape badLength:
                                 def [consArg] exit badLength := cons.getArgs()
                                 def [altArg] exit badLength := alt.getArgs()
-                                def newIf := maker(ast.getTest(), consArg,
-                                                   altArg, span)
+                                def newIf := maker(args[0], consArg, altArg,
+                                                   span)
                                 return a.MethodCallExpr(consReceiver,
                                                         cons.getVerb(),
                                                         [newIf], span)
 
         match =="MethodCallExpr":
-            def receiver := ast.getReceiver()
-            def verb := ast.getVerb()
-            def arguments := ast.getArgs()
+            def receiver := args[0]
+            def verb := args[1]
+            def arguments := args[2]
 
             # m`__booleanFlow.failureList(0)` -> m`__makeList.run(false)`
             if (receiver.getNodeName() == "NounExpr" &&
@@ -301,7 +304,6 @@ def optimize(ast, maker, args, span):
                 allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
                            arguments)):
                 def receiverValue := receiver.getValue()
-                def verb := ast.getVerb()
                 # Hack: Don't let .pow() get constant-folded, since it can be
                 # expensive to run.
                 if (verb != "pow"):
@@ -363,7 +365,9 @@ def testModPow(assert):
 
 def testRemoveUnusedBareNouns(assert):
     def ast := a.SeqExpr([a.NounExpr("x", null), a.NounExpr("y", null)], null)
-    def result := a.SeqExpr([a.NounExpr("y", null)], null)
+    # There used to be a SeqExpr around this NounExpr, but the optimizer
+    # (correctly) optimizes it away.
+    def result := a.NounExpr("y", null)
     assert.equal(ast.transform(optimize), result)
 
 unittest([
