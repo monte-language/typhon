@@ -14,6 +14,7 @@
 
 from rpython.rlib.jit import unroll_safe
 
+from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.collections import ConstList
@@ -26,6 +27,10 @@ from typhon.objects.slots import Binding, FinalSlot
 from typhon.smallcaps.machine import SmallCaps
 
 # XXX AuditionStamp, Audition guard
+
+ASK_1 = getAtom(u"ask", 1)
+GETGUARD_1 = getAtom(u"getGuard", 1)
+
 
 class Audition(Object):
     def __init__(self, fqn, ast, guards, cache):
@@ -83,10 +88,11 @@ class Audition(Object):
 
     def getGuard(self, name):
         n = unwrapStr(name)
-        if n not in self.frame:
+        if n not in self.guards:
             self.guardLog = None
-            raise UserException('"%s" is not a free variable in %s' %
-                                (n, self.fqn))
+            from typhon.objects.data import StrObject
+            raise UserException(StrObject(u'"%s" is not a free variable in %s' %
+                                (n, self.fqn)))
         answer = self.guards[n]
         if self.guardLog is not None:
             if False:  # DF check
@@ -94,6 +100,13 @@ class Audition(Object):
             else:
                 self.guardLog = None
         return answer
+
+    def recv(self, atom, args):
+        if atom is ASK_1:
+            return self.ask(args[0])
+        if atom is GETGUARD_1:
+            return self.getGuard(args[0])
+        raise Refused(self, atom, args)
 
 
 class ScriptObject(Object):
