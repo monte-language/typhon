@@ -2,7 +2,7 @@
 # rather `return M.call(maker, "run", args + [span])`; the transformation has
 # to rebuild the AST.
 
-def ["astBuilder" => a] | _ := import("lib/monte/monte_ast",
+def ["astBuilder" => a] | _ := import("prelude/monte_ast",
                                       [=> NullOk, => DeepFrozen,
                                        => __matchSame, => __bind, => Map,
                                        => __switchFailed, => Int, => Str,

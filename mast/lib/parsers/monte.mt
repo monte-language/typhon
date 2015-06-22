@@ -10,7 +10,7 @@ def parserScope := [
     => simple__quasiParser, => __makeOrderedSpace, => bench,
 ]
 
-def [=> astBuilder] | _ := import("lib/monte/monte_ast", parserScope)
+def [=> astBuilder] | _ := import("prelude/monte_ast", parserScope)
 def [=> dump] | _ := import("lib/monte/ast_dumper", parserScope)
 def [=> makeMonteLexer] | _ := import("lib/monte/monte_lexer", parserScope)
 def [=> parseExpression] | _ := import("lib/monte/monte_parser", parserScope)

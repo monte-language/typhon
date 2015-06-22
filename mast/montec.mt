@@ -1,4 +1,4 @@
-def [=> astBuilder] := import("lib/monte/monte_ast")
+def [=> astBuilder] := import("prelude/monte_ast")
 def [=> dump] := import("lib/monte/ast_dumper")
 def makeMonteLexer := import("lib/monte/monte_lexer")["makeMonteLexer"]
 def parseModule := import("lib/monte/monte_parser")["parseModule"]

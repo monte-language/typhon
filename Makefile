@@ -2,7 +2,6 @@ boot_objects = boot/lib/monte/termParser.ty \
 	boot/lib/monte/monte_lexer.ty \
 	boot/lib/monte/monte_parser.ty \
         boot/lib/monte/ast_dumper.ty \
-	boot/lib/monte/monte_ast.ty \
 	boot/lib/monte/monte_expander.ty \
 	boot/lib/monte/monte_optimizer.ty \
 	boot/lib/parsers/monte.ty \
@@ -14,6 +13,7 @@ boot_objects = boot/lib/monte/termParser.ty \
 	boot/lib/tubes/utf8.ty \
 	boot/lib/tubes/pumpTube.ty \
 	boot/prelude.ty \
+	boot/prelude/monte_ast.ty \
 	boot/prelude/brand.ty \
 	boot/prelude/m.ty \
 	boot/prelude/region.ty \
