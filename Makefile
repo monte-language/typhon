@@ -67,7 +67,8 @@ mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty 
 	monte
 
 prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/m.ty \
-	mast/prelude/region.ty mast/prelude/simple.ty mast/prelude/space.ty
+	mast/prelude/monte_ast.ty mast/prelude/region.ty mast/prelude/simple.ty \
+	mast/prelude/space.ty
 
 codec: mast/lib/codec/utf8.ty
 
@@ -94,7 +95,7 @@ fun: mast/fun/elements.ty mast/fun/repl.ty mast/fun/brot.ty
 
 bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty
 
-monte:  boot/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
+monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/lib/monte/monte_parser.ty mast/lib/monte/monte_expander.ty \
 	mast/lib/monte/monte_optimizer.ty mast/lib/monte/ast_dumper.ty \
 	mast/lib/monte/termParser.ty
