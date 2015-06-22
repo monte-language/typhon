@@ -108,10 +108,8 @@ def specialize(name, value):
                     var change := true
                     for i => expr in ast.getExprs():
                         if (expr.getStaticScope().outNames().contains(name)):
-                            # traceln(`Found the offender!`)
                             change := false
                         newExprs with= (if (change) {args[0][i]} else {expr})
-                        # traceln(`New exprs: $newExprs`)
                     return maker(newExprs, span)
 
             match _:
@@ -264,8 +262,14 @@ def optimize(ast, maker, args, span):
                             escape badLength:
                                 def [consArg] exit badLength := cons.getArgs()
                                 def [altArg] exit badLength := alt.getArgs()
-                                def newIf := maker(args[0], consArg, altArg,
+                                var newIf := maker(args[0], consArg, altArg,
                                                    span)
+                                # This has, in the past, been a problematic
+                                # recursion. It *should* be quite safe, since
+                                # the node's known to be an IfExpr and thus
+                                # the available optimization list is short and
+                                # the recursion is (currently) well-founded.
+                                newIf transform= (optimize)
                                 return a.MethodCallExpr(consReceiver,
                                                         cons.getVerb(),
                                                         [newIf], span)
