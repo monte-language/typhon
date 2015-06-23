@@ -30,36 +30,42 @@ RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 
 
-@runnable(RUN_1)
+@runnable(RUN_1, [deepFrozenStamp])
 def isBool(args):
     return wrapBool(isinstance(args[0], BoolObject))
 
-@runnable(RUN_1)
+
+@runnable(RUN_1, [deepFrozenStamp])
 def isChar(args):
     return wrapBool(isinstance(args[0], CharObject))
 
-@runnable(RUN_1)
+
+@runnable(RUN_1, [deepFrozenStamp])
 def isDouble(args):
     return wrapBool(isinstance(args[0], DoubleObject))
 
-@runnable(RUN_1)
+
+@runnable(RUN_1, [deepFrozenStamp])
 def isInt(args):
     return wrapBool(isinstance(args[0], IntObject)
                  or isinstance(args[0], BigInt))
 
-@runnable(RUN_1)
+@runnable(RUN_1, [deepFrozenStamp])
 def isStr(args):
     return wrapBool(isinstance(args[0], StrObject))
 
-@runnable(RUN_1)
+
+@runnable(RUN_1, [deepFrozenStamp])
 def isList(args):
     return wrapBool(isinstance(args[0], ConstList))
 
-@runnable(RUN_1)
+
+@runnable(RUN_1, [deepFrozenStamp])
 def isMap(args):
     return wrapBool(isinstance(args[0], ConstMap))
 
-@runnable(RUN_1)
+
+@runnable(RUN_1, [deepFrozenStamp])
 def isSet(args):
     return wrapBool(isinstance(args[0], ConstSet))
 
