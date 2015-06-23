@@ -1,11 +1,11 @@
 boot_objects = boot/lib/monte/termParser.ty \
 	boot/lib/monte/monte_lexer.ty \
 	boot/lib/monte/monte_parser.ty \
-        boot/lib/monte/ast_dumper.ty \
+	boot/lib/monte/ast_dumper.ty \
 	boot/lib/monte/monte_expander.ty \
 	boot/lib/monte/monte_optimizer.ty \
 	boot/lib/parsers/monte.ty \
-        boot/montec.ty \
+	boot/montec.ty \
 	boot/lib/bytes.ty \
 	boot/lib/codec/utf8.ty \
 	boot/lib/tubes/nullPump.ty \
@@ -40,9 +40,9 @@ mt-typhon:
 
 boot: $(boot_objects) | mt-typhon
 
-$(boot_objects): boot/%.ty: mast/%.mt
-	@ echo "MONTEC (boot scope) $<"
-	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec.ty $< $@ 2> /dev/null
+$(boot_objects): boot/%.ty: mast/%.ty
+	@ echo "BOOT $<"
+	@ cp $< $@
 
 test: default
 	trial typhon
@@ -99,7 +99,7 @@ bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty
 monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/lib/monte/monte_parser.ty mast/lib/monte/monte_expander.ty \
 	mast/lib/monte/monte_optimizer.ty mast/lib/monte/ast_dumper.ty \
-	mast/lib/monte/termParser.ty
+	mast/lib/monte/termParser.ty mast/montec.ty
 
 %.ty: %.mt
 	@ echo "MONTEC $<"
