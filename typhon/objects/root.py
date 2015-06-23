@@ -158,6 +158,9 @@ def runnable(singleAtom, _stamps=[]):
             def toString(self):
                 return name
 
+            def respondingAtoms(self):
+                return [singleAtom]
+
             def recv(self, atom, args):
                 if atom is singleAtom:
                     return f(args)
