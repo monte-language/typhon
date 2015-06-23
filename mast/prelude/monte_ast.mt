@@ -213,7 +213,6 @@ def makeLiteralExpr(value, span):
         emptyScope, "LiteralExpr", fn f {[value]})
 
 def makeNounExpr(name, span):
-    def scope := makeStaticScope([name], [], [], [], false)
     object nounExpr:
         to getName():
             return name
@@ -223,22 +222,20 @@ def makeNounExpr(name, span):
             else:
                 out.print("::")
                 out.quote(name)
+    def scope := makeStaticScope([nounExpr], [], [], [], false)
     return astWrapper(nounExpr, makeNounExpr, [name], span,
          scope, "NounExpr", fn f {[name]})
 
 def makeTempNounExpr(namePrefix, span):
-    object name extends namePrefix:
-        to _printOn(out):
+    object tempNounExpr:
+        to getNamePrefix():
+            return namePrefix
+        to subPrintOn(out, priority):
             out.print("$<temp ")
             out.print(namePrefix)
             out.print(">")
-    def scope := makeStaticScope([name], [], [], [], false)
-    object tempNounExpr:
-        to getName():
-            return namePrefix
-        to subPrintOn(out, priority):
-            out.print(name)
-    return astWrapper(tempNounExpr, makeTempNounExpr, [name], span,
+    def scope := makeStaticScope([tempNounExpr], [], [], [], false)
+    return astWrapper(tempNounExpr, makeTempNounExpr, [namePrefix], span,
          scope, "TempNounExpr", fn f {[namePrefix]})
 
 def makeSlotExpr(noun, span):
@@ -711,7 +708,7 @@ def makeForwardExpr(patt, span):
         scope, "ForwardExpr", fn f {[patt.transform(f)]})
 
 def makeVarPattern(noun, guard, span):
-    def scope := makeStaticScope([], [], [], [noun.getName()], false)
+    def scope := makeStaticScope([], [], [], [noun], false)
     object varPattern:
         to getNoun():
             return noun
@@ -728,7 +725,7 @@ def makeVarPattern(noun, guard, span):
         fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeBindPattern(noun, guard, span):
-    def scope := makeStaticScope([], [], [noun.getName()], [], false) + scopeMaybe(guard)
+    def scope := makeStaticScope([], [], [noun], [], false) + scopeMaybe(guard)
     object bindPattern:
         to getNoun():
             return noun
@@ -773,7 +770,7 @@ def makeDefExpr(pattern, exit_, expr, span):
 def makeAssignExpr(lvalue, rvalue, span):
     def [lmaker, _, largs] := lvalue._uncall()
     def lscope := if (lmaker == makeNounExpr || lmaker == makeTempNounExpr) {
-        makeStaticScope([], [lvalue.getName()], [], [], false)
+        makeStaticScope([], [lvalue], [], [], false)
     } else {
         lvalue.getStaticScope()
     }
@@ -797,7 +794,7 @@ def makeAssignExpr(lvalue, rvalue, span):
 def makeVerbAssignExpr(verb, lvalue, rvalues, span):
     def [lmaker, _, largs] := lvalue._uncall()
     def lscope := if (lmaker == makeNounExpr || lmaker == makeTempNounExpr) {
-        makeStaticScope([], [lvalue.getName()], [], [], false)
+        makeStaticScope([], [lvalue], [], [], false)
     } else {
         lvalue.getStaticScope()
     }
@@ -827,7 +824,7 @@ def makeVerbAssignExpr(verb, lvalue, rvalues, span):
 def makeAugAssignExpr(op, lvalue, rvalue, span):
     def [lmaker, _, largs] := lvalue._uncall()
     def lscope := if (lmaker == makeNounExpr || lmaker == makeTempNounExpr) {
-        makeStaticScope([], [lvalue.getName()], [], [], false)
+        makeStaticScope([], [lvalue], [], [], false)
     } else {
         lvalue.getStaticScope()
     }
@@ -1593,9 +1590,10 @@ def makePatternHolePattern(index, span):
 
 def makeFinalPattern(noun, guard, span):
     def gs := scopeMaybe(guard)
-    if (gs.namesUsed().contains(noun.getName())):
+    if (noun.getNodeName() == "NounExpr" &&
+        gs.namesUsed().contains(noun.getName())):
         throw("Kernel guard cycle not allowed")
-    def scope := makeStaticScope([], [], [noun.getName()], [], false) + gs
+    def scope := makeStaticScope([], [], [noun], [], false) + gs
     object finalPattern:
         to getNoun():
             return noun
@@ -1612,9 +1610,10 @@ def makeFinalPattern(noun, guard, span):
 
 def makeSlotPattern(noun, guard, span):
     def gs := scopeMaybe(guard)
-    if (gs.namesUsed().contains(noun.getName())):
+    if (noun.getNodeName() == "NounExpr" &&
+        gs.namesUsed().contains(noun.getName())):
         throw("Kernel guard cycle not allowed")
-    def scope := makeStaticScope([], [], [], [noun.getName()], false) + gs
+    def scope := makeStaticScope([], [], [], [noun], false) + gs
     object slotPattern:
         to getNoun():
             return noun
@@ -1628,7 +1627,7 @@ def makeSlotPattern(noun, guard, span):
         scope, "SlotPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeBindingPattern(noun, span):
-    def scope := makeStaticScope([], [], [], [noun.getName()], false)
+    def scope := makeStaticScope([], [], [], [noun], false)
     object bindingPattern:
         to getNoun():
             return noun
@@ -1845,7 +1844,7 @@ def quasiPrint(name, quasis, out, priority):
     out.print("`")
 
 def makeQuasiParserExpr(name, quasis, span):
-    def scope := if (name == null) {emptyScope} else {makeStaticScope([name + "__quasiParser"], [], [], [], false)} + sumScopes(quasis)
+    def scope := if (name == null) {emptyScope} else {makeStaticScope([makeNounExpr(name + "__quasiParser", span)], [], [], [], false)} + sumScopes(quasis)
     object quasiParserExpr:
         to getName():
             return name
@@ -1857,7 +1856,7 @@ def makeQuasiParserExpr(name, quasis, span):
         scope, "QuasiParserExpr", fn f {[name, transformAll(quasis, f)]})
 
 def makeQuasiParserPattern(name, quasis, span):
-    def scope := if (name == null) {emptyScope} else {makeStaticScope([name + "__quasiParser"], [], [], [], false)} + sumScopes(quasis)
+    def scope := if (name == null) {emptyScope} else {makeStaticScope([makeNounExpr(name + "__quasiParser", span)], [], [], [], false)} + sumScopes(quasis)
     object quasiParserPattern:
         to getName():
             return name

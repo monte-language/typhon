@@ -100,14 +100,16 @@ def specialize(name, value):
             match =="SeqExpr":
                 # XXX summons zalgo :c
                 def scope := ast.getStaticScope()
-                if (scope.outNames().contains(name)):
+                def outnames := [for n in (scope.outNames()) n.getName()]
+                if (outnames.contains(name)):
                     # We're going to delve into the sequence and try to only do
                     # replacements on the elements which don't have the name
                     # defined.
                     var newExprs := []
                     var change := true
                     for i => expr in ast.getExprs():
-                        if (expr.getStaticScope().outNames().contains(name)):
+                        def exOutNames := [for n in (expr.getStaticScope().outNames()) n.getName()]
+                        if (exOutNames.contains(name)):
                             change := false
                         newExprs with= (if (change) {args[0][i]} else {expr})
                     return maker(newExprs, span)
@@ -116,7 +118,8 @@ def specialize(name, value):
                 # If it doesn't use the name, then there's no reason to visit
                 # it and we can just continue on our way.
                 def scope := ast.getStaticScope()
-                if (!scope.namesUsed().contains(name)):
+                def namesused := [for n in (scope.namesUsed()) n.getName()]
+                if (!namesused.contains(name)):
                     return ast
 
         return M.call(maker, "run", args + [span])
@@ -182,7 +185,8 @@ def optimize(ast, maker, args, span):
 
                 # m`escape ej {expr}` ? ej not used by expr -> m`expr`
                 def scope := body.getStaticScope()
-                if (!scope.namesUsed().contains(name)):
+                def namesused := [for n in (scope.namesUsed()) n.getName()]
+                if (!namesused.contains(name)):
                     # We can just return the inner node directly.
                     return body.transform(optimize)
 

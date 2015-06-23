@@ -98,8 +98,7 @@ def expand(node, builder, fail):
 
         var bindingpatts := []
         var bindingexprs := []
-        for n in pattScope.outNames():
-            def nn := builder.NounExpr(n, span)
+        for nn in pattScope.outNames():
             bindingpatts with= (builder.BindingPattern(nn, span))
             bindingexprs with= (builder.BindingExpr(nn, span))
 
@@ -134,9 +133,8 @@ def expand(node, builder, fail):
         var bindingpatts := []
         var bindingexprs := []
         for n in leftNames | rightNames:
-            def nn := builder.NounExpr(n, span)
-            bindingpatts with= (builder.BindingPattern(nn, span))
-            bindingexprs with= (builder.BindingExpr(nn, span))
+            bindingpatts with= (builder.BindingPattern(n, span))
+            bindingexprs with= (builder.BindingExpr(n, span))
 
         def result := builder.TempNounExpr("ok", span)
         def success := emitList([builder.NounExpr("true", span)] +
@@ -514,8 +512,8 @@ def expand(node, builder, fail):
                 def resolvers := [].diverge()
                 def renamings := [].asMap().diverge()
                 for oldname in conflicts:
-                    def newname := builder.TempNounExpr(oldname, span)
-                    def newnameR := builder.TempNounExpr(oldname + "R", span)
+                    def newname := builder.TempNounExpr(oldname.getName(), span)
+                    def newnameR := builder.TempNounExpr(oldname.getName() + "R", span)
                     renamings[oldname] := newname
                     def pair := [builder.FinalPattern(newname, null, span),
                                  builder.FinalPattern(newnameR, null, span)]
