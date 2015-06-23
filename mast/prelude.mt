@@ -586,6 +586,10 @@ var preludeScope := [
     => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
     => M, => import, => throw, => typhonEval,
 ]
+# AST (needed for auditors).
+def astBuilder := import("prelude/monte_ast",
+                         preludeScope.with("DeepFrozenStamp", DeepFrozenStamp))
+_installASTBuilder(astBuilder)
 
 # Simple QP.
 preludeScope |= import("prelude/simple", preludeScope)

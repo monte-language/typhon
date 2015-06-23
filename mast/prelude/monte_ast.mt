@@ -64,7 +64,7 @@ def makeStaticScope(read, set, defs, vars, metaStateExpr):
             def rightNamesSet := right.getNamesSet() - varNames
             def badAssigns := rightNamesSet & defNames
             if (badAssigns.size() > 0):
-                throw(`Can't assign to final nouns ${badAssigns}`)
+                throw(["Can't assign to final nouns", badAssigns])
             return makeStaticScope(namesRead | rightNamesRead,
                                    namesSet | rightNamesSet,
                                    defNames | right.getDefNames(),
