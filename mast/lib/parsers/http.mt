@@ -39,8 +39,7 @@ def testBytes(assert):
 unittest([testBytes])
 
 # RFC 2616 5.1.1
-def [
-    Methods, OPTIONS, GET, HEAD, POST, PUT, DELETE, TRACE, CONNECT
+def [Methods, OPTIONS, GET, HEAD, POST, PUT, DELETE, TRACE, CONNECT
 ] := makeEnum(["OPTIONS", "GET", "HEAD", "POST", "PUT", "DELETE", "TRACE",
                "CONNECT"])
 var methods := bytes(b`OPTIONS`) % fn _ {OPTIONS} | bytes(b`GET`) % fn _ {GET}

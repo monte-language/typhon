@@ -106,7 +106,7 @@ def parseFragment(cs):
             cs.exactly('>')
             var fragments := []
             while (!cs.chooseSlice("</")):
-                fragments with= parseFragment(cs)
+                fragments with= (parseFragment(cs))
             cs.whitespace()
             # Look for an ending tag which matches.
             cs.exactlySlice(name)
