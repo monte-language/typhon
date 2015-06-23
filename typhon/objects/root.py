@@ -137,6 +137,14 @@ class Object(object):
         from typhon.objects.data import StrObject
         printer.call(u"print", [StrObject(self.toString())])
 
+    # Documentation/help stuff.
+
+    def docString(self):
+        doc = self.__class__.__doc__
+        if doc is not None:
+            return doc.decode("utf-8")
+        return None
+
     def respondingAtoms(self):
         return []
 
@@ -151,12 +159,16 @@ def runnable(singleAtom, _stamps=[]):
 
     def inner(f):
         name = u"<%s>" % f.__name__.decode("utf-8")
+        doc = f.__doc__.decode("utf-8") if f.__doc__ else None
 
         class runnableObject(Object):
             stamps = _stamps
 
             def toString(self):
                 return name
+
+            def docString(self):
+                return doc
 
             def respondingAtoms(self):
                 return [singleAtom]

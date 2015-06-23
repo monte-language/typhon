@@ -945,8 +945,8 @@ class Obj(Node):
         numAuditors = len(self._implements)
         if self._as is not None:
             numAuditors += 1
-        self.codeScript = CodeScript(
-            formatName(self._n), self, numAuditors, availableClosure)
+        self.codeScript = CodeScript(formatName(self._n), self, numAuditors,
+                                     availableClosure, self._d)
         self.codeScript.addScript(self._script)
         # The local closure is first to be pushed and last to be popped.
         for name in self.codeScript.closureNames:
@@ -990,11 +990,14 @@ class CodeScript(object):
     _immutable_fields_ = ("displayName", "objectAst", "numAuditors", "closureNames",
                           "globalNames")
 
-    def __init__(self, displayName, objectAst, numAuditors, availableClosure):
+    def __init__(self, displayName, objectAst, numAuditors, availableClosure,
+                 doc):
         self.displayName = displayName
         self.objectAst = objectAst
         self.availableClosure = availableClosure
         self.numAuditors = numAuditors
+        self.doc = doc
+
         # Objects can close over themselves. Here we merely make sure that the
         # display name is in the available closure, but we don't close over
         # ourselves unless requested during compilation. (If we don't make the

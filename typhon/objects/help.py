@@ -7,6 +7,15 @@ from typhon.objects.root import Object
 RUN_1 = getAtom(u"run", 1)
 
 
+def dedent(paragraph):
+    """
+    RPython-friendly Unicode text dedent.
+    """
+
+    pieces = [s.strip(u" ") for s in paragraph.split(u"\n")]
+    return u"\n".join([piece for piece in pieces if piece])
+
+
 class Help(Object):
     """
     A gentle introspection assistant.
@@ -20,8 +29,16 @@ class Help(Object):
             lines.append(u"Object type: %s" %
                     specimen.__class__.__name__.decode("utf-8"))
 
-            for atom in specimen.respondingAtoms():
-                lines.append(u"Method: %s/%d" % (atom.verb, atom.arity))
+            doc = specimen.docString()
+            if doc is not None:
+                lines.append(dedent(doc))
+
+            atoms = specimen.respondingAtoms()
+            if atoms:
+                for atom in atoms:
+                    lines.append(u"Method: %s/%d" % (atom.verb, atom.arity))
+            else:
+                lines.append(u"No methods declared")
 
             return StrObject(u"\n".join(lines))
 
