@@ -24,7 +24,7 @@ var environment := [
     => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
     => simple__quasiParser,
     # Safe capabilities.
-    => M, => Ref, => m__quasiParser,
+    => M, => Ref, => help, => m__quasiParser,
     # Unsafe capabilities.
     => import, => throw,
     # Monte-only fun.

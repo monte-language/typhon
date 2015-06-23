@@ -137,6 +137,9 @@ class Object(object):
         from typhon.objects.data import StrObject
         printer.call(u"print", [StrObject(self.toString())])
 
+    def respondingAtoms(self):
+        return []
+
 
 def runnable(singleAtom, _stamps=[]):
     """

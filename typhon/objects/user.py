@@ -173,6 +173,10 @@ class ScriptObject(Object):
         from typhon.objects.data import StrObject
         printer.call(u"print", [StrObject(u"<%s>" % self.displayName)])
 
+    def respondingAtoms(self):
+        # Only do methods for now. Matchers will be dealt with in other ways.
+        return self.codeScript.methods.keys()
+
     @unroll_safe
     def recv(self, atom, args):
         code = self.codeScript.lookupMethod(atom)
