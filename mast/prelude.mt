@@ -17,7 +17,7 @@
 
 # The comparer can come before guards, since it is extremely polymorphic and
 # doesn't care much about the types of the values that it is manipulating.
-object __comparer:
+object __comparer as DeepFrozenStamp:
     to asBigAs(left, right):
         return left.op__cmp(right).isZero()
 
@@ -34,15 +34,18 @@ object __comparer:
         return left.op__cmp(right).belowZero()
 
 
-object Void:
+object Void as DeepFrozenStamp:
     to coerce(specimen, ej):
         if (specimen != null):
             throw.eject(ej, "not null")
         return null
 
 
-def makePredicateGuard(predicate, label):
-    return object predicateGuard:
+def makePredicateGuard(predicate :DeepFrozenStamp, label) as DeepFrozenStamp:
+    # No Str guard yet, and we need to preserve DFness
+    if (!isStr(label)):
+        throw("Predicate guard label must be string")
+    return object predicateGuard as DeepFrozenStamp:
         to _printOn(out):
             out.print(label)
 
@@ -67,7 +70,7 @@ def Int := makePredicateGuard(isInt, "Int")
 def Str := makePredicateGuard(isStr, "Str")
 
 
-def Empty := makePredicateGuard(fn specimen {specimen.size() == 0}, "Empty")
+def Empty := makePredicateGuard(def pred(specimen) as DeepFrozenStamp {return specimen.size() == 0}, "Empty")
 # Alias for map patterns.
 def __mapEmpty := Empty
 
@@ -95,7 +98,7 @@ object _ListGuardStamp:
     to audit(audition):
         return true
 
-object List:
+object List as DeepFrozenStamp:
     to _printOn(out):
         out.print("List")
 
@@ -111,6 +114,7 @@ object List:
         throw.eject(ej, ["(Probably) not a list:", specimen])
 
     to get(subGuard):
+        # XXX make this transparent
         return object SubList implements _ListGuardStamp:
             to _printOn(out):
                 out.print("List[")
@@ -144,7 +148,7 @@ object _SetGuardStamp:
     to audit(audition):
         return true
 
-object Set:
+object Set as DeepFrozenStamp:
     to _printOn(out):
         out.print("Set")
 
@@ -160,6 +164,7 @@ object Set:
         throw.eject(ej, ["(Probably) not a set:", specimen])
 
     to get(subGuard):
+        # XXX make this transparent
         return object SubSet implements _SetGuardStamp:
             to _printOn(out):
                 out.print("Set[")
@@ -193,7 +198,7 @@ object _MapGuardStamp:
     to audit(audition):
         return true
 
-object Map:
+object Map as DeepFrozenStamp:
     to _printOn(out):
         out.print("Map")
 
@@ -209,6 +214,7 @@ object Map:
         throw.eject(ej, ["(Probably) not a map:", specimen])
 
     to get(keyGuard, valueGuard):
+        #XXX Make this transparent
         return object SubMap implements _MapGuardStamp:
             to _printOn(out):
                 out.print("Map[")
@@ -254,7 +260,7 @@ unittest([
 ])
 
 
-object NullOk:
+object NullOk as DeepFrozenStamp:
     to coerce(specimen, ej):
         if (specimen == null):
             return specimen
@@ -297,11 +303,12 @@ object _SameGuardStamp:
     to audit(audition):
         return true
 
-object Same:
+object Same as DeepFrozenStamp:
     to _printOn(out):
         out.print("Same")
 
     to get(value):
+        #XXX make this transparent
         return object SameGuard implements _SameGuardStamp:
             to _printOn(out):
                 out.print("Same[")
@@ -335,7 +342,7 @@ def testSame(assert):
 unittest([testSame])
 
 
-def __iterWhile(obj):
+def __iterWhile(obj) as DeepFrozenStamp:
     return object iterWhile:
         to _makeIterator():
             return iterWhile
@@ -346,7 +353,7 @@ def __iterWhile(obj):
             return [null, rv]
 
 
-def __splitList(position :Int):
+def __splitList(position :Int) as DeepFrozenStamp:
     # XXX could use `return fn ...`
     def listSplitter(specimen, ej):
         if (specimen.size() < position):
@@ -355,7 +362,7 @@ def __splitList(position :Int):
     return listSplitter
 
 
-def __accumulateList(iterable, mapper):
+def __accumulateList(iterable, mapper) as DeepFrozenStamp:
     def iterator := iterable._makeIterator()
     var rv := []
 
@@ -369,7 +376,7 @@ def __accumulateList(iterable, mapper):
     return rv
 
 
-def __matchSame(expected):
+def __matchSame(expected) as DeepFrozenStamp:
     # XXX could use `return fn ...`
     def sameMatcher(specimen, ej):
         if (expected != specimen):
@@ -377,7 +384,7 @@ def __matchSame(expected):
     return sameMatcher
 
 
-def __mapExtract(key):
+def __mapExtract(key) as DeepFrozenStamp:
     def mapExtractor(specimen, ej):
         if (specimen.contains(key)):
             return [specimen[key], specimen.without(key)]
@@ -385,13 +392,13 @@ def __mapExtract(key):
     return mapExtractor
 
 
-def __quasiMatcher(matchMaker, values):
+def __quasiMatcher(matchMaker, values) as DeepFrozenStamp:
     def quasiMatcher(specimen, ej):
         return matchMaker.matchBind(values, specimen, ej)
     return quasiMatcher
 
 
-object __suchThat:
+object __suchThat as DeepFrozenStamp:
     to run(specimen :Bool):
         def suchThat(_, ej):
             if (!specimen):
@@ -425,12 +432,12 @@ def testAnySubGuard(assert):
 unittest([testAnySubGuard])
 
 
-object __switchFailed:
+object __switchFailed as DeepFrozenStamp:
     match [=="run", args]:
         throw("Switch failed:", args)
 
 
-object __makeVerbFacet:
+object __makeVerbFacet as DeepFrozenStamp:
     to curryCall(target, verb):
         return object curried:
             match [=="run", args]:
@@ -500,7 +507,7 @@ unittest([
 ])
 
 
-object __makeMap:
+object __makeMap as DeepFrozenStamp:
     to fromPairs(l):
         def m := _flexMap([].asMap())
         for [k, v] in l:
