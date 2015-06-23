@@ -16,6 +16,7 @@ boot_objects = boot/lib/monte/termParser.ty \
 	boot/prelude/monte_ast.ty \
 	boot/prelude/brand.ty \
 	boot/prelude/m.ty \
+	boot/prelude/ql.ty \
 	boot/prelude/region.ty \
 	boot/prelude/simple.ty \
 	boot/prelude/space.ty
@@ -67,8 +68,8 @@ mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty 
 	monte
 
 prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/m.ty \
-	mast/prelude/monte_ast.ty mast/prelude/region.ty mast/prelude/simple.ty \
-	mast/prelude/space.ty
+	mast/prelude/monte_ast.ty mast/prelude/ql.ty mast/prelude/region.ty \
+	mast/prelude/simple.ty mast/prelude/space.ty
 
 codec: mast/lib/codec/utf8.ty
 
