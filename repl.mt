@@ -22,7 +22,7 @@ var environment := [
     => __validateFor,
     => __switchFailed, => __makeVerbFacet, => __comparer,
     => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
-    => simple__quasiParser,
+    => simple__quasiParser, => term__quasiParser,
     # Safe capabilities.
     => M, => Ref, => help, => m__quasiParser,
     # Unsafe capabilities.

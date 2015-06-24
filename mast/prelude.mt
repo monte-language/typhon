@@ -584,8 +584,10 @@ var preludeScope := [
     => __accumulateList, => __booleanFlow, => __iterWhile, => __validateFor,
     => __switchFailed, => __makeVerbFacet, => __comparer,
     => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
+    => __splitList,
     => M, => import, => throw, => typhonEval,
 ]
+
 # AST (needed for auditors).
 def astBuilder := import("prelude/monte_ast",
                          preludeScope.with("DeepFrozenStamp", DeepFrozenStamp))
@@ -608,6 +610,8 @@ preludeScope |= import("prelude/space",
                        preludeScope | [=> OrderedRegionMaker,
                                        => OrderedSpaceMaker])
 
+# Terms require simple QP and spaces.
+preludeScope |= import("lib/monte/termParser", preludeScope)
 
 # Finally, the big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This
@@ -627,6 +631,5 @@ preludeScope | [
     => __makeMessageDesc,
     => __makeParamDesc,
     => __makeProtocolDesc,
-    => __splitList,
     => _flexMap,
 ]

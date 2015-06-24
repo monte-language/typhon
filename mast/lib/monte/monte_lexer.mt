@@ -1,13 +1,3 @@
-def [=> term__quasiParser] := import("lib/monte/termParser",
-                                     [=> NullOk, => Int, => Str,
-                                      => DeepFrozen, => __matchSame,
-                                      => Double, => Char, => List,
-                                      => __validateFor, => __bind, => Map,
-                                      => __switchFailed, => Bool,
-                                      => simple__quasiParser,
-                                      => __booleanFlow, => __comparer,
-                                      => __makeOrderedSpace, => __iterWhile])
-
 object VALUE_HOLE {}
 object PATTERN_HOLE {}
 object EOF {}

@@ -8,7 +8,8 @@ def parserScope := [
     => __switchFailed, => __makeVerbFacet, => __comparer,
     => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
     => M, => import, => throw, => typhonEval,
-    => simple__quasiParser, => __makeOrderedSpace, => bench,
+    => simple__quasiParser, => term__quasiParser, => __makeOrderedSpace,
+    => bench,
 ]
 
 def [=> makeMonteParser] | _ := import("lib/parsers/monte", parserScope)
