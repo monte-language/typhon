@@ -28,9 +28,20 @@ class DeepFrozenStamp(Object):
     """
 
     def recv(self, atom, args):
-        from typhon.objects.constants import wrapBool
         if atom is AUDIT_1:
+            from typhon.objects.constants import wrapBool
             return wrapBool(True)
+
+        if atom is COERCE_2:
+            from typhon.objects.constants import NullObject
+            specimen = args[0]
+            ej = args[1]
+
+            if deepFrozenStamp in specimen.stamps:
+                return args[0]
+            ej.call(u"run", [NullObject])
+            return NullObject
+
         raise Refused(self, atom, args)
 
 deepFrozenStamp = DeepFrozenStamp()
