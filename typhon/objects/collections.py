@@ -18,6 +18,7 @@ from rpython.rlib.objectmodel import r_ordereddict
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, UserException, WrongType, userError
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
@@ -77,6 +78,7 @@ def monteLessThan(left, right):
 MonteSorter = make_timsort_class(lt=monteLessThan)
 
 
+@autohelp
 class listIterator(Object):
     """
     An iterator on a list, producing its elements.
@@ -106,6 +108,7 @@ class listIterator(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class mapIterator(Object):
     """
     An iterator on a map, producing its keys and values.

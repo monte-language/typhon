@@ -15,6 +15,7 @@
 from rpython.rlib.debug import debug_print
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.collections import unwrapList
 from typhon.objects.constants import NullObject
@@ -31,6 +32,7 @@ RUN_1 = getAtom(u"run", 1)
 THROWS_1 = getAtom(u"throws", 1)
 
 
+@autohelp
 class Asserter(Object):
     """
     A unit test assertion manager.
@@ -120,6 +122,7 @@ class Asserter(Object):
                 debug_print(label.encode("utf-8"), "PASS")
 
 
+@autohelp
 class UnitTest(Object):
     """
     A unit test collector.

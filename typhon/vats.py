@@ -15,6 +15,7 @@
 from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, UserException
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object, runnable
@@ -42,6 +43,7 @@ class Callable(object):
         """
 
 
+@autohelp
 class Vat(Object):
     """
     Turn management and object isolation.

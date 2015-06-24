@@ -25,6 +25,7 @@ from rpython.rlib.rstruct.ieee import pack_float
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import selfless, deepFrozenStamp
 from typhon.objects.constants import NullObject, wrapBool
@@ -101,6 +102,7 @@ def polyCmp(l, r):
         return IntObject(0)
 
 
+@autohelp
 class CharObject(Object):
     """
     A Unicode code point.
@@ -180,6 +182,7 @@ def unwrapChar(o):
     raise WrongType(u"Not a char!")
 
 
+@autohelp
 class DoubleObject(Object):
     """
     A numeric value in ℝ, with IEEE 754 semantics and at least double
@@ -276,6 +279,7 @@ def promoteToDouble(o):
     raise WrongType(u"Failed to promote to double")
 
 
+@autohelp
 class IntObject(Object):
     """
     A numeric value in ℤ.
@@ -516,6 +520,7 @@ def unwrapInt(o):
     raise WrongType(u"Not an integer!")
 
 
+@autohelp
 class BigInt(Object):
 
     __doc__ = IntObject.__doc__
@@ -705,6 +710,7 @@ def promoteToBigInt(o):
     raise WrongType(u"Not promotable to big integer!")
 
 
+@autohelp
 class strIterator(Object):
     """
     An iterator on a string, producing characters.
@@ -731,6 +737,7 @@ class strIterator(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class StrObject(Object):
     """
     A string of Unicode text.

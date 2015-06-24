@@ -12,6 +12,7 @@
 # under the License.
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
@@ -30,6 +31,7 @@ STOPFLOW_0 = getAtom(u"stopFlow", 0)
 UNPAUSE_0 = getAtom(u"unpause", 0)
 
 
+@autohelp
 class SocketUnpauser(Object):
     """
     A pause on a socket fount.
@@ -47,6 +49,7 @@ class SocketUnpauser(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class SocketFount(Object):
     """
     A fount which flows data out from a socket.
@@ -110,6 +113,7 @@ class SocketFount(Object):
             self._drain = None
 
 
+@autohelp
 class SocketDrain(Object):
     """
     A drain which sends received data out on a socket.

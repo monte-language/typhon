@@ -16,6 +16,7 @@ from rpython.rlib.debug import debug_print
 from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
@@ -117,13 +118,14 @@ def makeMap(args):
 theMakeMap = makeMap()
 
 
+@autohelp
 class MakeDouble(Object):
     stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<makeDouble>"
 
-    def callAtom(self, atom, args):
+    def recv(self, atom, args):
         if atom is RUN_1:
             return DoubleObject(float(unwrapStr(args[0]).encode('utf-8')))
 
@@ -136,13 +138,14 @@ class MakeDouble(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class MakeInt(Object):
     stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<makeInt>"
 
-    def callAtom(self, atom, args):
+    def recv(self, atom, args):
         if atom is RUN_1:
             return IntObject(int(unwrapStr(args[0]).encode('utf-8')))
 
@@ -165,13 +168,14 @@ class MakeInt(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class MakeString(Object):
     stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<makeString>"
 
-    def callAtom(self, atom, args):
+    def recv(self, atom, args):
         if atom is FROMSTRING_1:
             # XXX handle twineishness
             return args[0]
@@ -187,6 +191,7 @@ class MakeString(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class Throw(Object):
 
     stamps = [deepFrozenStamp]
@@ -204,6 +209,7 @@ class Throw(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class SlotBinder(Object):
     stamps = [deepFrozenStamp]
 
@@ -217,6 +223,7 @@ class SlotBinder(Object):
 theSlotBinder = SlotBinder()
 
 
+@autohelp
 class SpecializedSlotBinder(Object):
     def __init__(self, guard):
         self.guard = guard
@@ -229,6 +236,7 @@ class SpecializedSlotBinder(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class MObject(Object):
     """
     Miscellaneous vat management and quoting services.
@@ -285,6 +293,7 @@ theFinalSlotGuardMaker = FinalSlotGuardMaker()
 theVarSlotGuardMaker = VarSlotGuardMaker()
 
 
+@autohelp
 class FinalSlotMaker(Object):
     stamps = [deepFrozenStamp]
 
@@ -305,6 +314,7 @@ class FinalSlotMaker(Object):
 theFinalSlotMaker = FinalSlotMaker()
 
 
+@autohelp
 class VarSlotMaker(Object):
     stamps = [deepFrozenStamp]
 

@@ -1,4 +1,5 @@
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import throw
 from typhon.objects.root import Object, runnable
@@ -7,6 +8,7 @@ from typhon.objects.root import Object, runnable
 RUN_2 = getAtom(u"run", 2)
 
 
+@autohelp
 class SealedException(Object):
     """
     An exception.

@@ -1,4 +1,5 @@
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
@@ -18,6 +19,7 @@ STOPFLOW_0 = getAtom(u"stopFlow", 0)
 UNPAUSE_0 = getAtom(u"unpause", 0)
 
 
+@autohelp
 class InputUnpauser(Object):
     """
     A pause on a standard input fount.
@@ -35,6 +37,7 @@ class InputUnpauser(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class InputFount(Object):
     """
     A fount which flows data out from standard input.
@@ -103,6 +106,7 @@ def makeStdIn(_):
     return stdin.createFount()
 
 
+@autohelp
 class OutputDrain(Object):
     """
     A drain which sends received data out on standard output.

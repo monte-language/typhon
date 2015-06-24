@@ -13,6 +13,7 @@
 # under the License.
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.collections import ConstList
@@ -26,6 +27,7 @@ GETGUARD_0 = getAtom(u"getGuard", 0)
 PUT_1 = getAtom(u"put", 1)
 
 
+@autohelp
 class Binding(Object):
     """
     A slot and a guard describing the nature of the slot.
@@ -59,6 +61,7 @@ class Binding(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class Slot(Object):
     """
     A storage space.

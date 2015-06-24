@@ -17,6 +17,7 @@ from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rpath import rjoin
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.env import finalize
 from typhon.errors import Refused
 from typhon.objects.auditors import deepFrozenStamp
@@ -31,6 +32,7 @@ RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 
 
+@autohelp
 class Import(Object):
     """
     An importer of foreign objects from faraway modules.

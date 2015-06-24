@@ -15,6 +15,7 @@
 from rpython.rlib.jit import unroll_safe
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import ConstList, unwrapList
@@ -175,6 +176,7 @@ def optSame(first, second, cache=None):
     return INEQUAL
 
 
+@autohelp
 class Equalizer(Object):
     """
     A perceiver of identity.

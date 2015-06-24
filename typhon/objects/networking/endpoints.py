@@ -16,6 +16,7 @@ from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rsocket import INETAddress, RSocket
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject
@@ -68,6 +69,7 @@ class TCP4ClientPending(Callable):
         self.drainResolver.resolve(SocketDrain(socket))
 
 
+@autohelp
 class TCP4ClientEndpoint(Object):
     """
     A TCPv4 client endpoint.
@@ -104,6 +106,7 @@ def makeTCP4ClientEndpoint(args):
     return TCP4ClientEndpoint(host, port)
 
 
+@autohelp
 class TCP4ServerEndpoint(Object):
     """
     A TCPv4 server endpoint.

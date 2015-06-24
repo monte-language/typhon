@@ -13,6 +13,7 @@
 # under the License.
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.env import finalize
 from typhon.errors import Refused, userError
 from typhon.importing import evaluateTerms, obtainModuleFromSource
@@ -71,6 +72,7 @@ def isSet(args):
     return wrapBool(isinstance(args[0], ConstSet))
 
 
+@autohelp
 class TyphonEval(Object):
 
     def __init__(self, recorder):

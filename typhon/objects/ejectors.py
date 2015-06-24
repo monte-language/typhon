@@ -13,6 +13,7 @@
 # under the License.
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
@@ -22,6 +23,7 @@ DISABLE_0 = getAtom(u"disable", 0)
 RUN_0 = getAtom(u"run", 0)
 RUN_1 = getAtom(u"run", 1)
 
+@autohelp
 class Ejector(Object):
     """
     An ejector.

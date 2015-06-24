@@ -13,6 +13,7 @@
 # under the License.
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
@@ -37,6 +38,7 @@ STOPFLOW_0 = getAtom(u"stopFlow", 0)
 UNPAUSE_0 = getAtom(u"unpause", 0)
 
 
+@autohelp
 class FileUnpauser(Object):
     """
     A pause on a file fount.
@@ -81,6 +83,7 @@ class Read(Callable):
                 self.fount.queueRead()
 
 
+@autohelp
 class FileFount(Object):
     """
     A fount for a file.
@@ -152,6 +155,7 @@ class Close(Callable):
         self.handle.close()
 
 
+@autohelp
 class FileDrain(Object):
     """
     A drain for a file.
@@ -215,6 +219,7 @@ class SetContents(Callable):
         self.resolver.resolve(NullObject)
 
 
+@autohelp
 class FileResource(Object):
     """
     A Resource which provides access to the file system of the current

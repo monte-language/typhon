@@ -15,6 +15,7 @@
 from rpython.rlib.jit import unroll_safe
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.collections import ConstList
@@ -34,6 +35,7 @@ GETGUARD_1 = getAtom(u"getGuard", 1)
 GETOBJECTEXPR_0 = getAtom(u"getObjectExpr", 0)
 
 
+@autohelp
 class AstInflator(Object):
     def recv(self, atom, args):
         if atom.verb == u"run" and atom.arity >= 1:
@@ -46,6 +48,7 @@ class AstInflator(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class Audition(Object):
     def __init__(self, fqn, ast, guards, cache):
         self.fqn = fqn

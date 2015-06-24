@@ -15,6 +15,7 @@
 import weakref
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
@@ -74,6 +75,7 @@ def isResolved(o):
         return True
 
 
+@autohelp
 class RefOps(Object):
     """
     Ref management and utilities.
@@ -222,6 +224,7 @@ class RefOps(Object):
         return self.isNear(o) and not self.isSelfless(o)
 
 
+@autohelp
 class WhenBrokenReactor(Object):
 
     def __init__(self, callback, ref, resolver, vat):
@@ -251,6 +254,7 @@ class WhenBrokenReactor(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class WhenResolvedReactor(Object):
 
     done = False
@@ -284,6 +288,7 @@ class WhenResolvedReactor(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class LocalResolver(Object):
 
     def __init__(self, ref, buf, vat):
@@ -354,6 +359,7 @@ class MessageBuffer(object):
         return rv
 
 
+@autohelp
 class Promise(Object):
     """
     A promised reference.

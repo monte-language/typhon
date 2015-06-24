@@ -1,6 +1,7 @@
 # encoding: utf-8
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
@@ -19,6 +20,7 @@ def dedent(paragraph):
     return u"\n".join([piece for piece in pieces if piece])
 
 
+@autohelp
 class Help(Object):
     """
     A gentle introspection assistant.

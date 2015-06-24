@@ -13,6 +13,7 @@
 # under the License.
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object
@@ -27,6 +28,7 @@ PICK_2 = getAtom(u"pick", 2)
 XOR_1 = getAtom(u"xor", 1)
 
 
+@autohelp
 class _NullObject(Object):
     """
     The null object.
@@ -43,6 +45,7 @@ class _NullObject(Object):
 NullObject = _NullObject()
 
 
+@autohelp
 class BoolObject(Object):
     """
     A Boolean value.

@@ -13,6 +13,7 @@
 # under the License.
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.root import Object, runnable
 
@@ -22,6 +23,7 @@ PASSES_1 = getAtom(u"passes", 1)
 RUN_2 = getAtom(u"run", 2)
 
 
+@autohelp
 class DeepFrozenStamp(Object):
     """
     DeepFrozen's stamp.
@@ -60,6 +62,7 @@ def auditedBy(args):
     return wrapBool(specimen.auditedBy(auditor))
 
 
+@autohelp
 class TransparentStamp(Object):
     """
     Transparent's stamp.
@@ -76,6 +79,7 @@ class TransparentStamp(Object):
 transparentStamp = TransparentStamp()
 
 
+@autohelp
 class TransparentGuard(Object):
     """
     Transparent's guard.
@@ -96,6 +100,7 @@ class TransparentGuard(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class Selfless(Object):
     """
     An auditor over altruistic objects.

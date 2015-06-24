@@ -2,6 +2,7 @@ import os
 import signal
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
@@ -15,6 +16,7 @@ INTERRUPT_0 = getAtom(u"interrupt", 0)
 RUN_2 = getAtom(u"run", 2)
 
 
+@autohelp
 class CurrentProcess(Object):
     """
     The current process on the local node.
@@ -41,6 +43,7 @@ class CurrentProcess(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class SubProcess(Object):
     """
     A subordinate process of the current process, on the local node.

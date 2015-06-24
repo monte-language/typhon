@@ -1,6 +1,7 @@
 # encoding: utf-8
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.auditors import deepFrozenStamp, selfless, transparentStamp
 from typhon.objects.collections import ConstList
@@ -20,6 +21,7 @@ SUPERSETOF_1 = getAtom(u"supersetOf", 1)
 _UNCALL_0 = getAtom(u"_uncall", 0)
 
 
+@autohelp
 class Guard(Object):
     def coerce(self, specimen, ej):
         specimen = resolution(specimen)
@@ -39,6 +41,7 @@ class Guard(Object):
         return wrapBool(False)
 
 
+@autohelp
 class AnyGuard(Object):
     """
     A guard which admits the universal set.
@@ -61,6 +64,7 @@ class AnyGuard(Object):
 anyGuard = AnyGuard()
 
 
+@autohelp
 class AnyOfGuard(Object):
     """
     A guard which admits a union of its subguards.

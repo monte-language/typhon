@@ -15,6 +15,7 @@
 from rpython.rlib.rstring import UnicodeBuilder
 
 from typhon.atoms import getAtom
+from typhon.autohelp import autohelp
 from typhon.errors import Refused, UserException
 from typhon.objects.constants import NullObject
 from typhon.objects.data import CharObject, StrObject, unwrapStr
@@ -28,6 +29,7 @@ PRINTLN_1 = getAtom(u"println", 1)
 QUOTE_1 = getAtom(u"quote", 1)
 
 
+@autohelp
 class Printer(Object):
     """
     An object which can be printed to.
