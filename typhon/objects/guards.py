@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 from typhon.atoms import getAtom
 from typhon.errors import Refused
 from typhon.objects.auditors import deepFrozenStamp, selfless, transparentStamp
