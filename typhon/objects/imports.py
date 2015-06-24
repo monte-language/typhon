@@ -32,6 +32,12 @@ RUN_2 = getAtom(u"run", 2)
 
 
 class Import(Object):
+    """
+    An importer of foreign objects from faraway modules.
+
+    The imported module automatically is granted a safe scope.
+    """
+
     stamps = [deepFrozenStamp]
 
     def __init__(self, path, scope, recorder):

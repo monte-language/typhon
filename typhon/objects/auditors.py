@@ -23,6 +23,9 @@ RUN_2 = getAtom(u"run", 2)
 
 
 class DeepFrozenStamp(Object):
+    """
+    DeepFrozen's stamp.
+    """
 
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool
@@ -35,6 +38,10 @@ deepFrozenStamp = DeepFrozenStamp()
 
 @runnable(RUN_2, [deepFrozenStamp])
 def auditedBy(args):
+    """
+    Whether an auditor has audited a specimen.
+    """
+
     auditor = args[0]
     specimen = args[1]
 
@@ -43,6 +50,10 @@ def auditedBy(args):
 
 
 class TransparentStamp(Object):
+    """
+    Transparent's stamp.
+    """
+
     stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
@@ -55,6 +66,10 @@ transparentStamp = TransparentStamp()
 
 
 class TransparentGuard(Object):
+    """
+    Transparent's guard.
+    """
+
     stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
@@ -71,6 +86,12 @@ class TransparentGuard(Object):
 
 
 class Selfless(Object):
+    """
+    An auditor over altruistic objects.
+
+    Selfless objects are not yet well-defined.
+    """
+
     stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):

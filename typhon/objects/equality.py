@@ -176,6 +176,12 @@ def optSame(first, second, cache=None):
 
 
 class Equalizer(Object):
+    """
+    A perceiver of identity.
+
+    This object can discern whether any two objects are distinct from each
+    other.
+    """
 
     stamps = [deepFrozenStamp]
 

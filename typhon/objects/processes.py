@@ -16,6 +16,9 @@ RUN_2 = getAtom(u"run", 2)
 
 
 class CurrentProcess(Object):
+    """
+    The current process on the local node.
+    """
 
     def __init__(self, config):
         self.config = config
@@ -39,6 +42,9 @@ class CurrentProcess(Object):
 
 
 class SubProcess(Object):
+    """
+    A subordinate process of the current process, on the local node.
+    """
 
     def __init__(self, pid, argv):
         self.pid = pid

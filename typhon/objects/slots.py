@@ -63,6 +63,7 @@ class Slot(Object):
     """
     A storage space.
     """
+
     _immutable_fields_ = '_guard',
 
     def recv(self, atom, args):

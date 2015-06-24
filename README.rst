@@ -162,3 +162,25 @@ We use RPython's Unicode database. The magic incantation::
 objects.
 
 .. _reference Monte: https://github.com/monte-language/monte
+
+Documentation
+-------------
+
+If you create a new object by subclassing ``Object`` or calling ``@runnable``,
+please give it a docstring. The docstrings will be reflected into Monte, so
+please follow these guidelines:
+
+* The first line should describe the object.
+* Subsequent lines should describe specifics of the object's nature which
+  might be helpful to somebody calling ``help()`` on the object.
+* Docstrings should refer to their object as "this object".
+* In-jokes are sometimes allowed. Ask on IRC.
+* Dry language is always allowed.
+
+An example:
+
+    ▲> help(Any)
+    Result: Object type: AnyGuard
+    A guard which admits the universal set.
+    This object specializes to a guard which admits the union of its
+    subguards: Any[X, Y, Z] =~ X ∪ Y ∪ Z

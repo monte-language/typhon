@@ -38,6 +38,13 @@ class Guard(Object):
 
 
 class AnyGuard(Object):
+    """
+    A guard which admits the universal set.
+
+    This object specializes to a guard which admits the union of its
+    subguards: Any[X, Y, Z] =~ X ∪ Y ∪ Z
+    """
+
     stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
@@ -53,6 +60,10 @@ anyGuard = AnyGuard()
 
 
 class AnyOfGuard(Object):
+    """
+    A guard which admits a union of its subguards.
+    """
+
     # XXX EventuallyDeepFrozen?
     stamps = [selfless, transparentStamp]
 
@@ -81,6 +92,9 @@ class AnyOfGuard(Object):
 
 
 class FinalSlotGuard(Guard):
+    """
+    A guard which admits FinalSlots.
+    """
 
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
@@ -107,6 +121,10 @@ class FinalSlotGuard(Guard):
 
 
 class VarSlotGuard(Guard):
+    """
+    A guard which admits VarSlots.
+    """
+
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
         if deepFrozenStamp in self.valueGuard.stamps:
@@ -120,6 +138,10 @@ class VarSlotGuard(Guard):
 
 
 class FinalSlotGuardMaker(Guard):
+    """
+    A guard which emits makers of FinalSlots.
+    """
+
     stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
@@ -149,6 +171,10 @@ class FinalSlotGuardMaker(Guard):
 
 
 class VarSlotGuardMaker(Guard):
+    """
+    A guard which admits makers of VarSlots.
+    """
+
     stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):

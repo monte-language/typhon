@@ -69,6 +69,9 @@ class TCP4ClientPending(Callable):
 
 
 class TCP4ClientEndpoint(Object):
+    """
+    A TCPv4 client endpoint.
+    """
 
     def __init__(self, host, port):
         self.host = host
@@ -92,12 +95,19 @@ class TCP4ClientEndpoint(Object):
 
 @runnable(RUN_2)
 def makeTCP4ClientEndpoint(args):
+    """
+    Make a TCPv4 client endpoint.
+    """
+
     host = unwrapStr(args[0])
     port = unwrapInt(args[1])
     return TCP4ClientEndpoint(host, port)
 
 
 class TCP4ServerEndpoint(Object):
+    """
+    A TCPv4 server endpoint.
+    """
 
     def __init__(self, port):
         self.port = port
@@ -124,5 +134,9 @@ class TCP4ServerEndpoint(Object):
 
 @runnable(RUN_1)
 def makeTCP4ServerEndpoint(args):
+    """
+    Make a TCPv4 server endpoint.
+    """
+
     port = unwrapInt(args[0])
     return TCP4ServerEndpoint(port)

@@ -78,6 +78,9 @@ MonteSorter = make_timsort_class(lt=monteLessThan)
 
 
 class listIterator(Object):
+    """
+    An iterator on a list, producing its elements.
+    """
 
     _immutable_fields_ = "objects[*]", "size"
 
@@ -104,6 +107,9 @@ class listIterator(Object):
 
 
 class mapIterator(Object):
+    """
+    An iterator on a map, producing its keys and values.
+    """
 
     _immutable_fields_ = "objects",
 
@@ -180,6 +186,9 @@ class Collection(object):
 
 
 class ConstList(Collection, Object):
+    """
+    A list of objects.
+    """
 
     _immutable_fields_ = "storage[*]", "strategy[*]"
 
@@ -367,6 +376,9 @@ class ConstList(Collection, Object):
 
 
 class FlexList(Collection, Object):
+    """
+    A mutable list of objects.
+    """
 
     rstrategies.make_accessors(strategy="strategy", storage="storage")
 
@@ -575,6 +587,9 @@ def monteDict():
 
 
 class ConstMap(Collection, Object):
+    """
+    A map of objects.
+    """
 
     _immutable_fields_ = "objectMap",
     stamps = [selfless, transparentStamp]
@@ -708,10 +723,7 @@ class ConstMap(Collection, Object):
 
 class ConstSet(Collection, Object):
     """
-    Like a map, but with only keys.
-
-    The actual implementation is an RPython-style set, which is a dictionary
-    with None for the values.
+    A set of objects.
     """
 
     _immutable_fields_ = "objectMap",

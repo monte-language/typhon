@@ -82,6 +82,9 @@ class Read(Callable):
 
 
 class FileFount(Object):
+    """
+    A fount for a file.
+    """
 
     pauses = 0
 
@@ -150,6 +153,9 @@ class Close(Callable):
 
 
 class FileDrain(Object):
+    """
+    A drain for a file.
+    """
 
     def __init__(self, handle):
         self.handle = handle
@@ -211,12 +217,13 @@ class SetContents(Callable):
 
 class FileResource(Object):
     """
-    A Resource which provides access to the file system of the current node.
-
-    For help understanding this class, consult FilePath, the POSIX standards,
-    and a bottle of your finest and strongest liquor. Perhaps not in that
-    order, though.
+    A Resource which provides access to the file system of the current
+    process.
     """
+
+    # For help understanding this class, consult FilePath, the POSIX
+    # standards, and a bottle of your finest and strongest liquor. Perhaps not
+    # in that order, though.
 
     _immutable_ = True
 
@@ -250,5 +257,9 @@ class FileResource(Object):
 
 @runnable(RUN_1)
 def makeFileResource(args):
+    """
+    Make a file Resource.
+    """
+
     path = unwrapStr(args[0]).encode("utf-8")
     return FileResource(path)

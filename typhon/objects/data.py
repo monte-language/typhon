@@ -100,6 +100,9 @@ def polyCmp(l, r):
 
 
 class CharObject(Object):
+    """
+    A Unicode code point.
+    """
 
     _immutable_fields_ = "stamps", "_c"
 
@@ -176,6 +179,10 @@ def unwrapChar(o):
 
 
 class DoubleObject(Object):
+    """
+    A numeric value in ℝ, with IEEE 754 semantics and at least double
+    precision.
+    """
 
     _immutable_fields_ = "stamps", "_d"
 
@@ -268,6 +275,9 @@ def promoteToDouble(o):
 
 
 class IntObject(Object):
+    """
+    A numeric value in ℤ.
+    """
 
     _immutable_fields_ = "stamps", "_i"
 
@@ -505,10 +515,8 @@ def unwrapInt(o):
 
 
 class BigInt(Object):
-    """
-    An arbitrarily large integer object which is indistinguishable from an
-    ordinary IntObject at the Monte application level.
-    """
+
+    __doc__ = IntObject.__doc__
 
     _immutable_ = True
     _immutable_fields_ = "stamps", "bi"
@@ -696,6 +704,9 @@ def promoteToBigInt(o):
 
 
 class strIterator(Object):
+    """
+    An iterator on a string, producing characters.
+    """
 
     _immutable_fields_ = "s",
 
@@ -719,6 +730,9 @@ class strIterator(Object):
 
 
 class StrObject(Object):
+    """
+    A string of Unicode text.
+    """
 
     _immutable_fields_ = "stamps", "_s"
 

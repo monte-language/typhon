@@ -76,8 +76,9 @@ def isResolved(o):
 
 class RefOps(Object):
     """
-    Public functions for ref manipulation. Exposed in safescope as 'Ref'.
+    Ref management and utilities.
     """
+
     stamps = [deepFrozenStamp]
 
     def toString(self):

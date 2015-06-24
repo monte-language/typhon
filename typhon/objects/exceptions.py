@@ -9,7 +9,9 @@ RUN_2 = getAtom(u"run", 2)
 
 class SealedException(Object):
     """
-    An object which was thrown as an exception.
+    An exception.
+
+    Sealed within this object are the details of an exceptional occurrence.
     """
 
     def __init__(self, value):
@@ -21,6 +23,10 @@ class SealedException(Object):
 
 @runnable(RUN_2)
 def unsealException(args):
+    """
+    Unseal a specimen.
+    """
+
     specimen = args[0]
     ej = args[1]
 

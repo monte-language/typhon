@@ -20,4 +20,8 @@ GETFQNPREFIX_0 = getAtom(u"getFQNPrefix", 0)
 
 @runnable(GETFQNPREFIX_0)
 def MetaContext(_):
+    """
+    Obtain the fully qualified name prefix.
+    """
+
     return StrObject(u"unknown$monte$source$")

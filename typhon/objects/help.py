@@ -1,5 +1,8 @@
+# encoding: utf-8
+
 from typhon.atoms import getAtom
 from typhon.errors import Refused
+from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object
 
@@ -20,6 +23,12 @@ class Help(Object):
     """
     A gentle introspection assistant.
     """
+
+    def toString(self):
+        return u"\n".join([
+            u"To obtain information about an object, type:",
+            u"    ▲> help(anObject)",
+        ])
 
     def recv(self, atom, args):
         if atom is RUN_1:

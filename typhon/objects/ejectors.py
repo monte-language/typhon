@@ -26,10 +26,14 @@ class Ejector(Object):
     """
     An ejector.
 
-    To catch and handle an ejector, catch ``Ejecting`` and perform an identity
-    comparison on the ``ejector`` attribute with the desired ejector to
-    handle. If a different ejector was caught, the catcher must reraise it.
+    When fired, this object will prematurely end computation and return
+    control to the object that created it.
     """
+
+    # To catch and handle an ejector, catch ``Ejecting`` and perform an
+    # identity comparison on the ``ejector`` attribute with the desired
+    # ejector to handle. If a different ejector was caught, the catcher must
+    # reraise it.
 
     active = True
 

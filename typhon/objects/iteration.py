@@ -67,6 +67,10 @@ def loopJIT(consumer, ejector, iterator):
 
 @runnable(RUN_2, [deepFrozenStamp])
 def loop(args):
+    """
+    Perform an iterative loop.
+    """
+
     iterable = args[0]
     consumer = args[1]
     iterator = iterable.call(u"_makeIterator", [])

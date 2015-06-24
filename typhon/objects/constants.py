@@ -28,6 +28,9 @@ XOR_1 = getAtom(u"xor", 1)
 
 
 class _NullObject(Object):
+    """
+    The null object.
+    """
 
     _immutable_ = True
 
@@ -41,6 +44,9 @@ NullObject = _NullObject()
 
 
 class BoolObject(Object):
+    """
+    A Boolean value.
+    """
 
     _immutable_ = True
 
