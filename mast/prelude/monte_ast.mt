@@ -951,6 +951,11 @@ def makeScript(extend, methods, matchers, span):
             return methods
         to getMatchers():
             return matchers
+        to getMethodNamed(verb, ej):
+            for meth in methods:
+                if (meth.getVerb() == verb):
+                    return meth
+            throw.eject(ej, "No method named " + verb)
         to printObjectHeadOn(name, asExpr, auditors, out, priority):
             out.print("object ")
             name.subPrintOn(out, priorities["pattern"])
