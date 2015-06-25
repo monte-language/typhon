@@ -385,4 +385,18 @@ unittest([
 ])
 
 
-["optimize" => fn ast {ast.transform(optimize)}]
+def fixLiterals(ast, maker, args, span):
+    if (ast.getNodeName() == "LiteralExpr"):
+        switch (args[0]):
+            match b :Bool:
+                if (b):
+                    return a.NounExpr("true", span)
+                else:
+                    return a.NounExpr("false", span)
+            match _:
+                pass
+
+    return M.call(maker, "run", args + [span])
+
+
+["optimize" => fn ast {ast.transform(optimize).transform(fixLiterals)}]
