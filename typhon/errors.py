@@ -64,6 +64,9 @@ class Refused(UserException):
         self.args = args
         self.trail = []
 
+        from typhon.objects.data import StrObject
+        self.payload = StrObject(u"Message was refused")
+
     def error(self):
         l = []
         for arg in self.args:
@@ -85,6 +88,9 @@ class WrongType(UserException):
     def __init__(self, message):
         self.message = message
         self.trail = []
+
+        from typhon.objects.data import StrObject
+        self.payload = StrObject(u"Object had incorrect type")
 
     def error(self):
         return u"Object was wrong type: %s" % self.message
