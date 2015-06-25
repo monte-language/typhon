@@ -1,5 +1,6 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
+from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import throw
 from typhon.objects.root import Object, runnable
@@ -16,8 +17,9 @@ class SealedException(Object):
     Sealed within this object are the details of an exceptional occurrence.
     """
 
-    def __init__(self, value):
+    def __init__(self, value, trail):
         self.value = value
+        self.trail = trail
 
     def toString(self):
         return u"<sealed exception>"
@@ -33,5 +35,6 @@ def unsealException(args):
     ej = args[1]
 
     if isinstance(specimen, SealedException):
-        return specimen.value
+        trail = ConstList([StrObject(s) for s in specimen.trail])
+        return ConstList([specimen.value, trail])
     throw(ej, StrObject(u"Cannot unseal non-thrown object"))

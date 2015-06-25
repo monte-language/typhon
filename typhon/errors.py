@@ -47,6 +47,9 @@ class UserException(Exception):
     def error(self):
         return u"Error: " + self.payload.toQuote()
 
+    def getPayload(self):
+        return self.payload
+
 
 def userError(s):
     from typhon.objects.data import StrObject
@@ -64,9 +67,6 @@ class Refused(UserException):
         self.args = args
         self.trail = []
 
-        from typhon.objects.data import StrObject
-        self.payload = StrObject(u"Message was refused")
-
     def error(self):
         l = []
         for arg in self.args:
@@ -78,6 +78,10 @@ class Refused(UserException):
         return (u"Message refused: (%s, %s, [%s])" %
                 (self.target.toString(), self.atom.repr.decode("utf-8"),
                     args))
+
+    def getPayload(self):
+        from typhon.objects.data import StrObject
+        return StrObject(self.error())
 
 
 class WrongType(UserException):
@@ -94,3 +98,7 @@ class WrongType(UserException):
 
     def error(self):
         return u"Object was wrong type: %s" % self.message
+
+    def getPayload(self):
+        from typhon.objects.data import StrObject
+        return StrObject(self.error())

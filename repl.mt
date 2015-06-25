@@ -64,9 +64,10 @@ def makeMonteParser():
         to feedMany(tokens):
             try:
                 result := eval(tokens, environment)
-            catch via (unsealException) problem:
-                traceln(problem)
+            catch via (unsealException) [problem, trail]:
                 failure := `$problem`
+                for line in trail.reverse():
+                    traceln(line)
 
 def reduce(result):
     return result

@@ -329,12 +329,12 @@ class Catch(Handler):
     def unwind(self, machine, ex):
         machine.env.restoreDepth(self.savedDepth)
         # Push the caught value.
-        payload = ex.payload
+        payload = ex.getPayload()
         if not isinstance(payload, SealedException):
             # Sealed exceptions should not be nested. This is currently the
             # only call site for SealedException, so this comment should serve
             # as a good warning. ~ C.
-            payload = SealedException(payload)
+            payload = SealedException(payload, ex.trail)
         machine.push(payload)
         # And the ejector.
         machine.push(NullObject)
