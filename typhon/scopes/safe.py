@@ -21,8 +21,9 @@ from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import (DoubleObject, IntObject, StrObject, unwrapInt,
-                                 unwrapStr, unwrapChar)
+from typhon.objects.data import (DoubleObject, IntObject, StrObject,
+                                 makeSourceSpan, unwrapInt, unwrapStr,
+                                 unwrapChar)
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
@@ -360,6 +361,7 @@ def safeScope():
         u"__makeInt": MakeInt(),
         u"__makeDouble": MakeDouble(),
         u"__makeString": MakeString(),
+        u"__makeSourceSpan": makeSourceSpan,
         u"__slotToBinding": theSlotBinder,
         u"_makeFinalSlot": theFinalSlotMaker,
         u"_makeVarSlot": VarSlotMaker(),

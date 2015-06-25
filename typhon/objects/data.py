@@ -27,9 +27,9 @@ from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, WrongType, userError
-from typhon.objects.auditors import selfless, deepFrozenStamp
-from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.root import Object
+from typhon.objects.auditors import selfless, deepFrozenStamp, transparentStamp
+from typhon.objects.constants import NullObject, unwrapBool, wrapBool
+from typhon.objects.root import Object, runnable
 from typhon.quoting import quoteChar, quoteStr
 
 
@@ -46,6 +46,7 @@ ATLEASTZERO_0 = getAtom(u"atLeastZero", 0)
 ATMOSTZERO_0 = getAtom(u"atMostZero", 0)
 BELOWZERO_0 = getAtom(u"belowZero", 0)
 BITLENGTH_0 = getAtom(u"bitLength", 0)
+COMBINE_1 = getAtom(u"combine", 1)
 COMPLEMENT_0 = getAtom(u"complement", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 COS_0 = getAtom(u"cos", 0)
@@ -53,8 +54,13 @@ FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
 GETCATEGORY_0 = getAtom(u"getCategory", 0)
 GET_1 = getAtom(u"get", 1)
 GETSPAN_0 = getAtom(u"getSpan", 0)
+GETSTARTCOL_0 = getAtom(u"getStartCol", 0)
+GETENDCOL_0 = getAtom(u"getEndCol", 0)
+GETSTARTLINE_0 = getAtom(u"getStartLine", 0)
+GETENDLINE_0 = getAtom(u"getEndLine", 0)
 INDEXOF_1 = getAtom(u"indexOf", 1)
 INDEXOF_2 = getAtom(u"indexOf", 2)
+ISONETOONE_0 = getAtom(u"isOneToOne", 0)
 ISZERO_0 = getAtom(u"isZero", 0)
 JOIN_1 = getAtom(u"join", 1)
 LASTINDEXOF_1 = getAtom(u"lastIndexOf", 1)
@@ -66,11 +72,13 @@ MULTIPLY_1 = getAtom(u"multiply", 1)
 NEGATE_0 = getAtom(u"negate", 0)
 NEXT_0 = getAtom(u"next", 0)
 NEXT_1 = getAtom(u"next", 1)
+NOTONETOONE_0 = getAtom(u"notOneToOne", 0)
 OP__CMP_1 = getAtom(u"op__cmp", 1)
 OR_1 = getAtom(u"or", 1)
 POW_1 = getAtom(u"pow", 1)
 PREVIOUS_0 = getAtom(u"previous", 0)
 REPLACE_2 = getAtom(u"replace", 2)
+RUN_6 = getAtom(u"run", 6)
 QUOTE_0 = getAtom(u"quote", 0)
 SHIFTLEFT_1 = getAtom(u"shiftLeft", 1)
 SHIFTRIGHT_1 = getAtom(u"shiftRight", 1)
@@ -90,6 +98,7 @@ TRIM_0 = getAtom(u"trim", 0)
 WITH_1 = getAtom(u"with", 1)
 XOR_1 = getAtom(u"xor", 1)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
+_UNCALL_0 = getAtom(u"_uncall", 0)
 
 
 @specialize.argtype(0, 1)
@@ -708,6 +717,147 @@ def promoteToBigInt(o):
     if isinstance(i, IntObject):
         return rbigint.fromint(i.getInt())
     raise WrongType(u"Not promotable to big integer!")
+
+
+@runnable(RUN_6, [deepFrozenStamp])
+def _makeSourceSpan(args):
+    uri, isOneToOne, startLine, startCol, endLine, endCol = args
+    return SourceSpan(uri, unwrapBool(isOneToOne),
+                      unwrapInt(startLine), unwrapInt(startCol),
+                      unwrapInt(endLine), unwrapInt(endCol))
+
+makeSourceSpan = _makeSourceSpan()
+
+@autohelp
+class SourceSpan(Object):
+    """
+    Information about the original location of a span of text. Twines use
+    this to remember where they came from.
+
+    uri: Name of document this text came from.
+
+    isOneToOne: Whether each character in that Twine maps to the
+    corresponding source character position.
+
+    startLine, endLine: Line numbers for the beginning and end of the
+    span. Line numbers start at 1.
+
+    startCol, endCol: Column numbers for the beginning and end of the
+    span. Column numbers start at 0.
+
+    """
+    stamps = [selfless, transparentStamp]
+    def __init__(self, uri, isOneToOne, startLine, startCol,
+                 endLine, endCol):
+        self.uri = uri
+        self._isOneToOne = isOneToOne
+        self.startLine = startLine
+        self.startCol = startCol
+        self.endLine = endLine
+        self.endCol = endCol
+
+    def notOneToOne(self):
+        """
+        Return a new SourceSpan for the same text that doesn't claim
+        one-to-one correspondence.
+        """
+        return SourceSpan(self.uri, False,
+                          self.startLine, self.startCol,
+                          self.endLine, self.endCol)
+
+    def isOneToOne(self):
+        return wrapBool(self._isOneToOne)
+
+    def getStartLine(self):
+        return IntObject(self.startLine)
+
+    def getStartCol(self):
+        return IntObject(self.startCol)
+
+    def getEndLine(self):
+        return IntObject(self.endLine)
+
+    def getEndCol(self):
+        return IntObject(self.endCol)
+
+    def toString(self):
+        return u"<%s#:%s::%s>" % (
+            self.uri.toString(),
+            u"span" if self._isOneToOne else u"blob",
+            u":".join([str(self.startLine).decode('ascii'),
+                       str(self.startCol).decode('ascii'),
+                       str(self.endLine).decode('ascii'),
+                       str(self.endCol).decode('ascii')]))
+
+    def combine(self, other):
+        if not isinstance(other, SourceSpan):
+            raise userError(u"Not a SourceSpan")
+        return spanCover(self, other)
+
+    def recv(self, atom, args):
+        if atom is COMBINE_1:
+            return self.combine(args[0])
+        if atom is GETSTARTCOL_0:
+            return self.getStartCol()
+        if atom is GETSTARTLINE_0:
+            return self.getStartLine()
+        if atom is GETENDCOL_0:
+            return self.getEndCol()
+        if atom is GETENDLINE_0:
+            return self.getEndLine()
+        if atom is ISONETOONE_0:
+            return self.isOneToOne()
+        if atom is NOTONETOONE_0:
+            return self.notOneToOne()
+        if atom is _UNCALL_0:
+            from typhon.objects.collections import ConstList
+            return ConstList([
+                makeSourceSpan, StrObject(u"run"),
+                ConstList([wrapBool(self._isOneToOne), IntObject(self.startLine),
+                           IntObject(self.startCol), IntObject(self.endLine),
+                           IntObject(self.endCol)])])
+        raise Refused(self, atom, args)
+
+
+def spanCover(a, b):
+    """
+    Create a new SourceSpan that covers spans `a` and `b`.
+    """
+    if a is NullObject or b is NullObject:
+        return NullObject
+    if a.uri != b.uri:
+        return NullObject
+    if ((a._isOneToOne and b._isOneToOne
+         and a.endLine == b.startLine
+         and a.endCol + 1) == b.startCol):
+        # These spans are adjacent.
+        return SourceSpan(a.uri, True,
+                          a.startLine, a.startCol,
+                          b.endLine, b.endCol)
+
+    # find the earlier start point
+    if a.startLine < b.startLine:
+        startLine = a.startLine
+        startCol = a.startCol
+    elif a.startLine == b.startLine:
+        startLine = a.startLine
+        startCol = min(a.startCol, b.startCol)
+    else:
+        startLine = b.startLine
+        startCol = b.startCol
+
+    # find the later end point
+    if b.endLine > a.endLine:
+        endLine = b.endLine
+        endCol = b.endCol
+    elif a.endLine == b.endLine:
+        endLine = a.endLine
+        endCol = max(a.endCol, b.endCol)
+    else:
+        endLine = a.endLine
+        endCol = a.endCol
+
+    return SourceSpan(a.uri, False, startLine, startCol, endLine, endCol)
 
 
 @autohelp
