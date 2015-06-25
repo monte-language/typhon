@@ -23,6 +23,7 @@ from typhon.errors import Refused, UserException, userError
 RUN_1 = getAtom(u"run", 1)
 _CONFORMTO_1 = getAtom(u"_conformTo", 1)
 _PRINTON_1 = getAtom(u"_printOn", 1)
+_RESPONDSTO_2 = getAtom(u"_respondsTo", 2)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 
@@ -92,6 +93,9 @@ class Object(object):
         try:
             return self.recv(atom, arguments)
         except Refused as r:
+            # This block of method implementations is Typhon's Miranda
+            # protocol. ~ C.
+
             if atom is _CONFORMTO_1:
                 # Welcome to _conformTo/1.
                 # to _conformTo(_): return self
@@ -100,6 +104,14 @@ class Object(object):
             if atom is _PRINTON_1:
                 # Welcome to _printOn/1.
                 return self.printOn(arguments[0])
+
+            if atom is _RESPONDSTO_2:
+                from typhon.objects.constants import wrapBool
+                from typhon.objects.data import unwrapInt, unwrapStr
+                verb = unwrapStr(arguments[0])
+                arity = unwrapInt(arguments[1])
+                atom = getAtom(verb, arity)
+                return wrapBool(atom in self.respondingAtoms())
 
             if atom is _WHENMORERESOLVED_1:
                 # Welcome to _whenMoreResolved.
@@ -113,6 +125,7 @@ class Object(object):
 
             addTrail(r, self, atom, arguments)
             raise
+
         except UserException as ue:
             addTrail(ue, self, atom, arguments)
             raise
