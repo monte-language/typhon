@@ -20,11 +20,11 @@ def [=> optimize] | _ := import("lib/monte/monte_optimizer", parserScope)
 
 
 def makeMonteParser():
-    var failure :NullOk[Str] := null
+    var failure := null
     var results := null
 
     return object monteParser:
-        to getFailure() :NullOk[Str]:
+        to getFailure():
             return failure
 
         to failed() :Bool:
@@ -47,7 +47,7 @@ def makeMonteParser():
                                             astBuilder, throw)
                 results := [optimize(expand(tree, astBuilder, throw))]
             catch problem:
-                failure := `$problem`
+                failure := problem
 
         to dump():
             def result := monteParser.results()[0]
