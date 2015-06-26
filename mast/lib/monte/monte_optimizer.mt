@@ -388,13 +388,18 @@ unittest([
 def fixLiterals(ast, maker, args, span):
     if (ast.getNodeName() == "LiteralExpr"):
         switch (args[0]):
+            match _ :Any[Char, Double, Int, List, Str]:
+                return ast
             match b :Bool:
                 if (b):
                     return a.NounExpr("true", span)
                 else:
                     return a.NounExpr("false", span)
-            match _:
-                pass
+            match obj:
+                if (obj._uncall() =~ [maker, verb, args]):
+                    def call := a.MethodCallExpr(a.LiteralExpr(maker, span),
+                                                 verb, args, span)
+                    return call.transform(fixLiterals)
 
     return M.call(maker, "run", args + [span])
 
