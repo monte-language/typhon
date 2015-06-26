@@ -163,6 +163,12 @@ def optimize(ast, maker, args, span):
                                 def [patt] exit badLength := pattern.getPatterns()
                                 def [value] exit badLength := expr.getArgs()
                                 return maker(patt, args[1], value, span)
+                match =="FinalPattern":
+                    def ex := args[1]
+                    if (ex != null && pattern.getGuard() == null):
+                        # m`def name exit ej := expr` -> m`def name := expr`
+                        return maker(args[0], null,
+                                     args[2].transform(optimize))
                 match _:
                     pass
 
@@ -396,9 +402,10 @@ def fixLiterals(ast, maker, args, span):
                 else:
                     return a.NounExpr("false", span)
             match obj:
-                if (obj._uncall() =~ [maker, verb, args]):
-                    def call := a.MethodCallExpr(a.LiteralExpr(maker, span),
-                                                 verb, args, span)
+                if (obj._uncall() =~ [newMaker, newVerb, newArgs]):
+                    def call := a.MethodCallExpr(a.LiteralExpr(newMaker,
+                                                               span),
+                                                 newVerb, newArgs, span)
                     return call.transform(fixLiterals)
 
     return M.call(maker, "run", args + [span])
