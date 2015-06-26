@@ -161,10 +161,13 @@ def optSame(first, second, cache=None):
         left = first.call(u"_uncall", [])
         right = second.call(u"_uncall", [])
 
-        # Recurse, add the new value to the cache, and return.
-        rv = optSame(left, right, cache)
-        cache[first, second] = rv
-        return rv
+        # Recurse, add the new value to the cache, and return. However, we
+        # can't let Miranda uncalls (which return null) through, so check for
+        # those first.
+        if left is not NullObject and right is not NullObject:
+            rv = optSame(left, right, cache)
+            cache[first, second] = rv
+            return rv
     except Refused:
         pass
 
