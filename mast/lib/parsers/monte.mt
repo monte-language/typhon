@@ -19,7 +19,7 @@ def [=> expand] | _ := import("lib/monte/monte_expander", parserScope)
 def [=> optimize] | _ := import("lib/monte/monte_optimizer", parserScope)
 
 
-def makeMonteParser():
+def makeMonteParser(inputName):
     var failure := null
     var results := null
 
@@ -44,7 +44,7 @@ def makeMonteParser():
         to feedMany(tokens):
             try:
                 def tree := parseExpression(makeMonteLexer(tokens),
-                                            astBuilder, throw)
+                                            astBuilder, throw, inputName)
                 results := [optimize(expand(tree, astBuilder, throw))]
             catch problem:
                 failure := problem

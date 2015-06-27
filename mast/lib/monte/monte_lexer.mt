@@ -24,7 +24,7 @@ def composite(name, data, span):
     return term__quasiParser.makeTerm(term__quasiParser.makeTag(null, name, Any),
                                       data, [], span)
 
-def _makeMonteLexer(input, braceStack, var nestLevel):
+def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
 
     # The character under the cursor.
     var currentChar := null
@@ -33,6 +33,11 @@ def _makeMonteLexer(input, braceStack, var nestLevel):
     # Start offset of the text for the token being created.
     var startPos := -1
 
+    var lineNumber := 1
+    var colNumber := 0
+    var tokenStartLine := 1
+    var tokenStartCol := 0
+    var atLineStart := true
     # Syntax error produced from most recent tokenization attempt.
     var errorMessage := null
 
@@ -46,21 +51,23 @@ def _makeMonteLexer(input, braceStack, var nestLevel):
         return position == input.size()
 
     def spanAtPoint():
-        return position
-        def inp := if (input.getSpan() == null) {
-            input.asFrom("<input>")
-            input
-        } else {
-            input
-        }
-        return inp.slice(0.max(position - 1), 1.max(position)).getSpan()
+        #XXX use twine
+        return __makeSourceSpan(inputName, true, lineNumber, colNumber, lineNumber, colNumber + 1)
 
     def advance():
         position += 1
+        if (atLineStart):
+            colNumber := 0
+            atLineStart := false
+        else:
+            colNumber += 1
         if (atEnd()):
             currentChar := EOF
         else:
              currentChar := input[position]
+        if (currentChar == '\n'):
+            lineNumber += 1
+            atLineStart := true
         return currentChar
 
     def peekChar():
@@ -114,12 +121,21 @@ def _makeMonteLexer(input, braceStack, var nestLevel):
         if (startPos >= 0):
             throw("Token already started")
         startPos := position
+        tokenStartLine := lineNumber
+        tokenStartCol := colNumber
 
     def endToken():
         def pos := position
         def tok := input.slice(startPos, pos)
+        def span := __makeSourceSpan(inputName, tokenStartLine == lineNumber,
+                    tokenStartLine, tokenStartCol, lineNumber, colNumber)
         startPos := -1
-        return tok
+        # XXX replace with twine
+        return object token extends tok:
+            to unwrap():
+                return tok
+            to getSpan():
+                return span
 
     def leaf(tok):
         return composite(tok, null, endToken().getSpan())
@@ -310,30 +326,35 @@ def _makeMonteLexer(input, braceStack, var nestLevel):
             pushBrace(opener, closer, nestLevel * 4, true)
         else:
             pushBrace(opener, closer, offsetInLine(), true)
-        return composite(opener, null, opener.getSpan())
+        return composite(opener, null, if ((def s := opener.getSpan()) != null) {s} else {spanAtPoint()})
 
     def closeBracket(fail):
         advance()
         def closer := endToken()
-        popBrace(closer, fail)
+        popBrace(closer.unwrap(), fail)
         return composite(closer, null, closer.getSpan())
 
     def consumeComment():
+        def startCol := colNumber
         while (!['\n', EOF].contains(currentChar)):
             advance()
         def comment := endToken()
-        return composite("#", comment.slice(1), comment.getSpan())
+        return composite("#", comment.slice(1), __makeSourceSpan(inputName, true, lineNumber, startCol, lineNumber, colNumber))
 
     def consumeWhitespaceAndComments():
+        var startLine := lineNumber
+        var startCol := colNumber
         var spaces := skipSpaces()
         while (currentChar == '\n'):
-            queuedTokens.insert(0, composite("EOL", null, input.slice(position, position + 1).getSpan()))
+            queuedTokens.insert(0, composite("EOL", null, __makeSourceSpan(inputName, false, startLine, startCol, lineNumber, colNumber)))
             advance()
             spaces := skipSpaces()
             if (currentChar == '#'):
                 queuedTokens.insert(0, consumeComment())
                 startToken()
                 spaces := null
+            startLine := lineNumber
+            startCol := colNumber
         return spaces
 
 
@@ -362,7 +383,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel):
                     indentPositionStack.push(spaces)
                     openBracket("DEDENT", "INDENT", fail)
                     canStartIndentedBlock := false
-                    queuedTokens.insert(0, composite("INDENT", null, null))
+                    queuedTokens.insert(0, composite("INDENT", null, spanAtPoint()))
                     return leaf("EOL")
                 else:
                     throw.eject(fail, ["Expected an indented block", spanAtPoint()])
@@ -378,7 +399,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel):
                     while (indentPositionStack.size() > 1):
                         indentPositionStack.pop()
                         popBrace("DEDENT", fail)
-                        queuedTokens.push(composite("DEDENT", null, null))
+                        queuedTokens.push(composite("DEDENT", null, spanAtPoint()))
                     return queuedTokens.pop()
                 while (spaces < indentPositionStack.last()):
                     if (!indentPositionStack.contains(spaces)):
@@ -695,14 +716,16 @@ def _makeMonteLexer(input, braceStack, var nestLevel):
                 startPos := -1
 
         to lexerForNextChunk(chunk):
-            return _makeMonteLexer(chunk, braceStack, nestLevel)
+            return _makeMonteLexer(chunk, braceStack, nestLevel, inputName)
 
+        to getInput():
+            return input
 
 object makeMonteLexer:
-    to run(input):
+    to run(input, inputName):
         # State for paired delimiters like "", {}, (), []
         def braceStack := [[null, null, 0, true]].diverge()
-        return _makeMonteLexer(input, braceStack, 0)
+        return _makeMonteLexer(input, braceStack, 0, inputName)
 
     to holes():
         return [VALUE_HOLE, PATTERN_HOLE]

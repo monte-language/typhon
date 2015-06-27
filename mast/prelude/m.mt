@@ -48,8 +48,8 @@ def makeQL(tokens):
     def ast := parseExpression(makeFakeLex(tokens), astBuilder, throw)
     return makeM(ast)
 
-def makeChunkingLexer():
-    var lexer := makeMonteLexer("")
+def makeChunkingLexer(inputName):
+    var lexer := makeMonteLexer("", inputName)
 
     def makeLexer():
         var tokens := []
@@ -78,11 +78,11 @@ def makeValueHole(index):
 def makePatternHole(index):
     return [index, makeMonteLexer.holes()[1]]
 
-def m__quasiParser := makeLexerQP(makeQL, makeChunkingLexer(), makeValueHole,
+def m__quasiParser := makeLexerQP(makeQL, makeChunkingLexer("m``"), makeValueHole,
                                   makePatternHole)
 
 def eval(source, environment):
-    def parser := makeMonteParser()
+    def parser := makeMonteParser("<eval>")
     parser.feedMany(source)
     if (parser.failed()):
         throw(parser.getFailure())

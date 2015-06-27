@@ -7,7 +7,7 @@ def [=> optimize] := import("lib/monte/monte_optimizer")
 def [=> makeUTF8DecodePump] | _ := import("lib/tubes/utf8")
 def [=> makePumpTube] | _ := import("lib/tubes/pumpTube")
 
-def compile(inT, outputFile):
+def compile(inT, inputFile, outputFile):
     var bytebuf := []
     def buf := [].diverge()
 
@@ -24,7 +24,7 @@ def compile(inT, outputFile):
             # complete all of our transformative steps (each of which can
             # fail) before we emit a file. This prevents trashing existing
             # files with garbage or incomplete data.
-            def tree := parseModule(makeMonteLexer("".join(buf)), astBuilder, throw)
+            def tree := parseModule(makeMonteLexer("".join(buf), inputFile), astBuilder, throw)
             traceln(`parsed!`)
             def expandedTree := expand(tree, astBuilder, throw)
             traceln(`expanded!`)
@@ -49,4 +49,4 @@ def [outputFile, inputFile] := [argv.pop(), argv.pop()]
 def fileFount := makeFileResource(inputFile).openFount()
 def utf8Fount := fileFount.flowTo(makePumpTube(makeUTF8DecodePump()))
 
-compile(utf8Fount, outputFile)
+compile(utf8Fount, inputFile, outputFile)
