@@ -28,11 +28,11 @@ def compile(inT, outputFile):
             traceln(`parsed!`)
             def expandedTree := expand(tree, astBuilder, throw)
             traceln(`expanded!`)
-            def optimizedTree := optimize(expandedTree)
-            traceln("Optimized!")
+            # def optimizedTree := optimize(expandedTree)
+            # traceln("Optimized!")
 
             def data := [].diverge()
-            dump(optimizedTree, fn stuff {data.extend(stuff)})
+            dump(expandedTree, fn stuff {data.extend(stuff)})
             traceln(`dumped!`)
 
             def outT := makeFileResource(outputFile).openDrain()
