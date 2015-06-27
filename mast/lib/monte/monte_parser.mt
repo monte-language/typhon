@@ -52,6 +52,7 @@ def parseMonte(lex, builder, mode, err):
     var dollarHoleValueIndex := -1
     var atHoleValueIndex := -1
     var position := -1
+    var lastError := null
 
     def spanHere():
         if (position + 1 >= tokens.size()):
@@ -132,6 +133,8 @@ def parseMonte(lex, builder, mode, err):
                 acceptTag(",", __break)
                 acceptEOLs()
                 items.push(rule(__break))
+            catch msg:
+                lastError := msg
         return items.snapshot()
 
     def acceptListOrMap(ruleList, ruleMap):
@@ -156,6 +159,9 @@ def parseMonte(lex, builder, mode, err):
                 items.push(ruleMap(__break))
             else:
                 items.push(ruleList(__break))
+        catch msg:
+            lastError := msg
+
         return [items.snapshot(), isMap]
 
     def expr
@@ -386,7 +392,7 @@ def parseMonte(lex, builder, mode, err):
 
     def seqSep(ej):
         if (![";", "#", "EOL"].contains(peekTag())):
-            ej(null)
+            ej(["Expected a semicolon or newline after expression", tokens[position].getSpan()])
         advance(ej)
         while (true):
             if (![";", "#", "EOL"].contains(peekTag())):
@@ -400,6 +406,8 @@ def parseMonte(lex, builder, mode, err):
         while (true):
             seqSep(__break)
             exprs.push(ex(__break))
+        catch msg:
+            lastError := msg
         opt(seqSep, ej)
         if (exprs.size() == 1):
             return exprs[0]
@@ -450,6 +458,8 @@ def parseMonte(lex, builder, mode, err):
         def contents := [].diverge()
         while (true):
             contents.push(rule(indent, __break))
+        catch msg:
+            lastError := msg
         return contents.snapshot()
 
     def forExprHead(needParens, ej):
@@ -544,12 +554,16 @@ def parseMonte(lex, builder, mode, err):
                 advance(ej)
                 continue
             meths.push(meth(indent, __break))
+        catch msg:
+            lastError := msg
         def matchs := [].diverge()
         while (true):
             if (peekTag() == "pass"):
                 advance(ej)
                 continue
             matchs.push(matchers(indent, __break))
+        catch msg:
+            lastError := msg
         return [doco, meths.snapshot(), matchs.snapshot()]
 
     def oAuditors(ej):
@@ -686,6 +700,8 @@ def parseMonte(lex, builder, mode, err):
                 advance(ej)
                 continue
             msgs.push(messageDesc(indent, __break))
+        catch msg:
+            lastError := msg
         return [doco, msgs.snapshot()]
 
     def basic(indent, tryAgain, ej):
@@ -1282,6 +1298,33 @@ def parseMonte(lex, builder, mode, err):
         def body := seq(true, ej)
         return builder."Module"(imports, exports, body, spanFrom(start))
 
+    def formatError(var error, err):
+        if (error == null):
+            error := ["Syntax error", tokens[position].getSpan()]
+        if (error =~ [errMsg, span]):
+            def front := (span.getStartLine() - 3).max(0)
+            def back := span.getEndLine() + 3
+            def lines := lex.getInput().split("\n").slice(front, back)
+            def msg := [].diverge()
+            var i := front
+            for line in lines:
+                i += 1
+                def lnum := M.toString(i)
+                def pad := " " * (4 - lnum.size())
+                msg.push(`$pad$lnum $line`)
+                if (i == span.getStartLine()):
+                    def errLine := "    " + " " * span.getStartCol() + "^"
+                    if (span.getStartLine() == span.getEndLine()):
+                        msg.push(errLine + "~" * (span.getEndCol() - span.getStartCol()))
+                    else:
+                        msg.push(errLine)
+            msg.push(errMsg)
+            def msglines := msg.snapshot()
+            def fullMsg := "\n".join(msglines) + "\n"
+            throw.eject(err, fullMsg)
+        else:
+            throw.eject(err, `what am I supposed to do with $error ?`)
+
     def start(ej):
         acceptEOLs()
         if (peekTag() == "module"):
@@ -1289,11 +1332,15 @@ def parseMonte(lex, builder, mode, err):
         else:
             return seq(true, ej)
     if (mode == "module"):
-        def val := start(err)
-        acceptEOLs()
-        if (position < (tokens.size() - 1)):
-            throw.eject(err, `only got "$val". Trailing garbage: ${tokens.slice(position, tokens.size())}`)
-        return val
+        escape e:
+            def val := start(e)
+            acceptEOLs()
+            if (position < (tokens.size() - 1)):
+                formatError(lastError, err)
+            else:
+                return val
+        catch p:
+            formatError(p, err)
     else if (mode == "expression"):
         return blockExpr(err)
     else if (mode == "pattern"):

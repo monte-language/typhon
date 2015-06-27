@@ -4,7 +4,7 @@ def makeMonteLexer := import("lib/monte/monte_lexer")["makeMonteLexer"]
 def parseModule := import("lib/monte/monte_parser")["parseModule"]
 def [=> expand] := import("lib/monte/monte_expander")
 def [=> optimize] := import("lib/monte/monte_optimizer")
-def [=> makeUTF8DecodePump] | _ := import("lib/tubes/utf8")
+def [=> makeUTF8EncodePump, => makeUTF8DecodePump] | _ := import("lib/tubes/utf8")
 def [=> makePumpTube] | _ := import("lib/tubes/pumpTube")
 
 def compile(inT, inputFile, outputFile):
@@ -24,7 +24,14 @@ def compile(inT, inputFile, outputFile):
             # complete all of our transformative steps (each of which can
             # fail) before we emit a file. This prevents trashing existing
             # files with garbage or incomplete data.
-            def tree := parseModule(makeMonteLexer("".join(buf), inputFile), astBuilder, throw)
+            escape e:
+                def tree := parseModule(makeMonteLexer("".join(buf), inputFile), astBuilder, e)
+            catch parseErrorMsg:
+                def stdout := makePumpTube(makeUTF8EncodePump())
+                stdout.flowTo(makeStdOut())
+                stdout.receive(parseErrorMsg)
+                throw("Syntax error")
+
             traceln(`parsed!`)
             def expandedTree := expand(tree, astBuilder, throw)
             traceln(`expanded!`)
