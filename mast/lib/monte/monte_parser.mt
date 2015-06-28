@@ -1144,7 +1144,7 @@ def parseMonte(lex, builder, mode, err):
                 # oops, a token too far
                 position -= 1
                 return base
-            return builder.CoerceExpr(base, guard(ej), spanFrom(spanHere))
+            return builder.CoerceExpr(base, guard(ej), spanFrom(spanHere()))
         return base
     def operators  := [
         "**" => 1,

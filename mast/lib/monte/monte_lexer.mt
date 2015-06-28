@@ -82,7 +82,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
             nestLevel += 1
         braceStack.push([opener, closer, indent, canNest])
 
-    def popBrace(closer, fail):
+    def popBrace(closer :Any[Str, Char], fail):
         if (braceStack.size() <= 1):
             throw.eject(fail, [`Unmatched closing character ${closer.quote()}`, spanAtPoint()])
         else if (braceStack.last()[1] != closer):
@@ -132,8 +132,9 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
         startPos := -1
         # XXX replace with twine
         return object token extends tok:
-            to unwrap():
-                return tok
+            to _conformTo(guard, ej):
+                if (guard == Str):
+                    return token
             to getSpan():
                 return span
 
@@ -331,7 +332,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
     def closeBracket(fail):
         advance()
         def closer := endToken()
-        popBrace(closer.unwrap(), fail)
+        popBrace(closer, fail)
         return composite(closer, null, closer.getSpan())
 
     def consumeComment():
