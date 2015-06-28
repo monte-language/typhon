@@ -44,9 +44,14 @@ def makeMonteParser(inputName):
         to feedMany(tokens):
             try:
                 def tree := parseExpression(makeMonteLexer(tokens),
+<<<<<<< HEAD
                                             astBuilder, throw, inputName)
+                results := [optimize(expand(tree, astBuilder, throw))]
+=======
+                                            astBuilder, throw)
                 # results := [optimize(expand(tree, astBuilder, throw))]
                 results := [expand(tree, astBuilder, throw)]
+>>>>>>> Add a flag to enable the optimizer, and disable its use in m``.
             catch problem:
                 failure := problem
 

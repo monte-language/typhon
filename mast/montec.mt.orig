@@ -7,7 +7,11 @@ def [=> optimize] := import("lib/monte/monte_optimizer")
 def [=> makeUTF8EncodePump, => makeUTF8DecodePump] | _ := import("lib/tubes/utf8")
 def [=> makePumpTube] | _ := import("lib/tubes/pumpTube")
 
-def compile(config, inT, inputFile, outputFile):
+<<<<<<< HEAD
+def compile(inT, inputFile, outputFile):
+=======
+def compile(config, inT, outputFile):
+>>>>>>> Add a flag to enable the optimizer, and disable its use in m``.
     var bytebuf := []
     def buf := [].diverge()
 
@@ -36,7 +40,7 @@ def compile(config, inT, inputFile, outputFile):
             def expandedTree := expand(tree, astBuilder, throw)
             traceln(`expanded!`)
 
-            def finalTree := if (config.useMixer()) {
+            def finalTree := if (config.usesMixer()) {
                 def optimizedTree := optimize(expandedTree)
                 traceln("Optimized with mixer!")
                 optimizedTree
@@ -52,7 +56,7 @@ def compile(config, inT, inputFile, outputFile):
 
     inT.flowTo(tyDumper)
 
-def parseArguments([processName, scriptName] + argv):
+def parseArguments(argv):
     var useMixer :Bool := false
     var arguments := []
 
@@ -71,9 +75,14 @@ def parseArguments([processName, scriptName] + argv):
 
 def config := parseArguments(currentProcess.getArguments())
 
-def [inputFile, outputFile] := config.arguments()
+# YOLO
+def [outputFile, inputFile] := config.arguments()
 
 def fileFount := makeFileResource(inputFile).openFount()
 def utf8Fount := fileFount.flowTo(makePumpTube(makeUTF8DecodePump()))
 
-compile(config, utf8Fount, inputFile, outputFile)
+<<<<<<< HEAD
+compile(utf8Fount, inputFile, outputFile)
+=======
+compile(config, utf8Fount, outputFile)
+>>>>>>> Add a flag to enable the optimizer, and disable its use in m``.
