@@ -117,6 +117,11 @@ object OrderedRegionMaker as DeepFrozen:
                         out.print(" | ")
                         printEdge(true, myEdges[i])
 
+            to _uncall():
+                return [OrderedRegionMaker, "run", [myType, myName,
+                                                    initBoundedLeft,
+                                                    initEdges]]
+
             # Is pos in the region?
 
             # If it's in the type but not in the region, the answer is false.
@@ -480,6 +485,8 @@ object OrderedSpaceMaker as DeepFrozen:
             to _printOn(out):
                 out.print(myName)
 
+            to _uncall():
+                return [OrderedSpaceMaker, "run", [myType, myName]]
 
             # One step in executing the expansion of the relational
             # operators

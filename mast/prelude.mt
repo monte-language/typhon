@@ -581,7 +581,8 @@ var preludeScope := [
     => List, => Map, => NullOk, => Same, => Set, => Str, => SubrangeGuard,
     => Void,
     => __mapEmpty, => __mapExtract,
-    => __accumulateList, => __booleanFlow, => __iterWhile, => __validateFor,
+    => __accumulateList, => __accumulateMap, => __booleanFlow, => __iterWhile,
+    => __validateFor,
     => __switchFailed, => __makeVerbFacet, => __comparer,
     => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
     => __splitList,
@@ -627,7 +628,6 @@ preludeScope |= import("prelude/m", preludeScope)
 preludeScope | [
     "void" => Void,
     "__mapEmpty" => Empty,
-    => __accumulateMap,
     => __makeMessageDesc,
     => __makeParamDesc,
     => __makeProtocolDesc,
