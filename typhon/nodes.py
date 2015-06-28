@@ -34,7 +34,8 @@ from typhon.smallcaps.peephole import peephole
 class Compiler(object):
 
     def __init__(self, initialFrame=None, initialGlobals=None,
-                 availableClosure=None):
+                 availableClosure=None, fqn=u""):
+        self.fqn = fqn
         self.instructions = []
 
         if initialFrame is None:
@@ -128,8 +129,8 @@ class Compiler(object):
         self.instructions[index] = inst, len(self.instructions)
 
 
-def compile(node):
-    compiler = Compiler()
+def compile(node, origin):
+    compiler = Compiler(fqn=origin)
     node.compile(compiler)
     return compiler.makeCode()
 
@@ -1038,9 +1039,10 @@ class Obj(Node):
         numAuditors = len(self._implements)
         if self._as is not None:
             numAuditors += 1
-        self.codeScript = CodeScript(formatName(self._n), self, numAuditors,
-                                     availableClosure, self._d)
-        self.codeScript.addScript(self._script)
+        oname = formatName(self._n)
+        fqn = compiler.fqn + u"$" + oname
+        self.codeScript = CodeScript(oname, self, numAuditors, availableClosure, self._d, fqn)
+        self.codeScript.addScript(self._script, fqn)
         # The local closure is first to be pushed and last to be popped.
         for name in self.codeScript.closureNames:
             if name == self.codeScript.displayName:
@@ -1084,13 +1086,13 @@ class CodeScript(object):
                           "globalNames")
 
     def __init__(self, displayName, objectAst, numAuditors, availableClosure,
-                 doc):
+                 doc, fqn):
         self.displayName = displayName
         self.objectAst = objectAst
         self.availableClosure = availableClosure
         self.numAuditors = numAuditors
         self.doc = doc
-
+        self.fqn = fqn
         # Objects can close over themselves. Here we merely make sure that the
         # display name is in the available closure, but we don't close over
         # ourselves unless requested during compilation. (If we don't make the
@@ -1106,7 +1108,7 @@ class CodeScript(object):
 
     def makeObject(self, closure, globals, auditors):
         obj = ScriptObject(self, globals, self.globalNames, closure,
-                           self.closureNames, self.displayName, auditors)
+                           self.closureNames, self.displayName, auditors, self.fqn)
         return obj
 
     @elidable
@@ -1118,20 +1120,20 @@ class CodeScript(object):
 
         return self.closureNames.get(self.displayName, -1)
 
-    def addScript(self, script):
+    def addScript(self, script, fqn):
         assert isinstance(script, Script)
         for method in script._methods:
             assert isinstance(method, Method)
-            self.addMethod(method)
+            self.addMethod(method, fqn)
         for matcher in script._matchers:
             assert isinstance(matcher, Matcher)
-            self.addMatcher(matcher)
+            self.addMatcher(matcher, fqn)
 
-    def addMethod(self, method):
+    def addMethod(self, method, fqn):
         verb = method._verb
         arity = len(method._ps)
         compiler = Compiler(self.closureNames, self.globalNames,
-                            self.availableClosure)
+                            self.availableClosure, fqn=fqn)
         # [... specimen1 ej1 specimen0 ej0]
         for param in method._ps:
             # [... specimen1 ej1]
@@ -1154,8 +1156,8 @@ class CodeScript(object):
         atom = getAtom(verb, arity)
         self.methods[atom] = code
 
-    def addMatcher(self, matcher):
-        compiler = Compiler(self.closureNames, self.globalNames)
+    def addMatcher(self, matcher, fqn):
+        compiler = Compiler(self.closureNames, self.globalNames, fqn=fqn)
         # [[verb, args] ej]
         matcher._pattern.compile(compiler)
         # []

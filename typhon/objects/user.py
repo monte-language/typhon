@@ -33,6 +33,7 @@ from typhon.smallcaps.machine import SmallCaps
 ASK_1 = getAtom(u"ask", 1)
 GETGUARD_1 = getAtom(u"getGuard", 1)
 GETOBJECTEXPR_0 = getAtom(u"getObjectExpr", 0)
+GETFQN_0 = getAtom(u"getFQN", 0)
 
 
 @autohelp
@@ -128,23 +129,28 @@ class Audition(Object):
             if self.fullAst is NullObject:
                 self.fullAst = self.ast.slowTransform(AstInflator())
             return self.fullAst
+        if atom is GETFQN_0:
+            assert isinstance(self.fqn, unicode)
+            return StrObject(self.fqn)
+
         raise Refused(self, atom, args)
 
 
 class ScriptObject(Object):
 
     _immutable_fields_ = ("codeScript", "displayName", "globals[*]",
-                          "closure[*]")
+                          "closure[*]", "fqn")
     auditorCache = {}
 
     stamps = []
 
     def __init__(self, codeScript, globals, globalsNames,
-                 closure, closureNames, displayName, auditors):
+                 closure, closureNames, displayName, auditors, fqn):
         self.codeScript = codeScript
         self.globals = globals
         self.closure = closure
         self.displayName = displayName
+        self.fqn = fqn
 
         # Make sure that we can access ourselves.
         self.patchSelf(auditors[0]
@@ -164,7 +170,7 @@ class ScriptObject(Object):
         for name, i in closureNames.items():
             guards[name] = self.closure[i].call(u"getGuard", [])
 
-        audition = Audition(self.displayName, ast, guards, {})
+        audition = Audition(self.fqn, ast, guards, {})
         for a in auditors:
             audition.ask(a)
         audition.active = False

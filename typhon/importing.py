@@ -38,7 +38,7 @@ moduleCache = ModuleCache()
 
 
 @dont_look_inside
-def obtainModuleFromSource(source, inputScope, recorder):
+def obtainModuleFromSource(source, inputScope, recorder, origin):
     with recorder.context("Deserialization"):
         term = Sequence(load(source)[:])
 
@@ -53,7 +53,7 @@ def obtainModuleFromSource(source, inputScope, recorder):
     # debug_print("Optimized node:", term.repr())
 
     with recorder.context("Compilation"):
-        code = compile(term)
+        code = compile(term, origin)
     # debug_print("Compiled code:", code.disassemble())
 
     with recorder.context("Optimization"):
@@ -70,7 +70,7 @@ def obtainModule(path, inputScope, recorder):
 
     debug_print("Importing:", path)
     source = open(path, "rb").read()
-    code = obtainModuleFromSource(source, inputScope, recorder)
+    code = obtainModuleFromSource(source, inputScope, recorder, path.decode('utf-8'))
 
     # Cache.
     moduleCache.cache[path] = code
