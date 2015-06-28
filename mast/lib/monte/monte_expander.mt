@@ -437,12 +437,8 @@ def expand(node, builder, fail):
                 node.getOpName(), [args[0], args[2]], span)
         else if (nodeName == "CoerceExpr"):
             def [spec, guard] := args
-            return builder.MethodCallExpr(
-                builder.MethodCallExpr(
-                    builder.NounExpr("ValueGuard", span),
-                        "coerce",
-                        [guard, builder.NounExpr("throw", span)], span),
-                     "coerce", [spec, builder.NounExpr("throw", span)], span)
+            return builder.MethodCallExpr(guard, "coerce",
+                [spec, builder.NounExpr("throw", span)], span)
         else if (nodeName == "MatchBindExpr"):
             return expandMatchBind(args, span, fail)
         else if (nodeName == "MismatchExpr"):
