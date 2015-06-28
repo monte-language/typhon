@@ -129,6 +129,50 @@ def testSpecialize(assert):
 unittest([testSpecialize])
 
 
+def safeScope :Map := [
+    => __booleanFlow,
+    => __makeList,
+    => false,
+    => true,
+]
+
+
+def thaw(ast, maker, args, span):
+    "Enliven literal expressions via calls."
+
+    escape ej:
+        switch (ast.getNodeName()):
+            match =="MethodCallExpr":
+                def [var receiver, verb, arguments] exit ej := args
+                def receiverObj := switch (receiver.getNodeName()) {
+                    match =="NounExpr" {
+                        if (safeScope.contains(receiver.getName())) {
+                            safeScope[receiver.getName()]
+                        } else {ej("Not in safe scope")}
+                    }
+                    match =="LiteralExpr" {receiver.getValue()}
+                    match _ {ej("No matches")}
+                }
+                if (allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
+                    arguments)):
+                    # Hack: Don't let .pow() get constant-folded, since it can be
+                    # expensive to run.
+                    if (verb != "pow"):
+                        def argValues := [for x in (arguments) x.getValue()]
+                        def constant := M.call(receiverObj, verb, argValues)
+                        return a.LiteralExpr(constant, span)
+
+            match =="NounExpr":
+                def name := args[0]
+                if (safeScope.contains(name)):
+                    return a.LiteralExpr(safeScope[name], span)
+
+            match _:
+                pass
+
+    return M.call(maker, "run", args + [span])
+
+
 def optimize(ast, maker, args, span):
     "Transform ASTs to be more compact and efficient without changing any
      operational semantics."
@@ -235,15 +279,30 @@ def optimize(ast, maker, args, span):
 
         match =="IfExpr":
             escape failure:
+                def test := args[0]
                 def via (normalizeBody) cons ? (cons != null) exit failure := args[1]
                 def via (normalizeBody) alt ? (alt != null) exit failure := args[2]
+
+                # Two versions of this optimization, one for literals and one
+                # for nouns.
+                # m`if (true) {cons} else {alt}` -> m`cons`
+                if (test.getNodeName() == "LiteralExpr" &&
+                    test.getValue() =~ b :Bool):
+                    return (if (b) {cons} else {alt}).transform(optimize)
+
+                # m`if (true) {cons} else {alt}` -> m`cons`
+                if (test.getNodeName() == "NounExpr"):
+                    if (test.getName() <=> "true"):
+                        return cons.transform(optimize)
+                    else if (test.getName() <=> "false"):
+                        return alt.transform(optimize)
 
                 # m`if (test) {true} else {false}` -> m`test`
                 if (cons.getNodeName() == "NounExpr" &&
                     cons.getName() == "true"):
                     if (alt.getNodeName() == "NounExpr" &&
                         alt.getName() == "false"):
-                        return args[0].transform(optimize)
+                        return test.transform(optimize)
 
                 # m`if (test) {r.v(cons)} else {r.v(alt)}` ->
                 # m`r.v(if (test) {cons} else {alt})`
@@ -260,7 +319,7 @@ def optimize(ast, maker, args, span):
                                 escape badLength:
                                     def [consArg] exit badLength := cons.getArgs()
                                     def [altArg] exit badLength := alt.getArgs()
-                                    var newIf := maker(args[0], consArg, altArg,
+                                    var newIf := maker(test, consArg, altArg,
                                                        span)
                                     # This has, in the past, been a
                                     # problematic recursion. It *should* be
@@ -280,7 +339,7 @@ def optimize(ast, maker, args, span):
                     def consNoun := cons.getLvalue()
                     def altNoun := alt.getLvalue()
                     if (consNoun == altNoun):
-                        var newIf := maker(args[0], cons.getRvalue(),
+                        var newIf := maker(test, cons.getRvalue(),
                                            alt.getRvalue(), span)
                         newIf transform= (optimize)
                         return a.AssignExpr(consNoun, newIf, span)
@@ -289,20 +348,6 @@ def optimize(ast, maker, args, span):
             def receiver := args[0]
             def verb := args[1]
             def arguments := args[2]
-
-            # m`__booleanFlow.failureList(0)` -> m`__makeList.run(false)`
-            if (receiver.getNodeName() == "NounExpr" &&
-                receiver.getName() == "__booleanFlow"):
-                if (verb == "failureList" && arguments.size() == 1):
-                    def node := arguments[0]
-                    if (node.getNodeName() == "LiteralExpr" &&
-                        node.getValue() == 0):
-                        # Success!
-                        return a.MethodCallExpr(a.NounExpr("__makeList",
-                                                           span),
-                                                "run",
-                                                [a.NounExpr("false", span)],
-                                                span)
 
             # m`x.pow(e).mod(m)` -> m`x.modPow(e, m)`
             if (verb == "mod"):
@@ -391,24 +436,42 @@ unittest([
 ])
 
 
-def fixLiterals(ast, maker, args, span):
+def freezeMap :Map := [for k => v in (safeScope) v => k]
+
+
+def freeze(ast, maker, args, span):
+    "Uncall literal expressions."
+
     if (ast.getNodeName() == "LiteralExpr"):
         switch (args[0]):
-            match _ :Any[Char, Double, Int, List, Str]:
-                return ast
             match b :Bool:
                 if (b):
                     return a.NounExpr("true", span)
                 else:
                     return a.NounExpr("false", span)
+            match _ :Any[Char, Double, Int, Str]:
+                return ast
+            match l :List:
+                def newArgs := [for v in (l)
+                                a.LiteralExpr(v, span).transform(freeze)]
+                return a.MethodCallExpr(a.NounExpr("__makeList", span), "run",
+                                        newArgs, span)
+            match k ? (freezeMap.contains(k)):
+                return a.NounExpr(freezeMap[k])
             match obj:
                 if (obj._uncall() =~ [newMaker, newVerb, newArgs]):
+                    def wrappedArgs := [for arg in (newArgs)
+                                        a.LiteralExpr(arg, span)]
                     def call := a.MethodCallExpr(a.LiteralExpr(newMaker,
                                                                span),
-                                                 newVerb, newArgs, span)
-                    return call.transform(fixLiterals)
+                                                 newVerb, wrappedArgs, span)
+                    return call.transform(freeze)
 
     return M.call(maker, "run", args + [span])
 
 
-["optimize" => fn ast {ast.transform(optimize).transform(fixLiterals)}]
+def performOptimization(ast):
+    return ast.transform(thaw).transform(optimize).transform(freeze)
+
+
+["optimize" => performOptimization]
