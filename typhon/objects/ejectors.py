@@ -74,7 +74,9 @@ class Ejector(Object):
 
 def throw(ej, payload):
     if ej is None:
-        ej = NullObject
+        raise UserException(payload)
     if isinstance(ej, Ejector):
         ej.fire(payload)
-    raise UserException(payload)
+    else:
+        ej.call(u"run", [payload])
+    raise UserException(StrObject(u"Ejector did not exit"))
