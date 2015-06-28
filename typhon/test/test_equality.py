@@ -104,6 +104,11 @@ class TestOptSame(TestCase):
         second = StrObject(u"cs")
         self.assertEqual(optSame(first, second), EQUAL)
 
+    def testStrInequality(self):
+        first = StrObject(u"false")
+        second = StrObject(u"true")
+        self.assertEqual(optSame(first, second), INEQUAL)
+
     def testRefEqualityReflexive(self):
         p, r = makePromise()
         self.assertEqual(optSame(p, p), EQUAL)
