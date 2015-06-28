@@ -54,6 +54,36 @@ def parseMonte(lex, builder, mode, err):
     var position := -1
     var lastError := null
 
+    def formatError(var error, err):
+        if (error == null):
+            error := ["Syntax error", tokens[position].getSpan()]
+        if (error =~ [errMsg, span]):
+            def front := (span.getStartLine() - 3).max(0)
+            def back := span.getEndLine() + 3
+            def lines := lex.getInput().split("\n").slice(front, back)
+            def msg := [].diverge()
+            var i := front
+            for line in lines:
+                i += 1
+                def lnum := M.toString(i)
+                def pad := " " * (4 - lnum.size())
+                msg.push(`$pad$lnum $line`)
+                if (i == span.getStartLine()):
+                    def errLine := "    " + " " * span.getStartCol() + "^"
+                    if (span.getStartLine() == span.getEndLine()):
+                        msg.push(errLine + "~" * (span.getEndCol() - span.getStartCol()))
+                    else:
+                        msg.push(errLine)
+            msg.push(errMsg)
+            def msglines := msg.snapshot()
+            def fullMsg := "\n".join(msglines) + "\n"
+            throw.eject(err, fullMsg)
+        else:
+            throw.eject(err, `what am I supposed to do with $error ?`)
+
+    def giveUp(e):
+        formatError(e, err)
+
     def spanHere():
         if (position + 1 >= tokens.size()):
             return null
@@ -710,9 +740,9 @@ def parseMonte(lex, builder, mode, err):
         if (tag == "if"):
             def spanStart := spanHere()
             advance(ej)
-            acceptTag("(", ej)
+            acceptTag("(", giveUp)
             def test := expr(ej)
-            acceptTag(")", ej)
+            acceptTag(")", giveUp)
             if (indent):
                 blockLookahead(tryAgain)
             def consq := block(indent, ej)
@@ -1297,33 +1327,6 @@ def parseMonte(lex, builder, mode, err):
         }
         def body := seq(true, ej)
         return builder."Module"(imports, exports, body, spanFrom(start))
-
-    def formatError(var error, err):
-        if (error == null):
-            error := ["Syntax error", tokens[position].getSpan()]
-        if (error =~ [errMsg, span]):
-            def front := (span.getStartLine() - 3).max(0)
-            def back := span.getEndLine() + 3
-            def lines := lex.getInput().split("\n").slice(front, back)
-            def msg := [].diverge()
-            var i := front
-            for line in lines:
-                i += 1
-                def lnum := M.toString(i)
-                def pad := " " * (4 - lnum.size())
-                msg.push(`$pad$lnum $line`)
-                if (i == span.getStartLine()):
-                    def errLine := "    " + " " * span.getStartCol() + "^"
-                    if (span.getStartLine() == span.getEndLine()):
-                        msg.push(errLine + "~" * (span.getEndCol() - span.getStartCol()))
-                    else:
-                        msg.push(errLine)
-            msg.push(errMsg)
-            def msglines := msg.snapshot()
-            def fullMsg := "\n".join(msglines) + "\n"
-            throw.eject(err, fullMsg)
-        else:
-            throw.eject(err, `what am I supposed to do with $error ?`)
 
     def start(ej):
         acceptEOLs()
