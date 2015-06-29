@@ -68,7 +68,7 @@ class TraceLn(Object):
     def toString(self):
         return u"<traceln>"
 
-    def callAtom(self, atom, args):
+    def recv(self, atom, args):
         if atom.verb == u"run":
             debug_print("TRACE: [")
             for obj in args:
@@ -84,7 +84,7 @@ class MakeList(Object):
     def toString(self):
         return u"<makeList>"
 
-    def callAtom(self, atom, args):
+    def recv(self, atom, args):
         if atom.verb == u"run":
             return ConstList(args)
 
