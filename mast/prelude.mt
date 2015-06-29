@@ -515,12 +515,12 @@ object __makeMap as DeepFrozenStamp:
         return m.snapshot()
 
 
-def __accumulateMap(iterable, mapper):
+def __accumulateMap(iterable, mapper) as DeepFrozenStamp:
     def l := __accumulateList(iterable, mapper)
     return __makeMap.fromPairs(l)
 
 
-def __bind(resolver, guard):
+def __bind(resolver, guard) as DeepFrozenStamp:
     def viaBinder(specimen, ej):
         if (guard == null):
             resolver.resolve(specimen)
@@ -532,17 +532,17 @@ def __bind(resolver, guard):
     return viaBinder
 
 
-def __makeParamDesc(name, guard):
+def __makeParamDesc(name, guard) as DeepFrozenStamp:
     return object paramDesc:
         pass
 
 
-def __makeMessageDesc(unknown, name, params, guard):
+def __makeMessageDesc(unknown, name, params, guard) as DeepFrozenStamp:
     return object messageDesc:
         pass
 
 
-object __makeProtocolDesc:
+object __makeProtocolDesc as DeepFrozenStamp:
     to run(unknown, name, alsoUnknown, stillUnknown, messages):
         return object protocolDesc:
             pass
@@ -551,26 +551,19 @@ object __makeProtocolDesc:
         null
 
 
-object __booleanFlow:
+object __booleanFlow as DeepFrozenStamp:
     to broken():
         return Ref.broken("Boolean flow expression failed")
 
     to failureList(count :Int) :List:
         return [false] + [__booleanFlow.broken()] * count
 
-object DeepFrozen:
-    to audit(audition):
-        return true
-    to coerce(specimen, ej):
-        return specimen
+def [=> SubrangeGuard, => DeepFrozen] := import(
+    "prelude/deepfrozen",
+    [=> __comparer, => __booleanFlow, => __makeVerbFacet,
+     => DeepFrozenStamp, => Same, => TransparentStamp,
+     => Bool, => Char, => Double, => Int, => Str])
 
-object SubrangeGuard:
-    to get(superguard):
-        return object SpecializedSubrangeGuard:
-            to audit(audition):
-                return true
-            to coerce(specimen, ej):
-                return specimen
 
 
 # New approach to importing the rest of the prelude: Collate the entirety of
@@ -590,7 +583,7 @@ var preludeScope := [
 ]
 
 # AST (needed for auditors).
-def astBuilder := import("prelude/monte_ast",
+def [=> astBuilder] := import("prelude/monte_ast",
                          preludeScope.with("DeepFrozenStamp", DeepFrozenStamp))
 _installASTBuilder(astBuilder)
 
