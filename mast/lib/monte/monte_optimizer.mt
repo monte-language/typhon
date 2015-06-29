@@ -231,6 +231,14 @@ def weakenAllPatterns(ast, maker, args, span):
     "Find and weaken all patterns."
 
     switch (ast.getNodeName()):
+        match =="EscapeExpr":
+            def [var ejPatt, ejBody, var catchPatt, catchBody] := args
+            ejPatt := weakenPattern(ejPatt, [ejBody])
+            if (catchPatt != null):
+                catchPatt := weakenPattern(catchPatt, [catchBody])
+
+            return maker(ejPatt, ejBody, catchPatt, catchBody, span)
+
         match =="Matcher":
             def [var pattern, body] := args
             pattern := weakenPattern(pattern, [body])
@@ -246,6 +254,19 @@ def weakenAllPatterns(ast, maker, args, span):
                                        patterns.slice(i + 1) + [body])]
 
             return maker(args[0], args[1], patterns, args[3], body, span)
+
+        match =="SeqExpr":
+            def [var exprs] := args
+
+            for i => expr in exprs:
+                if (expr.getNodeName() == "DefExpr"):
+                    var defPatt := expr.getPattern()
+                    defPatt := weakenPattern(defPatt, exprs.slice(i + 1))
+                    def newDef := a.DefExpr(defPatt, expr.getExit(),
+                                            expr.getExpr(), expr.getSpan())
+                    exprs with= (i, newDef)
+
+            return sequence(exprs, span)
 
         match _:
             pass
@@ -552,7 +573,7 @@ def freeze(ast, maker, args, span):
                 return a.MethodCallExpr(a.NounExpr("__makeList", span), "run",
                                         newArgs, span)
             match k ? (freezeMap.contains(k)):
-                return a.NounExpr(freezeMap[k])
+                return a.NounExpr(freezeMap[k], span)
             match obj:
                 if (obj._uncall() =~ [newMaker, newVerb, newArgs]):
                     def wrappedArgs := [for arg in (newArgs)
