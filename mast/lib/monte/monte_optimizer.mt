@@ -198,14 +198,14 @@ def thaw(ast, maker, args, span):
     return M.call(maker, "run", args + [span])
 
 
-def weakenPattern(var pattern, exprs):
+def weakenPattern(var pattern, nodes):
     "Reduce the strength of patterns based on their usage in scope."
 
     if (pattern.getNodeName() == "VarPattern"):
         def name :Str := pattern.getNoun().getName()
-        for expr in exprs:
+        for node in nodes:
             def names :Set[Str] := [for noun
-                                    in (expr.getStaticScope().getNamesSet())
+                                    in (node.getStaticScope().getNamesSet())
                                     noun.getName()].asSet()
             if (names.contains(name)):
                 return pattern
@@ -215,9 +215,9 @@ def weakenPattern(var pattern, exprs):
 
     if (pattern.getNodeName() == "FinalPattern"):
         def name :Str := pattern.getNoun().getName()
-        for expr in exprs:
+        for node in nodes:
             def names :Set[Str] := [for noun
-                                    in (expr.getStaticScope().namesUsed())
+                                    in (node.getStaticScope().namesUsed())
                                     noun.getName()].asSet()
             if (names.contains(name)):
                 return pattern
@@ -231,12 +231,19 @@ def weakenAllPatterns(ast, maker, args, span):
     "Find and weaken all patterns."
 
     switch (ast.getNodeName()):
+        match =="Matcher":
+            def [var pattern, body] := args
+            pattern := weakenPattern(pattern, [body])
+
+            return maker(pattern, body, span)
+
         match =="Method":
             var patterns := args[2]
             def body := args[4]
 
-            patterns := [for pattern in (patterns)
-                         weakenPattern(pattern, [body])]
+            patterns := [for i => pattern in (patterns)
+                         weakenPattern(pattern,
+                                       patterns.slice(i + 1) + [body])]
 
             return maker(args[0], args[1], patterns, args[3], body, span)
 

@@ -45,8 +45,8 @@ def makeMonteParser(inputName):
 
         to feedMany(tokens):
             try:
-                def tree := parseExpression(makeMonteLexer(tokens),
-                                            astBuilder, throw, inputName)
+                def tree := parseExpression(makeMonteLexer(tokens, inputName),
+                                            astBuilder, throw)
                 # results := [optimize(expand(tree, astBuilder, throw))]
                 results := [expand(tree, astBuilder, throw)]
             catch problem:
