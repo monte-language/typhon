@@ -73,7 +73,7 @@ class Ejector(Object):
 
 
 def throw(ej, payload):
-    if ej is None:
+    if ej is None or ej is NullObject:
         raise UserException(payload)
     if isinstance(ej, Ejector):
         ej.fire(payload)
