@@ -476,11 +476,11 @@ def expand(node, builder, fail):
                         "broken", [], span)
                     var rightOnly := []
                     for n in rightmap - leftmap {
-                        rightOnly with= (builder.NounExpr(n, span))
+                        rightOnly with= (n)
                     }
                     var leftOnly := []
                     for n in leftmap - rightmap {
-                        leftOnly with= (builder.NounExpr(n, span))
+                        leftOnly with= (n)
                     }
                     builder.IfExpr(left, partialFail(rightOnly, s, broken),
                         builder.IfExpr(right, partialFail(leftOnly, s, broken), f, span), span)},
