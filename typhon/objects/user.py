@@ -45,7 +45,8 @@ class AstInflator(Object):
                 raise UserException(StrObject(u"node builder not yet installed"
                                               u", AST not available"))
             nodeName = unwrapStr(args[0])
-            return astBuilder.call(nodeName, args[1:])
+            # XXX Preserve spans
+            return astBuilder.call(nodeName, args[1:] + [NullObject])
         raise Refused(self, atom, args)
 
 

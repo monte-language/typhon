@@ -189,6 +189,9 @@ class _Null(Node):
     def compile(self, compiler):
         compiler.literal(NullObject)
 
+    def slowTransform(self, o):
+        return NullObject
+
 
 Null = _Null()
 
@@ -471,7 +474,7 @@ class Call(Node):
 
     def slowTransform(self, o):
         return o.call(u"run",
-                      [StrObject(u"CallExpr"),
+                      [StrObject(u"MethodCallExpr"),
                        self._target.slowTransform(o),
                        StrObject(self._verb),
                        self._args.slowTransform(o)])
@@ -598,8 +601,9 @@ class Escape(Node):
 
     def slowTransform(self, o):
         return o.call(u"run",
-                      [StrObject(u"Escape"),
+                      [StrObject(u"EscapeExpr"),
                        self._pattern.slowTransform(o),
+                       self._node.slowTransform(o),
                        (NullObject if self._catchPattern is None
                         else self._catchPattern.slowTransform(o)),
                        (NullObject if self._catchNode is None
@@ -903,7 +907,7 @@ class Method(Node):
                                NullObject if self._d is None else StrObject(self._d),
                                StrObject(self._verb),
                                ConstList([p.slowTransform(o) for p in self._ps]),
-                               self._g.slowTransform(o),
+                               NullObject if self._g is None else self._g.slowTransform(o),
                                self._b.slowTransform(o)])
 
     def rewriteScope(self, scope):
@@ -1020,7 +1024,7 @@ class Obj(Node):
         return o.call(u"run", [StrObject(u"ObjectExpr"),
                                NullObject if self._d is None else StrObject(self._d),
                                self._n.slowTransform(o),
-                               self._as.slowTransform(o),
+                               NullObject if self._as is None else self._as.slowTransform(o),
                                ConstList([im.slowTransform(o) for im in  self._implements]),
                                self._script.slowTransform(o)])
 
@@ -1213,7 +1217,7 @@ class Script(Node):
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"Script"),
-                               self._extends.slowTransform(o),
+                               NullObject,
                                ConstList([method.slowTransform(o)
                                           for method in self._methods]),
                                ConstList([method.slowTransform(o)

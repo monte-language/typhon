@@ -30,7 +30,6 @@ class DeepFrozenStamp(Object):
     """
 
     def recv(self, atom, args):
-        from typhon.objects.constants import wrapBool
         from typhon.objects.data import StrObject
         if atom is AUDIT_1:
             from typhon.objects.constants import wrapBool
