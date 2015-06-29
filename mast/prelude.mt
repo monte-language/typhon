@@ -178,10 +178,10 @@ object Set as DeepFrozenStamp:
                 if (!isSet(specimen)):
                     specimen := specimen._conformTo(SubSet)
 
-                if (isSet(specimen)):
-                    for element in specimen:
-                        subGuard.coerce(element, ej)
-                    return specimen
+                var set := [].asSet()
+                for element in specimen:
+                    set with= (subGuard.coerce(element, ej))
+                return set
 
                 throw.eject(ej,
                             ["(Probably) not a conforming set:", specimen])
