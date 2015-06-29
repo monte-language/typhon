@@ -114,6 +114,10 @@ theMakeList = MakeList()
 
 @runnable(FROMPAIRS_1, [deepFrozenStamp])
 def makeMap(args):
+    """
+    Create ConstMaps.
+    """
+
     return ConstMap.fromPairs(args[0])
 
 theMakeMap = makeMap()
