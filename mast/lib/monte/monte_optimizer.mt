@@ -21,6 +21,28 @@ def ["astBuilder" => a] | _ := import("prelude/monte_ast",
                                        => __makeVerbFacet])
 
 
+# Maybe Python isn't so bad after all.
+object zip:
+    "Transpose iterables."
+
+    match [=="run", iterables]:
+        def _its := [].diverge()
+        for it in iterables:
+            _its.push(it._makeIterator())
+        def its := _its.snapshot()
+        object ziperator:
+            to _makeIterator():
+                return ziperator
+            to next(ej):
+                def ks := [].diverge()
+                def vs := [].diverge()
+                for it in its:
+                    def [k, v] := it.next(ej)
+                    ks.push(k)
+                    vs.push(v)
+                return [ks.snapshot(), vs.snapshot()]
+
+
 def allSatisfy(pred, specimens) :Bool:
     "Return whether every specimen satisfies the predicate."
     for specimen in specimens:
@@ -146,8 +168,9 @@ def thaw(ast, maker, args, span):
                 def [var receiver, verb, arguments] exit ej := args
                 def receiverObj := switch (receiver.getNodeName()) {
                     match =="NounExpr" {
-                        if (safeScope.contains(receiver.getName())) {
-                            safeScope[receiver.getName()]
+                        def name :Str := receiver.getName()
+                        if (safeScope.contains(name)) {
+                            safeScope[name]
                         } else {ej("Not in safe scope")}
                     }
                     match =="LiteralExpr" {receiver.getValue()}
@@ -159,12 +182,14 @@ def thaw(ast, maker, args, span):
                     # expensive to run.
                     if (verb != "pow"):
                         def argValues := [for x in (arguments) x.getValue()]
+                        traceln(`thaw call $ast`)
                         def constant := M.call(receiverObj, verb, argValues)
                         return a.LiteralExpr(constant, span)
 
             match =="NounExpr":
-                def name := args[0]
+                def name :Str := args[0]
                 if (safeScope.contains(name)):
+                    traceln(`thaw noun $name`)
                     return a.LiteralExpr(safeScope[name], span)
 
             match _:
@@ -193,20 +218,35 @@ def optimize(ast, maker, args, span):
                             def ej := args[1]
                             return a.MethodCallExpr(guard, "coerce", [expr, ej],
                                                     span)
+
                 # The expander shouldn't ever give us list patterns with
                 # tails, but we'll filter them out here anyway.
                 match =="ListPattern" ? (pattern.getTail() == null):
                     def expr := args[2]
-                    if (expr.getNodeName() == "MethodCallExpr"):
-                        def receiver := expr.getReceiver()
-                        if (receiver.getNodeName() == "NounExpr" &&
-                            receiver.getName() == "__makeList"):
-                            # m`def [name] := __makeList.run(item)` ->
-                            # m`def name := item`
-                            escape badLength:
-                                def [patt] exit badLength := pattern.getPatterns()
-                                def [value] exit badLength := expr.getArgs()
-                                return maker(patt, args[1], value, span)
+                    switch (expr.getNodeName()):
+                        match =="LiteralExpr":
+                            # m`def [x, y] := [a, b]` ->
+                            # m`def x := a; def y := b`
+                            def value := expr.getValue()
+                            def patterns := pattern.getPatterns()
+                            if (value =~ l :List ? (l.size() == patterns.size())):
+                                def seq := [for [p, v] in (zip(patterns, l))
+                                            a.DefExpr(p, args[1], a.LiteralExpr(v, span), span)]
+                                return sequence(seq, span)
+                            else:
+                                traceln(`List pattern assignment will always fail`)
+
+                        match =="MethodCallExpr":
+                            def receiver := expr.getReceiver()
+                            if (receiver.getNodeName() == "NounExpr" &&
+                                receiver.getName() == "__makeList"):
+                                # m`def [name] := __makeList.run(item)` ->
+                                # m`def name := item`
+                                escape badLength:
+                                    def [patt] exit badLength := pattern.getPatterns()
+                                    def [value] exit badLength := expr.getArgs()
+                                    return maker(patt, args[1], value, span)
+
                 match =="FinalPattern":
                     def ex := args[1]
                     if (ex != null && pattern.getGuard() == null):
@@ -470,8 +510,11 @@ def freeze(ast, maker, args, span):
     return M.call(maker, "run", args + [span])
 
 
-def performOptimization(ast):
-    return ast.transform(thaw).transform(optimize).transform(freeze)
+def performOptimization(var ast):
+    ast transform= (thaw)
+    ast transform= (optimize)
+    ast transform= (freeze)
+    return ast
 
 
 ["optimize" => performOptimization]
