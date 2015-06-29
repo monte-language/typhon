@@ -298,6 +298,16 @@ def weakenAllPatterns(ast, maker, args, span):
     return M.call(maker, "run", args + [span])
 
 
+def removeDeadEscapes(ast, maker, args, span):
+
+    if (ast.getNodeName() == "EscapeExpr"):
+        def [ejPatt, ejBody, catchPatt, catchBody] := args
+        if (ejPatt.getNodeName() == "IgnorePattern"):
+            return ejBody
+
+    return M.call(maker, "run", args + [span])
+
+
 def optimize(ast, maker, args, span):
     "Transform ASTs to be more compact and efficient without changing any
      operational semantics."
@@ -571,6 +581,7 @@ def performOptimization(var ast):
     ast transform= (modPow)
     ast transform= (thaw)
     ast transform= (weakenAllPatterns)
+    ast transform= (removeDeadEscapes)
     # ast transform= (optimize)
     ast transform= (freeze)
     return ast
