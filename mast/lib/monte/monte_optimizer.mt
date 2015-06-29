@@ -151,6 +151,33 @@ def testSpecialize(assert):
 unittest([testSpecialize])
 
 
+def modPow(ast, maker, args, span):
+    "Expand modular exponentation method calls."
+
+    if (ast.getNodeName() == "MethodCallExpr"):
+        escape ej:
+            def [receiver, verb ? (verb :Str == "mod"), [m]] exit ej := args
+            if (receiver.getNodeName() == "MethodCallExpr"):
+                def x := receiver.getReceiver()
+                def verb ? (verb :Str == "pow") exit ej := receiver.getVerb()
+                def [e] exit ej := receiver.getArgs()
+                return maker(x, "modPow", [e, m], span)
+
+    return M.call(maker, "run", args + [span])
+
+def testModPow(assert):
+    def ast := a.MethodCallExpr(a.MethodCallExpr(a.LiteralExpr(7, null), "pow",
+                                                 [a.LiteralExpr(11, null)],
+                                                 null),
+                                "mod", [a.LiteralExpr(13, null)], null)
+    def result := a.MethodCallExpr(a.LiteralExpr(7, null), "modPow",
+                                   [a.LiteralExpr(11, null), a.LiteralExpr(13,
+                                   null)], null)
+    assert.equal(ast.transform(modPow), result)
+
+unittest([testModPow])
+
+
 def safeScope :Map := [
     # => __makeList,
     # => __makeMap,
@@ -528,17 +555,6 @@ def optimize(ast, maker, args, span):
 
     return M.call(maker, "run", args + [span])
 
-
-def testModPow(assert):
-    def ast := a.MethodCallExpr(a.MethodCallExpr(a.LiteralExpr(7, null), "pow",
-                                                 [a.LiteralExpr(11, null)],
-                                                 null),
-                                "mod", [a.LiteralExpr(13, null)], null)
-    def result := a.MethodCallExpr(a.LiteralExpr(7, null), "modPow",
-                                   [a.LiteralExpr(11, null), a.LiteralExpr(13,
-                                   null)], null)
-    assert.equal(ast.transform(optimize), result)
-
 def testRemoveUnusedBareNouns(assert):
     def ast := a.SeqExpr([a.NounExpr("x", null), a.NounExpr("y", null)], null)
     # There used to be a SeqExpr around this NounExpr, but the optimizer
@@ -546,10 +562,7 @@ def testRemoveUnusedBareNouns(assert):
     def result := a.NounExpr("y", null)
     assert.equal(ast.transform(optimize), result)
 
-unittest([
-    testModPow,
-    testRemoveUnusedBareNouns,
-])
+unittest([testRemoveUnusedBareNouns])
 
 
 def freezeMap :Map := [for k => v in (safeScope) v => k]
@@ -587,6 +600,7 @@ def freeze(ast, maker, args, span):
 
 
 def performOptimization(var ast):
+    ast transform= (modPow)
     ast transform= (thaw)
     ast transform= (weakenAllPatterns)
     # ast transform= (optimize)
