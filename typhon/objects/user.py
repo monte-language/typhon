@@ -52,10 +52,10 @@ class AstInflator(Object):
 
 @autohelp
 class Audition(Object):
+
     def __init__(self, fqn, ast, guards, cache):
         self.fqn = fqn
         self.ast = ast
-        self.fullAst = NullObject
         self.guards = guards
         self.cache = None
 
@@ -124,12 +124,15 @@ class Audition(Object):
     def recv(self, atom, args):
         if atom is ASK_1:
             return self.ask(args[0])
+
         if atom is GETGUARD_1:
             return self.getGuard(args[0])
+
         if atom is GETOBJECTEXPR_0:
-            if self.fullAst is NullObject:
-                self.fullAst = self.ast.slowTransform(AstInflator())
-            return self.fullAst
+            if self.ast.monteAST is None:
+                self.ast.monteAST = self.ast.slowTransform(AstInflator())
+            return self.ast.monteAST
+
         if atom is GETFQN_0:
             assert isinstance(self.fqn, unicode)
             return StrObject(self.fqn)

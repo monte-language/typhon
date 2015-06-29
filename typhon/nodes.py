@@ -144,7 +144,9 @@ class InvalidAST(LoadFailed):
 class Node(object):
 
     _immutable_ = True
-    _attrs_ = ()
+    _attrs_ = "monteAST",
+
+    monteAST = None
 
     def __repr__(self):
         b = Buffer()
