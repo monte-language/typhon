@@ -198,6 +198,54 @@ def thaw(ast, maker, args, span):
     return M.call(maker, "run", args + [span])
 
 
+def weakenPattern(var pattern, exprs):
+    "Reduce the strength of patterns based on their usage in scope."
+
+    if (pattern.getNodeName() == "VarPattern"):
+        def name :Str := pattern.getNoun().getName()
+        for expr in exprs:
+            def names :Set[Str] := [for noun
+                                    in (expr.getStaticScope().getNamesSet())
+                                    noun.getName()].asSet()
+            if (names.contains(name)):
+                return pattern
+        traceln(`Weakening var $name`)
+        pattern := a.FinalPattern(pattern.getNoun(), pattern.getGuard(),
+                                  pattern.getSpan())
+
+    if (pattern.getNodeName() == "FinalPattern"):
+        def name :Str := pattern.getNoun().getName()
+        for expr in exprs:
+            def names :Set[Str] := [for noun
+                                    in (expr.getStaticScope().namesUsed())
+                                    noun.getName()].asSet()
+            if (names.contains(name)):
+                return pattern
+        traceln(`Weakening def $name`)
+        pattern := a.IgnorePattern(pattern.getGuard(), pattern.getSpan())
+
+    return pattern
+
+
+def weakenAllPatterns(ast, maker, args, span):
+    "Find and weaken all patterns."
+
+    switch (ast.getNodeName()):
+        match =="Method":
+            var patterns := args[2]
+            def body := args[4]
+
+            patterns := [for pattern in (patterns)
+                         weakenPattern(pattern, [body])]
+
+            return maker(args[0], args[1], patterns, args[3], body, span)
+
+        match _:
+            pass
+
+    return M.call(maker, "run", args + [span])
+
+
 def optimize(ast, maker, args, span):
     "Transform ASTs to be more compact and efficient without changing any
      operational semantics."
@@ -512,7 +560,8 @@ def freeze(ast, maker, args, span):
 
 def performOptimization(var ast):
     ast transform= (thaw)
-    ast transform= (optimize)
+    ast transform= (weakenAllPatterns)
+    # ast transform= (optimize)
     ast transform= (freeze)
     return ast
 

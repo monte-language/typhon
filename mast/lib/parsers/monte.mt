@@ -1,7 +1,8 @@
 # Boot scope nonsense.
 def parserScope := [
     => Any, => Bool, => Char, => DeepFrozen, => Double, => Empty, => Int,
-    => List, => Map, => NullOk, => Same, => Str, => SubrangeGuard, => Void,
+    => List, => Map, => NullOk, => Same, => Set, => Str, => SubrangeGuard,
+    => Void,
     => __mapEmpty, => __mapExtract,
     => __accumulateList, => __accumulateMap, => __booleanFlow, => __iterWhile,
     => __validateFor,
