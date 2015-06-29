@@ -152,8 +152,8 @@ unittest([testSpecialize])
 
 
 def safeScope :Map := [
-    => __booleanFlow,
-    => __makeList,
+    # => __makeList,
+    # => __makeMap,
     => false,
     => true,
 ]
@@ -165,7 +165,7 @@ def thaw(ast, maker, args, span):
     escape ej:
         switch (ast.getNodeName()):
             match =="MethodCallExpr":
-                def [var receiver, verb, arguments] exit ej := args
+                def [var receiver, verb :Str, arguments] exit ej := args
                 def receiverObj := switch (receiver.getNodeName()) {
                     match =="NounExpr" {
                         def name :Str := receiver.getName()
