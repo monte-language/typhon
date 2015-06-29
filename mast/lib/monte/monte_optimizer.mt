@@ -205,13 +205,10 @@ def thaw(ast, maker, args, span):
                 }
                 if (allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
                     arguments)):
-                    # Hack: Don't let .pow() get constant-folded, since it can be
-                    # expensive to run.
-                    if (verb != "pow"):
-                        def argValues := [for x in (arguments) x.getValue()]
-                        traceln(`thaw call $ast`)
-                        def constant := M.call(receiverObj, verb, argValues)
-                        return a.LiteralExpr(constant, span)
+                    def argValues := [for x in (arguments) x.getValue()]
+                    traceln(`thaw call $ast`)
+                    def constant := M.call(receiverObj, verb, argValues)
+                    return a.LiteralExpr(constant, span)
 
             match =="NounExpr":
                 def name :Str := args[0]
@@ -364,13 +361,6 @@ def optimize(ast, maker, args, span):
                 def via (finalPatternToName) name exit nonFinalPattern := args[0]
                 def body := args[1]
 
-                # m`escape ej {expr}` ? ej not used by expr -> m`expr`
-                def scope := body.getStaticScope()
-                def namesused := [for n in (scope.namesUsed()) n.getName()]
-                if (!namesused.contains(name)):
-                    # We can just return the inner node directly.
-                    return body.transform(optimize)
-
                 switch (body.getNodeName()):
                     match =="MethodCallExpr":
                         # m`escape ej {ej.run(expr)}` -> m`expr`
@@ -491,28 +481,6 @@ def optimize(ast, maker, args, span):
             def receiver := args[0]
             def verb := args[1]
             def arguments := args[2]
-
-            # m`x.pow(e).mod(m)` -> m`x.modPow(e, m)`
-            if (verb == "mod"):
-                escape badMatch:
-                    def [m] exit badMatch := arguments
-                    if (receiver.getNodeName() == "MethodCallExpr" &&
-                        receiver.getVerb() == "pow"):
-                        def [e] exit badMatch := receiver.getArgs()
-                        return a.MethodCallExpr(receiver.getReceiver(),
-                                                "modPow", [e, m], span)
-
-            # m`2.add(2)` -> m`4`
-            if (receiver.getNodeName() == "LiteralExpr" &&
-                allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
-                           arguments)):
-                def receiverValue := receiver.getValue()
-                # Hack: Don't let .pow() get constant-folded, since it can be
-                # expensive to run.
-                if (verb != "pow"):
-                    def argValues := map(fn x {x.getValue()}, arguments)
-                    def constant := M.call(receiverValue, verb, argValues)
-                    return a.LiteralExpr(constant, span)
 
         match =="SeqExpr":
             # m`expr; noun; lastNoun` -> m`expr; lastNoun`
