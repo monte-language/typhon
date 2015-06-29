@@ -45,19 +45,16 @@ Without a prelude, Typhon doesn't do much. Most Monte applications have a
 reasonable expectation of certain non-kernel features, which are implemented
 in Monte via a prelude and library.
 
-``mast/Makefile`` assumes that ``monte`` and ``python`` are on your PATH,
-and that the ``python`` binary references the one in which you installed
-Monte's ``requirements.txt``. The easiest way to do this is to make sure
-that the ``bin`` directory of Monte's virtualenv comes early in your PATH.
+Fortunately, Typhon comes with a self-hosting Monte compiler and a prebuilt
+prelude, in the ``boot`` directory. To use it::
 
-To build the MAST library::
+    $ ./mt-typhon -l boot script.ty
 
-    $ make -C mast
+And the rest of the MAST library can be built immediately::
 
-You'll need to have a reference Monte nearby for the actual build, just like
-with other Monte code running on Typhon.
+    $ make mast
 
-Then, you can use the prelude::
+Then, you can use the newly built prelude and library::
 
     $ ./mt-typhon -l mast another/awesome/script.ty
 
