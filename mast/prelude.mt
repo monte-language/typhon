@@ -599,10 +599,12 @@ def [
     => OrderedSpaceMaker
 ] := import("prelude/region", preludeScope)
 
-# Spaces require regions.
-preludeScope |= import("prelude/space",
+# Spaces require regions. We're doing this import slightly differently since
+# we want to replace some of our names with spaces; look at the order of
+# operations.
+preludeScope := import("prelude/space",
                        preludeScope | [=> OrderedRegionMaker,
-                                       => OrderedSpaceMaker])
+                                       => OrderedSpaceMaker]) | preludeScope
 
 # Terms require simple QP and spaces.
 preludeScope |= import("lib/monte/termParser", preludeScope)
