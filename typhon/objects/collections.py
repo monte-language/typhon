@@ -30,8 +30,8 @@ from typhon.rstrategies import rstrategies
 from typhon.strategies import strategyFactory
 
 
-AND_1 = getAtom(u"and", 1)
 ADD_1 = getAtom(u"add", 1)
+AND_1 = getAtom(u"and", 1)
 ASLIST_0 = getAtom(u"asList", 0)
 ASMAP_0 = getAtom(u"asMap", 0)
 ASSET_0 = getAtom(u"asSet", 0)
@@ -55,6 +55,8 @@ SIZE_0 = getAtom(u"size", 0)
 SLICE_1 = getAtom(u"slice", 1)
 SLICE_2 = getAtom(u"slice", 2)
 SNAPSHOT_0 = getAtom(u"snapshot", 0)
+SORTKEYS_0 = getAtom(u"sortKeys", 0)
+SORTVALUES_0 = getAtom(u"sortValues", 0)
 SORT_0 = getAtom(u"sort", 0)
 STARTOF_1 = getAtom(u"startOf", 1)
 STARTOF_2 = getAtom(u"startOf", 2)
@@ -74,8 +76,16 @@ def monteLessThan(left, right):
     except UserException:
         return unwrapInt(right.call(u"op__cmp", [left])) > 0
 
+def monteLTKey(left, right):
+    return monteLessThan(left[0], right[0])
+
+def monteLTValue(left, right):
+    return monteLessThan(left[1], right[1])
+
 
 MonteSorter = make_timsort_class(lt=monteLessThan)
+KeySorter = make_timsort_class(lt=monteLTKey)
+ValueSorter = make_timsort_class(lt=monteLTValue)
 
 
 @autohelp
@@ -674,6 +684,33 @@ class ConstMap(Object):
         # or/1: Unify the elements of this collection with another.
         if atom is OR_1:
             return self._or(args[0])
+
+        if atom is REVERSE_0:
+            d = monteDict()
+            l = [(k, v) for k, v in self.objectMap.iteritems()]
+            # Reverse it!
+            l.reverse()
+            for k, v in l:
+                d[k] = v
+            return ConstMap(d)
+
+        if atom is SORTKEYS_0:
+            # Extract a list, sort it, pack it back into a dict.
+            d = monteDict()
+            l = [(k, v) for k, v in self.objectMap.iteritems()]
+            KeySorter(l).sort()
+            for k, v in l:
+                d[k] = v
+            return ConstMap(d)
+
+        if atom is SORTVALUES_0:
+            # Same as sortKeys/0.
+            d = monteDict()
+            l = [(k, v) for k, v in self.objectMap.iteritems()]
+            ValueSorter(l).sort()
+            for k, v in l:
+                d[k] = v
+            return ConstMap(d)
 
         if atom is WITH_2:
             # Replace by key.
