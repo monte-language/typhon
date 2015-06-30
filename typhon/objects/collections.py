@@ -14,7 +14,7 @@
 
 from rpython.rlib.jit import elidable
 from rpython.rlib.listsort import make_timsort_class
-from rpython.rlib.objectmodel import r_ordereddict
+from rpython.rlib.objectmodel import import_from_mixin, r_ordereddict
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
@@ -143,8 +143,6 @@ class Collection(object):
     A common abstraction for several collections which share methods.
     """
 
-    _mixin_ = True
-
     def recv(self, atom, args):
         # _makeIterator/0: Create an iterator for this collection's contents.
         if atom is _MAKEITERATOR_0:
@@ -188,10 +186,13 @@ class Collection(object):
         return self._recv(atom, args)
 
 
-class ConstList(Collection, Object):
+@autohelp
+class ConstList(Object):
     """
     A list of objects.
     """
+
+    import_from_mixin(Collection)
 
     _immutable_fields_ = "storage[*]", "strategy[*]"
 
@@ -378,10 +379,13 @@ class ConstList(Collection, Object):
         return -1
 
 
-class FlexList(Collection, Object):
+@autohelp
+class FlexList(Object):
     """
     A mutable list of objects.
     """
+
+    import_from_mixin(Collection)
 
     rstrategies.make_accessors(strategy="strategy", storage="storage")
 
@@ -589,10 +593,13 @@ def monteDict():
     return r_ordereddict(keyEq, keyHash)
 
 
-class ConstMap(Collection, Object):
+@autohelp
+class ConstMap(Object):
     """
     A map of objects.
     """
+
+    import_from_mixin(Collection)
 
     _immutable_fields_ = "objectMap",
     stamps = [selfless, transparentStamp]
@@ -724,10 +731,13 @@ class ConstMap(Collection, Object):
         return ConstMap(self.objectMap.copy())
 
 
-class ConstSet(Collection, Object):
+@autohelp
+class ConstSet(Object):
     """
     A set of objects.
     """
+
+    import_from_mixin(Collection)
 
     _immutable_fields_ = "objectMap",
     stamps = [selfless, transparentStamp]
