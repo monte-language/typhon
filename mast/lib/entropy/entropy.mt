@@ -41,7 +41,15 @@ def makeEntropy(generator):
         to nextDouble() :Double:
             return pool.getSomeBits(53) / (1 << 53)
 
-def [=>makeXORShift] := import("lib/entropy/xorshift")
+        to nextExponential(lambda :Double):
+            "The exponential distribution with half-life λ."
+
+            # This kind of inversion lets us avoid a conditional check for 0.0
+            # before taking a logarithm.
+            def d := 1.0 - entropy.nextDouble()
+            return -(d.log()) / lambda
+
+def [=> makeXORShift] := import("lib/entropy/xorshift")
 def e := makeEntropy(makeXORShift(0x12345678))
 bench(e.nextBool, "entropy nextBool")
 bench(fn {e.nextInt(4096)}, "entropy nextInt (best case)")
