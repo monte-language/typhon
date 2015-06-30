@@ -16,7 +16,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.env import finalize
 from typhon.errors import Refused, userError
-from typhon.importing import evaluateTerms, obtainModuleFromSource
+from typhon.importing import evaluateRaise, obtainModuleFromSource
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
                                         unwrapList, unwrapMap)
@@ -86,10 +86,10 @@ class TyphonEval(Object):
                 environment[unwrapStr(k)] = v
             code = obtainModuleFromSource(source, environment.keys(),
                                           self.recorder, u"<eval>")
-            result = evaluateTerms([code], finalize(environment))
-            if result is None:
-                raise userError(u"Error while evaluating dynamic source")
-            return result
+            # Don't catch exceptions; on traceback, we'll have a trail
+            # auto-added that indicates that the exception came through
+            # eval() or whatnot.
+            return evaluateRaise([code], finalize(environment))
 
         raise Refused(self, atom, args)
 

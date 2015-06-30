@@ -95,3 +95,16 @@ def evaluateTerms(codes, scope):
         if result is None:
             debug_print("Evaluation returned None!")
     return result
+
+
+def evaluateRaise(codes, scope):
+    """
+    Like evaluateTerms, but does not catch exceptions.
+    """
+
+    result = NullObject
+    for code in codes:
+        machine = SmallCaps.withDictScope(code, scope)
+        machine.run()
+        result = machine.pop()
+    return result
