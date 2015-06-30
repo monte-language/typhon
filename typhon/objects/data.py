@@ -382,8 +382,13 @@ class IntObject(Object):
             return IntObject(~self._i)
 
         if atom is FLOORDIVIDE_1:
-            other = unwrapInt(args[0])
-            return IntObject(self._i // other)
+            try:
+                other = unwrapInt(args[0])
+                return IntObject(self._i // other)
+            except WrongType:
+                other = unwrapBigInt(args[0])
+                bi = rbigint.fromint(self._i)
+                return BigInt(bi.floordiv(other))
 
         if atom is MAX_1:
             other = unwrapInt(args[0])
