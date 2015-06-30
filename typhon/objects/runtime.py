@@ -6,6 +6,7 @@ from typhon.errors import Refused
 from typhon.objects.collections import ConstMap, monteDict
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object
+from typhon.objects.user import ScriptObject
 
 
 GETBUCKETS_0 = getAtom(u"getBuckets", 0)
@@ -41,6 +42,7 @@ def getMonteObjects():
     return result_w
 
 
+@autohelp
 class Heap(Object):
     """
     A statistical snapshot of the heap.
@@ -52,7 +54,10 @@ class Heap(Object):
         self.buckets = {}
 
     def accountObject(self, obj):
-        name = obj.__class__.__name__
+        if isinstance(obj, ScriptObject):
+            name = obj.displayName
+        else:
+            name = obj.__class__.__name__.decode("utf-8")
         if name not in self.buckets:
             self.buckets[name] = 0
         self.buckets[name] += 1
