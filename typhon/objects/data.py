@@ -237,6 +237,10 @@ class DoubleObject(Object):
         if atom is SUBTRACT_1:
             return self.subtract(args[0])
 
+        if atom is APPROXDIVIDE_1:
+            divisor = promoteToDouble(args[0])
+            return DoubleObject(self._d / divisor)
+
         # Logarithms.
 
         if atom is LOG_0:
