@@ -64,6 +64,8 @@ ISONETOONE_0 = getAtom(u"isOneToOne", 0)
 ISZERO_0 = getAtom(u"isZero", 0)
 JOIN_1 = getAtom(u"join", 1)
 LASTINDEXOF_1 = getAtom(u"lastIndexOf", 1)
+LOG_0 = getAtom(u"log", 0)
+LOG_1 = getAtom(u"log", 1)
 MAX_1 = getAtom(u"max", 1)
 MIN_1 = getAtom(u"min", 1)
 MODPOW_2 = getAtom(u"modPow", 2)
@@ -234,6 +236,15 @@ class DoubleObject(Object):
 
         if atom is SUBTRACT_1:
             return self.subtract(args[0])
+
+        # Logarithms.
+
+        if atom is LOG_0:
+            return DoubleObject(math.log(self._d))
+
+        if atom is LOG_1:
+            base = promoteToDouble(args[0])
+            return DoubleObject(math.log(self._d) / math.log(base))
 
         # Trigonometry.
 
