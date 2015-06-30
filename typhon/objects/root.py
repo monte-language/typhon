@@ -147,8 +147,14 @@ class Object(object):
     def recv(self, atom, args):
         raise Refused(self, atom, args)
 
-    def auditedBy(self, stamp):
-        return stamp in self.stamps
+    def auditedBy(self, prospect):
+        from typhon.objects.equality import optSame, EQUAL
+        if prospect in self.stamps:
+            return True
+        for stamp in self.stamps:
+            if optSame(prospect, stamp) is EQUAL:
+                return True
+        return False
 
     def printOn(self, printer):
         # Note that the printer is a Monte-level object.

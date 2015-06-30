@@ -82,8 +82,7 @@ class TransparentGuard(Object):
     stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
-        from typhon.objects.constants import wrapBool
-        from typhon.objects.constants import NullObject
+        from typhon.objects.constants import wrapBool, NullObject
         if atom is PASSES_1:
             return wrapBool(transparentStamp in args[0].stamps)
         if atom is COERCE_2:
@@ -96,10 +95,10 @@ class TransparentGuard(Object):
 
 @autohelp
 class Selfless(Object):
-    """
-    An auditor over altruistic objects.
+    """A stamp for objects that do not wish to be compared by identity.
 
-    Selfless objects are not yet well-defined.
+    Selfless objects are not comparable with == unless they implement some
+    protocol for comparison (such as Transparent).
     """
 
     stamps = [deepFrozenStamp]

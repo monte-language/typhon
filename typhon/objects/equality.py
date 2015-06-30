@@ -17,7 +17,7 @@ from rpython.rlib.jit import unroll_safe
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.auditors import deepFrozenStamp, selfless, transparentStamp
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
@@ -76,10 +76,16 @@ def optSame(first, second, cache=None):
     first = resolution(first)
     second = resolution(second)
 
+    # Two identical objects are equal.
+    if first is second:
+        return EQUAL
+
     # Are we structurally recursive? If so, return the already-calculated
     # value.
     if cache is not None and (first, second) in cache:
         return cache[first, second]
+    if cache is not None and (second, first) in cache:
+        return cache[second, first]
 
     # Null.
     if first is NullObject:
@@ -151,29 +157,33 @@ def optSame(first, second, cache=None):
         # Well, nothing failed, so it would seem that they must be equal.
         return EQUAL
 
-    # Let's request an uncall from each specimen and compare those.
-    try:
-        # This could recurse.
-        if cache is None:
-            cache = {}
-        cache[first, second] = INEQUAL
+    # We've eliminated all objects that can be compared on first principles, now
+    # we need the specimens to cooperate with further investigation.
 
-        left = first.call(u"_uncall", [])
-        right = second.call(u"_uncall", [])
+    # First, see if either object wants to stop with just identity comparison.
+    if selfless in first.stamps:
+        if not selfless in second.stamps:
+            return INEQUAL
+        # Then see if both objects can be compared by contents.
+        if (transparentStamp in first.stamps and
+            transparentStamp in second.stamps):
 
-        # Recurse, add the new value to the cache, and return. However, we
-        # can't let Miranda uncalls (which return null) through, so check for
-        # those first.
-        if left is not NullObject and right is not NullObject:
+            # This could recurse.
+            if cache is None:
+                cache = {}
+            cache[first, second] = INEQUAL
+
+            left = first.call(u"_uncall", [])
+            right = second.call(u"_uncall", [])
+
+            # Recurse, add the new value to the cache, and return.
             rv = optSame(left, right, cache)
             cache[first, second] = rv
             return rv
-    except Refused:
-        pass
-
-    # Two identical objects are equal.
-    if first is second:
-        return EQUAL
+        # XXX Add support for Semitransparent, comparing objects for structural
+        # equality even if they don't publicly reveal their contents.
+        else:
+            return NOTYET
 
     # By default, objects are not equal.
     return INEQUAL
