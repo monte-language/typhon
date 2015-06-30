@@ -32,9 +32,9 @@ var environment := [
     => __auditedBy, => __slotToBinding, => _makeFinalSlot, => _makeVarSlot,
     => traceln, => unittest,
     # Typhon unsafe scope.
-    => Timer, => bench, => currentProcess, => currentVat, => makeFileResource,
-    => makeProcess, => makeStdErr, => makeStdIn, => makeStdOut,
-    => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
+    => Timer, => bench, => currentProcess, => currentRuntime, => currentVat,
+    => makeFileResource, => makeProcess, => makeStdErr, => makeStdIn,
+    => makeStdOut, => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
     => unsealException,
 ]
 
