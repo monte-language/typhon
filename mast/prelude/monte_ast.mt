@@ -38,6 +38,7 @@ def makeStaticScope(read, set, defs, vars, metaStateExpr):
     def defNames := defs.asSet()
     def varNames := vars.asSet()
     return object staticScope:
+
         to getNamesRead():
             return namesRead
 
@@ -189,7 +190,7 @@ def printObjectSuiteOn(leaderFn, docstring, suite, out, priority):
             }, false, true, out, priority)
 
 def astWrapper(node, maker, args, span, scope, termName, transformArgs):
-    return object astNode extends node:
+    return object astNode extends node implements Selfless, TransparentStamp:
         to getStaticScope():
             return scope
         to getSpan():
