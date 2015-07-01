@@ -17,7 +17,7 @@ from rpython.rlib.objectmodel import specialize
 
 from typhon.atoms import getAtom
 from typhon.env import Environment
-from typhon.errors import Ejecting, UserException, userError
+from typhon.errors import Ejecting, SmallCapsFailure, UserException, userError
 from typhon.objects.collections import unwrapList
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
@@ -240,18 +240,26 @@ class SmallCaps(object):
         while pc < self.code.instSize():
             instruction = self.code.inst(promote(pc))
             try:
-                # print ">", pc, self.code.dis(instruction,
-                #                              self.code.indices[pc])
-                # jit_debug("Before run")
                 pc = self.runInstruction(instruction, pc)
-                # jit_debug("After run")
-                # print "Stack:", self.env.valueStack[:self.env.depth]
-                # if self.env.handlerDepth:
-                #     print "Handlers:", self.env.handlerStack[:self.env.handlerDepth]
             except Ejecting as e:
                 pc = self.unwindEjector(e)
             except UserException as ue:
                 pc = self.unwindEx(ue)
+            except SmallCapsFailure as scf:
+                # Print out a reasonably informative summary of our state and
+                # then die.
+                print "Invariant failed in SmallCaps!"
+                print "PC:", pc
+                if self.env.handlerStack:
+                    print "Top of handler stack:", self.env.handlerStack[-1]
+                else:
+                    print "No handlers on handler stack"
+                if self.env.valueStack:
+                    print "Top of value stack:", self.env.valueStack[-1]
+                else:
+                    print "No values on values stack"
+                print self.code.disassemble()
+                raise RuntimeError("Ending the program")
         # If there is a final handler, drop it; it may cause exceptions to
         # propagate or perform some additional stack unwinding.
         if self.env.handlerDepth:

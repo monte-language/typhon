@@ -29,6 +29,17 @@ class LoadFailed(Exception):
     """
 
 
+class SmallCapsFailure(Exception):
+    """
+    The SmallCaps machine had an invariant fail.
+    """
+
+
+def scProve(condition, message):
+    if not condition:
+        raise SmallCapsFailure(message)
+
+
 class UserException(Exception):
     """
     An error occurred in user code.
