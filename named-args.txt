@@ -1,0 +1,75 @@
+Named Arguments
+
+Rationale
+
+* Extension of Miranda protocol. Providing Miranda named arguments enables some
+  stuff regarding error handling and some other nice-to-haves.
+* Versioning of interfaces. Unused named arguments do not provoke any error, so
+  they can be used to aid forward-compatibility.
+* Useful default values that are not changed often can be placed in named
+  arguments, and callers that do not need to change them do not need to pass
+ their own default values.
+
+Syntax
+
+* Callers: When passing a message, named arguments can be passed either as
+  `"key" => value` or as `=> value`; the latter expands to `"value" => value`.
+* Receivers: When declaring a method or function, named arguments can be
+  matched as one of `"key" => value`, `"key" => value := default`, `=> value`,
+  or `=> value := default`.
+
+Questions on Syntax
+
+1) Must named arguments come at the end of argument lists, as in Python et
+   al.? Undecided.
+2) May arbitrary objects be used as keys, or only strings which contain valid
+   identifiers? Undecided. This question affects semantics and implementation
+   too, so it is worth answering!
+3) Are default values evaluated at call time, or definition time? Currently
+   leaning towards call time; it's less surprising and matches the
+   expectations of neophytes as well as the rest of Monte.
+
+Semantics
+
+* Messages are changed from [verb :Str, args :List] to [verb :Str, args :List,
+  namedArgs :Map]. Message equality does not respect the ordering of keys
+  within the map of named arguments; it suffices that the key-value pairs are
+  each equal.
+* The Miranda protocol is extended to guarantee that certain named arguments
+  are always accessible to receivers.
+* Matchers will receive a specimen of the shape [verb :Str, args :List,
+  namedArgs :Map], with named arguments in indeterminate order. The specimen
+  will include all Miranda named arguments.
+* M.callWithPair/2 will take a new-style message with named arguments. To omit
+  named arguments, use m`[].asMap()`.
+* M.call/3, M.send/3, and M.sendOnly/3 all gain a fourth argument which should
+  be coercible by Map and will be used as named arguments to be passed in the
+  called or sent message.
+
+Questions on Semantics
+
+1) Should we sort the map of named arguments? Undecided.
+2) How do we alter method signatures? This affects Miranda _respondsTo/2,
+   help, protocol descriptions, metaobject introspection, etc.. Undecided.
+3) Which Miranda named arguments should exist? Undecided.
+4) What other safe scope objects, if any, need to be updated? Undecided.
+
+Implementation
+
+* New AST nodes will be added to full Monte representing the four different
+  kinds of named argument syntax for receivers, and the two different kinds of
+  named argument syntax for callers. The receiver syntax will be patterns, and
+  the caller syntax will be expressions, but neither will be usable outside
+  the prescribed contexts.
+* New AST nodes will also be added to Kernel-Monte. Only two nodes are needed
+  for receivers and one for callers, and the expander is expected to pick up
+  the slack.
+* The AST on-disk format will be extended to serialize the new Kernel-Monte
+  nodes.
+* Typhon: New AST nodes are the least of our troubles. We also need to change
+  the calling convention of all objects; we can do it in stages, by
+  deprecating recv(). SmallCaps needs to be extended to pull named arguments
+  from the stack during calls, so the compiler needs to put the named
+  arguments on the stack.
+* JIT: We need to find something faster than a dictionary with which to hold
+  named arguments.
