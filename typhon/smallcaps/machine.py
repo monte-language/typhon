@@ -60,7 +60,6 @@ class SmallCaps(object):
             for key in code.globals:
                 if key not in scope:
                     missing.append(key)
-            import pdb; pdb.set_trace()
             message = u"Keys not in scope: %s" % u", ".join(missing)
             raise userError(message)
         return SmallCaps(code, frame, globals)
