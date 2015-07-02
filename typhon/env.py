@@ -15,7 +15,6 @@
 from rpython.rlib.jit import hint, promote
 
 from typhon.atoms import getAtom
-from typhon.errors import scProve
 from typhon.objects.guards import anyGuard
 from typhon.objects.slots import Binding, FinalSlot
 
@@ -79,14 +78,14 @@ class Environment(object):
     def push(self, obj):
         i = self.depth
         assert i >= 0, "Stack underflow!"
-        scProve(i < self.stackSize, "Stack overflow!")
+        assert i < self.stackSize, "Stack overflow!"
         self.valueStack[i] = obj
         self.depth += 1
 
     def pop(self):
         self.depth -= 1
         i = self.depth
-        scProve(i >= 0, "Stack underflow!")
+        assert i >= 0, "Stack underflow!"
         assert i < self.stackSize, "Stack overflow!"
         rv = self.valueStack[i]
         self.valueStack[i] = None
@@ -94,21 +93,21 @@ class Environment(object):
 
     def peek(self):
         i = self.depth - 1
-        scProve(i >= 0, "Stack underflow!")
+        assert i >= 0, "Stack underflow!"
         assert i < self.stackSize, "Stack overflow!"
         return self.valueStack[i]
 
     def pushHandler(self, handler):
         i = self.handlerDepth
         assert i >= 0, "Stack underflow!"
-        scProve(i < self.handlerSize, "Stack overflow!")
+        assert i < self.handlerSize, "Stack overflow!"
         self.handlerStack[i] = handler
         self.handlerDepth += 1
 
     def popHandler(self):
         self.handlerDepth -= 1
         i = self.handlerDepth
-        scProve(i >= 0, "Stack underflow!")
+        assert i >= 0, "Stack underflow!"
         assert i < self.handlerSize, "Stack overflow!"
         rv = self.handlerStack[i]
         self.handlerStack[i] = None
