@@ -7,19 +7,7 @@
 # type of node is gonna lead to stale data, broken dreams, and summoning
 # Zalgo. Don't summon Zalgo.
 
-def ["astBuilder" => a] | _ := import("prelude/monte_ast",
-                                      [=> NullOk, => DeepFrozen,
-                                       => __matchSame, => __bind, => Map,
-                                       => __switchFailed, => Int, => Str,
-                                       => Bool, => Double, => Char,
-                                       => simple__quasiParser, => List,
-                                       => __booleanFlow, => __validateFor,
-                                       => __comparer, => __makeOrderedSpace,
-                                       => __iterWhile, => __mapExtract,
-                                       => bench, => __accumulateList,
-                                       => __quasiMatcher, => __suchThat,
-                                       => __makeVerbFacet])
-
+def a := astBuilder
 
 # Maybe Python isn't so bad after all.
 object zip:

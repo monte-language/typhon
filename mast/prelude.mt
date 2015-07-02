@@ -583,9 +583,9 @@ var preludeScope := [
 ]
 
 # AST (needed for auditors).
-def [=> astBuilder] := import("prelude/monte_ast",
-                         preludeScope.with("DeepFrozenStamp", DeepFrozenStamp))
-_installASTBuilder(astBuilder)
+preludeScope |= import("prelude/monte_ast",
+                         preludeScope | [=> DeepFrozenStamp, => TransparentStamp])
+_installASTBuilder(preludeScope["astBuilder"])
 
 # Simple QP.
 preludeScope |= import("prelude/simple", preludeScope)

@@ -11,7 +11,7 @@ def parserScope := [
     => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
     => M, => import, => throw, => typhonEval,
     => simple__quasiParser, => term__quasiParser, => __makeOrderedSpace,
-    => bench,
+    => bench, => astBuilder
 ]
 
 def [=> makeMonteParser] | _ := import("lib/parsers/monte", parserScope)
