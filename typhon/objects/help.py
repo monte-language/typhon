@@ -6,6 +6,7 @@ from typhon.errors import Refused
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object
+from typhon.objects.user import ScriptObject
 
 
 RUN_1 = getAtom(u"run", 1)
@@ -53,8 +54,11 @@ class Help(Object):
             specimen = args[0]
             lines = []
 
-            lines.append(u"Object type: %s" %
-                    specimen.__class__.__name__.decode("utf-8"))
+            if isinstance(specimen, ScriptObject):
+                name = specimen.displayName
+            else:
+                name = specimen.__class__.__name__.decode("utf-8")
+            lines.append(u"Object type: %s" % name)
 
             doc = specimen.docString()
             if doc is not None:
