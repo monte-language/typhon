@@ -13,7 +13,7 @@
 # under the License.
 
 from rpython.rlib.jit import jit_debug, promote
-from rpython.rlib.objectmodel import compute_identity_hash, specialize
+from rpython.rlib.objectmodel import compute_identity_hash
 from rpython.rlib.rstackovf import StackOverflow, check_stack_overflow
 
 from typhon.atoms import getAtom
@@ -24,6 +24,7 @@ RUN_1 = getAtom(u"run", 1)
 _CONFORMTO_1 = getAtom(u"_conformTo", 1)
 _PRINTON_1 = getAtom(u"_printOn", 1)
 _RESPONDSTO_2 = getAtom(u"_respondsTo", 2)
+_SEALEDDISPATCH_1 = getAtom(u"_sealedDispatch", 1)
 _UNCALL_0 = getAtom(u"_uncall", 0)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
@@ -113,6 +114,11 @@ class Object(object):
                 arity = unwrapInt(arguments[1])
                 atom = getAtom(verb, arity)
                 return wrapBool(atom in self.respondingAtoms())
+
+            if atom is _SEALEDDISPATCH_1:
+                # to _sealedDispatch(_): return null
+                from typhon.objects.constants import NullObject
+                return NullObject
 
             if atom is _UNCALL_0:
                 from typhon.objects.constants import NullObject
