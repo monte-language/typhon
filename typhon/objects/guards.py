@@ -52,6 +52,9 @@ class AnyGuard(Object):
 
     stamps = [deepFrozenStamp]
 
+    def toString(self):
+        return u"Any"
+
     def recv(self, atom, args):
         if atom is COERCE_2:
             return args[0]
@@ -75,6 +78,10 @@ class AnyOfGuard(Object):
 
     def __init__(self, subguards):
         self.subguards = subguards
+
+    def toString(self):
+        substrings = [subguard.toString() for subguard in self.subguards]
+        return u"Any[%s]" % u", ".join(substrings)
 
     def recv(self, atom, args):
         if atom is COERCE_2:
