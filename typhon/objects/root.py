@@ -29,6 +29,16 @@ _UNCALL_0 = getAtom(u"_uncall", 0)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 
+mirandaAtoms = [
+    _CONFORMTO_1,
+    _PRINTON_1,
+    _RESPONDSTO_2,
+    _SEALEDDISPATCH_1,
+    _UNCALL_0,
+    _WHENMORERESOLVED_1,
+]
+
+
 def addTrail(ue, target, atom, args):
     argStringList = []
     for arg in args:
@@ -113,7 +123,9 @@ class Object(object):
                 verb = unwrapStr(arguments[0])
                 arity = unwrapInt(arguments[1])
                 atom = getAtom(verb, arity)
-                return wrapBool(atom in self.respondingAtoms())
+                result = (atom in self.respondingAtoms() or
+                          atom in mirandaAtoms)
+                return wrapBool(result)
 
             if atom is _SEALEDDISPATCH_1:
                 # to _sealedDispatch(_): return null

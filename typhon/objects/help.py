@@ -9,6 +9,22 @@ from typhon.objects.root import Object
 
 
 RUN_1 = getAtom(u"run", 1)
+_CONFORMTO_1 = getAtom(u"_conformTo", 1)
+_PRINTON_1 = getAtom(u"_printOn", 1)
+_RESPONDSTO_2 = getAtom(u"_respondsTo", 2)
+_SEALEDDISPATCH_1 = getAtom(u"_sealedDispatch", 1)
+_UNCALL_0 = getAtom(u"_uncall", 0)
+_WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
+
+
+mirandaAtoms = [
+    _CONFORMTO_1,
+    _PRINTON_1,
+    _RESPONDSTO_2,
+    _SEALEDDISPATCH_1,
+    _UNCALL_0,
+    _WHENMORERESOLVED_1,
+]
 
 
 def dedent(paragraph):
@@ -47,7 +63,9 @@ class Help(Object):
             atoms = specimen.respondingAtoms()
             if atoms:
                 for atom in atoms:
-                    lines.append(u"Method: %s/%d" % (atom.verb, atom.arity))
+                    if atom not in mirandaAtoms:
+                        lines.append(u"Method: %s/%d" % (atom.verb,
+                                                         atom.arity))
             else:
                 lines.append(u"No methods declared")
 
