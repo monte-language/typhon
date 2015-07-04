@@ -51,6 +51,7 @@ COMPLEMENT_0 = getAtom(u"complement", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 COS_0 = getAtom(u"cos", 0)
 FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
+FLOOR_0 = getAtom(u"floor", 0)
 GETCATEGORY_0 = getAtom(u"getCategory", 0)
 GET_1 = getAtom(u"get", 1)
 GETSPAN_0 = getAtom(u"getSpan", 0)
@@ -224,6 +225,9 @@ class DoubleObject(Object):
 
         if atom is ADD_1:
             return self.add(args[0])
+
+        if atom is FLOOR_0:
+            return IntObject(int(self._d))
 
         if atom is MULTIPLY_1:
             return self.mul(args[0])
