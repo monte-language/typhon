@@ -31,7 +31,7 @@ def bench(args):
     if not benchmarkSettings.enabled:
         debug_print("Not running benchmark", name,
                     "since benchmarking is disabled")
-        return
+        return NullObject
 
     debug_print("Benchmarking", name)
 
