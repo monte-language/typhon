@@ -232,7 +232,7 @@ theSlotBinder = SlotBinder()
 class SpecializedSlotBinder(Object):
     def __init__(self, guard):
         self.guard = guard
-        if deepFrozenStamp in guard.stamps:
+        if guard.auditedBy(deepFrozenStamp):
             self.stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):

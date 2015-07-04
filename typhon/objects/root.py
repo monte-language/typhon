@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import jit_debug, promote
+from rpython.rlib.jit import jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import compute_identity_hash
 from rpython.rlib.rstackovf import StackOverflow, check_stack_overflow
 
@@ -58,7 +58,7 @@ class Object(object):
     _attrs_ = "stamps",
 
     # The attributes that are not mutable.
-    _immutable_fields_ = "stamps",
+    _immutable_fields_ = "stamps[*]",
 
     # The auditor stamps on objects.
     stamps = []
@@ -165,13 +165,25 @@ class Object(object):
     def recv(self, atom, args):
         raise Refused(self, atom, args)
 
+    @unroll_safe
     def auditedBy(self, prospect):
+        """
+        Whether a prospective stamp has been left on this object.
+        """
+
+        prospect = promote(prospect)
+
         from typhon.objects.equality import optSame, EQUAL
-        if prospect in self.stamps:
-            return True
+
+        # Already audited with an identical stamp?
         for stamp in self.stamps:
+            if prospect is stamp:
+                return True
+
             if optSame(prospect, stamp) is EQUAL:
                 return True
+
+        # Sorry, but nope.
         return False
 
     def printOn(self, printer):

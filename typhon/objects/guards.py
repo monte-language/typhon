@@ -111,7 +111,7 @@ class FinalSlotGuard(Guard):
 
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
-        if deepFrozenStamp in self.valueGuard.stamps:
+        if self.valueGuard.auditedBy(deepFrozenStamp):
             self.stamps = [deepFrozenStamp]
 
     def subCoerce(self, specimen):
@@ -140,7 +140,7 @@ class VarSlotGuard(Guard):
 
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
-        if deepFrozenStamp in self.valueGuard.stamps:
+        if self.valueGuard.auditedBy(deepFrozenStamp):
             self.stamps = [deepFrozenStamp]
 
     def subCoerce(self, specimen):

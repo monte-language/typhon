@@ -17,6 +17,7 @@ from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.root import Object, runnable
 
+
 AUDIT_1 = getAtom(u"audit", 1)
 COERCE_2 = getAtom(u"coerce", 2)
 PASSES_1 = getAtom(u"passes", 1)
@@ -84,12 +85,15 @@ class TransparentGuard(Object):
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool, NullObject
         if atom is PASSES_1:
-            return wrapBool(transparentStamp in args[0].stamps)
+            return wrapBool(args[0].auditedBy(transparentStamp))
+
         if atom is COERCE_2:
-            if transparentStamp in args[0].stamps:
+            if args[0].auditedBy(transparentStamp):
                 return args[0]
-            args[1].call("run", [NullObject])
+            from typhon.objects.ejectors import throw
+            throw(args[1], NullObject)
             return NullObject
+
         raise Refused(self, atom, args)
 
 
@@ -108,13 +112,17 @@ class Selfless(Object):
         from typhon.objects.constants import NullObject
         if atom is AUDIT_1:
             return wrapBool(True)
+
         if atom is PASSES_1:
-            return wrapBool(selfless in args[0].stamps)
+            return wrapBool(args[0].auditedBy(selfless))
+
         if atom is COERCE_2:
-            if selfless in args[0].stamps:
+            if args[0].auditedBy(selfless):
                 return args[0]
-            args[1].call(u"run", [NullObject])
+            from typhon.objects.ejectors import throw
+            throw(args[1], NullObject)
             return NullObject
+
         raise Refused(self, atom, args)
 
 selfless = Selfless()

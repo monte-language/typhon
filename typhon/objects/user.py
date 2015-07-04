@@ -16,7 +16,7 @@ from rpython.rlib.jit import unroll_safe
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Ejecting, Refused, UserException
+from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject, unwrapStr
@@ -42,8 +42,7 @@ class AstInflator(Object):
         if atom.verb == u"run" and atom.arity >= 1:
             astBuilder = getGlobal(u"astBuilder")
             if astBuilder is NullObject:
-                raise UserException(StrObject(u"node builder not yet installed"
-                                              u", AST not available"))
+                raise userError(u"node builder not yet installed, AST not available")
             nodeName = unwrapStr(args[0])
             # XXX Preserve spans
             return astBuilder.call(nodeName, args[1:] + [NullObject])
@@ -65,9 +64,9 @@ class Audition(Object):
         self.guardLog = []
 
     def ask(self, auditor):
-
         if not self.active:
-            raise UserException(StrObject(u"audition is out of scope"))
+            raise userError(u"audition is out of scope")
+
         doCaching = False
         cached = False
 
@@ -107,13 +106,12 @@ class Audition(Object):
                 self.askedLog, self.guardLog = prevlogs
 
     def getGuard(self, name):
-        n = unwrapStr(name)
-        if n not in self.guards:
+        if name not in self.guards:
             self.guardLog = None
             from typhon.objects.data import StrObject
             raise UserException(StrObject(u'"%s" is not a free variable in %s' %
-                                (n, self.fqn)))
-        answer = self.guards[n]
+                                (name, self.fqn)))
+        answer = self.guards[name]
         if self.guardLog is not None:
             if False:  # DF check
                 self.guardLog.append((name, answer))
@@ -126,7 +124,7 @@ class Audition(Object):
             return self.ask(args[0])
 
         if atom is GETGUARD_1:
-            return self.getGuard(args[0])
+            return self.getGuard(unwrapStr(args[0]))
 
         if atom is GETOBJECTEXPR_0:
             if self.ast.monteAST is None:
@@ -161,9 +159,11 @@ class ScriptObject(Object):
                        if len(auditors) > 0 and auditors[0] != NullObject
                        else anyGuard)
 
+        # XXX this should all eventually be on the codeScript so that the
+        # caching can be auto-shared amongst all instances of this class.
         if auditors:
             self.stamps = self.audit(auditors, self.codeScript.objectAst,
-                                     closureNames, globalsNames)
+                                     closureNames, globalsNames)[:]
 
     def audit(self, auditors, ast, closureNames, globalsNames):
         if auditors[0] == NullObject:
