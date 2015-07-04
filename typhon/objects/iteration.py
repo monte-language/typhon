@@ -34,35 +34,25 @@ def getLocation(code):
 
 
 loopDriver = JitDriver(greens=["code"],
-                       reds=["consumer", "ejector", "iterator", "machine",
-                             "env"],
-                       virtualizables=["env"],
+                       reds=["consumer", "ejector", "iterator"],
                        get_printable_location=getLocation)
 
 
-def loopJIT(consumer, ejector, iterator):
-    if isinstance(consumer, ScriptObject):
-        # Just copy and inline here.
-        code = consumer.codeScript.methods.get(RUN_2, None)
-        if code is not None:
-            machine = SmallCaps(code, consumer.closure, consumer.globals)
-            # JIT merge point.
-            loopDriver.jit_merge_point(code=code, consumer=consumer,
-                                       ejector=ejector, iterator=iterator,
-                                       machine=machine, env=machine.env)
-            values = unwrapList(iterator.call(u"next", [ejector]))
-            # Push the arguments onto the stack, backwards.
-            values.reverse()
-            for arg in values:
-                machine.push(arg)
-                machine.push(NullObject)
-            # print "--- Entering JIT loop", RUN_2
-            machine.run()
-            return
+def slowLoop(iterable, consumer):
+    iterator = iterable.call(u"_makeIterator", [])
 
-    # Relatively slow path here. This should be exceedingly rare, actually!
-    values = iterator.call(u"next", [ejector])
-    consumer.call(u"run", unwrapList(values))
+    with Ejector() as ej:
+        while True:
+            try:
+                values = iterator.call(u"next", [ej])
+                consumer.call(u"run", unwrapList(values))
+            except Ejecting as e:
+                if e.ejector is ej:
+                    break
+                else:
+                    raise
+
+    return NullObject
 
 
 @runnable(RUN_2, [deepFrozenStamp])
@@ -73,16 +63,42 @@ def loop(args):
 
     iterable = args[0]
     consumer = args[1]
+
+    # If the consumer is *not* a ScriptObject, then damn them to the slow
+    # path. In order for the consumer to not be ScriptObject, though, the
+    # compiler and optimizer must have decided that an object could be
+    # directly passed to __loop(), which is currently impossible to do without
+    # manual effort. It's really not a common pathway at all.
+    if not isinstance(consumer, ScriptObject):
+        return slowLoop(iterable, consumer)
+
+    # Rarer path: If the consumer doesn't actually have RUN_2, then they're
+    # not going to be JIT'd. Again, the compiler and optimizer won't ever do
+    # this to us; it has to be intentional.
+    code = consumer.codeScript.methods.get(RUN_2, None)
+    if code is None:
+        return slowLoop(iterable, consumer)
+
     iterator = iterable.call(u"_makeIterator", [])
 
-    with Ejector() as ej:
+    ej = Ejector()
+    try:
         while True:
-            try:
-                loopJIT(consumer, ej, iterator)
-            except Ejecting as e:
-                if e.ejector is ej:
-                    break
-                else:
-                    raise
+            # JIT merge point.
+            loopDriver.jit_merge_point(code=code, consumer=consumer,
+                                       ejector=ej, iterator=iterator)
+            machine = SmallCaps(code, consumer.closure, consumer.globals)
+            values = unwrapList(iterator.call(u"next", [ej]))
+            # Push the arguments onto the stack, backwards.
+            values.reverse()
+            for arg in values:
+                machine.push(arg)
+                machine.push(NullObject)
+            machine.run()
+    except Ejecting as e:
+        if e.ejector is not ej:
+            raise
+    finally:
+        ej.disable()
 
     return NullObject

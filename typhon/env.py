@@ -44,14 +44,6 @@ class Environment(object):
 
     _immutable_fields_ = "frame[*]", "globals[*]"
 
-    _virtualizable_ = (
-        "local[*]",
-        "frame[*]",
-        "globals[*]",
-        "valueStack[*]", "depth",
-        "handlerStack[*]", "handlerDepth",
-    )
-
     # The stack pointer. Always points to the *empty* cell above the top of
     # the stack.
     depth = 0
@@ -60,8 +52,6 @@ class Environment(object):
     handlerDepth = 0
 
     def __init__(self, frame, globals, localSize, stackSize, handlerSize):
-        self = hint(self, access_directly=True, fresh_virtualizable=True)
-
         assert localSize >= 0, "Negative local size not allowed!"
         assert stackSize >= 0, "Negative stack size not allowed!"
         assert handlerSize >= 0, "Negative handler stack size not allowed!"
