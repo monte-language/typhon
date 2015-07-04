@@ -26,7 +26,7 @@ RUN_2 = getAtom(u"run", 2)
 @runnable(RUN_2)
 def bench(args):
     obj = args[0]
-    name = unwrapStr(args[1])
+    name = unwrapStr(args[1]).encode("utf-8")
 
     if not benchmarkSettings.enabled:
         debug_print("Not running benchmark", name,
@@ -44,6 +44,7 @@ def bench(args):
     obj.call(u"run", [])
     taken = time.time() - taken
     while taken < 1.0 and loops < 100000000:
+        debug_print("Took", taken, "seconds to run", loops, "loops")
         loops *= 10
         debug_print("Trying", loops, "loops...")
         acc = 0
@@ -52,7 +53,6 @@ def bench(args):
             acc += 1
             obj.call(u"run", [])
         taken = time.time() - taken
-        debug_print("Took", taken, "seconds to run", loops, "loops")
     debug_print("Okay! Will take", loops, "loops at", taken, "seconds")
 
     # Step 2: Take trials.
@@ -89,7 +89,7 @@ def bench(args):
             sec = msec / 1000
             timing = "%f s/iteration" % sec
 
-    debug_print(name + u":",
+    debug_print(name + ":",
                 "Took %d loops in %f seconds (%s)" % (loops, taken, timing))
 
     # All done!
