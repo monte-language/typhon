@@ -13,6 +13,7 @@
 # under the License.
 
 from rpython.rlib.jit import unroll_safe
+from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -22,11 +23,12 @@ from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
-from typhon.objects.refs import EVENTUAL, Promise, resolution
+from typhon.objects.refs import EVENTUAL, Promise, resolution, isResolved
 from typhon.objects.root import Object
 
 
 ISSETTLED_1 = getAtom(u"isSettled", 1)
+MAKETRAVERSALKEY_1 = getAtom(u"makeTraversalKey", 1)
 OPTSAME_2 = getAtom(u"optSame", 2)
 SAMEEVER_2 = getAtom(u"sameEver", 2)
 SAMEYET_2 = getAtom(u"sameYet", 2)
@@ -157,6 +159,22 @@ def optSame(first, second, cache=None):
         # Well, nothing failed, so it would seem that they must be equal.
         return EQUAL
 
+    if isinstance(first, TraversalKey):
+        if not isinstance(second, TraversalKey):
+            return INEQUAL
+        if first.snapHash != second.snapHash:
+            return INEQUAL
+        # are the values the same now?
+        if optSame(first.ref, second.ref) is not EQUAL:
+            return INEQUAL
+        # OK but were they the same when the traversal keys were made?
+        if len(first.fringe) != len(second.fringe):
+            return INEQUAL
+        for i in range(len(first.fringe)):
+            if not first.fringe[i].eq(second.fringe[i]):
+                return INEQUAL
+        return EQUAL
+
     # We've eliminated all objects that can be compared on first principles, now
     # we need the specimens to cooperate with further investigation.
 
@@ -187,6 +205,179 @@ def optSame(first, second, cache=None):
 
     # By default, objects are not equal.
     return INEQUAL
+
+#Only look at a few levels of the object graph for hash values
+HASH_DEPTH = 10
+
+@unroll_safe
+def samenessHash(obj, depth, path, fringe):
+    """
+    Generate a hash code for an object that may not be completely
+    settled. Equality of hash code implies sameness of objects. The generated
+    hash is valid until settledness of a component changes.
+    """
+    if depth <= 0:
+        # not gonna look any further for the purposes of hash computation, but
+        # we do have to know about unsettled refs
+        if samenessFringe(obj, path, fringe):
+            # obj is settled.
+            return -1
+        elif fringe is None:
+            raise userError(u"Must be settled")
+        else:
+            # not settled.
+            return -1
+
+    o = resolution(obj)
+    if o is NullObject:
+        return 0
+
+    # Objects that do their own hashing.
+    if (isinstance(o, BoolObject) or isinstance(o, CharObject)
+        or isinstance(o, DoubleObject) or isinstance(o, IntObject)
+        or isinstance(o, BigInt) or isinstance(o, StrObject)
+        or isinstance(o, TraversalKey)):
+        return o.hash()
+
+    # Lists.
+    if isinstance(o, ConstList):
+
+        oList = unwrapList(o)
+        result = len(oList)
+        for i, x in enumerate(oList):
+            if fringe is None:
+                fr = None
+            else:
+                fr = FringePath(i, path)
+            result ^= i ^ samenessHash(x, depth - 1, fr, fringe)
+        return result
+
+    # Other objects compared by structure.
+    if selfless in o.stamps:
+        if transparentStamp in o.stamps:
+            return samenessHash(o.call(u"_uncall", []), depth, path, fringe)
+        #XXX Semitransparent support goes here
+
+    # Objects compared by identity.
+    if isResolved(o):
+        return compute_identity_hash(o)
+    elif fringe is None:
+        raise userError(u"Must be settled")
+    # Unresolved refs.
+    fringe.append(FringeNode(o, path))
+    return -1
+
+    
+
+def samenessFringe(original, path, fringe, sofar=None):
+    # Build a fringe after walking this object graph, and return whether
+    # it's settled.
+    if sofar is None:
+        sofar = {}
+    o = resolution(original)
+    if o is NullObject:
+        return True
+    if deepFrozenStamp in o.stamps:
+        return True
+    if o in sofar:
+        return True
+    if isinstance(o, ConstList):
+        sofar[o] = None
+        result = True
+        for i, x in enumerate(unwrapList(o)):
+            if fringe is None:
+                fr = None
+            else:
+                fr = FringePath(i, path)
+            result &= samenessFringe(o, fr, fringe, sofar)
+            if (not result) and fringe is None:
+                # Unresolved promise found.
+                return False
+
+    if (isinstance(o, BoolObject) or isinstance(o, CharObject)
+        or isinstance(o, DoubleObject) or isinstance(o, IntObject)
+        or isinstance(o, BigInt) or isinstance(o, StrObject)
+        or isinstance(o, TraversalKey)):
+        return True
+
+    if selfless in o.stamps:
+        if transparentStamp in o.stamps:
+            return samenessFringe(o.call(u"_uncall", []), path, fringe, sofar)
+        #XXX Semitransparent support goes here
+
+    if isResolved(o):
+        return True
+
+    # Welp, it's unsettled.
+    if fringe is not None:
+        fringe.append(FringeNode(o, path))
+    return False
+
+class FringePath(object):
+    def __init__(self, position, next):
+        self.position = position
+        self.next = next
+
+    def eq(left, right):
+        while left is not None:
+            if right is None or left.position != right.position:
+                return False
+            left = left.next
+            right = right.next
+        return right is None
+
+    def fringeHash(self):
+        p = self
+        h = 0
+        shift = 0
+        while p is not None:
+            h ^= self.position << shift
+            shift = (shift + 4) % 32
+            p = p.next
+        return h
+
+
+class FringeNode(object):
+    def __init__(self, obj, path):
+        self.identity = obj
+        self.path = path
+
+    def eq(self, other):
+        if self.identity is not other.identity:
+            return False
+        if self.path is None:
+            if other.path is None:
+                return True
+            return False
+        if other.path is None:
+            return False
+        return self.path.eq(other.path)
+
+    def fringeHash(self):
+        return compute_identity_hash(self.identity) ^ self.path.fringeHash()
+
+
+def sameYetHash(obj, fringe):
+    result = samenessHash(obj, HASH_DEPTH, None, fringe)
+    for f in fringe:
+        result ^= f.fringeHash()
+    return result
+
+
+@autohelp
+class TraversalKey(Object):
+    stamps = [deepFrozenStamp, selfless]
+
+    def __init__(self, ref):
+        self.ref = resolution(ref)
+        self.fringe = []
+        self.snapHash = sameYetHash(self.ref, self.fringe)
+
+    def toString(self):
+        return u"<a traversal key>"
+
+    def hash(self):
+        return self.snapHash
 
 
 @autohelp
@@ -222,5 +413,8 @@ class Equalizer(Object):
             first, second = args
             result = optSame(first, second)
             return wrapBool(result is EQUAL)
+
+        if atom is MAKETRAVERSALKEY_1:
+            return TraversalKey(args[0])
 
         raise Refused(self, atom, args)
