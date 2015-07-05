@@ -30,13 +30,6 @@ def makeEnum(names :List):
                 throw.eject(ej, `$specimen is not one of $enums`)
             return specimen
 
-        to makeSlot(var value):
-            return object enumSlot:
-                to get():
-                    return value
-                to put(v):
-                    value := EnumGuard.coerce(v, null)
-
     return [EnumGuard] + enums
 
 def testEnum(assert):
