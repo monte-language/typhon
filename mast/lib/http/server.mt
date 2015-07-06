@@ -86,7 +86,7 @@ def makeRequestPump():
                         return true
 
                     def b`@{via (UTF8.decode) header}:@{via (UTF8.decode) value}$\r$\n@t` exit ej := buf
-                    pendingHeaders |= [header => value]
+                    pendingHeaders |= [header => value.trim()]
                     buf := t
                     return true
 
@@ -118,7 +118,6 @@ def makeResponsePump():
             null
 
         to received(response):
-            # traceln(`preparing to send $response`)
             def [statusCode, headers, body] := response
             def status := `$statusCode ${statusMap[statusCode]}`
             var rv := [b`HTTP/1.1 $status$\r$\n`]
