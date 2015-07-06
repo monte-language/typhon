@@ -133,7 +133,7 @@ class FinalSlotGuard(Guard):
         raise Refused(self, atom, args)
 
     def toString(self):
-        return u"FinalSlot[" + self.valueGuard.toString() + "]"
+        return u"FinalSlot[" + self.valueGuard.toString() + u"]"
 
 
 class VarSlotGuard(Guard):
