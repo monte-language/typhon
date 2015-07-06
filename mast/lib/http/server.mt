@@ -103,6 +103,7 @@ def makeRequestTube():
 def statusMap :Map := [
     200 => "OK",
     400 => "Bad Request",
+    404 => "Not Found",
 ]
 
 
