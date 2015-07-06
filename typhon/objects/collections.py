@@ -32,7 +32,6 @@ from typhon.strategies import strategyFactory
 
 ADD_1 = getAtom(u"add", 1)
 AND_1 = getAtom(u"and", 1)
-BUTNOT_1 = getAtom(u"butNot", 1)
 ASLIST_0 = getAtom(u"asList", 0)
 ASMAP_0 = getAtom(u"asMap", 0)
 ASSET_0 = getAtom(u"asSet", 0)
@@ -597,8 +596,7 @@ def keyEq(first, second):
 
 
 def keyHash(key):
-    from typhon.objects.equality import samenessHash
-    return samenessHash(resolveKey(key), 10, None, None)
+    return resolveKey(key).hash()
 
 
 def monteDict():
@@ -825,14 +823,13 @@ class ConstSet(Object):
         if atom is OR_1:
             return self._or(args[0])
 
-        # XXX Decide if we follow python-style '-' or E-style '&!' here.
         if atom is SUBTRACT_1:
             return self.subtract(args[0])
 
         if atom is ASLIST_0:
             return ConstList(self.objectMap.keys())
 
-        if atom is BUTNOT_1:
+        if atom is SUBTRACT_1:
             return self.subtract(args[0])
 
         if atom is WITH_1:

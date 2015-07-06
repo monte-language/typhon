@@ -90,7 +90,7 @@ unittest([
 
 
 # Must come before List. Must come after Void and Bool.
-def __validateFor(flag :Bool) :Void as DeepFrozenStamp:
+def __validateFor(flag :Bool) :Void:
     if (!flag):
         throw("Failed to validate loop!")
 
@@ -561,9 +561,8 @@ object __booleanFlow as DeepFrozenStamp:
 def [=> SubrangeGuard, => DeepFrozen] := import(
     "prelude/deepfrozen",
     [=> __comparer, => __booleanFlow, => __makeVerbFacet,
-     => __validateFor, => __bind, => List, => DeepFrozenStamp, => Same,
-     => TransparentStamp, => Bool, => Char, => Double, => Int, => Str,
-     ])
+     => DeepFrozenStamp, => Same, => TransparentStamp,
+     => Bool, => Char, => Double, => Int, => Str])
 
 
 
