@@ -26,4 +26,5 @@ def registerGlobals(d):
 
 
 def getGlobal(k):
+    assert isinstance(k, unicode)
     return gs.get(k, None)

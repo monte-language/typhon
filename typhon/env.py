@@ -28,9 +28,9 @@ def finalize(scope):
     from typhon.prelude import getGlobal
     from typhon.objects.guards import FinalSlotGuard
     # This is kind of stupid, but it does resolve the circularity in time.
-    deepFrozen = getGlobal("DeepFrozen")
-    if deepFrozen is None and "DeepFrozen" in scope:
-        deepFrozen = scope["DeepFrozen"]
+    deepFrozen = getGlobal(u"DeepFrozen")
+    if deepFrozen is None and u"DeepFrozen" in scope:
+        deepFrozen = scope[u"DeepFrozen"]
     rv = {}
     for key in scope:
         o = scope[key]
