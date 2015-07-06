@@ -177,15 +177,15 @@ class Environment(object):
         self.createBindingLocal(index, Binding(slot, bindingGuard))
 
     def getBindingLocal(self, index):
-        # Elidability is based on bindings only being assigned once.
         assert index >= 0, "Frame index was negative!?"
         assert index < len(self.local), "Frame index out-of-bounds :c"
+        if self.local[index] is None:
+            print "Warning: Use-before-define on local index", index
+            print "Expect an imminent crash."
+            from typhon.objects.refs import UnconnectedRef
+            return UnconnectedRef(u"Local index %d used before definition" %
+                                  index)
 
-        # The promotion here is justified by a lack of ability for any node to
-        # dynamically alter its frame index. If the node is green (and they're
-        # always green), then the index is green as well. That said, the JIT
-        # is currently good enough at figuring this out that no annotation is
-        # currently needed.
         assert self.local[index] is not None, "Local binding use-before-define"
         return self.local[index]
 
