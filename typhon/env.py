@@ -15,6 +15,7 @@
 from rpython.rlib.jit import hint, promote
 
 from typhon.atoms import getAtom
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.guards import anyGuard
 from typhon.objects.slots import Binding, FinalSlot
 
@@ -25,11 +26,20 @@ PUT_1 = getAtom(u"put", 1)
 
 def finalize(scope):
     from typhon.prelude import getGlobal
-    from typhon.scopes.safe import theFinalSlotGuardMaker
+    from typhon.objects.guards import FinalSlotGuard
+    # This is kind of stupid, but it does resolve the circularity in time.
+    deepFrozen = getGlobal("DeepFrozen")
+    if deepFrozen is None and "DeepFrozen" in scope:
+        deepFrozen = scope["DeepFrozen"]
     rv = {}
     for key in scope:
-        rv[key] = Binding(FinalSlot(scope[key], anyGuard),
-                          theFinalSlotGuardMaker)
+        o = scope[key]
+        if deepFrozenStamp in o.stamps and deepFrozen is not None:
+            g = deepFrozen
+        else:
+            g = anyGuard
+        rv[key] = Binding(FinalSlot(scope[key], g),
+                          FinalSlotGuard(g))
     return rv
 
 

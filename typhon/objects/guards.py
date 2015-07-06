@@ -132,6 +132,9 @@ class FinalSlotGuard(Guard):
             return wrapBool(False)
         raise Refused(self, atom, args)
 
+    def toString(self):
+        return u"FinalSlot[" + self.valueGuard.toString() + "]"
+
 
 class VarSlotGuard(Guard):
     """

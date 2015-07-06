@@ -17,7 +17,7 @@ object PATTERN_HOLE {}
 object VALUE_HOLE {}
 
 def _makeString(chunks):
-    return object stringMaker:
+    return object stringMaker as DeepFrozenStamp:
         to substitute(values) :Str:
             def rv := [].diverge()
             for chunk in chunks:
@@ -29,7 +29,7 @@ def _makeString(chunks):
             return "".join(rv.snapshot())
 
 
-object simple__quasiParser:
+object simple__quasiParser as DeepFrozenStamp:
     to patternHole(index):
         return [PATTERN_HOLE, index]
 
