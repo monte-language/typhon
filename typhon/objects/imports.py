@@ -62,8 +62,7 @@ class Import(Object):
                             self.recorder)
 
         # Get results.
-        with self.recorder.context("Time spent in vats"):
-            result = evaluateTerms([term], finalize(scope))
+        result = evaluateTerms([term], finalize(scope))
 
         if result is None:
             debug_print("Result was None :c")
