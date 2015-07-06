@@ -86,6 +86,7 @@ tubes: mast/lib/tubes/nullPump.ty mast/lib/tubes/mapPump.ty \
 	mast/lib/tubes/chain.ty
 
 http: mast/lib/http/client.ty mast/lib/http/server.ty \
+	mast/lib/http/tag.ty mast/lib/http/resource.ty \
 	tubes
 
 irc: mast/lib/irc/client.ty mast/lib/irc/user.ty \
