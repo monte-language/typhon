@@ -46,8 +46,8 @@ def makeDebugResource(runtime):
             return notFoundResource
 
         to run(_, headers):
-            def heap := currentRuntime.getHeapStatistics()
-            def reactor := currentRuntime.getReactorStatistics()
+            def heap := runtime.getHeapStatistics()
+            def reactor := runtime.getReactorStatistics()
 
             def buckets := heap.getBuckets().sortValues().reverse().slice(0, 20)
             def bucketList := [for name => count in (buckets) tag.li(`$name: $count`)]
