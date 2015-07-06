@@ -66,7 +66,10 @@ def makeMonteParser():
                 result := eval(tokens, environment)
             catch via (unsealException) [problem, trail]:
                 failure := `$problem`
-                for line in trail.reverse():
+                # Discard the first line from the trail since it's always the
+                # eval() frame, which is noisy and useless. Also the second
+                # line. And maybe more lines in the future?
+                for line in trail.reverse().slice(2):
                     traceln(line)
 
 def reduce(result):
