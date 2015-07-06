@@ -9,9 +9,13 @@ from typhon.objects.root import Object
 from typhon.objects.user import ScriptObject
 
 
+GETALARMS_0 = getAtom(u"getAlarms", 0)
 GETBUCKETS_0 = getAtom(u"getBuckets", 0)
 GETHEAPSTATISTICS_0 = getAtom(u"getHeapStatistics", 0)
-SIZE_0 = getAtom(u"size", 0)
+GETMEMORYUSAGE_0 = getAtom(u"getMemoryUsage", 0)
+GETOBJECTCOUNT_0 = getAtom(u"getObjectCount", 0)
+GETREACTORSTATISTICS_0 = getAtom(u"getReactorStatistics", 0)
+GETSELECTABLES_0 = getAtom(u"getSelectables", 0)
 
 
 # The fun of GC management. This is all very subject to change and only works
@@ -48,7 +52,8 @@ class Heap(Object):
     A statistical snapshot of the heap.
     """
 
-    size = 0
+    objectCount = 0
+    memoryUsage = 0
 
     def __init__(self):
         self.buckets = {}
@@ -61,7 +66,8 @@ class Heap(Object):
         if name not in self.buckets:
             self.buckets[name] = 0
         self.buckets[name] += 1
-        self.size += 1
+        self.objectCount += 1
+        self.memoryUsage += rgc.get_rpy_memory_usage(obj)
 
     def recv(self, atom, args):
         if atom is GETBUCKETS_0:
@@ -70,8 +76,11 @@ class Heap(Object):
                 d[StrObject(name)] = IntObject(size)
             return ConstMap(d)
 
-        if atom is SIZE_0:
-            return IntObject(self.size)
+        if atom is GETMEMORYUSAGE_0:
+            return IntObject(self.memoryUsage)
+
+        if atom is GETOBJECTCOUNT_0:
+            return IntObject(self.objectCount)
 
         raise Refused(self, atom, args)
 
@@ -88,6 +97,39 @@ def makeHeapStats():
 
 
 @autohelp
+class ReactorStats(Object):
+    """
+    Information about the reactor.
+
+    This object is unsafe because it refers directly to the (read-only) vital
+    statistics of the runtime's reactor.
+    """
+
+    def __init__(self, reactor):
+        self.reactor = reactor
+
+    def recv(self, atom, args):
+        if atom is GETALARMS_0:
+            return IntObject(len(self.reactor.alarmQueue.heap))
+
+        if atom is GETSELECTABLES_0:
+            return IntObject(len(self.reactor._selectables))
+
+        raise Refused(self, atom, args)
+
+
+def makeReactorStats():
+    """
+    Compute some information about the reactor.
+    """
+
+    # XXX what a hack
+    from typhon.vats import currentVat
+    reactor = currentVat.get()._reactor
+    return ReactorStats(reactor)
+
+
+@autohelp
 class CurrentRuntime(Object):
     """
     The Typhon runtime.
@@ -101,5 +143,8 @@ class CurrentRuntime(Object):
     def recv(self, atom, args):
         if atom is GETHEAPSTATISTICS_0:
             return makeHeapStats()
+
+        if atom is GETREACTORSTATISTICS_0:
+            return makeReactorStats()
 
         raise Refused(self, atom, args)
