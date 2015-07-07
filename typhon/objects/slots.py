@@ -62,6 +62,45 @@ class Binding(Object):
 
 
 @autohelp
+class FinalBinding(Object):
+    """
+    A binding with a final slot.
+
+    This object is equivalent to a standard Typhon binding and Typhon final
+    slot, but is more memory- and CPU-efficient.
+    """
+
+    _immutable_ = True
+    stamps = [selfless, transparentStamp]
+
+    def __init__(self, value, guard):
+        self.value = value
+        self.guard = guard
+
+    def toString(self):
+        return u"<final binding for %s>" % self.value.toString()
+
+    def recv(self, atom, args):
+        if atom is GET_0:
+            return FinalSlot(self.value, self.guard)
+
+        if atom is GETGUARD_0:
+            from typhon.objects.guards import FinalSlotGuard
+            return FinalSlotGuard(self.guard)
+
+        if atom is _UNCALL_0:
+            from typhon.objects.guards import FinalSlotGuard
+            from typhon.scopes.safe import theSlotBinder
+            return ConstList([
+                ConstList([theSlotBinder, StrObject(u"run"),
+                           ConstList([FinalSlotGuard(self.guard)])]),
+                StrObject(u"run"),
+                ConstList([FinalSlot(self.value, self.guard), NullObject])])
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
 class Slot(Object):
     """
     A storage space.

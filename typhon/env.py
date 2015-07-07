@@ -12,12 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import hint, promote
+from rpython.rlib.jit import promote
 
 from typhon.atoms import getAtom
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.guards import anyGuard
-from typhon.objects.slots import Binding, FinalSlot
+from typhon.objects.slots import Binding, FinalBinding
 
 
 GET_0 = getAtom(u"get", 0)
@@ -26,7 +26,6 @@ PUT_1 = getAtom(u"put", 1)
 
 def finalize(scope):
     from typhon.prelude import getGlobal
-    from typhon.objects.guards import FinalSlotGuard
     # This is kind of stupid, but it does resolve the circularity in time.
     deepFrozen = getGlobal(u"DeepFrozen")
     if deepFrozen is None and u"DeepFrozen" in scope:
@@ -38,8 +37,7 @@ def finalize(scope):
             g = deepFrozen
         else:
             g = anyGuard
-        rv[key] = Binding(FinalSlot(scope[key], g),
-                          FinalSlotGuard(g))
+        rv[key] = FinalBinding(scope[key], g)
     return rv
 
 

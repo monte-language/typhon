@@ -21,10 +21,10 @@ from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector
-from typhon.objects.guards import FinalSlotGuard, anyGuard
+from typhon.objects.guards import anyGuard
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
-from typhon.objects.slots import Binding, FinalSlot
+from typhon.objects.slots import FinalBinding
 from typhon.prelude import getGlobal
 from typhon.smallcaps.machine import SmallCaps
 
@@ -183,9 +183,7 @@ class ScriptObject(Object):
     def patchSelf(self, guard):
         selfIndex = self.codeScript.selfIndex()
         if selfIndex != -1:
-            self.closure[selfIndex] = Binding(
-                FinalSlot(self, guard),
-                FinalSlotGuard(guard))
+            self.closure[selfIndex] = FinalBinding(self, guard)
 
     def toString(self):
         # Easily the worst part of the entire stringifying experience. We must
