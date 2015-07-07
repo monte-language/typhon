@@ -227,17 +227,28 @@ def makeNounExpr(name, span):
     return astWrapper(nounExpr, makeNounExpr, [name], span,
          scope, "NounExpr", fn f {[name]})
 
+# Doesn't use astWrapper because it is compared by identity, not Transparent.
 def makeTempNounExpr(namePrefix, span):
-    object tempNounExpr:
+    def scope
+    object tempNounExpr implements DeepFrozenStamp:
+        to getStaticScope():
+            return scope
+        to getSpan():
+            return span
+        to getNodeName():
+            return "TempNounExpr"
+        to transform(f):
+            return f(tempNounExpr, makeTempNounExpr, [namePrefix], span)
         to getNamePrefix():
             return namePrefix
+        to _printOn(out):
+            tempNounExpr.subPrintOn(out, 0)
         to subPrintOn(out, priority):
             out.print("$<temp ")
             out.print(namePrefix)
             out.print(">")
-    def scope := makeStaticScope([tempNounExpr], [], [], [], false)
-    return astWrapper(tempNounExpr, makeTempNounExpr, [namePrefix], span,
-         scope, "TempNounExpr", fn f {[namePrefix]})
+    bind scope := makeStaticScope([tempNounExpr], [], [], [], false)
+    return tempNounExpr
 
 def makeSlotExpr(noun, span):
     def scope := noun.getStaticScope()
@@ -755,7 +766,7 @@ def makeDefExpr(pattern, exit_, expr, span):
         to subPrintOn(out, priority):
             if (priorities["assign"] < priority):
                 out.print("(")
-            if (![makeVarPattern, makeBindPattern].contains(pattern._uncall()[0])):
+            if (!["VarPattern", "BindPattern"].contains(pattern.getNodeName())):
                 out.print("def ")
             pattern.subPrintOn(out, priorities["pattern"])
             if (exit_ != null):
@@ -769,8 +780,8 @@ def makeDefExpr(pattern, exit_, expr, span):
         scope, "DefExpr", fn f {[pattern.transform(f), if (exit_ == null) {null} else {exit_.transform(f)}, expr.transform(f)]})
 
 def makeAssignExpr(lvalue, rvalue, span):
-    def [lmaker, _, largs] := lvalue._uncall()
-    def lscope := if (lmaker == makeNounExpr || lmaker == makeTempNounExpr) {
+    def lname := lvalue.getNodeName()
+    def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
         makeStaticScope([], [lvalue], [], [], false)
     } else {
         lvalue.getStaticScope()
@@ -793,8 +804,8 @@ def makeAssignExpr(lvalue, rvalue, span):
         scope, "AssignExpr", fn f {[lvalue.transform(f), rvalue.transform(f)]})
 
 def makeVerbAssignExpr(verb, lvalue, rvalues, span):
-    def [lmaker, _, largs] := lvalue._uncall()
-    def lscope := if (lmaker == makeNounExpr || lmaker == makeTempNounExpr) {
+    def lname := lvalue.getNodeName()
+    def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
         makeStaticScope([], [lvalue], [], [], false)
     } else {
         lvalue.getStaticScope()
@@ -823,8 +834,8 @@ def makeVerbAssignExpr(verb, lvalue, rvalues, span):
 
 
 def makeAugAssignExpr(op, lvalue, rvalue, span):
-    def [lmaker, _, largs] := lvalue._uncall()
-    def lscope := if (lmaker == makeNounExpr || lmaker == makeTempNounExpr) {
+    def lname := lvalue.getNodeName()
+    def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
         makeStaticScope([], [lvalue], [], [], false)
     } else {
         lvalue.getStaticScope()
@@ -1176,7 +1187,7 @@ def makeObjectExpr(docstring, name, asExpr, auditors, script, span):
         to getScript():
             return script
         to subPrintOn(out, priority):
-            def printIt := if (script._uncall()[0] == makeFunctionScript) {
+            def printIt := if (script.getNodeName() == "FunctionScript") {
                 printDocExprSuiteOn
             } else {
                 printObjectSuiteOn
@@ -1679,7 +1690,7 @@ def makeMapPatternAssoc(key, value, span):
         to getValue():
             return value
         to subPrintOn(out, priority):
-            if (key._uncall()[0] == makeLiteralExpr):
+            if (key.getNodeName() == "LiteralExpr"):
                 key.subPrintOn(out, priority)
             else:
                 out.print("(")
@@ -1807,7 +1818,7 @@ def makeQuasiExprHole(expr, span):
         to subPrintOn(out, priority):
             out.print("$")
             if (priorities["braceExpr"] < priority):
-                if (expr._uncall()[0] == makeNounExpr && isIdentifier(expr.getName())):
+                if (expr.getNodeName() == "NounExpr" && isIdentifier(expr.getName())):
                     expr.subPrintOn(out, priority)
                     return
             out.print("{")
@@ -1825,7 +1836,7 @@ def makeQuasiPatternHole(pattern, span):
         to subPrintOn(out, priority):
             out.print("@")
             if (priorities["braceExpr"] < priority):
-                if (pattern._uncall()[0] == makeFinalPattern):
+                if (pattern.getNodeName() == "FinalPattern"):
                     if (pattern.getGuard() == null && isIdentifier(pattern.getNoun().getName())):
                         pattern.subPrintOn(out, priority)
                         return
@@ -1843,7 +1854,7 @@ def quasiPrint(name, quasis, out, priority):
         var p := priorities["prim"]
         if (i + 1 < quasis.size()):
             def next := quasis[i + 1]
-            if (next._uncall()[0] == makeQuasiText):
+            if (next.getNodeName() == "QuasiText"):
                 if (next.getText().size() > 0 && idPart.contains(next.getText()[0])):
                     p := priorities["braceExpr"]
         q.subPrintOn(out, p)
