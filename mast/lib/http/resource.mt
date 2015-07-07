@@ -71,8 +71,6 @@ def makeResource(worker, var children :Map[Str, Any]):
             return children
 
         to get(segment :Str):
-            if (segment == ""):
-                return resource
             if (children.contains(segment)):
                 return children[segment]
             return notFoundResource
@@ -90,8 +88,11 @@ def makeResourceApp(root):
             def [[verb, path], headers] exit badRequest := request
             def [==""] + segments exit badRequest := path.split("/")
             var resource := root
-            for segment in segments:
+            for segment in segments.slice(0, segments.size() - 1):
                 resource get= (segment)
+            def final := segments[segments.size() - 1]
+            if (final != ""):
+                resource get= (final)
             return resource(verb, headers)
         catch _:
             return null
