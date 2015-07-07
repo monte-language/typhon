@@ -106,7 +106,7 @@ monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 
 %.ty: %.mt
 	@ echo "MONTEC $<"
-	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec.ty -mix $< $@ 2> /dev/null
+	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec.ty $< $@ 2> /dev/null
 
 clean:
 	@ echo "CLEAN"
