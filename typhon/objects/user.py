@@ -156,14 +156,13 @@ class ScriptObject(Object):
 
         # Make sure that we can access ourselves.
         self.patchSelf(auditors[0]
-                       if len(auditors) > 0 and auditors[0] != NullObject
+                       if auditors[0] != NullObject
                        else anyGuard)
-
+        auditors = [a for a in auditors]
         # XXX this should all eventually be on the codeScript so that the
         # caching can be auto-shared amongst all instances of this class.
-        if auditors:
-            self.stamps = self.audit(auditors, self.codeScript.objectAst,
-                                     closureNames, globalsNames)[:]
+        self.stamps = self.audit(auditors, self.codeScript.objectAst,
+                                 closureNames, globalsNames)[:]
 
     def audit(self, auditors, ast, closureNames, globalsNames):
         if auditors[0] == NullObject:

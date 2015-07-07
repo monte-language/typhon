@@ -343,6 +343,7 @@ class VarSlotMaker(Object):
 Infinity = DoubleObject(float("inf"))
 NaN = DoubleObject(float("nan"))
 
+theThrower = Throw()
 
 def safeScope():
     return {
@@ -370,7 +371,7 @@ def safeScope():
         u"_makeFinalSlot": theFinalSlotMaker,
         u"_makeVarSlot": VarSlotMaker(),
         u"help": Help(),
-        u"throw": Throw(),
+        u"throw": theThrower,
 
         u"trace": TraceLn(),
         u"traceln": TraceLn(),

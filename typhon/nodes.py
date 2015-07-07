@@ -417,7 +417,7 @@ class Binding(Node):
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"BindingExpr"),
-                               StrObject(self.name)])
+                               Noun(self.name).slowTransform(o)])
 
     def rewriteScope(self, scope):
         # Read.
@@ -989,8 +989,8 @@ class Obj(Node):
 
     @staticmethod
     def fromAST(doc, name, auditors, script):
-        if name is None:
-            raise InvalidAST("Object pattern cannot be None")
+        if not (isinstance(name, FinalPattern) or isinstance(name, IgnorePattern)):
+            raise InvalidAST("Kernel object pattern must be FinalPattern or IgnorePattern")
 
         auditors = tupleToList(auditors)
         if not isinstance(script, Script):
@@ -1042,9 +1042,7 @@ class Obj(Node):
         # Create a code object for this object.
         availableClosure = compiler.frame.copy()
         availableClosure.update(compiler.locals)
-        numAuditors = len(self._implements)
-        if self._as is not None:
-            numAuditors += 1
+        numAuditors = len(self._implements) + 1
         oname = formatName(self._n)
         fqn = compiler.fqn + u"$" + oname
         self.codeScript = CodeScript(oname, self, numAuditors, availableClosure, self._d, fqn)
@@ -1077,13 +1075,20 @@ class Obj(Node):
                 compiler.addInstruction("BINDING_GLOBAL", index)
         for stamp in reversed(self._implements):
             stamp.compile(compiler)
-        if self._as is not None:
+        if self._as is None:
+            index = compiler.addGlobal(u"null")
+            compiler.addInstruction("NOUN_GLOBAL", index)
+        else:
             self._as.compile(compiler)
         index = compiler.addScript(self.codeScript)
         compiler.addInstruction("BINDOBJECT", index)
-        compiler.addInstruction("DUP", 0)
-        compiler.literal(NullObject)
-        self._n.compile(compiler)
+        if isinstance(self._n, IgnorePattern):
+            compiler.addInstruction("POP", 0)
+            compiler.addInstruction("POP", 0)
+            compiler.addInstruction("POP", 0)
+        elif isinstance(self._n, FinalPattern):
+            slotIndex = compiler.addLocal(self._n._n)
+            compiler.addInstruction("BINDFINALSLOT", slotIndex)
 
 
 class CodeScript(object):

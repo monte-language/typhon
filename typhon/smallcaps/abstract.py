@@ -93,6 +93,9 @@ class AbstractInterpreter(object):
             self.pop(len(self.code.scripts[index].globalNames))
             self.pop(len(self.code.scripts[index].closureNames))
             self.push()
+            self.push()
+            self.push()
+            self.push()
         elif instruction == EJECTOR:
             self.push()
             self.pushHandler()

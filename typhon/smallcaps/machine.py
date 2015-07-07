@@ -23,7 +23,7 @@ from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.exceptions import SealedException
-from typhon.objects.guards import FinalSlotGuard, VarSlotGuard
+from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.slots import FinalSlot, VarSlot
 from typhon.profile import csp
 from typhon.smallcaps.ops import *
@@ -74,15 +74,23 @@ class SmallCaps(object):
         return self.env.peek()
 
     @unroll_safe
-    def bindObject(self, index):
-        script = self.code.script(index)
+    def bindObject(self, scriptIndex):
+        from typhon.scopes.safe import theThrower
+        script = self.code.script(scriptIndex)
         auditors = [self.pop() for _ in range(script.numAuditors)]
+        assert len(auditors) == script.numAuditors
         globals = [self.pop() for _ in range(promote(len(script.globalNames)))]
         globals.reverse()
         closure = [self.pop() for _ in range(promote(len(script.closureNames)))]
         closure.reverse()
         obj = script.makeObject(closure, globals, auditors)
         self.push(obj)
+        self.push(obj)
+        self.push(theThrower)
+        if auditors[0] is NullObject:
+            self.push(anyGuard)
+        else:
+            self.push(auditors[0])
 
     @unroll_safe
     def listPattern(self, size):
