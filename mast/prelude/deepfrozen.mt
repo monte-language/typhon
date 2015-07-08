@@ -98,6 +98,11 @@ object DeepFrozen implements DeepFrozenStamp:
             return DeepFrozen.supersetOf(eltGuard)
         if (SubrangeGuard[DeepFrozen].passes(guard)):
             return true
+        if (guard =~ via (Any.extractGuards) subGuards):
+            for g in subGuards:
+                if (!DeepFrozen.supersetOf(g)):
+                    return false
+            return true
         return false
 
     to _printOn(out):

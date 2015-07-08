@@ -14,7 +14,7 @@ object Tag as DeepFrozen:
 object makeTag as DeepFrozen:
     to asType():
         return Tag
-    to run(code :DeepFrozen, name :Str, dataGuard :DeepFrozen):
+    to run(code :Any[Int, Void], name :Str, dataGuard :DeepFrozen):
         return object tag as DeepFrozen implements TagStamp:
             to _uncall():
                 return [makeTag, "run", [code, name, dataGuard]]

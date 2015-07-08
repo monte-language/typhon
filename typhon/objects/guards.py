@@ -15,6 +15,7 @@ from typhon.objects.slots import FinalSlot, VarSlot
 
 COERCE_2 = getAtom(u"coerce", 2)
 EXTRACTGUARD_2 = getAtom(u"extractGuard", 2)
+EXTRACTGUARDS_2 = getAtom(u"extractGuards", 2)
 GET_1 = getAtom(u"get", 1)
 GETGUARD_0 = getAtom(u"getGuard", 0)
 SUPERSETOF_1 = getAtom(u"supersetOf", 1)
@@ -60,6 +61,14 @@ class AnyGuard(Object):
             return args[0]
         if atom is SUPERSETOF_1:
             return wrapBool(True)
+        if atom is EXTRACTGUARDS_2:
+            g = args[0]
+            ej = args[1]
+            if isinstance(g, AnyOfGuard):
+                return ConstList(g.subguards)
+            else:
+                ej.call(u"run", [StrObject(u"Not an AnyOf guard")])
+
         if atom.verb == u"get":
             return AnyOfGuard(args)
         raise Refused(self, atom, args)
@@ -72,7 +81,7 @@ class AnyOfGuard(Object):
     """
     A guard which admits a union of its subguards.
     """
-
+    _immutable_fields_ = 'subguards[*]',
     # XXX EventuallyDeepFrozen?
     stamps = [selfless, transparentStamp]
 
@@ -98,6 +107,7 @@ class AnyOfGuard(Object):
                 if not unwrapBool(g.call(u"supersetOf", [args[0]])):
                     return wrapBool(False)
             return wrapBool(True)
+
         if atom is _UNCALL_0:
             return ConstList([anyGuard, StrObject(u"get"),
                               ConstList(self.subguards)])
