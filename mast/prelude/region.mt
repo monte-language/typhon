@@ -475,11 +475,17 @@ object OrderedSpaceMaker as DeepFrozen:
             return OrderedRegionMaker(myType, myName, boundedLeft, edges)
 
 
+        object maybeSubrangeDeepFrozen:
+            to audit(audition):
+                if (DeepFrozen.supersetOf(myType)):
+                    audition.ask(SubrangeGuard[DeepFrozen])
+                return false
+
+        # Be prepared to show our authorization at the border
+        def myTypeR :Same[myType] := myType
+
         # The OrderedSpace delegates to the myType.
-        # <p>
-        # Of all normal guard messages, the only one it implements itself
-        # rather than delegating is _printOn/1.
-        object OrderedSpace extends myType as DeepFrozen:
+        object OrderedSpace extends myType as DeepFrozen implements maybeSubrangeDeepFrozen:
 
             # Just uses the name used to construct this OrderedSpace
             to _printOn(out):
@@ -487,6 +493,9 @@ object OrderedSpaceMaker as DeepFrozen:
 
             to _uncall():
                 return [OrderedSpaceMaker, "run", [myType, myName]]
+
+            to coerce(specimen, ej) :myTypeR:
+                return myType.coerce(specimen, ej)
 
             # One step in executing the expansion of the relational
             # operators

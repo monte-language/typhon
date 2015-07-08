@@ -10,7 +10,7 @@ object SubrangeGuard as DeepFrozenStamp:
                 def meth := escape e {
                     expr.getScript().getMethodNamed("coerce", e)
                 } catch _ {
-                    throw(audition.getFQName() + " has no coerce/2 method")
+                    throw(audition.getFQN() + " has no coerce/2 method")
                 }
                 if ((def resultGuardExpr := meth.getResultGuard()) != null && resultGuardExpr.getNodeName() == "NounExpr"):
                     def resultGuardSlotGuard := audition.getGuard(resultGuardExpr.getName())
