@@ -613,9 +613,14 @@ class LocalVatRef(Promise):
                         atom.repr.decode("utf-8"))
 
     def sendAll(self, atom, args):
-        return self.vat.send(self.target, atom, args)
+        vat = currentVat.get()
+        refs = [LocalVatRef(arg, vat) for arg in args]
+        return LocalVatRef(self.vat.send(self.target, atom, refs), self.vat)
 
     def sendAllOnly(self, atom, args):
+        vat = currentVat.get()
+        refs = [LocalVatRef(arg, vat) for arg in args]
+        # NB: None is returned here and it's turned into null up above.
         return self.vat.sendOnly(self.target, atom, args)
 
     def optProblem(self):
