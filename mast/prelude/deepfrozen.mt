@@ -1,13 +1,3 @@
-object Really as DeepFrozenStamp:
-    "Non-coercing guard wrapper."
-    to get(guard):
-        return object reallyGuard:
-            to coerce(specimen, ej):
-                def coerced := guard.coerce(specimen, ej)
-                if (coerced != specimen):
-                  throw.eject(ej, M.toQuote(coerced) + " must be same as original specimen " + M.toQuote(specimen))
-                return coerced
-
 def FinalSlot := _makeFinalSlot.asType()
 
 object SubrangeGuard as DeepFrozenStamp:
@@ -28,7 +18,7 @@ object SubrangeGuard as DeepFrozenStamp:
                         if (resultGuard == superguard || superguard._respondsTo("supersetOf", 1) && superguard.supersetOf(resultGuard)):
                             return true
                         throw(audition.getFQN() + " does not have a result guard implying " + M.toQuote(superguard) + ", but " + M.toQuote(resultGuard))
-                    throw(audition.getFQN() + " does not have a determinable result guard, but <& " + resultGuardExpr.getName() + "> :" + M.toQuote(resultGuardSlotGuard))
+                    throw(audition.getFQN() + " does not have a determinable result guard, but <& " + M.toString(resultGuardExpr) + "> :" + M.toQuote(resultGuardSlotGuard))
 
             to coerce(specimen, ej):
                 if (__auditedBy(SpecializedSubrangeGuard, specimen)):
@@ -39,6 +29,12 @@ object SubrangeGuard as DeepFrozenStamp:
                 else:
                     throw.eject(ej, ["Not approved as a subrange of " + M.toQuote(superguard)])
 
+            to passes(specimen):
+                escape notOk:
+                    SpecializedSubrangeGuard.coerce(specimen, notOk)
+                    return true
+                return false
+
             to _printOn(out):
                 out.quote(SubrangeGuard)
                 out.print("[")
@@ -46,24 +42,62 @@ object SubrangeGuard as DeepFrozenStamp:
                 out.print("]")
 
 
-def dataGuards := [Bool, Char, Double, Int, Str]
+def checkDeepFrozen(specimen, sofar, ej, root) as DeepFrozenStamp:
+    def key := __equalizer.makeTraversalKey(specimen)
+    if (sofar.contains(key)):
+        # Oops, been here already.
+        return
+    def sofarther := sofar.with(key)
+    if (__auditedBy(DeepFrozenStamp, specimen)):
+        return
+    else if (Ref.isBroken(specimen)):
+        # Broken refs are DF if their problem is DF.
+        checkDeepFrozen(Ref.optProblem(specimen), sofarther, ej, root)
+        return
+    else if (__auditedBy(Selfless, specimen) &&
+             __auditedBy(TransparentStamp, specimen)):
+        def [maker, verb, args :List] := specimen._uncall()
+        checkDeepFrozen(maker, sofarther, ej, root)
+        checkDeepFrozen(verb, sofarther, ej, root)
+        for arg in args:
+            checkDeepFrozen(arg, sofarther, ej, root)
+    else:
+        if (__equalizer.sameYet(specimen, root)):
+            throw.eject(ej, M.toQuote(root) + " is not DeepFrozen")
+        else:
+            throw.eject(ej, M.toQuote(root) + " is not DeepFrozen because " +
+                        M.toQuote(specimen) + " is not")
+
+
+def auditDeepFrozen
+def dataGuards := [Bool, Char, Double, Int, Str, Void]
 object DeepFrozen implements DeepFrozenStamp:
 
     to audit(audition):
-        #requireAudit(audition, throw)
+        auditDeepFrozen(audition, throw)
         audition.ask(DeepFrozenStamp)
-        return false
-
-    to isDeepFrozen(specimen):
         return false
 
     to coerce(specimen, ej):
         return specimen
 
     to supersetOf(guard):
+        if (guard == DeepFrozen):
+            return true
         if (dataGuards.contains(guard)):
             return true
         # XXX orderedspace version of data guards
+        if (guard =~ via (Same.extractValue) sameVal):
+            escape notOk:
+                checkDeepFrozen(sameVal, [].asSet(), notOk, sameVal)
+                return true
+            return false
+        if (guard =~ via (FinalSlot.extractGuard) valGuard):
+            return DeepFrozen.supersetOf(valGuard)
+        if (guard =~ via (List.extractGuard) eltGuard):
+            return DeepFrozen.supersetOf(eltGuard)
+        if (SubrangeGuard[DeepFrozen].passes(guard)):
+            return true
         return false
 
     to _printOn(out):
@@ -71,5 +105,25 @@ object DeepFrozen implements DeepFrozenStamp:
 
     #to optionally():
     #to eventually():
+
+bind auditDeepFrozen(audition, fail) as DeepFrozenStamp:
+    def objectExpr := audition.getObjectExpr()
+    def patternSS := objectExpr.getName().getStaticScope()
+    def closurePatts := (objectExpr.getScript().getStaticScope().namesUsed() -
+                        patternSS.getDefNames())
+
+    for patt in closurePatts:
+        def name := patt.getName()
+        if (patternSS.getVarNames().contains(name)):
+            throw.eject(fail, M.toQuote(name) + " in the definition of " +
+                        audition.getFQN() + " is a variable pattern " +
+                        "and therefore not DeepFrozen")
+        else:
+            def guard := audition.getGuard(name)
+            if (!DeepFrozen.supersetOf(guard)):
+                throw.eject(fail,
+                            M.toQuote(name) + " in the lexical scope of " +
+                            audition.getFQN() + " does not have a guard " +
+                            "implying DeepFrozen, but " + M.toQuote(guard))
 
 [=> SubrangeGuard, => DeepFrozen]

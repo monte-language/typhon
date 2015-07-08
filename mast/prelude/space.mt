@@ -1,8 +1,8 @@
-def charSpace := OrderedSpaceMaker(Char, "Char")
-def intSpace := OrderedSpaceMaker(Int, "Int")
-def doubleSpace := OrderedSpaceMaker(Double, "Double")
+def charSpace :DeepFrozen := OrderedSpaceMaker(Char, "Char")
+def intSpace :DeepFrozen := OrderedSpaceMaker(Int, "Int")
+def doubleSpace :DeepFrozen := OrderedSpaceMaker(Double, "Double")
 
-object __makeOrderedSpace extends OrderedSpaceMaker:
+object __makeOrderedSpace extends OrderedSpaceMaker as DeepFrozen:
     to spaceOfValue(value):
         "Given a value of a type whose reflexive (x <=> x) instances are
          fully ordered, this returns the corresponding OrderedSpace."

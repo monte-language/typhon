@@ -119,8 +119,8 @@ object OrderedRegionMaker as DeepFrozen:
 
             to _uncall():
                 return [OrderedRegionMaker, "run", [myType, myName,
-                                                    initBoundedLeft,
-                                                    initEdges]]
+                                                    myBoundedLeft,
+                                                    myEdges]]
 
             # Is pos in the region?
 

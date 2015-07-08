@@ -1,10 +1,10 @@
 # interface Tag :DeepFrozen guards TagStamp :DeepFrozen:
 #     pass
-object TagStamp:
+object TagStamp as DeepFrozen:
     to audit(_):
         return true
 
-object Tag:
+object Tag as DeepFrozen:
     to coerce(specimen, ej):
         return specimen
         #if (__auditedBy(TagStamp, specimen)):
@@ -14,8 +14,8 @@ object Tag:
 object makeTag as DeepFrozen:
     to asType():
         return Tag
-    to run(code :NullOk[Int], name :Str, dataGuard :DeepFrozen):
-        return object tag implements TagStamp:
+    to run(code :DeepFrozen, name :Str, dataGuard :DeepFrozen):
+        return object tag as DeepFrozen implements TagStamp:
             to _uncall():
                 return [makeTag, "run", [code, name, dataGuard]]
 
@@ -50,7 +50,7 @@ object makeTag as DeepFrozen:
             to op__cmp(other):
                 return name.op__cmp(other.getName())
 
-def optMakeTagFromData(val, mkt):
+def optMakeTagFromData(val, mkt) as DeepFrozen:
     switch (val):
         match ==null:
             return mkt("null", null)
@@ -237,7 +237,7 @@ object makeTerm as DeepFrozen:
 def mkt(name, data) as DeepFrozen:
     return makeTerm(makeTag(null, name, Any), data, [], null)
 
-object termBuilder:
+object termBuilder as DeepFrozen:
     to leafInternal(tag, data, span):
         return makeTerm(tag, data, [], span)
 
@@ -259,19 +259,19 @@ object termBuilder:
         arglist.push(arg)
         return arglist
 
-object VALUE_HOLE {}
-object PATTERN_HOLE {}
-object EOF {}
-def decimalDigits := '0'..'9'
-def hexDigits := decimalDigits | 'a'..'f' | 'A'..'F'
+object VALUE_HOLE as DeepFrozen {}
+object PATTERN_HOLE as DeepFrozen {}
+object EOF as DeepFrozen {}
+def decimalDigits :DeepFrozen := '0'..'9'
+def hexDigits :DeepFrozen := decimalDigits | 'a'..'f' | 'A'..'F'
 
 # huh, maybe regions are dumb for this? guess we need sets
-def segStart := 'a'..'z' | 'A'..'Z' | '_'..'_' | '$'..'$' | '.'..'.'
-def segPart := segStart | '0'..'9' | '-'..'-'
-def closers := ['(' => ')', '[' => ']', '{' => '}']
+def segStart :DeepFrozen := 'a'..'z' | 'A'..'Z' | '_'..'_' | '$'..'$' | '.'..'.'
+def segPart :DeepFrozen := segStart | '0'..'9' | '-'..'-'
+def closers :DeepFrozen := ['(' => ')', '[' => ']', '{' => '}']
 
 
-def _makeTermLexer(input, builder, braceStack, var nestLevel):
+def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
 
     # The character under the cursor.
     var currentChar := null
@@ -558,7 +558,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel):
         to lexerForNextChunk(chunk):
             return _makeTermLexer(chunk, builder, braceStack, nestLevel)
 
-object makeTermLexer:
+object makeTermLexer as DeepFrozen:
     to run(input, builder):
         # State for paired delimiters like "", {}, (), []
         def braceStack := [[null, null, 0, true]].diverge()
@@ -591,7 +591,7 @@ def convertToTerm(val, ej) as DeepFrozen:
         match _:
             throw.eject(ej, `Could not coerce $val to term`)
 
-object qEmptySeq:
+object qEmptySeq as DeepFrozen:
     to reserve():
         return 0
 
@@ -608,7 +608,7 @@ object qEmptySeq:
         return 0
 
 
-def makeQPairSeq(left, right):
+def makeQPairSeq(left, right) as DeepFrozen:
     return object qpair:
         to getLeft():
             return left
@@ -646,7 +646,7 @@ def makeQPairSeq(left, right):
             return left.reserve() + right.reserve()
 
 
-def matchCoerce(val, isFunctorHole, tag):
+def matchCoerce(val, isFunctorHole, tag) as DeepFrozen:
     var result := null
     if (isFunctorHole):
         def mkt(name, data, args):
@@ -676,7 +676,7 @@ def matchCoerce(val, isFunctorHole, tag):
     return null
 
 
-def makeQTerm(functor, args):
+def makeQTerm(functor, args) as DeepFrozen:
     def coerce(termoid):
         if (termoid !~ _ :Term):
             return matchCoerce(termoid, functor.getIsFunctorHole(), functor.getTag())
@@ -734,7 +734,7 @@ def makeQTerm(functor, args):
         to reserve():
             return 1
 
-def makeQFunctor(tag, data, span):
+def makeQFunctor(tag, data, span) as DeepFrozen:
     return object qfunctor:
         to _printOn(out):
             out.print(tag.getName())
@@ -791,7 +791,7 @@ def makeQFunctor(tag, data, span):
             return -1
 
 
-def multiget(args, num, indices, repeat):
+def multiget(args, num, indices, repeat) as DeepFrozen:
     var result := args[num]
     for i in indices:
          if (result =~ rlist :List):
@@ -803,7 +803,7 @@ def multiget(args, num, indices, repeat):
     return result
 
 
-def multiput(bindings, holeNum, indices, newVal):
+def multiput(bindings, holeNum, indices, newVal) as DeepFrozen:
     var list := bindings
     var dest := holeNum
     for i in indices:
@@ -826,7 +826,7 @@ def multiput(bindings, holeNum, indices, newVal):
     return result
 
 
-def makeQDollarHole(tag, holeNum, isFunctorHole):
+def makeQDollarHole(tag, holeNum, isFunctorHole) as DeepFrozen:
     return object qdollarhole:
 
         to isHole():
@@ -886,7 +886,7 @@ def makeQDollarHole(tag, holeNum, isFunctorHole):
             return 1
 
 
-def makeQAtHole(tag, holeNum, isFunctorHole):
+def makeQAtHole(tag, holeNum, isFunctorHole) as DeepFrozen:
     return object qathole:
         to isHole():
             return true
@@ -938,7 +938,7 @@ def makeQAtHole(tag, holeNum, isFunctorHole):
         to reserve():
             return 1
 
-def inBounds(num, quant):
+def inBounds(num, quant) as DeepFrozen:
     switch (quant):
         match =="?":
             return num == 0 || num == 1
@@ -948,7 +948,7 @@ def inBounds(num, quant):
             return num >= 0
     return false
 
-def makeQSome(subPattern, quant, span):
+def makeQSome(subPattern, quant, span) as DeepFrozen:
     return object qsome:
         to getSubPattern():
             return subPattern
@@ -1009,13 +1009,12 @@ def makeQSome(subPattern, quant, span):
                 throw("Improper quantity: $result vs $quant")
             return result
 
-def tokenStart := 'a'..'z' | 'A'..'Z' | '_'..'_' | '$'..'$' | '.'..'.'
 
-
-def mkq(name, data):
+def mkq(name, data) as DeepFrozen:
     return makeQFunctor(makeTag(null, name, Any), data, null)
 
-object qBuilder:
+
+object qBuilder as DeepFrozen:
     to leafInternal(tag, data, span):
         return makeQFunctor(tag, data, span)
 
@@ -1040,7 +1039,7 @@ object qBuilder:
         return makeQPairSeq(arglist, arg)
 
 
-def _parseTerm(lex, builder, err):
+def _parseTerm(lex, builder, err) as DeepFrozen:
     def [VALUE_HOLE, PATTERN_HOLE] := [lex.valueHole(), lex.patternHole()]
     def tokens := __makeList.fromIterable(lex)
     var dollarHoleValueIndex := -1
@@ -1093,7 +1092,7 @@ def _parseTerm(lex, builder, err):
         if (token.getData() != null):
             return token
         def name := token.getTag().getName()
-        if (name.size() > 0 && tokenStart(name[0])):
+        if (name.size() > 0 && segStart(name[0])):
             if (peek() == VALUE_HOLE):
                 advance(fail)
                 return makeQDollarHole(token, dollarHoleValueIndex += 1, false)
@@ -1156,14 +1155,9 @@ def _parseTerm(lex, builder, err):
             return some(arglist(")", fail))
         return some(prim(fail))
 
-    term # deleting this line breaks tests. is there some compiler BS going on?
     return prim(err)
 
-def parseTerm(input):
-    def lex := makeTermLexer(input, termBuilder)
-    return _parseTerm(lex, termBuilder, throw)
-
-def makeQuasiTokenChain(makeLexer, template):
+def makeQuasiTokenChain(makeLexer, template) as DeepFrozen:
     var i := -1
     var current := makeLexer("", qBuilder)
     var lex := current
@@ -1200,9 +1194,7 @@ def makeQuasiTokenChain(makeLexer, template):
                 return chainer.next(ej)
 
 
-def [VALUE_HOLE, PATTERN_HOLE] := makeTermLexer.holes()
-
-object quasitermParser:
+object quasitermParser as DeepFrozen:
     to valueHole(n):
         return VALUE_HOLE
     to patternHole(n):
@@ -1210,8 +1202,8 @@ object quasitermParser:
 
     to valueMaker(template):
         def chain := makeQuasiTokenChain(makeTermLexer, template)
-        def q := _parseTerm(chain, qBuilder, throw)
-        return object qterm extends q:
+        def q :DeepFrozen := _parseTerm(chain, qBuilder, throw)
+        return object qterm extends q as DeepFrozen:
            to substitute(values):
                def vals := q.substSlice(values, [].diverge())
                if (vals.size() != 1):
@@ -1220,8 +1212,8 @@ object quasitermParser:
 
     to matchMaker(template):
         def chain := makeQuasiTokenChain(makeTermLexer, template)
-        def q := _parseTerm(chain, qBuilder, throw)
-        return object qterm extends q:
+        def q :DeepFrozen := _parseTerm(chain, qBuilder, throw)
+        return object qterm extends q as DeepFrozen:
             to matchBind(values, specimen, ej):
                 def bindings := [].diverge()
                 def blee := q.matchBindSlice(values, [specimen], bindings, [], 1)

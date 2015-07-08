@@ -884,9 +884,8 @@ def parseMonte(lex, builder, mode, err):
             advance(ej)
             def name := if (peekTag() == "bind") {
                 advance(ej)
-            def n := noun(ej)
-            def g := maybeGuard()
-                builder.BindPattern(n, g, spanFrom(spanStart))
+                def n := noun(ej)
+                builder.BindPattern(n, null, spanFrom(spanStart))
             } else if (peekTag() == "_") {
                 advance(ej)
                 builder.IgnorePattern(null, spanHere())
