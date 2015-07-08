@@ -18,23 +18,39 @@
 # The comparer can come before guards, since it is extremely polymorphic and
 # doesn't care much about the types of the values that it is manipulating.
 object __comparer as DeepFrozenStamp:
+    "A comparison helper.
+
+     This object implements the comparison operators."
+
     to asBigAs(left, right):
+        "Whether `left` and `right` have the same magnitude.
+
+         To be precise, this method returns whether `left` ≤ `right` ∧ `right`
+         ≤ `left`."
         return left.op__cmp(right).isZero()
 
     to geq(left, right):
+        "Whether `left` ≥ `right`."
         return left.op__cmp(right).atLeastZero()
 
     to greaterThan(left, right):
+        "Whether `left` > `right`."
         return left.op__cmp(right).aboveZero()
 
     to leq(left, right):
+        "Whether `left` ≤ `right`."
         return left.op__cmp(right).atMostZero()
 
     to lessThan(left, right):
+        "Whether `left` < `right`."
         return left.op__cmp(right).belowZero()
 
 
 object Void as DeepFrozenStamp:
+    "Nothingness.
+
+     This guard admits only `null`."
+
     to coerce(specimen, ej):
         if (specimen != null):
             throw.eject(ej, "not null")
@@ -46,6 +62,10 @@ def makePredicateGuard(predicate :DeepFrozenStamp, label) as DeepFrozenStamp:
     if (!isStr(label)):
         throw("Predicate guard label must be string")
     return object predicateGuard as DeepFrozenStamp:
+        "A predicate guard.
+
+         This guard admits any object which passes its predicate."
+
         to _printOn(out):
             out.print(label)
 
@@ -91,6 +111,12 @@ unittest([
 
 # Must come before List. Must come after Void and Bool.
 def __validateFor(flag :Bool) :Void as DeepFrozenStamp:
+    "Ensure that `flag` is `true`.
+
+     This object is a safeguard against malicious loop objects. A flag is set
+     to `true` and closed over by a loop body; once the loop is finished, the
+     flag is set to `false` and the loop cannot be reëntered."
+
     if (!flag):
         throw("Failed to validate loop!")
 
@@ -99,6 +125,12 @@ object _ListGuardStamp:
         return true
 
 object List as DeepFrozenStamp:
+    "A guard which admits lists.
+
+     Only immutable lists are admitted by this object. Mutable lists created
+     with `diverge/0` will not be admitted; freeze them first with
+     `snapshot/0`."
+
     to _printOn(out):
         out.print("List")
 
@@ -149,6 +181,12 @@ object _SetGuardStamp:
         return true
 
 object Set as DeepFrozenStamp:
+    "A guard which admits sets.
+
+     Only immutable sets are admitted by this object. Mutable sets created
+     with `diverge/0` will not be admitted; freeze them first with
+     `snapshot/0`."
+
     to _printOn(out):
         out.print("Set")
 
@@ -199,6 +237,12 @@ object _MapGuardStamp:
         return true
 
 object Map as DeepFrozenStamp:
+    "A guard which admits maps.
+
+     Only immutable maps are admitted by this object. Mutable maps created
+     with `diverge/0` will not be admitted; freeze them first with
+     `snapshot/0`."
+
     to _printOn(out):
         out.print("Map")
 
@@ -261,6 +305,11 @@ unittest([
 
 
 object NullOk as DeepFrozenStamp:
+    "A guard which admits `null`.
+
+     When specialized, this object returns a guard which admits its subguard
+     as well as `null`."
+
     to coerce(specimen, ej):
         if (specimen == null):
             return specimen
@@ -354,12 +403,10 @@ def __iterWhile(obj) as DeepFrozenStamp:
 
 
 def __splitList(position :Int) as DeepFrozenStamp:
-    # XXX could use `return fn ...`
-    def listSplitter(specimen, ej):
+    return def listSplitter(specimen, ej):
         if (specimen.size() < position):
             throw.eject(ej, ["List is too short:", specimen])
         return specimen.slice(0, position).with(specimen.slice(position))
-    return listSplitter
 
 
 def __accumulateList(iterable, mapper) as DeepFrozenStamp:
