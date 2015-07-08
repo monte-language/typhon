@@ -3,13 +3,14 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.constants import NullObject
-from typhon.objects.data import StrObject
+from typhon.objects.data import StrObject, unwrapInt, unwrapStr
 from typhon.objects.root import Object
 from typhon.objects.user import ScriptObject
 
 
+COERCE_2 = getAtom(u"coerce", 2)
 RUN_1 = getAtom(u"run", 1)
+RUN_3 = getAtom(u"run", 3)
 _CONFORMTO_1 = getAtom(u"_conformTo", 1)
 _PRINTON_1 = getAtom(u"_printOn", 1)
 _RESPONDSTO_2 = getAtom(u"_respondsTo", 2)
@@ -26,6 +27,11 @@ mirandaAtoms = [
     _UNCALL_0,
     _WHENMORERESOLVED_1,
 ]
+
+
+defaultMethodHelp = {
+    COERCE_2: u"Coerce a specimen with this object, ejecting on failure.",
+}
 
 
 def dedent(paragraph):
@@ -72,6 +78,27 @@ class Help(Object):
                                                          atom.arity))
             else:
                 lines.append(u"No methods declared")
+
+            return StrObject(u"\n".join(lines))
+
+        if atom is RUN_3:
+            specimen = args[0]
+            verb = unwrapStr(args[1])
+            arity = unwrapInt(args[2])
+
+            atom = getAtom(verb, arity)
+            atoms = specimen.respondingAtoms()
+            if atom not in atoms:
+                return StrObject(u"I don't think that that object responds to that method")
+
+            lines = []
+
+            if atom in defaultMethodHelp:
+                doc = defaultMethodHelp[atom]
+            else:
+                doc = u"No documentation available"
+
+            lines.append(u"Method: %s/%d: %s" % (verb, arity, dedent(doc)))
 
             return StrObject(u"\n".join(lines))
 
