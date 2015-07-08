@@ -17,7 +17,7 @@ import weakref
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object
@@ -217,8 +217,7 @@ class RefOps(Object):
         return o.auditedBy(deepFrozenStamp)
 
     def isSelfless(self, o):
-        # XXX overly conservative.
-        return False
+        return o.auditedBy(selfless)
 
     def isSelfish(self, o):
         return self.isNear(o) and not self.isSelfless(o)
