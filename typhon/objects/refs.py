@@ -589,6 +589,54 @@ class NearRef(Promise):
         pass
 
 
+class LocalVatRef(Promise):
+    """
+    A reference to an object in a different vat in the same runtime.
+
+    This object makes no effort to prove that its originating vat and target
+    vat are different vats.
+    """
+
+    def __init__(self, target, vat):
+        self.target = target
+        self.vat = vat
+
+    def toString(self):
+        return u"<farref into vat %s>" % self.vat.toString()
+
+    def hash(self):
+        # XXX shouldn't this simply be unhashable?
+        return self.target.hash()
+
+    def callAll(self, atom, args):
+        raise userError(u"not synchronously callable (%s)" %
+                        atom.repr.decode("utf-8"))
+
+    def sendAll(self, atom, args):
+        return self.vat.send(self.target, atom, args)
+
+    def sendAllOnly(self, atom, args):
+        return self.vat.sendOnly(self.target, atom, args)
+
+    def optProblem(self):
+        return NullObject
+
+    def state(self):
+        return EVENTUAL
+
+    def resolution(self):
+        return self
+
+    def resolutionRef(self):
+        return self
+
+    def isResolved(self):
+        return True
+
+    def commit(self):
+        pass
+
+
 class UnconnectedRef(Promise):
 
     def __init__(self, problem):
