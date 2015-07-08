@@ -93,7 +93,10 @@ class Help(Object):
 
             lines = []
 
-            if atom in defaultMethodHelp:
+            info = atoms[atom]
+            if info is not None:
+                doc = info
+            elif atom in defaultMethodHelp:
                 doc = defaultMethodHelp[atom]
             else:
                 doc = u"No documentation available"

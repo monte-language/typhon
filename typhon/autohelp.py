@@ -7,6 +7,13 @@ import inspect
 from typhon.atoms import Atom
 
 def autohelp(cls):
+    """
+    AutoHelp is here to help.
+
+    Do not mock AutoHelp. AutoHelp should not be engaged manually. AutoHelp is
+    here to help.
+    """
+
     recv = cls.recv.__func__
     names = recv.__code__.co_names
 
@@ -15,10 +22,10 @@ def autohelp(cls):
                                         lambda obj: isinstance(obj, Atom))
     availableAtoms = dict(availableAtoms)
 
-    atoms = []
+    atoms = {}
     for name in names:
         if name in availableAtoms:
-            atoms.append(availableAtoms[name])
+            atoms[availableAtoms[name]] = None
 
     def respondingAtoms(self):
         return atoms

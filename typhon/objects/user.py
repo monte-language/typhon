@@ -207,7 +207,11 @@ class ScriptObject(Object):
 
     def respondingAtoms(self):
         # Only do methods for now. Matchers will be dealt with in other ways.
-        return self.codeScript.methods.keys()
+        d = {}
+        for atom in self.codeScript.methods.keys():
+            d[atom] = self.codeScript.methodDocs.get(atom, None)
+
+        return d
 
     @unroll_safe
     def recv(self, atom, args):

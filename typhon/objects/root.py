@@ -200,7 +200,7 @@ class Object(object):
         return None
 
     def respondingAtoms(self):
-        return []
+        return {}
 
 
 def runnable(singleAtom, _stamps=[]):
@@ -225,7 +225,7 @@ def runnable(singleAtom, _stamps=[]):
                 return doc
 
             def respondingAtoms(self):
-                return [singleAtom]
+                return {singleAtom: doc}
 
             def recv(self, atom, args):
                 if atom is singleAtom:

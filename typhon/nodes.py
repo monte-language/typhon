@@ -1112,6 +1112,7 @@ class CodeScript(object):
         self.availableClosure[displayName] = 42
 
         self.methods = {}
+        self.methodDocs = {}
         self.matchers = []
 
         self.closureNames = OrderedDict()
@@ -1166,6 +1167,8 @@ class CodeScript(object):
         code = compiler.makeCode()
         atom = getAtom(verb, arity)
         self.methods[atom] = code
+        if method._d is not None:
+            self.methodDocs[atom] = method._d
 
     def addMatcher(self, matcher, fqn):
         compiler = Compiler(self.closureNames, self.globalNames, fqn=fqn)
