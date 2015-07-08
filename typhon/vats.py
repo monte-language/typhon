@@ -188,6 +188,9 @@ class scopedVat(object):
 
 class CurrentVatProxy(Object):
 
+    # Copy documentation from Vat.
+    __doc__ = Vat.__doc__
+
     def toString(self):
         vat = currentVat.get()
         return vat.toString()
@@ -195,6 +198,10 @@ class CurrentVatProxy(Object):
     def callAtom(self, atom, args):
         vat = currentVat.get()
         return vat.callAtom(atom, args)
+
+    def respondingAtoms(self):
+        vat = currentVat.get()
+        return vat.respondingAtoms()
 
 
 class VatManager(object):
