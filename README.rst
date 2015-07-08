@@ -173,6 +173,8 @@ please follow these guidelines:
 * Docstrings should refer to their object as "this object".
 * In-jokes are sometimes allowed. Ask on IRC.
 * Dry language is always allowed.
+* Unicode is encouraged; do not be afraid to use symbols which are generally
+  available in Unicode fonts. Ask on IRC if unsure.
 
 An example:
 
@@ -181,3 +183,11 @@ An example:
     A guard which admits the universal set.
     This object specializes to a guard which admits the union of its
     subguards: Any[X, Y, Z] =~ X ∪ Y ∪ Z
+
+Also document objects and methods written in Monte. For methods:
+
+* "this method" is the correct self-reference.
+* To refer to names defined in the method specification, surround the name in
+  backticks.
+* To refer to methods, use atom syntax and backticks: A method with name
+  "meth" and arity 2 would appear as \`meth/2\`.
