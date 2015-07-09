@@ -84,7 +84,7 @@ object DeepFrozen implements DeepFrozenStamp:
         return false
 
     to coerce(specimen, ej):
-        checkDeepFrozen(specimen, [].asSet(), ej, root)
+        checkDeepFrozen(specimen, [].asSet(), ej, specimen)
         return specimen
 
     to supersetOf(guard):
