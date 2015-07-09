@@ -491,8 +491,19 @@ object __switchFailed as DeepFrozenStamp:
 
 
 object __makeVerbFacet as DeepFrozenStamp:
+    "The operator `obj`.`method`."
+
     to curryCall(target, verb):
+        "Curry a call to `target` using `verb`."
+
         return object curried:
+            "A curried call.
+
+             This object responds to messages with the verb \"run\" by passing
+             them to another object with a different verb."
+            to _uncall():
+                return [__makeVerbFacet, "curryCall", [target, verb]]
+
             match [=="run", args]:
                 M.call(target, verb, args)
 
