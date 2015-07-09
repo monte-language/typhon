@@ -23,6 +23,8 @@ def makeBrand(nickname :NullOk[Str]):
 
 
 def makeBrandPair(nickname :NullOk[Str]):
+    "Make a [sealer, unsealer] pair."
+
     object sentinel:
         pass
     var scratchpad := sentinel
@@ -31,6 +33,11 @@ def makeBrandPair(nickname :NullOk[Str]):
 
     def makeBox(contents):
         return object box:
+            "A box.
+
+             The boat's a boat, but inside the box there could be anything!
+             There could even be a boat!"
+
             to _printOn(out) :Void:
                 out.print(`<box sealed by $brand>`)
 
@@ -41,6 +48,8 @@ def makeBrandPair(nickname :NullOk[Str]):
                 scratchpad := contents
 
     object sealer:
+        "A sealer."
+
         to _printOn(out) :Void:
             out.print(`<sealer $brand>`)
 
@@ -48,9 +57,15 @@ def makeBrandPair(nickname :NullOk[Str]):
             return brand
 
         to seal(specimen):
+            "Seal an object into a box.
+
+             The box can only be opened by this object's corresponding
+             unsealer."
             return makeBox(specimen)
 
     object unsealer:
+        "An unsealer."
+
         to _printOn(out) :Void:
             out.print(`<sealer $brand>`)
 
@@ -58,6 +73,10 @@ def makeBrandPair(nickname :NullOk[Str]):
             return brand
 
         to unseal(box):
+            "Unseal a box and retrieve its contents.
+
+             This object can only unseal boxes created by this object's
+             corresponding sealer."
             scratchpad := sentinel
             box.shareContent()
             if (scratchpad == sentinel):

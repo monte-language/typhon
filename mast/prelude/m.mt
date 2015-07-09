@@ -38,6 +38,11 @@ def makeFakeLex(tokens):
 
 def makeM(ast):
     return object m:
+        "A quasiparser for the Monte programming language.
+
+         This object will parse any Monte expression and return an opaque
+         value. In the near future, this object will be a translucent view
+         into a Monte compiler and optimizer."
         to _printOn(out):
             out.print("m`")
             ast._printOn(out)
@@ -80,10 +85,19 @@ def makeValueHole(index):
 def makePatternHole(index):
     return [index, makeMonteLexer.holes()[1]]
 
-def m__quasiParser := makeLexerQP(makeQL, makeChunkingLexer("m``"), makeValueHole,
-                                  makePatternHole)
+object m__quasiParser extends makeLexerQP(makeQL, makeChunkingLexer("m``"),
+                                          makeValueHole, makePatternHole):
+    "A quasiparser for the Monte programming language.
 
-def eval(source, environment):
+     This object will parse any Monte expression and return an opaque
+     value. In the near future, this object will instead return a translucent
+     view into a Monte compiler and optimizer."
+
+def eval(source :Str, environment):
+    "Evaluate a Monte source expression.
+
+     The expression will be provided only the given environment. No other
+     values will be passed in."
     def parser := makeMonteParser("<eval>")
     parser.feedMany(source)
     if (parser.failed()):

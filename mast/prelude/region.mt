@@ -486,6 +486,11 @@ object OrderedSpaceMaker as DeepFrozen:
 
         # The OrderedSpace delegates to the myType.
         object OrderedSpace extends myType as DeepFrozen implements maybeSubrangeDeepFrozen:
+            "An ordered vector space.
+
+             As a guard, this object admits any value in the set of objects in
+             the space. Comparison operators may be used on this object to
+             create subguards which only admit a partition of the set."
 
             # Just uses the name used to construct this OrderedSpace
             to _printOn(out):

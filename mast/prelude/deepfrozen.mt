@@ -72,6 +72,11 @@ def checkDeepFrozen(specimen, sofar, ej, root) as DeepFrozenStamp:
 def auditDeepFrozen
 def dataGuards := [Bool, Char, Double, Int, Str, Void]
 object DeepFrozen implements DeepFrozenStamp:
+    "Transitive immutability.
+
+     As an auditor, this object proves that a specimen is transitively
+     immutable; that is, that a specimen is immutable and that all of its
+     referents are also transitively immutable."
 
     to audit(audition):
         auditDeepFrozen(audition, throw)

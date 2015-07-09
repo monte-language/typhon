@@ -23,26 +23,34 @@ object __comparer as DeepFrozenStamp:
      This object implements the comparison operators."
 
     to asBigAs(left, right):
-        "Whether `left` and `right` have the same magnitude.
-
-         To be precise, this method returns whether `left` ≤ `right` ∧ `right`
-         ≤ `left`."
+        "The operator `left` <=> `right`.
+        
+         Whether `left` and `right` have the same magnitude; to be precise,
+         this method returns whether `left` ≤ `right` ∧ `right` ≤ `left`."
         return left.op__cmp(right).isZero()
 
     to geq(left, right):
-        "Whether `left` ≥ `right`."
+        "The operator `left` >= `right`.
+        
+         Whether `left` ≥ `right`."
         return left.op__cmp(right).atLeastZero()
 
     to greaterThan(left, right):
-        "Whether `left` > `right`."
+        "The operator `left` > `right`.
+        
+         Whether `left` > `right`."
         return left.op__cmp(right).aboveZero()
 
     to leq(left, right):
-        "Whether `left` ≤ `right`."
+        "The operator `left` <= `right`.
+        
+         Whether `left` ≤ `right`."
         return left.op__cmp(right).atMostZero()
 
     to lessThan(left, right):
-        "Whether `left` < `right`."
+        "The operator `left` < `right`.
+        
+         Whether `left` < `right`."
         return left.op__cmp(right).belowZero()
 
 
@@ -424,28 +432,26 @@ def __accumulateList(iterable, mapper) as DeepFrozenStamp:
 
 
 def __matchSame(expected) as DeepFrozenStamp:
-    # XXX could use `return fn ...`
-    def sameMatcher(specimen, ej):
+    "The pattern ==`expected`."
+    return def sameMatcher(specimen, ej):
         if (expected != specimen):
             throw.eject(ej, ["Not the same:", expected, specimen])
-    return sameMatcher
 
 
 def __mapExtract(key) as DeepFrozenStamp:
-    def mapExtractor(specimen, ej):
+    return def mapExtractor(specimen, ej):
         if (specimen.contains(key)):
             return [specimen[key], specimen.without(key)]
         throw.eject(ej, "Key " + M.toQuote(specimen) + " not in map")
-    return mapExtractor
 
 
 def __quasiMatcher(matchMaker, values) as DeepFrozenStamp:
-    def quasiMatcher(specimen, ej):
+    return def quasiMatcher(specimen, ej):
         return matchMaker.matchBind(values, specimen, ej)
-    return quasiMatcher
 
 
 object __suchThat as DeepFrozenStamp:
+    "The pattern patt ? (expr)."
     to run(specimen :Bool):
         def suchThat(_, ej):
             if (!specimen):

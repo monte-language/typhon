@@ -30,6 +30,18 @@ def _makeString(chunks):
 
 
 object simple__quasiParser as DeepFrozenStamp:
+    "A quasiparser of Unicode strings.
+
+     This object is the default quasiparser. It can interpolate any object
+     into a string by pretty-printing it; in fact, that is one of this
+     object's primary uses.
+
+     When used as a pattern, this object performs basic text matching.
+     Patterns always succeed, grabbing zero or more characters non-greedily
+     until the next segment. When patterns are concatenated in the
+     quasiliteral, only the rightmost pattern can match any characters; the
+     other patterns to the left will all match the empty string."
+
     to patternHole(index):
         return [PATTERN_HOLE, index]
 

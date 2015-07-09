@@ -3,9 +3,16 @@ def intSpace :DeepFrozen := OrderedSpaceMaker(Int, "Int")
 def doubleSpace :DeepFrozen := OrderedSpaceMaker(Double, "Double")
 
 object __makeOrderedSpace extends OrderedSpaceMaker as DeepFrozen:
+    "Maker of ordered vector spaces.
+
+     This object implements several Monte operators, including those which
+     provide ordered space syntax."
+
     to spaceOfValue(value):
-        "Given a value of a type whose reflexive (x <=> x) instances are
-         fully ordered, this returns the corresponding OrderedSpace."
+        "Return the ordered space corresponding to a given value.
+
+         The correspondence is obtained via Miranda _getAllegedType(), with
+         special cases for `Char`, `Double`, and `Int`."
 
         if (value =~ i :Int):
             return intSpace
@@ -19,15 +26,19 @@ object __makeOrderedSpace extends OrderedSpaceMaker as DeepFrozen:
             return OrderedSpaceMaker(type, M.toQuote(type))
 
     to op__till(start, bound):
-        "start..!bound is equivalent to
-         (space >= start) & (space < bound)"
+        "The operator `start`..!`bound`.
+
+         This is equivalent to (space ≥ `start`) ∪ (space < `bound`) for the
+         ordered space containing `start` and `bound`."
 
         def space := __makeOrderedSpace.spaceOfValue(start)
         return (space >= start) & (space < bound)
 
     to op__thru(start, stop):
-        "start..stop is equivalent to
-         (space >= start) & (space <= stop)"
+        "The operator `start`..`bound`.
+
+         This is equivalent to (space ≥ `start`) ∪ (space ≤ `bound`) for the
+         ordered space containing `start` and `bound`."
 
         def space := __makeOrderedSpace.spaceOfValue(start)
         return (space >= start) & (space <= stop)
