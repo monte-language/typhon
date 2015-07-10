@@ -3,7 +3,7 @@ from rpython.rlib import rgc
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.collections import ConstMap, monteDict
+from typhon.objects.collections import ConstList, ConstMap, monteDict
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object
 from typhon.objects.user import ScriptObject
@@ -57,6 +57,7 @@ class Heap(Object):
 
     def __init__(self):
         self.buckets = {}
+        self.sizes = {}
 
     def accountObject(self, obj):
         if isinstance(obj, ScriptObject):
@@ -65,15 +66,18 @@ class Heap(Object):
             name = obj.__class__.__name__.decode("utf-8")
         if name not in self.buckets:
             self.buckets[name] = 0
+            self.sizes[name] = rgc.get_rpy_memory_usage(obj)
         self.buckets[name] += 1
         self.objectCount += 1
-        self.memoryUsage += rgc.get_rpy_memory_usage(obj)
+        self.memoryUsage += self.sizes[name]
 
     def recv(self, atom, args):
         if atom is GETBUCKETS_0:
             d = monteDict()
-            for name, size in self.buckets.items():
-                d[StrObject(name)] = IntObject(size)
+            for name, count in self.buckets.items():
+                size = self.sizes.get(name, -1)
+                d[StrObject(name)] = ConstList([IntObject(size),
+                                                IntObject(count)])
             return ConstMap(d)
 
         if atom is GETMEMORYUSAGE_0:
