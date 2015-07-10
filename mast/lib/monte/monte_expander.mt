@@ -69,6 +69,36 @@ def renameCycles(node, renamings, builder):
         }
     return node.transform(renamer)
 
+
+def modPow(ast, maker, args, span):
+    "Expand modular exponentation method calls."
+
+    if (ast.getNodeName() == "MethodCallExpr"):
+        escape ej:
+            def [receiver, verb ? (verb :Str == "mod"), [m]] exit ej := args
+            if (receiver.getNodeName() == "MethodCallExpr"):
+                def x := receiver.getReceiver()
+                def verb ? (verb :Str == "pow") exit ej := receiver.getVerb()
+                def [e] exit ej := receiver.getArgs()
+                return maker(x, "modPow", [e, m], span)
+
+    return M.call(maker, "run", args + [span])
+
+
+# Commented out since there's no global AST builder here at the moment. The
+# code worked fine when it was in monte_optimizer though. ~ C.
+# def testModPow(assert):
+#     def ast := a.MethodCallExpr(a.MethodCallExpr(a.LiteralExpr(7, null), "pow",
+#                                                  [a.LiteralExpr(11, null)],
+#                                                  null),
+#                                 "mod", [a.LiteralExpr(13, null)], null)
+#     def result := a.MethodCallExpr(a.LiteralExpr(7, null), "modPow",
+#                                    [a.LiteralExpr(11, null), a.LiteralExpr(13,
+#                                    null)], null)
+#     assert.equal(ast.transform(modPow), result)
+#
+# unittest([testModPow])
+
 var ii := 0
 
 def expand(node, builder, fail):
@@ -830,6 +860,15 @@ def expand(node, builder, fail):
                 return M.call(builder, nodeName, args + [span])
         return tree.transform(renameTransformer)
 
-    return reifyTemporaries(node.transform(expandTransformer))
+    var ast := reifyTemporaries(node.transform(expandTransformer))
+
+    # Finishing touches.
+
+    # "Expand" modular exponentation. There is extant Monte code which only
+    # runs to completion in reasonable time when this transformation is
+    # applied.
+    ast transform= (modPow)
+
+    return ast
 
 [=> expand]
