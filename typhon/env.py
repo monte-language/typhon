@@ -128,7 +128,11 @@ class Environment(object):
         return binding.callAtom(GET_0, [])
 
     def getValueGlobal(self, index):
-        slot = self.getSlotGlobal(index)
+        # Specialize the relatively common case of FinalBindings.
+        binding = self.getBindingGlobal(index)
+        if isinstance(binding, FinalBinding):
+            return binding.value
+        slot = binding.callAtom(GET_0, [])
         return slot.callAtom(GET_0, [])
 
     def putValueGlobal(self, index, value):
