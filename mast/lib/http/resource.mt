@@ -49,8 +49,16 @@ def makeDebugResource(runtime):
             def heap := runtime.getHeapStatistics()
             def reactor := runtime.getReactorStatistics()
 
-            def buckets := heap.getBuckets().sortValues().reverse().slice(0, 20)
-            def bucketList := [for name => count in (buckets) tag.li(`$name: $count`)]
+            # We want to sort by how "big" each bucket is, which we can obtain
+            # with a DSU. Instead of undecorating, we'll reuse the decoration
+            # as a total footprint.
+            var buckets := [for name => [size, count] in (heap.getBuckets())
+                            name => [size * count, size, count]]
+            buckets := buckets.sortValues().reverse().slice(0, 20)
+            def bucketList := [for name => [footprint, size, count] in (buckets)
+                               tag.li(`$name: $count objects, $size bytes
+                                       each, total footprint
+                                       ${autoSI(footprint)}B`)]
             def heapTag := tag.div(
                 tag.h2("Heap"),
                 tag.p(`Number of live objects: ${heap.getObjectCount()}`),
