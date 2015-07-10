@@ -47,6 +47,7 @@ INSERT_2 = getAtom(u"insert", 2)
 LAST_0 = getAtom(u"last", 0)
 MULTIPLY_1 = getAtom(u"multiply", 1)
 NEXT_1 = getAtom(u"next", 1)
+OP__CMP_1 = getAtom(u"op__cmp", 1)
 OR_1 = getAtom(u"or", 1)
 POP_0 = getAtom(u"pop", 0)
 PUSH_1 = getAtom(u"push", 1)
@@ -278,6 +279,10 @@ class ConstList(Object):
                 return ConstList([])
             return ConstList(self.strategy.fetch_all(self) * count)
 
+        if atom is OP__CMP_1:
+            other = unwrapList(args[0])
+            return IntObject(self.cmp(other))
+
         if atom is REVERSE_0:
             # This might seem slightly inefficient, and it might be, but I
             # want to make it very clear to RPython that we are not mutating
@@ -328,6 +333,19 @@ class ConstList(Object):
         for o in self.strategy.fetch_all(self):
             d[o] = None
         return d
+
+    def cmp(self, other):
+        for i, left in enumerate(self.strategy.fetch_all(self)):
+            right = other[i]
+            try:
+                result = unwrapInt(left.call(u"op__cmp", [right]))
+            except UserException:
+                result = -unwrapInt(right.call(u"op__cmp", [left]))
+            if result < 0:
+                return -1
+            if result > 0:
+                return 1
+        return 0
 
     def contains(self, needle):
         from typhon.objects.equality import EQUAL, optSame
