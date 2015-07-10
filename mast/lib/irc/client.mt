@@ -206,7 +206,6 @@ def makeIRCClient(handler):
                     traceln(`$oldNick is now known as $newNick`)
 
                 match `PING @ping`:
-                    traceln(`Server ping/pong: $ping`)
                     IRCTube.pong(ping)
 
                 # XXX @_
