@@ -258,10 +258,10 @@ def expand(node, builder, fail):
             return builder.DefExpr(name, null, ifaceExpr, span)
         else:
             return builder.MethodCallExpr(
-                builder.DefExpr(builder.ListPattern([builder.FinalPattern(name, null, span), guard],
-                             null, span),
+                builder.DefExpr(builder.ListPattern([name, guard],
+                                                    null, span),
                          null, ifaceExpr, span),
-                "get", [builder.LiteralExpr(0)], span)
+                "get", [builder.LiteralExpr(0, span)], span)
 
     def validateFor(left, right, fail, span):
         if ((left.outNames() & right.namesUsed()).size() > 0):
