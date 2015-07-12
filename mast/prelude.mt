@@ -661,8 +661,18 @@ object __makeProtocolDesc as DeepFrozenStamp:
 
                 throw.eject(ej, "Specimen did not implement " + name)
 
-    to makePair():
-        null
+    to makePair(docString, name, alsoUnknown, stillUnknown, messages):
+        def protocolDescStamp := __makeProtocolDesc(docString, name,
+                                                    alsoUnknown, stillUnknown,
+                                                    messages)
+
+        object protocolDesc extends protocolDescStamp:
+            "The guard for an interface."
+
+            to audit(_):
+                throw("Can't audit with this object")
+
+        return [protocolDesc, protocolDescStamp]
 
 
 object __booleanFlow as DeepFrozenStamp:
