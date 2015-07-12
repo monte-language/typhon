@@ -846,7 +846,7 @@ class Meta(Node):
 
     def __init__(self, nature):
         self.nature = strToString(nature)
-        if self.nature != u"Context":
+        if self.nature != u"context":
             raise InvalidAST("Can't handle meta: %s" %
                              self.nature.encode("utf-8"))
 
