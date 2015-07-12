@@ -597,19 +597,69 @@ def __bind(resolver, guard) as DeepFrozenStamp:
 
 
 def __makeParamDesc(name, guard) as DeepFrozenStamp:
-    return object paramDesc:
+    return object paramDesc as DeepFrozenStamp:
         pass
 
 
-def __makeMessageDesc(unknown, name, params, guard) as DeepFrozenStamp:
-    return object messageDesc:
-        pass
+def __makeMessageDesc(unknown, verb, params, guard) as DeepFrozenStamp:
+    return object messageDesc as DeepFrozenStamp:
+        to getArity():
+            return params.size()
+
+        to getVerb():
+            return verb
 
 
 object __makeProtocolDesc as DeepFrozenStamp:
-    to run(unknown, name, alsoUnknown, stillUnknown, messages):
-        return object protocolDesc:
-            pass
+    "Produce an interface."
+
+    to run(docString, name, alsoUnknown, stillUnknown, messages):
+        # Precalculate [verb, arity] set of required methods.
+        def desiredMethods := [for message in (messages)
+                               [message.getVerb(),
+                                message.getArity()]].asSet()
+
+        return object protocolDesc as DeepFrozenStamp:
+            "An interface; a description of an object protocol.
+
+             As an auditor, this object proves that audited objects implement
+             this interface by examining the object protocol.
+
+             As a guard, this object is an unretractable guard which admits
+             all objects with this interface."
+
+            to _printOn(out):
+                out.print("<interface ")
+                out.print(name)
+                out.print(">")
+
+            to audit(audition) :Bool:
+                "Determine whether an object implements this object as an
+                 interface."
+
+                # Check that all the methods are there and have the right
+                # verb/arity.
+                def script := audition.getObjectExpr().getScript()
+                def scriptMethods := [for m in (script.getMethods())
+                                      [m.getVerb(),
+                                       m.getPatterns().size()]].asSet()
+                def missingMethods := desiredMethods - scriptMethods
+                if (missingMethods.size() != 0):
+                    return false
+
+                return true
+
+            to coerce(specimen, ej):
+                "Admit objects which implement this object's interface."
+
+                if (__auditedBy(protocolDesc, specimen)):
+                    return specimen
+
+                def conformed := specimen._conformTo(protocolDesc)
+                if (__auditedBy(protocolDesc, conformed)):
+                    return conformed
+
+                throw.eject(ej, "Specimen did not implement " + name)
 
     to makePair():
         null
@@ -622,13 +672,13 @@ object __booleanFlow as DeepFrozenStamp:
     to failureList(count :Int) :List:
         return [false] + [__booleanFlow.broken()] * count
 
+
 def [=> SubrangeGuard, => DeepFrozen] := import(
     "prelude/deepfrozen",
     [=> __comparer, => __booleanFlow, => __makeVerbFacet,
      => __validateFor, => __bind, => List, => DeepFrozenStamp, => Same,
      => TransparentStamp, => Bool, => Char, => Double, => Int, => Str, => Void,
      ])
-
 
 
 # New approach to importing the rest of the prelude: Collate the entirety of

@@ -171,6 +171,9 @@ class Object(object):
         Whether a prospective stamp has been left on this object.
         """
 
+        # The number of different objects that will pass through here is
+        # surprisingly low; consider how Python would look if metaclasses were
+        # promoted.
         prospect = promote(prospect)
 
         from typhon.objects.equality import optSame, EQUAL
