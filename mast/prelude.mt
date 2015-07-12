@@ -596,6 +596,14 @@ def __bind(resolver, guard) as DeepFrozenStamp:
     return viaBinder
 
 
+object __booleanFlow as DeepFrozenStamp:
+    to broken():
+        return Ref.broken("Boolean flow expression failed")
+
+    to failureList(count :Int) :List:
+        return [false] + [__booleanFlow.broken()] * count
+
+
 def __makeParamDesc(name, guard) as DeepFrozenStamp:
     return object paramDesc as DeepFrozenStamp:
         pass
@@ -619,7 +627,11 @@ object __makeProtocolDesc as DeepFrozenStamp:
                                [message.getVerb(),
                                 message.getArity()]].asSet()
 
-        return object protocolDesc as DeepFrozenStamp:
+        # The alleged version is prebuilt here so that it can be easily
+        # discovered by the non-alleged guard.
+        def allegedProtocolDesc
+
+        object protocolDesc as DeepFrozenStamp:
             "An interface; a description of an object protocol.
 
              As an auditor, this object proves that audited objects implement
@@ -652,35 +664,45 @@ object __makeProtocolDesc as DeepFrozenStamp:
             to coerce(specimen, ej):
                 "Admit objects which implement this object's interface."
 
-                if (__auditedBy(protocolDesc, specimen)):
+                if (__auditedBy(protocolDesc, specimen) ||
+                    __auditedBy(allegedProtocolDesc, specimen)):
                     return specimen
 
                 def conformed := specimen._conformTo(protocolDesc)
-                if (__auditedBy(protocolDesc, conformed)):
+                if (__auditedBy(protocolDesc, conformed) ||
+                    __auditedBy(allegedProtocolDesc, conformed)):
                     return conformed
 
                 throw.eject(ej, "Specimen did not implement " + name)
+
+            to alleged():
+                "Produce a version of this object which allows specimens to be
+                 stamped even if audition fails."
+
+                return allegedProtocolDesc
+
+        bind allegedProtocolDesc extends protocolDesc as DeepFrozenStamp:
+            to audit(audition) :Bool:
+                protocolDesc.audit(audition)
+                return true
+
+            to coerce(specimen, _):
+                return specimen
+
+        return protocolDesc
 
     to makePair(docString, name, alsoUnknown, stillUnknown, messages):
         def protocolDescStamp := __makeProtocolDesc(docString, name,
                                                     alsoUnknown, stillUnknown,
                                                     messages)
 
-        object protocolDesc extends protocolDescStamp:
+        object protocolDesc extends protocolDescStamp as DeepFrozenStamp:
             "The guard for an interface."
 
             to audit(_):
                 throw("Can't audit with this object")
 
         return [protocolDesc, protocolDescStamp]
-
-
-object __booleanFlow as DeepFrozenStamp:
-    to broken():
-        return Ref.broken("Boolean flow expression failed")
-
-    to failureList(count :Int) :List:
-        return [false] + [__booleanFlow.broken()] * count
 
 
 def [=> SubrangeGuard, => DeepFrozen] := import(
