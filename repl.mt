@@ -10,7 +10,8 @@ var environment := [
     => null, => true, => false, => Infinity, => NaN,
     # Constructors and core operator expansion.
     => __makeDouble, => __makeInt, => __makeList, => __makeMap,
-    => __makeOrderedSpace, => __makeString,
+    => __makeMessageDesc, => __makeOrderedSpace, => __makeParamDesc,
+    => __makeProtocolDesc, => __makeString,
     => __equalizer, => __comparer,
     => __accumulateList, => __accumulateMap,
     # Guards.
@@ -18,9 +19,9 @@ var environment := [
     => List, => Map, => NullOk, => Same, => Set, => Str, => SubrangeGuard,
     => Void,
     => __mapEmpty, => __mapExtract,
-    => __accumulateList, => __booleanFlow, => __iterWhile, => __loop,
-    => __validateFor,
-    => __switchFailed, => __makeVerbFacet, => __comparer,
+    => __accumulateList, => __auditedBy, => __booleanFlow, => __iterWhile,
+    => __loop, => __validateFor,
+    => __switchFailed, => __makeVerbFacet,
     => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
     => simple__quasiParser, => term__quasiParser,
     # Safe capabilities.
