@@ -631,7 +631,7 @@ object __makeProtocolDesc as DeepFrozenStamp:
         # discovered by the non-alleged guard.
         def allegedProtocolDesc
 
-        object protocolDesc as DeepFrozenStamp:
+        object protocolDesc implements Selfless, TransparentStamp:
             "An interface; a description of an object protocol.
 
              As an auditor, this object proves that audited objects implement
@@ -644,6 +644,11 @@ object __makeProtocolDesc as DeepFrozenStamp:
                 out.print("<interface ")
                 out.print(name)
                 out.print(">")
+
+            to _uncall():
+                return [__makeProtocolDesc, "run", [docString, name,
+                                                    alsoUnknown, stillUnknown,
+                                                    messages]]
 
             to audit(audition) :Bool:
                 "Determine whether an object implements this object as an
@@ -698,8 +703,14 @@ object __makeProtocolDesc as DeepFrozenStamp:
                                                     alsoUnknown, stillUnknown,
                                                     messages)
 
-        object protocolDesc extends protocolDescStamp as DeepFrozenStamp:
+        object protocolDesc extends protocolDescStamp implements Selfless, TransparentStamp:
             "The guard for an interface."
+
+            to _uncall():
+                return [__makeProtocolDesc, "makePair", [docString, name,
+                                                         alsoUnknown,
+                                                         stillUnknown,
+                                                         messages]]
 
             to audit(_):
                 throw("Can't audit with this object")
