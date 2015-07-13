@@ -31,7 +31,7 @@ var environment := [
     # Monte-only fun.
     # Typhon safe scope.
     => __auditedBy, => __slotToBinding, => _makeFinalSlot, => _makeVarSlot,
-    => traceln, => unittest,
+    => makeBrandPair, => traceln, => unittest,
     # Typhon unsafe scope.
     => Timer, => bench, => currentProcess, => currentRuntime, => currentVat,
     => makeFileResource, => makeProcess, => makeStdErr, => makeStdIn,

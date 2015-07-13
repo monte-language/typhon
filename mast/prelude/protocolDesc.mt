@@ -12,18 +12,26 @@ def __makeMessageDesc(unknown :DeepFrozen, verb :Str, params :DeepFrozen,
         to getVerb() :Str:
             return verb
 
+def reduce(sets :List[Set]) :Set as DeepFrozen:
+    var rv := [].asSet()
+    for set in sets:
+        rv |= set
+    return rv
 
 object __makeProtocolDesc as DeepFrozen:
     "Produce an interface."
 
-    to run(docString :DeepFrozen, name :Str, alsoUnknown :DeepFrozen,
-           stillUnknown :DeepFrozen, messages :List[DeepFrozen]):
+    to run(docString :NullOk[Str], name :Str, parents :List,
+           stillUnknown :DeepFrozen, messages :List):
         # Precalculate [verb, arity] set of required methods.
-        def desiredMethods :DeepFrozen := [for message in (messages)
-                                           [message.getVerb(),
-                                           message.getArity()]].asSet()
+        def ownMethods :Set := [for message in (messages)
+                                [message.getVerb(),
+                                message.getArity()]].asSet()
+        def parentMethods :List[Set] := [for parent in (parents)
+                                         parent.getMethods()]
+        def desiredMethods :Set := ownMethods | reduce(parentMethods)
 
-        object protocolDesc as DeepFrozen implements Selfless, TransparentStamp:
+        object protocolDesc implements Selfless, TransparentStamp:
             "An interface; a description of an object protocol.
 
              As an auditor, this object proves that audited objects implement
@@ -35,16 +43,24 @@ object __makeProtocolDesc as DeepFrozen:
             to _printOn(out):
                 out.print("<interface ")
                 out.print(name)
+                if (parents.size() != 0):
+                    out.print(" extends ")
+                    parents._printOn(out)
                 out.print(">")
 
             to _uncall():
                 return [__makeProtocolDesc, "run", [docString, name,
-                                                    alsoUnknown, stillUnknown,
+                                                    parents, stillUnknown,
                                                     messages]]
 
             to audit(audition) :Bool:
                 "Determine whether an object implements this object as an
                  interface."
+
+                # XXX should we fail if any parent fails?
+                for parent in parents:
+                    if (!audition.ask(parent)):
+                        traceln(`audit/1: Failed parent: $parent`)
 
                 # Check that all the methods are there and have the right
                 # verb/arity.
@@ -71,12 +87,15 @@ object __makeProtocolDesc as DeepFrozen:
 
                 throw.eject(ej, "Specimen did not implement " + name)
 
+            to getMethods():
+                return desiredMethods
+
         return protocolDesc
 
-    to makePair(docString :DeepFrozen, name :Str, alsoUnknown :DeepFrozen,
-                stillUnknown :DeepFrozen, messages :List[DeepFrozen]):
+    to makePair(docString :NullOk[Str], name :Str, parents :List,
+                stillUnknown :DeepFrozen, messages :List):
         def protocolDescStamp := __makeProtocolDesc(docString, name,
-                                                    alsoUnknown, stillUnknown,
+                                                    parents, stillUnknown,
                                                     messages)
 
         object protocolDesc extends protocolDescStamp implements Selfless, TransparentStamp:
@@ -85,8 +104,7 @@ object __makeProtocolDesc as DeepFrozen:
             to _uncall():
                 return [
                     [__makeProtocolDesc, "makePair", [docString, name,
-                                                      alsoUnknown,
-                                                      stillUnknown,
+                                                      parents, stillUnknown,
                                                       messages]],
                     "get", [0]]
 

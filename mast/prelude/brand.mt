@@ -67,7 +67,7 @@ def makeBrandPair(nickname :NullOk[Str]):
         "An unsealer."
 
         to _printOn(out) :Void:
-            out.print(`<sealer $brand>`)
+            out.print(`<unsealer $brand>`)
 
         to getBrand():
             return brand
