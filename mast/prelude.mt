@@ -657,6 +657,8 @@ object __makeProtocolDesc as DeepFrozenStamp:
                                        m.getPatterns().size()]].asSet()
                 def missingMethods := desiredMethods - scriptMethods
                 if (missingMethods.size() != 0):
+                    traceln("audit/1: Warning: Audition failed due to missing methods",
+                            missingMethods)
                     return false
 
                 return true
