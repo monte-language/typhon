@@ -604,120 +604,6 @@ object __booleanFlow as DeepFrozenStamp:
         return [false] + [__booleanFlow.broken()] * count
 
 
-def __makeParamDesc(name, guard) as DeepFrozenStamp:
-    return object paramDesc as DeepFrozenStamp:
-        pass
-
-
-def __makeMessageDesc(unknown, verb, params, guard) as DeepFrozenStamp:
-    return object messageDesc as DeepFrozenStamp:
-        to getArity():
-            return params.size()
-
-        to getVerb():
-            return verb
-
-
-object __makeProtocolDesc as DeepFrozenStamp:
-    "Produce an interface."
-
-    to run(docString, name, alsoUnknown, stillUnknown, messages):
-        # Precalculate [verb, arity] set of required methods.
-        def desiredMethods := [for message in (messages)
-                               [message.getVerb(),
-                                message.getArity()]].asSet()
-
-        # The alleged version is prebuilt here so that it can be easily
-        # discovered by the non-alleged guard.
-        def allegedProtocolDesc
-
-        object protocolDesc implements Selfless, TransparentStamp:
-            "An interface; a description of an object protocol.
-
-             As an auditor, this object proves that audited objects implement
-             this interface by examining the object protocol.
-
-             As a guard, this object is an unretractable guard which admits
-             all objects with this interface."
-
-            to _printOn(out):
-                out.print("<interface ")
-                out.print(name)
-                out.print(">")
-
-            to _uncall():
-                return [__makeProtocolDesc, "run", [docString, name,
-                                                    alsoUnknown, stillUnknown,
-                                                    messages]]
-
-            to audit(audition) :Bool:
-                "Determine whether an object implements this object as an
-                 interface."
-
-                # Check that all the methods are there and have the right
-                # verb/arity.
-                def script := audition.getObjectExpr().getScript()
-                def scriptMethods := [for m in (script.getMethods())
-                                      [m.getVerb(),
-                                       m.getPatterns().size()]].asSet()
-                def missingMethods := desiredMethods - scriptMethods
-                if (missingMethods.size() != 0):
-                    traceln("audit/1: Warning: Audition failed due to missing methods",
-                            missingMethods)
-                    return false
-
-                return true
-
-            to coerce(specimen, ej):
-                "Admit objects which implement this object's interface."
-
-                if (__auditedBy(protocolDesc, specimen) ||
-                    __auditedBy(allegedProtocolDesc, specimen)):
-                    return specimen
-
-                def conformed := specimen._conformTo(protocolDesc)
-                if (__auditedBy(protocolDesc, conformed) ||
-                    __auditedBy(allegedProtocolDesc, conformed)):
-                    return conformed
-
-                throw.eject(ej, "Specimen did not implement " + name)
-
-            to alleged():
-                "Produce a version of this object which allows specimens to be
-                 stamped even if audition fails."
-
-                return allegedProtocolDesc
-
-        bind allegedProtocolDesc extends protocolDesc as DeepFrozenStamp:
-            to audit(audition) :Bool:
-                protocolDesc.audit(audition)
-                return true
-
-            to coerce(specimen, _):
-                return specimen
-
-        return protocolDesc
-
-    to makePair(docString, name, alsoUnknown, stillUnknown, messages):
-        def protocolDescStamp := __makeProtocolDesc(docString, name,
-                                                    alsoUnknown, stillUnknown,
-                                                    messages)
-
-        object protocolDesc extends protocolDescStamp implements Selfless, TransparentStamp:
-            "The guard for an interface."
-
-            to _uncall():
-                return [__makeProtocolDesc, "makePair", [docString, name,
-                                                         alsoUnknown,
-                                                         stillUnknown,
-                                                         messages]]
-
-            to audit(_):
-                throw("Can't audit with this object")
-
-        return [protocolDesc, protocolDescStamp]
-
-
 def [=> SubrangeGuard, => DeepFrozen] := import(
     "prelude/deepfrozen",
     [=> __comparer, => __booleanFlow, => __makeVerbFacet,
@@ -753,6 +639,9 @@ preludeScope |= import("prelude/simple", preludeScope)
 # Brands require simple QP.
 preludeScope |= import("prelude/brand", preludeScope)
 
+# Interfaces require brands.
+preludeScope |= import("prelude/protocolDesc", preludeScope)
+
 # Regions require simple QP.
 def [
     => OrderedRegionMaker,
@@ -783,8 +672,5 @@ preludeScope |= import("prelude/m", preludeScope)
 preludeScope | [
     "void" => Void,
     "__mapEmpty" => Empty,
-    => __makeMessageDesc,
-    => __makeParamDesc,
-    => __makeProtocolDesc,
     => _flexMap,
 ]
