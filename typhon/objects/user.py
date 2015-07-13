@@ -17,7 +17,7 @@ from rpython.rlib.jit import unroll_safe
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException, userError
-from typhon.objects.constants import NullObject, unwrapBool
+from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector
@@ -87,7 +87,7 @@ class Audition(Object):
                 # We remember the other auditors invoked during this
                 # audition. Let's re-ask them since not all of them may have
                 # cacheable results.
-                self.ask(a)
+                answer = self.ask(a)
             if answer:
                 self.approvers.append(auditor)
             return answer
@@ -102,8 +102,11 @@ class Audition(Object):
                                                   self.guardLog[:])
                 if result:
                     self.approvers.append(auditor)
+                return result
             finally:
                 self.askedLog, self.guardLog = prevlogs
+
+        return False
 
     def getGuard(self, name):
         if name not in self.guards:
@@ -121,7 +124,7 @@ class Audition(Object):
 
     def recv(self, atom, args):
         if atom is ASK_1:
-            return self.ask(args[0])
+            return wrapBool(self.ask(args[0]))
 
         if atom is GETGUARD_1:
             return self.getGuard(unwrapStr(args[0]))
