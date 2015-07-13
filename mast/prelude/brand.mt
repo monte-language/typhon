@@ -14,7 +14,7 @@
 
 
 def makeBrand(nickname :NullOk[Str]):
-    return object brand:
+    return object brand as DeepFrozen:
         to _printOn(out) :Void:
             out.print(`$nickname`)
 

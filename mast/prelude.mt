@@ -277,6 +277,7 @@ object Map as DeepFrozenStamp:
 
             to getGuard():
                 return [keyGuard, valueGuard]
+
             to coerce(var specimen, ej):
                 if (!isMap(specimen)):
                     specimen := specimen._conformTo(SubMap)
@@ -311,6 +312,9 @@ unittest([
     testMapGuardIntStr,
 ])
 
+object _NullOkStamp:
+    to audit(audition):
+        return true
 
 object NullOk as DeepFrozenStamp:
     "A guard which admits `null`.
@@ -330,7 +334,7 @@ object NullOk as DeepFrozenStamp:
         throw.eject(ej, ["Not null:", specimen])
 
     to get(subGuard):
-        return object SubNullOk:
+        return object SubNullOk implements _NullOkStamp:
             to _printOn(out):
                 out.print("NullOk[")
                 out.print(subGuard)
@@ -340,6 +344,17 @@ object NullOk as DeepFrozenStamp:
                 if (specimen == null):
                     return specimen
                 return subGuard.coerce(specimen, ej)
+
+            to getGuard():
+                return subGuard
+
+    to extractGuard(specimen, ej):
+        if (specimen == NullOk):
+            return Any
+        else if (__auditedBy(_NullOkStamp, specimen)):
+            return specimen.getGuard()
+        else:
+            throw.eject(ej, "Not a NullOk guard")
 
 
 def testNullOkUnsubbed(assert):
@@ -607,8 +622,9 @@ object __booleanFlow as DeepFrozenStamp:
 def [=> SubrangeGuard, => DeepFrozen] := import(
     "prelude/deepfrozen",
     [=> __comparer, => __booleanFlow, => __makeVerbFacet,
-     => __validateFor, => __bind, => List, => DeepFrozenStamp, => Same,
-     => TransparentStamp, => Bool, => Char, => Double, => Int, => Str, => Void,
+     => __validateFor, => __bind, => DeepFrozenStamp, => TransparentStamp,
+     => Bool, => Char, => Double, => Int, => Str, => Void,
+     => List, => Map, => NullOk, => Same, => Set,
      ])
 
 

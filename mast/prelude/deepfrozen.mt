@@ -98,10 +98,12 @@ object DeepFrozen implements DeepFrozenStamp:
                 checkDeepFrozen(sameVal, [].asSet(), notOk, sameVal)
                 return true
             return false
-        if (guard =~ via (FinalSlot.extractGuard) valGuard):
-            return DeepFrozen.supersetOf(valGuard)
-        if (guard =~ via (List.extractGuard) eltGuard):
-            return DeepFrozen.supersetOf(eltGuard)
+
+        # Extractable guards in the prelude.
+        for superGuard in [FinalSlot, List, NullOk, Set]:
+            if (guard =~ via (superGuard.extractGuard) subGuard):
+                return DeepFrozen.supersetOf(subGuard)
+
         if (SubrangeGuard[DeepFrozen].passes(guard)):
             return true
         if (guard =~ via (Any.extractGuards) subGuards):
