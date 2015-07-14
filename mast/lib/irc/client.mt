@@ -151,6 +151,10 @@ def makeIRCClient(handler):
                     drain.receive(line + "\r\n")
                 outgoing := []
 
+        to flowAborted(reason):
+            traceln(`$IRCTube flow aborted: $reason`)
+            drain := null
+
         to flowStopped(reason):
             traceln(`$IRCTube flow stopped: $reason`)
             drain := null

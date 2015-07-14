@@ -69,6 +69,9 @@ def makeResponseDrain(resolver):
         to flowingFrom(fount):
             return responseDrain
 
+        to flowAborted(reason):
+            traceln(`Flow aborted: $reason`)
+
         to flowStopped(reason):
             traceln(`End of response: $reason`)
 

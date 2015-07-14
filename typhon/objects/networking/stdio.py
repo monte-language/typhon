@@ -8,6 +8,8 @@ from typhon.objects.root import Object, runnable
 from typhon.vats import currentVat
 
 
+ABORTFLOW_0 = getAtom(u"abortFlow", 0)
+FLOWABORTED_1 = getAtom(u"flowAborted", 1)
 FLOWINGFROM_1 = getAtom(u"flowingFrom", 1)
 FLOWSTOPPED_1 = getAtom(u"flowStopped", 1)
 FLOWTO_1 = getAtom(u"flowTo", 1)
@@ -62,6 +64,12 @@ class InputFount(Object):
 
         if atom is PAUSEFLOW_0:
             return self.pause()
+
+        if atom is ABORTFLOW_0:
+            self._drain.call(u"flowAborted", [StrObject(u"flow aborted")])
+            # Release the drain. They should have released us as well.
+            self._drain = None
+            return NullObject
 
         if atom is STOPFLOW_0:
             self.terminate(u"Flow stopped")
@@ -134,6 +142,12 @@ class OutputDrain(Object):
             data = unwrapList(args[0])
             s = "".join([chr(unwrapInt(byte)) for byte in data])
             self.selectable.enqueue(s)
+            return NullObject
+
+        if atom is FLOWABORTED_1:
+            self._closed = True
+            vat = currentVat.get()
+            self.selectable.error(vat._reactor, unwrapStr(args[0]))
             return NullObject
 
         if atom is FLOWSTOPPED_1:

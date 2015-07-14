@@ -98,6 +98,9 @@ def makeAMP(drain):
         to flowingFrom(upstream):
             null
 
+        to flowAborted(reason):
+            null
+
         to flowStopped(reason):
             null
 

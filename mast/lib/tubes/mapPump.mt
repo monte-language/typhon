@@ -20,9 +20,6 @@ def makeMapPump(f):
         to received(item):
             return [f(item)]
 
-        to progressed(amount):
-            null
-
         to stopped():
             null
 

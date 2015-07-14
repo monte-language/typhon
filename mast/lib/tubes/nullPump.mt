@@ -19,9 +19,6 @@ object nullPump:
     to received(item):
         return []
 
-    to progressed(amount):
-        null
-
     to stopped():
         null
 

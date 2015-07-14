@@ -17,6 +17,9 @@ def compile(config, inT, inputFile, outputFile):
         to receive(s):
             buf.push(s)
 
+        to flowAborted(reason):
+            traceln(`Fount aborted unexpectedly: $reason`)
+
         to flowStopped(reason):
             traceln(`flowed!`)
             # Our strategy here is to slurp the entire file into memory, and

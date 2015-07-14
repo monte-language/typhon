@@ -33,14 +33,13 @@ def makePumpTube(pump):
             else:
                 pumpTube.flush()
 
-        to progress(amount):
-            pump.progressed(amount)
-            if (downstream != null):
-                downstream.progress(amount)
-
-        to flowStopped(reason):
+        to flowStopped(reason :Str):
             if (downstream != null):
                 downstream.flowStopped(reason)
+
+        to flowAborted(reason :Str):
+            if (downstream != null):
+                downstream.flowAborted(reason)
 
         to flowTo(drain):
             # The drain must be fulfilled. We handle flow control, not
@@ -73,6 +72,11 @@ def makePumpTube(pump):
             downstream.flowStopped()
             downstream := null
             return upstream.stopFlow()
+
+        to abortFlow():
+            downstream.flowAborted()
+            downstream := null
+            return upstream.abortFlow()
 
         to flush():
             while (stash.size() > 0 &! downstream == null):
