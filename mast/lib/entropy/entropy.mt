@@ -49,8 +49,8 @@ def makeEntropy(generator):
             def d := 1.0 - entropy.nextDouble()
             return -(d.log()) / lambda
 
-def [=> makeXORShift] := import("lib/entropy/xorshift")
-def e := makeEntropy(makeXORShift(0x12345678))
+def [=> makePCG] := import("lib/entropy/pcg")
+def e := makeEntropy(makePCG(0x12345678, 0))
 bench(e.nextBool, "entropy nextBool")
 bench(fn {e.nextInt(4096)}, "entropy nextInt (best case)")
 bench(fn {e.nextInt(4097)}, "entropy nextInt (worst case)")

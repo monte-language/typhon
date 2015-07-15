@@ -22,8 +22,8 @@ object Word:
                 out.print(`Word[$width]`)
 
             to coerce(specimen, ej):
-                def rv :Int exit ej := specimen & mask
-                return rv
+                def int :Int exit ej := specimen
+                return int & mask
 
 def testWord(assert):
     assert.ejects(fn ej {def x :Word[32] exit ej := "asdf"})
@@ -33,5 +33,7 @@ def testWord(assert):
     assert.equal(x, 52)
     x -= 53
     assert.equal(x, 255)
+
+unittest([testWord])
 
 [=> Word]

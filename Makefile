@@ -77,7 +77,8 @@ prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/m.ty \
 codec: mast/lib/codec/utf8.ty
 
 entropy: mast/lib/entropy/pool.ty mast/lib/entropy/entropy.ty \
-	mast/lib/entropy/xorshift.ty mast/lib/entropy/pi.ty
+	mast/lib/entropy/xorshift.ty mast/lib/entropy/pi.ty \
+	mast/lib/entropy/pcg.ty
 
 parsers: mast/lib/parsers/http.ty mast/lib/parsers/html.ty \
 	mast/lib/parsers/marley.ty mast/lib/parsers/monte.ty
