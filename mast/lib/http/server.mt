@@ -102,6 +102,9 @@ def makeRequestTube():
 
 def statusMap :Map := [
     200 => "OK",
+    301 => "Moved Permanently",
+    303 => "See Other",
+    307 => "Temporary Redirect",
     400 => "Bad Request",
     404 => "Not Found",
 ]
@@ -120,7 +123,9 @@ def makeResponsePump():
 
         to received(response):
             def [statusCode, headers, body] := response
-            def status := `$statusCode ${statusMap[statusCode]}`
+            def statusDescription := statusMap.fetch(statusCode,
+                                                     "Unknown Status")
+            def status := `$statusCode $statusDescription`
             var rv := [b`HTTP/1.1 $status$\r$\n`]
             for header => value in headers:
                 def headerLine := `$header: $value`

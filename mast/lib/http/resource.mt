@@ -112,4 +112,5 @@ def makeResourceApp(root):
     => makeDebugResource,
     => makeResource,
     => makeResourceApp,
+    => smallBody,
 ]
