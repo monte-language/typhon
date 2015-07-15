@@ -22,7 +22,7 @@ from typhon.vats import currentVat
 
 
 ABORTFLOW_0 = getAtom(u"abortFlow", 0)
-FLOWABORTED_0 = getAtom(u"flowAborted", 1)
+FLOWABORTED_1 = getAtom(u"flowAborted", 1)
 FLOWINGFROM_1 = getAtom(u"flowingFrom", 1)
 FLOWSTOPPED_1 = getAtom(u"flowStopped", 1)
 FLOWTO_1 = getAtom(u"flowTo", 1)
