@@ -139,22 +139,24 @@ object makeTerm as DeepFrozen:
                 out.print("`")
 
             to prettyPrintOn(out, isQuasi :Bool):
-                var label := null # should be def w/ later bind
+                # XXX label had a comment that it should be a forward def with
+                # later bind. However, that doesn't match the usage later on
+                # in the method? ~ C.
+                var label := null
                 var reps := null
                 var delims := null
                 switch (data):
                     match ==null:
                         label := tag.getName()
                     match f :Double:
-                        if (f.isNaN()):
+                        if (f == NaN):
                             label := "%NaN"
-                        else if (f.isInfinite()):
-                            if (f > 0):
-                                label := "%Infinity"
-                            else:
-                                label := "-%Infinity"
+                        else if (f == Infinity):
+                            label := "%Infinity"
+                        else if (f == -Infinity):
+                            label := "-%Infinity"
                         else:
-                            label := `$data`
+                            label := M.toString(f)
                     match s :Str:
                         label := s.quote().replace("\n", "\\n")
                     match _:
