@@ -1,19 +1,9 @@
-# interface Tag :DeepFrozen guards TagStamp :DeepFrozen:
-#     pass
-object TagStamp as DeepFrozen:
-    to audit(_):
-        return true
-
-object Tag as DeepFrozen:
-    to coerce(specimen, ej):
-        return specimen
-        #if (__auditedBy(TagStamp, specimen)):
-        #    return specimen
-        # ej(null)
+interface Tag :DeepFrozen guards TagStamp :DeepFrozen {}
 
 object makeTag as DeepFrozen:
     to asType():
         return Tag
+
     to run(code :Any[Int, Void], name :Str, dataGuard :DeepFrozen):
         return object tag as DeepFrozen implements TagStamp:
             to _uncall():
@@ -69,19 +59,10 @@ def optMakeTagFromData(val, mkt) as DeepFrozen:
         match _:
             return null
 
-object TermStamp as DeepFrozen:
-    to audit(_):
-        return true
 
-def TermData :DeepFrozen := Any#[NullOk, Str, Int, Double, Char]
+def TermData :DeepFrozen := Any[NullOk, Str, Int, Double, Char]
 
-object Term as DeepFrozen:
-    to coerce(specimen, ej):
-        if (!__auditedBy(TermStamp, specimen)):
-            def coerced := specimen._conformTo(Term)
-            if (!__auditedBy(TermStamp, coerced)):
-                throw.eject(ej, `not a Term: ${M.toQuote(specimen)}`)
-        return specimen
+interface Term :DeepFrozen guards TermStamp :DeepFrozen {}
 
 
 object makeTerm as DeepFrozen:
