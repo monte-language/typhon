@@ -608,8 +608,8 @@ object qEmptySeq as DeepFrozen:
         return 0
 
 
-def makeQPairSeq(left, right) as DeepFrozen:
-    return object qpair:
+def makeQPairSeq(left :DeepFrozen, right :DeepFrozen) as DeepFrozen:
+    return object qpair as DeepFrozen:
         to getLeft():
             return left
 
@@ -676,8 +676,8 @@ def matchCoerce(val, isFunctorHole, tag) as DeepFrozen:
     return null
 
 
-def makeQTerm(functor, args) as DeepFrozen:
-    def coerce(termoid):
+def makeQTerm(functor :DeepFrozen, args :DeepFrozen) as DeepFrozen:
+    def coerce(termoid :DeepFrozen) as DeepFrozen:
         if (termoid !~ _ :Term):
             return matchCoerce(termoid, functor.getIsFunctorHole(), functor.getTag())
         def newFunctor := matchCoerce(termoid.withoutArgs(), functor.getIsFunctorHole(), functor.getTag())
@@ -685,7 +685,7 @@ def makeQTerm(functor, args) as DeepFrozen:
             return null
         return makeTerm(newFunctor.getTag(), newFunctor.getData(), termoid.getArgs(), termoid.getSpan())
 
-    return object qterm:
+    return object qterm as DeepFrozen:
         to isHole():
             return false
 
@@ -734,8 +734,8 @@ def makeQTerm(functor, args) as DeepFrozen:
         to reserve():
             return 1
 
-def makeQFunctor(tag, data, span) as DeepFrozen:
-    return object qfunctor:
+def makeQFunctor(tag :DeepFrozen, data :DeepFrozen, span :DeepFrozen) as DeepFrozen:
+    return object qfunctor as DeepFrozen:
         to _printOn(out):
             out.print(tag.getName())
 
@@ -1229,4 +1229,4 @@ object quasitermParser as DeepFrozen:
         return makeTerm(tag, data, arglist, span)
 
 
-[ "term__quasiParser" => quasitermParser]
+["term__quasiParser" => quasitermParser]
