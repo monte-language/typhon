@@ -12,6 +12,13 @@ def __makeMessageDesc(unknown :DeepFrozen, verb :Str, params :DeepFrozen,
         to getVerb() :Str:
             return verb
 
+
+def getMethods(auditor) :Set as DeepFrozen:
+    if (auditor._respondsTo("getMethods", 0)):
+        return auditor.getMethods()
+    else:
+        return [].asSet()
+
 def reduce(sets :List[Set]) :Set as DeepFrozen:
     var rv := [].asSet()
     for set in sets:
@@ -28,7 +35,7 @@ object __makeProtocolDesc as DeepFrozen:
                                 [message.getVerb(),
                                 message.getArity()]].asSet()
         def parentMethods :List[Set] := [for parent in (parents)
-                                         parent.getMethods()]
+                                         getMethods(parent)]
         def desiredMethods :Set := ownMethods | reduce(parentMethods)
 
         object protocolDesc implements Selfless, TransparentStamp:
@@ -89,6 +96,15 @@ object __makeProtocolDesc as DeepFrozen:
 
             to getMethods():
                 return desiredMethods
+
+            to supersetOf(guard):
+                "Whether `guard` admits a proper subset of this interface."
+
+                if (guard == protocolDesc):
+                    return true
+                else if (parents.contains(guard)):
+                    return true
+                return false
 
         return protocolDesc
 
