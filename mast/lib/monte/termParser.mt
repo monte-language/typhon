@@ -1,10 +1,22 @@
-interface Tag :DeepFrozen guards TagStamp :DeepFrozen {}
+# For future Corbin: SubrangeGuard requires that we use Same[] to get the
+# value of DF into a guard context. ~ C.
+def DF :Same[DeepFrozen] := DeepFrozen
+
+interface ITag :DeepFrozen guards TagStamp :DeepFrozen:
+    "A tag."
+
+object Tag extends ITag as DeepFrozen implements SubrangeGuard[DeepFrozen]:
+    "A tag."
+
+    to coerce(specimen, ej) :DF:
+        return ITag.coerce(specimen, ej)
+
 
 object makeTag as DeepFrozen:
     to asType():
         return Tag
 
-    to run(code :Any[Int, Void], name :Str, dataGuard :DeepFrozen):
+    to run(code :NullOk[Int], name :Str, dataGuard :DeepFrozen):
         return object tag as DeepFrozen implements TagStamp:
             to _uncall():
                 return [makeTag, "run", [code, name, dataGuard]]
@@ -60,20 +72,28 @@ def optMakeTagFromData(val, mkt) as DeepFrozen:
             return null
 
 
-def TermData :DeepFrozen := Any[NullOk, Str, Int, Double, Char]
+def TermData :DeepFrozen := Any[Void, Str, Int, Double, Char]
 
-interface Term :DeepFrozen guards TermStamp :DeepFrozen {}
+interface ITerm :DeepFrozen guards TermStamp :DeepFrozen:
+    "A term."
+
+object Term extends ITerm as DeepFrozen implements SubrangeGuard[DeepFrozen]:
+    "A term."
+
+    to coerce(specimen, ej) :DF:
+        return ITerm.coerce(specimen, ej)
 
 
 object makeTerm as DeepFrozen:
     to asType():
         return Term
 
-    to run(tag :Tag, data :TermData, args :List, span):
+    to run(tag :Tag, data :TermData, args :NullOk[List[Term]],
+           span :DeepFrozen):
         if (data != null && args != []):
             throw(`Term $tag can't have both data and children`)
 
-        return object term implements TermStamp:
+        return object term as DeepFrozen implements TermStamp:
             to _uncall():
                 return [makeTerm, "run", [tag, data, args, span]]
 
@@ -717,7 +737,7 @@ def makeQTerm(functor :DeepFrozen, args :DeepFrozen) as DeepFrozen:
         to reserve():
             return 1
 
-def makeQFunctor(tag :DeepFrozen, data :DeepFrozen, span :DeepFrozen) as DeepFrozen:
+def makeQFunctor(tag :Tag, data :TermData, span :DeepFrozen) as DeepFrozen:
     return object qfunctor as DeepFrozen:
         to _printOn(out):
             out.print(tag.getName())
@@ -809,8 +829,8 @@ def multiput(bindings, holeNum, indices, newVal) as DeepFrozen:
     return result
 
 
-def makeQDollarHole(tag, holeNum, isFunctorHole) as DeepFrozen:
-    return object qdollarhole:
+def makeQDollarHole(tag :NullOk[Tag], holeNum :Int, isFunctorHole :Bool) as DeepFrozen:
+    return object qdollarhole as DeepFrozen:
 
         to isHole():
             return true
@@ -869,8 +889,8 @@ def makeQDollarHole(tag, holeNum, isFunctorHole) as DeepFrozen:
             return 1
 
 
-def makeQAtHole(tag, holeNum, isFunctorHole) as DeepFrozen:
-    return object qathole:
+def makeQAtHole(tag :NullOk[Tag], holeNum :Int, isFunctorHole :Bool) as DeepFrozen:
+    return object qathole as DeepFrozen:
         to isHole():
             return true
 
