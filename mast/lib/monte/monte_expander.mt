@@ -224,22 +224,57 @@ def expand(node, builder, fail):
              span), span)
 
     def expandObject(doco, name, asExpr, auditors, [xtends, methods, matchers], span):
+        # Easy case: There's no object being extended, so the object's fine
+        # as-is. Just assemble it.
         if (xtends == null):
-            return builder.ObjectExpr(doco, name, asExpr, auditors, builder.Script(null, methods, matchers, span),
-                 span)
+            return builder.ObjectExpr(doco, name, asExpr, auditors,
+                                      builder.Script(null, methods, matchers,
+                                                     span),
+                                      span)
+
         def p := builder.TempNounExpr("pair", span)
         def superExpr := if (xtends.getNodeName() == "NounExpr") {
             builder.DefExpr(builder.BindingPattern(builder.NounExpr("super", span), span), null,
                 builder.BindingExpr(xtends, span), span)
-            } else {
-                builder.DefExpr(builder.FinalPattern(builder.NounExpr("super", span), null, span), null, xtends, span)
-            }
-        return builder.DefExpr(name, null, builder.HideExpr(builder.SeqExpr([superExpr,
-            builder.ObjectExpr(doco, name, asExpr, auditors, builder.Script(null, methods,
-                matchers + [builder.Matcher(builder.FinalPattern(p, null, span),
-                     builder.MethodCallExpr(builder.NounExpr("M", span), "callWithPair",
-                          [builder.NounExpr("super", span), p], span), span)], span), span)], span),
-            span), span)
+        } else {
+            builder.DefExpr(builder.FinalPattern(builder.NounExpr("super", span), null, span), null, xtends, span)
+        }
+
+        # We need to get the result of the asExpr into the guard for the
+        # overall defExpr. If (and only if!) we have the auditor as a single
+        # noun (e.g. DeepFrozen), then we should use it directly; otherwise,
+        # put it into an antecedent DefExpr and reference that defined name. A
+        # similar but subtler logic was used in superExpr. ~ C.
+        if (asExpr == null):
+            return builder.DefExpr(name, null, builder.HideExpr(builder.SeqExpr([superExpr,
+                builder.ObjectExpr(doco, name, null, auditors, builder.Script(null, methods,
+                    matchers + [builder.Matcher(builder.FinalPattern(p, null, span),
+                         builder.MethodCallExpr(builder.NounExpr("M", span), "callWithPair",
+                              [builder.NounExpr("super", span), p], span), span)], span), span)], span),
+                span), span)
+        else if (asExpr.getNodeName() == "NounExpr"):
+            return builder.DefExpr(name.withGuard(asExpr), null, builder.HideExpr(builder.SeqExpr([superExpr,
+                builder.ObjectExpr(doco, name, asExpr, auditors, builder.Script(null, methods,
+                    matchers + [builder.Matcher(builder.FinalPattern(p, null, span),
+                         builder.MethodCallExpr(builder.NounExpr("M", span), "callWithPair",
+                              [builder.NounExpr("super", span), p], span), span)], span), span)], span),
+                span), span)
+        else:
+            def auditorNoun := builder.TempNounExpr("auditor", span)
+            def auditorExpr := builder.DefExpr(builder.FinalPattern(auditorNoun, null, span),
+                                               null, asExpr, span)
+            # The auditorExpr must be evaluated early enough to be used as the
+            # definition guard. Unfortunately, I cannot think of any simple
+            # nor convoluted way to evaluate the superExpr first while still
+            # scoping it correctly. ~ C.
+            return builder.HideExpr(builder.SeqExpr([auditorExpr,
+                builder.DefExpr(name.withGuard(auditorNoun), null, builder.HideExpr(builder.SeqExpr([superExpr,
+                    builder.ObjectExpr(doco, name, auditorNoun, auditors, builder.Script(null, methods,
+                        matchers + [builder.Matcher(builder.FinalPattern(p, null, span),
+                             builder.MethodCallExpr(builder.NounExpr("M", span), "callWithPair",
+                                  [builder.NounExpr("super", span), p], span), span)], span), span)], span),
+                    span), span)], span), span)
+
 
     def expandInterface(doco, name, guard, xtends, mplements, messages, span):
         def verb := if (guard == null) {"run"} else {"makePair"}

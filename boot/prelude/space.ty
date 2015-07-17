@@ -1,4 +1,4 @@
--'%/;+#)charSpace+#*DeepFrozen .+#1OrderedSpaceMaker##run'"+#$Char*#$Char/;+#(intSpace+#*DeepFrozen .+#1OrderedSpaceMaker##run'"+##Int*##Int/;+#+doubleSpace+#*DeepFrozen .+#1OrderedSpaceMaker##run'"+#&Double*#&Double/;+#2__makeOrderedSpace  8-'"/@+#%super ,+#1OrderedSpaceMaker1#®!Maker of ordered vector spaces.
+-'%/;+#)charSpace+#*DeepFrozen .+#1OrderedSpaceMaker##run'"+#$Char*#$Char/;+#(intSpace+#*DeepFrozen .+#1OrderedSpaceMaker##run'"+##Int*##Int/;+#+doubleSpace+#*DeepFrozen .+#1OrderedSpaceMaker##run'"+#&Double*#&Double/;+#2__makeOrderedSpace+#*DeepFrozen 8-'"/@+#%super ,+#1OrderedSpaceMaker1#®!Maker of ordered vector spaces.
 
      This object implements several Monte operators, including those which
      provide ordered space syntax.;+#2__makeOrderedSpace '!+#*DeepFrozen2 '#3#Ý!Return the ordered space corresponding to a given value.
