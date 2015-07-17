@@ -951,8 +951,8 @@ def inBounds(num, quant) as DeepFrozen:
             return num >= 0
     return false
 
-def makeQSome(subPattern, quant, span) as DeepFrozen:
-    return object qsome:
+def makeQSome(subPattern :DeepFrozen, quant :Str, span :DeepFrozen) as DeepFrozen:
+    return object qsome as DeepFrozen:
         to getSubPattern():
             return subPattern
 
