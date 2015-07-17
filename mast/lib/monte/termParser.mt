@@ -1232,4 +1232,4 @@ object quasitermParser as DeepFrozen:
         return makeTerm(tag, data, arglist, span)
 
 
-["term__quasiParser" => quasitermParser]
+["term__quasiParser" => quasitermParser, => Tag, => Term]

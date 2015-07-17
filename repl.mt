@@ -17,7 +17,7 @@ var environment := [
     # Guards.
     => Any, => Bool, => Char, => DeepFrozen, => Double, => Empty, => Int,
     => List, => Map, => NullOk, => Same, => Set, => Str, => SubrangeGuard,
-    => Void,
+    => Tag, => Term, => Void,
     => __mapEmpty, => __mapExtract,
     => __accumulateList, => __auditedBy, => __booleanFlow, => __iterWhile,
     => __loop, => __validateFor,

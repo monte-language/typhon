@@ -655,7 +655,7 @@ preludeScope |= import("prelude/simple", preludeScope)
 # Brands require simple QP.
 preludeScope |= import("prelude/brand", preludeScope)
 
-# Interfaces require brands.
+# Interfaces require simple QP.
 preludeScope |= import("prelude/protocolDesc", preludeScope)
 
 # Regions require simple QP.
@@ -671,7 +671,7 @@ preludeScope := import("prelude/space",
                        preludeScope | [=> OrderedRegionMaker,
                                        => OrderedSpaceMaker]) | preludeScope
 
-# Terms require simple QP and spaces.
+# Terms require simple QP, spaces, and interfaces.
 preludeScope |= import("lib/monte/termParser", preludeScope)
 
 # Finally, the big kahuna: The Monte compiler and QL.
