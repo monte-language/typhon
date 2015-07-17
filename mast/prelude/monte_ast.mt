@@ -735,6 +735,8 @@ def makeVarPattern(noun, guard, span):
             return noun
         to getGuard():
             return guard
+        to withGuard(newGuard):
+            return makeVarPattern(noun, newGuard, span)
         to subPrintOn(out, priority):
             out.print("var ")
             noun.subPrintOn(out, priority)
@@ -1625,6 +1627,8 @@ def makeFinalPattern(noun, guard, span):
             return noun
         to getGuard():
             return guard
+        to withGuard(newGuard):
+            return makeFinalPattern(noun, newGuard, span)
         to subPrintOn(out, priority):
             noun.subPrintOn(out, priority)
             if (guard != null):
@@ -1668,6 +1672,8 @@ def makeIgnorePattern(guard, span):
     object ignorePattern:
         to getGuard():
             return guard
+        to withGuard(newGuard):
+            return makeIgnorePattern(newGuard, span)
         to subPrintOn(out, priority):
             out.print("_")
             if (guard != null):
