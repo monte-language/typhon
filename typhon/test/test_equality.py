@@ -21,6 +21,7 @@ from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, isSettled, optSame
 from typhon.objects.refs import makePromise
+from typhon.rope import makeRope
 
 
 class TestIsSettled(TestCase):
@@ -72,31 +73,31 @@ class TestOptSame(TestCase):
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListEquality(self):
-        first = ConstList([IntObject(42)])
-        second = ConstList([IntObject(42)])
+        first = ConstList.fromList([IntObject(42)])
+        second = ConstList.fromList([IntObject(42)])
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListEqualityRecursionReflexive(self):
-        first = ConstList([IntObject(42)])
-        first.strategy.append(first, [first])
+        first = ConstList.fromList([IntObject(42)])
+        first.rope = first.rope.add(makeRope([first]))
         self.assertEqual(optSame(first, first), EQUAL)
 
     def testListEqualityRecursion(self):
         # Yes, this is very hacky.
-        first = ConstList([IntObject(42)])
-        first.strategy.append(first, [first])
-        second = ConstList([IntObject(42)])
-        second.strategy.append(second, [second])
+        first = ConstList.fromList([IntObject(42)])
+        first.rope = first.rope.add(makeRope([first]))
+        second = ConstList.fromList([IntObject(42)])
+        second.rope = second.rope.add(makeRope([second]))
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListInequality(self):
-        first = ConstList([IntObject(42)])
-        second = ConstList([IntObject(41)])
+        first = ConstList.fromList([IntObject(42)])
+        second = ConstList.fromList([IntObject(41)])
         self.assertEqual(optSame(first, second), INEQUAL)
 
     def testListInequalityLength(self):
-        first = ConstList([IntObject(42)])
-        second = ConstList([IntObject(42), IntObject(5)])
+        first = ConstList.fromList([IntObject(42)])
+        second = ConstList.fromList([IntObject(42), IntObject(5)])
         self.assertEqual(optSame(first, second), INEQUAL)
 
     def testStrEquality(self):

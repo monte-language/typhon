@@ -141,7 +141,7 @@ class RefOps(Object):
     def promise(self):
         from typhon.objects.collections import ConstList
         p, r = makePromise()
-        return ConstList([p, r])
+        return ConstList.fromList([p, r])
 
     def broken(self, problem):
         return UnconnectedRef(problem)

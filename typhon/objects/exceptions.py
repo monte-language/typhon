@@ -35,6 +35,6 @@ def unsealException(args):
     ej = args[1]
 
     if isinstance(specimen, SealedException):
-        trail = ConstList([StrObject(s) for s in specimen.trail])
-        return ConstList([specimen.value, trail])
+        trail = ConstList.fromList([StrObject(s) for s in specimen.trail])
+        return ConstList.fromList([specimen.value, trail])
     throw(ej, StrObject(u"Cannot unseal non-thrown object"))

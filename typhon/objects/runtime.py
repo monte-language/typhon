@@ -76,7 +76,7 @@ class Heap(Object):
             d = monteDict()
             for name, count in self.buckets.items():
                 size = self.sizes.get(name, -1)
-                d[StrObject(name)] = ConstList([IntObject(size),
+                d[StrObject(name)] = ConstList.fromList([IntObject(size),
                                                 IntObject(count)])
             return ConstMap(d)
 

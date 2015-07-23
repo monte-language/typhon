@@ -38,22 +38,22 @@ class TestConstMap(TestCase):
 class TestConstList(TestCase):
 
     def testHashEqual(self):
-        a = ConstList([IntObject(42), CharObject(u'é')])
-        b = ConstList([IntObject(42), CharObject(u'é')])
+        a = ConstList.fromList([IntObject(42), CharObject(u'é')])
+        b = ConstList.fromList([IntObject(42), CharObject(u'é')])
         self.assertEqual(a.hash(), b.hash())
 
     def testHashInequalLength(self):
-        a = ConstList([IntObject(42), CharObject(u'é')])
-        b = ConstList([IntObject(42)])
+        a = ConstList.fromList([IntObject(42), CharObject(u'é')])
+        b = ConstList.fromList([IntObject(42)])
         self.assertNotEqual(a.hash(), b.hash())
 
     def testHashInequalItems(self):
-        a = ConstList([IntObject(42), CharObject(u'é')])
-        b = ConstList([IntObject(42), CharObject(u'e')])
+        a = ConstList.fromList([IntObject(42), CharObject(u'é')])
+        b = ConstList.fromList([IntObject(42), CharObject(u'e')])
         self.assertNotEqual(a.hash(), b.hash())
 
     def testSlice(self):
-        l = ConstList(map(CharObject, "abcdefg"))
+        l = ConstList.fromList(map(CharObject, "abcdefg"))
         result = l.call(u"slice", [IntObject(3), IntObject(6)])
         chars = [char._c for char in unwrapList(result)]
         self.assertEqual(chars, list("def"))

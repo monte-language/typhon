@@ -307,7 +307,7 @@ class Tuple(Node):
         return f(Tuple([node.transform(f) for node in self._t]))
 
     def slowTransform(self, o):
-        return ConstList([node.slowTransform(o) for node in self._t])
+        return ConstList.fromList([node.slowTransform(o) for node in self._t])
 
     def rewriteScope(self, scope):
         return Tuple([node.rewriteScope(scope) for node in self._t])
@@ -908,7 +908,7 @@ class Method(Node):
         return o.call(u"run", [StrObject(u"Method"),
                                NullObject if self._d is None else StrObject(self._d),
                                StrObject(self._verb),
-                               ConstList([p.slowTransform(o) for p in self._ps]),
+                               ConstList.fromList([p.slowTransform(o) for p in self._ps]),
                                NullObject if self._g is None else self._g.slowTransform(o),
                                self._b.slowTransform(o)])
 
@@ -1027,7 +1027,7 @@ class Obj(Node):
                                NullObject if self._d is None else StrObject(self._d),
                                self._n.slowTransform(o),
                                NullObject if self._as is None else self._as.slowTransform(o),
-                               ConstList([im.slowTransform(o) for im in  self._implements]),
+                               ConstList.fromList([im.slowTransform(o) for im in  self._implements]),
                                self._script.slowTransform(o)])
 
     def rewriteScope(self, scope):
@@ -1228,9 +1228,9 @@ class Script(Node):
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"Script"),
                                NullObject,
-                               ConstList([method.slowTransform(o)
+                               ConstList.fromList([method.slowTransform(o)
                                           for method in self._methods]),
-                               ConstList([method.slowTransform(o)
+                               ConstList.fromList([method.slowTransform(o)
                                           for method in self._methods])])
 
     def rewriteScope(self, scope):
@@ -1277,7 +1277,7 @@ class Sequence(Node):
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"SeqExpr"),
-                               ConstList([node.slowTransform(o)
+                               ConstList.fromList([node.slowTransform(o)
                                           for node in self._l])])
 
     def rewriteScope(self, scope):
@@ -1515,7 +1515,7 @@ class ListPattern(Pattern):
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"ListPattern"),
-                               ConstList([item.slowTransform(o)
+                               ConstList.fromList([item.slowTransform(o)
                                           for item in self._ps]),
                                NullObject])
 

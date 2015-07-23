@@ -52,11 +52,11 @@ class Binding(Object):
 
         if atom is _UNCALL_0:
             from typhon.scopes.safe import theSlotBinder
-            return ConstList([
-                ConstList([theSlotBinder, StrObject(u"run"),
-                           ConstList([self.guard])]),
+            return ConstList.fromList([
+                ConstList.fromList([theSlotBinder, StrObject(u"run"),
+                           ConstList.fromList([self.guard])]),
                 StrObject(u"run"),
-                ConstList([self.slot, NullObject])])
+                ConstList.fromList([self.slot, NullObject])])
 
         raise Refused(self, atom, args)
 
@@ -91,11 +91,11 @@ class FinalBinding(Object):
         if atom is _UNCALL_0:
             from typhon.objects.guards import FinalSlotGuard
             from typhon.scopes.safe import theSlotBinder
-            return ConstList([
-                ConstList([theSlotBinder, StrObject(u"run"),
-                           ConstList([FinalSlotGuard(self.guard)])]),
+            return ConstList.fromList([
+                ConstList.fromList([theSlotBinder, StrObject(u"run"),
+                           ConstList.fromList([FinalSlotGuard(self.guard)])]),
                 StrObject(u"run"),
-                ConstList([FinalSlot(self.value, self.guard), NullObject])])
+                ConstList.fromList([FinalSlot(self.value, self.guard), NullObject])])
 
         raise Refused(self, atom, args)
 
@@ -142,8 +142,8 @@ class FinalSlot(Slot):
     def recv(self, atom, args):
         if atom is _UNCALL_0:
             from typhon.scopes.safe import theFinalSlotMaker
-            return ConstList([theFinalSlotMaker, StrObject(u"run"),
-                              ConstList([self._obj, self._guard, NullObject])])
+            return ConstList.fromList([theFinalSlotMaker, StrObject(u"run"),
+                              ConstList.fromList([self._obj, self._guard, NullObject])])
         return Slot.recv(self, atom, args)
 
 

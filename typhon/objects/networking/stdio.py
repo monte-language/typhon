@@ -92,7 +92,7 @@ class InputFount(Object):
     def flush(self):
         if not self.pauses and self._drain is not None:
             rv = [IntObject(ord(byte)) for byte in self.buf]
-            self.vat.sendOnly(self._drain, RECEIVE_1, [ConstList(rv)])
+            self.vat.sendOnly(self._drain, RECEIVE_1, [ConstList.fromList(rv)])
             self.buf = ""
 
     def terminate(self, reason):

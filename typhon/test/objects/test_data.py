@@ -108,7 +108,7 @@ class TestStr(TestCase):
     def testJoin(self):
         s = StrObject(u"|")
         result = s.call(u"join",
-                [ConstList([StrObject(u"5"), StrObject(u"42")])])
+                [ConstList.fromList([StrObject(u"5"), StrObject(u"42")])])
         self.assertEqual(result._s, u"5|42")
 
     def testSliceStart(self):

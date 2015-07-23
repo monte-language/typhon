@@ -269,7 +269,7 @@ class DoubleObject(Object):
             from typhon.objects.collections import ConstList
             result = []
             pack_float(result, self._d, 8, True)
-            return ConstList([IntObject(ord(c)) for c in result[0]])
+            return ConstList.fromList([IntObject(ord(c)) for c in result[0]])
 
         raise Refused(self, atom, args)
 
@@ -835,9 +835,9 @@ class SourceSpan(Object):
             return self.notOneToOne()
         if atom is _UNCALL_0:
             from typhon.objects.collections import ConstList
-            return ConstList([
+            return ConstList.fromList([
                 makeSourceSpan, StrObject(u"run"),
-                ConstList([wrapBool(self._isOneToOne), IntObject(self.startLine),
+                ConstList.fromList([wrapBool(self._isOneToOne), IntObject(self.startLine),
                            IntObject(self.startCol), IntObject(self.endLine),
                            IntObject(self.endCol)])])
         raise Refused(self, atom, args)
@@ -903,7 +903,7 @@ class strIterator(Object):
                 from typhon.objects.collections import ConstList
                 rv = [IntObject(self._index), CharObject(self.s[self._index])]
                 self._index += 1
-                return ConstList(rv)
+                return ConstList.fromList(rv)
             else:
                 ej = args[0]
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
@@ -953,7 +953,7 @@ class StrObject(Object):
 
         if atom is ASLIST_0:
             from typhon.objects.collections import ConstList
-            return ConstList(self.asList())
+            return ConstList.fromList(self.asList())
 
         if atom is ASSET_0:
             from typhon.objects.collections import ConstSet
@@ -1032,11 +1032,11 @@ class StrObject(Object):
 
         if atom is SPLIT_1:
             from typhon.objects.collections import ConstList
-            return ConstList(self.split(unwrapStr(args[0])))
+            return ConstList.fromList(self.split(unwrapStr(args[0])))
 
         if atom is SPLIT_2:
             from typhon.objects.collections import ConstList
-            return ConstList(self.split(unwrapStr(args[0]),
+            return ConstList.fromList(self.split(unwrapStr(args[0]),
                                         unwrapInt(args[1])))
 
         if atom is TOLOWERCASE_0:

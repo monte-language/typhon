@@ -74,7 +74,7 @@ class Read(Callable):
             buf = self.fount.handle.read(16384)
             rv = [IntObject(ord(byte)) for byte in buf]
             vat = currentVat.get()
-            vat.sendOnly(self.fount.drain, RECEIVE_1, [ConstList(rv)])
+            vat.sendOnly(self.fount.drain, RECEIVE_1, [ConstList.fromList(rv)])
 
             if len(buf) < 16384:
                 # Short read; this will be the last chunk.
@@ -201,7 +201,7 @@ class GetContents(Callable):
         with open(self.path, "rb") as handle:
             s = handle.read()
 
-        data = ConstList([IntObject(ord(c)) for c in s])
+        data = ConstList.fromList([IntObject(ord(c)) for c in s])
         self.resolver.resolve(data)
 
 

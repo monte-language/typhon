@@ -225,8 +225,8 @@ class ScriptObject(Object):
             for matcher in self.codeScript.matchers:
                 with Ejector() as ej:
                     machine = SmallCaps(matcher, self.closure, self.globals)
-                    machine.push(ConstList([StrObject(atom.verb),
-                                            ConstList(args)]))
+                    machine.push(ConstList.fromList([StrObject(atom.verb),
+                                            ConstList.fromList(args)]))
                     machine.push(ej)
                     try:
                         machine.run()

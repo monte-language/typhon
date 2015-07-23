@@ -3,14 +3,35 @@ class Rope(object):
     A binary tree of fragments of some stringlike collection.
     """
 
+    _immutable_ = True
+
     def add(self, other):
         return Branch(self, other)
 
     def slice(self, start, stop):
         assert start >= 0, "Failed to prove non-negative start"
-        assert stop < self.size, "Stop was too large"
-        piece, _ = self.splitAt(stop)
+        if stop < self.size:
+            piece, _ = self.splitAt(stop)
+        else:
+            piece = self
         _, rv = piece.splitAt(start)
+        return rv
+
+    def put(self, index, value):
+        assert index >= 0, "Failed to prove non-negative index"
+        assert index < self.size, "Index was too large"
+        if index == 0:
+            return Leaf([value]).add(self.slice(1, self.size))
+        else:
+            left = self.slice(0, index)
+            right = self.slice(index + 1, self.size)
+            return left.add(Leaf([value])).add(right)
+
+    def multiply(self, count):
+        # XXX this can be sped up using poor man's counting
+        rv = self
+        for _ in range(count - 1):
+            rv = rv.add(self)
         return rv
 
 
@@ -34,6 +55,9 @@ class Leaf(Rope):
         assert index >= 0, "Failed to prove non-negative index"
         assert index < self.size, "Implementation error in rope"
         return Leaf(self.fragment[:index]), Leaf(self.fragment[index:])
+
+    def iterate(self):
+        return self.fragment
 
 
 class Branch(Rope):
@@ -67,6 +91,20 @@ class Branch(Rope):
             return Branch(self.left, leftPiece), right
         else:
             return self.left, self.right
+
+    def iterate(self):
+        return self.left.iterate() + self.right.iterate()
+        # stack = [self.right, self.left]
+        # while stack:
+        #     rope = stack.pop()
+        #     if isinstance(rope, Leaf):
+        #         for item in rope.fragment:
+        #             yield item
+        #     elif isinstance(rope, Branch):
+        #         stack.append(rope.right)
+        #         stack.append(rope.left)
+        #     else:
+        #         assert False, "Impossible case"
 
 
 def makeRope(fragment):

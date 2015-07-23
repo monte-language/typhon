@@ -92,7 +92,7 @@ class TCP4ClientEndpoint(Object):
         pending = TCP4ClientPending(self.host, self.port)
         vat = currentVat.get()
         vat.afterTurn(pending)
-        return ConstList([pending.fount, pending.drain])
+        return ConstList.fromList([pending.fount, pending.drain])
 
 
 @runnable(RUN_2)

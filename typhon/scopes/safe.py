@@ -86,10 +86,10 @@ class MakeList(Object):
 
     def recv(self, atom, args):
         if atom.verb == u"run":
-            return ConstList(args)
+            return ConstList.fromList(args)
 
         if atom is FROMITERABLE_1:
-            return ConstList(self.fromIterable(args[0])[:])
+            return ConstList.fromList(self.fromIterable(args[0])[:])
 
         raise Refused(self, atom, args)
 

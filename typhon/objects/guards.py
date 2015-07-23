@@ -65,7 +65,7 @@ class AnyGuard(Object):
             g = args[0]
             ej = args[1]
             if isinstance(g, AnyOfGuard):
-                return ConstList(g.subguards)
+                return ConstList.fromList(g.subguards)
             else:
                 ej.call(u"run", [StrObject(u"Not an AnyOf guard")])
 
@@ -109,8 +109,8 @@ class AnyOfGuard(Object):
             return wrapBool(True)
 
         if atom is _UNCALL_0:
-            return ConstList([anyGuard, StrObject(u"get"),
-                              ConstList(self.subguards)])
+            return ConstList.fromList([anyGuard, StrObject(u"get"),
+                              ConstList.fromList(self.subguards)])
         raise Refused(self, atom, args)
 
 

@@ -30,7 +30,7 @@ class CurrentProcess(Object):
 
     def recv(self, atom, args):
         if atom is GETARGUMENTS_0:
-            return ConstList([StrObject(arg.decode("utf-8"))
+            return ConstList.fromList([StrObject(arg.decode("utf-8"))
                               for arg in self.config.argv])
 
         if atom is GETPID_0:
@@ -58,7 +58,7 @@ class SubProcess(Object):
 
     def recv(self, atom, args):
         if atom is GETARGUMENTS_0:
-            return ConstList([StrObject(arg.decode("utf-8"))
+            return ConstList.fromList([StrObject(arg.decode("utf-8"))
                               for arg in self.argv])
 
         if atom is GETPID_0:
