@@ -266,11 +266,18 @@ class ConstList(Object):
 
     def _recv(self, atom, args):
         if atom is ADD_1:
-            other = unwrapList(args[0])
-            if other:
-                return ConstList(self.rope.add(makeRope(other)))
+            other = args[0]
+            if isinstance(other, ConstList):
+                if other.rope.size:
+                    return ConstList(self.rope.add(other.rope))
+                else:
+                    return self
             else:
-                return self
+                l = unwrapList(other)
+                if l:
+                    return ConstList(self.rope.add(makeRope(l)))
+                else:
+                    return self
 
         if atom is ASMAP_0:
             return ConstMap(self.asMap())
@@ -311,10 +318,7 @@ class ConstList(Object):
             return IntObject(self.cmp(other))
 
         if atom is REVERSE_0:
-            # XXX very inefficient
-            new = list(self.rope.iterate())
-            new.reverse()
-            return ConstList.fromList(new)
+            return ConstList(self.rope.reverse())
 
         if atom is SORT_0:
             return self.sort()

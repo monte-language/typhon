@@ -39,6 +39,8 @@ class Leaf(Rope):
 
     _immutable_ = True
 
+    _immutable_fields_ = "fragment[*]", "size"
+
     def __init__(self, fragment):
         self.fragment = fragment
         self.size = len(fragment)
@@ -58,6 +60,11 @@ class Leaf(Rope):
 
     def iterate(self):
         return self.fragment
+
+    def reverse(self):
+        fragment = self.fragment[:]
+        fragment.reverse()
+        return Leaf(fragment)
 
 
 class Branch(Rope):
@@ -105,6 +112,9 @@ class Branch(Rope):
         #         stack.append(rope.left)
         #     else:
         #         assert False, "Impossible case"
+
+    def reverse(self):
+        return Branch(self.right.reverse(), self.left.reverse())
 
 
 def makeRope(fragment):
