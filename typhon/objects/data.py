@@ -16,6 +16,7 @@
 
 import math
 
+from rpython.rlib import rgc
 from rpython.rlib.rbigint import BASE10, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
@@ -572,6 +573,10 @@ class BigInt(Object):
     def hash(self):
         return self.bi.hash()
 
+    def sizeOf(self):
+        return (rgc.get_rpy_memory_usage(self) +
+                rgc.get_rpy_memory_usage(self.bi))
+
     def recv(self, atom, args):
         # Bigints can be compared with bigints and ints.
         if atom is OP__CMP_1:
@@ -942,6 +947,10 @@ class StrObject(Object):
             i += 1
         x ^= length
         return intmask(x)
+
+    def sizeOf(self):
+        return (rgc.get_rpy_memory_usage(self) +
+                rgc.get_rpy_memory_usage(self._s))
 
     def recv(self, atom, args):
         if atom is ADD_1:

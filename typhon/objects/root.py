@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib import rgc
 from rpython.rlib.jit import jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import compute_identity_hash
 from rpython.rlib.rstackovf import StackOverflow, check_stack_overflow
@@ -72,6 +73,17 @@ class Object(object):
     # @specialize.argtype(0)
     def toString(self):
         return u"<%s>" % self.__class__.__name__.decode("utf-8")
+
+    def sizeOf(self):
+        """
+        The number of bytes occupied by this object.
+
+        The default implementation will nearly always suffice unless some
+        private data is attached to the object. Private data should only be
+        accounted if it does not reference any Monte-visible object.
+        """
+
+        return rgc.get_rpy_memory_usage(self)
 
     def hash(self):
         """

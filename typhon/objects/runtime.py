@@ -66,10 +66,12 @@ class Heap(Object):
             name = obj.__class__.__name__.decode("utf-8")
         if name not in self.buckets:
             self.buckets[name] = 0
-            self.sizes[name] = rgc.get_rpy_memory_usage(obj)
+            self.sizes[name] = 0
         self.buckets[name] += 1
+        sizeOf = obj.sizeOf()
+        self.sizes[name] += sizeOf
         self.objectCount += 1
-        self.memoryUsage += self.sizes[name]
+        self.memoryUsage += sizeOf
 
     def recv(self, atom, args):
         if atom is GETBUCKETS_0:
