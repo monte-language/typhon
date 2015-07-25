@@ -14,6 +14,10 @@ def makeREPLTube(makeParser, reducer, ps1 :Str, ps2 :Str, drain):
 
         to receive(s):
             def `@chars$\n` := s
+            # If they just thoughtlessly hit Enter, then don't bother.
+            if (chars.size() == 0):
+                REPLTube.prompt()
+                return
             parser.feedMany(chars)
             if (parser.failed()):
                 # The parser cannot continue.
