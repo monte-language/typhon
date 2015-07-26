@@ -18,6 +18,19 @@ class AnySpec(Spec):
 Any = AnySpec()
 
 
+class CharSpec(Spec):
+
+    def wrap(_, specimen):
+        from typhon.objects.data import CharObject
+        return CharObject(specimen)
+
+    def unwrap(_, specimen):
+        from typhon.objects.data import unwrapChar
+        return unwrapChar(specimen)
+
+Char = CharSpec()
+
+
 class IntSpec(Spec):
 
     def wrap(_, specimen):
@@ -40,3 +53,5 @@ class StrSpec(Spec):
     def unwrap(_, specimen):
         from typhon.objects.data import unwrapStr
         return unwrapStr(specimen)
+
+Str = StrSpec()

@@ -30,8 +30,9 @@ from typhon.autohelp import autohelp
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import selfless, deepFrozenStamp, transparentStamp
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
-from typhon.objects.root import Object, runnable
+from typhon.objects.root import Object, method, runnable
 from typhon.quoting import quoteChar, quoteStr
+from typhon.specs import Char, Int, Str
 
 
 ABOVEZERO_0 = getAtom(u"aboveZero", 0)
@@ -115,13 +116,23 @@ def polyCmp(l, r):
         return IntObject(0)
 
 
+@specialize.argtype(0, 1)
+def cmp(l, r):
+    if l < r:
+        return -1
+    elif l > r:
+        return 1
+    else:
+        return 0
+
+
 @autohelp
 class CharObject(Object):
     """
     A Unicode code point.
     """
 
-    _immutable_fields_ = "stamps", "_c"
+    _immutable_fields_ = "stamps[*]", "_c"
 
     stamps = [selfless, deepFrozenStamp]
 
@@ -129,6 +140,9 @@ class CharObject(Object):
         # RPython needs to be reminded that, no matter what, we are always
         # using a single character here.
         self._c = c[0]
+
+    def getChar(self):
+        return self._c
 
     def toString(self):
         return unicode(self._c)
@@ -140,51 +154,115 @@ class CharObject(Object):
         # Don't waste time with the traditional string hash.
         return ord(self._c)
 
-    def recv(self, atom, args):
-        if atom is ADD_1:
-            other = unwrapInt(args[0])
-            return self.withOffset(other)
+    def withOffset(self, i):
+        return unichr(ord(self._c) + i)
 
-        if atom is ASINTEGER_0:
-            return IntObject(ord(self._c))
+    @method([Int], Char)
+    def add(self, offset):
+        """
+        Add to this object's code point, producing another character.
 
-        if atom is ASSTRING_0:
-            return StrObject(unicode(self._c))
+        'c' + 2 == 'e'
+        """
 
-        if atom is GETCATEGORY_0:
-            return StrObject(unicode(unicodedb.category(ord(self._c))))
+        return self.withOffset(offset)
 
-        if atom is MAX_1:
-            other = unwrapChar(args[0])
-            return self if self._c > other else args[0]
+    @method([], Int)
+    def asInteger(self):
+        """
+        The code point for this object.
 
-        if atom is MIN_1:
-            other = unwrapChar(args[0])
-            return self if self._c < other else args[0]
+        'M'.asInteger() == 77
+        """
 
-        if atom is NEXT_0:
-            return self.withOffset(1)
+        assert isinstance(self, CharObject)
+        return ord(self._c)
 
-        if atom is OP__CMP_1:
-            return polyCmp(self._c, unwrapChar(args[0]))
+    @method([], Str)
+    def asString(self):
+        """
+        A string containing exactly one character.
 
-        if atom is PREVIOUS_0:
-            return self.withOffset(-1)
+        'c'.asString() == "C"
+        """
 
-        if atom is QUOTE_0:
-            return StrObject(quoteChar(self._c))
+        assert isinstance(self, CharObject)
+        return unicode(self._c)
 
-        if atom is SUBTRACT_1:
-            other = unwrapInt(args[0])
-            return self.withOffset(-other)
+    @method([], Str)
+    def getCategory(self):
+        """
+        The Unicode category of this object's code point.
+        """
 
-        raise Refused(self, atom, args)
+        assert isinstance(self, CharObject)
+        return unicode(unicodedb.category(ord(self._c)))
 
-    def withOffset(self, offset):
-        return CharObject(unichr(ord(self._c) + offset))
+    @method([Char], Char)
+    def max(self, other):
+        """
+        The greater code point of two characters.
+        """
 
-    def getChar(self):
-        return self._c
+        assert isinstance(self, CharObject)
+        return max(self._c, other)
+
+    @method([Char], Char)
+    def min(self, other):
+        """
+        The lesser code point of two characters.
+        """
+
+        assert isinstance(self, CharObject)
+        return min(self._c, other)
+
+    @method([], Char)
+    def next(self):
+        """
+        The next code point.
+
+        'n'.next() == 'o'
+        """
+
+        return self.withOffset(1)
+
+    @method([Char], Int)
+    def op__cmp(self, other):
+        """
+        General comparison of characters.
+        """
+
+        assert isinstance(self, CharObject)
+        return cmp(self._c, other)
+
+    @method([], Char)
+    def previous(self):
+        """
+        The preceding code point.
+        """
+
+        return self.withOffset(-1)
+
+    @method([], Str)
+    def quote(self):
+        """
+        A string quoting this object.
+
+        'q'.quote() == "'q'"
+        """
+
+        assert isinstance(self, CharObject)
+        return quoteChar(self._c)
+
+    @method([Int], Char)
+    def subtract(self, i):
+        """
+        Subtract from this object's code point, producing another character.
+
+        'c' - 2 == 'a'
+        """
+
+        return self.withOffset(-i)
 
 
 def unwrapChar(o):
