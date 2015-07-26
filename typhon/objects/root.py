@@ -66,8 +66,8 @@ class MetaObject(type):
             methods = []
             for attrName, attribute in attributes.iteritems():
                 if hasattr(attribute, "_monteMethod_"):
-                    argumentTypes, resultType = attribute._monteMethod_
-                    atom = getAtom(attrName, len(argumentTypes))
+                    verb, argumentTypes, resultType = attribute._monteMethod_
+                    atom = getAtom(verb, len(argumentTypes))
                     methods.append((attribute, atom))
 
             if methods:
@@ -285,13 +285,15 @@ def runnable(singleAtom, _stamps=[]):
     return inner
 
 
-def method(argumentTypes, returnType):
+def method(argumentTypes, returnType, verb=None):
     """
     Create an annotated function which can be picked up by the MetaObject
     metaclass.
     """
 
     def inner(f):
+        actualVerb = f.__name__.decode("utf-8") if verb is None else verb
+
         arity = len(argumentTypes)
         unrollingTypes = unrolling_iterable(enumerate(argumentTypes))
 
@@ -303,7 +305,7 @@ def method(argumentTypes, returnType):
                 argTuple += (spec.unwrap(args[i]),)
             return returnType.wrap(f(*argTuple))
 
-        wrapper._monteMethod_ = argumentTypes, returnType
+        wrapper._monteMethod_ = actualVerb, argumentTypes, returnType
         return wrapper
 
     return inner

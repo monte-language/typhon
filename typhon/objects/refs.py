@@ -20,7 +20,8 @@ from typhon.errors import Refused, userError
 from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
-from typhon.objects.root import Object
+from typhon.objects.root import Object, method
+from typhon.specs import Any
 from typhon.vats import currentVat
 
 

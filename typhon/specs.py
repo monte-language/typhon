@@ -18,6 +18,19 @@ class AnySpec(Spec):
 Any = AnySpec()
 
 
+class BoolSpec(Spec):
+
+    def wrap(_, specimen):
+        from typhon.objects.constants import wrapBool
+        return wrapBool(specimen)
+
+    def unwrap(_, specimen):
+        from typhon.objects.constants import unwrapBool
+        return unwrapBool(specimen)
+
+Bool = BoolSpec()
+
+
 class CharSpec(Spec):
 
     def wrap(_, specimen):

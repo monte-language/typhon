@@ -37,8 +37,8 @@ def autohelp(cls):
     methods = inspect.getmembers(cls,
                                  lambda attr: hasattr(attr, "_monteMethod_"))
     for name, method in methods:
-        argumentTypes, resultTypes = method._monteMethod_
-        atom = getAtom(name, len(argumentTypes))
+        verb, argumentTypes, resultTypes = method._monteMethod_
+        atom = getAtom(verb, len(argumentTypes))
         doc = method.__doc__.decode("utf-8") if method.__doc__ else None
         atoms[atom] = doc
 
