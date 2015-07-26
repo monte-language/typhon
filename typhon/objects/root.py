@@ -12,10 +12,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from functools import wraps
+
 from rpython.rlib import rgc
 from rpython.rlib.jit import jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import compute_identity_hash
 from rpython.rlib.rstackovf import StackOverflow, check_stack_overflow
+from rpython.rlib.unroll import unrolling_iterable
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException, userError
@@ -53,7 +56,37 @@ def addTrail(ue, target, atom, args):
                                          argString))
 
 
+class MetaObject(type):
+    """
+    Metaclass for Monte objects.
+    """
+
+    def __new__(mcls, clsName, parents, attributes):
+        if "recv" not in attributes:
+            methods = []
+            for attrName, attribute in attributes.iteritems():
+                if hasattr(attribute, "_monteMethod_"):
+                    argumentTypes, resultType = attribute._monteMethod_
+                    atom = getAtom(attrName, len(argumentTypes))
+                    methods.append((attribute, atom))
+
+            if methods:
+                def recv(self, atom, args):
+                    for method, methodAtom in unrolling_iterable(methods):
+                        if atom is methodAtom:
+                            return method(self, args)
+                    raise Refused(self, atom, args)
+
+                attributes["recv"] = recv
+
+        return type.__new__(mcls, clsName, parents, attributes)
+
+
 class Object(object):
+
+    # All objects get run through a metaclass which can build recv() for them.
+    # I've never metaobject that I didn't metalike.
+    __metaclass__ = MetaObject
 
     # The attributes that all Objects have in common.
     _attrs_ = "stamps",
@@ -248,5 +281,29 @@ def runnable(singleAtom, _stamps=[]):
                 raise Refused(self, atom, args)
 
         return runnableObject
+
+    return inner
+
+
+def method(argumentTypes, returnType):
+    """
+    Create an annotated function which can be picked up by the MetaObject
+    metaclass.
+    """
+
+    def inner(f):
+        arity = len(argumentTypes)
+        unrollingTypes = unrolling_iterable(enumerate(argumentTypes))
+
+        @wraps(f)
+        def wrapper(self, args):
+            assert len(args) == arity, "Atom/args arity mismatch"
+            argTuple = (self,)
+            for i, _ in unrollingTypes:
+                argTuple += (args[i],)
+            return f(*argTuple)
+
+        wrapper._monteMethod_ = argumentTypes, returnType
+        return wrapper
 
     return inner

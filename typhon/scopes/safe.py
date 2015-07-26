@@ -31,7 +31,7 @@ from typhon.objects.guards import (anyGuard, FinalSlotGuardMaker,
                                    VarSlotGuardMaker)
 from typhon.objects.help import Help
 from typhon.objects.refs import RefOps, UnconnectedRef
-from typhon.objects.root import Object, runnable
+from typhon.objects.root import Object, method, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 from typhon.objects.tests import UnitTest
 from typhon.vats import currentVat
@@ -204,14 +204,27 @@ class Throw(Object):
     def toString(self):
         return u"throw"
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            raise UserException(args[0])
+    @method([any], any)
+    def run(self, payload):
+        """
+        Throw an object into the void.
 
-        if atom is EJECT_2:
-            return throw(args[0], args[1])
+        The resulting exception can be caught by any superior try/catch
+        expression, but only the `unsealException` capability can examine its
+        payload.
+        """
 
-        raise Refused(self, atom, args)
+        raise UserException(payload)
+
+    @method([any, any], any)
+    def eject(self, ej, payload):
+        """
+        Throw an object to an ejector.
+
+        Control flow will resume at the location of the ejector.
+        """
+
+        return throw(ej, payload)
 
 
 @autohelp
