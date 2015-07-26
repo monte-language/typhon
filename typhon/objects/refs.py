@@ -621,7 +621,7 @@ class LocalVatRef(Promise):
         vat = currentVat.get()
         refs = [LocalVatRef(arg, vat) for arg in args]
         # NB: None is returned here and it's turned into null up above.
-        return self.vat.sendOnly(self.target, atom, args)
+        return self.vat.sendOnly(self.target, atom, refs)
 
     def optProblem(self):
         return NullObject
