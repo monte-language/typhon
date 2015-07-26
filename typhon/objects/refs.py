@@ -21,7 +21,7 @@ from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object, method
-from typhon.specs import Any
+from typhon.specs import Any, Bool
 from typhon.vats import currentVat
 
 
@@ -87,6 +87,17 @@ class RefOps(Object):
     def toString(self):
         return u"<Ref>"
 
+    @method([Any], Any)
+    def broken(self, problem):
+        return UnconnectedRef(problem.toString())
+
+    @method([Any], Bool)
+    def isBroken(self, obj):
+        if isinstance(obj, Promise):
+            return obj.state() is BROKEN
+        else:
+            return False
+
     def recv(self, atom, args):
         if atom is BROKEN_1:
             return self.broken(args[0].toString())
@@ -144,9 +155,6 @@ class RefOps(Object):
         p, r = makePromise()
         return ConstList([p, r])
 
-    def broken(self, problem):
-        return UnconnectedRef(problem)
-
     def optBroken(self, optProblem):
         if optProblem is NullObject:
             return NullObject
@@ -162,12 +170,6 @@ class RefOps(Object):
     def isEventual(self, ref):
         if isinstance(ref, Promise):
             return ref.state() is EVENTUAL
-        else:
-            return False
-
-    def isBroken(self, ref):
-        if isinstance(ref, Promise):
-            return ref.state() is BROKEN
         else:
             return False
 
@@ -622,7 +624,7 @@ class LocalVatRef(Promise):
         vat = currentVat.get()
         refs = [LocalVatRef(arg, vat) for arg in args]
         # NB: None is returned here and it's turned into null up above.
-        return self.vat.sendOnly(self.target, atom, args)
+        return self.vat.sendOnly(self.target, atom, refs)
 
     def optProblem(self):
         return NullObject
