@@ -21,7 +21,7 @@ from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object, method
-from typhon.specs import Any, Bool
+from typhon.specs import Any, Bool, List, Str, Void
 from typhon.vats import currentVat
 
 
@@ -30,21 +30,9 @@ class RefState(object):
 
 BROKEN, EVENTUAL, NEAR = RefState(), RefState(), RefState()
 
-BROKEN_1 = getAtom(u"broken", 1)
-ISBROKEN_1 = getAtom(u"isBroken", 1)
-ISDEEPFROZEN_1 = getAtom(u"isDeepFrozen", 1)
-ISEVENTUAL_1 = getAtom(u"isEventual", 1)
-ISNEAR_1 = getAtom(u"isNear", 1)
-ISRESOLVED_1 = getAtom(u"isResolved", 1)
-ISSELFISH_1 = getAtom(u"isSelfish", 1)
-ISSELFLESS_1 = getAtom(u"isSelfless", 1)
-PROMISE_0 = getAtom(u"promise", 0)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RESOLVE_2 = getAtom(u"resolve", 2)
 RUN_1 = getAtom(u"run", 1)
-STATE_1 = getAtom(u"state", 1)
-WHENBROKEN_2 = getAtom(u"whenBroken", 2)
-WHENRESOLVED_2 = getAtom(u"whenResolved", 2)
 _PRINTON_1 = getAtom(u"_printOn", 1)
 _WHENBROKEN_1 = getAtom(u"_whenBroken", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
@@ -79,7 +67,7 @@ def isResolved(o):
 @autohelp
 class RefOps(Object):
     """
-    Ref management and utilities.
+    Reference ("ref") management and utilities.
     """
 
     stamps = [deepFrozenStamp]
@@ -89,145 +77,165 @@ class RefOps(Object):
 
     @method([Any], Any)
     def broken(self, problem):
+        """
+        Return a broken ref with a description of a problem.
+        """
+
         return UnconnectedRef(problem.toString())
 
     @method([Any], Bool)
     def isBroken(self, obj):
+        """
+        Whether an object is a broken ref.
+        """
+
         if isinstance(obj, Promise):
             return obj.state() is BROKEN
         else:
             return False
 
-    def recv(self, atom, args):
-        if atom is BROKEN_1:
-            return self.broken(args[0].toString())
+    @method([Any], Bool)
+    def isDeepFrozen(self, obj):
+        """
+        Whether an object has the `DeepFrozen` property.
+        """
 
-        if atom is ISBROKEN_1:
-            return wrapBool(self.isBroken(args[0]))
+        return obj.auditedBy(deepFrozenStamp)
 
-        if atom is ISDEEPFROZEN_1:
-            return wrapBool(self.isDeepFrozen(args[0]))
+    @method([Any], Bool)
+    def isEventual(self, obj):
+        """
+        Whether an object is an eventual ref.
+        """
 
-        if atom is ISEVENTUAL_1:
-            return wrapBool(self.isEventual(args[0]))
-
-        if atom is ISNEAR_1:
-            return wrapBool(self.isNear(args[0]))
-
-        if atom is ISRESOLVED_1:
-            return wrapBool(isResolved(args[0]))
-
-        if atom is ISSELFISH_1:
-            return wrapBool(self.isSelfish(args[0]))
-
-        if atom is ISSELFLESS_1:
-            return wrapBool(self.isSelfless(args[0]))
-
-        if atom is PROMISE_0:
-            return self.promise()
-
-        # Inlined for name clash reasons.
-        if atom is STATE_1:
-            o = args[0]
-            if isinstance(o, Promise):
-                s = o.state()
-            else:
-                s = NEAR
-
-            if s is EVENTUAL:
-                return StrObject(u"EVENTUAL")
-            if s is NEAR:
-                return StrObject(u"NEAR")
-            if s is BROKEN:
-                return StrObject(u"BROKEN")
-            return StrObject(u"UNKNOWN")
-
-        if atom is WHENBROKEN_2:
-            return self.whenBroken(args[0], args[1])
-
-        if atom is WHENRESOLVED_2:
-            return self.whenResolved(args[0], args[1])
-
-        raise Refused(self, atom, args)
-
-    def promise(self):
-        from typhon.objects.collections import ConstList
-        p, r = makePromise()
-        return ConstList([p, r])
-
-    def optBroken(self, optProblem):
-        if optProblem is NullObject:
-            return NullObject
-        else:
-            return self.broken(optProblem.toString())
-
-    def isNear(self, ref):
-        if isinstance(ref, Promise):
-            return ref.state() is NEAR
-        else:
-            return True
-
-    def isEventual(self, ref):
-        if isinstance(ref, Promise):
-            return ref.state() is EVENTUAL
+        if isinstance(obj, Promise):
+            return obj.state() is EVENTUAL
         else:
             return False
 
-    def optProblem(self, ref):
-        if isinstance(ref, Promise):
-            return ref.problem
-        return NullObject
+    @method([Any], Bool)
+    def isFar(self, obj):
+        """
+        Whether an object is a far ref.
+        """
 
-#    def fulfillment(self, ref):
-#        ref = self.resolution(ref)
-#        p = self.optProblem(ref)
-#        if isResolved(ref):
-#            if p is NullObject:
-#                return ref
-#            else:
-#                raise p
-#        else:
-#            raise RuntimeError("Not resolved: %r" % (ref,))
+        if isinstance(obj, Promise):
+            return obj.state() is EVENTUAL and obj.isResolved()
+        else:
+            return False
 
-    def isFar(self, ref):
-        return self.isEventual(ref) and isResolved(ref)
+    @method([Any], Bool)
+    def isNear(self, obj):
+        """
+        Whether an object is near.
 
-    def whenResolved(self, o, callback):
+        Refs that are resolved to near objects are also near.
+        """
+
+        if isinstance(obj, Promise):
+            return obj.state() is NEAR
+        else:
+            return True
+
+    @method([Any], Bool)
+    def isResolved(self, obj):
+        """
+        Whether an object is resolved.
+        """
+
+        if isinstance(obj, Promise):
+            return obj.isResolved()
+        else:
+            return True
+
+    @method([Any], Bool)
+    def isSelfish(self, obj):
+        """
+        Whether an object is "selfish"; that is, whether it does not have the
+        `Selfless` property.
+
+        Refs that are not near cannot be examined for selfishness; they are
+        too far away.
+        """
+
+        if isinstance(obj, Promise):
+            return obj.state() is NEAR and not obj.auditedBy(selfless)
+        else:
+            return not obj.auditedBy(selfless)
+
+    @method([Any], Bool)
+    def isSelfless(self, obj):
+        """
+        Whether an object has the `Selfless` property.
+        """
+
+        return obj.auditedBy(selfless)
+
+    @method([], List)
+    def promise(self):
+        """
+        Create a [promise, resolver] pair.
+        """
+
+        p, r = makePromise()
+        return [p, r]
+
+    # While "state" is not a reserved keyword in Python, it is used as a
+    # method name by Promise and its subclasses, and poor RPython cannot deal
+    # with that.
+    @method([Any], Str, verb=u"state")
+    def state_(self, obj):
+        """
+        Determine the resolution state of an object.
+        """
+
+        if isinstance(obj, Promise):
+            s = obj.state()
+        else:
+            s = NEAR
+
+        if s is EVENTUAL:
+            return u"EVENTUAL"
+        if s is NEAR:
+            return u"NEAR"
+        if s is BROKEN:
+            return u"BROKEN"
+        return u"UNKNOWN"
+
+    @method([Any, Any], Any)
+    def whenBroken(self, obj, callback):
         p, r = makePromise()
         vat = currentVat.get()
-        vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenResolvedReactor(callback, o, r, vat)])
+        vat.sendOnly(obj, _WHENMORERESOLVED_1,
+                     [WhenBrokenReactor(callback, obj, r, vat)])
         return p
 
-    def whenResolvedOnly(self, o, callback):
+    @method([Any, Any], Void)
+    def whenBrokenOnly(self, obj, callback):
         vat = currentVat.get()
-        return vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenResolvedReactor(callback, o, None, vat)])
+        vat.sendOnly(obj, _WHENMORERESOLVED_1,
+                     [WhenBrokenReactor(callback, obj, None, vat)])
 
-    def whenBroken(self, o, callback):
+    @method([Any, Any], Any)
+    def whenResolved(self, obj, callback):
         p, r = makePromise()
         vat = currentVat.get()
-        vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenBrokenReactor(callback, o, r, vat)])
+        vat.sendOnly(obj, _WHENMORERESOLVED_1,
+                     [WhenResolvedReactor(callback, obj, r, vat)])
         return p
 
-    def whenBrokenOnly(self, o, callback):
+    @method([Any, Any], Void)
+    def whenResolvedOnly(self, obj, callback):
         vat = currentVat.get()
-        return vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenBrokenReactor(callback, o, None, vat)])
-
-    def isDeepFrozen(self, o):
-        return o.auditedBy(deepFrozenStamp)
-
-    def isSelfless(self, o):
-        return o.auditedBy(selfless)
-
-    def isSelfish(self, o):
-        return self.isNear(o) and not self.isSelfless(o)
+        vat.sendOnly(obj, _WHENMORERESOLVED_1,
+                     [WhenResolvedReactor(callback, obj, None, vat)])
 
 
 @autohelp
 class WhenBrokenReactor(Object):
+    """
+    React to a ref becoming broken.
+    """
 
     def __init__(self, callback, ref, resolver, vat):
         self._cb = callback
@@ -238,11 +246,10 @@ class WhenBrokenReactor(Object):
     def toString(self):
         return u"<whenBrokenReactor>"
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            if not isinstance(self._ref, Promise):
-                return NullObject
-
+    @method([Any], Void)
+    def run(self, _):
+        assert isinstance(self, WhenBrokenReactor)
+        if isinstance(self._ref, Promise):
             if self._ref.state() is EVENTUAL:
                 self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
             elif self._ref.state() is BROKEN:
@@ -252,12 +259,12 @@ class WhenBrokenReactor(Object):
                 if self._resolver is not None:
                     self._resolver.resolve(outcome)
 
-            return NullObject
-        raise Refused(self, atom, args)
-
 
 @autohelp
 class WhenResolvedReactor(Object):
+    """
+    React to a ref becoming resolved.
+    """
 
     done = False
 
@@ -270,11 +277,10 @@ class WhenResolvedReactor(Object):
     def toString(self):
         return u"<whenResolvedReactor>"
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            if self.done:
-                return NullObject
-
+    @method([Any], Void)
+    def run(self, _):
+        assert isinstance(self, WhenResolvedReactor)
+        if not self.done:
             if self._ref.isResolved():
                 # XXX should reflect to user if exception?
                 outcome = self._cb.call(u"run", [self._ref])
@@ -285,9 +291,6 @@ class WhenResolvedReactor(Object):
                 self.done = True
             else:
                 self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
-
-            return NullObject
-        raise Refused(self, atom, args)
 
 
 @autohelp

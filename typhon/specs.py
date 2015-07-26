@@ -4,7 +4,9 @@ Type specifications.
 
 
 class Spec(object):
-    pass
+    """
+    A type specification.
+    """
 
 
 class AnySpec(Spec):
@@ -17,6 +19,7 @@ class AnySpec(Spec):
 
 Any = AnySpec()
 
+# Data specifications.
 
 class BoolSpec(Spec):
 
@@ -68,3 +71,33 @@ class StrSpec(Spec):
         return unwrapStr(specimen)
 
 Str = StrSpec()
+
+
+class VoidSpec(Spec):
+
+    def wrap(_, specimen):
+        from typhon.objects.constants import NullObject
+        return NullObject
+
+    def unwrap(_, specimen):
+        from typhon.objects.constants import NullObject
+        if specimen is not NullObject:
+            from typhon.errors import WrongType
+            raise WrongType(u"Object was not null!")
+        return None
+
+Void = VoidSpec()
+
+# Collection specifications.
+
+class ListSpec(Spec):
+
+    def wrap(_, specimen):
+        from typhon.objects.collections import ConstList
+        return ConstList(specimen)
+
+    def unwrap(_, specimen):
+        from typhon.objects.collections import unwrapList
+        return unwrapList(specimen)
+
+List = ListSpec()
