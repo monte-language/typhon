@@ -299,9 +299,9 @@ def method(argumentTypes, returnType):
         def wrapper(self, args):
             assert len(args) == arity, "Atom/args arity mismatch"
             argTuple = (self,)
-            for i, _ in unrollingTypes:
-                argTuple += (args[i],)
-            return f(*argTuple)
+            for i, spec in unrollingTypes:
+                argTuple += (spec.unwrap(args[i]),)
+            return returnType.wrap(f(*argTuple))
 
         wrapper._monteMethod_ = argumentTypes, returnType
         return wrapper

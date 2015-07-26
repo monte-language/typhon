@@ -34,6 +34,7 @@ from typhon.objects.refs import RefOps, UnconnectedRef
 from typhon.objects.root import Object, method, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 from typhon.objects.tests import UnitTest
+from typhon.specs import Any
 from typhon.vats import currentVat
 
 ASTYPE_0 = getAtom(u"asType", 0)
@@ -204,7 +205,7 @@ class Throw(Object):
     def toString(self):
         return u"throw"
 
-    @method([any], any)
+    @method([Any], Any)
     def run(self, payload):
         """
         Throw an object into the void.
@@ -216,7 +217,7 @@ class Throw(Object):
 
         raise UserException(payload)
 
-    @method([any, any], any)
+    @method([Any, Any], Any)
     def eject(self, ej, payload):
         """
         Throw an object to an ejector.
