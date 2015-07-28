@@ -19,7 +19,8 @@ from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
-from typhon.objects.root import Object
+from typhon.objects.root import Object, method
+from typhon.specs import Any, List
 
 _UNCALL_0 = getAtom(u"_uncall", 0)
 GET_0 = getAtom(u"get", 0)
@@ -43,22 +44,23 @@ class Binding(Object):
     def toString(self):
         return u"<binding for %s>" % self.slot.toString()
 
-    def recv(self, atom, args):
-        if atom is GET_0:
-            return self.slot
+    @method([], Any)
+    def get(self):
+        assert isinstance(self, Binding)
+        return self.slot
 
-        if atom is GETGUARD_0:
-            return self.guard
+    @method([], Any)
+    def getGuard(self):
+        assert isinstance(self, Binding)
+        return self.guard
 
-        if atom is _UNCALL_0:
-            from typhon.scopes.safe import theSlotBinder
-            return ConstList([
-                ConstList([theSlotBinder, StrObject(u"run"),
+    @method([], List)
+    def _uncall(self):
+        assert isinstance(self, Binding)
+        from typhon.scopes.safe import theSlotBinder
+        return [ConstList([theSlotBinder, StrObject(u"run"),
                            ConstList([self.guard])]),
-                StrObject(u"run"),
-                ConstList([self.slot, NullObject])])
-
-        raise Refused(self, atom, args)
+                StrObject(u"run"), ConstList([self.slot, NullObject])]
 
 
 @autohelp

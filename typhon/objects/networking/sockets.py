@@ -13,12 +13,11 @@
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
-from typhon.objects.collections import ConstList, unwrapList
-from typhon.objects.constants import NullObject
-from typhon.objects.data import IntObject, StrObject, unwrapInt, unwrapStr
-from typhon.objects.root import Object
-from typhon.vats import currentVat
+from typhon.errors import userError
+from typhon.objects.collections import ConstList
+from typhon.objects.data import IntObject, StrObject, unwrapInt
+from typhon.objects.root import Object, method
+from typhon.specs import Any, List, Str, Void
 
 
 ABORTFLOW_0 = getAtom(u"abortFlow", 0)
@@ -42,13 +41,12 @@ class SocketUnpauser(Object):
     def __init__(self, fount):
         self.fount = fount
 
-    def recv(self, atom, args):
-        if atom is UNPAUSE_0:
-            if self.fount is not None:
-                self.fount.unpause()
-                self.fount = None
-            return NullObject
-        raise Refused(self, atom, args)
+    @method([], Void)
+    def unpause(self):
+        assert isinstance(self, SocketUnpauser)
+        if self.fount is not None:
+            self.fount.unpause()
+            self.fount = None
 
 
 @autohelp
@@ -68,32 +66,35 @@ class SocketFount(Object):
     def toString(self):
         return u"<SocketFount(%s)>" % self.sock.repr()
 
-    def recv(self, atom, args):
-        if atom is FLOWTO_1:
-            self._drain = drain = args[0]
-            # We can't actually call receive/1 on the drain until
-            # flowingFrom/1 has been called, *but* flush() should be using
-            # sends to incant receive/1, so they'll all be done in subsequent
-            # turns to the one we're queueing. ~ C.
-            rv = self.sock.vat.send(drain, FLOWINGFROM_1, [self])
-            self.flush()
-            return rv
+    @method([Any], Any)
+    def flowTo(self, drain):
+        assert isinstance(self, SocketFount)
+        self._drain = drain
+        # We can't actually call receive/1 on the drain until
+        # flowingFrom/1 has been called, *but* flush() should be using
+        # sends to incant receive/1, so they'll all be done in subsequent
+        # turns to the one we're queueing. ~ C.
+        rv = self.sock.vat.send(drain, FLOWINGFROM_1, [self])
+        self.flush()
+        return rv
 
-        if atom is PAUSEFLOW_0:
-            return self.pause()
+    @method([], Any)
+    def pauseFlow(self):
+        assert isinstance(self, SocketFount)
+        return self.pause()
 
-        if atom is ABORTFLOW_0:
-            self.sock.vat.sendOnly(self._drain, FLOWABORTED_1,
-                                   [StrObject(u"Flow aborted")])
-            # Release the drain. They should have released us as well.
-            self._drain = None
-            return NullObject
+    @method([], Void)
+    def abortFlow(self):
+        assert isinstance(self, SocketFount)
+        self.sock.vat.sendOnly(self._drain, FLOWABORTED_1,
+                               [StrObject(u"Flow aborted")])
+        # Release the drain. They should have released us as well.
+        self._drain = None
 
-        if atom is STOPFLOW_0:
-            self.terminate(u"Flow stopped")
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method([], Void)
+    def stopFlow(self):
+        assert isinstance(self, SocketFount)
+        self.terminate(u"Flow stopped")
 
     def pause(self):
         self.pauses += 1
@@ -137,27 +138,27 @@ class SocketDrain(Object):
     def toString(self):
         return u"<SocketDrain(%s)>" % self.sock.repr()
 
-    def recv(self, atom, args):
-        if atom is FLOWINGFROM_1:
-            return self
+    @method([Any], Any)
+    def flowingFrom(self, fount):
+        return self
 
-        if atom is RECEIVE_1:
-            if self._closed:
-                raise userError(u"Can't send data to a closed socket!")
+    @method([List], Void)
+    def receive(self, data):
+        assert isinstance(self, SocketDrain)
+        if self._closed:
+            raise userError(u"Can't send data to a closed socket!")
 
-            data = unwrapList(args[0])
-            s = "".join([chr(unwrapInt(byte)) for byte in data])
-            self.sock._outbound.append(s)
-            return NullObject
+        s = "".join([chr(unwrapInt(byte)) for byte in data])
+        self.sock._outbound.append(s)
 
-        if atom is FLOWABORTED_1:
-            self._closed = True
-            self.sock.error(self.sock.vat._reactor, unwrapStr(args[0]))
-            return NullObject
+    @method([Str], Void)
+    def flowAborted(self, reason):
+        assert isinstance(self, SocketDrain)
+        self._closed = True
+        self.sock.error(self.sock.vat._reactor, reason)
 
-        if atom is FLOWSTOPPED_1:
-            self._closed = True
-            self.sock.error(self.sock.vat._reactor, unwrapStr(args[0]))
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method([Str], Void)
+    def flowStopped(self, reason):
+        assert isinstance(self, SocketDrain)
+        self._closed = True
+        self.sock.error(self.sock.vat._reactor, reason)

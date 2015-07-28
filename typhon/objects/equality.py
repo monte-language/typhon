@@ -15,23 +15,16 @@
 from rpython.rlib.jit import unroll_safe
 from rpython.rlib.objectmodel import compute_identity_hash
 
-from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
+from typhon.errors import userError
 from typhon.objects.auditors import deepFrozenStamp, selfless, transparentStamp
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.refs import EVENTUAL, Promise, resolution, isResolved
-from typhon.objects.root import Object
-
-
-ISSETTLED_1 = getAtom(u"isSettled", 1)
-MAKETRAVERSALKEY_1 = getAtom(u"makeTraversalKey", 1)
-OPTSAME_2 = getAtom(u"optSame", 2)
-SAMEEVER_2 = getAtom(u"sameEver", 2)
-SAMEYET_2 = getAtom(u"sameYet", 2)
+from typhon.objects.root import Object, method
+from typhon.specs import Any, Bool
 
 
 class Equality(object):
@@ -391,30 +384,31 @@ class Equalizer(Object):
 
     stamps = [deepFrozenStamp]
 
-    def recv(self, atom, args):
-        if atom is ISSETTLED_1:
-            return wrapBool(isSettled(args[0]))
+    @method([Any], Bool)
+    def isSettled(self, specimen):
+        if isinstance(specimen, Promise):
+            return specimen.state() is not EVENTUAL
+        return True
 
-        if atom is OPTSAME_2:
-            first, second = args
-            result = optSame(first, second)
-            if result is NOTYET:
-                return NullObject
-            return wrapBool(result is EQUAL)
+    @method([Any, Any], Any)
+    def optSame(self, first, second):
+        result = optSame(first, second)
+        if result is NOTYET:
+            return NullObject
+        return wrapBool(result is EQUAL)
 
-        if atom is SAMEEVER_2:
-            first, second = args
-            result = optSame(first, second)
-            if result is NOTYET:
-                raise userError(u"Not yet settled!")
-            return wrapBool(result is EQUAL)
+    @method([Any, Any], Bool)
+    def sameEver(self, first, second):
+        result = optSame(first, second)
+        if result is NOTYET:
+            raise userError(u"Not yet settled!")
+        return result is EQUAL
 
-        if atom is SAMEYET_2:
-            first, second = args
-            result = optSame(first, second)
-            return wrapBool(result is EQUAL)
+    @method([Any, Any], Bool)
+    def sameYet(self, first, second):
+        result = optSame(first, second)
+        return result is EQUAL
 
-        if atom is MAKETRAVERSALKEY_1:
-            return TraversalKey(args[0])
-
-        raise Refused(self, atom, args)
+    @method([Any], Any)
+    def makeTraversalKey(self, obj):
+        return TraversalKey(obj)

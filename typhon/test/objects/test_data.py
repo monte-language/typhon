@@ -303,7 +303,8 @@ class TestInt(TestCase):
     def testPow(self):
         i = IntObject(3)
         result = i.call(u"pow", [IntObject(100)])
-        self.assertTrue(result.bi.eq(rbigint.fromint(3).pow(rbigint.fromint(100))))
+        expected = rbigint.fromint(3).pow(rbigint.fromint(100))
+        self.assertTrue(result.bi.eq(expected))
 
     def testModPow(self):
         i = IntObject(3)

@@ -4,7 +4,8 @@ from typhon.errors import Refused, userError
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapInt, unwrapStr
-from typhon.objects.root import Object, runnable
+from typhon.objects.root import Object, method, runnable
+from typhon.specs import Any, List, Str, Void
 from typhon.vats import currentVat
 
 
@@ -30,13 +31,12 @@ class InputUnpauser(Object):
     def __init__(self, fount):
         self.fount = fount
 
-    def recv(self, atom, args):
-        if atom is UNPAUSE_0:
-            if self.fount is not None:
-                self.fount.unpause()
-                self.fount = None
-            return NullObject
-        raise Refused(self, atom, args)
+    @method([], Void)
+    def unpause(self):
+        assert isinstance(self, InputUnpauser)
+        if self.fount is not None:
+            self.fount.unpause()
+            self.fount = None
 
 
 @autohelp
@@ -56,26 +56,29 @@ class InputFount(Object):
     def toString(self):
         return u"<InputFount>"
 
-    def recv(self, atom, args):
-        if atom is FLOWTO_1:
-            self._drain = drain = args[0]
-            rv = drain.call(u"flowingFrom", [self])
-            return rv
+    @method([Any], Any)
+    def flowTo(self, drain):
+        assert isinstance(self, InputFount)
+        self._drain = drain
+        rv = drain.call(u"flowingFrom", [self])
+        return rv
 
-        if atom is PAUSEFLOW_0:
-            return self.pause()
+    @method([], Any)
+    def pauseFlow(self):
+        assert isinstance(self, InputFount)
+        return self.pause()
 
-        if atom is ABORTFLOW_0:
-            self._drain.call(u"flowAborted", [StrObject(u"flow aborted")])
-            # Release the drain. They should have released us as well.
-            self._drain = None
-            return NullObject
+    @method([], Void)
+    def abortFlow(self):
+        assert isinstance(self, InputFount)
+        self._drain.call(u"flowAborted", [StrObject(u"flow aborted")])
+        # Release the drain. They should have released us as well.
+        self._drain = None
 
-        if atom is STOPFLOW_0:
-            self.terminate(u"Flow stopped")
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method([], Void)
+    def stopFlow(self):
+        assert isinstance(self, InputFount)
+        self.terminate(u"Flow stopped")
 
     def pause(self):
         self.pauses += 1
@@ -131,32 +134,32 @@ class OutputDrain(Object):
     def toString(self):
         return u"<OutputDrain>"
 
-    def recv(self, atom, args):
-        if atom is FLOWINGFROM_1:
-            return self
+    @method([Any], Any)
+    def flowingFrom(self, fount):
+        return self
 
-        if atom is RECEIVE_1:
-            if self._closed:
-                raise userError(u"Can't send data to a closed FD!")
+    @method([List], Void)
+    def receive(self, data):
+        assert isinstance(self, OutputDrain)
+        if self._closed:
+            raise userError(u"Can't send data to a closed FD!")
 
-            data = unwrapList(args[0])
-            s = "".join([chr(unwrapInt(byte)) for byte in data])
-            self.selectable.enqueue(s)
-            return NullObject
+        s = "".join([chr(unwrapInt(byte)) for byte in data])
+        self.selectable.enqueue(s)
 
-        if atom is FLOWABORTED_1:
-            self._closed = True
-            vat = currentVat.get()
-            self.selectable.error(vat._reactor, unwrapStr(args[0]))
-            return NullObject
+    @method([Str], Void)
+    def flowAborted(self, reason):
+        assert isinstance(self, OutputDrain)
+        self._closed = True
+        vat = currentVat.get()
+        self.selectable.error(vat._reactor, reason)
 
-        if atom is FLOWSTOPPED_1:
-            self._closed = True
-            vat = currentVat.get()
-            self.selectable.error(vat._reactor, unwrapStr(args[0]))
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method([Str], Void)
+    def flowStopped(self, reason):
+        assert isinstance(self, OutputDrain)
+        self._closed = True
+        vat = currentVat.get()
+        self.selectable.error(vat._reactor, reason)
 
 
 @runnable(RUN_0)

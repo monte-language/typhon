@@ -2,11 +2,11 @@ from rpython.rlib import rgc
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused
-from typhon.objects.collections import ConstList, ConstMap, monteDict
+from typhon.objects.collections import ConstList, monteDict
 from typhon.objects.data import IntObject, StrObject
-from typhon.objects.root import Object
+from typhon.objects.root import Object, method
 from typhon.objects.user import ScriptObject
+from typhon.specs import Any, Int, Map
 
 
 GETALARMS_0 = getAtom(u"getAlarms", 0)
@@ -73,22 +73,24 @@ class Heap(Object):
         self.objectCount += 1
         self.memoryUsage += sizeOf
 
-    def recv(self, atom, args):
-        if atom is GETBUCKETS_0:
-            d = monteDict()
-            for name, count in self.buckets.items():
-                size = self.sizes.get(name, -1)
-                d[StrObject(name)] = ConstList([IntObject(size),
-                                                IntObject(count)])
-            return ConstMap(d)
+    @method([], Map)
+    def getBuckets(self):
+        assert isinstance(self, Heap)
+        d = monteDict()
+        for name, count in self.buckets.items():
+            size = self.sizes.get(name, -1)
+            d[StrObject(name)] = ConstList([IntObject(size),
+                                            IntObject(count)])
 
-        if atom is GETMEMORYUSAGE_0:
-            return IntObject(self.memoryUsage)
+    @method([], Int)
+    def getMemoryUsage(self):
+        assert isinstance(self, Heap)
+        return self.memoryUsage
 
-        if atom is GETOBJECTCOUNT_0:
-            return IntObject(self.objectCount)
-
-        raise Refused(self, atom, args)
+    @method([], Int)
+    def getObjectCount(self):
+        assert isinstance(self, Heap)
+        return self.objectCount
 
 
 def makeHeapStats():
@@ -114,14 +116,15 @@ class ReactorStats(Object):
     def __init__(self, reactor):
         self.reactor = reactor
 
-    def recv(self, atom, args):
-        if atom is GETALARMS_0:
-            return IntObject(len(self.reactor.alarmQueue.heap))
+    @method([], Int)
+    def getAlarms(self):
+        assert isinstance(self, ReactorStats)
+        return len(self.reactor.alarmQueue.heap)
 
-        if atom is GETSELECTABLES_0:
-            return IntObject(len(self.reactor._selectables))
-
-        raise Refused(self, atom, args)
+    @method([], Int)
+    def getSelectables(self):
+        assert isinstance(self, ReactorStats)
+        return len(self.reactor._selectables)
 
 
 def makeReactorStats():
@@ -146,11 +149,10 @@ class CurrentRuntime(Object):
     This object is necessarily unsafe and nondeterministic.
     """
 
-    def recv(self, atom, args):
-        if atom is GETHEAPSTATISTICS_0:
-            return makeHeapStats()
+    @method([], Any)
+    def getHeapStatistics(self):
+        return makeHeapStats()
 
-        if atom is GETREACTORSTATISTICS_0:
-            return makeReactorStats()
-
-        raise Refused(self, atom, args)
+    @method([], Any)
+    def getReactorStatistics(self):
+        return makeReactorStats()

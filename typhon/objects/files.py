@@ -14,12 +14,12 @@
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused
-from typhon.objects.collections import ConstList, unwrapList
+from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapInt, unwrapStr
 from typhon.objects.refs import makePromise
-from typhon.objects.root import Object, runnable
+from typhon.objects.root import Object, method, runnable
+from typhon.specs import Any, List, Void
 from typhon.vats import Callable, currentVat
 
 
@@ -47,14 +47,12 @@ class FileUnpauser(Object):
     def __init__(self, fount):
         self.fount = fount
 
-    def recv(self, atom, args):
-        if atom is UNPAUSE_0:
-            if self.fount is not None:
-                self.fount.unpause()
-                self.fount = None
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method([], Void)
+    def unpause(self):
+        assert isinstance(self, FileUnpauser)
+        if self.fount is not None:
+            self.fount.unpause()
+            self.fount = None
 
 
 class Read(Callable):
@@ -94,22 +92,24 @@ class FileFount(Object):
     def __init__(self, handle):
         self.handle = handle
 
-    def recv(self, atom, args):
-        if atom is FLOWTO_1:
-            self.drain = drain = args[0]
-            rv = drain.call(u"flowingFrom", [self])
-            self.queueRead()
-            return rv
+    @method([Any], Any)
+    def flowTo(self, drain):
+        assert isinstance(self, FileFount)
+        self.drain = drain
+        rv = drain.call(u"flowingFrom", [self])
+        self.queueRead()
+        return rv
 
-        if atom is PAUSEFLOW_0:
-            return self.pause()
+    @method([], Any)
+    def pauseFlow(self):
+        assert isinstance(self, FileFount)
+        return self.pause()
 
-        if atom is STOPFLOW_0:
-            vat = currentVat.get()
-            vat.afterTurn(Close(self.handle))
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method([], Void)
+    def stopFlow(self):
+        assert isinstance(self, FileFount)
+        vat = currentVat.get()
+        vat.afterTurn(Close(self.handle))
 
     def close(self):
         self.handle.close()
@@ -163,32 +163,30 @@ class FileDrain(Object):
 
     def __init__(self, handle):
         self.handle = handle
-
         self.chunks = []
 
-    def recv(self, atom, args):
-        if atom is FLOWINGFROM_1:
-            return self
+    @method([Any], Any)
+    def flowingFrom(self, fount):
+        return self
 
-        if atom is RECEIVE_1:
-            data = unwrapList(args[0])
-            s = "".join([chr(unwrapInt(byte)) for byte in data])
+    @method([List], Void)
+    def receive(self, data):
+        assert isinstance(self, FileDrain)
+        s = "".join([chr(unwrapInt(byte)) for byte in data])
 
-            # If this is the first time that we've received since last flush,
-            # then prepare to flush after the turn.
-            if not self.chunks:
-                vat = currentVat.get()
-                vat.afterTurn(Write(self))
-
-            self.chunks.append(s)
-            return NullObject
-
-        if atom is FLOWSTOPPED_1:
+        # If this is the first time that we've received since last flush,
+        # then prepare to flush after the turn.
+        if not self.chunks:
             vat = currentVat.get()
-            vat.afterTurn(Close(self.handle))
-            return NullObject
+            vat.afterTurn(Write(self))
 
-        raise Refused(self, atom, args)
+        self.chunks.append(s)
+
+    @method([Any], Void)
+    def flowStopped(self, reason):
+        assert isinstance(self, FileDrain)
+        vat = currentVat.get()
+        vat.afterTurn(Close(self.handle))
 
 
 class GetContents(Callable):
@@ -235,29 +233,33 @@ class FileResource(Object):
     def __init__(self, path):
         self.path = path
 
-    def recv(self, atom, args):
-        if atom is GETCONTENTS_0:
-            p, r = makePromise()
-            vat = currentVat.get()
-            vat.afterTurn(GetContents(self.path, r))
-            return p
+    @method([], Any)
+    def getContents(self):
+        assert isinstance(self, FileResource)
+        p, r = makePromise()
+        vat = currentVat.get()
+        vat.afterTurn(GetContents(self.path, r))
+        return p
 
-        if atom is SETCONTENTS_1:
-            l = unwrapList(args[0])
-            data = "".join([chr(unwrapInt(i)) for i in l])
+    @method([List], Any)
+    def setContents(self, l):
+        assert isinstance(self, FileResource)
+        data = "".join([chr(unwrapInt(i)) for i in l])
 
-            p, r = makePromise()
-            vat = currentVat.get()
-            vat.afterTurn(SetContents(self.path, data, r))
-            return p
+        p, r = makePromise()
+        vat = currentVat.get()
+        vat.afterTurn(SetContents(self.path, data, r))
+        return p
 
-        if atom is OPENFOUNT_0:
-            return FileFount(open(self.path, "rb"))
+    @method([], Any)
+    def openFount(self):
+        assert isinstance(self, FileResource)
+        return FileFount(open(self.path, "rb"))
 
-        if atom is OPENDRAIN_0:
-            return FileDrain(open(self.path, "wb"))
-
-        raise Refused(self, atom, args)
+    @method([], Any)
+    def openDrain(self):
+        assert isinstance(self, FileResource)
+        return FileDrain(open(self.path, "wb"))
 
 
 @runnable(RUN_1)

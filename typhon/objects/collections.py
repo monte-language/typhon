@@ -24,9 +24,10 @@ from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import throw
-from typhon.objects.root import Object
+from typhon.objects.root import Object, method
 from typhon.prelude import getGlobal
 from typhon.rstrategies import rstrategies
+from typhon.specs import Any, List
 from typhon.strategies import strategyFactory
 
 
@@ -107,17 +108,15 @@ class listIterator(Object):
     def toString(self):
         return u"<listIterator>"
 
-    def recv(self, atom, args):
-        if atom is NEXT_1:
-            if self._index < self.size:
-                rv = [IntObject(self._index), self.objects[self._index]]
-                self._index += 1
-                return ConstList(rv)
-            else:
-                ej = args[0]
-                ej.call(u"run", [StrObject(u"Iterator exhausted")])
-
-        raise Refused(self, atom, args)
+    @method([Any], List)
+    def next(self, ej):
+        assert isinstance(self, listIterator)
+        if self._index < self.size:
+            rv = [IntObject(self._index), self.objects[self._index]]
+            self._index += 1
+            return rv
+        else:
+            ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
 
 @autohelp
@@ -136,18 +135,16 @@ class mapIterator(Object):
     def toString(self):
         return u"<mapIterator>"
 
-    def recv(self, atom, args):
-        if atom is NEXT_1:
-            if self._index < len(self.objects):
-                k, v = self.objects[self._index]
-                rv = [k, v]
-                self._index += 1
-                return ConstList(rv)
-            else:
-                ej = args[0]
-                ej.call(u"run", [StrObject(u"Iterator exhausted")])
-
-        raise Refused(self, atom, args)
+    @method([Any], List)
+    def next(self, ej):
+        assert isinstance(self, mapIterator)
+        if self._index < len(self.objects):
+            k, v = self.objects[self._index]
+            rv = [k, v]
+            self._index += 1
+            return rv
+        else:
+            ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
 
 class Collection(object):

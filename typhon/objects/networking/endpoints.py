@@ -17,19 +17,15 @@ from rpython.rlib.rsocket import INETAddress, RSocket
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused
-from typhon.objects.collections import ConstList
-from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapInt, unwrapStr
 from typhon.objects.networking.sockets import SocketDrain
 from typhon.objects.refs import makePromise
-from typhon.objects.root import Object, runnable
+from typhon.objects.root import Object, method, runnable
 from typhon.selectables import Socket
+from typhon.specs import Any, List, Void
 from typhon.vats import Callable, currentVat
 
 
-CONNECT_0 = getAtom(u"connect", 0)
-LISTEN_1 = getAtom(u"listen", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 
@@ -82,17 +78,13 @@ class TCP4ClientEndpoint(Object):
     def toString(self):
         return u"<endpoint (IPv4, TCP): %s:%d>" % (self.host, self.port)
 
-    def recv(self, atom, args):
-        if atom is CONNECT_0:
-            return self.connect()
-
-        raise Refused(self, atom, args)
-
+    @method([], List)
     def connect(self):
+        assert isinstance(self, TCP4ClientEndpoint)
         pending = TCP4ClientPending(self.host, self.port)
         vat = currentVat.get()
         vat.afterTurn(pending)
-        return ConstList([pending.fount, pending.drain])
+        return [pending.fount, pending.drain]
 
 
 @runnable(RUN_2)
@@ -118,21 +110,15 @@ class TCP4ServerEndpoint(Object):
     def toString(self):
         return u"<endpoint (IPv4, TCP): %d>" % (self.port,)
 
-    def recv(self, atom, args):
-        if atom is LISTEN_1:
-            return self.listen(args[0])
-
-        raise Refused(self, atom, args)
-
     @dont_look_inside
+    @method([Any], Void)
     def listen(self, handler):
+        assert isinstance(self, TCP4ServerEndpoint)
         vat = currentVat.get()
         socket = Socket(RSocket(), vat)
         # XXX this shouldn't block, but not guaranteed
         socket.listen(self.port, handler)
-
         # XXX should a promise be returned here?
-        return NullObject
 
 
 @runnable(RUN_1)

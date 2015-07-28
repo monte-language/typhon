@@ -32,7 +32,7 @@ from typhon.objects.auditors import selfless, deepFrozenStamp, transparentStamp
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.root import Object, method, runnable
 from typhon.quoting import quoteChar, quoteStr
-from typhon.specs import Char, Int, Str
+from typhon.specs import Any, Bool, Char, Double, Int, List, Str
 
 
 ABOVEZERO_0 = getAtom(u"aboveZero", 0)
@@ -408,180 +408,81 @@ class IntObject(Object):
         # This is what CPython and RPython do.
         return self._i
 
-    def recv(self, atom, args):
-        # Ints can be compared.
-        if atom is OP__CMP_1:
-            other = unwrapInt(args[0])
-            return polyCmp(self._i, other)
+    @method([Int], Int)
+    def op__cmp(self, other):
+        assert isinstance(self, IntObject)
+        return cmp(self._i, other)
 
-        # Ints are usually used to store the results of comparisons.
-        if atom is ABOVEZERO_0:
-            return wrapBool(self._i > 0)
-        if atom is ATLEASTZERO_0:
-            return wrapBool(self._i >= 0)
-        if atom is ATMOSTZERO_0:
-            return wrapBool(self._i <= 0)
-        if atom is BELOWZERO_0:
-            return wrapBool(self._i < 0)
-        if atom is ISZERO_0:
-            return wrapBool(self._i == 0)
+    @method([], Bool)
+    def aboveZero(self):
+        assert isinstance(self, IntObject)
+        return self._i > 0
 
-        if atom is ADD_1:
-            other = args[0]
+    @method([], Bool)
+    def atLeastZero(self):
+        assert isinstance(self, IntObject)
+        return self._i >= 0
+
+    @method([], Bool)
+    def atMostZero(self):
+        assert isinstance(self, IntObject)
+        return self._i <= 0
+
+    @method([], Bool)
+    def belowZero(self):
+        assert isinstance(self, IntObject)
+        return self._i < 0
+
+    @method([], Bool)
+    def isZero(self):
+        assert isinstance(self, IntObject)
+        return self._i == 0
+
+    @method([Any], Any)
+    def add(self, other):
+        assert isinstance(self, IntObject)
+        try:
+            i = unwrapInt(other)
+            return IntObject(ovfcheck(self._i + i))
+        except OverflowError:
+            i = unwrapInt(other)
+            return BigInt(rbigint.fromint(self._i).int_add(i))
+        except WrongType:
             try:
-                i = unwrapInt(other)
-                return IntObject(ovfcheck(self._i + i))
-            except OverflowError:
-                i = unwrapInt(other)
-                return BigInt(rbigint.fromint(self._i).int_add(i))
+                # Addition commutes.
+                return BigInt(unwrapBigInt(other).int_add(self._i))
             except WrongType:
-                try:
-                    # Addition commutes.
-                    return BigInt(unwrapBigInt(other).int_add(self._i))
-                except WrongType:
-                    return DoubleObject(self._i + unwrapDouble(other))
+                return DoubleObject(self._i + unwrapDouble(other))
 
-        if atom is AND_1:
-            try:
-                other = unwrapInt(args[0])
-                return IntObject(self._i & other)
-            except WrongType:
-                other = unwrapBigInt(args[0])
-                return BigInt(other.int_and_(self._i))
+    @method([Any], Any, verb=u"and")
+    def and_(self, other):
+        assert isinstance(self, IntObject)
+        try:
+            i = unwrapInt(other)
+            return IntObject(self._i & i)
+        except WrongType:
+            i = unwrapBigInt(other)
+            return BigInt(i.int_and_(self._i))
 
-        if atom is APPROXDIVIDE_1:
-            # approxDivide/1: Promote both this int and its argument to
-            # double, then perform division.
-            d = float(self._i)
-            other = promoteToDouble(args[0])
-            return DoubleObject(d / other)
+    @method([Any], Double)
+    def approxDivide(self, other):
+        """
+        Promote this object to `Double` and perform division with a given
+        divisor, returning the quotient.
+        """
 
-        if atom is BITLENGTH_0:
-            # bitLength/0: The number of bits required to store this integer.
-            # Cribbed from PyPy.
-            return IntObject(self.bitLength())
+        assert isinstance(self, IntObject)
+        dividend = float(self._i)
+        divisor = promoteToDouble(other)
+        return dividend / divisor
 
-        if atom is COMPLEMENT_0:
-            return IntObject(~self._i)
-
-        if atom is FLOORDIVIDE_1:
-            try:
-                other = unwrapInt(args[0])
-                return IntObject(self._i // other)
-            except WrongType:
-                other = unwrapBigInt(args[0])
-                bi = rbigint.fromint(self._i)
-                return BigInt(bi.floordiv(other))
-
-        if atom is MAX_1:
-            other = unwrapInt(args[0])
-            return self if self._i > other else args[0]
-
-        if atom is MIN_1:
-            other = unwrapInt(args[0])
-            return self if self._i < other else args[0]
-
-        if atom is MODPOW_2:
-            exponent = unwrapInt(args[0])
-            modulus = unwrapInt(args[1])
-            try:
-                return self.intModPow(exponent, modulus)
-            except OverflowError:
-                return BigInt(rbigint.fromint(self._i).pow(rbigint.fromint(exponent),
-                                                           rbigint.fromint(modulus)))
-
-        if atom is MOD_1:
-            other = unwrapInt(args[0])
-            return IntObject(self._i % other)
-
-        if atom is MULTIPLY_1:
-            other = args[0]
-            try:
-                i = unwrapInt(other)
-                return IntObject(ovfcheck(self._i * i))
-            except OverflowError:
-                i = unwrapInt(other)
-                return BigInt(rbigint.fromint(self._i).int_mul(i))
-            except WrongType:
-                try:
-                    # Multiplication commutes.
-                    return BigInt(unwrapBigInt(other).int_mul(self._i))
-                except WrongType:
-                    return DoubleObject(self._i * unwrapDouble(other))
-
-        if atom is NEGATE_0:
-            return IntObject(-self._i)
-
-        if atom is NEXT_0:
-            return IntObject(self._i + 1)
-
-        if atom is OR_1:
-            try:
-                other = unwrapInt(args[0])
-                return IntObject(self._i | other)
-            except WrongType:
-                other = unwrapBigInt(args[0])
-                return BigInt(other.int_or_(self._i))
-
-        if atom is POW_1:
-            other = unwrapInt(args[0])
-            try:
-                return self.intPow(other)
-            except OverflowError:
-                return BigInt(rbigint.fromint(self._i).pow(rbigint.fromint(other)))
-
-        if atom is PREVIOUS_0:
-            return IntObject(self._i - 1)
-
-        if atom is SHIFTLEFT_1:
-            other = unwrapInt(args[0])
-            try:
-                return IntObject(ovfcheck(self._i << other))
-            except OverflowError:
-                return BigInt(rbigint.fromint(self._i).lshift(other))
-
-        if atom is SHIFTRIGHT_1:
-            other = unwrapInt(args[0])
-            if other >= LONG_BIT:
-                # This'll underflow, returning who-knows-what when translated.
-                # To keep things reasonable, we define an int that has been
-                # right-shifted past word width to be 0, since every bit has
-                # been shifted off.
-                return IntObject(0)
-            return IntObject(self._i >> other)
-
-        if atom is SUBTRACT_1:
-            other = args[0]
-            try:
-                i = unwrapInt(other)
-                return IntObject(ovfcheck(self._i - i))
-            except OverflowError:
-                i = unwrapInt(other)
-                return BigInt(rbigint.fromint(self._i).int_sub(i))
-            except WrongType:
-                try:
-                    # Subtraction doesn't commute, so we have to work a little
-                    # harder.
-                    bi = unwrapBigInt(other)
-                    return BigInt(rbigint.fromint(self._i).sub(bi))
-                except WrongType:
-                    return DoubleObject(self._i - unwrapDouble(other))
-
-        if atom is XOR_1:
-            try:
-                other = unwrapInt(args[0])
-                return IntObject(self._i ^ other)
-            except WrongType:
-                other = unwrapBigInt(args[0])
-                return BigInt(other.int_xor(self._i))
-
-        raise Refused(self, atom, args)
-
-    def getInt(self):
-        return self._i
-
-    @elidable
+    @method([], Int)
     def bitLength(self):
+        """
+        The number of bits required to store this object's value.
+        """
+
+        assert isinstance(self, IntObject)
         i = self._i
         rv = 0
         if i < 0:
@@ -592,31 +493,166 @@ class IntObject(Object):
             i >>= 1
         return rv
 
-    def intPow(self, exponent):
-        accumulator = 1
-        multiplier = self._i
-        while exponent > 0:
-            if exponent & 1:
-                # Odd bit.
-                accumulator = ovfcheck(accumulator * multiplier)
-            exponent >>= 1
-            if not exponent:
-                break
-            multiplier = ovfcheck(multiplier * multiplier)
-        return IntObject(accumulator)
+    @method([], Int)
+    def complement(self):
+        assert isinstance(self, IntObject)
+        return ~self._i
 
-    def intModPow(self, exponent, modulus):
-        accumulator = 1
-        multiplier = self._i % modulus
-        while exponent > 0:
-            if exponent & 1:
-                # Odd bit.
-                accumulator = ovfcheck(accumulator * multiplier) % modulus
-            exponent >>= 1
-            if not exponent:
-                break
-            multiplier = ovfcheck(multiplier * multiplier) % modulus
-        return IntObject(accumulator)
+    @method([Any], Any)
+    def floorDivide(self, other):
+        assert isinstance(self, IntObject)
+        try:
+            i = unwrapInt(other)
+            return IntObject(self._i // i)
+        except WrongType:
+            other = unwrapBigInt(other)
+            bi = rbigint.fromint(self._i)
+            return BigInt(bi.floordiv(other))
+
+    @method([Int], Int)
+    def max(self, other):
+        assert isinstance(self, IntObject)
+        return self._i if self._i > other else other
+
+    @method([Int], Int)
+    def min(self, other):
+        assert isinstance(self, IntObject)
+        return self._i if self._i < other else other
+
+    @method([Int, Int], Any)
+    def modPow(self, exponent, modulus):
+        assert isinstance(self, IntObject)
+        try:
+            accumulator = 1
+            multiplier = self._i % modulus
+            e = exponent
+            while e > 0:
+                if e & 1:
+                    # Odd bit.
+                    accumulator = ovfcheck(accumulator * multiplier) % modulus
+                e >>= 1
+                if e == 0:
+                    break
+                multiplier = ovfcheck(multiplier * multiplier) % modulus
+            return IntObject(accumulator)
+        except OverflowError:
+            return BigInt(rbigint.fromint(self._i).pow(rbigint.fromint(exponent),
+                                                       rbigint.fromint(modulus)))
+
+    @method([Int], Int)
+    def mod(self, modulus):
+        assert isinstance(self, IntObject)
+        return self._i % modulus
+
+    @method([Any], Any)
+    def multiply(self, other):
+        assert isinstance(self, IntObject)
+        try:
+            i = unwrapInt(other)
+            return IntObject(ovfcheck(self._i * i))
+        except OverflowError:
+            i = unwrapInt(other)
+            return BigInt(rbigint.fromint(self._i).int_mul(i))
+        except WrongType:
+            try:
+                # Multiplication commutes.
+                return BigInt(unwrapBigInt(other).int_mul(self._i))
+            except WrongType:
+                return DoubleObject(self._i * unwrapDouble(other))
+
+    @method([], Int)
+    def negate(self):
+        assert isinstance(self, IntObject)
+        return -self._i
+
+    @method([], Int)
+    def next(self):
+        assert isinstance(self, IntObject)
+        return self._i + 1
+
+    @method([Any], Any, verb=u"or")
+    def or_(self, other):
+        assert isinstance(self, IntObject)
+        try:
+            i = unwrapInt(other)
+            return IntObject(self._i | i)
+        except WrongType:
+            i = unwrapBigInt(other)
+            return BigInt(i.int_or_(self._i))
+
+    @method([Int], Any)
+    def pow(self, exponent):
+        assert isinstance(self, IntObject)
+        try:
+            accumulator = 1
+            multiplier = self._i
+            e = exponent
+            while e > 0:
+                if e & 1:
+                    # Odd bit.
+                    accumulator = ovfcheck(accumulator * multiplier)
+                e >>= 1
+                if e == 0:
+                    break
+                multiplier = ovfcheck(multiplier * multiplier)
+            return IntObject(accumulator)
+        except OverflowError:
+            return BigInt(rbigint.fromint(self._i).pow(rbigint.fromint(exponent)))
+
+    @method([], Int)
+    def previous(self):
+        assert isinstance(self, IntObject)
+        return self._i - 1
+
+    @method([Int], Any)
+    def shiftLeft(self, bits):
+        assert isinstance(self, IntObject)
+        try:
+            return IntObject(ovfcheck(self._i << bits))
+        except OverflowError:
+            return BigInt(rbigint.fromint(self._i).lshift(bits))
+
+    @method([Int], Int)
+    def shiftRight(self, bits):
+        assert isinstance(self, IntObject)
+        if bits >= LONG_BIT:
+            # This'll underflow, returning who-knows-what when translated.
+            # To keep things reasonable, we define an int that has been
+            # right-shifted past word width to be 0, since every bit has
+            # been shifted off.
+            return 0
+        return self._i >> bits
+
+    @method([Any], Any)
+    def subtract(self, other):
+        assert isinstance(self, IntObject)
+        try:
+            i = unwrapInt(other)
+            return IntObject(ovfcheck(self._i - i))
+        except OverflowError:
+            i = unwrapInt(other)
+            return BigInt(rbigint.fromint(self._i).int_sub(i))
+        except WrongType:
+            try:
+                # Subtraction doesn't commute, so we have to work a little
+                # harder.
+                bi = unwrapBigInt(other)
+                return BigInt(rbigint.fromint(self._i).sub(bi))
+            except WrongType:
+                return DoubleObject(self._i - unwrapDouble(other))
+
+    @method([Any], Any)
+    def xor(self, other):
+        assert isinstance(self, IntObject)
+        try:
+            i = unwrapInt(other)
+            return IntObject(self._i ^ i)
+        except WrongType:
+            i = unwrapBigInt(other)
+            return BigInt(i.int_xor(self._i))
+
+    def getInt(self):
+        return self._i
 
 
 def unwrapInt(o):
@@ -838,22 +874,23 @@ makeSourceSpan = _makeSourceSpan()
 @autohelp
 class SourceSpan(Object):
     """
-    Information about the original location of a span of text. Twines use
-    this to remember where they came from.
+    Information about the original location of a span of text. Twines use this
+    to remember where they came from.
 
     uri: Name of document this text came from.
 
-    isOneToOne: Whether each character in that Twine maps to the
-    corresponding source character position.
+    isOneToOne: Whether each character in that Twine maps to the corresponding
+    source character position.
 
-    startLine, endLine: Line numbers for the beginning and end of the
-    span. Line numbers start at 1.
+    startLine, endLine: Line numbers for the beginning and end of the span.
+    Line numbers start at 1.
 
-    startCol, endCol: Column numbers for the beginning and end of the
-    span. Column numbers start at 0.
-
+    startCol, endCol: Column numbers for the beginning and end of the span.
+    Column numbers start at 0.
     """
+
     stamps = [selfless, transparentStamp]
+
     def __init__(self, uri, isOneToOne, startLine, startCol,
                  endLine, endCol):
         self.uri = uri
@@ -863,31 +900,8 @@ class SourceSpan(Object):
         self.endLine = endLine
         self.endCol = endCol
 
-    def notOneToOne(self):
-        """
-        Return a new SourceSpan for the same text that doesn't claim
-        one-to-one correspondence.
-        """
-        return SourceSpan(self.uri, False,
-                          self.startLine, self.startCol,
-                          self.endLine, self.endCol)
-
-    def isOneToOne(self):
-        return wrapBool(self._isOneToOne)
-
-    def getStartLine(self):
-        return IntObject(self.startLine)
-
-    def getStartCol(self):
-        return IntObject(self.startCol)
-
-    def getEndLine(self):
-        return IntObject(self.endLine)
-
-    def getEndCol(self):
-        return IntObject(self.endCol)
-
     def toString(self):
+        # XXX should this be ASCII instead of UTF-8?
         return u"<%s#:%s::%s>" % (
             self.uri.toString(),
             u"span" if self._isOneToOne else u"blob",
@@ -896,34 +910,59 @@ class SourceSpan(Object):
                        str(self.endLine).decode('ascii'),
                        str(self.endCol).decode('ascii')]))
 
+    @method([], Any)
+    def notOneToOne(self):
+        """
+        Return a SourceSpan for the same text as this object, but which
+        doesn't claim one-to-one correspondence.
+        """
+
+        assert isinstance(self, SourceSpan)
+        return SourceSpan(self.uri, False,
+                          self.startLine, self.startCol,
+                          self.endLine, self.endCol)
+
+    @method([], Bool)
+    def isOneToOne(self):
+        assert isinstance(self, SourceSpan)
+        return self._isOneToOne
+
+    @method([], Int)
+    def getStartLine(self):
+        assert isinstance(self, SourceSpan)
+        return self.startLine
+
+    @method([], Int)
+    def getStartCol(self):
+        assert isinstance(self, SourceSpan)
+        return self.startCol
+
+    @method([], Int)
+    def getEndLine(self):
+        assert isinstance(self, SourceSpan)
+        return self.endLine
+
+    @method([], Int)
+    def getEndCol(self):
+        assert isinstance(self, SourceSpan)
+        return self.endCol
+
+    @method([Any], Any)
     def combine(self, other):
+        assert isinstance(self, SourceSpan)
         if not isinstance(other, SourceSpan):
             raise userError(u"Not a SourceSpan")
         return spanCover(self, other)
 
-    def recv(self, atom, args):
-        if atom is COMBINE_1:
-            return self.combine(args[0])
-        if atom is GETSTARTCOL_0:
-            return self.getStartCol()
-        if atom is GETSTARTLINE_0:
-            return self.getStartLine()
-        if atom is GETENDCOL_0:
-            return self.getEndCol()
-        if atom is GETENDLINE_0:
-            return self.getEndLine()
-        if atom is ISONETOONE_0:
-            return self.isOneToOne()
-        if atom is NOTONETOONE_0:
-            return self.notOneToOne()
-        if atom is _UNCALL_0:
-            from typhon.objects.collections import ConstList
-            return ConstList([
-                makeSourceSpan, StrObject(u"run"),
-                ConstList([wrapBool(self._isOneToOne), IntObject(self.startLine),
+    @method([], List)
+    def _uncall(self):
+        assert isinstance(self, SourceSpan)
+        from typhon.objects.collections import ConstList
+        return [makeSourceSpan, StrObject(u"run"),
+                ConstList([wrapBool(self._isOneToOne),
+                           IntObject(self.startLine),
                            IntObject(self.startCol), IntObject(self.endLine),
-                           IntObject(self.endCol)])])
-        raise Refused(self, atom, args)
+                           IntObject(self.endCol)])]
 
 
 def spanCover(a, b):
@@ -980,18 +1019,15 @@ class strIterator(Object):
     def __init__(self, s):
         self.s = s
 
-    def recv(self, atom, args):
-        if atom is NEXT_1:
-            if self._index < len(self.s):
-                from typhon.objects.collections import ConstList
-                rv = [IntObject(self._index), CharObject(self.s[self._index])]
-                self._index += 1
-                return ConstList(rv)
-            else:
-                ej = args[0]
-                ej.call(u"run", [StrObject(u"Iterator exhausted")])
-
-        raise Refused(self, atom, args)
+    @method([Any], List)
+    def next(self, ej):
+        assert isinstance(self, strIterator)
+        if self._index < len(self.s):
+            rv = [IntObject(self._index), CharObject(self.s[self._index])]
+            self._index += 1
+            return rv
+        else:
+            ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
 
 @autohelp

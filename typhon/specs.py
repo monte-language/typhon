@@ -47,6 +47,19 @@ class CharSpec(Spec):
 Char = CharSpec()
 
 
+class DoubleSpec(Spec):
+
+    def wrap(_, specimen):
+        from typhon.objects.data import DoubleObject
+        return DoubleObject(specimen)
+
+    def unwrap(_, specimen):
+        from typhon.objects.data import unwrapDouble
+        return unwrapDouble(specimen)
+
+Double = DoubleSpec()
+
+
 class IntSpec(Spec):
 
     def wrap(_, specimen):
@@ -101,3 +114,16 @@ class ListSpec(Spec):
         return unwrapList(specimen)
 
 List = ListSpec()
+
+
+class MapSpec(Spec):
+
+    def wrap(_, specimen):
+        from typhon.objects.collections import ConstMap
+        return ConstMap(specimen)
+
+    def unwrap(_, specimen):
+        from typhon.objects.collections import unwrapMap
+        return unwrapMap(specimen)
+
+Map = MapSpec()

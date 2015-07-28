@@ -3,12 +3,12 @@ import signal
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
-from typhon.objects.collections import (ConstList, ConstMap, monteDict,
-                                        unwrapList, unwrapMap)
+from typhon.errors import userError
+from typhon.objects.collections import monteDict, unwrapList, unwrapMap
 from typhon.objects.constants import NullObject
-from typhon.objects.data import IntObject, StrObject, unwrapStr
-from typhon.objects.root import Object, runnable
+from typhon.objects.data import StrObject, unwrapStr
+from typhon.objects.root import Object, method, runnable
+from typhon.specs import Int, List, Map, Void
 
 
 GETARGUMENTS_0 = getAtom(u"getArguments", 0)
@@ -30,27 +30,27 @@ class CurrentProcess(Object):
     def toString(self):
         return u"<current process (PID %d)>" % os.getpid()
 
-    def recv(self, atom, args):
-        if atom is GETARGUMENTS_0:
-            return ConstList([StrObject(arg.decode("utf-8"))
-                              for arg in self.config.argv])
+    @method([], List)
+    def getArguments(self):
+        assert isinstance(self, CurrentProcess)
+        return [StrObject(arg.decode("utf-8")) for arg in self.config.argv]
 
-        if atom is GETENVIRONMENT_0:
-            d = monteDict()
-            for key, value in os.environ.items():
-                k = StrObject(key.decode("utf-8"))
-                v = StrObject(value.decode("utf-8"))
-                d[k] = v
-            return ConstMap(d)
+    @method([], Map)
+    def getEnvironment(self):
+        d = monteDict()
+        for key, value in os.environ.items():
+            k = StrObject(key.decode("utf-8"))
+            v = StrObject(value.decode("utf-8"))
+            d[k] = v
+        return d
 
-        if atom is GETPID_0:
-            return IntObject(os.getpid())
+    @method([], Int)
+    def getPID(self):
+        return os.getpid()
 
-        if atom is INTERRUPT_0:
-            os.kill(os.getpid(), signal.SIGINT)
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method([], Void)
+    def interrupt(self):
+        os.kill(os.getpid(), signal.SIGINT)
 
 
 @autohelp
@@ -67,27 +67,30 @@ class SubProcess(Object):
     def toString(self):
         return u"<child process (PID %d)>" % self.pid
 
-    def recv(self, atom, args):
-        if atom is GETARGUMENTS_0:
-            return ConstList([StrObject(arg.decode("utf-8"))
-                              for arg in self.argv])
+    @method([], List)
+    def getArguments(self):
+        assert isinstance(self, SubProcess)
+        return [StrObject(arg.decode("utf-8")) for arg in self.argv]
 
-        if atom is GETENVIRONMENT_0:
-            d = monteDict()
-            for key, value in self.env.items():
-                k = StrObject(key.decode("utf-8"))
-                v = StrObject(value.decode("utf-8"))
-                d[k] = v
-            return ConstMap(d)
+    @method([], Map)
+    def getEnvironment(self):
+        assert isinstance(self, SubProcess)
+        d = monteDict()
+        for key, value in self.env.items():
+            k = StrObject(key.decode("utf-8"))
+            v = StrObject(value.decode("utf-8"))
+            d[k] = v
+        return d
 
-        if atom is GETPID_0:
-            return IntObject(self.pid)
+    @method([], Int)
+    def getPID(self):
+        assert isinstance(self, SubProcess)
+        return self.pid
 
-        if atom is INTERRUPT_0:
-            os.kill(self.pid, signal.SIGINT)
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method([], Void)
+    def interrupt(self):
+        assert isinstance(self, SubProcess)
+        os.kill(self.pid, signal.SIGINT)
 
 
 @runnable(RUN_3)
