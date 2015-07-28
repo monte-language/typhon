@@ -16,6 +16,7 @@
 
 from unittest import TestCase
 
+from typhon.errors import UserException
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
                                         FlexList, monteDict, unwrapList)
 from typhon.objects.data import CharObject, IntObject
@@ -36,6 +37,10 @@ class TestConstMap(TestCase):
 
 
 class TestConstList(TestCase):
+
+    def testGetNegative(self):
+        l = ConstList([])
+        self.assertRaises(UserException, l.call, u"get", [IntObject(-1)])
 
     def testHashEqual(self):
         a = ConstList([IntObject(42), CharObject(u'é')])

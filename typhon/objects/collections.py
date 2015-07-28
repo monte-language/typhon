@@ -257,6 +257,8 @@ class ConstList(Object):
         if atom is GET_1:
             # Lookup by index.
             index = unwrapInt(args[0])
+            if index < 0:
+                raise userError(u"Index %d cannot be negative" % index)
             if index >= self.strategy.size(self):
                 raise userError(u"Index %d is out of bounds" % index)
             return self.strategy.fetch(self, index)
