@@ -1185,8 +1185,8 @@ class BytesObject(Object):
 
     def toString(self):
         d = {
-            '\r': u"\\r",
-            '\n': u"\\n",
+            '\r': u"$\\r",
+            '\n': u"$\\n",
         }
         pieces = []
         for char in self._bs:
@@ -1195,9 +1195,9 @@ class BytesObject(Object):
             elif char in d:
                 pieces.append(d[char])
             elif ord(char) < 0x10:
-                pieces.append(u"\\x0%x" % ord(char))
+                pieces.append(u"$\\x0%x" % ord(char))
             else:
-                pieces.append(u"\\x%x" % ord(char))
+                pieces.append(u"$\\x%x" % ord(char))
         return u"b`%s`" % u"".join(pieces)
 
     def hash(self):
