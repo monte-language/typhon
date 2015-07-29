@@ -58,6 +58,11 @@ def parseMonte(lex, builder, mode, err):
         if (error == null):
             error := ["Syntax error", tokens[position].getSpan()]
         if (error =~ [errMsg, span]):
+            if (span == null):
+                # There's no span information. This is legal and caused by
+                # token exhaustion.
+                throw.eject(err, "Error at end of input: " + errMsg)
+
             def front := (span.getStartLine() - 3).max(0)
             def back := span.getEndLine() + 3
             def lines := lex.getInput().split("\n").slice(front, back)
