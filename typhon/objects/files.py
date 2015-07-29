@@ -15,9 +15,8 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
-from typhon.objects.data import IntObject, StrObject, unwrapInt, unwrapStr
+from typhon.objects.data import BytesObject, StrObject, unwrapBytes, unwrapStr
 from typhon.objects.refs import makePromise
 from typhon.objects.root import Object, runnable
 from typhon.vats import Callable, currentVat
@@ -72,9 +71,9 @@ class Read(Callable):
             # 16KiB reads. There is no justification for this; 4KiB seemed too
             # small and 1MiB seemed too large.
             buf = self.fount.handle.read(16384)
-            rv = [IntObject(ord(byte)) for byte in buf]
+            rv = BytesObject(buf)
             vat = currentVat.get()
-            vat.sendOnly(self.fount.drain, RECEIVE_1, [ConstList(rv)])
+            vat.sendOnly(self.fount.drain, RECEIVE_1, [rv])
 
             if len(buf) < 16384:
                 # Short read; this will be the last chunk.
@@ -171,8 +170,7 @@ class FileDrain(Object):
             return self
 
         if atom is RECEIVE_1:
-            data = unwrapList(args[0])
-            s = "".join([chr(unwrapInt(byte)) for byte in data])
+            data = unwrapBytes(args[0])
 
             # If this is the first time that we've received since last flush,
             # then prepare to flush after the turn.
@@ -180,7 +178,7 @@ class FileDrain(Object):
                 vat = currentVat.get()
                 vat.afterTurn(Write(self))
 
-            self.chunks.append(s)
+            self.chunks.append(data)
             return NullObject
 
         if atom is FLOWSTOPPED_1:
@@ -201,7 +199,7 @@ class GetContents(Callable):
         with open(self.path, "rb") as handle:
             s = handle.read()
 
-        data = ConstList([IntObject(ord(c)) for c in s])
+        data = BytesObject(s)
         self.resolver.resolve(data)
 
 
@@ -243,8 +241,7 @@ class FileResource(Object):
             return p
 
         if atom is SETCONTENTS_1:
-            l = unwrapList(args[0])
-            data = "".join([chr(unwrapInt(i)) for i in l])
+            data = unwrapBytes(args[0])
 
             p, r = makePromise()
             vat = currentVat.get()

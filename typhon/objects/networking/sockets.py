@@ -14,11 +14,9 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
-from typhon.objects.data import IntObject, StrObject, unwrapInt, unwrapStr
+from typhon.objects.data import BytesObject, StrObject, unwrapBytes, unwrapStr
 from typhon.objects.root import Object
-from typhon.vats import currentVat
 
 
 ABORTFLOW_0 = getAtom(u"abortFlow", 0)
@@ -110,8 +108,8 @@ class SocketFount(Object):
     def flush(self):
         # print "SocketFount flush", self.pauses, self._drain
         if not self.pauses and self._drain is not None:
-            rv = [IntObject(ord(byte)) for byte in self.buf]
-            self.sock.vat.sendOnly(self._drain, RECEIVE_1, [ConstList(rv)])
+            rv = BytesObject(self.buf)
+            self.sock.vat.sendOnly(self._drain, RECEIVE_1, [rv])
             self.buf = ""
 
     def terminate(self, reason):
@@ -145,9 +143,8 @@ class SocketDrain(Object):
             if self._closed:
                 raise userError(u"Can't send data to a closed socket!")
 
-            data = unwrapList(args[0])
-            s = "".join([chr(unwrapInt(byte)) for byte in data])
-            self.sock._outbound.append(s)
+            data = unwrapBytes(args[0])
+            self.sock._outbound.append(data)
             return NullObject
 
         if atom is FLOWABORTED_1:

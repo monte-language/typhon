@@ -1,9 +1,8 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
-from typhon.objects.data import IntObject, StrObject, unwrapInt, unwrapStr
+from typhon.objects.data import BytesObject, StrObject, unwrapBytes, unwrapStr
 from typhon.objects.root import Object, runnable
 from typhon.vats import currentVat
 
@@ -91,8 +90,8 @@ class InputFount(Object):
 
     def flush(self):
         if not self.pauses and self._drain is not None:
-            rv = [IntObject(ord(byte)) for byte in self.buf]
-            self.vat.sendOnly(self._drain, RECEIVE_1, [ConstList(rv)])
+            rv = BytesObject(self.buf)
+            self.vat.sendOnly(self._drain, RECEIVE_1, [rv])
             self.buf = ""
 
     def terminate(self, reason):
@@ -139,9 +138,8 @@ class OutputDrain(Object):
             if self._closed:
                 raise userError(u"Can't send data to a closed FD!")
 
-            data = unwrapList(args[0])
-            s = "".join([chr(unwrapInt(byte)) for byte in data])
-            self.selectable.enqueue(s)
+            data = unwrapBytes(args[0])
+            self.selectable.enqueue(data)
             return NullObject
 
         if atom is FLOWABORTED_1:
