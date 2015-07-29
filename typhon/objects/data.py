@@ -15,13 +15,14 @@
 # under the License.
 
 import math
+import string
 
 from rpython.rlib import rgc
 from rpython.rlib.rbigint import BASE10, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
 from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
-from rpython.rlib.rstring import UnicodeBuilder, replace, split
+from rpython.rlib.rstring import StringBuilder, UnicodeBuilder, replace, split
 from rpython.rlib.rstruct.ieee import pack_float
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
@@ -1139,3 +1140,251 @@ def unwrapStr(o):
     if isinstance(s, StrObject):
         return s.getString()
     raise WrongType(u"Not a string!")
+
+
+@autohelp
+class bytesIterator(Object):
+    """
+    An iterator on a bytestring, producing integers.
+    """
+
+    _immutable_fields_ = "s",
+
+    _index = 0
+
+    def __init__(self, s):
+        self.s = s
+
+    def recv(self, atom, args):
+        if atom is NEXT_1:
+            if self._index < len(self.s):
+                from typhon.objects.collections import ConstList
+                rv = [IntObject(self._index),
+                      IntObject(ord(self.s[self._index]))]
+                self._index += 1
+                return ConstList(rv)
+            else:
+                ej = args[0]
+                ej.call(u"run", [StrObject(u"Iterator exhausted")])
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class BytesObject(Object):
+    """
+    A string of bytes.
+    """
+
+    _immutable_fields_ = "stamps", "_bs"
+
+    stamps = [selfless, deepFrozenStamp]
+
+    def __init__(self, s):
+        self._bs = s
+
+    def toString(self):
+        d = {
+            '\r': u"\\r",
+            '\n': u"\\n",
+        }
+        pieces = []
+        for char in self._bs:
+            if 0x20 <= ord(char) < 0x7f:
+                pieces.append(unicode(unichr(ord(char))))
+            elif char in d:
+                pieces.append(d[char])
+            elif ord(char) < 0x10:
+                pieces.append(u"\\x0%x" % ord(char))
+            else:
+                pieces.append(u"\\x%x" % ord(char))
+        return u"b`%s`" % u"".join(pieces)
+
+    def hash(self):
+        # Cribbed from RPython's _hash_string.
+        length = len(self._bs)
+        if length == 0:
+            return -1
+        x = ord(self._bs[0]) << 7
+        i = 0
+        while i < length:
+            x = intmask((1000003 * x) ^ ord(self._bs[i]))
+            i += 1
+        x ^= length
+        return intmask(x)
+
+    def sizeOf(self):
+        return (rgc.get_rpy_memory_usage(self) +
+                rgc.get_rpy_memory_usage(self._bs))
+
+    def recv(self, atom, args):
+        if atom is ADD_1:
+            other = args[0]
+            if isinstance(other, BytesObject):
+                return BytesObject(self._bs + other._bs)
+            if isinstance(other, IntObject):
+                return BytesObject(self._bs + str(chr(other._i)))
+
+        if atom is ASLIST_0:
+            from typhon.objects.collections import ConstList
+            return ConstList(self.asList())
+
+        if atom is ASSET_0:
+            from typhon.objects.collections import ConstSet
+            return ConstSet(self.asSet())
+
+        if atom is CONTAINS_1:
+            needle = args[0]
+            if isinstance(needle, IntObject):
+                return wrapBool(chr(needle._i) in self._bs)
+            if isinstance(needle, BytesObject):
+                return wrapBool(needle._bs in self._bs)
+
+        if atom is GET_1:
+            index = unwrapInt(args[0])
+            if not 0 <= index < len(self._bs):
+                raise userError(u"string.get/1: Index out of bounds: %d" %
+                                index)
+            return IntObject(ord(self._bs[index]))
+
+        if atom is INDEXOF_1:
+            needle = unwrapBytes(args[0])
+            return IntObject(self._bs.find(needle))
+
+        if atom is INDEXOF_2:
+            needle = unwrapBytes(args[0])
+            offset = unwrapInt(args[1])
+            if offset < 0:
+                raise userError(u"indexOf/2: Negative offset %d not supported"
+                                % offset)
+            return IntObject(self._bs.find(needle, offset))
+
+        if atom is JOIN_1:
+            from typhon.objects.collections import unwrapList
+            return BytesObject(self.join(unwrapList(args[0])))
+
+        if atom is LASTINDEXOF_1:
+            needle = unwrapBytes(args[0])
+            return IntObject(self._bs.rfind(needle))
+
+        if atom is MULTIPLY_1:
+            amount = args[0]
+            if isinstance(amount, IntObject):
+                return BytesObject(self._bs * amount._i)
+
+        if atom is OP__CMP_1:
+            return polyCmp(self._bs, unwrapBytes(args[0]))
+
+        if atom is REPLACE_2:
+            return BytesObject(replace(self._bs,
+                                       unwrapBytes(args[0]),
+                                       unwrapBytes(args[1])))
+
+        if atom is SIZE_0:
+            return IntObject(len(self._bs))
+
+        if atom is SLICE_1:
+            start = unwrapInt(args[0])
+            if start < 0:
+                raise userError(u"Slice start cannot be negative")
+            return BytesObject(self._bs[start:])
+
+        if atom is SLICE_2:
+            start = unwrapInt(args[0])
+            stop = unwrapInt(args[1])
+            if start < 0:
+                raise userError(u"Slice start cannot be negative")
+            if stop < 0:
+                raise userError(u"Slice stop cannot be negative")
+            return BytesObject(self._bs[start:stop])
+
+        if atom is SPLIT_1:
+            from typhon.objects.collections import ConstList
+            return ConstList(self.split(unwrapBytes(args[0])))
+
+        if atom is SPLIT_2:
+            from typhon.objects.collections import ConstList
+            return ConstList(self.split(unwrapBytes(args[0]),
+                                        unwrapInt(args[1])))
+
+        if atom is TOLOWERCASE_0:
+            return BytesObject(self.toLowerCase())
+
+        if atom is TOUPPERCASE_0:
+            return BytesObject(self.toUpperCase())
+
+        if atom is TRIM_0:
+            return BytesObject(self.trim())
+
+        if atom is WITH_1:
+            return BytesObject(self._bs + chr(unwrapInt(args[0])))
+
+        if atom is _MAKEITERATOR_0:
+            return bytesIterator(self._bs)
+
+        raise Refused(self, atom, args)
+
+    def getBytes(self):
+        return self._bs
+
+    def asList(self):
+        return [IntObject(ord(c)) for c in self._bs]
+
+    def asSet(self):
+        from typhon.objects.collections import monteDict
+        d = monteDict()
+        for c in self._bs:
+            d[IntObject(ord(c))] = None
+        return d
+
+    def join(self, pieces):
+        sb = StringBuilder()
+        first = True
+        for s in pieces:
+            # For all iterations except the first, append a copy of
+            # ourselves.
+            if first:
+                first = False
+            else:
+                sb.append(self._bs)
+
+            string = unwrapBytes(s)
+
+            sb.append(string)
+        return sb.build()
+
+    def split(self, splitter, splits=-1):
+        if splits == -1:
+            return [BytesObject(s) for s in split(self._bs, splitter)]
+        else:
+            return [BytesObject(s) for s in split(self._bs, splitter, splits)]
+
+    def toLowerCase(self):
+        return self._bs.lower()
+
+    def toUpperCase(self):
+        return self._bs.upper()
+
+    def trim(self):
+        if len(self._bs) == 0:
+            return ""
+
+        left = 0
+        right = len(self._bs)
+
+        while left < right and self._bs[left] in string.whitespace:
+            left += 1
+
+        while left < right and self._bs[right - 1] in string.whitespace:
+            right -= 1
+
+        assert right >= 0, "BytesObject.trim/0: Proven impossible"
+        return self._bs[left:right]
+
+
+def unwrapBytes(o):
+    from typhon.objects.refs import resolution
+    s = resolution(o)
+    if isinstance(s, BytesObject):
+        return s.getBytes()
+    raise WrongType(u"Not a bytestring!")

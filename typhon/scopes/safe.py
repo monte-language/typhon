@@ -21,16 +21,16 @@ from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import (DoubleObject, IntObject, StrObject,
-                                 makeSourceSpan, unwrapInt, unwrapStr,
-                                 unwrapChar)
+from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
+                                 StrObject, makeSourceSpan, unwrapInt,
+                                 unwrapStr, unwrapChar)
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
 from typhon.objects.guards import (anyGuard, FinalSlotGuardMaker,
                                    VarSlotGuardMaker)
 from typhon.objects.help import Help
-from typhon.objects.refs import RefOps, UnconnectedRef
+from typhon.objects.refs import RefOps
 from typhon.objects.root import Object, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 from typhon.objects.tests import UnitTest
@@ -44,22 +44,20 @@ EJECT_2 = getAtom(u"eject", 2)
 FAILURELIST_1 = getAtom(u"failureList", 1)
 FROMBYTES_1 = getAtom(u"fromBytes", 1)
 FROMCHARS_1 = getAtom(u"fromChars", 1)
+FROMINTS_1 = getAtom(u"fromInts", 1)
 FROMITERABLE_1 = getAtom(u"fromIterable", 1)
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
 FROMSTRING_1 = getAtom(u"fromString", 1)
 FROMSTRING_2 = getAtom(u"fromString", 2)
 MAKEFINALSLOT_2 = getAtom(u"makeFinalSlot", 2)
 MAKEVARSLOT_2 = getAtom(u"makeVarSlot", 2)
-MATCHMAKER_1 = getAtom(u"matchMaker", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 RUN_3 = getAtom(u"run", 3)
 SENDONLY_3 = getAtom(u"sendOnly", 3)
 SEND_3 = getAtom(u"send", 3)
-SUBSTITUTE_1 = getAtom(u"substitute", 1)
 TOQUOTE_1 = getAtom(u"toQuote", 1)
 TOSTRING_1 = getAtom(u"toString", 1)
-VALUEMAKER_1 = getAtom(u"valueMaker", 1)
 
 
 class TraceLn(Object):
@@ -194,6 +192,23 @@ class MakeString(Object):
             return StrObject(u"".join([unwrapChar(c) for c in data]))
 
         raise Refused(self, atom, args)
+
+
+@autohelp
+class MakeBytes(Object):
+    stamps = [deepFrozenStamp]
+
+    def toString(self):
+        return u"<makeBytes>"
+
+    def recv(self, atom, args):
+        if atom is FROMSTRING_1:
+            return BytesObject("".join([chr(ord(c))
+                                        for c in unwrapStr(args[0])]))
+
+        if atom is FROMINTS_1:
+            data = unwrapList(args[0])
+            return BytesObject("".join([chr(unwrapInt(i)) for i in data]))
 
 
 @autohelp
@@ -365,9 +380,10 @@ def safeScope():
         u"__makeMap": theMakeMap,
         u"__makeInt": MakeInt(),
         u"__makeDouble": MakeDouble(),
-        u"__makeString": MakeString(),
         u"__makeSourceSpan": makeSourceSpan,
+        u"__makeString": MakeString(),
         u"__slotToBinding": theSlotBinder,
+        u"_makeBytes": MakeBytes(),
         u"_makeFinalSlot": theFinalSlotMaker,
         u"_makeVarSlot": VarSlotMaker(),
         u"help": Help(),
