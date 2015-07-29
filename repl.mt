@@ -9,7 +9,7 @@ var environment := [
     # Constants.
     => null, => true, => false, => Infinity, => NaN,
     # Constructors and core operator expansion.
-    => __makeDouble, => __makeInt, => __makeList, => __makeMap,
+    => _makeBytes, => __makeDouble, => __makeInt, => __makeList, => __makeMap,
     => __makeMessageDesc, => __makeOrderedSpace, => __makeParamDesc,
     => __makeProtocolDesc, => __makeString,
     => __equalizer, => __comparer,
