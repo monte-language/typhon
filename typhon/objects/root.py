@@ -127,7 +127,9 @@ class Object(object):
 
             if atom is _PRINTON_1:
                 # Welcome to _printOn/1.
-                return self.printOn(arguments[0])
+                from typhon.objects.constants import NullObject
+                self.printOn(arguments[0])
+                return NullObject
 
             if atom is _RESPONDSTO_2:
                 from typhon.objects.constants import wrapBool

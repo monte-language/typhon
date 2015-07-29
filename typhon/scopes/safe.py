@@ -210,6 +210,8 @@ class MakeBytes(Object):
             data = unwrapList(args[0])
             return BytesObject("".join([chr(unwrapInt(i)) for i in data]))
 
+        raise Refused(self, atom, args)
+
 
 @autohelp
 class Throw(Object):
@@ -275,13 +277,23 @@ class MObject(Object):
                 raise userError(u"callWithPair/2 requires a pair!")
             sendVerb = unwrapStr(pair[0])
             sendArgs = unwrapList(pair[1])
-            return target.call(sendVerb, sendArgs)
+            rv = target.call(sendVerb, sendArgs)
+            if rv is None:
+                print "callWithPair/2: Returned None:", \
+                      target.__class__.__name__, sendVerb.encode("utf-8")
+                raise RuntimeError("Implementation error")
+            return rv
 
         if atom is CALL_3:
             target = args[0]
             sendVerb = unwrapStr(args[1])
             sendArgs = unwrapList(args[2])
-            return target.call(sendVerb, sendArgs)
+            rv = target.call(sendVerb, sendArgs)
+            if rv is None:
+                print "call/3: Returned None:", target.__class__.__name__, \
+                      sendVerb.encode("utf-8")
+                raise RuntimeError("Implementation error")
+            return rv
 
         if atom is SENDONLY_3:
             target = args[0]

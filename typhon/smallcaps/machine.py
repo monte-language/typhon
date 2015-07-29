@@ -114,7 +114,12 @@ class SmallCaps(object):
         # We used to add the call trail for tracebacks here, but it's been
         # moved to t.o.root. Happy bug hunting! ~ C.
         with csp.startCall(target, atom):
-            self.push(target.callAtom(atom, args))
+            rv = target.callAtom(atom, args)
+            if rv is None:
+                print "A call to", target.__class__.__name__, "with atom", \
+                      atom.repr, "returned None"
+                raise RuntimeError("Implementation error")
+            self.push(rv)
 
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)
