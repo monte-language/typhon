@@ -22,8 +22,9 @@ from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
                                         unwrapList, unwrapMap)
 from typhon.objects.constants import BoolObject, NullObject
 from typhon.objects.guards import anyGuard
-from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
-                                 StrObject, unwrapInt, unwrapStr, wrapBool)
+from typhon.objects.data import (BigInt, BytesObject, CharObject,
+                                 DoubleObject, IntObject, StrObject,
+                                 unwrapInt, unwrapStr, wrapBool)
 from typhon.objects.root import Object, runnable
 from typhon.prelude import registerGlobals
 
@@ -34,6 +35,11 @@ RUN_2 = getAtom(u"run", 2)
 @runnable(RUN_1, [deepFrozenStamp])
 def isBool(args):
     return wrapBool(isinstance(args[0], BoolObject))
+
+
+@runnable(RUN_1, [deepFrozenStamp])
+def isBytes(args):
+    return wrapBool(isinstance(args[0], BytesObject))
 
 
 @runnable(RUN_1, [deepFrozenStamp])
@@ -105,6 +111,7 @@ registerGlobals({u"astBuilder": NullObject})
 def bootScope(recorder):
     return {
         u"isBool": isBool(),
+        u"isBytes": isBytes(),
         u"isChar": isChar(),
         u"isDouble": isDouble(),
         u"isInt": isInt(),
