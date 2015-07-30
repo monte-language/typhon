@@ -31,7 +31,7 @@ def splitAt(needle, var haystack):
     var offset := 0
 
     while (offset < haystack.size()):
-        def nextNeedle := haystack.startOf(needle, offset)
+        def nextNeedle := haystack.indexOf(needle, offset)
         if (nextNeedle == -1):
             break
 
@@ -63,7 +63,7 @@ unittest([
 
 
 def makeSplittingPump():
-    var buf := []
+    var buf := b``
 
     return object splitPump extends nullPump:
         to received(item):
