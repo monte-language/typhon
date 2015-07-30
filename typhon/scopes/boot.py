@@ -15,16 +15,15 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.env import finalize
-from typhon.errors import Refused, userError
+from typhon.errors import Refused
 from typhon.importing import evaluateRaise, obtainModuleFromSource
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
-                                        unwrapList, unwrapMap)
+                                        unwrapMap)
 from typhon.objects.constants import BoolObject, NullObject
-from typhon.objects.guards import anyGuard
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject,
-                                 unwrapInt, unwrapStr, wrapBool)
+                                 unwrapBytes, unwrapStr, wrapBool)
 from typhon.objects.root import Object, runnable
 from typhon.prelude import registerGlobals
 
@@ -86,7 +85,7 @@ class TyphonEval(Object):
 
     def recv(self, atom, args):
         if atom is RUN_2:
-            source = "".join([chr(unwrapInt(i)) for i in unwrapList(args[0])])
+            source = unwrapBytes(args[0])
             environment = {}
             for k, v in unwrapMap(args[1]).items():
                 environment[unwrapStr(k)] = v
