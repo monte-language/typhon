@@ -1,5 +1,3 @@
-def [=> b__quasiParser, => Bytes] | _ := import("lib/bytes")
-
 def unreserved := b`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~/`.asSet()
 def percent := 0x25
 def hexDigits := b`0123456789abcdef`

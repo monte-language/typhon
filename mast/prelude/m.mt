@@ -1,17 +1,17 @@
 def bench(_, _) {null}
 
 def parserScope := [
-    => Any, => Bool, => Char, => DeepFrozen, => Double, => Empty, => Int,
-    => List, => Map, => NullOk, => Same, => Set, => Str, => SubrangeGuard,
-    => Void,
+    => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
+    => Int, => List, => Map, => NullOk, => Same, => Set, => Str,
+    => SubrangeGuard, => Void,
     => __mapEmpty, => __mapExtract,
     => __accumulateList, => __accumulateMap, => __booleanFlow, => __iterWhile,
     => __validateFor,
     => __switchFailed, => __makeVerbFacet, => __comparer,
     => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
     => M, => import, => throw, => typhonEval,
-    => simple__quasiParser, => term__quasiParser, => __makeOrderedSpace,
-    => bench, => astBuilder
+    => b__quasiParser, => simple__quasiParser, => term__quasiParser,
+    => __makeOrderedSpace, => bench, => astBuilder
 ]
 
 def [=> makeMonteParser] | _ := import("lib/parsers/monte", parserScope)

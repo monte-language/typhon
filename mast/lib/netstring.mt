@@ -12,8 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> Bytes, "b" => b__quasiParser] := import("lib/bytes")
-
 def charsToInt(cs :Bytes) :int:
     var rv :int := 0
     for c in cs:

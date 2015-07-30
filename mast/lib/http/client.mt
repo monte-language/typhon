@@ -13,7 +13,6 @@
 # under the License.
 
 def [=> bytesToInt] | _ := import("lib/atoi")
-def [=> b__quasiParser, => Bytes] | _ := import("lib/bytes")
 def [=> makeEnum] | _ := import("lib/enum")
 def [=> UTF8] | _ := import("lib/codec/utf8")
 def [=> makeMapPump] := import("lib/tubes/mapPump")

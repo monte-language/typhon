@@ -18,7 +18,6 @@ def [
     => anything,
     => set
 ] | _ := import("lib/parsers/derp")
-def [=> b__quasiParser] | _ := import("lib/bytes")
 def [=> makeEnum] | _ := import("lib/enum")
 
 def bytes(bs):

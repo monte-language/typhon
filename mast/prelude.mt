@@ -671,6 +671,9 @@ preludeScope := import("prelude/space",
                        preludeScope | [=> OrderedRegionMaker,
                                        => OrderedSpaceMaker]) | preludeScope
 
+# b__quasiParser desires spaces.
+preludeScope |= import("prelude/b", preludeScope)
+
 # Terms require simple QP, spaces, and interfaces.
 preludeScope |= import("lib/monte/termParser", preludeScope)
 

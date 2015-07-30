@@ -6,7 +6,6 @@ boot_objects = boot/lib/monte/termParser.ty \
 	boot/lib/monte/monte_optimizer.ty \
 	boot/lib/parsers/monte.ty \
 	boot/montec.ty \
-	boot/lib/bytes.ty \
 	boot/lib/codec/utf8.ty \
 	boot/lib/tubes/nullPump.ty \
 	boot/lib/tubes/mapPump.ty \
@@ -14,6 +13,7 @@ boot_objects = boot/lib/monte/termParser.ty \
 	boot/lib/tubes/pumpTube.ty \
 	boot/prelude.ty \
 	boot/prelude/monte_ast.ty \
+	boot/prelude/b.ty \
 	boot/prelude/brand.ty \
 	boot/prelude/m.ty \
 	boot/prelude/ql.ty \
@@ -50,7 +50,7 @@ test: default
 	trial typhon
 	find mast/lib -name \*.ty -exec ./mt-typhon -l mast {} \;
 
-mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty \
+mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/netstring.ty \
 	mast/lib/regex.ty mast/lib/words.ty \
 	mast/lib/percent.ty \
 	mast/lib/continued.ty \
@@ -72,7 +72,7 @@ mast: mast/lib/atoi.ty mast/lib/bytes.ty mast/lib/enum.ty mast/lib/netstring.ty 
 prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/m.ty \
 	mast/prelude/monte_ast.ty mast/prelude/ql.ty mast/prelude/region.ty \
 	mast/prelude/simple.ty mast/prelude/space.ty mast/prelude/deepfrozen.ty \
-	mast/prelude/protocolDesc.ty
+	mast/prelude/protocolDesc.ty mast/prelude/b.ty
 
 codec: mast/lib/codec/utf8.ty
 

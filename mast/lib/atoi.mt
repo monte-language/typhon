@@ -41,9 +41,7 @@ unittest([
 ])
 
 
-def [=> Bytes, => b__quasiParser] | _ := import("lib/bytes")
-
-def bytesToInt(bs :List[Int], ej) :Int:
+def bytesToInt(bs :Bytes, ej) :Int:
     var rv :Int := 0
     for b in bs:
         def i :(0..!10) exit ej := b - 48

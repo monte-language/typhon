@@ -1,4 +1,3 @@
-def [=> Bytes] | _ := import("lib/bytes")
 def [=> UTF8] | _ := import("lib/codec/utf8")
 def [=> nullPump] | _ := import("lib/tubes/nullPump")
 def [=> makeMapPump] | _ := import("lib/tubes/mapPump")
