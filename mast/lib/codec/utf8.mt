@@ -96,7 +96,7 @@ unittest([testDecodeCore])
 
 
 def encodeCore(c :Char) :Bytes:
-    return switch (c.asInteger()) {
+    return _makeBytes.fromInts(switch (c.asInteger()) {
         # One byte.
         match i ? (i < 0x80) {[i]}
         # Two bytes.
@@ -113,7 +113,7 @@ def encodeCore(c :Char) :Bytes:
                 0x80 | ((i >> 6) & 0x3f),
                 0x80 | (i & 0x3f), ]
         }
-    }
+    })
 
 def testEncodeCore(assert):
     # One byte.
@@ -136,8 +136,9 @@ unittest([testEncodeCore])
 object UTF8:
     to decode(specimen, ej) :Str:
         def bs :Bytes exit ej := specimen
-        # XXX def [s, []] exit ej := decodeCore(bs, ej)
-        def [s, ==[]] exit ej := decodeCore(bs, ej)
+        def [s, remainder] exit ej := decodeCore(bs, ej)
+        if (remainder.size() != 0):
+            throw.eject(ej, [remainder, "was not empty"])
         return s
 
     to decodeExtras(specimen, ej):
@@ -146,14 +147,15 @@ object UTF8:
 
     to encode(specimen, ej) :Bytes:
         def s :Str exit ej := specimen
-        var rv := []
+        var rv :Bytes := b``
         for c in s:
             rv += encodeCore(c)
         return rv
 
 def testUTF8Decode(assert):
-    assert.ejects(fn ej {def via (UTF8.decode) x exit ej := [0xc3]})
-    assert.doesNotEject(fn ej {def via (UTF8.decode) x exit ej := [0xc3, 0xa9]})
+    assert.ejects(fn ej {def via (UTF8.decode) x exit ej := b`$\xc3`})
+    assert.doesNotEject(
+        fn ej {def via (UTF8.decode) x exit ej := b`$\xc3$\xa9`})
 
 def testUTF8Encode(assert):
     assert.ejects(fn ej {def via (UTF8.encode) x exit ej := 42})

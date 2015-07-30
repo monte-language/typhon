@@ -92,6 +92,7 @@ def makePredicateGuard(predicate :DeepFrozenStamp, label) as DeepFrozenStamp:
 
 # Data guards. These must come before any while-expressions.
 def Bool := makePredicateGuard(isBool, "Bool")
+def Bytes := makePredicateGuard(isBytes, "Bytes")
 def Char := makePredicateGuard(isChar, "Char")
 def Double := makePredicateGuard(isDouble, "Double")
 def Int := makePredicateGuard(isInt, "Int")
@@ -632,9 +633,9 @@ def [=> SubrangeGuard, => DeepFrozen] := import(
 # the module and boot scope into a single map which is then passed as-is to
 # the other modules.
 var preludeScope := [
-    => Any, => Bool, => Char, => DeepFrozen, => Double, => Empty, => Int,
-    => List, => Map, => NullOk, => Same, => Set, => Str, => SubrangeGuard,
-    => Void,
+    => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
+    => Int, => List, => Map, => NullOk, => Same, => Set, => Str,
+    => SubrangeGuard, => Void,
     => __mapEmpty, => __mapExtract,
     => __accumulateList, => __accumulateMap, => __booleanFlow, => __iterWhile,
     => __validateFor,

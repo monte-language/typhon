@@ -12,8 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def Bytes := List[0..!256]
-
 object bytePattern:
     pass
 
@@ -56,7 +54,7 @@ object b__quasiParser:
                     if (piece =~ [==byteValue, index]):
                         piece := values[index]
                     else:
-                        piece := [for c in (piece) c.asInteger()]
+                        piece := _makeBytes.fromString(piece)
 
                     def len := piece.size()
                     if (inPattern):
@@ -93,19 +91,19 @@ object b__quasiParser:
         def chunks := [].diverge()
         for piece in pieces:
             if (piece =~ _ :Str):
-                chunks.push([for c in (piece) c.asInteger()])
+                chunks.push(_makeBytes.fromString(piece))
             else:
                 chunks.push(piece)
 
         return object bytes:
             to substitute(values) :Bytes:
-                var rv := []
+                var rv := _makeBytes.fromInts([])
                 for chunk in chunks.snapshot():
                     switch (chunk):
                         match [==byteValue, index]:
                             switch (values[index]):
                                 match s :Str:
-                                    rv += [for c in (s) c.asInteger()]
+                                    rv += _makeBytes.fromString(s)
                                 match bs :Bytes:
                                     rv += bs
                         match bs :Bytes:
@@ -134,14 +132,9 @@ def testQuasiPatterns(assert):
     assert.equal(car, b`first`)
     assert.equal(cdr, b`second\r\nthird`)
 
-def testBytesGuard(assert):
-    assert.ejects(fn ej {def bs :Bytes exit ej := [0, 256, 4242]})
-    assert.doesNotEject(fn ej {def bs :Bytes exit ej := [42, 5, 0, 255]})
-
 unittest([
     testQuasiValues,
     testQuasiPatterns,
-    testBytesGuard,
 ])
 
-[=> Bytes, => b__quasiParser]
+[=> b__quasiParser]

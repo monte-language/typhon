@@ -34,7 +34,7 @@ def astCodes := [
     "ViaPattern" => 31,
     "BindingPattern" => 32]
 
-def asciiShift(bs :Bytes) :Bytes:
+def asciiShift(bs) :Bytes:
     var result := b``
     for c in bs:
         result with= ((c + 32) % 256)

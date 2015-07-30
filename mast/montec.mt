@@ -44,12 +44,12 @@ def compile(config, inT, inputFile, outputFile):
                 optimizedTree
             } else {expandedTree}
 
-            def data := [].diverge()
-            dump(finalTree, fn stuff {data.extend(stuff)})
+            var data := b``
+            dump(finalTree, fn stuff {data += stuff})
             traceln(`dumped!`)
 
             def outT := makeFileResource(outputFile).openDrain()
-            outT.receive(data.snapshot())
+            outT.receive(data)
             traceln("Wrote new file!")
 
     inT.flowTo(tyDumper)
