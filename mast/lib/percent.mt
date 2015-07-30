@@ -4,17 +4,17 @@ def hexDigits := b`0123456789abcdef`
 def digitToInt := [for i => b in (hexDigits) b => i] | [for i => b in (b`ABCDEF`) b => i + 10]
 
 def percentEncode(s :Str) :Bytes:
-    def rv := [].diverge()
+    var rv := b``
     # XXX for c :(Int < 256) in s:
     for c in s:
         def i := c.asInteger()
         if (unreserved.contains(i)):
-            rv.push(i)
+            rv with= (i)
         else:
-            rv.push(percent)
-            rv.push(hexDigits[i >> 4])
-            rv.push(hexDigits[i & 0xf])
-    return rv.snapshot()
+            rv with= (percent)
+            rv with= (hexDigits[i >> 4])
+            rv with= (hexDigits[i & 0xf])
+    return rv
 
 def testPercentEncode(assert):
     assert.equal(percentEncode("/test stuff"), b`/test%20stuff`)

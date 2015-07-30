@@ -3,7 +3,7 @@ def [=> nullPump] | _ := import("lib/tubes/nullPump")
 def [=> makeMapPump] | _ := import("lib/tubes/mapPump")
 
 def makeUTF8DecodePump():
-    var buf :Bytes := []
+    var buf :Bytes := b``
 
     return object UTF8DecodePump extends nullPump:
         to received(bs :Bytes) :List[Str]:

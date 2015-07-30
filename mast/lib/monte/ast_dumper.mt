@@ -34,11 +34,11 @@ def astCodes := [
     "ViaPattern" => 31,
     "BindingPattern" => 32]
 
-def asciiShift(bs):
-    def result := [].diverge()
+def asciiShift(bs :Bytes) :Bytes:
+    var result := b``
     for c in bs:
-        result.push((c + 32) % 256)
-    return result.snapshot()
+        result with= ((c + 32) % 256)
+    return result
 
 def zze(val):
     if (val < 0):
@@ -49,43 +49,43 @@ def zze(val):
 
 def dumpVarint(var value, write):
     if (value == 0):
-        write(asciiShift([0]))
+        write(asciiShift(b`$\x00`))
     else:
-        def target := [].diverge()
+        var target := b``
         while (value > 0):
             def chunk := value & 0x7f
             value >>= 7
             if (value > 0):
-                target.push(chunk | 0x80)
+                target with= (chunk | 0x80)
             else:
-                target.push(chunk)
+                target with= (chunk)
         write(asciiShift(target))
 
 
 def dump(item, write):
     if (item == null):
-        write(asciiShift([0]))
+        write(asciiShift(b`$\x00`))
         return
     switch (item):
         match _ :Int:
-            write(asciiShift([6]))
+            write(asciiShift(b`$\x06`))
             dumpVarint(zze(item), write)
         match _ :Str:
-            write(asciiShift([3]))
+            write(asciiShift(b`$\x03`))
             def bs := UTF8.encode(item, throw)
             dumpVarint(bs.size(), write)
             write(bs)
         match _ :Double:
-            write(asciiShift([4]))
+            write(asciiShift(b`$\x04`))
             write(asciiShift(item.toBytes()))
         match _ :Char:
-            write(asciiShift([33]))
-            write(asciiShift([3]))
+            # Char holds a Str internally.
+            write(asciiShift(b`$\x21$\x03`))
             def bs := UTF8.encode(__makeString.fromChars([item]), throw)
             dumpVarint(bs.size(), write)
             write(bs)
         match _ :List:
-            write(asciiShift([7]))
+            write(asciiShift(b`$\x07`))
             dumpVarint(item.size(), write)
             for val in item:
                 dump(val, write)

@@ -21,23 +21,6 @@ object byteValue:
     pass
 
 
-def _makeBytes(chunks):
-    return object bytes:
-        to substitute(values) :Bytes:
-            var rv := []
-            for chunk in chunks:
-                switch (chunk):
-                    match [==byteValue, index]:
-                        switch (values[index]):
-                            match s :Str:
-                                rv += [for c in (s) c.asInteger()]
-                            match bs :Bytes:
-                                rv += bs
-                    match bs :Bytes:
-                        rv += bs
-            return rv
-
-
 object b__quasiParser:
     to patternHole(index):
         return [bytePattern, index]
@@ -107,13 +90,27 @@ object b__quasiParser:
                 return patterns.snapshot()
 
     to valueMaker(pieces):
-        def rv := [].diverge()
+        def chunks := [].diverge()
         for piece in pieces:
             if (piece =~ _ :Str):
-                rv.push([for c in (piece) c.asInteger()])
+                chunks.push([for c in (piece) c.asInteger()])
             else:
-                rv.push(piece)
-        return _makeBytes(rv.snapshot())
+                chunks.push(piece)
+
+        return object bytes:
+            to substitute(values) :Bytes:
+                var rv := []
+                for chunk in chunks.snapshot():
+                    switch (chunk):
+                        match [==byteValue, index]:
+                            switch (values[index]):
+                                match s :Str:
+                                    rv += [for c in (s) c.asInteger()]
+                                match bs :Bytes:
+                                    rv += bs
+                        match bs :Bytes:
+                            rv += bs
+                return rv
 
 
 def testQuasiValues(assert):

@@ -77,20 +77,20 @@ def decodeCore(var bs :Bytes, ej):
 
 def testDecodeCore(assert):
     # One byte.
-    assert.equal(["\x00", []], decodeCore([0x00], null))
-    assert.equal(["\n", []], decodeCore([0x0a], null))
+    assert.equal(["\x00", b``], decodeCore(b`$\x00`, null))
+    assert.equal(["\n", b``], decodeCore(b`$\x0a`, null))
     # One byte as leftover.
-    assert.equal(["", [0xc3]], decodeCore([0xc3], null))
+    assert.equal(["", b`$\xc3`], decodeCore(b`$\xc3`, null))
     # Two bytes.
     # XXX é
-    assert.equal(["\u00e9", []], decodeCore([0xc3, 0xa9], null))
+    assert.equal(["\u00e9", b``], decodeCore(b`$\xc3$\xa9`, null))
     # Three bytes.
     # XXX ▲
-    assert.equal(["\u25b2", []], decodeCore([0xe2, 0x96, 0xb2], null))
+    assert.equal(["\u25b2", b``], decodeCore(b`$\xe2$\x96$\xb2`, null))
     # Four bytes.
     # XXX this codepoint is generally not in any font
-    assert.equal(["\U0001f3d4", []],
-                 decodeCore([0xf0, 0x9f, 0x8f, 0x94], null))
+    assert.equal(["\U0001f3d4", b``],
+                 decodeCore(b`$\xf0$\x9f$\x8f$\x94`, null))
 
 unittest([testDecodeCore])
 
@@ -117,16 +117,16 @@ def encodeCore(c :Char) :Bytes:
 
 def testEncodeCore(assert):
     # One byte.
-    assert.equal([0x00], encodeCore('\x00'))
+    assert.equal(b`$\x00`, encodeCore('\x00'))
     # Two bytes.
     # XXX é
-    assert.equal([0xc3, 0xa9], encodeCore('\u00e9'))
+    assert.equal(b`$\xc3$\xa9`, encodeCore('\u00e9'))
     # Three bytes.
     # XXX ▲
-    assert.equal([0xe2, 0x96, 0xb2], encodeCore('\u25b2'))
+    assert.equal(b`$\xe2$\x96$\xb2`, encodeCore('\u25b2'))
     # Four bytes.
     # XXX this codepoint is generally not in any font
-    assert.equal([0xf0, 0x9f, 0x8f, 0x94], encodeCore('\U0001f3d4'))
+    assert.equal(b`$\xf0$\x9f$\x8f$\x94`, encodeCore('\U0001f3d4'))
 
 unittest([testEncodeCore])
 
@@ -173,11 +173,7 @@ bench(encodeBench, "UTF-8 encoding")
 
 
 def decodeBench():
-    def via (UTF8.decode) xs := [84, 104, 105, 115, 32, 105, 115, 32, 97, 32,
-                                 116, 101, 115, 116, 32, 111, 102, 32, 116,
-                                 104, 101, 32, 85, 84, 70, 45, 56, 32, 101,
-                                 110, 99, 111, 100, 101, 114, 226, 128, 166,
-                                 32]
+    def via (UTF8.decode) xs := b`This is a test of the UTF-8 encoder$\xe2$\x80$\xa6 `
     def via (UTF8.decode) ys := [194, 165, 32, 194, 183, 32, 194, 163, 32,
                                  194, 183, 32, 226, 130, 172, 32, 194, 183,
                                  32, 36, 32, 194, 183, 32, 194, 162, 32, 194,

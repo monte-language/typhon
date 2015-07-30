@@ -53,8 +53,8 @@ def makeMonteParser(inputName):
 
         to dump():
             def result := monteParser.results()[0]
-            def data := [].diverge()
-            dump(result, data.extend)
-            return data.snapshot()
+            var data := b``
+            dump(result, fn bs {data += bs})
+            return data
 
 [=> makeMonteParser]
