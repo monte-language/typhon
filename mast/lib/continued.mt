@@ -225,10 +225,23 @@ object continued:
         machine.forceFeed(1, 1)
         return machine
 
+    to sqrt(x :Int):
+        "The square root of an integer."
+
+        # sqrt(x) = 1 + (x - 1)/(1 + sqrt(x))
+        # This holds for all reals except zero and one?
+
+        def q := x - 1
+
+        def machine := makeMachine(fn {[2, q]})
+        machine.forceFeed(1, q)
+        return machine
+
+
 def testEDigits(assert):
     def e := continued.e()
     def extractor := e.extractDigits(10)
-    for digit in [2, 7, 8, 1, 8]:
+    for digit in [2, 7, 1, 8, 2, 8]:
         assert.equal(extractor.produceDigit(null), digit)
 
 def testPhiDigits(assert):
@@ -245,10 +258,17 @@ def testPiDigits(assert):
     for digit in [3, 1, 4, 1, 5, 9, 2, 6]:
         assert.equal(extractor.produceDigit(null), digit)
 
+def testSqrt2Digits(assert):
+    def sqrt2 := continued.sqrt(2)
+    def extractor := sqrt2.extractDigits(10)
+    for digit in [1, 4, 1, 4]:
+        assert.equal(extractor.produceDigit(null), digit)
+
 unittest([
     testEDigits,
     testPhiDigits,
     testPiDigits,
+    testSqrt2Digits,
 ])
 
 
