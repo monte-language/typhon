@@ -164,11 +164,31 @@ def makeRegularMachine(feed):
     def generalFeed():
         return [feed(), 1]
 
-    return makeMachine(generalFeed)
+    return object regularMachine extends makeMachine(generalFeed):
+        to forceFeed(p):
+            return super.forceFeed(p, 1)
 
 
 object continued:
     "Continued fraction arithmetic."
+
+    to e():
+        "Euler's number; the base of the natural logarithm."
+
+        var counter := 0
+        var bump := 0
+
+        def feed():
+            # [1, 2, 1, 1, 4, 1, 1, 6, 1, ...]
+            counter := (counter + 1) % 3
+            if (counter == 2):
+                bump += 2
+                return bump
+            return 1
+
+        def machine := makeRegularMachine(feed)
+        machine.forceFeed(2)
+        return machine
 
     to phi():
         "φ: The golden ratio.
@@ -205,6 +225,11 @@ object continued:
         machine.forceFeed(1, 1)
         return machine
 
+def testEDigits(assert):
+    def e := continued.e()
+    def extractor := e.extractDigits(10)
+    for digit in [2, 7, 8, 1, 8]:
+        assert.equal(extractor.produceDigit(null), digit)
 
 def testPhiDigits(assert):
     def phi := continued.phi()
@@ -221,6 +246,7 @@ def testPiDigits(assert):
         assert.equal(extractor.produceDigit(null), digit)
 
 unittest([
+    testEDigits,
     testPhiDigits,
     testPiDigits,
 ])
