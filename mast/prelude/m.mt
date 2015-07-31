@@ -19,6 +19,9 @@ def [=> makeMonteLexer] | _ := import("lib/monte/monte_lexer", parserScope)
 def [=> parseExpression] | _ := import("lib/monte/monte_parser", parserScope)
 def [=> makeLexerQP] | _ := import("prelude/ql", parserScope)
 def [=> astBuilder] | _ := import("prelude/monte_ast", parserScope)
+def [=> expand] | _ := import("lib/monte/monte_expander", parserScope)
+def [=> optimize] | _ := import("lib/monte/monte_optimizer", parserScope)
+
 
 def makeFakeLex(tokens):
     def iter := tokens._makeIterator()
@@ -36,24 +39,43 @@ def makeFakeLex(tokens):
         to patternHole():
             return 42
 
-def makeM(ast):
-    return object m:
-        "A quasiparser for the Monte programming language.
 
-         This object will parse any Monte expression and return an opaque
-         value. In the near future, this object will be a translucent view
-         into a Monte compiler and optimizer."
+def makeM(ast, isKernel :Bool):
+    return object m:
+        "An abstract syntax tree in the Monte programming language."
+
         to _printOn(out):
             out.print("m`")
             ast._printOn(out)
             out.print("`")
 
         to substitute(values):
+            # XXX
             return m
+
+        to expand():
+            "Desugar all non-Kernel-Monte syntax into Kernel-Monte."
+
+            if (isKernel):
+                return m
+
+            escape ej:
+                return makeM(expand(ast, astBuilder, ej), true)
+            catch error:
+                throw(`Couldn't expand to Kernel-Monte: $error`)
+
+        to mix():
+            "Aggressively optimize Kernel-Monte."
+
+            if (!isKernel):
+                throw(`Can't optimize unexpanded AST`)
+
+            return makeM(optimize(ast), true)
+
 
 def makeQL(tokens):
     def ast := parseExpression(makeFakeLex(tokens), astBuilder, throw)
-    return makeM(ast)
+    return makeM(ast, false)
 
 def makeChunkingLexer(inputName):
     var lexer := makeMonteLexer("", inputName)
