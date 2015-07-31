@@ -24,7 +24,7 @@ def [RequestState, REQUEST, HEADER, BODY] := makeEnum(
 
 def makeRequestPump():
     var state :RequestState := REQUEST
-    var buf := []
+    var buf := b``
     var pendingRequest := null
     var pendingRequestLine := null
     var pendingHeaders := null
@@ -64,7 +64,7 @@ def makeRequestPump():
 
             switch (state):
                 match ==REQUEST:
-                    if (buf.startOf(b`$\r$\n`) == -1):
+                    if (buf.indexOf(b`$\r$\n`) == -1):
                         return false
 
                     # XXX it'd be swell if these were subpatterns
@@ -76,7 +76,7 @@ def makeRequestPump():
                     return true
 
                 match ==HEADER:
-                    if (buf.startOf(b`$\r$\n`) == -1):
+                    if (buf.indexOf(b`$\r$\n`) == -1):
                         return false
 
                     if (buf =~ b`$\r$\n@t`):
