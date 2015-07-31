@@ -169,7 +169,7 @@ def expand(node, builder, fail):
         def result := builder.TempNounExpr("ok", span)
         def success := emitList([builder.NounExpr("true", span)] +
             bindingexprs, span)
-        def failure := builder.MethodCallExpr(builder.NounExpr("__booleanFlow", span),
+        def failure := builder.MethodCallExpr(builder.NounExpr("_booleanFlow", span),
             "failureList", [builder.LiteralExpr(bindingexprs.size(), span)], span)
         return builder.SeqExpr([
             builder.DefExpr(
@@ -285,7 +285,7 @@ def expand(node, builder, fail):
                     builder.MethodCallExpr(
                         builder.MetaContextExpr(span),
                         "getFQNPrefix", [], span),
-                    "add", [builder.LiteralExpr(name.getNoun().getName() + "__T", span)], span),
+                    "add", [builder.LiteralExpr(name.getNoun().getName() + "_T", span)], span),
                 emitList(xtends, span),
                 emitList(mplements, span),
                 emitList(messages, span)], span), span)
@@ -320,7 +320,7 @@ def expand(node, builder, fail):
                 null,
                 builder.SeqExpr([
                     builder.MethodCallExpr(
-                        builder.NounExpr("__validateFor", span),
+                        builder.NounExpr("_validateFor", span),
                         "run", [fTemp], span),
                     builder.EscapeExpr(
                         builder.FinalPattern(builder.NounExpr("__continue", span), null, span),
@@ -370,7 +370,7 @@ def expand(node, builder, fail):
                 null,
                 builder.SeqExpr([
                     builder.MethodCallExpr(
-                        builder.NounExpr("__validateFor", span),
+                        builder.NounExpr("_validateFor", span),
                         "run", [fTemp], span),
                     builder.DefExpr(key, null, kTemp, span),
                     builder.DefExpr(value, null, vTemp, span),
@@ -462,7 +462,7 @@ def expand(node, builder, fail):
         else if (nodeName == "CurryExpr"):
             def [receiver, verb, isSend] := args
             return builder.MethodCallExpr(
-                builder.NounExpr("__makeVerbFacet", span),
+                builder.NounExpr("_makeVerbFacet", span),
                 "curryCall",
                 [receiver, builder.LiteralExpr(verb, span)],
                 span)
@@ -487,7 +487,7 @@ def expand(node, builder, fail):
         else if (nodeName == "SendCurryExpr"):
             def [receiver, verb] := args
             return builder.MethodCallExpr(
-            builder.NounExpr("__makeVerbFacet", span),
+            builder.NounExpr("_makeVerbFacet", span),
                 "currySend", [receiver, builder.LiteralExpr(verb, span)],
                 span)
         else if (nodeName == "PrefixExpr"):
@@ -495,10 +495,10 @@ def expand(node, builder, fail):
         else if (nodeName == "BinaryExpr"):
             return builder.MethodCallExpr(args[0], node.getOpName(), [args[2]], span)
         else if (nodeName == "RangeExpr"):
-            return builder.MethodCallExpr(builder.NounExpr("__makeOrderedSpace", span),
+            return builder.MethodCallExpr(builder.NounExpr("_makeOrderedSpace", span),
                 "op__" + node.getOpName(), [args[0], args[2]], span)
         else if (nodeName == "CompareExpr"):
-            return builder.MethodCallExpr(builder.NounExpr("__comparer", span),
+            return builder.MethodCallExpr(builder.NounExpr("_comparer", span),
                 node.getOpName(), [args[0], args[2]], span)
         else if (nodeName == "CoerceExpr"):
             def [spec, guard] := args
@@ -537,7 +537,7 @@ def expand(node, builder, fail):
                 leftmap, rightmap,
                 fn s, f {
                     def broken := builder.MethodCallExpr(
-                        builder.NounExpr("__booleanFlow", span),
+                        builder.NounExpr("_booleanFlow", span),
                         "broken", [], span)
                     var rightOnly := []
                     for n in rightmap - leftmap {
@@ -593,7 +593,7 @@ def expand(node, builder, fail):
                 return builder.SeqExpr(promises.snapshot() + [resDef] + resolvers.snapshot(), span)
         else if (nodeName == "ForwardExpr"):
             def [patt] := args
-            def rname := builder.NounExpr(patt.getNoun().getName() + "__Resolver", span)
+            def rname := builder.NounExpr(patt.getNoun().getName() + "_Resolver", span)
             return builder.SeqExpr([
                 builder.DefExpr(builder.ListPattern([
                         patt,
@@ -633,12 +633,12 @@ def expand(node, builder, fail):
             def [value, isSame] := args
             if (isSame):
                 return builder.ViaPattern(
-                    builder.MethodCallExpr(builder.NounExpr("__matchSame", span),
+                    builder.MethodCallExpr(builder.NounExpr("_matchSame", span),
                         "run", [value], span),
                     builder.IgnorePattern(null, span), span)
             else:
                 return builder.ViaPattern(
-                    builder.MethodCallExpr(builder.NounExpr("__matchSame", span),
+                    builder.MethodCallExpr(builder.NounExpr("_matchSame", span),
                         "different", [value], span),
                     builder.IgnorePattern(null, span). span)
         else if (nodeName == "VarPattern"):
@@ -647,8 +647,8 @@ def expand(node, builder, fail):
             def [noun, guard] := args
             def g := if (guard == null) {builder.NounExpr("null", span)} else {guard}
             return builder.ViaPattern(
-                builder.MethodCallExpr(builder.NounExpr("__bind", span),
-                    "run", [builder.NounExpr(noun.getName() + "__Resolver", span), g],
+                builder.MethodCallExpr(builder.NounExpr("_bind", span),
+                    "run", [builder.NounExpr(noun.getName() + "_Resolver", span), g],
                     span),
                 builder.FinalPattern(noun, null, span), span)
         else if (nodeName == "SlotPattern"):
@@ -665,7 +665,7 @@ def expand(node, builder, fail):
         else if (nodeName == "MapPattern"):
             def [assocs, tail] := args
             var nub := if (tail == null) {
-                  builder.IgnorePattern(builder.NounExpr("__mapEmpty", span), span)
+                  builder.IgnorePattern(builder.NounExpr("_mapEmpty", span), span)
                   } else {tail}
             for [left, right] in assocs.reverse():
                 nub := builder.ViaPattern(
@@ -685,11 +685,11 @@ def expand(node, builder, fail):
                 return [builder.LiteralExpr("&&" + node.getPattern().getNoun().getName(), span), subnode]
         else if (nodeName == "MapPatternDefault"):
             def [[k, v], default] := args
-            return [builder.MethodCallExpr(builder.NounExpr("__mapExtract", span),
+            return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
                     "depr", [k, default], span), v]
         else if (nodeName == "MapPatternRequired"):
             def [[k, v]] := args
-            return [builder.MethodCallExpr(builder.NounExpr("__mapExtract", span),
+            return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
                     "run", [k], span), v]
         else if (nodeName == "ListPattern"):
             def [patterns, tail] := args
@@ -697,14 +697,14 @@ def expand(node, builder, fail):
                 return builder.ListPattern(patterns, null, span)
             else:
                 return builder.ViaPattern(
-                    builder.MethodCallExpr(builder.NounExpr("__splitList", span), "run",
+                    builder.MethodCallExpr(builder.NounExpr("_splitList", span), "run",
                         [builder.LiteralExpr(patterns.size(), span)], span),
                     builder.ListPattern(patterns + [tail], null, span), span)
         else if (nodeName == "SuchThatPattern"):
             def [pattern, expr] := args
-            return builder.ViaPattern(builder.NounExpr("__suchThat", span),
+            return builder.ViaPattern(builder.NounExpr("_suchThat", span),
                 builder.ListPattern([pattern, builder.ViaPattern(
-                    builder.MethodCallExpr(builder.NounExpr("__suchThat", span), "run",
+                    builder.MethodCallExpr(builder.NounExpr("_suchThat", span), "run",
                          [expr], span),
                     builder.IgnorePattern(null, span), span)], null, span), span)
         else if (nodeName == "QuasiParserPattern"):
@@ -714,7 +714,7 @@ def expand(node, builder, fail):
             def [parts, exprs, patterns] := buildQuasi(builder, qname, quasis)
             return builder.ViaPattern(
                 builder.MethodCallExpr(
-                    builder.NounExpr("__quasiMatcher", span), "run",
+                    builder.NounExpr("_quasiMatcher", span), "run",
                     [builder.MethodCallExpr(builder.NounExpr(qname, span), "matchMaker",
                         [emitList(parts, span)], span), emitList(exprs, span)], span),
                 builder.ListPattern(patterns, null, span), span)
@@ -774,11 +774,11 @@ def expand(node, builder, fail):
             return expandFor(key, value, coll, block, catchPatt, catchBlock, span)
         else if (nodeName == "ListComprehensionExpr"):
             def [coll, filter, key, value, exp] := args
-            return expandComprehension(key, value, coll, filter, exp, "__accumulateList", span)
+            return expandComprehension(key, value, coll, filter, exp, "_accumulateList", span)
         else if (nodeName == "MapComprehensionExpr"):
             def [coll, filter, key, value, kExp, vExp] := args
             return expandComprehension(key, value, coll, filter,
-                emitList([kExp, vExp], span), "__accumulateMap", span)
+                emitList([kExp, vExp], span), "_accumulateMap", span)
         else if (nodeName == "SwitchExpr"):
             def [expr, matchers] := args
             def sp := builder.TempNounExpr("specimen", span)
@@ -787,7 +787,7 @@ def expand(node, builder, fail):
             for _ in matchers:
                 failures with= (builder.TempNounExpr("failure", span))
                 ejs with= (builder.TempNounExpr("ej", span))
-            var block := builder.MethodCallExpr(builder.NounExpr("__switchFailed", span), "run",
+            var block := builder.MethodCallExpr(builder.NounExpr("_switchFailed", span), "run",
                 [sp] + failures, span)
             for [m, fail, ej] in reversed(zip(matchers, failures, ejs)):
                 block := builder.EscapeExpr(
@@ -813,7 +813,7 @@ def expand(node, builder, fail):
             return builder.EscapeExpr(
                 builder.FinalPattern(builder.NounExpr("__break", span), null, span),
                     builder.MethodCallExpr(builder.NounExpr("__loop", span), "run",
-                        [builder.MethodCallExpr(builder.NounExpr("__iterWhile", span), "run",
+                        [builder.MethodCallExpr(builder.NounExpr("_iterWhile", span), "run",
                             [builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
                                 builder.Script(null,
                                     [builder."Method"(null, "run", [], null, test, span)],
@@ -882,7 +882,7 @@ def expand(node, builder, fail):
                     var noun := null
                     while (true) {
                         i += 1
-                        def name := `${args[0]}__$i`
+                        def name := `${args[0]}_$i`
                         if (!names.contains(name)) {
                              noun := builder.NounExpr(name, span)
                             break

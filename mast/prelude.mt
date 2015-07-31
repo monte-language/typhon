@@ -17,7 +17,7 @@
 
 # The comparer can come before guards, since it is extremely polymorphic and
 # doesn't care much about the types of the values that it is manipulating.
-object __comparer as DeepFrozenStamp:
+object _comparer as DeepFrozenStamp:
     "A comparison helper.
 
      This object implements the comparison operators."
@@ -101,7 +101,7 @@ def Str := makePredicateGuard(isStr, "Str")
 
 def Empty := makePredicateGuard(def pred(specimen) as DeepFrozenStamp {return specimen.size() == 0}, "Empty")
 # Alias for map patterns.
-def __mapEmpty := Empty
+def _mapEmpty := Empty
 
 
 def testIntGuard(assert):
@@ -119,7 +119,7 @@ unittest([
 
 
 # Must come before List. Must come after Void and Bool.
-def __validateFor(flag :Bool) :Void as DeepFrozenStamp:
+def _validateFor(flag :Bool) :Void as DeepFrozenStamp:
     "Ensure that `flag` is `true`.
 
      This object is a safeguard against malicious loop objects. A flag is set
@@ -415,7 +415,7 @@ def testSame(assert):
 unittest([testSame])
 
 
-def __iterWhile(obj) as DeepFrozenStamp:
+def _iterWhile(obj) as DeepFrozenStamp:
     return object iterWhile:
         to _makeIterator():
             return iterWhile
@@ -426,14 +426,14 @@ def __iterWhile(obj) as DeepFrozenStamp:
             return [null, rv]
 
 
-def __splitList(position :Int) as DeepFrozenStamp:
+def _splitList(position :Int) as DeepFrozenStamp:
     return def listSplitter(specimen, ej):
         if (specimen.size() < position):
             throw.eject(ej, ["List is too short:", specimen])
         return specimen.slice(0, position).with(specimen.slice(position))
 
 
-def __accumulateList(iterable, mapper) as DeepFrozenStamp:
+def _accumulateList(iterable, mapper) as DeepFrozenStamp:
     def iterator := iterable._makeIterator()
     var rv := []
 
@@ -447,26 +447,26 @@ def __accumulateList(iterable, mapper) as DeepFrozenStamp:
     return rv
 
 
-def __matchSame(expected) as DeepFrozenStamp:
+def _matchSame(expected) as DeepFrozenStamp:
     "The pattern ==`expected`."
     return def sameMatcher(specimen, ej):
         if (expected != specimen):
             throw.eject(ej, ["Not the same:", expected, specimen])
 
 
-def __mapExtract(key) as DeepFrozenStamp:
+def _mapExtract(key) as DeepFrozenStamp:
     return def mapExtractor(specimen, ej):
         if (specimen.contains(key)):
             return [specimen[key], specimen.without(key)]
         throw.eject(ej, "Key " + M.toQuote(specimen) + " not in map")
 
 
-def __quasiMatcher(matchMaker, values) as DeepFrozenStamp:
+def _quasiMatcher(matchMaker, values) as DeepFrozenStamp:
     return def quasiMatcher(specimen, ej):
         return matchMaker.matchBind(values, specimen, ej)
 
 
-object __suchThat as DeepFrozenStamp:
+object _suchThat as DeepFrozenStamp:
     "The pattern patt ? (expr)."
     to run(specimen :Bool):
         def suchThat(_, ej):
@@ -501,12 +501,12 @@ def testAnySubGuard(assert):
 unittest([testAnySubGuard])
 
 
-object __switchFailed as DeepFrozenStamp:
+object _switchFailed as DeepFrozenStamp:
     match [=="run", args]:
         throw("Switch failed:", args)
 
 
-object __makeVerbFacet as DeepFrozenStamp:
+object _makeVerbFacet as DeepFrozenStamp:
     "The operator `obj`.`method`."
 
     to curryCall(target, verb):
@@ -518,7 +518,7 @@ object __makeVerbFacet as DeepFrozenStamp:
              This object responds to messages with the verb \"run\" by passing
              them to another object with a different verb."
             to _uncall():
-                return [__makeVerbFacet, "curryCall", [target, verb]]
+                return [_makeVerbFacet, "curryCall", [target, verb]]
 
             match [=="run", args]:
                 M.call(target, verb, args)
@@ -587,7 +587,7 @@ unittest([
 ])
 
 
-object __makeMap as DeepFrozenStamp:
+object _makeMap as DeepFrozenStamp:
     to fromPairs(l):
         def m := _flexMap([].asMap())
         for [k, v] in l:
@@ -595,12 +595,12 @@ object __makeMap as DeepFrozenStamp:
         return m.snapshot()
 
 
-def __accumulateMap(iterable, mapper) as DeepFrozenStamp:
-    def l := __accumulateList(iterable, mapper)
-    return __makeMap.fromPairs(l)
+def _accumulateMap(iterable, mapper) as DeepFrozenStamp:
+    def l := _accumulateList(iterable, mapper)
+    return _makeMap.fromPairs(l)
 
 
-def __bind(resolver, guard) as DeepFrozenStamp:
+def _bind(resolver, guard) as DeepFrozenStamp:
     def viaBinder(specimen, ej):
         if (guard == null):
             resolver.resolve(specimen)
@@ -612,18 +612,19 @@ def __bind(resolver, guard) as DeepFrozenStamp:
     return viaBinder
 
 
-object __booleanFlow as DeepFrozenStamp:
+object _booleanFlow as DeepFrozenStamp:
     to broken():
         return Ref.broken("Boolean flow expression failed")
 
     to failureList(count :Int) :List:
-        return [false] + [__booleanFlow.broken()] * count
+        return [false] + [_booleanFlow.broken()] * count
 
 
 def [=> SubrangeGuard, => DeepFrozen] := import(
     "prelude/deepfrozen",
-    [=> __comparer, => __booleanFlow, => __makeVerbFacet,
-     => __validateFor, => __bind, => DeepFrozenStamp, => TransparentStamp,
+    [=> _comparer, => _booleanFlow, => _makeVerbFacet,
+     => _validateFor, => _bind,
+     => DeepFrozenStamp, => TransparentStamp,
      => Bool, => Char, => Double, => Int, => Str, => Void,
      => List, => Map, => NullOk, => Same, => Set,
      ])
@@ -636,12 +637,11 @@ var preludeScope := [
     => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
     => Int, => List, => Map, => NullOk, => Same, => Set, => Str,
     => SubrangeGuard, => Void,
-    => __mapEmpty, => __mapExtract,
-    => __accumulateList, => __accumulateMap, => __booleanFlow, => __iterWhile,
-    => __validateFor,
-    => __switchFailed, => __makeVerbFacet, => __comparer,
-    => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
-    => __splitList,
+    => _mapEmpty, => _mapExtract,
+    => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterWhile,
+    => _validateFor,
+    => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
+    => _matchSame, => _bind, => _quasiMatcher, => _splitList,
     => M, => import, => throw, => typhonEval,
 ]
 
@@ -690,7 +690,5 @@ preludeScope |= import("prelude/m", preludeScope)
 # The final scope exported from the prelude. This *must* be the final
 # expression in the module!
 preludeScope | [
-    "void" => Void,
-    "__mapEmpty" => Empty,
     => _flexMap,
 ]

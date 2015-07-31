@@ -2,12 +2,11 @@ def [=> UTF8] | _ := import("lib/codec/utf8",
                             [=> Bool, => Bytes, => Char, => Int, => List,
                              => Str,
                              => b__quasiParser,
-                             => bench, => __accumulateList,
-                             => __quasiMatcher, => __mapExtract,
-                             => __iterWhile, => __comparer,
-                             => __suchThat, => __switchFailed,
-                             => __matchSame, => __validateFor,
-                             => __makeVerbFacet, => __makeOrderedSpace])
+                             => bench, => _accumulateList, => _quasiMatcher,
+                             => _mapExtract, => _iterWhile, => _comparer,
+                             => _suchThat, => _switchFailed, => _matchSame,
+                             => _validateFor, => _makeVerbFacet,
+                             => _makeOrderedSpace])
 
 def astCodes := [
     "LiteralExpr" => 10,

@@ -4,14 +4,14 @@ def parserScope := [
     => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
     => Int, => List, => Map, => NullOk, => Same, => Set, => Str,
     => SubrangeGuard, => Void,
-    => __mapEmpty, => __mapExtract,
-    => __accumulateList, => __accumulateMap, => __booleanFlow, => __iterWhile,
-    => __validateFor,
-    => __switchFailed, => __makeVerbFacet, => __comparer,
-    => __suchThat, => __matchSame, => __bind, => __quasiMatcher,
+    => _mapEmpty, => _mapExtract,
+    => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterWhile,
+    => _validateFor,
+    => _switchFailed, => _makeVerbFacet, => _comparer,
+    => _suchThat, => _matchSame, => _bind, => _quasiMatcher,
     => M, => import, => throw, => typhonEval,
     => b__quasiParser, => simple__quasiParser, => term__quasiParser,
-    => __makeOrderedSpace, => bench, => astBuilder
+    => _makeOrderedSpace, => bench, => astBuilder
 ]
 
 def [=> makeMonteParser] | _ := import("lib/parsers/monte", parserScope)

@@ -2,7 +2,7 @@ def charSpace :DeepFrozen := OrderedSpaceMaker(Char, "Char")
 def intSpace :DeepFrozen := OrderedSpaceMaker(Int, "Int")
 def doubleSpace :DeepFrozen := OrderedSpaceMaker(Double, "Double")
 
-object __makeOrderedSpace extends OrderedSpaceMaker as DeepFrozen:
+object _makeOrderedSpace extends OrderedSpaceMaker as DeepFrozen:
     "Maker of ordered vector spaces.
 
      This object implements several Monte operators, including those which
@@ -31,7 +31,7 @@ object __makeOrderedSpace extends OrderedSpaceMaker as DeepFrozen:
          This is equivalent to (space ≥ `start`) ∪ (space < `bound`) for the
          ordered space containing `start` and `bound`."
 
-        def space := __makeOrderedSpace.spaceOfValue(start)
+        def space := _makeOrderedSpace.spaceOfValue(start)
         return (space >= start) & (space < bound)
 
     to op__thru(start, stop):
@@ -40,12 +40,12 @@ object __makeOrderedSpace extends OrderedSpaceMaker as DeepFrozen:
          This is equivalent to (space ≥ `start`) ∪ (space ≤ `bound`) for the
          ordered space containing `start` and `bound`."
 
-        def space := __makeOrderedSpace.spaceOfValue(start)
+        def space := _makeOrderedSpace.spaceOfValue(start)
         return (space >= start) & (space <= stop)
 
 [
     "Char" => charSpace,
     "Int" => intSpace,
     "Double" => doubleSpace,
-    => __makeOrderedSpace,
+    => _makeOrderedSpace,
 ]
