@@ -12,20 +12,42 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import time
+
 from typhon.atoms import getAtom
-from typhon.objects.data import promoteToDouble
+from typhon.autohelp import autohelp
+from typhon.errors import Refused
+from typhon.objects.data import DoubleObject, promoteToDouble
 from typhon.objects.refs import makePromise
-from typhon.objects.root import runnable
+from typhon.objects.root import Object
 from typhon.vats import currentVat
 
 
 FROMNOW_1 = getAtom(u"fromNow", 1)
+TRIAL_1 = getAtom(u"trial", 1)
 
 
-@runnable(FROMNOW_1)
-def Timer(args):
-    duration = promoteToDouble(args[0])
-    p, r = makePromise()
-    vat = currentVat.get()
-    vat._reactor.addTimer(duration, r)
-    return p
+@autohelp
+class Timer(Object):
+    """
+    An unsafe nondeterministic clock.
+
+    Use with caution.
+    """
+
+    def recv(self, atom, args):
+        if atom is FROMNOW_1:
+            duration = promoteToDouble(args[0])
+            p, r = makePromise()
+            vat = currentVat.get()
+            vat._reactor.addTimer(duration, r)
+            return p
+
+        if atom is TRIAL_1:
+            obj = args[0]
+            then = time.time()
+            obj.call(u"run", [])
+            now = time.time()
+            return DoubleObject(now - then)
+
+        raise Refused(self, atom, args)
