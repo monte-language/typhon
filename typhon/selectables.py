@@ -21,6 +21,7 @@ from rpython.rlib.rsignal import pypysig_poll, pypysig_set_wakeup_fd
 from rpython.rlib.rsocket import CSocketError, INETAddress, RSocket, _c
 
 from typhon.atoms import getAtom
+from typhon.errors import userError
 from typhon.objects.networking.sockets import SocketDrain, SocketFount
 from typhon.objects.networking.stdio import InputFount
 from typhon.vats import currentVat
@@ -335,6 +336,9 @@ class Socket(Selectable):
             if cse.errno == EADDRINUSE:
                 reactor = self.vat._reactor
                 self.error(reactor, u"Address is already in use")
+                # We haven't gotten started yet, so it'd probably be a mercy
+                # to our callers up above to get an error.
+                raise userError(u"Address is already in use")
             else:
                 raise
         else:
