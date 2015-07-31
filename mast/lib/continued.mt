@@ -76,6 +76,11 @@ def makeDigitExtractor(machine, base :Int):
 
 
 def makeMachine(feed):
+    "Make a machine for a generalized continued fraction.
+    
+     `feed` should be a stateful function which returns a [p, q] pair on every
+     call."
+
     var a :Int := 1
     var b :Int := 0
     var c :Int := 0
@@ -150,8 +155,37 @@ def makeMachine(feed):
             return makeDigitExtractor(machine, base)
 
 
+def makeRegularMachine(feed):
+    "Make a machine for a regular continued fraction.
+    
+     `feed` should be a stateful function which provides digits on every
+     call."
+
+    def generalFeed():
+        return [feed(), 1]
+
+    return makeMachine(generalFeed)
+
+
 object continued:
+    "Continued fraction arithmetic."
+
+    to phi():
+        "φ: The golden ratio.
+
+         φ is represented with the regular continued fraction [1; 1, 1, …]"
+
+        return makeRegularMachine(fn {1})
+
     to pi():
+        "π: The ratio of a circle's circumference to its diameter.
+        
+         The specific expansion used is:
+         π = 0 + 4/(1 + 1**2/(3 + 2**2/(5 + 3**2/(…))))
+         
+         This expansion converges linearly, gaining an additional digit of
+         precision for every iteration."
+
         # 0 + 4/(1 + 1**2/(3 + 2**2/(5 + 3**2/(...))))
         # Converges linearly, requires a force feeding at the beginning.
         var p := 1
@@ -172,6 +206,13 @@ object continued:
         return machine
 
 
+def testPhiDigits(assert):
+    def phi := continued.phi()
+    def extractor := phi.extractDigits(10)
+    # I don't have many digits of this memorized. :c
+    for digit in [1, 6, 1, 8]:
+        assert.equal(extractor.produceDigit(null), digit)
+
 def testPiDigits(assert):
     def pi := continued.pi()
     def extractor := pi.extractDigits(10)
@@ -179,13 +220,15 @@ def testPiDigits(assert):
     for digit in [3, 1, 4, 1, 5, 9, 2, 6]:
         assert.equal(extractor.produceDigit(null), digit)
 
-unittest([testPiDigits])
+unittest([
+    testPhiDigits,
+    testPiDigits,
+])
 
 
 def piBench():
     def pi := continued.pi().extractDigits(10)
     return [for _ in (0..!100) pi.produceDigit(null)]
-
 
 bench(piBench, "100 digits of pi")
 
