@@ -7,6 +7,14 @@ def [=> makeUTF8EncodePump, => makeUTF8DecodePump] | _ := import("lib/tubes/utf8
 def [=> makePumpTube] | _ := import("lib/tubes/pumpTube")
 
 def compile(config, inT, inputFile, outputFile):
+    "Compile a module and write it to an output file.
+
+     This function reads the entire input file into memory and completes all
+     of its compilation steps prior to opening and writing the output file.
+     This avoids the failure mode where the output file is corrupted by
+     incomplete data, as well as the failure mode where the output file is
+     truncated."
+
     var bytebuf := []
     def buf := [].diverge()
 
@@ -21,36 +29,37 @@ def compile(config, inT, inputFile, outputFile):
             traceln(`Fount aborted unexpectedly: $reason`)
 
         to flowStopped(reason):
-            traceln(`flowed!`)
-            # Our strategy here is to slurp the entire file into memory, and
-            # complete all of our transformative steps (each of which can
-            # fail) before we emit a file. This prevents trashing existing
-            # files with garbage or incomplete data.
-            escape e:
-                def tree := parseModule(makeMonteLexer("".join(buf), inputFile), astBuilder, e)
-            catch parseErrorMsg:
-                def stdout := makePumpTube(makeUTF8EncodePump())
-                stdout.flowTo(makeStdOut())
-                stdout.receive(parseErrorMsg)
-                throw("Syntax error")
+            traceln("Read in source file")
 
-            traceln(`parsed!`)
-            def expandedTree := expand(tree, astBuilder, throw)
-            traceln(`expanded!`)
+            var tree := null
+            def parseTime := Timer.trial(fn {
+                escape e {
+                    tree := parseModule(makeMonteLexer("".join(buf), inputFile),
+                                        astBuilder, e)
+                } catch parseErrorMsg {
+                    def stdout := makePumpTube(makeUTF8EncodePump())
+                    stdout.flowTo(makeStdOut())
+                    stdout.receive(parseErrorMsg)
+                    throw("Syntax error")
+                }
+            })
+            traceln(`Parsed source file (${parseTime}s)`)
 
-            def finalTree := if (config.useMixer()) {
-                def optimizedTree := optimize(expandedTree)
-                traceln("Optimized with mixer!")
-                optimizedTree
-            } else {expandedTree}
+            def expandTime := Timer.trial(fn {tree := expand(tree, astBuilder, throw)})
+            traceln(`Expanded source file (${expandTime}s)`)
+
+            if (config.useMixer()) {
+                def optimizeTime := Timer.trial(fn {tree := optimize(tree)})
+                traceln(`Optimized source file (${optimizeTime}s)`)
+            }
 
             var data := b``
-            dump(finalTree, fn stuff {data += stuff})
-            traceln(`dumped!`)
+            def dumpTime := Timer.trial(fn {dump(tree, fn stuff {data += stuff})})
+            traceln(`Dumped source file (${dumpTime}s)`)
 
             def outT := makeFileResource(outputFile).openDrain()
             outT.receive(data)
-            traceln("Wrote new file!")
+            traceln("Wrote out source file")
 
     inT.flowTo(tyDumper)
 
