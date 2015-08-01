@@ -40,6 +40,8 @@ CONTAINS_1 = getAtom(u"contains", 1)
 DIVERGE_0 = getAtom(u"diverge", 0)
 EXTEND_1 = getAtom(u"extend", 1)
 FETCH_2 = getAtom(u"fetch", 2)
+GETKEYS_0 = getAtom(u"getKeys", 0)
+GETVALUES_0 = getAtom(u"getValues", 0)
 GET_1 = getAtom(u"get", 1)
 INDEXOF_1 = getAtom(u"indexOf", 1)
 INDEXOF_2 = getAtom(u"indexOf", 2)
@@ -695,6 +697,12 @@ class ConstMap(Object):
             if rv is None:
                 rv = thunk.call(u"run", [])
             return rv
+
+        if atom is GETKEYS_0:
+            return ConstList(self.objectMap.keys())
+
+        if atom is GETVALUES_0:
+            return ConstList(self.objectMap.values())
 
         if atom is GET_1:
             key = args[0]
