@@ -729,7 +729,8 @@ def makeForwardExpr(patt, span):
         scope, "ForwardExpr", fn f {[patt.transform(f)]})
 
 def makeVarPattern(noun, guard, span):
-    def scope := makeStaticScope([], [], [], [noun.withoutSpan()], false)
+    def gs := scopeMaybe(guard)
+    def scope := makeStaticScope([], [], [], [noun.withoutSpan()], false) + gs
     object varPattern:
         to getNoun():
             return noun
