@@ -64,7 +64,7 @@ def makeMonteParser():
 
         to feedMany(tokens):
             try:
-                result := eval(tokens, environment)
+                result := M.toQuote(eval(tokens, environment))
             catch via (unsealException) [problem, trail]:
                 failure := `$problem`
                 # Discard the first line from the trail since it's always the
