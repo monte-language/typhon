@@ -268,10 +268,9 @@ class DoubleObject(Object):
             return DoubleObject(math.tan(self._d))
 
         if atom is TOBYTES_0:
-            from typhon.objects.collections import ConstList
             result = []
             pack_float(result, self._d, 8, True)
-            return ConstList([IntObject(ord(c)) for c in result[0]])
+            return BytesObject(result[0])
 
         raise Refused(self, atom, args)
 

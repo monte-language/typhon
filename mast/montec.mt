@@ -53,8 +53,11 @@ def compile(config, inT, inputFile, outputFile):
                 traceln(`Optimized source file (${optimizeTime}s)`)
             }
 
-            var data := b``
-            def dumpTime := Timer.trial(fn {dump(tree, fn stuff {data += stuff})})
+            var data := [].diverge()
+            def dumpTime := Timer.trial(fn {
+                dump(tree, fn stuff :Bytes {data.push(stuff)})
+                data := b``.join(data)
+            })
             traceln(`Dumped source file (${dumpTime}s)`)
 
             def outT := makeFileResource(outputFile).openDrain()

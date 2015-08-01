@@ -69,14 +69,17 @@ class Printer(Object):
             item = resolution(args[0])
             self._print(item)
             return NullObject
+
         if atom is PRINTLN_1:
             item = resolution(args[0])
             self.println(item)
             return NullObject
+
         if atom is LNPRINT_1:
             item = resolution(args[0])
             self.lnPrint(item)
             return NullObject
+
         if atom is QUOTE_1:
             item = resolution(args[0])
             if isinstance(item, CharObject) or isinstance(item, StrObject):
@@ -84,6 +87,7 @@ class Printer(Object):
             else:
                 self.objPrint(item)
             return NullObject
+
         if atom is INDENT_1:
             return self.indent(args[0])
 
