@@ -50,7 +50,8 @@ test: default
 	trial typhon
 	find mast/lib -name \*.ty -exec ./mt-typhon -l mast {} \;
 
-mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/netstring.ty \
+mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/record.ty \
+	mast/lib/netstring.ty \
 	mast/lib/regex.ty mast/lib/words.ty \
 	mast/lib/percent.ty \
 	mast/lib/continued.ty \
