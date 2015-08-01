@@ -151,5 +151,7 @@ class UnitTest(Object):
             except UserException as ue:
                 asserter.log(u"Caught exception: " +
                         ue.formatError().decode("utf-8"))
+            except Ejecting as ej:
+                asserter.log(u"Ejector tried to cross the unittest boundary")
         debug_print("Unit test output:")
         asserter.dump()
