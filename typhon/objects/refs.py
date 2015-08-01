@@ -37,6 +37,7 @@ ISNEAR_1 = getAtom(u"isNear", 1)
 ISRESOLVED_1 = getAtom(u"isResolved", 1)
 ISSELFISH_1 = getAtom(u"isSelfish", 1)
 ISSELFLESS_1 = getAtom(u"isSelfless", 1)
+OPTPROBLEM_1 = getAtom(u"optProblem", 1)
 PROMISE_0 = getAtom(u"promise", 0)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RESOLVE_2 = getAtom(u"resolve", 2)
@@ -111,6 +112,12 @@ class RefOps(Object):
         if atom is ISSELFLESS_1:
             return wrapBool(self.isSelfless(args[0]))
 
+        if atom is OPTPROBLEM_1:
+            ref = args[0]
+            if isinstance(ref, Promise):
+                return ref.optProblem()
+            return NullObject
+
         if atom is PROMISE_0:
             return self.promise()
 
@@ -169,11 +176,6 @@ class RefOps(Object):
             return ref.state() is BROKEN
         else:
             return False
-
-    def optProblem(self, ref):
-        if isinstance(ref, Promise):
-            return ref.problem
-        return NullObject
 
 #    def fulfillment(self, ref):
 #        ref = self.resolution(ref)
@@ -664,6 +666,9 @@ class UnconnectedRef(Promise):
 
     def state(self):
         return BROKEN
+
+    def optProblem(self):
+        return StrObject(self._problem)
 
     def resolutionRef(self):
         return self
