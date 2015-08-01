@@ -15,7 +15,7 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.env import finalize
-from typhon.errors import Refused
+from typhon.errors import LoadFailed, Refused, userError
 from typhon.importing import evaluateRaise, obtainModuleFromSource
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
@@ -89,9 +89,17 @@ class TyphonEval(Object):
             environment = {}
             for k, v in unwrapMap(args[1]).items():
                 environment[unwrapStr(k)] = v
-            code = obtainModuleFromSource(source, environment.keys(),
-                                          self.recorder, u"<eval>")
-            # Don't catch exceptions; on traceback, we'll have a trail
+
+            # *Do* catch this particular exception, as it is not a
+            # UserException and thus will kill the process (!!!) if allowed to
+            # propagate. ~ C.
+            try:
+                code = obtainModuleFromSource(source, environment.keys(),
+                                              self.recorder, u"<eval>")
+            except LoadFailed:
+                raise userError(u"Couldn't load invalid AST")
+
+            # Don't catch user exceptions; on traceback, we'll have a trail
             # auto-added that indicates that the exception came through
             # eval() or whatnot.
             return evaluateRaise([code], finalize(environment))
