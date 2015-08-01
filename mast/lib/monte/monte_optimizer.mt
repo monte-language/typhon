@@ -153,6 +153,7 @@ def safeScope :Map := [
     # => __makeMap,
     => _booleanFlow,
     => false,
+    => null,
     => true,
 ]
 
@@ -253,6 +254,10 @@ def weakenAllPatterns(ast, maker, args, span):
         match =="SeqExpr":
             def [var exprs] := args
 
+            # Took me a couple extra readthroughs to understand. This
+            # iteration is safe and `exprs` is altered during iteration but
+            # that doesn't change the iteration order, which is frozen once at
+            # the beginning of the loop. ~ C.
             for i => expr in exprs:
                 if (expr.getNodeName() == "DefExpr"):
                     var defPatt := expr.getPattern()
@@ -528,6 +533,8 @@ def freeze(ast, maker, args, span):
                                         [a.LiteralExpr(Ref.optProblem(broken),
                                                        span)],
                                         span)
+            match ==null:
+                return a.NounExpr("null", span)
             match b :Bool:
                 if (b):
                     return a.NounExpr("true", span)
