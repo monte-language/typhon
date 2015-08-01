@@ -139,9 +139,19 @@ def testSpecialize(assert):
 unittest([testSpecialize])
 
 
+# This is the list of objects which can be thawed and will not break things
+# when frozen later on. These objects must satisfy a few rules:
+# * Must be uncallable and the transitive uncall must be within the types that
+#   are serializable as literals. Currently:
+#   * Bool, Char, Int, Str;
+#   * List;
+#   * broken refs;
+#   * Anything in this list of objects; e.g. _booleanFlow is acceptable
+# * Must have a transitive closure (under calls) obeying the above rule.
 def safeScope :Map := [
     # => __makeList,
     # => __makeMap,
+    => _booleanFlow,
     => false,
     => true,
 ]
@@ -260,11 +270,30 @@ def weakenAllPatterns(ast, maker, args, span):
 
 
 def removeDeadEscapes(ast, maker, args, span):
+    "Remove escape-exprs that cannot have their ejectors fired."
 
     if (ast.getNodeName() == "EscapeExpr"):
         def [ejPatt, ejBody, catchPatt, catchBody] := args
         if (ejPatt.getNodeName() == "IgnorePattern"):
             return ejBody
+
+    return M.call(maker, "run", args + [span])
+
+
+def constantFoldIf(ast, maker, args, span):
+    "Constant-fold if-exprs."
+
+    if (ast.getNodeName() == "IfExpr"):
+        def [test, consequent, alternative] := args
+        if (test.getNodeName() == "LiteralExpr"):
+            escape wrongType:
+                def b :Bool exit wrongType := test.getValue()
+                if (b):
+                    return consequent
+                else:
+                    return alternative
+            catch err:
+                traceln(`Warning: If-expr test fails Bool guard: $err`)
 
     return M.call(maker, "run", args + [span])
 
@@ -387,20 +416,6 @@ def optimize(ast, maker, args, span):
                 def via (normalizeBody) cons ? (cons != null) exit failure := args[1]
                 def via (normalizeBody) alt ? (alt != null) exit failure := args[2]
 
-                # Two versions of this optimization, one for literals and one
-                # for nouns.
-                # m`if (true) {cons} else {alt}` -> m`cons`
-                if (test.getNodeName() == "LiteralExpr" &&
-                    test.getValue() =~ b :Bool):
-                    return (if (b) {cons} else {alt}).transform(optimize)
-
-                # m`if (true) {cons} else {alt}` -> m`cons`
-                if (test.getNodeName() == "NounExpr"):
-                    if (test.getName() <=> "true"):
-                        return cons.transform(optimize)
-                    else if (test.getName() <=> "false"):
-                        return alt.transform(optimize)
-
                 # m`if (test) {true} else {false}` -> m`test`
                 if (cons.getNodeName() == "NounExpr" &&
                     cons.getName() == "true"):
@@ -447,11 +462,6 @@ def optimize(ast, maker, args, span):
                                            alt.getRvalue(), span)
                         newIf transform= (optimize)
                         return a.AssignExpr(consNoun, newIf, span)
-
-        match =="MethodCallExpr":
-            def receiver := args[0]
-            def verb := args[1]
-            def arguments := args[2]
 
         match =="SeqExpr":
             # m`expr; noun; lastNoun` -> m`expr; lastNoun`
@@ -512,6 +522,12 @@ def freeze(ast, maker, args, span):
 
     if (ast.getNodeName() == "LiteralExpr"):
         switch (args[0]):
+            match broken ? (Ref.isBroken(broken)):
+                # Generate the uncall for broken refs by hand.
+                return a.MethodCallExpr(a.NounExpr("Ref", span), "broken",
+                                        [a.LiteralExpr(Ref.optProblem(broken),
+                                                       span)],
+                                        span)
             match b :Bool:
                 if (b):
                     return a.NounExpr("true", span)
@@ -520,6 +536,7 @@ def freeze(ast, maker, args, span):
             match _ :Any[Char, Double, Int, Str]:
                 return ast
             match l :List:
+                # Generate the uncall for lists by hand.
                 def newArgs := [for v in (l)
                                 a.LiteralExpr(v, span).transform(freeze)]
                 return a.MethodCallExpr(a.NounExpr("__makeList", span), "run",
@@ -534,6 +551,7 @@ def freeze(ast, maker, args, span):
                                                                span),
                                                  newVerb, wrappedArgs, span)
                     return call.transform(freeze)
+                traceln(`Warning: Couldn't freeze $obj: Bad uncall`)
 
     return M.call(maker, "run", args + [span])
 
@@ -542,6 +560,7 @@ def performOptimization(var ast):
     ast transform= (thaw)
     ast transform= (weakenAllPatterns)
     ast transform= (removeDeadEscapes)
+    ast transform= (constantFoldIf)
     # ast transform= (optimize)
     ast transform= (freeze)
     return ast
