@@ -8,6 +8,7 @@ def makeRecord(name :Str, fields :Map[Str, Any]):
     def fieldNames :List[Str] := fields.getKeys()
     def capitalizedNames :List[Str] := [for fieldName in (fieldNames)
                                         capitalize(fieldName)]
+    def checkSlug := capitalizedNames.indexOf
 
     interface Record guards RecordStamp:
         pass
@@ -27,14 +28,14 @@ def makeRecord(name :Str, fields :Map[Str, Any]):
                                   `$fieldName => ${M.toQuote(elements[i])}`]
                     out.print(`$name(${", ".join(parts)})`)
 
-                match [`get@slug` ? ((def i := capitalizedNames.indexOf(slug)) != -1),
+                match [`get@slug` ? ((def i := checkSlug(slug)) != -1),
                        []]:
                     elements[i]
 
-                # match [`with$slug` ? (def i := capitalizedNames.indexOf(slug) != -1),
-                #        [newValue :fields[fieldNames[i]]]]:
-                #     def newElements := elements.with(i, newValue)
-                #     recordMaker(newElements)
+                match [`with@slug` ? ((def i := checkSlug(slug)) != -1),
+                       [newValue :fields[fieldNames[i]]]]:
+                    def newElements := elements.with(i, newValue)
+                    M.call(recordMaker, "run", newElements)
 
     return [Record, recordMaker]
 
@@ -48,9 +49,9 @@ def testRecord(assert):
         assert.equal(M.toString(test), "Test(first => 42, second => 'm')")
         assert.equal(test.getFirst(), 42)
         assert.equal(test.getSecond(), 'm')
-        # def mutated :Test exit ej := test.withFirst(7)
-        # assert.equal(mutated.getFirst(), 7)
-        # assert.equal(mutated.getSecond(), 'm')
+        def mutated :Test exit ej := test.withFirst(7)
+        assert.equal(mutated.getFirst(), 7)
+        assert.equal(mutated.getSecond(), 'm')
     })
 
 unittest([testRecord])
