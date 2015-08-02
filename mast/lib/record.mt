@@ -25,15 +25,14 @@ def makeRecord(name :Str, fields :Map[Str, Any]):
             object record as RecordStamp:
                 "A record."
 
-                to _conformTo(guard):
-                    if (guard == Map):
-                        return elements
-                    return record
-
                 to _printOn(out):
                     def parts := [for i => fieldName in (fieldNames)
                                   `$fieldName => ${M.toQuote(elements[i])}`]
                     out.print(`$name(${", ".join(parts)})`)
+
+                to asMap():
+                    return [for i => element in (elements)
+                            fieldNames[i] => element]
 
                 match [`get@slug` ? ((def i := checkSlug(slug)) != -1),
                        []]:
@@ -46,9 +45,10 @@ def makeRecord(name :Str, fields :Map[Str, Any]):
 
     return [Record, recordMaker]
 
-def testRecord(assert):
-    def [Test, makeTest] := makeRecord("Test",
-                                       ["first" => Int, "second" => Char])
+# For testing purposes only.
+def [Test, makeTest] := makeRecord("Test", ["first" => Int, "second" => Char])
+
+def testRecordMutation(assert):
     # Yeah, I'm aware that this is a crime against ejectors. I don't care.
     # They had it coming. ~ C.
     assert.doesNotEject(fn ej {
@@ -61,10 +61,12 @@ def testRecord(assert):
         assert.equal(mutated.getSecond(), 'm')
     })
 
+def testRecordCreationGuard(assert):
     # The guards should kick in during creation.
     assert.throws(fn {def test := makeTest(42.0, 'm')})
     assert.throws(fn {def test := makeTest(42, "m")})
 
+def testRecordMutationGuard(assert):
     # The guard should also kick in when mutated.
     assert.throws(fn {
         def test := makeTest(42, 'm')
@@ -72,6 +74,15 @@ def testRecord(assert):
         def mutated := test.withFirst("invalid")
     })
 
-unittest([testRecord])
+def testRecordAsMap(assert):
+    def test := makeTest(42, 'm')
+    assert.equal(test.asMap(), ["first" => 42, "second" => 'm'])
+
+unittest([
+    testRecordMutation,
+    testRecordCreationGuard,
+    testRecordMutationGuard,
+    testRecordAsMap,
+])
 
 [=> makeRecord]
