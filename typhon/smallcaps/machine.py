@@ -56,10 +56,10 @@ class SmallCaps(object):
             missing = []
             for key in code.frame:
                 if key not in scope:
-                    missing.append(key)
+                    missing.append(u"%s (local)" % key)
             for key in code.globals:
                 if key not in scope:
-                    missing.append(key)
+                    missing.append(u"%s (global)" % key)
             message = u"Keys not in scope: %s" % u", ".join(missing)
             raise userError(message)
         return SmallCaps(code, frame, globals)
