@@ -1171,7 +1171,8 @@ class CodeScript(object):
             self.methodDocs[atom] = method._d
 
     def addMatcher(self, matcher, fqn):
-        compiler = Compiler(self.closureNames, self.globalNames, fqn=fqn)
+        compiler = Compiler(self.closureNames, self.globalNames,
+                            self.availableClosure, fqn=fqn)
         # [[verb, args] ej]
         matcher._pattern.compile(compiler)
         # []
