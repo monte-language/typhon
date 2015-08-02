@@ -27,9 +27,9 @@ def makeRecord(name :Str, fields :Map[Str, Any]):
                                   `$fieldName => ${M.toQuote(elements[i])}`]
                     out.print(`$name(${", ".join(parts)})`)
 
-                # match [`get$slug` ? (def i := capitalizedNames.indexOf(slug) != -1),
-                #        []]:
-                #     elements[i]
+                match [`get@slug` ? ((def i := capitalizedNames.indexOf(slug)) != -1),
+                       []]:
+                    elements[i]
 
                 # match [`with$slug` ? (def i := capitalizedNames.indexOf(slug) != -1),
                 #        [newValue :fields[fieldNames[i]]]]:
@@ -46,6 +46,8 @@ def testRecord(assert):
     assert.doesNotEject(fn ej {
         def test :Test exit ej := makeTest(42, 'm')
         assert.equal(M.toString(test), "Test(first => 42, second => 'm')")
+        assert.equal(test.getFirst(), 42)
+        assert.equal(test.getSecond(), 'm')
         # def mutated :Test exit ej := test.withFirst(7)
         # assert.equal(mutated.getFirst(), 7)
         # assert.equal(mutated.getSecond(), 'm')
