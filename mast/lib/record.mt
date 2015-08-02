@@ -6,15 +6,22 @@ def capitalize(s :Str) :Str:
 # XXX should be Map[Str, Guard]
 def makeRecord(name :Str, fields :Map[Str, Any]):
     def fieldNames :List[Str] := fields.getKeys()
+    def fieldGuards :List := fields.getValues()
     def capitalizedNames :List[Str] := [for fieldName in (fieldNames)
                                         capitalize(fieldName)]
     def checkSlug := capitalizedNames.indexOf
+
+    def checkElements(elts, ej):
+        if (elts.size() != fieldGuards.size()):
+            throw.eject(ej, "Wrong number of elements")
+
+        return [for i => elt in (elts) fieldGuards[i].coerce(elt, ej)]
 
     interface Record guards RecordStamp:
         pass
 
     object recordMaker:
-        match [=="run", elements ? (elements.size() == fields.size())]:
+        match [=="run", via (checkElements) elements]:
             object record as RecordStamp:
                 "A record."
 
@@ -52,6 +59,17 @@ def testRecord(assert):
         def mutated :Test exit ej := test.withFirst(7)
         assert.equal(mutated.getFirst(), 7)
         assert.equal(mutated.getSecond(), 'm')
+    })
+
+    # The guards should kick in during creation.
+    assert.throws(fn {def test := makeTest(42.0, 'm')})
+    assert.throws(fn {def test := makeTest(42, "m")})
+
+    # The guard should also kick in when mutated.
+    assert.throws(fn {
+        def test := makeTest(42, 'm')
+        # *This* is what we're testing.
+        def mutated := test.withFirst("invalid")
     })
 
 unittest([testRecord])
