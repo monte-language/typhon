@@ -115,17 +115,22 @@ object m__quasiParser extends makeLexerQP(makeQL, makeChunkingLexer("m``"),
      value. In the near future, this object will instead return a translucent
      view into a Monte compiler and optimizer."
 
-def eval(source :Str, environment):
-    "Evaluate a Monte source expression.
+object eval:
+    to run(source :Str, environment):
+        "Evaluate a Monte source expression.
 
-     The expression will be provided only the given environment. No other
-     values will be passed in."
-    def parser := makeMonteParser("<eval>")
-    parser.feedMany(source)
-    if (parser.failed()):
-        throw(parser.getFailure())
-    else:
-        def result := parser.dump()
-        return typhonEval(result, environment)
+         The expression will be provided only the given environment. No other
+         values will be passed in."
+
+        return eval.evalToPair(source, environment)[0]
+
+    to evalToPair(source :Str, environment):
+        def parser := makeMonteParser("<eval>")
+        parser.feedMany(source)
+        if (parser.failed()):
+            throw(parser.getFailure())
+        else:
+            def result := parser.dump()
+            return typhonEval.evalToPair(result, environment)
 
 [=> m__quasiParser, => eval]

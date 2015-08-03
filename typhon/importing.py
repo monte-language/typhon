@@ -17,7 +17,7 @@ from rpython.rlib.jit import dont_look_inside
 
 from typhon.errors import UserException
 from typhon.load import load
-from typhon.nodes import Sequence, compile
+from typhon.nodes import Sequence, interactiveCompile
 from typhon.objects.constants import NullObject
 from typhon.optimizer import optimize
 from typhon.smallcaps.machine import SmallCaps
@@ -45,14 +45,14 @@ def obtainModuleFromSource(source, inputScope, recorder, origin):
     # debug_print("Optimized node:", term.repr())
 
     with recorder.context("Compilation"):
-        code = compile(term, origin)
+        code, topLocals = interactiveCompile(term, origin)
     # debug_print("Compiled code:", code.disassemble())
 
     with recorder.context("Optimization"):
         peephole(code)
     # debug_print("Optimized code:", code.disassemble())
 
-    return code
+    return code, topLocals
 
 
 def obtainModule(path, inputScope, recorder):
@@ -62,12 +62,12 @@ def obtainModule(path, inputScope, recorder):
 
     debug_print("Importing:", path)
     source = open(path, "rb").read()
-    code = obtainModuleFromSource(source, inputScope, recorder, path.decode('utf-8'))
+    code = obtainModuleFromSource(source, inputScope, recorder,
+                                  path.decode('utf-8'))[0]
 
     # Cache.
     moduleCache.cache[path] = code
     return code
-
 
 
 def evaluateWithTraces(code, scope):
@@ -94,9 +94,11 @@ def evaluateRaise(codes, scope):
     Like evaluateTerms, but does not catch exceptions.
     """
 
+    env = None
     result = NullObject
     for code in codes:
         machine = SmallCaps.withDictScope(code, scope)
         machine.run()
         result = machine.pop()
-    return result
+        env = machine.env
+    return result, env
