@@ -14,12 +14,11 @@
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.env import finalize
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.importing import evaluateRaise, obtainModuleFromSource
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
-                                        unwrapMap)
+                                        monteDict, unwrapMap)
 from typhon.objects.constants import BoolObject, NullObject
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject,
@@ -27,6 +26,7 @@ from typhon.objects.data import (BigInt, BytesObject, CharObject,
 from typhon.objects.root import Object, runnable
 from typhon.prelude import registerGlobals
 
+EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 
@@ -77,6 +77,34 @@ def isSet(args):
     return wrapBool(isinstance(args[0], ConstSet))
 
 
+def evalToPair(source, envMap, recorder):
+    source = unwrapBytes(source)
+    environment = {}
+    for k, v in unwrapMap(envMap).items():
+        environment[unwrapStr(k)] = v
+
+    # *Do* catch this particular exception, as it is not a
+    # UserException and thus will kill the process (!!!) if allowed to
+    # propagate. ~ C.
+    try:
+        code, topLocals = obtainModuleFromSource(source, environment.keys(),
+                                                 recorder, u"<eval>")
+    except LoadFailed:
+        raise userError(u"Couldn't load invalid AST")
+
+    # Don't catch user exceptions; on traceback, we'll have a trail
+    # auto-added that indicates that the exception came through
+    # eval() or whatnot.
+    result, newEnv = evaluateRaise([code], environment)
+    if newEnv is not None:
+        d = monteDict()
+        for k, vi in topLocals.items():
+            d[StrObject(k)] = newEnv.local[vi]
+        addendum = ConstMap(d)
+        envMap = addendum._or(envMap)
+    return result, envMap
+
+
 @autohelp
 class TyphonEval(Object):
 
@@ -85,24 +113,10 @@ class TyphonEval(Object):
 
     def recv(self, atom, args):
         if atom is RUN_2:
-            source = unwrapBytes(args[0])
-            environment = {}
-            for k, v in unwrapMap(args[1]).items():
-                environment[unwrapStr(k)] = v
-
-            # *Do* catch this particular exception, as it is not a
-            # UserException and thus will kill the process (!!!) if allowed to
-            # propagate. ~ C.
-            try:
-                code = obtainModuleFromSource(source, environment.keys(),
-                                              self.recorder, u"<eval>")
-            except LoadFailed:
-                raise userError(u"Couldn't load invalid AST")
-
-            # Don't catch user exceptions; on traceback, we'll have a trail
-            # auto-added that indicates that the exception came through
-            # eval() or whatnot.
-            return evaluateRaise([code], finalize(environment))
+            return evalToPair(args[0], args[1], self.recorder)[0]
+        if atom is EVALTOPAIR_2:
+            result, envMap = evalToPair(args[0], args[1], self.recorder)
+            return ConstList([result, envMap])
 
         raise Refused(self, atom, args)
 

@@ -2,7 +2,7 @@
 
      This object will parse any Monte expression and return an opaque
      value. In the near future, this object will instead return a translucent
-     view into a Monte compiler and optimizer.;+#.m__quasiParser '! 2 ' '!4;+#&pair_1 .+#!M#,callWithPair'"+#%super+#&pair_11#­!Evaluate a Monte source expression.
+     view into a Monte compiler and optimizer.;+#.m__quasiParser '! 2 ' '!4;+#&pair_1 .+#!M#,callWithPair'"+#%super+#&pair_11 ;+#$eval '! 2 '"3#µ!Evaluate a Monte source expression.
 
-     The expression will be provided only the given environment. No other
-     values will be passed in.;+#$eval '! 2 '!3 ##run'";+#&source+##Str;+#+environment  0;+#(__return -'"-'#/;+#&parser  .+#/makeMonteParser##run'!*#&<eval>.+#&parser#(feedMany'!+#&source9.+#&parser#&failed' .+#%throw##run'!.+#&parser#*getFailure' -'"/;+#&result  .+#&parser#$dump' .+#(__return##run'!.+#*typhonEval##run'"+#&result+#+environment+#$null  ' .+#)__makeMap#)fromPairs'!.+#*__makeList##run'".+#*__makeList##run'"*#.m__quasiParser+#.m__quasiParser.+#*__makeList##run'"*#$eval+#$eval
+         The expression will be provided only the given environment. No other
+         values will be passed in.##run'";+#&source+##Str;+#+environment  0;+#(__return -'".+#(__return##run'!..+#$eval#*evalToPair'"+#&source+#+environment##get'!*& +#$null  3 #*evalToPair'";+#&source+##Str;+#+environment  0;+#(__return -'"-'#/;+#&parser  .+#/makeMonteParser##run'!*#&<eval>.+#&parser#(feedMany'!+#&source9.+#&parser#&failed' .+#%throw##run'!.+#&parser#*getFailure' -'"/;+#&result  .+#&parser#$dump' .+#(__return##run'!.+#*typhonEval#*evalToPair'"+#&result+#+environment+#$null  ' .+#)__makeMap#)fromPairs'!.+#*__makeList##run'".+#*__makeList##run'"*#.m__quasiParser+#.m__quasiParser.+#*__makeList##run'"*#$eval+#$eval

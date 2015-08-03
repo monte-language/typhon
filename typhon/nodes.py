@@ -196,6 +196,11 @@ def compile(node, origin):
     node.compile(compiler)
     return compiler.makeCode()
 
+def interactiveCompile(node, origin):
+    compiler = Compiler(fqn=origin)
+    node.compile(compiler)
+    return compiler.makeCode(), compiler.locals.map
+
 
 class InvalidAST(LoadFailed):
     """
