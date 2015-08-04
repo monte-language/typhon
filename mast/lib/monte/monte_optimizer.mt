@@ -39,13 +39,6 @@ def allSatisfy(pred, specimens) :Bool:
     return true
 
 
-def map(f, xs):
-    def rv := [].diverge()
-    for x in xs:
-        rv.push(f(x))
-    return rv.snapshot()
-
-
 def sequence(exprs, span):
     if (exprs.size() == 0):
         return a.LiteralExpr(null, span)
