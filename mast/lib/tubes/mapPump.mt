@@ -20,7 +20,7 @@ def makeMapPump(f):
         to received(item):
             return [f(item)]
 
-        to stopped():
+        to stopped(_):
             null
 
 [=> makeMapPump]

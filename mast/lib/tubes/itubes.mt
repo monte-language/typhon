@@ -18,7 +18,7 @@ interface Pump:
     to progressed(amount :Double):
         "To be honest, this method's on the chopping block."
 
-    to stopped():
+    to stopped(reason :Str):
         "Flow has stopped.
 
          Pumps should use this method to tear down any allocated resources

@@ -34,10 +34,14 @@ def makePumpTube(pump):
                 pumpTube.flush()
 
         to flowStopped(reason :Str):
+            pump.stopped(reason)
+
             if (downstream != null):
                 downstream.flowStopped(reason)
 
         to flowAborted(reason :Str):
+            pump.stopped(reason)
+
             if (downstream != null):
                 downstream.flowAborted(reason)
 

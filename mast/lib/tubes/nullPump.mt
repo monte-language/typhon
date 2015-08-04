@@ -19,7 +19,7 @@ object nullPump:
     to received(item):
         return []
 
-    to stopped():
+    to stopped(_):
         null
 
 [=> nullPump]

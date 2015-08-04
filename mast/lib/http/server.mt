@@ -36,7 +36,7 @@ def makeRequestPump():
         to progressed(amount):
             null
 
-        to stopped():
+        to stopped(_):
             null
 
         to received(bytes) :List:
@@ -117,7 +117,7 @@ def makeResponsePump():
         to progressed(amount):
             null
 
-        to stopped():
+        to stopped(_):
             null
 
         to received(response):
