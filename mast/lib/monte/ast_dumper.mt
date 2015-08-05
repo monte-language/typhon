@@ -89,11 +89,11 @@ def dump(item, write):
             for val in item:
                 dump(val, write)
         match _:
-            escape ej:
+            def [nodeMaker, _, arglist] := escape ej {
                 def [nodeMaker, _, arglist] exit ej := item._uncall()
-            catch failure:
+            } catch failure {
                 throw(`$item had a misbehaving _uncall: ${item._uncall()}`)
-
+            }
             def name := item.getNodeName()
             if (name == "MetaContextExpr"):
                 write(asciiShift([astCodes["Meta"]]))

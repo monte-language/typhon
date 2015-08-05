@@ -650,7 +650,7 @@ def expand(node, builder, fail):
                 builder.MethodCallExpr(builder.NounExpr("_bind", span),
                     "run", [builder.NounExpr(noun.getName() + "_Resolver", span), g],
                     span),
-                builder.FinalPattern(noun, null, span), span)
+                builder.IgnorePattern(null, span), span)
         else if (nodeName == "SlotPattern"):
             def [noun, guard] := args
             if (guard == null):
