@@ -24,6 +24,7 @@ from typhon.vats import currentVat
 
 
 FROMNOW_1 = getAtom(u"fromNow", 1)
+RESOLVE_1 = getAtom(u"resolve", 1)
 TRIAL_1 = getAtom(u"trial", 1)
 
 
@@ -48,6 +49,14 @@ class Timer(Object):
             then = time.time()
             obj.call(u"run", [])
             now = time.time()
-            return DoubleObject(now - then)
+
+            # We can't give the value up immediately, due to determinism
+            # requirements. Instead, provide it as a promise which will be
+            # available on subsequent turns.
+            rv = DoubleObject(now - then)
+            p, r = makePromise()
+            vat = currentVat.get()
+            vat.sendOnly(r, RESOLVE_1, [rv])
+            return p
 
         raise Refused(self, atom, args)
