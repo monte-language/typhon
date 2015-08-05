@@ -314,11 +314,6 @@ def makeIRCClient(handler):
                 return p
 
 
-def chain([var fount] + drains):
-    for drain in drains:
-        fount := fount<-flowTo(drain)
-    return fount
-
 def connectIRCClient(client, endpoint):
     endpoint.connect()
     def [fount, drain] := endpoint.connect()
