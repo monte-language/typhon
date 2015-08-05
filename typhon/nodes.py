@@ -1073,13 +1073,13 @@ class Obj(Node):
             else:
                 index = compiler.addGlobal(name)
                 compiler.addInstruction("BINDING_GLOBAL", index)
-        for stamp in reversed(self._implements):
-            stamp.compile(compiler)
         if self._as is None:
             index = compiler.addGlobal(u"null")
             compiler.addInstruction("NOUN_GLOBAL", index)
         else:
             self._as.compile(compiler)
+        for stamp in self._implements:
+            stamp.compile(compiler)
         index = compiler.addScript(self.codeScript)
         compiler.addInstruction("BINDOBJECT", index)
         if isinstance(self._n, IgnorePattern):

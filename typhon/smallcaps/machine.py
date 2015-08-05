@@ -79,6 +79,7 @@ class SmallCaps(object):
         script = self.code.script(scriptIndex)
         auditors = [self.pop() for _ in range(script.numAuditors)]
         assert len(auditors) == script.numAuditors
+        auditors.reverse()
         globals = [self.pop() for _ in range(promote(len(script.globalNames)))]
         globals.reverse()
         closure = [self.pop() for _ in range(promote(len(script.closureNames)))]
