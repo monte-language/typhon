@@ -14,14 +14,12 @@
 
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import dont_look_inside
-from rpython.rlib.listsort import TimSort
 
 from typhon.errors import UserException
 from typhon.load import load
 from typhon.nodes import Sequence, compile
 from typhon.objects.constants import NullObject
 from typhon.optimizer import optimize
-from typhon.scope import Scope
 from typhon.smallcaps.machine import SmallCaps
 from typhon.smallcaps.peephole import peephole
 
@@ -41,12 +39,6 @@ moduleCache = ModuleCache()
 def obtainModuleFromSource(source, inputScope, recorder, origin):
     with recorder.context("Deserialization"):
         term = Sequence(load(source)[:])
-
-    # Unshadow.
-    with recorder.context("Scope analysis"):
-        TimSort(inputScope).sort()
-        scope = Scope(inputScope)
-        term = term.rewriteScope(scope)
 
     with recorder.context("Optimization"):
         term = optimize(term)
