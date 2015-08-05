@@ -555,7 +555,11 @@ class NearRef(Promise):
         self.vat = vat
 
     def toString(self):
-        return u"<nearref: %s>" % self.target.toString()
+        # This used to say <nearref: %s> but that broke transparency since it
+        # was visible from Monte. ~ C.
+        # XXX It would be quite nice to be able to toggle the old behavior for
+        # debugging.
+        return self.target.toString()
 
     def hash(self):
         return self.target.hash()
