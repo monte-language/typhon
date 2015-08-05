@@ -30,7 +30,7 @@ from typhon.objects.iteration import loop
 from typhon.objects.guards import (anyGuard, FinalSlotGuardMaker,
                                    VarSlotGuardMaker)
 from typhon.objects.help import Help
-from typhon.objects.refs import RefOps
+from typhon.objects.refs import Promise, RefOps, resolution
 from typhon.objects.root import Object, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 from typhon.objects.tests import UnitTest
@@ -40,6 +40,7 @@ ASTYPE_0 = getAtom(u"asType", 0)
 BROKEN_0 = getAtom(u"broken", 0)
 CALLWITHPAIR_2 = getAtom(u"callWithPair", 2)
 CALL_3 = getAtom(u"call", 3)
+COERCE_2 = getAtom(u"coerce", 2)
 EJECT_2 = getAtom(u"eject", 2)
 FAILURELIST_1 = getAtom(u"failureList", 1)
 FROMBYTES_1 = getAtom(u"fromBytes", 1)
@@ -365,6 +366,22 @@ class VarSlotMaker(Object):
         raise Refused(self, atom, args)
 
 
+@runnable(COERCE_2)
+def nearGuard(args):
+    """
+    A guard over references to near values.
+    """
+
+    specimen = args[0]
+    ej = args[1]
+
+    specimen = resolution(specimen)
+    if isinstance(specimen, Promise):
+        msg = u"Specimen is in non-near state %s" % specimen.state().repr
+        throw(ej, StrObject(msg))
+    return specimen
+
+
 # Prebuild, since building on-the-fly floats from strings doesn't work in
 # RPython.
 Infinity = DoubleObject(float("inf"))
@@ -384,6 +401,7 @@ def safeScope():
 
         u"M": MObject(),
         u"Ref": RefOps(),
+        u"Near": nearGuard(),
         u"Selfless": selfless,
         u"__auditedBy": auditedBy(),
         u"__equalizer": Equalizer(),

@@ -25,9 +25,13 @@ from typhon.vats import currentVat
 
 
 class RefState(object):
-    pass
 
-BROKEN, EVENTUAL, NEAR = RefState(), RefState(), RefState()
+    def __init__(self, repr):
+        self.repr = repr
+
+BROKEN = RefState(u"BROKEN")
+EVENTUAL = RefState(u"EVENTUAL")
+NEAR = RefState(u"NEAR")
 
 BROKEN_1 = getAtom(u"broken", 1)
 ISBROKEN_1 = getAtom(u"isBroken", 1)
@@ -128,14 +132,7 @@ class RefOps(Object):
                 s = o.state()
             else:
                 s = NEAR
-
-            if s is EVENTUAL:
-                return StrObject(u"EVENTUAL")
-            if s is NEAR:
-                return StrObject(u"NEAR")
-            if s is BROKEN:
-                return StrObject(u"BROKEN")
-            return StrObject(u"UNKNOWN")
+            return StrObject(s.repr)
 
         if atom is WHENBROKEN_2:
             return self.whenBroken(args[0], args[1])
