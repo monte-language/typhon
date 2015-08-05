@@ -226,11 +226,14 @@ def parseMonte(lex, builder, mode, err):
                 def subexpr := expr(ej)
                 parts.push(builder.QuasiExprHole(subexpr, subexpr.getSpan()))
             else if (tname == "AT_IDENT"):
-                parts.push(builder.QuasiPatternHole(
-                               builder.FinalPattern(
-                                   builder.NounExpr(t.getData(), t.getSpan()),
-                                   null, t.getSpan()),
-                               t.getSpan()))
+                def patt := if (t.getData() == "_") {
+                    builder.IgnorePattern(null, t.getSpan())
+                } else {
+                    builder.FinalPattern(
+                        builder.NounExpr(t.getData(), t.getSpan()),
+                        null, t.getSpan())
+                }
+                parts.push(builder.QuasiPatternHole(patt, t.getSpan()))
             else if (tname == "@{"):
                 def subpatt := pattern(ej)
                 parts.push(builder.QuasiPatternHole(subpatt, subpatt.getSpan()))
