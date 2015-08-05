@@ -43,14 +43,16 @@ def compile(config, inT, inputFile, outputFile):
                     throw("Syntax error")
                 }
             })
-            traceln(`Parsed source file (${parseTime}s)`)
+            when (parseTime) ->
+                traceln(`Parsed source file (${parseTime}s)`)
 
             def expandTime := Timer.trial(fn {tree := expand(tree, astBuilder, throw)})
-            traceln(`Expanded source file (${expandTime}s)`)
+            when (expandTime) ->
+                traceln(`Expanded source file (${expandTime}s)`)
 
             if (config.useMixer()) {
                 def optimizeTime := Timer.trial(fn {tree := optimize(tree)})
-                traceln(`Optimized source file (${optimizeTime}s)`)
+                when (optimizeTime) -> {traceln(`Optimized source file (${optimizeTime}s)`)}
             }
 
             var data := [].diverge()
@@ -58,7 +60,8 @@ def compile(config, inT, inputFile, outputFile):
                 dump(tree, fn stuff :Bytes {data.push(stuff)})
                 data := b``.join(data)
             })
-            traceln(`Dumped source file (${dumpTime}s)`)
+            when (dumpTime) ->
+                traceln(`Dumped source file (${dumpTime}s)`)
 
             def outT := makeFileResource(outputFile).openDrain()
             outT.receive(data)
