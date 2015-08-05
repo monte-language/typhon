@@ -6,6 +6,17 @@ import inspect
 
 from typhon.atoms import Atom
 
+def harvest(cls, name):
+    """
+    The harvester is here to help AutoHelp.
+    """
+
+    if hasattr(cls, name):
+        func = getattr(cls, name).__func__
+        return func.__code__.co_names
+    else:
+        return ()
+
 def autohelp(cls):
     """
     AutoHelp is here to help.
@@ -14,8 +25,10 @@ def autohelp(cls):
     here to help.
     """
 
-    recv = cls.recv.__func__
-    names = recv.__code__.co_names
+    names = harvest(cls, "recv")
+    # Collections try to hide their atoms from AutoHelp. Collections will be
+    # harvested.
+    names += harvest(cls, "_recv")
 
     module = inspect.getmodule(cls)
     availableAtoms = inspect.getmembers(module,
