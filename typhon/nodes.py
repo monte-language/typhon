@@ -15,6 +15,7 @@
 from collections import OrderedDict
 
 from rpython.rlib.jit import elidable, elidable_promote
+from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
@@ -29,6 +30,61 @@ from typhon.pretty import Buffer, LineWriter
 from typhon.smallcaps.code import Code
 from typhon.smallcaps.ops import ops
 from typhon.smallcaps.peephole import peephole
+
+def lt0(a, b):
+    return a[0] < b[0]
+
+TimSort0 = make_timsort_class(lt=lt0)
+
+class LocalScope(object):
+    def __init__(self, parent):
+        self.map = OrderedDict()
+        self.children = []
+        self.parent = parent
+        if parent is not None:
+            self.offset = parent.getOffset()
+            parent.addChildScope(self)
+        else:
+            self.offset = 0
+
+    def size(self):
+        siz = len(self.map)
+        for ch in self.children:
+            siz += ch.size()
+        return siz
+
+    def getOffset(self):
+        return self.offset + self.size()
+
+    def addChildScope(self, child):
+        self.children.append(child)
+
+    def add(self, name):
+        i = self.getOffset()
+        if name in self.map:
+            raise InvalidAST(name.encode("utf-8") +
+                             " is already defined in this scope")
+        self.map[name] = i
+        return i
+
+    def find(self, name):
+        i = self.map.get(name, -1)
+        if i == -1:
+            if self.parent is not None:
+                return self.parent.find(name)
+        return i
+
+    def _nameList(self):
+        names = [(i, k) for k, i in self.map.items()]
+        for ch in self.children:
+            names.extend(ch._nameList())
+        return names
+
+    def nameList(self):
+        names = self._nameList()
+        TimSort0(names).sort()
+        assert [i for i, k in names] == range(len(names))
+        return [k for i, k in names]
 
 
 class Compiler(object):
@@ -58,15 +114,26 @@ class Compiler(object):
 
         self.atoms = OrderedDict()
         self.literals = OrderedDict()
-        self.locals = OrderedDict()
+        self.locals = LocalScope(None)
         self.scripts = []
+
+    def pushScope(self):
+        c = Compiler(initialFrame=self.frame, initialGlobals=self.globals,
+                     availableClosure=self.availableClosure, fqn=self.fqn)
+        c.instructions = self.instructions
+        c.atoms = self.atoms
+        c.literals = self.literals
+        c.locals = LocalScope(self.locals)
+        c.scripts = self.scripts
+
+        return c
 
     def makeCode(self):
         atoms = self.atoms.keys()
         frame = self.frame.keys()
         literals = self.literals.keys()
         globals = self.globals.keys()
-        locals = self.locals.keys()
+        locals = self.locals.nameList()
 
         code = Code(self.instructions, atoms, literals, globals, frame,
                     locals, self.scripts)
@@ -100,11 +167,6 @@ class Compiler(object):
         if literal not in self.literals:
             self.literals[literal] = len(self.literals)
         return self.literals[literal]
-
-    def addLocal(self, name):
-        if name not in self.locals:
-            self.locals[name] = len(self.locals)
-        return self.locals[name]
 
     def addScript(self, script):
         index = len(self.scripts)
@@ -164,13 +226,6 @@ class Node(object):
         """
 
         return f(self)
-
-    def rewriteScope(self, scope):
-        """
-        Rewrite the scope definitions by altering names.
-        """
-
-        return self
 
     def usesName(self, name):
         """
@@ -309,9 +364,6 @@ class Tuple(Node):
     def slowTransform(self, o):
         return ConstList([node.slowTransform(o) for node in self._t])
 
-    def rewriteScope(self, scope):
-        return Tuple([node.rewriteScope(scope) for node in self._t])
-
     def usesName(self, name):
         uses = False
         for node in self._t:
@@ -362,14 +414,6 @@ class Assign(Node):
                                Noun(self.target).slowTransform(o),
                                self.rvalue.slowTransform(o)])
 
-    def rewriteScope(self, scope):
-        # Read.
-        newTarget = scope.getShadow(self.target)
-        if newTarget is None:
-            newTarget = self.target
-        self = Assign(newTarget, self.rvalue.rewriteScope(scope))
-        return self
-
     def usesName(self, name):
         return self.rvalue.usesName(name)
 
@@ -383,9 +427,9 @@ class Assign(Node):
         # whether the name is already known to be local; if not, then it must
         # be in the outer frame. Unless it's not in there, in which case it
         # must be global.
-        if self.target in compiler.locals:
-            index = compiler.locals[self.target]
-            compiler.addInstruction("ASSIGN_LOCAL", index)
+        localIndex = compiler.locals.find(self.target)
+        if localIndex >= 0:
+            compiler.addInstruction("ASSIGN_LOCAL", localIndex)
             # [rvalue]
         elif compiler.canCloseOver(self.target):
             index = compiler.addFrame(self.target)
@@ -419,17 +463,10 @@ class Binding(Node):
         return o.call(u"run", [StrObject(u"BindingExpr"),
                                Noun(self.name).slowTransform(o)])
 
-    def rewriteScope(self, scope):
-        # Read.
-        newName = scope.getShadow(self.name)
-        if newName is not None:
-            self = Binding(newName)
-        return self
-
     def compile(self, compiler):
-        if self.name in compiler.locals:
-            index = compiler.addLocal(self.name)
-            compiler.addInstruction("BINDING_LOCAL", index)
+        localIndex = compiler.locals.find(self.name)
+        if localIndex >= 0:
+            compiler.addInstruction("BINDING_LOCAL", localIndex)
             # [binding]
         elif compiler.canCloseOver(self.name):
             index = compiler.addFrame(self.name)
@@ -480,10 +517,6 @@ class Call(Node):
                        self._target.slowTransform(o),
                        StrObject(self._verb),
                        self._args.slowTransform(o)])
-
-    def rewriteScope(self, scope):
-        return Call(self._target.rewriteScope(scope), self._verb,
-                    self._args.rewriteScope(scope))
 
     def usesName(self, name):
         return self._target.usesName(name) or self._args.usesName(name)
@@ -536,15 +569,6 @@ class Def(Node):
              (NullObject if self._e is None
               else self._e.slowTransform(o)),
              self._v.slowTransform(o)])
-
-    def rewriteScope(self, scope):
-        # Delegate to patterns.
-        p = self._p.rewriteScope(scope)
-        if self._e is None:
-            e = None
-        else:
-            e = self._e.rewriteScope(scope)
-        return Def(p, e, self._v.rewriteScope(scope))
 
     def usesName(self, name):
         rv = self._v.usesName(name)
@@ -611,24 +635,6 @@ class Escape(Node):
                        (NullObject if self._catchNode is None
                         else self._catchNode.slowTransform(o))])
 
-    def rewriteScope(self, scope):
-        with scope:
-            p = self._pattern.rewriteScope(scope)
-            n = self._node.rewriteScope(scope)
-
-        with scope:
-            if self._catchPattern is None:
-                cp = None
-            else:
-                cp = self._catchPattern.rewriteScope(scope)
-            if self._catchNode is None:
-                cn = None
-            else:
-                cn = self._catchNode.rewriteScope(scope)
-
-        rv = Escape(p, n, cp, cn)
-        return rv
-
     def usesName(self, name):
         rv = self._node.usesName(name)
         if self._catchNode is not None:
@@ -640,9 +646,10 @@ class Escape(Node):
         # [ej]
         compiler.literal(NullObject)
         # [ej null]
-        self._pattern.compile(compiler)
+        subc = compiler.pushScope()
+        self._pattern.compile(subc)
         # []
-        self._node.compile(compiler)
+        self._node.compile(subc)
         # [retval]
 
         if self._catchNode is not None:
@@ -653,9 +660,10 @@ class Escape(Node):
             # [retval]
             compiler.literal(NullObject)
             # [retval null]
-            self._catchPattern.compile(compiler)
+            subc2 = compiler.pushScope()
+            self._catchPattern.compile(subc2)
             # []
-            self._catchNode.compile(compiler)
+            self._catchNode.compile(subc2)
             # [retval]
             compiler.patch(jump)
         else:
@@ -687,25 +695,16 @@ class Finally(Node):
                                self._block.slowTransform(o),
                                self._atLast.slowTransform(o)])
 
-    def rewriteScope(self, scope):
-        with scope:
-            block = self._block.rewriteScope(scope)
-
-        with scope:
-            atLast = self._atLast.rewriteScope(scope)
-
-        rv = Finally(block, atLast)
-        return rv
-
     def usesName(self, name):
         return self._block.usesName(name) or self._atLast.usesName(name)
 
     def compile(self, compiler):
         unwind = compiler.markInstruction("UNWIND")
-        self._block.compile(compiler)
+        subc = compiler.pushScope()
+        self._block.compile(subc)
         handler = compiler.markInstruction("END_HANDLER")
         compiler.patch(unwind)
-        self._atLast.compile(compiler)
+        self._atLast.compile(subc)
         compiler.addInstruction("POP", 0)
         dropper = compiler.markInstruction("END_HANDLER")
         compiler.patch(handler)
@@ -731,19 +730,13 @@ class Hide(Node):
         return o.call(u"run", [StrObject(u"HideExpr"),
                                self._inner.slowTransform(o)])
 
-    def rewriteScope(self, scope):
-        with scope:
-            rv = Hide(self._inner.rewriteScope(scope))
-
-        return rv
-
     def usesName(self, name):
         # XXX not technically correct due to Hide intentionally altering
         # scope resolution.
         return self._inner.usesName(name)
 
     def compile(self, compiler):
-        self._inner.compile(compiler)
+        self._inner.compile(compiler.pushScope())
 
 
 class If(Node):
@@ -776,14 +769,6 @@ class If(Node):
                                self._then.slowTransform(o),
                                self._otherwise.slowTransform(o)])
 
-    def rewriteScope(self, scope):
-        with scope:
-            rv = If(self._test.rewriteScope(scope),
-                    self._then.rewriteScope(scope),
-                    self._otherwise.rewriteScope(scope))
-
-        return rv
-
     def usesName(self, name):
         rv = self._test.usesName(name) or self._then.usesName(name)
         return rv or self._otherwise.usesName(name)
@@ -794,13 +779,14 @@ class If(Node):
         # JUMP end
         # otherwise: ...
         # end: ...
-        self._test.compile(compiler)
+        subc = compiler.pushScope()
+        self._test.compile(subc)
         # [condition]
         branch = compiler.markInstruction("BRANCH")
-        self._then.compile(compiler)
+        self._then.compile(subc.pushScope())
         jump = compiler.markInstruction("JUMP")
         compiler.patch(branch)
-        self._otherwise.compile(compiler)
+        self._otherwise.compile(subc.pushScope())
         compiler.patch(jump)
 
 
@@ -829,13 +815,6 @@ class Matcher(Node):
         return o.call(u"run", [StrObject(u"Matcher"),
                                self._pattern.slowTransform(o),
                                self._block.slowTransform(o)])
-
-    def rewriteScope(self, scope):
-        with scope:
-            rv = Matcher(self._pattern.rewriteScope(scope),
-                         self._block.rewriteScope(scope))
-
-        return rv
 
 
 class Meta(Node):
@@ -912,15 +891,6 @@ class Method(Node):
                                NullObject if self._g is None else self._g.slowTransform(o),
                                self._b.slowTransform(o)])
 
-    def rewriteScope(self, scope):
-        with scope:
-            ps = [p.rewriteScope(scope) for p in self._ps]
-            rv = Method(self._d, self._verb, ps,
-                        self._g.rewriteScope(scope),
-                        self._b.rewriteScope(scope))
-
-        return rv
-
     def usesName(self, name):
         return self._b.usesName(name)
 
@@ -940,20 +910,13 @@ class Noun(Node):
     def pretty(self, out):
         out.write(self.name.encode("utf-8"))
 
-    def rewriteScope(self, scope):
-        # Read.
-        newName = scope.getShadow(self.name)
-        if newName is not None:
-            self = Noun(newName)
-        return self
-
     def usesName(self, name):
         return self.name == name
 
     def compile(self, compiler):
-        if self.name in compiler.locals:
-            index = compiler.addLocal(self.name)
-            compiler.addInstruction("NOUN_LOCAL", index)
+        localIndex = compiler.locals.find(self.name)
+        if localIndex >= 0:
+            compiler.addInstruction("NOUN_LOCAL", localIndex)
             # print "I think", self.name, "is local"
         elif compiler.canCloseOver(self.name):
             index = compiler.addFrame(self.name)
@@ -1024,16 +987,14 @@ class Obj(Node):
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"ObjectExpr"),
-                               NullObject if self._d is None else StrObject(self._d),
+                               (NullObject if self._d is None
+                                else StrObject(self._d)),
                                self._n.slowTransform(o),
-                               NullObject if self._as is None else self._as.slowTransform(o),
-                               ConstList([im.slowTransform(o) for im in  self._implements]),
+                               (NullObject if self._as is None
+                                else self._as.slowTransform(o)),
+                               ConstList([im.slowTransform(o)
+                                          for im in self._implements]),
                                self._script.slowTransform(o)])
-
-    def rewriteScope(self, scope):
-        # XXX as, implements
-        return Obj(self._d, self._n.rewriteScope(scope), self._as,
-                   self._implements, self._script.rewriteScope(scope))
 
     def usesName(self, name):
         return self._script.usesName(name)
@@ -1041,20 +1002,22 @@ class Obj(Node):
     def compile(self, compiler):
         # Create a code object for this object.
         availableClosure = compiler.frame.copy()
-        availableClosure.update(compiler.locals)
+        availableClosure.update(compiler.locals.map)
         numAuditors = len(self._implements) + 1
         oname = formatName(self._n)
         fqn = compiler.fqn + u"$" + oname
-        self.codeScript = CodeScript(oname, self, numAuditors, availableClosure, self._d, fqn)
+        self.codeScript = CodeScript(oname, self, numAuditors,
+                                     availableClosure, self._d, fqn)
         self.codeScript.addScript(self._script, fqn)
         # The local closure is first to be pushed and last to be popped.
         for name in self.codeScript.closureNames:
             if name == self.codeScript.displayName:
                 # Put in a null and patch it later via UserObject.patchSelf().
                 compiler.literal(NullObject)
-            elif name in compiler.locals:
-                index = compiler.addLocal(name)
-                compiler.addInstruction("BINDING_LOCAL", index)
+                continue
+            localIndex = compiler.locals.find(name)
+            if localIndex >= 0:
+                compiler.addInstruction("BINDING_LOCAL", localIndex)
             elif compiler.canCloseOver(name):
                 index = compiler.addFrame(name)
                 compiler.addInstruction("BINDING_FRAME", index)
@@ -1064,22 +1027,23 @@ class Obj(Node):
 
         # Globals are pushed after closure, so they'll be popped first.
         for name in self.codeScript.globalNames:
-            if name in compiler.locals:
-                index = compiler.addLocal(name)
-                compiler.addInstruction("BINDING_LOCAL", index)
+            localIndex = compiler.locals.find(name)
+            if localIndex >= 0:
+                compiler.addInstruction("BINDING_LOCAL", localIndex)
             elif compiler.canCloseOver(name):
                 index = compiler.addFrame(name)
                 compiler.addInstruction("BINDING_FRAME", index)
             else:
                 index = compiler.addGlobal(name)
                 compiler.addInstruction("BINDING_GLOBAL", index)
+        subc = compiler.pushScope()
         if self._as is None:
             index = compiler.addGlobal(u"null")
             compiler.addInstruction("NOUN_GLOBAL", index)
         else:
-            self._as.compile(compiler)
+            self._as.compile(subc)
         for stamp in self._implements:
-            stamp.compile(compiler)
+            stamp.compile(subc)
         index = compiler.addScript(self.codeScript)
         compiler.addInstruction("BINDOBJECT", index)
         if isinstance(self._n, IgnorePattern):
@@ -1087,14 +1051,14 @@ class Obj(Node):
             compiler.addInstruction("POP", 0)
             compiler.addInstruction("POP", 0)
         elif isinstance(self._n, FinalPattern):
-            slotIndex = compiler.addLocal(self._n._n)
+            slotIndex = compiler.locals.add(self._n._n)
             compiler.addInstruction("BINDFINALSLOT", slotIndex)
 
 
 class CodeScript(object):
 
-    _immutable_fields_ = ("displayName", "objectAst", "numAuditors", "closureNames",
-                          "globalNames")
+    _immutable_fields_ = ("displayName", "objectAst", "numAuditors",
+                          "closureNames", "globalNames")
 
     def __init__(self, displayName, objectAst, numAuditors, availableClosure,
                  doc, fqn):
@@ -1120,7 +1084,8 @@ class CodeScript(object):
 
     def makeObject(self, closure, globals, auditors):
         obj = ScriptObject(self, globals, self.globalNames, closure,
-                           self.closureNames, self.displayName, auditors, self.fqn)
+                           self.closureNames, self.displayName, auditors,
+                           self.fqn)
         return obj
 
     @elidable
@@ -1234,11 +1199,6 @@ class Script(Node):
                                ConstList([method.slowTransform(o)
                                           for method in self._methods])])
 
-    def rewriteScope(self, scope):
-        methods = [m.rewriteScope(scope) for m in self._methods]
-        matchers = [m.rewriteScope(scope) for m in self._matchers]
-        return Script(self._extends, methods, matchers)
-
     def usesName(self, name):
         for method in self._methods:
             if method.usesName(name):
@@ -1280,9 +1240,6 @@ class Sequence(Node):
         return o.call(u"run", [StrObject(u"SeqExpr"),
                                ConstList([node.slowTransform(o)
                                           for node in self._l])])
-
-    def rewriteScope(self, scope):
-        return Sequence([n.rewriteScope(scope) for n in self._l])
 
     def usesName(self, name):
         for node in self._l:
@@ -1331,26 +1288,17 @@ class Try(Node):
                                self._pattern.slowTransform(o),
                                self._then.slowTransform(o)])
 
-    def rewriteScope(self, scope):
-        with scope:
-            first = self._first.rewriteScope(scope)
-
-        with scope:
-            rv = Try(first, self._pattern.rewriteScope(scope),
-                     self._then.rewriteScope(scope))
-
-        return rv
-
     def usesName(self, name):
         return self._first.usesName(name) or self._then.usesName(name)
 
     def compile(self, compiler):
         index = compiler.markInstruction("TRY")
-        self._first.compile(compiler)
+        self._first.compile(compiler.pushScope())
         end = compiler.markInstruction("END_HANDLER")
         compiler.patch(index)
-        self._pattern.compile(compiler)
-        self._then.compile(compiler)
+        subc = compiler.pushScope()
+        self._pattern.compile(subc)
+        self._then.compile(subc)
         compiler.patch(end)
 
 
@@ -1382,16 +1330,8 @@ class BindingPattern(Pattern):
         return o.call(u"run", [StrObject(u"BindingPattern"),
                                Noun(self._noun).slowTransform(o)])
 
-    def rewriteScope(self, scope):
-        # Write.
-        if scope.getSeen(self._noun) != -1:
-            # Shadow.
-            shadowed = scope.shadowName(self._noun)
-            self = BindingPattern(Noun(shadowed))
-        return self
-
     def compile(self, compiler):
-        index = compiler.addLocal(self._noun)
+        index = compiler.locals.add(self._noun)
         compiler.addInstruction("POP", 0)
         compiler.addInstruction("BIND", index)
 
@@ -1416,19 +1356,6 @@ class FinalPattern(Pattern):
                                (NullObject if self._g is None
                                 else self._g.slowTransform(o))])
 
-    def rewriteScope(self, scope):
-        if self._g is None:
-            g = None
-        else:
-            g = self._g.rewriteScope(scope)
-
-        # Write.
-        if scope.getSeen(self._n) != -1:
-            # Shadow.
-            shadowed = scope.shadowName(self._n)
-            self = FinalPattern(Noun(shadowed), g)
-        return self
-
     def compile(self, compiler):
         # [specimen ej]
         if self._g is None:
@@ -1438,7 +1365,7 @@ class FinalPattern(Pattern):
         else:
             self._g.compile(compiler)
             # [specimen ej guard]
-        index = compiler.addLocal(self._n)
+        index = compiler.locals.add(self._n)
         compiler.addInstruction("BINDFINALSLOT", index)
         # []
 
@@ -1455,11 +1382,6 @@ class IgnorePattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
-
-    def rewriteScope(self, scope):
-        if self._g is None:
-            return self
-        return IgnorePattern(self._g.rewriteScope(scope))
 
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"IgnorePattern"),
@@ -1520,10 +1442,6 @@ class ListPattern(Pattern):
                                           for item in self._ps]),
                                NullObject])
 
-    def rewriteScope(self, scope):
-        ps = [p.rewriteScope(scope) for p in self._ps]
-        return ListPattern(ps)
-
     def compile(self, compiler):
         # [specimen ej]
         compiler.addInstruction("LIST_PATT", len(self._ps))
@@ -1553,19 +1471,6 @@ class VarPattern(Pattern):
                                (NullObject if self._g is None
                                 else self._g.slowTransform(o))])
 
-    def rewriteScope(self, scope):
-        if self._g is None:
-            g = None
-        else:
-            g = self._g.rewriteScope(scope)
-
-        # Write.
-        if scope.getSeen(self._n) != -1:
-            # Shadow.
-            shadowed = scope.shadowName(self._n)
-            self = VarPattern(Noun(shadowed), g)
-        return self
-
     def compile(self, compiler):
         # [specimen ej]
         if self._g is None:
@@ -1575,7 +1480,7 @@ class VarPattern(Pattern):
         else:
             self._g.compile(compiler)
             # [specimen ej guard]
-        index = compiler.addLocal(self._n)
+        index = compiler.locals.add(self._n)
         compiler.addInstruction("BINDVARSLOT", index)
 
 
@@ -1599,10 +1504,6 @@ class ViaPattern(Pattern):
         return o.call(u"run", [StrObject(u"ViaPattern"),
                                self._expr.slowTransform(o),
                                self._pattern.slowTransform(o)])
-
-    def rewriteScope(self, scope):
-        return ViaPattern(self._expr.rewriteScope(scope),
-                          self._pattern.rewriteScope(scope))
 
     def compile(self, compiler):
         # [specimen ej]
