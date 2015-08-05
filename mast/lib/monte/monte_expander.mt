@@ -70,6 +70,44 @@ def renameCycles(node, renamings, builder):
     return node.transform(renamer)
 
 
+def ifAnd(ast, maker, args, span):
+    "Expand and-expressions inside if-expressions."
+
+    if (ast.getNodeName() == "IfExpr"):
+        def [test, consequent, alternative] := args
+
+        if (test.getNodeName() == "AndExpr"):
+            def left := test.getLeft()
+            def right := test.getRight()
+
+            # The name occurrence check is not required.
+            return maker(left, maker(right, consequent, alternative, span),
+                         alternative, span)
+
+    return M.call(maker, "run", args + [span])
+
+
+def ifOr(ast, maker, args, span):
+    "Expand or-expressions inside if-expressions."
+
+    if (ast.getNodeName() == "IfExpr"):
+        def [test, consequent, alternative] := args
+
+        if (test.getNodeName() == "OrExpr"):
+            def left := test.getLeft()
+            def right := test.getRight()
+
+            # left must not define any name used by right; otherwise, if
+            # left's test fails, right's test will try to access undefined
+            # names.
+            if ((left.getStaticScope().outNames() &
+                 right.getStaticScope().namesUsed()).size() == 0):
+                return maker(left, consequent, maker(right, consequent,
+                                                     alternative, span), span)
+
+    return M.call(maker, "run", args + [span])
+
+
 def modPow(ast, maker, args, span):
     "Expand modular exponentation method calls."
 
@@ -84,7 +122,6 @@ def modPow(ast, maker, args, span):
 
     return M.call(maker, "run", args + [span])
 
-
 # Commented out since there's no global AST builder here at the moment. The
 # code worked fine when it was in monte_optimizer though. ~ C.
 # def testModPow(assert):
@@ -98,6 +135,7 @@ def modPow(ast, maker, args, span):
 #     assert.equal(ast.transform(modPow), result)
 #
 # unittest([testModPow])
+
 
 var ii := 0
 
@@ -895,9 +933,19 @@ def expand(node, builder, fail):
                 return M.call(builder, nodeName, args + [span])
         return tree.transform(renameTransformer)
 
-    var ast := reifyTemporaries(node.transform(expandTransformer))
+    var ast := node
 
-    # Finishing touches.
+    # Appetizers.
+
+    # Pre-expand certain simple if-expressions. The transformation isn't total
+    # but covers many easy cases and doesn't require temporaries.
+    ast transform= (ifAnd)
+    ast transform= (ifOr)
+
+    # The main course. Expand everything not yet expanded.
+    ast := reifyTemporaries(ast.transform(expandTransformer))
+
+    # Dessert.
 
     # "Expand" modular exponentation. There is extant Monte code which only
     # runs to completion in reasonable time when this transformation is
