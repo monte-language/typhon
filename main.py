@@ -16,11 +16,13 @@ import os
 import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
+from rpython.rlib import rsignal
 from rpython.rlib import rvmprof
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import JitHookInterface, set_user_param
 from rpython.rlib.rpath import rjoin
 
+from typhon import ruv
 from typhon.arguments import Configuration
 from typhon.env import finalize
 from typhon.errors import LoadFailed, UserException
@@ -33,7 +35,6 @@ from typhon.objects.imports import addImportToScope
 from typhon.objects.tests import TestCollector
 from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
-from typhon.reactor import Reactor
 from typhon.scopes.boot import bootScope
 from typhon.scopes.safe import safeScope
 from typhon.scopes.unsafe import unsafeScope
@@ -85,27 +86,30 @@ def loadPrelude(config, recorder, vat):
     return {}
 
 
-def runUntilDone(vatManager, reactor, recorder):
+def runUntilDone(vatManager, uv_loop, recorder):
     # This may take a while.
     anyVatHasTurns = vatManager.anyVatHasTurns()
-    while anyVatHasTurns or reactor.hasObjects():
-        # print "Vats:", vatManager.vats
+    while anyVatHasTurns or ruv.loopAlive(uv_loop):
         for vat in vatManager.vats:
             if vat.hasTurns():
-                # print "Vat", vat, "has some turns"
                 with scopedVat(vat) as vat:
                     with recorder.context("Time spent in vats"):
                         vat.takeSomeTurns()
 
-        anyVatHasTurns = vatManager.anyVatHasTurns()
-
-        if reactor.hasObjects():
+        if ruv.loopAlive(uv_loop):
             with recorder.context("Time spent in I/O"):
                 try:
-                    reactor.spin(anyVatHasTurns)
+                    if anyVatHasTurns:
+                        # More work to be done, so don't block.
+                        remaining = ruv.run(uv_loop, ruv.RUN_NOWAIT)
+                    else:
+                        # No more work to be done, so blocking is fine.
+                        remaining = ruv.run(uv_loop, ruv.RUN_ONCE)
                 except UserException as ue:
                     debug_print("Caught exception while reacting:",
                             ue.formatError())
+
+        anyVatHasTurns = vatManager.anyVatHasTurns()
 
 
 class profiling(object):
@@ -148,13 +152,21 @@ def entryPoint(argv):
     # Pass user configuration to the JIT.
     set_user_param(None, config.jit)
 
-    # Intialize our first vat.
-    reactor = Reactor()
-    reactor.usurpSignals()
+    # Intialize our loop.
+    uv_loop = ruv.alloc_loop()
+
+    # Usurp SIGPIPE, as libuv does not handle it.
+    rsignal.pypysig_ignore(rsignal.SIGPIPE)
+
+    # Initialize our first vat.
     vatManager = VatManager()
-    vat = Vat(vatManager, reactor)
+    vat = Vat(vatManager, uv_loop)
     vatManager.vats.append(vat)
 
+    # Update loop timing information. Until the loop really gets going, we
+    # have to do this ourselves in order to get the timing correct for early
+    # timers.
+    ruv.update_time(uv_loop)
     try:
         with scopedVat(vat) as vat:
             prelude = loadPrelude(config, recorder, vat)
@@ -187,6 +199,8 @@ def entryPoint(argv):
         benchmarkSettings.disable()
 
     with profiling("vmprof.log", config.profile):
+        # Update loop timing information.
+        ruv.update_time(uv_loop)
         debug_print("Taking initial turn in script...")
         result = NullObject
         with recorder.context("Time spent in vats"):
@@ -198,8 +212,10 @@ def entryPoint(argv):
         # Exit status code.
         rv = 0
 
+        # Update loop timing information.
+        ruv.update_time(uv_loop)
         try:
-            runUntilDone(vatManager, reactor, recorder)
+            runUntilDone(vatManager, uv_loop, recorder)
         except SystemExit as se:
             rv = se.code
         finally:

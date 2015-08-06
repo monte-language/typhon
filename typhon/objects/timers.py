@@ -14,11 +14,13 @@
 
 import time
 
+from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
+from typhon.objects.constants import NullObject
 from typhon.objects.data import DoubleObject, promoteToDouble
-from typhon.objects.refs import makePromise
+from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object
 from typhon.vats import currentVat
 
@@ -26,6 +28,13 @@ from typhon.vats import currentVat
 FROMNOW_1 = getAtom(u"fromNow", 1)
 RESOLVE_1 = getAtom(u"resolve", 1)
 TRIAL_1 = getAtom(u"trial", 1)
+
+
+def resolveTimer(uv_timer):
+    vat, resolver = ruv.unstashTimer(uv_timer)
+    print "Resolving timer on vat", vat, "with resolver", resolver
+    assert isinstance(resolver, LocalResolver)
+    resolver.resolve(NullObject)
 
 
 @autohelp
@@ -42,7 +51,12 @@ class Timer(Object):
             duration = promoteToDouble(args[0])
             p, r = makePromise()
             vat = currentVat.get()
-            vat._reactor.addTimer(duration, r)
+            uv_timer = ruv.alloc_timer(vat.uv_loop)
+            # Stash the resolver.
+            ruv.stashTimer(uv_timer, (vat, r))
+            # repeat of 0 means "don't repeat"
+            ruv.timerStart(uv_timer, resolveTimer, int(duration * 1000), 0)
+            assert ruv.isActive(uv_timer), "Timer isn't active!?"
             return p
 
         if atom is TRIAL_1:

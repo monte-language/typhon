@@ -12,17 +12,26 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import os
+
+from rpython.rlib.rarithmetic import intmask
+from rpython.rtyper.lltypesystem.lltype import scoped_alloc
+from rpython.rtyper.lltypesystem.rffi import charpsize2str
+
+from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapBytes, unwrapStr
-from typhon.objects.refs import makePromise
+from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object, runnable
-from typhon.vats import Callable, currentVat
+from typhon.vats import currentVat, scopedVat
 
 
+ABORTFLOW_0 = getAtom(u"abortFlow", 0)
 FLOWINGFROM_1 = getAtom(u"flowingFrom", 1)
+FLOWABORTED_1 = getAtom(u"flowAborted", 1)
 FLOWSTOPPED_1 = getAtom(u"flowStopped", 1)
 FLOWTO_1 = getAtom(u"flowTo", 1)
 GETCONTENTS_0 = getAtom(u"getContents", 0)
@@ -56,31 +65,26 @@ class FileUnpauser(Object):
         raise Refused(self, atom, args)
 
 
-class Read(Callable):
+def readCB(fs):
+    # Does *not* invoke user code.
+    try:
+        vat, fount = ruv.unstashFS(fs)
+        assert isinstance(fount, FileFount)
+        size = intmask(fs.c_result)
+        if size > 0:
+            data = charpsize2str(fount.buf.c_base, size)
+            fount.receive(data)
+        elif size < 0:
+            msg = ruv.formatError(size).decode("utf-8")
+            fount.abort(u"libuv error: %s" % msg)
+        else:
+            fount.stop(u"End of file")
+    except:
+        print "Exception in readCB"
 
-    def __init__(self, fount):
-        self.fount = fount
 
-    def call(self):
-        from typhon.objects.collections import EMPTY_MAP
-        # XXX What do you know about POSIX and file systems? This function is
-        # totally wrong and the wrongness isn't removable without
-        # rearchitecting a fair amount of reactor code. I apologize for doing
-        # it this way, but it is non-trivial and I don't know how I would fix
-        # it at this point in time. ~ C.
-        if not self.fount.pauses and self.fount.drain is not None:
-            # 16KiB reads. There is no justification for this; 4KiB seemed too
-            # small and 1MiB seemed too large.
-            buf = self.fount.handle.read(16384)
-            rv = BytesObject(buf)
-            vat = currentVat.get()
-            vat.sendOnly(self.fount.drain, RECEIVE_1, [rv], EMPTY_MAP)
-
-            if len(buf) < 16384:
-                # Short read; this will be the last chunk.
-                self.fount.close()
-            else:
-                self.fount.queueRead()
+def closeCB(fs):
+    pass
 
 
 @autohelp
@@ -90,9 +94,15 @@ class FileFount(Object):
     """
 
     pauses = 0
+    pos = 0
 
-    def __init__(self, handle):
-        self.handle = handle
+    def __init__(self, fs, fd, vat):
+        self.fs = fs
+        self.fd = fd
+        self.vat = vat
+
+        # XXX read size should be tunable
+        self.buf = ruv.allocBuf(16384)
 
     def recv(self, atom, args):
         if atom is FLOWTO_1:
@@ -105,19 +115,32 @@ class FileFount(Object):
             return self.pause()
 
         if atom is STOPFLOW_0:
-            vat = currentVat.get()
-            vat.afterTurn(Close(self.handle))
+            self.stop(u"stopFlow() called")
+            return NullObject
+
+        if atom is ABORTFLOW_0:
+            self.abort(u"abortFlow() called")
             return NullObject
 
         raise Refused(self, atom, args)
 
-    def close(self):
+    def stop(self, reason):
         from typhon.objects.collections import EMPTY_MAP
-        self.handle.close()
-        if self.drain is not None:
-            vat = currentVat.get()
-            vat.sendOnly(self.drain, FLOWSTOPPED_1,
-                         [StrObject(u"End of file")], EMPTY_MAP)
+        self.vat.sendOnly(self.drain, FLOWSTOPPED_1, [StrObject(reason)],
+                          EMPTY_MAP)
+        self.close()
+
+    def abort(self, reason):
+        from typhon.objects.collections import EMPTY_MAP
+        self.vat.sendOnly(self.drain, FLOWABORTED_1, [StrObject(reason)],
+                          EMPTY_MAP)
+        self.close()
+
+    def close(self):
+        uv_loop = self.vat.uv_loop
+        ruv.fsClose(uv_loop, self.fs, self.fd, closeCB)
+        ruv.freeBuf(self.buf)
+        self.drain = None
 
     def pause(self):
         self.pauses += 1
@@ -129,31 +152,34 @@ class FileFount(Object):
             self.queueRead()
 
     def queueRead(self):
-        vat = currentVat.get()
-        vat.afterTurn(Read(self))
+        ruv.stashFS(self.fs, (self.vat, self))
+        with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
+            bufs[0].c_base = self.buf.c_base
+            bufs[0].c_len = self.buf.c_len
+            ruv.fsRead(self.vat.uv_loop, self.fs, self.fd, bufs, 1, self.pos,
+                       readCB)
+
+    def receive(self, data):
+        from typhon.objects.collections import EMPTY_MAP
+        # Advance the file pointer.
+        self.pos += len(data)
+        self.vat.sendOnly(self.drain, RECEIVE_1, [BytesObject(data)],
+                          EMPTY_MAP)
+        self.queueRead()
 
 
-class Write(Callable):
-
-    def __init__(self, drain):
-        self.drain = drain
-
-    def call(self):
-        for chunk in self.drain.chunks:
-            self.drain.handle.write(chunk)
-
-        # Reuse the allocated list; we'll probably use around the same number
-        # of chunks per iteration.
-        del self.drain.chunks[:]
-
-
-class Close(Callable):
-
-    def __init__(self, handle):
-        self.handle = handle
-
-    def call(self):
-        self.handle.close()
+def writeCB(fs):
+    try:
+        vat, drain = ruv.unstashFS(fs)
+        assert isinstance(drain, FileDrain)
+        size = intmask(fs.c_result)
+        if size > 0:
+            drain.written(size)
+        elif size < 0:
+            msg = ruv.formatError(size).decode("utf-8")
+            drain.abort(u"libuv error: %s" % msg)
+    except:
+        print "Exception in writeCB"
 
 
 @autohelp
@@ -162,61 +188,98 @@ class FileDrain(Object):
     A drain for a file.
     """
 
-    def __init__(self, handle):
-        self.handle = handle
+    fount = None
+    pos = 0
+    writing = False
 
-        self.chunks = []
+    def __init__(self, fs, fd, vat):
+        self.fs = fs
+        self.fd = fd
+        self.vat = vat
+
+        self.bufs = []
 
     def recv(self, atom, args):
         if atom is FLOWINGFROM_1:
+            self.fount = args[0]
             return self
 
         if atom is RECEIVE_1:
             data = unwrapBytes(args[0])
 
-            # If this is the first time that we've received since last flush,
-            # then prepare to flush after the turn.
-            if not self.chunks:
-                vat = currentVat.get()
-                vat.afterTurn(Write(self))
+            self.bufs.append(data)
 
-            self.chunks.append(data)
+            if not self.writing:
+                # We're not writing right now, so queue a write.
+                ruv.stashFS(self.fs, (self.vat, self))
+                with ruv.scopedBufs(self.bufs) as bufs:
+                    ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
+                                len(self.bufs), self.pos, writeCB)
+
             return NullObject
 
         if atom is FLOWSTOPPED_1:
-            vat = currentVat.get()
-            vat.afterTurn(Close(self.handle))
+            ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
+            return NullObject
+
+        if atom is FLOWABORTED_1:
+            ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
             return NullObject
 
         raise Refused(self, atom, args)
 
+    def abort(self, reason):
+        print "Aborting file drain:", reason
+        if self.fount is not None:
+            with scopedVat(self.vat):
+                from typhon.objects.collections import EMPTY_MAP
+                self.vat.sendOnly(self.fount, ABORTFLOW_0, [], EMPTY_MAP)
 
-class GetContents(Callable):
+    def written(self, size):
+        self.pos += size
+        bufs = []
+        for buf in self.bufs:
+            if size >= len(buf):
+                size -= len(buf)
+            elif size == 0:
+                bufs.append(buf)
+            else:
+                assert size >= 0
+                bufs.append(buf[size:])
+                size = 0
+        self.bufs = bufs
 
-    def __init__(self, path, resolver):
-        self.path = path
-        self.resolver = resolver
 
-    def call(self):
-        with open(self.path, "rb") as handle:
-            s = handle.read()
+def openFountCB(fs):
+    # Does *not* run user-level code. The scoped vat is only for promise
+    # resolution.
+    try:
+        fd = intmask(fs.c_result)
+        vat, r = ruv.unstashFS(fs)
+        assert isinstance(r, LocalResolver)
+        with scopedVat(vat):
+            if fd < 0:
+                msg = ruv.formatError(fd).decode("utf-8")
+                r.smash(u"Couldn't open file fount: %s" % msg)
+            else:
+                r.resolve(FileFount(fs, fd, vat))
+    except:
+        print "Exception in openFountCB"
 
-        data = BytesObject(s)
-        self.resolver.resolve(data)
-
-
-class SetContents(Callable):
-
-    def __init__(self, path, data, resolver):
-        self.path = path
-        self.data = data
-        self.resolver = resolver
-
-    def call(self):
-        with open(self.path, "wb") as handle:
-            handle.write(self.data)
-
-        self.resolver.resolve(NullObject)
+def openDrainCB(fs):
+    # As above.
+    try:
+        fd = intmask(fs.c_result)
+        vat, r = ruv.unstashFS(fs)
+        assert isinstance(r, LocalResolver)
+        with scopedVat(vat):
+            if fd < 0:
+                msg = ruv.formatError(fd).decode("utf-8")
+                r.smash(u"Couldn't open file drain: %s" % msg)
+            else:
+                r.resolve(FileDrain(fs, fd, vat))
+    except:
+        print "Exception in openDrainCB"
 
 
 @autohelp
@@ -236,25 +299,48 @@ class FileResource(Object):
         self.path = path
 
     def recv(self, atom, args):
-        if atom is GETCONTENTS_0:
-            p, r = makePromise()
-            vat = currentVat.get()
-            vat.afterTurn(GetContents(self.path, r))
-            return p
+        # XXX this is racy.
+        # if atom is GETCONTENTS_0:
+        #     p, r = makePromise()
+        #     vat = currentVat.get()
+        #     uv_loop = vat.uv_loop
+        #     fs = ruv.alloc_fs()
 
-        if atom is SETCONTENTS_1:
-            data = unwrapBytes(args[0])
+        #     fd = ruv.fsOpen(uv_loop, fs, self.path, 0, os.O_RDONLY, None)
+        #     # XXX Ugh. We're going to stat() and then read from however large
+        #     # the stat() was. This is probably racy in a fundamental way.
+        #     ruv.fsRead(uv_loop, fs,
+        #     r.resolve()
+        #     return p
 
-            p, r = makePromise()
-            vat = currentVat.get()
-            vat.afterTurn(SetContents(self.path, data, r))
-            return p
+        # XXX lots of effort, no users in mast yet
+        # if atom is SETCONTENTS_1:
+        #     data = unwrapBytes(args[0])
+
+        #     p, r = makePromise()
+        #     vat = currentVat.get()
+        #     vat.afterTurn(SetContents(self.path, data, r))
+        #     return p
 
         if atom is OPENFOUNT_0:
-            return FileFount(open(self.path, "rb"))
+            p, r = makePromise()
+            vat = currentVat.get()
+            fs = ruv.alloc_fs()
+            ruv.stashFS(fs, (vat, r))
+            ruv.fsOpen(vat.uv_loop, fs, self.path, os.O_RDONLY, 0,
+                       openFountCB)
+            return p
 
         if atom is OPENDRAIN_0:
-            return FileDrain(open(self.path, "wb"))
+            p, r = makePromise()
+            vat = currentVat.get()
+            fs = ruv.alloc_fs()
+            ruv.stashFS(fs, (vat, r))
+            # Create the file if it doesn't yet exist. Trust the umask to be
+            # reasonable for now.
+            ruv.fsOpen(vat.uv_loop, fs, self.path, os.O_CREAT | os.O_WRONLY,
+                       0777, openDrainCB)
+            return p
 
         raise Refused(self, atom, args)
 

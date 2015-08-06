@@ -20,6 +20,7 @@ from typhon.objects.constants import unwrapBool, wrapBool
 from typhon.objects.data import (DoubleObject, IntObject, promoteToDouble,
                                  unwrapInt)
 from typhon.objects.refs import isResolved, makePromise, resolution
+from typhon.vats import scopedVat, testingVat
 
 
 def makeNear(o):
@@ -34,48 +35,56 @@ class TestIsResolved(TestCase):
         self.assertTrue(isResolved(IntObject(42)))
 
     def testSwitchableBecomesResolved(self):
-        p, r = makePromise()
-        self.assertFalse(isResolved(p))
+        with scopedVat(testingVat()):
+            p, r = makePromise()
+            self.assertFalse(isResolved(p))
 
-        r.resolve(IntObject(42))
-        self.assertTrue(isResolved(p))
+            r.resolve(IntObject(42))
+            self.assertTrue(isResolved(p))
 
     def testSwitchableChains(self):
-        p, r = makePromise()
-        p2, r2 = makePromise()
+        with scopedVat(testingVat()):
+            p, r = makePromise()
+            p2, r2 = makePromise()
 
-        r.resolve(p2)
-        self.assertFalse(isResolved(p))
+            r.resolve(p2)
+            self.assertFalse(isResolved(p))
 
-        r2.resolve(IntObject(42))
-        self.assertTrue(isResolved(p))
+            r2.resolve(IntObject(42))
+            self.assertTrue(isResolved(p))
 
 
 class TestRefs(TestCase):
 
     def testResolveNear(self):
-        p = makeNear(wrapBool(False))
-        self.assertFalse(resolution(p).isTrue())
+        with scopedVat(testingVat()):
+            p = makeNear(wrapBool(False))
+            self.assertFalse(resolution(p).isTrue())
 
 
 class TestUnwrappers(TestCase):
 
     def testPromoteToDoublePromise(self):
-        p = makeNear(DoubleObject(4.2))
-        self.assertAlmostEqual(promoteToDouble(p), 4.2)
+        with scopedVat(testingVat()):
+            p = makeNear(DoubleObject(4.2))
+            self.assertAlmostEqual(promoteToDouble(p), 4.2)
 
     def testUnwrapBoolPromise(self):
-        p = makeNear(wrapBool(False))
-        self.assertFalse(unwrapBool(p))
+        with scopedVat(testingVat()):
+            p = makeNear(wrapBool(False))
+            self.assertFalse(unwrapBool(p))
 
     def testUnwrapIntPromise(self):
-        p = makeNear(IntObject(42))
-        self.assertEqual(unwrapInt(p), 42)
+        with scopedVat(testingVat()):
+            p = makeNear(IntObject(42))
+            self.assertEqual(unwrapInt(p), 42)
 
     def testUnwrapListPromise(self):
-        p = makeNear(ConstList([]))
-        self.assertEqual(unwrapList(p), [])
+        with scopedVat(testingVat()):
+            p = makeNear(ConstList([]))
+            self.assertEqual(unwrapList(p), [])
 
     def testUnwrapMapPromise(self):
-        p = makeNear(ConstMap({}))
-        self.assertEqual(unwrapMap(p).items(), [])
+        with scopedVat(testingVat()):
+            p = makeNear(ConstMap({}))
+            self.assertEqual(unwrapMap(p).items(), [])

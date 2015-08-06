@@ -1,5 +1,7 @@
 from rpython.rlib import rgc
+from rpython.rlib.rerased import new_erasing_pair
 
+from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
@@ -9,13 +11,12 @@ from typhon.objects.root import Object
 from typhon.objects.user import ScriptObject
 
 
-GETALARMS_0 = getAtom(u"getAlarms", 0)
 GETBUCKETS_0 = getAtom(u"getBuckets", 0)
+GETHANDLES_0 = getAtom(u"getHandles", 0)
 GETHEAPSTATISTICS_0 = getAtom(u"getHeapStatistics", 0)
 GETMEMORYUSAGE_0 = getAtom(u"getMemoryUsage", 0)
 GETOBJECTCOUNT_0 = getAtom(u"getObjectCount", 0)
 GETREACTORSTATISTICS_0 = getAtom(u"getReactorStatistics", 0)
-GETSELECTABLES_0 = getAtom(u"getSelectables", 0)
 
 
 # The fun of GC management. This is all very subject to change and only works
@@ -103,23 +104,37 @@ def makeHeapStats():
 
 
 @autohelp
-class ReactorStats(Object):
+def LoopHandle(Object):
     """
-    Information about the reactor.
+    A handle.
+    """
+
+    def __init__(self, handle):
+        self.handle = handle
+
+def walkCB(handle, erased):
+    l = uneraseList(erased)
+    l.append(handle)
+
+eraseList, uneraseList = new_erasing_pair("handleList")
+
+@autohelp
+class LoopStats(Object):
+    """
+    Information about the event loop.
 
     This object is unsafe because it refers directly to the (read-only) vital
     statistics of the runtime's reactor.
     """
 
-    def __init__(self, reactor):
-        self.reactor = reactor
+    def __init__(self, loop):
+        self.loop = loop
 
     def recv(self, atom, args):
-        if atom is GETALARMS_0:
-            return IntObject(len(self.reactor.alarmQueue.heap))
-
-        if atom is GETSELECTABLES_0:
-            return IntObject(len(self.reactor._selectables))
+        if atom is GETHANDLES_0:
+            l = []
+            # ruv.walk(self.loop, walkCB, eraseList(l))
+            return ConstList([LoopHandle(h) for h in l])
 
         raise Refused(self, atom, args)
 
@@ -131,8 +146,8 @@ def makeReactorStats():
 
     # XXX what a hack
     from typhon.vats import currentVat
-    reactor = currentVat.get()._reactor
-    return ReactorStats(reactor)
+    loop = currentVat.get().uv_loop
+    return LoopStats(loop)
 
 
 @autohelp

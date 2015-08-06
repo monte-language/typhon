@@ -302,6 +302,7 @@ class WhenResolvedReactor(Object):
 class LocalResolver(Object):
 
     def __init__(self, ref, buf, vat):
+        assert vat is not None, "Vat cannot be None"
         self._ref = ref
         self._buf = buf
         self.vat = vat
@@ -565,6 +566,7 @@ class BufferingRef(Promise):
 class NearRef(Promise):
 
     def __init__(self, target, vat):
+        assert vat is not None, "Vat cannot be None"
         self.target = target
         self.vat = vat
 
@@ -615,6 +617,7 @@ class LocalVatRef(Promise):
     """
 
     def __init__(self, target, vat):
+        assert vat is not None, "Vat cannot be None"
         self.target = target
         self.vat = vat
 

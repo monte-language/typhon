@@ -27,22 +27,6 @@ SEED_1 = getAtom(u"seed", 1)
 SPROUT_1 = getAtom(u"sprout", 1)
 
 
-class Callable(object):
-    """
-    One of the ugliest hacks I've ever written.
-
-    RPython is not good. Today, RPython is not good in that RPython cannot
-    unify bound methods that are disjoint. This means that "zero-argument
-    callable" is not a possible type to achieve in RPython. I am very
-    disappointed.
-    """
-
-    def call(self):
-        """
-        Feel bad about life.
-        """
-
-
 @autohelp
 class Vat(Object):
     """
@@ -51,9 +35,10 @@ class Vat(Object):
 
     name = u"pa"
 
-    def __init__(self, manager, reactor, name=None):
+    def __init__(self, manager, uv_loop, name=None):
         self._manager = manager
-        self._reactor = reactor
+        self.uv_loop = uv_loop
+
         if name is not None:
             self.name = name
 
@@ -77,7 +62,7 @@ class Vat(Object):
 
         if atom is SPROUT_1:
             name = unwrapStr(args[0])
-            vat = Vat(self._manager, self._reactor, name)
+            vat = Vat(self._manager, self.uv_loop, name)
             self._manager.vats.append(vat)
             return vat
 
@@ -131,27 +116,6 @@ class Vat(Object):
                 result = target.callAtom(atom, args, namedArgs)
             resolver.resolve(result)
 
-    def afterTurn(self, callback):
-        """
-        After the current turn, run this callback.
-
-        The callback must guarantee that it will *not* take turns on the vat!
-
-        It is acceptable for the callback to queue more turns; in fact, it's
-        expected.
-        """
-
-        self._callbacks.append(callback)
-
-    def runCallbacks(self):
-        # Reallocate the callback list so that callbacks can queue more
-        # callbacks for after the next turn.
-        callbacks = self._callbacks
-        self._callbacks = []
-
-        for callback in callbacks:
-            callback.call()
-
     def takeSomeTurns(self):
         # Limit the number of continuous turns to keep network latency low.
         # It's possible that more turns will be queued while we're taking
@@ -164,10 +128,12 @@ class Vat(Object):
             except UserException as ue:
                 print "Caught exception while taking turn:", ue.formatError()
 
-        self.runCallbacks()
-
 
 currentVat = ThreadLocalReference(Vat)
+
+
+def testingVat():
+    return Vat(None, None, name="testing")
 
 
 class scopedVat(object):

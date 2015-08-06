@@ -21,6 +21,7 @@ from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, isSettled, optSame
 from typhon.objects.refs import makePromise
+from typhon.vats import scopedVat, testingVat
 
 
 class TestIsSettled(TestCase):
@@ -30,13 +31,15 @@ class TestIsSettled(TestCase):
         self.assertTrue(isSettled(i))
 
     def testPromise(self):
-        p, r = makePromise()
-        self.assertFalse(isSettled(p))
+        with scopedVat(testingVat()):
+            p, r = makePromise()
+            self.assertFalse(isSettled(p))
 
     def testPromiseResolved(self):
-        p, r = makePromise()
-        r.resolve(IntObject(42))
-        self.assertTrue(isSettled(p))
+        with scopedVat(testingVat()):
+            p, r = makePromise()
+            r.resolve(IntObject(42))
+            self.assertTrue(isSettled(p))
 
 
 class TestOptSame(TestCase):
@@ -110,17 +113,20 @@ class TestOptSame(TestCase):
         self.assertEqual(optSame(first, second), INEQUAL)
 
     def testRefEqualityReflexive(self):
-        p, r = makePromise()
-        self.assertEqual(optSame(p, p), EQUAL)
+        with scopedVat(testingVat()):
+            p, r = makePromise()
+            self.assertEqual(optSame(p, p), EQUAL)
 
     def testRefEquality(self):
-        first, r = makePromise()
-        second, r = makePromise()
-        self.assertEqual(optSame(first, second), NOTYET)
+        with scopedVat(testingVat()):
+            first, r = makePromise()
+            second, r = makePromise()
+            self.assertEqual(optSame(first, second), NOTYET)
 
     def testRefEqualitySettled(self):
-        first, r = makePromise()
-        r.resolve(IntObject(42))
-        second, r = makePromise()
-        r.resolve(IntObject(42))
-        self.assertEqual(optSame(first, second), EQUAL)
+        with scopedVat(testingVat()):
+            first, r = makePromise()
+            r.resolve(IntObject(42))
+            second, r = makePromise()
+            r.resolve(IntObject(42))
+            self.assertEqual(optSame(first, second), EQUAL)

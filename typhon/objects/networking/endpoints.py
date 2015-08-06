@@ -13,60 +13,47 @@
 # under the License.
 
 from rpython.rlib.jit import dont_look_inside
-from rpython.rlib.rsocket import INETAddress, RSocket
+from rpython.rlib.rarithmetic import intmask
 
+from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.collections import ConstList
+from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapInt, unwrapStr
-from typhon.objects.networking.sockets import SocketDrain
-from typhon.objects.refs import makePromise
+from typhon.objects.networking.streams import StreamDrain, StreamFount
+from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object, runnable
-from typhon.selectables import Socket
-from typhon.vats import Callable, currentVat
+from typhon.vats import currentVat
 
 
 CONNECT_0 = getAtom(u"connect", 0)
 LISTEN_1 = getAtom(u"listen", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
+SHUTDOWN_0 = getAtom(u"shutdown", 0)
 
 
-class TCP4ClientPending(Callable):
+def connectCB(connect, status):
+    status = intmask(status)
 
-    socket = None
-
-    def __init__(self, host, port):
-        self.host = host
-        self.port = port
-
-        self.fount, self.fountResolver = makePromise()
-        self.drain, self.drainResolver = makePromise()
-
-    def call(self):
-        # Hint: The following line is where GAI is called.
-        # XXX this should be IDNA, not UTF-8.
-        addr = INETAddress(self.host.encode("utf-8"), self.port)
-        vat = currentVat.get()
-        self.socket = Socket(RSocket(), vat)
-        self.socket.connect(addr, self)
-
-    def failSocket(self, reason):
-        self.fountResolver.smash(reason)
-        self.drainResolver.smash(reason)
-
-    def fulfillSocket(self):
-        """
-        Fulfill the sockets.
-        """
-
-        socket = self.socket
-        assert socket is not None, "Bad socket"
-
-        self.fountResolver.resolve(socket.createFount())
-        self.drainResolver.resolve(SocketDrain(socket))
+    try:
+        # XXX error handling?
+        stream = connect.c_handle
+        # Ugh, such hax.
+        vat, resolvers = ruv.unstashStream(stream)
+        fountResolver, drainResolver = unwrapList(resolvers)
+        assert isinstance(fountResolver, LocalResolver)
+        assert isinstance(drainResolver, LocalResolver)
+        if status >= 0:
+            fountResolver.resolve(StreamFount(stream, vat))
+            drainResolver.resolve(StreamDrain(stream, vat))
+        else:
+            fountResolver.smash(u"Connection failed")
+            drainResolver.smash(u"Connection failed")
+    except:
+        print "Exception in connectCB"
 
 
 @autohelp
@@ -89,10 +76,24 @@ class TCP4ClientEndpoint(Object):
         raise Refused(self, atom, args)
 
     def connect(self):
-        pending = TCP4ClientPending(self.host, self.port)
+        # XXX need to do name resolution too~
         vat = currentVat.get()
-        vat.afterTurn(pending)
-        return ConstList([pending.fount, pending.drain])
+        stream = ruv.alloc_tcp(vat.uv_loop)
+
+        fount, fountResolver = makePromise()
+        drain, drainResolver = makePromise()
+
+        # Ugh, the hax.
+        resolvers = ConstList([fountResolver, drainResolver])
+        ruv.stashStream(ruv.rffi.cast(ruv.stream_tp, stream),
+                        (vat, resolvers))
+
+        # Make the actual connection.
+        # XXX name resolution!!!
+        ruv.tcpConnect(stream, self.host.encode("utf-8"), self.port, connectCB)
+
+        # Return the promises.
+        return ConstList([fount, drain])
 
 
 @runnable(RUN_2)
@@ -104,6 +105,64 @@ def makeTCP4ClientEndpoint(args):
     host = unwrapStr(args[0])
     port = unwrapInt(args[1])
     return TCP4ClientEndpoint(host, port)
+
+
+def shutdownCB(shutdown, status):
+    try:
+        ruv.free(shutdown)
+        # print "Shut down server, status", status
+    except:
+        print "Exception in shutdownCB"
+
+
+@autohelp
+class TCP4Server(Object):
+    """
+    A TCPv4 listening server.
+    """
+
+    listening = True
+
+    def __init__(self, uv_server):
+        self.uv_server = uv_server
+
+    def toString(self):
+        return u"<server (IPv4, TCP)>"
+
+    def recv(self, atom, args):
+        if atom is SHUTDOWN_0:
+            if self.listening:
+                shutdown = ruv.alloc_shutdown()
+                ruv.shutdown(shutdown, ruv.rffi.cast(ruv.stream_tp,
+                                                     self.uv_server),
+                             shutdownCB)
+                self.listening = False
+                return NullObject
+
+        raise Refused(self, atom, args)
+
+
+def connectionCB(uv_server, status):
+    status = intmask(status)
+
+    # If the connection failed to complete, then whatever; we're a server, not
+    # a client, and this is a pretty boring do-nothing failure mode.
+    if status < 0:
+        return
+
+    try:
+        with ruv.unstashingStream(uv_server) as (vat, handler):
+            uv_client = ruv.rffi.cast(ruv.stream_tp,
+                                      ruv.alloc_tcp(vat.uv_loop))
+            # Actually accept the connection.
+            ruv.accept(uv_server, uv_client)
+            # Incant the handler.
+            from typhon.objects.collections import EMPTY_MAP
+            vat.sendOnly(handler, RUN_2, [StreamFount(uv_client, vat),
+                                          StreamDrain(uv_client, vat)],
+                         EMPTY_MAP)
+    except:
+        print "Exception in connectionCB"
 
 
 @autohelp
@@ -124,15 +183,17 @@ class TCP4ServerEndpoint(Object):
 
         raise Refused(self, atom, args)
 
-    @dont_look_inside
     def listen(self, handler):
         vat = currentVat.get()
-        socket = Socket(RSocket(), vat)
-        # XXX this shouldn't block, but not guaranteed
-        socket.listen(self.port, handler)
+        uv_server = ruv.alloc_tcp(vat.uv_loop)
+        ruv.tcpBind(uv_server, "0.0.0.0", self.port)
 
-        # XXX should a promise be returned here?
-        return NullObject
+        uv_stream = ruv.rffi.cast(ruv.stream_tp, uv_server)
+        ruv.stashStream(uv_stream, (vat, handler))
+        # XXX hardcoded backlog of 42
+        ruv.listen(uv_stream, 42, connectionCB)
+
+        return TCP4Server(uv_server)
 
 
 @runnable(RUN_1)
