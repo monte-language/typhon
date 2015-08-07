@@ -59,6 +59,7 @@ mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/record.ty \
 	mast/lib/cache.ty mast/lib/paths.ty \
 	mast/lib/amp.ty \
 	mast/lib/slow/exp.ty \
+	mast/lib/ansiColor.ty \
 	prelude \
 	codec \
 	entropy \

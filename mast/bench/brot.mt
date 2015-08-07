@@ -30,23 +30,22 @@ def brotCount(a) :Int:
     return i
 
 
-def getChar(count :Int) :Char:
-    def chars := "@#&%!*+-."
-    def range := chars.size()
+def getScaled(l, count :Int):
+    def range := l.size()
     def index := (count * range // ITERATIONS).min(range - 1)
-    return chars[index]
+    return l[index]
 
 
-def getColor(count :Int) :Str:
-    def colors := ["37", "32", "33", "31", "36", "35", "34"]
-    def range := colors.size()
-    def index := (count * range // ITERATIONS).min(range - 1)
-    return colors[index]
+def [=> ramp] | _ := import("lib/ansiColor")
+def chars := "@#&%!*+-."
+def colors := ["37", "32", "33", "31", "36", "35", "34"]
+def ramp80 := [for i in (ramp(80)) `38;5;$i`].reverse()
 
 
 def format(count :Int) :Str:
-    def c := getChar(count)
-    def color := getColor(count)
+    def c := getScaled(chars, count)
+    # def color := getScaled(colors, count)
+    def color := getScaled(ramp80, count)
     return `$\u001b[${color}m$c`
 
 
