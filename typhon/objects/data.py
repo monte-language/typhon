@@ -274,15 +274,12 @@ class DoubleObject(Object):
 
         raise Refused(self, atom, args)
 
-    @elidable
     def add(self, other):
         return DoubleObject(self._d + promoteToDouble(other))
 
-    @elidable
     def mul(self, other):
         return DoubleObject(self._d * promoteToDouble(other))
 
-    @elidable
     def subtract(self, other):
         return DoubleObject(self._d - promoteToDouble(other))
 
