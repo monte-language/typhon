@@ -21,7 +21,7 @@ from typhon.nodes import (Assign, Binding, BindingPattern, Call, Char, Def,
                           Double, Escape, FinalPattern, Finally, Hide, If,
                           Int, IgnorePattern, ListPattern, Matcher, Meta,
                           Method, Noun, Null, Obj, Script, Sequence, Str, Try,
-                          Tuple, VarPattern, ViaPattern)
+                          Tuple, VarPattern, ViaPattern, NamedParam)
 
 
 # The largest tuple arity that we'll willingly decode.
@@ -143,6 +143,7 @@ patternInfo = {
     30: 'List',
     31: 'Via',
     32: 'Binding',
+    34: 'NamedParam',
 }
 
 
@@ -190,6 +191,10 @@ def loadPattern(stream):
 
     elif tag == "Via":
         return ViaPattern(loadTerm(stream), loadPattern(stream))
+
+    elif tag == "NamedParam":
+        return NamedParam(loadTerm(stream), loadPattern(stream),
+                          loadTerm(stream))
 
     raise LoadFailed("Unknown pattern tag %s (implementation error)" % tag)
 
@@ -292,12 +297,13 @@ def loadTerm(stream):
         return Meta(loadTerm(stream))
 
     elif tag == "Method":
-        return Method.fromAST(loadTerm(stream), loadTerm(stream),
-                loadPatternList(stream), loadTerm(stream), loadTerm(stream))
+        return Method.fromAST(
+            loadTerm(stream), loadTerm(stream), loadPatternList(stream),
+            loadPatternList(stream), loadTerm(stream), loadTerm(stream))
 
     elif tag == "MethodCallExpr":
         return Call.fromAST(loadTerm(stream), loadTerm(stream),
-                            loadTerm(stream))
+                            loadTerm(stream), loadTerm(stream))
 
     elif tag == "NounExpr":
         return Noun.fromAST(loadTerm(stream))

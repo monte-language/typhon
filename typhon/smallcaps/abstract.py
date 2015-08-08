@@ -20,7 +20,9 @@ from typhon.smallcaps.ops import (DUP, ROT, POP, SWAP, ASSIGN_FRAME,
                                   BINDING_FRAME, BINDING_GLOBAL,
                                   BINDING_LOCAL, LIST_PATT, LITERAL,
                                   BINDOBJECT, SCOPE, EJECTOR, TRY, UNWIND,
-                                  END_HANDLER, BRANCH, CALL, JUMP)
+                                  END_HANDLER, BRANCH, CALL, CALL_MAP,
+                                  BUILD_MAP, JUMP, NAMEDARG_EXTRACT,
+                                  NAMEDARG_EXTRACT_OPTIONAL)
 
 
 class AbstractInterpreter(object):
@@ -106,9 +108,21 @@ class AbstractInterpreter(object):
         elif instruction == BRANCH:
             self.pop()
             self.addBranch(index)
+        elif instruction == BUILD_MAP:
+            self.pop(index * 2)
+            self.push()
+        elif instruction == NAMEDARG_EXTRACT:
+            self.pop(2)
+            self.push()
+        elif instruction == NAMEDARG_EXTRACT_OPTIONAL:
+            self.pop(2)
+            self.push()
+            self.addBranch(index)
         elif instruction == CALL:
-            self.pop(self.code.atoms[index].arity)
-            self.pop()
+            self.pop(self.code.atoms[index].arity + 1)
+            self.push()
+        elif instruction == CALL_MAP:
+            self.pop(self.code.atoms[index].arity + 2)
             self.push()
         elif instruction == JUMP:
             self.addBranch(index)

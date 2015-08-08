@@ -19,7 +19,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import deepFrozenStamp, selfless, transparentStamp
-from typhon.objects.collections import ConstList, unwrapList
+from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
@@ -179,6 +179,13 @@ def optSame(first, second, cache=None):
                 return INEQUAL
         return EQUAL
 
+    if isinstance(first, ConstMap):
+        if not isinstance(second, ConstMap):
+            return INEQUAL
+        if len(first.objectMap) == 0 and len(second.objectMap) == 0:
+            return EQUAL
+        # Fall through to uncall-based comparison.
+
     # We've eliminated all objects that can be compared on first principles, now
     # we need the specimens to cooperate with further investigation.
 
@@ -256,11 +263,15 @@ def samenessHash(obj, depth, path, fringe):
             result ^= i ^ samenessHash(x, depth - 1, fr, fringe)
         return result
 
+    # The empty map. (Uncalls contain maps, thus this base case.)
+    if isinstance(o, ConstMap) and len(o.objectMap) == 0:
+        return 127
+
     # Other objects compared by structure.
     if selfless in o.stamps:
         if transparentStamp in o.stamps:
             return samenessHash(o.call(u"_uncall", []), depth, path, fringe)
-        #XXX Semitransparent support goes here
+        # XXX Semitransparent support goes here
 
     # Objects compared by identity.
     if isResolved(o):
@@ -297,7 +308,8 @@ def samenessFringe(original, path, fringe, sofar=None):
             if (not result) and fringe is None:
                 # Unresolved promise found.
                 return False
-
+    if isinstance(o, ConstMap) and len(o.objectMap) == 0:
+        return True
     if (isinstance(o, BoolObject) or isinstance(o, CharObject)
         or isinstance(o, DoubleObject) or isinstance(o, IntObject)
         or isinstance(o, BigInt) or isinstance(o, StrObject)
@@ -307,7 +319,7 @@ def samenessFringe(original, path, fringe, sofar=None):
     if selfless in o.stamps:
         if transparentStamp in o.stamps:
             return samenessFringe(o.call(u"_uncall", []), path, fringe, sofar)
-        #XXX Semitransparent support goes here
+        # XXX Semitransparent support goes here
 
     if isResolved(o):
         return True

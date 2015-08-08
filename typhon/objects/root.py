@@ -94,20 +94,22 @@ class Object(object):
 
         return compute_identity_hash(self)
 
-    def call(self, verb, arguments):
+    def call(self, verb, arguments, namedArgs=None):
         """
         Pass a message immediately to this object.
         """
-
+        from typhon.objects.collections import EMPTY_MAP
+        if namedArgs is None:
+            namedArgs = EMPTY_MAP
         arity = len(arguments)
         atom = getAtom(verb, arity)
-        return self.callAtom(atom, arguments)
+        return self.callAtom(atom, arguments, namedArgs)
 
-    def callAtom(self, atom, arguments):
+    def callAtom(self, atom, arguments, namedArgsMap):
         """
         This method is used to reuse atoms without having to rebuild them.
         """
-
+        from typhon.objects.collections import EMPTY_MAP
         # Promote the atom, on the basis that atoms are generally reused.
         atom = promote(atom)
         # Log the atom to the JIT log. Don't do this if the atom's not
@@ -115,7 +117,7 @@ class Object(object):
         jit_debug(atom.repr)
 
         try:
-            return self.recv(atom, arguments)
+            return self.recvNamed(atom, arguments, namedArgsMap)
         except Refused as r:
             # This block of method implementations is Typhon's Miranda
             # protocol. ~ C.
@@ -156,7 +158,7 @@ class Object(object):
                 # to _whenMoreResolved(callback): callback<-(self)
                 from typhon.vats import currentVat
                 vat = currentVat.get()
-                vat.sendOnly(arguments[0], RUN_1, [self])
+                vat.sendOnly(arguments[0], RUN_1, [self], EMPTY_MAP)
                 from typhon.objects.constants import NullObject
                 return NullObject
 
@@ -175,6 +177,9 @@ class Object(object):
             ue = userError(u"Stack overflow")
             addTrail(ue, self, atom, arguments)
             raise ue
+
+    def recvNamed(self, atom, args, namedArgs):
+        return self.recv(atom, args)
 
     def recv(self, atom, args):
         raise Refused(self, atom, args)

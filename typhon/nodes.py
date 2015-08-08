@@ -38,6 +38,8 @@ from typhon.smallcaps.peephole import peephole
 
 ADD_1 = getAtom(u"add", 1)
 GETDEFNAMES_0 = getAtom(u"getDefNames", 0)
+GETDEFAULT_1 = getAtom(u"getDefault", 1)
+GETKEY_0 = getAtom(u"getKey", 0)
 GETMETASTATEEXPRFLAG_0 = getAtom(u"getMetaStateExprFlag", 0)
 GETMETHODNAMED_2 = getAtom(u"getMethodNamed", 2)
 GETMETHODS_0 = getAtom(u"getMethods", 0)
@@ -45,6 +47,7 @@ GETNAMESREAD_0 = getAtom(u"getNamesRead", 0)
 GETNAMESSET_0 = getAtom(u"getNamesSet", 0)
 GETNAME_0 = getAtom(u"getName", 0)
 GETNODENAME_0 = getAtom(u"getNodeName", 0)
+GETPATTERN_0 = getAtom(u"getPattern", 0)
 GETPATTERNS_0 = getAtom(u"getPatterns", 0)
 GETRESULTGUARD_0 = getAtom(u"getResultGuard", 0)
 GETSCRIPT_0 = getAtom(u"getScript", 0)
@@ -61,6 +64,7 @@ def lt0(a, b):
     return a[0] < b[0]
 
 TimSort0 = make_timsort_class(lt=lt0)
+
 
 class LocalScope(object):
     def __init__(self, parent):
@@ -211,6 +215,11 @@ class Compiler(object):
         atom = self.addAtom(verb, arity)
         self.addInstruction("CALL", atom)
 
+    def callMap(self, verb, arity, lenNamedArgs):
+        atom = self.addAtom(verb, arity)
+        self.addInstruction("BUILD_MAP", lenNamedArgs)
+        self.addInstruction("CALL_MAP", atom)
+
     def markInstruction(self, name):
         index = len(self.instructions)
         self.addInstruction(name, 0)
@@ -225,6 +234,7 @@ def compile(node, origin):
     compiler = Compiler(fqn=origin)
     node.compile(compiler)
     return compiler.makeCode()
+
 
 def interactiveCompile(node, origin):
     compiler = Compiler(fqn=origin)
@@ -696,15 +706,25 @@ class Call(Expr):
 
     _immutable_ = True
 
-    def __init__(self, target, verb, args):
+    def __init__(self, target, verb, args, namedArgs):
         self._target = target
         self._verb = verb
-        assert isinstance(args, Tuple), "XXX should be fromAST instead"
+        assert isinstance(args, Tuple), "Malformed AST"
         self._args = args
+        assert (isinstance(namedArgs, Tuple)), "Malformed AST"
+        for pair in namedArgs._t:
+            if not (isinstance(pair, Tuple) and len(pair._t) == 2):
+                raise InvalidAST("namedArgs must contain key/value pairs")
+
+        self._namedArgs = namedArgs
 
     @staticmethod
-    def fromAST(target, verb, args):
-        return Call(target, strToString(verb), args)
+    def fromAST(target, verb, args, namedArgs):
+        if not isinstance(args, Tuple):
+            raise InvalidAST("args must be a tuple")
+        if not isinstance(namedArgs, Tuple):
+            raise InvalidAST("namedArgs must be a tuple")
+        return Call(target, strToString(verb), args, namedArgs)
 
     def pretty(self, out):
         self._target.pretty(out)
@@ -719,11 +739,26 @@ class Call(Expr):
             for item in tail:
                 out.write(", ")
                 item.pretty(out)
+        na = self._namedArgs._t
+        if na:
+            if l:
+                out.write(", ")
+            head = na[0]
+            assert isinstance(head, Tuple), "malformed AST"
+            head._t[0].pretty(out)
+            out.write(" => ")
+            head._t[1].pretty(out)
+            for pair in na[1:]:
+                assert isinstance(pair, Tuple), "malformed AST"
+                pair._t[0].pretty(out)
+                out.write(" => ")
+                pair._t[1].pretty(out)
         out.write(")")
+
 
     def transform(self, f):
         return f(Call(self._target.transform(f), self._verb,
-                      self._args.transform(f)))
+                      self._args.transform(f), self._namedArgs.transform(f)))
 
     def usesName(self, name):
         return self._target.usesName(name) or self._args.usesName(name)
@@ -736,15 +771,21 @@ class Call(Expr):
         for node in args:
             node.compile(compiler)
             # [target x0 x1 ...]
-        compiler.call(self._verb, arity)
+        namedArgs = tupleToList(self._namedArgs)
+        if len(namedArgs) == 0:
+            compiler.call(self._verb, arity)
+        else:
+            for pair in namedArgs:
+                key, value = tupleToList(pair)
+                key.compile(compiler)
+                value.compile(compiler)
+            compiler.callMap(self._verb, arity, len(namedArgs))
         # [retval]
 
     def getStaticScope(self):
-        # XXX is this right? It feels backwards.
-        scope = emptyScope
+        scope = self._target.getStaticScope()
         for expr in self._args._t:
             scope = scope.add(expr.getStaticScope())
-        scope = scope.add(self._target.getStaticScope())
         return scope
 
     def recv(self, atom, args):
@@ -1139,20 +1180,27 @@ class Method(Expr):
 
     _immutable_fields_ = "_ps[*]",
 
-    def __init__(self, doc, verb, params, guard, block):
+    def __init__(self, doc, verb, params, namedParams, guard, block):
         self._d = doc
         self._verb = verb
         self._ps = params
+        for np in namedParams:
+            if not isinstance(np, NamedParam):
+                raise InvalidAST("Named parameters must be NamedParam nodes")
+        self._namedParams = namedParams
         self._g = guard
         self._b = block
 
     @staticmethod
-    def fromAST(doc, verb, params, guard, block):
+    def fromAST(doc, verb, params, namedParams, guard, block):
         for param in params:
             if param is None:
                 raise InvalidAST("Parameter patterns cannot be None")
+        for np in namedParams:
+            if not isinstance(np, NamedParam):
+                raise InvalidAST("Named parameters must be NamedParam nodes")
         doc = doc._s if isinstance(doc, Str) else None
-        return Method(doc, strToString(verb), params, guard, block)
+        return Method(doc, strToString(verb), params, namedParams, guard, block)
 
     def pretty(self, out):
         out.write("method ")
@@ -1166,6 +1214,13 @@ class Method(Expr):
             for item in tail:
                 out.write(", ")
                 item.pretty(out)
+        if self._namedParams:
+            if l:
+                out.write(", ")
+            self._namedParams[0].pretty(out)
+            for item in self._namedParams[1:]:
+                out.write(", ")
+                item.pretty(out)
         out.write(") :")
         self._g.pretty(out)
         out.writeLine(" {")
@@ -1174,7 +1229,7 @@ class Method(Expr):
         out.writeLine("}")
 
     def transform(self, f):
-        return f(Method(self._d, self._verb, self._ps, self._g,
+        return f(Method(self._d, self._verb, self._ps, self._namedParams, self._g,
                         self._b.transform(f)))
 
     def usesName(self, name):
@@ -1183,6 +1238,8 @@ class Method(Expr):
     def getStaticScope(self):
         scope = emptyScope
         for patt in self._ps:
+            scope = scope.add(patt.getStaticScope())
+        for patt in self._namedParams:
             scope = scope.add(patt.getStaticScope())
         scope = scope.add(self._g.getStaticScope())
         scope = scope.add(self._b.getStaticScope())
@@ -1455,6 +1512,10 @@ class CodeScript(object):
         arity = len(method._ps)
         compiler = Compiler(self.closureNames, self.globalNames,
                             self.availableClosure, fqn=fqn)
+        # [... specimen1 ej1 specimen0 ej0 namedArgs]
+        for np in method._namedParams:
+            np.compile(compiler)
+        compiler.addInstruction("POP", 0)
         # [... specimen1 ej1 specimen0 ej0]
         for param in method._ps:
             # [... specimen1 ej1]
@@ -1878,6 +1939,70 @@ class ListPattern(Pattern):
             return self.getStaticScope()
 
         raise Refused(self, atom, args)
+
+
+class NamedParam(Pattern):
+
+    _immutable_ = True
+
+    _immutable_fields_ = "_k", "_p", "_default"
+
+    def __init__(self, key, pattern, default):
+        self._k = key
+        if not isinstance(pattern, Pattern):
+            raise InvalidAST("Named-arg pattern value must be a Pattern")
+        self._p = pattern
+        self._default = default
+
+    def pretty(self, out):
+        self._k.pretty(out)
+        out.write(" => ")
+        self._p.pretty(out)
+        if self._default is not None:
+            out.write(" := ")
+            self._default.pretty(out)
+
+    def getStaticScope(self):
+        scope = self._k.getStaticScope().add(self._p.getStaticScope())
+        if self._default is not None:
+            scope = scope.add(self._default.getStaticScope())
+        return scope
+
+    def recv(self, atom, args):
+        if atom is GETKEY_0:
+            return self._k
+
+        if atom is GETPATTERN_0:
+            return self._p
+
+        if atom is GETDEFAULT_1:
+            if self._default is None:
+                throw(args[0], StrObject(u"Parameter has no default"))
+            return self._default
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+    def compile(self, compiler):
+        # [argmap]
+        compiler.addInstruction("DUP", 0)
+        self._k.compile(compiler)
+        # [argmap argmap0 key]
+        if self._default is Null:
+            compiler.addInstruction("NAMEDARG_EXTRACT", 0)
+        else:
+            useDefault = compiler.markInstruction("NAMEDARG_EXTRACT_OPTIONAL")
+            compiler.addInstruction("POP", 0)
+            self._default.compile(compiler)
+            compiler.patch(useDefault)
+        # [argmap specimen]
+        throwIdx = compiler.addGlobal(u"throw")
+        compiler.addInstruction("NOUN_GLOBAL", throwIdx)
+        # [argmap specimen ej]
+        self._p.compile(compiler)
+        # [argmap]
 
 
 @autohelp

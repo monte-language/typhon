@@ -17,9 +17,10 @@ from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Ejecting, Refused, UserException, userError
+from typhon.errors import (Ejecting, Refused, UserException, WrongType,
+                           userError)
 from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
-from typhon.objects.collections import ConstList, ConstMap, unwrapList
+from typhon.objects.collections import EMPTY_MAP, ConstList, ConstMap, unwrapList
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
                                  StrObject, makeSourceSpan, unwrapInt,
@@ -39,7 +40,10 @@ from typhon.vats import currentVat
 ASTYPE_0 = getAtom(u"asType", 0)
 BROKEN_0 = getAtom(u"broken", 0)
 CALLWITHPAIR_2 = getAtom(u"callWithPair", 2)
+CALLWITHPAIR_3 = getAtom(u"callWithPair", 3)
 CALL_3 = getAtom(u"call", 3)
+CALLWITHMESSAGE_2 = getAtom(u"callWithMessage", 2)
+CALL_4 = getAtom(u"call", 4)
 COERCE_2 = getAtom(u"coerce", 2)
 EJECT_2 = getAtom(u"eject", 2)
 FAILURELIST_1 = getAtom(u"failureList", 1)
@@ -57,6 +61,8 @@ RUN_2 = getAtom(u"run", 2)
 RUN_3 = getAtom(u"run", 3)
 SENDONLY_3 = getAtom(u"sendOnly", 3)
 SEND_3 = getAtom(u"send", 3)
+SENDONLY_4 = getAtom(u"sendOnly", 4)
+SEND_4 = getAtom(u"send", 4)
 TOQUOTE_1 = getAtom(u"toQuote", 1)
 TOSTRING_1 = getAtom(u"toString", 1)
 
@@ -271,25 +277,33 @@ class MObject(Object):
         return u"M"
 
     def recv(self, atom, args):
-        if atom is CALLWITHPAIR_2:
+        if atom is CALLWITHPAIR_2 or atom is CALLWITHPAIR_3:
             target = args[0]
             pair = unwrapList(args[1])
-            if len(pair) != 2:
+            if len(pair) not in (2, 3):
                 raise userError(u"callWithPair/2 requires a pair!")
+            if len(pair) == 3:
+                namedArgs = pair[2]
+            else:
+                namedArgs = EMPTY_MAP
             sendVerb = unwrapStr(pair[0])
             sendArgs = unwrapList(pair[1])
-            rv = target.call(sendVerb, sendArgs)
+            rv = target.call(sendVerb, sendArgs, namedArgs)
             if rv is None:
                 print "callWithPair/2: Returned None:", \
                       target.__class__.__name__, sendVerb.encode("utf-8")
                 raise RuntimeError("Implementation error")
             return rv
 
-        if atom is CALL_3:
+        if atom is CALL_3 or atom is CALL_4:
             target = args[0]
             sendVerb = unwrapStr(args[1])
             sendArgs = unwrapList(args[2])
-            rv = target.call(sendVerb, sendArgs)
+            if len(args) == 3:
+                namedArgs = EMPTY_MAP
+            else:
+                namedArgs = args[3]
+            rv = target.call(sendVerb, sendArgs, namedArgs)
             if rv is None:
                 print "call/3: Returned None:", target.__class__.__name__, \
                       sendVerb.encode("utf-8")
@@ -303,7 +317,7 @@ class MObject(Object):
             # Signed, sealed, delivered, I'm yours.
             sendAtom = getAtom(sendVerb, len(sendArgs))
             vat = currentVat.get()
-            return vat.sendOnly(target, sendAtom, sendArgs)
+            return vat.sendOnly(target, sendAtom, sendArgs, EMPTY_MAP)
 
         if atom is SEND_3:
             target = args[0]
@@ -312,7 +326,63 @@ class MObject(Object):
             # Signed, sealed, delivered, I'm yours.
             sendAtom = getAtom(sendVerb, len(sendArgs))
             vat = currentVat.get()
-            return vat.send(target, sendAtom, sendArgs)
+            return vat.send(target, sendAtom, sendArgs, EMPTY_MAP)
+
+        if atom is CALLWITHMESSAGE_2:
+            target = args[0]
+            msg = unwrapList(args[1])
+            if len(msg) != 3:
+                raise userError(
+                    u"callWithPair/2 requires a [verb, args, namedArgs] triple")
+            sendVerb = unwrapStr(msg[0])
+            sendArgs = unwrapList(msg[1])
+            sendNamedArgs = resolution(msg[2])
+            if not isinstance(sendNamedArgs, ConstMap):
+                raise WrongType(u"namedArgs must be a ConstMap")
+            rv = target.call(sendVerb, sendArgs, sendNamedArgs)
+            if rv is None:
+                print "callWithPair/2: Returned None:", \
+                      target.__class__.__name__, sendVerb.encode("utf-8")
+                raise RuntimeError("Implementation error")
+            return rv
+
+        if atom is CALL_4:
+            target = args[0]
+            sendVerb = unwrapStr(args[1])
+            sendArgs = unwrapList(args[2])
+            sendNamedArgs = resolution(args[3])
+            if not isinstance(sendNamedArgs, ConstMap):
+                raise WrongType(u"namedArgs must be a ConstMap")
+            rv = target.call(sendVerb, sendArgs, sendNamedArgs)
+            if rv is None:
+                print "call/3: Returned None:", target.__class__.__name__, \
+                      sendVerb.encode("utf-8")
+                raise RuntimeError("Implementation error")
+            return rv
+
+        if atom is SENDONLY_4:
+            target = args[0]
+            sendVerb = unwrapStr(args[1])
+            sendArgs = unwrapList(args[2])
+            sendNamedArgs = resolution(args[3])
+            if not isinstance(sendNamedArgs, ConstMap):
+                raise WrongType(u"namedArgs must be a ConstMap")
+            # Signed, sealed, delivered, I'm yours.
+            sendAtom = getAtom(sendVerb, len(sendArgs))
+            vat = currentVat.get()
+            return vat.sendOnly(target, sendAtom, sendArgs, sendNamedArgs)
+
+        if atom is SEND_4:
+            target = args[0]
+            sendVerb = unwrapStr(args[1])
+            sendArgs = unwrapList(args[2])
+            sendNamedArgs = resolution(args[3])
+            if not isinstance(sendNamedArgs, ConstMap):
+                raise WrongType(u"namedArgs must be a ConstMap")
+            # Signed, sealed, delivered, I'm yours.
+            sendAtom = getAtom(sendVerb, len(sendArgs))
+            vat = currentVat.get()
+            return vat.send(target, sendAtom, sendArgs, sendNamedArgs)
 
         if atom is TOQUOTE_1:
             return StrObject(args[0].toQuote())

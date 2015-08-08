@@ -17,7 +17,7 @@ from rpython.rlib.jit import JitDriver
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.collections import unwrapList
+from typhon.objects.collections import EMPTY_MAP, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.root import runnable
@@ -94,6 +94,7 @@ def loop(args):
             for arg in values:
                 machine.push(arg)
                 machine.push(NullObject)
+            machine.push(EMPTY_MAP)
             machine.run()
     except Ejecting as e:
         if e.ejector is not ej:

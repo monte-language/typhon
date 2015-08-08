@@ -109,8 +109,9 @@ class AnyOfGuard(Object):
             return wrapBool(True)
 
         if atom is _UNCALL_0:
+            from typhon.objects.collections import EMPTY_MAP
             return ConstList([anyGuard, StrObject(u"get"),
-                              ConstList(self.subguards)])
+                              ConstList(self.subguards), EMPTY_MAP])
         raise Refused(self, atom, args)
 
 

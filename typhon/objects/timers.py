@@ -37,6 +37,7 @@ class Timer(Object):
     """
 
     def recv(self, atom, args):
+        from typhon.objects.collections import EMPTY_MAP
         if atom is FROMNOW_1:
             duration = promoteToDouble(args[0])
             p, r = makePromise()
@@ -56,7 +57,7 @@ class Timer(Object):
             rv = DoubleObject(now - then)
             p, r = makePromise()
             vat = currentVat.get()
-            vat.sendOnly(r, RESOLVE_1, [rv])
+            vat.sendOnly(r, RESOLVE_1, [rv], EMPTY_MAP)
             return p
 
         raise Refused(self, atom, args)

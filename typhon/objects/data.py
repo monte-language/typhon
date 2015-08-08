@@ -836,12 +836,12 @@ class SourceSpan(Object):
         if atom is NOTONETOONE_0:
             return self.notOneToOne()
         if atom is _UNCALL_0:
-            from typhon.objects.collections import ConstList
+            from typhon.objects.collections import EMPTY_MAP, ConstList
             return ConstList([
                 makeSourceSpan, StrObject(u"run"),
                 ConstList([wrapBool(self._isOneToOne), IntObject(self.startLine),
                            IntObject(self.startCol), IntObject(self.endLine),
-                           IntObject(self.endCol)])])
+                           IntObject(self.endCol)]), EMPTY_MAP])
         raise Refused(self, atom, args)
 
 

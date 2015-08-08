@@ -189,28 +189,36 @@ class RefOps(Object):
         return self.isEventual(ref) and isResolved(ref)
 
     def whenResolved(self, o, callback):
+        from typhon.objects.collections import EMPTY_MAP
         p, r = makePromise()
         vat = currentVat.get()
         vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenResolvedReactor(callback, o, r, vat)])
+                     [WhenResolvedReactor(callback, o, r, vat)],
+                     EMPTY_MAP)
         return p
 
     def whenResolvedOnly(self, o, callback):
+        from typhon.objects.collections import EMPTY_MAP
         vat = currentVat.get()
         return vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenResolvedReactor(callback, o, None, vat)])
+                            [WhenResolvedReactor(callback, o, None, vat)],
+                            EMPTY_MAP)
 
     def whenBroken(self, o, callback):
+        from typhon.objects.collections import EMPTY_MAP
         p, r = makePromise()
         vat = currentVat.get()
         vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenBrokenReactor(callback, o, r, vat)])
+                     [WhenBrokenReactor(callback, o, r, vat)],
+                     EMPTY_MAP)
         return p
 
     def whenBrokenOnly(self, o, callback):
+        from typhon.objects.collections import EMPTY_MAP
         vat = currentVat.get()
         return vat.sendOnly(o, _WHENMORERESOLVED_1,
-                [WhenBrokenReactor(callback, o, None, vat)])
+                            [WhenBrokenReactor(callback, o, None, vat)],
+                            EMPTY_MAP)
 
     def isDeepFrozen(self, o):
         return o.auditedBy(deepFrozenStamp)
@@ -235,12 +243,14 @@ class WhenBrokenReactor(Object):
         return u"<whenBrokenReactor>"
 
     def recv(self, atom, args):
+        from typhon.objects.collections import EMPTY_MAP
         if atom is RUN_1:
             if not isinstance(self._ref, Promise):
                 return NullObject
 
             if self._ref.state() is EVENTUAL:
-                self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
+                self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
+                                  EMPTY_MAP)
             elif self._ref.state() is BROKEN:
                 # XXX this could raise; we might need to reflect to user
                 outcome = self._cb.call(u"run", [self._ref])
@@ -267,6 +277,7 @@ class WhenResolvedReactor(Object):
         return u"<whenResolvedReactor>"
 
     def recv(self, atom, args):
+        from typhon.objects.collections import EMPTY_MAP
         if atom is RUN_1:
             if self.done:
                 return NullObject
@@ -280,7 +291,8 @@ class WhenResolvedReactor(Object):
 
                 self.done = True
             else:
-                self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self])
+                self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
+                                  EMPTY_MAP)
 
             return NullObject
         raise Refused(self, atom, args)
@@ -340,17 +352,17 @@ class MessageBuffer(object):
 
         self._buf = []
 
-    def enqueue(self, resolver, atom, args):
-        self._buf.append((resolver, atom, args))
+    def enqueue(self, resolver, atom, args, namedArgs):
+        self._buf.append((resolver, atom, args, namedArgs))
 
     def deliverAll(self, target):
         #XXX record sending-context information for causality tracing
         targRef = _toRef(target, self.vat)
-        for resolver, atom, args in self._buf:
+        for resolver, atom, args, namedArgs in self._buf:
             if resolver is None:
-                targRef.sendAllOnly(atom, args)
+                targRef.sendAllOnly(atom, args, namedArgs)
             else:
-                result = targRef.sendAll(atom, args)
+                result = targRef.sendAll(atom, args, namedArgs)
                 resolver.resolve(result)
         rv = len(self._buf)
         self._buf = []
@@ -369,6 +381,7 @@ class Promise(Object):
     # Monte core.
 
     def recv(self, atom, args):
+        from typhon.objects.collections import EMPTY_MAP
         if atom is _PRINTON_1:
             out = args[0]
             return out.call(u"print", [StrObject(self.toString())])
@@ -376,27 +389,28 @@ class Promise(Object):
         if atom is _WHENMORERESOLVED_1:
             return self._whenMoreResolved(args[0])
 
-        return self.callAll(atom, args)
+        return self.callAll(atom, args, EMPTY_MAP)
 
     def _whenMoreResolved(self, callback):
+        from typhon.objects.collections import EMPTY_MAP
         # Welcome to _whenMoreResolved.
         # This method's implementation, in Monte, should be:
         # to _whenMoreResolved(callback): callback<-(self)
         vat = currentVat.get()
-        vat.sendOnly(callback, RUN_1, [self])
+        vat.sendOnly(callback, RUN_1, [self], EMPTY_MAP)
         return NullObject
 
     # Synchronous calls.
 
     # Eventual sends.
 
-    def send(self, atom, args):
+    def send(self, atom, args, namedArgs):
         # Resolution is done by the vat here; we don't get to access the
         # resolver ourselves.
-        return self.sendAll(atom, args)
+        return self.sendAll(atom, args, namedArgs)
 
-    def sendOnly(self, atom, args):
-        self.sendAllOnly(atom, args)
+    def sendOnly(self, atom, args, namedArgs):
+        self.sendAllOnly(atom, args, namedArgs)
         return NullObject
 
     # Promise API.
@@ -438,21 +452,21 @@ class SwitchableRef(Promise):
             self.resolutionRef()
             return self._target.toString()
 
-    def callAll(self, atom, args):
+    def callAll(self, atom, args, namedArgs):
         if self.isSwitchable:
             raise userError(u"not synchronously callable (%s)" %
                     atom.repr.decode("utf-8"))
         else:
             self.resolutionRef()
-            return self._target.callAll(atom, args)
+            return self._target.callAll(atom, args, namedArgs)
 
-    def sendAll(self, atom, args):
+    def sendAll(self, atom, args, namedArgs):
         self.resolutionRef()
-        return self._target.sendAll(atom, args)
+        return self._target.sendAll(atom, args, namedArgs)
 
-    def sendAllOnly(self, atom, args):
+    def sendAllOnly(self, atom, args, namedArgs):
         self.resolutionRef()
-        return self._target.sendAllOnly(atom, args)
+        return self._target.sendAllOnly(atom, args, namedArgs)
 
     def optProblem(self):
         if self.isSwitchable:
@@ -512,24 +526,24 @@ class BufferingRef(Promise):
     def toString(self):
         return u"<bufferingRef>"
 
-    def callAll(self, atom, args):
+    def callAll(self, atom, args, namedArgs):
         raise userError(u"not synchronously callable (%s)" %
                 atom.repr.decode("utf-8"))
 
-    def sendAll(self, atom, args):
+    def sendAll(self, atom, args, namedArgs):
         optMsgs = self._buf()
         if optMsgs is None:
             # XXX what does it mean for us to have no more buffer?
             return self
         else:
             p, r = makePromise()
-            optMsgs.enqueue(r, atom, args)
+            optMsgs.enqueue(r, atom, args, namedArgs)
             return p
 
-    def sendAllOnly(self, atom, args):
+    def sendAllOnly(self, atom, args, namedArgs):
         optMsgs = self._buf()
         if optMsgs is not None:
-            optMsgs.enqueue(None, atom, args)
+            optMsgs.enqueue(None, atom, args, namedArgs)
         return NullObject
 
     def optProblem(self):
@@ -564,14 +578,14 @@ class NearRef(Promise):
     def hash(self):
         return self.target.hash()
 
-    def callAll(self, atom, args):
-        return self.target.callAtom(atom, args)
+    def callAll(self, atom, args, namedArgs):
+        return self.target.callAtom(atom, args, namedArgs)
 
-    def sendAll(self, atom, args):
-        return self.vat.send(self.target, atom, args)
+    def sendAll(self, atom, args, namedArgs):
+        return self.vat.send(self.target, atom, args, namedArgs)
 
-    def sendAllOnly(self, atom, args):
-        return self.vat.sendOnly(self.target, atom, args)
+    def sendAllOnly(self, atom, args, namedArgs):
+        return self.vat.sendOnly(self.target, atom, args, namedArgs)
 
     def optProblem(self):
         return NullObject
@@ -611,20 +625,31 @@ class LocalVatRef(Promise):
         # XXX shouldn't this simply be unhashable?
         return self.target.hash()
 
-    def callAll(self, atom, args):
+    def callAll(self, atom, args, namedArgs):
         raise userError(u"not synchronously callable (%s)" %
                         atom.repr.decode("utf-8"))
 
-    def sendAll(self, atom, args):
+    def sendAll(self, atom, args, namedArgs):
+        from typhon.objects.collections import ConstMap, monteDict
         vat = currentVat.get()
+        # XXX Upgrade this to honor the real serialization protocol.
         refs = [LocalVatRef(arg, vat) for arg in args]
-        return LocalVatRef(self.vat.send(self.target, atom, refs), self.vat)
+        namedRefs = monteDict()
+        for k, v in namedArgs.objectMap.items():
+            namedRefs[LocalVatRef(k, vat)] = LocalVatRef(v, vat)
+        return LocalVatRef(self.vat.send(self.target, atom, refs,
+                                         ConstMap(namedRefs)),
+                           self.vat)
 
-    def sendAllOnly(self, atom, args):
+    def sendAllOnly(self, atom, args, namedArgs):
+        from typhon.objects.collections import ConstMap, monteDict
         vat = currentVat.get()
         refs = [LocalVatRef(arg, vat) for arg in args]
+        namedRefs = monteDict()
+        for k, v in namedArgs.objectMap.items():
+            namedRefs[LocalVatRef(k, vat)] = LocalVatRef(v, vat)
         # NB: None is returned here and it's turned into null up above.
-        return self.vat.sendOnly(self.target, atom, refs)
+        return self.vat.sendOnly(self.target, atom, refs, ConstMap(namedRefs))
 
     def optProblem(self):
         return NullObject
@@ -654,16 +679,16 @@ class UnconnectedRef(Promise):
     def toString(self):
         return u"<ref broken by %s>" % (self._problem,)
 
-    def callAll(self, atom, args):
-        self._doBreakage(atom, args)
+    def callAll(self, atom, args, namedArgs):
+        self._doBreakage(atom, args, namedArgs)
         raise userError(self._problem)
 
-    def sendAll(self, atom, args):
-        self._doBreakage(atom, args)
+    def sendAll(self, atom, args, namedArgs):
+        self._doBreakage(atom, args, namedArgs)
         return self
 
-    def sendAllOnly(self, atom, args):
-        return self._doBreakage(atom, args)
+    def sendAllOnly(self, atom, args, namedArgs):
+        return self._doBreakage(atom, args, namedArgs)
 
     def state(self):
         return BROKEN
@@ -674,10 +699,11 @@ class UnconnectedRef(Promise):
     def resolutionRef(self):
         return self
 
-    def _doBreakage(self, atom, args):
+    def _doBreakage(self, atom, args, namedArgs):
+        from typhon.objects.collections import EMPTY_MAP
         if atom in (_WHENMORERESOLVED_1, _WHENBROKEN_1):
             vat = currentVat.get()
-            return vat.sendOnly(args[0], RUN_1, [self])
+            return vat.sendOnly(args[0], RUN_1, [self], EMPTY_MAP)
 
     def isResolved(self):
         return True

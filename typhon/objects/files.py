@@ -62,6 +62,7 @@ class Read(Callable):
         self.fount = fount
 
     def call(self):
+        from typhon.objects.collections import EMPTY_MAP
         # XXX What do you know about POSIX and file systems? This function is
         # totally wrong and the wrongness isn't removable without
         # rearchitecting a fair amount of reactor code. I apologize for doing
@@ -73,7 +74,7 @@ class Read(Callable):
             buf = self.fount.handle.read(16384)
             rv = BytesObject(buf)
             vat = currentVat.get()
-            vat.sendOnly(self.fount.drain, RECEIVE_1, [rv])
+            vat.sendOnly(self.fount.drain, RECEIVE_1, [rv], EMPTY_MAP)
 
             if len(buf) < 16384:
                 # Short read; this will be the last chunk.
@@ -111,11 +112,12 @@ class FileFount(Object):
         raise Refused(self, atom, args)
 
     def close(self):
+        from typhon.objects.collections import EMPTY_MAP
         self.handle.close()
         if self.drain is not None:
             vat = currentVat.get()
             vat.sendOnly(self.drain, FLOWSTOPPED_1,
-                         [StrObject(u"End of file")])
+                         [StrObject(u"End of file")], EMPTY_MAP)
 
     def pause(self):
         self.pauses += 1

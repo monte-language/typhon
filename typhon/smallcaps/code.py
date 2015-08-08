@@ -21,7 +21,7 @@ from typhon.smallcaps.ops import (reverseOps, ASSIGN_GLOBAL, ASSIGN_FRAME,
                                   BINDVARSLOT, SLOT_GLOBAL, SLOT_FRAME,
                                   SLOT_LOCAL, NOUN_GLOBAL, NOUN_FRAME,
                                   NOUN_LOCAL, BINDING_GLOBAL, BINDING_FRAME,
-                                  BINDING_LOCAL, CALL)
+                                  BINDING_LOCAL, CALL, CALL_MAP)
 
 
 class Code(object):
@@ -83,7 +83,7 @@ class Code(object):
 
     def dis(self, instruction, index):
         base = "%s %d" % (reverseOps[instruction], index)
-        if instruction == CALL:
+        if instruction == CALL or instruction == CALL_MAP:
             base += " (%s)" % self.atoms[index].repr
         # XXX enabling this requires the JIT to be able to traverse a lot of
         # otherwise-unsafe code. You're free to try to fix it, but you've been
