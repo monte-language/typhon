@@ -198,7 +198,7 @@ def swapEquality(call):
     if isNullNoun(call._args._t[1]):
         args = call._args._t[:]
         args.reverse()
-        return Call(call._target, call._verb, Tuple(args))
+        return Call(call._target, call._verb, Tuple(args), call._namedArgs)
 
     return None
 

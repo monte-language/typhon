@@ -18,7 +18,8 @@ from rpython.rlib.objectmodel import specialize
 from typhon.atoms import getAtom
 from typhon.env import Environment
 from typhon.errors import Ejecting, UserException, userError
-from typhon.objects.collections import unwrapList
+from typhon.objects.collections import (EMPTY_MAP, ConstMap, monteDict,
+                                        unwrapList, unwrapMap)
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
@@ -106,8 +107,12 @@ class SmallCaps(object):
             self.push(ej)
 
     @unroll_safe
-    def call(self, index):
+    def call(self, index, withMap):
         atom = self.code.atom(index)
+        if withMap:
+            namedArgs = self.pop()
+        else:
+            namedArgs = EMPTY_MAP
         args = [self.pop() for _ in range(atom.arity)]
         args.reverse()
         target = self.pop()
@@ -115,12 +120,19 @@ class SmallCaps(object):
         # We used to add the call trail for tracebacks here, but it's been
         # moved to t.o.root. Happy bug hunting! ~ C.
         with csp.startCall(target, atom):
-            rv = target.callAtom(atom, args)
+            rv = target.callAtom(atom, args, namedArgs)
             if rv is None:
                 print "A call to", target.__class__.__name__, "with atom", \
                       atom.repr, "returned None"
                 raise RuntimeError("Implementation error")
             self.push(rv)
+
+    @unroll_safe
+    def buildMap(self, index):
+        d = monteDict()
+        for i in range(index):
+            d[self.pop()] = self.pop()
+        self.push(ConstMap(d))
 
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)
@@ -240,8 +252,30 @@ class SmallCaps(object):
             else:
                 return index
         elif instruction == CALL:
-            self.call(index)
+            self.call(index, False)
             return pc + 1
+        elif instruction == CALL_MAP:
+            self.call(index, True)
+            return pc + 1
+        elif instruction == BUILD_MAP:
+            self.buildMap(index)
+            return pc + 1
+        elif instruction == NAMEDARG_EXTRACT:
+            k = self.pop()
+            d = unwrapMap(self.pop())
+            if k not in d:
+                raise userError(u"Named arg %s missing in call" % (
+                    k.toString(),))
+            self.push(d[k])
+            return pc + 1
+        elif instruction == NAMEDARG_EXTRACT_OPTIONAL:
+            k = self.pop()
+            d = unwrapMap(self.pop())
+            if k not in d:
+                self.push(NullObject)
+                return pc + 1
+            self.push(d[k])
+            return index
         elif instruction == JUMP:
             return index
         else:

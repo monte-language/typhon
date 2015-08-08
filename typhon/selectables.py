@@ -202,13 +202,15 @@ class Socket(Selectable):
         We should have been assured that we will not block.
         """
 
+        from typhon.objects.collections import EMPTY_MAP
         # If we are a listening socket, let's not actually try to read, but
         # instead accept and spin off a new connection.
         if self._listener is not None:
             fd, _ = self.rsock.accept()
             sock = Socket(RSocket(fd=fd), self.vat)
             self.vat.sendOnly(self._listener, RUN_2, [sock.createFount(),
-                                                      SocketDrain(sock)])
+                                                      SocketDrain(sock)],
+                              EMPTY_MAP)
             return
 
         # Perform the actual recv call.

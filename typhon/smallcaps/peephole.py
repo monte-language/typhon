@@ -143,7 +143,7 @@ class PeepholeOptimizer(object):
         for pc, instruction in enumerate(self.code.instructions):
             if instruction in (ASSIGN_LOCAL, BIND, BINDFINALSLOT,
                                BINDVARSLOT, SLOT_LOCAL,
-                                 NOUN_LOCAL, BINDING_LOCAL):
+                               NOUN_LOCAL, BINDING_LOCAL):
                 index = self.code.index(pc)
                 if index not in newLocalMap:
                     newLocal.append(self.code.locals[index])

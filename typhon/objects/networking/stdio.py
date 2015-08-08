@@ -89,9 +89,10 @@ class InputFount(Object):
         self.flush()
 
     def flush(self):
+        from typhon.objects.collections import EMPTY_MAP
         if not self.pauses and self._drain is not None:
             rv = BytesObject(self.buf)
-            self.vat.sendOnly(self._drain, RECEIVE_1, [rv])
+            self.vat.sendOnly(self._drain, RECEIVE_1, [rv], EMPTY_MAP)
             self.buf = ""
 
     def terminate(self, reason):

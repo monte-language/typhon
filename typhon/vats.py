@@ -66,13 +66,14 @@ class Vat(Object):
         return u"<vat(%s, %d turns pending)>" % (self.name, len(self._pending))
 
     def recv(self, atom, args):
+        from typhon.objects.collections import EMPTY_MAP
         if atom is SEED_1:
             f = args[0]
             if not f.auditedBy(deepFrozenStamp):
                 print "seed/1: Warning: Seeded receiver is not DeepFrozen"
                 print "seed/1: Warning: This is gonna be an error soon!"
             from typhon.objects.refs import LocalVatRef
-            return LocalVatRef(self.send(f, RUN_0, []), self)
+            return LocalVatRef(self.send(f, RUN_0, [], EMPTY_MAP), self)
 
         if atom is SPROUT_1:
             name = unwrapStr(args[0])
@@ -82,17 +83,17 @@ class Vat(Object):
 
         raise Refused(self, atom, args)
 
-    def send(self, target, atom, args):
+    def send(self, target, atom, args, namedArgs):
         from typhon.objects.refs import makePromise
         promise, resolver = makePromise()
         with self._pendingLock:
-            self._pending.append((resolver, target, atom, args))
+            self._pending.append((resolver, target, atom, args, namedArgs))
             # print "Planning to send", target, atom, args
         return promise
 
-    def sendOnly(self, target, atom, args):
+    def sendOnly(self, target, atom, args, namedArgs):
         with self._pendingLock:
-            self._pending.append((None, target, atom, args))
+            self._pending.append((None, target, atom, args, namedArgs))
             # print "Planning to sendOnly", target, atom, args
 
     def hasTurns(self):
@@ -107,7 +108,7 @@ class Vat(Object):
         from typhon.objects.refs import Promise, resolution
 
         with self._pendingLock:
-            resolver, target, atom, args = self._pending.pop(0)
+            resolver, target, atom, args, namedArgs = self._pending.pop(0)
 
         # If the target is a promise, then we should send to it instead of
         # calling. Try to resolve it as much as possible first, though.
@@ -118,16 +119,16 @@ class Vat(Object):
         if resolver is None:
             # callOnly/sendOnly.
             if isinstance(target, Promise):
-                target.sendOnly(atom, args)
+                target.sendOnly(atom, args, namedArgs)
             else:
                 # Oh, that's right; we don't do callOnly since it's silly.
-                target.callAtom(atom, args)
+                target.callAtom(atom, args, namedArgs)
         else:
             # call/send.
             if isinstance(target, Promise):
-                result = target.send(atom, args)
+                result = target.send(atom, args, namedArgs)
             else:
-                result = target.callAtom(atom, args)
+                result = target.callAtom(atom, args, namedArgs)
             resolver.resolve(result)
 
     def afterTurn(self, callback):
@@ -197,9 +198,9 @@ class CurrentVatProxy(Object):
         vat = currentVat.get()
         return vat.toString()
 
-    def callAtom(self, atom, args):
+    def callAtom(self, atom, args, namedArgsMap):
         vat = currentVat.get()
-        return vat.callAtom(atom, args)
+        return vat.callAtom(atom, args, namedArgsMap)
 
     def respondingAtoms(self):
         vat = currentVat.get()

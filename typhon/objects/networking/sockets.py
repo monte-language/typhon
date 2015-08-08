@@ -67,13 +67,14 @@ class SocketFount(Object):
         return u"<SocketFount(%s)>" % self.sock.repr()
 
     def recv(self, atom, args):
+        from typhon.objects.collections import EMPTY_MAP
         if atom is FLOWTO_1:
             self._drain = drain = args[0]
             # We can't actually call receive/1 on the drain until
             # flowingFrom/1 has been called, *but* flush() should be using
             # sends to incant receive/1, so they'll all be done in subsequent
             # turns to the one we're queueing. ~ C.
-            rv = self.sock.vat.send(drain, FLOWINGFROM_1, [self])
+            rv = self.sock.vat.send(drain, FLOWINGFROM_1, [self], EMPTY_MAP)
             self.flush()
             return rv
 
@@ -82,7 +83,7 @@ class SocketFount(Object):
 
         if atom is ABORTFLOW_0:
             self.sock.vat.sendOnly(self._drain, FLOWABORTED_1,
-                                   [StrObject(u"Flow aborted")])
+                                   [StrObject(u"Flow aborted")], EMPTY_MAP)
             # Release the drain. They should have released us as well.
             self._drain = None
             return NullObject
@@ -106,16 +107,18 @@ class SocketFount(Object):
         self.flush()
 
     def flush(self):
+        from typhon.objects.collections import EMPTY_MAP
         # print "SocketFount flush", self.pauses, self._drain
         if not self.pauses and self._drain is not None:
             rv = BytesObject(self.buf)
-            self.sock.vat.sendOnly(self._drain, RECEIVE_1, [rv])
+            self.sock.vat.sendOnly(self._drain, RECEIVE_1, [rv], EMPTY_MAP)
             self.buf = ""
 
     def terminate(self, reason):
+        from typhon.objects.collections import EMPTY_MAP
         if self._drain is not None:
             self.sock.vat.sendOnly(self._drain, FLOWSTOPPED_1,
-                                   [StrObject(reason)])
+                                   [StrObject(reason)], EMPTY_MAP)
             # Release the drain. They should have released us as well.
             self._drain = None
 

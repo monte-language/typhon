@@ -319,7 +319,7 @@ class ConstList(Object):
 
         if atom is _UNCALL_0:
             from typhon.scopes.safe import theMakeList
-            return ConstList([theMakeList, StrObject(u"run"), self])
+            return ConstList([theMakeList, StrObject(u"run"), self, EMPTY_MAP])
 
         raise Refused(self, atom, args)
 
@@ -766,7 +766,7 @@ class ConstMap(Object):
     def _uncall(self):
         from typhon.scopes.safe import theMakeMap
         rv = ConstList([ConstList([k, v]) for k, v in self.objectMap.items()])
-        return [theMakeMap, StrObject(u"fromPairs"), rv]
+        return [theMakeMap, StrObject(u"fromPairs"), rv, EMPTY_MAP]
 
     def contains(self, needle):
         return needle in self.objectMap
@@ -796,6 +796,8 @@ class ConstMap(Object):
 
     def snapshot(self):
         return ConstMap(self.objectMap.copy())
+
+EMPTY_MAP = ConstMap(monteDict())
 
 
 @autohelp
@@ -837,7 +839,8 @@ class ConstSet(Object):
         if atom is _UNCALL_0:
             # [1,2,3].asSet() -> [[1,2,3], "asSet"]
             rv = ConstList(self.objectMap.keys())
-            return ConstList([rv, StrObject(u"asSet"), ConstList([])])
+            return ConstList([rv, StrObject(u"asSet"), ConstList([]),
+                              EMPTY_MAP])
 
         if atom is ASSET_0:
             return self

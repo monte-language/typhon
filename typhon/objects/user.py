@@ -215,7 +215,7 @@ class ScriptObject(Object):
         return d
 
     @unroll_safe
-    def recv(self, atom, args):
+    def recvNamed(self, atom, args, namedArgs):
         code = self.codeScript.lookupMethod(atom)
         if code is None:
             # No atoms matched, so there's no prebuilt methods. Instead, we'll
@@ -224,7 +224,7 @@ class ScriptObject(Object):
                 with Ejector() as ej:
                     machine = SmallCaps(matcher, self.closure, self.globals)
                     machine.push(ConstList([StrObject(atom.verb),
-                                            ConstList(args)]))
+                                            ConstList(args), namedArgs]))
                     machine.push(ej)
                     try:
                         machine.run()
@@ -243,8 +243,10 @@ class ScriptObject(Object):
         machine = SmallCaps(code, self.closure, self.globals)
         # print "--- Running", self.displayName, atom, args
         # Push the arguments onto the stack, backwards.
+        machine.push(namedArgs)
         for arg in reversed(args):
             machine.push(arg)
             machine.push(NullObject)
+        machine.push(namedArgs)
         machine.run()
         return machine.pop()

@@ -124,20 +124,23 @@ class Environment(object):
         return promote(self.globals[index])
 
     def getSlotGlobal(self, index):
+        from typhon.objects.collections import EMPTY_MAP
         binding = self.getBindingGlobal(index)
-        return binding.callAtom(GET_0, [])
+        return binding.callAtom(GET_0, [], EMPTY_MAP)
 
     def getValueGlobal(self, index):
+        from typhon.objects.collections import EMPTY_MAP
         # Specialize the relatively common case of FinalBindings.
         binding = self.getBindingGlobal(index)
         if isinstance(binding, FinalBinding):
             return binding.value
-        slot = binding.callAtom(GET_0, [])
-        return slot.callAtom(GET_0, [])
+        slot = binding.callAtom(GET_0, [], EMPTY_MAP)
+        return slot.callAtom(GET_0, [], EMPTY_MAP)
 
     def putValueGlobal(self, index, value):
+        from typhon.objects.collections import EMPTY_MAP
         slot = self.getSlotGlobal(index)
-        return slot.callAtom(PUT_1, [value])
+        return slot.callAtom(PUT_1, [value], EMPTY_MAP)
 
     def getBindingFrame(self, index):
         # The promotion here is justified by a lack of ability for any code
@@ -151,17 +154,20 @@ class Environment(object):
         return self.frame[index]
 
     def getSlotFrame(self, index):
+        from typhon.objects.collections import EMPTY_MAP
         # Elidability is based on bindings not allowing reassignment of slots.
         binding = self.getBindingFrame(index)
-        return binding.callAtom(GET_0, [])
+        return binding.callAtom(GET_0, [], EMPTY_MAP)
 
     def getValueFrame(self, index):
+        from typhon.objects.collections import EMPTY_MAP
         slot = self.getSlotFrame(index)
-        return slot.callAtom(GET_0, [])
+        return slot.callAtom(GET_0, [], EMPTY_MAP)
 
     def putValueFrame(self, index, value):
+        from typhon.objects.collections import EMPTY_MAP
         slot = self.getSlotFrame(index)
-        return slot.callAtom(PUT_1, [value])
+        return slot.callAtom(PUT_1, [value], EMPTY_MAP)
 
     def createBindingLocal(self, index, binding):
         # Commented out because binding replacement is not that weird and also
@@ -192,17 +198,20 @@ class Environment(object):
         return self.local[index]
 
     def getSlotLocal(self, index):
+        from typhon.objects.collections import EMPTY_MAP
         # Elidability is based on bindings not allowing reassignment of slots.
         binding = self.getBindingLocal(index)
-        return binding.callAtom(GET_0, [])
+        return binding.callAtom(GET_0, [], EMPTY_MAP)
 
     def getValueLocal(self, index):
+        from typhon.objects.collections import EMPTY_MAP
         slot = self.getSlotLocal(index)
-        return slot.callAtom(GET_0, [])
+        return slot.callAtom(GET_0, [], EMPTY_MAP)
 
     def putValueLocal(self, index, value):
+        from typhon.objects.collections import EMPTY_MAP
         slot = self.getSlotLocal(index)
-        return slot.callAtom(PUT_1, [value])
+        return slot.callAtom(PUT_1, [value], EMPTY_MAP)
 
     def saveDepth(self):
         return self.depth, self.handlerDepth
