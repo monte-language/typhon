@@ -64,10 +64,10 @@ def compile(config, inT, inputFile, outputFile):
                 traceln(`Dumped source file (${dumpTime}s)`)
 
             def outT := makeFileResource(outputFile).openDrain()
-            outT.receive(data)
-            traceln("Wrote out source file")
+            outT<-receive(data)
+            traceln("Writing out source file")
 
-    inT.flowTo(tyDumper)
+    inT<-flowTo(tyDumper)
 
 def parseArguments([processName, scriptName] + argv):
     var useMixer :Bool := false
@@ -91,6 +91,6 @@ def config := parseArguments(currentProcess.getArguments())
 def [inputFile, outputFile] := config.arguments()
 
 def fileFount := makeFileResource(inputFile).openFount()
-def utf8Fount := fileFount.flowTo(makePumpTube(makeUTF8DecodePump()))
+def utf8Fount := fileFount<-flowTo(makePumpTube(makeUTF8DecodePump()))
 
 compile(config, utf8Fount, inputFile, outputFile)
