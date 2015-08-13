@@ -80,9 +80,9 @@ def makeMonteParser():
 def reduce(result):
     return result
 
-def stdin := makeStdIn().flowTo(makePumpTube(makeUTF8DecodePump()))
+def stdin := makeStdIn()<-flowTo(makePumpTube(makeUTF8DecodePump()))
 def stdout := makePumpTube(makeUTF8EncodePump())
-stdout.flowTo(makeStdOut())
+stdout<-flowTo(makeStdOut())
 
 def replTube := makeREPLTube(makeMonteParser, reduce, "▲> ", "…> ", stdout)
-stdin.flowTo(replTube)
+stdin<-flowTo(replTube)
