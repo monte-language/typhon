@@ -491,6 +491,4 @@ def safeScope():
 
         u"trace": TraceLn(),
         u"traceln": TraceLn(),
-
-        u"unittest": UnitTest(),
     }

@@ -25,6 +25,7 @@ from typhon.objects.collections import unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapStr
 from typhon.objects.root import Object
+from typhon.objects.tests import UnitTest
 from typhon.importing import evaluateTerms, obtainModule
 
 
@@ -42,10 +43,11 @@ class Import(Object):
 
     stamps = [deepFrozenStamp]
 
-    def __init__(self, path, scope, recorder):
+    def __init__(self, path, scope, recorder, testCollector):
         self.path = path
         self.scope = scope
         self.recorder = recorder
+        self.testCollector = testCollector
 
     @dont_look_inside
     def performImport(self, path, extraScope=None):
@@ -53,10 +55,12 @@ class Import(Object):
         p += ".ty"
 
         # Transitive imports.
-        scope = addImportToScope(self.path, self.scope, self.recorder)
+        scope = addImportToScope(self.path, self.scope, self.recorder,
+                                 self.testCollector)
         if extraScope is not None:
             scope.update(extraScope)
 
+        scope[u'unittest'] = UnitTest(path, self.testCollector)
         # Attempt the import.
         term = obtainModule(rjoin(self.path, p), scope.keys(),
                             self.recorder)
@@ -87,7 +91,7 @@ class Import(Object):
         raise Refused(self, atom, args)
 
 
-def addImportToScope(path, scope, recorder):
+def addImportToScope(path, scope, recorder, testCollector):
     scope = scope.copy()
-    scope[u"import"] = Import(path, scope, recorder)
+    scope[u"import"] = Import(path, scope, recorder, testCollector)
     return scope
