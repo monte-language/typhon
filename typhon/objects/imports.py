@@ -53,7 +53,6 @@ class Import(Object):
     @dont_look_inside
     def performModule(self, path, importList=None):
         p = path.encode("utf-8")
-        p += ".ty"
 
         term = obtainModule(self.path, p, self.recorder)
 
@@ -78,7 +77,6 @@ class Import(Object):
     @dont_look_inside
     def performScript(self, path, extraScope=None):
         p = path.encode("utf-8")
-        p += ".ty"
 
         # Transitive imports.
         scope = addImportToScope(self.path, self.scope, self.recorder,

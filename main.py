@@ -60,7 +60,7 @@ def loadPrelude(config, recorder, vat):
     # Boot imports.
     scope = addImportToScope(config.libraryPaths, scope, recorder, bootTC)
 
-    code = obtainModule(config.libraryPaths, "prelude.ty", recorder)
+    code = obtainModule(config.libraryPaths, "prelude", recorder)
 
     with recorder.context("Time spent in prelude"):
         result = evaluateTerms([code], finalize(scope))

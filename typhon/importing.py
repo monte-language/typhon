@@ -15,8 +15,10 @@
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rpath import rjoin
+from rpython.rlib.unroll import unrolling_iterable
 
 from typhon.errors import UserException, userError
+from typhon.load.mast import InvalidMAST, loadMAST
 from typhon.load.trash import load
 from typhon.nodes import Sequence, interactiveCompile
 from typhon.objects.constants import NullObject
@@ -38,7 +40,11 @@ moduleCache = ModuleCache()
 @dont_look_inside
 def obtainModuleFromSource(source, recorder, origin):
     with recorder.context("Deserialization"):
-        term = Sequence(load(source)[:])
+        try:
+            term = loadMAST(source)
+        except InvalidMAST as im:
+            print "Invalid MAST:", im
+            term = Sequence(load(source)[:])
 
     with recorder.context("Compilation"):
         code, topLocals = interactiveCompile(term, origin)
@@ -51,6 +57,20 @@ def obtainModuleFromSource(source, recorder, origin):
     return code, topLocals
 
 
+def tryExtensions(filePath, recorder):
+    for extension in unrolling_iterable((".mast", ".ty")):
+        path = filePath + extension
+        try:
+            with open(path, "rb") as handle:
+                debug_print("Reading:", path)
+                source = handle.read()
+                return obtainModuleFromSource(source, recorder,
+                                               path.decode('utf-8'))[0]
+        except IOError:
+            continue
+    return None
+
+
 def obtainModule(libraryPaths, filePath, recorder):
     for libraryPath in libraryPaths:
         path = rjoin(libraryPath, filePath)
@@ -60,19 +80,16 @@ def obtainModule(libraryPaths, filePath, recorder):
             return moduleCache.cache[path]
 
         debug_print("Importing:", path)
-        try:
-            with open(path, "rb") as handle:
-                source = handle.read()
-                code = obtainModuleFromSource(source, recorder,
-                                              path.decode('utf-8'))[0]
-        except IOError:
+        code = tryExtensions(path, recorder)
+        if code is None:
             continue
 
         # Cache.
         moduleCache.cache[path] = code
         return code
     else:
-        raise userError(u"Module couldn't be found" %
+        debug_print("Failed to import:", filePath)
+        raise userError(u"Module '%s' couldn't be found" %
                         filePath.decode("utf-8"))
 
 
