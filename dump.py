@@ -2,7 +2,7 @@
 
 import sys
 
-from typhon.load import load
+from typhon.load.trash import load
 from typhon.nodes import Sequence
 
 path = sys.argv[1]

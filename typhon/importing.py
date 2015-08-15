@@ -16,7 +16,7 @@ from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import dont_look_inside
 
 from typhon.errors import UserException
-from typhon.load import load
+from typhon.load.trash import load
 from typhon.nodes import Sequence, interactiveCompile
 from typhon.objects.constants import NullObject
 from typhon.optimizer import optimize
