@@ -2,6 +2,8 @@ imports
 exports (main)
 
 def [=> dump :DeepFrozen] := import.script("lib/monte/ast_dumper")
+def [=> UTF8 :DeepFrozen] := import.script("lib/codec/utf8")
+def [=> makeMASTContext :DeepFrozen] := import("lib/monte/mast", [=> UTF8])
 def makeMonteLexer :DeepFrozen := import.script("lib/monte/monte_lexer")["makeMonteLexer"]
 def parseModule :DeepFrozen := import.script("lib/monte/monte_parser")["parseModule"]
 def [=> expand :DeepFrozen] := import.script("lib/monte/monte_expander")
@@ -60,13 +62,18 @@ def compile(config, inT, inputFile, outputFile, Timer, makeFileResource,
                 when (optimizeTime) -> {traceln(`Optimized source file (${optimizeTime}s)`)}
             }
 
-            var data := [].diverge()
-            def dumpTime := Timer.trial(fn {
-                dump(tree, fn stuff :Bytes {data.push(stuff)})
-                data := b``.join(data)
-            })
-            when (dumpTime) ->
-                traceln(`Dumped source file (${dumpTime}s)`)
+            def data := if (config.useNewFormat()) {
+                def context := makeMASTContext()
+                context(tree)
+                context.bytes()
+            } else {
+                var data := [].diverge()
+                def dumpTime := Timer.trial(fn {
+                    dump(tree, fn stuff :Bytes {data.push(stuff)})
+                })
+                when (dumpTime) -> {traceln(`Dumped source file (${dumpTime}s)`)}
+                b``.join(data)
+            }
 
             def outT := makeFileResource(outputFile).openDrain()
             outT<-receive(data)
@@ -75,21 +82,33 @@ def compile(config, inT, inputFile, outputFile, Timer, makeFileResource,
     inT<-flowTo(tyDumper)
 
 
-def parseArguments([processName, scriptName] + argv) as DeepFrozen:
+def parseArguments([processName, scriptName] + var argv) as DeepFrozen:
     var useMixer :Bool := false
-    var arguments := []
+    var useNewFormat :Bool := false
+    var arguments :List[Str] := []
 
-    for arg in argv:
-        if (arg == "-mix"):
-            useMixer := true
-        else:
-            arguments with= (arg)
+    while (argv.size() > 0):
+        switch (argv):
+            match [=="-mix"] + tail:
+                useMixer := true
+                argv := tail
+            match [=="-format", =="mast"] + tail:
+                useNewFormat := true
+                argv := tail
+            match [=="-format", =="trash"] + tail:
+                argv := tail
+            match [arg] + tail:
+                arguments with= (arg)
+                argv := tail
 
     return object configuration:
-        to useMixer():
+        to useMixer() :Bool:
             return useMixer
 
-        to arguments():
+        to useNewFormat() :Bool:
+            return useNewFormat
+
+        to arguments() :List[Str]:
             return arguments
 
 
