@@ -376,9 +376,6 @@ class _Null(Expr):
     def compile(self, compiler):
         compiler.literal(NullObject)
 
-    def slowTransform(self, o):
-        return NullObject
-
     def getStaticScope(self):
         return emptyScope
 
@@ -416,10 +413,6 @@ class Int(Expr):
         except OverflowError:
             compiler.literal(BigInt(self.bi))
 
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"LiteralExpr"),
-                               IntObject(self.bi.toint())])
-
     def getStaticScope(self):
         return emptyScope
 
@@ -446,9 +439,6 @@ class Str(Expr):
 
     def compile(self, compiler):
         compiler.literal(StrObject(self._s))
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"LiteralExpr"), StrObject(self._s)])
 
     def getStaticScope(self):
         return emptyScope
@@ -482,10 +472,6 @@ class Double(Expr):
     def compile(self, compiler):
         compiler.literal(DoubleObject(self._d))
 
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"LiteralExpr"),
-                               DoubleObject(self._d)])
-
     def getStaticScope(self):
         return emptyScope
 
@@ -512,10 +498,6 @@ class Char(Expr):
 
     def compile(self, compiler):
         compiler.literal(CharObject(self._c))
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"LiteralExpr"),
-                               CharObject(self._c)])
 
     def getStaticScope(self):
         return emptyScope
@@ -555,9 +537,6 @@ class Tuple(Expr):
     def transform(self, f):
         # I don't care if it's cheating. It's elegant and simple and pretty.
         return f(Tuple([node.transform(f) for node in self._t]))
-
-    def slowTransform(self, o):
-        return ConstList([node.slowTransform(o) for node in self._t])
 
     def usesName(self, name):
         uses = False
@@ -620,11 +599,6 @@ class Assign(Expr):
     def transform(self, f):
         return f(Assign(self.target, self.rvalue.transform(f)))
 
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"AssignExpr"),
-                               Noun(self.target).slowTransform(o),
-                               self.rvalue.slowTransform(o)])
-
     def usesName(self, name):
         return self.rvalue.usesName(name)
 
@@ -684,10 +658,6 @@ class Binding(Expr):
 
     def transform(self, f):
         return f(self)
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"BindingExpr"),
-                               Noun(self.name).slowTransform(o)])
 
     def compile(self, compiler):
         localIndex = compiler.locals.find(self.name)
@@ -749,13 +719,6 @@ class Call(Expr):
     def transform(self, f):
         return f(Call(self._target.transform(f), self._verb,
                       self._args.transform(f)))
-
-    def slowTransform(self, o):
-        return o.call(u"run",
-                      [StrObject(u"MethodCallExpr"),
-                       self._target.slowTransform(o),
-                       StrObject(self._verb),
-                       self._args.slowTransform(o)])
 
     def usesName(self, name):
         return self._target.usesName(name) or self._args.usesName(name)
@@ -819,14 +782,6 @@ class Def(Expr):
 
     def transform(self, f):
         return f(Def(self._p, self._e, self._v.transform(f)))
-
-    def slowTransform(self, o):
-        return o.call(
-            u"run",
-            [StrObject(u"DefExpr"), self._p.slowTransform(o),
-             (NullObject if self._e is None
-              else self._e.slowTransform(o)),
-             self._v.slowTransform(o)])
 
     def usesName(self, name):
         rv = self._v.usesName(name)
@@ -899,16 +854,6 @@ class Escape(Expr):
 
         return f(Escape(self._pattern, self._node.transform(f),
             self._catchPattern, catchNode))
-
-    def slowTransform(self, o):
-        return o.call(u"run",
-                      [StrObject(u"EscapeExpr"),
-                       self._pattern.slowTransform(o),
-                       self._node.slowTransform(o),
-                       (NullObject if self._catchPattern is None
-                        else self._catchPattern.slowTransform(o)),
-                       (NullObject if self._catchNode is None
-                        else self._catchNode.slowTransform(o))])
 
     def usesName(self, name):
         rv = self._node.usesName(name)
@@ -985,11 +930,6 @@ class Finally(Expr):
     def transform(self, f):
         return f(Finally(self._block.transform(f), self._atLast.transform(f)))
 
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"FinallyExpr"),
-                               self._block.slowTransform(o),
-                               self._atLast.slowTransform(o)])
-
     def usesName(self, name):
         return self._block.usesName(name) or self._atLast.usesName(name)
 
@@ -1036,10 +976,6 @@ class Hide(Expr):
     def transform(self, f):
         return f(Hide(self._inner.transform(f)))
 
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"HideExpr"),
-                               self._inner.slowTransform(o)])
-
     def usesName(self, name):
         # XXX not technically correct due to Hide intentionally altering
         # scope resolution.
@@ -1085,12 +1021,6 @@ class If(Expr):
     def transform(self, f):
         return f(If(self._test.transform(f), self._then.transform(f),
             self._otherwise.transform(f)))
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"IfExpr"),
-                               self._test.slowTransform(o),
-                               self._then.slowTransform(o),
-                               self._otherwise.slowTransform(o)])
 
     def usesName(self, name):
         rv = self._test.usesName(name) or self._then.usesName(name)
@@ -1150,11 +1080,6 @@ class Matcher(Expr):
     def transform(self, f):
         return f(Matcher(self._pattern, self._block.transform(f)))
 
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"Matcher"),
-                               self._pattern.slowTransform(o),
-                               self._block.slowTransform(o)])
-
     def getStaticScope(self):
         scope = self._pattern.getStaticScope()
         scope = scope.add(self._block.getStaticScope())
@@ -1188,9 +1113,6 @@ class Meta(Expr):
 
     def compile(self, compiler):
         compiler.literal(MetaContext())
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"MetaContextExpr")])
 
     def getStaticScope(self):
         return emptyScope
@@ -1249,14 +1171,6 @@ class Method(Expr):
     def transform(self, f):
         return f(Method(self._d, self._verb, self._ps, self._g,
                         self._b.transform(f)))
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"Method"),
-                               NullObject if self._d is None else StrObject(self._d),
-                               StrObject(self._verb),
-                               ConstList([p.slowTransform(o) for p in self._ps]),
-                               NullObject if self._g is None else self._g.slowTransform(o),
-                               self._b.slowTransform(o)])
 
     def usesName(self, name):
         return self._b.usesName(name)
@@ -1320,9 +1234,6 @@ class Noun(Expr):
             index = compiler.addGlobal(self.name)
             compiler.addInstruction("NOUN_GLOBAL", index)
             # print "I think", self.name, "is global"
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"NounExpr"), StrObject(self.name)])
 
     def getStaticScope(self):
         return StaticScope([self.name], [], [], [], False)
@@ -1397,17 +1308,6 @@ class Obj(Expr):
     def transform(self, f):
         return f(Obj(self._d, self._n, self._as, self._implements,
                      self._script.transform(f)))
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"ObjectExpr"),
-                               (NullObject if self._d is None
-                                else StrObject(self._d)),
-                               self._n.slowTransform(o),
-                               (NullObject if self._as is None
-                                else self._as.slowTransform(o)),
-                               ConstList([im.slowTransform(o)
-                                          for im in self._implements]),
-                               self._script.slowTransform(o)])
 
     def usesName(self, name):
         return self._script.usesName(name)
@@ -1630,15 +1530,6 @@ class Script(Expr):
         methods = [method.transform(f) for method in self._methods]
         return f(Script(self._extends, methods, self._matchers))
 
-    def slowTransform(self, o):
-        # XXX bug
-        return o.call(u"run", [StrObject(u"Script"),
-                               NullObject,
-                               ConstList([method.slowTransform(o)
-                                          for method in self._methods]),
-                               ConstList([method.slowTransform(o)
-                                          for method in self._methods])])
-
     def usesName(self, name):
         for method in self._methods:
             if method.usesName(name):
@@ -1706,11 +1597,6 @@ class Sequence(Expr):
     def transform(self, f):
         return f(Sequence([node.transform(f) for node in self._l]))
 
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"SeqExpr"),
-                               ConstList([node.slowTransform(o)
-                                          for node in self._l])])
-
     def usesName(self, name):
         for node in self._l:
             if node.usesName(name):
@@ -1767,12 +1653,6 @@ class Try(Expr):
     def transform(self, f):
         return f(Try(self._first.transform(f), self._pattern,
             self._then.transform(f)))
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"CatchExpr"),
-                               self._first.slowTransform(o),
-                               self._pattern.slowTransform(o),
-                               self._then.slowTransform(o)])
 
     def usesName(self, name):
         return self._first.usesName(name) or self._then.usesName(name)
@@ -1832,10 +1712,6 @@ class BindingPattern(Pattern):
         out.write("&&")
         out.write(self._noun.encode("utf-8"))
 
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"BindingPattern"),
-                               Noun(self._noun).slowTransform(o)])
-
     def compile(self, compiler):
         index = compiler.locals.add(self._noun)
         compiler.addInstruction("POP", 0)
@@ -1868,12 +1744,6 @@ class FinalPattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"FinalPattern"),
-                               Noun(self._n).slowTransform(o),
-                               (NullObject if self._g is None
-                                else self._g.slowTransform(o))])
 
     def compile(self, compiler):
         # [specimen ej]
@@ -1917,11 +1787,6 @@ class IgnorePattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"IgnorePattern"),
-                               (NullObject if self._g is None
-                                else self._g.slowTransform(o))])
 
     def compile(self, compiler):
         # [specimen ej]
@@ -1987,12 +1852,6 @@ class ListPattern(Pattern):
                 item.pretty(out)
         out.write("]")
 
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"ListPattern"),
-                               ConstList([item.slowTransform(o)
-                                          for item in self._ps]),
-                               NullObject])
-
     def compile(self, compiler):
         # [specimen ej]
         compiler.addInstruction("LIST_PATT", len(self._ps))
@@ -2031,12 +1890,6 @@ class VarPattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"VarPattern"),
-                               Noun(self._n).slowTransform(o),
-                               (NullObject if self._g is None
-                                else self._g.slowTransform(o))])
 
     def compile(self, compiler):
         # [specimen ej]
@@ -2082,11 +1935,6 @@ class ViaPattern(Pattern):
         self._expr.pretty(out)
         out.write(") ")
         self._pattern.pretty(out)
-
-    def slowTransform(self, o):
-        return o.call(u"run", [StrObject(u"ViaPattern"),
-                               self._expr.slowTransform(o),
-                               self._pattern.slowTransform(o)])
 
     def compile(self, compiler):
         # [specimen ej]
