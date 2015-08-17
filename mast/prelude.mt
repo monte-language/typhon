@@ -675,9 +675,6 @@ preludeScope := import("prelude/space",
 # b__quasiParser desires spaces.
 preludeScope |= import("prelude/b", preludeScope)
 
-# Terms require simple QP, spaces, and interfaces.
-preludeScope |= import("lib/monte/termParser", preludeScope)
-
 # Finally, the big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This
 # doesn't *have* to be the case, but it's the case we currently want to deal

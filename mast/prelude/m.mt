@@ -10,7 +10,7 @@ def parserScope := [
     => _switchFailed, => _makeVerbFacet, => _comparer,
     => _suchThat, => _matchSame, => _bind, => _quasiMatcher,
     => M, => import, => throw, => typhonEval,
-    => b__quasiParser, => simple__quasiParser, => term__quasiParser,
+    => b__quasiParser, => simple__quasiParser,
     => _makeOrderedSpace, => bench, => astBuilder
 ]
 

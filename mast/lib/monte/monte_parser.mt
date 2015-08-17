@@ -56,7 +56,7 @@ def parseMonte(lex, builder, mode, err):
 
     def formatError(var error, err):
         if (error == null):
-            error := ["Syntax error", tokens[position].getSpan()]
+            error := ["Syntax error", tokens[position][2]]
         if (error =~ [errMsg, span]):
             if (span == null):
                 # There's no span information. This is legal and caused by
@@ -92,7 +92,7 @@ def parseMonte(lex, builder, mode, err):
     def spanHere():
         if (position + 1 >= tokens.size()):
             return null
-        return tokens[position.max(0)].getSpan()
+        return tokens[position.max(0)][2]
 
     def spanFrom(start):
         return spanCover(start, spanHere())
@@ -100,7 +100,7 @@ def parseMonte(lex, builder, mode, err):
     def advance(ej):
         position += 1
         if (position >= tokens.size()):
-            throw.eject(ej, ["hit EOF", tokens.last().getSpan()])
+            throw.eject(ej, ["hit EOF", tokens.last()[2]])
         return tokens[position]
 
     def advanceTag(ej):
@@ -109,11 +109,11 @@ def parseMonte(lex, builder, mode, err):
         if (isHole):
             return t
         else:
-            return t.getTag().getName()
+            return t[0]
 
     def acceptTag(tagname, fail):
         def t := advance(fail)
-        def specname := t.getTag().getName()
+        def specname := t[0]
         if (specname != tagname):
             position -= 1
             throw.eject(fail, [`expected $tagname, got $specname`, spanHere()])
@@ -125,7 +125,7 @@ def parseMonte(lex, builder, mode, err):
                 return
             def t := tokens[position + 1]
             def isHole := t == VALUE_HOLE || t == PATTERN_HOLE
-            if (isHole || !["EOL", "#"].contains(t.getTag().getName())):
+            if (isHole || !["EOL", "#"].contains(t[0])):
                 return
             position += 1
 
@@ -143,7 +143,7 @@ def parseMonte(lex, builder, mode, err):
     def peekTag():
         if (position + 1 >= tokens.size()):
             return null
-        return tokens[position + 1].getTag().getName()
+        return tokens[position + 1][0]
 
     def matchEOLsThenTag(indent, tagname):
         def origPosition := position
@@ -152,7 +152,7 @@ def parseMonte(lex, builder, mode, err):
         if (position + 1 >= tokens.size()):
             position := origPosition
             return false
-        if (tokens[position + 1].getTag().getName() == tagname):
+        if (tokens[position + 1][0] == tagname):
             position += 1
             return true
         else:
@@ -207,36 +207,36 @@ def parseMonte(lex, builder, mode, err):
     def pattern
     def assign
     def quasiliteral(id, isPattern, ej):
-        def spanStart := if (id == null) {spanHere()} else {id.getSpan()}
-        def name := if (id == null) {null} else {id.getData()}
+        def spanStart := if (id == null) {spanHere()} else {id[2]}
+        def name := if (id == null) {null} else {id[1]}
         def parts := [].diverge()
         while (true):
             def t := advance(ej)
-            def tname := t.getTag().getName()
-            if (tname == "QUASI_OPEN" && t.getData() != ""):
-                parts.push(builder.QuasiText(t.getData(), t.getSpan()))
+            def tname := t[0]
+            if (tname == "QUASI_OPEN" && t[1] != ""):
+                parts.push(builder.QuasiText(t[1], t[2]))
             else if (tname == "QUASI_CLOSE"):
-                parts.push(builder.QuasiText(t.getData(), t.getSpan()))
+                parts.push(builder.QuasiText(t[1], t[2]))
                 break
             else if (tname == "DOLLAR_IDENT"):
                 parts.push(builder.QuasiExprHole(
-                               builder.NounExpr(t.getData(), t.getSpan()),
-                               t.getSpan()))
+                               builder.NounExpr(t[1], t[2]),
+                               t[2]))
             else if (tname == "${"):
                 def subexpr := expr(ej)
-                parts.push(builder.QuasiExprHole(subexpr, subexpr.getSpan()))
+                parts.push(builder.QuasiExprHole(subexpr, subexpr[2]))
             else if (tname == "AT_IDENT"):
-                def patt := if (t.getData() == "_") {
-                    builder.IgnorePattern(null, t.getSpan())
+                def patt := if (t[1] == "_") {
+                    builder.IgnorePattern(null, t[2])
                 } else {
                     builder.FinalPattern(
-                        builder.NounExpr(t.getData(), t.getSpan()),
-                        null, t.getSpan())
+                        builder.NounExpr(t[1], t[2]),
+                        null, t[2])
                 }
-                parts.push(builder.QuasiPatternHole(patt, t.getSpan()))
+                parts.push(builder.QuasiPatternHole(patt, t[2]))
             else if (tname == "@{"):
                 def subpatt := pattern(ej)
-                parts.push(builder.QuasiPatternHole(subpatt, subpatt.getSpan()))
+                parts.push(builder.QuasiPatternHole(subpatt, subpatt[2]))
         if (isPattern):
             return builder.QuasiParserPattern(name, parts, spanFrom(spanStart))
         else:
@@ -246,7 +246,7 @@ def parseMonte(lex, builder, mode, err):
        def spanStart := spanHere()
        if (peekTag() == "IDENTIFIER"):
             def t := advance(ej)
-            def n := builder.NounExpr(t.getData(), t.getSpan())
+            def n := builder.NounExpr(t[1], t[2])
             if (peekTag() == "["):
                 advance(ej)
                 def g := acceptList(expr)
@@ -262,12 +262,12 @@ def parseMonte(lex, builder, mode, err):
     def noun(ej):
         if (peekTag() == "IDENTIFIER"):
             def t := advance(ej)
-            return builder.NounExpr(t.getData(), t.getSpan())
+            return builder.NounExpr(t[1], t[2])
         else:
             def spanStart := spanHere()
             acceptTag("::", ej)
             def t := acceptTag(".String.", ej)
-            return builder.NounExpr(t.getData(), spanFrom(spanStart))
+            return builder.NounExpr(t[1], spanFrom(spanStart))
 
     def maybeGuard():
         def origPosition := position
@@ -293,13 +293,13 @@ def parseMonte(lex, builder, mode, err):
                     throw.eject(ej, [nex2, spanHere()])
             else:
                 def g := maybeGuard()
-                return builder.FinalPattern(builder.NounExpr(t.getData(), t.getSpan()), g, spanFrom(spanStart))
+                return builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))
         else if (nex == "::"):
             advance(ej)
             def spanStart := spanHere()
             def t := acceptTag(".String.", ej)
             def g := maybeGuard()
-            return builder.FinalPattern(builder.NounExpr(t.getData(), t.getSpan()), g, spanFrom(spanStart))
+            return builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))
         else if (nex == "var"):
             advance(ej)
             def n := noun(ej)
@@ -335,7 +335,7 @@ def parseMonte(lex, builder, mode, err):
         } else {
             if ([".String.", ".int.", ".float64.", ".char."].contains(peekTag())) {
                 def t := advance(ej)
-                builder.LiteralExpr(t.getData(), t.getSpan())
+                builder.LiteralExpr(t[1], t[2])
             } else {
                 throw.eject(ej, ["Map pattern keys must be literals or expressions in parens", spanHere()])
             }
@@ -371,7 +371,7 @@ def parseMonte(lex, builder, mode, err):
         else if (nex == "_"):
             advance(ej)
             def spanStart := spanHere()
-            def g := if (peekTag() == ":" && tokens[position + 2].getTag().getName() != "EOL") {
+            def g := if (peekTag() == ":" && tokens[position + 2][0] != "EOL") {
                 advance(ej); guard(ej)
             } else {
                 null
@@ -430,7 +430,7 @@ def parseMonte(lex, builder, mode, err):
 
     def seqSep(ej):
         if (![";", "#", "EOL"].contains(peekTag())):
-            ej(["Expected a semicolon or newline after expression", tokens[position].getSpan()])
+            ej(["Expected a semicolon or newline after expression", tokens[position][2]])
         advance(ej)
         while (true):
             if (![";", "#", "EOL"].contains(peekTag())):
@@ -533,7 +533,7 @@ def parseMonte(lex, builder, mode, err):
     def methBody(indent, ej):
         acceptEOLs()
         def doco := if (peekTag() == ".String.") {
-            advance(ej).getData()
+            advance(ej)[1]
         } else {
             null
         }
@@ -559,7 +559,7 @@ def parseMonte(lex, builder, mode, err):
             advance(ej)
         } else {
             def t := acceptTag("IDENTIFIER", ej)
-            __makeString.fromString(t.getData(), t.getSpan())
+            __makeString.fromString(t[1], t[2])
         }
         acceptTag("(", ej)
         def patts := acceptList(pattern)
@@ -581,7 +581,7 @@ def parseMonte(lex, builder, mode, err):
 
     def objectScript(indent, ej):
         def doco := if (peekTag() == ".String.") {
-            advance(ej).getData()
+            advance(ej)[1]
         } else {
             null
         }
@@ -674,7 +674,7 @@ def parseMonte(lex, builder, mode, err):
             null
         } else if (peekTag() == "IDENTIFIER") {
             def t := advance(ej)
-            __makeString.fromString(t.getData(), t.getSpan())
+            __makeString.fromString(t[1], t[2])
         } else {
             acceptTag("::", ej)
             acceptTag(".String.", ej)
@@ -707,7 +707,7 @@ def parseMonte(lex, builder, mode, err):
             if (indent) {
                 blockLookahead(tryAgain)
             }
-            suite(fn i, j {acceptEOLs(); acceptTag(".String.", j).getData()}, indent, ej)
+            suite(fn i, j {acceptEOLs(); acceptTag(".String.", j)[1]}, indent, ej)
         } else {
             null
         }
@@ -720,14 +720,14 @@ def parseMonte(lex, builder, mode, err):
             advance(ej)
         } else {
             def t := acceptTag("IDENTIFIER", ej)
-            __makeString.fromString(t.getData(), t.getSpan())
+            __makeString.fromString(t[1], t[2])
         }
         def [doco, params, resultguard] := messageDescInner(indent, ej, ej)
         return builder.MessageDesc(doco, verb, params, resultguard, spanFrom(spanStart))
 
     def interfaceBody(indent, ej):
         def doco := if (peekTag() == ".String.") {
-            advance(ej).getData()
+            advance(ej)[1]
         } else {
             null
         }
@@ -970,11 +970,11 @@ def parseMonte(lex, builder, mode, err):
             acceptTag("meta", ej)
             acceptTag(".", ej)
             def verb := acceptTag("IDENTIFIER", ej)
-            if (verb.getData() == "context"):
+            if (verb[1] == "context"):
                 acceptTag("(", ej)
                 acceptTag(")", ej)
                 return builder.MetaContextExpr(spanFrom(spanStart))
-            if (verb.getData() == "getState"):
+            if (verb[1] == "getState"):
                 acceptTag("(", ej)
                 acceptTag(")", ej)
                 return builder.MetaStateExpr(spanFrom(spanStart))
@@ -982,7 +982,7 @@ def parseMonte(lex, builder, mode, err):
 
         if (indent && peekTag() == "pass"):
             advance(ej)
-            return builder.SeqExpr([], advance(ej).getSpan())
+            return builder.SeqExpr([], advance(ej)[2])
         throw.eject(tryAgain, [`don't recognize $tag`, spanHere()])
 
     bind blockExpr(ej):
@@ -997,19 +997,19 @@ def parseMonte(lex, builder, mode, err):
         def tag := peekTag()
         if ([".String.", ".int.", ".float64.", ".char."].contains(tag)):
             def t := advance(ej)
-            return builder.LiteralExpr(t.getData(), t.getSpan())
+            return builder.LiteralExpr(t[1], t[2])
         if (tag == "IDENTIFIER"):
             def t := advance(ej)
             def nex := peekTag()
             if (nex == "QUASI_OPEN" || nex == "QUASI_CLOSE"):
                 return quasiliteral(t, false, ej)
             else:
-                return builder.NounExpr(t.getData(), t.getSpan())
+                return builder.NounExpr(t[1], t[2])
         if (tag == "::"):
             def spanStart := spanHere()
             advance(ej)
             def t := acceptTag(".String.", ej)
-            return builder.NounExpr(t.getData(), t.getSpan())
+            return builder.NounExpr(t[1], t[2])
         if (tag == "QUASI_OPEN" || tag == "QUASI_CLOSE"):
             return quasiliteral(null, false, ej)
         # paren expr
@@ -1079,10 +1079,10 @@ def parseMonte(lex, builder, mode, err):
 
         def callish(methodish, curryish):
             def verb := if (peekTag() == ".String.") {
-                advance(ej).getData()
+                advance(ej)[1]
             } else {
                 def t := acceptTag("IDENTIFIER", ej)
-                __makeString.fromString(t.getData(), t.getSpan())
+                __makeString.fromString(t[1], t[2])
             }
             if (peekTag() == "("):
                 advance(ej)
@@ -1290,7 +1290,7 @@ def parseMonte(lex, builder, mode, err):
                 return builder.AugAssignExpr(op, lval, assign(ej), spanFrom(spanStart))
             throw.eject(ej, [`Invalid assignment target`, lt.getSpan()])
         if (peekTag() == "VERB_ASSIGN"):
-            def verb := advance(ej).getData()
+            def verb := advance(ej)[1]
             def lt := lval.getNodeName()
             if (["NounExpr", "GetExpr"].contains(lt)):
                 acceptTag("(", ej)
@@ -1308,7 +1308,7 @@ def parseMonte(lex, builder, mode, err):
         if (["continue", "break", "return"].contains(peekTag())):
             def spanStart := spanHere()
             def ex := advanceTag(ej)
-            if (peekTag() == "(" && tokens[position + 2].getTag().getName() == ")"):
+            if (peekTag() == "(" && tokens[position + 2][0] == ")"):
                 position += 2
                 return builder.ExitExpr(ex, null, spanFrom(spanStart))
             if (["EOL", "#", ";", "DEDENT", null].contains(peekTag())):

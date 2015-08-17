@@ -1,5 +1,4 @@
-boot_objects = boot/lib/monte/termParser.ty \
-	boot/lib/monte/monte_lexer.ty \
+boot_objects = boot/lib/monte/monte_lexer.ty \
 	boot/lib/monte/monte_parser.ty \
 	boot/lib/monte/ast_dumper.ty \
 	boot/lib/monte/monte_expander.ty \
@@ -100,7 +99,8 @@ irc: mast/lib/irc/client.ty mast/lib/irc/user.ty \
 
 games: mast/games/mafia.ty
 
-fun: mast/fun/elements.ty mast/fun/repl.ty mast/fun/brot.ty
+fun: mast/fun/elements.ty mast/fun/repl.ty mast/fun/brot.ty \
+	mast/fun/termParser.ty
 
 bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty \
 	mast/bench/primeCount.ty mast/bench/brot.ty
@@ -108,7 +108,7 @@ bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty \
 monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/lib/monte/monte_parser.ty mast/lib/monte/monte_expander.ty \
 	mast/lib/monte/monte_optimizer.ty mast/lib/monte/ast_dumper.ty \
-	mast/lib/monte/termParser.ty mast/montec.ty
+	mast/montec.ty
 
 %.ty: %.mt
 	@ echo "MONTEC $<"

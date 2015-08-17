@@ -21,8 +21,7 @@ def MONTE_KEYWORDS := [
     "via", "when", "while"]
 
 def composite(name, data, span):
-    return term__quasiParser.makeTerm(term__quasiParser.makeTag(null, name, Any),
-                                      data, [], span)
+    return [name, data, span]
 
 def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
 
@@ -130,13 +129,8 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
         def span := __makeSourceSpan(inputName, tokenStartLine == lineNumber,
                     tokenStartLine, tokenStartCol, lineNumber, colNumber)
         startPos := -1
-        # XXX replace with twine
-        return object token extends tok:
-            to _conformTo(guard, ej):
-                if (guard == Str):
-                    return token
-            to getSpan():
-                return span
+        # XXX use span somehow
+        return tok
 
     def leaf(tok):
         return composite(tok, null, endToken().getSpan())
