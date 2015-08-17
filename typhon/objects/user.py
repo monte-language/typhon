@@ -130,9 +130,7 @@ class Audition(Object):
             return self.getGuard(unwrapStr(args[0]))
 
         if atom is GETOBJECTEXPR_0:
-            if self.ast.monteAST is None:
-                self.ast.monteAST = self.ast.slowTransform(AstInflator())
-            return self.ast.monteAST
+            return self.ast
 
         if atom is GETFQN_0:
             assert isinstance(self.fqn, unicode)

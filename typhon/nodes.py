@@ -19,17 +19,42 @@ from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
-from typhon.errors import LoadFailed
-from typhon.objects.constants import NullObject
-from typhon.objects.collections import ConstList
+from typhon.autohelp import autohelp
+from typhon.errors import LoadFailed, Refused, userError
+from typhon.objects.constants import NullObject, wrapBool
+from typhon.objects.collections import ConstList, ConstSet, monteDict
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
-                                 StrObject)
+                                 StrObject, unwrapStr)
+from typhon.objects.ejectors import throw
 from typhon.objects.meta import MetaContext
+from typhon.objects.root import Object
 from typhon.objects.user import ScriptObject
 from typhon.pretty import Buffer, LineWriter
 from typhon.smallcaps.code import Code
 from typhon.smallcaps.ops import ops
 from typhon.smallcaps.peephole import peephole
+
+
+ADD_1 = getAtom(u"add", 1)
+GETDEFNAMES_0 = getAtom(u"getDefNames", 0)
+GETMETASTATEEXPRFLAG_0 = getAtom(u"getMetaStateExprFlag", 0)
+GETMETHODNAMED_2 = getAtom(u"getMethodNamed", 2)
+GETMETHODS_0 = getAtom(u"getMethods", 0)
+GETNAMESREAD_0 = getAtom(u"getNamesRead", 0)
+GETNAMESSET_0 = getAtom(u"getNamesSet", 0)
+GETNAME_0 = getAtom(u"getName", 0)
+GETNODENAME_0 = getAtom(u"getNodeName", 0)
+GETPATTERNS_0 = getAtom(u"getPatterns", 0)
+GETRESULTGUARD_0 = getAtom(u"getResultGuard", 0)
+GETSCRIPT_0 = getAtom(u"getScript", 0)
+GETSTATICSCOPE_0 = getAtom(u"getStaticScope", 0)
+GETVALUE_0 = getAtom(u"getValue", 0)
+GETVARNAMES_0 = getAtom(u"getVarNames", 0)
+GETVERB_0 = getAtom(u"getVerb", 0)
+HIDE_0 = getAtom(u"hide", 0)
+NAMESUSED_0 = getAtom(u"namesUsed", 0)
+OUTNAMES_0 = getAtom(u"outNames", 0)
+
 
 def lt0(a, b):
     return a[0] < b[0]
@@ -208,12 +233,12 @@ class InvalidAST(LoadFailed):
     """
 
 
-class Node(object):
+class Node(Object):
+    """
+    An AST node, either an expression or a pattern.
+    """
 
     _immutable_ = True
-    _attrs_ = "monteAST",
-
-    monteAST = None
 
     def __repr__(self):
         b = Buffer()
@@ -240,10 +265,110 @@ class Node(object):
         return False
 
 
-class _Null(Node):
+def wrapNameList(names):
+    d = monteDict()
+    for name in names:
+        d[StrObject(name)] = None
+    return ConstSet(d)
+
+def orList(left, right):
+    if len(left) < len(right):
+        right, left = left, right
+    rv = []
+    for item in left:
+        if item not in right:
+            rv.append(item)
+    return rv + right
+
+def printList(names):
+    return u"[%s]" % u", ".join(names)
+
+
+@autohelp
+class StaticScope(Object):
+    """
+    The sets of names which occur within this scope.
+    """
 
     _immutable_ = True
-    _attrs_ = ()
+    _immutable_fields_ = "read[*]", "set[*]", "defs[*]", "vars[*]", "meta"
+
+    def __init__(self, read, set, defs, vars, meta):
+        self.read = read
+        self.set = set
+        self.defs = defs
+        self.vars = vars
+        self.meta = meta
+
+    def toString(self):
+        return u"<%s := %s =~ %s + var %s%s>" % (
+            printList(self.set), printList(self.read), printList(self.defs),
+            printList(self.vars), u" (meta)" if self.meta else u"")
+
+    def add(self, right):
+        if right is NullObject:
+            return self
+        if isinstance(right, StaticScope):
+            rightNamesRead = [name for name in right.read
+                              if name not in self.defs + self.vars]
+            rightNamesSet = [name for name in right.set
+                             if name not in self.vars]
+            for name in rightNamesSet:
+                if name in self.defs:
+                    raise userError(u"Can't assign to final noun %s" % name)
+            return StaticScope(orList(self.read, rightNamesRead),
+                               orList(self.set, rightNamesSet),
+                               orList(self.defs, right.defs),
+                               orList(self.vars, right.vars),
+                               self.meta or right.meta)
+    def hide(self):
+        return StaticScope(self.read, self.set, [], [], self.meta)
+
+    def recv(self, atom, args):
+        if atom is GETNAMESREAD_0:
+            return wrapNameList(self.read)
+
+        if atom is GETNAMESSET_0:
+            return wrapNameList(self.set)
+
+        if atom is GETDEFNAMES_0:
+            return wrapNameList(self.defs)
+
+        if atom is GETVARNAMES_0:
+            return wrapNameList(self.vars)
+
+        if atom is GETMETASTATEEXPRFLAG_0:
+            return wrapBool(self.meta)
+
+        if atom is HIDE_0:
+            return self.hide()
+
+        if atom is ADD_1:
+            return self.add(args[0])
+
+        if atom is NAMESUSED_0:
+            return wrapNameList(self.read + self.set)
+
+        if atom is OUTNAMES_0:
+            return wrapNameList(self.defs + self.vars)
+
+        raise Refused(self, atom, args)
+
+emptyScope = StaticScope([], [], [], [], False)
+
+
+class Expr(Node):
+    """
+    The root of all expressions.
+    """
+
+    _immutable_ = True
+
+
+@autohelp
+class _Null(Expr):
+
+    _immutable_ = True
 
     def pretty(self, out):
         out.write("null")
@@ -254,6 +379,18 @@ class _Null(Node):
     def slowTransform(self, o):
         return NullObject
 
+    def getStaticScope(self):
+        return emptyScope
+
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"LiteralExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
 
 Null = _Null()
 
@@ -262,7 +399,8 @@ def nullToNone(node):
     return None if node is Null else node
 
 
-class Int(Node):
+@autohelp
+class Int(Expr):
 
     _immutable_ = True
 
@@ -282,8 +420,21 @@ class Int(Node):
         return o.call(u"run", [StrObject(u"LiteralExpr"),
                                IntObject(self.bi.toint())])
 
+    def getStaticScope(self):
+        return emptyScope
 
-class Str(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"LiteralExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Str(Expr):
 
     _immutable_ = True
 
@@ -299,6 +450,18 @@ class Str(Node):
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"LiteralExpr"), StrObject(self._s)])
 
+    def getStaticScope(self):
+        return emptyScope
+
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"LiteralExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
 
 def strToString(s):
     if not isinstance(s, Str):
@@ -306,7 +469,7 @@ def strToString(s):
     return s._s
 
 
-class Double(Node):
+class Double(Expr):
 
     _immutable_ = True
 
@@ -323,8 +486,21 @@ class Double(Node):
         return o.call(u"run", [StrObject(u"LiteralExpr"),
                                DoubleObject(self._d)])
 
+    def getStaticScope(self):
+        return emptyScope
 
-class Char(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"LiteralExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Char(Expr):
 
     _immutable_ = True
 
@@ -341,7 +517,21 @@ class Char(Node):
         return o.call(u"run", [StrObject(u"LiteralExpr"),
                                CharObject(self._c)])
 
-class Tuple(Node):
+    def getStaticScope(self):
+        return emptyScope
+
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"LiteralExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Tuple(Expr):
 
     _immutable_ = True
 
@@ -387,6 +577,21 @@ class Tuple(Node):
         compiler.call(u"run", size)
         # [ConstList]
 
+    def getStaticScope(self):
+        scope = emptyScope
+        for expr in self._t:
+            scope = scope.add(expr.getStaticScope())
+        return scope
+
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"LiteralExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
 
 def tupleToList(t):
     if not isinstance(t, Tuple):
@@ -394,7 +599,8 @@ def tupleToList(t):
     return t._t
 
 
-class Assign(Node):
+@autohelp
+class Assign(Expr):
 
     _immutable_ = True
 
@@ -445,8 +651,23 @@ class Assign(Node):
             compiler.addInstruction("ASSIGN_GLOBAL", index)
             # [rvalue]
 
+    def getStaticScope(self):
+        scope = StaticScope([], [self.target], [], [], False)
+        scope = scope.add(self.rvalue.getStaticScope())
+        return scope
 
-class Binding(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"AssignExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Binding(Expr):
 
     _immutable_ = True
 
@@ -482,8 +703,21 @@ class Binding(Node):
             compiler.addInstruction("BINDING_GLOBAL", index)
             # [binding]
 
+    def getStaticScope(self):
+        return StaticScope([self.name], [], [], [], False)
 
-class Call(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"BindingExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Call(Expr):
 
     _immutable_ = True
 
@@ -537,7 +771,26 @@ class Call(Node):
         compiler.call(self._verb, arity)
         # [retval]
 
-class Def(Node):
+    def getStaticScope(self):
+        # XXX is this right? It feels backwards.
+        scope = emptyScope
+        for expr in self._args._t:
+            scope = scope.add(expr.getStaticScope())
+        scope = scope.add(self._target.getStaticScope())
+        return scope
+
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"MethodCallExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Def(Expr):
 
     _immutable_ = True
 
@@ -595,8 +848,25 @@ class Def(Node):
         self._p.compile(compiler)
         # [value]
 
+    def getStaticScope(self):
+        scope = self._p.getStaticScope()
+        if self._e is not None:
+            scope = scope.add(self._e.getStaticScope())
+        scope = scope.add(self._v.getStaticScope())
+        return scope
 
-class Escape(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"DefExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Escape(Expr):
 
     _immutable_ = True
 
@@ -674,8 +944,28 @@ class Escape(Node):
         else:
             compiler.patch(ejector)
 
+    def getStaticScope(self):
+        scope = self._pattern.getStaticScope()
+        scope = scope.add(self._node.getStaticScope())
+        scope = scope.hide()
+        if self._catchNode is not None:
+            catchScope = self._catchPattern.getStaticScope()
+            catchScope = catchScope.add(self._catchNode.getStaticScope())
+            scope = scope.add(catchScope.hide())
+        return scope
 
-class Finally(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"EscapeExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Finally(Expr):
 
     _immutable_ = True
 
@@ -715,8 +1005,23 @@ class Finally(Node):
         compiler.patch(handler)
         compiler.patch(dropper)
 
+    def getStaticScope(self):
+        scope = self._block.getStaticScope().hide()
+        scope = scope.add(self._atLast.getStaticScope().hide())
+        return scope
 
-class Hide(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"FinallyExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Hide(Expr):
 
     _immutable_ = True
 
@@ -743,8 +1048,21 @@ class Hide(Node):
     def compile(self, compiler):
         self._inner.compile(compiler.pushScope())
 
+    def getStaticScope(self):
+        return self._inner.getStaticScope().hide()
 
-class If(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"HideExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class If(Expr):
 
     _immutable_ = True
 
@@ -794,8 +1112,24 @@ class If(Node):
         self._otherwise.compile(subc.pushScope())
         compiler.patch(jump)
 
+    def getStaticScope(self):
+        scope = self._test.getStaticScope()
+        scope = scope.add(self._then.getStaticScope().hide())
+        scope = scope.add(self._otherwise.getStaticScope().hide())
+        return scope
 
-class Matcher(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"IfExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Matcher(Expr):
 
     _immutable_ = True
 
@@ -821,8 +1155,23 @@ class Matcher(Node):
                                self._pattern.slowTransform(o),
                                self._block.slowTransform(o)])
 
+    def getStaticScope(self):
+        scope = self._pattern.getStaticScope()
+        scope = scope.add(self._block.getStaticScope())
+        return scope.hide()
 
-class Meta(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"Matcher")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Meta(Expr):
 
     _immutable_ = True
 
@@ -843,8 +1192,21 @@ class Meta(Node):
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"MetaContextExpr")])
 
+    def getStaticScope(self):
+        return emptyScope
 
-class Method(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"MetaContextExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Method(Expr):
 
     _immutable_ = True
 
@@ -899,8 +1261,35 @@ class Method(Node):
     def usesName(self, name):
         return self._b.usesName(name)
 
+    def getStaticScope(self):
+        scope = emptyScope
+        for patt in self._ps:
+            scope = scope.add(patt.getStaticScope())
+        scope = scope.add(self._g.getStaticScope())
+        scope = scope.add(self._b.getStaticScope())
+        return scope.hide()
 
-class Noun(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"MethodExpr")
+
+        if atom is GETPATTERNS_0:
+            return ConstList(self._ps)
+
+        if atom is GETRESULTGUARD_0:
+            return NullObject if self._g is None else self._g
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        if atom is GETVERB_0:
+            return StrObject(self._verb)
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Noun(Expr):
 
     _immutable_ = True
     _immutable_Fields_ = "noun",
@@ -935,6 +1324,21 @@ class Noun(Node):
     def slowTransform(self, o):
         return o.call(u"run", [StrObject(u"NounExpr"), StrObject(self.name)])
 
+    def getStaticScope(self):
+        return StaticScope([self.name], [], [], [], False)
+
+    def recv(self, atom, args):
+        if atom is GETNAME_0:
+            return StrObject(self.name)
+
+        if atom is GETNODENAME_0:
+            return StrObject(u"NounExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
 
 def nounToString(n):
     if not isinstance(n, Noun):
@@ -942,7 +1346,11 @@ def nounToString(n):
     return n.name
 
 
-class Obj(Node):
+@autohelp
+class Obj(Expr):
+    """
+    An object.
+    """
 
     _immutable_ = True
 
@@ -1059,6 +1467,32 @@ class Obj(Node):
             slotIndex = compiler.locals.add(self._n._n)
             compiler.addInstruction("BINDFINALSLOT", slotIndex)
 
+    def getStaticScope(self):
+        scope = self._n.getStaticScope()
+        auditorScope = emptyScope
+        if self._as is not None:
+            auditorScope = self._as.getStaticScope()
+        for expr in self._implements:
+            auditorScope = auditorScope.add(expr.getStaticScope())
+        scope = scope.add(auditorScope.hide())
+        scope = scope.add(self._script.getStaticScope())
+        return scope
+
+    def recv(self, atom, args):
+        if atom is GETNAME_0:
+            return self._n
+
+        if atom is GETNODENAME_0:
+            return StrObject(u"ObjectExpr")
+
+        if atom is GETSCRIPT_0:
+            return self._script
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
 
 class CodeScript(object):
 
@@ -1157,7 +1591,7 @@ class CodeScript(object):
         return self.methods.get(atom, None)
 
 
-class Script(Node):
+class Script(Expr):
 
     _immutable_ = True
 
@@ -1197,6 +1631,7 @@ class Script(Node):
         return f(Script(self._extends, methods, self._matchers))
 
     def slowTransform(self, o):
+        # XXX bug
         return o.call(u"run", [StrObject(u"Script"),
                                NullObject,
                                ConstList([method.slowTransform(o)
@@ -1213,8 +1648,38 @@ class Script(Node):
                 return True
         return False
 
+    def getStaticScope(self):
+        scope = emptyScope
+        for expr in self._methods:
+            scope = scope.add(expr.getStaticScope())
+        for expr in self._matchers:
+            scope = scope.add(expr.getStaticScope())
+        return scope
 
-class Sequence(Node):
+    def recv(self, atom, args):
+        if atom is GETMETHODNAMED_2:
+            name = unwrapStr(args[0])
+            for method in self._methods:
+                assert isinstance(method, Method), "Method wasn't a method!?"
+                if method._verb == name:
+                    return method
+            ej = args[1]
+            throw(ej, StrObject(u"No method named %s" % name))
+
+        if atom is GETNODENAME_0:
+            return StrObject(u"ScriptExpr")
+
+        if atom is GETMETHODS_0:
+            return ConstList(self._methods)
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Sequence(Expr):
 
     _immutable_ = True
 
@@ -1262,8 +1727,24 @@ class Sequence(Node):
             # If the sequence is empty, then it evaluates to null.
             compiler.literal(NullObject)
 
+    def getStaticScope(self):
+        scope = emptyScope
+        for expr in self._l:
+            scope = scope.add(expr.getStaticScope())
+        return scope
 
-class Try(Node):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"SeqExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Try(Expr):
 
     _immutable_ = True
 
@@ -1306,8 +1787,27 @@ class Try(Node):
         self._then.compile(subc)
         compiler.patch(end)
 
+    def getStaticScope(self):
+        scope = self._first.getStaticScope()
+        catchScope = self._pattern.getStaticScope()
+        catchScope = catchScope.add(self._then.getStaticScope())
+        return scope.add(catchScope.hide())
 
-class Pattern(object):
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"CatchExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class Pattern(Expr):
+    """
+    The root of all patterns.
+    """
 
     _immutable_ = True
 
@@ -1320,6 +1820,7 @@ class Pattern(object):
         return self.__repr__()
 
 
+@autohelp
 class BindingPattern(Pattern):
 
     _immutable_ = True
@@ -1340,7 +1841,20 @@ class BindingPattern(Pattern):
         compiler.addInstruction("POP", 0)
         compiler.addInstruction("BIND", index)
 
+    def getStaticScope(self):
+        return StaticScope([], [], [], [self._noun], False)
 
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"BindingPattern")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
 class FinalPattern(Pattern):
 
     _immutable_ = True
@@ -1374,7 +1888,23 @@ class FinalPattern(Pattern):
         compiler.addInstruction("BINDFINALSLOT", index)
         # []
 
+    def getStaticScope(self):
+        scope = StaticScope([], [], [self._n], [], False)
+        if self._g is not None:
+            scope = scope.add(self._g.getStaticScope())
+        return scope
 
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"FinalPattern")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
 class IgnorePattern(Pattern):
 
     _immutable_ = True
@@ -1411,7 +1941,23 @@ class IgnorePattern(Pattern):
             compiler.addInstruction("POP", 0)
             # []
 
+    def getStaticScope(self):
+        scope = emptyScope
+        if self._g is not None:
+            scope = scope.add(self._g.getStaticScope())
+        return scope
 
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"IgnorePattern")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
 class ListPattern(Pattern):
 
     _immutable_ = True
@@ -1454,7 +2000,23 @@ class ListPattern(Pattern):
             # [specimen ej]
             patt.compile(compiler)
 
+    def getStaticScope(self):
+        scope = emptyScope
+        for patt in self._ps:
+            scope = scope.add(patt.getStaticScope())
+        return scope
 
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"ListPattern")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
 class VarPattern(Pattern):
 
     _immutable_ = True
@@ -1488,7 +2050,23 @@ class VarPattern(Pattern):
         index = compiler.locals.add(self._n)
         compiler.addInstruction("BINDVARSLOT", index)
 
+    def getStaticScope(self):
+        scope = StaticScope([], [], [], [self._n], False)
+        if self._g is not None:
+            scope = scope.add(self._g.getStaticScope())
+        return scope
 
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"VarPattern")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
 class ViaPattern(Pattern):
 
     _immutable_ = True
@@ -1528,6 +2106,18 @@ class ViaPattern(Pattern):
         compiler.addInstruction("SWAP", 0)
         # [specimen ej]
         self._pattern.compile(compiler)
+
+    def getStaticScope(self):
+        return self._expr.getStaticScope().add(self._pattern.getStaticScope())
+
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"ViaPattern")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
 
 
 def formatName(p):

@@ -126,7 +126,7 @@ bind auditDeepFrozen(audition, fail) as DeepFrozenStamp:
                         patternSS.getDefNames())
 
     for patt in closurePatts:
-        def name := patt.getName()
+        def name := if (patt =~ s :Str) {s} else {patt.getName()}
         if (patternSS.getVarNames().contains(name)):
             throw.eject(fail, M.toQuote(name) + " in the definition of " +
                         audition.getFQN() + " is a variable pattern " +
