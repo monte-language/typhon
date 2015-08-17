@@ -188,7 +188,7 @@ def printObjectSuiteOn(leaderFn, docstring, suite, out, priority):
             suite.subPrintOn(o, p)
             }, false, true, out, priority)
 
-def astWrapper(node, maker, args, span, scope, termName, transformArgs):
+def astWrapper(node, maker, args, span, scope, nodeName, transformArgs):
     return object astNode extends node implements Selfless, TransparentStamp:
         to getStaticScope():
             return scope
@@ -199,7 +199,7 @@ def astWrapper(node, maker, args, span, scope, termName, transformArgs):
                 return astNode
             return M.call(maker, "run", args + [null])
         to getNodeName():
-            return termName
+            return nodeName
         to transform(f):
             return f(astNode, maker, transformArgs(f), span)
         to _uncall():
