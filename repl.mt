@@ -17,7 +17,7 @@ def baseEnvironment := [
     # Guards.
     => &&Any, => &&Bool, => &&Char, => &&DeepFrozen, => &&Double, => &&Empty, => &&Int,
     => &&List, => &&Map, => &&Near, => &&NullOk, => &&Same, => &&Set, => &&Str,
-    => &&SubrangeGuard, => &&Tag, => &&Term, => &&Void,
+    => &&SubrangeGuard, => &&Void,
     => &&_mapEmpty, => &&_mapExtract,
     => &&_accumulateList, => &&__auditedBy, => &&_booleanFlow, => &&_iterWhile,
     => &&__loop, => &&_validateFor,

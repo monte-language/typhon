@@ -556,7 +556,7 @@ def parseMonte(lex, builder, mode, err):
             builder."Method"
         }
         def verb := if (peekTag() == ".String.") {
-            advance(ej)
+            advance(ej)[1]
         } else {
             def t := acceptTag("IDENTIFIER", ej)
             __makeString.fromString(t[1], t[2])
