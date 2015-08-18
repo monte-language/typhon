@@ -1,24 +1,27 @@
+def regionToSet(r):
+    return [for i in (r) i].asSet()
+
 object VALUE_HOLE {}
 object PATTERN_HOLE {}
 object EOF {}
-def decimalDigits := '0'..'9'
-def hexDigits := decimalDigits | 'a'..'f' | 'A'..'F'
+def decimalDigits := regionToSet('0'..'9')
+def hexDigits := decimalDigits | regionToSet('a'..'f' | 'A'..'F')
 
-def idStart := 'a'..'z' | 'A'..'Z' | '_'..'_'
-def idPart := idStart | '0'..'9'
+def idStart := regionToSet('a'..'z' | 'A'..'Z' | '_'..'_')
+def idPart := idStart | decimalDigits
 def closers := ['(' => ')', '[' => ']', '{' => '}']
 
 def isIdentifierPart(c):
     if (c == EOF):
         return false
-    return idPart(c)
+    return idPart.contains(c)
 
 def MONTE_KEYWORDS := [
     "as", "bind", "break", "catch", "continue", "def", "else", "escape",
     "exit", "extends", "export", "finally", "fn", "for", "guards", "if",
     "implements", "in", "interface", "match", "meta", "method", "module",
     "object", "pass", "pragma", "return", "switch", "to", "try", "var",
-    "via", "when", "while"]
+    "via", "when", "while"].asSet()
 
 def composite(name, data, span):
     return [name, data, span]
@@ -136,10 +139,10 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
         return composite(tok, null, endToken().getSpan())
 
     def collectDigits(var digitset):
-        if (atEnd() || !digitset(currentChar)):
+        if (atEnd() || !digitset.contains(currentChar)):
             return false
-        digitset |= ('_'..'_')
-        while (!atEnd() && digitset(currentChar)):
+        digitset |= ['_'].asSet()
+        while (!atEnd() && digitset.contains(currentChar)):
             advance()
         return true
 
@@ -159,7 +162,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
                 def pc := peekChar()
                 if (pc == EOF):
                     throw.eject(fail, ["Missing fractional part", spanAtPoint()])
-                if (decimalDigits(pc)):
+                if (decimalDigits.contains(pc)):
                     advance()
                     floating := true
                     collectDigits(decimalDigits)
@@ -431,7 +434,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
             if (nex == '{'):
                 # quasi hole of form ${blah}
                 return openBracket("}", null, fail)
-            else if (nex != EOF && idStart(nex)):
+            else if (nex != EOF && idStart.contains(nex)):
                 # quasi hole of form $blee
                 var cc := advance()
                 while (isIdentifierPart(cc)):
@@ -454,7 +457,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
             if (nex == '{'):
                 # quasi hole of the form @{blee}
                 return openBracket("}", null, fail)
-            else if (nex != EOF && idStart(nex)):
+            else if (nex != EOF && idStart.contains(nex)):
                 # quasi hole of the form @blee
                 var cc := advance()
                 while (isIdentifierPart(cc)):
@@ -664,19 +667,19 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
                 return next
             return part
 
-        if (decimalDigits(cur)):
+        if (decimalDigits.contains(cur)):
             return numberLiteral(fail)
 
         if (cur == '_'):
             def pc := peekChar()
-            if (pc != EOF && idStart(pc)):
+            if (pc != EOF && idStart.contains(pc)):
                 return identifier(fail)
             advance()
             return leaf("_")
 
         if (cur == '\t'):
             throw.eject(fail, ["Tab characters are not permitted in Monte source.", spanAtPoint()])
-        if (idStart(cur)):
+        if (idStart.contains(cur)):
             return identifier(fail)
 
         throw.eject(fail, [`Unrecognized character ${cur.quote()}`, spanAtPoint()])
