@@ -224,7 +224,7 @@ def parseMonte(lex, builder, mode, err):
                                t[2]))
             else if (tname == "${"):
                 def subexpr := expr(ej)
-                parts.push(builder.QuasiExprHole(subexpr, subexpr[2]))
+                parts.push(builder.QuasiExprHole(subexpr, subexpr.getSpan()))
             else if (tname == "AT_IDENT"):
                 def patt := if (t[1] == "_") {
                     builder.IgnorePattern(null, t[2])
@@ -236,7 +236,7 @@ def parseMonte(lex, builder, mode, err):
                 parts.push(builder.QuasiPatternHole(patt, t[2]))
             else if (tname == "@{"):
                 def subpatt := pattern(ej)
-                parts.push(builder.QuasiPatternHole(subpatt, subpatt[2]))
+                parts.push(builder.QuasiPatternHole(subpatt, subpatt.getSpan()))
         if (isPattern):
             return builder.QuasiParserPattern(name, parts, spanFrom(spanStart))
         else:
