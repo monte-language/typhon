@@ -30,13 +30,14 @@ class Code(object):
     """
 
     _immutable_ = True
-    _immutable_fields_ = ("instructions[*]?", "indices[*]?", "atoms[*]",
-                          "globals[*]", "frame[*]", "literals[*]",
-                          "locals[*]", "scripts[*]",
-                          "maxDepth", "maxHandlerDepth")
+    _immutable_fields_ = ("fqn", "instructions[*]?", "indices[*]?",
+                          "atoms[*]", "globals[*]", "frame[*]", "literals[*]",
+                          "locals[*]", "scripts[*]", "maxDepth",
+                          "maxHandlerDepth")
 
-    def __init__(self, instructions, atoms, literals, globals, frame, locals,
-                 scripts):
+    def __init__(self, fqn, instructions, atoms, literals, globals, frame,
+                 locals, scripts):
+        self.fqn = fqn
         # Copy all of the lists on construction, to satisfy RPython's need for
         # these lists to be immutable.
         self.instructions = [pair[0] for pair in instructions]
@@ -119,6 +120,11 @@ class Code(object):
         self.maxDepth, self.maxHandlerDepth = ai.getDepth()
 
     def profileName(self):
-        return "mt:<unknown>:1:<unknown>"
+        try:
+            filename, objname = self.fqn.encode("utf-8").split('$', 1)
+        except ValueError:
+            filename = "<unknown>"
+            objname = self.fqn.encode("utf-8")
+        return "mt:%s:1:%s" % (objname, filename)
 
 rvmprof.register_code_object_class(Code, Code.profileName)

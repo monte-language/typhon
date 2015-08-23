@@ -125,7 +125,7 @@ class profiling(object):
     def __enter__(self):
         self.handle = open(self.path, "wb")
         try:
-            rvmprof.enable(self.handle.fileno(), 0.42)
+            rvmprof.enable(self.handle.fileno(), 0.00042)
         except rvmprof.VMProfError:
             print "Couldn't enable vmprof :T"
 

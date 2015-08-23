@@ -161,8 +161,8 @@ class Compiler(object):
         globals = self.globals.keys()
         locals = self.locals.nameList()
 
-        code = Code(self.instructions, atoms, literals, globals, frame,
-                    locals, self.scripts)
+        code = Code(self.fqn, self.instructions, atoms, literals, globals,
+                    frame, locals, self.scripts)
 
         # Register the code for profiling.
         rvmprof.register_code(code, Code.profileName)
