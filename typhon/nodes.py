@@ -14,6 +14,7 @@
 
 from collections import OrderedDict
 
+from rpython.rlib import rvmprof
 from rpython.rlib.jit import elidable, elidable_promote
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.rbigint import BASE10
@@ -162,6 +163,10 @@ class Compiler(object):
 
         code = Code(self.instructions, atoms, literals, globals, frame,
                     locals, self.scripts)
+
+        # Register the code for profiling.
+        rvmprof.register_code(code, Code.profileName)
+
         # Run optimizations on code, including inner code.
         peephole(code)
         return code

@@ -16,6 +16,7 @@ import os
 import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
+from rpython.rlib import rvmprof
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import JitHookInterface, set_user_param
 from rpython.rlib.rpath import rjoin
@@ -116,6 +117,26 @@ def runUntilDone(vatManager, reactor, recorder):
                             ue.formatError())
 
 
+class profiling(object):
+
+    def __init__(self, path):
+        self.path = path
+
+    def __enter__(self):
+        self.handle = open(self.path, "wb")
+        try:
+            rvmprof.enable(self.handle.fileno(), 0.42)
+        except rvmprof.VMProfError:
+            print "Couldn't enable vmprof :T"
+
+    def __exit__(self, *args):
+        try:
+            rvmprof.disable()
+        except rvmprof.VMProfError:
+            print "Couldn't disable vmprof >:T"
+        self.handle.close()
+
+
 def entryPoint(argv):
     recorder = Recorder()
     recorder.start()
@@ -185,19 +206,19 @@ def entryPoint(argv):
     # Exit status code.
     rv = 0
 
-    try:
-        runUntilDone(vatManager, reactor, recorder)
-    except SystemExit as se:
-        rv = se.code
-    finally:
-        recorder.stop()
-        recorder.printResults()
+    with profiling("vmprof.log"):
+        try:
+            runUntilDone(vatManager, reactor, recorder)
+        except SystemExit as se:
+            rv = se.code
+        finally:
+            recorder.stop()
+            recorder.printResults()
 
-        if config.profile:
-
-            # Print out flame graph information.
-            with open("flames.txt", "wb") as handle:
-                csp.writeFlames(handle)
+            if config.profile:
+                # Print out flame graph information.
+                with open("flames.txt", "wb") as handle:
+                    csp.writeFlames(handle)
 
     return 0
 

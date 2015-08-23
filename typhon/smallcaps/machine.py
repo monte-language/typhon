@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib import rvmprof
 from rpython.rlib.jit import elidable_promote, jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import specialize
 
@@ -247,6 +248,8 @@ class SmallCaps(object):
         else:
             raise RuntimeError("Unknown instruction %d" % instruction)
 
+    # Second argument is how to get a code object from a machine object.
+    @rvmprof.vmprof_execute_code("smallcaps", lambda self: self.code)
     @unroll_safe
     def run(self):
         # print ">" * 10
@@ -273,6 +276,7 @@ class SmallCaps(object):
             # Return value ignored here.
             finalHandler.drop(self, pc, pc)
         # print "<" * 10
+        return 0
 
     @unroll_safe
     def unwindEjector(self, ex):

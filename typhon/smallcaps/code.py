@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib import rvmprof
 from rpython.rlib.jit import elidable_promote
 
 from typhon.smallcaps.abstract import AbstractInterpreter
@@ -116,3 +117,8 @@ class Code(object):
         ai = AbstractInterpreter(self)
         ai.run()
         self.maxDepth, self.maxHandlerDepth = ai.getDepth()
+
+    def profileName(self):
+        return "mt:<unknown>:1:<unknown>"
+
+rvmprof.register_code_object_class(Code, Code.profileName)
