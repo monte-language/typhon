@@ -8,6 +8,11 @@ Monte AST files.
 How To Monte
 ============
 
+You will need RPython from Mercurial::
+
+    $ hg clone https://bitbucket.org/pypy/pypy
+    $ export PYTHONPATH=pypy:.
+
 Typhon operates in both untranslated and translated modes, with an optional
 JIT. Regardless of mode of operation, you'll need some dependencies (Twisted
 and RPython), so create a virtualenv::
@@ -16,8 +21,9 @@ and RPython), so create a virtualenv::
     $ . local-typhon/bin/activate
     $ pip install -r requirements.txt
 
-If you don't have PyPy, you can leave off ``-p pypy``, but be warned that this
-will increase run times. Once that's done, Typhon can be run untranslated::
+If you don't have a system PyPy, you can leave off ``-p pypy``, but be warned
+that this will increase run times. Once that's done, Typhon can be run
+untranslated::
 
     $ python main.py your/awesome/script.ty
 
@@ -28,6 +34,10 @@ Translation is done via the RPython toolchain::
 The JIT can be enabled with a switch::
 
     $ python -m rpython -Ojit main
+
+You can also build a slow version with libgc, for testing purposes::
+
+    $ python -m rpython -O0 main
 
 The resulting executable is immediately usable for any scripts that don't use
 prelude features::
