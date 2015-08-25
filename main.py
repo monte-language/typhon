@@ -32,7 +32,6 @@ from typhon.objects.data import unwrapStr, StrObject
 from typhon.objects.imports import addImportToScope
 from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
-from typhon.profile import csp
 from typhon.reactor import Reactor
 from typhon.scopes.boot import bootScope
 from typhon.scopes.safe import safeScope
@@ -119,10 +118,14 @@ def runUntilDone(vatManager, reactor, recorder):
 
 class profiling(object):
 
-    def __init__(self, path):
+    def __init__(self, path, enabled):
         self.path = path
+        self.enabled = enabled
 
     def __enter__(self):
+        if not self.enabled:
+            return
+
         self.handle = open(self.path, "wb")
         try:
             rvmprof.enable(self.handle.fileno(), 0.00042)
@@ -130,6 +133,9 @@ class profiling(object):
             print "Couldn't enable vmprof :T"
 
     def __exit__(self, *args):
+        if not self.enabled:
+            return
+
         try:
             rvmprof.disable()
         except rvmprof.VMProfError:
@@ -185,13 +191,10 @@ def entryPoint(argv):
         # We are finished.
         return 0
 
-    if config.profile:
-        csp.enable()
-
     if not config.benchmark:
         benchmarkSettings.disable()
 
-    with profiling("vmprof.log"):
+    with profiling("vmprof.log", config.profile):
         debug_print("Taking initial turn in script...")
         result = NullObject
         with recorder.context("Time spent in vats"):
@@ -214,11 +217,6 @@ def entryPoint(argv):
         finally:
             recorder.stop()
             recorder.printResults()
-
-            if config.profile:
-                # Print out flame graph information.
-                with open("flames.txt", "wb") as handle:
-                    csp.writeFlames(handle)
 
     return 0
 
