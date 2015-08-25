@@ -191,22 +191,22 @@ def entryPoint(argv):
     if not config.benchmark:
         benchmarkSettings.disable()
 
-    debug_print("Taking initial turn in script...")
-    result = NullObject
-    with recorder.context("Time spent in vats"):
-        with scopedVat(vat):
-            result = evaluateTerms([code], finalize(scope))
-    if result is None:
-        return 1
-    # print result.toQuote()
-
-    # Run unit tests.
-    runScopeTests(scope)
-
-    # Exit status code.
-    rv = 0
-
     with profiling("vmprof.log"):
+        debug_print("Taking initial turn in script...")
+        result = NullObject
+        with recorder.context("Time spent in vats"):
+            with scopedVat(vat):
+                result = evaluateTerms([code], finalize(scope))
+        if result is None:
+            return 1
+        # print result.toQuote()
+
+        # Run unit tests.
+        runScopeTests(scope)
+
+        # Exit status code.
+        rv = 0
+
         try:
             runUntilDone(vatManager, reactor, recorder)
         except SystemExit as se:
