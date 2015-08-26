@@ -502,7 +502,7 @@ unittest([testAnySubGuard])
 
 
 object _switchFailed as DeepFrozenStamp:
-    match [=="run", args]:
+    match [=="run", args, _]:
         throw("Switch failed:", args)
 
 
@@ -518,10 +518,10 @@ object _makeVerbFacet as DeepFrozenStamp:
              This object responds to messages with the verb \"run\" by passing
              them to another object with a different verb."
             to _uncall():
-                return [_makeVerbFacet, "curryCall", [target, verb]]
+                return [_makeVerbFacet, "curryCall", [target, verb], [].asMap()]
 
-            match [=="run", args]:
-                M.call(target, verb, args)
+            match [=="run", args, namedArgs]:
+                M.call(target, verb, args, namedArgs)
 
 
 def _flexMap(var m):

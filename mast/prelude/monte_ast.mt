@@ -197,15 +197,15 @@ def astWrapper(node, maker, args, span, scope, nodeName, transformArgs):
         to withoutSpan():
             if (span == null):
                 return astNode
-            return M.call(maker, "run", args + [null])
+            return M.call(maker, "run", args + [null], [].asMap())
         to getNodeName():
             return nodeName
         to transform(f):
             return f(astNode, maker, transformArgs(f), span)
         to _uncall():
-            return [maker, "run", args + [span]]
+            return [maker, "run", args + [span], [].asMap()]
         to _printOn(out):
-            astNode.subPrintOn(out, 0)
+            node.subPrintOn(out, 0)
 
 def makeLiteralExpr(value, span):
     object literalExpr:
@@ -342,8 +342,23 @@ def makeModule(imports, exports, body, span):
             transformAll(exports, f),
             body.transform(f)]})
 
-def makeMethodCallExpr(rcvr, verb, arglist, span):
-    def scope := sumScopes(arglist + [rcvr])
+def mkNAPrinter([k, v]):
+    return object napr:
+        to subPrintOn(o, p):
+            k.subPrintOn(o, 16)
+            o.print(" => ")
+            v.subPrintOn(o, 1)
+
+def namedArgPairsScope(pairs):
+    var scope := emptyScope
+    traceln("ast pairs: " + M.toString(pairs))
+    for [k, v] in pairs:
+        scope += k.getStaticScope()
+        scope += v.getStaticScope()
+    return scope
+
+def makeMethodCallExpr(rcvr, verb, arglist, namedArgs, span):
+    def scope := sumScopes([rcvr] + arglist) + namedArgPairsScope(namedArgs)
     object methodCallExpr:
         to getReceiver():
             return rcvr
@@ -351,6 +366,8 @@ def makeMethodCallExpr(rcvr, verb, arglist, span):
             return verb
         to getArgs():
             return arglist
+        to getNamedArgs():
+            return namedArgs
         to subPrintOn(out, priority):
             if (priorities["call"] < priority):
                 out.print("(")
@@ -360,32 +377,43 @@ def makeMethodCallExpr(rcvr, verb, arglist, span):
                 out.print(verb)
             else:
                 out.quote(verb)
-            printListOn("(", arglist, ", ", ")", out, priorities["braceExpr"])
+            printListOn("(", arglist, ", ", "", out, priorities["braceExpr"])
+            def namedArgList := [for pair in (namedArgs) mkNAPrinter(pair)]
+            if (arglist.size() > 0 && namedArgs.size() > 0):
+                out.print(", ")
+            printListOn("", namedArgList, ", ", ")", out, priorities["braceExpr"])
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(methodCallExpr, makeMethodCallExpr,
-        [rcvr, verb, arglist], span, scope, "MethodCallExpr",
-        fn f {[rcvr.transform(f), verb, transformAll(arglist, f)]})
+        [rcvr, verb, arglist, namedArgs], span, scope, "MethodCallExpr",
+        fn f {[rcvr.transform(f), verb, transformAll(arglist, f),
+              [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
 
-def makeFunCallExpr(receiver, args, span):
-    def scope := sumScopes(args + [receiver])
+def makeFunCallExpr(receiver, args, namedArgs, span):
+    def scope := sumScopes([receiver] + args) + namedArgPairsScope(namedArgs)
     object funCallExpr:
         to getReceiver():
             return receiver
         to getArgs():
             return args
+        to getNamedArgs():
+            return namedArgs
         to subPrintOn(out, priority):
             if (priorities["call"] < priority):
                 out.print("(")
             receiver.subPrintOn(out, priorities["call"])
-            printListOn("(", args, ", ", ")", out, priorities["braceExpr"])
+            printListOn("(", args, ", ", "", out, priorities["braceExpr"])
+            if (args.size() > 0 && namedArgs.size() > 0):
+                out.print(", ")
+            printListOn("", [for pair in (namedArgs) mkNAPrinter(pair)],
+                        ", ", ")", out, priorities["braceExpr"])
             if (priorities["call"] < priority):
                 out.print(")")
-    return astWrapper(funCallExpr, makeFunCallExpr, [receiver, args], span,
-        scope, "FunCallExpr", fn f {[receiver.transform(f), transformAll(args, f)]})
+    return astWrapper(funCallExpr, makeFunCallExpr, [receiver, args, namedArgs], span,
+        scope, "FunCallExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
 
-def makeSendExpr(rcvr, verb, arglist, span):
-    def scope := sumScopes(arglist + [rcvr])
+def makeSendExpr(rcvr, verb, arglist, namedArgs, span):
+    def scope := sumScopes([rcvr] + arglist) + namedArgPairsScope(namedArgs)
     object sendExpr:
         to getReceiver():
             return rcvr
@@ -393,6 +421,8 @@ def makeSendExpr(rcvr, verb, arglist, span):
             return verb
         to getArgs():
             return arglist
+        to getNamedArgs():
+            return namedArgs
         to subPrintOn(out, priority):
             if (priorities["call"] < priority):
                 out.print("(")
@@ -402,29 +432,39 @@ def makeSendExpr(rcvr, verb, arglist, span):
                 out.print(verb)
             else:
                 out.quote(verb)
-            printListOn("(", arglist, ", ", ")", out, priorities["braceExpr"])
+            printListOn("(", arglist, ", ", "", out, priorities["braceExpr"])
+            if (arglist.size() > 0 && namedArgs.size() > 0):
+                out.print(", ")
+            printListOn("", [for pair in (namedArgs) mkNAPrinter(pair)],
+                        ", ", ")", out, priorities["braceExpr"])
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(sendExpr, makeSendExpr,
-        [rcvr, verb, arglist], span, scope, "SendExpr",
-        fn f {[rcvr.transform(f), verb, transformAll(arglist, f)]})
+        [rcvr, verb, arglist, namedArgs], span, scope, "SendExpr",
+        fn f {[rcvr.transform(f), verb, transformAll(arglist, f), [for [k, v] in (namedArgs) [f(k), f(v)]]]})
 
-def makeFunSendExpr(receiver, args, span):
-    def scope := sumScopes(args + [receiver])
+def makeFunSendExpr(receiver, args, namedArgs, span):
+    def scope := sumScopes([receiver] + args) + namedArgPairsScope(namedArgs)
     object funSendExpr:
         to getReceiver():
             return receiver
         to getArgs():
             return args
+        to getNamedArgs():
+            return namedArgs
         to subPrintOn(out, priority):
             if (priorities["call"] < priority):
                 out.print("(")
             receiver.subPrintOn(out, priorities["call"])
-            printListOn(" <- (", args, ", ", ")", out, priorities["braceExpr"])
+            printListOn(" <- (", args, ", ", "", out, priorities["braceExpr"])
+            if (args.size() > 0 && namedArgs.size() > 0):
+                out.print(", ")
+            printListOn("", [for pair in (namedArgs) mkNAPrinter(pair)],
+                        ", ", ")", out, priorities["braceExpr"])
             if (priorities["call"] < priority):
                 out.print(")")
-    return astWrapper(funSendExpr, makeFunSendExpr, [receiver, args], span,
-        scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f)]})
+    return astWrapper(funSendExpr, makeFunSendExpr, [receiver, args, namedArgs], span,
+        scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [f(k), f(v)]]]})
 
 def makeGetExpr(receiver, indices, span):
     def scope := sumScopes(indices + [receiver])
@@ -875,8 +915,8 @@ def makeAugAssignExpr(op, lvalue, rvalue, span):
     return astWrapper(augAssignExpr, makeAugAssignExpr, [op, lvalue, rvalue], span,
         scope, "AugAssignExpr", fn f {[op, lvalue.transform(f), rvalue.transform(f)]})
 
-def makeMethod(docstring, verb, patterns, resultGuard, body, span):
-    def scope := sumScopes(patterns + [resultGuard, body]).hide()
+def makeMethod(docstring, verb, patterns, namedPatts, resultGuard, body, span):
+    def scope := sumScopes(patterns + namedPatts + [resultGuard, body]).hide()
     object ::"method":
         to getDocstring():
             return docstring
@@ -884,6 +924,8 @@ def makeMethod(docstring, verb, patterns, resultGuard, body, span):
             return verb
         to getPatterns():
             return patterns
+        to getNamedPatterns():
+            return namedPatts
         to getResultGuard():
             return resultGuard
         to getBody():
@@ -896,17 +938,21 @@ def makeMethod(docstring, verb, patterns, resultGuard, body, span):
                 } else {
                     out.quote(verb)
                 }
-                printListOn("(", patterns, ", ", ")", out, priorities["pattern"])
+                printListOn("(", patterns, ", ", "", out, priorities["pattern"])
+                if (patterns.size() > 0 && namedPatts.size() > 0) {
+                    out.print(", ")
+                }
+                printListOn("", namedPatts, ", ", ")", out, priorities["pattern"])
                 if (resultGuard != null) {
                     out.print(" :")
                     resultGuard.subPrintOn(out, priorities["call"])
                 }
             }, docstring, body, out, priority)
-    return astWrapper(::"method", makeMethod, [docstring, verb, patterns, resultGuard, body], span,
-        scope, "Method", fn f {[docstring, verb, transformAll(patterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
+    return astWrapper(::"method", makeMethod, [docstring, verb, patterns, namedPatts, resultGuard, body], span,
+        scope, "Method", fn f {[docstring, verb, transformAll(patterns, f), transformAll(namedPatts, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
-def makeTo(docstring, verb, patterns, resultGuard, body, span):
-    def scope := sumScopes(patterns + [resultGuard, body]).hide()
+def makeTo(docstring, verb, patterns, namedPatts, resultGuard, body, span):
+    def scope := sumScopes(patterns + namedPatts + [resultGuard, body]).hide()
     object ::"to":
         to getDocstring():
             return docstring
@@ -914,6 +960,8 @@ def makeTo(docstring, verb, patterns, resultGuard, body, span):
             return verb
         to getPatterns():
             return patterns
+        to getNamedPatterns():
+            return namedPatts
         to getResultGuard():
             return resultGuard
         to getBody():
@@ -927,14 +975,15 @@ def makeTo(docstring, verb, patterns, resultGuard, body, span):
                 } else {
                     out.quote(verb)
                 }
-                printListOn("(", patterns, ", ", ")", out, priorities["pattern"])
+                printListOn("(", patterns, ", ", "", out, priorities["pattern"])
+                printListOn("", namedPatts, ", ", ")", out, priorities["pattern"])
                 if (resultGuard != null) {
                     out.print(" :")
                     resultGuard.subPrintOn(out, priorities["call"])
                 }
             }, docstring, body, out, priority)
-    return astWrapper(::"to", makeTo, [docstring, verb, patterns, resultGuard, body], span,
-        scope, "To", fn f {[docstring, verb, transformAll(patterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
+    return astWrapper(::"to", makeTo, [docstring, verb, patterns, namedPatts, resultGuard, body], span,
+        scope, "To", fn f {[docstring, verb, transformAll(patterns, f), transformAll(namedPatts, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeMatcher(pattern, body, span):
     def scope := (pattern.getStaticScope() + body.getStaticScope()).hide()
@@ -998,11 +1047,13 @@ def makeScript(extend, methods, matchers, span):
     return astWrapper(script, makeScript, [extend, methods, matchers], span,
         scope, "Script", fn f {[maybeTransform(extend, f), transformAll(methods, f), transformAll(matchers, f)]})
 
-def makeFunctionScript(patterns, resultGuard, body, span):
-    def scope := sumScopes(patterns + [resultGuard, body]).hide()
+def makeFunctionScript(patterns, namedPatterns, resultGuard, body, span):
+    def scope := sumScopes(patterns + namedPatterns + [resultGuard, body]).hide()
     object functionScript:
         to getPatterns():
             return patterns
+        to getNamedPatterns():
+            return namedPatterns
         to getResultGuard():
             return resultGuard
         to getBody():
@@ -1010,7 +1061,8 @@ def makeFunctionScript(patterns, resultGuard, body, span):
         to printObjectHeadOn(name, asExpr, auditors, out, priority):
             out.print("def ")
             name.subPrintOn(out, priorities["pattern"])
-            printListOn("(", patterns, ", ", ")", out, priorities["pattern"])
+            printListOn("(", patterns, ", ", "", out, priorities["pattern"])
+            printListOn("", namedPatterns, ", ", ")", out, priorities["pattern"])
             if (resultGuard != null):
                 out.print(" :")
                 resultGuard.subPrintOn(out, priorities["call"])
@@ -1022,8 +1074,8 @@ def makeFunctionScript(patterns, resultGuard, body, span):
         to subPrintOn(out, priority):
             body.subPrintOn(out, priority)
             out.print("\n")
-    return astWrapper(functionScript, makeFunctionScript, [patterns, resultGuard, body], span,
-        scope, "FunctionScript", fn f {[transformAll(patterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
+    return astWrapper(functionScript, makeFunctionScript, [patterns, namedPatterns, resultGuard, body], span,
+        scope, "FunctionScript", fn f {[transformAll(patterns, f), transformAll(namedPatterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeFunctionExpr(patterns, body, span):
     def scope := (sumScopes(patterns) + body.getStaticScope()).hide()
@@ -1770,6 +1822,31 @@ def makeMapPattern(patterns, tail, span):
     return astWrapper(mapPattern, makeMapPattern, [patterns, tail], span,
         scope, "MapPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
 
+def makeNamedParam(key, patt, default, span):
+    def scope := key.getStaticScope() + patt.getStaticScope() + scopeMaybe(default)
+    object namedParam:
+        to getKey():
+            return key
+        to getPattern():
+            return patt
+        to getDefault():
+            return default
+        to subPrintOn(out, priority):
+            if (key.getNodeName() == "LiteralExpr"):
+                key.subPrintOn(out, priority)
+            else:
+                out.print("(")
+                key.subPrintOn(out, priorities["braceExpr"])
+                out.print(")")
+            out.print(" => ")
+            patt.subPrintOn(out, priority)
+            if (default != null):
+                out.print(" := (")
+                default.subPrintOn(out, priorities["braceExpr"])
+                out.print(")")
+    return astWrapper(namedParam, makeNamedParam, [key, patt, default], span,
+        scope, "NamedParam", fn f {[key.transform(f), patt.transform(f), maybeTransform(default, f)]})
+
 def makeViaPattern(expr, subpattern, span):
     def scope := expr.getStaticScope() + subpattern.getStaticScope()
     object viaPattern:
@@ -1919,14 +1996,14 @@ object astBuilder:
         return makeSeqExpr(exprs, span)
     to "Module"(imports, exports, body, span):
         return makeModule(imports, exports, body, span)
-    to MethodCallExpr(rcvr, verb, arglist, span):
-        return makeMethodCallExpr(rcvr, verb, arglist, span)
-    to FunCallExpr(receiver, args, span):
-        return makeFunCallExpr(receiver, args, span)
-    to SendExpr(rcvr, verb, arglist, span):
-        return makeSendExpr(rcvr, verb, arglist, span)
-    to FunSendExpr(receiver, args, span):
-        return makeFunSendExpr(receiver, args, span)
+    to MethodCallExpr(rcvr, verb, arglist, namedArgs, span):
+        return makeMethodCallExpr(rcvr, verb, arglist, namedArgs, span)
+    to FunCallExpr(receiver, args, namedArgs, span):
+        return makeFunCallExpr(receiver, args, namedArgs, span)
+    to SendExpr(rcvr, verb, arglist, namedArgs, span):
+        return makeSendExpr(rcvr, verb, arglist, namedArgs, span)
+    to FunSendExpr(receiver, args, namedArgs, span):
+        return makeFunSendExpr(receiver, args, namedArgs, span)
     to GetExpr(receiver, indices, span):
         return makeGetExpr(receiver, indices, span)
     to AndExpr(left, right, span):
@@ -1965,18 +2042,18 @@ object astBuilder:
         return makeVerbAssignExpr(verb, lvalue, rvalues, span)
     to AugAssignExpr(op, lvalue, rvalue, span):
         return makeAugAssignExpr(op, lvalue, rvalue, span)
-    to "Method"(docstring, verb, patterns, resultGuard, body, span):
-        return makeMethod(docstring, verb, patterns, resultGuard, body, span)
-    to "To"(docstring, verb, patterns, resultGuard, body, span):
-        return makeTo(docstring, verb, patterns, resultGuard, body, span)
+    to "Method"(docstring, verb, patterns, namedPatts, resultGuard, body, span):
+        return makeMethod(docstring, verb, namedPatts, patterns, resultGuard, body, span)
+    to "To"(docstring, verb, patterns, namedPatts, resultGuard, body, span):
+        return makeTo(docstring, verb, patterns, namedPatts, resultGuard, body, span)
     to Matcher(pattern, body, span):
         return makeMatcher(pattern, body, span)
     to Catcher(pattern, body, span):
         return makeCatcher(pattern, body, span)
     to Script(extend, methods, matchers, span):
         return makeScript(extend, methods, matchers, span)
-    to FunctionScript(patterns, resultGuard, body, span):
-        return makeFunctionScript(patterns, resultGuard, body, span)
+    to FunctionScript(patterns, namedPatterns, resultGuard, body, span):
+        return makeFunctionScript(patterns, namedPatterns, resultGuard, body, span)
     to FunctionExpr(patterns, body, span):
         return makeFunctionExpr(patterns, body, span)
     to ListExpr(items, span):
@@ -2051,6 +2128,8 @@ object astBuilder:
         return makeMapPatternDefault(keyer, default, span)
     to MapPattern(patterns, tail, span):
         return makeMapPattern(patterns, tail, span)
+    to NamedParam(k, p, default, span):
+        return makeNamedParam(k, p, default, span)
     to ViaPattern(expr, subpattern, span):
         return makeViaPattern(expr, subpattern, span)
     to SuchThatPattern(subpattern, expr, span):

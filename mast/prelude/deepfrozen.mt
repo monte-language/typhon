@@ -4,7 +4,7 @@ object SubrangeGuard as DeepFrozenStamp:
     to get(superguard):
         return object SpecializedSubrangeGuard implements Selfless, TransparentStamp:
             to _uncall():
-                return [SubrangeGuard, "get", [superguard]]
+                return [SubrangeGuard, "get", [superguard], [].asMap()]
             to audit(audition):
                 def expr := audition.getObjectExpr()
                 def meth := escape e {
@@ -56,11 +56,14 @@ def checkDeepFrozen(specimen, sofar, ej, root) as DeepFrozenStamp:
         return
     else if (__auditedBy(Selfless, specimen) &&
              __auditedBy(TransparentStamp, specimen)):
-        def [maker, verb, args :List] := specimen._uncall()
+        def [maker, verb, args :List, namedArgs :Map] := specimen._uncall()
         checkDeepFrozen(maker, sofarther, ej, root)
         checkDeepFrozen(verb, sofarther, ej, root)
         for arg in args:
             checkDeepFrozen(arg, sofarther, ej, root)
+        for argkey => argval in namedArgs:
+            checkDeepFrozen(argkey, sofarther, ej, root)
+            checkDeepFrozen(argval, sofarther, ej, root)
     else:
         if (__equalizer.sameYet(specimen, root)):
             throw.eject(ej, M.toQuote(root) + " is not DeepFrozen")

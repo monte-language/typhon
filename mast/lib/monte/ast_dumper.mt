@@ -31,7 +31,8 @@ def astCodes := [
     "VarPattern" => 29,
     "ListPattern" => 30,
     "ViaPattern" => 31,
-    "BindingPattern" => 32]
+    "BindingPattern" => 32,
+    "NamedParam" => 34]
 
 def asciiShift(bs) :Bytes:
     var result := b``
@@ -89,8 +90,8 @@ def dump(item, write):
             for val in item:
                 dump(val, write)
         match _:
-            def [nodeMaker, _, arglist] := escape ej {
-                def [nodeMaker, _, arglist] exit ej := item._uncall()
+            def [nodeMaker, _, arglist, ==([].asMap())] := escape ej {
+                def [nodeMaker, _, arglist, ==([].asMap())] exit ej := item._uncall()
             } catch failure {
                 throw(`$item had a misbehaving _uncall: ${item._uncall()}`)
             }

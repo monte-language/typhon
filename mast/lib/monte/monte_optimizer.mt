@@ -1,5 +1,5 @@
 # Note that the identity "no-op" operation on ASTs is not `return ast` but
-# rather `return M.call(maker, "run", args + [span])`; the transformation has
+# rather `return M.call(maker, "run", args + [span], [].asMap())`; the transformation has
 # to rebuild the AST.
 # Also note that the AST node provided as part of the transformation is *not*
 # yet transformed; the transformed node is constructed by the no-op mentioned
@@ -113,7 +113,7 @@ def specialize(name, value):
                 if (!namesused.contains(name)):
                     return ast
 
-        return M.call(maker, "run", args + [span])
+        return M.call(maker, "run", args + [span], [].asMap())
 
     return specializeNameToValue
 
@@ -172,7 +172,7 @@ def thaw(ast, maker, args, span):
                     arguments)):
                     def argValues := [for x in (arguments) x.getValue()]
                     traceln(`thaw call $ast`)
-                    def constant := M.call(receiverObj, verb, argValues)
+                    def constant := M.call(receiverObj, verb, argValues, [].asMap())
                     return a.LiteralExpr(constant, span)
 
             match =="NounExpr":
@@ -184,7 +184,7 @@ def thaw(ast, maker, args, span):
             match _:
                 pass
 
-    return M.call(maker, "run", args + [span])
+    return M.call(maker, "run", args + [span], [].asMap())
 
 
 def weakenPattern(var pattern, nodes):
@@ -236,13 +236,18 @@ def weakenAllPatterns(ast, maker, args, span):
 
         match =="Method":
             var patterns := args[2]
-            def body := args[4]
-
+            var namedPatterns := args[3]
+            def body := args[5]
+            def candidatePatterns := patterns + namedPatterns
             patterns := [for i => pattern in (patterns)
                          weakenPattern(pattern,
-                                       patterns.slice(i + 1) + [body])]
+                                       candidatePatterns.slice(i + 1) + [body])]
 
-            return maker(args[0], args[1], patterns, args[3], body, span)
+            var pi := patterns.size()
+            namedPatterns := [for i => pattern in (namedPatterns)
+                              weakenPattern(pattern,
+                                            candidatePatterns.slice(pi += 1) + [body])]
+            return maker(args[0], args[1], patterns, namedPatterns, args[4], body, span)
 
         match =="SeqExpr":
             def [var exprs] := args
@@ -264,7 +269,7 @@ def weakenAllPatterns(ast, maker, args, span):
         match _:
             pass
 
-    return M.call(maker, "run", args + [span])
+    return M.call(maker, "run", args + [span], [].asMap())
 
 
 def removeDeadEscapes(ast, maker, args, span):
@@ -275,7 +280,7 @@ def removeDeadEscapes(ast, maker, args, span):
         if (ejPatt.getNodeName() == "IgnorePattern"):
             return ejBody
 
-    return M.call(maker, "run", args + [span])
+    return M.call(maker, "run", args + [span], [].asMap())
 
 
 def constantFoldIf(ast, maker, args, span):
@@ -293,7 +298,7 @@ def constantFoldIf(ast, maker, args, span):
             catch err:
                 traceln(`Warning: If-expr test fails Bool guard: $err`)
 
-    return M.call(maker, "run", args + [span])
+    return M.call(maker, "run", args + [span], [].asMap())
 
 
 def optimize(ast, maker, args, span):
@@ -314,7 +319,7 @@ def optimize(ast, maker, args, span):
                             # m`def _ :Guard exit ej := expr` ->
                             # m`Guard.coerce(expr, ej)`
                             def ej := args[1]
-                            return a.MethodCallExpr(guard, "coerce", [expr, ej],
+                            return a.MethodCallExpr(guard, "coerce", [expr, ej], [],
                                                     span)
 
                 # The expander shouldn't ever give us list patterns with
@@ -434,6 +439,8 @@ def optimize(ast, maker, args, span):
                             # now.
                             if (cons.getVerb() == alt.getVerb()):
                                 escape badLength:
+                                    if (cons.getNamedArgs() != alt.getNamedArgs()):
+                                        throw.eject(badLength, null)
                                     def [consArg] exit badLength := cons.getArgs()
                                     def [altArg] exit badLength := alt.getArgs()
                                     var newIf := maker(test, consArg, altArg,
@@ -447,7 +454,7 @@ def optimize(ast, maker, args, span):
                                     newIf transform= (optimize)
                                     return a.MethodCallExpr(consReceiver,
                                                             cons.getVerb(),
-                                                            [newIf], span)
+                                                            [newIf], cons.getNamedArgs(), span)
 
                 # m`if (test) {x := cons} else {x := alt}` ->
                 # m`x := if (test) {cons} else {alt}`
@@ -500,7 +507,7 @@ def optimize(ast, maker, args, span):
         match _:
             pass
 
-    return M.call(maker, "run", args + [span])
+    return M.call(maker, "run", args + [span], [].asMap())
 
 def testRemoveUnusedBareNouns(assert):
     def ast := a.SeqExpr([a.NounExpr("x", null), a.NounExpr("y", null)], null)
@@ -524,7 +531,7 @@ def freeze(ast, maker, args, span):
                 # Generate the uncall for broken refs by hand.
                 return a.MethodCallExpr(a.NounExpr("Ref", span), "broken",
                                         [a.LiteralExpr(Ref.optProblem(broken),
-                                                       span)],
+                                                       span)], [],
                                         span)
             match ==null:
                 return a.NounExpr("null", span)
@@ -540,20 +547,20 @@ def freeze(ast, maker, args, span):
                 def newArgs := [for v in (l)
                                 a.LiteralExpr(v, span).transform(freeze)]
                 return a.MethodCallExpr(a.NounExpr("__makeList", span), "run",
-                                        newArgs, span)
+                                        newArgs, [], span)
             match k ? (freezeMap.contains(k)):
                 return a.NounExpr(freezeMap[k], span)
             match obj:
-                if (obj._uncall() =~ [newMaker, newVerb, newArgs]):
+                if (obj._uncall() =~ [newMaker, newVerb, newArgs, [], _]):
                     def wrappedArgs := [for arg in (newArgs)
                                         a.LiteralExpr(arg, span)]
                     def call := a.MethodCallExpr(a.LiteralExpr(newMaker,
                                                                span),
-                                                 newVerb, wrappedArgs, span)
+                                                 newVerb, wrappedArgs, [], span)
                     return call.transform(freeze)
                 traceln(`Warning: Couldn't freeze $obj: Bad uncall`)
 
-    return M.call(maker, "run", args + [span])
+    return M.call(maker, "run", args + [span], [].asMap())
 
 
 def performOptimization(var ast):

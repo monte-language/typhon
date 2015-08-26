@@ -120,7 +120,7 @@ object OrderedRegionMaker as DeepFrozen:
             to _uncall():
                 return [OrderedRegionMaker, "run", [myType, myName,
                                                     myBoundedLeft,
-                                                    myEdges]]
+                                                    myEdges], [].asMap()]
 
             # Is pos in the region?
 
@@ -497,7 +497,7 @@ object OrderedSpaceMaker as DeepFrozen:
                 out.print(myName)
 
             to _uncall():
-                return [OrderedSpaceMaker, "run", [myType, myName]]
+                return [OrderedSpaceMaker, "run", [myType, myName], [].asMap()]
 
             to coerce(specimen, ej) :myTypeR:
                 return myType.coerce(specimen, ej)

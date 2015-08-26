@@ -4,7 +4,7 @@ def makeUser(nick :Str, user :Str, host :Str):
             out.print(`$nick!$user@@$host`)
 
         to _uncall():
-            return [makeUser, [nick, user, host]]
+            return [makeUser, [nick, user, host], [].asMap()]
 
         to getNick() :Str:
             return nick
