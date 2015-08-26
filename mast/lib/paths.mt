@@ -15,7 +15,7 @@
 def makePath(segments :List[Str]):
     return object path:
         to _uncall():
-            return [makePath, segments]
+            return [makePath, segments, [].asMap()]
 
         to _printOn(out):
             out.print("path`")

@@ -19,7 +19,7 @@ object makeTag as DeepFrozen:
     to run(code :NullOk[Int], name :Str, dataGuard :DeepFrozen):
         return object tag as DeepFrozen implements TagStamp:
             to _uncall():
-                return [makeTag, "run", [code, name, dataGuard]]
+                return [makeTag, "run", [code, name, dataGuard], [].asMap()]
 
             to _printOn(out):
                 out.print("<")
@@ -95,7 +95,7 @@ object makeTerm as DeepFrozen:
 
         return object term as DeepFrozen implements TermStamp:
             to _uncall():
-                return [makeTerm, "run", [tag, data, args, span]]
+                return [makeTerm, "run", [tag, data, args, span], [].asMap()]
 
             to withSpan(newSpan):
                 return makeTerm(tag, data, args, newSpan)

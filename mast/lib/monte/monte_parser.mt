@@ -101,7 +101,8 @@ def parseMonte(lex, builder, mode, err):
         position += 1
         if (position >= tokens.size()):
             throw.eject(ej, ["hit EOF", tokens.last()[2]])
-        return tokens[position]
+        def t := tokens[position]
+        return t
 
     def advanceTag(ej):
         def t := advance(ej)
@@ -545,6 +546,35 @@ def parseMonte(lex, builder, mode, err):
         }
         return [doco, contents]
 
+    def positionalParam(ej):
+        def pattStart := position
+        def p := pattern(ej)
+        if (peekTag() == "=>"):
+            position := pattStart
+            throw.eject(ej, null)
+        return p
+
+    def namedParam(ej):
+        # XXX consider parameterizing mapPatternItem instead of
+        # destructuring like this.
+        def node := mapPatternItem(ej)
+        def [mapPatt, default] := [node.getKeyer(), node.getDefault()]
+        def nn := mapPatt.getNodeName()
+        def [k, p] := if (nn == "MapPatternImport") {
+            def sub := mapPatt.getPattern()
+            def ns := sub.getNodeName()
+            def name := if (ns == "SlotPattern") {
+                [builder.LiteralExpr("&" + sub.getNoun().getName(), null), sub]
+            } else if (ns == "BindingPattern") {
+                [builder.LiteralExpr("&&" + sub.getNoun().getName(), null), sub]
+            } else {
+                [builder.LiteralExpr(sub.getNoun().getName(), null), sub]
+            }
+        } else {
+            [mapPatt.getKey(), mapPatt.getValue()]
+        }
+        return builder.NamedParam(k, p, default, node.getSpan())
+
     def meth(indent, ej):
         acceptEOLs()
         def spanStart := spanHere()
@@ -562,7 +592,8 @@ def parseMonte(lex, builder, mode, err):
             __makeString.fromString(t[1], t[2])
         }
         acceptTag("(", ej)
-        def patts := acceptList(pattern)
+        def patts := acceptList(positionalParam)
+        def namedPatts := acceptList(namedParam)
         acceptTag(")", ej)
         def resultguard := if (peekTag() == ":") {
             advance(ej)
@@ -577,7 +608,7 @@ def parseMonte(lex, builder, mode, err):
             null
         }
         def [doco, body] := suite(methBody, indent, ej)
-        return mknode(doco, verb, patts, resultguard, body, spanFrom(spanStart))
+        return mknode(doco, verb, patts, namedPatts, resultguard, body, spanFrom(spanStart))
 
     def objectScript(indent, ej):
         def doco := if (peekTag() == ".String.") {
@@ -645,7 +676,8 @@ def parseMonte(lex, builder, mode, err):
 
     def objectFunction(name, indent, tryAgain, ej, spanStart):
         acceptTag("(", ej)
-        def patts := acceptList(pattern)
+        def patts := acceptList(positionalParam)
+        def namedPatts := acceptList(namedParam)
         acceptTag(")", ej)
         def resultguard := if (peekTag() == ":") {
             advance(ej)
@@ -665,7 +697,7 @@ def parseMonte(lex, builder, mode, err):
         def [doco, body] := suite(methBody, indent, ej)
         def span := spanFrom(spanStart)
         return builder.ObjectExpr(doco, name, oAs, oImplements,
-            builder.FunctionScript(patts, resultguard, body, span), span)
+            builder.FunctionScript(patts, namedPatts, resultguard, body, span), span)
 
     def paramDesc(ej):
         def spanStart := spanHere()
@@ -1077,6 +1109,35 @@ def parseMonte(lex, builder, mode, err):
         def base := prim(ej)
         def trailers := [].diverge()
 
+        # XXX maybe parameterize mapItem instead of doing this
+        def unpackMapItems(items):
+            var pairs := []
+            for node in items:
+                def nn := node.getNodeName()
+                if (nn == "MapExprExport"):
+                    def sub := node.getValue()
+                    def ns := sub.getNodeName()
+                    def name := if (ns == "SlotExpr") {
+                        builder.LiteralExpr("&" + sub.getNoun().getName(), null)
+                    } else if (ns == "BindingExpr") {
+                        builder.LiteralExpr("&&" + sub.getNoun().getName(), null)
+                    } else {
+                        builder.LiteralExpr(sub.getName(), null)
+                    }
+                    pairs with= ([name, node.getValue()])
+                else:
+                    pairs with= ([node.getKey(), node.getValue()])
+            traceln(`pairs: $pairs`)
+            return pairs
+
+        def positionalArg(ej):
+            def origPosition := position
+            def v := expr(ej)
+            if (peekTag() == "=>"):
+                position := origPosition
+                throw.eject(ej, null)
+            return v
+
         def callish(methodish, curryish):
             def verb := if (peekTag() == ".String.") {
                 advance(ej)[1]
@@ -1086,10 +1147,12 @@ def parseMonte(lex, builder, mode, err):
             }
             if (peekTag() == "("):
                 advance(ej)
-                def arglist := acceptList(expr)
+                def arglist := acceptList(positionalArg)
+                def namedArglist := acceptList(mapItem)
                 acceptEOLs()
                 acceptTag(")", ej)
-                trailers.push([methodish, [verb, arglist, spanFrom(spanStart)]])
+                trailers.push([methodish, [verb, arglist, unpackMapItems(namedArglist),
+                                           spanFrom(spanStart)]])
                 return false
             else:
                 trailers.push(["CurryExpr", [verb, curryish, spanFrom(spanStart)]])
@@ -1097,10 +1160,12 @@ def parseMonte(lex, builder, mode, err):
 
         def funcallish(name):
             acceptTag("(", ej)
-            def arglist := acceptList(expr)
+            def arglist := acceptList(positionalArg)
+            def namedArglist := acceptList(mapItem)
             acceptEOLs()
             acceptTag(")", ej)
-            trailers.push([name, [arglist, spanFrom(spanStart)]])
+            trailers.push([name, [arglist, unpackMapItems(namedArglist),
+                                  spanFrom(spanStart)]])
 
         while (true):
             if (peekTag() == "."):
@@ -1126,7 +1191,7 @@ def parseMonte(lex, builder, mode, err):
                 break
         var result := base
         for tr in trailers:
-            result := M.call(builder, tr[0], [result] + tr[1])
+            result := M.call(builder, tr[0], [result] + tr[1], [].asMap())
         return result
 
     def prefix(ej):

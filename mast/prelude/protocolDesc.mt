@@ -58,7 +58,7 @@ object __makeProtocolDesc as DeepFrozen:
             to _uncall():
                 return [__makeProtocolDesc, "run", [docString, name,
                                                     parents, stillUnknown,
-                                                    messages]]
+                                                    messages], [].asMap()]
 
             to audit(audition) :Bool:
                 "Determine whether an object implements this object as an
@@ -121,8 +121,8 @@ object __makeProtocolDesc as DeepFrozen:
                 return [
                     [__makeProtocolDesc, "makePair", [docString, name,
                                                       parents, stillUnknown,
-                                                      messages]],
-                    "get", [0]]
+                                                      messages], [].asMap()],
+                    "get", [0], [].asMap()]
 
             to audit(_):
                 throw("Can't audit with this object")

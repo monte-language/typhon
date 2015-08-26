@@ -21,7 +21,7 @@ def escapeFragment(fragment):
             return someTag
 
 object tag:
-    match [tagType, pieces]:
+    match [tagType, pieces, _]:
         def fragments := [for piece in (pieces) escapeFragment(piece)]
         object HTMLTag:
             to _printOn(out):

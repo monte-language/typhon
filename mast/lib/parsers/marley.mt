@@ -170,7 +170,7 @@ def makeMarley(grammar, startRule):
 def exactly(token):
     return object exactlyMatcher:
         to _uncall():
-            return [exactly, [token]]
+            return [exactly, [token], [].asMap()]
 
         to matches(specimen) :Bool:
             return token == specimen
@@ -310,7 +310,7 @@ def makeScanner(characters):
 def tag(t :Str):
     return object tagMatcher:
         to _uncall():
-            return [tag, [t]]
+            return [tag, [t], [].asMap()]
 
         to matches(specimen) :Bool:
             return switch (specimen) {

@@ -21,7 +21,7 @@ def makeRecord(name :Str, fields :Map[Str, Any]):
         pass
 
     object recordMaker:
-        match [=="run", via (checkElements) elements]:
+        match [=="run", via (checkElements) elements, _]:
             object record as RecordStamp:
                 "A record."
 
@@ -35,13 +35,13 @@ def makeRecord(name :Str, fields :Map[Str, Any]):
                             fieldNames[i] => element]
 
                 match [`get@slug` ? ((def i := checkSlug(slug)) != -1),
-                       []]:
+                       [], _]:
                     elements[i]
 
                 match [`with@slug` ? ((def i := checkSlug(slug)) != -1),
-                       [newValue :fields[fieldNames[i]]]]:
+                       [newValue :fields[fieldNames[i]]], _]:
                     def newElements := elements.with(i, newValue)
-                    M.call(recordMaker, "run", newElements)
+                    M.call(recordMaker, "run", newElements, [].asMap())
 
     return [Record, recordMaker]
 

@@ -62,7 +62,7 @@ def makeDebugResource(runtime):
                 tag.p(`Number of live objects: ${heap.getObjectCount()}`),
                 tag.p(`Conservative heap size: ${autoSI(heap.getMemoryUsage())}B`),
                 tag.p("Most common objects on the heap:"),
-                M.call(tag, "ul", bucketList))
+                M.call(tag, "ul", bucketList), [].asMap())
             def reactorTag := tag.div(
                 tag.h2("Reactor"),
                 tag.p(`Alarms: ${reactor.getAlarms()}`),
