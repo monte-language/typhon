@@ -199,8 +199,7 @@ def unwrapChar(o):
 @autohelp
 class DoubleObject(Object):
     """
-    A numeric value in ℝ, with IEEE 754 semantics and at least double
-    precision.
+    An IEEE 754 floating-point number with at least double precision.
     """
 
     _immutable_fields_ = "stamps", "_d"
