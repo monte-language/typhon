@@ -1,15 +1,6 @@
-# Explicitly use the faster container-based builders.
-sudo: false
+sudo: required
 language: python
 python: 2.7
-install:
-    - pip install -r requirements.txt
-    - hg clone https://bitbucket.org/pypy/pypy
-env:
-    - OPT=-O2
-    - OPT=-Ojit
-script: PYTHONPATH=pypy:. python -m rpython $OPT main && PYTHONPATH=pypy:. make test
-matrix:
-    fast_finish: true
+script: ./travis-build.sh
 notifications:
     irc: "irc.freenode.org#monte"
