@@ -12,14 +12,14 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-object bytePattern:
+object bytePattern as DeepFrozen:
     pass
 
-object byteValue:
+object byteValue as DeepFrozen:
     pass
 
 
-object b__quasiParser:
+object b__quasiParser as DeepFrozen:
     to patternHole(index):
         return [bytePattern, index]
 
