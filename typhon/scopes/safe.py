@@ -436,7 +436,7 @@ class VarSlotMaker(Object):
         raise Refused(self, atom, args)
 
 
-@runnable(COERCE_2)
+@runnable(COERCE_2, _stamps=[deepFrozenStamp])
 def nearGuard(args):
     """
     A guard over references to near values.
