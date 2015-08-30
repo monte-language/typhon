@@ -492,8 +492,22 @@ def expand(node, builder, fail) as DeepFrozen:
                 "substitute",
                 [emitList(exprs, span)], [], span)
         else if (nodeName == "Module"):
-            def [imports, exports, expr] := args
-            return builder."Module"(imports, exports, expr, span)
+            def [importsList, exportsList, expr] := args
+            def exportExpr := emitMap([for noun in (exportsList)
+                               emitList([builder.LiteralExpr(noun.getName(),
+                                                    noun.getSpan()), noun],
+                                        span)], span)
+            def body := builder.SeqExpr([expr, exportExpr], span)
+            def DF := builder.NounExpr("DeepFrozen", span)
+            def DFMap := builder.MethodCallExpr(builder.NounExpr("Map", span),
+                "get", [builder.NounExpr("Str", span),
+                        builder.NounExpr("DeepFrozen", span)], [], span)
+            return builder.ObjectExpr(null,
+                builder.IgnorePattern(null, span),
+                builder.NounExpr("DeepFrozen", span), [],
+                builder.Script(null,
+                     [builder."Method"(null, "run", [], importsList, DFMap, body, span)],
+                     [], span), span)
         else if (nodeName == "SeqExpr"):
             def [exprs] := args
             #XXX some parsers have emitted nested SeqExprs, should that

@@ -1,6 +1,6 @@
 def MONTE_KEYWORDS :List[Str] := [
 "as", "bind", "break", "catch", "continue", "def", "else", "escape",
-"exit", "extends", "export", "finally", "fn", "for", "guards", "if",
+"exit", "extends", "exports", "finally", "fn", "for", "guards", "if",
 "implements", "in", "interface", "match", "meta", "method", "module",
 "object", "pass", "pragma", "return", "switch", "to", "try", "var",
 "via", "when", "while", "_"]
@@ -376,7 +376,7 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozen:
                 printListOn("", importsList, ", ", "", out, priorities["braceExpr"])
             out.println("")
             if (exportsList.size() > 0):
-                out.print("export ")
+                out.print("exports ")
                 printListOn("(", exportsList, ", ", ")", out, priorities["braceExpr"])
                 out.println("")
             body.subPrintOn(out, priorities["indentExpr"])
