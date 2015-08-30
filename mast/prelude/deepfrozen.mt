@@ -107,8 +107,15 @@ object DeepFrozen implements DeepFrozenStamp:
             if (guard =~ via (superGuard.extractGuard) subGuard):
                 return DeepFrozen.supersetOf(subGuard)
 
+        # Map is special since it has two subguards.
+        if (guard =~ via (Map.extractGuards) [keyGuard, valueGuard]):
+            return (DeepFrozen.supersetOf(keyGuard) &&
+                    DeepFrozen.supersetOf(valueGuard))
+
         if (SubrangeGuard[DeepFrozen].passes(guard)):
             return true
+
+        # Any is also special since it has many subguards.
         if (guard =~ via (Any.extractGuards) subGuards):
             for g in subGuards:
                 if (!DeepFrozen.supersetOf(g)):

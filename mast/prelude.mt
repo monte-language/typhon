@@ -276,7 +276,7 @@ object Map as DeepFrozenStamp:
                 valueGuard._printOn(out)
                 out.print("]")
 
-            to getGuard():
+            to getGuards():
                 return [keyGuard, valueGuard]
 
             to coerce(var specimen, ej):
@@ -292,11 +292,11 @@ object Map as DeepFrozenStamp:
                 throw.eject(ej,
                             ["(Probably) not a conforming map:", specimen])
 
-    to extractGuard(specimen, ej):
+    to extractGuards(specimen, ej):
         if (specimen == Map):
-            return Any
+            return [Any, Any]
         else if (__auditedBy(_MapGuardStamp, specimen)):
-            return specimen.getGuard()
+            return specimen.getGuards()
         else:
             throw.eject(ej, "Not a Map guard")
 
