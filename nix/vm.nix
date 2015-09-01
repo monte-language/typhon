@@ -1,4 +1,4 @@
-{stdenv, fetchFromBitbucket, lib, pypy, pypyPackages}:
+{stdenv, fetchFromBitbucket, lib, libuv, pypy, pypyPackages}:
 
 let pypySrc = fetchFromBitbucket {
     owner = "pypy";
@@ -9,7 +9,7 @@ let pypySrc = fetchFromBitbucket {
 in
 stdenv.mkDerivation {
   name = "typhon-vm";
-  buildInputs = [ pypy pypyPackages.pytest pypyPackages.twisted pypySrc ];
+  buildInputs = [ pypy pypyPackages.pytest pypyPackages.twisted pypySrc libuv ];
   buildPhase = ''
     source $stdenv/setup
     mkdir -p ./rpython/_cache
