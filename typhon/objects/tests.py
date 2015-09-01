@@ -17,7 +17,9 @@ from rpython.rlib.debug import debug_print
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException
-from typhon.objects.collections import unwrapList
+from typhon.objects.collections import (ConstList, ConstMap, monteDict,
+                                        unwrapList)
+from typhon.objects.data import StrObject
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, optSame
@@ -28,7 +30,9 @@ DOESNOTEJECT_1 = getAtom(u"doesNotEject", 1)
 EJECTS_1 = getAtom(u"ejects", 1)
 EQUAL_2 = getAtom(u"equal", 2)
 NOTEQUAL_2 = getAtom(u"notEqual", 2)
+RUN_0 = getAtom(u"run", 0)
 RUN_1 = getAtom(u"run", 1)
+STARTTEST_1 = getAtom(u"startTest", 1)
 THROWS_1 = getAtom(u"throws", 1)
 
 
@@ -123,35 +127,48 @@ class Asserter(Object):
 
 
 @autohelp
-class UnitTest(Object):
+class TestCollector(Object):
     """
     A unit test collector.
 
-    Pass unit tests to this object, then call test() to execute them.
+    Unit tests in various modules are aggregated here for the convenience of
+    test runners.
+    """
+    def __init__(self):
+        self._tests = {}
+
+    def addTest(self, locus, test):
+        if locus not in self._tests:
+            self._tests[locus] = []
+        self._tests[locus].append(test)
+
+    def recv(self, atom, args):
+        if atom is RUN_0:
+            d = monteDict()
+            for k in self._tests:
+                d[StrObject(k)] = ConstList(self._tests[k][:])
+            return ConstMap(d)
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class UnitTest(Object):
+
+    """
+    A unit test backend.
+
+    Pass unit tests to this object, they will be available from its
+    TestCollector.
     """
 
-    def __init__(self):
-        self._tests = []
+    def __init__(self, locus, testCollector):
+        self.locus = locus
+        self.testCollector = testCollector
 
     def recv(self, atom, args):
         if atom is RUN_1:
             for test in unwrapList(args[0]):
-                self._tests.append(test)
+                self.testCollector.addTest(self.locus, test)
             return NullObject
 
         raise Refused(self, atom, args)
-
-    def test(self):
-        debug_print("Running unit tests...")
-        asserter = Asserter()
-        for test in self._tests:
-            asserter.startTest(test.toString())
-            try:
-                test.call(u"run", [asserter])
-            except UserException as ue:
-                asserter.log(u"Caught exception: " +
-                        ue.formatError().decode("utf-8"))
-            except Ejecting as ej:
-                asserter.log(u"Ejector tried to cross the unittest boundary")
-        debug_print("Unit test output:")
-        asserter.dump()

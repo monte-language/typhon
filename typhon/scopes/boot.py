@@ -24,6 +24,7 @@ from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject,
                                  unwrapBytes, unwrapStr, wrapBool)
 from typhon.objects.root import Object, runnable
+from typhon.objects.tests import UnitTest
 from typhon.prelude import registerGlobals
 
 EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
@@ -129,7 +130,7 @@ def installAstBuilder(args):
 registerGlobals({u"astBuilder": NullObject})
 
 
-def bootScope(recorder):
+def bootScope(recorder, collectTests):
     return {
         u"isBool": isBool(),
         u"isBytes": isBytes(),
@@ -147,4 +148,5 @@ def bootScope(recorder):
 
         u"typhonEval": TyphonEval(recorder),
         u"_installASTBuilder": installAstBuilder(),
+        u"unittest": UnitTest(u"<boot>", collectTests),
     }

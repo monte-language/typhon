@@ -34,7 +34,7 @@ endif
 
 # This, being the first rule in the file, will be the default rule to make. It
 # is *not* because of the name.
-default: mt-typhon mast
+default: mt-typhon mast fun
 
 mt-typhon:
 	$(PYTHON) -m rpython -O2 main
@@ -45,9 +45,13 @@ $(boot_objects): boot/%.ty: mast/%.ty
 	@ echo "BOOT $<"
 	@ cp $< $@
 
-test: default
+testVM: default
 	trial typhon
-	find mast/lib -name \*.ty -exec ./mt-typhon -l mast {} \;
+
+testMast: default
+	./mt-typhon -l mast mast/unittest.ty all-tests
+
+test: testVM testMast
 
 mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/record.ty \
 	mast/lib/netstring.ty \
@@ -108,7 +112,7 @@ bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty \
 monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/lib/monte/monte_parser.ty mast/lib/monte/monte_expander.ty \
 	mast/lib/monte/monte_optimizer.ty mast/lib/monte/ast_dumper.ty \
-	mast/montec.ty
+	mast/montec.ty mast/unittest.ty mast/all-tests.ty
 
 %.ty: %.mt
 	@ echo "MONTEC $<"

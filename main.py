@@ -30,6 +30,7 @@ from typhon.objects.collections import ConstMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import unwrapStr, StrObject
 from typhon.objects.imports import addImportToScope
+from typhon.objects.tests import TestCollector
 from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
 from typhon.reactor import Reactor
@@ -49,22 +50,14 @@ def dirname(p):
     return head
 
 
-def runScopeTests(scope):
-    # Run unit tests.
-    if u"unittest" in scope:
-        unittest = scope[u"unittest"]
-        unittest.test()
-    else:
-        print "Tried to run scope tests, but 'unittest' wasn't in scope."
-
-
 def loadPrelude(config, recorder, vat):
     scope = safeScope()
     # For the prelude (and only the prelude), permit the boot scope.
-    scope.update(bootScope(recorder))
+    bootTC = TestCollector()
+    scope.update(bootScope(recorder, bootTC))
 
     # Boot imports.
-    scope = addImportToScope(config.libraryPath, scope, recorder)
+    scope = addImportToScope(config.libraryPath, scope, recorder, bootTC)
 
     code = obtainModule(rjoin(config.libraryPath, "prelude.ty"), scope.keys(),
                         recorder)
@@ -76,7 +69,6 @@ def loadPrelude(config, recorder, vat):
         print "Prelude returned None!?"
         return {}
 
-    runScopeTests(scope)
 
     # debug_print("Prelude result:", result.toQuote())
 
@@ -178,9 +170,9 @@ def entryPoint(argv):
     # it receives, so the unsafe scope will only be available to the
     # top-level script and not to any library code which is indirectly loaded
     # via import().
-    scope = addImportToScope(config.libraryPath, scope, recorder)
-    scope.update(unsafeScope(config))
-
+    collectTests = TestCollector()
+    scope = addImportToScope(config.libraryPath, scope, recorder, collectTests)
+    scope.update(unsafeScope(config, collectTests))
     try:
         code = obtainModule(config.argv[1], scope.keys(), recorder)
     except LoadFailed as lf:
@@ -202,10 +194,6 @@ def entryPoint(argv):
                 result = evaluateTerms([code], finalize(scope))
         if result is None:
             return 1
-        # print result.toQuote()
-
-        # Run unit tests.
-        runScopeTests(scope)
 
         # Exit status code.
         rv = 0

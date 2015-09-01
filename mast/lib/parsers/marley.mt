@@ -299,7 +299,7 @@ def makeScanner(characters):
                         return ["character", c]
                     match =='|':
                         return "pipe"
-                    match _:
+                    match c:
                         return ["unknown", c]
 
         to hasTokens() :Bool:
