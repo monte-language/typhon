@@ -1,11 +1,9 @@
 let
   nixpkgs = import <nixpkgs> { };
   jobs = with nixpkgs; rec {
-    typhonVm = callPackage ./nix/vm.nix { };
+    typhonVm_O2 = callPackage ./nix/vm.nix { buildJIT = false; };
+    typhonVm = callPackage ./nix/vm.nix { buildJIT = true; };
     mast = callPackage ./nix/mast.nix { typhonVm = typhonVm; };
-    mastWithTests = pkgs.lib.overrideDerivation mast (oldAttrs: {
-      inherit mast;
-      doCheck = true;});
   };
 in
   jobs
