@@ -25,6 +25,10 @@ stdenv.mkDerivation {
     mkdir $out
     cp mt-typhon $out/
     '';
+  fixupPhase = ''
+    patchelf --shrink-rpath $out/mt-typhon
+    strip $out/mt-typhon
+    '';
   src = let loc = part: (toString ./..) + part;
    in builtins.filterSource (path: type:
     let p = toString path;
