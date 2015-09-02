@@ -15,6 +15,6 @@ binary-caches = http://cache.nixos.org http://hydra.nixos.org http://selina.inze
 trusted-binary-caches = http://hydra.nixos.org
 build-max-jobs = 4
 EOF
-
 source $HOME/.nix-profile/etc/profile.d/nix.sh
+nix-env -iA latest.typhonVm
 nix-build default.nix -A mast
