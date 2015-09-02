@@ -1127,7 +1127,6 @@ def parseMonte(lex, builder, mode, err):
                     pairs with= ([name, node.getValue()])
                 else:
                     pairs with= ([node.getKey(), node.getValue()])
-            traceln(`pairs: $pairs`)
             return pairs
 
         def positionalArg(ej):

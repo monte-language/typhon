@@ -351,7 +351,6 @@ def mkNAPrinter([k, v]):
 
 def namedArgPairsScope(pairs):
     var scope := emptyScope
-    traceln("ast pairs: " + M.toString(pairs))
     for [k, v] in pairs:
         scope += k.getStaticScope()
         scope += v.getStaticScope()
