@@ -110,3 +110,14 @@ class Printer(Object):
 
     def value(self):
         return self.ub.build()
+
+
+def toString(self):
+    try:
+        printer = Printer()
+        printer.objPrint(self)
+        return printer.value()
+    except UserException, e:
+        return u"<%s (threw exception %s when printed)>" % (
+            self.__class__.__name__.decode('utf-8'),
+            e.error())

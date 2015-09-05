@@ -20,7 +20,8 @@ from typhon.autohelp import autohelp
 from typhon.errors import (Ejecting, Refused, UserException, WrongType,
                            userError)
 from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
-from typhon.objects.collections import EMPTY_MAP, ConstList, ConstMap, unwrapList
+from typhon.objects.collections import (EMPTY_MAP, ConstList, ConstMap,
+                                        unwrapList)
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
                                  StrObject, makeSourceSpan, unwrapInt,
@@ -31,10 +32,10 @@ from typhon.objects.iteration import loop
 from typhon.objects.guards import (anyGuard, FinalSlotGuardMaker,
                                    VarSlotGuardMaker)
 from typhon.objects.help import Help
+from typhon.objects.printers import toString
 from typhon.objects.refs import Promise, RefOps, resolution
 from typhon.objects.root import Object, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
-from typhon.objects.tests import UnitTest
 from typhon.vats import currentVat
 
 ASTYPE_0 = getAtom(u"asType", 0)
@@ -317,7 +318,8 @@ class MObject(Object):
             # Signed, sealed, delivered, I'm yours.
             sendAtom = getAtom(sendVerb, len(sendArgs))
             vat = currentVat.get()
-            return vat.sendOnly(target, sendAtom, sendArgs, EMPTY_MAP)
+            vat.sendOnly(target, sendAtom, sendArgs, EMPTY_MAP)
+            return NullObject
 
         if atom is SEND_3:
             target = args[0]
@@ -388,7 +390,7 @@ class MObject(Object):
             return StrObject(args[0].toQuote())
 
         if atom is TOSTRING_1:
-            return StrObject(args[0].toString())
+            return StrObject(toString(args[0]))
 
         raise Refused(self, atom, args)
 

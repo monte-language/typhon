@@ -24,7 +24,7 @@ from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import throw
-from typhon.objects.printers import Printer
+from typhon.objects.printers import Printer, toString
 from typhon.objects.root import Object
 from typhon.prelude import getGlobal
 from typhon.rstrategies import rstrategies
@@ -232,13 +232,7 @@ class ConstList(Object):
         printer.call(u"print", [StrObject(u"]")])
 
     def toString(self):
-        try:
-            printer = Printer()
-            printer.objPrint(self)
-            return printer.value()
-        except UserException, e:
-            return u"<ConstList (threw exception %s when printed)>" % (e.error(),)
-
+        return toString(self)
 
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.
@@ -448,12 +442,7 @@ class FlexList(Object):
         printer.call(u"print", [StrObject(u"].diverge()")])
 
     def toString(self):
-        try:
-            printer = Printer()
-            printer.objPrint(self)
-            return printer.value()
-        except UserException, e:
-            return u"<FlexList (threw exception %s when printed)>" % (e.error(),)
+        return toString(self)
 
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.

@@ -52,9 +52,14 @@ def eq(b):
 
 
 def isSettled(o):
-    if isinstance(o, Promise):
-        return o.state() is not EVENTUAL
-    return True
+    return samenessFringe(o, None, None)
+
+
+def isSameEver(first, second):
+    result = optSame(first, second)
+    if result is NOTYET:
+        raise userError(u"Not yet settled!")
+    return result is EQUAL
 
 
 @unroll_safe
@@ -179,6 +184,11 @@ def optSame(first, second, cache=None):
                 return INEQUAL
         return EQUAL
 
+    # Proxies do their own sameness checking.
+    from typhon.objects.proxy import DisconnectedRef, Proxy
+    if isinstance(first, Proxy) or isinstance(first, DisconnectedRef):
+        return eq(first.eq(second))
+
     if isinstance(first, ConstMap):
         if not isinstance(second, ConstMap):
             return INEQUAL
@@ -191,11 +201,11 @@ def optSame(first, second, cache=None):
 
     # First, see if either object wants to stop with just identity comparison.
     if selfless in first.stamps:
-        if not selfless in second.stamps:
+        if selfless not in second.stamps:
             return INEQUAL
         # Then see if both objects can be compared by contents.
         if (transparentStamp in first.stamps and
-            transparentStamp in second.stamps):
+                transparentStamp in second.stamps):
 
             # This could recurse.
             if cache is None:
@@ -266,6 +276,9 @@ def samenessHash(obj, depth, path, fringe):
     # The empty map. (Uncalls contain maps, thus this base case.)
     if isinstance(o, ConstMap) and len(o.objectMap) == 0:
         return 127
+    from typhon.objects.proxy import FarRef, DisconnectedRef
+    if isinstance(o, FarRef) or isinstance(o, DisconnectedRef):
+        return samenessHash(o.handler, depth, path, fringe)
 
     # Other objects compared by structure.
     if selfless in o.stamps:
@@ -282,7 +295,6 @@ def samenessHash(obj, depth, path, fringe):
     fringe.append(FringeNode(o, path))
     return -1
 
-    
 
 def samenessFringe(original, path, fringe, sofar=None):
     # Build a fringe after walking this object graph, and return whether
@@ -306,7 +318,7 @@ def samenessFringe(original, path, fringe, sofar=None):
             if (not result) and fringe is None:
                 # Unresolved promise found.
                 return False
-        return True
+        return result
     if isinstance(o, ConstMap) and len(o.objectMap) == 0:
         return True
     if (isinstance(o, BoolObject) or isinstance(o, CharObject)
@@ -341,15 +353,15 @@ class FringePath(object):
             right = right.next
         return right is None
 
-    def fringeHash(self):
-        p = self
-        h = 0
-        shift = 0
-        while p is not None:
-            h ^= self.position << shift
-            shift = (shift + 4) % 32
-            p = p.next
-        return h
+
+def hashFringePath(path):
+    val = 0
+    shift = 0
+    while path is not None:
+        val ^= path.position << shift
+        shift = (shift + 4) % 32
+        path = path.next
+    return val
 
 
 class FringeNode(object):
@@ -369,7 +381,7 @@ class FringeNode(object):
         return self.path.eq(other.path)
 
     def fringeHash(self):
-        return compute_identity_hash(self.identity) ^ self.path.fringeHash()
+        return compute_identity_hash(self.identity) ^ hashFringePath(self.path)
 
 
 def sameYetHash(obj, fringe):
