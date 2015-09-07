@@ -447,6 +447,14 @@ class FlexList(Object):
                 printer.call(u"print", [StrObject(u", ")])
         printer.call(u"print", [StrObject(u"].diverge()")])
 
+    def toString(self):
+        try:
+            printer = Printer()
+            printer.objPrint(self)
+            return printer.value()
+        except UserException, e:
+            return u"<FlexList (threw exception %s when printed)>" % (e.error(),)
+
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.
         x = 0x345678
