@@ -6,6 +6,7 @@ absolutely required. You're welcome.
 
 Import as `from typhon import ruv` and then use namespaced. Please.
 """
+import os
 
 from functools import wraps
 
@@ -51,7 +52,17 @@ def checking(message, f):
     return checker
 
 
+def envPaths(name):
+    val = os.getenv(name)
+    if val is None:
+        return []
+    else:
+        return val.split(':')
+
+
 eci = ExternalCompilationInfo(includes=["uv.h"],
+                              include_dirs=envPaths("TYPHON_INCLUDE_PATH"),
+                              library_dirs=envPaths("TYPHON_LIBRARY_PATH"),
                               libraries=["nsl", "rt", "uv"])
 
 class CConfig:
