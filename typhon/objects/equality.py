@@ -292,8 +292,6 @@ def samenessFringe(original, path, fringe, sofar=None):
     o = resolution(original)
     if o is NullObject:
         return True
-    if deepFrozenStamp in o.stamps:
-        return True
     if o in sofar:
         return True
     if isinstance(o, ConstList):
@@ -308,19 +306,19 @@ def samenessFringe(original, path, fringe, sofar=None):
             if (not result) and fringe is None:
                 # Unresolved promise found.
                 return False
+        return True
     if isinstance(o, ConstMap) and len(o.objectMap) == 0:
         return True
     if (isinstance(o, BoolObject) or isinstance(o, CharObject)
-        or isinstance(o, DoubleObject) or isinstance(o, IntObject)
-        or isinstance(o, BigInt) or isinstance(o, StrObject)
-        or isinstance(o, TraversalKey)):
+            or isinstance(o, DoubleObject) or isinstance(o, IntObject)
+            or isinstance(o, BigInt) or isinstance(o, StrObject)
+            or isinstance(o, TraversalKey)):
         return True
 
     if selfless in o.stamps:
         if transparentStamp in o.stamps:
             return samenessFringe(o.call(u"_uncall", []), path, fringe, sofar)
         # XXX Semitransparent support goes here
-
     if isResolved(o):
         return True
 
@@ -328,6 +326,7 @@ def samenessFringe(original, path, fringe, sofar=None):
     if fringe is not None:
         fringe.append(FringeNode(o, path))
     return False
+
 
 class FringePath(object):
     def __init__(self, position, next):
