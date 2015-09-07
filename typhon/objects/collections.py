@@ -24,6 +24,7 @@ from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import throw
+from typhon.objects.printers import Printer
 from typhon.objects.root import Object
 from typhon.prelude import getGlobal
 from typhon.rstrategies import rstrategies
@@ -164,7 +165,7 @@ class Collection(object):
 
         if atom is _PRINTON_1:
             printer = args[0]
-            printer.call(u"print", [StrObject(self.toQuote())])
+            self.printOn(printer)
             return NullObject
 
         # contains/1: Determine whether an element is in this collection.
@@ -221,15 +222,23 @@ class ConstList(Object):
         strategyFactory.set_initial_strategy(self, strategy, len(objects),
                                              objects)
 
-    def toString(self):
-        guts = u", ".join([obj.toString()
-                           for obj in self.strategy.fetch_all(self)])
-        return u"[%s]" % (guts,)
+    def printOn(self, printer):
+        printer.call(u"print", [StrObject(u"[")])
+        items = self.strategy.fetch_all(self)
+        for i, obj in enumerate(items):
+            printer.call(u"print", [obj])
+            if i + 1 < len(items):
+                printer.call(u"print", [StrObject(u", ")])
+        printer.call(u"print", [StrObject(u"]")])
 
-    def toQuote(self):
-        guts = u", ".join([obj.toQuote()
-                           for obj in self.strategy.fetch_all(self)])
-        return u"[%s]" % (guts,)
+    def toString(self):
+        try:
+            printer = Printer()
+            printer.objPrint(self)
+            return printer.value()
+        except UserException, e:
+            return u"<ConstList (threw exception %s when printed)>" % (e.error(),)
+
 
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.
@@ -429,15 +438,14 @@ class FlexList(Object):
         strategyFactory.set_initial_strategy(self, strategy, len(flexObjects),
                                              flexObjects)
 
-    def toString(self):
-        guts = u", ".join([obj.toString()
-                           for obj in self.strategy.fetch_all(self)])
-        return u"[%s].diverge()" % (guts,)
-
-    def toQuote(self):
-        guts = u", ".join([obj.toQuote()
-                           for obj in self.strategy.fetch_all(self)])
-        return u"[%s].diverge()" % (guts,)
+    def printOn(self, printer):
+        printer.call(u"print", [StrObject(u"[")])
+        items = self.strategy.fetch_all(self)
+        for i, obj in enumerate(items):
+            printer.call(u"print", [obj])
+            if i + 1 < len(items):
+                printer.call(u"print", [StrObject(u", ")])
+        printer.call(u"print", [StrObject(u"].diverge()")])
 
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.

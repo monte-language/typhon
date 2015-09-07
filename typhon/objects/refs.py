@@ -385,7 +385,7 @@ class Promise(Object):
         from typhon.objects.collections import EMPTY_MAP
         if atom is _PRINTON_1:
             out = args[0]
-            return out.call(u"print", [StrObject(self.toString())])
+            return self.printOn(out)
 
         if atom is _WHENMORERESOLVED_1:
             return self._whenMoreResolved(args[0])
@@ -428,7 +428,7 @@ class Promise(Object):
 
     def state(self):
         if self.optProblem() is not NullObject:
-             return BROKEN
+            return BROKEN
         target = self.resolutionRef()
         if self is target:
             return EVENTUAL
@@ -446,12 +446,12 @@ class SwitchableRef(Promise):
     def __init__(self, target):
         self._target = target
 
-    def toString(self):
+    def printOn(self, printer):
         if self.isSwitchable:
-            return u"<switchable promise>"
+            printer.call(u"print", [StrObject(u"<switchable promise>")])
         else:
             self.resolutionRef()
-            return self._target.toString()
+            return self._target.printOn(printer)
 
     def callAll(self, atom, args, namedArgs):
         if self.isSwitchable:
@@ -524,8 +524,8 @@ class BufferingRef(Promise):
         # Note to self: Weakref.
         self._buf = weakref.ref(buf)
 
-    def toString(self):
-        return u"<bufferingRef>"
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"<bufferingRef>")])
 
     def callAll(self, atom, args, namedArgs):
         raise userError(u"not synchronously callable (%s)" %
@@ -570,12 +570,8 @@ class NearRef(Promise):
         self.target = target
         self.vat = vat
 
-    def toString(self):
-        # This used to say <nearref: %s> but that broke transparency since it
-        # was visible from Monte. ~ C.
-        # XXX It would be quite nice to be able to toggle the old behavior for
-        # debugging.
-        return self.target.toString()
+    def printOn(self, out):
+        out.call(u"print", [self.target])
 
     def hash(self):
         return self.target.hash()
@@ -621,8 +617,10 @@ class LocalVatRef(Promise):
         self.target = target
         self.vat = vat
 
-    def toString(self):
-        return u"<farref into vat %s>" % self.vat.toString()
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"<farref into vat ")])
+        out.call(u"print", [self.vat])
+        out.call(u"print", [StrObject(u">")])
 
     def hash(self):
         # XXX shouldn't this simply be unhashable?
@@ -679,8 +677,9 @@ class UnconnectedRef(Promise):
         assert isinstance(problem, unicode)
         self._problem = problem
 
-    def toString(self):
-        return u"<ref broken by %s>" % (self._problem,)
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"<ref broken by " +
+                                      self._problem + u">")])
 
     def callAll(self, atom, args, namedArgs):
         self._doBreakage(atom, args, namedArgs)

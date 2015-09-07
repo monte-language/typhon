@@ -105,5 +105,8 @@ class Printer(Object):
                 item.toString(), e.error()))
         del self.context[item]
 
+    def printStr(self, s):
+        self.ub.append(s)
+
     def value(self):
         return self.ub.build()
