@@ -336,10 +336,12 @@ class FileResource(Object):
             vat = currentVat.get()
             fs = ruv.alloc_fs()
             ruv.stashFS(fs, (vat, r))
-            # Create the file if it doesn't yet exist. Trust the umask to be
-            # reasonable for now.
-            ruv.fsOpen(vat.uv_loop, fs, self.path, os.O_CREAT | os.O_WRONLY,
-                       0777, openDrainCB)
+            # Create the file if it doesn't yet exist, and truncate it if it
+            # does. Trust the umask to be reasonable for now.
+            flags = os.O_CREAT | os.O_WRONLY
+            # XXX this behavior should be configurable via namedarg?
+            flags |= os.O_TRUNC
+            ruv.fsOpen(vat.uv_loop, fs, self.path, flags, 0777, openDrainCB)
             return p
 
         raise Refused(self, atom, args)
