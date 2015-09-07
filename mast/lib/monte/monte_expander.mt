@@ -61,7 +61,7 @@ def renameCycles(node, renamings, builder):
     def renamer(node, maker, args, span):
         return switch (node.getNodeName()) {
             match =="NounExpr" {
-                renamings.fetch(args[0], fn {node})
+                renamings.fetch(node.withoutSpan(), fn {node})
             }
             match _ {
                 M.call(maker, "run", args + [span], [].asMap())
@@ -618,14 +618,14 @@ def expand(node, builder, fail):
                 for oldname in conflicts:
                     def newname := builder.TempNounExpr(oldname.getName(), span)
                     def newnameR := builder.TempNounExpr(oldname.getName() + "R", span)
-                    renamings[oldname] := newname
+                    renamings[oldname.withoutSpan()] := newname
                     def pair := [builder.FinalPattern(newname, null, span),
                                  builder.FinalPattern(newnameR, null, span)]
                     promises.push(builder.DefExpr(builder.ListPattern(pair, null, span),
                         null, builder.MethodCallExpr(builder.NounExpr("Ref", span), "promise",
                             [], [], span), span))
                     resolvers.push(builder.MethodCallExpr(newnameR, "resolve",
-                         [builder.NounExpr(oldname, span)], [], span))
+                         [oldname], [], span))
                 def resName := builder.TempNounExpr("value", span)
                 resolvers.push(resName)
                 def renamedEj := if (ej == null) {null} else {renameCycles(ej, renamings, builder)}
