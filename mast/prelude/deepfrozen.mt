@@ -135,18 +135,21 @@ bind auditDeepFrozen(audition, fail) as DeepFrozenStamp:
     def closurePatts := (objectExpr.getScript().getStaticScope().namesUsed() -
                         patternSS.getDefNames())
 
+
+    def errors := [].diverge()
     for patt in closurePatts:
         def name := if (patt =~ s :Str) {s} else {patt.getName()}
         if (patternSS.getVarNames().contains(name)):
-            throw.eject(fail, M.toQuote(name) + " in the definition of " +
+            errors.push(M.toQuote(name) + " in the definition of " +
                         audition.getFQN() + " is a variable pattern " +
                         "and therefore not DeepFrozen")
         else:
             def guard := audition.getGuard(name)
             if (!DeepFrozen.supersetOf(guard)):
-                throw.eject(fail,
-                            M.toQuote(name) + " in the lexical scope of " +
+                errors.push(M.toQuote(name) + " in the lexical scope of " +
                             audition.getFQN() + " does not have a guard " +
                             "implying DeepFrozen, but " + M.toQuote(guard))
+    if (errors.size() > 0):
+        throw.eject(fail, ";\n".join(errors))
 
 [=> SubrangeGuard, => DeepFrozen]
