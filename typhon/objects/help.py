@@ -3,6 +3,7 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.data import StrObject, unwrapInt, unwrapStr
 from typhon.objects.root import Object
 from typhon.objects.user import ScriptObject
@@ -48,6 +49,8 @@ class Help(Object):
     """
     A gentle introspection assistant.
     """
+
+    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"\n".join([
