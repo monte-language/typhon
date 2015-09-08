@@ -1,14 +1,17 @@
-def [=> UTF8] | _ := import("lib/codec/utf8",
-                            [=> Bool, => Bytes, => Char, => Int, => List,
-                             => Str,
-                             => b__quasiParser,
-                             => bench, => _accumulateList, => _quasiMatcher,
-                             => _mapExtract, => _iterWhile, => _comparer,
-                             => _suchThat, => _switchFailed, => _matchSame,
-                             => _validateFor, => _makeVerbFacet,
-                             => _makeOrderedSpace])
+def [=> UTF8 :DeepFrozen] | _ := import("lib/codec/utf8",
+                                        [=> Bool, => Bytes, => Char,
+                                        => DeepFrozen, => Int, => List,
+                                        => Str,
+                                        => b__quasiParser,
+                                        => bench, => _accumulateList,
+                                        => _quasiMatcher, => _mapExtract,
+                                        => _iterWhile, => _comparer,
+                                        => _suchThat, => _switchFailed,
+                                        => _matchSame, => _validateFor,
+                                        => _makeVerbFacet,
+                                        => _makeOrderedSpace])
 
-def astCodes := [
+def astCodes :Map[Str, Int] := [
     "LiteralExpr" => 10,
     "NounExpr" => 11,
     "BindingExpr" => 12,
@@ -34,20 +37,20 @@ def astCodes := [
     "BindingPattern" => 32,
     "NamedParam" => 34]
 
-def asciiShift(bs) :Bytes:
+def asciiShift(bs) :Bytes as DeepFrozen:
     var result := b``
     for c in bs:
         result with= ((c + 32) % 256)
     return result
 
-def zze(val):
+def zze(val) as DeepFrozen:
     if (val < 0):
         return ((val * 2) ^ -1) | 1
     else:
         return val * 2
 
 
-def dumpVarint(var value, write):
+def dumpVarint(var value, write) as DeepFrozen:
     if (value == 0):
         write(asciiShift(b`$\x00`))
     else:
@@ -62,7 +65,7 @@ def dumpVarint(var value, write):
         write(asciiShift(target))
 
 
-def dump(item, write):
+def dump(item, write) as DeepFrozen:
     if (item == null):
         write(asciiShift(b`$\x00`))
         return

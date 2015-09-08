@@ -13,7 +13,7 @@
 # under the License.
 
 
-def chr(i :Int) :Char:
+def chr(i :Int) :Char as DeepFrozen:
     return '\x00' + i
 
 def testChr(assert):
@@ -25,7 +25,7 @@ def testChr(assert):
 unittest([testChr])
 
 
-def decodeCore(var bs :Bytes, ej):
+def decodeCore(var bs :Bytes, ej) as DeepFrozen:
     def iterator := bs._makeIterator()
     var offset :Int := 0
     var rv :Str := ""
@@ -95,7 +95,7 @@ def testDecodeCore(assert):
 unittest([testDecodeCore])
 
 
-def encodeCore(c :Char) :Bytes:
+def encodeCore(c :Char) :Bytes as DeepFrozen:
     return _makeBytes.fromInts(switch (c.asInteger()) {
         # One byte.
         match i ? (i < 0x80) {[i]}
@@ -133,7 +133,7 @@ unittest([testEncodeCore])
 
 # The codec itself.
 
-object UTF8:
+object UTF8 as DeepFrozen:
     to decode(specimen, ej) :Str:
         def bs :Bytes exit ej := specimen
         def [s, remainder] exit ej := decodeCore(bs, ej)

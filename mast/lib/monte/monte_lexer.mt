@@ -1,33 +1,32 @@
 def regionToSet(r):
     return [for i in (r) i].asSet()
 
-object VALUE_HOLE {}
-object PATTERN_HOLE {}
-object EOF {}
-def decimalDigits := regionToSet('0'..'9')
-def hexDigits := decimalDigits | regionToSet('a'..'f' | 'A'..'F')
+object VALUE_HOLE as DeepFrozen {}
+object PATTERN_HOLE as DeepFrozen {}
+object EOF as DeepFrozen {}
+def decimalDigits :Set[Char] := regionToSet('0'..'9')
+def hexDigits :Set[Char] := decimalDigits | regionToSet('a'..'f' | 'A'..'F')
 
-def idStart := regionToSet('a'..'z' | 'A'..'Z' | '_'..'_')
-def idPart := idStart | decimalDigits
-def closers := ['(' => ')', '[' => ']', '{' => '}']
+def idStart :Set[Char] := regionToSet('a'..'z' | 'A'..'Z' | '_'..'_')
+def idPart :Set[Char] := idStart | decimalDigits
+def closers :Map[Char, Char] := ['(' => ')', '[' => ']', '{' => '}']
 
-def isIdentifierPart(c):
+def isIdentifierPart(c) as DeepFrozen:
     if (c == EOF):
         return false
     return idPart.contains(c)
 
-def MONTE_KEYWORDS := [
+def MONTE_KEYWORDS :Set[Str] := [
     "as", "bind", "break", "catch", "continue", "def", "else", "escape",
     "exit", "extends", "export", "finally", "fn", "for", "guards", "if",
     "implements", "in", "interface", "match", "meta", "method", "module",
     "object", "pass", "pragma", "return", "switch", "to", "try", "var",
     "via", "when", "while"].asSet()
 
-def composite(name, data, span):
+def composite(name, data, span) as DeepFrozen:
     return [name, data, span]
 
-def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
-
+def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     # The character under the cursor.
     var currentChar := null
     # Offset of the current character.
@@ -719,7 +718,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName):
         to getInput():
             return input
 
-object makeMonteLexer:
+object makeMonteLexer as DeepFrozen:
     to run(input, inputName):
         # State for paired delimiters like "", {}, (), []
         def braceStack := [[null, null, 0, true]].diverge()

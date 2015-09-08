@@ -1,5 +1,5 @@
 # Maybe Python isn't so bad after all.
-object zip:
+object zip as DeepFrozen:
     match [=="run", iterables, _]:
         def _its := [].diverge()
         for it in iterables:
@@ -18,11 +18,11 @@ object zip:
                 return [ks.snapshot(), vs.snapshot()]
 
 
-def reversed(it):
+def reversed(it) as DeepFrozen:
     def items := __makeList.fromIterable(it)
     return items.reverse()
 
-def buildQuasi(builder, name, inputs):
+def buildQuasi(builder, name, inputs) as DeepFrozen:
     def parts := ["parts" => [].diverge(),
                   "expr" => [].diverge(),
                   "patt" => [].diverge()]
@@ -48,7 +48,7 @@ def buildQuasi(builder, name, inputs):
         ps with= (p.snapshot())
     return ps
 
-def putVerb(verb, fail, span):
+def putVerb(verb, fail, span) as DeepFrozen:
     switch (verb):
         match =="get":
             return "put"
@@ -57,7 +57,7 @@ def putVerb(verb, fail, span):
         match _:
             fail(["Unsupported verb for assignment", span])
 
-def renameCycles(node, renamings, builder):
+def renameCycles(node, renamings, builder) as DeepFrozen:
     def renamer(node, maker, args, span):
         return switch (node.getNodeName()) {
             match =="NounExpr" {
@@ -70,7 +70,7 @@ def renameCycles(node, renamings, builder):
     return node.transform(renamer)
 
 
-def ifAnd(ast, maker, args, span):
+def ifAnd(ast, maker, args, span) as DeepFrozen:
     "Expand and-expressions inside if-expressions."
 
     if (ast.getNodeName() == "IfExpr"):
@@ -87,7 +87,7 @@ def ifAnd(ast, maker, args, span):
     return M.call(maker, "run", args + [span], [].asMap())
 
 
-def ifOr(ast, maker, args, span):
+def ifOr(ast, maker, args, span) as DeepFrozen:
     "Expand or-expressions inside if-expressions."
 
     if (ast.getNodeName() == "IfExpr"):
@@ -108,7 +108,7 @@ def ifOr(ast, maker, args, span):
     return M.call(maker, "run", args + [span], [].asMap())
 
 
-def modPow(ast, maker, args, span):
+def modPow(ast, maker, args, span) as DeepFrozen:
     "Expand modular exponentation method calls."
 
     if (ast.getNodeName() == "MethodCallExpr"):
@@ -137,10 +137,7 @@ def modPow(ast, maker, args, span):
 # unittest([testModPow])
 
 
-var ii := 0
-
-def expand(node, builder, fail):
-    ii += 1
+def expand(node, builder, fail) as DeepFrozen:
     def emitList(items, span):
         return builder.MethodCallExpr(
             builder.NounExpr("__makeList", span),

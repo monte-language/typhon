@@ -1,7 +1,6 @@
 def bench(_, _) {null}
 
-def parserScope := [
-    => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
+def parserScope := [ => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
     => Int, => List, => Map, => NullOk, => Same, => Set, => Str,
     => SubrangeGuard, => Void,
     => _mapEmpty, => _mapExtract,
@@ -14,16 +13,22 @@ def parserScope := [
     => _makeOrderedSpace, => bench, => astBuilder
 ]
 
-def [=> makeMonteParser] | _ := import("lib/parsers/monte", parserScope)
-def [=> makeMonteLexer] | _ := import("lib/monte/monte_lexer", parserScope)
-def [=> parseExpression] | _ := import("lib/monte/monte_parser", parserScope)
+def [=> makeMonteParser :DeepFrozen] | _ := import("lib/parsers/monte",
+                                                   parserScope)
+def [=> makeMonteLexer :DeepFrozen] | _ := import("lib/monte/monte_lexer",
+                                                  parserScope)
+def [=> parseExpression :DeepFrozen] | _ := import("lib/monte/monte_parser",
+                                                   parserScope)
 def [=> makeLexerQP] | _ := import("prelude/ql", parserScope)
-def [=> astBuilder] | _ := import("prelude/monte_ast", parserScope)
-def [=> expand] | _ := import("lib/monte/monte_expander", parserScope)
-def [=> optimize] | _ := import("lib/monte/monte_optimizer", parserScope)
+def [=> astBuilder :DeepFrozen] | _ := import("prelude/monte_ast",
+                                              parserScope)
+def [=> expand :DeepFrozen] | _ := import("lib/monte/monte_expander",
+                                          parserScope)
+def [=> optimize :DeepFrozen] | _ := import("lib/monte/monte_optimizer",
+                                            parserScope)
 
 
-def makeFakeLex(tokens):
+def makeFakeLex(tokens) as DeepFrozen:
     def iter := tokens._makeIterator()
 
     return object fakeLex:
@@ -40,7 +45,7 @@ def makeFakeLex(tokens):
             return 42
 
 
-def makeM(ast, isKernel :Bool):
+def makeM(ast, isKernel :Bool) as DeepFrozen:
     return object m:
         "An abstract syntax tree in the Monte programming language."
 
@@ -73,14 +78,13 @@ def makeM(ast, isKernel :Bool):
             return makeM(optimize(ast), true)
 
 
-def makeQL(tokens):
+def makeQL(tokens) as DeepFrozen:
     def ast := parseExpression(makeFakeLex(tokens), astBuilder, throw)
     return makeM(ast, false)
 
-def makeChunkingLexer(inputName):
-    var lexer := makeMonteLexer("", inputName)
-
-    def makeLexer():
+def makeChunkingLexer(inputName :Str):
+    def makeLexer() as DeepFrozen:
+        var lexer := makeMonteLexer("", inputName)
         var tokens := []
 
         return object chunkingLexerChunk:
@@ -101,14 +105,19 @@ def makeChunkingLexer(inputName):
 
     return makeLexer
 
-def makeValueHole(index):
-    return [index, makeMonteLexer.holes()[0]]
+def [VALUE_HOLE :DeepFrozen,
+     PATTERN_HOLE :DeepFrozen] := makeMonteLexer.holes()
 
-def makePatternHole(index):
-    return [index, makeMonteLexer.holes()[1]]
+def makeValueHole(index) as DeepFrozen:
+    return [index, VALUE_HOLE]
 
-object m__quasiParser extends makeLexerQP(makeQL, makeChunkingLexer("m``"),
-                                          makeValueHole, makePatternHole):
+def makePatternHole(index) as DeepFrozen:
+    return [index, PATTERN_HOLE]
+
+# XXX manual desugaring of extends-syntax to preserve DFness.
+def lexerQP :DeepFrozen := makeLexerQP(makeQL, makeChunkingLexer("m``"),
+                                       makeValueHole, makePatternHole)
+object m__quasiParser extends lexerQP as DeepFrozen:
     "A quasiparser for the Monte programming language.
 
      This object will parse any Monte expression and return an opaque
@@ -118,7 +127,7 @@ object m__quasiParser extends makeLexerQP(makeQL, makeChunkingLexer("m``"),
     to getAstBuilder():
         return astBuilder
 
-object eval:
+object eval as DeepFrozen:
     to run(source :Str, environment):
         "Evaluate a Monte source expression.
 

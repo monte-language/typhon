@@ -1,4 +1,4 @@
-def spanCover(left, right):
+def spanCover(left, right) as DeepFrozen:
     if (left == null || right == null):
         return null
     return left.combine(right)
@@ -40,7 +40,7 @@ def spanCover(left, right):
 #                 current := null
 #                 return chainer.next(ej)
 
-def parseMonte(lex, builder, mode, err):
+def parseMonte(lex, builder, mode, err) as DeepFrozen:
     def [VALUE_HOLE, PATTERN_HOLE] := [lex.valueHole(), lex.patternHole()]
     def _toks := [].diverge()
     while (true):
@@ -1421,13 +1421,13 @@ def parseMonte(lex, builder, mode, err):
         return pattern(err)
     return "broke"
 
-def parseExpression(lex, builder, err):
+def parseExpression(lex, builder, err) as DeepFrozen:
     return parseMonte(lex, builder, "expression", err)
 
-def parseModule(lex, builder, err):
+def parseModule(lex, builder, err) as DeepFrozen:
     return parseMonte(lex, builder, "module", err)
 
-def parsePattern(lex, builder, err):
+def parsePattern(lex, builder, err) as DeepFrozen:
     return parseMonte(lex, builder, "pattern", err)
 
 # object quasiMonteParser:

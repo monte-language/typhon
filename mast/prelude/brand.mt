@@ -13,7 +13,7 @@
 # under the License.
 
 
-def makeBrand(nickname :NullOk[Str]):
+def makeBrand(nickname :NullOk[Str]) as DeepFrozen:
     return object brand as DeepFrozen:
         to _printOn(out) :Void:
             out.print(`$nickname`)
@@ -22,7 +22,7 @@ def makeBrand(nickname :NullOk[Str]):
             return nickname
 
 
-def makeBrandPair(nickname :NullOk[Str]):
+def makeBrandPair(nickname :NullOk[Str]) as DeepFrozen:
     "Make a [sealer, unsealer] pair."
 
     object sentinel:

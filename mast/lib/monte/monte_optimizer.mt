@@ -7,10 +7,10 @@
 # type of node is gonna lead to stale data, broken dreams, and summoning
 # Zalgo. Don't summon Zalgo.
 
-def a := astBuilder
+def a :DeepFrozen := astBuilder
 
 # Maybe Python isn't so bad after all.
-object zip:
+object zip as DeepFrozen:
     "Transpose iterables."
 
     match [=="run", iterables]:
@@ -31,7 +31,7 @@ object zip:
                 return [ks.snapshot(), vs.snapshot()]
 
 
-def allSatisfy(pred, specimens) :Bool:
+def allSatisfy(pred, specimens) :Bool as DeepFrozen:
     "Return whether every specimen satisfies the predicate."
     for specimen in specimens:
         if (!pred(specimen)):
@@ -39,7 +39,7 @@ def allSatisfy(pred, specimens) :Bool:
     return true
 
 
-def sequence(exprs, span):
+def sequence(exprs, span) as DeepFrozen:
     if (exprs.size() == 0):
         return a.LiteralExpr(null, span)
     else if (exprs.size() == 1):
@@ -48,7 +48,7 @@ def sequence(exprs, span):
         return a.SeqExpr(exprs, span)
 
 
-def flattenSeq(exprs):
+def flattenSeq(exprs) as DeepFrozen:
     "Undo nesting of sequences."
 
     var rv := []
@@ -62,14 +62,14 @@ def flattenSeq(exprs):
     return rv
 
 
-def finalPatternToName(pattern, ej):
+def finalPatternToName(pattern, ej) as DeepFrozen:
     if (pattern.getNodeName() == "FinalPattern" &&
         pattern.getGuard() == null):
         return pattern.getNoun().getName()
     ej("Not an unguarded final pattern")
 
 
-def normalizeBody(expr, _):
+def normalizeBody(expr, _) as DeepFrozen:
     if (expr == null):
         return null
     if (expr.getNodeName() == "SeqExpr"):
@@ -79,7 +79,7 @@ def normalizeBody(expr, _):
     return expr
 
 
-def specialize(name, value):
+def specialize(name, value) as DeepFrozen:
     "Specialize the given name to the given AST value via substitution."
 
     def specializeNameToValue(ast, maker, args, span):
@@ -141,7 +141,7 @@ unittest([testSpecialize])
 #   * broken refs;
 #   * Anything in this list of objects; e.g. _booleanFlow is acceptable
 # * Must have a transitive closure (under calls) obeying the above rule.
-def safeScope :Map := [
+def safeScope :Map[Str, DeepFrozen] := [
     # => __makeList,
     # => __makeMap,
     => _booleanFlow,
@@ -151,7 +151,7 @@ def safeScope :Map := [
 ]
 
 
-def thaw(ast, maker, args, span):
+def thaw(ast, maker, args, span) as DeepFrozen:
     "Enliven literal expressions via calls."
 
     escape ej:
@@ -187,7 +187,7 @@ def thaw(ast, maker, args, span):
     return M.call(maker, "run", args + [span], [].asMap())
 
 
-def weakenPattern(var pattern, nodes):
+def weakenPattern(var pattern, nodes) as DeepFrozen:
     "Reduce the strength of patterns based on their usage in scope."
 
     if (pattern.getNodeName() == "VarPattern"):
@@ -216,7 +216,7 @@ def weakenPattern(var pattern, nodes):
     return pattern
 
 
-def weakenAllPatterns(ast, maker, args, span):
+def weakenAllPatterns(ast, maker, args, span) as DeepFrozen:
     "Find and weaken all patterns."
 
     switch (ast.getNodeName()):
@@ -272,7 +272,7 @@ def weakenAllPatterns(ast, maker, args, span):
     return M.call(maker, "run", args + [span], [].asMap())
 
 
-def removeDeadEscapes(ast, maker, args, span):
+def removeDeadEscapes(ast, maker, args, span) as DeepFrozen:
     "Remove escape-exprs that cannot have their ejectors fired."
 
     if (ast.getNodeName() == "EscapeExpr"):
@@ -283,7 +283,7 @@ def removeDeadEscapes(ast, maker, args, span):
     return M.call(maker, "run", args + [span], [].asMap())
 
 
-def constantFoldIf(ast, maker, args, span):
+def constantFoldIf(ast, maker, args, span) as DeepFrozen:
     "Constant-fold if-exprs."
 
     if (ast.getNodeName() == "IfExpr"):
@@ -519,10 +519,10 @@ def testRemoveUnusedBareNouns(assert):
 unittest([testRemoveUnusedBareNouns])
 
 
-def freezeMap :Map := [for k => v in (safeScope) v => k]
+def freezeMap :Map[DeepFrozen, Str] := [for k => v in (safeScope) v => k]
 
 
-def freeze(ast, maker, args, span):
+def freeze(ast, maker, args, span) as DeepFrozen:
     "Uncall literal expressions."
 
     if (ast.getNodeName() == "LiteralExpr"):
@@ -563,7 +563,7 @@ def freeze(ast, maker, args, span):
     return M.call(maker, "run", args + [span], [].asMap())
 
 
-def performOptimization(var ast):
+def performOptimization(var ast) as DeepFrozen:
     ast transform= (thaw)
     ast transform= (weakenAllPatterns)
     ast transform= (removeDeadEscapes)

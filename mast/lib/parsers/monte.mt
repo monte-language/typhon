@@ -13,14 +13,17 @@ def parserScope := [
     => _makeOrderedSpace, => bench, => astBuilder,
 ]
 
-def [=> dump] | _ := import("lib/monte/ast_dumper", parserScope)
-def [=> makeMonteLexer] | _ := import("lib/monte/monte_lexer", parserScope)
-def [=> parseExpression] | _ := import("lib/monte/monte_parser", parserScope)
-def [=> expand] | _ := import("lib/monte/monte_expander", parserScope)
-def [=> optimize] | _ := import("lib/monte/monte_optimizer", parserScope)
+def [=> dump :DeepFrozen] | _ := import("lib/monte/ast_dumper", parserScope)
+def [=> makeMonteLexer :DeepFrozen] | _ := import("lib/monte/monte_lexer",
+                                                  parserScope)
+def [=> parseExpression :DeepFrozen] | _ := import("lib/monte/monte_parser",
+                                                   parserScope)
+def [=> expand :DeepFrozen] | _ := import("lib/monte/monte_expander",
+                                          parserScope)
+def [=> optimize :DeepFrozen] | _ := import("lib/monte/monte_optimizer",
+                                            parserScope)
 
-
-def makeMonteParser(inputName):
+def makeMonteParser(inputName) as DeepFrozen:
     var failure := null
     var results := null
 
