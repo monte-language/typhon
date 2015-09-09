@@ -42,6 +42,7 @@ class DeepFrozenStamp(Object):
         raise Refused(self, atom, args)
 
 deepFrozenStamp = DeepFrozenStamp()
+deepFrozenStamp.stamps = [deepFrozenStamp]
 
 
 @runnable(RUN_2, [deepFrozenStamp])
