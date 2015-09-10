@@ -171,14 +171,14 @@ def thaw(ast, maker, args, span):
                 if (allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
                     arguments)):
                     def argValues := [for x in (arguments) x.getValue()]
-                    traceln(`thaw call $ast`)
+                    # traceln(`thaw call $ast`)
                     def constant := M.call(receiverObj, verb, argValues, [].asMap())
                     return a.LiteralExpr(constant, span)
 
             match =="NounExpr":
                 def name :Str := args[0]
                 if (safeScope.contains(name)):
-                    traceln(`thaw noun $name`)
+                    # traceln(`thaw noun $name`)
                     return a.LiteralExpr(safeScope[name], span)
 
             match _:
@@ -198,7 +198,7 @@ def weakenPattern(var pattern, nodes):
                                     noun.getName()].asSet()
             if (names.contains(name)):
                 return pattern
-        traceln(`Weakening var $name`)
+        # traceln(`Weakening var $name`)
         pattern := a.FinalPattern(pattern.getNoun(), pattern.getGuard(),
                                   pattern.getSpan())
 
@@ -210,7 +210,7 @@ def weakenPattern(var pattern, nodes):
                                     noun.getName()].asSet()
             if (names.contains(name)):
                 return pattern
-        traceln(`Weakening def $name`)
+        # traceln(`Weakening def $name`)
         pattern := a.IgnorePattern(pattern.getGuard(), pattern.getSpan())
 
     return pattern
