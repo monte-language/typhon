@@ -36,7 +36,7 @@ moduleCache = ModuleCache()
 
 
 @dont_look_inside
-def obtainModuleFromSource(source, inputScope, recorder, origin):
+def obtainModuleFromSource(source, recorder, origin):
     with recorder.context("Deserialization"):
         term = Sequence(load(source)[:])
 
@@ -55,15 +55,14 @@ def obtainModuleFromSource(source, inputScope, recorder, origin):
     return code, topLocals
 
 
-def obtainModule(path, inputScope, recorder):
+def obtainModule(path, recorder):
     if path in moduleCache.cache:
         debug_print("Importing (cached):", path)
         return moduleCache.cache[path]
 
     debug_print("Importing:", path)
     source = open(path, "rb").read()
-    code = obtainModuleFromSource(source, inputScope, recorder,
-                                  path.decode('utf-8'))[0]
+    code = obtainModuleFromSource(source, recorder, path.decode('utf-8'))[0]
 
     # Cache.
     moduleCache.cache[path] = code

@@ -62,8 +62,7 @@ class Import(Object):
 
         scope[u'unittest'] = UnitTest(path, self.testCollector)
         # Attempt the import.
-        term = obtainModule(rjoin(self.path, p), scope.keys(),
-                            self.recorder)
+        term = obtainModule(rjoin(self.path, p), self.recorder)
 
         # Get results.
         result = evaluateTerms([term], finalize(scope))

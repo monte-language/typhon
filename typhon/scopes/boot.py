@@ -88,8 +88,7 @@ def evalToPair(source, envMap, recorder):
     # UserException and thus will kill the process (!!!) if allowed to
     # propagate. ~ C.
     try:
-        code, topLocals = obtainModuleFromSource(source, environment.keys(),
-                                                 recorder, u"<eval>")
+        code, topLocals = obtainModuleFromSource(source, recorder, u"<eval>")
     except LoadFailed:
         raise userError(u"Couldn't load invalid AST")
 

@@ -60,8 +60,7 @@ def loadPrelude(config, recorder, vat):
     # Boot imports.
     scope = addImportToScope(config.libraryPath, scope, recorder, bootTC)
 
-    code = obtainModule(rjoin(config.libraryPath, "prelude.ty"), scope.keys(),
-                        recorder)
+    code = obtainModule(rjoin(config.libraryPath, "prelude.ty"), recorder)
 
     with recorder.context("Time spent in prelude"):
         result = evaluateTerms([code], finalize(scope))
@@ -186,7 +185,7 @@ def entryPoint(argv):
     scope = addImportToScope(config.libraryPath, scope, recorder, collectTests)
     scope.update(unsafeScope(config, collectTests))
     try:
-        code = obtainModule(config.argv[1], scope.keys(), recorder)
+        code = obtainModule(config.argv[1], recorder)
     except LoadFailed as lf:
         print lf
         return 1
