@@ -45,14 +45,6 @@ $(boot_objects): boot/%.ty: mast/%.ty
 	@ echo "BOOT $<"
 	@ cp $< $@
 
-testVM: default
-	trial typhon
-
-testMast: default
-	./mt-typhon -l mast mast/unittest.ty all-tests
-
-test: testVM testMast
-
 mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/record.ty \
 	mast/lib/netstring.ty \
 	mast/lib/regex.ty mast/lib/words.ty \
@@ -73,6 +65,15 @@ mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/record.ty \
 	games \
 	bench \
 	monte
+
+
+testVM: default
+	trial typhon
+
+testMast: default mast mast/tests/lexer.ty mast/tests/parser.ty
+	./mt-typhon -l mast mast/unittest.ty all-tests
+
+test: testVM testMast
 
 prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/m.ty \
 	mast/prelude/monte_ast.ty mast/prelude/ql.ty mast/prelude/region.ty \

@@ -239,9 +239,9 @@ def parseMonte(lex, builder, mode, err):
                 def subpatt := pattern(ej)
                 parts.push(builder.QuasiPatternHole(subpatt, subpatt.getSpan()))
         if (isPattern):
-            return builder.QuasiParserPattern(name, parts, spanFrom(spanStart))
+            return builder.QuasiParserPattern(name, parts.snapshot(), spanFrom(spanStart))
         else:
-            return builder.QuasiParserExpr(name, parts, spanFrom(spanStart))
+            return builder.QuasiParserExpr(name, parts.snapshot(), spanFrom(spanStart))
 
     def guard(ej):
        def spanStart := spanHere()

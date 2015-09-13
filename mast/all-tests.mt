@@ -19,4 +19,5 @@ import("lib/singleUse")
 import("lib/slow/exp")
 import("lib/words")
 import("fun/elements")
-
+import("tests/lexer")
+import("tests/parser")

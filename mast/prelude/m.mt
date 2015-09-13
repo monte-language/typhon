@@ -115,6 +115,9 @@ object m__quasiParser extends makeLexerQP(makeQL, makeChunkingLexer("m``"),
      value. In the near future, this object will instead return a translucent
      view into a Monte compiler and optimizer."
 
+    to getAstBuilder():
+        return astBuilder
+
 object eval:
     to run(source :Str, environment):
         "Evaluate a Monte source expression.
