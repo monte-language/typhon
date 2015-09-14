@@ -153,6 +153,8 @@ def test_ObjectExpr(assert):
     assert.equal(expr("object bind foo {}"), ta`ObjectExpr(null, BindPattern(NounExpr("foo"), null), null, [], Script(null, [], []))`)
     assert.equal(expr("object foo { to doA(x, y) :z {0} method blee() {1} to \"object\"() {2} match p {3} match q {4}}"),
         ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To(null, "doA", [FinalPattern(NounExpr("x"), null), FinalPattern(NounExpr("y"), null)], [], NounExpr("z"), LiteralExpr(0)), Method(null, "blee", [], [], null, LiteralExpr(1)), To(null, "object", [], [], null, LiteralExpr(2))], [Matcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3)), Matcher(FinalPattern(NounExpr("q"), null), LiteralExpr(4))]))`)
+    assert.equal(expr("object foo { to doA(x, y, \"a\" => b) :z {0} method blee(=> a := 9) {1} to \"object\"(=> &b, \"c\" => d :Int := 99) {2} match p {3} match q {4}}"),
+        ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To(null, "doA", [FinalPattern(NounExpr("x"), null), FinalPattern(NounExpr("y"), null)], [NamedParam(LiteralExpr("a"), FinalPattern(NounExpr("b"), null), null)], NounExpr("z"), LiteralExpr(0)), Method(null, "blee", [], [NamedParam(LiteralExpr("a"), FinalPattern(NounExpr("a"), null), LiteralExpr(9))], null, LiteralExpr(1)), To(null, "object", [], [NamedParam(LiteralExpr("&b"), SlotPattern(NounExpr("b"), null), null), NamedParam(LiteralExpr("c"), FinalPattern(NounExpr("d"), NounExpr("Int")), LiteralExpr(99))], null, LiteralExpr(2))], [Matcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3)), Matcher(FinalPattern(NounExpr("q"), null), LiteralExpr(4))]))`)
     assert.equal(expr("object foo {\"hello\" to blee() {\"yes\"\n1}}"), ta`ObjectExpr("hello", FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To("yes", "blee", [], [], null, LiteralExpr(1))], []))`)
     assert.equal(expr("object foo as A implements B, C {}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), NounExpr("A"), [NounExpr("B"), NounExpr("C")], Script(null, [], []))`)
     assert.equal(expr("object foo extends baz {}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(NounExpr("baz"), [], []))`)
@@ -196,7 +198,9 @@ def test_Interface(assert):
 
 def test_Call(assert):
     assert.equal(expr("a.b(c, d)"), ta`MethodCallExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [])`)
+    assert.equal(expr("a.b(c, d, => e, \"f\" => g)"), ta`MethodCallExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [[LiteralExpr("e"), NounExpr("e")], [LiteralExpr("f"), NounExpr("g")]])`)
     assert.equal(expr("a.b()"), ta`MethodCallExpr(NounExpr("a"), "b", [], [])`)
+    assert.equal(expr("a.b(=> &c)"), ta`MethodCallExpr(NounExpr("a"), "b", [], [[LiteralExpr("&c"), SlotExpr(NounExpr("c"))]])`)
     assert.equal(expr("a.b"), ta`CurryExpr(NounExpr("a"), "b", false)`)
     assert.equal(expr("a.b().c()"), ta`MethodCallExpr(MethodCallExpr(NounExpr("a"), "b", [], []), "c", [], [])`)
     assert.equal(expr("a.\"if\"()"), ta`MethodCallExpr(NounExpr("a"), "if", [], [])`)
@@ -204,6 +208,7 @@ def test_Call(assert):
 
 def test_Send(assert):
     assert.equal(expr("a <- b(c, d)"), ta`SendExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [])`)
+    assert.equal(expr("a.b(c, d, => e, \"f\" => g)"), ta`SendExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [[LiteralExpr("e"), NounExpr("e")], [LiteralExpr("f"), NounExpr("g")]])`)
     assert.equal(expr("a <- b()"), ta`SendExpr(NounExpr("a"), "b", [], [])`)
     assert.equal(expr("a <- b"), ta`CurryExpr(NounExpr("a"), "b", true)`)
     assert.equal(expr("a <- b() <- c()"), ta`SendExpr(SendExpr(NounExpr("a"), "b", [], []), "c", [], [])`)

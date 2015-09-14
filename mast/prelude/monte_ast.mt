@@ -975,6 +975,9 @@ def makeTo(docstring, verb, patterns, namedPatts, resultGuard, body, span):
                     out.quote(verb)
                 }
                 printListOn("(", patterns, ", ", "", out, priorities["pattern"])
+                if (patterns.size() > 0 && namedPatts.size() > 0) {
+                    out.print(", ")
+                }
                 printListOn("", namedPatts, ", ", ")", out, priorities["pattern"])
                 if (resultGuard != null) {
                     out.print(" :")
