@@ -208,7 +208,7 @@ def test_Call(assert):
 
 def test_Send(assert):
     assert.equal(expr("a <- b(c, d)"), ta`SendExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [])`)
-    assert.equal(expr("a.b(c, d, => e, \"f\" => g)"), ta`SendExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [[LiteralExpr("e"), NounExpr("e")], [LiteralExpr("f"), NounExpr("g")]])`)
+    assert.equal(expr("a <- b(c, d, => e, \"f\" => g)"), ta`SendExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [[LiteralExpr("e"), NounExpr("e")], [LiteralExpr("f"), NounExpr("g")]])`)
     assert.equal(expr("a <- b()"), ta`SendExpr(NounExpr("a"), "b", [], [])`)
     assert.equal(expr("a <- b"), ta`CurryExpr(NounExpr("a"), "b", true)`)
     assert.equal(expr("a <- b() <- c()"), ta`SendExpr(SendExpr(NounExpr("a"), "b", [], []), "c", [], [])`)
