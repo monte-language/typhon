@@ -32,7 +32,6 @@ TRIAL_1 = getAtom(u"trial", 1)
 
 def resolveTimer(uv_timer):
     vat, resolver = ruv.unstashTimer(uv_timer)
-    print "Resolving timer on vat", vat, "with resolver", resolver
     assert isinstance(resolver, LocalResolver)
     resolver.resolve(NullObject)
 
