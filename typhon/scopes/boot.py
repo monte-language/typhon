@@ -108,6 +108,8 @@ def evalToPair(source, envMap, recorder):
 @autohelp
 class TyphonEval(Object):
 
+    stamps = [deepFrozenStamp]
+
     def __init__(self, recorder):
         self.recorder = recorder
 
