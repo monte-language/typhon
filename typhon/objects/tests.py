@@ -17,6 +17,7 @@ from rpython.rlib.debug import debug_print
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import (ConstList, ConstMap, monteDict,
                                         unwrapList)
 from typhon.objects.data import StrObject
@@ -153,13 +154,15 @@ class TestCollector(Object):
 
 @autohelp
 class UnitTest(Object):
-
     """
     A unit test backend.
 
     Pass unit tests to this object, they will be available from its
     TestCollector.
     """
+
+    # Not at all DF, but doesn't produce any app-affecting side effects.
+    stamps = [deepFrozenStamp]
 
     def __init__(self, locus, testCollector):
         self.locus = locus
