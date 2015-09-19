@@ -31,6 +31,8 @@ from typhon.importing import evaluateTerms, obtainModule
 
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
+SCRIPT_1 = getAtom(u"script", 1)
+SCRIPT_2 = getAtom(u"script", 2)
 
 
 @autohelp
@@ -78,6 +80,20 @@ class Import(Object):
             return self.performImport(path, None)
 
         if atom is RUN_2:
+            path = unwrapStr(args[0])
+            scope = unwrapMap(args[1])
+
+            d = {}
+            for k, v in scope.items():
+                d[unwrapStr(k)] = scope[k]
+
+            return self.performImport(path, d)
+
+        if atom is SCRIPT_1:
+            path = unwrapStr(args[0])
+            return self.performImport(path, None)
+
+        if atom is SCRIPT_2:
             path = unwrapStr(args[0])
             scope = unwrapMap(args[1])
 
