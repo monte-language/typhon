@@ -1,5 +1,5 @@
-def [=> makePumpTube] | _ := import("lib/tubes/pumpTube")
-def [=> makeUTF8EncodePump] | _ := import("lib/tubes/utf8")
+def [=> makePumpTube] | _ := import.script("lib/tubes/pumpTube")
+def [=> makeUTF8EncodePump] | _ := import.script("lib/tubes/utf8")
 
 
 def makeComplex(r, i):

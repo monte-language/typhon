@@ -1,4 +1,4 @@
-def [=> UTF8 :DeepFrozen] | _ := import("lib/codec/utf8",
+def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8",
                                         [=> Bool, => Bytes, => Char,
                                         => DeepFrozen, => Int, => List,
                                         => Str,

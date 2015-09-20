@@ -13,18 +13,18 @@ def parserScope := [ => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Doubl
     => _makeOrderedSpace, => bench, => astBuilder
 ]
 
-def [=> makeMonteParser :DeepFrozen] | _ := import("lib/parsers/monte",
+def [=> makeMonteParser :DeepFrozen] | _ := import.script("lib/parsers/monte",
                                                    parserScope)
-def [=> makeMonteLexer :DeepFrozen] | _ := import("lib/monte/monte_lexer",
+def [=> makeMonteLexer :DeepFrozen] | _ := import.script("lib/monte/monte_lexer",
                                                   parserScope)
-def [=> parseExpression :DeepFrozen] | _ := import("lib/monte/monte_parser",
+def [=> parseExpression :DeepFrozen] | _ := import.script("lib/monte/monte_parser",
                                                    parserScope)
-def [=> makeLexerQP] | _ := import("prelude/ql", parserScope)
-def [=> astBuilder :DeepFrozen] | _ := import("prelude/monte_ast",
+def [=> makeLexerQP] | _ := import.script("prelude/ql", parserScope)
+def [=> astBuilder :DeepFrozen] | _ := import.script("prelude/monte_ast",
                                               parserScope)
-def [=> expand :DeepFrozen] | _ := import("lib/monte/monte_expander",
+def [=> expand :DeepFrozen] | _ := import.script("lib/monte/monte_expander",
                                           parserScope)
-def [=> optimize :DeepFrozen] | _ := import("lib/monte/monte_optimizer",
+def [=> optimize :DeepFrozen] | _ := import.script("lib/monte/monte_optimizer",
                                             parserScope)
 
 

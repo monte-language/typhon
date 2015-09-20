@@ -14,7 +14,7 @@
 
 # An implementation of the Mafia party game state machine.
 
-def [=> makeEnum] | _ := import("lib/enum")
+def [=> makeEnum] | _ := import.script("lib/enum")
 
 def [MafiaState, DAY, NIGHT] := makeEnum(["day", "night"])
 

@@ -1,6 +1,6 @@
-def [=> UTF8] | _ := import("lib/codec/utf8")
-def [=> nullPump] | _ := import("lib/tubes/nullPump")
-def [=> makeMapPump] | _ := import("lib/tubes/mapPump")
+def [=> UTF8] | _ := import.script("lib/codec/utf8")
+def [=> nullPump] | _ := import.script("lib/tubes/nullPump")
+def [=> makeMapPump] | _ := import.script("lib/tubes/mapPump")
 
 def makeUTF8DecodePump():
     var buf :Bytes := b``

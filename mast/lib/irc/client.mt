@@ -12,18 +12,18 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> UTF8] | _ := import("lib/codec/utf8")
+def [=> UTF8] | _ := import.script("lib/codec/utf8")
 def [
     => makeUTF8DecodePump,
     => makeUTF8EncodePump
-] | _ := import("lib/tubes/utf8")
-def [=> nullPump] := import("lib/tubes/nullPump")
-def [=> makeMapPump] := import("lib/tubes/mapPump")
-def [=> makePumpTube] := import("lib/tubes/pumpTube")
-def [=> chain] := import("lib/tubes/chain")
-def [=> makeSingleUse] := import("lib/singleUse")
-def [=> makeTokenBucket] := import("lib/tokenBucket")
-def [=> makeUser, => sourceToUser] | _ := import("lib/irc/user")
+] | _ := import.script("lib/tubes/utf8")
+def [=> nullPump] := import.script("lib/tubes/nullPump")
+def [=> makeMapPump] := import.script("lib/tubes/mapPump")
+def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
+def [=> chain] := import.script("lib/tubes/chain")
+def [=> makeSingleUse] := import.script("lib/singleUse")
+def [=> makeTokenBucket] := import.script("lib/tokenBucket")
+def [=> makeUser, => sourceToUser] | _ := import.script("lib/irc/user")
 
 
 def splitAt(needle, var haystack):

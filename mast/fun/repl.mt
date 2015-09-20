@@ -1,4 +1,4 @@
-def [=> makeEnum] | _ := import("lib/enum")
+def [=> makeEnum] | _ := import.script("lib/enum")
 
 # XXX these names are pretty lame
 def [REPLState, PS1, PS2] := makeEnum(["PS1", "PS2"])

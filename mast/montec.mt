@@ -1,10 +1,10 @@
-def [=> dump] := import("lib/monte/ast_dumper")
-def makeMonteLexer := import("lib/monte/monte_lexer")["makeMonteLexer"]
-def parseModule := import("lib/monte/monte_parser")["parseModule"]
-def [=> expand] := import("lib/monte/monte_expander")
-def [=> optimize] := import("lib/monte/monte_optimizer")
-def [=> makeUTF8EncodePump, => makeUTF8DecodePump] | _ := import("lib/tubes/utf8")
-def [=> makePumpTube] | _ := import("lib/tubes/pumpTube")
+def [=> dump] := import.script("lib/monte/ast_dumper")
+def makeMonteLexer := import.script("lib/monte/monte_lexer")["makeMonteLexer"]
+def parseModule := import.script("lib/monte/monte_parser")["parseModule"]
+def [=> expand] := import.script("lib/monte/monte_expander")
+def [=> optimize] := import.script("lib/monte/monte_optimizer")
+def [=> makeUTF8EncodePump, => makeUTF8DecodePump] | _ := import.script("lib/tubes/utf8")
+def [=> makePumpTube] | _ := import.script("lib/tubes/pumpTube")
 
 def compile(config, inT, inputFile, outputFile):
     "Compile a module and write it to an output file.

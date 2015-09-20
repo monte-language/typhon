@@ -1,4 +1,4 @@
-def [=> continued] := import("lib/continued")
+def [=> continued] := import.script("lib/continued")
 
 
 def makePiEntropy():

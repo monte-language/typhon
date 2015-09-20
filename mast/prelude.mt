@@ -620,7 +620,7 @@ object _booleanFlow as DeepFrozenStamp:
         return [false] + [_booleanFlow.broken()] * count
 
 
-def [=> SubrangeGuard, => DeepFrozen] := import(
+def [=> SubrangeGuard, => DeepFrozen] := import.script(
     "prelude/deepfrozen",
     [=> _comparer, => _booleanFlow, => _makeVerbFacet,
      => _validateFor, => _bind,
@@ -646,34 +646,34 @@ var preludeScope := [
 ]
 
 # AST (needed for auditors).
-preludeScope |= import("prelude/monte_ast",
+preludeScope |= import.script("prelude/monte_ast",
                          preludeScope | [=> DeepFrozenStamp, => TransparentStamp])
 _installASTBuilder(preludeScope["astBuilder"])
 
 # Simple QP.
-preludeScope |= import("prelude/simple", preludeScope)
+preludeScope |= import.script("prelude/simple", preludeScope)
 
 # Brands require simple QP.
-preludeScope |= import("prelude/brand", preludeScope)
+preludeScope |= import.script("prelude/brand", preludeScope)
 
 # Interfaces require simple QP.
-preludeScope |= import("prelude/protocolDesc", preludeScope)
+preludeScope |= import.script("prelude/protocolDesc", preludeScope)
 
 # Regions require simple QP.
 def [
     => OrderedRegionMaker,
     => OrderedSpaceMaker
-] := import("prelude/region", preludeScope)
+] := import.script("prelude/region", preludeScope)
 
 # Spaces require regions. We're doing this import slightly differently since
 # we want to replace some of our names with spaces; look at the order of
 # operations.
-preludeScope := import("prelude/space",
+preludeScope := import.script("prelude/space",
                        preludeScope | [=> OrderedRegionMaker,
                                        => OrderedSpaceMaker]) | preludeScope
 
 # b__quasiParser desires spaces.
-preludeScope |= import("prelude/b", preludeScope)
+preludeScope |= import.script("prelude/b", preludeScope)
 
 # Finally, the big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This
@@ -682,7 +682,7 @@ preludeScope |= import("prelude/b", preludeScope)
 # doesn't support evaluation, and I'd expect it to be slow, so we're not doing
 # that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
 # hook, and that'll do for now. ~ C.
-preludeScope |= import("prelude/m", preludeScope)
+preludeScope |= import.script("prelude/m", preludeScope)
 
 # The final scope exported from the prelude. This *must* be the final
 # expression in the module!

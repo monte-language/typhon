@@ -1,9 +1,9 @@
-def [=> makeUTF8EncodePump] | _ := import("lib/tubes/utf8")
-def [=> makePumpTube] := import("lib/tubes/pumpTube")
+def [=> makeUTF8EncodePump] | _ := import.script("lib/tubes/utf8")
+def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
 
 def args := currentProcess.getArguments()
 for path in args.slice(2, args.size()):
-    import(path)
+    import.script(path)
 
 def errors := [].asMap().diverge()
 

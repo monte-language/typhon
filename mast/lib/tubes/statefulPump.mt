@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> nullPump] | _ := import("lib/tubes/nullPump")
+def [=> nullPump] | _ := import.script("lib/tubes/nullPump")
 
 def makeStatefulPump(machine):
     def State := machine.getStateGuard()

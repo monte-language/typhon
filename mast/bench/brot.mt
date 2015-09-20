@@ -36,7 +36,7 @@ def getScaled(l, count :Int):
     return l[index]
 
 
-def [=> ramp] | _ := import("lib/ansiColor")
+def [=> ramp] | _ := import.script("lib/ansiColor")
 def chars := "@#&%!*+-."
 def colors := ["37", "32", "33", "31", "36", "35", "34"]
 def ramp80 := [for i in (ramp(80)) `38;5;$i`].reverse()
@@ -70,8 +70,8 @@ def brotAt(xCenter :Double, yCenter :Double, xScale :Double, yScale :Double) :St
     return fullBrot(yStart, yScale, xStart, xScale)
 
 
-def [=> makeUTF8EncodePump] | _ := import("lib/tubes/utf8")
-def [=> makePumpTube] | _ := import("lib/tubes/pumpTube")
+def [=> makeUTF8EncodePump] | _ := import.script("lib/tubes/utf8")
+def [=> makePumpTube] | _ := import.script("lib/tubes/pumpTube")
 def stdout := makePumpTube(makeUTF8EncodePump())
 stdout.flowTo(makeStdOut())
 # And you thought Pokémon Snap was hard. ~ C.

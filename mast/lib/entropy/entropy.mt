@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> makePool] := import("lib/entropy/pool")
+def [=> makePool] := import.script("lib/entropy/pool")
 
 def makeEntropy(generator):
     def pool := makePool(generator)
@@ -49,7 +49,7 @@ def makeEntropy(generator):
             def d := 1.0 - entropy.nextDouble()
             return -(d.log()) / lambda
 
-def [=> makePCG] := import("lib/entropy/pcg")
+def [=> makePCG] := import.script("lib/entropy/pcg")
 def e := makeEntropy(makePCG(0x12345678, 0))
 bench(e.nextBool, "entropy nextBool")
 bench(fn {e.nextInt(4096)}, "entropy nextInt (best case)")

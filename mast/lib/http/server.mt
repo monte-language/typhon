@@ -12,12 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> UTF8] | _ := import("lib/codec/utf8")
-def [=> makeMapPump] := import("lib/tubes/mapPump")
-def [=> makePumpTube] := import("lib/tubes/pumpTube")
-def [=> makeEnum] | _ := import("lib/enum")
-def [=> percentDecode] | _ := import("lib/percent")
-def [=> chain] | _ := import("lib/tubes/chain")
+def [=> UTF8] | _ := import.script("lib/codec/utf8")
+def [=> makeMapPump] := import.script("lib/tubes/mapPump")
+def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
+def [=> makeEnum] | _ := import.script("lib/enum")
+def [=> percentDecode] | _ := import.script("lib/percent")
+def [=> chain] | _ := import.script("lib/tubes/chain")
 
 def [RequestState, REQUEST, HEADER, BODY] := makeEnum(
     ["request", "header", "body"])

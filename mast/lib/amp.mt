@@ -12,14 +12,14 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> strToInt] | _ := import("lib/atoi")
-def [=> makeEnum] | _ := import("lib/enum")
-def [=> UTF8] | _ := import("lib/codec/utf8")
-def [=> nullPump] := import("lib/tubes/nullPump")
-def [=> makeMapPump] := import("lib/tubes/mapPump")
-def [=> makeStatefulPump] := import("lib/tubes/statefulPump")
-def [=> makePumpTube] := import("lib/tubes/pumpTube")
-def [=> chain] := import("lib/tubes/chain")
+def [=> strToInt] | _ := import.script("lib/atoi")
+def [=> makeEnum] | _ := import.script("lib/enum")
+def [=> UTF8] | _ := import.script("lib/codec/utf8")
+def [=> nullPump] := import.script("lib/tubes/nullPump")
+def [=> makeMapPump] := import.script("lib/tubes/mapPump")
+def [=> makeStatefulPump] := import.script("lib/tubes/statefulPump")
+def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
+def [=> chain] := import.script("lib/tubes/chain")
 
 # Either we await a key length, value length, or string.
 def [AMPState, KEY, VALUE, STRING] := makeEnum([

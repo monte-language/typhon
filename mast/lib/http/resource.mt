@@ -1,5 +1,5 @@
-def [=> UTF8] | _ := import("lib/codec/utf8")
-def [=> tag] | _ := import("lib/http/tag")
+def [=> UTF8] | _ := import.script("lib/codec/utf8")
+def [=> tag] | _ := import.script("lib/http/tag")
 
 
 def smallBody(s):
