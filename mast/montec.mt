@@ -1,12 +1,17 @@
-def [=> dump] := import.script("lib/monte/ast_dumper")
-def makeMonteLexer := import.script("lib/monte/monte_lexer")["makeMonteLexer"]
-def parseModule := import.script("lib/monte/monte_parser")["parseModule"]
-def [=> expand] := import.script("lib/monte/monte_expander")
-def [=> optimize] := import.script("lib/monte/monte_optimizer")
-def [=> makeUTF8EncodePump, => makeUTF8DecodePump] | _ := import.script("lib/tubes/utf8")
-def [=> makePumpTube] | _ := import.script("lib/tubes/pumpTube")
+imports
+exports (main)
 
-def compile(config, inT, inputFile, outputFile):
+def [=> dump :DeepFrozen] := import.script("lib/monte/ast_dumper")
+def makeMonteLexer :DeepFrozen := import.script("lib/monte/monte_lexer")["makeMonteLexer"]
+def parseModule :DeepFrozen := import.script("lib/monte/monte_parser")["parseModule"]
+def [=> expand :DeepFrozen] := import.script("lib/monte/monte_expander")
+def [=> optimize :DeepFrozen] := import.script("lib/monte/monte_optimizer")
+def [=> makeUTF8EncodePump :DeepFrozen,
+     => makeUTF8DecodePump :DeepFrozen] | _ := import.script("lib/tubes/utf8")
+def [=> makePumpTube :DeepFrozen] | _ := import.script("lib/tubes/pumpTube")
+
+def compile(config, inT, inputFile, outputFile, Timer, makeFileResource,
+            makeStdOut) as DeepFrozen:
     "Compile a module and write it to an output file.
 
      This function reads the entire input file into memory and completes all
@@ -69,7 +74,8 @@ def compile(config, inT, inputFile, outputFile):
 
     inT<-flowTo(tyDumper)
 
-def parseArguments([processName, scriptName] + argv):
+
+def parseArguments([processName, scriptName] + argv) as DeepFrozen:
     var useMixer :Bool := false
     var arguments := []
 
@@ -86,11 +92,16 @@ def parseArguments([processName, scriptName] + argv):
         to arguments():
             return arguments
 
-def config := parseArguments(currentProcess.getArguments())
 
-def [inputFile, outputFile] := config.arguments()
+def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut) as DeepFrozen:
+    def config := parseArguments(currentProcess.getArguments())
 
-def fileFount := makeFileResource(inputFile).openFount()
-def utf8Fount := fileFount<-flowTo(makePumpTube(makeUTF8DecodePump()))
+    def [inputFile, outputFile] := config.arguments()
 
-compile(config, utf8Fount, inputFile, outputFile)
+    def fileFount := makeFileResource(inputFile).openFount()
+    def utf8Fount := fileFount<-flowTo(makePumpTube(makeUTF8DecodePump()))
+
+    compile(config, utf8Fount, inputFile, outputFile, Timer, makeFileResource,
+            makeStdOut)
+
+    return 0

@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def makePumpTube(pump):
+def makePumpTube(pump) as DeepFrozen:
     var upstream := var downstream := null
     var pause := null
     var stash := []

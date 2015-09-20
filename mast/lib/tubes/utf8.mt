@@ -1,8 +1,8 @@
-def [=> UTF8] | _ := import.script("lib/codec/utf8")
-def [=> nullPump] | _ := import.script("lib/tubes/nullPump")
-def [=> makeMapPump] | _ := import.script("lib/tubes/mapPump")
+def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
+def [=> nullPump :DeepFrozen] | _ := import.script("lib/tubes/nullPump")
+def [=> makeMapPump :DeepFrozen] | _ := import.script("lib/tubes/mapPump")
 
-def makeUTF8DecodePump():
+def makeUTF8DecodePump() as DeepFrozen:
     var buf :Bytes := b``
 
     return object UTF8DecodePump extends nullPump:
@@ -12,7 +12,7 @@ def makeUTF8DecodePump():
             buf := leftovers
             return if (s.size() != 0) {[s]} else {[]}
 
-def makeUTF8EncodePump():
+def makeUTF8EncodePump() as DeepFrozen:
     return makeMapPump(fn s {UTF8.encode(s, null)})
 
 [
