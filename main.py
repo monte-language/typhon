@@ -26,11 +26,11 @@ from typhon import ruv
 from typhon.arguments import Configuration
 from typhon.env import finalize
 from typhon.errors import LoadFailed, UserException
-from typhon.importing import evaluateTerms, obtainModule
+from typhon.importing import evaluateTerms, instantiateModule, obtainModule
 from typhon.metrics import Recorder
-from typhon.objects.collections import ConstMap, unwrapMap
+from typhon.objects.collections import ConstMap, monteDict, unwrapMap
 from typhon.objects.constants import NullObject
-from typhon.objects.data import unwrapStr, StrObject
+from typhon.objects.data import IntObject, StrObject, unwrapStr
 from typhon.objects.imports import addImportToScope
 from typhon.objects.tests import TestCollector
 from typhon.objects.timeit import benchmarkSettings
@@ -138,6 +138,26 @@ class profiling(object):
         self.handle.close()
 
 
+def runModule(exports, config):
+    """
+    Run a main entrypoint.
+    """
+
+    if not isinstance(exports, ConstMap):
+        return None
+
+    main = exports.objectMap.get(StrObject(u"main"), None)
+    if main is None:
+        return None
+
+    collectTests = TestCollector()
+    unsafeStuff = unsafeScope(config, collectTests)
+    namedArgs = monteDict()
+    for k, v in unsafeStuff.iteritems():
+        namedArgs[StrObject(k)] = v
+    return main.call(u"run", [], ConstMap(namedArgs))
+
+
 def entryPoint(argv):
     recorder = Recorder()
     recorder.start()
@@ -209,19 +229,37 @@ def entryPoint(argv):
             return 1
 
         # Exit status code.
-        rv = 0
+        exitStatus = 0
+
+        # Were we started with a script or a module? Check to see if it's a
+        # module. Note that this'll instantiate the module.
+        with scopedVat(vat):
+            debug_print("Instantiating module...")
+            try:
+                module = instantiateModule(result)
+                # Hey, we've got a module! Run it.
+                ruv.update_time(uv_loop)
+                debug_print("Running module...")
+                rv = runModule(module, config)
+                if rv is not None and isinstance(rv, IntObject):
+                    exitStatus = rv.getInt()
+            except UserException as ue:
+                debug_print("Caught exception while instantiating:",
+                            ue.formatError())
 
         # Update loop timing information.
         ruv.update_time(uv_loop)
         try:
             runUntilDone(vatManager, uv_loop, recorder)
         except SystemExit as se:
-            rv = se.code
+            pass
+            # Huh, apparently this doesn't work. Wonder why/why not.
+            # exitStatus = se.code
         finally:
             recorder.stop()
             recorder.printResults()
 
-    return 0
+    return exitStatus
 
 
 def writePerfMap(s):

@@ -101,3 +101,11 @@ def evaluateRaise(codes, scope):
         result = machine.pop()
         env = machine.env
     return result, env
+
+
+def instantiateModule(module, importList=None):
+    """
+    Instantiate a top-level module.
+    """
+
+    return module.call(u"run", [], namedArgs=importList)

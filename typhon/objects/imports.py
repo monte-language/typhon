@@ -21,12 +21,12 @@ from typhon.autohelp import autohelp
 from typhon.env import finalize
 from typhon.errors import Refused
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.collections import unwrapMap
+from typhon.objects.collections import ConstMap, monteDict, unwrapMap
 from typhon.objects.constants import NullObject
-from typhon.objects.data import unwrapStr
+from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.root import Object
 from typhon.objects.tests import UnitTest
-from typhon.importing import evaluateTerms, obtainModule
+from typhon.importing import evaluateTerms, instantiateModule, obtainModule
 
 
 RUN_1 = getAtom(u"run", 1)
@@ -52,7 +52,32 @@ class Import(Object):
         self.testCollector = testCollector
 
     @dont_look_inside
-    def performImport(self, path, extraScope=None):
+    def performModule(self, path, importList=None):
+        p = path.encode("utf-8")
+        p += ".ty"
+
+        term = obtainModule(rjoin(self.path, p), self.recorder)
+
+        # Get module.
+        module = evaluateTerms([term], finalize(self.scope))
+
+        scope = monteDict()
+        scope[StrObject(u"import")] = self
+        scope[StrObject(u"unittest")] = UnitTest(path, self.testCollector)
+        if importList is not None:
+            assert isinstance(importList, ConstMap)
+            scope.update(importList.objectMap)
+
+        # Instantiate the module.
+        mapping = instantiateModule(module, ConstMap(scope))
+
+        if mapping is None:
+            debug_print("Result was None :c")
+            return NullObject
+        return mapping
+
+    @dont_look_inside
+    def performScript(self, path, extraScope=None):
         p = path.encode("utf-8")
         p += ".ty"
 
@@ -77,21 +102,15 @@ class Import(Object):
     def recv(self, atom, args):
         if atom is RUN_1:
             path = unwrapStr(args[0])
-            return self.performImport(path, None)
+            return self.performModule(path)
 
         if atom is RUN_2:
             path = unwrapStr(args[0])
-            scope = unwrapMap(args[1])
-
-            d = {}
-            for k, v in scope.items():
-                d[unwrapStr(k)] = scope[k]
-
-            return self.performImport(path, d)
+            return self.performModule(path, importList=args[1])
 
         if atom is SCRIPT_1:
             path = unwrapStr(args[0])
-            return self.performImport(path, None)
+            return self.performScript(path, None)
 
         if atom is SCRIPT_2:
             path = unwrapStr(args[0])
@@ -101,7 +120,7 @@ class Import(Object):
             for k, v in scope.items():
                 d[unwrapStr(k)] = scope[k]
 
-            return self.performImport(path, d)
+            return self.performScript(path, d)
 
         raise Refused(self, atom, args)
 
