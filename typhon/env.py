@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import promote
+from rpython.rlib.jit import promote, unroll_safe
 
 from typhon.atoms import getAtom
 from typhon.objects.auditors import deepFrozenStamp
@@ -87,6 +87,15 @@ class Environment(object):
         assert i < self.stackSize, "Stack overflow!"
         rv = self.valueStack[i]
         self.valueStack[i] = None
+        return rv
+
+    @unroll_safe
+    def popSlice(self, size):
+        depth = self.depth
+        assert size <= depth, "Stack underflow!"
+        # XXX should be handwritten loop per fijal and arigato. ~ C.
+        rv = [self.pop() for _ in range(size)]
+        rv.reverse()
         return rv
 
     def peek(self):

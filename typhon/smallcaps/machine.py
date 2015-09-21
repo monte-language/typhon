@@ -69,6 +69,9 @@ class SmallCaps(object):
     def pop(self):
         return self.env.pop()
 
+    def popSlice(self, size):
+        return self.env.popSlice(promote(size))
+
     def push(self, value):
         self.env.push(value)
 
@@ -79,15 +82,9 @@ class SmallCaps(object):
     def bindObject(self, scriptIndex):
         from typhon.scopes.safe import theThrower
         script = self.code.script(scriptIndex)
-        auditors = [self.pop() for _ in range(script.numAuditors)]
-        assert len(auditors) == script.numAuditors
-        auditors.reverse()
-        globals = [promote(self.pop())
-                   for _ in range(promote(len(script.globalNames)))]
-        globals.reverse()
-        closure = [self.pop()
-                   for _ in range(promote(len(script.closureNames)))]
-        closure.reverse()
+        auditors = self.popSlice(script.numAuditors)
+        globals = self.popSlice(len(script.globalNames))
+        closure = self.popSlice(len(script.closureNames))
         obj = script.makeObject(closure, globals, auditors)
         self.push(obj)
         self.push(obj)
@@ -116,8 +113,7 @@ class SmallCaps(object):
             namedArgs = self.pop()
         else:
             namedArgs = EMPTY_MAP
-        args = [self.pop() for _ in range(atom.arity)]
-        args.reverse()
+        args = self.popSlice(atom.arity)
         target = self.pop()
 
         # We used to add the call trail for tracebacks here, but it's been
@@ -134,6 +130,7 @@ class SmallCaps(object):
     def buildMap(self, index):
         d = monteDict()
         for i in range(index):
+            # Yikes, the order of operations here is dangerous.
             d[self.pop()] = self.pop()
         self.push(ConstMap(d))
 
