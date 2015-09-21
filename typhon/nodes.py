@@ -15,7 +15,7 @@
 from collections import OrderedDict
 
 from rpython.rlib import rvmprof
-from rpython.rlib.jit import elidable, elidable_promote
+from rpython.rlib.jit import elidable, elidable_promote, look_inside_iff
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.rbigint import BASE10
 
@@ -29,7 +29,7 @@ from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
 from typhon.objects.ejectors import throw
 from typhon.objects.meta import MetaContext
 from typhon.objects.root import Object
-from typhon.objects.user import ScriptObject
+from typhon.objects.user import Audition, ScriptObject
 from typhon.pretty import Buffer, LineWriter
 from typhon.smallcaps.code import Code
 from typhon.smallcaps.ops import ops
@@ -1458,7 +1458,7 @@ class Obj(Expr):
 
 class CodeScript(object):
 
-    _immutable_fields_ = ("displayName", "objectAst", "numAuditors",
+    _immutable_fields_ = ("displayName", "fqn", "objectAst", "numAuditors",
                           "closureNames", "globalNames")
 
     def __init__(self, displayName, objectAst, numAuditors, availableClosure,
@@ -1484,10 +1484,18 @@ class CodeScript(object):
         self.globalNames = OrderedDict()
 
     def makeObject(self, closure, globals, auditors):
-        obj = ScriptObject(self, globals, self.globalNames, closure,
-                           self.closureNames, self.displayName, auditors,
+        obj = ScriptObject(self, globals, closure, self.displayName, auditors,
                            self.fqn)
         return obj
+
+    # Picking 3 for the common case of:
+    # `as DeepFrozen implements Selfless, Transparent`
+    @look_inside_iff(lambda self, auditors, guards: len(auditors) <= 3)
+    def audit(self, auditors, guards):
+        with Audition(self.fqn, self.objectAst, guards, {}) as audition:
+            for a in auditors:
+                audition.ask(a)
+        return audition.approvers
 
     @elidable
     def selfIndex(self):

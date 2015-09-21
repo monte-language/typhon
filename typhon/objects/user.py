@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import unroll_safe
+from rpython.rlib.jit import elidable, unroll_safe
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -25,7 +25,6 @@ from typhon.objects.guards import anyGuard
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
 from typhon.objects.slots import FinalBinding
-from typhon.prelude import getGlobal
 from typhon.smallcaps.machine import SmallCaps
 
 # XXX AuditionStamp, Audition guard
@@ -37,35 +36,31 @@ GETFQN_0 = getAtom(u"getFQN", 0)
 
 
 @autohelp
-class AstInflator(Object):
-    def recv(self, atom, args):
-        if atom.verb == u"run" and atom.arity >= 1:
-            astBuilder = getGlobal(u"astBuilder")
-            if astBuilder is NullObject:
-                raise userError(u"node builder not yet installed, AST not available")
-            nodeName = unwrapStr(args[0])
-            # XXX Preserve spans
-            return astBuilder.call(nodeName, args[1:] + [NullObject])
-        raise Refused(self, atom, args)
-
-
-@autohelp
 class Audition(Object):
 
+    # Whether the audition is still fresh and usable.
+    active = True
+
     def __init__(self, fqn, ast, guards, cache):
+        assert isinstance(fqn, unicode)
         self.fqn = fqn
         self.ast = ast
         self.guards = guards
-        self.cache = None
+        self.cache = cache
 
-        self.active = True
         self.approvers = []
         self.askedLog = []
         self.guardLog = []
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.active = False
+
     def ask(self, auditor):
         if not self.active:
-            raise userError(u"audition is out of scope")
+            raise userError(u"Audition is out of scope")
 
         doCaching = False
         cached = False
@@ -111,9 +106,8 @@ class Audition(Object):
     def getGuard(self, name):
         if name not in self.guards:
             self.guardLog = None
-            from typhon.objects.data import StrObject
-            raise UserException(StrObject(u'"%s" is not a free variable in %s' %
-                                (name, self.fqn)))
+            raise userError(u'"%s" is not a free variable in %s' %
+                            (name, self.fqn))
         answer = self.guards[name]
         if self.guardLog is not None:
             if False:  # DF check
@@ -133,7 +127,6 @@ class Audition(Object):
             return self.ast
 
         if atom is GETFQN_0:
-            assert isinstance(self.fqn, unicode)
             return StrObject(self.fqn)
 
         raise Refused(self, atom, args)
@@ -143,42 +136,34 @@ class ScriptObject(Object):
 
     _immutable_fields_ = ("codeScript", "displayName", "globals[*]",
                           "closure[*]", "fqn")
-    auditorCache = {}
 
-    stamps = []
-
-    def __init__(self, codeScript, globals, globalsNames,
-                 closure, closureNames, displayName, auditors, fqn):
+    def __init__(self, codeScript, globals, closure, displayName, auditors,
+                 fqn):
         self.codeScript = codeScript
         self.globals = globals
         self.closure = closure
         self.displayName = displayName
         self.fqn = fqn
 
-        # Make sure that we can access ourselves.
-        self.patchSelf(auditors[0]
-                       if auditors[0] != NullObject
-                       else anyGuard)
-        auditors = [a for a in auditors]
-        # XXX this should all eventually be on the codeScript so that the
-        # caching can be auto-shared amongst all instances of this class.
-        self.stamps = self.audit(auditors, self.codeScript.objectAst,
-                                 closureNames, globalsNames)[:]
+        # The first auditor is our as-auditor, so it'll also be the guard. If
+        # it's null, then we'll use Any as our guard.
+        if auditors[0] is NullObject:
+            self.patchSelf(anyGuard)
+            auditors = auditors[1:]
+        else:
+            self.patchSelf(auditors[0])
 
-    def audit(self, auditors, ast, closureNames, globalsNames):
-        if auditors[0] == NullObject:
-            del auditors[0]
+        # Grab the guards of our closure and send them off for processing.
+        guards = self.getGuards()
+        self.stamps = self.codeScript.audit(auditors, guards)[:]
+
+    def getGuards(self):
         guards = {}
-        for name, i in globalsNames.items():
+        for name, i in self.codeScript.globalNames.items():
             guards[name] = self.globals[i].call(u"getGuard", [])
-        for name, i in closureNames.items():
+        for name, i in self.codeScript.closureNames.items():
             guards[name] = self.closure[i].call(u"getGuard", [])
-
-        audition = Audition(self.fqn, ast, guards, {})
-        for a in auditors:
-            audition.ask(a)
-        audition.active = False
-        return audition.approvers
+        return guards
 
     def patchSelf(self, guard):
         selfIndex = self.codeScript.selfIndex()
