@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import unroll_safe
+from rpython.rlib.jit import elidable, unroll_safe
 from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.atoms import getAtom
@@ -62,7 +62,33 @@ def isSameEver(first, second):
     return result is EQUAL
 
 
-@unroll_safe
+def fringeEq(first, second):
+    if len(first) != len(second):
+        return False
+    for i in range(len(first)):
+        if not first[i].eq(second[i]):
+            return False
+    return True
+
+
+def listEq(first, second, cache):
+    # I miss zip().
+    for i, x in enumerate(first):
+        y = second[i]
+
+        # Recurse.
+        equal = optSame(x, y, cache)
+
+        # Note the equality for the rest of this invocation.
+        cache[x, y] = equal
+
+        # And terminate on the first failure.
+        if equal is not EQUAL:
+            return equal
+    # Well, nothing failed, so it would seem that they must be equal.
+    return EQUAL
+
+
 def optSame(first, second, cache=None):
     """
     Determine whether two objects are equal, returning None if a decision
@@ -152,21 +178,7 @@ def optSame(first, second, cache=None):
 
         cache[first, second] = EQUAL
 
-        # I miss zip().
-        for i, x in enumerate(firstList):
-            y = secondList[i]
-
-            # Recurse.
-            equal = optSame(x, y, cache)
-
-            # Note the equality for the rest of this invocation.
-            cache[x, y] = equal
-
-            # And terminate on the first failure.
-            if equal is not EQUAL:
-                return equal
-        # Well, nothing failed, so it would seem that they must be equal.
-        return EQUAL
+        return listEq(firstList, secondList, cache)
 
     if isinstance(first, TraversalKey):
         if not isinstance(second, TraversalKey):
@@ -177,12 +189,7 @@ def optSame(first, second, cache=None):
         if optSame(first.ref, second.ref) is not EQUAL:
             return INEQUAL
         # OK but were they the same when the traversal keys were made?
-        if len(first.fringe) != len(second.fringe):
-            return INEQUAL
-        for i in range(len(first.fringe)):
-            if not first.fringe[i].eq(second.fringe[i]):
-                return INEQUAL
-        return EQUAL
+        return eq(fringeEq(first.fringe, second.fringe))
 
     # Proxies do their own sameness checking.
     from typhon.objects.proxy import DisconnectedRef, Proxy
@@ -230,13 +237,13 @@ def optSame(first, second, cache=None):
 #Only look at a few levels of the object graph for hash values
 HASH_DEPTH = 10
 
-@unroll_safe
 def samenessHash(obj, depth, path, fringe):
     """
     Generate a hash code for an object that may not be completely
     settled. Equality of hash code implies sameness of objects. The generated
     hash is valid until settledness of a component changes.
     """
+
     if depth <= 0:
         # not gonna look any further for the purposes of hash computation, but
         # we do have to know about unsettled refs
@@ -296,41 +303,56 @@ def samenessHash(obj, depth, path, fringe):
     return -1
 
 
+def listFringe(o, fringe, path, sofar):
+    result = True
+    for i, x in enumerate(unwrapList(o)):
+        if fringe is None:
+            fr = None
+        else:
+            fr = FringePath(i, path)
+        result &= samenessFringe(o, fr, fringe, sofar)
+        if (not result) and fringe is None:
+            # Unresolved promise found.
+            return False
+    return result
+
+
 def samenessFringe(original, path, fringe, sofar=None):
-    # Build a fringe after walking this object graph, and return whether
-    # it's settled.
-    if sofar is None:
-        sofar = {}
+    """
+    Walk an object graph, building up the fringe.
+
+    Returns whether the graph is settled.
+    """
+
+    # Resolve the object.
     o = resolution(original)
+    # Handle primitive cases first.
     if o is NullObject:
         return True
-    if o in sofar:
-        return True
-    if isinstance(o, ConstList):
-        sofar[o] = None
-        result = True
-        for i, x in enumerate(unwrapList(o)):
-            if fringe is None:
-                fr = None
-            else:
-                fr = FringePath(i, path)
-            result &= samenessFringe(o, fr, fringe, sofar)
-            if (not result) and fringe is None:
-                # Unresolved promise found.
-                return False
-        return result
-    if isinstance(o, ConstMap) and len(o.objectMap) == 0:
-        return True
+
     if (isinstance(o, BoolObject) or isinstance(o, CharObject)
             or isinstance(o, DoubleObject) or isinstance(o, IntObject)
             or isinstance(o, BigInt) or isinstance(o, StrObject)
             or isinstance(o, TraversalKey)):
         return True
 
+    if isinstance(o, ConstMap) and len(o.objectMap) == 0:
+        return True
+
+    if sofar is None:
+        sofar = {}
+    elif o in sofar:
+        return True
+
+    if isinstance(o, ConstList):
+        sofar[o] = None
+        return listFringe(o, fringe, path, sofar)
+
     if selfless in o.stamps:
         if transparentStamp in o.stamps:
             return samenessFringe(o.call(u"_uncall", []), path, fringe, sofar)
         # XXX Semitransparent support goes here
+
     if isResolved(o):
         return True
 
