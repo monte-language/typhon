@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import JitDriver
+from rpython.rlib.jit import JitDriver, promote
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting
@@ -87,7 +87,8 @@ def loop(args):
             # JIT merge point.
             loopDriver.jit_merge_point(code=code, consumer=consumer,
                                        ejector=ej, iterator=iterator)
-            machine = SmallCaps(code, consumer.closure, consumer.globals)
+            machine = SmallCaps(code, consumer.closure,
+                                promote(consumer.globals))
             values = unwrapList(iterator.call(u"next", [ej]))
             # Push the arguments onto the stack, backwards.
             values.reverse()
