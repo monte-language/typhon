@@ -41,9 +41,6 @@ class Configuration(object):
     The Law of Demeter is waived for this object; treat it as data.
     """
 
-    # The path from which to draw imports and the prelude.
-    libraryPath = "."
-
     # Whether to exit after loading the script file. Useful for testing.
     loadOnly = False
 
@@ -57,7 +54,12 @@ class Configuration(object):
     jit = "default"
 
     def __init__(self, argv):
+        # Arguments not consumed by Typhon. Will be available to the main
+        # script.
         self.argv = []
+
+        # The paths from which to draw imports and the prelude.
+        self.libraryPaths = []
 
         stream = ListStream(argv)
         # argv[0] is always the name that we were invoked with. Always.
@@ -67,7 +69,7 @@ class Configuration(object):
             item = stream.nextItem()
 
             if item == "-l":
-                self.libraryPath = stream.nextItem()
+                self.libraryPaths.append(stream.nextItem())
             elif item == "-load":
                 self.loadOnly = True
             elif item == "-p":

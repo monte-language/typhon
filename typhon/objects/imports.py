@@ -14,7 +14,6 @@
 
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import dont_look_inside
-from rpython.rlib.rpath import rjoin
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -56,7 +55,7 @@ class Import(Object):
         p = path.encode("utf-8")
         p += ".ty"
 
-        term = obtainModule(rjoin(self.path, p), self.recorder)
+        term = obtainModule(self.path, p, self.recorder)
 
         # Get module.
         module = evaluateTerms([term], finalize(self.scope))
@@ -89,7 +88,7 @@ class Import(Object):
 
         scope[u'unittest'] = UnitTest(path, self.testCollector)
         # Attempt the import.
-        term = obtainModule(rjoin(self.path, p), self.recorder)
+        term = obtainModule(self.path, p, self.recorder)
 
         # Get results.
         result = evaluateTerms([term], finalize(scope))

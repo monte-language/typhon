@@ -20,7 +20,6 @@ from rpython.rlib import rsignal
 from rpython.rlib import rvmprof
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import JitHookInterface, set_user_param
-from rpython.rlib.rpath import rjoin
 
 from typhon import ruv
 from typhon.arguments import Configuration
@@ -58,9 +57,9 @@ def loadPrelude(config, recorder, vat):
     scope.update(bootScope(recorder, bootTC))
 
     # Boot imports.
-    scope = addImportToScope(config.libraryPath, scope, recorder, bootTC)
+    scope = addImportToScope(config.libraryPaths, scope, recorder, bootTC)
 
-    code = obtainModule(rjoin(config.libraryPath, "prelude.ty"), recorder)
+    code = obtainModule(config.libraryPaths, "prelude.ty", recorder)
 
     with recorder.context("Time spent in prelude"):
         result = evaluateTerms([code], finalize(scope))
@@ -202,10 +201,10 @@ def entryPoint(argv):
     # top-level script and not to any library code which is indirectly loaded
     # via import().
     collectTests = TestCollector()
-    scope = addImportToScope(config.libraryPath, scope, recorder, collectTests)
+    scope = addImportToScope(config.libraryPaths, scope, recorder, collectTests)
     scope.update(unsafeScope(config, collectTests))
     try:
-        code = obtainModule(config.argv[1], recorder)
+        code = obtainModule([""], config.argv[1], recorder)
     except LoadFailed as lf:
         print lf
         return 1

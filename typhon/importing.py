@@ -14,8 +14,9 @@
 
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import dont_look_inside
+from rpython.rlib.rpath import rjoin
 
-from typhon.errors import UserException
+from typhon.errors import UserException, userError
 from typhon.load.trash import load
 from typhon.nodes import Sequence, interactiveCompile
 from typhon.objects.constants import NullObject
@@ -55,18 +56,29 @@ def obtainModuleFromSource(source, recorder, origin):
     return code, topLocals
 
 
-def obtainModule(path, recorder):
-    if path in moduleCache.cache:
-        debug_print("Importing (cached):", path)
-        return moduleCache.cache[path]
+def obtainModule(libraryPaths, filePath, recorder):
+    for libraryPath in libraryPaths:
+        path = rjoin(libraryPath, filePath)
 
-    debug_print("Importing:", path)
-    source = open(path, "rb").read()
-    code = obtainModuleFromSource(source, recorder, path.decode('utf-8'))[0]
+        if path in moduleCache.cache:
+            debug_print("Importing (cached):", path)
+            return moduleCache.cache[path]
 
-    # Cache.
-    moduleCache.cache[path] = code
-    return code
+        debug_print("Importing:", path)
+        try:
+            with open(path, "rb") as handle:
+                source = handle.read()
+                code = obtainModuleFromSource(source, recorder,
+                                              path.decode('utf-8'))[0]
+        except IOError:
+            continue
+
+        # Cache.
+        moduleCache.cache[path] = code
+        return code
+    else:
+        raise userError(u"Module couldn't be found" %
+                        filePath.decode("utf-8"))
 
 
 def evaluateWithTraces(code, scope):
