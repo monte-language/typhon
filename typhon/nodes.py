@@ -1142,17 +1142,9 @@ class Matcher(Expr):
 
 
 @autohelp
-class Meta(Expr):
+class MetaContextExpr(Expr):
 
     _immutable_ = True
-
-    _immutable_fields_ = "nature",
-
-    def __init__(self, nature):
-        self.nature = strToString(nature)
-        if self.nature != u"context":
-            raise InvalidAST("Can't handle meta: %s" %
-                             self.nature.encode("utf-8"))
 
     def pretty(self, out):
         out.write("meta.context()")
@@ -1166,6 +1158,34 @@ class Meta(Expr):
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
             return StrObject(u"MetaContextExpr")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class MetaStateExpr(Expr):
+
+    _immutable_ = True
+
+    def pretty(self, out):
+        out.write("meta.getState()")
+
+    def compile(self, compiler):
+        # XXX should this produce outers + locals when outside an object expr?
+        for k, v in compiler.frame.iteritems():
+            compiler.literal(StrObject(k))
+            compiler.addInstruction("BINDING_FRAME", v)
+        compiler.addInstruction("BUILD_MAP", len(compiler.frame))
+
+    def getStaticScope(self):
+        return StaticScope([], [], [], [], True)
+
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"MetaStateExpr")
 
         if atom is GETSTATICSCOPE_0:
             return self.getStaticScope()

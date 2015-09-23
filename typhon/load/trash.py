@@ -19,9 +19,10 @@ from rpython.rlib.runicode import str_decode_utf_8
 from typhon.errors import LoadFailed
 from typhon.nodes import (Assign, Binding, BindingPattern, Call, Char, Def,
                           Double, Escape, FinalPattern, Finally, Hide, If,
-                          Int, IgnorePattern, ListPattern, Matcher, Meta,
-                          Method, Noun, Null, Obj, Script, Sequence, Str, Try,
-                          Tuple, VarPattern, ViaPattern, NamedParam)
+                          Int, IgnorePattern, ListPattern, Matcher,
+                          MetaContextExpr, MetaStateExpr, Method, Noun, Null,
+                          Obj, Script, Sequence, Str, Try, Tuple, VarPattern,
+                          ViaPattern, NamedParam)
 
 
 # The largest tuple arity that we'll willingly decode.
@@ -294,8 +295,13 @@ def loadTerm(stream):
         return Matcher(loadPattern(stream), loadTerm(stream))
 
     elif tag == "Meta":
-        return Meta(loadTerm(stream))
-
+        nature = loadTerm(stream)
+        if not isinstance(nature, Str):
+            raise LoadFailed("Meta verb not a Str")
+        if nature._s == u"context":
+            return MetaContextExpr()
+        elif nature._s == u"getState":
+            return MetaStateExpr()
     elif tag == "Method":
         return Method.fromAST(
             loadTerm(stream), loadTerm(stream), loadPatternList(stream),
