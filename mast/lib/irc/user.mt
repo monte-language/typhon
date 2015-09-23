@@ -15,13 +15,6 @@ def makeUser(nick :Str, user :Str, host :Str):
         to getHost() :Str:
             return host
 
-def testUserEquality(assert):
-    def first := makeUser("first", "second", "example.com")
-    def second := makeUser("first", "second", "example.com")
-    assert.equal(first, second)
-
-unittest([testUserEquality])
-
 
 def sourceToUser(specimen, ej):
     switch (specimen):

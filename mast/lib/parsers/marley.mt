@@ -178,12 +178,6 @@ def exactly(token):
         to error() :Str:
             return `exactly $token`
 
-def testExactlyEquality(assert):
-    assert.equal(exactly('c'), exactly('c'))
-    assert.notEqual(exactly('c'), exactly('d'))
-
-unittest([testExactlyEquality])
-
 
 def parens := [
     "parens" => [
@@ -237,12 +231,13 @@ def testMarleyWP(assert):
     wpParser.feedMany("2+3*4")
     assert.equal(wpParser.finished(), true)
 
-unittest([
-    testMarleyParensFailed,
-    testMarleyParensFinished,
-    testMarleyParensPartial,
-    testMarleyWP,
-])
+## Disabled until Transparent auditor available.
+# unittest([
+#     testMarleyParensFailed,
+#     testMarleyParensFinished,
+#     testMarleyParensPartial,
+#     testMarleyWP,
+# ])
 
 def alphanumeric := 'a'..'z' | 'A'..'Z' | '0'..'9'
 def escapeTable := ['n' => '\n']
@@ -429,10 +424,10 @@ def testMarleyQPDouble(assert):
     `
     assert.equal(handwritten, generated)
 
-unittest([
-    testMarleyQPSingle,
-    testMarleyQPDouble,
-])
+# unittest([
+#     testMarleyQPSingle,
+#     testMarleyQPDouble,
+# ])
 
 
 def marleyBench():

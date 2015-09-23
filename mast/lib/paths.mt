@@ -47,12 +47,6 @@ def testPathChild(assert):
     def path := makePath(["first"])
     assert.equal(path.child("second"), makePath(["first", "second"]))
 
-unittest([
-    testPathParent,
-    testPathSibling,
-    testPathChild,
-])
-
 
 object pathPattern:
     pass
@@ -104,7 +98,11 @@ def testPathQLValue(assert):
     def p := path`first/$inner/third`
     assert.equal(p, path`first/second/third`)
 
-unittest([
-    testPathQL,
-    testPathQLValue,
-])
+## Disabled until Transparent auditor available.
+# unittest([
+#     testPathParent,
+#     testPathSibling,
+#     testPathChild,
+#     testPathQL,
+#     testPathQLValue,
+# ])
