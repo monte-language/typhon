@@ -25,7 +25,7 @@ from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.root import Object
 from typhon.objects.tests import UnitTest
-from typhon.importing import evaluateTerms, instantiateModule, obtainModule
+from typhon.importing import evaluateRaise, instantiateModule, obtainModule
 
 
 RUN_1 = getAtom(u"run", 1)
@@ -58,7 +58,7 @@ class Import(Object):
         term = obtainModule(self.path, p, self.recorder)
 
         # Get module.
-        module = evaluateTerms([term], finalize(self.scope))
+        module, _ = evaluateRaise([term], finalize(self.scope))
 
         scope = monteDict()
         scope[StrObject(u"import")] = self
@@ -91,11 +91,7 @@ class Import(Object):
         term = obtainModule(self.path, p, self.recorder)
 
         # Get results.
-        result = evaluateTerms([term], finalize(scope))
-
-        if result is None:
-            debug_print("Result was None :c")
-            return NullObject
+        result, _ = evaluateRaise([term], finalize(scope))
         return result
 
     def recv(self, atom, args):
