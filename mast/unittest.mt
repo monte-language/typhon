@@ -1,77 +1,83 @@
-def [=> makeUTF8EncodePump] | _ := import.script("lib/tubes/utf8")
-def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
+imports
+exports (main)
 
-def args := currentProcess.getArguments()
-for path in args.slice(2, args.size()):
-    import.script(path)
+def main(=> makeStdOut, => Timer, => currentProcess, => unsealException, => collectTests) as DeepFrozen:
+    def [=> makeUTF8EncodePump] | _ := import.script("lib/tubes/utf8")
+    def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
 
-def errors := [].asMap().diverge()
+    def args := currentProcess.getArguments()
+    for path in args.slice(2, args.size()):
+        import.script(path)
 
-var successes := 0
-var fails := 0
+    def errors := [].asMap().diverge()
 
-def logIt(loc, msg):
-    def errs := errors.fetch(loc, fn {[]})
-    errors[loc] := errs.with(msg)
-    return msg
+    var successes := 0
+    var fails := 0
 
-def makeAsserter(label):
-    return object assert:
-        to doesNotEject(f):
-            escape e:
-                f(e)
-            catch _:
-                throw(logIt(label, "Ejector was fired"))
+    def logIt(loc, msg):
+        def errs := errors.fetch(loc, fn {[]})
+        errors[loc] := errs.with(msg)
+        return msg
 
-        to ejects(f):
-            escape e:
-               f(e)
-               throw(logIt(label, "Ejector was not fired"))
+    def makeAsserter(label):
+        return object assert:
+            to doesNotEject(f):
+                escape e:
+                    f(e)
+                catch _:
+                    throw(logIt(label, "Ejector was fired"))
 
-        to equal(l, r):
-            def isEqual := __equalizer.sameYet(l, r)
-            if (isEqual == null):
-                throw(logIt(label, `Equality not settled: $l ?= $r`))
-            if (!isEqual):
-                throw(logIt(label, `Not equal: $l != $r`))
+            to ejects(f):
+                escape e:
+                   f(e)
+                   throw(logIt(label, "Ejector was not fired"))
 
-        to notEqual(l, r):
-            def isEqual := __equalizer.sameYet(l, r)
-            if (isEqual == null):
-                throw(logIt(label, `Equality not settled: $l ?= $r`))
-            if (isEqual):
-                throw(logIt(label, `Equal: $l == $r`))
+            to equal(l, r):
+                def isEqual := __equalizer.sameYet(l, r)
+                if (isEqual == null):
+                    throw(logIt(label, `Equality not settled: $l ?= $r`))
+                if (!isEqual):
+                    throw(logIt(label, `Not equal: $l != $r`))
 
-        to throws(f):
-            try:
-                f()
-                throw(logIt(label, "No exception was thrown"))
-            catch _:
-                null
+            to notEqual(l, r):
+                def isEqual := __equalizer.sameYet(l, r)
+                if (isEqual == null):
+                    throw(logIt(label, `Equality not settled: $l ?= $r`))
+                if (isEqual):
+                    throw(logIt(label, `Equal: $l == $r`))
 
-def formatError(err):
-    return "\n".join(err[1].reverse()) + "\n\n" + err[0] + "\n"
+            to throws(f):
+                try:
+                    f()
+                    throw(logIt(label, "No exception was thrown"))
+                catch _:
+                    null
 
-def stdout := makePumpTube(makeUTF8EncodePump())
-stdout<-flowTo(makeStdOut())
+    def formatError(err):
+        return "\n".join(err[1].reverse()) + "\n\n" + err[0] + "\n"
 
-def runTests():
-    for k => tests in collectTests():
-        stdout.receive(`$k$\n`)
-        for t in tests:
-            def st := M.toString(t)
-            stdout.receive(`    $st`)
-            try:
-                t(makeAsserter(st))
-                stdout.receive("    OK\n")
-                successes += 1
-            catch p:
-                stdout.receive("    FAIL\n")
-                fails += 1
-                def msg := formatError(unsealException(p, throw))
-                logIt(st, msg)
-                stdout.receive(msg + "\n")
+    def stdout := makePumpTube(makeUTF8EncodePump())
+    stdout<-flowTo(makeStdOut())
 
-when (def runTime := Timer.trial(runTests)) ->
-    stdout.receive(`${successes + fails} tests run, ${fails} failures` +
-                   ` in ${runTime} s$\n`)
+    def runTests():
+        for k => tests in collectTests():
+            stdout.receive(`$k$\n`)
+            for t in tests:
+                def st := M.toString(t)
+                stdout.receive(`    $st`)
+                try:
+                    t(makeAsserter(st))
+                    stdout.receive("    OK\n")
+                    successes += 1
+                catch p:
+                    stdout.receive("    FAIL\n")
+                    fails += 1
+                    def msg := formatError(unsealException(p, throw))
+                    logIt(st, msg)
+                    stdout.receive(msg + "\n")
+
+    return when (def runTime := Timer.trial(runTests)) ->
+        stdout.receive(`${successes + fails} tests run, ${fails} failures` +
+                       ` in ${runTime} s$\n`)
+        fails.min(1)
+
