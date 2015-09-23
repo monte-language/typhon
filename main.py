@@ -31,6 +31,7 @@ from typhon.objects.collections import ConstMap, monteDict, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapStr
 from typhon.objects.imports import addImportToScope
+from typhon.objects.refs import resolution
 from typhon.objects.tests import TestCollector
 from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
@@ -137,7 +138,7 @@ class profiling(object):
         self.handle.close()
 
 
-def runModule(exports, config):
+def runModule(exports, scope):
     """
     Run a main entrypoint.
     """
@@ -149,10 +150,8 @@ def runModule(exports, config):
     if main is None:
         return None
 
-    collectTests = TestCollector()
-    unsafeStuff = unsafeScope(config, collectTests)
     namedArgs = monteDict()
-    for k, v in unsafeStuff.iteritems():
+    for k, v in scope.iteritems():
         namedArgs[StrObject(k)] = v
     return main.call(u"run", [], ConstMap(namedArgs))
 
@@ -201,7 +200,8 @@ def entryPoint(argv):
     # top-level script and not to any library code which is indirectly loaded
     # via import().
     collectTests = TestCollector()
-    scope = addImportToScope(config.libraryPaths, scope, recorder, collectTests)
+    scope = addImportToScope(config.libraryPaths, scope, recorder,
+                             collectTests)
     scope.update(unsafeScope(config, collectTests))
     try:
         code = obtainModule([""], config.argv[1], recorder)
@@ -239,17 +239,18 @@ def entryPoint(argv):
                 # Hey, we've got a module! Run it.
                 ruv.update_time(uv_loop)
                 debug_print("Running module...")
-                rv = runModule(module, config)
-                if rv is not None and isinstance(rv, IntObject):
-                    exitStatus = rv.getInt()
+                rv = runModule(module, scope)
             except UserException as ue:
                 debug_print("Caught exception while instantiating:",
                             ue.formatError())
-
+                return 1
         # Update loop timing information.
         ruv.update_time(uv_loop)
         try:
             runUntilDone(vatManager, uv_loop, recorder)
+            rv = resolution(rv) if rv is not None else NullObject
+            if isinstance(rv, IntObject):
+                exitStatus = rv.getInt()
         except SystemExit as se:
             pass
             # Huh, apparently this doesn't work. Wonder why/why not.
