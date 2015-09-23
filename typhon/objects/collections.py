@@ -158,6 +158,9 @@ class Collection(object):
     A common abstraction for several collections which share methods.
     """
 
+    def toString(self):
+        return toString(self)
+
     def recv(self, atom, args):
         # _makeIterator/0: Create an iterator for this collection's contents.
         if atom is _MAKEITERATOR_0:
@@ -226,13 +229,10 @@ class ConstList(Object):
         printer.call(u"print", [StrObject(u"[")])
         items = self.strategy.fetch_all(self)
         for i, obj in enumerate(items):
-            printer.call(u"print", [obj])
+            printer.call(u"quote", [obj])
             if i + 1 < len(items):
                 printer.call(u"print", [StrObject(u", ")])
         printer.call(u"print", [StrObject(u"]")])
-
-    def toString(self):
-        return toString(self)
 
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.
@@ -434,13 +434,10 @@ class FlexList(Object):
         printer.call(u"print", [StrObject(u"[")])
         items = self.strategy.fetch_all(self)
         for i, obj in enumerate(items):
-            printer.call(u"print", [obj])
+            printer.call(u"quote", [obj])
             if i + 1 < len(items):
                 printer.call(u"print", [StrObject(u", ")])
         printer.call(u"print", [StrObject(u"].diverge()")])
-
-    def toString(self):
-        return toString(self)
 
     def hash(self):
         # Use the same sort of hashing as CPython's tuple hash.
@@ -597,13 +594,6 @@ class FlexList(Object):
 # change at any time.
 
 
-def pairRepr(key, value):
-    return key.toString() + u" => " + value.toString()
-
-
-def pairQuote(key, value):
-    return key.toQuote() + u" => " + value.toQuote()
-
 
 def resolveKey(key):
     from typhon.objects.refs import Promise, isResolved
@@ -647,21 +637,19 @@ class ConstMap(Object):
     def asDict(self):
         return self.objectMap
 
-    def toString(self):
-        # If this map is empty, return a string that distinguishes it from a
-        # list. E does the same thing.
-        if not self.objectMap:
-            return u"[].asMap()"
-
-        guts = u", ".join([pairRepr(k, v) for k, v in self.objectMap.items()])
-        return u"[%s]" % (guts,)
-
-    def toQuote(self):
-        if not self.objectMap:
-            return u"[].asMap()"
-
-        guts = u", ".join([pairQuote(k, v) for k, v in self.objectMap.items()])
-        return u"[%s]" % (guts,)
+    def printOn(self, printer):
+        printer.call(u"print", [StrObject(u"[")])
+        i = 0
+        for k, v in self.objectMap.iteritems():
+            printer.call(u"quote", [k])
+            printer.call(u"print", [StrObject(u" => ")])
+            printer.call(u"quote", [v])
+            if i + 1 < len(self.objectMap):
+                printer.call(u"print", [StrObject(u", ")])
+            i += 1
+        printer.call(u"print", [StrObject(u"]")])
+        if len(self.objectMap) == 0:
+            printer.call(u"print", [StrObject(u".asMap()")])
 
     def hash(self):
         # Nest each item, hand-unwrapping the nested "tuple" of items.
@@ -829,14 +817,15 @@ class ConstSet(Object):
         return x
 
     def toString(self):
-        # We always have to remind the user that we are a set, not a list.
-        guts = u", ".join([k.toString() for k in self.objectMap.keys()])
-        return u"[%s].asSet()" % (guts,)
+        return toString(self)
 
-    def toQuote(self):
-        # We always have to remind the user that we are a set, not a list.
-        guts = u", ".join([k.toQuote() for k in self.objectMap.keys()])
-        return u"[%s].asSet()" % (guts,)
+    def printOn(self, printer):
+        printer.call(u"print", [StrObject(u"[")])
+        for i, obj in enumerate(self.objectMap.keys()):
+            printer.call(u"quote", [obj])
+            if i + 1 < len(self.objectMap):
+                printer.call(u"print", [StrObject(u", ")])
+        printer.call(u"print", [StrObject(u"].asSet()")])
 
     def _recv(self, atom, args):
         if atom is _UNCALL_0:
