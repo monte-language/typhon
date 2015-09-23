@@ -1,5 +1,6 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import ConstList
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import throw
@@ -25,7 +26,7 @@ class SealedException(Object):
         return u"<sealed exception>"
 
 
-@runnable(RUN_2)
+@runnable(RUN_2, _stamps=[deepFrozenStamp])
 def unsealException(args):
     """
     Unseal a specimen.
