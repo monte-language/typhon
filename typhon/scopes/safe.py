@@ -76,10 +76,8 @@ class TraceLn(Object):
 
     def recv(self, atom, args):
         if atom.verb == u"run":
-            debug_print("TRACE: [")
-            for obj in args:
-                debug_print("    ", obj.toQuote().encode("utf-8"))
-            debug_print("]")
+            guts = u", ".join([obj.toQuote() for obj in args])
+            debug_print("TRACE: [%s]" % guts.encode("utf-8"))
             return NullObject
         raise Refused(self, atom, args)
 
