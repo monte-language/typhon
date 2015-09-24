@@ -52,6 +52,7 @@ COMBINE_1 = getAtom(u"combine", 1)
 COMPLEMENT_0 = getAtom(u"complement", 0)
 CONTAINS_1 = getAtom(u"contains", 1)
 COS_0 = getAtom(u"cos", 0)
+ENDSWITH_1 = getAtom(u"endsWith", 1)
 FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
 FLOOR_0 = getAtom(u"floor", 0)
 GETCATEGORY_0 = getAtom(u"getCategory", 0)
@@ -94,6 +95,7 @@ SLICE_2 = getAtom(u"slice", 2)
 SPLIT_1 = getAtom(u"split", 1)
 SPLIT_2 = getAtom(u"split", 2)
 SQRT_0 = getAtom(u"sqrt", 0)
+STARTSWITH_1 = getAtom(u"startsWith", 1)
 SUBTRACT_1 = getAtom(u"subtract", 1)
 TAN_0 = getAtom(u"tan", 0)
 TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
@@ -971,6 +973,9 @@ class StrObject(Object):
             if isinstance(needle, StrObject):
                 return wrapBool(needle._s in self._s)
 
+        if atom is ENDSWITH_1:
+            return wrapBool(self._s.endswith(unwrapStr(args[0])))
+
         if atom is GET_1:
             index = unwrapInt(args[0])
             if not 0 <= index < len(self._s):
@@ -1043,6 +1048,9 @@ class StrObject(Object):
             from typhon.objects.collections import ConstList
             return ConstList(self.split(unwrapStr(args[0]),
                                         unwrapInt(args[1])))
+
+        if atom is STARTSWITH_1:
+            return wrapBool(self._s.startswith(unwrapStr(args[0])))
 
         if atom is TOLOWERCASE_0:
             return StrObject(self.toLowerCase())
