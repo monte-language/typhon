@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import elidable, unroll_safe
 
 from typhon.atoms import getAtom
@@ -62,40 +63,54 @@ class Audition(Object):
         if not self.active:
             raise userError(u"Audition is out of scope")
 
-        doCaching = False
         cached = False
 
-        if doCaching:
-            if auditor in self.cache:
-                answer, asked, guards = self.cache[auditor]
-                for name, value in guards:
-                    # We remember what the binding guards for the previous
-                    # invocation were.
-                    if self.guards[name] != value:
-                        # If any of them have changed, we need to re-audit.
-                        break
-                else:
-                    cached = True
+        if auditor in self.cache:
+            answer, asked, guards = self.cache[auditor]
+            # msg = u"'%s': %s (cached)" % (auditor.toString(),
+            #                               u"true" if answer else u"false")
+            # debug_print(msg.encode("utf-8"))
+            for name, value in guards:
+                # We remember what the binding guards for the previous
+                # invocation were.
+                if self.guards[name] != value:
+                    # If any of them have changed, we need to re-audit.
+                    # msg = u"Name '%s' is invalid; reauditing" % name
+                    # debug_print(msg.encode("utf-8"))
+                    break
+            else:
+                # XXX stopgap: Ignore negative answers in the cache.
+                cached = answer
 
         if cached:
             for a in asked:
                 # We remember the other auditors invoked during this
                 # audition. Let's re-ask them since not all of them may have
                 # cacheable results.
+                # msg = u"Re-asking '%s'" % a.toString()
+                # debug_print(msg.encode("utf-8"))
                 answer = self.ask(a)
             if answer:
+                # debug_print("Reapproving from cache")
                 self.approvers.append(auditor)
             return answer
         else:
+            # This seems a little convoluted, but the idea is that the logs
+            # are written to during the course of the audition, and then
+            # copied out to the cache afterwards.
             prevlogs = self.askedLog, self.guardLog
             self.askedLog = []
             self.guardLog = []
             try:
                 result = unwrapBool(auditor.call(u"audit", [self]))
-                if doCaching and self.guardLog is not None:
-                    self.auditorCache[auditor] = (result, self.askedLog[:],
-                                                  self.guardLog[:])
+                if self.guardLog is not None:
+                    self.cache[auditor] = (result, self.askedLog[:],
+                                           self.guardLog[:])
+                    # msg = u"'%s': %s (cached)" % (auditor.toString(),
+                    #                               u"true" if result else u"false")
+                    # debug_print(msg.encode("utf-8"))
                 if result:
+                    # debug_print("Approving")
                     self.approvers.append(auditor)
                 return result
             finally:

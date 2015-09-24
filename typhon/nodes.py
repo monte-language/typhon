@@ -1503,6 +1503,8 @@ class CodeScript(object):
         self.closureNames = OrderedDict()
         self.globalNames = OrderedDict()
 
+        self.auditions = {}
+
     def makeObject(self, closure, globals, auditors):
         obj = ScriptObject(self, globals, closure, self.displayName, auditors,
                            self.fqn)
@@ -1512,7 +1514,7 @@ class CodeScript(object):
     # `as DeepFrozen implements Selfless, Transparent`
     @look_inside_iff(lambda self, auditors, guards: len(auditors) <= 3)
     def audit(self, auditors, guards):
-        with Audition(self.fqn, self.objectAst, guards, {}) as audition:
+        with Audition(self.fqn, self.objectAst, guards, self.auditions) as audition:
             for a in auditors:
                 audition.ask(a)
         return audition.approvers
