@@ -17,16 +17,15 @@ from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import (Ejecting, Refused, UserException, WrongType,
-                           userError)
+from typhon.errors import Refused, UserException, WrongType, userError
 from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
 from typhon.objects.collections import (EMPTY_MAP, ConstList, ConstMap,
-                                        unwrapList)
+                                        listFromIterable, unwrapList)
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
                                  StrObject, makeSourceSpan, unwrapInt,
                                  unwrapStr, unwrapChar)
-from typhon.objects.ejectors import Ejector, throw
+from typhon.objects.ejectors import throw
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
 from typhon.objects.guards import (anyGuard, FinalSlotGuardMaker,
@@ -93,25 +92,9 @@ class MakeList(Object):
             return ConstList(args)
 
         if atom is FROMITERABLE_1:
-            return ConstList(self.fromIterable(args[0])[:])
+            return ConstList(listFromIterable(args[0])[:])
 
         raise Refused(self, atom, args)
-
-    def fromIterable(self, obj):
-        rv = []
-        iterator = obj.call(u"_makeIterator", [])
-        ej = Ejector()
-        while True:
-            try:
-                l = unwrapList(iterator.call(u"next", [ej]))
-                if len(l) != 2:
-                    raise userError(u"makeList.fromIterable/1: Invalid iterator")
-                rv.append(l[1])
-            except Ejecting as ex:
-                if ex.ejector is ej:
-                    ej.disable()
-                    return rv
-                raise
 
 theMakeList = MakeList()
 

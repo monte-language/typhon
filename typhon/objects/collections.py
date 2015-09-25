@@ -19,11 +19,12 @@ from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, UserException, WrongType, userError
+from typhon.errors import (Ejecting, Refused, UserException, WrongType,
+                           userError)
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
-from typhon.objects.ejectors import throw
+from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.printers import Printer, toString
 from typhon.objects.root import Object
 from typhon.prelude import getGlobal
@@ -463,7 +464,15 @@ class FlexList(Object):
             return FlexList(self.strategy.fetch_all(self))
 
         if atom is EXTEND_1:
-            self.strategy.append(self, unwrapList(args[0]))
+            from typhon.objects.refs import resolution
+            l = resolution(args[0])
+            if isinstance(l, ConstList):
+                data = l.strategy.fetch_all(l)
+            elif isinstance(l, FlexList):
+                data = l.strategy.fetch_all(l)
+            else:
+                data = listFromIterable(l)[:]
+            self.strategy.append(self, data)
             return NullObject
 
         if atom is GET_1:
@@ -945,6 +954,23 @@ def unwrapList(o, ej=None):
     if isinstance(l, FlexList):
         return l.strategy.fetch_all(l)
     throw(ej, StrObject(u"Not a list!"))
+
+
+def listFromIterable(obj):
+    rv = []
+    iterator = obj.call(u"_makeIterator", [])
+    ej = Ejector()
+    while True:
+        try:
+            l = unwrapList(iterator.call(u"next", [ej]))
+            if len(l) != 2:
+                raise userError(u"makeList.fromIterable/1: Invalid iterator")
+            rv.append(l[1])
+        except Ejecting as ex:
+            if ex.ejector is ej:
+                ej.disable()
+                return rv
+            raise
 
 
 def unwrapMap(o):
