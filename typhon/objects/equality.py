@@ -145,11 +145,14 @@ def optSame(first, second, cache=None):
             return eq(first.getInt() == second.getInt())
         if isinstance(second, BigInt):
             return eq(second.bi.int_eq(first.getInt()))
+        return INEQUAL
+
     if isinstance(first, BigInt):
         if isinstance(second, IntObject):
             return eq(first.bi.int_eq(second.getInt()))
         if isinstance(second, BigInt):
             return eq(first.bi.eq(second.bi))
+        return INEQUAL
 
     # Strings.
     if isinstance(first, StrObject):
