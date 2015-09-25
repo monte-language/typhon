@@ -93,8 +93,8 @@ def main(=> Timer, => bench, => unittest,
     def stdin := makeStdIn()<-flowTo(makePumpTube(makeUTF8DecodePump()))
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout<-flowTo(makeStdOut())
-
-    def replTube := makeREPLTube(fn {makeMonteParser(environment)}, reduce,
+    def parser := makeMonteParser(environment)
+    def replTube := makeREPLTube(fn {parser}, reduce,
                                  "▲> ", "…> ", stdout)
     stdin<-flowTo(replTube)
 
