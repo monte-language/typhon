@@ -195,32 +195,36 @@ object astStamp as DeepFrozen:
 object Ast as DeepFrozen:
     to coerce(specimen, ej):
         if (!__auditedBy(astStamp, specimen)):
-            throw.eject(ej, "not an ast node")
+            def conformed := specimen._conformTo(Ast)
+            if (!__auditedBy(astStamp, conformed)):
+                throw.eject(ej, "not an ast node")
+            else:
+                return conformed
         return specimen
 
     match [=="get", nodeNames :List[Str], _]:
         object nodeGuard as DeepFrozen:
             to coerce(specimen, ej):
-                Ast.coerce(specimen, ej)
-                if (nodeNames.contains(specimen.getNodeName())):
-                    return specimen
-                throw.eject(ej, "m`" + M.toString(specimen) + "`'s type is not one of " + M.toString(nodeNames))
+                def sp := Ast.coerce(specimen, ej)
+                if (nodeNames.contains(sp.getNodeName())):
+                    return sp
+                throw.eject(ej, "m`" + M.toString(sp) + "`'s type is not one of " + M.toString(nodeNames))
 
 object Pattern as DeepFrozen:
     to coerce(specimen, ej):
-        Ast.coerce(specimen, ej)
-        def n := specimen.getNodeName()
+        def sp := Ast.coerce(specimen, ej)
+        def n := sp.getNodeName()
         if (n.slice(n.size() - 7) == "Pattern"):
-            return specimen
-        throw.eject(ej, "m`" + M.toString(specimen) + "` is not a pattern")
+            return sp
+        throw.eject(ej, "m`" + M.toString(sp) + "` is not a pattern")
 
 
 object Expr as DeepFrozen:
     to coerce(specimen, ej):
-        Ast.coerce(specimen, ej)
-        def n := specimen.getNodeName()
+        def sp := Ast.coerce(specimen, ej)
+        def n := sp.getNodeName()
         if (n.slice(n.size() - 4) == "Expr"):
-            return specimen
+            return sp
         throw.eject(ej, "m`" + M.toString(specimen) + "` is not an an expression")
 
 def NamePattern :DeepFrozen := Ast["FinalPattern", "VarPattern",
@@ -2069,6 +2073,16 @@ def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as
         scope, "QuasiParserPattern", fn f {[name, transformAll(quasis, f)]})
 
 object astBuilder as DeepFrozen:
+    to getAstGuard():
+        return Ast
+    to getPatternGuard():
+        return Pattern
+    to getExprGuard():
+        return Expr
+    to getNamePatternGuard():
+        return NamePattern
+    to getNounGuard():
+        return Noun
     to LiteralExpr(value, span):
         return makeLiteralExpr(value, span)
     to NounExpr(name, span):
