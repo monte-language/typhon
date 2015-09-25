@@ -19,7 +19,6 @@ def [=> makeMonteLexer :DeepFrozen] | _ := import.script("lib/monte/monte_lexer"
                                                   parserScope)
 def [=> parseExpression :DeepFrozen] | _ := import.script("lib/monte/monte_parser",
                                                    parserScope)
-def [=> makeLexerQP] | _ := import.script("prelude/ql", parserScope)
 def [=> astBuilder :DeepFrozen] | _ := import.script("prelude/monte_ast",
                                               parserScope)
 def [=> expand :DeepFrozen] | _ := import.script("lib/monte/monte_expander",
@@ -27,22 +26,21 @@ def [=> expand :DeepFrozen] | _ := import.script("lib/monte/monte_expander",
 def [=> optimize :DeepFrozen] | _ := import.script("lib/monte/monte_optimizer",
                                             parserScope)
 
+def [VALUE_HOLE :DeepFrozen,
+     PATTERN_HOLE :DeepFrozen] := makeMonteLexer.holes()
 
-def makeFakeLex(tokens) as DeepFrozen:
-    def iter := tokens._makeIterator()
-
-    return object fakeLex:
+def zipList(left :List, right :List) as DeepFrozen:
+    if (left.size() != right.size()):
+        throw("Can't zip lists of unequal length")
+    var i := -1
+    return object zip:
+        to _makeIterator():
+            return zip
         to next(ej):
-            escape doNotCare:
-                return iter.next(doNotCare)[1]
-            catch _:
-                ej(null)
-
-        to valueHole():
-            return 42
-
-        to patternHole():
-            return 42
+            i += 1
+            if (i == left.size()):
+                throw.eject(ej, null)
+            return [i, [left[i], right[i]]]
 
 def makeQuasiAstTransformer(values) as DeepFrozen:
     return def monteQAstTransformer(node, maker, args, span):
@@ -63,8 +61,7 @@ def makeQuasiAstTransformer(values) as DeepFrozen:
                 M.call(maker, "run", args + [span], [].asMap())
             }
         }
-def [VALUE_HOLE :DeepFrozen,
-     PATTERN_HOLE: DeepFrozen] := makeMonteLexer.holes()
+
 def Ast :DeepFrozen := astBuilder.getAstGuard()
 def Pattern :DeepFrozen := astBuilder.getPatternGuard()
 def Expr :DeepFrozen := astBuilder.getExprGuard()
@@ -87,6 +84,46 @@ def makeM(ast, isKernel :Bool) as DeepFrozen:
         to substitute(values):
             return makeM(ast.transform(makeQuasiAstTransformer(values)), false)
 
+        to matchBind(values, specimen :Ast, ej):
+            "Walk over the pattern AST and the specimen comparing each node.
+            Value holes in the pattern are substituted before comparison.
+            Pattern holes are used to collect nodes to return for binding."
+            def nextNodePairs := [[ast, specimen]].diverge()
+
+            def results := [].asMap().diverge()
+            while (nextNodePairs.size() != 0):
+                def [var patternNode, specimenNode] := nextNodePairs.pop()
+                # Is this node a value hole? Replace it before further comparison.
+                if (patternNode.getNodeName().startsWith("ValueHole")):
+                        patternNode := values[patternNode.getIndex()]
+                        continue
+                # Is this node a pattern hole? Collect the specimen's node.
+                if (patternNode.getNodeName().startsWith("PatternHole")):
+                    results[patternNode.getIndex()] := specimenNode
+                    continue
+                # Let's look at node contents now.
+                def argPairs := zipList(patternNode._uncall()[2],
+                                        specimenNode._uncall()[2])
+                for [pattArg, specArg] in argPairs:
+                    if (pattArg =~ _ :Ast):
+                        if (specArg =~ _ :Ast):
+                            nextNodePairs.push([pattArg, specArg])
+                        else:
+                            throw.eject(ej, "Expected " + pattArg.getNodeName() + " " +
+                                        M.toQuote(pattArg) + ", not " + M.toQuote(specArg))
+                    # Non-node children might be lists of nodes.
+                    else if (pattArg =~ _ :List):
+                        if (specArg !~ _ :List):
+                            throw.eject(ej, "Expected list, not " + M.toString(specArg))
+                        if (pattArg.size() != specArg.size()):
+                            throw.eject(ej, "List size mismatch in " + pattArg.getNodeName())
+                        nextNodePairs.extend(zipList(pattArg, specArg))
+                    # Ensure everything else matches.
+                    else:
+                        if (pattArg != specArg):
+                            throw.eject(ej, "Expected " + M.toQuote(pattArg) +
+                                        ", not " + M.toQuote(specArg))
+            return [for node in (results.sortKeys().getValues()) makeM(node, false)]
 
         to expand():
             "Desugar all non-Kernel-Monte syntax into Kernel-Monte."
@@ -166,6 +203,12 @@ object m__quasiParser as DeepFrozen:
         def chain := makeQuasiTokenChain(template)
         def qast := parseExpression(chain, astBuilder, throw)
         return makeM(qast, false)
+
+    to matchMaker(template):
+        def chain := makeQuasiTokenChain(template)
+        def qast := parseExpression(chain, astBuilder, throw)
+        return makeM(qast, false)
+
 
 object eval as DeepFrozen:
     to run(source :Str, environment):
