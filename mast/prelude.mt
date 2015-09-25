@@ -570,6 +570,12 @@ def _flexMap(var m):
         to snapshot():
             return m
 
+        to sortKeys():
+            return m.sortKeys()
+
+        to sortValues():
+            return m.sortValues()
+
 
 def testFlexMapPrinting(assert):
     assert.equal(M.toString(_flexMap([].asMap())), "[].asMap().diverge()")
