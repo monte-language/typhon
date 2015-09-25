@@ -220,6 +220,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
        return e
 
     def noun(ej):
+        if (peekTag() == VALUE_HOLE):
+            return builder.ValueHoleExpr(advance(ej)[1], spanHere())
+        if (peekTag() == PATTERN_HOLE):
+            return builder.PatternHoleExpr(advance(ej)[1], spanHere())
         if (peekTag() == "IDENTIFIER"):
             def t := advance(ej)
             return builder.NounExpr(t[1], t[2])
@@ -278,6 +282,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             def n := noun(ej)
             def g := maybeGuard()
             return builder.BindPattern(n, g, spanFrom(spanStart))
+        else if (nex == VALUE_HOLE):
+            return builder.ValueHolePattern(advance(ej)[1], spanHere())
+        else if (nex == PATTERN_HOLE):
+            return builder.PatternHolePattern(advance(ej)[1], spanHere())
         throw.eject(ej, [`Unrecognized name pattern $nex`, spanHere()])
 
     def mapPatternItemInner(ej):
@@ -901,7 +909,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             def spanStart := spanHere()
             advance(ej)
             var isBind := false
-            if (!["IDENTIFIER", "::", "bind"].contains(peekTag())):
+            if (!["IDENTIFIER", "::", "bind", PATTERN_HOLE, VALUE_HOLE].contains(peekTag())):
                 position := origPosition
                 return assign(ej)
             def name := if (peekTag() == "bind") {
