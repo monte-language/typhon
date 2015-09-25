@@ -24,6 +24,11 @@ def makeMonteParser(var environment) as DeepFrozen:
         to feed(token):
             monteEvalParser.feedMany([token])
 
+        to reset():
+            failure := null
+            result := null
+            return monteEvalParser
+
         to feedMany(tokens):
             try:
                 def [val, newEnv] := eval.evalToPair(tokens, environment)
@@ -94,7 +99,7 @@ def main(=> Timer, => bench, => unittest,
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout<-flowTo(makeStdOut())
     def parser := makeMonteParser(environment)
-    def replTube := makeREPLTube(fn {parser}, reduce,
+    def replTube := makeREPLTube(fn {parser.reset()}, reduce,
                                  "▲> ", "…> ", stdout)
     stdin<-flowTo(replTube)
 
