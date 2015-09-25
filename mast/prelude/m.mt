@@ -44,9 +44,35 @@ def makeFakeLex(tokens) as DeepFrozen:
         to patternHole():
             return 42
 
+def makeQuasiAstTransformer(values) as DeepFrozen:
+    return def monteQAstTransformer(node, maker, args, span):
+        return switch (node.getNodeName()) {
+            match =="ValueHoleExpr" {
+                values[node.getIndex()]
+            }
+            match =="ValueHolePattern" {
+                values[node.getIndex()]
+            }
+            match =="PatternHoleExpr" {
+                throw("Pattern-holes not allowed in QL exprs")
+            }
+            match =="PatternHolePattern" {
+                throw("Pattern-holes not allowed in QL exprs")
+            }
+            match _ {
+                M.call(maker, "run", args + [span], [].asMap())
+            }
+        }
+def [VALUE_HOLE :DeepFrozen,
+     PATTERN_HOLE: DeepFrozen] := makeMonteLexer.holes()
+def Ast :DeepFrozen := astBuilder.getAstGuard()
+def Pattern :DeepFrozen := astBuilder.getPatternGuard()
+def Expr :DeepFrozen := astBuilder.getExprGuard()
+def NamePattern :DeepFrozen := astBuilder.getNamePatternGuard()
+def Noun :DeepFrozen := astBuilder.getNounGuard()
 
 def makeM(ast, isKernel :Bool) as DeepFrozen:
-    return object m:
+    return object m extends ast:
         "An abstract syntax tree in the Monte programming language."
 
         to _printOn(out):
@@ -54,9 +80,13 @@ def makeM(ast, isKernel :Bool) as DeepFrozen:
             ast._printOn(out)
             out.print("`")
 
+        to _conformTo(guard):
+            if ([Ast, Pattern, Expr, Noun, NamePattern].contains(guard)):
+                return ast
+
         to substitute(values):
-            # XXX
-            return m
+            return makeM(ast.transform(makeQuasiAstTransformer(values)), false)
+
 
         to expand():
             "Desugar all non-Kernel-Monte syntax into Kernel-Monte."
@@ -77,47 +107,46 @@ def makeM(ast, isKernel :Bool) as DeepFrozen:
 
             return makeM(optimize(ast), true)
 
+def makeQuasiTokenChain(template) as DeepFrozen:
+    var i := -1
+    var current := makeMonteLexer("", "m``")
+    var lex := current
+    var j := 0
+    def counters := [VALUE_HOLE => -1, PATTERN_HOLE => -1].diverge()
+    return object chainer:
+        to _makeIterator():
+            return chainer
 
-def makeQL(tokens) as DeepFrozen:
-    def ast := parseExpression(makeFakeLex(tokens), astBuilder, throw)
-    return makeM(ast, false)
+        to valueHole():
+           return VALUE_HOLE
 
-def makeChunkingLexer(inputName :Str):
-    def makeLexer() as DeepFrozen:
-        var lexer := makeMonteLexer("", inputName)
-        var tokens := []
+        to patternHole():
+           return PATTERN_HOLE
 
-        return object chunkingLexerChunk:
-            to feedMany(chunk):
-                lexer lexerForNextChunk= (chunk)
-                escape ej:
-                    while (true):
-                        tokens with= (lexer.next(ej))
+        to getSyntaxError():
+            return current.getSyntaxError()
 
-            to failed():
-                return false
+        to next(ej):
+            if (i >= template.size()):
+                throw.eject(ej, null)
+            j += 1
+            if (current == null):
+                if (template[i] == VALUE_HOLE || template[i] == PATTERN_HOLE):
+                    def hol := template[i]
+                    i += 1
+                    return [j, [hol, counters[hol] += 1, null]]
+                else:
+                    current := lex.lexerForNextChunk(template[i])._makeIterator()
+                    lex := current
+            escape e:
+                def t := current.next(e)[1]
+                return [j, t]
+            catch z:
+                i += 1
+                current := null
+                return chainer.next(ej)
 
-            to finished():
-                return true
-
-            to results():
-                return tokens
-
-    return makeLexer
-
-def [VALUE_HOLE :DeepFrozen,
-     PATTERN_HOLE :DeepFrozen] := makeMonteLexer.holes()
-
-def makeValueHole(index) as DeepFrozen:
-    return [index, VALUE_HOLE]
-
-def makePatternHole(index) as DeepFrozen:
-    return [index, PATTERN_HOLE]
-
-# XXX manual desugaring of extends-syntax to preserve DFness.
-def lexerQP :DeepFrozen := makeLexerQP(makeQL, makeChunkingLexer("m``"),
-                                       makeValueHole, makePatternHole)
-object m__quasiParser extends lexerQP as DeepFrozen:
+object m__quasiParser as DeepFrozen:
     "A quasiparser for the Monte programming language.
 
      This object will parse any Monte expression and return an opaque
@@ -126,6 +155,17 @@ object m__quasiParser extends lexerQP as DeepFrozen:
 
     to getAstBuilder():
         return astBuilder
+
+    to valueHole(_):
+       return VALUE_HOLE
+
+    to patternHole(_):
+       return PATTERN_HOLE
+
+    to valueMaker(template):
+        def chain := makeQuasiTokenChain(template)
+        def qast := parseExpression(chain, astBuilder, throw)
+        return makeM(qast, false)
 
 object eval as DeepFrozen:
     to run(source :Str, environment):

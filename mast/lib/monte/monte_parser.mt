@@ -3,43 +3,6 @@ def spanCover(left, right) as DeepFrozen:
         return null
     return left.combine(right)
 
-# # XXX dupe from term parser module
-# def makeQuasiTokenChain(makeLexer, template):
-#     var i := -1
-#     var current := makeLexer("", qBuilder)
-#     var lex := current
-#     def [VALUE_HOLE, PATTERN_HOLE] := makeLexer.holes()
-#     var j := 0
-#     return object chainer:
-#         to _makeIterator():
-#             return chainer
-
-#         to valueHole():
-#            return VALUE_HOLE
-
-#         to patternHole():
-#            return PATTERN_HOLE
-
-#         to next(ej):
-#             if (i >= template.size()):
-#                 throw.eject(ej, null)
-#             j += 1
-#             if (current == null):
-#                 if (template[i] == VALUE_HOLE || template[i] == PATTERN_HOLE):
-#                     def hol := template[i]
-#                     i += 1
-#                     return [j, hol]
-#                 else:
-#                     current := lex.lexerForNextChunk(template[i])._makeIterator()
-#                     lex := current
-#             escape e:
-#                 def t := current.next(e)[1]
-#                 return [j, t]
-#             catch z:
-#                 i += 1
-#                 current := null
-#                 return chainer.next(ej)
-
 def parseMonte(lex, builder, mode, err) as DeepFrozen:
     def [VALUE_HOLE, PATTERN_HOLE] := [lex.valueHole(), lex.patternHole()]
     def _toks := [].diverge()
@@ -106,11 +69,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
 
     def advanceTag(ej):
         def t := advance(ej)
-        def isHole := t == VALUE_HOLE || t == PATTERN_HOLE
-        if (isHole):
-            return t
-        else:
-            return t[0]
+        return t[0]
 
     def acceptTag(tagname, fail):
         def t := advance(fail)
@@ -125,8 +84,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             if ((position + 1) >= tokens.size()):
                 return
             def t := tokens[position + 1]
-            def isHole := t == VALUE_HOLE || t == PATTERN_HOLE
-            if (isHole || !["EOL", "#"].contains(t[0])):
+            if (!["EOL", "#"].contains(t[0])):
                 return
             position += 1
 
@@ -144,7 +102,8 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
     def peekTag():
         if (position + 1 >= tokens.size()):
             return null
-        return tokens[position + 1][0]
+        def t := tokens[position + 1]
+        return t[0]
 
     def matchEOLsThenTag(indent, tagname):
         def origPosition := position
@@ -397,6 +356,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             else:
                 def tail := if (peekTag() == "+") {advance(ej); _pattern(ej)}
                 return builder.ListPattern(items, tail, spanFrom(spanStart))
+        else if (nex == VALUE_HOLE):
+            return builder.ValueHolePattern(advance(ej)[1], spanHere())
+        else if (nex == PATTERN_HOLE):
+            return builder.PatternHolePattern(advance(ej)[1], spanHere())
         throw.eject(ej, [`Invalid pattern $nex`, spanHere()])
 
     bind pattern(ej):
@@ -997,7 +960,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             def [doco, msgs] := suite(interfaceBody, indent, ej)
             return builder.InterfaceExpr(doco, name, guards_, extends_, implements_, msgs,
                 spanFrom(spanStart))
-        if (peekTag() == "meta"):
+        if (tag == "meta"):
             def spanStart := spanHere()
             acceptTag("meta", ej)
             acceptTag(".", ej)
@@ -1015,6 +978,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         if (indent && peekTag() == "pass"):
             advance(ej)
             return builder.SeqExpr([], advance(ej)[2])
+        if (tag == VALUE_HOLE):
+            return builder.ValueHoleExpr(advance(ej)[1], spanHere())
+        if (tag == PATTERN_HOLE):
+            return builder.PatternHoleExpr(advance(ej)[1], spanHere())
         throw.eject(tryAgain, [`don't recognize $tag`, spanHere()])
 
     bind blockExpr(ej):
@@ -1431,31 +1398,6 @@ def parseModule(lex, builder, err) as DeepFrozen:
 
 def parsePattern(lex, builder, err) as DeepFrozen:
     return parseMonte(lex, builder, "pattern", err)
-
-# object quasiMonteParser:
-#     to valueHole(n):
-#         return VALUE_HOLE
-#     to patternHole(n):
-#         return PATTERN_HOLE
-
-#     to valueMaker(template):
-#         def chain := makeQuasiTokenChain(makeMonteLexer, template)
-#         def q := makeMonteParser(chain, astBuilder)
-#         return object qast extends q:
-#            to substitute(values):
-#                return q.transform(holeFiller)
-
-#     to matchMaker(template):
-#         def chain := makeQuasiTokenChain(makeMonteLexer, template)
-#         def q := makeMonteParser(chain, astBuilder)
-#         return object qast extends q:
-#             to matchBind(values, specimen, ej):
-#                 escape ej:
-#                     def holeMatcher := makeHoleMatcher(ej)
-#                     q.transform(holeMatcher)
-#                     return holeMatcher.getBindings()
-#                 catch blee:
-#                     ej(`$q doesn't match $specimen: $blee`)
 
 
 [=> parseModule, => parseExpression, => parsePattern]

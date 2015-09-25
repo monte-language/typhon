@@ -1712,7 +1712,7 @@ def makeHideExpr(body :Expr, span) as DeepFrozen:
         scope, "HideExpr", fn f {[body.transform(f)]})
 
 def makeValueHoleExpr(index :Int, span) as DeepFrozen:
-    def scope := null
+    def scope := emptyScope
     object valueHoleExpr:
         to getIndex():
             return index
@@ -1724,7 +1724,7 @@ def makeValueHoleExpr(index :Int, span) as DeepFrozen:
         scope, "ValueHoleExpr", fn f {[index]})
 
 def makePatternHoleExpr(index :Int, span) as DeepFrozen:
-    def scope := null
+    def scope := emptyScope
     object patternHoleExpr:
         to getIndex():
             return index
@@ -1736,7 +1736,7 @@ def makePatternHoleExpr(index :Int, span) as DeepFrozen:
         scope, "PatternHoleExpr", fn f {[index]})
 
 def makeValueHolePattern(index :Int, span) as DeepFrozen:
-    def scope := null
+    def scope := emptyScope
     object valueHolePattern:
         to getIndex():
             return index
@@ -1748,7 +1748,7 @@ def makeValueHolePattern(index :Int, span) as DeepFrozen:
         scope, "ValueHolePattern", fn f {[index]})
 
 def makePatternHolePattern(index :Int, span) as DeepFrozen:
-    def scope := null
+    def scope := emptyScope
     object patternHolePattern:
         to getIndex():
             return index
