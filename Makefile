@@ -20,7 +20,8 @@ boot_objects = boot/lib/monte/monte_lexer.ty \
 	boot/prelude/protocolDesc.ty \
 	boot/prelude/region.ty \
 	boot/prelude/simple.ty \
-	boot/prelude/space.ty
+	boot/prelude/space.ty \
+	boot/prelude/transparent.ty
 
 .PRECIOUS: $(boot_objects)
 
@@ -70,7 +71,8 @@ mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/record.ty \
 testVM: default
 	trial typhon
 
-testMast: default mast mast/tests/lexer.ty mast/tests/parser.ty
+testMast: default mast mast/tests/lexer.ty mast/tests/parser.ty \
+	mast/tests/auditors.ty
 	./mt-typhon -l mast mast/unittest.ty all-tests
 
 test: testVM testMast
@@ -78,7 +80,7 @@ test: testVM testMast
 prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/m.ty \
 	mast/prelude/monte_ast.ty mast/prelude/ql.ty mast/prelude/region.ty \
 	mast/prelude/simple.ty mast/prelude/space.ty mast/prelude/deepfrozen.ty \
-	mast/prelude/protocolDesc.ty mast/prelude/b.ty
+	mast/prelude/protocolDesc.ty mast/prelude/b.ty mast/prelude/transparent.ty
 
 codec: mast/lib/codec/utf8.ty
 

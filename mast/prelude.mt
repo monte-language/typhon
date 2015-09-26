@@ -681,7 +681,7 @@ preludeScope := import.script("prelude/space",
 # b__quasiParser desires spaces.
 preludeScope |= import.script("prelude/b", preludeScope)
 
-# Finally, the big kahuna: The Monte compiler and QL.
+# The big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This
 # doesn't *have* to be the case, but it's the case we currently want to deal
 # with. Or, at least, this is what *I* want to deal with. The AST currently
@@ -689,6 +689,11 @@ preludeScope |= import.script("prelude/b", preludeScope)
 # that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
 # hook, and that'll do for now. ~ C.
 preludeScope |= import.script("prelude/m", preludeScope)
+
+# Transparent auditor and guard.
+# This has to do some significant AST groveling so it uses AST quasipatterns
+# for convenience.
+preludeScope |= import.script("prelude/transparent", preludeScope)
 
 # The final scope exported from the prelude. This *must* be the final
 # expression in the module!
