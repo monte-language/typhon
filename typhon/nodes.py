@@ -272,13 +272,6 @@ class Node(Object):
 
         return f(self)
 
-    def usesName(self, name):
-        """
-        Whether a name is used within this node.
-        """
-
-        return False
-
 
 def wrapNameList(names):
     d = monteDict()
@@ -553,13 +546,6 @@ class Tuple(Expr):
         # I don't care if it's cheating. It's elegant and simple and pretty.
         return f(Tuple([node.transform(f) for node in self._t]))
 
-    def usesName(self, name):
-        uses = False
-        for node in self._t:
-            if node.usesName(name):
-                uses = True
-        return uses
-
     def compile(self, compiler):
         size = len(self._t)
         makeList = compiler.addGlobal(u"__makeList")
@@ -613,9 +599,6 @@ class Assign(Expr):
 
     def transform(self, f):
         return f(Assign(self.target, self.rvalue.transform(f)))
-
-    def usesName(self, name):
-        return self.rvalue.usesName(name)
 
     def compile(self, compiler):
         self.rvalue.compile(compiler)
@@ -760,9 +743,6 @@ class Call(Expr):
         return f(Call(self._target.transform(f), self._verb,
                       self._args.transform(f), self._namedArgs.transform(f)))
 
-    def usesName(self, name):
-        return self._target.usesName(name) or self._args.usesName(name)
-
     def compile(self, compiler):
         self._target.compile(compiler)
         # [target]
@@ -829,12 +809,6 @@ class Def(Expr):
     def transform(self, f):
         return f(Def(self._p, self._e, self._v.transform(f)))
 
-    def usesName(self, name):
-        rv = self._v.usesName(name)
-        if self._e is not None:
-            rv = rv or self._e.usesName(name)
-        return rv
-
     def compile(self, compiler):
         self._v.compile(compiler)
         # [value]
@@ -900,12 +874,6 @@ class Escape(Expr):
 
         return f(Escape(self._pattern, self._node.transform(f),
             self._catchPattern, catchNode))
-
-    def usesName(self, name):
-        rv = self._node.usesName(name)
-        if self._catchNode is not None:
-            rv = rv or self._catchNode.usesName(name)
-        return rv
 
     def compile(self, compiler):
         ejector = compiler.markInstruction("EJECTOR")
@@ -976,9 +944,6 @@ class Finally(Expr):
     def transform(self, f):
         return f(Finally(self._block.transform(f), self._atLast.transform(f)))
 
-    def usesName(self, name):
-        return self._block.usesName(name) or self._atLast.usesName(name)
-
     def compile(self, compiler):
         unwind = compiler.markInstruction("UNWIND")
         subc = compiler.pushScope()
@@ -1022,11 +987,6 @@ class Hide(Expr):
     def transform(self, f):
         return f(Hide(self._inner.transform(f)))
 
-    def usesName(self, name):
-        # XXX not technically correct due to Hide intentionally altering
-        # scope resolution.
-        return self._inner.usesName(name)
-
     def compile(self, compiler):
         self._inner.compile(compiler.pushScope())
 
@@ -1067,10 +1027,6 @@ class If(Expr):
     def transform(self, f):
         return f(If(self._test.transform(f), self._then.transform(f),
             self._otherwise.transform(f)))
-
-    def usesName(self, name):
-        rv = self._test.usesName(name) or self._then.usesName(name)
-        return rv or self._otherwise.usesName(name)
 
     def compile(self, compiler):
         # BRANCH otherwise
@@ -1252,9 +1208,6 @@ class Method(Expr):
         return f(Method(self._d, self._verb, self._ps, self._namedParams, self._g,
                         self._b.transform(f)))
 
-    def usesName(self, name):
-        return self._b.usesName(name)
-
     def getStaticScope(self):
         scope = emptyScope
         for patt in self._ps:
@@ -1299,9 +1252,6 @@ class Noun(Expr):
 
     def pretty(self, out):
         out.write(self.name.encode("utf-8"))
-
-    def usesName(self, name):
-        return self.name == name
 
     def compile(self, compiler):
         localIndex = compiler.locals.find(self.name)
@@ -1390,9 +1340,6 @@ class Obj(Expr):
     def transform(self, f):
         return f(Obj(self._d, self._n, self._as, self._implements,
                      self._script.transform(f)))
-
-    def usesName(self, name):
-        return self._script.usesName(name)
 
     def compile(self, compiler):
         # Create a code object for this object.
@@ -1626,15 +1573,6 @@ class Script(Expr):
         methods = [method.transform(f) for method in self._methods]
         return f(Script(self._extends, methods, self._matchers))
 
-    def usesName(self, name):
-        for method in self._methods:
-            if method.usesName(name):
-                return True
-        for matcher in self._matchers:
-            if matcher.usesName(name):
-                return True
-        return False
-
     def getStaticScope(self):
         scope = emptyScope
         for expr in self._methods:
@@ -1693,12 +1631,6 @@ class Sequence(Expr):
     def transform(self, f):
         return f(Sequence([node.transform(f) for node in self._l]))
 
-    def usesName(self, name):
-        for node in self._l:
-            if node.usesName(name):
-                return True
-        return False
-
     def compile(self, compiler):
         if self._l:
             for node in self._l[:-1]:
@@ -1749,9 +1681,6 @@ class Try(Expr):
     def transform(self, f):
         return f(Try(self._first.transform(f), self._pattern,
             self._then.transform(f)))
-
-    def usesName(self, name):
-        return self._first.usesName(name) or self._then.usesName(name)
 
     def compile(self, compiler):
         index = compiler.markInstruction("TRY")

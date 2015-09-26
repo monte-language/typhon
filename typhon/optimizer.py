@@ -1,8 +1,6 @@
 from functools import wraps
 
-from typhon.nodes import (Call, Def, Escape, FinalPattern, Noun, Sequence,
-                          Tuple)
-from typhon.scope import Scope
+from typhon.nodes import Call, Escape, FinalPattern, Noun, Sequence, Tuple
 
 
 def matches(ty):
@@ -56,76 +54,6 @@ def flattenSequence(sequence):
     # Copy the list to avoid RPython thinking that we're mutating an immutable
     # list.
     return Sequence(rv[:])
-
-
-def _isPlainDef(node):
-    if not isinstance(node, Def):
-        return False
-    if not isinstance(node._p, FinalPattern):
-        return False
-    return node._p._g is None and isinstance(node._v, Noun)
-
-
-@matches(Sequence)
-def simplifyPlainDefs(sequence):
-    for i, node in enumerate(sequence._l):
-        if _isPlainDef(node):
-            # Hit! Unwrap everything and cry a little inside.
-            assert isinstance(node, Def)
-            p = node._p
-            v = node._v
-            assert isinstance(p, FinalPattern)
-            assert isinstance(v, Noun)
-            src = p._n
-            dest = v.name
-            # Use shadows to rewrite the scope.
-            scope = Scope()
-            scope.putShadow(src, dest)
-            tail = Sequence(sequence._l[i + 1:])
-            tail = tail.rewriteScope(scope)
-            # Reassemble the sequence, omitting the now-useless Def.
-            return Sequence(sequence._l[:i] + tail._l)
-    return None
-
-
-@matches(Escape)
-def elideSingleEscape(escape):
-    pattern = escape._pattern
-    # First, the binding pattern must be a FinalPattern with no guard.
-    if not isinstance(pattern, FinalPattern) or pattern._g is not None:
-        return None
-
-    name = pattern._n
-    node = escape._node
-
-    # Now, the internal node needs to be a Call.
-    if not isinstance(node, Call):
-        return None
-
-    # We're looking for Calls which fire the ejector. They should also be
-    # Calls which don't use the ejector inside any of their other nodes.
-    target = node._target
-    if not isinstance(target, Noun) or target.name != name:
-        return None
-
-    if node._args.usesName(name):
-        return None
-
-    # Elide both the Call and the Escape. This only works if the Call was
-    # going to pass a single object to the Ejector, but that was probably the
-    # case anyway.
-    # XXX For now, we'll only finish the optimization if the argument node is
-    # a Tuple with a single element.
-    args = node._args
-    if not isinstance(args, Tuple) or len(args._t) != 1:
-        return None
-
-    # XXX For now, refuse to rewrite the catch node. This could be fixed with
-    # a little elbow grease.
-    if escape._catchNode is not None:
-        return None
-
-    return args._t[0]
 
 
 @matches(Escape)
@@ -215,10 +143,7 @@ class Optimizer(object):
 def optimize(node):
     changes = [
         flattenSequence,
-        # This just isn't reasonable as long as we can't rewrite patterns.
-        # simplifyPlainDefs,
         narrowEscape,
-        elideSingleEscape,
         swapEquality,
     ]
     f = Optimizer(changes).rewrite
