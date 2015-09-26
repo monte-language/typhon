@@ -20,7 +20,6 @@ from typhon.errors import UserException, userError
 from typhon.load.trash import load
 from typhon.nodes import Sequence, interactiveCompile
 from typhon.objects.constants import NullObject
-from typhon.optimizer import optimize
 from typhon.smallcaps.machine import SmallCaps
 from typhon.smallcaps.peephole import peephole
 
@@ -40,10 +39,6 @@ moduleCache = ModuleCache()
 def obtainModuleFromSource(source, recorder, origin):
     with recorder.context("Deserialization"):
         term = Sequence(load(source)[:])
-
-    with recorder.context("Optimization"):
-        term = optimize(term)
-    # debug_print("Optimized node:", term.repr())
 
     with recorder.context("Compilation"):
         code, topLocals = interactiveCompile(term, origin)
