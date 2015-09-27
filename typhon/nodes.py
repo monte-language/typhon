@@ -692,13 +692,7 @@ class Call(Expr):
     def __init__(self, target, verb, args, namedArgs):
         self._target = target
         self._verb = verb
-        assert isinstance(args, Tuple), "Malformed AST"
         self._args = args
-        assert (isinstance(namedArgs, Tuple)), "Malformed AST"
-        for pair in namedArgs._t:
-            if not (isinstance(pair, Tuple) and len(pair._t) == 2):
-                raise InvalidAST("namedArgs must contain key/value pairs")
-
         self._namedArgs = namedArgs
 
     @staticmethod
@@ -707,14 +701,20 @@ class Call(Expr):
             raise InvalidAST("args must be a tuple")
         if not isinstance(namedArgs, Tuple):
             raise InvalidAST("namedArgs must be a tuple")
-        return Call(target, strToString(verb), args, namedArgs)
+        nargs = []
+        for pair in namedArgs._t:
+            if not (isinstance(pair, Tuple) and len(pair._t) == 2):
+                raise InvalidAST("namedArgs must contain key/value pairs")
+            s, patt = pair._t
+            nargs.append((strToString(s), patt))
+        return Call(target, strToString(verb), args._t, nargs)
 
     def pretty(self, out):
         self._target.pretty(out)
         out.write(".")
         out.write(self._verb.encode("utf-8"))
         out.write("(")
-        l = self._args._t
+        l = self._args
         if l:
             head = l[0]
             tail = l[1:]
@@ -722,49 +722,51 @@ class Call(Expr):
             for item in tail:
                 out.write(", ")
                 item.pretty(out)
-        na = self._namedArgs._t
+        na = self._namedArgs
         if na:
             if l:
                 out.write(", ")
             head = na[0]
-            assert isinstance(head, Tuple), "malformed AST"
-            head._t[0].pretty(out)
+            out.write('"%s"' % (head[0].encode("utf-8")))
             out.write(" => ")
-            head._t[1].pretty(out)
+            head[1].pretty(out)
             for pair in na[1:]:
-                assert isinstance(pair, Tuple), "malformed AST"
-                pair._t[0].pretty(out)
+                out.write('"%s"' % (pair[0].encode("utf-8")))
                 out.write(" => ")
-                pair._t[1].pretty(out)
+                pair[1].pretty(out)
         out.write(")")
 
 
     def transform(self, f):
         return f(Call(self._target.transform(f), self._verb,
-                      self._args.transform(f), self._namedArgs.transform(f)))
+                      [arg.transform(f) for arg in self._args],
+                      [(name, narg.transform(f))
+                       for (name, narg) in self._namedArgs]))
 
     def compile(self, compiler):
         self._target.compile(compiler)
         # [target]
-        args = tupleToList(self._args)
+        args = self._args
         arity = len(args)
         for node in args:
             node.compile(compiler)
             # [target x0 x1 ...]
-        namedArgs = tupleToList(self._namedArgs)
-        if len(namedArgs) == 0:
+        namedArgs = self._namedArgs
+        namedArity = len(namedArgs)
+        if namedArity == 0:
             compiler.call(self._verb, arity)
         else:
-            for pair in namedArgs:
-                key, value = tupleToList(pair)
-                key.compile(compiler)
+            for key, value in namedArgs:
+                # Compile the key...
+                compiler.literal(StrObject(key))
+                # ...and the value.
                 value.compile(compiler)
-            compiler.callMap(self._verb, arity, len(namedArgs))
+            compiler.callMap(self._verb, arity, namedArity)
         # [retval]
 
     def getStaticScope(self):
         scope = self._target.getStaticScope()
-        for expr in self._args._t:
+        for expr in self._args:
             scope = scope.add(expr.getStaticScope())
         return scope
 
