@@ -16,6 +16,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.importing import evaluateRaise, obtainModuleFromSource
+from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
                                         monteDict, unwrapMap)
@@ -123,14 +124,6 @@ class TyphonEval(Object):
         raise Refused(self, atom, args)
 
 
-@runnable(RUN_1)
-def installAstBuilder(args):
-    registerGlobals({u"astBuilder": args[0]})
-    return NullObject
-
-registerGlobals({u"astBuilder": NullObject})
-
-
 def bootScope(recorder, collectTests):
     return {
         u"isBool": isBool(),
@@ -144,10 +137,11 @@ def bootScope(recorder, collectTests):
         u"isMap": isMap(),
         u"isSet": isSet(),
 
+        u"KernelAstStamp": kernelAstStamp,
+
         u"DeepFrozenStamp": deepFrozenStamp,
         u"TransparentStamp": transparentStamp,
 
         u"typhonEval": TyphonEval(recorder),
-        u"_installASTBuilder": installAstBuilder(),
         u"unittest": UnitTest(u"<boot>", collectTests),
     }

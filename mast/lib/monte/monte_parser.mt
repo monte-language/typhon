@@ -986,10 +986,6 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         if (indent && peekTag() == "pass"):
             advance(ej)
             return builder.SeqExpr([], advance(ej)[2])
-        if (tag == VALUE_HOLE):
-            return builder.ValueHoleExpr(advance(ej)[1], spanHere())
-        if (tag == PATTERN_HOLE):
-            return builder.PatternHoleExpr(advance(ej)[1], spanHere())
         throw.eject(tryAgain, [`don't recognize $tag`, spanHere()])
 
     bind blockExpr(ej):
@@ -1019,6 +1015,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return builder.NounExpr(t[1], t[2])
         if (tag == "QUASI_OPEN" || tag == "QUASI_CLOSE"):
             return quasiliteral(null, false, ej)
+        if (tag == VALUE_HOLE):
+            return builder.ValueHoleExpr(advance(ej)[1], spanHere())
+        if (tag == PATTERN_HOLE):
+            return builder.PatternHoleExpr(advance(ej)[1], spanHere())
         # paren expr
         if (tag == "("):
             advance(ej)
@@ -1382,21 +1382,26 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         else:
             return seq(true, ej)
 
-    return switch (mode):
-        match =="module":
-            escape e:
-                def val := start(e)
-                acceptEOLs()
-                if (position < (tokens.size() - 1)):
-                    formatError(lastError, err)
-                else:
-                    val
-            catch p:
-                formatError(p, err)
-        match =="expression":
-            blockExpr(err)
-        match =="pattern":
-            pattern(err)
+    escape e:
+        def val := switch (mode) {
+            match =="module" {
+                start(e)
+            }
+            match =="expression" {
+                blockExpr(e)
+            }
+            match =="pattern" {
+                pattern(e)
+            }
+        }
+        acceptEOLs()
+        if (position < (tokens.size() - 1)):
+            formatError(lastError, err)
+        else:
+            return val
+    catch p:
+        formatError(p, err)
+
 
 def parseExpression(lex, builder, err) as DeepFrozen:
     return parseMonte(lex, builder, "expression", err)

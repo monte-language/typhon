@@ -93,6 +93,8 @@ object DeepFrozen implements DeepFrozenStamp:
     to supersetOf(guard):
         if (guard == DeepFrozen):
             return true
+        if (guard == DeepFrozenStamp):
+            return true
         if (dataGuards.contains(guard)):
             return true
         # XXX orderedspace version of data guards
@@ -132,13 +134,14 @@ object DeepFrozen implements DeepFrozenStamp:
 bind auditDeepFrozen(audition, fail) as DeepFrozenStamp:
     def objectExpr := audition.getObjectExpr()
     def patternSS := objectExpr.getName().getStaticScope()
-    def closurePatts := (objectExpr.getScript().getStaticScope().namesUsed() -
-                        patternSS.getDefNames())
-
-
+    def objNouns := patternSS.getDefNames().asList()
+    def objName := if (objNouns.size() > 0 && objNouns[0] != null) { objNouns[0].getName()} else {null}
+    def closureNames := [].diverge()
+    for noun in objectExpr.getScript().getStaticScope().namesUsed():
+        if (noun.getName() != objName):
+            closureNames.push(noun.getName())
     def errors := [].diverge()
-    for patt in closurePatts:
-        def name := if (patt =~ s :Str) {s} else {patt.getName()}
+    for name in closureNames:
         if (patternSS.getVarNames().contains(name)):
             errors.push(M.toQuote(name) + " in the definition of " +
                         audition.getFQN() + " is a variable pattern " +

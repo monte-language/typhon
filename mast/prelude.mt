@@ -653,8 +653,8 @@ var preludeScope := [
 
 # AST (needed for auditors).
 preludeScope |= import.script("prelude/monte_ast",
-                         preludeScope | [=> DeepFrozenStamp, => TransparentStamp])
-_installASTBuilder(preludeScope["astBuilder"])
+                         preludeScope | [=> DeepFrozenStamp, => TransparentStamp,
+                                         => KernelAstStamp])
 
 # Simple QP.
 preludeScope |= import.script("prelude/simple", preludeScope)

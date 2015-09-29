@@ -192,11 +192,11 @@ object astStamp as DeepFrozen:
     to audit(audition):
         return true
 
-object Ast as DeepFrozen:
+object Ast as DeepFrozenStamp:
     to coerce(specimen, ej):
-        if (!__auditedBy(astStamp, specimen)):
+        if (!__auditedBy(astStamp, specimen) && !__auditedBy(KernelAstStamp, specimen)):
             def conformed := specimen._conformTo(Ast)
-            if (!__auditedBy(astStamp, conformed)):
+            if (!__auditedBy(astStamp, conformed)  && !__auditedBy(KernelAstStamp, conformed)):
                 throw.eject(ej, "not an ast node")
             else:
                 return conformed
@@ -1717,7 +1717,7 @@ def makeValueHoleExpr(index :Int, span) as DeepFrozen:
         to getIndex():
             return index
         to subPrintOn(out, priority):
-            out.print("${value-hole ")
+            out.print("${expr-hole ")
             out.print(index)
             out.print("}")
     return astWrapper(valueHoleExpr, makeValueHoleExpr, [index], span,
@@ -1729,7 +1729,7 @@ def makePatternHoleExpr(index :Int, span) as DeepFrozen:
         to getIndex():
             return index
         to subPrintOn(out, priority):
-            out.print("${pattern-hole ")
+            out.print("@{expr-hole ")
             out.print(index)
             out.print("}")
     return astWrapper(patternHoleExpr, makePatternHoleExpr, [index], span,
@@ -1741,7 +1741,7 @@ def makeValueHolePattern(index :Int, span) as DeepFrozen:
         to getIndex():
             return index
         to subPrintOn(out, priority):
-            out.print("@{value-hole ")
+            out.print("${pattern-hole ")
             out.print(index)
             out.print("}")
     return astWrapper(valueHolePattern, makeValueHolePattern, [index], span,
