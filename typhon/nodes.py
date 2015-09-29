@@ -276,7 +276,7 @@ class Node(Object):
 def wrapNameList(names):
     d = monteDict()
     for name in names:
-        d[StrObject(name)] = None
+        d[Noun(name)] = None
     return ConstSet(d)
 
 def orList(left, right):
