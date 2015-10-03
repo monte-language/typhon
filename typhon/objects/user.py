@@ -65,6 +65,7 @@ class Audition(Object):
 
         cached = False
 
+        self.askedLog.append(auditor)
         if auditor in self.cache:
             answer, asked, guards = self.cache[auditor]
             # msg = u"'%s': %s (cached)" % (auditor.toString(),
