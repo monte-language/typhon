@@ -402,7 +402,8 @@ class Promise(Object):
         from typhon.objects.collections import EMPTY_MAP
         if atom is _PRINTON_1:
             out = args[0]
-            return self.printOn(out)
+            self.printOn(out)
+            return NullObject
 
         if atom is _WHENMORERESOLVED_1:
             return self._whenMoreResolved(args[0])
@@ -468,7 +469,7 @@ class SwitchableRef(Promise):
             printer.call(u"print", [StrObject(u"<Promise>")])
         else:
             self.resolutionRef()
-            return self._target.printOn(printer)
+            self._target.printOn(printer)
 
     def callAll(self, atom, args, namedArgs):
         if self.isSwitchable:
