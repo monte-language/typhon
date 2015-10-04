@@ -19,8 +19,6 @@ def [=> makeMonteLexer :DeepFrozen] | _ := import.script("lib/monte/monte_lexer"
                                                   parserScope)
 def [=> parseExpression :DeepFrozen] | _ := import.script("lib/monte/monte_parser",
                                                    parserScope)
-def [=> astBuilder :DeepFrozen] | _ := import.script("prelude/monte_ast",
-                                              parserScope)
 def [=> expand :DeepFrozen] | _ := import.script("lib/monte/monte_expander",
                                           parserScope)
 def [=> optimize :DeepFrozen] | _ := import.script("lib/monte/monte_optimizer",
@@ -96,11 +94,12 @@ def makeM(ast, isKernel :Bool) as DeepFrozen:
                 # Is this node a value hole? Replace it before further comparison.
                 if (patternNode.getNodeName().startsWith("ValueHole")):
                         patternNode := values[patternNode.getIndex()]
-                        continue
                 # Is this node a pattern hole? Collect the specimen's node.
                 if (patternNode.getNodeName().startsWith("PatternHole")):
                     results[patternNode.getIndex()] := specimenNode
                     continue
+                if (patternNode.getNodeName() != specimenNode.getNodeName()):
+                    throw.eject(ej, "<" + patternNode.getNodeName() + "> != <" + specimenNode.getNodeName() ">")
                 # Let's look at node contents now.
                 def argPairs := zipList(patternNode._uncall()[2],
                                         specimenNode._uncall()[2])
@@ -116,7 +115,7 @@ def makeM(ast, isKernel :Bool) as DeepFrozen:
                         if (specArg !~ _ :List):
                             throw.eject(ej, "Expected list, not " + M.toString(specArg))
                         if (pattArg.size() != specArg.size()):
-                            throw.eject(ej, "List size mismatch in " + pattArg.getNodeName())
+                            throw.eject(ej, "List size mismatch: " + M.toString(pattArg) + " !~ " + M.toString(specArg))
                         nextNodePairs.extend(zipList(pattArg, specArg))
                     # Ensure everything else matches.
                     else:
