@@ -896,12 +896,9 @@ def expand(node, builder, fail) as DeepFrozen:
                     [emitList(args, span)], [], span)
             } else {promiseExprs[0]}
             def resolution := builder.TempNounExpr("resolution", span)
-            block := builder.IfExpr(
-                builder.MethodCallExpr(builder.NounExpr("Ref", span), "isBroken",
-                     [resolution], [], span),
-                builder.MethodCallExpr(builder.NounExpr("Ref", span), "broken",
-                    [builder.MethodCallExpr(builder.NounExpr("Ref", span), "optProblem",
-                        [resolution], [], span)], [], span), block, span)
+            block := builder.SeqExpr([builder.MethodCallExpr(builder.NounExpr("Ref", span),
+                                                             "fulfillment", [resolution], [], span),
+                                      block], span)
             for cat in catchers:
                 block := builder.CatchExpr(block, cat.getPattern(), cat.getBody(), span)
             if (finallyblock != null):

@@ -34,6 +34,7 @@ EVENTUAL = RefState(u"EVENTUAL")
 NEAR = RefState(u"NEAR")
 
 BROKEN_1 = getAtom(u"broken", 1)
+FULFILLMENT_1 = getAtom(u"fulfillment", 1)
 ISBROKEN_1 = getAtom(u"isBroken", 1)
 ISDEEPFROZEN_1 = getAtom(u"isDeepFrozen", 1)
 ISEVENTUAL_1 = getAtom(u"isEventual", 1)
@@ -104,6 +105,9 @@ class RefOps(Object):
     def recv(self, atom, args):
         if atom is BROKEN_1:
             return self.broken(args[0])
+
+        if atom is FULFILLMENT_1:
+            return self.fulfillment(args[0])
 
         if atom is ISBROKEN_1:
             return wrapBool(self.isBroken(args[0]))
@@ -191,16 +195,14 @@ class RefOps(Object):
     def isBroken(self, ref):
         return isBroken(ref)
 
-#    def fulfillment(self, ref):
-#        ref = self.resolution(ref)
-#        p = self.optProblem(ref)
-#        if isResolved(ref):
-#            if p is NullObject:
-#                return ref
-#            else:
-#                raise p
-#        else:
-#            raise RuntimeError("Not resolved: %r" % (ref,))
+    def fulfillment(self, ref):
+        ref = resolution(ref)
+        if isResolved(ref):
+            if isBroken(ref):
+                raise UserException(ref.optProblem())
+            return ref
+        else:
+            raise RuntimeError("Not resolved: %r" % (ref,))
 
     def isFar(self, ref):
         return self.isEventual(ref) and isResolved(ref)
