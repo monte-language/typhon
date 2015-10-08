@@ -506,7 +506,7 @@ def makeSendExpr(rcvr :Ast, verb :Str, arglist :List[Ast],
                 out.print(")")
     return astWrapper(sendExpr, makeSendExpr,
         [rcvr, verb, arglist, namedArgs], span, scope, "SendExpr",
-        fn f {[rcvr.transform(f), verb, transformAll(arglist, f), [for [k, v] in (namedArgs) [f(k), f(v)]]]})
+        fn f {[rcvr.transform(f), verb, transformAll(arglist, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
 
 def makeFunSendExpr(receiver :Expr, args :List[Expr],
                     namedArgs :NamedArgPairs, span) as DeepFrozen:
@@ -530,7 +530,7 @@ def makeFunSendExpr(receiver :Expr, args :List[Expr],
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(funSendExpr, makeFunSendExpr, [receiver, args, namedArgs], span,
-        scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [f(k), f(v)]]]})
+        scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
 
 def makeGetExpr(receiver :Expr, indices :List[Expr], span) as DeepFrozen:
     def scope := sumScopes(indices + [receiver])
