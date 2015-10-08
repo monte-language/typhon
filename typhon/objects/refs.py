@@ -50,6 +50,7 @@ PROMISE_0 = getAtom(u"promise", 0)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RESOLVE_2 = getAtom(u"resolve", 2)
 RUN_1 = getAtom(u"run", 1)
+SMASH_1 = getAtom(u"smash", 1)
 STATE_1 = getAtom(u"state", 1)
 WHENBROKEN_2 = getAtom(u"whenBroken", 2)
 WHENRESOLVED_2 = getAtom(u"whenResolved", 2)
@@ -339,6 +340,9 @@ class LocalResolver(Object):
         if atom is RESOLVE_2:
             return wrapBool(self.resolve(args[0], unwrapBool(args[1])))
 
+        if atom is SMASH_1:
+            return wrapBool(self.smash(args[0]))
+
         raise Refused(self, atom, args)
 
     def resolve(self, target, strict=True):
@@ -359,6 +363,7 @@ class LocalResolver(Object):
         return self.resolve(target, False)
 
     def smash(self, problem):
+        import pdb; pdb.set_trace()
         return self.resolve(UnconnectedRef(problem), False)
 
     def isDone(self):
