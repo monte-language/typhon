@@ -346,23 +346,30 @@ def makeBindingExpr(noun :Noun, span) as DeepFrozen:
         scope, "BindingExpr", fn f {[noun.transform(f)]})
 
 def makeSeqExpr(exprs :List[Expr], span) as DeepFrozen:
-    def scope := sumScopes(exprs)
+    def _exprs := [].diverge()
+    for ex in exprs:
+        if (ex.getNodeName() == "SeqExpr"):
+            _exprs.extend(ex.getExprs())
+        else:
+            _exprs.push(ex)
+    def fixedExprs := _exprs.snapshot()
+    def scope := sumScopes(fixedExprs)
     object seqExpr:
         to getExprs():
-            return exprs
+            return fixedExprs
         to subPrintOn(out, priority):
             if (priority > priorities["braceExpr"]):
                 out.print("(")
             var first := true
-            if (priorities["braceExpr"] >= priority && exprs == []):
+            if (priorities["braceExpr"] >= priority && fixedExprs == []):
                 out.print("pass")
-            for e in exprs:
+            for e in fixedExprs:
                 if (!first):
                     out.println("")
                 first := false
                 e.subPrintOn(out, priority.min(priorities["braceExpr"]))
-    return astWrapper(seqExpr, makeSeqExpr, [exprs], span,
-        scope, "SeqExpr", fn f {[transformAll(exprs, f)]})
+    return astWrapper(seqExpr, makeSeqExpr, [fixedExprs], span,
+        scope, "SeqExpr", fn f {[transformAll(fixedExprs, f)]})
 
 def makeModule(importsList, exportsList, body, span) as DeepFrozen:
     def scope := sumScopes(importsList + exportsList)

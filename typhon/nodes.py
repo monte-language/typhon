@@ -1899,7 +1899,13 @@ class Sequence(Expr):
     _immutable_fields_ = "_l[*]",
 
     def __init__(self, l):
-        self._l = l
+        exprs = []
+        for ex in l:
+            if (isinstance(ex, Sequence)):
+                exprs.extend(ex._l)
+            else:
+                exprs.append(ex)
+        self._l = exprs[:]
 
     @staticmethod
     def fromMonte(l):
