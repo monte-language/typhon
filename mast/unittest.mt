@@ -70,14 +70,15 @@ def main(=> makeStdOut, => Timer, => currentProcess, => unsealException, => coll
                 collectTests(),
                 fn k, v { [for t in (v) [k, t]] })
         var lastSource := null
-        for [k, t] in testInfo:
+        def testsIterator := testInfo._makeIterator()
+        def done := __return
+        def runTest([i, [k, t]]):
             if (lastSource != k):
                 stdout.receive(`$k$\n`)
                 lastSource := k
             def st := M.toString(t)
             stdout.receive(`    $st`)
-            try:
-                t(makeAsserter(st))
+            return when (t <- (makeAsserter(st))) ->
                 stdout.receive("    OK\n")
                 successes += 1
             catch p:
@@ -86,9 +87,13 @@ def main(=> makeStdOut, => Timer, => currentProcess, => unsealException, => coll
                 def msg := formatError(unsealException(p, throw))
                 logIt(st, msg)
                 stdout.receive(msg + "\n")
+            finally:
+                escape e:
+                    runTest(testsIterator.next(e))
+        escape e:
+            return runTest(testsIterator.next(e))
 
-    return when (def runTime := Timer.trial(runTests)) ->
-        stdout.receive(`${successes + fails} tests run, ${fails} failures` +
-                       ` in ${runTime} s$\n`)
+    return when (runTests()) ->
+        stdout.receive(`${successes + fails} tests run, ${fails} failures$\n`)
         fails.min(1)
 
