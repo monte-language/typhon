@@ -861,7 +861,7 @@ class Call(Expr):
     @staticmethod
     def fromMonte(target, verb, args, namedArgs):
         return Call(target, strToString(verb), unwrapList(args),
-                    [(unwrapStr(unwrapList(p)[0]), unwrapList(p)[1])
+                    [(unwrapList(p)[0], unwrapList(p)[1])
                      for p in unwrapList(namedArgs)])
 
     @staticmethod
@@ -874,14 +874,14 @@ class Call(Expr):
         for pair in namedArgs._t:
             if not (isinstance(pair, Tuple) and len(pair._t) == 2):
                 raise InvalidAST("namedArgs must contain key/value pairs")
-            s, patt = pair._t
-            nargs.append((strToString(s), patt))
+            k, patt = pair._t
+            nargs.append((k, patt))
         return Call(target, strToString(verb), args._t, nargs)
 
     def uncall(self):
         return ConstList([self._target, StrObject(self._verb),
                           ConstList(self._args),
-                          ConstList([ConstList([StrObject(p[0]), p[1]])
+                          ConstList([ConstList([p[0], p[1]])
                                      for p in self._namedArgs])])
 
     def pretty(self, out):
@@ -902,11 +902,10 @@ class Call(Expr):
             if l:
                 out.write(", ")
             head = na[0]
-            out.write('"%s"' % (head[0].encode("utf-8")))
+            head[0].pretty(out)
             out.write(" => ")
-            head[1].pretty(out)
             for pair in na[1:]:
-                out.write('"%s"' % (pair[0].encode("utf-8")))
+                pair[0].pretty(out)
                 out.write(" => ")
                 pair[1].pretty(out)
         out.write(")")
@@ -933,7 +932,7 @@ class Call(Expr):
         else:
             for key, value in namedArgs:
                 # Compile the key...
-                compiler.literal(StrObject(key))
+                key.compile(compiler)
                 # ...and the value.
                 value.compile(compiler)
             compiler.callMap(self._verb, arity, namedArity)
@@ -962,7 +961,7 @@ class Call(Expr):
             return ConstList(self._args)
 
         if atom is GETNAMEDARGS_0:
-            return ConstList([ConstList([StrObject(p[0]), p[1]])
+            return ConstList([ConstList([p[0], p[1]])
                               for p in self._namedArgs])
 
         return Expr.recv(self, atom, args)
