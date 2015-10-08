@@ -25,7 +25,7 @@ from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
                                  StrObject, makeSourceSpan, unwrapInt,
                                  unwrapStr, unwrapChar)
-from typhon.objects.ejectors import throw
+from typhon.objects.ejectors import throw, theThrower
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
 from typhon.objects.guards import (anyGuard, FinalSlotGuardMaker,
@@ -45,7 +45,6 @@ CALL_3 = getAtom(u"call", 3)
 CALLWITHMESSAGE_2 = getAtom(u"callWithMessage", 2)
 CALL_4 = getAtom(u"call", 4)
 COERCE_2 = getAtom(u"coerce", 2)
-EJECT_2 = getAtom(u"eject", 2)
 FAILURELIST_1 = getAtom(u"failureList", 1)
 FROMBYTES_1 = getAtom(u"fromBytes", 1)
 FROMCHARS_1 = getAtom(u"fromChars", 1)
@@ -198,24 +197,6 @@ class MakeBytes(Object):
         if atom is FROMINTS_1:
             data = unwrapList(args[0])
             return BytesObject("".join([chr(unwrapInt(i)) for i in data]))
-
-        raise Refused(self, atom, args)
-
-
-@autohelp
-class Throw(Object):
-
-    stamps = [deepFrozenStamp]
-
-    def toString(self):
-        return u"throw"
-
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            raise UserException(args[0])
-
-        if atom is EJECT_2:
-            return throw(args[0], args[1])
 
         raise Refused(self, atom, args)
 
@@ -439,8 +420,6 @@ def nearGuard(args):
 # RPython.
 Infinity = DoubleObject(float("inf"))
 NaN = DoubleObject(float("nan"))
-
-theThrower = Throw()
 
 def safeScope():
     return {

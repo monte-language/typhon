@@ -15,13 +15,16 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object
 
 DISABLE_0 = getAtom(u"disable", 0)
+EJECT_2 = getAtom(u"eject", 2)
 RUN_0 = getAtom(u"run", 0)
 RUN_1 = getAtom(u"run", 1)
+
 
 @autohelp
 class Ejector(Object):
@@ -80,3 +83,23 @@ def throw(ej, payload):
     else:
         ej.call(u"run", [payload])
     raise UserException(StrObject(u"Ejector did not exit"))
+
+@autohelp
+class Throw(Object):
+
+    stamps = [deepFrozenStamp]
+
+    def toString(self):
+        return u"throw"
+
+    def recv(self, atom, args):
+        if atom is RUN_1:
+            raise UserException(args[0])
+
+        if atom is EJECT_2:
+            return throw(args[0], args[1])
+
+        raise Refused(self, atom, args)
+
+
+theThrower = Throw()

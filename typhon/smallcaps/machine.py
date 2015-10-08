@@ -23,7 +23,7 @@ from typhon.objects.collections import (EMPTY_MAP, ConstMap, monteDict,
                                         unwrapList, unwrapMap)
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
-from typhon.objects.ejectors import Ejector, throw
+from typhon.objects.ejectors import Ejector, theThrower, throw
 from typhon.objects.exceptions import sealException
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.slots import FinalSlot, VarSlot
@@ -80,7 +80,7 @@ class SmallCaps(object):
 
     @unroll_safe
     def bindObject(self, scriptIndex):
-        from typhon.scopes.safe import theThrower
+        from typhon.objects.ejectors import theThrower
         script = self.code.script(scriptIndex)
         auditors = self.popSlice(script.numAuditors)
         globals = self.popSlice(len(script.globalNames))

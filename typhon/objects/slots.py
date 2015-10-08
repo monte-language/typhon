@@ -168,9 +168,9 @@ class VarSlot(Slot):
         return self._obj
 
     def put(self, value):
-        from typhon.scopes.safe import Throw
+        from typhon.objects.ejectors import theThrower
         if self._guard is NullObject:
             self._obj = value
         else:
-            self._obj = self._guard.call(u"coerce", [value, Throw()])
+            self._obj = self._guard.call(u"coerce", [value, theThrower])
         return NullObject
