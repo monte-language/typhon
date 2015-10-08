@@ -100,21 +100,31 @@ class Vat(Object):
         target = resolution(target)
 
         # print "Taking turn:", self, resolver, target, atom, args
-
         if resolver is None:
-            # callOnly/sendOnly.
-            if isinstance(target, Promise):
-                target.sendOnly(atom, args, namedArgs)
-            else:
-                # Oh, that's right; we don't do callOnly since it's silly.
-                target.callAtom(atom, args, namedArgs)
+            try:
+                # callOnly/sendOnly.
+                if isinstance(target, Promise):
+                    target.sendOnly(atom, args, namedArgs)
+                else:
+                    # Oh, that's right; we don't do callOnly since it's silly.
+                    target.callAtom(atom, args, namedArgs)
+            except UserException as ue:
+                print "Uncaught exception while taking turn:", ue.formatError()
+
         else:
-            # call/send.
-            if isinstance(target, Promise):
-                result = target.send(atom, args, namedArgs)
-            else:
-                result = target.callAtom(atom, args, namedArgs)
-            resolver.resolve(result)
+            try:
+                # call/send.
+                if isinstance(target, Promise):
+                    result = target.send(atom, args, namedArgs)
+                else:
+                    result = target.callAtom(atom, args, namedArgs)
+                resolver.resolve(result)
+            except UserException, ue:
+                from typhon.objects.exceptions import SealedException
+                p = ue.payload
+                if not isinstance(p, SealedException):
+                    p = SealedException(ue.payload, ue.trail)
+                resolver.smash(p)
 
     def takeSomeTurns(self):
         # Limit the number of continuous turns to keep network latency low.
@@ -123,10 +133,7 @@ class Vat(Object):
         count = len(self._pending)
         # print "Taking", count, "turn(s) on", self.repr()
         for _ in range(count):
-            try:
-                self.takeTurn()
-            except UserException as ue:
-                print "Caught exception while taking turn:", ue.formatError()
+            self.takeTurn()
 
 
 currentVat = ThreadLocalReference(Vat)
