@@ -363,7 +363,6 @@ class LocalResolver(Object):
         return self.resolve(target, False)
 
     def smash(self, problem):
-        import pdb; pdb.set_trace()
         return self.resolve(UnconnectedRef(problem), False)
 
     def isDone(self):
