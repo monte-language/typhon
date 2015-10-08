@@ -17,6 +17,7 @@ def sealException(ue):
         return val
     return SealedException(val, trail)
 
+
 @autohelp
 class SealedException(Object):
     """

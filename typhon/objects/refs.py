@@ -721,7 +721,7 @@ class UnconnectedRef(Promise):
         return BROKEN
 
     def optProblem(self):
-        return StrObject(self._problem.toString())
+        return self._problem
 
     def resolutionRef(self):
         return self

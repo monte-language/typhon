@@ -35,8 +35,13 @@ class UserException(Exception):
     """
 
     def __init__(self, payload):
-        self.payload = payload
-        self.trail = []
+        from typhon.objects.exceptions import SealedException
+        if isinstance(payload, SealedException):
+            self.payload = payload.value
+            self.trail = payload.trail
+        else:
+            self.payload = payload
+            self.trail = []
 
     def formatError(self):
         pieces = [self.error()] + self.trail
