@@ -79,7 +79,7 @@ class BooleanFlowStrategy(Strategy):
     contained_type = UnconnectedRef
 
     def default_value(self):
-        return UnconnectedRef(u"Implementation detail leaked")
+        return UnconnectedRef(StrObject(u"Implementation detail leaked"))
 
     def wrap(self, value):
         return UnconnectedRef(value)

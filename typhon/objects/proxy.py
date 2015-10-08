@@ -48,12 +48,12 @@ class Proxy(Promise):
         if isinstance(self.resolutionBox, FinalSlot):
             res = self.resolutionBox.get()
         else:
-            res = UnconnectedRef(
+            res = UnconnectedRef(StrObject(
                 u"Resolution promise of a proxy handled by " +
                 self.handler.toString() +
                 u" didn't resolve to a FinalSlot, but " +
                 self.resolutionBox.toString() +
-                u" instead.")
+                u" instead."))
             self.resolutionBox = FinalSlot(res, anyGuard)
         self.handler = None
         return res
@@ -151,7 +151,7 @@ class DisconnectedRef(UnconnectedRef):
         result = (isSameEver(self.handler, other.handler) and
                   isSameEver(self.resolutionIdentity,
                              other.resolutionIdentity))
-        if (result and not self._problem == other._problem):
+        if (result and not isSameEver(self._problem, other._problem)):
             raise userError(u"Ref invariant violation: disconnected refs with "
                             u" same identity but different problems")
         return result
@@ -192,10 +192,11 @@ class FarRef(Proxy):
         handler = self.handler
         resolution = Proxy.commit(self)
         if not isinstance(resolution, UnconnectedRef):
-            problem = (u"Attempt to resolve a far ref handled by " +
-                       handler.toString() +
-                       u"to a different identity (" +
-                       resolution.toString() + u")")
+            problem = StrObject(
+                u"Attempt to resolve a far ref handled by " +
+                handler.toString() +
+                u"to a different identity (" +
+                resolution.toString() + u")")
         else:
             problem = resolution._problem
         resolution = DisconnectedRef(handler, self.resolutionIdentity,

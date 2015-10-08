@@ -16,6 +16,7 @@ from rpython.rlib.jit import promote, unroll_safe
 
 from typhon.atoms import getAtom
 from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.data import StrObject
 from typhon.objects.guards import anyGuard
 from typhon.objects.slots import Binding, FinalBinding
 
@@ -200,8 +201,8 @@ class Environment(object):
             print "Warning: Use-before-define on local index", index
             print "Expect an imminent crash."
             from typhon.objects.refs import UnconnectedRef
-            return UnconnectedRef(u"Local index %d used before definition" %
-                                  index)
+            return UnconnectedRef(StrObject(
+                u"Local index %d used before definition" % index))
 
         assert self.local[index] is not None, "Local binding use-before-define"
         return self.local[index]

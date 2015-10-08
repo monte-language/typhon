@@ -21,7 +21,7 @@ from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
-from typhon.objects.data import unwrapInt, unwrapStr
+from typhon.objects.data import StrObject, unwrapInt, unwrapStr
 from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object, runnable
@@ -50,8 +50,8 @@ def connectCB(connect, status):
             fountResolver.resolve(StreamFount(stream, vat))
             drainResolver.resolve(StreamDrain(stream, vat))
         else:
-            fountResolver.smash(u"Connection failed")
-            drainResolver.smash(u"Connection failed")
+            fountResolver.smash(StrObject(u"Connection failed"))
+            drainResolver.smash(StrObject(u"Connection failed"))
     except:
         print "Exception in connectCB"
 

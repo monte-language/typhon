@@ -260,7 +260,7 @@ def openFountCB(fs):
         with scopedVat(vat):
             if fd < 0:
                 msg = ruv.formatError(fd).decode("utf-8")
-                r.smash(u"Couldn't open file fount: %s" % msg)
+                r.smash(StrObject(u"Couldn't open file fount: %s" % msg))
             else:
                 r.resolve(FileFount(fs, fd, vat))
     except:
@@ -275,7 +275,7 @@ def openDrainCB(fs):
         with scopedVat(vat):
             if fd < 0:
                 msg = ruv.formatError(fd).decode("utf-8")
-                r.smash(u"Couldn't open file drain: %s" % msg)
+                r.smash(StrObject(u"Couldn't open file drain: %s" % msg))
             else:
                 r.resolve(FileDrain(fs, fd, vat))
     except:

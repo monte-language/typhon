@@ -16,7 +16,7 @@ import weakref
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
+from typhon.errors import Refused, UserException, userError
 from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
@@ -103,7 +103,7 @@ class RefOps(Object):
 
     def recv(self, atom, args):
         if atom is BROKEN_1:
-            return self.broken(args[0].toString())
+            return self.broken(args[0])
 
         if atom is ISBROKEN_1:
             return wrapBool(self.isBroken(args[0]))
@@ -174,7 +174,7 @@ class RefOps(Object):
         if optProblem is NullObject:
             return NullObject
         else:
-            return self.broken(optProblem.toString())
+            return self.broken(optProblem)
 
     def isNear(self, ref):
         if isinstance(ref, Promise):
@@ -692,16 +692,16 @@ class LocalVatRef(Promise):
 class UnconnectedRef(Promise):
 
     def __init__(self, problem):
-        assert isinstance(problem, unicode)
+        assert isinstance(problem, Object)
         self._problem = problem
 
     def printOn(self, out):
         out.call(u"print", [StrObject(u"<ref broken by " +
-                                      self._problem + u">")])
+                                      self._problem.toString() + u">")])
 
     def callAll(self, atom, args, namedArgs):
         self._doBreakage(atom, args, namedArgs)
-        raise userError(self._problem)
+        raise UserException(self._problem)
 
     def sendAll(self, atom, args, namedArgs):
         self._doBreakage(atom, args, namedArgs)
@@ -714,7 +714,7 @@ class UnconnectedRef(Promise):
         return BROKEN
 
     def optProblem(self):
-        return StrObject(self._problem)
+        return StrObject(self._problem.toString())
 
     def resolutionRef(self):
         return self
