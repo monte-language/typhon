@@ -736,3 +736,16 @@ class UnconnectedRef(Promise):
 
     def commit(self):
         pass
+
+
+@autohelp
+class Smash(Object):
+    _immutable_fields_ = "resolver",
+
+    def __init__(self, resolver):
+        self.resolver = resolver
+
+    def recv(self, atom, args):
+        if atom is RUN_1:
+            return wrapBool(self.resolver.smash(args[0]))
+        raise Refused(self, atom, args)

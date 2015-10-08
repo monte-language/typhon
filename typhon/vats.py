@@ -19,10 +19,11 @@ from typhon.autohelp import autohelp
 from typhon.errors import Refused, UserException
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object, runnable
-from typhon.objects.data import unwrapStr
+from typhon.objects.data import StrObject, unwrapStr
 
 
 RUN_0 = getAtom(u"run", 0)
+RUN_1 = getAtom(u"run", 1)
 SEED_1 = getAtom(u"seed", 1)
 SPROUT_1 = getAtom(u"sprout", 1)
 
@@ -112,13 +113,21 @@ class Vat(Object):
                 print "Uncaught exception while taking turn:", ue.formatError()
 
         else:
+            from typhon.objects.collections import ConstMap, monteDict
+            from typhon.objects.refs import Smash
+            _d = monteDict()
+            _d[StrObject(u"FAIL")] = Smash(resolver)
+            MIRANDA_ARGS = ConstMap(_d)
+            namedArgs = namedArgs._or(MIRANDA_ARGS)
             try:
                 # call/send.
                 if isinstance(target, Promise):
                     result = target.send(atom, args, namedArgs)
                 else:
                     result = target.callAtom(atom, args, namedArgs)
-                resolver.resolve(result)
+                # Resolver may be invoked from the code in this turn, so
+                # strict=False to skip this if already resolved.
+                resolver.resolve(result, strict=False)
             except UserException, ue:
                 from typhon.objects.exceptions import sealException
                 resolver.smash(sealException(ue))
