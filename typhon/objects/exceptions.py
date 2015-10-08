@@ -10,6 +10,13 @@ from typhon.objects.root import Object, runnable
 RUN_2 = getAtom(u"run", 2)
 
 
+def sealException(ue):
+    val = ue.getPayload()
+    trail = ue.trail
+    if isinstance(val, SealedException):
+        return val
+    return SealedException(val, trail)
+
 @autohelp
 class SealedException(Object):
     """

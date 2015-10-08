@@ -120,11 +120,8 @@ class Vat(Object):
                     result = target.callAtom(atom, args, namedArgs)
                 resolver.resolve(result)
             except UserException, ue:
-                from typhon.objects.exceptions import SealedException
-                p = ue.payload
-                if not isinstance(p, SealedException):
-                    p = SealedException(ue.payload, ue.trail)
-                resolver.smash(p)
+                from typhon.objects.exceptions import sealException
+                resolver.smash(sealException(ue))
 
     def takeSomeTurns(self):
         # Limit the number of continuous turns to keep network latency low.

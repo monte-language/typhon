@@ -24,7 +24,7 @@ from typhon.objects.collections import (EMPTY_MAP, ConstMap, monteDict,
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
-from typhon.objects.exceptions import SealedException
+from typhon.objects.exceptions import sealException
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.slots import FinalSlot, VarSlot
 from typhon.profile import csp
@@ -380,13 +380,7 @@ class Catch(Handler):
     def unwind(self, machine, ex):
         machine.env.restoreDepth(self.savedDepth)
         # Push the caught value.
-        payload = ex.getPayload()
-        if not isinstance(payload, SealedException):
-            # Sealed exceptions should not be nested. This is currently the
-            # only call site for SealedException, so this comment should serve
-            # as a good warning. ~ C.
-            payload = SealedException(payload, ex.trail)
-        machine.push(payload)
+        machine.push(sealException(ex))
         # And the ejector.
         machine.push(NullObject)
         return self.index
