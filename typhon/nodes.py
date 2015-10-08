@@ -860,8 +860,9 @@ class Call(Expr):
 
     @staticmethod
     def fromMonte(target, verb, args, namedArgs):
-        return Call(target, strToString(verb), Tuple(unwrapList(args)),
-                    Tuple([Tuple(unwrapList(p)) for p in unwrapList(namedArgs)]))
+        return Call(target, strToString(verb), unwrapList(args),
+                    [(unwrapStr(unwrapList(p)[0]), unwrapList(p)[1])
+                     for p in unwrapList(namedArgs)])
 
     @staticmethod
     def fromAST(target, verb, args, namedArgs):
@@ -879,9 +880,9 @@ class Call(Expr):
 
     def uncall(self):
         return ConstList([self._target, StrObject(self._verb),
-                          ConstList(tupleToList(self._args)),
-                          ConstList([ConstList(tupleToList(p))
-                                     for p in tupleToList(self._namedArgs)])])
+                          ConstList(self._args),
+                          ConstList([ConstList([StrObject(p[0]), p[1]])
+                                     for p in self._namedArgs])])
 
     def pretty(self, out):
         self._target.pretty(out)
@@ -958,11 +959,11 @@ class Call(Expr):
             return StrObject(self._verb)
 
         if atom is GETARGS_0:
-            return ConstList(tupleToList(self._args))
+            return ConstList(self._args)
 
         if atom is GETNAMEDARGS_0:
-            return ConstList([ConstList(tupleToList(p))
-                              for p in tupleToList(self._namedArgs)])
+            return ConstList([ConstList([StrObject(p[0]), p[1]])
+                              for p in self._namedArgs])
 
         return Expr.recv(self, atom, args)
 
