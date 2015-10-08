@@ -59,22 +59,33 @@ def main(=> makeStdOut, => Timer, => currentProcess, => unsealException, => coll
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout<-flowTo(makeStdOut())
 
+    def concatMap(it, f):
+        var result := [].diverge()
+        for k => v in it:
+            result.extend(f(k, v))
+        return result.snapshot()
+
     def runTests():
-        for k => tests in collectTests():
-            stdout.receive(`$k$\n`)
-            for t in tests:
-                def st := M.toString(t)
-                stdout.receive(`    $st`)
-                try:
-                    t(makeAsserter(st))
-                    stdout.receive("    OK\n")
-                    successes += 1
-                catch p:
-                    stdout.receive("    FAIL\n")
-                    fails += 1
-                    def msg := formatError(unsealException(p, throw))
-                    logIt(st, msg)
-                    stdout.receive(msg + "\n")
+        def testInfo := concatMap(
+                collectTests(),
+                fn k, v { [for t in (v) [k, t]] })
+        var lastSource := null
+        for [k, t] in testInfo:
+            if (lastSource != k):
+                stdout.receive(`$k$\n`)
+                lastSource := k
+            def st := M.toString(t)
+            stdout.receive(`    $st`)
+            try:
+                t(makeAsserter(st))
+                stdout.receive("    OK\n")
+                successes += 1
+            catch p:
+                stdout.receive("    FAIL\n")
+                fails += 1
+                def msg := formatError(unsealException(p, throw))
+                logIt(st, msg)
+                stdout.receive(msg + "\n")
 
     return when (def runTime := Timer.trial(runTests)) ->
         stdout.receive(`${successes + fails} tests run, ${fails} failures` +
