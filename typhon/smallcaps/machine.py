@@ -35,6 +35,14 @@ GET_0 = getAtom(u"get", 0)
 PUT_1 = getAtom(u"put", 1)
 
 
+def mkMirandaArgs():
+    _d = monteDict()
+    _d[StrObject(u"FAIL")] = theThrower
+    return ConstMap(_d)
+
+MIRANDA_ARGS = mkMirandaArgs()
+
+
 class SmallCaps(object):
     """
     A SmallCaps abstract bytecode interpreter.
@@ -113,6 +121,7 @@ class SmallCaps(object):
             namedArgs = self.pop()
         else:
             namedArgs = EMPTY_MAP
+        namedArgs = namedArgs._or(MIRANDA_ARGS)
         args = self.popSlice(atom.arity)
         target = self.pop()
 
