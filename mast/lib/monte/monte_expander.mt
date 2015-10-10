@@ -152,6 +152,15 @@ def expand(node, builder, fail) as DeepFrozen:
         return builder.ViaPattern(builder.NounExpr("__slotToBinding", span),
              builder.BindingPattern(n, span), span)
 
+    def makeFn(doc, args, body, span):
+        return builder.ObjectExpr(doc,
+             builder.IgnorePattern(null, span), null, [],
+             builder.Script(null,
+                 [builder."Method"(null, "run",
+                                   args,
+                                   [], null, body, span)], [], span),
+             span)
+
     def expandMatchBind(args, span, fail):
         def [spec, patt] := args
         def pattScope := patt.getStaticScope()
@@ -890,28 +899,62 @@ def expand(node, builder, fail) as DeepFrozen:
                 if (catcher !=null) {catcher.getPattern()},
                  if (catcher !=null) {catcher.getBody()}, span)
         else if (nodeName == "WhenExpr"):
-            def [var promiseExprs, var block, catchers, finallyblock] := args
+            def [promiseExprs, block, catchers, finallyblock] := args
             def expr := if (promiseExprs.size() > 1) {
                 builder.MethodCallExpr(builder.NounExpr("promiseAllFulfilled", span), "run",
-                    [emitList(args, span)], [], span)
+                    [emitList(promiseExprs, span)], [], span)
             } else {promiseExprs[0]}
+            def prob1 := builder.TempNounExpr("problem", span)
+            def tryExpr := builder.CatchExpr(
+                    expr, builder.FinalPattern(prob1, null, span),
+                    builder.MethodCallExpr(builder.NounExpr("Ref", span),
+                                           "broken", [prob1], [], span), span)
             def resolution := builder.TempNounExpr("resolution", span)
-            block := builder.SeqExpr([builder.MethodCallExpr(builder.NounExpr("Ref", span),
-                                                             "fulfillment", [resolution], [], span),
-                                      block], span)
+            def whenblock := builder.IfExpr(
+                builder.MethodCallExpr(builder.NounExpr("Ref", span), "isBroken",
+                     [resolution], [], span),
+                resolution, block, span)
+            def wr := builder.MethodCallExpr(builder.NounExpr("Ref", span),
+                "whenResolved", [tryExpr,
+                                 makeFn("when-catch 'done' function",
+                                        [builder.FinalPattern(resolution, null, span)],
+                                        whenblock,
+                                        expr.getSpan())], [], span)
+            def prob2 := builder.TempNounExpr("problem", span)
+            var handler := prob2
+            if (catchers.size() == 0):
+                return wr
             for cat in catchers:
-                block := builder.CatchExpr(block, cat.getPattern(), cat.getBody(), span)
-            if (finallyblock != null):
-                block := builder.FinallyExpr(block, finallyblock, span)
-            return builder.HideExpr(builder.MethodCallExpr(builder.NounExpr("Ref", span),
-                "whenResolved", [expr,
-                     builder.ObjectExpr("when-catch 'done' function",
-                          builder.IgnorePattern(null, span), null, [],
-                          builder.Script(null,
-                              [builder."Method"(null, "run",
-                                  [builder.FinalPattern(resolution, null, span)],
-                                  [], null, block, span)], [], span),
-                          span)], [], span), span)
+                def fail := builder.TempNounExpr("fail", cat.getSpan())
+                handler := builder.EscapeExpr(
+                    builder.FinalPattern(fail, null, cat.getSpan()),
+                    builder.SeqExpr([
+                        builder.DefExpr(cat.getPattern(),
+                                        fail,
+                                        prob2, cat.getSpan()),
+                        cat.getBody()], cat.getSpan()),
+                    builder.IgnorePattern(null, cat.getSpan()), handler, cat.getSpan())
+            def broken := builder.TempNounExpr("broken", span)
+            def wb := builder.MethodCallExpr(
+                    builder.NounExpr("Ref", span), "whenBroken", [
+                        wr, makeFn(
+                            "when-catch 'catch' function",
+                            [builder.FinalPattern(broken, null, span)],
+                            builder.SeqExpr([
+                                builder.DefExpr(
+                                    builder.FinalPattern(prob2, null, span),
+                                    null,
+                                    builder.MethodCallExpr(
+                                        builder.NounExpr("Ref", span), "optProblem",
+                                        [broken], [], span), span), handler], span), span)],
+                    [], span)
+            if (finallyblock == null):
+                return wb
+            return builder.MethodCallExpr(
+                wb, "_whenMoreResolved",
+                [makeFn("when-catch 'finally' function",
+                        [builder.IgnorePattern(null, span)],
+                        finallyblock, span)], [], span)
         else:
             return M.call(builder, nodeName, args + [span], [].asMap())
 
