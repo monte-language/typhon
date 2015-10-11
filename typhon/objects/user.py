@@ -149,9 +149,111 @@ class Audition(Object):
 
 
 class ScriptObject(Object):
+    """
+    An object whose behavior depends on a Monte script.
+    """
 
-    _immutable_fields_ = ("codeScript", "displayName", "globals[*]",
-                          "closure[*]", "fqn")
+    _immutable_fields_ = "codeScript", "displayName", "globals[*]", "fqn"
+
+    def toString(self):
+        # Easily the worst part of the entire stringifying experience. We must
+        # be careful to not recurse here.
+        try:
+            printer = Printer()
+            self.call(u"_printOn", [printer])
+            return printer.value()
+        except Refused:
+            return u"<%s>" % self.displayName
+        except UserException, e:
+            return u"<%s (threw exception %s when printed)>" % (self.displayName, e.error())
+
+    def printOn(self, printer):
+        # Note that the printer is a Monte-level object. Also note that, at
+        # this point, we have had a bad day; we did not respond to _printOn/1.
+        from typhon.objects.data import StrObject
+        printer.call(u"print", [StrObject(u"<%s>" % self.displayName)])
+
+    def docString(self):
+        return self.codeScript.doc
+
+    def respondingAtoms(self):
+        # Only do methods for now. Matchers will be dealt with in other ways.
+        d = {}
+        for atom in self.codeScript.methods.keys():
+            d[atom] = self.codeScript.methodDocs.get(atom, None)
+
+        return d
+
+
+class QuietObject(ScriptObject):
+    """
+    An object without a closure.
+    """
+
+    def __init__(self, codeScript, globals, displayName, auditors, fqn):
+        self.codeScript = codeScript
+        self.globals = globals
+        self.displayName = displayName
+        self.fqn = fqn
+
+        # The first auditor is our as-auditor, and it can be null.
+        if auditors[0] is NullObject:
+            auditors = auditors[1:]
+
+        # Grab the guards of our globals and send them off for processing.
+        guards = self.getGuards()
+        self.stamps = self.codeScript.audit(auditors, guards)[:]
+
+    def getGuards(self):
+        guards = {}
+        for name, i in self.codeScript.globalNames.items():
+            guards[name] = self.globals[i].call(u"getGuard", [])
+        return guards
+
+    @unroll_safe
+    def recvNamed(self, atom, args, namedArgs):
+        code = self.codeScript.lookupMethod(atom)
+        if code is None:
+            # No atoms matched, so there's no prebuilt methods. Instead, we'll
+            # use our matchers.
+            for matcher in self.codeScript.matchers:
+                with Ejector() as ej:
+                    machine = SmallCaps(matcher, None, self.globals)
+                    machine.push(ConstList([StrObject(atom.verb),
+                                            ConstList(args), namedArgs]))
+                    machine.push(ej)
+                    try:
+                        machine.run()
+                        return machine.pop()
+                    except Ejecting as e:
+                        if e.ejector is ej:
+                            # Looks like unification failed. On to the next
+                            # matcher!
+                            continue
+                        else:
+                            # It's not ours, cap'n.
+                            raise
+
+            raise Refused(self, atom, args)
+
+        machine = SmallCaps(code, None, self.globals)
+        # print "--- Running", self.displayName, atom, args
+        # Push the arguments onto the stack, backwards.
+        machine.push(namedArgs)
+        for arg in reversed(args):
+            machine.push(arg)
+            machine.push(NullObject)
+        machine.push(namedArgs)
+        machine.run()
+        return machine.pop()
+
+
+class BusyObject(ScriptObject):
+    """
+    An object with a closure.
+    """
+
+    _immutable_fields_ = "closure[*]",
 
     def __init__(self, codeScript, globals, closure, displayName, auditors,
                  fqn):
@@ -185,35 +287,6 @@ class ScriptObject(Object):
         selfIndex = self.codeScript.selfIndex()
         if selfIndex != -1:
             self.closure[selfIndex] = FinalBinding(self, guard)
-
-    def toString(self):
-        # Easily the worst part of the entire stringifying experience. We must
-        # be careful to not recurse here.
-        try:
-            printer = Printer()
-            self.call(u"_printOn", [printer])
-            return printer.value()
-        except Refused:
-            return u"<%s>" % self.displayName
-        except UserException, e:
-            return u"<%s (threw exception %s when printed)>" % (self.displayName, e.error())
-
-    def printOn(self, printer):
-        # Note that the printer is a Monte-level object. Also note that, at
-        # this point, we have had a bad day; we did not respond to _printOn/1.
-        from typhon.objects.data import StrObject
-        printer.call(u"print", [StrObject(u"<%s>" % self.displayName)])
-
-    def docString(self):
-        return self.codeScript.doc
-
-    def respondingAtoms(self):
-        # Only do methods for now. Matchers will be dealt with in other ways.
-        d = {}
-        for atom in self.codeScript.methods.keys():
-            d[atom] = self.codeScript.methodDocs.get(atom, None)
-
-        return d
 
     @unroll_safe
     def recvNamed(self, atom, args, namedArgs):

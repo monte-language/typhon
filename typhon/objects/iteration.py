@@ -21,7 +21,7 @@ from typhon.objects.collections import EMPTY_MAP, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.root import runnable
-from typhon.objects.user import ScriptObject
+from typhon.objects.user import BusyObject, ScriptObject
 from typhon.smallcaps.machine import SmallCaps
 
 
@@ -87,8 +87,11 @@ def loop(args):
             # JIT merge point.
             loopDriver.jit_merge_point(code=code, consumer=consumer,
                                        ejector=ej, iterator=iterator)
-            machine = SmallCaps(code, consumer.closure,
-                                promote(consumer.globals))
+            globals = promote(consumer.globals)
+            if isinstance(consumer, BusyObject):
+                machine = SmallCaps(code, consumer.closure, globals)
+            else:
+                machine = SmallCaps(code, None, globals)
             values = unwrapList(iterator.call(u"next", [ej]))
             # Push the arguments onto the stack, backwards.
             values.reverse()

@@ -19,6 +19,7 @@ from collections import OrderedDict
 from rpython.rlib import rvmprof
 from rpython.rlib.jit import elidable, elidable_promote, look_inside_iff
 from rpython.rlib.listsort import make_timsort_class
+from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
@@ -33,7 +34,7 @@ from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
 from typhon.objects.ejectors import throw
 from typhon.objects.meta import MetaContext
 from typhon.objects.root import Object
-from typhon.objects.user import Audition, ScriptObject
+from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.pretty import Buffer, LineWriter
 from typhon.smallcaps.code import Code
 from typhon.smallcaps.ops import ops
@@ -202,6 +203,7 @@ class Compiler(object):
     def canCloseOver(self, name):
         return name in self.frame or name in self.availableClosure
 
+    @specialize.arg(1)
     def addInstruction(self, name, index):
         self.instructions.append((ops[name], index))
 
@@ -244,6 +246,7 @@ class Compiler(object):
         self.addInstruction("BUILD_MAP", lenNamedArgs)
         self.addInstruction("CALL_MAP", atom)
 
+    @specialize.arg(1)
     def markInstruction(self, name):
         index = len(self.instructions)
         self.addInstruction(name, 0)
@@ -1663,6 +1666,9 @@ class Obj(Expr):
         elif isinstance(self._n, FinalPattern):
             slotIndex = compiler.locals.add(self._n._n)
             compiler.addInstruction("BINDFINALSLOT", slotIndex)
+        else:
+            # Bail!?
+            assert False, "Shouldn't happen"
 
     def getStaticScope(self):
         scope = self._n.getStaticScope()
@@ -1730,8 +1736,12 @@ class CodeScript(object):
         self.auditions = {}
 
     def makeObject(self, closure, globals, auditors):
-        obj = ScriptObject(self, globals, closure, self.displayName, auditors,
-                           self.fqn)
+        if len(self.closureNames):
+            obj = BusyObject(self, globals, closure, self.displayName, auditors,
+                             self.fqn)
+        else:
+            obj = QuietObject(self, globals, self.displayName, auditors,
+                              self.fqn)
         return obj
 
     # Picking 3 for the common case of:
