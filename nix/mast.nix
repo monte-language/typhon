@@ -10,7 +10,7 @@ stdenv.mkDerivation {
     installPhase = ''
       mkdir -p $out/bin
       cp -r mast repl.ty $out/
-      echo "${typhonVm}/mt-typhon -l $out/mast $out/repl.ty" > $out/bin/monte
+      echo "${typhonVm}/mt-typhon -l $out/mast $out/repl" > $out/bin/monte
       chmod +x $out/bin/monte
       '';
     checkPhase = "make testMast";
