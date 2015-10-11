@@ -1,4 +1,7 @@
-def hitAt(ranks, size :Int) :Bool:
+imports
+exports (main)
+
+def hitAt(ranks, size :Int) :Bool as DeepFrozen:
     def i := size - 1
     def x := ranks[i]
     var j := 0
@@ -12,7 +15,7 @@ def hitAt(ranks, size :Int) :Bool:
     return false
 
 
-def nQueen(n :Int):
+def nQueen(n :Int) as DeepFrozen:
     def ranks := ([0] * n).diverge()
     var size :Int := 1
 
@@ -41,4 +44,6 @@ def showBoard(ranks):
         traceln(s)
 
 
-bench(fn {nQueen(8)}, "n queens (8)")
+def main(=> bench) as DeepFrozen:
+    bench(fn {nQueen(8)}, "n queens (8)")
+    return 0
