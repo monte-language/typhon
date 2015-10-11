@@ -126,7 +126,7 @@ class MASTContext(object):
 
     def nextNamedExprs(self, stream):
         size = stream.nextInt()
-        return [(stream.nextStr(), self.nextExpr(stream))
+        return [(self.nextExpr(stream), self.nextExpr(stream))
                 for _ in range(size)]
 
     def nextNamedPatts(self, stream):
@@ -191,7 +191,7 @@ class MASTContext(object):
             elif pattTag == 'L':
                 # List.
                 patts = self.nextPatts(stream)
-                self.patts.append(ListPattern(patts))
+                self.patts.append(ListPattern(patts, None))
             elif pattTag == 'A':
                 # Via.
                 expr = self.nextExpr(stream)
