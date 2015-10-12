@@ -1,11 +1,34 @@
 def __makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
-    return object paramDesc as DeepFrozen:
-        pass
+    "Describe a parameter."
+
+    return object paramDesc as DeepFrozen implements Selfless, TransparentStamp:
+        to _printOn(out):
+            out.print(`<param $name`)
+            if (guard != null):
+                out.print(` :$guard`)
+            out.print(">")
+
+        to _uncall():
+            return [__makeParamDesc, "run", [name, guard]]
+
+        to getName() :Str:
+            return name
+
+        to getGuard() :DeepFrozen:
+            return guard
 
 
 def __makeMessageDesc(unknown :DeepFrozen, verb :Str, params :DeepFrozen,
                       guard :DeepFrozen) as DeepFrozen:
-    return object messageDesc as DeepFrozen:
+    "Describe a message."
+
+    return object messageDesc as DeepFrozen implements Selfless, TransparentStamp:
+        to _printOn(out):
+            out.print(`<message $verb/${params.size()}>`)
+
+        to _uncall():
+            return [__makeMessageDesc, "run", [unknown, verb, params, guard]]
+
         to getArity() :Int:
             return params.size()
 
@@ -31,12 +54,13 @@ object __makeProtocolDesc as DeepFrozen:
     to run(docString :NullOk[Str], name :Str, parents :List,
            stillUnknown :DeepFrozen, messages :List):
         # Precalculate [verb, arity] set of required methods.
-        def ownMethods :Set := [for message in (messages)
-                                [message.getVerb(),
-                                message.getArity()]].asSet()
+        def ownMethods :Set := messages.asSet()
         def parentMethods :List[Set] := [for parent in (parents)
                                          getMethods(parent)]
-        def desiredMethods :Set := ownMethods | reduce(parentMethods)
+        def allMethods :Set := ownMethods | reduce(parentMethods)
+        def desiredMethods :Set := [for message in (allMethods)
+                                    [message.getVerb(),
+                                     message.getArity()]].asSet()
 
         object protocolDesc implements Selfless, TransparentStamp:
             "An interface; a description of an object protocol.
@@ -94,8 +118,8 @@ object __makeProtocolDesc as DeepFrozen:
 
                 throw.eject(ej, "Specimen did not implement " + name)
 
-            to getMethods():
-                return desiredMethods
+            to getMethods() :Set:
+                return allMethods
 
             to supersetOf(guard):
                 "Whether `guard` admits a proper subset of this interface."
