@@ -132,10 +132,11 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     tokenStartLine, tokenStartCol, lineNumber, colNumber)
         startPos := -1
         # XXX use span somehow
-        return tok
+        return [tok, span]
 
-    def leaf(tok):
-        return composite(tok, null, endToken().getSpan())
+    def leaf(tokname):
+        def [tokdata, span] := endToken()
+        return composite(tokname, tokdata, span)
 
     def collectDigits(var digitset):
         if (atEnd() || !digitset.contains(currentChar)):
@@ -172,15 +173,15 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     advance()
                 if (!collectDigits(decimalDigits)):
                     throw.eject(fail, ["Missing exponent", spanAtPoint()])
-        def tok := endToken()
+        def [tok, span] := endToken()
         def s := tok.replace("_", "")
         if (floating):
-            return composite(".float64.", __makeDouble(s), tok.getSpan())
+            return composite(".float64.", __makeDouble(s), span)
         else:
             if (radix == 16):
-                return composite(".int.", __makeInt(s.slice(2), 16), tok.getSpan())
+                return composite(".int.", __makeInt(s.slice(2), 16), span)
             else:
-                return composite(".int.", __makeInt(s), tok.getSpan())
+                return composite(".int.", __makeInt(s), span)
 
 
     def charConstant(fail):
@@ -263,7 +264,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         if (currentChar != '\''):
             throw.eject(fail, ["Character constant must end in \"'\"", spanAtPoint()])
         advance()
-        return composite(".char.", c, endToken().getSpan())
+        return composite(".char.", c, endToken()[1])
 
     def identifier(fail):
         while (isIdentifierPart(advance())):
@@ -272,16 +273,16 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             def c := peekChar()
             if (!['=', '>', '~'].contains(c)):
                 advance()
-                def chunk := endToken()
+                def [chunk, span] := endToken()
                 def token := chunk.slice(0, chunk.size() - 1)
                 if (MONTE_KEYWORDS.contains(token)):
                     throw.eject(fail, [`$token is a keyword`, spanAtPoint()])
-                return composite("VERB_ASSIGN", token, chunk.getSpan())
-        def token := endToken()
+                return composite("VERB_ASSIGN", token, span)
+        def [token, span] := endToken()
         if (MONTE_KEYWORDS.contains(token.toLowerCase())):
-            return composite(token.toLowerCase(), token.toLowerCase(), token.getSpan())
+            return composite(token.toLowerCase(), token.toLowerCase(), span)
         else:
-            return composite("IDENTIFIER", token, token.getSpan())
+            return composite("IDENTIFIER", token, span)
 
     def quasiPart(fail):
         def buf := [].diverge()
@@ -301,7 +302,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 advance()
                 popBrace('`', fail)
                 return composite("QUASI_CLOSE", __makeString.fromChars(buf.snapshot()),
-                                 endToken().getSpan())
+                                 endToken()[1])
             else if (currentChar == '$' && peekChar() == '\\'):
                 # it's a character constant like $\u2603 or a line continuation like $\
                 advance()
@@ -309,33 +310,36 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 if (cc != null):
                     buf.push(cc)
             else:
-                def opener := endToken()
+                def [opener, span] := endToken()
                 pushBrace(opener, "hole", nestLevel * 4, true)
                 return composite("QUASI_OPEN", __makeString.fromChars(buf.snapshot()),
-                                 opener.getSpan())
+                                 span)
 
 
     def openBracket(closer, var opener, fail):
+        var span := null
         if (opener == null):
             advance()
-            opener := endToken()
+            def [o, s] := endToken()
+            opener := o
+            span := s
         if (atLogicalEndOfLine()):
             pushBrace(opener, closer, nestLevel * 4, true)
         else:
             pushBrace(opener, closer, offsetInLine(), true)
-        return composite(opener, null, if ((def s := opener.getSpan()) != null) {s} else {spanAtPoint()})
+        return composite(opener, null, if (span != null) {span} else {spanAtPoint()})
 
     def closeBracket(fail):
         advance()
-        def closer := endToken()
+        def [closer, span] := endToken()
         popBrace(closer, fail)
-        return composite(closer, null, closer.getSpan())
+        return composite(closer, null, span)
 
     def consumeComment():
         def startCol := colNumber
         while (!['\n', EOF].contains(currentChar)):
             advance()
-        def comment := endToken()
+        def [comment, _] := endToken()
         return composite("#", comment.slice(1), __makeSourceSpan(inputName, true, lineNumber, startCol, lineNumber, colNumber))
 
     def consumeWhitespaceAndComments():
@@ -438,14 +442,14 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 var cc := advance()
                 while (isIdentifierPart(cc)):
                     cc := advance()
-                def name := endToken()
+                def [name, span] := endToken()
                 def key := name.slice(1)
                 if (MONTE_KEYWORDS.contains(key.toLowerCase())):
                     advance()
                     throw.eject(fail, [`$key is a keyword`, spanAtPoint()])
                 if (braceStack.last()[1] == "hole"):
                     popBrace("hole", fail)
-                return composite("DOLLAR_IDENT", key, name.getSpan())
+                return composite("DOLLAR_IDENT", key, span)
             else if (nex == '$'):
                 return leaf("$")
             else:
@@ -461,14 +465,14 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 var cc := advance()
                 while (isIdentifierPart(cc)):
                     cc := advance()
-                def name := endToken()
+                def [name, span] := endToken()
                 def key := name.slice(1)
                 if (MONTE_KEYWORDS.contains(key.toLowerCase())):
                     advance()
                     throw.eject(fail, [`$key is a keyword`, spanAtPoint()])
                 if (braceStack.last()[1] == "hole"):
                     popBrace("hole", fail)
-                return composite("AT_IDENT", key, name.getSpan())
+                return composite("AT_IDENT", key, span)
             else if (nex == '@'):
                 return leaf("@")
             else:
@@ -647,10 +651,10 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
         if (cur == '"'):
             def s := stringLiteral(fail)
-            def closer := endToken()
+            def [closer, span] := endToken()
             popBrace('"', fail)
 
-            return composite(".String.", s, closer.getSpan())
+            return composite(".String.", s, span)
 
         if (cur == '\''):
             return charLiteral(fail)

@@ -28,7 +28,8 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
 
             def front := (span.getStartLine() - 3).max(0)
             def back := span.getEndLine() + 3
-            def lines := lex.getInput().split("\n").slice(front, back)
+            def allLines := lex.getInput().split("\n")
+            def lines := allLines.slice(front, back.min(allLines.size()))
             def msg := [].diverge()
             var i := front
             for line in lines:
@@ -57,6 +58,11 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return null
         return tokens[position.max(0)][2]
 
+    def spanNext():
+        if (position + 2 >= tokens.size()):
+            return null
+        return tokens[position + 1][2]
+
     def spanFrom(start):
         return spanCover(start, spanHere())
 
@@ -76,7 +82,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         def specname := t[0]
         if (specname != tagname):
             position -= 1
-            throw.eject(fail, [`expected $tagname, got $specname`, spanHere()])
+            throw.eject(fail, [`expected $tagname, got $specname`, t[2]])
         return t
 
     def acceptEOLs():
@@ -254,7 +260,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 if (tryQuasi):
                     return quasiliteral(t, true, ej)
                 else:
-                    throw.eject(ej, [nex2, spanHere()])
+                    throw.eject(ej, [nex2, spanNext()])
             else:
                 def g := maybeGuard()
                 return builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))
@@ -286,7 +292,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return builder.ValueHolePattern(advance(ej)[1], spanHere())
         else if (nex == PATTERN_HOLE):
             return builder.PatternHolePattern(advance(ej)[1], spanHere())
-        throw.eject(ej, [`Unrecognized name pattern $nex`, spanHere()])
+        throw.eject(ej, [`Unrecognized name pattern $nex`, spanNext()])
 
     def mapPatternItemInner(ej):
         def spanStart := spanHere()
@@ -305,7 +311,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 def t := advance(ej)
                 builder.LiteralExpr(t[1], t[2])
             } else {
-                throw.eject(ej, ["Map pattern keys must be literals or expressions in parens", spanHere()])
+                throw.eject(ej, ["Map pattern keys must be literals or expressions in parens", spanNext()])
             }
         }
         acceptTag("=>", ej)
@@ -368,7 +374,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return builder.ValueHolePattern(advance(ej)[1], spanHere())
         else if (nex == PATTERN_HOLE):
             return builder.PatternHolePattern(advance(ej)[1], spanHere())
-        throw.eject(ej, [`Invalid pattern $nex`, spanHere()])
+        throw.eject(ej, [`Invalid pattern $nex`, spanNext()])
 
     bind pattern(ej):
         def spanStart := spanHere()
@@ -932,7 +938,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 position := origPosition
                 return assign(ej)
             else if (isBind):
-                throw.eject(ej, ["expected :=", spanHere()])
+                throw.eject(ej, ["expected :=", spanNext()])
             else:
                 return builder.ForwardExpr(name, spanFrom(spanStart))
 
@@ -986,7 +992,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         if (indent && peekTag() == "pass"):
             advance(ej)
             return builder.SeqExpr([], advance(ej)[2])
-        throw.eject(tryAgain, [`don't recognize $tag`, spanHere()])
+        throw.eject(tryAgain, [`don't recognize $tag`, spanNext()])
 
     bind blockExpr(ej):
         def origPosition := position
