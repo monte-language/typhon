@@ -13,6 +13,7 @@ COERCE_2 = getAtom(u"coerce", 2)
 RUN_1 = getAtom(u"run", 1)
 RUN_3 = getAtom(u"run", 3)
 _CONFORMTO_1 = getAtom(u"_conformTo", 1)
+_GETALLEGEDINTERFACE_0 = getAtom(u"_getAllegedInterface", 0)
 _PRINTON_1 = getAtom(u"_printOn", 1)
 _RESPONDSTO_2 = getAtom(u"_respondsTo", 2)
 _SEALEDDISPATCH_1 = getAtom(u"_sealedDispatch", 1)
@@ -22,6 +23,7 @@ _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 mirandaAtoms = [
     _CONFORMTO_1,
+    _GETALLEGEDINTERFACE_0,
     _PRINTON_1,
     _RESPONDSTO_2,
     _SEALEDDISPATCH_1,
@@ -32,6 +34,13 @@ mirandaAtoms = [
 
 defaultMethodHelp = {
     COERCE_2: u"Coerce a specimen with this object, ejecting on failure.",
+    _CONFORMTO_1: u"Conform this object to an interface.",
+    _PRINTON_1: u"Print this object onto a printer.",
+    _RESPONDSTO_2:
+        u"Determine whether this object is likely to respond to a method.",
+    _SEALEDDISPATCH_1: u"Perform generic sealed dispatch.",
+    _UNCALL_0: u"Uncall this object into its components.",
+    _WHENMORERESOLVED_1: u"Callback for this object becoming more resolved.",
 }
 
 

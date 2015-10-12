@@ -23,6 +23,7 @@ from typhon.errors import Refused, UserException, userError
 
 RUN_1 = getAtom(u"run", 1)
 _CONFORMTO_1 = getAtom(u"_conformTo", 1)
+_GETALLEGEDINTERFACE_0 = getAtom(u"_getAllegedInterface", 0)
 _PRINTON_1 = getAtom(u"_printOn", 1)
 _RESPONDSTO_2 = getAtom(u"_respondsTo", 2)
 _SEALEDDISPATCH_1 = getAtom(u"_sealedDispatch", 1)
@@ -32,6 +33,7 @@ _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 mirandaAtoms = [
     _CONFORMTO_1,
+    _GETALLEGEDINTERFACE_0,
     _PRINTON_1,
     _RESPONDSTO_2,
     _SEALEDDISPATCH_1,
@@ -126,6 +128,11 @@ class Object(object):
                 # Welcome to _conformTo/1.
                 # to _conformTo(_): return self
                 return self
+
+            if atom is _GETALLEGEDINTERFACE_0:
+                # Welcome to _getAllegedInterface/0.
+                from typhon.objects.interfaces import ComputedInterface
+                return ComputedInterface(self)
 
             if atom is _PRINTON_1:
                 # Welcome to _printOn/1.
