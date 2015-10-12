@@ -9,7 +9,7 @@ def __makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
             out.print(">")
 
         to _uncall():
-            return [__makeParamDesc, "run", [name, guard]]
+            return [__makeParamDesc, "run", [name, guard], [].asMap()]
 
         to getName() :Str:
             return name
@@ -27,7 +27,8 @@ def __makeMessageDesc(unknown :DeepFrozen, verb :Str, params :DeepFrozen,
             out.print(`<message $verb/${params.size()}>`)
 
         to _uncall():
-            return [__makeMessageDesc, "run", [unknown, verb, params, guard]]
+            return [__makeMessageDesc, "run", [unknown, verb, params, guard],
+                    [].asMap()]
 
         to getArity() :Int:
             return params.size()
