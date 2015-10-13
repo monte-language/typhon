@@ -117,11 +117,20 @@ class SmallCaps(object):
     @unroll_safe
     def call(self, index, withMap):
         atom = self.code.atom(index)
+
+        # Grab the named args.
         if withMap:
             namedArgs = self.pop()
         else:
             namedArgs = EMPTY_MAP
-        namedArgs = namedArgs._or(MIRANDA_ARGS)
+
+        assert isinstance(namedArgs, ConstMap), "No polymorphism in namedArgs"
+        # Avoid _or() if possible; it is slow and JIT-opaque. ~ C.
+        if namedArgs.size():
+            namedArgs = namedArgs._or(MIRANDA_ARGS)
+        else:
+            namedArgs = MIRANDA_ARGS
+
         args = self.popSlice(atom.arity)
         target = self.pop()
 
