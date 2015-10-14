@@ -290,6 +290,11 @@ class TestInt(TestCase):
         self.assertTrue(isinstance(result, DoubleObject))
         self.assertEqual(result.getDouble(), 8.4)
 
+    def testOpCmpDouble(self):
+        i = IntObject(2)
+        result = i.call(u"op__cmp", [DoubleObject(2.0)])
+        self.assertEqual(result.getInt(), 0)
+
     def testOr(self):
         i = IntObject(0x3)
         result = i.call(u"or", [IntObject(0x5)])

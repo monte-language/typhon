@@ -329,10 +329,14 @@ class IntObject(Object):
         return self._i
 
     def recv(self, atom, args):
-        # Ints can be compared.
+        # Ints can be compared to ints and also to doubles.
         if atom is OP__CMP_1:
-            other = unwrapInt(args[0])
-            return polyCmp(self._i, other)
+            try:
+                other = unwrapInt(args[0])
+                return polyCmp(self._i, other)
+            except WrongType:
+                other = unwrapDouble(args[0])
+                return polyCmp(self._i, other)
 
         # Ints are usually used to store the results of comparisons.
         if atom is ABOVEZERO_0:
