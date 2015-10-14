@@ -1,4 +1,4 @@
-def entities := [
+def entities :Map[Str, Str] := [
     "&" => "&amp;",
     "<" => "&lt;",
     ">" => "&gt;",
@@ -6,21 +6,21 @@ def entities := [
     "\"" => "&quot;",
 ]
 
-def escapeEntities(specimen, ej) :Str:
+def escapeEntities(specimen, ej) :Str as DeepFrozen:
     def unescaped :Str exit ej := specimen
     var escaped := unescaped
     for needle => entity in entities:
         escaped replace= (needle, entity)
     return escaped
 
-def escapeFragment(fragment):
+def escapeFragment(fragment) as DeepFrozen:
     switch (fragment):
         match via (escapeEntities) s :Str:
             return s
         match someTag:
             return someTag
 
-object tag:
+object tag as DeepFrozen:
     match [tagType, pieces, _]:
         def fragments := [for piece in (pieces) escapeFragment(piece)]
         object HTMLTag:

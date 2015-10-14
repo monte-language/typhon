@@ -1,8 +1,16 @@
-def [=> UTF8] | _ := import.script("lib/codec/utf8")
-def [=> tag] | _ := import.script("lib/http/tag")
+imports
+exports (smallBody,
+         notFoundResource,
+         makeDebugResource,
+         makeResource,
+         makeResourceApp,
+         main)
+
+def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
+def [=> tag :DeepFrozen] | _ := import.script("lib/http/tag")
 
 
-def smallBody(s):
+def smallBody(s) as DeepFrozen:
     escape badBody:
         def body := UTF8.encode(s, badBody)
         def headers := [
@@ -14,7 +22,7 @@ def smallBody(s):
         return null
 
 
-object notFoundResource:
+object notFoundResource as DeepFrozen:
     to getStaticChildren():
         return [].asMap()
 
@@ -26,7 +34,7 @@ object notFoundResource:
         return [404, headers, body]
 
 
-def autoSI(var amount):
+def autoSI(var amount) as DeepFrozen:
     if (amount < 1024):
         return `$amount `
     def prefixes := ["Ki", "Mi", "Gi", "Ti"]
@@ -37,7 +45,7 @@ def autoSI(var amount):
     return `$amount ${prefixes[-1]}`
 
 
-def makeDebugResource(runtime):
+def makeDebugResource(runtime) as DeepFrozen:
     return object debugResource:
         to getStaticChildren():
             return [].asMap()
@@ -65,13 +73,12 @@ def makeDebugResource(runtime):
                 M.call(tag, "ul", bucketList), [].asMap())
             def reactorTag := tag.div(
                 tag.h2("Reactor"),
-                tag.p(`Alarms: ${reactor.getAlarms()}`),
-                tag.p(`Selectables: ${reactor.getSelectables()}`))
+                tag.p(`Handles: ${reactor.getHandles()}`))
             def body := tag.body(tag.h1("Debug Info"), heapTag, reactorTag)
             return smallBody(`$body`)
 
 
-def makeResource(worker, var children :Map[Str, Any]):
+def makeResource(worker, var children :Map[Str, Any]) as DeepFrozen:
     return object resource:
         to getStaticChildren():
             return children
@@ -88,7 +95,7 @@ def makeResource(worker, var children :Map[Str, Any]):
             return worker(resource, verb, headers)
 
 
-def makeResourceApp(root):
+def makeResourceApp(root) as DeepFrozen:
     def resourceApp(request):
         escape badRequest:
             def [[verb, path], headers] exit badRequest := request
@@ -105,10 +112,15 @@ def makeResourceApp(root):
     return resourceApp
 
 
-[
-    => notFoundResource,
-    => makeDebugResource,
-    => makeResource,
-    => makeResourceApp,
-    => smallBody,
-]
+def main(=> currentRuntime, => makeTCP4ServerEndpoint) as DeepFrozen:
+    def [=> makeHTTPEndpoint] | _ := import.script("lib/http/server")
+
+    # Just a single / that shows the debug page.
+    def root := makeDebugResource(currentRuntime)
+
+    def port :Int := 8080
+    def endpoint := makeHTTPEndpoint(makeTCP4ServerEndpoint(port))
+    def app := makeResourceApp(root)
+    endpoint.listen(app)
+
+    return 0
