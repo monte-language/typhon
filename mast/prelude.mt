@@ -59,6 +59,9 @@ object Void as DeepFrozenStamp:
 
      This guard admits only `null`."
 
+    to _printOn(out):
+        out.print("Void")
+
     to coerce(specimen, ej):
         if (specimen != null):
             throw.eject(ej, "not null")
@@ -677,6 +680,10 @@ def [
 preludeScope := import.script("prelude/space",
                        preludeScope | [=> OrderedRegionMaker,
                                        => OrderedSpaceMaker]) | preludeScope
+
+# And once again, to upgrade all the guards with interfaces.
+preludeScope := import.script("prelude/coreInterfaces",
+                              preludeScope) | preludeScope
 
 # b__quasiParser desires spaces.
 preludeScope |= import.script("prelude/b", preludeScope)

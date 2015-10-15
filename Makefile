@@ -22,7 +22,8 @@ boot_objects = boot/lib/monte/monte_lexer.ty \
 	boot/prelude/region.ty \
 	boot/prelude/simple.ty \
 	boot/prelude/space.ty \
-	boot/prelude/transparent.ty
+	boot/prelude/transparent.ty \
+	boot/prelude/coreInterfaces.ty
 
 .PRECIOUS: $(boot_objects)
 
@@ -81,7 +82,8 @@ test: testVM testMast
 prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/m.ty \
 	mast/prelude/monte_ast.ty mast/prelude/ql.ty mast/prelude/region.ty \
 	mast/prelude/simple.ty mast/prelude/space.ty mast/prelude/deepfrozen.ty \
-	mast/prelude/protocolDesc.ty mast/prelude/b.ty mast/prelude/transparent.ty
+	mast/prelude/protocolDesc.ty mast/prelude/b.ty mast/prelude/transparent.ty \
+	mast/prelude/coreInterfaces.ty
 
 codec: mast/lib/codec/utf8.ty
 
