@@ -754,6 +754,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     return [count += 1, t]
                 catch msg:
                     if (msg == null):
+                        checkParenBalance(fn msg {formatError(msg, ej)})
                         throw.eject(ej, null)
                     else:
                         formatError(msg, ej)
