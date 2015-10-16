@@ -412,7 +412,6 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             if (canStartIndentedBlock):
                 def spaces := consumeWhitespaceAndComments()
                 if (strict && !inStatementPosition()):
-                    endToken()
                     checkParenBalance(fail)
                     throw.eject(fail,
                         ["Indented blocks only allowed in statement position", spanAtPoint()])
@@ -725,6 +724,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
     bind checkParenBalance(fail):
         while (true):
+            startPos := -1
             getNextToken(false, __break)
         if (braceStack.size() != 0):
             for b in braceStack:
