@@ -159,11 +159,14 @@ object List as DeepFrozenStamp:
 
     to get(subGuard):
         # XXX make this transparent
-        return object SubList implements _ListGuardStamp:
+        return object SubList as DeepFrozenStamp implements _ListGuardStamp, Selfless, TransparentStamp:
             to _printOn(out):
                 out.print("List[")
                 subGuard._printOn(out)
                 out.print("]")
+
+            to _uncall():
+                return [List, "get", [subGuard], [].asMap()]
 
             to getGuard():
                 return subGuard
@@ -215,11 +218,14 @@ object Set as DeepFrozenStamp:
 
     to get(subGuard):
         # XXX make this transparent
-        return object SubSet implements _SetGuardStamp:
+        return object SubSet implements _SetGuardStamp, Selfless, TransparentStamp:
             to _printOn(out):
                 out.print("Set[")
                 subGuard._printOn(out)
                 out.print("]")
+
+            to _uncall():
+                return [Set, "get", [subGuard], [].asMap()]
 
             to getGuard():
                 return subGuard
@@ -270,14 +276,16 @@ object Map as DeepFrozenStamp:
         throw.eject(ej, ["(Probably) not a map:", specimen])
 
     to get(keyGuard, valueGuard):
-        #XXX Make this transparent
-        return object SubMap implements _MapGuardStamp:
+        return object SubMap implements _MapGuardStamp, Selfless, TransparentStamp:
             to _printOn(out):
                 out.print("Map[")
                 keyGuard._printOn(out)
                 out.print(", ")
                 valueGuard._printOn(out)
                 out.print("]")
+
+            to _uncall():
+                return [Map, "get", [keyGuard, valueGuard], [].asMap()]
 
             to getGuards():
                 return [keyGuard, valueGuard]
@@ -338,11 +346,14 @@ object NullOk as DeepFrozenStamp:
         throw.eject(ej, ["Not null:", specimen])
 
     to get(subGuard):
-        return object SubNullOk implements _NullOkStamp:
+        return object SubNullOk implements _NullOkStamp, Selfless, TransparentStamp:
             to _printOn(out):
                 out.print("NullOk[")
                 out.print(subGuard)
                 out.print("]")
+
+            to _uncall():
+                return [NullOk, "get", [subGuard], [].asMap()]
 
             to coerce(specimen, ej):
                 if (specimen == null):
@@ -384,12 +395,14 @@ object Same as DeepFrozenStamp:
         out.print("Same")
 
     to get(value):
-        #XXX make this transparent
-        return object SameGuard implements _SameGuardStamp:
+        return object SameGuard implements _SameGuardStamp, Selfless, TransparentStamp:
             to _printOn(out):
                 out.print("Same[")
                 value._printOn(out)
                 out.print("]")
+
+            to _uncall():
+                return [Same, "get", [value], [].asMap()]
 
             to coerce(specimen, ej):
                 if (!__equalizer.sameYet(value, specimen)):
