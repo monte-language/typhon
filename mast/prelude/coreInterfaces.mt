@@ -1,4 +1,4 @@
-def compose(f :SubrangeGuard[DeepFrozen], g :DeepFrozen):
+def compose(f :DeepFrozen, g :DeepFrozen):
     "Compose two objects together.
 
      This composite object passes messages to `f`, except for those which
@@ -7,7 +7,7 @@ def compose(f :SubrangeGuard[DeepFrozen], g :DeepFrozen):
     # Subrange proof.
     def F :Same[f] := f
 
-    return object composition as DeepFrozen implements SubrangeGuard[F]:
+    return object composition as DeepFrozen implements SubrangeGuard[DeepFrozen]:
         to coerce(specimen, ej) :F:
             return f.coerce(specimen, ej)
 
