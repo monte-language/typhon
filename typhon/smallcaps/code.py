@@ -27,17 +27,21 @@ from typhon.smallcaps.ops import (reverseOps, ASSIGN_GLOBAL, ASSIGN_FRAME,
 class Code(object):
     """
     SmallCaps code object.
+
+    I wish. It's machine code.
     """
 
     _immutable_ = True
-    _immutable_fields_ = ("fqn", "instructions[*]?", "indices[*]?",
+    _immutable_fields_ = ("fqn", "methodName",
+                          "instructions[*]?", "indices[*]?",
                           "atoms[*]", "globals[*]", "frame[*]", "literals[*]",
                           "locals[*]", "scripts[*]", "maxDepth",
                           "maxHandlerDepth")
 
-    def __init__(self, fqn, instructions, atoms, literals, globals, frame,
-                 locals, scripts):
+    def __init__(self, fqn, methodName, instructions, atoms, literals,
+                 globals, frame, locals, scripts):
         self.fqn = fqn
+        self.methodName = methodName
         # Copy all of the lists on construction, to satisfy RPython's need for
         # these lists to be immutable.
         self.instructions = [pair[0] for pair in instructions]
@@ -125,6 +129,7 @@ class Code(object):
         except ValueError:
             filename = "<unknown>"
             objname = self.fqn.encode("utf-8")
-        return "mt:%s:1:%s" % (objname, filename)
+        method = self.methodName.encode("utf-8")
+        return "mt:%s.%s:1:%s" % (objname, method, filename)
 
 rvmprof.register_code_object_class(Code, Code.profileName)

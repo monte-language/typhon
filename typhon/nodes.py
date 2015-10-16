@@ -145,8 +145,10 @@ class LocalScope(object):
 class Compiler(object):
 
     def __init__(self, initialFrame=None, initialGlobals=None,
-                 availableClosure=None, fqn=u""):
+                 availableClosure=None, fqn=u"", methodName=u"<noMethod>"):
         self.fqn = fqn
+        self.methodName = methodName
+
         self.instructions = []
 
         if initialFrame is None:
@@ -174,7 +176,8 @@ class Compiler(object):
 
     def pushScope(self):
         c = Compiler(initialFrame=self.frame, initialGlobals=self.globals,
-                     availableClosure=self.availableClosure, fqn=self.fqn)
+                     availableClosure=self.availableClosure, fqn=self.fqn,
+                     methodName=self.methodName)
         c.instructions = self.instructions
         c.atoms = self.atoms
         c.literals = self.literals
@@ -190,8 +193,8 @@ class Compiler(object):
         globals = self.globals.keys()
         locals = self.locals.nameList()
 
-        code = Code(self.fqn, self.instructions, atoms, literals, globals,
-                    frame, locals, self.scripts)
+        code = Code(self.fqn, self.methodName, self.instructions, atoms,
+                    literals, globals, frame, locals, self.scripts)
 
         # Register the code for profiling.
         rvmprof.register_code(code, Code.profileName)
@@ -1775,7 +1778,7 @@ class CodeScript(object):
         verb = method._verb
         arity = len(method._ps)
         compiler = Compiler(self.closureNames, self.globalNames,
-                            self.availableClosure, fqn=fqn)
+                            self.availableClosure, fqn=fqn, methodName=verb)
         # [... specimen1 ej1 specimen0 ej0 namedArgs]
         for np in method._namedParams:
             np.compile(compiler)
@@ -1806,7 +1809,8 @@ class CodeScript(object):
 
     def addMatcher(self, matcher, fqn):
         compiler = Compiler(self.closureNames, self.globalNames,
-                            self.availableClosure, fqn=fqn)
+                            self.availableClosure, fqn=fqn,
+                            methodName=u"<matcher>")
         # [[verb, args] ej]
         matcher._pattern.compile(compiler)
         # []
