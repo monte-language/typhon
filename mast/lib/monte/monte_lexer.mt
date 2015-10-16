@@ -48,6 +48,37 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     def queuedTokens := [].diverge()
     def indentPositionStack := [0].diverge()
 
+    def formatError(error, err):
+        if (error =~ [errMsg, span]):
+            if (span == null):
+                # There's no span information. This is legal and caused by
+                # token exhaustion.
+                throw.eject(err, "Error at end of input: " + errMsg)
+
+            def front := (span.getStartLine() - 3).max(0)
+            def back := span.getEndLine() + 3
+            def allLines := input.split("\n")
+            def lines := allLines.slice(front, back.min(allLines.size()))
+            def msg := [].diverge()
+            var i := front
+            for line in lines:
+                i += 1
+                def lnum := M.toString(i)
+                def pad := " " * (4 - lnum.size())
+                msg.push(`$pad$lnum $line`)
+                if (i == span.getStartLine()):
+                    def errLine := "    " + " " * span.getStartCol() + "^"
+                    if (span.getStartLine() == span.getEndLine()):
+                        msg.push(errLine + "~" * (span.getEndCol() - span.getStartCol()))
+                    else:
+                        msg.push(errLine)
+            msg.push(errMsg)
+            def msglines := msg.snapshot()
+            def fullMsg := "\n".join(msglines) + "\n"
+            throw.eject(err, fullMsg)
+        else:
+            throw.eject(err, `Unrecognized parser error data $error`)
+
     def atEnd():
         return position == input.size()
 
@@ -378,6 +409,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             if (canStartIndentedBlock):
                 def spaces := consumeWhitespaceAndComments()
                 if (!inStatementPosition()):
+                    #checkParenBalance(fail)
                     throw.eject(fail,
                         ["Indented blocks only allowed in statement position", spanAtPoint()])
                 if (spaces > indentPositionStack.last()):
@@ -709,15 +741,18 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     def t := getNextToken(e)
                     return [count += 1, t]
                 catch msg:
-                    errorMessage := msg
-                    if (msg == null && !atEnd()):
-                        throw.eject(ej, [`Trailing garbage: ${input.slice(position, input.size())}`, spanAtPoint()])
-                    throw.eject(ej, msg)
+                    if (msg == null):
+                        throw.eject(ej, null)
+                    else:
+                        formatError(msg, ej)
             finally:
                 startPos := -1
 
         to lexerForNextChunk(chunk):
             return _makeMonteLexer(chunk, braceStack, nestLevel, inputName)
+
+        to formatError(e, ej):
+            formatError(e, ej)
 
         to getInput():
             return input

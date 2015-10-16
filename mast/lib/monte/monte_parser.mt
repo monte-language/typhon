@@ -17,38 +17,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
     var position := -1
     var lastError := null
 
-    def formatError(var error, err):
+    def formatError(var error, ej):
         if (error == null):
             error := ["Syntax error", tokens[position][2]]
-        if (error =~ [errMsg, span]):
-            if (span == null):
-                # There's no span information. This is legal and caused by
-                # token exhaustion.
-                throw.eject(err, "Error at end of input: " + errMsg)
-
-            def front := (span.getStartLine() - 3).max(0)
-            def back := span.getEndLine() + 3
-            def allLines := lex.getInput().split("\n")
-            def lines := allLines.slice(front, back.min(allLines.size()))
-            def msg := [].diverge()
-            var i := front
-            for line in lines:
-                i += 1
-                def lnum := M.toString(i)
-                def pad := " " * (4 - lnum.size())
-                msg.push(`$pad$lnum $line`)
-                if (i == span.getStartLine()):
-                    def errLine := "    " + " " * span.getStartCol() + "^"
-                    if (span.getStartLine() == span.getEndLine()):
-                        msg.push(errLine + "~" * (span.getEndCol() - span.getStartCol()))
-                    else:
-                        msg.push(errLine)
-            msg.push(errMsg)
-            def msglines := msg.snapshot()
-            def fullMsg := "\n".join(msglines) + "\n"
-            throw.eject(err, fullMsg)
-        else:
-            throw.eject(err, `what am I supposed to do with $error ?`)
+        lex.formatError(error, ej)
 
     def giveUp(e):
         formatError(e, err)
