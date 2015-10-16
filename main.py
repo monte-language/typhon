@@ -124,8 +124,8 @@ class profiling(object):
         self.handle = open(self.path, "wb")
         try:
             rvmprof.enable(self.handle.fileno(), 0.00042)
-        except rvmprof.VMProfError:
-            print "Couldn't enable vmprof :T"
+        except rvmprof.VMProfError as vmpe:
+            print "Couldn't enable vmprof:", vmpe.msg
 
     def __exit__(self, *args):
         if not self.enabled:
@@ -133,8 +133,8 @@ class profiling(object):
 
         try:
             rvmprof.disable()
-        except rvmprof.VMProfError:
-            print "Couldn't disable vmprof >:T"
+        except rvmprof.VMProfError as vmpe:
+            print "Couldn't disable vmprof:", vmpe.msg
         self.handle.close()
 
 
