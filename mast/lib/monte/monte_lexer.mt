@@ -109,18 +109,18 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             return EOF
         return input[position + 1]
 
-    def pushBrace(opener, closer, indent, canNest):
+    def pushBrace(opener, openerSpan, closer, indent, canNest):
         if (canNest):
             nestLevel += 1
-        braceStack.push([opener, closer, indent, canNest])
+        braceStack.push([opener, openerSpan, closer, indent, canNest])
 
     def popBrace(closer :Any[Str, Char], fail):
         if (braceStack.size() <= 1):
             throw.eject(fail, [`Unmatched closing character ${closer.quote()}`, spanAtPoint()])
-        else if (braceStack.last()[1] != closer):
+        else if (braceStack.last()[2] != closer):
             throw.eject(fail, [`Mismatch: ${closer.quote()} doesn't close ${braceStack.last()[0]}`, spanAtPoint()])
         def item := braceStack.pop()
-        if (item[3]):
+        if (item[4]):
             nestLevel -= 1
 
     def inStatementPosition():
@@ -162,7 +162,6 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         def span := __makeSourceSpan(inputName, tokenStartLine == lineNumber,
                     tokenStartLine, tokenStartCol, lineNumber, colNumber)
         startPos := -1
-        # XXX use span somehow
         return [tok, span]
 
     def leaf(tokname):
@@ -276,11 +275,11 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     def stringLiteral(fail):
         def opener := currentChar
         advance()
-        pushBrace(opener, '"', 0, false)
+        pushBrace(opener, spanAtPoint(), '"', 0, false)
         def buf := [].diverge()
         while (currentChar != '"'):
             if (atEnd()):
-                throw.eject(fail, ["Input ends inside string literal", spanAtPoint()])
+                throw.eject(fail, ["Input ends inside string literal", braceStack.last()[1]])
             def cc := charConstant(fail)
             if (cc != null):
                buf.push(cc)
@@ -293,7 +292,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         while (c == null):
            c := charConstant(fail)
         if (currentChar != '\''):
-            throw.eject(fail, ["Character constant must end in \"'\"", spanAtPoint()])
+            throw.eject(fail, ["Character constant must end in \"'\"", braceStack.last()[1]])
         advance()
         return composite(".char.", c, endToken()[1])
 
@@ -342,7 +341,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     buf.push(cc)
             else:
                 def [opener, span] := endToken()
-                pushBrace(opener, "hole", nestLevel * 4, true)
+                pushBrace(opener, spanAtPoint(), "hole", nestLevel * 4, true)
                 return composite("QUASI_OPEN", __makeString.fromChars(buf.snapshot()),
                                  span)
 
@@ -355,9 +354,9 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             opener := o
             span := s
         if (atLogicalEndOfLine()):
-            pushBrace(opener, closer, nestLevel * 4, true)
+            pushBrace(opener, spanAtPoint(), closer, nestLevel * 4, true)
         else:
-            pushBrace(opener, closer, offsetInLine(), true)
+            pushBrace(opener, spanAtPoint(), closer, offsetInLine(), true)
         return composite(opener, null, if (span != null) {span} else {spanAtPoint()})
 
     def closeBracket(fail):
@@ -390,11 +389,15 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         return spaces
 
 
-    def getNextToken(fail):
+    def checkParenBalance
+
+    def getNextToken(strict, fail):
+        # 'strict' determines if indentation errors count as failures; this is
+        # turned off when just doing parens-balance checks.
         if (queuedTokens.size() > 0):
             return queuedTokens.pop()
 
-        if (braceStack.last()[1] == '`'):
+        if (braceStack.last()[2] == '`'):
             startToken()
             return quasiPart(fail)
 
@@ -408,8 +411,9 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             def c := advance()
             if (canStartIndentedBlock):
                 def spaces := consumeWhitespaceAndComments()
-                if (!inStatementPosition()):
-                    #checkParenBalance(fail)
+                if (strict && !inStatementPosition()):
+                    endToken()
+                    checkParenBalance(fail)
                     throw.eject(fail,
                         ["Indented blocks only allowed in statement position", spanAtPoint()])
                 if (spaces > indentPositionStack.last()):
@@ -418,7 +422,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     canStartIndentedBlock := false
                     queuedTokens.insert(0, composite("INDENT", null, spanAtPoint()))
                     return leaf("EOL")
-                else:
+                else if (strict):
                     throw.eject(fail, ["Expected an indented block", spanAtPoint()])
             if (!inStatementPosition()):
                 return leaf("EOL")
@@ -426,7 +430,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 queuedTokens.insert(0, leaf("EOL"))
                 startToken()
                 def spaces := consumeWhitespaceAndComments()
-                if (spaces > indentPositionStack.last()):
+                if (strict && spaces > indentPositionStack.last()):
                     throw.eject(fail, ["Unexpected indent", spanAtPoint()])
                 if (atEnd()):
                     while (indentPositionStack.size() > 1):
@@ -435,7 +439,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                         queuedTokens.push(composite("DEDENT", null, spanAtPoint()))
                     return queuedTokens.pop()
                 while (spaces < indentPositionStack.last()):
-                    if (!indentPositionStack.contains(spaces)):
+                    if (strict && !indentPositionStack.contains(spaces)):
                         throw.eject(fail, ["unindent does not match any outer indentation level", spanAtPoint()])
                     indentPositionStack.pop()
                     popBrace("DEDENT", fail)
@@ -456,7 +460,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
         if (cur == '}'):
             def result := closeBracket(fail)
-            if (braceStack.last()[1] == "hole"):
+            if (braceStack.last()[2] == "hole"):
                 popBrace("hole", fail)
             return result
         if (cur == ']'):
@@ -479,7 +483,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 if (MONTE_KEYWORDS.contains(key.toLowerCase())):
                     advance()
                     throw.eject(fail, [`$key is a keyword`, spanAtPoint()])
-                if (braceStack.last()[1] == "hole"):
+                if (braceStack.last()[2] == "hole"):
                     popBrace("hole", fail)
                 return composite("DOLLAR_IDENT", key, span)
             else if (nex == '$'):
@@ -502,7 +506,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 if (MONTE_KEYWORDS.contains(key.toLowerCase())):
                     advance()
                     throw.eject(fail, [`$key is a keyword`, spanAtPoint()])
-                if (braceStack.last()[1] == "hole"):
+                if (braceStack.last()[2] == "hole"):
                     popBrace("hole", fail)
                 return composite("AT_IDENT", key, span)
             else if (nex == '@'):
@@ -693,10 +697,10 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
         if (cur == '`'):
             advance()
-            pushBrace('`', '`', 0, false)
+            pushBrace('`', spanAtPoint(), '`', 0, false)
             def part := quasiPart(fail)
             if (part == null):
-                def next := getNextToken(fail)
+                def next := getNextToken(strict, fail)
                 if (next == EOF):
                     throw.eject(fail, ["File ends in quasiliteral", spanAtPoint()])
                 return next
@@ -719,6 +723,14 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
         throw.eject(fail, [`Unrecognized character ${cur.quote()}`, spanAtPoint()])
 
+    bind checkParenBalance(fail):
+        while (true):
+            getNextToken(false, __break)
+        if (braceStack.size() != 0):
+            for b in braceStack:
+                if (!["INDENT", null].contains(b[0])):
+                    throw.eject(fail, [`No matching ${b[2]} found`, b[1]])
+
     advance()
     return object monteLexer:
 
@@ -738,7 +750,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             try:
                 def errorStartPos := position
                 escape e:
-                    def t := getNextToken(e)
+                    def t := getNextToken(true, e)
                     return [count += 1, t]
                 catch msg:
                     if (msg == null):
@@ -760,7 +772,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 object makeMonteLexer as DeepFrozen:
     to run(input, inputName):
         # State for paired delimiters like "", {}, (), []
-        def braceStack := [[null, null, 0, true]].diverge()
+        def braceStack := [[null, null, null, 0, true]].diverge()
         return _makeMonteLexer(input, braceStack, 0, inputName)
 
     to holes():
