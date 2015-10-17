@@ -184,11 +184,41 @@ class ScriptObject(Object):
 
         return d
 
+    def recvNamed(self, atom, args, namedArgs):
+        method = self.codeScript.lookupMethod(atom)
+        if method:
+            return self.runMethod(method, args, namedArgs)
+        else:
+            # No atoms matched, so there's no prebuilt methods. Instead, we'll
+            # use our matchers.
+            return self.runMatchers(atom, args, namedArgs)
+
+    @unroll_safe
+    def runMatchers(self, atom, args, namedArgs):
+        message = ConstList([StrObject(atom.verb), ConstList(args),
+                             namedArgs])
+        for matcher in self.codeScript.matchers:
+            with Ejector() as ej:
+                try:
+                    return self.runMatcher(matcher, message, ej)
+                except Ejecting as e:
+                    if e.ejector is ej:
+                        # Looks like unification failed. On to the next
+                        # matcher!
+                        continue
+                    else:
+                        # It's not ours, cap'n.
+                        raise
+
+        raise Refused(self, atom, args)
+
 
 class QuietObject(ScriptObject):
     """
     An object without a closure.
     """
+
+    stamps = []
 
     def __init__(self, codeScript, globals, displayName, auditors, fqn):
         self.codeScript = codeScript
@@ -201,8 +231,9 @@ class QuietObject(ScriptObject):
             auditors = auditors[1:]
 
         # Grab the guards of our globals and send them off for processing.
-        guards = self.getGuards()
-        self.stamps = self.codeScript.audit(auditors, guards)[:]
+        if auditors:
+            guards = self.getGuards()
+            self.stamps = self.codeScript.audit(auditors, guards)[:]
 
     def getGuards(self):
         guards = {}
@@ -211,32 +242,8 @@ class QuietObject(ScriptObject):
         return guards
 
     @unroll_safe
-    def recvNamed(self, atom, args, namedArgs):
-        code = self.codeScript.lookupMethod(atom)
-        if code is None:
-            # No atoms matched, so there's no prebuilt methods. Instead, we'll
-            # use our matchers.
-            for matcher in self.codeScript.matchers:
-                with Ejector() as ej:
-                    machine = SmallCaps(matcher, None, self.globals)
-                    machine.push(ConstList([StrObject(atom.verb),
-                                            ConstList(args), namedArgs]))
-                    machine.push(ej)
-                    try:
-                        machine.run()
-                        return machine.pop()
-                    except Ejecting as e:
-                        if e.ejector is ej:
-                            # Looks like unification failed. On to the next
-                            # matcher!
-                            continue
-                        else:
-                            # It's not ours, cap'n.
-                            raise
-
-            raise Refused(self, atom, args)
-
-        machine = SmallCaps(code, None, self.globals)
+    def runMethod(self, method, args, namedArgs):
+        machine = SmallCaps(method, None, self.globals)
         # print "--- Running", self.displayName, atom, args
         # Push the arguments onto the stack, backwards.
         machine.push(namedArgs)
@@ -247,11 +254,20 @@ class QuietObject(ScriptObject):
         machine.run()
         return machine.pop()
 
+    def runMatcher(self, code, message, ej):
+        machine = SmallCaps(code, None, self.globals)
+        machine.push(message)
+        machine.push(ej)
+        machine.run()
+        return machine.pop()
+
 
 class BusyObject(ScriptObject):
     """
     An object with a closure.
     """
+
+    stamps = []
 
     _immutable_fields_ = "closure[*]",
 
@@ -272,8 +288,9 @@ class BusyObject(ScriptObject):
             self.patchSelf(auditors[0])
 
         # Grab the guards of our closure and send them off for processing.
-        guards = self.getGuards()
-        self.stamps = self.codeScript.audit(auditors, guards)[:]
+        if auditors:
+            guards = self.getGuards()
+            self.stamps = self.codeScript.audit(auditors, guards)[:]
 
     def getGuards(self):
         guards = {}
@@ -289,32 +306,8 @@ class BusyObject(ScriptObject):
             self.closure[selfIndex] = FinalBinding(self, guard)
 
     @unroll_safe
-    def recvNamed(self, atom, args, namedArgs):
-        code = self.codeScript.lookupMethod(atom)
-        if code is None:
-            # No atoms matched, so there's no prebuilt methods. Instead, we'll
-            # use our matchers.
-            for matcher in self.codeScript.matchers:
-                with Ejector() as ej:
-                    machine = SmallCaps(matcher, self.closure, self.globals)
-                    machine.push(ConstList([StrObject(atom.verb),
-                                            ConstList(args), namedArgs]))
-                    machine.push(ej)
-                    try:
-                        machine.run()
-                        return machine.pop()
-                    except Ejecting as e:
-                        if e.ejector is ej:
-                            # Looks like unification failed. On to the next
-                            # matcher!
-                            continue
-                        else:
-                            # It's not ours, cap'n.
-                            raise
-
-            raise Refused(self, atom, args)
-
-        machine = SmallCaps(code, self.closure, self.globals)
+    def runMethod(self, method, args, namedArgs):
+        machine = SmallCaps(method, self.closure, self.globals)
         # print "--- Running", self.displayName, atom, args
         # Push the arguments onto the stack, backwards.
         machine.push(namedArgs)
@@ -322,5 +315,12 @@ class BusyObject(ScriptObject):
             machine.push(arg)
             machine.push(NullObject)
         machine.push(namedArgs)
+        machine.run()
+        return machine.pop()
+
+    def runMatcher(self, code, message, ej):
+        machine = SmallCaps(code, self.closure, self.globals)
+        machine.push(message)
+        machine.push(ej)
         machine.run()
         return machine.pop()
