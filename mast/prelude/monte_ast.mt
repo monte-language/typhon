@@ -234,7 +234,9 @@ def NamePattern :DeepFrozen := Ast["FinalPattern", "VarPattern",
 # LiteralExpr included here because the optimizer uses it.
 def Noun :DeepFrozen := Ast["NounExpr", "TempNounExpr", "LiteralExpr"]
 
-def astWrapper(node, maker, args, span, scope, nodeName, transformArgs) as DeepFrozen:
+# The story of &scope:
+# Lemme make sure that this works first, okay? ~ C.
+def astWrapper(node, maker, args, span, &scope, nodeName, transformArgs) as DeepFrozen:
     return object astNode extends node implements Selfless, TransparentStamp, astStamp:
         to getStaticScope():
             return scope
@@ -262,7 +264,7 @@ def makeLiteralExpr(value, span) as DeepFrozen:
         to subPrintOn(out, priority):
             out.quote(value)
     return astWrapper(literalExpr, makeLiteralExpr, [value], span,
-        emptyScope, "LiteralExpr", fn f {[value]})
+        &emptyScope, "LiteralExpr", fn f {[value]})
 
 def makeNounExpr(name :Str, span) as DeepFrozen:
     object nounExpr:
@@ -276,7 +278,7 @@ def makeNounExpr(name :Str, span) as DeepFrozen:
                 out.quote(name)
     def scope
     def node := astWrapper(nounExpr, makeNounExpr, [name], span,
-         scope, "NounExpr", fn f {[name]})
+         &scope, "NounExpr", fn f {[name]})
     bind scope := makeStaticScope([node.withoutSpan()], [], [], [], false)
     return node
 
@@ -316,7 +318,7 @@ def makeSlotExpr(noun :Noun, span) as DeepFrozen:
             out.print("&")
             out.print(noun)
     return astWrapper(slotExpr, makeSlotExpr, [noun], span,
-        scope, "SlotExpr", fn f {[noun.transform(f)]})
+        &scope, "SlotExpr", fn f {[noun.transform(f)]})
 
 def makeMetaContextExpr(span) as DeepFrozen:
     def scope := emptyScope
@@ -324,7 +326,7 @@ def makeMetaContextExpr(span) as DeepFrozen:
         to subPrintOn(out, priority):
             out.print("meta.context()")
     return astWrapper(metaContextExpr, makeMetaContextExpr, [], span,
-        scope, "MetaContextExpr", fn f {[]})
+        &scope, "MetaContextExpr", fn f {[]})
 
 def makeMetaStateExpr(span) as DeepFrozen:
     def scope := makeStaticScope([], [], [], [], true)
@@ -332,7 +334,7 @@ def makeMetaStateExpr(span) as DeepFrozen:
         to subPrintOn(out, priority):
             out.print("meta.getState()")
     return astWrapper(metaStateExpr, makeMetaStateExpr, [], span,
-        scope, "MetaStateExpr", fn f {[]})
+        &scope, "MetaStateExpr", fn f {[]})
 
 def makeBindingExpr(noun :Noun, span) as DeepFrozen:
     def scope := noun.getStaticScope()
@@ -343,9 +345,12 @@ def makeBindingExpr(noun :Noun, span) as DeepFrozen:
             out.print("&&")
             out.print(noun)
     return astWrapper(bindingExpr, makeBindingExpr, [noun], span,
-        scope, "BindingExpr", fn f {[noun.transform(f)]})
+        &scope, "BindingExpr", fn f {[noun.transform(f)]})
 
 def makeSeqExpr(exprs :List[Expr], span) as DeepFrozen:
+    # It's common to accidentally nest SeqExprs, mostly because it's legal and
+    # semantically unsurprising (distributive, etc.) So we un-nest them here
+    # as a courtesy. ~ C.
     def _exprs := [].diverge()
     for ex in exprs:
         if (ex.getNodeName() == "SeqExpr"):
@@ -353,7 +358,7 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozen:
         else:
             _exprs.push(ex)
     def fixedExprs := _exprs.snapshot()
-    def scope := sumScopes(fixedExprs)
+    def &scope := makeLazySlot(fn {sumScopes(fixedExprs)})
     object seqExpr:
         to getExprs():
             return fixedExprs
@@ -368,11 +373,11 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozen:
                     out.println("")
                 first := false
                 e.subPrintOn(out, priority.min(priorities["braceExpr"]))
-    return astWrapper(seqExpr, makeSeqExpr, [fixedExprs], span,
-        scope, "SeqExpr", fn f {[transformAll(fixedExprs, f)]})
+    return astWrapper(seqExpr, makeSeqExpr, [fixedExprs], span, &scope,
+                      "SeqExpr", fn f {[transformAll(fixedExprs, f)]})
 
 def makeModule(importsList, exportsList, body, span) as DeepFrozen:
-    def scope := sumScopes(importsList + exportsList)
+    def &scope := makeLazySlot(fn {sumScopes(importsList + exportsList)})
     object ::"module":
         to getImports():
             return importsList
@@ -392,10 +397,10 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozen:
                 out.println("")
             body.subPrintOn(out, priorities["indentExpr"])
     return astWrapper(::"module", makeModule, [importsList, exportsList, body], span,
-        scope, "Module", fn f {[
-            transformAll(importsList, f),
-            transformAll(exportsList, f),
-            body.transform(f)]})
+                      &scope, "Module", fn f {[
+                          transformAll(importsList, f),
+                          transformAll(exportsList, f),
+                          body.transform(f)]})
 
 def mkNAPrinter([k, v]) as DeepFrozen:
     return object napr:
@@ -421,7 +426,8 @@ object NamedArgPairs as DeepFrozen:
 
 def makeMethodCallExpr(rcvr :Expr, verb :Str, arglist :List[Expr],
                        namedArgs :NamedArgPairs, span) as DeepFrozen:
-    def scope := sumScopes([rcvr] + arglist) + namedArgPairsScope(namedArgs)
+    def &scope := makeLazySlot(fn {sumScopes([rcvr] + arglist) +
+                                   namedArgPairsScope(namedArgs)})
     object methodCallExpr:
         to getReceiver():
             return rcvr
@@ -448,13 +454,14 @@ def makeMethodCallExpr(rcvr :Expr, verb :Str, arglist :List[Expr],
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(methodCallExpr, makeMethodCallExpr,
-        [rcvr, verb, arglist, namedArgs], span, scope, "MethodCallExpr",
+        [rcvr, verb, arglist, namedArgs], span, &scope, "MethodCallExpr",
         fn f {[rcvr.transform(f), verb, transformAll(arglist, f),
               [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
 
 def makeFunCallExpr(receiver :Expr, args :List[Expr],
                     namedArgs :NamedArgPairs, span) as DeepFrozen:
-    def scope := sumScopes([receiver] + args) + namedArgPairsScope(namedArgs)
+    def &scope := makeLazySlot(fn {sumScopes([receiver] + args) +
+                                   namedArgPairsScope(namedArgs)})
     object funCallExpr:
         to getReceiver():
             return receiver
@@ -474,11 +481,12 @@ def makeFunCallExpr(receiver :Expr, args :List[Expr],
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(funCallExpr, makeFunCallExpr, [receiver, args, namedArgs], span,
-        scope, "FunCallExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
+        &scope, "FunCallExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
 
 def makeSendExpr(rcvr :Ast, verb :Str, arglist :List[Ast],
                  namedArgs :NamedArgPairs, span) as DeepFrozen:
-    def scope := sumScopes([rcvr] + arglist) + namedArgPairsScope(namedArgs)
+    def &scope := makeLazySlot(fn {sumScopes([rcvr] + arglist) +
+                                   namedArgPairsScope(namedArgs)})
     object sendExpr:
         to getReceiver():
             return rcvr
@@ -505,12 +513,13 @@ def makeSendExpr(rcvr :Ast, verb :Str, arglist :List[Ast],
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(sendExpr, makeSendExpr,
-        [rcvr, verb, arglist, namedArgs], span, scope, "SendExpr",
+        [rcvr, verb, arglist, namedArgs], span, &scope, "SendExpr",
         fn f {[rcvr.transform(f), verb, transformAll(arglist, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
 
 def makeFunSendExpr(receiver :Expr, args :List[Expr],
                     namedArgs :NamedArgPairs, span) as DeepFrozen:
-    def scope := sumScopes([receiver] + args) + namedArgPairsScope(namedArgs)
+    def &scope := makeLazySlot(fn {sumScopes([receiver] + args) +
+                                   namedArgPairsScope(namedArgs)})
     object funSendExpr:
         to getReceiver():
             return receiver
@@ -530,10 +539,10 @@ def makeFunSendExpr(receiver :Expr, args :List[Expr],
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(funSendExpr, makeFunSendExpr, [receiver, args, namedArgs], span,
-        scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
+        &scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
 
 def makeGetExpr(receiver :Expr, indices :List[Expr], span) as DeepFrozen:
-    def scope := sumScopes(indices + [receiver])
+    def &scope := makeLazySlot(fn {sumScopes(indices + [receiver])})
     object getExpr:
         to getReceiver():
             return receiver
@@ -544,10 +553,11 @@ def makeGetExpr(receiver :Expr, indices :List[Expr], span) as DeepFrozen:
             printListOn("[", indices, ", ", "]", out, priorities["braceExpr"])
 
     return astWrapper(getExpr, makeGetExpr, [receiver, indices], span,
-        scope, "GetExpr", fn f {[receiver.transform(f), transformAll(indices, f)]})
+        &scope, "GetExpr", fn f {[receiver.transform(f), transformAll(indices, f)]})
 
 def makeAndExpr(left :Expr, right :Expr, span) as DeepFrozen:
-    def scope := left.getStaticScope() + right.getStaticScope()
+    def &scope := makeLazySlot(fn {left.getStaticScope() +
+                                   right.getStaticScope()})
     object andExpr:
         to getLeft():
             return left
@@ -562,10 +572,11 @@ def makeAndExpr(left :Expr, right :Expr, span) as DeepFrozen:
             if (priorities["logicalAnd"] < priority):
                 out.print(")")
     return astWrapper(andExpr, makeAndExpr, [left, right], span,
-        scope, "AndExpr", fn f {[left.transform(f), right.transform(f)]})
+        &scope, "AndExpr", fn f {[left.transform(f), right.transform(f)]})
 
 def makeOrExpr(left :Expr, right :Expr, span) as DeepFrozen:
-    def scope := left.getStaticScope() + right.getStaticScope()
+    def &scope := makeLazySlot(fn {left.getStaticScope() +
+                                   right.getStaticScope()})
     object orExpr:
         to getLeft():
             return left
@@ -580,7 +591,7 @@ def makeOrExpr(left :Expr, right :Expr, span) as DeepFrozen:
             if (priorities["logicalOr"] < priority):
                 out.print(")")
     return astWrapper(orExpr, makeOrExpr, [left, right], span,
-        scope, "OrExpr", fn f {[left.transform(f), right.transform(f)]})
+        &scope, "OrExpr", fn f {[left.transform(f), right.transform(f)]})
 
 def operatorsToNamePrio :Map[Str, List[Str]] := [
     "+" => ["add", "addsub"],
@@ -598,7 +609,8 @@ def operatorsToNamePrio :Map[Str, List[Str]] := [
     ">>" => ["shiftRight", "comp"]]
 
 def makeBinaryExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
-    def scope := left.getStaticScope() + right.getStaticScope()
+    def &scope := makeLazySlot(fn {left.getStaticScope() +
+                                   right.getStaticScope()})
     object binaryExpr:
         to getLeft():
             return left
@@ -620,7 +632,7 @@ def makeBinaryExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
             if (opPrio < priority):
                 out.print(")")
     return astWrapper(binaryExpr, makeBinaryExpr, [left, op, right], span,
-        scope, "BinaryExpr", fn f {[left.transform(f), op, right.transform(f)]})
+        &scope, "BinaryExpr", fn f {[left.transform(f), op, right.transform(f)]})
 
 def comparatorsToName :Map[Str, Str] := [
     ">" => "greaterThan", "<" => "lessThan",
@@ -628,7 +640,8 @@ def comparatorsToName :Map[Str, Str] := [
     "<=>" => "asBigAs"]
 
 def makeCompareExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
-    def scope := left.getStaticScope() + right.getStaticScope()
+    def &scope := makeLazySlot(fn {left.getStaticScope() +
+                                   right.getStaticScope()})
     object compareExpr:
         to getLeft():
             return left
@@ -649,10 +662,11 @@ def makeCompareExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
             if (priorities["comp"] < priority):
                 out.print(")")
     return astWrapper(compareExpr, makeCompareExpr, [left, op, right], span,
-        scope, "CompareExpr", fn f {[left.transform(f), op, right.transform(f)]})
+        &scope, "CompareExpr", fn f {[left.transform(f), op, right.transform(f)]})
 
 def makeRangeExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
-    def scope := left.getStaticScope() + right.getStaticScope()
+    def &scope := makeLazySlot(fn {left.getStaticScope() +
+                                   right.getStaticScope()})
     object rangeExpr:
         to getLeft():
             return left
@@ -674,10 +688,11 @@ def makeRangeExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
             if (priorities["interval"] < priority):
                 out.print(")")
     return astWrapper(rangeExpr, makeRangeExpr, [left, op, right], span,
-        scope, "RangeExpr", fn f {[left.transform(f), op, right.transform(f)]})
+        &scope, "RangeExpr", fn f {[left.transform(f), op, right.transform(f)]})
 
 def makeSameExpr(left :Expr, right :Expr, direction :Bool, span) as DeepFrozen:
-    def scope := left.getStaticScope() + right.getStaticScope()
+    def &scope := makeLazySlot(fn {left.getStaticScope() +
+                                   right.getStaticScope()})
     object sameExpr:
         to getLeft():
             return left
@@ -697,10 +712,11 @@ def makeSameExpr(left :Expr, right :Expr, direction :Bool, span) as DeepFrozen:
             if (priorities["comp"] < priority):
                 out.print(")")
     return astWrapper(sameExpr, makeSameExpr, [left, right, direction], span,
-        scope, "SameExpr", fn f {[left.transform(f), right.transform(f), direction]})
+        &scope, "SameExpr", fn f {[left.transform(f), right.transform(f), direction]})
 
 def makeMatchBindExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozen:
-    def scope := specimen.getStaticScope() + pattern.getStaticScope()
+    def &scope := makeLazySlot(fn {specimen.getStaticScope() +
+                                   pattern.getStaticScope()})
     object matchBindExpr:
         to getSpecimen():
             return specimen
@@ -715,10 +731,11 @@ def makeMatchBindExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozen:
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(matchBindExpr, makeMatchBindExpr, [specimen, pattern], span,
-        scope, "MatchBindExpr", fn f {[specimen.transform(f), pattern.transform(f)]})
+        &scope, "MatchBindExpr", fn f {[specimen.transform(f), pattern.transform(f)]})
 
 def makeMismatchExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozen:
-    def scope := specimen.getStaticScope() + pattern.getStaticScope()
+    def &scope := makeLazySlot(fn {specimen.getStaticScope() +
+                                   pattern.getStaticScope()})
     object mismatchExpr:
         to getSpecimen():
             return specimen
@@ -733,7 +750,7 @@ def makeMismatchExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozen:
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(mismatchExpr, makeMismatchExpr, [specimen, pattern], span,
-        scope, "MismatchExpr", fn f {[specimen.transform(f), pattern.transform(f)]})
+        &scope, "MismatchExpr", fn f {[specimen.transform(f), pattern.transform(f)]})
 
 def unaryOperatorsToName :Map[Str, Str] := [
     "~" => "complement", "!" => "not", "-" => "negate"]
@@ -755,10 +772,11 @@ def makePrefixExpr(op :Str, receiver :Expr, span) as DeepFrozen:
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(prefixExpr, makePrefixExpr, [op, receiver], span,
-        scope, "PrefixExpr", fn f {[op, receiver.transform(f)]})
+        &scope, "PrefixExpr", fn f {[op, receiver.transform(f)]})
 
 def makeCoerceExpr(specimen :Expr, guard :NullOk[Expr], span) as DeepFrozen:
-    def scope := specimen.getStaticScope() + guard.getStaticScope()
+    def &scope := makeLazySlot(fn {specimen.getStaticScope() +
+                                   guard.getStaticScope()})
     object coerceExpr:
         to getSpecimen():
             return specimen
@@ -773,7 +791,7 @@ def makeCoerceExpr(specimen :Expr, guard :NullOk[Expr], span) as DeepFrozen:
             if (priorities["coerce"] < priority):
                 out.print(")")
     return astWrapper(coerceExpr, makeCoerceExpr, [specimen, guard], span,
-        scope, "CoerceExpr", fn f {[specimen.transform(f), guard.transform(f)]})
+        &scope, "CoerceExpr", fn f {[specimen.transform(f), guard.transform(f)]})
 
 def makeCurryExpr(receiver :Expr, verb :Str, isSend :Bool, span) as DeepFrozen:
     def scope := receiver.getStaticScope()
@@ -799,10 +817,10 @@ def makeCurryExpr(receiver :Expr, verb :Str, isSend :Bool, span) as DeepFrozen:
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(curryExpr, makeCurryExpr, [receiver, verb, isSend], span,
-        scope, "CurryExpr", fn f {[receiver.transform(f), verb, isSend]})
+        &scope, "CurryExpr", fn f {[receiver.transform(f), verb, isSend]})
 
 def makeExitExpr(name :Str, value :NullOk[Expr], span) as DeepFrozen:
-    def scope := scopeMaybe(value)
+    def &scope := makeLazySlot(fn {scopeMaybe(value)})
     object exitExpr:
         to getName():
             return name
@@ -818,7 +836,7 @@ def makeExitExpr(name :Str, value :NullOk[Expr], span) as DeepFrozen:
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(exitExpr, makeExitExpr, [name, value], span,
-        scope, "ExitExpr", fn f {[name, maybeTransform(value, f)]})
+        &scope, "ExitExpr", fn f {[name, maybeTransform(value, f)]})
 
 def makeForwardExpr(patt :Ast["FinalPattern"], span) as DeepFrozen:
     def scope := patt.getStaticScope()
@@ -836,8 +854,10 @@ def makeForwardExpr(patt :Ast["FinalPattern"], span) as DeepFrozen:
         scope, "ForwardExpr", fn f {[patt.transform(f)]})
 
 def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
-    def gs := scopeMaybe(guard)
-    def scope := makeStaticScope([], [], [], [noun.withoutSpan()], false) + gs
+    def &scope := makeLazySlot(fn {makeStaticScope([], [], [],
+                                                   [noun.withoutSpan()],
+                                                   false) +
+                                   scopeMaybe(guard)})
     object varPattern:
         to getNoun():
             return noun
@@ -852,11 +872,14 @@ def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(varPattern, makeVarPattern, [noun, guard], span,
-        scope, "VarPattern",
+        &scope, "VarPattern",
         fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeBindPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
-    def scope := makeStaticScope([], [], [noun.withoutSpan()], [], false) + scopeMaybe(guard)
+    def &scope := makeLazySlot(fn {makeStaticScope([], [],
+                                                   [noun.withoutSpan()], [],
+                                                   false) +
+                                   scopeMaybe(guard)})
     object bindPattern:
         to getNoun():
             return noun
@@ -867,13 +890,14 @@ def makeBindPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(bindPattern, makeBindPattern, [noun, guard], span,
-        scope, "BindPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
+        &scope, "BindPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeDefExpr(pattern :Pattern, exit_ :NullOk[Expr], expr :Expr, span) as DeepFrozen:
-    def scope := if (exit_ == null) {
-        pattern.getStaticScope() + expr.getStaticScope()
+    def &scope := if (exit_ == null) {
+        makeLazySlot(fn {pattern.getStaticScope() + expr.getStaticScope()})
     } else {
-        pattern.getStaticScope() + exit_.getStaticScope() + expr.getStaticScope()
+        makeLazySlot(fn {pattern.getStaticScope() + exit_.getStaticScope() +
+                         expr.getStaticScope()})
     }
     object defExpr:
         to getPattern():
@@ -896,7 +920,7 @@ def makeDefExpr(pattern :Pattern, exit_ :NullOk[Expr], expr :Expr, span) as Deep
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(defExpr, makeDefExpr, [pattern, exit_, expr], span,
-        scope, "DefExpr", fn f {[pattern.transform(f), if (exit_ == null) {null} else {exit_.transform(f)}, expr.transform(f)]})
+        &scope, "DefExpr", fn f {[pattern.transform(f), if (exit_ == null) {null} else {exit_.transform(f)}, expr.transform(f)]})
 
 def makeAssignExpr(lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
     def lname := lvalue.getNodeName()
@@ -905,7 +929,7 @@ def makeAssignExpr(lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
     } else {
         lvalue.getStaticScope()
     }
-    def scope := lscope + rvalue.getStaticScope()
+    def &scope := makeLazySlot(fn {lscope + rvalue.getStaticScope()})
     object assignExpr:
         to getLvalue():
             return lvalue
@@ -920,7 +944,7 @@ def makeAssignExpr(lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(assignExpr, makeAssignExpr, [lvalue, rvalue], span,
-        scope, "AssignExpr", fn f {[lvalue.transform(f), rvalue.transform(f)]})
+        &scope, "AssignExpr", fn f {[lvalue.transform(f), rvalue.transform(f)]})
 
 def makeVerbAssignExpr(verb :Str, lvalue :Expr, rvalues :List[Expr], span) as DeepFrozen:
     def lname := lvalue.getNodeName()
@@ -929,7 +953,7 @@ def makeVerbAssignExpr(verb :Str, lvalue :Expr, rvalues :List[Expr], span) as De
     } else {
         lvalue.getStaticScope()
     }
-    def scope := lscope + sumScopes(rvalues)
+    def &scope := makeLazySlot(fn {lscope + sumScopes(rvalues)})
     object verbAssignExpr:
         to getLvalue():
             return lvalue
@@ -949,7 +973,7 @@ def makeVerbAssignExpr(verb :Str, lvalue :Expr, rvalues :List[Expr], span) as De
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(verbAssignExpr, makeVerbAssignExpr, [verb, lvalue, rvalues], span,
-        scope, "VerbAssignExpr", fn f {[verb, lvalue.transform(f), transformAll(rvalues, f)]})
+        &scope, "VerbAssignExpr", fn f {[verb, lvalue.transform(f), transformAll(rvalues, f)]})
 
 
 def makeAugAssignExpr(op :Str, lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
@@ -959,7 +983,7 @@ def makeAugAssignExpr(op :Str, lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
     } else {
         lvalue.getStaticScope()
     }
-    def scope := lscope + rvalue.getStaticScope()
+    def &scope := makeLazySlot(fn {lscope + rvalue.getStaticScope()})
     object augAssignExpr:
         to getOp():
             return op
@@ -980,12 +1004,13 @@ def makeAugAssignExpr(op :Str, lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(augAssignExpr, makeAugAssignExpr, [op, lvalue, rvalue], span,
-        scope, "AugAssignExpr", fn f {[op, lvalue.transform(f), rvalue.transform(f)]})
+        &scope, "AugAssignExpr", fn f {[op, lvalue.transform(f), rvalue.transform(f)]})
 
 def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
                namedPatts :List[Ast["NamedParam"]], resultGuard :NullOk[Expr],
                body :Expr, span) as DeepFrozen:
-    def scope := sumScopes(patterns + namedPatts + [resultGuard, body]).hide()
+    def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatts +
+                                             [resultGuard, body]).hide()})
     object ::"method":
         to getDocstring():
             return docstring
@@ -1018,12 +1043,13 @@ def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
                 }
             }, docstring, body, out, priority)
     return astWrapper(::"method", makeMethod, [docstring, verb, patterns, namedPatts, resultGuard, body], span,
-        scope, "Method", fn f {[docstring, verb, transformAll(patterns, f), transformAll(namedPatts, f), maybeTransform(resultGuard, f), body.transform(f)]})
+        &scope, "Method", fn f {[docstring, verb, transformAll(patterns, f), transformAll(namedPatts, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeTo(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
            namedPatts :List[Ast["NamedParam"]], resultGuard :NullOk[Expr],
            body :Expr, span) as DeepFrozen:
-    def scope := sumScopes(patterns + namedPatts + [resultGuard, body]).hide()
+    def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatts +
+                                             [resultGuard, body]).hide()})
     object ::"to":
         to getDocstring():
             return docstring
@@ -1057,10 +1083,11 @@ def makeTo(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
                 }
             }, docstring, body, out, priority)
     return astWrapper(::"to", makeTo, [docstring, verb, patterns, namedPatts, resultGuard, body], span,
-        scope, "To", fn f {[docstring, verb, transformAll(patterns, f), transformAll(namedPatts, f), maybeTransform(resultGuard, f), body.transform(f)]})
+        &scope, "To", fn f {[docstring, verb, transformAll(patterns, f), transformAll(namedPatts, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeMatcher(pattern :Pattern, body :Expr, span) as DeepFrozen:
-    def scope := (pattern.getStaticScope() + body.getStaticScope()).hide()
+    def &scope := makeLazySlot(fn {(pattern.getStaticScope() +
+                                    body.getStaticScope()).hide()})
     object matcher:
         to getPattern():
             return pattern
@@ -1072,10 +1099,11 @@ def makeMatcher(pattern :Pattern, body :Expr, span) as DeepFrozen:
                 pattern.subPrintOn(out, priorities["pattern"]);
             }, body, false, out, priority)
     return astWrapper(matcher, makeMatcher, [pattern, body], span,
-        scope, "Matcher", fn f {[pattern.transform(f), body.transform(f)]})
+        &scope, "Matcher", fn f {[pattern.transform(f), body.transform(f)]})
 
 def makeCatcher(pattern :Pattern, body :Expr, span) as DeepFrozen:
-    def scope := (pattern.getStaticScope() + body.getStaticScope()).hide()
+    def &scope := makeLazySlot(fn {(pattern.getStaticScope() +
+                                    body.getStaticScope()).hide()})
     object catcher:
         to getPattern():
             return pattern
@@ -1087,11 +1115,11 @@ def makeCatcher(pattern :Pattern, body :Expr, span) as DeepFrozen:
                 pattern.subPrintOn(out, priorities["pattern"]);
             }, body, true, out, priority)
     return astWrapper(catcher, makeCatcher, [pattern, body], span,
-        scope, "Catcher", fn f {[pattern.transform(f), body.transform(f)]})
+        &scope, "Catcher", fn f {[pattern.transform(f), body.transform(f)]})
 
 def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
                matchers :List[Ast["Matcher"]], span) as DeepFrozen:
-    def scope := sumScopes(methods + matchers)
+    def &scope := makeLazySlot(fn {sumScopes(methods + matchers)})
     object script:
         to getExtends():
             return extend
@@ -1120,12 +1148,13 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
                 m.subPrintOn(out, priority)
                 out.print("\n")
     return astWrapper(script, makeScript, [extend, methods, matchers], span,
-        scope, "Script", fn f {[maybeTransform(extend, f), transformAll(methods, f), transformAll(matchers, f)]})
+        &scope, "Script", fn f {[maybeTransform(extend, f), transformAll(methods, f), transformAll(matchers, f)]})
 
 def makeFunctionScript(patterns :List[Pattern],
                        namedPatterns :List[Ast["NamedParam"]],
                        resultGuard :NullOk[Expr], body :Expr, span) as DeepFrozen:
-    def scope := sumScopes(patterns + namedPatterns + [resultGuard, body]).hide()
+    def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatterns +
+                                             [resultGuard, body]).hide()})
     object functionScript:
         to getPatterns():
             return patterns
@@ -1152,10 +1181,11 @@ def makeFunctionScript(patterns :List[Pattern],
             body.subPrintOn(out, priority)
             out.print("\n")
     return astWrapper(functionScript, makeFunctionScript, [patterns, namedPatterns, resultGuard, body], span,
-        scope, "FunctionScript", fn f {[transformAll(patterns, f), transformAll(namedPatterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
+        &scope, "FunctionScript", fn f {[transformAll(patterns, f), transformAll(namedPatterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeFunctionExpr(patterns :List[Pattern], body :Expr, span) as DeepFrozen:
-    def scope := (sumScopes(patterns) + body.getStaticScope()).hide()
+    def &scope := makeLazySlot(fn {(sumScopes(patterns) +
+                                    body.getStaticScope()).hide()})
     object functionExpr:
         to getPatterns():
             return patterns
@@ -1166,22 +1196,23 @@ def makeFunctionExpr(patterns :List[Pattern], body :Expr, span) as DeepFrozen:
                 printListOn("fn ", patterns, ", ", "", out, priorities["pattern"])
             }, body, false, out, priorities["assign"])
     return astWrapper(functionExpr, makeFunctionExpr, [patterns, body], span,
-        scope, "FunctionExpr", fn f {[transformAll(patterns, f), body.transform(f)]})
+        &scope, "FunctionExpr", fn f {[transformAll(patterns, f), body.transform(f)]})
 
 def makeListExpr(items :List[Expr], span) as DeepFrozen:
-    def scope := sumScopes(items)
+    def &scope := makeLazySlot(fn {sumScopes(items)})
     object listExpr:
         to getItems():
             return items
         to subPrintOn(out, priority):
             printListOn("[", items, ", ", "]", out, priorities["braceExpr"])
     return astWrapper(listExpr, makeListExpr, [items], span,
-        scope, "ListExpr", fn f {[transformAll(items, f)]})
+        &scope, "ListExpr", fn f {[transformAll(items, f)]})
 
 def makeListComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
                               key :NullOk[Pattern], value :Pattern,
                               body :Expr, span) as DeepFrozen:
-    def scope := sumScopes([iterable, key, value, filter, body]).hide()
+    def &scope := makeLazySlot(fn {sumScopes([iterable, key, value, filter,
+                                              body]).hide()})
     object listComprehensionExpr:
         to getKey():
             return key
@@ -1209,10 +1240,11 @@ def makeListComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
             body.subPrintOn(out, priorities["braceExpr"])
             out.print("]")
     return astWrapper(listComprehensionExpr, makeListComprehensionExpr, [iterable, filter, key, value, body], span,
-        scope, "ListComprehensionExpr", fn f {[iterable.transform(f), maybeTransform(filter, f), maybeTransform(key, f), value.transform(f), body.transform(f)]})
+        &scope, "ListComprehensionExpr", fn f {[iterable.transform(f), maybeTransform(filter, f), maybeTransform(key, f), value.transform(f), body.transform(f)]})
 
 def makeMapExprAssoc(key :Expr, value :Expr, span) as DeepFrozen:
-    def scope := key.getStaticScope() + value.getStaticScope()
+    def &scope := makeLazySlot(fn {key.getStaticScope() +
+                                   value.getStaticScope()})
     object mapExprAssoc:
         to getKey():
             return key
@@ -1223,7 +1255,7 @@ def makeMapExprAssoc(key :Expr, value :Expr, span) as DeepFrozen:
             out.print(" => ")
             value.subPrintOn(out, priorities["braceExpr"])
     return astWrapper(mapExprAssoc, makeMapExprAssoc, [key, value], span,
-        scope, "MapExprAssoc", fn f {[key.transform(f), value.transform(f)]})
+        &scope, "MapExprAssoc", fn f {[key.transform(f), value.transform(f)]})
 
 def makeMapExprExport(value :Ast["NounExpr", "BindingExpr", "SlotExpr", "TempNounExpr"], span) as DeepFrozen:
     def scope := value.getStaticScope()
@@ -1234,22 +1266,23 @@ def makeMapExprExport(value :Ast["NounExpr", "BindingExpr", "SlotExpr", "TempNou
             out.print("=> ")
             value.subPrintOn(out, priorities["prim"])
     return astWrapper(mapExprExport, makeMapExprExport, [value], span,
-        scope, "MapExprExport", fn f {[value.transform(f)]})
+        &scope, "MapExprExport", fn f {[value.transform(f)]})
 
 def makeMapExpr(pairs :List[Ast["MapExprAssoc", "MapExprExport"]] ? (pairs.size() > 0), span) as DeepFrozen:
-    def scope := sumScopes(pairs)
+    def &scope := makeLazySlot(fn {sumScopes(pairs)})
     object mapExpr:
         to getPairs():
             return pairs
         to subPrintOn(out, priority):
             printListOn("[", pairs, ", ", "]", out, priorities["braceExpr"])
     return astWrapper(mapExpr, makeMapExpr, [pairs], span,
-        scope, "MapExpr", fn f {[transformAll(pairs, f)]})
+        &scope, "MapExpr", fn f {[transformAll(pairs, f)]})
 
 def makeMapComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
                              key :NullOk[Pattern], value :Pattern,
                              bodyk :Expr, bodyv :Expr, span) as DeepFrozen:
-    def scope := sumScopes([iterable, key, value, filter, bodyk, bodyv]).hide()
+    def &scope := makeLazySlot(fn {sumScopes([iterable, key, value, filter,
+                                              bodyk, bodyv]).hide()})
     object mapComprehensionExpr:
         to getIterable():
             return iterable
@@ -1281,12 +1314,13 @@ def makeMapComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
             bodyv.subPrintOn(out, priorities["braceExpr"])
             out.print("]")
     return astWrapper(mapComprehensionExpr, makeMapComprehensionExpr, [iterable, filter, key, value, bodyk, bodyv], span,
-        scope, "MapComprehensionExpr", fn f {[iterable.transform(f), maybeTransform(filter, f), maybeTransform(key, f), value.transform(f), bodyk.transform(f), bodyv.transform(f)]})
+        &scope, "MapComprehensionExpr", fn f {[iterable.transform(f), maybeTransform(filter, f), maybeTransform(key, f), value.transform(f), bodyk.transform(f), bodyv.transform(f)]})
 
 def makeForExpr(iterable :Expr, key :NullOk[Pattern], value :Pattern,
                 body :Expr, catchPattern :NullOk[Pattern],
                 catchBody :NullOk[Expr], span) as DeepFrozen:
-    def scope := sumScopes([iterable, key, value, body]).hide()
+    def &scope := makeLazySlot(fn {sumScopes([iterable, key, value,
+                                              body]).hide()})
     object forExpr:
         to getKey():
             return key
@@ -1318,12 +1352,14 @@ def makeForExpr(iterable :Expr, key :NullOk[Pattern], value :Pattern,
                 }, catchBody, true, out, priority)
     return astWrapper(forExpr, makeForExpr, [iterable, key, value, body, catchPattern, catchBody],
         span,
-        scope, "ForExpr", fn f {[iterable.transform(f), maybeTransform(key, f), value.transform(f), body.transform(f), maybeTransform(catchPattern, f), maybeTransform(catchBody, f)]})
+        &scope, "ForExpr", fn f {[iterable.transform(f), maybeTransform(key, f), value.transform(f), body.transform(f), maybeTransform(catchPattern, f), maybeTransform(catchBody, f)]})
 
 def makeObjectExpr(docstring :NullOk[Str], name :NamePattern,
                    asExpr :NullOk[Expr], auditors :List[Expr],
                    script :Ast["Script", "FunctionScript"], span) as DeepFrozen:
-    def scope := name.getStaticScope() + sumScopes([asExpr] + auditors).hide() + script.getStaticScope()
+    def &scope := makeLazySlot(fn {name.getStaticScope() +
+                                   sumScopes([asExpr] + auditors).hide() +
+                                   script.getStaticScope()})
     object ObjectExpr:
         to getDocstring():
             return docstring
@@ -1345,10 +1381,10 @@ def makeObjectExpr(docstring :NullOk[Str], name :NamePattern,
                 script.printObjectHeadOn(name, asExpr, auditors, out, priority)
             }, docstring, script, out, priority)
     return astWrapper(ObjectExpr, makeObjectExpr, [docstring, name, asExpr, auditors, script], span,
-        scope, "ObjectExpr", fn f {[docstring, name.transform(f), maybeTransform(asExpr, f), transformAll(auditors, f), script.transform(f)]})
+        &scope, "ObjectExpr", fn f {[docstring, name.transform(f), maybeTransform(asExpr, f), transformAll(auditors, f), script.transform(f)]})
 
 def makeParamDesc(name :Str, guard :NullOk[Expr], span) as DeepFrozen:
-    def scope := scopeMaybe(guard)
+    def &scope := makeLazySlot(fn {scopeMaybe(guard)})
     object paramDesc:
         to getName():
             return name
@@ -1363,12 +1399,12 @@ def makeParamDesc(name :Str, guard :NullOk[Expr], span) as DeepFrozen:
                 out.print(" :")
                 guard.subPrintOn(out, priorities["call"])
     return astWrapper(paramDesc, makeParamDesc, [name, guard], span,
-        scope, "ParamDesc", fn f {[name, maybeTransform(guard, f)]})
+        &scope, "ParamDesc", fn f {[name, maybeTransform(guard, f)]})
 
 def makeMessageDesc(docstring :NullOk[Str], verb :Str,
                     params :List[Ast["ParamDesc"]], resultGuard :NullOk[Expr],
                     span) as DeepFrozen:
-    def scope := sumScopes(params + [resultGuard])
+    def &scope := makeLazySlot(fn {sumScopes(params + [resultGuard])})
     object messageDesc:
         to getDocstring():
             return docstring
@@ -1404,14 +1440,16 @@ def makeMessageDesc(docstring :NullOk[Str], verb :Str,
                     out.print("}")
 
     return astWrapper(messageDesc, makeMessageDesc, [docstring, verb, params, resultGuard], span,
-        scope, "MessageDesc", fn f {[docstring, verb, transformAll(params, f), maybeTransform(resultGuard, f)]})
+        &scope, "MessageDesc", fn f {[docstring, verb, transformAll(params, f), maybeTransform(resultGuard, f)]})
 
 
 def makeInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
                       stamp :NullOk[NamePattern], parents :List[Expr],
                       auditors :List[Expr],
                       messages :List[Ast["MessageDesc"]], span) as DeepFrozen:
-    def scope := name.getStaticScope() + sumScopes(parents + [stamp] + auditors + messages)
+    def &scope := makeLazySlot(fn {name.getStaticScope() +
+                                   sumScopes(parents + [stamp] + auditors +
+                                             messages)})
     object interfaceExpr:
         to getDocstring():
             return docstring
@@ -1447,13 +1485,15 @@ def makeInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
             if (priorities["braceExpr"] <= priority):
                 out.print("}")
     return astWrapper(interfaceExpr, makeInterfaceExpr, [docstring, name, stamp, parents, auditors, messages], span,
-        scope, "InterfaceExpr", fn f {[docstring, name.transform(f), maybeTransform(stamp, f), transformAll(parents, f), transformAll(auditors, f), transformAll(messages, f)]})
+        &scope, "InterfaceExpr", fn f {[docstring, name.transform(f), maybeTransform(stamp, f), transformAll(parents, f), transformAll(auditors, f), transformAll(messages, f)]})
 
 def makeFunctionInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
                               stamp :NullOk[NamePattern], parents :List[Expr],
                               auditors :List[Expr],
                               messageDesc :Ast["MessageDesc"], span) as DeepFrozen:
-    def scope := name.getStaticScope() + sumScopes(parents + [stamp] + auditors + [messageDesc])
+    def &scope := makeLazySlot(fn {name.getStaticScope() +
+                                   sumScopes(parents + [stamp] + auditors +
+                                             [messageDesc])})
     object functionInterfaceExpr:
         to getDocstring():
             return docstring
@@ -1499,10 +1539,12 @@ def makeFunctionInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
                     out.print("}")
             out.print("\n")
     return astWrapper(functionInterfaceExpr, makeFunctionInterfaceExpr, [docstring, name, stamp, parents, auditors, messageDesc], span,
-        scope, "FunctionInterfaceExpr", fn f {[docstring, name.transform(f), maybeTransform(stamp, f), transformAll(parents, f), transformAll(auditors, f), messageDesc.transform(f)]})
+        &scope, "FunctionInterfaceExpr", fn f {[docstring, name.transform(f), maybeTransform(stamp, f), transformAll(parents, f), transformAll(auditors, f), messageDesc.transform(f)]})
 
 def makeCatchExpr(body :Expr, pattern :Pattern, catcher :Expr, span) as DeepFrozen:
-    def scope := body.getStaticScope().hide() + (pattern.getStaticScope() + catcher.getStaticScope()).hide()
+    def &scope := makeLazySlot(fn {body.getStaticScope().hide() +
+                                   (pattern.getStaticScope() +
+                                    catcher.getStaticScope()).hide()})
     object catchExpr:
         to getBody():
             return body
@@ -1517,11 +1559,12 @@ def makeCatchExpr(body :Expr, pattern :Pattern, catcher :Expr, span) as DeepFroz
                 pattern.subPrintOn(out, priorities["pattern"])
             }, catcher, true, out, priority)
     return astWrapper(catchExpr, makeCatchExpr, [body, pattern, catcher], span,
-        scope, "CatchExpr", fn f {[body.transform(f), pattern.transform(f),
+        &scope, "CatchExpr", fn f {[body.transform(f), pattern.transform(f),
                                        catcher.transform(f)]})
 
 def makeFinallyExpr(body :Expr, unwinder :Expr, span) as DeepFrozen:
-    def scope := body.getStaticScope().hide() + unwinder.getStaticScope().hide()
+    def &scope := makeLazySlot(fn {body.getStaticScope().hide() +
+                                   unwinder.getStaticScope().hide()})
     object finallyExpr:
         to getBody():
             return body
@@ -1532,15 +1575,19 @@ def makeFinallyExpr(body :Expr, unwinder :Expr, span) as DeepFrozen:
             printExprSuiteOn(fn {out.print("finally")}, unwinder, true, out,
                          priority)
     return astWrapper(finallyExpr, makeFinallyExpr, [body, unwinder], span,
-        scope, "FinallyExpr", fn f {[body.transform(f), unwinder.transform(f)]})
+        &scope, "FinallyExpr", fn f {[body.transform(f), unwinder.transform(f)]})
 
 def makeTryExpr(body :Expr, catchers :List[Ast["Catcher"]],
                 finallyBlock :NullOk[Expr], span) as DeepFrozen:
-    def baseScope := (body.getStaticScope() + sumScopes(catchers)).hide()
-    def scope := if (finallyBlock == null) {
-        baseScope
+    # Definition of baseScope is duplicated in order to avoid chaining lazy
+    # slots. ~ C.
+    def &scope := if (finallyBlock == null) {
+        makeLazySlot(fn {(body.getStaticScope() +
+                          sumScopes(catchers)).hide()})
     } else {
-        baseScope + finallyBlock.getStaticScope().hide()
+        makeLazySlot(fn {(body.getStaticScope() +
+                          sumScopes(catchers)).hide() +
+                          finallyBlock.getStaticScope().hide()})
     }
     object tryExpr:
         to getBody():
@@ -1557,16 +1604,21 @@ def makeTryExpr(body :Expr, catchers :List[Ast["Catcher"]],
                 printExprSuiteOn(fn {out.print("finally")},
                     finallyBlock, true, out, priority)
     return astWrapper(tryExpr, makeTryExpr, [body, catchers, finallyBlock], span,
-        scope, "TryExpr", fn f {[body.transform(f), transformAll(catchers, f),maybeTransform(finallyBlock, f)]})
+        &scope, "TryExpr", fn f {[body.transform(f), transformAll(catchers, f),maybeTransform(finallyBlock, f)]})
 
 def makeEscapeExpr(ejectorPattern :Pattern, body :Expr,
                    catchPattern :NullOk[Pattern], catchBody :NullOk[Expr],
                    span) as DeepFrozen:
-    def baseScope := (ejectorPattern.getStaticScope() + body.getStaticScope()).hide()
-    def scope := if (catchPattern == null) {
-        baseScope
+    # Definition of baseScope is duplicated in order to avoid chaining lazy
+    # slots. ~ C.
+    def &scope := if (catchPattern == null) {
+        makeLazySlot(fn {(ejectorPattern.getStaticScope() +
+                          body.getStaticScope()).hide()})
     } else {
-        baseScope + (catchPattern.getStaticScope() + catchBody.getStaticScope()).hide()
+        makeLazySlot(fn {(ejectorPattern.getStaticScope() +
+                          body.getStaticScope()).hide() +
+                         (catchPattern.getStaticScope() +
+                          catchBody.getStaticScope()).hide()})
     }
     object escapeExpr:
         to getEjectorPattern():
@@ -1589,12 +1641,13 @@ def makeEscapeExpr(ejectorPattern :Pattern, body :Expr,
                 }, catchBody, true, out, priority)
     return astWrapper(escapeExpr, makeEscapeExpr,
          [ejectorPattern, body, catchPattern, catchBody], span,
-        scope, "EscapeExpr",
+        &scope, "EscapeExpr",
          fn f {[ejectorPattern.transform(f), body.transform(f),
                 maybeTransform(catchPattern, f), maybeTransform(catchBody, f)]})
 
 def makeSwitchExpr(specimen :Expr, matchers :List[Ast["Matcher"]], span) as DeepFrozen:
-    def scope := specimen.getStaticScope() + sumScopes(matchers)
+    def &scope := makeLazySlot(fn {specimen.getStaticScope() +
+                                   sumScopes(matchers)})
     object switchExpr:
         to getSpecimen():
             return specimen
@@ -1615,11 +1668,13 @@ def makeSwitchExpr(specimen :Expr, matchers :List[Ast["Matcher"]], span) as Deep
             if (priorities["braceExpr"] <= priority):
                 out.print("}")
     return astWrapper(switchExpr, makeSwitchExpr, [specimen, matchers], span,
-        scope, "SwitchExpr", fn f {[specimen.transform(f), transformAll(matchers, f)]})
+        &scope, "SwitchExpr", fn f {[specimen.transform(f), transformAll(matchers, f)]})
 
 def makeWhenExpr(args :List[Expr], body :Expr, catchers :List[Ast["Catcher"]],
                  finallyBlock :NullOk[Expr], span) as DeepFrozen:
-    def scope := sumScopes(args + [body]).hide() + sumScopes(catchers) + scopeMaybe(finallyBlock).hide()
+    def &scope := makeLazySlot(fn {sumScopes(args + [body]).hide() +
+                                   sumScopes(catchers) +
+                                   scopeMaybe(finallyBlock).hide()})
     object whenExpr:
         to getArgs():
             return args
@@ -1647,14 +1702,18 @@ def makeWhenExpr(args :List[Expr], body :Expr, catchers :List[Ast["Catcher"]],
                     out.print("finally")
                 }, finallyBlock, true, out, priority)
     return astWrapper(whenExpr, makeWhenExpr, [args, body, catchers, finallyBlock], span,
-        scope, "WhenExpr", fn f {[transformAll(args, f), body.transform(f), transformAll(catchers, f), maybeTransform(finallyBlock, f)]})
+        &scope, "WhenExpr", fn f {[transformAll(args, f), body.transform(f), transformAll(catchers, f), maybeTransform(finallyBlock, f)]})
 
 def makeIfExpr(test :Expr, consq :Expr, alt :NullOk[Expr], span) as DeepFrozen:
-    def baseScope := test.getStaticScope() + consq.getStaticScope().hide()
-    def scope := if (alt == null) {
-        baseScope
+    # Definition of baseScope is duplicated in order to avoid chaining lazy
+    # slots. ~ C.
+    def &scope := if (alt == null) {
+        makeLazySlot(fn {test.getStaticScope() +
+                         consq.getStaticScope().hide()})
     } else {
-        baseScope + alt.getStaticScope().hide()
+        makeLazySlot(fn {test.getStaticScope() +
+                         consq.getStaticScope().hide() +
+                         alt.getStaticScope().hide()})
     }
     object ifExpr:
         to getTest():
@@ -1681,10 +1740,10 @@ def makeIfExpr(test :Expr, consq :Expr, alt :NullOk[Expr], span) as DeepFrozen:
                     printExprSuiteOn(fn {out.print("else")}, alt, true, out, priority)
 
     return astWrapper(ifExpr, makeIfExpr, [test, consq, alt], span,
-        scope, "IfExpr", fn f {[test.transform(f), consq.transform(f), maybeTransform(alt, f)]})
+        &scope, "IfExpr", fn f {[test.transform(f), consq.transform(f), maybeTransform(alt, f)]})
 
 def makeWhileExpr(test :Expr, body :Expr, catcher :NullOk[Ast["Catcher"]], span) as DeepFrozen:
-    def scope := sumScopes([test, body, catcher])
+    def &scope := makeLazySlot(fn {sumScopes([test, body, catcher])})
     object whileExpr:
         to getTest():
             return test
@@ -1701,10 +1760,10 @@ def makeWhileExpr(test :Expr, body :Expr, catcher :NullOk[Ast["Catcher"]], span)
             if (catcher != null):
                 catcher.subPrintOn(out, priority)
     return astWrapper(whileExpr, makeWhileExpr, [test, body, catcher], span,
-        scope, "WhileExpr", fn f {[test.transform(f), body.transform(f), maybeTransform(catcher, f)]})
+        &scope, "WhileExpr", fn f {[test.transform(f), body.transform(f), maybeTransform(catcher, f)]})
 
 def makeHideExpr(body :Expr, span) as DeepFrozen:
-    def scope := body.getStaticScope().hide()
+    def &scope := makeLazySlot(fn {body.getStaticScope().hide()})
     object hideExpr:
         to getBody():
             return body
@@ -1716,7 +1775,7 @@ def makeHideExpr(body :Expr, span) as DeepFrozen:
             out.print("}")
 
     return astWrapper(hideExpr, makeHideExpr, [body], span,
-        scope, "HideExpr", fn f {[body.transform(f)]})
+        &scope, "HideExpr", fn f {[body.transform(f)]})
 
 def makeValueHoleExpr(index :Int, span) as DeepFrozen:
     def scope := emptyScope
@@ -1728,7 +1787,7 @@ def makeValueHoleExpr(index :Int, span) as DeepFrozen:
             out.print(index)
             out.print("}")
     return astWrapper(valueHoleExpr, makeValueHoleExpr, [index], span,
-        scope, "ValueHoleExpr", fn f {[index]})
+        &scope, "ValueHoleExpr", fn f {[index]})
 
 def makePatternHoleExpr(index :Int, span) as DeepFrozen:
     def scope := emptyScope
@@ -1740,7 +1799,7 @@ def makePatternHoleExpr(index :Int, span) as DeepFrozen:
             out.print(index)
             out.print("}")
     return astWrapper(patternHoleExpr, makePatternHoleExpr, [index], span,
-        scope, "PatternHoleExpr", fn f {[index]})
+        &scope, "PatternHoleExpr", fn f {[index]})
 
 def makeValueHolePattern(index :Int, span) as DeepFrozen:
     def scope := emptyScope
@@ -1752,7 +1811,7 @@ def makeValueHolePattern(index :Int, span) as DeepFrozen:
             out.print(index)
             out.print("}")
     return astWrapper(valueHolePattern, makeValueHolePattern, [index], span,
-        scope, "ValueHolePattern", fn f {[index]})
+        &scope, "ValueHolePattern", fn f {[index]})
 
 def makePatternHolePattern(index :Int, span) as DeepFrozen:
     def scope := emptyScope
@@ -1764,7 +1823,7 @@ def makePatternHolePattern(index :Int, span) as DeepFrozen:
             out.print(index)
             out.print("}")
     return astWrapper(patternHolePattern, makePatternHolePattern, [index], span,
-        scope, "PatternHolePattern", fn f {[index]})
+        &scope, "PatternHolePattern", fn f {[index]})
 
 # Guard  would be 'noun :Noun' but optimizer will fold some constants here.
 def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozen:
@@ -1786,7 +1845,7 @@ def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozen:
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(finalPattern, makeFinalPattern, [noun, guard], span,
-        scope, "FinalPattern",
+        &scope, "FinalPattern",
         fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozen:
@@ -1805,7 +1864,7 @@ def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozen:
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(slotPattern, makeSlotPattern, [noun, guard], span,
-        scope, "SlotPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
+        &scope, "SlotPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeBindingPattern(noun :Noun, span) as DeepFrozen:
     def scope := makeStaticScope([], [], [], [noun.withoutSpan()], false)
@@ -1816,10 +1875,10 @@ def makeBindingPattern(noun :Noun, span) as DeepFrozen:
             out.print("&&")
             noun.subPrintOn(out, priority)
     return astWrapper(bindingPattern, makeBindingPattern, [noun], span,
-        scope, "BindingPattern", fn f {[noun.transform(f)]})
+        &scope, "BindingPattern", fn f {[noun.transform(f)]})
 
 def makeIgnorePattern(guard :NullOk[Expr], span) as DeepFrozen:
-    def scope := scopeMaybe(guard)
+    def &scope := makeLazySlot(fn {scopeMaybe(guard)})
     object ignorePattern:
         to getGuard():
             return guard
@@ -1831,10 +1890,10 @@ def makeIgnorePattern(guard :NullOk[Expr], span) as DeepFrozen:
                 out.print(" :")
                 guard.subPrintOn(out, priorities["order"])
     return astWrapper(ignorePattern, makeIgnorePattern, [guard], span,
-        scope, "IgnorePattern", fn f {[maybeTransform(guard, f)]})
+        &scope, "IgnorePattern", fn f {[maybeTransform(guard, f)]})
 
 def makeListPattern(patterns :List[Pattern], tail :NullOk[Pattern], span) as DeepFrozen:
-    def scope := sumScopes(patterns + [tail])
+    def &scope := makeLazySlot(fn {sumScopes(patterns + [tail])})
     object listPattern:
         to getPatterns():
             return patterns
@@ -1846,10 +1905,11 @@ def makeListPattern(patterns :List[Pattern], tail :NullOk[Pattern], span) as Dee
                 out.print(" + ")
                 tail.subPrintOn(out, priorities["pattern"])
     return astWrapper(listPattern, makeListPattern, [patterns, tail], span,
-        scope, "ListPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
+        &scope, "ListPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
 
 def makeMapPatternAssoc(key :Expr, value :Pattern , span) as DeepFrozen:
-    def scope := key.getStaticScope() + value.getStaticScope()
+    def &scope := makeLazySlot(fn {key.getStaticScope() +
+                                   value.getStaticScope()})
     object mapPatternAssoc:
         to getKey():
             return key
@@ -1865,7 +1925,7 @@ def makeMapPatternAssoc(key :Expr, value :Pattern , span) as DeepFrozen:
             out.print(" => ")
             value.subPrintOn(out, priority)
     return astWrapper(mapPatternAssoc, makeMapPatternAssoc, [key, value], span,
-        scope, "MapPatternAssoc", fn f {[key.transform(f), value.transform(f)]})
+        &scope, "MapPatternAssoc", fn f {[key.transform(f), value.transform(f)]})
 
 def makeMapPatternImport(pattern :NamePattern, span) as DeepFrozen:
     def scope := pattern.getStaticScope()
@@ -1876,7 +1936,7 @@ def makeMapPatternImport(pattern :NamePattern, span) as DeepFrozen:
             out.print("=> ")
             pattern.subPrintOn(out, priority)
     return astWrapper(mapPatternImport, makeMapPatternImport, [pattern], span,
-        scope, "MapPatternImport", fn f {[pattern.transform(f)]})
+        &scope, "MapPatternImport", fn f {[pattern.transform(f)]})
 
 def makeMapPatternRequired(keyer :Ast["MapPatternImport", "MapPatternAssoc"], span) as DeepFrozen:
     def scope := keyer.getStaticScope()
@@ -1888,11 +1948,12 @@ def makeMapPatternRequired(keyer :Ast["MapPatternImport", "MapPatternAssoc"], sp
         to subPrintOn(out, priority):
             keyer.subPrintOn(out, priority)
     return astWrapper(mapPatternRequired, makeMapPatternRequired, [keyer], span,
-        scope, "MapPatternRequired", fn f {[keyer.transform(f)]})
+        &scope, "MapPatternRequired", fn f {[keyer.transform(f)]})
 
 def makeMapPatternDefault(keyer :Ast["MapPatternImport", "MapPatternAssoc"],
                           default :Expr, span) as DeepFrozen:
-    def scope := keyer.getStaticScope() + default.getStaticScope()
+    def &scope := makeLazySlot(fn {keyer.getStaticScope() +
+                                   default.getStaticScope()})
     object mapPatternDefault:
         to getKeyer():
             return keyer
@@ -1904,10 +1965,10 @@ def makeMapPatternDefault(keyer :Ast["MapPatternImport", "MapPatternAssoc"],
             default.subPrintOn(out, priorities["braceExpr"])
             out.print(")")
     return astWrapper(mapPatternDefault, makeMapPatternDefault, [keyer, default], span,
-        scope, "MapPatternDefault", fn f {[keyer.transform(f), default.transform(f)]})
+        &scope, "MapPatternDefault", fn f {[keyer.transform(f), default.transform(f)]})
 
 def makeMapPattern(patterns :List[Ast["MapPatternRequired", "MapPatternDefault"]], tail :NullOk[Pattern], span) as DeepFrozen:
-    def scope := sumScopes(patterns + [tail])
+    def &scope := makeLazySlot(fn {sumScopes(patterns + [tail])})
     object mapPattern:
         to getPatterns():
             return patterns
@@ -1919,10 +1980,12 @@ def makeMapPattern(patterns :List[Ast["MapPatternRequired", "MapPatternDefault"]
                 out.print(" | ")
                 tail.subPrintOn(out, priorities["pattern"])
     return astWrapper(mapPattern, makeMapPattern, [patterns, tail], span,
-        scope, "MapPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
+        &scope, "MapPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
 
 def makeNamedParam(key :Expr, patt :Pattern, default :NullOk[Expr], span) as DeepFrozen:
-    def scope := key.getStaticScope() + patt.getStaticScope() + scopeMaybe(default)
+    def &scope := makeLazySlot(fn {key.getStaticScope() +
+                                   patt.getStaticScope() +
+                                   scopeMaybe(default)})
     object namedParam:
         to getKey():
             return key
@@ -1944,10 +2007,11 @@ def makeNamedParam(key :Expr, patt :Pattern, default :NullOk[Expr], span) as Dee
                 default.subPrintOn(out, priorities["braceExpr"])
                 out.print(")")
     return astWrapper(namedParam, makeNamedParam, [key, patt, default], span,
-        scope, "NamedParam", fn f {[key.transform(f), patt.transform(f), maybeTransform(default, f)]})
+        &scope, "NamedParam", fn f {[key.transform(f), patt.transform(f), maybeTransform(default, f)]})
 
 def makeViaPattern(expr :Expr, subpattern :Pattern, span) as DeepFrozen:
-    def scope := expr.getStaticScope() + subpattern.getStaticScope()
+    def &scope := makeLazySlot(fn {expr.getStaticScope() +
+                                   subpattern.getStaticScope()})
     object viaPattern:
         to getExpr():
             return expr
@@ -1959,10 +2023,11 @@ def makeViaPattern(expr :Expr, subpattern :Pattern, span) as DeepFrozen:
             out.print(") ")
             subpattern.subPrintOn(out, priority)
     return astWrapper(viaPattern, makeViaPattern, [expr, subpattern], span,
-        scope, "ViaPattern", fn f {[expr.transform(f), subpattern.transform(f)]})
+        &scope, "ViaPattern", fn f {[expr.transform(f), subpattern.transform(f)]})
 
 def makeSuchThatPattern(subpattern :Pattern, expr :Expr, span) as DeepFrozen:
-    def scope := expr.getStaticScope() + subpattern.getStaticScope()
+    def &scope := makeLazySlot(fn {expr.getStaticScope() +
+                                   subpattern.getStaticScope()})
     object suchThatPattern:
         to getExpr():
             return expr
@@ -1974,7 +2039,7 @@ def makeSuchThatPattern(subpattern :Pattern, expr :Expr, span) as DeepFrozen:
             expr.subPrintOn(out, priorities["braceExpr"])
             out.print(")")
     return astWrapper(suchThatPattern, makeSuchThatPattern, [subpattern, expr], span,
-        scope, "SuchThatPattern", fn f {[subpattern.transform(f), expr.transform(f)]})
+        &scope, "SuchThatPattern", fn f {[subpattern.transform(f), expr.transform(f)]})
 
 def makeSamePattern(value :Expr, direction :Bool, span) as DeepFrozen:
     def scope := value.getStaticScope()
@@ -1990,7 +2055,7 @@ def makeSamePattern(value :Expr, direction :Bool, span) as DeepFrozen:
                 out.print("!=")
             value.subPrintOn(out, priorities["call"])
     return astWrapper(samePattern, makeSamePattern, [value, direction], span,
-        scope, "SamePattern", fn f {[value.transform(f), direction]})
+        &scope, "SamePattern", fn f {[value.transform(f), direction]})
 
 def makeQuasiText(text :Str, span) as DeepFrozen:
     def scope := emptyScope
@@ -2000,7 +2065,7 @@ def makeQuasiText(text :Str, span) as DeepFrozen:
         to subPrintOn(out, priority):
             out.print(text)
     return astWrapper(quasiText, makeQuasiText, [text], span,
-        scope, "QuasiText", fn f {[text]})
+        &scope, "QuasiText", fn f {[text]})
 
 def makeQuasiExprHole(expr :Expr, span) as DeepFrozen:
     def scope := expr.getStaticScope()
@@ -2017,7 +2082,7 @@ def makeQuasiExprHole(expr :Expr, span) as DeepFrozen:
             expr.subPrintOn(out, priorities["braceExpr"])
             out.print("}")
     return astWrapper(quasiExprHole, makeQuasiExprHole, [expr], span,
-        scope, "QuasiExprHole", fn f {[expr.transform(f)]})
+        &scope, "QuasiExprHole", fn f {[expr.transform(f)]})
 
 
 def makeQuasiPatternHole(pattern :Pattern, span) as DeepFrozen:
@@ -2036,7 +2101,7 @@ def makeQuasiPatternHole(pattern :Pattern, span) as DeepFrozen:
             pattern.subPrintOn(out, priority)
             out.print("}")
     return astWrapper(quasiPatternHole, makeQuasiPatternHole, [pattern], span,
-        scope, "QuasiPatternHole", fn f {[pattern.transform(f)]})
+        &scope, "QuasiPatternHole", fn f {[pattern.transform(f)]})
 
 def quasiPrint(name, quasis, out, priority) as DeepFrozen:
     if (name != null):
@@ -2056,7 +2121,12 @@ def QuasiPiece :DeepFrozen := Ast["QuasiText", "QuasiExprHole",
                                   "QuasiPatternHole"]
 
 def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozen:
-    def scope := if (name == null) {emptyScope} else {makeStaticScope([makeNounExpr(name + "__quasiParser", null)], [], [], [], false)} + sumScopes(quasis)
+    def &scope := makeLazySlot(fn {
+        if (name == null) {emptyScope} else {
+            makeStaticScope([makeNounExpr(name + "__quasiParser", null)], [],
+                            [], [], false)
+        } + sumScopes(quasis)
+    })
     object quasiParserExpr:
         to getName():
             return name
@@ -2065,10 +2135,15 @@ def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as De
         to subPrintOn(out, priority):
             quasiPrint(name, quasis, out, priority)
     return astWrapper(quasiParserExpr, makeQuasiParserExpr, [name, quasis], span,
-        scope, "QuasiParserExpr", fn f {[name, transformAll(quasis, f)]})
+        &scope, "QuasiParserExpr", fn f {[name, transformAll(quasis, f)]})
 
 def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozen:
-    def scope := if (name == null) {emptyScope} else {makeStaticScope([makeNounExpr(name + "__quasiParser", null)], [], [], [], false)} + sumScopes(quasis)
+    def &scope := makeLazySlot(fn {
+        if (name == null) {emptyScope} else {
+            makeStaticScope([makeNounExpr(name + "__quasiParser", null)], [],
+                            [], [], false)
+        } + sumScopes(quasis)
+    })
     object quasiParserPattern:
         to getName():
             return name
@@ -2077,7 +2152,7 @@ def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as
         to subPrintOn(out, priority):
             quasiPrint(name, quasis, out, priority)
     return astWrapper(quasiParserPattern, makeQuasiParserPattern, [name, quasis], span,
-        scope, "QuasiParserPattern", fn f {[name, transformAll(quasis, f)]})
+        &scope, "QuasiParserPattern", fn f {[name, transformAll(quasis, f)]})
 
 object astBuilder as DeepFrozen:
     to getAstGuard():
