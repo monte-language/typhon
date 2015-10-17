@@ -40,8 +40,12 @@ class Binding(Object):
         self.slot = slot
         self.guard = guard
 
-    def toString(self):
-        return u"<binding for %s>" % self.slot.toString()
+    def printOn(self, printer):
+        printer.call(u"print", [StrObject(u"<binding ")])
+        printer.call(u"print", [self.slot])
+        printer.call(u"print", [StrObject(u" :")])
+        printer.call(u"print", [self.guard])
+        printer.call(u"print", [StrObject(u">")])
 
     def recv(self, atom, args):
         if atom is GET_0:
@@ -79,8 +83,12 @@ class FinalBinding(Object):
         self.value = value
         self.guard = guard
 
-    def toString(self):
-        return u"<final binding for %s>" % self.value.toString()
+    def printOn(self, printer):
+        printer.call(u"print", [StrObject(u"<binding ")])
+        printer.call(u"print", [self.value])
+        printer.call(u"print", [StrObject(u" :FinalSlot[")])
+        printer.call(u"print", [self.guard])
+        printer.call(u"print", [StrObject(u"]>")])
 
     def recv(self, atom, args):
         if atom is GET_0:
