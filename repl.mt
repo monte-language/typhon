@@ -84,7 +84,9 @@ def main(=> Timer, => bench, => unittest,
         => &&import, => &&throw,
         # Monte-only fun.
         # Typhon safe scope.
-        => &&__auditedBy, => &&__slotToBinding, => &&_makeFinalSlot, => &&_makeVarSlot,
+        => &&__auditedBy,
+        => &&__slotToBinding, => &&_makeFinalSlot, => &&_makeVarSlot,
+        => &&makeLazySlot,
         => &&makeBrandPair, => &&traceln, => &&unittest,
         # Typhon unsafe scope.
         => &&Timer, => &&bench, => &&currentProcess, => &&currentRuntime, => &&currentVat,

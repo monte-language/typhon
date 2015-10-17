@@ -642,6 +642,27 @@ object _booleanFlow as DeepFrozenStamp:
         return [false] + [_booleanFlow.broken()] * count
 
 
+# DF abuse.
+def makeLazySlot(var thunk, => guard := Any) as DeepFrozenStamp:
+    "Make a slot that lazily binds its value."
+
+    var evaluated :Bool := false
+
+    return object lazySlot as DeepFrozenStamp:
+        "A slot that possibly has not yet computed its value."
+
+        to get() :guard:
+            if (!evaluated):
+                # Our predecessors had a trick where they nulled out the
+                # reference to the thunk, which let the thunk be GC'd. While
+                # this is good, we're going to go one step better and not have
+                # two spots in the closure for the thunk and value. Instead,
+                # the value replaces the thunk. ~ C.
+                evaluated := true
+                thunk := thunk()
+            return thunk
+
+
 def [=> SubrangeGuard, => DeepFrozen] := import.script(
     "prelude/deepfrozen",
     [=> _comparer, => _booleanFlow, => _makeVerbFacet,
@@ -665,6 +686,7 @@ var preludeScope := [
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
     => M, => import, => throw, => typhonEval,
+    => makeLazySlot,
 ]
 
 # AST (needed for auditors).
