@@ -75,7 +75,7 @@ testVM: default
 
 testMast: default mast mast/tests/lexer.ty mast/tests/parser.ty \
 	mast/tests/auditors.ty mast/tests/fail-arg.ty
-	./mt-typhon -l mast mast/unittest.ty all-tests
+	./mt-typhon -l mast mast/unittest all-tests
 
 test: testVM testMast
 
