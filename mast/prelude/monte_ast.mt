@@ -214,7 +214,7 @@ object Pattern as DeepFrozen:
     to coerce(specimen, ej):
         def sp := Ast.coerce(specimen, ej)
         def n := sp.getNodeName()
-        if (n.slice(n.size() - 7) == "Pattern"):
+        if (n.endsWith("Pattern")):
             return sp
         throw.eject(ej, "m`" + M.toString(sp) + "` is not a pattern")
 
@@ -223,7 +223,7 @@ object Expr as DeepFrozen:
     to coerce(specimen, ej):
         def sp := Ast.coerce(specimen, ej)
         def n := sp.getNodeName()
-        if (n.slice(n.size() - 4) == "Expr"):
+        if (n.endsWith("Expr")):
             return sp
         throw.eject(ej, "m`" + M.toString(specimen) + "` is not an an expression")
 
