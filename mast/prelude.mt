@@ -716,10 +716,6 @@ preludeScope := import.script("prelude/space",
                        preludeScope | [=> OrderedRegionMaker,
                                        => OrderedSpaceMaker]) | preludeScope
 
-# And once again, to upgrade all the guards with interfaces.
-preludeScope := import.script("prelude/coreInterfaces",
-                              preludeScope) | preludeScope
-
 # b__quasiParser desires spaces.
 preludeScope |= import.script("prelude/b", preludeScope)
 
@@ -736,6 +732,10 @@ preludeScope |= import.script("prelude/m", preludeScope)
 # This has to do some significant AST groveling so it uses AST quasipatterns
 # for convenience.
 preludeScope |= import.script("prelude/transparent", preludeScope)
+
+# And once again, to upgrade all the guards with interfaces.
+preludeScope := import.script("prelude/coreInterfaces",
+                              preludeScope) | preludeScope
 
 # The final scope exported from the prelude. This *must* be the final
 # expression in the module!
