@@ -141,7 +141,7 @@ unittest([testSpecialize])
 #   * broken refs;
 #   * Anything in this list of objects; e.g. _booleanFlow is acceptable
 # * Must have a transitive closure (under calls) obeying the above rule.
-def safeScope :Map[Str, DeepFrozen] := [
+def thawable :Map[Str, DeepFrozen] := [
     # => __makeList,
     # => __makeMap,
     => _booleanFlow,
@@ -161,8 +161,8 @@ def thaw(ast, maker, args, span) as DeepFrozen:
                 def receiverObj := switch (receiver.getNodeName()) {
                     match =="NounExpr" {
                         def name :Str := receiver.getName()
-                        if (safeScope.contains(name)) {
-                            safeScope[name]
+                        if (thawable.contains(name)) {
+                            thawable[name]
                         } else {ej("Not in safe scope")}
                     }
                     match =="LiteralExpr" {receiver.getValue()}
@@ -177,9 +177,9 @@ def thaw(ast, maker, args, span) as DeepFrozen:
 
             match =="NounExpr":
                 def name :Str := args[0]
-                if (safeScope.contains(name)):
+                if (thawable.contains(name)):
                     # traceln(`thaw noun $name`)
-                    return a.LiteralExpr(safeScope[name], span)
+                    return a.LiteralExpr(thawable[name], span)
 
             match _:
                 pass
@@ -519,7 +519,7 @@ def testRemoveUnusedBareNouns(assert):
 unittest([testRemoveUnusedBareNouns])
 
 
-def freezeMap :Map[DeepFrozen, Str] := [for k => v in (safeScope) v => k]
+def freezeMap :Map[DeepFrozen, Str] := [for k => v in (thawable) v => k]
 
 
 def freeze(ast, maker, args, span) as DeepFrozen:

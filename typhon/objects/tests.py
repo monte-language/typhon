@@ -173,5 +173,4 @@ class UnitTest(Object):
             for test in unwrapList(args[0]):
                 self.testCollector.addTest(self.locus, test)
             return NullObject
-
         raise Refused(self, atom, args)

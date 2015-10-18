@@ -4,7 +4,7 @@ exports (main)
 # We *could* use lib/parsers/monte, but it's got a flaw; it can't interoperate
 # with eval() at the moment. Instead we just wrap eval() here. It's not like
 # the current MiM parser can deal with secondary prompts, anyway.
-def makeMonteParser(var environment) as DeepFrozen:
+def makeMonteParser(var environment, unsealException) as DeepFrozen:
     var failure :NullOk[Str] := null
     var result := null
 
@@ -50,7 +50,7 @@ def main(=> Timer, => bench, => unittest,
          => makeFileResource, => makeProcess,
          => makeStdErr, => makeStdIn, => makeStdOut,
          => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
-         => unsealException) as DeepFrozen:
+         => unsealException, => unsafeScope) as DeepFrozen:
 
     def [=> makeREPLTube] | _ := import.script("fun/repl")
     def [
@@ -79,9 +79,9 @@ def main(=> Timer, => bench, => unittest,
         => &&_suchThat, => &&_matchSame, => &&_bind, => &&_quasiMatcher,
         => &&b__quasiParser, => &&simple__quasiParser,
         # Safe capabilities.
-        => &&M, => &&Ref, => &&help, => &&m__quasiParser,
+        => &&M, => &&Ref, => &&help, => &&m__quasiParser, => &&safeScope,
         # Unsafe capabilities.
-        => &&import, => &&throw,
+        => &&import, => &&throw, => &&unsafeScope,
         # Monte-only fun.
         # Typhon safe scope.
         => &&__auditedBy,
@@ -100,7 +100,7 @@ def main(=> Timer, => bench, => unittest,
     def stdin := makeStdIn()<-flowTo(makePumpTube(makeUTF8DecodePump()))
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout<-flowTo(makeStdOut())
-    def parser := makeMonteParser(environment)
+    def parser := makeMonteParser(environment, unsealException)
     def replTube := makeREPLTube(fn {parser.reset()}, reduce,
                                  "▲> ", "…> ", stdout)
     stdin<-flowTo(replTube)

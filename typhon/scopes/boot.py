@@ -14,6 +14,7 @@
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
+from typhon.env import finalize
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.importing import evaluateRaise, obtainModuleFromSource
 from typhon.nodes import kernelAstStamp
@@ -125,7 +126,7 @@ class TyphonEval(Object):
 
 
 def bootScope(recorder, collectTests):
-    return {
+    return finalize({
         u"isBool": isBool(),
         u"isBytes": isBytes(),
         u"isChar": isChar(),
@@ -144,4 +145,4 @@ def bootScope(recorder, collectTests):
 
         u"typhonEval": TyphonEval(recorder),
         u"unittest": UnitTest(u"<boot>", collectTests),
-    }
+    })

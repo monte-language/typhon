@@ -43,7 +43,7 @@ def makeBrandPair(nickname :NullOk[Str]) as DeepFrozen:
 
             to getBrand():
                 return brand
-                
+
             to shareContent() :Void:
                 scratchpad := contents
 

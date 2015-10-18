@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.env import finalize
 from typhon.objects.exceptions import unsealException
 from typhon.objects.files import makeFileResource
 from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
@@ -26,7 +27,7 @@ from typhon.vats import CurrentVatProxy
 
 
 def unsafeScope(config, collectTests):
-    return {
+    return finalize({
         u"Timer": Timer(),
         u"bench": bench(),
         u"collectTests": collectTests,
@@ -42,4 +43,4 @@ def unsafeScope(config, collectTests):
         u"makeTCP4ServerEndpoint": makeTCP4ServerEndpoint(),
         u"unsealException": unsealException(),
         u"unittest": UnitTest(u"<main>", collectTests),
-    }
+    })

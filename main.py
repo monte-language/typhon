@@ -23,15 +23,16 @@ from rpython.rlib.jit import JitHookInterface, set_user_param
 
 from typhon import ruv
 from typhon.arguments import Configuration
-from typhon.env import finalize
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, instantiateModule, obtainModule
 from typhon.metrics import Recorder
 from typhon.objects.collections import ConstMap, monteDict, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapStr
-from typhon.objects.imports import addImportToScope
+from typhon.objects.guards import anyGuard
+from typhon.objects.imports import Import, addImportToScope
 from typhon.objects.refs import resolution
+from typhon.objects.slots import FinalBinding
 from typhon.objects.tests import TestCollector
 from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
@@ -61,9 +62,8 @@ def loadPrelude(config, recorder, vat):
     scope = addImportToScope(config.libraryPaths, scope, recorder, bootTC)
 
     code = obtainModule(config.libraryPaths, "prelude", recorder)
-
     with recorder.context("Time spent in prelude"):
-        result = evaluateTerms([code], finalize(scope))
+        result = evaluateTerms([code], scope)
 
     if result is None:
         print "Prelude returned None!?"
@@ -76,7 +76,11 @@ def loadPrelude(config, recorder, vat):
         prelude = {}
         for key, value in unwrapMap(result).items():
             if isinstance(key, StrObject):
-                prelude[unwrapStr(key)] = value
+                s = unwrapStr(key)
+                if not s.startswith(u"&&"):
+                    print "Prelude map key", s, "doesn't start with '&&'"
+                else:
+                    prelude[s[2:]] = value
             else:
                 print "Prelude map key", key, "isn't a string"
         return prelude
@@ -151,8 +155,15 @@ def runModule(exports, scope):
         return None
 
     namedArgs = monteDict()
-    for k, v in scope.iteritems():
+    reflectedUnsafeScope = monteDict()
+    for k, b in scope.iteritems():
+        v = b.getValue()
         namedArgs[StrObject(k)] = v
+        reflectedUnsafeScope[StrObject(u"&&" + k)] = b
+    rus = ConstMap(reflectedUnsafeScope)
+    reflectedUnsafeScope[StrObject(u"&&unsafeScope")] = FinalBinding(
+        rus, anyGuard)
+    namedArgs[StrObject(u"unsafeScope")] = rus
     return main.call(u"run", [], ConstMap(namedArgs))
 
 
@@ -195,13 +206,19 @@ def entryPoint(argv):
 
     scope = safeScope()
     scope.update(prelude)
-    # Note the order of operations. addImportToScope() copies the scope that
-    # it receives, so the unsafe scope will only be available to the
-    # top-level script and not to any library code which is indirectly loaded
-    # via import().
+    DF = prelude[u"DeepFrozen"].getValue()
     collectTests = TestCollector()
-    scope = addImportToScope(config.libraryPaths, scope, recorder,
-                             collectTests)
+    ss = scope.copy()
+    ss[u"import"] = FinalBinding(
+        Import(config.libraryPaths, ss, recorder, collectTests),
+        DF)
+    reflectedSS = monteDict()
+    for k, b in ss.iteritems():
+        reflectedSS[StrObject(u"&&" + k)] = b
+    ss[u"safeScope"] = FinalBinding(ConstMap(reflectedSS), DF)
+    reflectedSS[StrObject(u"&&safeScope")] = ss[u"safeScope"]
+    scope[u"safeScope"] = ss[u"safeScope"]
+    scope[u"import"] = ss[u"import"]
     scope.update(unsafeScope(config, collectTests))
     try:
         code = obtainModule([""], config.argv[1], recorder)
@@ -223,7 +240,7 @@ def entryPoint(argv):
         result = NullObject
         with recorder.context("Time spent in vats"):
             with scopedVat(vat):
-                result = evaluateTerms([code], finalize(scope))
+                result = evaluateTerms([code], ss)
         if result is None:
             return 1
 

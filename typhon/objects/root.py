@@ -129,11 +129,6 @@ class Object(object):
                 # to _conformTo(_): return self
                 return self
 
-            if atom is _GETALLEGEDINTERFACE_0:
-                # Welcome to _getAllegedInterface/0.
-                from typhon.objects.interfaces import ComputedInterface
-                return ComputedInterface(self)
-
             if atom is _PRINTON_1:
                 # Welcome to _printOn/1.
                 from typhon.objects.constants import NullObject
