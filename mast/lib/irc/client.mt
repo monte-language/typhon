@@ -315,7 +315,6 @@ def makeIRCClient(handler):
 
 
 def connectIRCClient(client, endpoint):
-    endpoint.connect()
     def [fount, drain] := endpoint.connect()
     chain([
         fount,
