@@ -665,21 +665,31 @@ def makeLazySlot(var thunk, => guard := Any) as DeepFrozenStamp:
 
 def [=> SubrangeGuard, => DeepFrozen] := import.script(
     "prelude/deepfrozen",
-    [=> _comparer, => _booleanFlow, => _makeVerbFacet,
-     => _validateFor, => _bind,
-     => DeepFrozenStamp, => TransparentStamp,
-     => Bool, => Char, => Double, => Int, => Str, => Void,
-     => List, => Map, => NullOk, => Same, => Set,
+    [=> &&_comparer, => &&_booleanFlow, => &&_makeVerbFacet,
+     => &&_validateFor, => &&_bind,
+     => &&DeepFrozenStamp, => &&TransparentStamp,
+     => &&Bool, => &&Char, => &&Double, => &&Int, => &&Str, => &&Void,
+     => &&List, => &&Map, => &&NullOk, => &&Same, => &&Set,
      ])
 
+
+def scopeAsDF(scope):
+    return [for k => v in (scope)
+            "&&" + k => (def v0 :DeepFrozen := v; &&v0)]
 
 # New approach to importing the rest of the prelude: Collate the entirety of
 # the module and boot scope into a single map which is then passed as-is to
 # the other modules.
-var preludeScope := [
+var preludeScope := scopeAsDF([
     => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
-    => Int, => List, => Map, => NullOk, => Same, => Set, => Str,
-    => SubrangeGuard, => Void,
+    => Int, => List, => Map, => NullOk, => Ref, => Near, => Same, => Set,
+    => Selfless, => Str, => SubrangeGuard, => Void,
+    => null, => Infinity, => NaN, => false, => true,
+    => __auditedBy, => __equalizer, => __loop,
+    => __makeList, => __makeMap, => __makeInt, => __makeDouble,
+    => __makeSourceSpan, => __makeString, => __slotToBinding,
+    => _makeBytes, => _makeFinalSlot, => _makeVarSlot,
+    => help, => throw, => trace, => traceln,
     => _mapEmpty, => _mapExtract,
     => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterWhile,
     => _validateFor,
@@ -687,37 +697,42 @@ var preludeScope := [
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
     => M, => import, => throw, => typhonEval,
     => makeLazySlot,
-]
+])
+
+def importIntoScope(name, moduleScope):
+    preludeScope |= scopeAsDF(import.script(name, moduleScope))
 
 # AST (needed for auditors).
-preludeScope |= import.script("prelude/monte_ast",
-                         preludeScope | [=> DeepFrozenStamp, => TransparentStamp,
-                                         => KernelAstStamp])
+importIntoScope(
+    "prelude/monte_ast",
+    preludeScope | scopeAsDF([=> DeepFrozenStamp, => TransparentStamp,
+                              => KernelAstStamp]))
 
 # Simple QP.
-preludeScope |= import.script("prelude/simple", preludeScope)
+importIntoScope("prelude/simple", preludeScope)
 
 # Brands require simple QP.
-preludeScope |= import.script("prelude/brand", preludeScope)
+importIntoScope("prelude/brand", preludeScope)
 
 # Interfaces require simple QP.
-preludeScope |= import.script("prelude/protocolDesc", preludeScope)
+importIntoScope("prelude/protocolDesc",
+                preludeScope | scopeAsDF([=> TransparentStamp]))
 
 # Regions require simple QP.
-def [
-    => OrderedRegionMaker,
-    => OrderedSpaceMaker
-] := import.script("prelude/region", preludeScope)
+def [=> OrderedRegionMaker, => OrderedSpaceMaker] := (
+        import.script("prelude/region", preludeScope))
 
 # Spaces require regions. We're doing this import slightly differently since
 # we want to replace some of our names with spaces; look at the order of
 # operations.
-preludeScope := import.script("prelude/space",
-                       preludeScope | [=> OrderedRegionMaker,
-                                       => OrderedSpaceMaker]) | preludeScope
+preludeScope := scopeAsDF(import.script(
+    "prelude/space",
+    preludeScope | scopeAsDF([
+        => OrderedRegionMaker,
+        => OrderedSpaceMaker]))) | preludeScope
 
 # b__quasiParser desires spaces.
-preludeScope |= import.script("prelude/b", preludeScope)
+importIntoScope("prelude/b", preludeScope)
 
 # The big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This
@@ -726,19 +741,20 @@ preludeScope |= import.script("prelude/b", preludeScope)
 # doesn't support evaluation, and I'd expect it to be slow, so we're not doing
 # that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
 # hook, and that'll do for now. ~ C.
-preludeScope |= import.script("prelude/m", preludeScope)
+def preludeScope0 := preludeScope | ["&&safeScope" => &&preludeScope0]
+importIntoScope("prelude/m", preludeScope0)
+
 
 # Transparent auditor and guard.
 # This has to do some significant AST groveling so it uses AST quasipatterns
 # for convenience.
-preludeScope |= import.script("prelude/transparent", preludeScope)
+importIntoScope("prelude/transparent", preludeScope)
 
 # And once again, to upgrade all the guards with interfaces.
-preludeScope := import.script("prelude/coreInterfaces",
-                              preludeScope) | preludeScope
+preludeScope := scopeAsDF(
+    import.script("prelude/coreInterfaces",
+                  preludeScope)) | preludeScope
 
 # The final scope exported from the prelude. This *must* be the final
 # expression in the module!
-preludeScope | [
-    => _flexMap,
-]
+preludeScope | [=> &&_flexMap]

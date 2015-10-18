@@ -47,9 +47,15 @@ class Binding(Object):
         printer.call(u"print", [self.guard])
         printer.call(u"print", [StrObject(u">")])
 
+    def get(self):
+        return self.slot
+
+    def getValue(self):
+        return self.slot.get()
+
     def recv(self, atom, args):
         if atom is GET_0:
-            return self.slot
+            return self.get()
 
         if atom is GETGUARD_0:
             return self.guard
@@ -90,9 +96,15 @@ class FinalBinding(Object):
         printer.call(u"print", [self.guard])
         printer.call(u"print", [StrObject(u"]>")])
 
+    def get(self):
+        return FinalSlot(self.value, self.guard)
+
+    def getValue(self):
+        return self.value
+
     def recv(self, atom, args):
         if atom is GET_0:
-            return FinalSlot(self.value, self.guard)
+            return self.get()
 
         if atom is GETGUARD_0:
             from typhon.objects.guards import FinalSlotGuard

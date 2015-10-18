@@ -17,6 +17,7 @@ from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
+from typhon.env import finalize
 from typhon.errors import Refused, UserException, WrongType, userError
 from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
 from typhon.objects.collections import (EMPTY_MAP, ConstList, ConstMap,
@@ -422,7 +423,7 @@ Infinity = DoubleObject(float("inf"))
 NaN = DoubleObject(float("nan"))
 
 def safeScope():
-    return {
+    return finalize({
         u"null": NullObject,
         u"any": anyGuard,
         u"Any": anyGuard,
@@ -453,4 +454,4 @@ def safeScope():
 
         u"trace": TraceLn(),
         u"traceln": TraceLn(),
-    }
+    })

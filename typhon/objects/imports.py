@@ -18,13 +18,16 @@ from rpython.rlib.jit import dont_look_inside
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.env import finalize
-from typhon.errors import Refused
+from typhon.errors import Refused, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import ConstMap, monteDict, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject, unwrapStr
+from typhon.objects.guards import anyGuard
 from typhon.objects.root import Object
+from typhon.objects.slots import FinalBinding
 from typhon.objects.tests import UnitTest
+from typhon.prelude import getGlobal
 from typhon.importing import evaluateRaise, instantiateModule, obtainModule
 
 
@@ -57,11 +60,19 @@ class Import(Object):
         term = obtainModule(self.path, p, self.recorder)
 
         # Get module.
-        module, _ = evaluateRaise([term], finalize(self.scope))
+        module, _ = evaluateRaise([term], self.scope)
 
         scope = monteDict()
-        scope[StrObject(u"import")] = self
-        scope[StrObject(u"unittest")] = UnitTest(path, self.testCollector)
+        DFb = getGlobal(u"DeepFrozen")
+        if DFb is None:
+            g = anyGuard
+        else:
+            g = DFb.getValue()
+        scope[StrObject(u"import")] = FinalBinding(
+            self, g)
+
+        scope[StrObject(u"unittest")] = FinalBinding(
+            UnitTest(path, self.testCollector), anyGuard)
         if importList is not None:
             assert isinstance(importList, ConstMap)
             scope.update(importList.objectMap)
@@ -84,12 +95,13 @@ class Import(Object):
         if extraScope is not None:
             scope.update(extraScope)
 
-        scope[u'unittest'] = UnitTest(path, self.testCollector)
+        scope[u'unittest'] = FinalBinding(
+            UnitTest(path, self.testCollector), anyGuard)
         # Attempt the import.
         term = obtainModule(self.path, p, self.recorder)
 
         # Get results.
-        result, _ = evaluateRaise([term], finalize(scope))
+        result, _ = evaluateRaise([term], scope)
         return result
 
     def recv(self, atom, args):
@@ -111,7 +123,11 @@ class Import(Object):
 
             d = {}
             for k, v in scope.items():
-                d[unwrapStr(k)] = scope[k]
+                s = unwrapStr(k)
+                if not s.startswith("&&"):
+                    raise userError(u"import.script scope map must be of the "
+                                    "form '[\"&&name\" => binding]'")
+                d[s[2:]] = scope[k]
 
             return self.performScript(path, d)
 
@@ -120,5 +136,11 @@ class Import(Object):
 
 def addImportToScope(path, scope, recorder, testCollector):
     scope = scope.copy()
-    scope[u"import"] = Import(path, scope, recorder, testCollector)
+    DFb = getGlobal(u"DeepFrozen")
+    if DFb is None:
+        g = anyGuard
+    else:
+        g = DFb.getValue()
+    scope[u"import"] = FinalBinding(
+        Import(path, scope, recorder, testCollector), g)
     return scope

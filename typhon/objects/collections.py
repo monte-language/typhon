@@ -687,7 +687,7 @@ class ConstMap(Object):
             return ConstSet(self.objectMap)
 
         if atom is DIVERGE_0:
-            _flexMap = getGlobal(u"_flexMap")
+            _flexMap = getGlobal(u"_flexMap").getValue()
             return _flexMap.call(u"run", [self])
 
         if atom is FETCH_2:
@@ -847,7 +847,7 @@ class ConstSet(Object):
             return self
 
         if atom is DIVERGE_0:
-            _flexSet = getGlobal(u"_flexSet")
+            _flexSet = getGlobal(u"_flexSet").getValue()
             return _flexSet.call(u"run", [self])
 
         if atom is AND_1:

@@ -28,17 +28,17 @@ PUT_1 = getAtom(u"put", 1)
 def finalize(scope):
     from typhon.prelude import getGlobal
     # This is kind of stupid, but it does resolve the circularity in time.
-    deepFrozen = getGlobal(u"DeepFrozen")
-    if deepFrozen is None and u"DeepFrozen" in scope:
-        deepFrozen = scope[u"DeepFrozen"]
+    DFb = getGlobal(u"DeepFrozen")
+    if DFb is None and u"DeepFrozen" in scope:
+        DFb = scope[u"DeepFrozen"]
     rv = {}
     for key in scope:
         o = scope[key]
-        if deepFrozenStamp in o.stamps and deepFrozen is not None:
-            g = deepFrozen
+        if deepFrozenStamp in o.stamps and DFb is not None:
+            g = DFb.getValue()
         else:
             g = anyGuard
-        rv[key] = FinalBinding(scope[key], g)
+        rv[key] = FinalBinding(o, g)
     return rv
 
 

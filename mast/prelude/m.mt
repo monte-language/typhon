@@ -1,28 +1,18 @@
-def bench(_, _) {null}
 
-def parserScope := [ => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
-    => Int, => List, => Map, => NullOk, => Same, => Set, => Str,
-    => SubrangeGuard, => Void,
-    => _mapEmpty, => _mapExtract,
-    => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterWhile,
-    => _validateFor,
-    => _switchFailed, => _makeVerbFacet, => _comparer,
-    => _suchThat, => _matchSame, => _bind, => _quasiMatcher,
-    => M, => import, => throw, => typhonEval,
-    => b__quasiParser, => simple__quasiParser,
-    => _makeOrderedSpace, => bench, => astBuilder
-]
+def bench(_, _) as DeepFrozen {null}
+
+def scope := safeScope | [=> &&bench]
 
 def [=> makeMonteParser :DeepFrozen] | _ := import.script("lib/parsers/monte",
-                                                   parserScope)
+                                                   scope)
 def [=> makeMonteLexer :DeepFrozen] | _ := import.script("lib/monte/monte_lexer",
-                                                  parserScope)
+                                                  scope)
 def [=> parseExpression :DeepFrozen] | _ := import.script("lib/monte/monte_parser",
-                                                   parserScope)
+                                                   scope)
 def [=> expand :DeepFrozen] | _ := import.script("lib/monte/monte_expander",
-                                          parserScope)
+                                          scope)
 def [=> optimize :DeepFrozen] | _ := import.script("lib/monte/monte_optimizer",
-                                            parserScope)
+                                            scope)
 
 def [VALUE_HOLE :DeepFrozen,
      PATTERN_HOLE :DeepFrozen] := makeMonteLexer.holes()

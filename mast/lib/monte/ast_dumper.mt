@@ -1,15 +1,4 @@
-def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8",
-                                        [=> Bool, => Bytes, => Char,
-                                        => DeepFrozen, => Int, => List,
-                                        => Str,
-                                        => b__quasiParser,
-                                        => bench, => _accumulateList,
-                                        => _quasiMatcher, => _mapExtract,
-                                        => _iterWhile, => _comparer,
-                                        => _suchThat, => _switchFailed,
-                                        => _matchSame, => _validateFor,
-                                        => _makeVerbFacet,
-                                        => _makeOrderedSpace])
+def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8", safeScope | [=> &&bench])
 
 def astCodes :Map[Str, Int] := [
     "LiteralExpr" => 10,

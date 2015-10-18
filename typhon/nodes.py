@@ -277,8 +277,11 @@ class InvalidAST(LoadFailed):
     An AST was ill-formed.
     """
 
+
 @autohelp
 class KernelAstStamp(Object):
+    stamps = [deepFrozenStamp]
+
     def recv(self, atom, args):
         if atom is AUDIT_1:
             from typhon.objects.constants import wrapBool
