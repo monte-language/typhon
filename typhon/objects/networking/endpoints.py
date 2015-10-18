@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rarithmetic import intmask
 
@@ -47,11 +48,14 @@ def connectCB(connect, status):
         assert isinstance(fountResolver, LocalResolver)
         assert isinstance(drainResolver, LocalResolver)
         if status >= 0:
+            debug_print("Made connection!")
             fountResolver.resolve(StreamFount(stream, vat))
             drainResolver.resolve(StreamDrain(stream, vat))
         else:
-            fountResolver.smash(StrObject(u"Connection failed"))
-            drainResolver.smash(StrObject(u"Connection failed"))
+            error = "Connection failed: " + ruv.formatError(status)
+            debug_print(error)
+            fountResolver.smash(StrObject(error.decode("utf-8")))
+            drainResolver.smash(StrObject(error.decode("utf-8")))
     except:
         print "Exception in connectCB"
 
@@ -90,7 +94,9 @@ class TCP4ClientEndpoint(Object):
 
         # Make the actual connection.
         # XXX name resolution!!!
-        ruv.tcpConnect(stream, self.host.encode("utf-8"), self.port, connectCB)
+        host = self.host.encode("utf-8")
+        debug_print("Making connection to '%s'" % host)
+        ruv.tcpConnect(stream, host, self.port, connectCB)
 
         # Return the promises.
         return ConstList([fount, drain])
