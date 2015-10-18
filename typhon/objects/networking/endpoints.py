@@ -26,7 +26,7 @@ from typhon.objects.data import StrObject, unwrapInt, unwrapStr
 from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object, runnable
-from typhon.vats import currentVat
+from typhon.vats import currentVat, scopedVat
 
 
 CONNECT_0 = getAtom(u"connect", 0)
@@ -38,24 +38,23 @@ SHUTDOWN_0 = getAtom(u"shutdown", 0)
 
 def connectCB(connect, status):
     status = intmask(status)
+    stream = connect.c_handle
 
     try:
-        # XXX error handling?
-        stream = connect.c_handle
-        # Ugh, such hax.
-        vat, resolvers = ruv.unstashStream(stream)
-        fountResolver, drainResolver = unwrapList(resolvers)
-        assert isinstance(fountResolver, LocalResolver)
-        assert isinstance(drainResolver, LocalResolver)
-        if status >= 0:
-            debug_print("Made connection!")
-            fountResolver.resolve(StreamFount(stream, vat))
-            drainResolver.resolve(StreamDrain(stream, vat))
-        else:
-            error = "Connection failed: " + ruv.formatError(status)
-            debug_print(error)
-            fountResolver.smash(StrObject(error.decode("utf-8")))
-            drainResolver.smash(StrObject(error.decode("utf-8")))
+        with ruv.unstashingStream(stream) as (vat, resolvers):
+            with scopedVat(vat):
+                fountResolver, drainResolver = unwrapList(resolvers)
+                assert isinstance(fountResolver, LocalResolver)
+                assert isinstance(drainResolver, LocalResolver)
+                if status >= 0:
+                    debug_print("Made connection!")
+                    fountResolver.resolve(StreamFount(stream, vat))
+                    drainResolver.resolve(StreamDrain(stream, vat))
+                else:
+                    error = "Connection failed: " + ruv.formatError(status)
+                    debug_print(error)
+                    fountResolver.smash(StrObject(error.decode("utf-8")))
+                    drainResolver.smash(StrObject(error.decode("utf-8")))
     except:
         print "Exception in connectCB"
 
@@ -153,6 +152,7 @@ def connectionCB(uv_server, status):
 
     # If the connection failed to complete, then whatever; we're a server, not
     # a client, and this is a pretty boring do-nothing failure mode.
+    # XXX we *really* should have some way to report failures, though; right?
     if status < 0:
         return
 
