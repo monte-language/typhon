@@ -94,7 +94,6 @@ class TCP4ClientEndpoint(Object):
         # Make the actual connection.
         # XXX name resolution!!!
         host = self.host.encode("utf-8")
-        debug_print("Making connection to '%s'" % host)
         ruv.tcpConnect(stream, host, self.port, connectCB)
 
         # Return the promises.
