@@ -108,7 +108,7 @@ http: mast/lib/http/client.ty mast/lib/http/server.ty \
 irc: mast/lib/irc/client.ty mast/lib/irc/user.ty \
 	tubes
 
-games: mast/games/mafia.ty
+games: mast/games/mafia.ty mast/lib/uKanren.ty
 
 fun: mast/fun/elements.ty mast/fun/repl.ty mast/fun/brot.ty \
 	mast/fun/termParser.ty
