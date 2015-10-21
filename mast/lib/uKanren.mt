@@ -1,40 +1,59 @@
 imports
-exports (emptyState, unifyGoal, callFresh, conj, disj)
+exports (makeState, unifyGoal, callFresh, conj, disj)
 "μKanren."
 
 object VARS as DeepFrozen:
     "Variables are tagged with this object."
 
-def makeVar(c) as DeepFrozen:
-    return [VARS, c]
 
-def emptyState() as DeepFrozen:
-    return [[].asMap(), 0]
+def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
+    return object state:
+        "μKanren 's/c'."
 
-def walk(u, s :Map) as DeepFrozen:
-    return if (u =~ [==VARS, k]):
-        if (s.contains(k)) {walk(s[k], s)} else {u}
-    else:
-        u
+        to _printOn(out):
+            out.print("μKanrenState(")
+            def pairs := ", ".join([for k => v in (s) `_$k := $v`])
+            out.print(pairs)
+            out.print(")")
 
-def unify(u, v, s :Map) :NullOk[Map] as DeepFrozen:
-    def rv := switch ([walk(u, s), walk(v, s)]) {
-        match [[==VARS, x], [==VARS, y]] ? (x == y) {s}
-        match [[==VARS, x], y] {[x => y] | s}
-        match [x, [==VARS, y]] {[y => x] | s}
-        match [x, y] {if (x == y) {s}}
-    }
-    traceln(`Unify: $u ≡ $v in $s: $rv`)
-    return rv
+        to get(key :Int):
+            return s[key]
+
+        to reify(key :Int):
+            return state.walk(s[key])
+
+        to reifiedMap() :Map[Int, Any]:
+            return [for k => v in (s) k => state.walk(v)]
+
+        to fresh():
+            return [makeState(s, c + 1), [VARS, c]]
+
+        to walk(u):
+            return if (u =~ [==VARS, k]):
+                if (s.contains(k)) {state.walk(s[k])} else {u}
+            else:
+                u
+
+        to unify(u, v) :NullOk[Any]:
+            def rv := switch ([state.walk(u), state.walk(v)]) {
+                match [[==VARS, x], [==VARS, y]] ? (x == y) {state}
+                match [[==VARS, x], y] {makeState([x => y] | s, c)}
+                match [x, [==VARS, y]] {makeState([y => x] | s, c)}
+                match [x, y] {if (x == y) {state}}
+            }
+            traceln(`Unify: $u ≡ $v in $s: $rv`)
+            return rv
+
 
 def unifyGoal(u, v) as DeepFrozen:
-    return def unifyingGoal([s, c]) :List:
-        def next := unify(u, v, s)
-        return if (next != null) {[[next, c]]} else {[]}
+    return def unifyingGoal(state) :List:
+        def nextState := state.unify(u, v)
+        return if (nextState != null) {[nextState]} else {[]}
 
 def callFresh(f) as DeepFrozen:
-    return def freshGoal([s, c]):
-        return f(makeVar(c))([s, c + 1])
+    return def freshGoal(state):
+        def [freshState, freshVar] := state.fresh()
+        return f(freshVar)(freshState)
 
 def mplus(stream1, stream2) as DeepFrozen:
     return switch (stream1) {
@@ -51,9 +70,9 @@ def mbind(stream, g) as DeepFrozen:
     }
 
 def disj(g1, g2) as DeepFrozen:
-    return def orGoal(sc):
-        return mplus(g1(sc), g2(sc))
+    return def orGoal(state):
+        return mplus(g1(state), g2(state))
 
 def conj(g1, g2) as DeepFrozen:
-    return def andGoal(sc):
-        return mbind(g1(sc), g2)
+    return def andGoal(state):
+        return mbind(g1(state), g2)
