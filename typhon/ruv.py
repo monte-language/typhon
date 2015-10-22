@@ -115,7 +115,7 @@ array_buf_t = lltype.Ptr(lltype.Array(buf_t, hints={"nolength": True}))
 cConfig["connect_t"].c_handle.TO.become(cConfig["stream_t"])
 
 
-def stashFor(struct):
+def stashFor(name, struct):
     class Stash(object):
         """
         Like a weaklist, but keeps a strong reference to its elements.
@@ -168,11 +168,14 @@ def stashFor(struct):
         # uv_t = rffi.cast(struct, uv_t)
         index = theStash.put(obj)
         uv_t.c_data = rffi.cast(rffi.VOIDP, index)
+        # print "stash", name, obj, id(uv_t)
 
     def unstash(uv_t):
         # uv_t = rffi.cast(struct, uv_t)
         index = rffi.cast(rffi.INT, uv_t.c_data)
-        return theStash.get(index)
+        obj = theStash.get(index)
+        # print "unstash", name, obj, id(uv_t)
+        return obj
 
     class unstashing(object):
 
@@ -188,9 +191,9 @@ def stashFor(struct):
 
     return stash, unstash, unstashing
 
-stashTimer, unstashTimer, unstashingTimer = stashFor(timer_tp)
-stashStream, unstashStream, unstashingStream = stashFor(stream_tp)
-stashFS, unstashFS, unstashingFS = stashFor(fs_tp)
+stashTimer, unstashTimer, unstashingTimer = stashFor("timer", timer_tp)
+stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
+stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
 
 
 @specialize.ll()

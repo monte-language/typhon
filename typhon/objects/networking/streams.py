@@ -59,6 +59,7 @@ def readCB(stream, status, buf):
     status = intmask(status)
     try:
         with ruv.unstashingStream(stream) as (vat, fount):
+            assert isinstance(fount, StreamFount), "Implementation error"
             with scopedVat(vat):
                 if status > 0:
                     data = charpsize2str(buf.c_base, status)
@@ -69,8 +70,8 @@ def readCB(stream, status, buf):
                 else:
                     msg = ruv.formatError(status).decode("utf-8")
                     fount.abort(u"libuv error: %s" % msg)
-    except:
-        print "Exception in readCB"
+    except Exception as e:
+        print "Exception in readCB", e
 
 
 def closeCB(handle):
@@ -97,9 +98,6 @@ class StreamFount(Object):
         self.vat = vat
 
         self.bufs = []
-
-        # This stash only has to be done once, but it does have to be done.
-        ruv.stashStream(self.stream, (vat, self))
 
     def toString(self):
         return u"<StreamFount>"
@@ -181,6 +179,8 @@ class StreamFount(Object):
     def considerFlush(self):
         if not self.pauses and self._drain is not None:
             if not self._reading:
+                # Stash ourselves so that the read CB can get at us.
+                ruv.stashStream(self.stream, (self.vat, self))
                 ruv.readStart(self.stream, ruv.allocCB, readCB)
                 self._reading = True
             from typhon.objects.collections import EMPTY_MAP
