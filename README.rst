@@ -201,3 +201,10 @@ Also document objects and methods written in Monte. For methods:
   backticks.
 * To refer to methods, use atom syntax and backticks: A method with name
   "meth" and arity 2 would appear as \`meth/2\`.
+
+Autohelp would like to remind you that subclasses of ``Object`` should
+decorate themselves with ``@autohelp`` in order to maintain compliance and
+safety.
+
+To override pretty-printing for an object, add a ``toString()`` method which
+should return a Unicode string.

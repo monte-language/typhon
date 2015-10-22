@@ -11,6 +11,7 @@ GETMETHODS_0 = getAtom(u"getMethods", 0)
 GETVERB_0 = getAtom(u"getVerb", 0)
 
 
+@autohelp
 class ComputedMethod(Object):
     """
     A method description.
@@ -21,6 +22,9 @@ class ComputedMethod(Object):
     def __init__(self, arity, verb):
         self.arity = arity
         self.verb = verb
+
+    def toString(self):
+        return u"<computed message %s/%d>" % (self.verb, self.arity)
 
     def recv(self, atom, args):
         if atom is GETARITY_0:
@@ -42,6 +46,9 @@ class ComputedInterface(Object):
 
     def __init__(self, obj):
         self.atoms = obj.respondingAtoms()
+
+    def toString(self):
+        return u"<computed interface>"
 
     def recv(self, atom, args):
         if atom is GETMETHODS_0:
