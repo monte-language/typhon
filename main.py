@@ -21,7 +21,7 @@ from rpython.rlib import rvmprof
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import JitHookInterface, set_user_param
 
-from typhon import ruv
+from typhon import rsodium, ruv
 from typhon.arguments import Configuration
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, instantiateModule, obtainModule
@@ -170,6 +170,11 @@ def runModule(exports, scope):
 def entryPoint(argv):
     recorder = Recorder()
     recorder.start()
+
+    # Initialize libsodium.
+    if rsodium.init() < 0:
+        print "Couldn't initialize libsodium!"
+        return 1
 
     config = Configuration(argv)
 

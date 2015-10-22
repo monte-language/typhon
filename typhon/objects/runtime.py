@@ -12,6 +12,7 @@ from typhon.objects.user import ScriptObject
 
 
 GETBUCKETS_0 = getAtom(u"getBuckets", 0)
+GETCRYPT_0 = getAtom(u"getCrypt", 0)
 GETHANDLES_0 = getAtom(u"getHandles", 0)
 GETHEAPSTATISTICS_0 = getAtom(u"getHeapStatistics", 0)
 GETMEMORYUSAGE_0 = getAtom(u"getMemoryUsage", 0)
@@ -162,6 +163,10 @@ class CurrentRuntime(Object):
     """
 
     def recv(self, atom, args):
+        if atom is GETCRYPT_0:
+            from typhon.objects.crypt import Crypt
+            return Crypt()
+
         if atom is GETHEAPSTATISTICS_0:
             return makeHeapStats()
 
