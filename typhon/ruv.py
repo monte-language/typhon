@@ -392,10 +392,12 @@ def alloc_shutdown():
 
 tcp_init = rffi.llexternal("uv_tcp_init", [loop_tp, tcp_tp], rffi.INT,
                            compilation_info=eci)
-tcp_bind = rffi.llexternal("uv_tcp_bind", [tcp_tp, s.sockaddr_ptr, rffi.UINT],
+# Give up type safety on the sockaddrs. They already intentionally gave up on
+# type safety. ~ C.
+tcp_bind = rffi.llexternal("uv_tcp_bind", [tcp_tp, rffi.VOIDP, rffi.UINT],
                            rffi.INT, compilation_info=eci)
 tcp_connect = rffi.llexternal("uv_tcp_connect", [connect_tp, tcp_tp,
-                                                 s.sockaddr_ptr, connect_cb],
+                                                 rffi.VOIDP, connect_cb],
                               rffi.INT, compilation_info=eci)
 
 def alloc_tcp(loop):
@@ -403,24 +405,29 @@ def alloc_tcp(loop):
     check("tcp_init", tcp_init(loop, tcp))
     return tcp
 
+sin = lltype.malloc(s.sockaddr_in, flavor="raw", zero=True)
+
 def tcpBind(stream, address, port):
-    with lltype.scoped_alloc(s.sockaddr_in) as sockaddr:
-        rffi.setintfield(sockaddr, "c_sin_family", s.AF_INET)
-        sockaddr.c_sin_port = s.htons(port)
-        s.inet_pton(s.AF_INET, address, sockaddr.c_sin_addr)
-        # No flags.
-        sa = rffi.cast(lltype.Ptr(s.sockaddr), sockaddr)
-        return check("tcp_bind", tcp_bind(stream, sa, 0))
+    rffi.setintfield(sin, "c_sin_family", s.AF_INET)
+    rffi.setintfield(sin, "c_sin_port", s.htons(port))
+    if inet_pton(s.AF_INET, address, sin.c_sin_addr):
+        print "tcpBind: inet_pton failed!?"
+        assert False
+
+    # No flags.
+    rv = check("tcp_bind", tcp_bind(stream, sin, 0))
+    return rv
 
 def tcpConnect(stream, address, port, callback):
     connect = alloc_connect()
-    with lltype.scoped_alloc(s.sockaddr_in) as sockaddr:
-        rffi.setintfield(sockaddr, "c_sin_family", s.AF_INET)
-        sockaddr.c_sin_port = s.htons(port)
-        s.inet_pton(s.AF_INET, address, sockaddr.c_sin_addr)
-        sa = rffi.cast(lltype.Ptr(s.sockaddr), sockaddr)
-        return check("tcp_connect", tcp_connect(connect, stream, sa,
-                                                callback))
+    rffi.setintfield(sin, "c_sin_family", s.AF_INET)
+    rffi.setintfield(sin, "c_sin_port", s.htons(port))
+    if inet_pton(s.AF_INET, address, sin.c_sin_addr):
+        print "tcpConnect: inet_pton failed!?"
+        assert False
+
+    rv = check("tcp_connect", tcp_connect(connect, stream, sin, callback))
+    return rv
 
 
 tty_init = rffi.llexternal("uv_tty_init", [loop_tp, tty_tp, rffi.INT,
@@ -455,3 +462,8 @@ fsWrite = checking("fs_write", fs_write)
 
 def alloc_fs():
     return lltype.malloc(cConfig["fs_t"], flavor="raw", zero=True)
+
+
+inet_pton = rffi.llexternal("uv_inet_pton", [rffi.INT, rffi.CCHARP,
+                                             rffi.VOIDP],
+                            rffi.INT, compilation_info=eci)
