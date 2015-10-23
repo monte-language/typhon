@@ -13,7 +13,6 @@
 # under the License.
 
 from rpython.rlib.debug import debug_print
-from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rarithmetic import intmask
 
 from typhon import ruv
@@ -22,7 +21,7 @@ from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.collections import ConstList, unwrapList
 from typhon.objects.constants import NullObject
-from typhon.objects.data import StrObject, unwrapInt, unwrapStr
+from typhon.objects.data import StrObject, unwrapBytes, unwrapInt
 from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object, runnable
@@ -70,7 +69,8 @@ class TCP4ClientEndpoint(Object):
         self.port = port
 
     def toString(self):
-        return u"<endpoint (IPv4, TCP): %s:%d>" % (self.host, self.port)
+        return u"<endpoint (IPv4, TCP): %s:%d>" % (self.host.decode("utf-8"),
+                                                   self.port)
 
     def recv(self, atom, args):
         if atom is CONNECT_0:
@@ -79,7 +79,6 @@ class TCP4ClientEndpoint(Object):
         raise Refused(self, atom, args)
 
     def connect(self):
-        # XXX need to do name resolution too~
         vat = currentVat.get()
         stream = ruv.alloc_tcp(vat.uv_loop)
 
@@ -92,9 +91,7 @@ class TCP4ClientEndpoint(Object):
                         (vat, resolvers))
 
         # Make the actual connection.
-        # XXX name resolution!!!
-        host = self.host.encode("utf-8")
-        ruv.tcpConnect(stream, host, self.port, connectCB)
+        ruv.tcpConnect(stream, self.host, self.port, connectCB)
 
         # Return the promises.
         return ConstList([fount, drain])
@@ -106,7 +103,7 @@ def makeTCP4ClientEndpoint(args):
     Make a TCPv4 client endpoint.
     """
 
-    host = unwrapStr(args[0])
+    host = unwrapBytes(args[0])
     port = unwrapInt(args[1])
     return TCP4ClientEndpoint(host, port)
 

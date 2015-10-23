@@ -1177,6 +1177,24 @@ class bytesIterator(Object):
         raise Refused(self, atom, args)
 
 
+def bytesToString(bs):
+    d = {
+        '\r': u"$\\r",
+        '\n': u"$\\n",
+    }
+    pieces = []
+    for char in bs:
+        if 0x20 <= ord(char) < 0x7f:
+            pieces.append(unicode(unichr(ord(char))))
+        elif char in d:
+            pieces.append(d[char])
+        elif ord(char) < 0x10:
+            pieces.append(u"$\\x0%x" % ord(char))
+        else:
+            pieces.append(u"$\\x%x" % ord(char))
+    return u"b`%s`" % u"".join(pieces)
+
+
 @autohelp
 class BytesObject(Object):
     """
@@ -1191,21 +1209,7 @@ class BytesObject(Object):
         self._bs = s
 
     def toString(self):
-        d = {
-            '\r': u"$\\r",
-            '\n': u"$\\n",
-        }
-        pieces = []
-        for char in self._bs:
-            if 0x20 <= ord(char) < 0x7f:
-                pieces.append(unicode(unichr(ord(char))))
-            elif char in d:
-                pieces.append(d[char])
-            elif ord(char) < 0x10:
-                pieces.append(u"$\\x0%x" % ord(char))
-            else:
-                pieces.append(u"$\\x%x" % ord(char))
-        return u"b`%s`" % u"".join(pieces)
+        return bytesToString(self._bs)
 
     def hash(self):
         # Cribbed from RPython's _hash_string.

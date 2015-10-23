@@ -47,6 +47,7 @@ def reduce(result) as DeepFrozen:
 
 def main(=> Timer, => bench, => unittest,
          => currentProcess, => currentRuntime, => currentVat,
+         => getAddrInfo,
          => makeFileResource, => makeProcess,
          => makeStdErr, => makeStdIn, => makeStdOut,
          => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
@@ -91,6 +92,7 @@ def main(=> Timer, => bench, => unittest,
         => &&makeBrandPair, => &&traceln, => &&unittest,
         # Typhon unsafe scope.
         => &&Timer, => &&bench, => &&currentProcess, => &&currentRuntime, => &&currentVat,
+        => &&getAddrInfo,
         => &&makeFileResource, => &&makeProcess, => &&makeStdErr, => &&makeStdIn,
         => &&makeStdOut, => &&makeTCP4ClientEndpoint, => &&makeTCP4ServerEndpoint,
         => &&unsealException,

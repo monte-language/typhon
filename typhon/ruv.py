@@ -41,7 +41,9 @@ def formatError(code):
 def check(message, rv):
     rv = intmask(rv)
     if rv < 0:
-        raise UVError(rv, message)
+        uve = UVError(rv, message)
+        print "uv:", uve.repr()
+        raise uve
     return rv
 
 @specialize.arg(0)
@@ -86,6 +88,8 @@ class CConfig:
                                  ("path", rffi.CONST_CCHARP),
                                  ("result", rffi.SSIZE_T),
                                  ("ptr", rffi.VOIDP)])
+    getaddrinfo_t = rffi_platform.Struct("uv_getaddrinfo_t",
+                                         [("data", rffi.VOIDP)])
     buf_t = rffi_platform.Struct("uv_buf_t",
                                  [("base", rffi.CCHARP),
                                   ("len", rffi.SIZE_T)])
@@ -106,6 +110,7 @@ write_tp = rffi.lltype.Ptr(cConfig["write_t"])
 tcp_tp = rffi.lltype.Ptr(cConfig["tcp_t"])
 tty_tp = rffi.lltype.Ptr(cConfig["tty_t"])
 fs_tp = rffi.lltype.Ptr(cConfig["fs_t"])
+gai_tp = rffi.lltype.Ptr(cConfig["getaddrinfo_t"])
 buf_tp = lltype.Ptr(cConfig["buf_t"])
 
 buf_t = cConfig["buf_t"]
@@ -194,6 +199,7 @@ def stashFor(name, struct):
 stashTimer, unstashTimer, unstashingTimer = stashFor("timer", timer_tp)
 stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
 stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
+stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
 
 
 @specialize.ll()
@@ -467,6 +473,41 @@ def alloc_fs():
     return lltype.malloc(cConfig["fs_t"], flavor="raw", zero=True)
 
 
+gai_cb = rffi.CCallback([gai_tp, rffi.INT, s.addrinfo_ptr], lltype.Void)
+
+gai = rffi.llexternal("uv_getaddrinfo", [loop_tp, gai_tp, gai_cb, rffi.CCHARP,
+                                         rffi.CCHARP, s.addrinfo_ptr],
+                      rffi.INT, compilation_info=eci)
+getAddrInfo = checking("getaddrinfo", gai)
+freeAddrInfo = rffi.llexternal("uv_freeaddrinfo", [s.addrinfo_ptr],
+                               lltype.Void, compilation_info=eci)
+
+def alloc_gai():
+    return lltype.malloc(cConfig["getaddrinfo_t"], flavor="raw", zero=True)
+
+
+ip4_name = rffi.llexternal("uv_ip4_name", [s.sockaddr_ptr, rffi.CCHARP,
+                                           rffi.SIZE_T],
+                           rffi.INT, compilation_info=eci)
+ip6_name = rffi.llexternal("uv_ip6_name", [s.sockaddr_ptr, rffi.CCHARP,
+                                           rffi.SIZE_T],
+                           rffi.INT, compilation_info=eci)
+inet_ntop = rffi.llexternal("uv_inet_ntop", [rffi.INT, rffi.VOIDP,
+                                             rffi.CCHARP, rffi.SIZE_T],
+                            rffi.INT, compilation_info=eci)
 inet_pton = rffi.llexternal("uv_inet_pton", [rffi.INT, rffi.CCHARP,
                                              rffi.VOIDP],
                             rffi.INT, compilation_info=eci)
+
+def IP4Name(sockaddr):
+    size = 16
+    with rffi.scoped_alloc_buffer(size) as buf:
+        check("ip4_name", ip4_name(sockaddr, buf.raw, size))
+        i = 0
+        return buf.str(size).split('\x00', 1)[0]
+
+def IP6Name(sockaddr):
+    size = 46
+    with rffi.scoped_alloc_buffer(size) as buf:
+        check("ip6_name", ip6_name(sockaddr, buf.raw, size))
+        return buf.str(size).split('\x00', 1)[0]

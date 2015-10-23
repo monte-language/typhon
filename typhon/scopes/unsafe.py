@@ -15,6 +15,7 @@
 from typhon.env import finalize
 from typhon.objects.exceptions import unsealException
 from typhon.objects.files import makeFileResource
+from typhon.objects.networking.dns import getAddrInfo
 from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
                                                  makeTCP4ServerEndpoint)
 from typhon.objects.networking.stdio import makeStdErr, makeStdIn, makeStdOut
@@ -34,6 +35,7 @@ def unsafeScope(config, collectTests):
         u"currentProcess": CurrentProcess(config),
         u"currentRuntime": CurrentRuntime(),
         u"currentVat": CurrentVatProxy(),
+        u"getAddrInfo": getAddrInfo(),
         u"makeFileResource": makeFileResource(),
         u"makeProcess": makeProcess(),
         u"makeStdErr": makeStdErr(),
