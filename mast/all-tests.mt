@@ -6,7 +6,7 @@ import.script("lib/cache")
 import.script("lib/codec/utf8")
 import.script("lib/continued", [=> &&bench])
 import.script("lib/entropy/pool")
-import.script("lib/enum")
+import("lib/enum", [=> unittest])
 # Needs fake Timer.
 # import.script("lib/irc/client")
 import.script("lib/irc/user")

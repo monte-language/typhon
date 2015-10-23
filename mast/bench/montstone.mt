@@ -16,7 +16,7 @@
 # I am not afraid to include the relatively poorly-written parts of this
 # benchmark. ~ C.
 
-def [=> makeEnum] := import.script("lib/enum")
+def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
 
 def [Enumeration, Ident1, Ident2, Ident3, Ident4, Ident5] := makeEnum(
     ["Ident1", "Ident2", "Ident3", "Ident4", "Ident5"])

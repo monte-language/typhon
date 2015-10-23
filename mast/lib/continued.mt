@@ -15,7 +15,7 @@
 # Continued fractions. Nearly all maths here comes from Gosper in the early
 # 70s. Nothing interesting here, aside from the wonders of maths.
 
-def [=> makeEnum] | _ := import.script("lib/enum")
+def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
 
 object infinity:
     to _printOn(out):

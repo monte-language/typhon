@@ -13,7 +13,7 @@
 # under the License.
 
 def [=> strToInt] | _ := import.script("lib/atoi")
-def [=> makeEnum] | _ := import.script("lib/enum")
+def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
 def [=> UTF8] | _ := import.script("lib/codec/utf8")
 def [=> nullPump] := import.script("lib/tubes/nullPump")
 def [=> makeMapPump] := import.script("lib/tubes/mapPump")

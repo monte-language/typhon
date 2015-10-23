@@ -1,3 +1,5 @@
+imports => unittest
+exports (makeEnum)
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,21 +14,29 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def makeEnumObject(i :Int, name):
-    return object enumObject:
+def makeEnumObject(i :Int, name :Str) as DeepFrozen:
+    return object enumObject as DeepFrozen:
         to _printOn(out):
             out.print(name)
 
         to asInteger() :Int:
             return i
 
-def makeEnum(names :List):
-    def enums := [for i => name in (names) makeEnumObject(i, name)]
-    def enumSet := enums.asSet()
+def makeEnum(names :List[Str]) as DeepFrozen:
+    "Make an enumeration from a list of names.
 
-    object EnumGuard:
+     def [Enum, first, second] := makeEnum([\"first\", \"second\"])
+    "
+
+    def enums :List[DeepFrozen] := [for i => name in (names)
+                                    makeEnumObject(i, name)]
+    def enumSet :Set[DeepFrozen] := enums.asSet()
+
+    object EnumGuard as DeepFrozen:
+        "A guard for an enumeration."
+
         to coerce(specimen, ej):
-            if (!enums.contains(specimen)):
+            if (!enumSet.contains(specimen)):
                 throw.eject(ej, `$specimen is not one of $enums`)
             return specimen
 
@@ -41,5 +51,3 @@ def testEnum(assert):
     assert.doesNotEject(fn ej {def x :Fubar exit ej := FOO})
 
 unittest([testEnum])
-
-[=> makeEnum]

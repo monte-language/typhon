@@ -16,7 +16,7 @@
 # some Monte idioms instead of slavishly translating Python, but doesn't make
 # any choices that would speed things up by cheating.
 
-def [=> makeEnum] := import.script("lib/enum")
+def [=> makeEnum] := import("lib/enum", [=> unittest])
 
 # Task states.
 def [TaskType, BLANK, IDLE, WORK, HANDLERA, HANDLERB, DEVA, DEVB] := makeEnum(

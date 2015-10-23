@@ -15,7 +15,7 @@
 def [=> UTF8] | _ := import.script("lib/codec/utf8")
 def [=> makeMapPump] := import.script("lib/tubes/mapPump")
 def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
-def [=> makeEnum] | _ := import.script("lib/enum")
+def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
 def [=> percentDecode] | _ := import.script("lib/percent")
 def [=> chain] | _ := import.script("lib/tubes/chain")
 
