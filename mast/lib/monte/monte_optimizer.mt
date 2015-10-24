@@ -48,20 +48,6 @@ def sequence(exprs, span) as DeepFrozen:
         return a.SeqExpr(exprs, span)
 
 
-def flattenSeq(exprs) as DeepFrozen:
-    "Undo nesting of sequences."
-
-    var rv := []
-    for expr in exprs:
-        switch (expr.getNodeName()):
-            match =="SeqExpr":
-                # Recurse. Hopefully this isn't too terribly deep.
-                rv += flattenSeq(expr.getExprs())
-            match _:
-                rv with= (expr)
-    return rv
-
-
 def finalPatternToName(pattern, ej) as DeepFrozen:
     if (pattern.getNodeName() == "FinalPattern" &&
         pattern.getGuard() == null):
@@ -385,9 +371,9 @@ def optimize(ast, maker, args, span):
                         # m`escape ej {before; ej.run(value); expr}` ->
                         # m`escape ej {before; ej.run(value)}`
                         var slicePoint := -1
-                        def flattenedExprs := flattenSeq(body.getExprs())
+                        def exprs := body.getExprs()
 
-                        for i => expr in flattenedExprs:
+                        for i => expr in exprs:
                             switch (expr.getNodeName()):
                                 match =="MethodCallExpr":
                                     def receiver := expr.getReceiver()
@@ -401,12 +387,11 @@ def optimize(ast, maker, args, span):
                                 match _:
                                     pass
 
-                        if (slicePoint != -1 &&
-                            slicePoint < flattenedExprs.size()):
-                            def exprs := [for n
-                                          in (flattenedExprs.slice(0, slicePoint))
+                        if (slicePoint != -1 && slicePoint < exprs.size()):
+                            def slice := [for n
+                                          in (exprs.slice(0, slicePoint))
                                           n.transform(optimize)]
-                            def newSeq := sequence(exprs, body.getSpan())
+                            def newSeq := sequence(slice, body.getSpan())
                             return maker(args[0], newSeq, args[2], args[3],
                                          span).transform(optimize)
 
