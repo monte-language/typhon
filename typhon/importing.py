@@ -18,7 +18,7 @@ from rpython.rlib.rpath import rjoin
 from rpython.rlib.unroll import unrolling_iterable
 
 from typhon.errors import LoadFailed, UserException, userError
-from typhon.load.mast import InvalidMAST, loadMAST
+from typhon.load.mast import InvalidMAST, loadMASTBytes
 from typhon.load.trash import load
 from typhon.nodes import Sequence, interactiveCompile
 from typhon.objects.constants import NullObject
@@ -44,7 +44,7 @@ def obtainModuleFromSource(source, recorder, origin):
             term = Sequence(load(source)[:])
         except LoadFailed as le:
             print "Load (trash) failed:", le
-            term = loadMAST(source)
+            term = loadMASTBytes(source)
 
     with recorder.context("Compilation"):
         code, topLocals = interactiveCompile(term, origin)

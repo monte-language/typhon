@@ -137,9 +137,15 @@ class MASTContext(object):
 
     def decodeNextTag(self, stream):
         tag = stream.nextByte()
+        if self.noisy:
+            print "Tag:", tag
+
         if tag == 'L':
             # Literal.
             literalTag = stream.nextByte()
+            if self.noisy:
+                print "Literal tag:", literalTag
+
             if literalTag == 'C':
                 # Character. Read bytes one-at-a-time until a code point has
                 # been decoded successfully.
@@ -174,6 +180,9 @@ class MASTContext(object):
         elif tag == 'P':
             # Pattern.
             pattTag = stream.nextByte()
+            if self.noisy:
+                print "Pattern tag:", pattTag
+
             if pattTag == 'F':
                 # Final.
                 name = stream.nextStr()
@@ -314,16 +323,18 @@ class MASTContext(object):
                 print "No expressions yet"
 
 
-
-def loadMASTHandle(handle, noisy=False):
-    magic = handle.read(len(MAGIC))
-    if magic != MAGIC:
-        raise InvalidMAST("Wrong magic bytes '%s'" % magic)
-    stream = MASTStream(handle.read())
+def loadMASTBytes(bs, noisy=False):
+    if not bs.startswith(MAGIC):
+        raise InvalidMAST("Wrong magic bytes '%s'" % bs[:len(MAGIC)])
+    stream = MASTStream(bs[len(MAGIC):])
     context = MASTContext(noisy)
     while not stream.exhausted():
         context.decodeNextTag(stream)
     return context.exprs[-1]
+
+
+def loadMASTHandle(handle, noisy=False):
+    return loadMASTBytes(handle.read(), noisy)
 
 
 def loadMAST(path, noisy=False):

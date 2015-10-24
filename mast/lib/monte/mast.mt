@@ -18,7 +18,8 @@ def packRefs(bss :List[Bytes]) :Bytes as DeepFrozen:
 
 def packStr(s :NullOk[Str]) :Bytes as DeepFrozen:
     if (s == null) {return b`$\x00`}
-    return packInt(s.size()) + UTF8.encode(s, null)
+    def bs := UTF8.encode(s, null)
+    return packInt(bs.size()) + bs
 
 def makeMASTContext() as DeepFrozen:
     "Make a MAST context."
@@ -200,7 +201,7 @@ def makeMASTContext() as DeepFrozen:
                 match =="ViaPattern":
                     def expr := MASTContext.packExpr(patt.getExpr())
                     def innerPatt := MASTContext.packPatt(patt.getPattern())
-                    MASTContext.appendPatt(b`PV$expr$innerPatt`)
+                    MASTContext.appendPatt(b`PA$expr$innerPatt`)
                 match =="BindingPattern":
                     def name := packStr(patt.getNoun().getName())
                     MASTContext.appendPatt(b`PB$name`)
