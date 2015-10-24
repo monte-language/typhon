@@ -140,6 +140,9 @@ def makeQuasiTokenChain(template) as DeepFrozen:
     var j := 0
     def counters := [VALUE_HOLE => -1, PATTERN_HOLE => -1].diverge()
     return object chainer:
+        to formatError(m, ej):
+            return lex.formatError(m, ej)
+
         to _makeIterator():
             return chainer
 
