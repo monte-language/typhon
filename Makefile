@@ -71,6 +71,7 @@ mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/record.ty \
 	bench \
 	monte
 
+infer: mast mast/tools/infer.mast
 
 testVM: default
 	trial typhon
@@ -100,7 +101,8 @@ tubes: mast/lib/tubes/itubes.ty \
 	mast/lib/tubes/nullPump.ty mast/lib/tubes/mapPump.ty \
 	mast/lib/tubes/pumpTube.ty mast/lib/tubes/statefulPump.ty \
 	mast/lib/tubes/utf8.ty \
-	mast/lib/tubes/chain.ty
+	mast/lib/tubes/chain.ty \
+	mast/lib/tubes/pureDrain.mast
 
 http: mast/lib/http/client.ty mast/lib/http/server.ty \
 	mast/lib/http/tag.ty mast/lib/http/resource.ty \

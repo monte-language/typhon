@@ -11,7 +11,7 @@ if path.endswith(".ty"):
     term = Sequence(load(open(path, "rb").read())[:])
 else:
     from typhon.load.mast import loadMAST
-    term = loadMAST(path, noisy=True)
+    term = loadMAST(path, noisy=False)
 
 for line in term.repr().split("\n"):
     print line.rstrip()
