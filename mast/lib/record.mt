@@ -1,26 +1,36 @@
-def capitalize(s :Str) :Str:
+imports => unittest
+exports (makeRecord)
+
+def capitalize(s :Str) :Str as DeepFrozen:
     if (s.size() > 0):
         return s.slice(0, 1).toUpperCase() + s.slice(1)
     return s
 
 # XXX should be Map[Str, Guard]
-def makeRecord(name :Str, fields :Map[Str, Any]):
+def makeRecord(name :Str, fields :Map[Str, DeepFrozen]) as DeepFrozen:
     def fieldNames :List[Str] := fields.getKeys()
-    def fieldGuards :List := fields.getValues()
+    def fieldGuards :List[DeepFrozen] := fields.getValues()
     def capitalizedNames :List[Str] := [for fieldName in (fieldNames)
                                         capitalize(fieldName)]
-    def checkSlug := capitalizedNames.indexOf
 
-    def checkElements(elts, ej):
+    # XXX used to be a curry, but curries can't be DF.
+    def checkSlug(slug) as DeepFrozen:
+        return capitalizedNames.indexOf(slug)
+
+    def checkElements(elts, ej) as DeepFrozen:
         if (elts.size() != fieldGuards.size()):
             throw.eject(ej, "Wrong number of elements")
 
         return [for i => elt in (elts) fieldGuards[i].coerce(elt, ej)]
 
-    interface Record guards RecordStamp:
-        pass
+    # XXX call makeProtocolDesc directly and more directly customize the
+    # structure of the interface.
+    interface Record :DeepFrozen guards RecordStamp :DeepFrozen:
+        "An interface for a record."
 
-    object recordMaker:
+        to asMap() :Map[Int, Any]
+
+    object recordMaker as DeepFrozen:
         match [=="run", via (checkElements) elements, _]:
             object record as RecordStamp:
                 "A record."
