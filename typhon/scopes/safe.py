@@ -31,7 +31,6 @@ from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
 from typhon.objects.guards import (anyGuard, FinalSlotGuardMaker,
                                    VarSlotGuardMaker)
-from typhon.objects.help import Help
 from typhon.objects.printers import toString
 from typhon.objects.refs import Promise, RefOps, resolution
 from typhon.objects.root import Object, runnable
@@ -449,7 +448,6 @@ def safeScope():
         u"_makeBytes": MakeBytes(),
         u"_makeFinalSlot": theFinalSlotMaker,
         u"_makeVarSlot": VarSlotMaker(),
-        u"help": Help(),
         u"throw": theThrower,
 
         u"trace": TraceLn(),

@@ -689,7 +689,7 @@ var preludeScope := scopeAsDF([
     => __makeList, => __makeMap, => __makeInt, => __makeDouble,
     => __makeSourceSpan, => __makeString, => __slotToBinding,
     => _makeBytes, => _makeFinalSlot, => _makeVarSlot,
-    => help, => throw, => trace, => traceln,
+    => throw, => trace, => traceln,
     => _mapEmpty, => _mapExtract,
     => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterWhile,
     => _validateFor,

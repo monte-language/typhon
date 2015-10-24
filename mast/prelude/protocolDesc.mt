@@ -11,14 +11,14 @@ def __makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
         to _uncall():
             return [__makeParamDesc, "run", [name, guard], [].asMap()]
 
-        to getName() :Str:
-            return name
-
         to getGuard() :DeepFrozen:
             return guard
 
+        to getName() :Str:
+            return name
 
-def __makeMessageDesc(unknown :DeepFrozen, verb :Str, params :DeepFrozen,
+
+def __makeMessageDesc(docstring :NullOk[Str], verb :Str, params :DeepFrozen,
                       guard :DeepFrozen) as DeepFrozen:
     "Describe a message."
 
@@ -27,11 +27,15 @@ def __makeMessageDesc(unknown :DeepFrozen, verb :Str, params :DeepFrozen,
             out.print(`<message $verb/${params.size()}>`)
 
         to _uncall():
-            return [__makeMessageDesc, "run", [unknown, verb, params, guard],
+            return [__makeMessageDesc, "run", [docstring, verb, params,
+                                               guard],
                     [].asMap()]
 
         to getArity() :Int:
             return params.size()
+
+        to getDocstring() :NullOk[Str]:
+            return docstring
 
         to getVerb() :Str:
             return verb
@@ -52,7 +56,7 @@ def reduce(sets :List[Set]) :Set as DeepFrozen:
 object __makeProtocolDesc as DeepFrozen:
     "Produce an interface."
 
-    to run(docString :NullOk[Str], name :Str, parents :List,
+    to run(docstring :NullOk[Str], name :Str, parents :List,
            stillUnknown :DeepFrozen, messages :List):
         # Precalculate [verb, arity] set of required methods.
         def ownMethods :Set := messages.asSet()
@@ -81,7 +85,7 @@ object __makeProtocolDesc as DeepFrozen:
                 out.print(">")
 
             to _uncall():
-                return [__makeProtocolDesc, "run", [docString, name,
+                return [__makeProtocolDesc, "run", [docstring, name,
                                                     parents, stillUnknown,
                                                     messages], [].asMap()]
 
@@ -119,6 +123,9 @@ object __makeProtocolDesc as DeepFrozen:
 
                 throw.eject(ej, "Specimen did not implement " + name)
 
+            to getDocstring() :NullOk[Str]:
+                return docstring
+
             to getMethods() :Set:
                 return allMethods
 
@@ -133,9 +140,9 @@ object __makeProtocolDesc as DeepFrozen:
 
         return protocolDesc
 
-    to makePair(docString :NullOk[Str], name :Str, parents :List,
+    to makePair(docstring :NullOk[Str], name :Str, parents :List,
                 stillUnknown :DeepFrozen, messages :List):
-        def protocolDescStamp := __makeProtocolDesc(docString, name,
+        def protocolDescStamp := __makeProtocolDesc(docstring, name,
                                                     parents, stillUnknown,
                                                     messages)
 
@@ -144,7 +151,7 @@ object __makeProtocolDesc as DeepFrozen:
 
             to _uncall():
                 return [
-                    [__makeProtocolDesc, "makePair", [docString, name,
+                    [__makeProtocolDesc, "makePair", [docstring, name,
                                                       parents, stillUnknown,
                                                       messages], [].asMap()],
                     "get", [0], [].asMap()]
