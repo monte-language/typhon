@@ -466,9 +466,15 @@ class FlexList(Object):
         if atom is EXTEND_1:
             from typhon.objects.refs import resolution
             l = resolution(args[0])
+            # The early exits are essential here; without them, we might pass
+            # an empty list to strategy.append(), which causes a crash. ~ C.
             if isinstance(l, ConstList):
+                if l.size() == 0:
+                    return NullObject
                 data = l.strategy.fetch_all(l)
             elif isinstance(l, FlexList):
+                if l.size() == 0:
+                    return NullObject
                 data = l.strategy.fetch_all(l)
             else:
                 data = listFromIterable(l)[:]
