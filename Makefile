@@ -124,8 +124,12 @@ monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/montec.ty mast/unittest.ty mast/all-tests.ty
 
 %.ty: %.mt
-	@ echo "MONTEC $<"
+	@ echo "MONTEC (trash) $<"
 	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec -mix -format trash $< $@ # 2> /dev/null
+
+%.mast: %.mt
+	@ echo "MONTEC $<"
+	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec -mix -format mast $< $@ # 2> /dev/null
 
 clean:
 	@ echo "CLEAN"

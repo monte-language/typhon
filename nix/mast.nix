@@ -5,11 +5,11 @@ stdenv.mkDerivation {
     buildInputs = [ typhonVm ];
     buildPhase = ''
       ln -s ${typhonVm}/mt-typhon .
-      make mast fun repl.ty
+      make mast fun repl.mast
       '';
     installPhase = ''
       mkdir -p $out/bin
-      cp -r mast repl.ty $out/
+      cp -r mast repl.mast $out/
       echo "${typhonVm}/mt-typhon -l $out/mast $out/repl" > $out/bin/monte
       chmod +x $out/bin/monte
       '';
@@ -25,5 +25,5 @@ stdenv.mkDerivation {
         p == loc "/mast" ||
         p == loc "/boot" ||
         p == loc "/Makefile" ||
-        p == loc "/repl.mt")) ./..;
+        p == loc "/repl.mast")) ./..;
 }
