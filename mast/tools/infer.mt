@@ -36,6 +36,13 @@ def shouldHaveMethod(specimen, verb, arity) as DeepFrozen:
             return
     traceln(`$specimen doesn't have method $verb/$arity`)
 
+def reifyGuard(expr) as DeepFrozen:
+    if (expr.getNodeName() == "NounExpr"):
+        def &&rv := safeScope.fetch(`&&${expr.getName()}`, fn {&&Any})
+        return rv
+    return Any
+
+
 object inference as DeepFrozen:
     to inferPatt(specimen, patt :Patt, var context :Map):
         "Infer the type of a pattern and its specimen."
@@ -43,9 +50,8 @@ object inference as DeepFrozen:
         return switch (patt.getNodeName()):
             match =="VarPattern":
                 def noun :Str := patt.getNoun().getName()
-                def [guard, c] := inference.inferType(patt.getGuard(),
-                                                      context)
-                context | [noun => guard]
+                def g := reifyGuard(patt.getGuard())
+                context | [noun => g]
             match name:
                 traceln(`Couldn't infer anything about $name`)
                 context
@@ -54,6 +60,17 @@ object inference as DeepFrozen:
         "Infer the type of an expression."
 
         return switch (expr.getNodeName()):
+            match =="AugAssignExpr":
+                def [rhs, c] := inference.inferType(expr.getRvalue(), context)
+                def [lhs, _] := inference.inferType(expr.getLvalue(), context)
+                shouldHaveMethod(lhs, expr.getOpName(), 1)
+                [rhs, c]
+            match =="BinaryExpr":
+                def [lhs, c] := inference.inferType(expr.getLeft(), context)
+                def [rhs, c2] := inference.inferType(expr.getRight(), c)
+                shouldHaveMethod(lhs, expr.getOpName(), 1)
+                # XXX don't have method rv guards yet
+                [Any, c2]
             match =="DefExpr":
                 def [rhs, c] := inference.inferType(expr.getExpr(), context)
                 context := inference.inferPatt(rhs, expr.getPattern(), c)
@@ -65,6 +82,13 @@ object inference as DeepFrozen:
                 # XXX key and value
                 inference.inferType(expr.getBody(), c)
                 [Void, context]
+            match =="FunCallExpr":
+                def [receiver, c] := inference.inferType(expr.getReceiver(),
+                                                         context)
+                # XXX punting
+                shouldHaveMethod(receiver, "run", expr.getArgs().size())
+                # XXX don't have function rv guards yet
+                [Any, context]
             match =="LiteralExpr":
                 switch (expr.getValue()) {
                     match _ :Bool {[Bool, context]}
@@ -83,6 +107,21 @@ object inference as DeepFrozen:
                     traceln(`Undefined name $noun`)
                     return Any
                 [context.fetch(noun, notFound), context]
+            match =="RangeExpr":
+                def [left, c] := inference.inferType(expr.getLeft(), context)
+                context := c
+                def [right, c2] := inference.inferType(expr.getRight(),
+                                                       context)
+                context := c2
+                if (left != right):
+                    traceln(`Range expr range type varies from $left to $right`)
+                # XXX hax
+                def range := switch (left) {
+                    match ==Char {('0'..'1')._getAllegedInterface()}
+                    match ==Int {(0..1)._getAllegedInterface()}
+                    match _ {Any}
+                }
+                [range, context]
             match =="SeqExpr":
                 var rv := Any
                 for subExpr in expr.getExprs():
