@@ -76,7 +76,7 @@ infer: mast mast/tools/infer.mast
 testVM: default
 	trial typhon
 
-testMast: default mast mast/tests/lexer.ty mast/tests/parser.ty \
+testMast: default mast infer mast/tests/lexer.ty mast/tests/parser.ty \
 	mast/tests/auditors.ty mast/tests/fail-arg.ty
 	./mt-typhon -l mast mast/unittest all-tests
 

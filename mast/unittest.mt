@@ -1,6 +1,12 @@
 imports
 exports (main)
 
+def concatMap(it, f) as DeepFrozen:
+    var result := [].diverge()
+    for k => v in it:
+        result.extend(f(k, v))
+    return result.snapshot()
+
 def main(=> makeStdOut, => Timer, => currentProcess, => unsealException, => collectTests) as DeepFrozen:
     def [=> makeUTF8EncodePump] | _ := import.script("lib/tubes/utf8")
     def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
@@ -58,12 +64,6 @@ def main(=> makeStdOut, => Timer, => currentProcess, => unsealException, => coll
 
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout<-flowTo(makeStdOut())
-
-    def concatMap(it, f):
-        var result := [].diverge()
-        for k => v in it:
-            result.extend(f(k, v))
-        return result.snapshot()
 
     def runTests():
         def testInfo := concatMap(
