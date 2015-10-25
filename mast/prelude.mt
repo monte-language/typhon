@@ -431,16 +431,6 @@ def testSame(assert):
 unittest([testSame])
 
 
-def _iterWhile(obj) as DeepFrozenStamp:
-    return object iterWhile:
-        to _makeIterator():
-            return iterWhile
-        to next(ej):
-            def rv := obj()
-            if (rv == false):
-                throw.eject(ej, "End of iteration")
-            return [null, rv]
-
 object _iterForever as DeepFrozenStamp:
     to _makeIterator():
         return _iterForever
@@ -697,7 +687,7 @@ var preludeScope := scopeAsDF([
     => _makeBytes, => _makeFinalSlot, => _makeVarSlot,
     => throw, => trace, => traceln,
     => _mapEmpty, => _mapExtract,
-    => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterForever, => _iterWhile,
+    => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterForever,
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
