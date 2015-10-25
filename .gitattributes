@@ -1,1 +1,2 @@
 *.ty binary diff=typhon
+*.mast binary diff=typhon
