@@ -69,6 +69,8 @@ def main(=> Timer, => bench, => unittest,
         => &&makeFileResource, => &&makeProcess, => &&makeStdErr, => &&makeStdIn,
         => &&makeStdOut, => &&makeTCP4ClientEndpoint, => &&makeTCP4ServerEndpoint,
         => &&unsealException,
+        # REPL-only fun.
+        => &&help,
     ]
 
     var environment := [for `&&@name` => binding in (baseEnvironment) name => binding]
