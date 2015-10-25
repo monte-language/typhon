@@ -441,6 +441,12 @@ def _iterWhile(obj) as DeepFrozenStamp:
                 throw.eject(ej, "End of iteration")
             return [null, rv]
 
+object _iterForever as DeepFrozenStamp:
+    to _makeIterator():
+        return _iterForever
+    to next(ej):
+        return [null, null]
+
 
 def _splitList(position :Int) as DeepFrozenStamp:
     return def listSplitter(specimen, ej):
@@ -691,7 +697,7 @@ var preludeScope := scopeAsDF([
     => _makeBytes, => _makeFinalSlot, => _makeVarSlot,
     => throw, => trace, => traceln,
     => _mapEmpty, => _mapExtract,
-    => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterWhile,
+    => _accumulateList, => _accumulateMap, => _booleanFlow, => _iterForever, => _iterWhile,
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,

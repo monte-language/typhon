@@ -876,25 +876,24 @@ def expand(node, builder, fail) as DeepFrozen:
             return builder.EscapeExpr(
                 builder.FinalPattern(builder.NounExpr("__break", span), null, span),
                     builder.MethodCallExpr(builder.NounExpr("__loop", span), "run",
-                        [builder.MethodCallExpr(builder.NounExpr("_iterWhile", span), "run",
-                            [builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
-                                builder.Script(null,
-                                    [builder."Method"(null, "run", [], [], null, test, span)],
-                                    [], span), span)], [], span),
-                        builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
+                        [builder.NounExpr("_iterForever", span),
+                         builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
                             builder.Script(null,
                                 [builder."Method"(null, "run",
                                      [builder.IgnorePattern(null, span),
                                      builder.IgnorePattern(null, span)],
                                      [],
                                      builder.NounExpr("Bool", span),
-                                     builder.SeqExpr([
-                                         builder.EscapeExpr(
-                                             builder.FinalPattern(
-                                                 builder.NounExpr("__continue", span),
-                                                 null, span),
-                                             block, null, null, span),
-                                         builder.NounExpr("true", span)], span), span)],
+                                         builder.IfExpr(
+                                             test,
+                                             builder.SeqExpr([
+                                                 builder.EscapeExpr(
+                                                     builder.FinalPattern(
+                                                         builder.NounExpr("__continue", span),
+                                                         null, span),
+                                                     block, null, null, span),
+                                                 builder.NounExpr("true", span)],
+                                            span), builder.MethodCallExpr(builder.NounExpr("__break", span), "run", [], [], span), span), span)],
                                  [], span), span)], [], span),
                 if (catcher !=null) {catcher.getPattern()},
                  if (catcher !=null) {catcher.getBody()}, span)
