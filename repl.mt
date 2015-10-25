@@ -62,36 +62,7 @@ def main(=> Timer, => bench, => unittest,
     ] | _ := import.script("lib/tubes/utf8")
     def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
 
-    def baseEnvironment := [
-        # Constants.
-        => &&null, => &&true, => &&false, => &&Infinity, => &&NaN,
-        # Constructors and core operator expansion.
-        => &&_makeBytes, => &&__makeDouble, => &&__makeInt, => &&__makeList, => &&__makeMap,
-        => &&__makeMessageDesc, => &&_makeOrderedSpace, => &&__makeParamDesc,
-        => &&__makeProtocolDesc, => &&__makeString,
-        => &&__equalizer, => &&_comparer,
-        => &&_accumulateList, => &&_accumulateMap,
-        # Guards.
-        => &&Any, => &&Bool, => &&Char, => &&DeepFrozen, => &&Double, => &&Empty, => &&Int,
-        => &&List, => &&Map, => &&Near, => &&NullOk, => &&Same, => &&Set, => &&Str,
-        => &&SubrangeGuard,  => &&Transparent, => &&Void,
-        => &&_mapEmpty, => &&_mapExtract,
-        => &&_splitList, => &&_accumulateList,
-        => &&__auditedBy, => &&_booleanFlow, => &&_iterWhile,
-        => &&__loop, => &&_validateFor,
-        => &&_switchFailed, => &&_makeVerbFacet,
-        => &&_suchThat, => &&_matchSame, => &&_bind, => &&_quasiMatcher,
-        => &&b__quasiParser, => &&simple__quasiParser,
-        # Safe capabilities.
-        => &&M, => &&Ref, => &&help, => &&m__quasiParser, => &&safeScope,
-        # Unsafe capabilities.
-        => &&import, => &&throw, => &&unsafeScope,
-        # Monte-only fun.
-        # Typhon safe scope.
-        => &&__auditedBy,
-        => &&__slotToBinding, => &&_makeFinalSlot, => &&_makeVarSlot,
-        => &&makeLazySlot,
-        => &&makeBrandPair, => &&traceln, => &&unittest,
+    def baseEnvironment := safeScope | [
         # Typhon unsafe scope.
         => &&Timer, => &&bench, => &&currentProcess, => &&currentRuntime, => &&currentVat,
         => &&getAddrInfo,
