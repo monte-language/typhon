@@ -43,6 +43,7 @@ def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut, => ben
     def [=> makeUTF8EncodePump :DeepFrozen,
          => makeUTF8DecodePump :DeepFrozen] | _ := import.script("lib/tubes/utf8", scope)
     def [=> makePumpTube :DeepFrozen] | _ := import.script("lib/tubes/pumpTube", scope)
+    def [=> findUndefinedNames :DeepFrozen] | _ := import("lib/monte/monte_verifier")
 
     def compile(config, inT, inputFile, outputFile, Timer, makeFileResource,
                 makeStdOut) as DeepFrozen:
@@ -71,10 +72,10 @@ def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut, => ben
                 traceln("Read in source file")
 
                 var tree := null
+                def lex := makeMonteLexer("".join(buf), inputFile)
                 def parseTime := Timer.trial(fn {
                     escape e {
-                        tree := parseModule(makeMonteLexer("".join(buf), inputFile),
-                                            astBuilder, e)
+                        tree := parseModule(lex, astBuilder, e)
                     } catch parseErrorMsg {
                         def stdout := makePumpTube(makeUTF8EncodePump())
                         stdout.flowTo(makeStdOut())
@@ -82,6 +83,18 @@ def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut, => ben
                         throw("Syntax error")
                     }
                 })
+                def undefineds := findUndefinedNames(tree, safeScope)
+                if (undefineds.size() > 0):
+                        def stdout := makePumpTube(makeUTF8EncodePump())
+                        stdout.flowTo(makeStdOut())
+                        for n in undefineds:
+                            escape x:
+                                lex.formatError(
+                                    [`Undefined name ${n.getName()}`, n.getSpan()], x)
+                            catch msg:
+                                stdout.receive(msg)
+                        throw("Name usage error")
+
                 when (parseTime) ->
                     traceln(`Parsed source file (${parseTime}s)`)
 

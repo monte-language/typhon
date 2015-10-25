@@ -3,6 +3,7 @@ boot_objects = boot/lib/monte/monte_lexer.ty \
 	boot/lib/monte/ast_dumper.ty \
 	boot/lib/monte/monte_expander.ty \
 	boot/lib/monte/monte_optimizer.ty \
+	boot/lib/monte/monte_verifier.ty \
 	boot/lib/monte/mast.ty \
 	boot/lib/parsers/monte.ty \
 	boot/montec.ty \
@@ -122,7 +123,7 @@ bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty \
 monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/lib/monte/monte_parser.ty mast/lib/monte/monte_expander.ty \
 	mast/lib/monte/monte_optimizer.ty mast/lib/monte/ast_dumper.ty \
-	mast/lib/monte/mast.ty \
+	mast/lib/monte/mast.ty mast/lib/monte/monte_verifier.ty \
 	mast/montec.ty mast/unittest.ty mast/all-tests.ty
 
 %.ty: %.mt
