@@ -851,7 +851,7 @@ def makeForwardExpr(patt :Ast["FinalPattern"], span) as DeepFrozen:
             if (priorities["assign"] < priority):
                 out.print(")")
     return astWrapper(forwardExpr, makeForwardExpr, [patt], span,
-        scope, "ForwardExpr", fn f {[patt.transform(f)]})
+        &scope, "ForwardExpr", fn f {[patt.transform(f)]})
 
 def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
     def &scope := makeLazySlot(fn {makeStaticScope([], [], [],
