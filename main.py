@@ -23,6 +23,7 @@ from rpython.rlib.jit import JitHookInterface, set_user_param
 
 from typhon import rsodium, ruv
 from typhon.arguments import Configuration
+from typhon.debug import enableDebugPrint
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, instantiateModule, obtainModule
 from typhon.metrics import Recorder
@@ -177,6 +178,9 @@ def entryPoint(argv):
         return 1
 
     config = Configuration(argv)
+
+    if config.verbose:
+        enableDebugPrint()
 
     if len(config.argv) < 2:
         print "No file provided?"

@@ -41,6 +41,9 @@ class Configuration(object):
     The Law of Demeter is waived for this object; treat it as data.
     """
 
+    # Whether to be verbose.
+    verbose = False
+
     # Whether to exit after loading the script file. Useful for testing.
     loadOnly = False
 
@@ -68,7 +71,9 @@ class Configuration(object):
         while not stream.done():
             item = stream.nextItem()
 
-            if item == "-l":
+            if item == "-v":
+                self.verbose = True
+            elif item == "-l":
                 self.libraryPaths.append(stream.nextItem())
             elif item == "-load":
                 self.loadOnly = True
