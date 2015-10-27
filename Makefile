@@ -101,7 +101,7 @@ parsers: mast/lib/parsers/http.ty mast/lib/parsers/html.ty \
 tubes: mast/lib/tubes/itubes.ty \
 	mast/lib/tubes/nullPump.ty mast/lib/tubes/mapPump.ty \
 	mast/lib/tubes/pumpTube.ty mast/lib/tubes/statefulPump.ty \
-	mast/lib/tubes/utf8.ty \
+	mast/lib/tubes/splitPump.mast mast/lib/tubes/utf8.ty \
 	mast/lib/tubes/chain.ty \
 	mast/lib/tubes/pureDrain.mast
 

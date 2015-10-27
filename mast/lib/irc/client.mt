@@ -17,8 +17,8 @@ def [
     => makeUTF8DecodePump,
     => makeUTF8EncodePump
 ] | _ := import.script("lib/tubes/utf8")
-def [=> nullPump] := import.script("lib/tubes/nullPump")
 def [=> makeMapPump] := import.script("lib/tubes/mapPump")
+def [=> makeSplitPump] := import("lib/tubes/splitPump", [=> unittest])
 def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
 def [=> chain] := import.script("lib/tubes/chain")
 def [=> makeSingleUse] := import.script("lib/singleUse")
@@ -26,55 +26,8 @@ def [=> makeTokenBucket] := import.script("lib/tokenBucket")
 def [=> makeUser, => sourceToUser] | _ := import.script("lib/irc/user")
 
 
-def splitAt(needle, var haystack):
-    def pieces := [].diverge()
-    var offset := 0
-
-    while (offset < haystack.size()):
-        def nextNeedle := haystack.indexOf(needle, offset)
-        if (nextNeedle == -1):
-            break
-
-        def piece := haystack.slice(offset, nextNeedle)
-        pieces.push(piece)
-        offset := nextNeedle + needle.size()
-
-    return [pieces.snapshot(), haystack.slice(offset, haystack.size())]
-
-
-def testSplitAtColons(assert):
-    def specimen := b`colon:splitting:things`
-    def [pieces, leftovers] := splitAt(b`:`, specimen)
-    assert.equal(pieces, [b`colon`, b`splitting`])
-    assert.equal(leftovers, b`things`)
-
-
-def testSplitAtWide(assert):
-    def specimen := b`it's##an##octagon#not##an#octothorpe`
-    def [pieces, leftovers] := splitAt(b`##`, specimen)
-    assert.equal(pieces, [b`it's`, b`an`, b`octagon#not`])
-    assert.equal(leftovers, b`an#octothorpe`)
-
-
-unittest([
-    testSplitAtColons,
-    testSplitAtWide,
-])
-
-
-def makeSplittingPump():
-    var buf := b``
-
-    return object splitPump extends nullPump:
-        to received(item):
-            buf += item
-            def [pieces, leftovers] := splitAt(b`$\r$\n`, buf)
-            buf := leftovers
-            return pieces
-
-
 def makeLineTube():
-    return makePumpTube(makeSplittingPump())
+    return makePumpTube(makeSplitPump(b`$\r$\n`))
 
 
 def makeIncoming():
