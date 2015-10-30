@@ -68,9 +68,11 @@ class FileUnpauser(Object):
 def readCB(fs):
     # Does *not* invoke user code.
     try:
+        size = intmask(fs.c_result)
         vat, fount = ruv.unstashFS(fs)
         assert isinstance(fount, FileFount)
-        size = intmask(fs.c_result)
+        # Done with fs.
+        ruv.free(fs)
         if size > 0:
             data = charpsize2str(fount.buf.c_base, size)
             fount.receive(data)
@@ -84,7 +86,8 @@ def readCB(fs):
 
 
 def closeCB(fs):
-    pass
+    # Done with fs.
+    ruv.free(fs)
 
 
 @autohelp
@@ -261,6 +264,8 @@ def openFountCB(fs):
             if fd < 0:
                 msg = ruv.formatError(fd).decode("utf-8")
                 r.smash(StrObject(u"Couldn't open file fount: %s" % msg))
+                # Done with fs.
+                ruv.free(fs)
             else:
                 r.resolve(FileFount(fs, fd, vat))
     except:
@@ -276,6 +281,8 @@ def openDrainCB(fs):
             if fd < 0:
                 msg = ruv.formatError(fd).decode("utf-8")
                 r.smash(StrObject(u"Couldn't open file drain: %s" % msg))
+                # Done with fs.
+                ruv.free(fs)
             else:
                 r.resolve(FileDrain(fs, fd, vat))
     except:
