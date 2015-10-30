@@ -373,6 +373,8 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozen:
                     out.println("")
                 first := false
                 e.subPrintOn(out, priority.min(priorities["braceExpr"]))
+            if (priority > priorities["braceExpr"]):
+                out.print(")")
     return astWrapper(seqExpr, makeSeqExpr, [fixedExprs], span, &scope,
                       "SeqExpr", fn f {[transformAll(fixedExprs, f)]})
 
