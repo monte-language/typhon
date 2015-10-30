@@ -43,7 +43,8 @@ def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut, => ben
     def [=> makeUTF8EncodePump :DeepFrozen,
          => makeUTF8DecodePump :DeepFrozen] | _ := import.script("lib/tubes/utf8", scope)
     def [=> makePumpTube :DeepFrozen] | _ := import.script("lib/tubes/pumpTube", scope)
-    def [=> findUndefinedNames :DeepFrozen] | _ := import("lib/monte/monte_verifier")
+    def [=> findUndefinedNames :DeepFrozen,
+         => walkScopeBoxes :DeepFrozen] | _ := import("lib/monte/monte_verifier")
 
     def compile(config, inT, inputFile, outputFile, Timer, makeFileResource,
                 makeStdOut) as DeepFrozen:
@@ -54,7 +55,6 @@ def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut, => ben
          This avoids the failure mode where the output file is corrupted by
          incomplete data, as well as the failure mode where the output file is
          truncated."
-
         var bytebuf := []
         def buf := [].diverge()
 
@@ -73,28 +73,34 @@ def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut, => ben
 
                 var tree := null
                 def lex := makeMonteLexer("".join(buf), inputFile)
+                def stdout := makePumpTube(makeUTF8EncodePump())
+                stdout.flowTo(makeStdOut())
                 def parseTime := Timer.trial(fn {
                     escape e {
                         tree := parseModule(lex, astBuilder, e)
                     } catch parseErrorMsg {
-                        def stdout := makePumpTube(makeUTF8EncodePump())
-                        stdout.flowTo(makeStdOut())
                         stdout.receive(parseErrorMsg)
                         throw("Syntax error")
                     }
                 })
                 def undefineds := findUndefinedNames(tree, safeScope)
                 if (undefineds.size() > 0):
-                        def stdout := makePumpTube(makeUTF8EncodePump())
-                        stdout.flowTo(makeStdOut())
-                        for n in undefineds:
-                            escape x:
-                                lex.formatError(
-                                    [`Undefined name ${n.getName()}`, n.getSpan()], x)
-                            catch msg:
-                                stdout.receive(msg)
-                        throw("Name usage error")
+                    for n in undefineds:
+                        escape x:
+                            lex.formatError(
+                                [`Undefined name ${n.getName()}`, n.getSpan()], x)
+                        catch msg:
+                            stdout.receive(msg)
+                    throw("Name usage error")
 
+                def redefineds := walkScopeBoxes(tree, safeScope)
+                if (redefineds.size() > 0):
+                    for n in redefineds:
+                        escape x:
+                            lex.formatError(
+                                [`Redefinition of existing name "${n.getNoun().getName()}"`, n.getSpan()], x)
+                        catch msg:
+                            stdout.receive(msg)
                 when (parseTime) ->
                     traceln(`Parsed source file (${parseTime}s)`)
 
