@@ -38,6 +38,18 @@ class TestConstMap(TestCase):
 
 class TestConstList(TestCase):
 
+    def testCmpShortLeft(self):
+        a = ConstList([IntObject(2)])
+        b = ConstList([IntObject(2), IntObject(4)])
+        result = a.call(u"op__cmp", [b])
+        self.assertEqual(result.getInt(), -1)
+
+    def testCmpShortRight(self):
+        a = ConstList([IntObject(2), IntObject(4)])
+        b = ConstList([IntObject(2)])
+        result = a.call(u"op__cmp", [b])
+        self.assertEqual(result.getInt(), 1)
+
     def testGetNegative(self):
         l = ConstList([])
         self.assertRaises(UserException, l.call, u"get", [IntObject(-1)])

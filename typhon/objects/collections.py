@@ -344,7 +344,11 @@ class ConstList(Object):
 
     def cmp(self, other):
         for i, left in enumerate(self.strategy.fetch_all(self)):
-            right = other[i]
+            try:
+                right = other[i]
+            except IndexError:
+                # They're shorter than us.
+                return 1
             try:
                 result = unwrapInt(left.call(u"op__cmp", [right]))
             except UserException:
@@ -353,7 +357,9 @@ class ConstList(Object):
                 return -1
             if result > 0:
                 return 1
-        return 0
+        # They could be longer than us but we were equal up to this point.
+        # Do a final length check.
+        return 0 if self.size() == len(other) else -1
 
     def contains(self, needle):
         from typhon.objects.equality import EQUAL, optSame
