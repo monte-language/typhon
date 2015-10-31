@@ -69,18 +69,17 @@ def readCB(fs):
     # Does *not* invoke user code.
     try:
         size = intmask(fs.c_result)
-        vat, fount = ruv.unstashFS(fs)
-        assert isinstance(fount, FileFount)
-        # Done with fs.
-        ruv.free(fs)
-        if size > 0:
-            data = charpsize2str(fount.buf.c_base, size)
-            fount.receive(data)
-        elif size < 0:
-            msg = ruv.formatError(size).decode("utf-8")
-            fount.abort(u"libuv error: %s" % msg)
-        else:
-            fount.stop(u"End of file")
+        with ruv.unstashingFS(fs) as (vat, fount):
+            assert isinstance(fount, FileFount)
+            # Done with fs, but don't free it; it belongs to the fount.
+            if size > 0:
+                data = charpsize2str(fount.buf.c_base, size)
+                fount.receive(data)
+            elif size < 0:
+                msg = ruv.formatError(size).decode("utf-8")
+                fount.abort(u"libuv error: %s" % msg)
+            else:
+                fount.stop(u"End of file")
     except:
         print "Exception in readCB"
 
@@ -106,6 +105,9 @@ class FileFount(Object):
 
         # XXX read size should be tunable
         self.buf = ruv.allocBuf(16384)
+
+        # Set this up only once.
+        ruv.stashFS(self.fs, (self.vat, self))
 
     def recv(self, atom, args):
         if atom is FLOWTO_1:
@@ -155,7 +157,6 @@ class FileFount(Object):
             self.queueRead()
 
     def queueRead(self):
-        ruv.stashFS(self.fs, (self.vat, self))
         with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
             bufs[0].c_base = self.buf.c_base
             bufs[0].c_len = self.buf.c_len
@@ -173,14 +174,14 @@ class FileFount(Object):
 
 def writeCB(fs):
     try:
-        vat, drain = ruv.unstashFS(fs)
-        assert isinstance(drain, FileDrain)
-        size = intmask(fs.c_result)
-        if size > 0:
-            drain.written(size)
-        elif size < 0:
-            msg = ruv.formatError(size).decode("utf-8")
-            drain.abort(u"libuv error: %s" % msg)
+        with ruv.unstashingFS(fs) as (vat, drain):
+            assert isinstance(drain, FileDrain)
+            size = intmask(fs.c_result)
+            if size > 0:
+                drain.written(size)
+            elif size < 0:
+                msg = ruv.formatError(size).decode("utf-8")
+                drain.abort(u"libuv error: %s" % msg)
     except:
         print "Exception in writeCB"
 
@@ -202,6 +203,9 @@ class FileDrain(Object):
 
         self.bufs = []
 
+        # Set this up only once.
+        ruv.stashFS(self.fs, (self.vat, self))
+
     def recv(self, atom, args):
         if atom is FLOWINGFROM_1:
             self.fount = args[0]
@@ -214,7 +218,6 @@ class FileDrain(Object):
 
             if not self.writing:
                 # We're not writing right now, so queue a write.
-                ruv.stashFS(self.fs, (self.vat, self))
                 with ruv.scopedBufs(self.bufs) as bufs:
                     ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
                                 len(self.bufs), self.pos, writeCB)
