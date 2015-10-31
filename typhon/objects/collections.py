@@ -57,6 +57,7 @@ POP_0 = getAtom(u"pop", 0)
 PUSH_1 = getAtom(u"push", 1)
 PUT_2 = getAtom(u"put", 2)
 REVERSE_0 = getAtom(u"reverse", 0)
+REVERSEINPLACE_0 = getAtom(u"reverseInPlace", 0)
 SIZE_0 = getAtom(u"size", 0)
 SLICE_1 = getAtom(u"slice", 1)
 SLICE_2 = getAtom(u"slice", 2)
@@ -532,7 +533,14 @@ class FlexList(Object):
             return self.put(index, args[1])
 
         if atom is REVERSE_0:
-            self.strategy.store_all(self, self.strategy.fetch_all(self))
+            new = self.strategy.fetch_all(self)[:]
+            new.reverse()
+            return ConstList(new)
+
+        if atom is REVERSEINPLACE_0:
+            new = self.strategy.fetch_all(self)[:]
+            new.reverse()
+            self.strategy.store_all(self, new)
             return NullObject
 
         if atom is WITH_1:
