@@ -246,6 +246,12 @@ def astWrapper(node, maker, args, span, &scope, nodeName, transformArgs) as Deep
             if (span == null):
                 return astNode
             return M.call(maker, "run", args + [null], [].asMap())
+
+        to canonical():
+            def noSpan(nod, mkr, canonicalArgs, span):
+                return M.call(mkr, "run", canonicalArgs + [null], [].asMap())
+            return astNode.transform(noSpan)
+
         to getNodeName():
             return nodeName
         to transform(f):

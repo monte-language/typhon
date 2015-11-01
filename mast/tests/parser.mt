@@ -30,11 +30,11 @@ object ta__quasiParser:
 
 def expr(s):
     return parseExpression(makeMonteLexer(s + "\n", "<test>"), astBuilder,
-                           throw)
+                           throw).canonical()
 
 def pattern(s):
     return parsePattern(makeMonteLexer(s, "<test>"), astBuilder,
-                        throw)
+                        throw).canonical()
 
 def test_Literal(assert):
     assert.equal(expr("\"foo bar\""), ta`LiteralExpr("foo bar")`)
