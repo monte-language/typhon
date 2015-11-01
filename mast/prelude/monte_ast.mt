@@ -354,6 +354,9 @@ def makeBindingExpr(noun :Noun, span) as DeepFrozen:
         &scope, "BindingExpr", fn f {[noun.transform(f)]})
 
 def makeSeqExpr(exprs :List[Expr], span) as DeepFrozen:
+    # Let's not allocate unnecessarily.
+    if (exprs.size() == 1):
+        return exprs[0]
     # It's common to accidentally nest SeqExprs, mostly because it's legal and
     # semantically unsurprising (distributive, etc.) So we un-nest them here
     # as a courtesy. ~ C.
