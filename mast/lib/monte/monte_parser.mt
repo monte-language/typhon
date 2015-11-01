@@ -477,8 +477,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         return builder.Matcher(pp, bl, spanFrom(spanStart))
 
     def catcher(indent, ej):
-        def spanStart := spanHere()
-        return builder.Catcher(pattern(ej), block(indent, ej), spanFrom(spanStart))
+        return [pattern(ej), block(indent, ej)]
 
     def methBody(indent, ej):
         acceptEOLs()
@@ -806,8 +805,14 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             } else {
                 null
             }
-            return builder.TryExpr(tryblock, catchers.snapshot(),
-                                   finallyblock, spanFrom(spanStart))
+            # make life easier on expander and expander tests
+            var n := tryblock
+            for [cp, cb] in catchers:
+                n := builder.CatchExpr(n, cp, cb, spanFrom(spanStart))
+            if (finallyblock != null):
+                n := builder.FinallyExpr(n, finallyblock, spanFrom(spanStart))
+            return n
+
         if (tag == "while"):
             def spanStart := spanHere()
             advance(ej)
@@ -818,7 +823,9 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 blockLookahead(tryAgain)
             def whileblock := block(indent, ej)
             def catchblock := if (matchEOLsThenTag(indent, "catch")) {
-               catcher(indent, ej)
+               def spanStart := spanHere()
+               def [cp, cb] := catcher(indent, ej)
+                builder.Catcher(cp, cb, spanFrom(spanStart))
             } else {
                 null
             }
@@ -846,7 +853,9 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 acceptTag("}", ej)
             def catchers := [].diverge()
             while (matchEOLsThenTag(indent, "catch")):
-               catchers.push(catcher(indent, ej))
+                def spanStart := spanHere()
+                def [cp, cb] := catcher(indent, ej)
+                catchers.push(builder.Catcher(cp, cb, spanFrom(spanStart)))
             def finallyblock := if (matchEOLsThenTag(indent, "finally")) {
                 block(indent, ej)
             } else {

@@ -117,17 +117,17 @@ def test_SwitchExpr(assert):
 
 def test_TryExpr(assert):
     assert.equal(expr("try {1} catch p {2} catch q {3} finally {4}"),
-        ta`TryExpr(LiteralExpr(1), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2)), Catcher(FinalPattern(NounExpr("q"), null), LiteralExpr(3))], LiteralExpr(4))`)
+        ta`FinallyExpr(CatchExpr(CatchExpr(LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2)), FinalPattern(NounExpr("q"), null), LiteralExpr(3)), LiteralExpr(4))`)
     assert.equal(expr("try {1} finally {2}"),
-        ta`TryExpr(LiteralExpr(1), [], LiteralExpr(2))`)
+        ta`FinallyExpr(LiteralExpr(1), LiteralExpr(2))`)
     assert.equal(expr("try {1} catch p {2}"),
-        ta`TryExpr(LiteralExpr(1), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2))], null)`)
+        ta`CatchExpr(LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
     assert.equal(expr("try:\n  1\ncatch p:\n  2\ncatch q:\n  3\nfinally:\n  4"),
-        ta`TryExpr(LiteralExpr(1), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2)), Catcher(FinalPattern(NounExpr("q"), null), LiteralExpr(3))], LiteralExpr(4))`)
+        ta`FinallyExpr(CatchExpr(CatchExpr(LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2)), FinalPattern(NounExpr("q"), null), LiteralExpr(3)), LiteralExpr(4))`)
     assert.equal(expr("try:\n  1\nfinally:\n  2"),
-        ta`TryExpr(LiteralExpr(1), [], LiteralExpr(2))`)
+        ta`FinallyExpr(LiteralExpr(1), LiteralExpr(2))`)
     assert.equal(expr("try:\n  1\ncatch p:\n  2"),
-        ta`TryExpr(LiteralExpr(1), [Catcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2))], null)`)
+        ta`CatchExpr(LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
 
 def test_WhileExpr(assert):
     assert.equal(expr("while (1):\n  2"), ta`WhileExpr(LiteralExpr(1), LiteralExpr(2), null)`)
