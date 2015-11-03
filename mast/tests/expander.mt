@@ -468,39 +468,38 @@ def specimens := [
               __makeMessageDesc.run(null, "boz", __makeList.run(__makeParamDesc.run("d", Any)), Double)
           }))
       }`],
-    ## These can't work because kernel-ast and full-ast represent try blocks different. :-(
-     # ["
-     #  try:
-     #      x
-     #  catch p:
-     #      y
-     #  catch q:
-     #      z
-     #  ",
-     #  "
-     #  try:
-     #      try:
-     #          x
-     #      catch p:
-     #          y
-     #  catch q:
-     #      z"],
-     # ["
-     #  try:
-     #      x
-     #  catch p:
-     #      y
-     #  finally:
-     #      z
-     #  ",
-     #  "
-     #  try:
-     #      try:
-     #          x
-     #      catch p:
-     #          y
-     #  finally:
-     #      z"],
+     ["
+      try:
+          x
+      catch p:
+          y
+      catch q:
+          z
+      ",
+      "
+      try:
+          try:
+              x
+          catch p:
+              y
+      catch q:
+          z"],
+     ["
+      try:
+          x
+      catch p:
+          y
+      finally:
+          z
+      ",
+      "
+      try:
+          try:
+              x
+          catch p:
+              y
+      finally:
+          z"],
     ["
      when (x) ->
          y
