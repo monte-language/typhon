@@ -1018,7 +1018,7 @@ def makeAugAssignExpr(op :Str, lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
         &scope, "AugAssignExpr", fn f {[op, lvalue.transform(f), rvalue.transform(f)]})
 
 def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
-               namedPatts :List[Ast["NamedParam"]], resultGuard :NullOk[Expr],
+               namedPatts :List[Ast["NamedParam", "NamedParamImport"]], resultGuard :NullOk[Expr],
                body :Expr, span) as DeepFrozen:
     def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatts +
                                              [resultGuard, body]).hide()})
@@ -1057,7 +1057,7 @@ def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
         &scope, "Method", fn f {[docstring, verb, transformAll(patterns, f), transformAll(namedPatts, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeTo(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
-           namedPatts :List[Ast["NamedParam"]], resultGuard :NullOk[Expr],
+           namedPatts :List[Ast["NamedParam", "NamedParamImport"]], resultGuard :NullOk[Expr],
            body :Expr, span) as DeepFrozen:
     def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatts +
                                              [resultGuard, body]).hide()})
@@ -1162,7 +1162,7 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
         &scope, "Script", fn f {[maybeTransform(extend, f), transformAll(methods, f), transformAll(matchers, f)]})
 
 def makeFunctionScript(patterns :List[Pattern],
-                       namedPatterns :List[Ast["NamedParam"]],
+                       namedPatterns :List[Ast["NamedParam", "NamedParamImport"]],
                        resultGuard :NullOk[Expr], body :Expr, span) as DeepFrozen:
     def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatterns +
                                              [resultGuard, body]).hide()})
@@ -2003,6 +2003,24 @@ def makeNamedParam(key :Expr, patt :Pattern, default :NullOk[Expr], span) as Dee
     return astWrapper(namedParam, makeNamedParam, [key, patt, default], span,
         &scope, "NamedParam", fn f {[key.transform(f), patt.transform(f), maybeTransform(default, f)]})
 
+def makeNamedParamImport(patt :NamePattern, default :NullOk[Expr], span) as DeepFrozen:
+    def &scope := makeLazySlot(fn {patt.getStaticScope() +
+                                   scopeMaybe(default)})
+    object namedParamImport:
+        to getPattern():
+            return patt
+        to getDefault():
+            return default
+        to subPrintOn(out, priority):
+            out.print("=> ")
+            patt.subPrintOn(out, priority)
+            if (default != null):
+                out.print(" := (")
+                default.subPrintOn(out, priorities["braceExpr"])
+                out.print(")")
+    return astWrapper(namedParamImport, makeNamedParamImport, [patt, default], span,
+        &scope, "NamedParamImport", fn f {[patt.transform(f), maybeTransform(default, f)]})
+
 def makeViaPattern(expr :Expr, subpattern :Pattern, span) as DeepFrozen:
     def &scope := makeLazySlot(fn {expr.getStaticScope() +
                                    subpattern.getStaticScope()})
@@ -2307,6 +2325,8 @@ object astBuilder as DeepFrozen:
         return makeMapPattern(patterns, tail, span)
     to NamedParam(k, p, default, span):
         return makeNamedParam(k, p, default, span)
+    to NamedParamImport(p, default, span):
+        return makeNamedParamImport(p, default, span)
     to ViaPattern(expr, subpattern, span):
         return makeViaPattern(expr, subpattern, span)
     to SuchThatPattern(subpattern, expr, span):

@@ -839,6 +839,20 @@ def expand(node, builder, fail) as DeepFrozen:
         else if (nodeName == "Method"):
             def [doco, verb, params, namedParams, guard, block] := args
             return builder."Method"(doco, verb, params, namedParams, guard, block, span)
+        else if (nodeName == "NamedParamImport"):
+            def [pattern, default] := args
+            def k := if (pattern.getNodeName() == "BindingPattern") {
+                builder.LiteralExpr("&&" + pattern.getNoun().getName(), span)
+            ## via (__slotToBinding) &&foo
+            } else if (pattern.getNodeName() == "ViaPattern" &&
+                       pattern.getExpr().getNodeName() == "NounExpr" &&
+                       pattern.getExpr().getName() == "__slotToBinding" &&
+                       pattern.getPattern().getNodeName() == "BindingPattern") {
+                builder.LiteralExpr("&" + pattern.getPattern().getNoun().getName(), span)
+            } else if (["BindPattern", "VarPattern", "FinalPattern"].contains(pattern.getNodeName())) {
+                builder.LiteralExpr(pattern.getNoun().getName(), span)
+            }
+            return builder.NamedParam(k, pattern, default, span)
         else if (nodeName == "ForExpr"):
             def [coll, key, value, block, catchPatt, catchBlock] := args
             return expandFor(key, value, coll, block, catchPatt, catchBlock, span)

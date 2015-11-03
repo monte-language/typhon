@@ -150,6 +150,9 @@ def specimens := [
     ["x..y", "_makeOrderedSpace.op__thru(x, y)"],
     ["x..!y", "_makeOrderedSpace.op__till(x, y)"],
 
+    ["object foo { method baz(a, => b, => &c := (0), => &&d) {1} }",
+     "object foo {method baz(a, \"b\" => b, \"&c\" =>  via (__slotToBinding) &&c := (0), \"&&d\" => &&d) {1}}"],
+
     ["foo <- bar(x, y)",
      "M.send(foo, \"bar\", __makeList.run(x, y), __makeMap.fromPairs(__makeList.run()))"],
 

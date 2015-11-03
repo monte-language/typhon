@@ -266,7 +266,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return builder.PatternHolePattern(advance(ej)[1], spanHere())
         throw.eject(ej, [`Unrecognized name pattern $nex`, spanNext()])
 
-    def mapPatternItem(ej):
+    def _mapPatternItem(pairBuilder, importBuilder, ej):
         def spanStart := spanHere()
         if (peekTag() == "=>"):
             advance(ej)
@@ -274,7 +274,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             def default := if (peekTag() == ":=") {
                 advance(ej); order(ej)
             } else {null}
-            return builder.MapPatternImport(p, default, spanFrom(spanStart))
+            return importBuilder(p, default, spanFrom(spanStart))
         def k := if (peekTag() == "(") {
             advance(ej)
             def e := expr(ej)
@@ -294,8 +294,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         def default := if (peekTag() == ":=") {
             advance(ej); order(ej)
         } else {null}
-        return builder.MapPatternAssoc(k, p, default, spanFrom(spanStart))
+        return pairBuilder(k, p, default, spanFrom(spanStart))
 
+    def mapPatternItem(ej):
+        return _mapPatternItem(builder.MapPatternAssoc, builder.MapPatternImport, ej)
 
     def _pattern(ej):
         escape e:
@@ -502,24 +504,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         return p
 
     def namedParam(ej):
-        # XXX consider parameterizing mapPatternItem instead of
-        # destructuring like this.
-        def mapPatt := mapPatternItem(ej)
-        def nn := mapPatt.getNodeName()
-        def [k, p] := if (nn == "MapPatternImport") {
-            def sub := mapPatt.getPattern()
-            def ns := sub.getNodeName()
-            def name := if (ns == "SlotPattern") {
-                [builder.LiteralExpr("&" + sub.getNoun().getName(), null), sub]
-            } else if (ns == "BindingPattern") {
-                [builder.LiteralExpr("&&" + sub.getNoun().getName(), null), sub]
-            } else {
-                [builder.LiteralExpr(sub.getNoun().getName(), null), sub]
-            }
-        } else {
-            [mapPatt.getKey(), mapPatt.getValue()]
-        }
-        return builder.NamedParam(k, p, mapPatt.getDefault(), mapPatt.getSpan())
+        return _mapPatternItem(builder.NamedParam, builder.NamedParamImport, ej)
 
     def meth(indent, ej):
         acceptEOLs()
