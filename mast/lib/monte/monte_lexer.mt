@@ -166,7 +166,9 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
     def leaf(tokname):
         def [tokdata, span] := endToken()
-        return composite(tokname, tokdata, span)
+        # XXX compat with tests, fix em later
+        def d := if (tokname == tokdata || tokname == "EOL") {null} else {tokdata}
+        return composite(tokname, d, span)
 
     def collectDigits(var digitset):
         if (atEnd() || !digitset.contains(currentChar)):
