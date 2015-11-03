@@ -43,6 +43,7 @@ from typhon.smallcaps.peephole import peephole
 
 ADD_1 = getAtom(u"add", 1)
 AUDIT_1 = getAtom(u"audit", 1)
+CANONICAL_0 = getAtom(u"canonical", 0)
 COERCE_2 = getAtom(u"coerce", 2)
 GETARGS_0 = getAtom(u"getArgs", 0)
 GETASEXPR_0 = getAtom(u"getAsExpr", 0)
@@ -69,6 +70,7 @@ GETPATTERNS_0 = getAtom(u"getPatterns", 0)
 GETRECEIVER_0 = getAtom(u"getReceiver", 0)
 GETRESULTGUARD_0 = getAtom(u"getResultGuard", 0)
 GETSCRIPT_0 = getAtom(u"getScript", 0)
+GETSPAN_0 = getAtom(u"getSpan", 0)
 GETSTATICSCOPE_0 = getAtom(u"getStaticScope", 0)
 GETVALUE_0 = getAtom(u"getValue", 0)
 GETVARNAMES_0 = getAtom(u"getVarNames", 0)
@@ -354,6 +356,10 @@ class Node(Object):
         return f(self)
 
     def recv(self, atom, args):
+        if atom is CANONICAL_0:
+            return self
+        if atom is GETSPAN_0:
+            return NullObject
         if atom is UNCALL_0:
             span = ConstList([NullObject])
             return ConstList([self.nodeMaker, StrObject(u"run"),

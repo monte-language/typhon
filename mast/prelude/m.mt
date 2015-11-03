@@ -76,7 +76,7 @@ def makeM(ast, isKernel :Bool) as DeepFrozen:
             "Walk over the pattern AST and the specimen comparing each node.
             Value holes in the pattern are substituted before comparison.
             Pattern holes are used to collect nodes to return for binding."
-            def nextNodePairs := [[ast, specimen]].diverge()
+            def nextNodePairs := [[ast.canonical(), specimen.canonical()]].diverge()
 
             def results := [].asMap().diverge()
             while (nextNodePairs.size() != 0):
