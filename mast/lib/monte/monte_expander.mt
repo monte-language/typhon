@@ -736,24 +736,31 @@ def expand(node, builder, fail) as DeepFrozen:
                     builder.ListPattern([right, nub], null, span), span)
             return nub
         else if (nodeName == "MapPatternAssoc"):
-            return args
+            def [k, v, default] := args
+            if (default == null):
+                return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
+                                               "run", [k], [], span), v]
+            else:
+                return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
+                                               "depr", [k, default], [], span), v]
+
         else if (nodeName == "MapPatternImport"):
-            def [subnode] := args
+            def [subnode, default] := args
             def pattName := node.getPattern().getNodeName()
-            if (pattName == "FinalPattern"):
-                return [builder.LiteralExpr(node.getPattern().getNoun().getName(), span), subnode]
-            else if (pattName == "SlotPattern"):
-                return [builder.LiteralExpr("&" + node.getPattern().getNoun().getName(), span), subnode]
-            else if (pattName == "BindingPattern"):
-                return [builder.LiteralExpr("&&" + node.getPattern().getNoun().getName(), span), subnode]
-        else if (nodeName == "MapPatternDefault"):
-            def [[k, v], default] := args
-            return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
-                    "depr", [k, default], [], span), v]
-        else if (nodeName == "MapPatternRequired"):
-            def [[k, v]] := args
-            return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
-                    "run", [k], [], span), v]
+            def [k, v] := if (pattName == "FinalPattern") {
+                [builder.LiteralExpr(node.getPattern().getNoun().getName(), span), subnode]
+            } else if (pattName == "SlotPattern") {
+                [builder.LiteralExpr("&" + node.getPattern().getNoun().getName(), span), subnode]
+            } else if (pattName == "BindingPattern") {
+                [builder.LiteralExpr("&&" + node.getPattern().getNoun().getName(), span), subnode]
+            }
+            if (default == null):
+                return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
+                                               "run", [k], [], span), v]
+            else:
+                return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
+                                               "depr", [k, default], [], span), v]
+
         else if (nodeName == "ListPattern"):
             def [patterns, tail] := args
             if (tail == null):

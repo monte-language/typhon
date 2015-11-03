@@ -1918,14 +1918,16 @@ def makeListPattern(patterns :List[Pattern], tail :NullOk[Pattern], span) as Dee
     return astWrapper(listPattern, makeListPattern, [patterns, tail], span,
         &scope, "ListPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
 
-def makeMapPatternAssoc(key :Expr, value :Pattern , span) as DeepFrozen:
+def makeMapPatternAssoc(key :Expr, value :Pattern, default :NullOk[Expr], span) as DeepFrozen:
     def &scope := makeLazySlot(fn {key.getStaticScope() +
-                                   value.getStaticScope()})
+                                   value.getStaticScope() + scopeMaybe(default)})
     object mapPatternAssoc:
         to getKey():
             return key
         to getValue():
             return value
+        to getDefault():
+            return default
         to subPrintOn(out, priority):
             if (key.getNodeName() == "LiteralExpr"):
                 key.subPrintOn(out, priority)
@@ -1935,50 +1937,31 @@ def makeMapPatternAssoc(key :Expr, value :Pattern , span) as DeepFrozen:
                 out.print(")")
             out.print(" => ")
             value.subPrintOn(out, priority)
-    return astWrapper(mapPatternAssoc, makeMapPatternAssoc, [key, value], span,
-        &scope, "MapPatternAssoc", fn f {[key.transform(f), value.transform(f)]})
+            if (default != null):
+                out.print(" := (")
+                default.subPrintOn(out, "braceExpr")
+                out.print(")")
+    return astWrapper(mapPatternAssoc, makeMapPatternAssoc, [key, value, default], span,
+        &scope, "MapPatternAssoc", fn f {[key.transform(f), value.transform(f), maybeTransform(default, f)]})
 
-def makeMapPatternImport(pattern :NamePattern, span) as DeepFrozen:
-    def scope := pattern.getStaticScope()
+def makeMapPatternImport(pattern :NamePattern, default :NullOk[Expr], span) as DeepFrozen:
+    def &scope := makeLazySlot(fn {pattern.getStaticScope() + scopeMaybe(default)})
     object mapPatternImport:
         to getPattern():
             return pattern
-        to subPrintOn(out, priority):
-            out.print("=> ")
-            pattern.subPrintOn(out, priority)
-    return astWrapper(mapPatternImport, makeMapPatternImport, [pattern], span,
-        &scope, "MapPatternImport", fn f {[pattern.transform(f)]})
-
-def makeMapPatternRequired(keyer :Ast["MapPatternImport", "MapPatternAssoc"], span) as DeepFrozen:
-    def scope := keyer.getStaticScope()
-    object mapPatternRequired:
-        to getKeyer():
-            return keyer
-        to getDefault():
-            return null
-        to subPrintOn(out, priority):
-            keyer.subPrintOn(out, priority)
-    return astWrapper(mapPatternRequired, makeMapPatternRequired, [keyer], span,
-        &scope, "MapPatternRequired", fn f {[keyer.transform(f)]})
-
-def makeMapPatternDefault(keyer :Ast["MapPatternImport", "MapPatternAssoc"],
-                          default :Expr, span) as DeepFrozen:
-    def &scope := makeLazySlot(fn {keyer.getStaticScope() +
-                                   default.getStaticScope()})
-    object mapPatternDefault:
-        to getKeyer():
-            return keyer
         to getDefault():
             return default
         to subPrintOn(out, priority):
-            keyer.subPrintOn(out, priority)
-            out.print(" := (")
-            default.subPrintOn(out, priorities["braceExpr"])
-            out.print(")")
-    return astWrapper(mapPatternDefault, makeMapPatternDefault, [keyer, default], span,
-        &scope, "MapPatternDefault", fn f {[keyer.transform(f), default.transform(f)]})
+            out.print("=> ")
+            pattern.subPrintOn(out, priority)
+            if (default != null):
+                out.print(" := (")
+                default.subPrintOn(out, "braceExpr")
+                out.print(")")
+    return astWrapper(mapPatternImport, makeMapPatternImport, [pattern, default], span,
+        &scope, "MapPatternImport", fn f {[pattern.transform(f), maybeTransform(default, f)]})
 
-def makeMapPattern(patterns :List[Ast["MapPatternRequired", "MapPatternDefault"]], tail :NullOk[Pattern], span) as DeepFrozen:
+def makeMapPattern(patterns :List[Ast["MapPatternAssoc", "MapPatternImport"]], tail :NullOk[Pattern], span) as DeepFrozen:
     def &scope := makeLazySlot(fn {sumScopes(patterns + [tail])})
     object mapPattern:
         to getPatterns():
@@ -2316,14 +2299,10 @@ object astBuilder as DeepFrozen:
         return makeIgnorePattern(guard, span)
     to ListPattern(patterns, tail, span):
         return makeListPattern(patterns, tail, span)
-    to MapPatternAssoc(key, value, span):
-        return makeMapPatternAssoc(key, value, span)
-    to MapPatternImport(value, span):
-        return makeMapPatternImport(value, span)
-    to MapPatternRequired(keyer, span):
-        return makeMapPatternRequired(keyer, span)
-    to MapPatternDefault(keyer, default, span):
-        return makeMapPatternDefault(keyer, default, span)
+    to MapPatternAssoc(key, value, default, span):
+        return makeMapPatternAssoc(key, value, default, span)
+    to MapPatternImport(value, default, span):
+        return makeMapPatternImport(value, default, span)
     to MapPattern(patterns, tail, span):
         return makeMapPattern(patterns, tail, span)
     to NamedParam(k, p, default, span):

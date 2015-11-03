@@ -266,12 +266,15 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return builder.PatternHolePattern(advance(ej)[1], spanHere())
         throw.eject(ej, [`Unrecognized name pattern $nex`, spanNext()])
 
-    def mapPatternItemInner(ej):
+    def mapPatternItem(ej):
         def spanStart := spanHere()
         if (peekTag() == "=>"):
             advance(ej)
             def p := namePattern(ej, false)
-            return builder.MapPatternImport(p, spanFrom(spanStart))
+            def default := if (peekTag() == ":=") {
+                advance(ej); order(ej)
+            } else {null}
+            return builder.MapPatternImport(p, default, spanFrom(spanStart))
         def k := if (peekTag() == "(") {
             advance(ej)
             def e := expr(ej)
@@ -287,16 +290,12 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             }
         }
         acceptTag("=>", ej)
-        return builder.MapPatternAssoc(k, pattern(ej), spanFrom(spanStart))
+        def p := pattern(ej)
+        def default := if (peekTag() == ":=") {
+            advance(ej); order(ej)
+        } else {null}
+        return builder.MapPatternAssoc(k, p, default, spanFrom(spanStart))
 
-    def mapPatternItem(ej):
-        def spanStart := spanHere()
-        def p := mapPatternItemInner(ej)
-        if (peekTag() == ":="):
-            advance(ej)
-            return builder.MapPatternDefault(p, order(ej), spanFrom(spanStart))
-        else:
-            return builder.MapPatternRequired(p, spanFrom(spanStart))
 
     def _pattern(ej):
         escape e:
@@ -505,8 +504,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
     def namedParam(ej):
         # XXX consider parameterizing mapPatternItem instead of
         # destructuring like this.
-        def node := mapPatternItem(ej)
-        def [mapPatt, default] := [node.getKeyer(), node.getDefault()]
+        def mapPatt := mapPatternItem(ej)
         def nn := mapPatt.getNodeName()
         def [k, p] := if (nn == "MapPatternImport") {
             def sub := mapPatt.getPattern()
@@ -521,7 +519,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         } else {
             [mapPatt.getKey(), mapPatt.getValue()]
         }
-        return builder.NamedParam(k, p, default, node.getSpan())
+        return builder.NamedParam(k, p, mapPatt.getDefault(), mapPatt.getSpan())
 
     def meth(indent, ej):
         acceptEOLs()

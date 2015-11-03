@@ -267,8 +267,8 @@ def specimens := [
      }
      ok_2))) _] := z"],
 
-    [`def ["a" => b, "c" => d] := x`,
-     `def via (_mapExtract.run("a")) [b, via (_mapExtract.run("c")) [d, _ :_mapEmpty]] := x`],
+    [`def ["a" => b, "c" => d := (3)] := x`,
+     `def via (_mapExtract.run("a")) [b, via (_mapExtract.depr("c", 3)) [d, _ :_mapEmpty]] := x`],
 
     ["def [(a) => b] | c := x",
      "def via (_mapExtract.run(a)) [b, c] := x"],

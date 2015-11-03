@@ -368,9 +368,9 @@ def test_ListPattern(assert):
     assert.equal(pattern("[a, b] + c"), ta`ListPattern([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], FinalPattern(NounExpr("c"), null))`)
 
 def test_MapPattern(assert):
-     assert.equal(pattern("[\"k\" => v, (a) => b, => c]"), ta`MapPattern([MapPatternRequired(MapPatternAssoc(LiteralExpr("k"), FinalPattern(NounExpr("v"), null))), MapPatternRequired(MapPatternAssoc(NounExpr("a"), FinalPattern(NounExpr("b"), null))), MapPatternRequired(MapPatternImport(FinalPattern(NounExpr("c"), null)))], null)`)
-     assert.equal(pattern("[\"a\" => b := 1] | c"), ta`MapPattern([MapPatternDefault(MapPatternAssoc(LiteralExpr("a"), FinalPattern(NounExpr("b"), null)), LiteralExpr(1))], FinalPattern(NounExpr("c"), null))`)
-     assert.equal(pattern("[\"k\" => &v, => &&b, => ::\"if\"]"), ta`MapPattern([MapPatternRequired(MapPatternAssoc(LiteralExpr("k"), SlotPattern(NounExpr("v"), null))), MapPatternRequired(MapPatternImport(BindingPattern(NounExpr("b")))), MapPatternRequired(MapPatternImport(FinalPattern(NounExpr("if"), null)))], null)`)
+     assert.equal(pattern("[\"k\" => v, (a) => b, => c]"), ta`MapPattern([MapPatternAssoc(LiteralExpr("k"), FinalPattern(NounExpr("v"), null), null), MapPatternAssoc(NounExpr("a"), FinalPattern(NounExpr("b"), null), null), MapPatternImport(FinalPattern(NounExpr("c"), null), null)], null)`)
+     assert.equal(pattern("[\"a\" => b := 1] | c"), ta`MapPattern([MapPatternAssoc(LiteralExpr("a"), FinalPattern(NounExpr("b"), null), LiteralExpr(1))], FinalPattern(NounExpr("c"), null))`)
+     assert.equal(pattern("[\"k\" => &v, => &&b, => ::\"if\"]"), ta`MapPattern([MapPatternAssoc(LiteralExpr("k"), SlotPattern(NounExpr("v"), null), null), MapPatternImport(BindingPattern(NounExpr("b")), null), MapPatternImport(FinalPattern(NounExpr("if"), null), null)], null)`)
 
 def test_QuasiliteralPattern(assert):
     assert.equal(pattern("`foo`")._uncall(), ta`QuasiParserPattern(null, [QuasiText("foo")])`._uncall())
