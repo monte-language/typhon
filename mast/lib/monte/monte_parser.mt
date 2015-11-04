@@ -1358,7 +1358,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 start(e)
             }
             match =="expression" {
-                blockExpr(e)
+                seq(true, e)
             }
             match =="pattern" {
                 pattern(e)
