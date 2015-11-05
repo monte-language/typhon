@@ -42,6 +42,15 @@ class Guard(Object):
     def supersetOf(self, other):
         return wrapBool(False)
 
+    def recv(self, atom, args):
+        if atom is COERCE_2:
+            return self.coerce(args[0], args[1])
+
+        if atom is SUPERSETOF_1:
+            return self.supersetOf(args[0])
+
+        raise Refused(self, atom, args)
+
 
 @autohelp
 class AnyGuard(Object):
@@ -234,4 +243,17 @@ class VarSlotGuardMaker(Guard):
 
     def subCoerce(self, specimen):
         if isinstance(specimen, VarSlot):
+            return specimen
+
+
+class BindingGuard(Guard):
+    """
+    A guard which admits bindings.
+    """
+
+    stamps = [deepFrozenStamp]
+
+    def subCoerce(self, specimen):
+        from typhon.objects.slots import Binding
+        if isinstance(specimen, Binding):
             return specimen

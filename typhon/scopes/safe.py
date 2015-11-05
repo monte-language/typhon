@@ -29,8 +29,8 @@ from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
 from typhon.objects.ejectors import throw, theThrower
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
-from typhon.objects.guards import (anyGuard, FinalSlotGuardMaker,
-                                   VarSlotGuardMaker)
+from typhon.objects.guards import (anyGuard, BindingGuard,
+                                   FinalSlotGuardMaker, VarSlotGuardMaker)
 from typhon.objects.printers import toString
 from typhon.objects.refs import Promise, RefOps, resolution
 from typhon.objects.root import Object, runnable
@@ -432,10 +432,12 @@ def safeScope():
         u"false": wrapBool(False),
         u"true": wrapBool(True),
 
-        u"M": MObject(),
-        u"Ref": RefOps(),
+        u"Binding": BindingGuard(),
         u"Near": nearGuard(),
         u"Selfless": selfless,
+
+        u"M": MObject(),
+        u"Ref": RefOps(),
         u"__auditedBy": auditedBy(),
         u"__equalizer": Equalizer(),
         u"__loop": loop(),
