@@ -929,7 +929,6 @@ class Call(Expr):
         nargs = []
         for pair in namedArgs._t:
             if not (isinstance(pair, Tuple) and len(pair._t) == 2):
-                import pdb; pdb.set_trace()
                 raise InvalidAST("namedArgs must contain key/value pairs")
             k, patt = pair._t
             nargs.append(NamedArg(k, patt))
