@@ -197,19 +197,22 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
        acceptTag(")", ej)
        return e
 
-    def noun(ej):
+    def nounAndName(ej):
         if (peekTag() == VALUE_HOLE):
-            return builder.ValueHoleExpr(advance(ej)[1], spanHere())
+            return [null, builder.ValueHoleExpr(advance(ej)[1], spanHere())]
         if (peekTag() == PATTERN_HOLE):
-            return builder.PatternHoleExpr(advance(ej)[1], spanHere())
+            return [null, builder.PatternHoleExpr(advance(ej)[1], spanHere())]
         if (peekTag() == "IDENTIFIER"):
             def t := advance(ej)
-            return builder.NounExpr(t[1], t[2])
+            return [t[1], builder.NounExpr(t[1], t[2])]
         else:
             def spanStart := spanHere()
             acceptTag("::", ej)
             def t := acceptTag(".String.", ej)
-            return builder.NounExpr(t[1], spanFrom(spanStart))
+            return [t[1], builder.NounExpr(t[1], spanFrom(spanStart))]
+
+    def noun(ej):
+        return nounAndName(ej)[1]
 
     def maybeGuard():
         def origPosition := position
@@ -222,40 +225,49 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 position := origPosition
                 return null
 
-    def namePattern(ej, tryQuasi):
+    def strictNamePattern(ej):
         def spanStart := spanHere()
         def nex := peekTag()
         if (nex == "IDENTIFIER"):
             def t := advance(ej)
-            def nex2 := peekTag()
-            if (nex2 == "QUASI_OPEN" || nex2 == "QUASI_CLOSE"):
-                if (tryQuasi):
-                    return quasiliteral(t, true, ej)
-                else:
-                    throw.eject(ej, [nex2, spanNext()])
-            else:
-                def g := maybeGuard()
-                return builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))
+            def g := maybeGuard()
+            return [t[1], builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))]
         else if (nex == "::"):
             advance(ej)
             def spanStart := spanHere()
             def t := acceptTag(".String.", ej)
             def g := maybeGuard()
-            return builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))
+            return [t[1], builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))]
         else if (nex == "var"):
             advance(ej)
-            def n := noun(ej)
+            def [name, n] := nounAndName(ej)
             def g := maybeGuard()
-            return builder.VarPattern(n, g, spanFrom(spanStart))
+            return [name, builder.VarPattern(n, g, spanFrom(spanStart))]
         else if (nex == "&"):
             advance(ej)
-            def n := noun(ej)
+            def [name, n] := nounAndName(ej)
             def g := maybeGuard()
-            return builder.SlotPattern(n, g, spanFrom(spanStart))
+            return ["&" + name, builder.SlotPattern(n, g, spanFrom(spanStart))]
         else if (nex == "&&"):
             advance(ej)
-            return builder.BindingPattern(noun(ej), spanFrom(spanStart))
-        else if (nex == "bind"):
+            def [name, n] := nounAndName(ej)
+            return ["&&" + name, builder.BindingPattern(n, spanFrom(spanStart))]
+        else:
+            throw.eject(ej, [`Unrecognized name pattern $nex`, spanNext()])
+
+    def namePattern(ej, tryQuasi):
+        def spanStart := spanHere()
+        def nex := peekTag()
+        if (nex == "IDENTIFIER" && tryQuasi && position + 2 < tokens.size()):
+            def nex2 := tokens[position + 2][0]
+            if (nex2 == "QUASI_OPEN" || nex2 == "QUASI_CLOSE"):
+                def x := quasiliteral(advance(ej), true, ej)
+                return x
+
+        escape e:
+            return strictNamePattern(e)[1]
+
+        if (nex == "bind"):
             advance(ej)
             def n := noun(ej)
             def g := maybeGuard()
@@ -298,6 +310,11 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
 
     def mapPatternItem(ej):
         return _mapPatternItem(builder.MapPatternAssoc, builder.MapPatternImport, ej)
+
+    def namedParamItem(ej):
+        def spanStart := spanHere()
+        def p := mapPatternItem(ej)
+        return builder.NamedParam(null, p, null, spanFrom(spanStart))
 
     def _pattern(ej):
         escape e:
@@ -362,22 +379,28 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return p
     "XXX buggy expander eats this line"
 
-    def mapItem(ej):
+    def _pairItem(mkExport, mkPair, ej):
         def spanStart := spanHere()
         if (peekTag() == "=>"):
             advance(ej)
             if (peekTag() == "&"):
                 advance(ej)
-                return builder.MapExprExport(builder.SlotExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
+                return mkExport(builder.SlotExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
             else if (peekTag() == "&&"):
                 advance(ej)
-                return builder.MapExprExport(builder.BindingExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
+                return mkExport(builder.BindingExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
             else:
-                return builder.MapExprExport(noun(ej), spanFrom(spanStart))
+                return mkExport(noun(ej), spanFrom(spanStart))
         def k := expr(ej)
         acceptTag("=>", ej)
         def v := expr(ej)
-        return builder.MapExprAssoc(k, v, spanFrom(spanStart))
+        return mkPair(k, v, spanFrom(spanStart))
+
+    def mapItem(ej):
+        return _pairItem(builder.MapExprExport, builder.MapExprAssoc, ej)
+
+    def namedArg(ej):
+        return _pairItem(builder.NamedArgExport, builder.NamedArg, ej)
 
     def seqSep(ej):
         if (![";", "#", "EOL"].contains(peekTag())):
@@ -1092,10 +1115,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             if (peekTag() == "("):
                 advance(ej)
                 def arglist := acceptList(positionalArg)
-                def namedArglist := acceptList(mapItem)
+                def namedArglist := acceptList(namedArg)
                 acceptEOLs()
                 acceptTag(")", ej)
-                trailers.push([methodish, [verb, arglist, unpackMapItems(namedArglist),
+                trailers.push([methodish, [verb, arglist, namedArglist,
                                            spanFrom(spanStart)]])
                 return false
             else:
@@ -1105,10 +1128,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         def funcallish(name):
             acceptTag("(", ej)
             def arglist := acceptList(positionalArg)
-            def namedArglist := acceptList(mapItem)
+            def namedArglist := acceptList(namedArg)
             acceptEOLs()
             acceptTag(")", ej)
-            trailers.push([name, [arglist, unpackMapItems(namedArglist),
+            trailers.push([name, [arglist, namedArglist,
                                   spanFrom(spanStart)]])
 
         while (true):

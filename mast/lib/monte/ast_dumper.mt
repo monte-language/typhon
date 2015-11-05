@@ -94,6 +94,11 @@ def dump(item, write) as DeepFrozen:
             else if (name == "MetaStateExpr"):
                 write(asciiShift([astCodes["Meta"]]))
                 dump("getState", write)
+            else if (name == "NamedArg"):
+                write(asciiShift(b`$\x07`))
+                dumpVarint(2, write)
+                dump(item.getKey(), write)
+                dump(item.getValue(), write)
             else if (name == "ObjectExpr"):
                 write(asciiShift([astCodes[name]]))
                 dump(item.getDocstring(), write)

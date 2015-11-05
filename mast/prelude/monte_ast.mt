@@ -413,32 +413,36 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozen:
                           transformAll(exportsList, f),
                           body.transform(f)]})
 
-def mkNAPrinter([k, v]) as DeepFrozen:
-    return object napr:
-        to subPrintOn(o, p):
-            k.subPrintOn(o, 16)
-            o.print(" => ")
-            v.subPrintOn(o, 1)
 
-def namedArgPairsScope(pairs) as DeepFrozen:
-    var scope := emptyScope
-    for [k, v] in pairs:
-        scope += k.getStaticScope()
-        scope += v.getStaticScope()
-    return scope
+def makeNamedArg(k :Expr, v :Expr, span) as DeepFrozen:
+    def &scope := makeLazySlot(fn {k.getStaticScope() + v.getStaticScope()})
+    object namedArg:
+        to getKey():
+            return k
+        to getValue():
+            return v
+        to subPrintOn(out, priority):
+            k.subPrintOn(out, priorities["prim"])
+            out.print(" => ")
+            v.subPrintOn(out, priorities["braceExpr"])
+    return astWrapper(namedArg, makeNamedArg, [k, v], span, &scope, "NamedArg",
+                      fn f {[k.transform(f), v.transform(f)]})
 
-object NamedArgPairs as DeepFrozen:
-    to coerce(specimen, ej):
-        List.coerce(specimen, ej)
-        def pairIt := specimen._makeIterator()
-        while (true):
-            def [_, [_ :Expr, _ :Expr]] exit ej := pairIt.next(__break)
-        return specimen
+def makeNamedArgExport(v :Expr, span) as DeepFrozen:
+    def scope := v.getStaticScope()
+    object namedArgExport:
+        to getValue():
+            return v
+        to subPrintOn(out, priority):
+            out.print(" => ")
+            v.subPrintOn(out, "braceExpr")
+    return astWrapper(namedArgExport, makeNamedArgExport, [v], span, &scope, "NamedArgExport",
+                      fn f {[v.transform(f)]})
 
 def makeMethodCallExpr(rcvr :Expr, verb :Str, arglist :List[Expr],
-                       namedArgs :NamedArgPairs, span) as DeepFrozen:
-    def &scope := makeLazySlot(fn {sumScopes([rcvr] + arglist) +
-                                   namedArgPairsScope(namedArgs)})
+                       namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozen:
+    def &scope := makeLazySlot(fn {sumScopes([rcvr] + arglist + namedArgs)})
+
     object methodCallExpr:
         to getReceiver():
             return rcvr
@@ -457,22 +461,17 @@ def makeMethodCallExpr(rcvr :Expr, verb :Str, arglist :List[Expr],
                 out.print(verb)
             else:
                 out.quote(verb)
-            printListOn("(", arglist, ", ", "", out, priorities["braceExpr"])
-            def namedArgList := [for pair in (namedArgs) mkNAPrinter(pair)]
-            if (arglist.size() > 0 && namedArgs.size() > 0):
-                out.print(", ")
-            printListOn("", namedArgList, ", ", ")", out, priorities["braceExpr"])
+            printListOn("(", arglist + namedArgs, ", ", ")", out, priorities["braceExpr"])
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(methodCallExpr, makeMethodCallExpr,
         [rcvr, verb, arglist, namedArgs], span, &scope, "MethodCallExpr",
         fn f {[rcvr.transform(f), verb, transformAll(arglist, f),
-              [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
+               transformAll(namedArgs, f)]})
 
 def makeFunCallExpr(receiver :Expr, args :List[Expr],
-                    namedArgs :NamedArgPairs, span) as DeepFrozen:
-    def &scope := makeLazySlot(fn {sumScopes([receiver] + args) +
-                                   namedArgPairsScope(namedArgs)})
+                    namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozen:
+    def &scope := makeLazySlot(fn {sumScopes([receiver] + args + namedArgs)})
     object funCallExpr:
         to getReceiver():
             return receiver
@@ -484,20 +483,16 @@ def makeFunCallExpr(receiver :Expr, args :List[Expr],
             if (priorities["call"] < priority):
                 out.print("(")
             receiver.subPrintOn(out, priorities["call"])
-            printListOn("(", args, ", ", "", out, priorities["braceExpr"])
-            if (args.size() > 0 && namedArgs.size() > 0):
-                out.print(", ")
-            printListOn("", [for pair in (namedArgs) mkNAPrinter(pair)],
-                        ", ", ")", out, priorities["braceExpr"])
+            printListOn("(", args + namedArgs, ", ", ")", out, priorities["braceExpr"])
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(funCallExpr, makeFunCallExpr, [receiver, args, namedArgs], span,
-        &scope, "FunCallExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
+        &scope, "FunCallExpr", fn f {[receiver.transform(f), transformAll(args, f),
+                                      transformAll(namedArgs, f)]})
 
 def makeSendExpr(rcvr :Ast, verb :Str, arglist :List[Ast],
-                 namedArgs :NamedArgPairs, span) as DeepFrozen:
-    def &scope := makeLazySlot(fn {sumScopes([rcvr] + arglist) +
-                                   namedArgPairsScope(namedArgs)})
+                 namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozen:
+    def &scope := makeLazySlot(fn {sumScopes([rcvr] + arglist + namedArgs)})
     object sendExpr:
         to getReceiver():
             return rcvr
@@ -516,21 +511,17 @@ def makeSendExpr(rcvr :Ast, verb :Str, arglist :List[Ast],
                 out.print(verb)
             else:
                 out.quote(verb)
-            printListOn("(", arglist, ", ", "", out, priorities["braceExpr"])
-            if (arglist.size() > 0 && namedArgs.size() > 0):
-                out.print(", ")
-            printListOn("", [for pair in (namedArgs) mkNAPrinter(pair)],
-                        ", ", ")", out, priorities["braceExpr"])
+            printListOn("(", arglist + namedArgs, ", ", ")", out, priorities["braceExpr"])
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(sendExpr, makeSendExpr,
         [rcvr, verb, arglist, namedArgs], span, &scope, "SendExpr",
-        fn f {[rcvr.transform(f), verb, transformAll(arglist, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
+        fn f {[rcvr.transform(f), verb, transformAll(arglist, f),
+               transformAll(namedArgs, f)]})
 
 def makeFunSendExpr(receiver :Expr, args :List[Expr],
-                    namedArgs :NamedArgPairs, span) as DeepFrozen:
-    def &scope := makeLazySlot(fn {sumScopes([receiver] + args) +
-                                   namedArgPairsScope(namedArgs)})
+                    namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozen:
+    def &scope := makeLazySlot(fn {sumScopes([receiver] + args + namedArgs)})
     object funSendExpr:
         to getReceiver():
             return receiver
@@ -542,15 +533,11 @@ def makeFunSendExpr(receiver :Expr, args :List[Expr],
             if (priorities["call"] < priority):
                 out.print("(")
             receiver.subPrintOn(out, priorities["call"])
-            printListOn(" <- (", args, ", ", "", out, priorities["braceExpr"])
-            if (args.size() > 0 && namedArgs.size() > 0):
-                out.print(", ")
-            printListOn("", [for pair in (namedArgs) mkNAPrinter(pair)],
-                        ", ", ")", out, priorities["braceExpr"])
+            printListOn(" <- (", args + namedArgs, ", ", ")", out, priorities["braceExpr"])
             if (priorities["call"] < priority):
                 out.print(")")
     return astWrapper(funSendExpr, makeFunSendExpr, [receiver, args, namedArgs], span,
-        &scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f), [for [k, v] in (namedArgs) [k.transform(f), v.transform(f)]]]})
+        &scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f), transformAll(namedArgs, f)]})
 
 def makeGetExpr(receiver :Expr, indices :List[Expr], span) as DeepFrozen:
     def &scope := makeLazySlot(fn {sumScopes(indices + [receiver])})
@@ -2195,6 +2182,10 @@ object astBuilder as DeepFrozen:
         return makeSeqExpr(exprs, span)
     to "Module"(importsList, exportsList, body, span):
         return makeModule(importsList, exportsList, body, span)
+    to NamedArg(k, v, span):
+        return makeNamedArg(k, v, span)
+    to NamedArgExport(v, span):
+        return makeNamedArgExport(v, span)
     to MethodCallExpr(rcvr, verb, arglist, namedArgs, span):
         return makeMethodCallExpr(rcvr, verb, arglist, namedArgs, span)
     to FunCallExpr(receiver, args, namedArgs, span):

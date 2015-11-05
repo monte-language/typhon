@@ -863,6 +863,44 @@ class Binding(Expr):
 
 @autohelp
 @withMaker
+class NamedArg(Expr):
+    _immutable_ = True
+
+    def __init__(self, key, value):
+        self.key = key
+        self.value = value
+
+    def uncall(self):
+        return ConstList([self.key, self.value])
+
+    def pretty(self, out):
+        self.key.pretty(out)
+        out.write(" => ")
+        self.value.pretty(out)
+
+    def transform(self, f):
+        return f(NamedArg(self.key.transform(f), self.value.transform(f)))
+
+    def getStaticScope(self):
+        return self.key.getStaticScope().add(self.value.getStaticScope())
+
+    def recv(self, atom, args):
+        if atom is GETNODENAME_0:
+            return StrObject(u"NamedArg")
+
+        if atom is GETSTATICSCOPE_0:
+            return self.getStaticScope()
+
+        if atom is GETKEY_0:
+            return self.key
+
+        if atom is GETVALUE_0:
+            return self.value
+        return Expr.recv(self, atom, args)
+
+
+@autohelp
+@withMaker
 class Call(Expr):
 
     _immutable_ = True
@@ -874,10 +912,13 @@ class Call(Expr):
         self._namedArgs = namedArgs
 
     @staticmethod
-    def fromMonte(target, verb, args, namedArgs):
+    def fromMonte(target, verb, args, namedArgList):
+        namedArgs = unwrapList(namedArgList)
+        for na in namedArgs:
+            if not isinstance(na, NamedArg):
+                raise InvalidAST("named args must be NamedArg nodes")
         return Call(target, strToString(verb), unwrapList(args),
-                    [(unwrapList(p)[0], unwrapList(p)[1])
-                     for p in unwrapList(namedArgs)])
+                    namedArgs)
 
     @staticmethod
     def fromAST(target, verb, args, namedArgs):
@@ -888,16 +929,16 @@ class Call(Expr):
         nargs = []
         for pair in namedArgs._t:
             if not (isinstance(pair, Tuple) and len(pair._t) == 2):
+                import pdb; pdb.set_trace()
                 raise InvalidAST("namedArgs must contain key/value pairs")
             k, patt = pair._t
-            nargs.append((k, patt))
+            nargs.append(NamedArg(k, patt))
         return Call(target, strToString(verb), args._t, nargs)
 
     def uncall(self):
         return ConstList([self._target, StrObject(self._verb),
                           ConstList(self._args),
-                          ConstList([ConstList([p[0], p[1]])
-                                     for p in self._namedArgs])])
+                          ConstList(self._namedArgs)])
 
     def pretty(self, out):
         self._target.pretty(out)
@@ -905,6 +946,7 @@ class Call(Expr):
         out.write(self._verb.encode("utf-8"))
         out.write("(")
         l = self._args
+        na = self._namedArgs
         if l:
             head = l[0]
             tail = l[1:]
@@ -912,25 +954,19 @@ class Call(Expr):
             for item in tail:
                 out.write(", ")
                 item.pretty(out)
-        na = self._namedArgs
         if na:
             if l:
                 out.write(", ")
             head = na[0]
-            head[0].pretty(out)
-            out.write(" => ")
-            for pair in na[1:]:
-                pair[0].pretty(out)
-                out.write(" => ")
-                pair[1].pretty(out)
+            head.pretty(out)
+            for na in na[1:]:
+                na.pretty(out)
         out.write(")")
-
 
     def transform(self, f):
         return f(Call(self._target.transform(f), self._verb,
                       [arg.transform(f) for arg in self._args],
-                      [(name, narg.transform(f))
-                       for (name, narg) in self._namedArgs]))
+                      [narg.transform(f) for narg in self._namedArgs]))
 
     def compile(self, compiler):
         self._target.compile(compiler)
@@ -945,11 +981,13 @@ class Call(Expr):
         if namedArity == 0:
             compiler.call(self._verb, arity)
         else:
-            for key, value in namedArgs:
+            for na in namedArgs:
+                if not isinstance(na, NamedArg):
+                    raise InvalidAST("named arg not a NamedArg node")
                 # Compile the key...
-                key.compile(compiler)
+                na.key.compile(compiler)
                 # ...and the value.
-                value.compile(compiler)
+                na.value.compile(compiler)
             compiler.callMap(self._verb, arity, namedArity)
         # [retval]
 
@@ -957,6 +995,8 @@ class Call(Expr):
         scope = self._target.getStaticScope()
         for expr in self._args:
             scope = scope.add(expr.getStaticScope())
+        for na in self._namedArgs:
+            scope = scope.add(na.getStaticScope())
         return scope
 
     def recv(self, atom, args):
@@ -976,8 +1016,7 @@ class Call(Expr):
             return ConstList(self._args)
 
         if atom is GETNAMEDARGS_0:
-            return ConstList([ConstList([p[0], p[1]])
-                              for p in self._namedArgs])
+            return ConstList(self._namedArgs)
 
         return Expr.recv(self, atom, args)
 

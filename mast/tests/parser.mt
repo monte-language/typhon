@@ -198,9 +198,9 @@ def test_Interface(assert):
 
 def test_Call(assert):
     assert.equal(expr("a.b(c, d)"), ta`MethodCallExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [])`)
-    assert.equal(expr("a.b(c, d, => e, \"f\" => g)"), ta`MethodCallExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [[LiteralExpr("e"), NounExpr("e")], [LiteralExpr("f"), NounExpr("g")]])`)
+    assert.equal(expr("a.b(c, d, => e, \"f\" => g)"), ta`MethodCallExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [NamedArgExport(NounExpr("e")), NamedArg(LiteralExpr("f"), NounExpr("g"))])`)
     assert.equal(expr("a.b()"), ta`MethodCallExpr(NounExpr("a"), "b", [], [])`)
-    assert.equal(expr("a.b(=> &c)"), ta`MethodCallExpr(NounExpr("a"), "b", [], [[LiteralExpr("&c"), SlotExpr(NounExpr("c"))]])`)
+    assert.equal(expr("a.b(=> &c)"), ta`MethodCallExpr(NounExpr("a"), "b", [], [NamedArgExport(SlotExpr(NounExpr("c")))])`)
     assert.equal(expr("a.b"), ta`CurryExpr(NounExpr("a"), "b", false)`)
     assert.equal(expr("a.b().c()"), ta`MethodCallExpr(MethodCallExpr(NounExpr("a"), "b", [], []), "c", [], [])`)
     assert.equal(expr("a.\"if\"()"), ta`MethodCallExpr(NounExpr("a"), "if", [], [])`)
@@ -208,7 +208,7 @@ def test_Call(assert):
 
 def test_Send(assert):
     assert.equal(expr("a <- b(c, d)"), ta`SendExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [])`)
-    assert.equal(expr("a <- b(c, d, => e, \"f\" => g)"), ta`SendExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [[LiteralExpr("e"), NounExpr("e")], [LiteralExpr("f"), NounExpr("g")]])`)
+    assert.equal(expr("a <- b(c, d, => e, \"f\" => g)"), ta`SendExpr(NounExpr("a"), "b", [NounExpr("c"), NounExpr("d")], [NamedArgExport(NounExpr("e")), NamedArg(LiteralExpr("f"), NounExpr("g"))])`)
     assert.equal(expr("a <- b()"), ta`SendExpr(NounExpr("a"), "b", [], [])`)
     assert.equal(expr("a <- b"), ta`CurryExpr(NounExpr("a"), "b", true)`)
     assert.equal(expr("a <- b() <- c()"), ta`SendExpr(SendExpr(NounExpr("a"), "b", [], []), "c", [], [])`)

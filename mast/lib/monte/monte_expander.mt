@@ -454,7 +454,19 @@ def expand(node, builder, fail) as DeepFrozen:
         else if (nodeName == "MethodCallExpr"):
             def [rcvr, verb, arglist, namedArgs] := args
             return builder.MethodCallExpr(rcvr, verb, arglist, namedArgs, span)
-
+        else if (nodeName == "NamedArg"):
+            return builder.NamedArg(args[0], args[1], span)
+        else if (nodeName == "NamedArgExport"):
+            def [val] := args
+            def orig := node.getValue()
+            def name := if (orig.getNodeName() == "BindingExpr") {
+                "&&" + orig.getNoun().getName()
+            } else if (orig.getNodeName() == "SlotExpr") {
+                "&" + orig.getNoun().getName()
+            } else {
+                orig.getName()
+            }
+            return builder.NamedArg(builder.LiteralExpr(name, span), val, span)
         else if (nodeName == "ListExpr"):
             def [items] := args
             return emitList(items, span)

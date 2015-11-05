@@ -233,6 +233,7 @@ class MObject(Object):
     """
     Miscellaneous vat management and quoting services.
     """
+    fqn = displayName = u"M"
 
     stamps = [deepFrozenStamp]
 

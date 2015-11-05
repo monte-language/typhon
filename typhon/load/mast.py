@@ -9,9 +9,9 @@ from rpython.rlib.runicode import str_decode_utf_8
 from typhon.nodes import (Assign, Binding, BindingPattern, Call, Char, Def,
                           Double, Escape, FinalPattern, Finally, Hide, If,
                           Int, IgnorePattern, ListPattern, Matcher,
-                          MetaContextExpr, MetaStateExpr, Method, NamedParam,
-                          Noun, Null, Obj, Script, Sequence, Str, Try,
-                          VarPattern, ViaPattern)
+                          MetaContextExpr, MetaStateExpr, Method, NamedArg,
+                          NamedParam, Noun, Null, Obj, Script, Sequence,
+                          Str, Try, VarPattern, ViaPattern)
 
 
 class InvalidMAST(Exception):
@@ -126,7 +126,7 @@ class MASTContext(object):
 
     def nextNamedExprs(self, stream):
         size = stream.nextInt()
-        return [(self.nextExpr(stream), self.nextExpr(stream))
+        return [NamedArg(self.nextExpr(stream), self.nextExpr(stream))
                 for _ in range(size)]
 
     def nextNamedPatts(self, stream):
