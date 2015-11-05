@@ -13,16 +13,62 @@
 # under the License.
 
 from rpython.rlib.jit import promote, unroll_safe
+from rpython.rlib.objectmodel import always_inline
 
 from typhon.atoms import getAtom
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.data import StrObject
 from typhon.objects.guards import anyGuard
-from typhon.objects.slots import Binding, FinalBinding
+from typhon.objects.slots import Binding, FinalBinding, VarBinding, VarSlot
 
 
 GET_0 = getAtom(u"get", 0)
 PUT_1 = getAtom(u"put", 1)
+
+
+@always_inline
+def bindingToSlot(binding):
+    if isinstance(binding, FinalBinding):
+        return binding.get()
+    elif isinstance(binding, VarBinding):
+        return binding.get()
+    elif isinstance(binding, Binding):
+        return binding.get()
+    from typhon.objects.collections import EMPTY_MAP
+    return binding.callAtom(GET_0, [], EMPTY_MAP)
+
+
+@always_inline
+def bindingToValue(binding):
+    if isinstance(binding, FinalBinding):
+        return binding.value
+    elif isinstance(binding, VarBinding):
+        return binding.value
+
+    from typhon.objects.collections import EMPTY_MAP
+    if isinstance(binding, Binding):
+        slot = binding.get()
+    else:
+        slot = binding.callAtom(GET_0, [], EMPTY_MAP)
+    return slot.callAtom(GET_0, [], EMPTY_MAP)
+
+
+@always_inline
+def assignValue(binding, value):
+    # Speed up VarBindings, as they are common on this path.
+    if isinstance(binding, VarBinding):
+        binding.putValue(value)
+        return
+
+    # So are VarSlots.
+    from typhon.objects.collections import EMPTY_MAP
+    slot = binding.callAtom(GET_0, [], EMPTY_MAP)
+    if isinstance(slot, VarSlot):
+        slot.put(value)
+        return
+
+    # Slowest path.
+    slot.callAtom(PUT_1, [value], EMPTY_MAP)
 
 
 def finalize(scope):
@@ -134,23 +180,16 @@ class Environment(object):
         return promote(self.globals[index])
 
     def getSlotGlobal(self, index):
-        from typhon.objects.collections import EMPTY_MAP
         binding = self.getBindingGlobal(index)
-        return binding.callAtom(GET_0, [], EMPTY_MAP)
+        return bindingToSlot(binding)
 
     def getValueGlobal(self, index):
-        from typhon.objects.collections import EMPTY_MAP
-        # Specialize the relatively common case of FinalBindings.
         binding = self.getBindingGlobal(index)
-        if isinstance(binding, FinalBinding):
-            return binding.value
-        slot = binding.callAtom(GET_0, [], EMPTY_MAP)
-        return slot.callAtom(GET_0, [], EMPTY_MAP)
+        return bindingToValue(binding)
 
     def putValueGlobal(self, index, value):
-        from typhon.objects.collections import EMPTY_MAP
-        slot = self.getSlotGlobal(index)
-        return slot.callAtom(PUT_1, [value], EMPTY_MAP)
+        binding = self.getBindingGlobal(index)
+        assignValue(binding, value)
 
     def getBindingFrame(self, index):
         # The promotion here is justified by a lack of ability for any code
@@ -164,20 +203,16 @@ class Environment(object):
         return self.frame[index]
 
     def getSlotFrame(self, index):
-        from typhon.objects.collections import EMPTY_MAP
-        # Elidability is based on bindings not allowing reassignment of slots.
         binding = self.getBindingFrame(index)
-        return binding.callAtom(GET_0, [], EMPTY_MAP)
+        return bindingToSlot(binding)
 
     def getValueFrame(self, index):
-        from typhon.objects.collections import EMPTY_MAP
-        slot = self.getSlotFrame(index)
-        return slot.callAtom(GET_0, [], EMPTY_MAP)
+        binding = self.getBindingFrame(index)
+        return bindingToValue(binding)
 
     def putValueFrame(self, index, value):
-        from typhon.objects.collections import EMPTY_MAP
-        slot = self.getSlotFrame(index)
-        return slot.callAtom(PUT_1, [value], EMPTY_MAP)
+        binding = self.getBindingFrame(index)
+        assignValue(binding, value)
 
     def createBindingLocal(self, index, binding):
         # Commented out because binding replacement is not that weird and also
@@ -208,20 +243,16 @@ class Environment(object):
         return self.local[index]
 
     def getSlotLocal(self, index):
-        from typhon.objects.collections import EMPTY_MAP
-        # Elidability is based on bindings not allowing reassignment of slots.
         binding = self.getBindingLocal(index)
-        return binding.callAtom(GET_0, [], EMPTY_MAP)
+        return bindingToSlot(binding)
 
     def getValueLocal(self, index):
-        from typhon.objects.collections import EMPTY_MAP
-        slot = self.getSlotLocal(index)
-        return slot.callAtom(GET_0, [], EMPTY_MAP)
+        binding = self.getBindingLocal(index)
+        return bindingToValue(binding)
 
     def putValueLocal(self, index, value):
-        from typhon.objects.collections import EMPTY_MAP
-        slot = self.getSlotLocal(index)
-        return slot.callAtom(PUT_1, [value], EMPTY_MAP)
+        binding = self.getBindingLocal(index)
+        assignValue(binding, value)
 
     def saveDepth(self):
         return self.depth, self.handlerDepth

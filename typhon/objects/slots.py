@@ -125,6 +125,53 @@ class FinalBinding(Object):
 
 
 @autohelp
+class VarBinding(Object):
+    """
+    A binding with a var slot.
+
+    This object is equivalent to a standard Typhon binding and Typhon var
+    slot, but is more memory- and CPU-efficient.
+    """
+
+    _immutable_ = True
+    _immutable_fields_ = "guard",
+
+    def __init__(self, value, guard):
+        self.value = value
+        self.guard = guard
+
+    def printOn(self, printer):
+        printer.call(u"print", [StrObject(u"<binding ")])
+        printer.call(u"print", [self.value])
+        printer.call(u"print", [StrObject(u" :VarSlot[")])
+        printer.call(u"print", [self.guard])
+        printer.call(u"print", [StrObject(u"]>")])
+
+    def get(self):
+        return VarSlot(self.value, self.guard)
+
+    def getValue(self):
+        return self.value
+
+    def putValue(self, value):
+        from typhon.objects.ejectors import theThrower
+        if self.guard is NullObject:
+            self.value = value
+        else:
+            self.value = self.guard.call(u"coerce", [value, theThrower])
+
+    def recv(self, atom, args):
+        if atom is GET_0:
+            return self.get()
+
+        if atom is GETGUARD_0:
+            from typhon.objects.guards import VarSlotGuard
+            return VarSlotGuard(self.guard)
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
 class Slot(Object):
     """
     A storage space.
