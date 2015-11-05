@@ -551,13 +551,13 @@ def expand(node, builder, fail) as DeepFrozen:
             def [receiver, fargs, namedArgs] := args
             return builder.MethodCallExpr(builder.NounExpr("M", span),
                 "send", [receiver, builder.LiteralExpr("run", span),
-                         emitList(fargs, span), emitMap([for pair in (namedArgs) emitList(pair, span)], span)], [],
+                         emitList(fargs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
                 span)
         else if (nodeName == "SendExpr"):
             def [receiver, verb, margs, namedArgs] := args
             return builder.MethodCallExpr(builder.NounExpr("M", span),
                 "send", [receiver, builder.LiteralExpr(verb, span),
-                         emitList(margs, span), emitMap([for pair in (namedArgs) emitList(pair, span)], span)], [],
+                         emitList(margs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
                  span)
         else if (nodeName == "SendCurryExpr"):
             def [receiver, verb] := args
