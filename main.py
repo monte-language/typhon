@@ -12,18 +12,17 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import os
 import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
 from rpython.rlib import rsignal
 from rpython.rlib import rvmprof
 from rpython.rlib.debug import debug_print
-from rpython.rlib.jit import JitHookInterface, set_user_param
+from rpython.rlib.jit import set_user_param
 
 from typhon import rsodium, ruv
 from typhon.arguments import Configuration
-from typhon.debug import enableDebugPrint
+from typhon.debug import enableDebugPrint, TyphonJitHooks
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, instantiateModule, obtainModule
 from typhon.metrics import Recorder
@@ -105,10 +104,10 @@ def runUntilDone(vatManager, uv_loop, recorder):
                 try:
                     if anyVatHasTurns:
                         # More work to be done, so don't block.
-                        remaining = ruv.run(uv_loop, ruv.RUN_NOWAIT)
+                        ruv.run(uv_loop, ruv.RUN_NOWAIT)
                     else:
                         # No more work to be done, so blocking is fine.
-                        remaining = ruv.run(uv_loop, ruv.RUN_ONCE)
+                        ruv.run(uv_loop, ruv.RUN_ONCE)
                 except UserException as ue:
                     debug_print("Caught exception while reacting:",
                             ue.formatError())
@@ -277,7 +276,7 @@ def entryPoint(argv):
             rv = resolution(rv) if rv is not None else NullObject
             if isinstance(rv, IntObject):
                 exitStatus = rv.getInt()
-        except SystemExit as se:
+        except SystemExit:
             pass
             # Huh, apparently this doesn't work. Wonder why/why not.
             # exitStatus = se.code
@@ -286,28 +285,6 @@ def entryPoint(argv):
             recorder.printResults()
 
     return exitStatus
-
-
-def writePerfMap(s):
-    path = "/tmp/perf-%d.map" % os.getpid()
-    fd = os.open(path, os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0777)
-    os.write(fd, s)
-    os.close(fd)
-
-
-class TyphonJitHooks(JitHookInterface):
-
-    def after_compile(self, debug_info):
-        s = "%x %x %s\n" % (debug_info.asminfo.asmaddr,
-                            debug_info.asminfo.asmlen,
-                            "<Typhon JIT trace>")
-        writePerfMap(s)
-
-    def after_compile_bridge(self, debug_info):
-        s = "%x %x %s\n" % (debug_info.asminfo.asmaddr,
-                            debug_info.asminfo.asmlen,
-                            "<Typhon JIT bridge>")
-        writePerfMap(s)
 
 
 def jitpolicy(driver):

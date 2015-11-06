@@ -30,7 +30,7 @@ RUN_3 = getAtom(u"run", 3)
 
 
 def getLocation(code):
-    return code.disassemble()
+    return code.profileName()
 
 
 loopDriver = JitDriver(greens=["code"],

@@ -1,4 +1,5 @@
 from rpython.rlib.debug import debug_print
+from rpython.rlib.jit import JitHookInterface
 
 class DebugPrinter(object):
 
@@ -17,3 +18,19 @@ class DebugPrinter(object):
 debugPrinter = DebugPrinter()
 debugPrint = debugPrinter.debugPrint
 enableDebugPrint = debugPrinter.enableDebugPrint
+
+
+class TyphonJitHooks(JitHookInterface):
+
+    def on_abort(self, reason, jitdriver, greenkey, greenkey_repr, logops,
+                 operations):
+        debugPrint("Aborted trace:", greenkey_repr, reason, "operations",
+                   str(len(operations)))
+
+    def after_compile(self, debug_info):
+        debugPrint("Compiled:", debug_info.get_greenkey_repr(), "operations",
+                   str(len(debug_info.operations)))
+
+    def after_compile_bridge(self, debug_info):
+        debugPrint("Compiled bridge: operations",
+                   str(len(debug_info.operations)))
