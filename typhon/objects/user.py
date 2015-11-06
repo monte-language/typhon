@@ -25,7 +25,7 @@ from typhon.objects.ejectors import Ejector
 from typhon.objects.guards import anyGuard
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
-from typhon.objects.slots import FinalBinding
+from typhon.objects.slots import finalBinding
 from typhon.smallcaps.machine import SmallCaps
 
 # XXX AuditionStamp, Audition guard
@@ -303,7 +303,7 @@ class BusyObject(ScriptObject):
     def patchSelf(self, guard):
         selfIndex = self.codeScript.selfIndex()
         if selfIndex != -1:
-            self.closure[selfIndex] = FinalBinding(self, guard)
+            self.closure[selfIndex] = finalBinding(self, guard)
 
     @unroll_safe
     def runMethod(self, method, args, namedArgs):

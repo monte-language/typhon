@@ -33,7 +33,7 @@ from typhon.objects.data import IntObject, StrObject, unwrapStr
 from typhon.objects.guards import anyGuard
 from typhon.objects.imports import Import, addImportToScope
 from typhon.objects.refs import resolution
-from typhon.objects.slots import FinalBinding
+from typhon.objects.slots import finalBinding
 from typhon.objects.tests import TestCollector
 from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
@@ -162,7 +162,7 @@ def runModule(exports, scope):
         namedArgs[StrObject(k)] = v
         reflectedUnsafeScope[StrObject(u"&&" + k)] = b
     rus = ConstMap(reflectedUnsafeScope)
-    reflectedUnsafeScope[StrObject(u"&&unsafeScope")] = FinalBinding(
+    reflectedUnsafeScope[StrObject(u"&&unsafeScope")] = finalBinding(
         rus, anyGuard)
     namedArgs[StrObject(u"unsafeScope")] = rus
     return main.call(u"run", [], ConstMap(namedArgs))
@@ -218,13 +218,13 @@ def entryPoint(argv):
     DF = prelude[u"DeepFrozen"].getValue()
     collectTests = TestCollector()
     ss = scope.copy()
-    ss[u"import"] = FinalBinding(
+    ss[u"import"] = finalBinding(
         Import(config.libraryPaths, ss, recorder, collectTests),
         DF)
     reflectedSS = monteDict()
     for k, b in ss.iteritems():
         reflectedSS[StrObject(u"&&" + k)] = b
-    ss[u"safeScope"] = FinalBinding(ConstMap(reflectedSS), DF)
+    ss[u"safeScope"] = finalBinding(ConstMap(reflectedSS), DF)
     reflectedSS[StrObject(u"&&safeScope")] = ss[u"safeScope"]
     scope[u"safeScope"] = ss[u"safeScope"]
     scope[u"import"] = ss[u"import"]

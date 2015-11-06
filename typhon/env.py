@@ -19,7 +19,7 @@ from typhon.atoms import getAtom
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.data import StrObject
 from typhon.objects.guards import anyGuard
-from typhon.objects.slots import Binding, FinalBinding, VarBinding, VarSlot
+from typhon.objects.slots import Binding, finalBinding, VarSlot
 
 
 GET_0 = getAtom(u"get", 0)
@@ -28,11 +28,7 @@ PUT_1 = getAtom(u"put", 1)
 
 @always_inline
 def bindingToSlot(binding):
-    if isinstance(binding, FinalBinding):
-        return binding.get()
-    elif isinstance(binding, VarBinding):
-        return binding.get()
-    elif isinstance(binding, Binding):
+    if isinstance(binding, Binding):
         return binding.get()
     from typhon.objects.collections import EMPTY_MAP
     return binding.callAtom(GET_0, [], EMPTY_MAP)
@@ -40,11 +36,6 @@ def bindingToSlot(binding):
 
 @always_inline
 def bindingToValue(binding):
-    if isinstance(binding, FinalBinding):
-        return binding.value
-    elif isinstance(binding, VarBinding):
-        return binding.value
-
     from typhon.objects.collections import EMPTY_MAP
     if isinstance(binding, Binding):
         slot = binding.get()
@@ -55,14 +46,9 @@ def bindingToValue(binding):
 
 @always_inline
 def assignValue(binding, value):
-    # Speed up VarBindings, as they are common on this path.
-    if isinstance(binding, VarBinding):
-        binding.putValue(value)
-        return
-
-    # So are VarSlots.
     from typhon.objects.collections import EMPTY_MAP
     slot = binding.callAtom(GET_0, [], EMPTY_MAP)
+    # Speed up VarSlots.
     if isinstance(slot, VarSlot):
         slot.put(value)
         return
@@ -84,7 +70,7 @@ def finalize(scope):
             g = DFb.getValue()
         else:
             g = anyGuard
-        rv[key] = FinalBinding(o, g)
+        rv[key] = finalBinding(o, g)
     return rv
 
 
