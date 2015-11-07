@@ -14,6 +14,8 @@ def [=> expand :DeepFrozen] | _ := import.script("lib/monte/monte_expander",
 def [=> optimize :DeepFrozen] | _ := import.script("lib/monte/monte_optimizer",
                                             scope)
 
+def Transparent :DeepFrozen := TransparentStamp
+
 def [VALUE_HOLE :DeepFrozen,
      PATTERN_HOLE :DeepFrozen] := makeMonteLexer.holes()
 
@@ -57,7 +59,7 @@ def NamePattern :DeepFrozen := astBuilder.getNamePatternGuard()
 def Noun :DeepFrozen := astBuilder.getNounGuard()
 
 def makeM(ast, isKernel :Bool) as DeepFrozen:
-    return object m extends ast:
+    return object m extends ast implements Selfless, Transparent:
         "An abstract syntax tree in the Monte programming language."
 
         to _printOn(out):
@@ -68,6 +70,9 @@ def makeM(ast, isKernel :Bool) as DeepFrozen:
         to _conformTo(guard):
             if ([Ast, Pattern, Expr, Noun, NamePattern].contains(guard)):
                 return ast
+
+        to _uncall():
+            return [makeM, "run", [ast, isKernel], [].asMap()]
 
         to substitute(values):
             return makeM(ast.transform(makeQuasiAstTransformer(values)), false)
