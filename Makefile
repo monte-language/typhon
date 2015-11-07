@@ -78,7 +78,7 @@ testVM: default
 	trial typhon
 
 testMast: default mast infer mast/tests/lexer.ty mast/tests/parser.ty \
-	mast/tests/auditors.ty mast/tests/fail-arg.ty
+	mast/tests/auditors.ty mast/tests/fail-arg.ty mast/tests/expander.ty
 	./mt-typhon -l mast mast/unittest all-tests
 
 test: testVM testMast
