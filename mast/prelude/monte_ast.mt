@@ -904,6 +904,7 @@ def makeDefExpr(pattern :Pattern, exit_ :NullOk[Expr], expr :Expr, span) as Deep
             return exit_
         to getExpr():
             return expr
+
         to subPrintOn(out, priority):
             if (priorities["assign"] < priority):
                 out.print("(")
@@ -1022,6 +1023,11 @@ def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
             return resultGuard
         to getBody():
             return body
+
+        to withBody(newBody):
+            return makeMethod(docstring, verb, patterns, namedPatts,
+                              resultGuard, newBody, span)
+
         to subPrintOn(out, priority):
             printDocExprSuiteOn(fn {
                 out.lnPrint("method ")
@@ -1369,6 +1375,11 @@ def makeObjectExpr(docstring :NullOk[Str], name :NamePattern,
             return auditors
         to getScript():
             return script
+
+        to withScript(newScript):
+            return makeObjectExpr(docstring, name, asExpr, auditors,
+                                  newScript, span)
+
         to subPrintOn(out, priority):
             def printIt := if (script.getNodeName() == "FunctionScript") {
                 printDocExprSuiteOn
@@ -1627,6 +1638,11 @@ def makeEscapeExpr(ejectorPattern :Pattern, body :Expr,
             return catchPattern
         to getCatchBody():
             return catchBody
+
+        to withBody(newBody :Expr):
+            return makeEscapeExpr(ejectorPattern, newBody, catchPattern,
+                                  catchBody, span)
+
         to subPrintOn(out, priority):
             printExprSuiteOn(fn {
                 out.print("escape ")
