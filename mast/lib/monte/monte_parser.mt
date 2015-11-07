@@ -377,7 +377,6 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return builder.SuchThatPattern(p, e, spanFrom(spanStart))
         else:
             return p
-    "XXX buggy expander eats this line"
 
     def _pairItem(mkExport, mkPair, ej):
         def spanStart := spanHere()
@@ -987,7 +986,6 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return basic(true, e, ej)
         position := origPosition
         return expr(ej)
-    "XXX buggy expander eats this line"
 
     bind prim(ej):
         def tag := peekTag()
@@ -1071,31 +1069,11 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             else:
                 return builder.ListExpr(items, spanFrom(spanStart))
         return basic(false, ej, ej)
-    "XXX buggy expander eats this line"
+
     def call(ej):
         def spanStart := spanHere()
         def base := prim(ej)
         def trailers := [].diverge()
-
-        # XXX maybe parameterize mapItem instead of doing this
-        def unpackMapItems(items):
-            var pairs := []
-            for node in items:
-                def nn := node.getNodeName()
-                if (nn == "MapExprExport"):
-                    def sub := node.getValue()
-                    def ns := sub.getNodeName()
-                    def name := if (ns == "SlotExpr") {
-                        builder.LiteralExpr("&" + sub.getNoun().getName(), null)
-                    } else if (ns == "BindingExpr") {
-                        builder.LiteralExpr("&&" + sub.getNoun().getName(), null)
-                    } else {
-                        builder.LiteralExpr(sub.getName(), null)
-                    }
-                    pairs with= ([name, node.getValue()])
-                else:
-                    pairs with= ([node.getKey(), node.getValue()])
-            return pairs
 
         def positionalArg(ej):
             def origPosition := position
@@ -1250,12 +1228,11 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 break
             advance(ej)
             acceptEOLs()
-            # XXX buggy expander can't handle compound booleans
+
             if (opstack.size() > 0):
-                def selfy := selfAssociative.contains(op) && (opstack.last()[1] == op)
-                def lefty := leftAssociative.contains(op) && opstack.last()[0] <= nextPrec
-                def b2 := lefty || selfy
-                if (opstack.last()[0] < nextPrec || b2):
+                if (opstack.last()[0] < nextPrec ||
+                        (leftAssociative.contains(op) && opstack.last()[0] <= nextPrec) ||
+                        (selfAssociative.contains(op) && (opstack.last()[1] == op))):
                     emitTop()
             opstack.push([operators[op], op])
             if (["=~", "!~"].contains(op)):
@@ -1270,14 +1247,13 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
 
     bind order(ej):
         return convertInfix(6, ej)
-    "XXX buggy expander eats this line"
+
 
     def infix(ej):
         return convertInfix(10, ej)
 
     bind comp(ej):
         return convertInfix(8, ej)
-    "XXX buggy expander eats this line"
 
     def _assign(ej):
         def spanStart := spanHere()
