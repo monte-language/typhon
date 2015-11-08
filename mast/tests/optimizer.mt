@@ -14,6 +14,8 @@ def specimens := [for [this, that] in ([
     [m`object o {to m() {return x}}`, m`object o {method m() {x}}`],
     [m`f(); x; y`, m`f(); y`],
     [m`def x := 42; y; x`, m`42`],
+    [m`if (test) {r.v(x)} else {r.v(y)}`, m`r.v(if (test) {x} else {y})`],
+    [m`if (test) {n := x} else {n := y}`, m`n := if (test) {x} else {y}`],
 ]) [this.expand(), that.expand()]]
 
 for [this, that] in (specimens):

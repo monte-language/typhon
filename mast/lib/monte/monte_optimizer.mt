@@ -251,6 +251,58 @@ def mix(expr) as DeepFrozen:
                     match _:
                         expr
 
+        match =="IfExpr":
+            def test := expr.getTest()
+            def cons := expr.getThen()
+            def alt := expr.getElse()
+            if (test.getNodeName() == "LiteralExpr"):
+                escape wrongType:
+                    def b :Bool exit wrongType := test.getValue()
+                    return mix(b.pick(cons, alt))
+                catch _:
+                    throw(`mix/1: $expr: if-test evaluates to non-Bool $test`)
+            else:
+                expr
+
+            # m`if (test) {r.v(cons)} else {r.v(alt)}` ->
+            # m`r.v(if (test) {cons} else {alt})`
+            if (cons.getNodeName() == "MethodCallExpr" &&
+                alt.getNodeName() == "MethodCallExpr"):
+                def consReceiver := cons.getReceiver()
+                def altReceiver := alt.getReceiver()
+                if (consReceiver.getNodeName() == "NounExpr" &&
+                    altReceiver.getNodeName() == "NounExpr"):
+                    if (consReceiver.getName() == altReceiver.getName()):
+                        # Doing good. Just need to check the verb and args
+                        # now.
+                        if (cons.getVerb() == alt.getVerb()):
+                            escape badLength:
+                                if (cons.getNamedArgs() != alt.getNamedArgs()):
+                                    throw.eject(badLength, null)
+                                def [consArg] exit badLength := cons.getArgs()
+                                def [altArg] exit badLength := alt.getArgs()
+                                var newIf := a.IfExpr(test, mix(consArg),
+                                                      mix(altArg),
+                                                      expr.getSpan())
+                                return a.MethodCallExpr(consReceiver,
+                                                        cons.getVerb(),
+                                                        [mix(newIf)],
+                                                        cons.getNamedArgs(),
+                                                        expr.getSpan())
+
+            # m`if (test) {x := cons} else {x := alt}` ->
+            # m`x := if (test) {cons} else {alt}`
+            if (cons.getNodeName() == "AssignExpr" &&
+                alt.getNodeName() == "AssignExpr"):
+                def consNoun := cons.getLvalue()
+                def altNoun := alt.getLvalue()
+                if (consNoun.getName() == altNoun.getName()):
+                    var newIf := a.IfExpr(test, mix(cons.getRvalue()),
+                                          mix(alt.getRvalue()),
+                                          expr.getSpan())
+                    return a.AssignExpr(consNoun, mix(newIf), expr.getSpan())
+            expr
+
         match =="Matcher":
             def body := mix(expr.getBody())
             def pattern := weakenPattern(expr.getPattern(), [body])
@@ -307,6 +359,7 @@ def mix(expr) as DeepFrozen:
             sequence(newExprs, expr.getSpan())
 
         match _:
+            traceln(`Nothing interesting about $expr`)
             expr
 #
 #
@@ -326,20 +379,6 @@ def mix(expr) as DeepFrozen:
 #         if (exprs.size() == 1):
 #             return exprs[0]
 #     return expr
-#
-# def testSpecialize(assert):
-#     def ast := a.SeqExpr([
-#         a.NounExpr("x", null),
-#         a.DefExpr(a.FinalPattern(a.NounExpr("x", null), null, null), null, a.LiteralExpr(42, null), null),
-#         a.NounExpr("x", null)], null)
-#     def result := a.SeqExpr([
-#         a.LiteralExpr(42, null),
-#         a.DefExpr(a.FinalPattern(a.NounExpr("x", null), null, null), null, a.LiteralExpr(42, null), null),
-#         a.NounExpr("x", null)], null)
-#     assert.equal(ast.transform(specialize("x", a.LiteralExpr(42, null))),
-#                  result)
-#
-# unittest([testSpecialize])
 #
 #
 # # This is the list of objects which can be thawed and will not break things
@@ -453,101 +492,6 @@ def mix(expr) as DeepFrozen:
 #             pass
 #
 #     return M.call(maker, "run", args + [span], [].asMap())
-#
-#
-# def constantFoldIf(ast, maker, args, span) as DeepFrozen:
-#     "Constant-fold if-exprs."
-#
-#     if (ast.getNodeName() == "IfExpr"):
-#         def [test, consequent, alternative] := args
-#         if (test.getNodeName() == "LiteralExpr"):
-#             escape wrongType:
-#                 def b :Bool exit wrongType := test.getValue()
-#                 if (b):
-#                     return consequent
-#                 else:
-#                     return alternative
-#             catch err:
-#                 traceln(`Warning: If-expr test fails Bool guard: $err`)
-#
-#     return M.call(maker, "run", args + [span], [].asMap())
-#
-#
-# def optimize(ast, maker, args, span):
-#     "Transform ASTs to be more compact and efficient without changing any
-#      operational semantics."
-#
-#     switch (ast.getNodeName()):
-#
-#         match =="IfExpr":
-#             escape failure:
-#                 def test := args[0]
-#                 def via (normalizeBody) cons ? (cons != null) exit failure := args[1]
-#                 def via (normalizeBody) alt ? (alt != null) exit failure := args[2]
-#
-#                 # m`if (test) {true} else {false}` -> m`test`
-#                 if (cons.getNodeName() == "NounExpr" &&
-#                     cons.getName() == "true"):
-#                     if (alt.getNodeName() == "NounExpr" &&
-#                         alt.getName() == "false"):
-#                         return test.transform(optimize)
-#
-#                 # m`if (test) {r.v(cons)} else {r.v(alt)}` ->
-#                 # m`r.v(if (test) {cons} else {alt})`
-#                 if (cons.getNodeName() == "MethodCallExpr" &&
-#                     alt.getNodeName() == "MethodCallExpr"):
-#                     def consReceiver := cons.getReceiver()
-#                     def altReceiver := alt.getReceiver()
-#                     if (consReceiver.getNodeName() == "NounExpr" &&
-#                         altReceiver.getNodeName() == "NounExpr"):
-#                         if (consReceiver.getName() == altReceiver.getName()):
-#                             # Doing good. Just need to check the verb and args
-#                             # now.
-#                             if (cons.getVerb() == alt.getVerb()):
-#                                 escape badLength:
-#                                     if (cons.getNamedArgs() != alt.getNamedArgs()):
-#                                         throw.eject(badLength, null)
-#                                     def [consArg] exit badLength := cons.getArgs()
-#                                     def [altArg] exit badLength := alt.getArgs()
-#                                     var newIf := maker(test, consArg, altArg,
-#                                                        span)
-#                                     # This has, in the past, been a
-#                                     # problematic recursion. It *should* be
-#                                     # quite safe, since the node's known to be
-#                                     # an IfExpr and thus the available
-#                                     # optimization list is short and the
-#                                     # recursion is (currently) well-founded.
-#                                     newIf transform= (optimize)
-#                                     return a.MethodCallExpr(consReceiver,
-#                                                             cons.getVerb(),
-#                                                             [newIf], cons.getNamedArgs(), span)
-#
-#                 # m`if (test) {x := cons} else {x := alt}` ->
-#                 # m`x := if (test) {cons} else {alt}`
-#                 if (cons.getNodeName() == "AssignExpr" &&
-#                     alt.getNodeName() == "AssignExpr"):
-#                     def consNoun := cons.getLvalue()
-#                     def altNoun := alt.getLvalue()
-#                     if (consNoun == altNoun):
-#                         var newIf := maker(test, cons.getRvalue(),
-#                                            alt.getRvalue(), span)
-#                         newIf transform= (optimize)
-#                         return a.AssignExpr(consNoun, newIf, span)
-#
-#
-#         match _:
-#             pass
-#
-#     return M.call(maker, "run", args + [span], [].asMap())
-#
-# def testRemoveUnusedBareNouns(assert):
-#     def ast := a.SeqExpr([a.NounExpr("x", null), a.NounExpr("y", null)], null)
-#     # There used to be a SeqExpr around this NounExpr, but the optimizer
-#     # (correctly) optimizes it away.
-#     def result := a.NounExpr("y", null)
-#     assert.equal(ast.transform(optimize), result)
-#
-# unittest([testRemoveUnusedBareNouns])
 #
 #
 # def freezeMap :Map[DeepFrozen, Str] := [for k => v in (thawable) v => k]
