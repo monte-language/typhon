@@ -3,6 +3,34 @@
 def a :DeepFrozen := astBuilder
 def Expr :DeepFrozen := a.getExprGuard()
 
+def weakenPattern(var pattern, nodes) as DeepFrozen:
+    "Reduce the strength of patterns based on their usage in scope."
+
+    if (pattern.getNodeName() == "VarPattern"):
+        def name :Str := pattern.getNoun().getName()
+        for node in nodes:
+            def names :Set[Str] := [for noun
+                                    in (node.getStaticScope().getNamesSet())
+                                    noun.getName()].asSet()
+            if (names.contains(name)):
+                return pattern
+        # traceln(`Weakening var $name`)
+        pattern := a.FinalPattern(pattern.getNoun(), pattern.getGuard(),
+                                  pattern.getSpan())
+
+    if (pattern.getNodeName() == "FinalPattern"):
+        def name :Str := pattern.getNoun().getName()
+        for node in nodes:
+            def names :Set[Str] := [for noun
+                                    in (node.getStaticScope().namesUsed())
+                                    noun.getName()].asSet()
+            if (names.contains(name)):
+                return pattern
+        # traceln(`Weakening def $name`)
+        pattern := a.IgnorePattern(pattern.getGuard(), pattern.getSpan())
+
+    return pattern
+
 def mix(expr :Expr) :Expr as DeepFrozen:
     "Partially evaluate a thawed Monte expression.
     
@@ -11,8 +39,8 @@ def mix(expr :Expr) :Expr as DeepFrozen:
     traceln(`Mixing $expr`)
     return switch (expr.getNodeName()):
         match =="EscapeExpr":
-            def ejPatt := expr.getEjectorPattern()
             def body := expr.getBody()
+            def ejPatt := weakenPattern(expr.getEjectorPattern(), [body])
             # Elide escapes that never use their ejectors.
             if (ejPatt.getNodeName() == "IgnorePattern"):
                 mix(body)
@@ -186,33 +214,6 @@ def mix(expr :Expr) :Expr as DeepFrozen:
 #     return M.call(maker, "run", args + [span], [].asMap())
 #
 #
-# def weakenPattern(var pattern, nodes) as DeepFrozen:
-#     "Reduce the strength of patterns based on their usage in scope."
-#
-#     if (pattern.getNodeName() == "VarPattern"):
-#         def name :Str := pattern.getNoun().getName()
-#         for node in nodes:
-#             def names :Set[Str] := [for noun
-#                                     in (node.getStaticScope().getNamesSet())
-#                                     noun.getName()].asSet()
-#             if (names.contains(name)):
-#                 return pattern
-#         # traceln(`Weakening var $name`)
-#         pattern := a.FinalPattern(pattern.getNoun(), pattern.getGuard(),
-#                                   pattern.getSpan())
-#
-#     if (pattern.getNodeName() == "FinalPattern"):
-#         def name :Str := pattern.getNoun().getName()
-#         for node in nodes:
-#             def names :Set[Str] := [for noun
-#                                     in (node.getStaticScope().namesUsed())
-#                                     noun.getName()].asSet()
-#             if (names.contains(name)):
-#                 return pattern
-#         # traceln(`Weakening def $name`)
-#         pattern := a.IgnorePattern(pattern.getGuard(), pattern.getSpan())
-#
-#     return pattern
 #
 #
 # def weakenAllPatterns(ast, maker, args, span) as DeepFrozen:
