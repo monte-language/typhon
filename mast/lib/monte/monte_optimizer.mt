@@ -66,12 +66,12 @@ def weakenPattern(var pattern, nodes) as DeepFrozen:
 
     return pattern
 
-def mix(expr :Expr) :Expr as DeepFrozen:
+def mix(expr) as DeepFrozen:
     "Partially evaluate a thawed Monte expression.
     
      This function recurses on its own, to avoid visiting every node."
 
-    traceln(`Mixing $expr`)
+    # traceln(`Mixing ${expr.getNodeName()}: $expr`)
     return switch (expr.getNodeName()):
         match =="DefExpr":
             # Not worth it to weaken here. Weaken DefExprs from above instead.
@@ -212,6 +212,24 @@ def mix(expr :Expr) :Expr as DeepFrozen:
 
                     match _:
                         expr
+
+        match =="Matcher":
+            def body := mix(expr.getBody())
+            def pattern := weakenPattern(expr.getPattern(), [body])
+            a.Matcher(pattern, body, expr.getSpan())
+
+        match =="Method":
+            def body := mix(expr.getBody())
+            expr.withBody(body)
+
+        match =="ObjectExpr":
+            def script := mix(expr.getScript())
+            expr.withScript(script)
+
+        match =="Script":
+            def methods := [for m in (expr.getMethods()) mix(m)]
+            def matchers := [for m in (expr.getMatchers()) mix(m)]
+            a.Script(expr.getExtends(), methods, matchers, expr.getSpan())
 
         match _:
             expr

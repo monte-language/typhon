@@ -11,6 +11,7 @@ def specimens := [for [this, that] in ([
     [m`escape outer { escape inner {x}}`, m`x`],
     [m`escape ej {ej.run(x)}`, m`x`],
     [m`escape ej {ej.run(x); y}`, m`x`],
+    [m`object o {to m() {return x}}`, m`object o {method m() {x}}`],
 ]) [this.expand(), that.expand()]]
 
 for [this, that] in (specimens):
