@@ -3,6 +3,35 @@
 def a :DeepFrozen := astBuilder
 def Expr :DeepFrozen := a.getExprGuard()
 
+# Maybe Python isn't so bad after all.
+object zip as DeepFrozen:
+    "Transpose iterables."
+
+    match [=="run", iterables, _]:
+        def _its := [].diverge()
+        for it in iterables:
+            _its.push(it._makeIterator())
+        def its := _its.snapshot()
+        object ziperator:
+            to _makeIterator():
+                return ziperator
+            to next(ej):
+                def ks := [].diverge()
+                def vs := [].diverge()
+                for it in its:
+                    def [k, v] := it.next(ej)
+                    ks.push(k)
+                    vs.push(v)
+                return [ks.snapshot(), vs.snapshot()]
+
+def sequence(exprs, span) as DeepFrozen:
+    if (exprs.size() == 0):
+        return a.NounExpr("null", span)
+    else if (exprs.size() == 1):
+        return exprs[0]
+    else:
+        return a.SeqExpr(exprs, span)
+
 def weakenPattern(var pattern, nodes) as DeepFrozen:
     "Reduce the strength of patterns based on their usage in scope."
 
@@ -38,38 +67,89 @@ def mix(expr :Expr) :Expr as DeepFrozen:
 
     traceln(`Mixing $expr`)
     return switch (expr.getNodeName()):
+        match =="DefExpr":
+            # Not worth it to weaken here. Weaken DefExprs from above instead.
+            def pattern := expr.getPattern()
+            def ej := expr.getExit()
+            def rhs := expr.getExpr()
+            def span := expr.getSpan()
+            switch (pattern.getNodeName()):
+                match =="IgnorePattern":
+                    switch (pattern.getGuard()):
+                        match ==null:
+                            # m`def _ := expr` -> m`expr`
+                            mix(rhs)
+                        match guard:
+                            # m`def _ :Guard exit ej := expr` ->
+                            # m`Guard.coerce(expr, ej)`
+                            a.MethodCallExpr(guard, "coerce", [mix(rhs), ej],
+                                             [], span)
+
+                # The expander shouldn't ever give us list patterns with
+                # tails, but we'll filter them out here anyway.
+                match =="ListPattern" ? (pattern.getTail() == null):
+                    switch (rhs.getNodeName()):
+                        match =="LiteralExpr":
+                            # m`def [x, y] := [a, b]` ->
+                            # m`def x := a; def y := b`
+                            # The RHS must be a thawed literal list.
+                            def value := rhs.getValue()
+                            def patterns := pattern.getPatterns()
+                            if (value =~ l :List ? (l.size() ==
+                                                    patterns.size())):
+                                def seq := [for [p, v] in (zip(patterns, l))
+                                            a.DefExpr(p, ej, a.LiteralExpr(v,
+                                                                           span),
+                                                     span)]
+                                mix(sequence(seq, span))
+                            else:
+                                throw(`mix/1: $expr: List pattern ` +
+                                      `assignment from literal list will ` +
+                                      `always fail`)
+
+                        match =="MethodCallExpr":
+                            def receiver := rhs.getReceiver()
+                            if (receiver.getNodeName() == "NounExpr" &&
+                                receiver.getName() == "__makeList"):
+                                # m`def [name] := __makeList.run(item)` ->
+                                # m`def name := item`
+                                # XXX why doesn't this work for multiples? It
+                                # should, right?
+                                def patterns := pattern.getPatterns()
+                                def l := rhs.getArgs()
+                                if (l.size() == patterns.size()):
+                                    def seq := [for [p, v] in (zip(patterns, l))
+                                                a.DefExpr(p, ej, mix(v), span)]
+                                    mix(sequence(seq, span))
+                                else:
+                                    throw(`mix/1: $expr: List pattern ` +
+                                          `assignment from __makeList will ` +
+                                          `always fail`)
+
+                        match _:
+                            expr
+
+                match =="FinalPattern":
+                    if (ej != null && pattern.getGuard() == null):
+                        # m`def name exit ej := expr` -> m`def name := expr`
+                        a.DefExpr(pattern, null, mix(rhs), span)
+                    else:
+                        expr
+
+                match _:
+                    expr
+
         match =="EscapeExpr":
             def body := expr.getBody()
             def ejPatt := weakenPattern(expr.getEjectorPattern(), [body])
-            # Elide escapes that never use their ejectors.
+            # m`escape ej {expr}` -> m`expr`
             if (ejPatt.getNodeName() == "IgnorePattern"):
                 mix(body)
             else:
                 expr
 
-        match ex:
+        match _:
             expr
-
-# # Maybe Python isn't so bad after all.
-# object zip as DeepFrozen:
-#     "Transpose iterables."
-#
-#     match [=="run", iterables]:
-#         def _its := [].diverge()
-#         for it in iterables:
-#             _its.push(it._makeIterator())
-#         def its := _its.snapshot()
-#         object ziperator:
-#             to _makeIterator():
-#                 return ziperator
-#             to next(ej):
-#                 def ks := [].diverge()
-#                 def vs := [].diverge()
-#                 for it in its:
-#                     def [k, v] := it.next(ej)
-#                     ks.push(k)
-#                     vs.push(v)
-#                 return [ks.snapshot(), vs.snapshot()]
 #
 #
 # def allSatisfy(pred, specimens) :Bool as DeepFrozen:
@@ -78,15 +158,6 @@ def mix(expr :Expr) :Expr as DeepFrozen:
 #         if (!pred(specimen)):
 #             return false
 #     return true
-#
-#
-# def sequence(exprs, span) as DeepFrozen:
-#     if (exprs.size() == 0):
-#         return a.LiteralExpr(null, span)
-#     else if (exprs.size() == 1):
-#         return exprs[0]
-#     else:
-#         return a.SeqExpr(exprs, span)
 #
 #
 # def finalPatternToName(pattern, ej) as DeepFrozen:
@@ -272,17 +343,6 @@ def mix(expr :Expr) :Expr as DeepFrozen:
 #     return M.call(maker, "run", args + [span], [].asMap())
 #
 #
-# def removeDeadEscapes(ast, maker, args, span) as DeepFrozen:
-#     "Remove escape-exprs that cannot have their ejectors fired."
-#
-#     if (ast.getNodeName() == "EscapeExpr"):
-#         def [ejPatt, ejBody, catchPatt, catchBody] := args
-#         if (ejPatt.getNodeName() == "IgnorePattern"):
-#             return ejBody
-#
-#     return M.call(maker, "run", args + [span], [].asMap())
-#
-#
 # def constantFoldIf(ast, maker, args, span) as DeepFrozen:
 #     "Constant-fold if-exprs."
 #
@@ -306,59 +366,6 @@ def mix(expr :Expr) :Expr as DeepFrozen:
 #      operational semantics."
 #
 #     switch (ast.getNodeName()):
-#         match =="DefExpr":
-#             def pattern := args[0]
-#             switch (pattern.getNodeName()):
-#                 match =="IgnorePattern":
-#                     def expr := args[2]
-#                     switch (pattern.getGuard()):
-#                         match ==null:
-#                             # m`def _ := expr` -> m`expr`
-#                             return expr.transform(optimize)
-#                         match guard:
-#                             # m`def _ :Guard exit ej := expr` ->
-#                             # m`Guard.coerce(expr, ej)`
-#                             def ej := args[1]
-#                             return a.MethodCallExpr(guard, "coerce", [expr, ej], [],
-#                                                     span)
-#
-#                 # The expander shouldn't ever give us list patterns with
-#                 # tails, but we'll filter them out here anyway.
-#                 match =="ListPattern" ? (pattern.getTail() == null):
-#                     def expr := args[2]
-#                     switch (expr.getNodeName()):
-#                         match =="LiteralExpr":
-#                             # m`def [x, y] := [a, b]` ->
-#                             # m`def x := a; def y := b`
-#                             def value := expr.getValue()
-#                             def patterns := pattern.getPatterns()
-#                             if (value =~ l :List ? (l.size() == patterns.size())):
-#                                 def seq := [for [p, v] in (zip(patterns, l))
-#                                             a.DefExpr(p, args[1], a.LiteralExpr(v, span), span)]
-#                                 return sequence(seq, span)
-#                             else:
-#                                 traceln(`List pattern assignment will always fail`)
-#
-#                         match =="MethodCallExpr":
-#                             def receiver := expr.getReceiver()
-#                             if (receiver.getNodeName() == "NounExpr" &&
-#                                 receiver.getName() == "__makeList"):
-#                                 # m`def [name] := __makeList.run(item)` ->
-#                                 # m`def name := item`
-#                                 escape badLength:
-#                                     def [patt] exit badLength := pattern.getPatterns()
-#                                     def [value] exit badLength := expr.getArgs()
-#                                     return maker(patt, args[1], value, span)
-#
-#                 match =="FinalPattern":
-#                     def ex := args[1]
-#                     if (ex != null && pattern.getGuard() == null):
-#                         # m`def name exit ej := expr` -> m`def name := expr`
-#                         return maker(args[0], null,
-#                                      args[2].transform(optimize))
-#                 match _:
-#                     pass
-#
 #         match =="EscapeExpr":
 #             escape nonFinalPattern:
 #                 def via (finalPatternToName) name exit nonFinalPattern := args[0]

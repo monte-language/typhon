@@ -904,6 +904,7 @@ def makeDefExpr(pattern :Pattern, exit_ :NullOk[Expr], expr :Expr, span) as Deep
             return exit_
         to getExpr():
             return expr
+
         to subPrintOn(out, priority):
             if (priorities["assign"] < priority):
                 out.print("(")

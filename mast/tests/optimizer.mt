@@ -4,6 +4,10 @@ def specimens := [for [this, that] in ([
     [m`42`, m`42`],
     [m`escape _ {x}`, m`x`],
     [m`escape ej {x}`, m`x`],
+    [m`def _ := x`, m`x`],
+    [m`def _ :Int exit ej := x`, m`Int.coerce(x, ej)`],
+    [m`def [a, b] := [x, y]`, m`def a := x; def b := y`],
+    [m`def x exit ej := 42`, m`def x := 42`],
 ]) [this.expand(), that.expand()]]
 
 for [this, that] in (specimens):
