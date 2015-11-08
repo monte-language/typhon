@@ -316,7 +316,7 @@ def makeTempNounExpr(namePrefix :Str, span) as DeepFrozen:
     return tempNounExpr
 
 def makeSlotExpr(noun :Noun, span) as DeepFrozen:
-    def scope := noun.getStaticScope()
+    def scope := makeStaticScope([noun.withoutSpan()], [noun.withoutSpan()], [], [], false)
     object slotExpr:
         to getNoun():
             return noun
@@ -343,7 +343,7 @@ def makeMetaStateExpr(span) as DeepFrozen:
         &scope, "MetaStateExpr", fn f {[]})
 
 def makeBindingExpr(noun :Noun, span) as DeepFrozen:
-    def scope := noun.getStaticScope()
+    def scope := makeStaticScope([noun.withoutSpan()], [noun.withoutSpan()], [], [], false)
     object bindingExpr:
         to getNoun():
             return noun
