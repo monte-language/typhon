@@ -66,6 +66,44 @@ def weakenPattern(var pattern, nodes) as DeepFrozen:
 
     return pattern
 
+def specialize(name, value) as DeepFrozen:
+    "Specialize the given name to the given AST value via substitution."
+
+    def specializeNameToValue(ast, maker, args, span):
+        switch (ast.getNodeName()):
+            match =="NounExpr":
+                if (args[0] == name):
+                    return value
+
+            match =="SeqExpr":
+                # XXX summons zalgo :c
+                def scope := ast.getStaticScope()
+                def outnames := [for n in (scope.outNames()) n.getName()]
+                if (outnames.contains(name)):
+                    # We're going to delve into the sequence and try to only do
+                    # replacements on the elements which don't have the name
+                    # defined.
+                    var newExprs := []
+                    var change := true
+                    for i => expr in ast.getExprs():
+                        def exOutNames := [for n in (expr.getStaticScope().outNames()) n.getName()]
+                        if (exOutNames.contains(name)):
+                            change := false
+                        newExprs with= (if (change) {args[0][i]} else {expr})
+                    return maker(newExprs, span)
+
+            match _:
+                # If it doesn't use the name, then there's no reason to visit
+                # it and we can just continue on our way.
+                def scope := ast.getStaticScope()
+                def namesused := [for n in (scope.namesUsed()) n.getName()]
+                if (!namesused.contains(name)):
+                    return ast
+
+        return M.call(maker, "run", args + [span], [].asMap())
+
+    return specializeNameToValue
+
 def mix(expr) as DeepFrozen:
     "Partially evaluate a thawed Monte expression.
     
@@ -231,6 +269,43 @@ def mix(expr) as DeepFrozen:
             def matchers := [for m in (expr.getMatchers()) mix(m)]
             a.Script(expr.getExtends(), methods, matchers, expr.getSpan())
 
+        match =="SeqExpr":
+            def exprs := expr.getExprs()
+            # m`expr; noun; lastNoun` -> m`expr; lastNoun`
+            # m`def x := 42; expr; x` -> m`expr; 42` ? x is replaced in expr
+            var nameMap := [].asMap()
+            var newExprs := []
+            for i => var item in exprs:
+                # First, rewrite. This ensures that all propagations are
+                # fulfilled.
+                for name => rhs in nameMap:
+                    item transform= (specialize(name, rhs))
+
+                if (item.getNodeName() == "DefExpr"):
+                    def pattern := item.getPattern()
+                    if (pattern.getNodeName() == "FinalPattern" &&
+                        pattern.getGuard() == null):
+                        def name := pattern.getNoun().getName()
+                        def rhs := item.getExpr()
+                        # XXX could rewrite nouns as well, but only if the
+                        # noun is known to be final! Otherwise bugs happen.
+                        # For example, the lexer is known to be miscompiled.
+                        # So be careful.
+                        if (rhs.getNodeName() == "LiteralExpr"):
+                            nameMap with= (name, rhs)
+                            # If we found a simple definition, do *not* add it
+                            # to the list of new expressions to emit.
+                            continue
+                else if (i < exprs.size() - 1):
+                    if (item.getNodeName() == "NounExpr"):
+                        # Bare noun; skip it.
+                        continue
+
+                # Whatever survived to the end is clearly worthy.
+                newExprs with= (mix(item))
+            # And rebuild.
+            sequence(newExprs, expr.getSpan())
+
         match _:
             expr
 #
@@ -251,45 +326,6 @@ def mix(expr) as DeepFrozen:
 #         if (exprs.size() == 1):
 #             return exprs[0]
 #     return expr
-#
-#
-# def specialize(name, value) as DeepFrozen:
-#     "Specialize the given name to the given AST value via substitution."
-#
-#     def specializeNameToValue(ast, maker, args, span):
-#         switch (ast.getNodeName()):
-#             match =="NounExpr":
-#                 if (args[0] == name):
-#                     return value
-#
-#             match =="SeqExpr":
-#                 # XXX summons zalgo :c
-#                 def scope := ast.getStaticScope()
-#                 def outnames := [for n in (scope.outNames()) n.getName()]
-#                 if (outnames.contains(name)):
-#                     # We're going to delve into the sequence and try to only do
-#                     # replacements on the elements which don't have the name
-#                     # defined.
-#                     var newExprs := []
-#                     var change := true
-#                     for i => expr in ast.getExprs():
-#                         def exOutNames := [for n in (expr.getStaticScope().outNames()) n.getName()]
-#                         if (exOutNames.contains(name)):
-#                             change := false
-#                         newExprs with= (if (change) {args[0][i]} else {expr})
-#                     return maker(newExprs, span)
-#
-#             match _:
-#                 # If it doesn't use the name, then there's no reason to visit
-#                 # it and we can just continue on our way.
-#                 def scope := ast.getStaticScope()
-#                 def namesused := [for n in (scope.namesUsed()) n.getName()]
-#                 if (!namesused.contains(name)):
-#                     return ast
-#
-#         return M.call(maker, "run", args + [span], [].asMap())
-#
-#     return specializeNameToValue
 #
 # def testSpecialize(assert):
 #     def ast := a.SeqExpr([
@@ -498,41 +534,6 @@ def mix(expr) as DeepFrozen:
 #                         newIf transform= (optimize)
 #                         return a.AssignExpr(consNoun, newIf, span)
 #
-#         match =="SeqExpr":
-#             # m`expr; noun; lastNoun` -> m`expr; lastNoun`
-#             # m`def x := 42; expr; x` -> m`expr; 42` ? x is replaced in expr
-#             var nameMap := [].asMap()
-#             var newExprs := []
-#             for i => var expr in args[0]:
-#                 # First, rewrite. This ensures that all propagations are
-#                 # fulfilled.
-#                 for name => rhs in nameMap:
-#                     expr transform= (specialize(name, rhs))
-#
-#                 if (expr.getNodeName() == "DefExpr"):
-#                     def pattern := expr.getPattern()
-#                     if (pattern.getNodeName() == "FinalPattern" &&
-#                         pattern.getGuard() == null):
-#                         def name := pattern.getNoun().getName()
-#                         def rhs := expr.getExpr()
-#                         # XXX could rewrite nouns as well, but only if the
-#                         # noun is known to be final! Otherwise bugs happen.
-#                         # For example, the lexer is known to be miscompiled.
-#                         # So be careful.
-#                         if (rhs.getNodeName() == "LiteralExpr"):
-#                             nameMap with= (name, rhs)
-#                             # If we found a simple definition, do *not* add it
-#                             # to the list of new expressions to emit.
-#                             continue
-#                 else if (i < args[0].size() - 1):
-#                     if (expr.getNodeName() == "NounExpr"):
-#                         # Bare noun; skip it.
-#                         continue
-#
-#                 # Whatever survived to the end is clearly worthy.
-#                 newExprs with= (expr)
-#             # And rebuild.
-#             return sequence(newExprs, span)
 #
 #         match _:
 #             pass
