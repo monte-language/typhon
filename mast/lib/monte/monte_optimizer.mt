@@ -32,6 +32,12 @@ def sequence(exprs, span) as DeepFrozen:
     else:
         return a.SeqExpr(exprs, span)
 
+def finalPatternToName(pattern, ej) as DeepFrozen:
+    if (pattern.getNodeName() == "FinalPattern" &&
+        pattern.getGuard() == null):
+        return pattern.getNoun().getName()
+    ej("Not an unguarded final pattern")
+
 def weakenPattern(var pattern, nodes) as DeepFrozen:
     "Reduce the strength of patterns based on their usage in scope."
 
@@ -146,7 +152,66 @@ def mix(expr :Expr) :Expr as DeepFrozen:
             if (ejPatt.getNodeName() == "IgnorePattern"):
                 mix(body)
             else:
-                expr
+                switch (body.getNodeName()):
+                    match =="MethodCallExpr":
+                        # m`escape ej {ej.run(expr)}` -> m`expr`
+                        def receiver := body.getReceiver()
+                        if (receiver.getNodeName() == "NounExpr" &&
+                            ejPatt =~ via (finalPatternToName) name &&
+                            receiver.getName() == name):
+                            # Looks like this escape qualifies! Let's check
+                            # the catch.
+                            # XXX we can totally handle a catch, BTW; we just
+                            # currently don't. Catches aren't common on
+                            # ejectors, especially on the ones like __return
+                            # that are most affected by this optimization.
+                            if (expr.getCatchPattern() == null):
+                                def args := body.getArgs()
+                                if (body.getArgs() =~ [arg]):
+                                    mix(arg)
+                                else:
+                                    throw(`mix/1: $expr: Known ejector ` + 
+                                          `called with wrong arity ${args.size()}`)
+                            else:
+                                expr
+                        else:
+                            expr
+
+                    match =="SeqExpr":
+                        # m`escape ej {before; ej.run(value); expr}` ->
+                        # m`escape ej {before; ej.run(value)}`
+                        var slicePoint := -1
+                        def exprs := body.getExprs()
+
+                        for i => expr in exprs:
+                            switch (expr.getNodeName()):
+                                match =="MethodCallExpr":
+                                    def receiver := expr.getReceiver()
+                                    if (receiver.getNodeName() == "NounExpr" &&
+                                        ejPatt =~ via (finalPatternToName) name &&
+                                        receiver.getName() == name):
+                                        # The slice has to happen *after* this
+                                        # expression; we want to keep the call to
+                                        # the ejector.
+                                        slicePoint := i + 1
+                                        break
+                                match _:
+                                    pass
+
+                        if (slicePoint != -1 && slicePoint < exprs.size()):
+                            def slice := [for n
+                                          in (exprs.slice(0, slicePoint))
+                                          mix(n)]
+                            def newSeq := sequence(slice, body.getSpan())
+                            # Since we must have chosen a slicePoint, we've
+                            # definitely opened up new possibilities and we
+                            # should recurse.
+                            mix(expr.withBody(newSeq))
+                        else:
+                            expr
+
+                    match _:
+                        expr
 
         match _:
             expr
@@ -158,13 +223,6 @@ def mix(expr :Expr) :Expr as DeepFrozen:
 #         if (!pred(specimen)):
 #             return false
 #     return true
-#
-#
-# def finalPatternToName(pattern, ej) as DeepFrozen:
-#     if (pattern.getNodeName() == "FinalPattern" &&
-#         pattern.getGuard() == null):
-#         return pattern.getNoun().getName()
-#     ej("Not an unguarded final pattern")
 #
 #
 # def normalizeBody(expr, _) as DeepFrozen:
@@ -366,58 +424,6 @@ def mix(expr :Expr) :Expr as DeepFrozen:
 #      operational semantics."
 #
 #     switch (ast.getNodeName()):
-#         match =="EscapeExpr":
-#             escape nonFinalPattern:
-#                 def via (finalPatternToName) name exit nonFinalPattern := args[0]
-#                 def body := args[1]
-#
-#                 switch (body.getNodeName()):
-#                     match =="MethodCallExpr":
-#                         # m`escape ej {ej.run(expr)}` -> m`expr`
-#                         def receiver := body.getReceiver()
-#                         if (receiver.getNodeName() == "NounExpr" &&
-#                             receiver.getName() == name):
-#                             # Looks like this escape qualifies! Let's check
-#                             # the catch.
-#                             # XXX we can totally handle a catch, BTW; we just
-#                             # currently don't. Catches aren't common on
-#                             # ejectors, especially on the ones like __return
-#                             # that are most affected by this optimization.
-#                             if (args[2] == null):
-#                                 def args := body.getArgs()
-#                                 if (args.size() == 1):
-#                                     return args[0].transform(optimize)
-#
-#                     match =="SeqExpr":
-#                         # m`escape ej {before; ej.run(value); expr}` ->
-#                         # m`escape ej {before; ej.run(value)}`
-#                         var slicePoint := -1
-#                         def exprs := body.getExprs()
-#
-#                         for i => expr in exprs:
-#                             switch (expr.getNodeName()):
-#                                 match =="MethodCallExpr":
-#                                     def receiver := expr.getReceiver()
-#                                     if (receiver.getNodeName() == "NounExpr" &&
-#                                         receiver.getName() == name):
-#                                         # The slice has to happen *after* this
-#                                         # expression; we want to keep the call to
-#                                         # the ejector.
-#                                         slicePoint := i + 1
-#                                         break
-#                                 match _:
-#                                     pass
-#
-#                         if (slicePoint != -1 && slicePoint < exprs.size()):
-#                             def slice := [for n
-#                                           in (exprs.slice(0, slicePoint))
-#                                           n.transform(optimize)]
-#                             def newSeq := sequence(slice, body.getSpan())
-#                             return maker(args[0], newSeq, args[2], args[3],
-#                                          span).transform(optimize)
-#
-#                     match _:
-#                         pass
 #
 #         match =="IfExpr":
 #             escape failure:

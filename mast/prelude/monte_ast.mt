@@ -1628,6 +1628,11 @@ def makeEscapeExpr(ejectorPattern :Pattern, body :Expr,
             return catchPattern
         to getCatchBody():
             return catchBody
+
+        to withBody(newBody :Expr):
+            return makeEscapeExpr(ejectorPattern, newBody, catchPattern,
+                                  catchBody, span)
+
         to subPrintOn(out, priority):
             printExprSuiteOn(fn {
                 out.print("escape ")
