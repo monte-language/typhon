@@ -3,64 +3,24 @@
 def a :DeepFrozen := astBuilder
 def Expr :DeepFrozen := a.getExprGuard()
 
-object MIX as DeepFrozen {}
-object BUILD as DeepFrozen {}
+def mix(expr :Expr) :Expr as DeepFrozen:
+    "Partially evaluate a thawed Monte expression.
+    
+     This function recurses on its own, to avoid visiting every node."
 
-def mix(initialExpr :Expr) :Expr as DeepFrozen:
-    "Partially evaluate a thawed Monte expression."
-
-    def exprStack := [].diverge()
-    def builderStack := [].diverge()
-
-    def queue(expr):
-        "Uncall an expression and put it onto the stack."
-
-        def [maker, verb, args, _] := expr._uncall()
-        def span := args.last()
-        for arg in (args.slice(0, args.size() - 1)):
-            exprStack.push(arg)
-        builderStack.push([[maker, verb, span], args.size() - 1])
-
-    def assemble(exprs, builder):
-        "Assemble an expression from its pieces."
-
-        def [maker, verb, span] := builder
-        return M.call(maker, verb, exprs + [span])
-
-    def mixExpr(expr :Expr):
-        "Aggressively optimize a Monte expression.
-
-         The optimization will not recurse beyond what is necessary to fully
-         apply an optimization to the top-level expression."
-
-        return switch (expr.getNodeName()):
-            match ex:
+    traceln(`Mixing $expr`)
+    return switch (expr.getNodeName()):
+        match =="EscapeExpr":
+            def ejPatt := expr.getEjectorPattern()
+            def body := expr.getBody()
+            # Elide escapes that never use their ejectors.
+            if (ejPatt.getNodeName() == "IgnorePattern"):
+                mix(body)
+            else:
                 expr
 
-    def mixing(thing):
-        "Mix a piece of an expression."
-
-        return switch (thing):
-            match expr :Expr:
-                mixExpr(expr)
-
-    # And now that everything's defined, we can get started. First, try mixing
-    # the initial expression. We'll put it at the very beginning of the stack
-    # using insert/2 to not mess up any other exprs queued by mixing.
-    exprStack.insert(0, mixing(initialExpr))
-
-    # Now loop over any builders that have to run, and do additional mixing as
-    # required.
-    while (builderStack.size() > 0):
-        # We pop before doing any mixing, since mixing will push stuff onto
-        # the stacks.
-        def [builder, size] := builderStack.pop()
-        def unmixedArgs := [for _ in (0..!size) exprStack.pop()]
-        # Mix, mix, swirl and mix.
-        def args := [for ex in (unmixedArgs.reverse()) mixing(ex)]
-        exprStack.push(assemble(args, builder))
-
-    return exprStack.pop()
+        match ex:
+            expr
 
 # # Maybe Python isn't so bad after all.
 # object zip as DeepFrozen:
