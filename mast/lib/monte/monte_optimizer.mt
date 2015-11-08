@@ -312,6 +312,13 @@ def mix(expr) as DeepFrozen:
             def body := mix(expr.getBody())
             expr.withBody(body)
 
+        match =="MethodCallExpr":
+            def receiver := expr.getReceiver()
+            def verb := expr.getVerb()
+            def args := [for arg in (expr.getArgs()) mix(arg)]
+            def namedArgs := expr.getNamedArgs()
+            a.MethodCallExpr(receiver, verb, args, namedArgs, expr.getSpan())
+
         match =="ObjectExpr":
             def script := mix(expr.getScript())
             expr.withScript(script)
@@ -361,83 +368,67 @@ def mix(expr) as DeepFrozen:
         match _:
             traceln(`Nothing interesting about $expr`)
             expr
-#
-#
-# def allSatisfy(pred, specimens) :Bool as DeepFrozen:
-#     "Return whether every specimen satisfies the predicate."
-#     for specimen in specimens:
-#         if (!pred(specimen)):
-#             return false
-#     return true
-#
-#
-# def normalizeBody(expr, _) as DeepFrozen:
-#     if (expr == null):
-#         return null
-#     if (expr.getNodeName() == "SeqExpr"):
-#         def exprs := expr.getExprs()
-#         if (exprs.size() == 1):
-#             return exprs[0]
-#     return expr
-#
-#
-# # This is the list of objects which can be thawed and will not break things
-# # when frozen later on. These objects must satisfy a few rules:
-# # * Must be uncallable and the transitive uncall must be within the types that
-# #   are serializable as literals. Currently:
-# #   * Bool, Char, Int, Str;
-# #   * List;
-# #   * broken refs;
-# #   * Anything in this list of objects; e.g. _booleanFlow is acceptable
-# # * Must have a transitive closure (under calls) obeying the above rule.
-# def thawable :Map[Str, DeepFrozen] := [
-#     # => __makeList,
-#     # => __makeMap,
-#     => _booleanFlow,
-#     => false,
-#     => null,
-#     => true,
-# ]
-#
-#
-# def thaw(ast, maker, args, span) as DeepFrozen:
-#     "Enliven literal expressions via calls."
-#
-#     escape ej:
-#         switch (ast.getNodeName()):
-#             match =="MethodCallExpr":
-#                 def [var receiver, verb :Str, arguments] exit ej := args
-#                 def receiverObj := switch (receiver.getNodeName()) {
-#                     match =="NounExpr" {
-#                         def name :Str := receiver.getName()
-#                         if (thawable.contains(name)) {
-#                             thawable[name]
-#                         } else {ej("Not in safe scope")}
-#                     }
-#                     match =="LiteralExpr" {receiver.getValue()}
-#                     match _ {ej("No matches")}
-#                 }
-#                 if (allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
-#                     arguments)):
-#                     def argValues := [for x in (arguments) x.getValue()]
-#                     # traceln(`thaw call $ast`)
-#                     def constant := M.call(receiverObj, verb, argValues, [].asMap())
-#                     return a.LiteralExpr(constant, span)
-#
-#             match =="NounExpr":
-#                 def name :Str := args[0]
-#                 if (thawable.contains(name)):
-#                     # traceln(`thaw noun $name`)
-#                     return a.LiteralExpr(thawable[name], span)
-#
-#             match _:
-#                 pass
-#
-#     return M.call(maker, "run", args + [span], [].asMap())
-#
-#
-#
-#
+
+def allSatisfy(pred, specimens) :Bool as DeepFrozen:
+    "Return whether every specimen satisfies the predicate."
+    for specimen in specimens:
+        if (!pred(specimen)):
+            return false
+    return true
+
+# This is the list of objects which can be thawed and will not break things
+# when frozen later on. These objects must satisfy a few rules:
+# * Must be uncallable and the transitive uncall must be within the types that
+#   are serializable as literals. Currently:
+#   * Bool, Char, Int, Str;
+#   * List;
+#   * broken refs;
+#   * Anything in this list of objects; e.g. _booleanFlow is acceptable
+# * Must have a transitive closure (under calls) obeying the above rule.
+def thawable :Map[Str, DeepFrozen] := [
+    # => __makeList,
+    # => __makeMap,
+    => _booleanFlow,
+    => false,
+    => null,
+    => true,
+]
+
+def thaw(ast, maker, args, span) as DeepFrozen:
+    "Enliven literal expressions via calls."
+
+    escape ej:
+        switch (ast.getNodeName()):
+            match =="MethodCallExpr":
+                def [var receiver, verb :Str, arguments, []] exit ej := args
+                def receiverObj := switch (receiver.getNodeName()) {
+                    match =="NounExpr" {
+                        def name :Str := receiver.getName()
+                        if (thawable.contains(name)) {
+                            thawable[name]
+                        } else {ej("Not in safe scope")}
+                    }
+                    match =="LiteralExpr" {receiver.getValue()}
+                    match _ {ej("No matches")}
+                }
+                if (allSatisfy(fn x {x.getNodeName() == "LiteralExpr"},
+                    arguments)):
+                    def argValues := [for x in (arguments) x.getValue()]
+                    # traceln(`thaw call $ast`)
+                    def constant := M.call(receiverObj, verb, argValues, [].asMap())
+                    return a.LiteralExpr(constant, span)
+
+            match =="NounExpr":
+                def name :Str := args[0]
+                if (thawable.contains(name)):
+                    # traceln(`thaw noun $name`)
+                    return a.LiteralExpr(thawable[name], span)
+
+            match _:
+                pass
+
+    return M.call(maker, "run", args + [span], [].asMap())
+
 # def weakenAllPatterns(ast, maker, args, span) as DeepFrozen:
 #     "Find and weaken all patterns."
 #
@@ -492,62 +483,53 @@ def mix(expr) as DeepFrozen:
 #             pass
 #
 #     return M.call(maker, "run", args + [span], [].asMap())
-#
-#
-# def freezeMap :Map[DeepFrozen, Str] := [for k => v in (thawable) v => k]
-#
-#
-# def freeze(ast, maker, args, span) as DeepFrozen:
-#     "Uncall literal expressions."
-#
-#     if (ast.getNodeName() == "LiteralExpr"):
-#         switch (args[0]):
-#             match broken ? (Ref.isBroken(broken)):
-#                 # Generate the uncall for broken refs by hand.
-#                 return a.MethodCallExpr(a.NounExpr("Ref", span), "broken",
-#                                         [a.LiteralExpr(Ref.optProblem(broken),
-#                                                        span)], [],
-#                                         span)
-#             match ==null:
-#                 return a.NounExpr("null", span)
-#             match b :Bool:
-#                 if (b):
-#                     return a.NounExpr("true", span)
-#                 else:
-#                     return a.NounExpr("false", span)
-#             match _ :Any[Char, Double, Int, Str]:
-#                 return ast
-#             match l :List:
-#                 # Generate the uncall for lists by hand.
-#                 def newArgs := [for v in (l)
-#                                 a.LiteralExpr(v, span).transform(freeze)]
-#                 return a.MethodCallExpr(a.NounExpr("__makeList", span), "run",
-#                                         newArgs, [], span)
-#             match k ? (freezeMap.contains(k)):
-#                 return a.NounExpr(freezeMap[k], span)
-#             match obj:
-#                 if (obj._uncall() =~ [newMaker, newVerb, newArgs, [], _]):
-#                     def wrappedArgs := [for arg in (newArgs)
-#                                         a.LiteralExpr(arg, span)]
-#                     def call := a.MethodCallExpr(a.LiteralExpr(newMaker,
-#                                                                span),
-#                                                  newVerb, wrappedArgs, [], span)
-#                     return call.transform(freeze)
-#                 traceln(`Warning: Couldn't freeze $obj: Bad uncall`)
-#
-#     return M.call(maker, "run", args + [span], [].asMap())
-#
-#
-# def performOptimization(var ast) as DeepFrozen:
-#     ast transform= (thaw)
-#     ast transform= (weakenAllPatterns)
-#     ast transform= (removeDeadEscapes)
-#     ast transform= (constantFoldIf)
-#     # ast transform= (optimize)
-#     ast transform= (freeze)
-#     return ast
 
-def optimize(expr) as DeepFrozen:
-    return mix(expr)
+def freezeMap :Map[DeepFrozen, Str] := [for k => v in (thawable) v => k]
+
+def freeze(ast, maker, args, span) as DeepFrozen:
+    "Uncall literal expressions."
+
+    if (ast.getNodeName() == "LiteralExpr"):
+        switch (args[0]):
+            match broken ? (Ref.isBroken(broken)):
+                # Generate the uncall for broken refs by hand.
+                return a.MethodCallExpr(a.NounExpr("Ref", span), "broken",
+                                        [a.LiteralExpr(Ref.optProblem(broken),
+                                                       span)], [],
+                                        span)
+            match ==null:
+                return a.NounExpr("null", span)
+            match b :Bool:
+                if (b):
+                    return a.NounExpr("true", span)
+                else:
+                    return a.NounExpr("false", span)
+            match _ :Any[Char, Double, Int, Str]:
+                return ast
+            match l :List:
+                # Generate the uncall for lists by hand.
+                def newArgs := [for v in (l)
+                                a.LiteralExpr(v, span).transform(freeze)]
+                return a.MethodCallExpr(a.NounExpr("__makeList", span), "run",
+                                        newArgs, [], span)
+            match k ? (freezeMap.contains(k)):
+                return a.NounExpr(freezeMap[k], span)
+            match obj:
+                if (obj._uncall() =~ [newMaker, newVerb, newArgs, [], _]):
+                    def wrappedArgs := [for arg in (newArgs)
+                                        a.LiteralExpr(arg, span)]
+                    def call := a.MethodCallExpr(a.LiteralExpr(newMaker,
+                                                               span),
+                                                 newVerb, wrappedArgs, [], span)
+                    return call.transform(freeze)
+                traceln(`Warning: Couldn't freeze $obj: Bad uncall`)
+
+    return M.call(maker, "run", args + [span], [].asMap())
+
+def optimize(var expr) as DeepFrozen:
+    expr transform= (thaw)
+    expr := mix(expr)
+    expr transform= (freeze)
+    return expr
 
 [=> optimize]

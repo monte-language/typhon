@@ -16,6 +16,8 @@ def specimens := [for [this, that] in ([
     [m`def x := 42; y; x`, m`42`],
     [m`if (test) {r.v(x)} else {r.v(y)}`, m`r.v(if (test) {x} else {y})`],
     [m`if (test) {n := x} else {n := y}`, m`n := if (test) {x} else {y}`],
+    [m`2 + 2`, m`4`],
+    [m`r.v(2 + 2)`, m`r.v(4)`],
 ]) [this.expand(), that.expand()]]
 
 for [this, that] in (specimens):
