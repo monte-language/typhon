@@ -112,8 +112,10 @@ class FinalSlot(Slot):
         self._obj = obj
         self._guard = guard
 
-    def toString(self):
-        return u"<FinalSlot(%s)>" % self._obj.toString()
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"<FinalSlot(")])
+        out.call(u"print", [self._obj])
+        out.call(u"print", [StrObject(u")>")])
 
     def get(self):
         return self._obj
@@ -138,9 +140,12 @@ class VarSlot(Slot):
         self._obj = obj
         self._guard = guard
 
-    def toString(self):
-        return u"<VarSlot(%s, %s)>" % (self._obj.toString(),
-                                       self._guard.toString())
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"<VarSlot(")])
+        out.call(u"print", [self._obj])
+        out.call(u"print", [StrObject(u", ")])
+        out.call(u"print", [self._guard])
+        out.call(u"print", [StrObject(u")>")])
 
     def get(self):
         return self._obj

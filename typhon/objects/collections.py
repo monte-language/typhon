@@ -845,9 +845,6 @@ class ConstSet(Object):
             x = intmask((1000003 * x) ^ y)
         return x
 
-    def toString(self):
-        return toString(self)
-
     def printOn(self, printer):
         printer.call(u"print", [StrObject(u"[")])
         for i, obj in enumerate(self.objectMap.keys()):
