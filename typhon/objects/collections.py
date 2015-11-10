@@ -587,7 +587,7 @@ class FlexList(Object):
     def put(self, index, value):
         top = self.strategy.size(self)
         if 0 <= index <= top:
-            self.strategy.insert(self, index, [value])
+            self.strategy.store(self, index, value)
         else:
             raise userError(u"Index %d out of bounds for list of length %d" %
                            (index, top))
