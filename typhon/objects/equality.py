@@ -213,6 +213,10 @@ def optSame(first, second, cache=None):
     if selfless in first.stamps:
         if selfless not in second.stamps:
             return INEQUAL
+        if ((transparentStamp in first.stamps) ^
+                (transparentStamp in second.stamps)):
+            # One's transparent, the other isn't, so they're not the same.
+            return INEQUAL
         # Then see if both objects can be compared by contents.
         if (transparentStamp in first.stamps and
                 transparentStamp in second.stamps):
