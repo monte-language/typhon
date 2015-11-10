@@ -387,7 +387,7 @@ def mix(expr) as DeepFrozen:
             sequence(newExprs, expr.getSpan())
 
         match _:
-            traceln(`Nothing interesting about $expr`)
+            # traceln(`Nothing interesting about $expr`)
             expr
 
 def allSatisfy(pred, specimens) :Bool as DeepFrozen:
@@ -548,9 +548,9 @@ def freeze(ast, maker, args, span) as DeepFrozen:
     return M.call(maker, "run", args + [span], [].asMap())
 
 def optimize(var expr) as DeepFrozen:
-    expr transform= (thaw)
+    # expr transform= (thaw)
     expr := mix(expr)
-    expr transform= (freeze)
+    # expr transform= (freeze)
     return expr
 
 [=> optimize]
