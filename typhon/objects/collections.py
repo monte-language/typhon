@@ -25,7 +25,7 @@ from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import Ejector, throw
-from typhon.objects.printers import Printer, toString
+from typhon.objects.printers import toString
 from typhon.objects.root import Object
 from typhon.prelude import getGlobal
 from typhon.rstrategies import rstrategies
@@ -456,6 +456,10 @@ class FlexList(Object):
         return x
 
     def _recv(self, atom, args):
+        if atom is _UNCALL_0:
+            return ConstList([self.snapshot(), StrObject(u"diverge"),
+                              ConstList([]), EMPTY_MAP])
+
         if atom is ADD_1:
             other = args[0]
             return ConstList(self.strategy.fetch_all(self) +
@@ -954,13 +958,6 @@ class ConstSet(Object):
 
     def snapshot(self):
         return ConstSet(self.objectMap.copy())
-
-    def subtract(self, other):
-        rv = self.objectMap.copy()
-        for ok in unwrapSet(other).keys():
-            if ok in rv:
-                del rv[ok]
-        return ConstSet(rv)
 
 
 def unwrapList(o, ej=None):
