@@ -38,6 +38,9 @@ def finalPatternToName(pattern, ej) as DeepFrozen:
         return pattern.getNoun().getName()
     ej("Not an unguarded final pattern")
 
+def exprOrNull(expr) as DeepFrozen:
+    return if (expr == null) {a.LiteralExpr("null", null)} else {expr}
+
 def weakenPattern(var pattern, nodes) as DeepFrozen:
     "Reduce the strength of patterns based on their usage in scope."
 
@@ -104,6 +107,12 @@ def specialize(name, value) as DeepFrozen:
 
     return specializeNameToValue
 
+def nodeUsesName(node, name :Str) as DeepFrozen:
+    for noun in (node.getStaticScope().namesUsed()):
+        if (name == noun.getName() :Str):
+            return true
+    return false
+
 def mix(expr) as DeepFrozen:
     "Partially evaluate a thawed Monte expression.
     
@@ -169,6 +178,8 @@ def mix(expr) as DeepFrozen:
                                     throw(`mix/1: $expr: List pattern ` +
                                           `assignment from __makeList will ` +
                                           `always fail`)
+                            else:
+                                expr
 
                         match _:
                             expr
@@ -193,6 +204,9 @@ def mix(expr) as DeepFrozen:
                 switch (body.getNodeName()):
                     match =="MethodCallExpr":
                         # m`escape ej {ej.run(expr)}` -> m`expr`
+                        # But if `ej` doesn't occur in `expr`, then we instead
+                        # choose the weaker optimization:
+                        # m`escape ej {ej.run(expr)}` -> m`escape ej {expr}`
                         def receiver := body.getReceiver()
                         if (receiver.getNodeName() == "NounExpr" &&
                             ejPatt =~ via (finalPatternToName) name &&
@@ -206,7 +220,14 @@ def mix(expr) as DeepFrozen:
                             if (expr.getCatchPattern() == null):
                                 def args := body.getArgs()
                                 if (body.getArgs() =~ [arg]):
-                                    mix(arg)
+                                    # Moment of truth. If the ejector's still
+                                    # used within the expr, then rebuild and
+                                    # remix. Otherwise, strip the escape
+                                    # entirely.
+                                    if (nodeUsesName(arg, name)):
+                                        mix(expr.withBody(arg))
+                                    else:
+                                        mix(arg)
                                 else:
                                     throw(`mix/1: $expr: Known ejector ` + 
                                           `called with wrong arity ${args.size()}`)
@@ -253,8 +274,8 @@ def mix(expr) as DeepFrozen:
 
         match =="IfExpr":
             def test := expr.getTest()
-            def cons := expr.getThen()
-            def alt := expr.getElse()
+            def cons := exprOrNull(expr.getThen())
+            def alt := exprOrNull(expr.getElse())
             if (test.getNodeName() == "LiteralExpr"):
                 escape wrongType:
                     def b :Bool exit wrongType := test.getValue()
