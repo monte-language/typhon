@@ -111,6 +111,12 @@ class TestFlexList(TestCase):
         self.assertFalse(l.contains(IntObject(42)))
         self.assertFalse(l.contains(l))
 
+    def testPutSize(self):
+        l = FlexList([IntObject(5), CharObject(u'a')])
+        l.put(1, IntObject(7))
+        expected = [IntObject(5), IntObject(7)]
+        self.assertEqual(l.strategy.size(l), len(expected))
+
 
 class TestConstSet(TestCase):
 
