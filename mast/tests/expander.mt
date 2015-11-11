@@ -139,17 +139,17 @@ def specimens := [
     ["-x", "x.negate()"],
     ["~x", "x.complement()"],
 
-#     ["x < y", "_comparer.lessThan(x, y)"],
-#     ["x <= y", "_comparer.leq(x, y)"],
-#     ["x > y", "_comparer.greaterThan(x, y)"],
-#     ["x >= y", "_comparer.geq(x, y)"],
-#     ["x <=> y", "_comparer.asBigAs(x, y)"],
+    ["x < y", "_comparer.lessThan(x, y)"],
+    ["x <= y", "_comparer.leq(x, y)"],
+    ["x > y", "_comparer.greaterThan(x, y)"],
+    ["x >= y", "_comparer.geq(x, y)"],
+    ["x <=> y", "_comparer.asBigAs(x, y)"],
 
-#     ["x == y", "__equalizer.sameEver(x, y)"],
-#     ["x != y", "__equalizer.sameEver(x, y).not()"],
+    ["x == y", "__equalizer.sameEver(x, y)"],
+    ["x != y", "__equalizer.sameEver(x, y).not()"],
 
-#     ["x..y", "_makeOrderedSpace.op__thru(x, y)"],
-#     ["x..!y", "_makeOrderedSpace.op__till(x, y)"],
+    ["x..y", "_makeOrderedSpace.op__thru(x, y)"],
+    ["x..!y", "_makeOrderedSpace.op__till(x, y)"],
 
 #     ["object foo { method baz(a, => b, => &c := (0), => &&d) {1} }",
 #      "object foo {method baz(a, \"b\" => b, \"&c\" =>  via (__slotToBinding) &&c := (0), \"&&d\" => &&d) {1}}"],

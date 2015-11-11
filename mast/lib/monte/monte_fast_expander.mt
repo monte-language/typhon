@@ -107,6 +107,11 @@ def operatorsToName :Map[Str, Str] := [
 def unaryOperatorsToName :Map[Str, Str] := [
     "~" => "complement", "!" => "not", "-" => "negate"]
 
+def comparatorsToName :Map[Str, Str] := [
+    ">" => "greaterThan", "<" => "lessThan",
+    ">=" => "geq", "<=" => "leq",
+    "<=>" => "asBigAs"]
+
 
 def makeBuilder() as DeepFrozen:
     def tree := [].diverge()
@@ -385,11 +390,56 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
                 def [left, op, right] := getArgs()
                 stack.extend(["MethodCallExpr",
                              span, "out",
-                              [], "out",
+                             [], "out",
                              1, "makeList",
                              right, "expand",
                              operatorsToName[op], "out",
                              left, "expand"])
+            else if (nodeName == "RangeExpr"):
+                def [left, op, right] := getArgs()
+                def opName := [".." => "thru", "..!" => "till"][op]
+                def n_i := tree.size()
+                tree.extend(["NounExpr", "_makeOrderedSpace", span])
+                stack.extend(["MethodCallExpr",
+                             span, "out",
+                             [], "out",
+                             2, "makeList",
+                             left, "expand",
+                             right, "expand",
+                             "op__" + opName, "out",
+                             n_i, "out"])
+            else if (nodeName == "CompareExpr"):
+                def [left, op, right] := getArgs()
+                def n_i := tree.size()
+                tree.extend(["NounExpr", "_comparer", span])
+                stack.extend(["MethodCallExpr",
+                             span, "out",
+                             [], "out",
+                             2, "makeList",
+                             left, "expand",
+                             right, "expand",
+                             comparatorsToName[op], "out",
+                             n_i, "out"])
+            else if (nodeName == "SameExpr"):
+                def [left, right, same] := getArgs()
+                def n_i := tree.size()
+                tree.extend(["NounExpr", "__equalizer", span])
+                def base := ["MethodCallExpr",
+                             span, "out",
+                             [], "out",
+                             2, "makeList",
+                             left, "expand",
+                             right, "expand",
+                             "sameEver", "out",
+                             n_i, "out"]
+                if (same):
+                    stack.extend(base)
+                else:
+                    stack.extend(["MethodCallExpr",
+                                  span, "out",
+                                  [], "out",
+                                  [], "out",
+                                  "not", "out"] + base)
             else if (nodeName == "PrefixExpr"):
                 def [op, expr] := getArgs()
                 stack.extend(["MethodCallExpr",
