@@ -56,88 +56,88 @@ def specimens := [
      def arg_2 := i
      recip_1.put(arg_2, def ares_3 := recip_1.get(arg_2).foo(y))
      ares_3"],
-#     ["x[i] += y",
-#      "
-#      def recip_1 := x
-#      def arg_2 := i
-#      recip_1.put(arg_2, def ares_3 := recip_1.get(arg_2).add(y))
-#      ares_3"],
+    ["x[i] += y",
+     "
+     def recip_1 := x
+     def arg_2 := i
+     recip_1.put(arg_2, def ares_3 := recip_1.get(arg_2).add(y))
+     ares_3"],
 
-#     ["x + y",
-#      "x.add(y)"],
+    ["x + y",
+     "x.add(y)"],
 
-#     ["x - y",
-#      "x.subtract(y)"],
+    ["x - y",
+     "x.subtract(y)"],
 
-#     ["x * y",
-#      "x.multiply(y)"],
+    ["x * y",
+     "x.multiply(y)"],
 
-#     ["x / y",
-#      "x.approxDivide(y)"],
+    ["x / y",
+     "x.approxDivide(y)"],
 
-#     ["x // y",
-#      "x.floorDivide(y)"],
+    ["x // y",
+     "x.floorDivide(y)"],
 
-#     ["x % y",
-#      "x.mod(y)"],
+    ["x % y",
+     "x.mod(y)"],
 
-#     ["x ** y",
-#      "x.pow(y)"],
+    ["x ** y",
+     "x.pow(y)"],
 
-#     ["x >> y",
-#      "x.shiftRight(y)"],
+    ["x >> y",
+     "x.shiftRight(y)"],
 
-#     ["x << y",
-#      "x.shiftLeft(y)"],
+    ["x << y",
+     "x.shiftLeft(y)"],
 
-#     ["x & y",
-#      "x.and(y)"],
+    ["x & y",
+     "x.and(y)"],
 
-#     ["x | y",
-#      "x.or(y)"],
+    ["x | y",
+     "x.or(y)"],
 
-#     ["x ^ y",
-#      "x.xor(y)"],
+    ["x ^ y",
+     "x.xor(y)"],
 
-#     ["x += y",
-#      "x := x.add(y)"],
+    ["x += y",
+     "x := x.add(y)"],
 
-#     ["x -= y",
-#      "x := x.subtract(y)"],
+    ["x -= y",
+     "x := x.subtract(y)"],
 
-#     ["x *= y",
-#      "x := x.multiply(y)"],
+    ["x *= y",
+     "x := x.multiply(y)"],
 
-#     ["x /= y",
-#      "x := x.approxDivide(y)"],
+    ["x /= y",
+     "x := x.approxDivide(y)"],
 
-#     ["x //= y",
-#      "x := x.floorDivide(y)"],
+    ["x //= y",
+     "x := x.floorDivide(y)"],
 
-#     ["x %= y",
-#      "x := x.mod(y)"],
+    ["x %= y",
+     "x := x.mod(y)"],
 
-#     ["x **= y",
-#      "x := x.pow(y)"],
+    ["x **= y",
+     "x := x.pow(y)"],
 
-#     ["x >>= y",
-#      "x := x.shiftRight(y)"],
+    ["x >>= y",
+     "x := x.shiftRight(y)"],
 
-#     ["x <<= y",
-#      "x := x.shiftLeft(y)"],
+    ["x <<= y",
+     "x := x.shiftLeft(y)"],
 
-#     ["x &= y",
-#      "x := x.and(y)"],
+    ["x &= y",
+     "x := x.and(y)"],
 
-#     ["x |= y",
-#      "x := x.or(y)"],
+    ["x |= y",
+     "x := x.or(y)"],
 
-#     ["x ^= y",
-#      "x := x.xor(y)"],
+    ["x ^= y",
+     "x := x.xor(y)"],
 
-#     ["!x", "x.not()"],
-#     ["-x", "x.negate()"],
-#     ["~x", "x.complement()"],
+    ["!x", "x.not()"],
+    ["-x", "x.negate()"],
+    ["~x", "x.complement()"],
 
 #     ["x < y", "_comparer.lessThan(x, y)"],
 #     ["x <= y", "_comparer.leq(x, y)"],

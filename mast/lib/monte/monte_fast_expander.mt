@@ -89,6 +89,25 @@ def NODE_INFO :Map[Str, Int] := [
     "QuasiParserPattern"    => 2,
 ]
 
+def operatorsToName :Map[Str, Str] := [
+    "+" => "add",
+    "-" => "subtract",
+    "*" => "multiply",
+    "//" => "floorDivide",
+    "/" => "approxDivide",
+    "%" => "mod",
+    "**" => "pow",
+    "&" => "and",
+    "|" => "or",
+    "^" => "xor",
+    "&!" => "butNot",
+    "<<" => "shiftLeft",
+    ">>" => "shiftRight"]
+
+def unaryOperatorsToName :Map[Str, Str] := [
+    "~" => "complement", "!" => "not", "-" => "negate"]
+
+
 def makeBuilder() as DeepFrozen:
     def tree := [].diverge()
     return object fastBuilder:
@@ -101,11 +120,13 @@ def makeBuilder() as DeepFrozen:
                 tree.push(v)
                 tree.extend(a)
                 object astNodeish extends i:
+                    to _conformTo(guard):
+                        return i
                     # Just enough to fool the parser.
                     to getNodeName():
                         return v
-                    to _conformTo(guard):
-                        return i
+                    to getSpan():
+                        return tree[i + 1 + NODE_INFO[v]]
 
 
 def findTopNode(tree, ej) as DeepFrozen:
@@ -354,7 +375,29 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
                           span])
             else if (nodeName == "VerbAssignExpr"):
                 def [verb, target, vargs] := getArgs()
-                stack.extend(expandVerbAssign(tree, verb, target, vargs, span, fail))
+                stack.extend(expandVerbAssign(tree, verb, target, vargs, span,
+                                              fail))
+            else if (nodeName == "AugAssignExpr"):
+                def [op, lvalue, rvalue] := getArgs()
+                stack.extend(expandVerbAssign(tree, operatorsToName[op],
+                                              lvalue, [rvalue], span, fail))
+            else if (nodeName == "BinaryExpr"):
+                def [left, op, right] := getArgs()
+                stack.extend(["MethodCallExpr",
+                             span, "out",
+                              [], "out",
+                             1, "makeList",
+                             right, "expand",
+                             operatorsToName[op], "out",
+                             left, "expand"])
+            else if (nodeName == "PrefixExpr"):
+                def [op, expr] := getArgs()
+                stack.extend(["MethodCallExpr",
+                             span, "out",
+                              [], "out",
+                              [], "out",
+                             unaryOperatorsToName[op], "out",
+                             expr, "expand"])
             else if (nodeName == "IfExpr"):
                 def [test, consq, alt] := getArgs()
                 stack.extend([node, "out",
