@@ -10,20 +10,20 @@ def fixedPointSpecimens := [
     "x := y := z",
     "foo.bar(x, y)",
     "def x := y",
-    # "def [x, y] := z",
-    # "def x :y exit z := w",
-    # "def &&x := y",
-    # "def via (x) y := z",
-    # "
-    # if (x):
-    #     y
-    # else:
-    #     z",
-    # "
-    # if (x):
-    #     y
-    # else if (z):
-    #     w",
+    "def [x, y] := z",
+    "def x :y exit z := w",
+    "def &&x := y",
+    "def via (x) y := z",
+    "
+    if (x):
+        y
+    else:
+        z",
+    "
+    if (x):
+        y
+    else if (z):
+        w",
     # "
     # object x:
     #     method y():
@@ -48,14 +48,14 @@ def specimens := [
      ares_2
      ares_1"],
 
-#     ["x foo= (y, z)", "x := x.foo(y, z)"],
+    ["x foo= (y, z)", "x := x.foo(y, z)"],
 
-#     ["x[i] foo= (y)",
-#      "
-#      def recip_1 := x
-#      def arg_2 := i
-#      recip_1.put(arg_2, def ares_3 := recip_1.get(arg_2).foo(y))
-#      ares_3"],
+    ["x[i] foo= (y)",
+     "
+     def recip_1 := x
+     def arg_2 := i
+     recip_1.put(arg_2, def ares_3 := recip_1.get(arg_2).foo(y))
+     ares_3"],
 #     ["x[i] += y",
 #      "
 #      def recip_1 := x

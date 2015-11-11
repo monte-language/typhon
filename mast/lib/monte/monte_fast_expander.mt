@@ -149,11 +149,64 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
                 span, "out",
                 [], "out",
                 2, "concatLists",
-                [def_i], "out",
+                1, "makeList",
+                "DefExpr",
+                span, "out",
+                right, "expand",
+                null, "out",
+                fp_i, "out",
                 margs, "expandList",
                 pv, "out",
                 rcvr, "expand",
                 ares_i, "out"]
+
+    def expandVerbAssign(tree, verb, target :Int, vargs, span, fail):
+        def targetName := tree[target]
+        def doVA(rcvr, methverb, args, namedArgs):
+            def recip_i := tree.size()
+            tree.extend(["TempNounExpr", genTemp("recip"), span])
+            def recipPatt_i := tree.size()
+            tree.extend(["FinalPattern", recip_i, null, span])
+            def defrecip_i := tree.size()
+            tree.extend(["DefExpr", recipPatt_i, null, rcvr, span])
+            def setArgs := [for arg in (args.reverse())
+                            (def a_i := tree.size();
+                             tree.extend(["TempNounExpr", genTemp("arg"), span]);
+                             a_i)]
+            def getCall_i := tree.size()
+            tree.extend(["MethodCallExpr", recip_i, methverb, setArgs, [], span])
+            def setCall_i := tree.size()
+            tree.extend(["MethodCallExpr", getCall_i, verb, vargs, [], span])
+            var result := ["SeqExpr",
+                           span, "out",
+                           args.size() + 3, "makeList",
+                           defrecip_i, "out"]
+            for i in (0..!args.size()):
+                def ap_i := tree.size()
+                tree.extend(["FinalPattern", setArgs[i], null, span])
+                def def_i := tree.size()
+                tree.extend(["DefExpr", ap_i, null, args[i], span])
+                result += [def_i, "out"]
+            return result + expandCallAssign(tree, recip_i, putVerb(methverb, fail, span),
+                                             setArgs, setCall_i, span).slice(5)
+
+        if (targetName == "NounExpr"):
+            return ["AssignExpr",
+                    span, "out",
+                    "MethodCallExpr",
+                    span, "out",
+                    [], "out",
+                    vargs, "expandList",
+                    verb, "out",
+                    target, "out",
+                    target, "out"]
+        else if (targetName == "GetExpr"):
+            def leftargs := tree[target + 2]
+            return doVA(tree[target + 1], "get", tree[target + 2], [])
+        else if (targetName == "MethodCallExpr"):
+            return doVA(tree[target + 1], tree[target + 2], tree[target + 3], tree[target + 4])
+        else:
+            fail(`update-assign on $targetName not allowed`)
 
     def tree := builder.getTree()
     #traceln(`tree $tree`)
@@ -184,6 +237,9 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
             for _ in 0..!n:
                 outStack.pop()
             outStack.push(l)
+        else if (op == "patch"):
+            def dest :Int := stack.pop()
+            tree[dest] := outStack.pop()
         else if (op == "expand"):
             def node :NullOk[Int] := stack.pop()
             if (node == null):
@@ -201,7 +257,14 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
             if (["BindingExpr", "NounExpr"].contains(nodeName)):
                 nameList.push(tree[node + 1])
                 outStack.push(node)
+            else if (nodeName == "BindingPattern"):
+                def noun_i := tree[node + 1]
+                nameList.push(tree[noun_i + 1])
+                outStack.push(node)
             else if (nodeName == "LiteralExpr"):
+                outStack.push(node)
+            # Sometimes we're lazy and feed already-expanded stuff in.
+            else if (nodeName == "TempNounExpr"):
                 outStack.push(node)
             else if (nodeName == "SlotExpr"):
                 def name := getArg(0)
@@ -216,17 +279,21 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
                               name, "out"])
             else if (nodeName == "MethodCallExpr"):
                 def [rcvr, verb, arglist, namedArgs] := getArgs()
-                stack.extend(["MethodCallExpr",
-                              span, "out",
+                def [rcvr_i, arglist_i, namedArgs_i] := [node + 1, node + 3, node + 4]
+                stack.extend([node, "out",
+                              namedArgs_i, "patch",
                               namedArgs, "expandList",
+                              arglist_i, "patch",
                               arglist, "expandList",
-                              verb, "out",
+                              rcvr_i, "patch",
                               rcvr, "expand"])
             else if (nodeName == "NamedArg"):
+                def [k_i, v_i] := [node + 1, node + 2]
                 def [k, v] := getArgs()
-                stack.extend(["NamedArg",
-                              span, "out",
+                stack.extend([node, "out",
+                              v_i, "patch",
                               v, "expand",
+                              k_i, "patch",
                               k, "expand"])
             else if (nodeName == "NamedArgExport"):
                 def v := getArg(0)
@@ -253,15 +320,20 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
                               "run", "out",
                               receiver, "expand"])
             else if (nodeName == "DefExpr"):
+                def [patt_i, exit_i, expr_i] := [node + 1, node + 2, node + 3]
                 def [patt, exit_, expr] := getArgs()
                 #XXX do cycles etc
-                stack.extend(["DefExpr",
-                              span, "out",
+                stack.extend([node, "out",
+                              expr_i, "patch",
                               expr, "expand",
+                              exit_i, "patch",
                               exit_, "expand",
+                              patt_i, "patch",
                               patt, "expand"])
             else if (nodeName == "SeqExpr"):
-                stack.extend(["SeqExpr", span, "out", getArg(0), "expandList"])
+                stack.extend([node, "out",
+                              node + 1, "patch",
+                              getArg(0), "expandList"])
             else if (nodeName == "AssignExpr"):
                 def [left :Int, right :Int] := getArgs()
                 if (tree[left] == "MethodCallExpr"):
@@ -272,15 +344,50 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
                     def [rcvr, margs] := tree.slice(left + 1, left + 3)
                     stack.extend(expandCallAssign(tree, rcvr, "put", margs, right, span))
                 else if (tree[left] == "NounExpr"):
-                    stack.extend(["AssignExpr",
-                                  span, "out",
+                    stack.extend([node, "out",
+                                  node + 2, "patch",
                                   right, "expand",
+                                  node + 1, "patch",
                                   left, "expand"])
                 else:
                     fail(["Assignment can only be done to nouns and collection elements",
                           span])
+            else if (nodeName == "VerbAssignExpr"):
+                def [verb, target, vargs] := getArgs()
+                stack.extend(expandVerbAssign(tree, verb, target, vargs, span, fail))
+            else if (nodeName == "IfExpr"):
+                def [test, consq, alt] := getArgs()
+                stack.extend([node, "out",
+                              node + 3, "patch",
+                              alt, "expand",
+                              node + 2, "patch",
+                              consq, "expand",
+                              node + 1, "patch",
+                              test, "expand"])
+            else if (nodeName == "FinalPattern"):
+                def [noun, guard] := getArgs()
+                stack.extend([node, "out",
+                              node + 2, "patch",
+                              guard, "expand",
+                              node + 1, "patch",
+                              noun, "expand"])
+            else if (nodeName == "ListPattern"):
+                def [patterns, tail] := getArgs()
+                if (tail == null):
+                    stack.extend([node, "out",
+                                  node + 1, "patch",
+                                  patterns, "expandList"])
+                else:
+                    throw("xxx")
+            else if (nodeName == "ViaPattern"):
+                def [expr, subpatt] := getArgs()
+                stack.extend([node, "out",
+                              node + 2, "patch",
+                              subpatt, "expand",
+                              node + 1, "patch",
+                              expr, "expand"])
             else:
-                throw(`No expander for $nodeName`)
+                fail(`No expander for $nodeName`)
         else if (NODE_INFO.contains(op)):
             tree.push(op)
             def n := NODE_INFO[op]
@@ -295,7 +402,7 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
 
     # reify temporaries
     {
-        traceln("reify temporaries")
+        #traceln("reify temporaries")
         def names := nameList.asSet()
         def seen := [].asMap().diverge()
         var i := 0
@@ -322,13 +429,13 @@ def expand(builder, finalBuilder, fail) as DeepFrozen:
             i += NODE_INFO[tree[i]] + 2
         }
     }
-    traceln("build final ast")
+    #traceln("build final ast")
     def buildStack := [outStack.pop(), "build"].diverge()
     while (buildStack.size() > 0):
         #traceln(`build$\n$buildStack$\n$outStack`)
         def op := buildStack.pop()
         if (op == "build"):
-            def node := buildStack.pop()
+            def node :Int := buildStack.pop()
             #traceln(`node $node`)
             def nodeName := tree[node]
             #traceln(`nodename $nodeName`)
