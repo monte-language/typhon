@@ -12,8 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.debug import debug_print
-from rpython.rlib.jit import elidable, unroll_safe
+from rpython.rlib.jit import unroll_safe
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -153,7 +152,7 @@ class ScriptObject(Object):
     An object whose behavior depends on a Monte script.
     """
 
-    _immutable_fields_ = "codeScript", "displayName", "globals[*]", "fqn"
+    _immutable_fields_ = "codeScript", "globals[*]"
 
     def toString(self):
         # Easily the worst part of the entire stringifying experience. We must
@@ -163,15 +162,17 @@ class ScriptObject(Object):
             self.call(u"_printOn", [printer])
             return printer.value()
         except Refused:
-            return u"<%s>" % self.displayName
+            return u"<%s>" % self.codeScript.displayName
         except UserException, e:
-            return u"<%s (threw exception %s when printed)>" % (self.displayName, e.error())
+            return (u"<%s (threw exception %s when printed)>" %
+                    (self.codeScript.displayName, e.error()))
 
     def printOn(self, printer):
         # Note that the printer is a Monte-level object. Also note that, at
         # this point, we have had a bad day; we did not respond to _printOn/1.
         from typhon.objects.data import StrObject
-        printer.call(u"print", [StrObject(u"<%s>" % self.displayName)])
+        printer.call(u"print",
+                     [StrObject(u"<%s>" % self.codeScript.displayName)])
 
     def docString(self):
         return self.codeScript.doc
@@ -220,11 +221,9 @@ class QuietObject(ScriptObject):
 
     stamps = []
 
-    def __init__(self, codeScript, globals, displayName, auditors, fqn):
+    def __init__(self, codeScript, globals, auditors):
         self.codeScript = codeScript
         self.globals = globals
-        self.displayName = displayName
-        self.fqn = fqn
 
         # The first auditor is our as-auditor, and it can be null.
         if auditors[0] is NullObject:
@@ -271,13 +270,10 @@ class BusyObject(ScriptObject):
 
     _immutable_fields_ = "closure[*]",
 
-    def __init__(self, codeScript, globals, closure, displayName, auditors,
-                 fqn):
+    def __init__(self, codeScript, globals, closure, auditors):
         self.codeScript = codeScript
         self.globals = globals
         self.closure = closure
-        self.displayName = displayName
-        self.fqn = fqn
 
         # The first auditor is our as-auditor, so it'll also be the guard. If
         # it's null, then we'll use Any as our guard.

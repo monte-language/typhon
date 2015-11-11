@@ -63,7 +63,7 @@ class Heap(Object):
 
     def accountObject(self, obj):
         if isinstance(obj, ScriptObject):
-            name = obj.displayName
+            name = obj.codeScript.displayName
         else:
             name = obj.__class__.__name__.decode("utf-8")
         if name not in self.buckets:

@@ -1787,11 +1787,9 @@ class CodeScript(object):
 
     def makeObject(self, closure, globals, auditors):
         if len(self.closureNames):
-            obj = BusyObject(self, globals, closure, self.displayName, auditors,
-                             self.fqn)
+            obj = BusyObject(self, globals, closure, auditors)
         else:
-            obj = QuietObject(self, globals, self.displayName, auditors,
-                              self.fqn)
+            obj = QuietObject(self, globals, auditors)
         return obj
 
     # Picking 3 for the common case of:
