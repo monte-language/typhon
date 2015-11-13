@@ -21,7 +21,8 @@ from rpython.rtyper.lltypesystem.rffi import charpsize2str
 from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused
+from typhon.errors import Refused, userError
+from typhon.enum import makeEnum
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapBytes, unwrapStr
 from typhon.objects.refs import LocalResolver, makePromise
@@ -59,6 +60,7 @@ class FileUnpauser(Object):
         if atom is UNPAUSE_0:
             if self.fount is not None:
                 self.fount.unpause()
+                # Let go so that the fount can be GC'd if necessary.
                 self.fount = None
             return NullObject
 
@@ -194,7 +196,17 @@ class FileDrain(Object):
 
     fount = None
     pos = 0
-    writing = False
+
+    # State machine:
+    # * READY: Bufs are empty.
+    # * WRITING: Bufs are partially full. Write is pending.
+    # * BUSY: Bufs are overfull. Write is pending.
+    # * CLOSING: Bufs are partially full. Write is pending. New writes cause
+    #   exceptions.
+    # * CLOSED: Bufs are empty. New writes cause exceptions.
+    READY, WRITING, BUSY, CLOSING, CLOSED = makeEnum(u"FileDrain",
+        u"ready writing busy closing closed".split())
+    _state = READY
 
     def __init__(self, fs, fd, vat):
         self.fs = fs
@@ -213,26 +225,35 @@ class FileDrain(Object):
 
         if atom is RECEIVE_1:
             data = unwrapBytes(args[0])
-
-            self.bufs.append(data)
-
-            if not self.writing:
-                # We're not writing right now, so queue a write.
-                with ruv.scopedBufs(self.bufs) as bufs:
-                    ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
-                                len(self.bufs), self.pos, writeCB)
-
+            self.receive(data)
             return NullObject
 
         if atom is FLOWSTOPPED_1:
-            ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
+            # Prepare to shut down. Switch to CLOSING to stop future data from
+            # being queued.
+            self.closing()
             return NullObject
 
         if atom is FLOWABORTED_1:
-            ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
+            # We'll shut down cleanly, but we're going to discard all the work
+            # that we haven't yet written.
+            self.bufs = []
+            self.closing()
             return NullObject
 
         raise Refused(self, atom, args)
+
+    def receive(self, data):
+        if self._state in (self.READY, self.WRITING, self.BUSY):
+            self.bufs.append(data)
+
+            if self._state is self.READY:
+                # We're not writing right now, so queue a write.
+                self.queueWrite()
+                self._state = self.WRITING
+        else:
+            raise userError(u"Can't write to drain in state %s" %
+                            self._state.repr)
 
     def abort(self, reason):
         print "Aborting file drain:", reason
@@ -240,6 +261,23 @@ class FileDrain(Object):
             with scopedVat(self.vat):
                 from typhon.objects.collections import EMPTY_MAP
                 self.vat.sendOnly(self.fount, ABORTFLOW_0, [], EMPTY_MAP)
+        self.closing()
+
+    def queueWrite(self):
+        with ruv.scopedBufs(self.bufs) as bufs:
+            ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
+                        len(self.bufs), self.pos, writeCB)
+
+    def closing(self):
+        if self._state is self.READY:
+            # Optimization: proceed directly to CLOSED if there's no
+            # outstanding writes.
+            self.queueClose()
+        self._state = self.CLOSING
+
+    def queueClose(self):
+        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
+        self._state = self.CLOSED
 
     def written(self, size):
         self.pos += size
@@ -254,6 +292,20 @@ class FileDrain(Object):
                 bufs.append(buf[size:])
                 size = 0
         self.bufs = bufs
+
+        if self.bufs:
+            # More bufs remain to write. Queue them.
+            self.queueWrite()
+            # If we were CLOSING before, we're still CLOSING now. Otherwise,
+            # we transition (from READY/WRITING) to WRITING.
+            if self._state is not self.CLOSING:
+                self._state = self.WRITING
+        elif self._state is self.CLOSING:
+            # Finally, we're out of things to do. Request a close.
+            self.queueClose()
+        else:
+            # We are ready for more work.
+            self._state = self.READY
 
 
 def openFountCB(fs):
