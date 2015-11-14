@@ -36,6 +36,7 @@ from typhon.objects.meta import MetaContext
 from typhon.objects.root import Object
 from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.pretty import Buffer, LineWriter
+from typhon.quoting import quoteChar, quoteStr
 from typhon.smallcaps.code import Code
 from typhon.smallcaps.ops import ops
 from typhon.smallcaps.peephole import peephole
@@ -588,7 +589,7 @@ class Str(Expr):
         return ConstList([StrObject(self._s)])
 
     def pretty(self, out):
-        out.write('"%s"' % (self._s.encode("utf-8")))
+        out.write(quoteStr(self._s).encode("utf-8"))
 
     def compile(self, compiler):
         compiler.literal(StrObject(self._s))
@@ -663,7 +664,7 @@ class Char(Expr):
         return ConstList([CharObject(self._c)])
 
     def pretty(self, out):
-        out.write("'%s'" % (self._c.encode("utf-8")))
+        out.write(quoteChar(self._c[0]).encode("utf-8"))
 
     def compile(self, compiler):
         compiler.literal(CharObject(self._c))
@@ -1576,9 +1577,6 @@ class Noun(Expr):
     def getStaticScope(self):
         return StaticScope([self.name], [], [], [], False)
 
-    def uncall(self):
-        return ConstList([StrObject(self.name)])
-
     def recv(self, atom, args):
         if atom is GETNAME_0:
             return StrObject(self.name)
@@ -2040,7 +2038,7 @@ class Try(Expr):
         out.writeLine("")
         out.write("} catch ")
         self._pattern.pretty(out)
-        out.writeLine("{")
+        out.writeLine(" {")
         self._then.pretty(out.indent())
         out.writeLine("")
         out.writeLine("}")
