@@ -223,6 +223,18 @@ class DoubleObject(Object):
             other = promoteToDouble(args[0])
             return polyCmp(self._d, other)
 
+        # Doubles are related to zero.
+        if atom is ABOVEZERO_0:
+            return wrapBool(self._d > 0.0)
+        if atom is ATLEASTZERO_0:
+            return wrapBool(self._d >= 0.0)
+        if atom is ATMOSTZERO_0:
+            return wrapBool(self._d <= 0.0)
+        if atom is BELOWZERO_0:
+            return wrapBool(self._d < 0.0)
+        if atom is ISZERO_0:
+            return wrapBool(self._d == 0.0)
+
         if atom is ABS_0:
             return DoubleObject(abs(self._d))
 
