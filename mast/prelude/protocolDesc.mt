@@ -1,4 +1,4 @@
-def __makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
+def _makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
     "Describe a parameter."
 
     return object paramDesc as DeepFrozen implements Selfless, TransparentStamp:
@@ -9,7 +9,7 @@ def __makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
             out.print(">")
 
         to _uncall():
-            return [__makeParamDesc, "run", [name, guard], [].asMap()]
+            return [_makeParamDesc, "run", [name, guard], [].asMap()]
 
         to getGuard() :DeepFrozen:
             return guard
@@ -18,8 +18,8 @@ def __makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
             return name
 
 
-def __makeMessageDesc(docstring :NullOk[Str], verb :Str, params :DeepFrozen,
-                      guard :DeepFrozen) as DeepFrozen:
+def _makeMessageDesc(docstring :NullOk[Str], verb :Str, params :DeepFrozen,
+                     guard :DeepFrozen) as DeepFrozen:
     "Describe a message."
 
     return object messageDesc as DeepFrozen implements Selfless, TransparentStamp:
@@ -27,8 +27,7 @@ def __makeMessageDesc(docstring :NullOk[Str], verb :Str, params :DeepFrozen,
             out.print(`<message $verb/${params.size()}>`)
 
         to _uncall():
-            return [__makeMessageDesc, "run", [docstring, verb, params,
-                                               guard],
+            return [_makeMessageDesc, "run", [docstring, verb, params, guard],
                     [].asMap()]
 
         to getArity() :Int:
@@ -53,7 +52,7 @@ def reduce(sets :List[Set]) :Set as DeepFrozen:
         rv |= set
     return rv
 
-object __makeProtocolDesc as DeepFrozen:
+object _makeProtocolDesc as DeepFrozen:
     "Produce an interface."
 
     to run(docstring :NullOk[Str], name :Str, parents :List,
@@ -85,9 +84,9 @@ object __makeProtocolDesc as DeepFrozen:
                 out.print(">")
 
             to _uncall():
-                return [__makeProtocolDesc, "run", [docstring, name,
-                                                    parents, stillUnknown,
-                                                    messages], [].asMap()]
+                return [_makeProtocolDesc, "run", [docstring, name, parents,
+                                                   stillUnknown, messages],
+                        [].asMap()]
 
             to audit(audition) :Bool:
                 "Determine whether an object implements this object as an
@@ -142,23 +141,26 @@ object __makeProtocolDesc as DeepFrozen:
 
     to makePair(docstring :NullOk[Str], name :Str, parents :List,
                 stillUnknown :DeepFrozen, messages :List):
-        def protocolDescStamp := __makeProtocolDesc(docstring, name,
-                                                    parents, stillUnknown,
-                                                    messages)
+        def protocolDescStamp := _makeProtocolDesc(docstring, name, parents,
+                                                   stillUnknown, messages)
 
         object protocolDesc extends protocolDescStamp implements Selfless, TransparentStamp:
             "The guard for an interface."
 
             to _uncall():
-                return [
-                    [__makeProtocolDesc, "makePair", [docstring, name,
-                                                      parents, stillUnknown,
-                                                      messages], [].asMap()],
-                    "get", [0], [].asMap()]
+                def makePair := [_makeProtocolDesc, "makePair",
+                                 [docstring, name, parents, stillUnknown,
+                                  messages],
+                                 [].asMap()]
+                return [makePair, "get", [0], [].asMap()]
 
             to audit(_):
                 throw("Can't audit with this object")
 
         return [protocolDesc, protocolDescStamp]
 
-[=> __makeMessageDesc, => __makeParamDesc, => __makeProtocolDesc]
+[=> _makeMessageDesc, => _makeParamDesc, => _makeProtocolDesc,
+ "__makeMessageDesc" => _makeMessageDesc,
+ "__makeParamDesc" => _makeParamDesc,
+ "__makeProtocolDesc" => _makeProtocolDesc,
+]

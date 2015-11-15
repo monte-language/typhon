@@ -267,7 +267,7 @@ def expand(node, builder, fail) as DeepFrozen:
         def docExpr := if (doco == null) {builder.NounExpr("null", span)} else {builder.LiteralExpr(doco, span)}
         def guardExpr := if (resultGuard == null) {builder.NounExpr("Any", span)} else {
             resultGuard}
-        return builder.HideExpr(builder.MethodCallExpr(builder.NounExpr("__makeMessageDesc", span),
+        return builder.HideExpr(builder.MethodCallExpr(builder.NounExpr("_makeMessageDesc", span),
             "run", [docExpr, builder.LiteralExpr(verb, span),
                  emitList(paramDescs, span), guardExpr], [],
              span), span)
@@ -329,7 +329,7 @@ def expand(node, builder, fail) as DeepFrozen:
         def verb := if (guard == null) {"run"} else {"makePair"}
         def docExpr := if (doco == null) { builder.NounExpr("null", span) } else {builder.LiteralExpr(doco, span)}
         def ifaceExpr := builder.HideExpr(builder.MethodCallExpr(
-            builder.NounExpr("__makeProtocolDesc", span), verb,
+            builder.NounExpr("_makeProtocolDesc", span), verb,
                 [docExpr, builder.MethodCallExpr(
                     builder.MethodCallExpr(
                         builder.MetaContextExpr(span),
@@ -813,7 +813,7 @@ def expand(node, builder, fail) as DeepFrozen:
             return expandMessageDesc(doco, verb, params, resultGuard, span)
         else if (nodeName == "ParamDesc"):
             def [name, guard] := args
-            return builder.MethodCallExpr(builder.NounExpr("__makeParamDesc", span),
+            return builder.MethodCallExpr(builder.NounExpr("_makeParamDesc", span),
                 "run", [builder.LiteralExpr(name, span),
                     if (guard == null) {builder.NounExpr("Any", span)} else {guard}], [], span)
         else if (nodeName == "FunctionExpr"):

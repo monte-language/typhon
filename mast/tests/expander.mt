@@ -454,7 +454,7 @@ def specimens := [
       ",
       "
       def foo := {
-          __makeProtocolDesc.run(null, meta.context().getFQNPrefix().add(\"foo_T\"), __makeList.run(), __makeList.run(), __makeList.run())
+          _makeProtocolDesc.run(null, meta.context().getFQNPrefix().add(\"foo_T\"), __makeList.run(), __makeList.run(), __makeList.run())
       }"],
      [`
       interface foo extends x, y implements a, b:
@@ -465,10 +465,10 @@ def specimens := [
       `,
       `
       def foo := {
-          __makeProtocolDesc.run("yay", meta.context().getFQNPrefix().add("foo_T"), __makeList.run(x, y), __makeList.run(a, b), __makeList.run({
-              __makeMessageDesc.run("blee", "baz", __makeList.run(__makeParamDesc.run("c", Int)), Any)
+          _makeProtocolDesc.run("yay", meta.context().getFQNPrefix().add("foo_T"), __makeList.run(x, y), __makeList.run(a, b), __makeList.run({
+              _makeMessageDesc.run("blee", "baz", __makeList.run(_makeParamDesc.run("c", Int)), Any)
           }, {
-              __makeMessageDesc.run(null, "boz", __makeList.run(__makeParamDesc.run("d", Any)), Double)
+              _makeMessageDesc.run(null, "boz", __makeList.run(_makeParamDesc.run("d", Any)), Double)
           }))
       }`],
      ["
