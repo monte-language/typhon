@@ -72,7 +72,7 @@ interface coreChar extends Comparable:
     to quote() :Str
 
 
-interface coreDouble extends Comparable:
+interface coreDouble extends Comparable, Comparison:
     "IEEE 754 double-precision floating-point numbers."
 
     to add(other) :Double
@@ -97,14 +97,8 @@ interface coreDouble extends Comparable:
     to tan() :Double
 
 
-interface coreInt extends Comparable:
+interface coreInt extends Comparable, Comparison:
     "Integers."
-
-    to aboveZero() :Bool
-    to atLeastZero() :Bool
-    to atMostZero() :Bool
-    to belowZero() :Bool
-    to isZero() :Bool
 
     to and(other :Int) :Int
     to butNot(other :Int) :Int
