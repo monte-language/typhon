@@ -113,13 +113,20 @@ def nodeUsesName(node, name :Str) as DeepFrozen:
             return true
     return false
 
-def mix(expr) as DeepFrozen:
+def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
     "Partially evaluate a thawed Monte expression.
     
      This function recurses on its own, to avoid visiting every node."
 
     # traceln(`Mixing ${expr.getNodeName()}: $expr`)
     return switch (expr.getNodeName()):
+        match =="CatchExpr":
+            # Nothing fancy yet; just recurse.
+            def body := mix(expr.getBody(), => safeFinalNames)
+            def catcher := mix(expr.getCatcher(), => safeFinalNames)
+            def pattern := weakenPattern(expr.getPattern(), [catcher])
+            a.CatchExpr(body, pattern, catcher, expr.getSpan())
+
         match =="DefExpr":
             # Not worth it to weaken here. Weaken DefExprs from above instead.
             def pattern := expr.getPattern()
@@ -199,7 +206,7 @@ def mix(expr) as DeepFrozen:
             def ejPatt := weakenPattern(expr.getEjectorPattern(), [body])
             # m`escape ej {expr}` -> m`expr`
             if (ejPatt.getNodeName() == "IgnorePattern"):
-                mix(body)
+                mix(body, => safeFinalNames)
             else:
                 switch (body.getNodeName()):
                     match =="MethodCallExpr":
@@ -225,9 +232,10 @@ def mix(expr) as DeepFrozen:
                                     # remix. Otherwise, strip the escape
                                     # entirely.
                                     if (nodeUsesName(arg, name)):
-                                        mix(expr.withBody(arg))
+                                        mix(expr.withBody(arg),
+                                            => safeFinalNames)
                                     else:
-                                        mix(arg)
+                                        mix(arg, => safeFinalNames)
                                 else:
                                     throw(`mix/1: $expr: Known ejector ` + 
                                           `called with wrong arity ${args.size()}`)
@@ -260,17 +268,23 @@ def mix(expr) as DeepFrozen:
                         if (slicePoint != -1 && slicePoint < exprs.size()):
                             def slice := [for n
                                           in (exprs.slice(0, slicePoint))
-                                          mix(n)]
+                                          mix(n, => safeFinalNames)]
                             def newSeq := sequence(slice, body.getSpan())
                             # Since we must have chosen a slicePoint, we've
                             # definitely opened up new possibilities and we
                             # should recurse.
-                            mix(expr.withBody(newSeq))
+                            mix(expr.withBody(newSeq), => safeFinalNames)
                         else:
                             expr
 
                     match _:
                         expr
+
+        match =="FinallyExpr":
+            # Nothing fancy yet; just recurse.
+            def body := mix(expr.getBody(), => safeFinalNames)
+            def unwinder := mix(expr.getUnwinder(), => safeFinalNames)
+            a.FinallyExpr(body, unwinder, expr.getSpan())
 
         match =="IfExpr":
             def test := expr.getTest()
@@ -325,12 +339,15 @@ def mix(expr) as DeepFrozen:
             expr
 
         match =="Matcher":
-            def body := mix(expr.getBody())
+            def body := mix(expr.getBody(), => safeFinalNames)
             def pattern := weakenPattern(expr.getPattern(), [body])
             a.Matcher(pattern, body, expr.getSpan())
 
         match =="Method":
-            def body := mix(expr.getBody())
+            def safeNames := [for patt in (expr.getPatterns())
+                              if (patt =~ via (finalPatternToName) name) name]
+            # traceln(`method $expr safeNames $safeNames`)
+            def body := mix(expr.getBody(), "safeFinalNames" => safeNames)
             expr.withBody(body)
 
         match =="MethodCallExpr":
@@ -350,6 +367,7 @@ def mix(expr) as DeepFrozen:
             a.Script(expr.getExtends(), methods, matchers, expr.getSpan())
 
         match =="SeqExpr":
+            # traceln(`seqexpr $expr`)
             def exprs := expr.getExprs()
             # m`expr; noun; lastNoun` -> m`expr; lastNoun`
             # m`def x := 42; expr; x` -> m`expr; 42` ? x is replaced in expr
@@ -361,28 +379,40 @@ def mix(expr) as DeepFrozen:
                 for name => rhs in nameMap:
                     item transform= (specialize(name, rhs))
 
+                # Now, optimize. This probably won't be too expensive and lets
+                # us take advantage of the substitutions that have already
+                # been performed.
+                item := mix(item, => safeFinalNames)
+
                 if (item.getNodeName() == "DefExpr"):
+                    # traceln(`defexpr $item`)
                     def pattern := item.getPattern()
                     if (pattern.getNodeName() == "FinalPattern" &&
                         pattern.getGuard() == null):
                         def name := pattern.getNoun().getName()
                         def rhs := item.getExpr()
-                        # XXX could rewrite nouns as well, but only if the
-                        # noun is known to be final! Otherwise bugs happen.
-                        # For example, the lexer is known to be miscompiled.
-                        # So be careful.
                         if (rhs.getNodeName() == "LiteralExpr"):
                             nameMap with= (name, rhs)
                             # If we found a simple definition, do *not* add it
                             # to the list of new expressions to emit.
                             continue
+                        else if (rhs.getNodeName() == "NounExpr"):
+                            # traceln(`item $item rhs $rhs SFN $safeFinalNames`)
+                            # We need to know that this noun is final. If we
+                            # don't know that, then we shouldn't be replacing
+                            # it, since we could be stomping on a var noun; at
+                            # least monte_lexer requires us to do due
+                            # diligence here. ~ C.
+                            if (safeFinalNames.contains(rhs.getName())):
+                                nameMap with= (name, rhs)
+                                continue
                 else if (i < exprs.size() - 1):
                     if (item.getNodeName() == "NounExpr"):
                         # Bare noun; skip it.
                         continue
 
                 # Whatever survived to the end is clearly worthy.
-                newExprs with= (mix(item))
+                newExprs with= (mix(item, => safeFinalNames))
             # And rebuild.
             sequence(newExprs, expr.getSpan())
 
