@@ -15,6 +15,7 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
+# Can't use audited, even thought it's importable; calling it causes a circle.
 from typhon.objects.root import Object, runnable
 
 
@@ -30,6 +31,11 @@ class DeepFrozenStamp(Object):
     DeepFrozen's stamp.
     """
 
+    def auditorStamps(self):
+        # Have you ever felt that sense of mischief and wonder as much as when
+        # looking at this line? ~ C.
+        return [self]
+
     def recv(self, atom, args):
         from typhon.objects.data import StrObject
         if atom is AUDIT_1:
@@ -42,7 +48,6 @@ class DeepFrozenStamp(Object):
         raise Refused(self, atom, args)
 
 deepFrozenStamp = DeepFrozenStamp()
-deepFrozenStamp.stamps = [deepFrozenStamp]
 
 
 @runnable(RUN_2, [deepFrozenStamp])
@@ -65,7 +70,8 @@ class TransparentStamp(Object):
     Transparent's stamp.
     """
 
-    stamps = [deepFrozenStamp]
+    def auditorStamps(self):
+        return [deepFrozenStamp]
 
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool
@@ -82,7 +88,8 @@ class TransparentGuard(Object):
     Transparent's guard.
     """
 
-    stamps = [deepFrozenStamp]
+    def auditorStamps(self):
+        return [deepFrozenStamp]
 
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool, NullObject
@@ -107,7 +114,8 @@ class Selfless(Object):
     protocol for comparison (such as Transparent).
     """
 
-    stamps = [deepFrozenStamp]
+    def auditorStamps(self):
+        return [deepFrozenStamp]
 
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool

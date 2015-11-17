@@ -25,7 +25,7 @@ from rpython.rlib.rbigint import BASE10
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import LoadFailed, Refused, userError
-from typhon.objects.auditors import deepFrozenStamp, selfless, transparentStamp
+from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.collections import (ConstList, ConstSet, EMPTY_MAP,
                                         monteDict, unwrapList)
@@ -33,7 +33,7 @@ from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, promoteToBigInt, unwrapStr)
 from typhon.objects.ejectors import throw
 from typhon.objects.meta import MetaContext
-from typhon.objects.root import Object
+from typhon.objects.root import Object, audited
 from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.pretty import Buffer, LineWriter
 from typhon.quoting import quoteChar, quoteStr
@@ -282,8 +282,8 @@ class InvalidAST(LoadFailed):
 
 
 @autohelp
+@audited.DF
 class KernelAstStamp(Object):
-    stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is AUDIT_1:
@@ -312,8 +312,8 @@ def withMaker(cls):
     arglist = u", ".join([u"args[%s]" % i for i in range(len(names))])
     runverb = 'RUN_%s' % len(names)
     src = """\
+    @audited.DF
     class %sMaker(Object):
-        stamps = [deepFrozenStamp]
         def printOn(self, out):
             out.call(u"print", [StrObject(u"<kernel make%s>")])
         def recv(self, atom, args):
@@ -334,7 +334,8 @@ class Node(Object):
 
     _immutable_ = True
 
-    stamps = [selfless, transparentStamp, kernelAstStamp]
+    def auditorStamps(self):
+        return [selfless, transparentStamp, kernelAstStamp]
 
     def printOn(self, out):
         out.call(u"print", [StrObject(self.repr().decode("utf-8"))])
@@ -389,6 +390,7 @@ def printList(names):
 
 
 @autohelp
+@audited.DF
 class StaticScope(Object):
     """
     The sets of names which occur within this scope.
@@ -396,7 +398,7 @@ class StaticScope(Object):
 
     _immutable_ = True
     _immutable_fields_ = "read[*]", "set[*]", "defs[*]", "vars[*]", "meta"
-    stamps = [deepFrozenStamp]
+
     def __init__(self, read, set, defs, vars, meta):
         self.read = read
         self.set = set
@@ -469,8 +471,9 @@ class Expr(Node):
     _immutable_ = True
 
 @autohelp
+@audited.DF
 class LiteralMaker(Object):
-    stamps = [deepFrozenStamp]
+
     def printOn(self, out):
         out.call(u"print", [StrObject(u"<makeLiteral>")])
 

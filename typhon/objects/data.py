@@ -29,9 +29,9 @@ from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, WrongType, userError
-from typhon.objects.auditors import selfless, deepFrozenStamp, transparentStamp
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
-from typhon.objects.root import Object, runnable
+from typhon.objects.root import Object, audited, runnable
 from typhon.quoting import quoteChar, quoteStr
 
 
@@ -119,14 +119,13 @@ def polyCmp(l, r):
 
 
 @autohelp
+@audited.DFSelfless
 class CharObject(Object):
     """
     A Unicode code point.
     """
 
-    _immutable_fields_ = "stamps", "_c"
-
-    stamps = [selfless, deepFrozenStamp]
+    _immutable_ = True
 
     def __init__(self, c):
         # RPython needs to be reminded that, no matter what, we are always
@@ -199,14 +198,13 @@ def unwrapChar(o):
 
 
 @autohelp
+@audited.DFSelfless
 class DoubleObject(Object):
     """
     An IEEE 754 floating-point number with at least double precision.
     """
 
-    _immutable_fields_ = "stamps", "_d"
-
-    stamps = [selfless, deepFrozenStamp]
+    _immutable_ = True
 
     def __init__(self, d):
         self._d = d
@@ -319,16 +317,13 @@ def promoteToDouble(o):
 
 
 @autohelp
+@audited.DFSelfless
 class IntObject(Object):
     """
     A numeric value in ℤ.
     """
 
-    _immutable_fields_ = "stamps", "_i"
-
-    _i = 0
-
-    stamps = [selfless, deepFrozenStamp]
+    _immutable_ = True
 
     def __init__(self, i):
         self._i = i
@@ -569,14 +564,12 @@ def unwrapInt(o):
 
 
 @autohelp
+@audited.DFSelfless
 class BigInt(Object):
 
     __doc__ = IntObject.__doc__
 
     _immutable_ = True
-    _immutable_fields_ = "stamps", "bi"
-
-    stamps = [selfless, deepFrozenStamp]
 
     def __init__(self, bi):
         self.bi = bi
@@ -771,7 +764,9 @@ def _makeSourceSpan(args):
 
 makeSourceSpan = _makeSourceSpan()
 
+# XXX not DF?
 @autohelp
+@audited.Transparent
 class SourceSpan(Object):
     """
     Information about the original location of a span of text. Twines use
@@ -789,7 +784,7 @@ class SourceSpan(Object):
     span. Column numbers start at 0.
 
     """
-    stamps = [selfless, transparentStamp]
+
     def __init__(self, uri, isOneToOne, startLine, startCol,
                  endLine, endCol):
         self.uri = uri
@@ -931,14 +926,13 @@ class strIterator(Object):
 
 
 @autohelp
+@audited.DFSelfless
 class StrObject(Object):
     """
     A string of Unicode text.
     """
 
-    _immutable_fields_ = "stamps", "_s"
-
-    stamps = [selfless, deepFrozenStamp]
+    _immutable_ = True
 
     def __init__(self, s):
         self._s = s
@@ -1208,14 +1202,13 @@ def bytesToString(bs):
 
 
 @autohelp
+@audited.DFSelfless
 class BytesObject(Object):
     """
     A string of bytes.
     """
 
-    _immutable_fields_ = "stamps", "_bs"
-
-    stamps = [selfless, deepFrozenStamp]
+    _immutable_ = True
 
     def __init__(self, s):
         self._bs = s

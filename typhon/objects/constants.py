@@ -15,8 +15,7 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.root import Object
+from typhon.objects.root import Object, audited
 
 
 AND_1 = getAtom(u"and", 1)
@@ -29,14 +28,13 @@ XOR_1 = getAtom(u"xor", 1)
 
 
 @autohelp
+@audited.DF
 class _NullObject(Object):
     """
     The null object.
     """
 
     _immutable_ = True
-
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"null"
@@ -46,14 +44,13 @@ NullObject = _NullObject()
 
 
 @autohelp
+@audited.DF
 class BoolObject(Object):
     """
     A Boolean value.
     """
 
     _immutable_ = True
-
-    stamps = [deepFrozenStamp]
 
     def __init__(self, b):
         self._b = b

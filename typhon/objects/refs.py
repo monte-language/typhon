@@ -20,7 +20,7 @@ from typhon.errors import Refused, UserException, userError
 from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
-from typhon.objects.root import Object
+from typhon.objects.root import Object, audited
 from typhon.vats import currentVat
 
 
@@ -93,12 +93,11 @@ def isBroken(o):
 
 
 @autohelp
+@audited.DF
 class RefOps(Object):
     """
     Ref management and utilities.
     """
-
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<Ref>"

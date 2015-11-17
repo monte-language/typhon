@@ -1,7 +1,6 @@
 from typhon.atoms import getAtom
 from typhon.errors import userError
 from typhon.vats import currentVat
-from typhon.objects.auditors import selfless
 from typhon.objects.collections import EMPTY_MAP, ConstList
 from typhon.objects.data import NullObject, StrObject, unwrapBool
 from typhon.objects.equality import (EQUAL, TraversalKey, optSame,
@@ -9,6 +8,7 @@ from typhon.objects.equality import (EQUAL, TraversalKey, optSame,
 from typhon.objects.guards import anyGuard
 from typhon.objects.refs import (EVENTUAL, NEAR, Promise, UnconnectedRef,
                                  isResolved, resolution)
+from typhon.objects.root import audited
 from typhon.objects.slots import FinalSlot
 
 HANDLESEND_3 = getAtom(u"handleSend", 3)
@@ -133,12 +133,12 @@ class Proxy(Promise):
             return self._proxyToString()
 
 
+@audited.Selfless
 class DisconnectedRef(UnconnectedRef):
     """
     A DisconnectedRef is a broken ref that used to point to an object in a
     different vat but doesn't anymore.
     """
-    stamps = [selfless]
 
     def __init__(self, handler, resolutionIdentity, problem):
         UnconnectedRef.__init__(self, problem)
@@ -157,6 +157,7 @@ class DisconnectedRef(UnconnectedRef):
         return result
 
 
+@audited.Selfless
 class FarRef(Proxy):
     """
     A FarRef is a settled reference to an object in another vat. It may become
@@ -165,7 +166,6 @@ class FarRef(Proxy):
     Synchronous calls are rejected, and sends are delivered to the ref's
     handler object.
     """
-    stamps = [selfless]
 
     def __init__(self, handler, resolutionBox):
         Proxy.__init__(self, handler, resolutionBox)

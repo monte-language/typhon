@@ -12,19 +12,18 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import elidable, unroll_safe
 from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.auditors import deepFrozenStamp, selfless, transparentStamp
+from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.collections import ConstList, ConstMap, unwrapList
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
-from typhon.objects.refs import EVENTUAL, Promise, resolution, isResolved
-from typhon.objects.root import Object
+from typhon.objects.refs import resolution, isResolved
+from typhon.objects.root import Object, audited
 
 
 ISSETTLED_1 = getAtom(u"isSettled", 1)
@@ -210,12 +209,12 @@ def optSame(first, second, cache=None):
     # we need the specimens to cooperate with further investigation.
 
     # First, see if either object wants to stop with just identity comparison.
-    if selfless in first.stamps:
-        if selfless not in second.stamps:
+    if selfless in first.auditorStamps():
+        if selfless not in second.auditorStamps():
             return INEQUAL
         # Then see if both objects can be compared by contents.
-        if (transparentStamp in first.stamps and
-                transparentStamp in second.stamps):
+        if (transparentStamp in first.auditorStamps() and
+                transparentStamp in second.auditorStamps()):
 
             # This could recurse.
             if cache is None:
@@ -291,8 +290,8 @@ def samenessHash(obj, depth, path, fringe):
         return samenessHash(o.handler, depth, path, fringe)
 
     # Other objects compared by structure.
-    if selfless in o.stamps:
-        if transparentStamp in o.stamps:
+    if selfless in o.auditorStamps():
+        if transparentStamp in o.auditorStamps():
             return samenessHash(o.call(u"_uncall", []), depth, path, fringe)
         # XXX Semitransparent support goes here
 
@@ -351,8 +350,8 @@ def samenessFringe(original, path, fringe, sofar=None):
         sofar[o] = None
         return listFringe(o, fringe, path, sofar)
 
-    if selfless in o.stamps:
-        if transparentStamp in o.stamps:
+    if selfless in o.auditorStamps():
+        if transparentStamp in o.auditorStamps():
             return samenessFringe(o.call(u"_uncall", []), path, fringe, sofar)
         # XXX Semitransparent support goes here
 
@@ -417,8 +416,8 @@ def sameYetHash(obj, fringe):
 
 
 @autohelp
+@audited.DFSelfless
 class TraversalKey(Object):
-    stamps = [deepFrozenStamp, selfless]
 
     def __init__(self, ref):
         self.ref = resolution(ref)
@@ -433,6 +432,7 @@ class TraversalKey(Object):
 
 
 @autohelp
+@audited.DF
 class Equalizer(Object):
     """
     A perceiver of identity.
@@ -440,8 +440,6 @@ class Equalizer(Object):
     This object can discern whether any two objects are distinct from each
     other.
     """
-
-    stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is ISSETTLED_1:

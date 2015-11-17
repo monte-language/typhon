@@ -18,7 +18,7 @@ from rpython.rlib.rstruct.ieee import unpack_float
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.env import finalize
-from typhon.errors import Refused, UserException, WrongType, userError
+from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
 from typhon.objects.collections import (EMPTY_MAP, ConstList, ConstMap,
                                         listFromIterable, unwrapList)
@@ -33,7 +33,7 @@ from typhon.objects.guards import (anyGuard, BindingGuard,
                                    FinalSlotGuardMaker, VarSlotGuardMaker)
 from typhon.objects.printers import toString
 from typhon.objects.refs import Promise, RefOps, resolution
-from typhon.objects.root import Object, runnable
+from typhon.objects.root import Object, audited, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 from typhon.vats import currentVat
 
@@ -66,8 +66,8 @@ TOQUOTE_1 = getAtom(u"toQuote", 1)
 TOSTRING_1 = getAtom(u"toString", 1)
 
 
+@audited.DF
 class TraceLn(Object):
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<traceln>"
@@ -80,8 +80,8 @@ class TraceLn(Object):
         raise Refused(self, atom, args)
 
 
+@audited.DF
 class MakeList(Object):
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<makeList>"
@@ -110,8 +110,8 @@ theMakeMap = makeMap()
 
 
 @autohelp
+@audited.DF
 class MakeDouble(Object):
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<makeDouble>"
@@ -130,8 +130,8 @@ class MakeDouble(Object):
 
 
 @autohelp
+@audited.DF
 class MakeInt(Object):
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<makeInt>"
@@ -160,8 +160,8 @@ class MakeInt(Object):
 
 
 @autohelp
+@audited.DF
 class MakeString(Object):
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<makeString>"
@@ -183,8 +183,8 @@ class MakeString(Object):
 
 
 @autohelp
+@audited.DF
 class MakeBytes(Object):
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"<makeBytes>"
@@ -202,8 +202,8 @@ class MakeBytes(Object):
 
 
 @autohelp
+@audited.DF
 class SlotBinder(Object):
-    stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is RUN_1:
@@ -219,8 +219,12 @@ theSlotBinder = SlotBinder()
 class SpecializedSlotBinder(Object):
     def __init__(self, guard):
         self.guard = guard
-        if guard.auditedBy(deepFrozenStamp):
-            self.stamps = [deepFrozenStamp]
+
+    def auditorStamps(self):
+        if self.guard.auditedBy(deepFrozenStamp):
+            return [deepFrozenStamp]
+        else:
+            return []
 
     def recv(self, atom, args):
         if atom is RUN_2:
@@ -229,13 +233,11 @@ class SpecializedSlotBinder(Object):
 
 
 @autohelp
+@audited.DF
 class MObject(Object):
     """
     Miscellaneous vat management and quoting services.
     """
-    fqn = displayName = u"M"
-
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"M"
@@ -362,8 +364,8 @@ theVarSlotGuardMaker = VarSlotGuardMaker()
 
 
 @autohelp
+@audited.DF
 class FinalSlotMaker(Object):
-    stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is RUN_3:
@@ -383,8 +385,8 @@ theFinalSlotMaker = FinalSlotMaker()
 
 
 @autohelp
+@audited.DF
 class VarSlotMaker(Object):
-    stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is RUN_3:

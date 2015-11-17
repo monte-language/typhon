@@ -15,10 +15,9 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException
-from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
-from typhon.objects.root import Object
+from typhon.objects.root import Object, audited
 
 DISABLE_0 = getAtom(u"disable", 0)
 EJECT_2 = getAtom(u"eject", 2)
@@ -85,9 +84,8 @@ def throw(ej, payload):
     raise UserException(StrObject(u"Ejector did not exit"))
 
 @autohelp
+@audited.DF
 class Throw(Object):
-
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"throw"

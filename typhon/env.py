@@ -66,7 +66,7 @@ def finalize(scope):
     rv = {}
     for key in scope:
         o = scope[key]
-        if deepFrozenStamp in o.stamps and DFb is not None:
+        if deepFrozenStamp in o.auditorStamps() and DFb is not None:
             g = DFb.getValue()
         else:
             g = anyGuard

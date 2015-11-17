@@ -152,7 +152,7 @@ class ScriptObject(Object):
     An object whose behavior depends on a Monte script.
     """
 
-    _immutable_fields_ = "codeScript", "globals[*]"
+    _immutable_fields_ = "codeScript", "globals[*]", "stamps[*]"
 
     def toString(self):
         # Easily the worst part of the entire stringifying experience. We must
@@ -173,6 +173,9 @@ class ScriptObject(Object):
         from typhon.objects.data import StrObject
         printer.call(u"print",
                      [StrObject(u"<%s>" % self.codeScript.displayName)])
+
+    def auditorStamps(self):
+        return self.stamps
 
     def docString(self):
         return self.codeScript.doc
@@ -219,8 +222,6 @@ class QuietObject(ScriptObject):
     An object without a closure.
     """
 
-    stamps = []
-
     def __init__(self, codeScript, globals, auditors):
         self.codeScript = codeScript
         self.globals = globals
@@ -228,11 +229,14 @@ class QuietObject(ScriptObject):
         # The first auditor is our as-auditor, and it can be null.
         if auditors[0] is NullObject:
             auditors = auditors[1:]
+        self.auditors = auditors
 
         # Grab the guards of our globals and send them off for processing.
         if auditors:
             guards = self.getGuards()
             self.stamps = self.codeScript.audit(auditors, guards)[:]
+        else:
+            self.stamps = []
 
     def getGuards(self):
         guards = {}
@@ -266,8 +270,6 @@ class BusyObject(ScriptObject):
     An object with a closure.
     """
 
-    stamps = []
-
     _immutable_fields_ = "closure[*]",
 
     def __init__(self, codeScript, globals, closure, auditors):
@@ -282,11 +284,14 @@ class BusyObject(ScriptObject):
             auditors = auditors[1:]
         else:
             self.patchSelf(auditors[0])
+        self.auditors = auditors
 
         # Grab the guards of our closure and send them off for processing.
         if auditors:
             guards = self.getGuards()
             self.stamps = self.codeScript.audit(auditors, guards)[:]
+        else:
+            self.stamps = []
 
     def getGuards(self):
         guards = {}

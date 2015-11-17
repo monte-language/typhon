@@ -19,7 +19,7 @@ from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.collections import ConstList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
-from typhon.objects.root import Object
+from typhon.objects.root import Object, audited
 
 _UNCALL_0 = getAtom(u"_uncall", 0)
 GET_0 = getAtom(u"get", 0)
@@ -28,13 +28,13 @@ PUT_1 = getAtom(u"put", 1)
 
 
 @autohelp
+@audited.Transparent
 class Binding(Object):
     """
     A slot and a guard describing the nature of the slot.
     """
 
     _immutable_ = True
-    stamps = [selfless, transparentStamp]
 
     def __init__(self, slot, guard):
         self.slot = slot
@@ -103,10 +103,10 @@ class Slot(Object):
         raise Refused(self, atom, args)
 
 
+@audited.Transparent
 class FinalSlot(Slot):
 
     _immutable_fields_ = "_obj", "_guard"
-    stamps = [selfless, transparentStamp]
 
     def __init__(self, obj, guard):
         self._obj = obj

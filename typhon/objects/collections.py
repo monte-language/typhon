@@ -26,7 +26,7 @@ from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.printers import toString
-from typhon.objects.root import Object
+from typhon.objects.root import Object, audited
 from typhon.prelude import getGlobal
 from typhon.rstrategies import rstrategies
 from typhon.strategies import strategyFactory
@@ -207,6 +207,7 @@ class Collection(object):
 
 
 @autohelp
+@audited.Transparent
 class ConstList(Object):
     """
     A list of objects.
@@ -219,8 +220,6 @@ class ConstList(Object):
     rstrategies.make_accessors(strategy="strategy", storage="storage")
 
     strategy = None
-
-    stamps = [selfless, transparentStamp]
 
     def __init__(self, objects):
         strategy = strategyFactory.strategy_type_for(objects)
@@ -654,6 +653,7 @@ def monteDict():
 
 
 @autohelp
+@audited.Transparent
 class ConstMap(Object):
     """
     A map of objects.
@@ -662,7 +662,6 @@ class ConstMap(Object):
     import_from_mixin(Collection)
 
     _immutable_fields_ = "objectMap",
-    stamps = [selfless, transparentStamp]
 
     def __init__(self, objectMap):
         self.objectMap = objectMap
@@ -825,6 +824,7 @@ EMPTY_MAP = ConstMap(monteDict())
 
 
 @autohelp
+@audited.Transparent
 class ConstSet(Object):
     """
     A set of objects.
@@ -833,7 +833,6 @@ class ConstSet(Object):
     import_from_mixin(Collection)
 
     _immutable_fields_ = "objectMap",
-    stamps = [selfless, transparentStamp]
 
     def __init__(self, objectMap):
         self.objectMap = objectMap

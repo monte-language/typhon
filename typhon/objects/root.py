@@ -56,15 +56,9 @@ def addTrail(ue, target, atom, args):
 
 
 class Object(object):
-
-    # The attributes that all Objects have in common.
-    _attrs_ = "stamps",
-
-    # The attributes that are not mutable.
-    _immutable_fields_ = "stamps[*]",
-
-    # The auditor stamps on objects.
-    stamps = []
+    """
+    A Monte object.
+    """
 
     def __repr__(self):
         return self.toQuote().encode("utf-8")
@@ -191,6 +185,11 @@ class Object(object):
     def recv(self, atom, args):
         raise Refused(self, atom, args)
 
+    # Auditors.
+
+    def auditorStamps(self):
+        return []
+
     @unroll_safe
     def auditedBy(self, prospect):
         """
@@ -205,7 +204,7 @@ class Object(object):
         from typhon.objects.equality import optSame, EQUAL
 
         # Already audited with an identical stamp?
-        for stamp in self.stamps:
+        for stamp in self.auditorStamps():
             if prospect is stamp:
                 return True
 
@@ -245,10 +244,12 @@ def runnable(singleAtom, _stamps=[]):
         doc = f.__doc__.decode("utf-8") if f.__doc__ else None
 
         class runnableObject(Object):
-            stamps = _stamps
 
             def toString(self):
                 return name
+
+            def auditorStamps(self):
+                return _stamps
 
             def docString(self):
                 return doc
@@ -264,3 +265,53 @@ def runnable(singleAtom, _stamps=[]):
         return runnableObject
 
     return inner
+
+
+class audited(object):
+    """
+    Helper for annotating objects with prebuilt auditor stamps.
+
+    This annotation is equivalent to the committer saying "Yes, I read through
+    the source code of this object, and it's fine, really."
+    """
+
+    @staticmethod
+    def DF(cls):
+        def auditorStamps(self):
+            from typhon.objects.auditors import deepFrozenStamp
+            return [deepFrozenStamp]
+        cls.auditorStamps = auditorStamps
+        return cls
+
+    @staticmethod
+    def DFSelfless(cls):
+        def auditorStamps(self):
+            from typhon.objects.auditors import deepFrozenStamp, selfless
+            return [deepFrozenStamp, selfless]
+        cls.auditorStamps = auditorStamps
+        return cls
+
+    @staticmethod
+    def DFTransparent(cls):
+        def auditorStamps(self):
+            from typhon.objects.auditors import (deepFrozenStamp, selfless,
+                                                 transparentStamp)
+            return [deepFrozenStamp, selfless, transparentStamp]
+        cls.auditorStamps = auditorStamps
+        return cls
+
+    @staticmethod
+    def Selfless(cls):
+        def auditorStamps(self):
+            from typhon.objects.auditors import selfless
+            return [selfless]
+        cls.auditorStamps = auditorStamps
+        return cls
+
+    @staticmethod
+    def Transparent(cls):
+        def auditorStamps(self):
+            from typhon.objects.auditors import selfless, transparentStamp
+            return [selfless, transparentStamp]
+        cls.auditorStamps = auditorStamps
+        return cls

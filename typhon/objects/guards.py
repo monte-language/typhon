@@ -10,7 +10,7 @@ from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
 from typhon.errors import Ejecting
 from typhon.objects.refs import resolution
-from typhon.objects.root import Object
+from typhon.objects.root import Object, audited
 from typhon.objects.slots import FinalSlot, VarSlot
 
 COERCE_2 = getAtom(u"coerce", 2)
@@ -53,6 +53,7 @@ class Guard(Object):
 
 
 @autohelp
+@audited.DF
 class AnyGuard(Object):
     """
     A guard which admits the universal set.
@@ -60,8 +61,6 @@ class AnyGuard(Object):
     This object specializes to a guard which admits the union of its
     subguards: Any[X, Y, Z] =~ X ∪ Y ∪ Z
     """
-
-    stamps = [deepFrozenStamp]
 
     def toString(self):
         return u"Any"
@@ -92,14 +91,14 @@ class AnyGuard(Object):
 anyGuard = AnyGuard()
 
 
+# XXX EventuallyDeepFrozen?
 @autohelp
+@audited.Transparent
 class AnyOfGuard(Object):
     """
     A guard which admits a union of its subguards.
     """
     _immutable_fields_ = 'subguards[*]',
-    # XXX EventuallyDeepFrozen?
-    stamps = [selfless, transparentStamp]
 
     def __init__(self, subguards):
         self.subguards = subguards
@@ -138,8 +137,12 @@ class FinalSlotGuard(Guard):
 
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
+
+    def auditorStamps(self):
         if self.valueGuard.auditedBy(deepFrozenStamp):
-            self.stamps = [deepFrozenStamp]
+            return [deepFrozenStamp]
+        else:
+            return []
 
     def subCoerce(self, specimen):
         if (isinstance(specimen, FinalSlot) and
@@ -170,8 +173,12 @@ class VarSlotGuard(Guard):
 
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
+
+    def auditorStamps(self):
         if self.valueGuard.auditedBy(deepFrozenStamp):
-            self.stamps = [deepFrozenStamp]
+            return [deepFrozenStamp]
+        else:
+            return []
 
     def subCoerce(self, specimen):
         if (isinstance(specimen, VarSlot) and
@@ -180,12 +187,11 @@ class VarSlotGuard(Guard):
             return specimen
 
 
+@audited.DF
 class FinalSlotGuardMaker(Guard):
     """
     A guard which emits makers of FinalSlots.
     """
-
-    stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is EXTRACTGUARD_2:
@@ -213,12 +219,11 @@ class FinalSlotGuardMaker(Guard):
             return specimen
 
 
+@audited.DF
 class VarSlotGuardMaker(Guard):
     """
     A guard which admits makers of VarSlots.
     """
-
-    stamps = [deepFrozenStamp]
 
     def recv(self, atom, args):
         if atom is EXTRACTGUARD_2:
@@ -246,12 +251,11 @@ class VarSlotGuardMaker(Guard):
             return specimen
 
 
+@audited.DF
 class BindingGuard(Guard):
     """
     A guard which admits bindings.
     """
-
-    stamps = [deepFrozenStamp]
 
     def subCoerce(self, specimen):
         from typhon.objects.slots import Binding

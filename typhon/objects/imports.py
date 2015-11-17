@@ -18,12 +18,11 @@ from rpython.rlib.jit import dont_look_inside
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections import ConstMap, monteDict, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.guards import anyGuard
-from typhon.objects.root import Object
+from typhon.objects.root import Object, audited
 from typhon.objects.slots import finalBinding
 from typhon.objects.tests import UnitTest
 from typhon.prelude import getGlobal
@@ -37,14 +36,13 @@ SCRIPT_2 = getAtom(u"script", 2)
 
 
 @autohelp
+@audited.DF
 class Import(Object):
     """
     An importer of foreign objects from faraway modules.
 
     The imported module automatically is granted a safe scope.
     """
-
-    stamps = [deepFrozenStamp]
 
     def __init__(self, path, scope, recorder, testCollector):
         self.path = path

@@ -21,13 +21,12 @@ from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
                                         monteDict, unwrapMap)
-from typhon.objects.constants import BoolObject, NullObject
+from typhon.objects.constants import BoolObject
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject,
                                  unwrapBytes, unwrapStr, wrapBool)
-from typhon.objects.root import Object, runnable
+from typhon.objects.root import Object, audited, runnable
 from typhon.objects.tests import UnitTest
-from typhon.prelude import registerGlobals
 
 EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
 RUN_1 = getAtom(u"run", 1)
@@ -108,9 +107,8 @@ def evalToPair(source, envMap, recorder):
 
 
 @autohelp
+@audited.DF
 class TyphonEval(Object):
-
-    stamps = [deepFrozenStamp]
 
     def __init__(self, recorder):
         self.recorder = recorder
