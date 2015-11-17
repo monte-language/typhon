@@ -61,7 +61,7 @@ def renameCycles(node, renamings, builder) as DeepFrozen:
     def renamer(node, maker, args, span):
         return switch (node.getNodeName()) {
             match =="NounExpr" {
-                renamings.fetch(node.withoutSpan(), fn {node})
+                renamings.fetch(node.getName(), fn {node})
             }
             match _ {
                 M.call(maker, "run", args + [span], [].asMap())
@@ -138,6 +138,12 @@ def modPow(ast, maker, args, span) as DeepFrozen:
 
 
 def expand(node, builder, fail) as DeepFrozen:
+
+    def nounFromScopeName(n, span):
+        if (n =~ _ :Str):
+            return builder.NounExpr(n, span)
+        return n
+
     def emitList(items, span):
         return builder.MethodCallExpr(
             builder.NounExpr("__makeList", span),
@@ -178,8 +184,9 @@ def expand(node, builder, fail) as DeepFrozen:
         var bindingpatts := []
         var bindingexprs := []
         for nn in pattScope.outNames():
-            bindingpatts with= (builder.BindingPattern(nn, span))
-            bindingexprs with= (builder.BindingExpr(nn, span))
+            def noun := builder.NounExpr(nn, span)
+            bindingpatts with= (builder.BindingPattern(noun, span))
+            bindingexprs with= (builder.BindingExpr(noun, span))
 
         return builder.SeqExpr([
             builder.DefExpr(builder.FinalPattern(sp, null, span), null, spec, span),
@@ -212,8 +219,8 @@ def expand(node, builder, fail) as DeepFrozen:
         var bindingpatts := []
         var bindingexprs := []
         for n in leftNames | rightNames:
-            bindingpatts with= (builder.BindingPattern(n, span))
-            bindingexprs with= (builder.BindingExpr(n, span))
+            bindingpatts with= (builder.BindingPattern(nounFromScopeName(n, span), span))
+            bindingexprs with= (builder.BindingExpr(nounFromScopeName(n, span), span))
 
         def result := builder.TempNounExpr("ok", span)
         def success := emitList([builder.NounExpr("true", span)] +
@@ -606,7 +613,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 var failedDefs := []
                 for n in failed:
                     failedDefs with= (builder.DefExpr(
-                        builder.BindingPattern(n, span), null, broken, span))
+                        builder.BindingPattern(builder.NounExpr(n, span), span), null, broken, span))
                 return builder.SeqExpr(failedDefs + [s], span)
             return expandLogical(
                 leftmap, rightmap,
@@ -648,16 +655,17 @@ def expand(node, builder, fail) as DeepFrozen:
                 def resolvers := [].diverge()
                 def renamings := [].asMap().diverge()
                 for oldname in conflicts:
-                    def newname := builder.TempNounExpr(oldname.getName(), span)
-                    def newnameR := builder.TempNounExpr(oldname.getName() + "R", span)
-                    renamings[oldname.withoutSpan()] := newname
+                    # Not calling nounFromScope because temp names won't conflict
+                    def newname := builder.TempNounExpr(oldname, span)
+                    def newnameR := builder.TempNounExpr(oldname + "R", span)
+                    renamings[oldname] := newname
                     def pair := [builder.FinalPattern(newname, null, span),
                                  builder.FinalPattern(newnameR, null, span)]
                     promises.push(builder.DefExpr(builder.ListPattern(pair, null, span),
                         null, builder.MethodCallExpr(builder.NounExpr("Ref", span), "promise",
                             [], [], span), span))
                     resolvers.push(builder.MethodCallExpr(newnameR, "resolve",
-                         [oldname], [], span))
+                         [builder.NounExpr(oldname, span)], [], span))
                 def resName := builder.TempNounExpr("value", span)
                 resolvers.push(resName)
                 def renamedEj := if (ej == null) {null} else {renameCycles(ej, renamings, builder)}

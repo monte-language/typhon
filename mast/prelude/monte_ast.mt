@@ -32,12 +32,12 @@ def priorities :Map[Str, Int] := [
 
      "pattern" => 0]
 
-def makeStaticScope(read, set, defs, vars, metaStateExpr :Bool) as DeepFrozen:
+def makeStaticScope(read, set, defs, vars, metaStateExpr :Bool) as DeepFrozenStamp:
     def namesRead :Set[DeepFrozen] := read.asSet()
     def namesSet :Set[DeepFrozen] := set.asSet()
     def defNames :Set[DeepFrozen] := defs.asSet()
     def varNames :Set[DeepFrozen] := vars.asSet()
-    return object staticScope as DeepFrozen:
+    return object staticScope as DeepFrozenStamp:
         to getNamesRead():
             return namesRead
 
@@ -285,7 +285,7 @@ def makeNounExpr(name :Str, span) as DeepFrozen:
     def scope
     def node := astWrapper(nounExpr, makeNounExpr, [name], span,
          &scope, "NounExpr", fn f {[name]})
-    bind scope := makeStaticScope([node.withoutSpan()], [], [], [], false)
+    bind scope := makeStaticScope([node.getName()], [], [], [], false)
     return node
 
 # Doesn't use astWrapper because it is compared by identity, not Transparent.
@@ -304,6 +304,9 @@ def makeTempNounExpr(namePrefix :Str, span) as DeepFrozen:
             return tempNounExpr
         to transform(f):
             return f(tempNounExpr, makeTempNounExpr, [namePrefix], span)
+        to getName():
+            # this object IS a name, at least for comparison/expansion purposes
+            return tempNounExpr
         to getNamePrefix():
             return namePrefix
         to _printOn(out):
@@ -853,7 +856,7 @@ def makeForwardExpr(patt :Ast["FinalPattern"], span) as DeepFrozen:
 
 def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
     def &scope := makeLazySlot(fn {makeStaticScope([], [], [],
-                                                   [noun.withoutSpan()],
+                                                   [noun.getName()],
                                                    false) +
                                    scopeMaybe(guard)})
     object varPattern:
@@ -875,7 +878,7 @@ def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
 
 def makeBindPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
     def &scope := makeLazySlot(fn {makeStaticScope([], [],
-                                                   [noun.withoutSpan()], [],
+                                                   [noun.getName()], [],
                                                    false) +
                                    scopeMaybe(guard)})
     object bindPattern:
@@ -924,7 +927,7 @@ def makeDefExpr(pattern :Pattern, exit_ :NullOk[Expr], expr :Expr, span) as Deep
 def makeAssignExpr(lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
     def lname := lvalue.getNodeName()
     def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
-        makeStaticScope([], [lvalue.withoutSpan()], [], [], false)
+        makeStaticScope([], [lvalue.getName()], [], [], false)
     } else {
         lvalue.getStaticScope()
     }
@@ -948,7 +951,7 @@ def makeAssignExpr(lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
 def makeVerbAssignExpr(verb :Str, lvalue :Expr, rvalues :List[Expr], span) as DeepFrozen:
     def lname := lvalue.getNodeName()
     def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
-        makeStaticScope([], [lvalue.withoutSpan()], [], [], false)
+        makeStaticScope([], [lvalue.getName()], [], [], false)
     } else {
         lvalue.getStaticScope()
     }
@@ -978,7 +981,7 @@ def makeVerbAssignExpr(verb :Str, lvalue :Expr, rvalues :List[Expr], span) as De
 def makeAugAssignExpr(op :Str, lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
     def lname := lvalue.getNodeName()
     def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
-        makeStaticScope([], [lvalue.withoutSpan()], [], [], false)
+        makeStaticScope([], [lvalue.getName()], [], [], false)
     } else {
         lvalue.getStaticScope()
     }
@@ -1845,7 +1848,7 @@ def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozen:
     if (noun.getNodeName() == "NounExpr" &&
         gs.namesUsed().contains(noun.getName())):
         throw("Kernel guard cycle not allowed")
-    def scope := makeStaticScope([], [], [noun.withoutSpan()], [], false) + gs
+    def scope := makeStaticScope([], [], [noun.getName()], [], false) + gs
     object finalPattern:
         to getNoun():
             return noun
@@ -1867,7 +1870,7 @@ def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozen:
     if (noun.getNodeName() == "NounExpr" &&
         gs.namesUsed().contains(noun.getName())):
         throw("Kernel guard cycle not allowed")
-    def scope := makeStaticScope([], [], [], [noun.withoutSpan()], false) + gs
+    def scope := makeStaticScope([], [], [], [noun.getName()], false) + gs
     object slotPattern:
         to getNoun():
             return noun
@@ -1881,7 +1884,7 @@ def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozen:
         &scope, "SlotPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeBindingPattern(noun :Noun, span) as DeepFrozen:
-    def scope := makeStaticScope([], [], [], [noun.withoutSpan()], false)
+    def scope := makeStaticScope([], [], [], [noun.getName()], false)
     object bindingPattern:
         to getNoun():
             return noun
@@ -2138,7 +2141,7 @@ def QuasiPiece :DeepFrozen := Ast["QuasiText", "QuasiExprHole",
 def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozen:
     def &scope := makeLazySlot(fn {
         if (name == null) {emptyScope} else {
-            makeStaticScope([makeNounExpr(name + "__quasiParser", null)], [],
+            makeStaticScope([name + "__quasiParser"], [],
                             [], [], false)
         } + sumScopes(quasis)
     })
@@ -2155,7 +2158,7 @@ def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as De
 def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozen:
     def &scope := makeLazySlot(fn {
         if (name == null) {emptyScope} else {
-            makeStaticScope([makeNounExpr(name + "__quasiParser", null)], [],
+            makeStaticScope([name + "__quasiParser"], [],
                             [], [], false)
         } + sumScopes(quasis)
     })

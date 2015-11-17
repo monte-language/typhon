@@ -135,13 +135,11 @@ bind auditDeepFrozen(audition, fail) as DeepFrozenStamp:
     def objectExpr := audition.getObjectExpr()
     def patternSS := objectExpr.getName().getStaticScope()
     def objNouns := patternSS.getDefNames().asList()
-    def objName := if (objNouns.size() > 0 && objNouns[0] != null) { objNouns[0].getName()} else {null}
-    def closureNames := [].diverge()
-    for noun in objectExpr.getScript().getStaticScope().namesUsed():
-        if (noun.getName() != objName):
-            closureNames.push(noun.getName())
+    def objName := if (objNouns.size() > 0 && objNouns[0] != null) {objNouns[0]} else {null}
     def errors := [].diverge()
-    for name in closureNames:
+    for name in objectExpr.getScript().getStaticScope().namesUsed():
+        if (name == objName):
+            continue
         if (patternSS.getVarNames().contains(name)):
             errors.push(M.toQuote(name) + " in the definition of " +
                         audition.getFQN() + " is a variable pattern " +

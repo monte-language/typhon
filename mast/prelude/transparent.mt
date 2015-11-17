@@ -40,11 +40,11 @@ object Transparent as DeepFrozenStamp:
                 def objectExpr := audition.getObjectExpr()
                 def patternSS := objectExpr.getName().getStaticScope()
                 def objNouns := patternSS.getDefNames().asList()
-                def objName := if (objNouns.size() > 0 && objNouns[0] != null) { objNouns[0].getName()} else {null}
+                def objName := if (objNouns.size() > 0 && objNouns[0] != null) {objNouns[0]} else {null}
                 def closureNames := [].diverge()
-                for noun in objectExpr.getScript().getStaticScope().namesUsed():
-                    if (noun.getName() != objName):
-                        closureNames.push(noun.getName())
+                for name in objectExpr.getScript().getStaticScope().namesUsed():
+                    if (name != objName):
+                        closureNames.push(name)
                 var valueAuditorNoun := null
                 var serializerNoun := null
                 for n in closureNames:
@@ -101,7 +101,7 @@ object Transparent as DeepFrozenStamp:
                             ebody.getExprs()} else {[ebody]}
                     var returnFound := false
                     for ex in exprs:
-                        if ([for x in (ex.getStaticScope().getNamesRead()) x.getName()].contains("__return")):
+                        if (ex.getStaticScope().getNamesRead().contains("__return")):
                             if (ex.getNodeName() == "MethodCallExpr" && ex.getReceiver() =~ m`__return`):
                                 returnFound := true
                                 targetExpr := ex

@@ -47,10 +47,7 @@ def weakenPattern(var pattern, nodes) as DeepFrozen:
     if (pattern.getNodeName() == "VarPattern"):
         def name :Str := pattern.getNoun().getName()
         for node in nodes:
-            def names :Set[Str] := [for noun
-                                    in (node.getStaticScope().getNamesSet())
-                                    noun.getName()].asSet()
-            if (names.contains(name)):
+            if (node.getStaticScope().getNamesSet().contains(name)):
                 return pattern
         # traceln(`Weakening var $name`)
         pattern := a.FinalPattern(pattern.getNoun(), pattern.getGuard(),
@@ -59,10 +56,7 @@ def weakenPattern(var pattern, nodes) as DeepFrozen:
     if (pattern.getNodeName() == "FinalPattern"):
         def name :Str := pattern.getNoun().getName()
         for node in nodes:
-            def names :Set[Str] := [for noun
-                                    in (node.getStaticScope().namesUsed())
-                                    noun.getName()].asSet()
-            if (names.contains(name)):
+            if (node.getStaticScope().namesUsed().contains(name)):
                 return pattern
         # traceln(`Weakening def $name`)
         pattern := a.IgnorePattern(pattern.getGuard(), pattern.getSpan())
@@ -81,16 +75,14 @@ def specialize(name, value) as DeepFrozen:
             match =="SeqExpr":
                 # XXX summons zalgo :c
                 def scope := ast.getStaticScope()
-                def outnames := [for n in (scope.outNames()) n.getName()]
-                if (outnames.contains(name)):
+                if (scope.outNames().contains(name)):
                     # We're going to delve into the sequence and try to only do
                     # replacements on the elements which don't have the name
                     # defined.
                     var newExprs := []
                     var change := true
                     for i => expr in ast.getExprs():
-                        def exOutNames := [for n in (expr.getStaticScope().outNames()) n.getName()]
-                        if (exOutNames.contains(name)):
+                        if (expr.getStaticScope().outNames().contains(name)):
                             change := false
                         newExprs with= (if (change) {args[0][i]} else {expr})
                     return maker(newExprs, span)
@@ -99,8 +91,7 @@ def specialize(name, value) as DeepFrozen:
                 # If it doesn't use the name, then there's no reason to visit
                 # it and we can just continue on our way.
                 def scope := ast.getStaticScope()
-                def namesused := [for n in (scope.namesUsed()) n.getName()]
-                if (!namesused.contains(name)):
+                if (!scope.namesUsed().contains(name)):
                     return ast
 
         return M.call(maker, "run", args + [span], [].asMap())
@@ -108,10 +99,7 @@ def specialize(name, value) as DeepFrozen:
     return specializeNameToValue
 
 def nodeUsesName(node, name :Str) as DeepFrozen:
-    for noun in (node.getStaticScope().namesUsed()):
-        if (name == noun.getName() :Str):
-            return true
-    return false
+    return node.getStaticScope().namesUsed().contains(name)
 
 def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
     "Partially evaluate a thawed Monte expression.
