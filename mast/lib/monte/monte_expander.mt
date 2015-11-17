@@ -184,7 +184,7 @@ def expand(node, builder, fail) as DeepFrozen:
         var bindingpatts := []
         var bindingexprs := []
         for nn in pattScope.outNames():
-            def noun := builder.NounExpr(nn, span)
+            def noun := nounFromScopeName(nn, span)
             bindingpatts with= (builder.BindingPattern(noun, span))
             bindingexprs with= (builder.BindingExpr(noun, span))
 
@@ -613,7 +613,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 var failedDefs := []
                 for n in failed:
                     failedDefs with= (builder.DefExpr(
-                        builder.BindingPattern(builder.NounExpr(n, span), span), null, broken, span))
+                        builder.BindingPattern(nounFromScopeName(n, span), span), null, broken, span))
                 return builder.SeqExpr(failedDefs + [s], span)
             return expandLogical(
                 leftmap, rightmap,
