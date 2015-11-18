@@ -1,10 +1,11 @@
 {stdenv, fetchFromBitbucket, lib, libsodium, libuv, libffi, pkgconfig, pypy, pypyPackages, buildJIT}:
 
+# $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let pypySrc = fetchFromBitbucket {
     owner = "pypy";
     repo = "pypy";
-    rev = "5345333d8dcd";
-    sha256 = "0qsxjql2x7qkmg20mzjp2b02fds5vai1jr5asbwvg5yp3qqnmdwk";
+    rev = "5f8302b8bf9f";
+    sha256 = "19ql1brvn0vmhcx9rax6csikmf3irmb1b7bi1qprdydx5ylp28rp";
   };
   optLevel = if buildJIT then "-Ojit" else "-O2";
 in
