@@ -3,7 +3,7 @@ from rpython.rlib.jit import Counters, JitHookInterface
 
 class DebugPrinter(object):
 
-    _immutable_fields_ = "enabled?"
+    # _immutable_fields_ = "enabled?",
 
     enabled = False
 

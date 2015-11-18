@@ -63,7 +63,7 @@ class PeepholeOptimizer(object):
     An abstract interpreter that applies peephole optimizations to bytecode.
     """
 
-    _immutable_fields_ = "code"
+    _immutable_fields_ = "code",
 
     pc = 0
 

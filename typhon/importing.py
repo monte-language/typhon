@@ -19,7 +19,7 @@ from rpython.rlib.unroll import unrolling_iterable
 
 from typhon.debug import debugPrint
 from typhon.errors import LoadFailed, UserException, userError
-from typhon.load.mast import InvalidMAST, loadMASTBytes
+from typhon.load.mast import loadMASTBytes
 from typhon.load.trash import load
 from typhon.nodes import Sequence, interactiveCompile
 from typhon.objects.constants import NullObject
@@ -59,7 +59,8 @@ def obtainModuleFromSource(source, recorder, origin):
 
 
 def tryExtensions(filePath, recorder):
-    for extension in unrolling_iterable((".ty", ".mast")):
+    ### for extension in unrolling_iterable([".ty", ".mast"]):
+    for extension in [".ty", ".mast"]:
         path = filePath + extension
         try:
             with open(path, "rb") as handle:

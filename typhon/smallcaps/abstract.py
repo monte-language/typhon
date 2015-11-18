@@ -30,7 +30,7 @@ class AbstractInterpreter(object):
     An abstract interpreter for precalculating facts about code.
     """
 
-    _immutable_fields_ = "code"
+    _immutable_fields_ = "code",
 
     currentDepth = 0
     currentHandlerDepth = 0
