@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import elidable
+from rpython.rlib.jit import elidable_promote
 
 
 class Atom(object):
@@ -40,7 +40,7 @@ class _AtomHolder(object):
     def __init__(self):
         self.atoms = {}
 
-    @elidable
+    @elidable_promote()
     def getAtom(self, verb, arity):
         """
         Return the one and only atom for a given verb and arity.
