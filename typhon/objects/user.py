@@ -201,7 +201,7 @@ class ScriptObject(Object):
     def runMatchers(self, atom, args, namedArgs):
         message = ConstList([StrObject(atom.verb), ConstList(args),
                              namedArgs])
-        for matcher in self.codeScript.matchers:
+        for matcher in self.codeScript.getMatchers():
             with Ejector() as ej:
                 try:
                     return self.runMatcher(matcher, message, ej)

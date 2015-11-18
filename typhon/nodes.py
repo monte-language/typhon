@@ -1871,6 +1871,10 @@ class CodeScript(object):
     def lookupMethod(self, atom):
         return self.methods.get(atom, None)
 
+    @elidable
+    def getMatchers(self):
+        return self.matchers
+
 @autohelp
 @withMaker
 class Script(Expr):
