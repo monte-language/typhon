@@ -91,8 +91,8 @@ class SmallCaps(object):
         from typhon.objects.ejectors import theThrower
         script = self.code.script(scriptIndex)
         auditors = self.popSlice(script.numAuditors)
-        globals = self.popSlice(len(script.globalNames))
-        closure = self.popSlice(len(script.closureNames))
+        globals = self.popSlice(script.globalSize)
+        closure = self.popSlice(script.closureSize)
         obj = script.makeObject(closure, globals, auditors)
         self.push(obj)
         self.push(obj)
@@ -115,18 +115,15 @@ class SmallCaps(object):
             self.push(ej)
 
     @unroll_safe
+    @specialize.arg(2)
     def call(self, index, withMap):
         atom = self.code.atom(index)
 
-        # Grab the named args.
         if withMap:
+            # Grab the named args.
             namedArgs = self.pop()
-        else:
-            namedArgs = EMPTY_MAP
-
-        assert isinstance(namedArgs, ConstMap), "No polymorphism in namedArgs"
-        # Avoid _or() if possible; it is slow and JIT-opaque. ~ C.
-        if namedArgs.size():
+            assert isinstance(namedArgs, ConstMap), "No polymorphism in namedArgs"
+            # Avoid _or() if possible; it is slow and JIT-opaque. ~ C.
             namedArgs = namedArgs._or(MIRANDA_ARGS)
         else:
             namedArgs = MIRANDA_ARGS

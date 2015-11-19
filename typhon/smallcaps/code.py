@@ -13,8 +13,9 @@
 # under the License.
 
 from rpython.rlib import rvmprof
-from rpython.rlib.jit import elidable_promote
+from rpython.rlib.jit import elidable, elidable_promote, look_inside_iff
 
+from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.smallcaps.abstract import AbstractInterpreter
 from typhon.smallcaps.ops import (reverseOps, ASSIGN_GLOBAL, ASSIGN_FRAME,
                                   ASSIGN_LOCAL, BIND, BINDFINALSLOT,
@@ -22,6 +23,67 @@ from typhon.smallcaps.ops import (reverseOps, ASSIGN_GLOBAL, ASSIGN_FRAME,
                                   SLOT_LOCAL, NOUN_GLOBAL, NOUN_FRAME,
                                   NOUN_LOCAL, BINDING_GLOBAL, BINDING_FRAME,
                                   BINDING_LOCAL, CALL, CALL_MAP)
+
+
+class CodeScript(object):
+    """
+    A single compiled script object.
+    """
+
+    _immutable_ = True
+    _immutable_fields_ = ("displayName", "objectAst", "numAuditors", "doc",
+                          "fqn", "methods", "methodDocs", "matchers[*]",
+                          "closureNames", "globalNames")
+
+    def __init__(self, displayName, objectAst, numAuditors, doc, fqn, methods,
+                 methodDocs, matchers, closureNames, globalNames):
+        self.displayName = displayName
+        self.objectAst = objectAst
+        self.numAuditors = numAuditors
+        self.doc = doc
+        self.fqn = fqn
+        self.methods = methods
+        self.methodDocs = methodDocs
+        self.matchers = matchers[:]
+        self.closureNames = closureNames
+        self.closureSize = len(closureNames)
+        self.globalNames = globalNames
+        self.globalSize = len(globalNames)
+
+        self.auditions = {}
+
+    def makeObject(self, closure, globals, auditors):
+        if self.closureSize:
+            obj = BusyObject(self, globals, closure, auditors)
+        else:
+            obj = QuietObject(self, globals, auditors)
+        return obj
+
+    # Picking 3 for the common case of:
+    # `as DeepFrozen implements Selfless, Transparent`
+    @look_inside_iff(lambda self, auditors, guards: len(auditors) <= 3)
+    def audit(self, auditors, guards):
+        with Audition(self.fqn, self.objectAst, guards, self.auditions) as audition:
+            for a in auditors:
+                audition.ask(a)
+        return audition.approvers
+
+    @elidable
+    def selfIndex(self):
+        """
+        The index at which this codescript's objects should reference
+        themselves, or -1 if the objects are not self-referential.
+        """
+
+        return self.closureNames.get(self.displayName, -1)
+
+    @elidable_promote()
+    def lookupMethod(self, atom):
+        return self.methods.get(atom, None)
+
+    @elidable
+    def getMatchers(self):
+        return self.matchers
 
 
 class Code(object):

@@ -17,7 +17,7 @@ import textwrap
 from collections import OrderedDict
 
 from rpython.rlib import rvmprof
-from rpython.rlib.jit import elidable, elidable_promote, look_inside_iff
+from rpython.rlib.jit import elidable, elidable_promote
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rbigint import BASE10
@@ -34,10 +34,9 @@ from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
 from typhon.objects.ejectors import throw
 from typhon.objects.meta import MetaContext
 from typhon.objects.root import Object, audited
-from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.pretty import Buffer, LineWriter
 from typhon.quoting import quoteChar, quoteStr
-from typhon.smallcaps.code import Code
+from typhon.smallcaps.code import Code, CodeScript
 from typhon.smallcaps.ops import ops
 from typhon.smallcaps.peephole import peephole
 
@@ -195,9 +194,10 @@ class Compiler(object):
         literals = self.literals.keys()
         globals = self.globals.keys()
         locals = self.locals.nameList()
+        scripts = [script.freeze() for script in self.scripts]
 
         code = Code(self.fqn, self.methodName, self.instructions, atoms,
-                    literals, globals, frame, locals, self.scripts)
+                    literals, globals, frame, locals, scripts)
 
         # Register the code for profiling.
         rvmprof.register_code(code, Code.profileName)
@@ -1671,12 +1671,12 @@ class Obj(Expr):
         numAuditors = len(self._implements) + 1
         oname = formatName(self._n)
         fqn = compiler.fqn + u"$" + oname
-        self.codeScript = CodeScript(oname, self, numAuditors,
+        codeScript = CompilingScript(oname, self, numAuditors,
                                      availableClosure, self._d, fqn)
-        self.codeScript.addScript(self._script, fqn)
+        codeScript.addScript(self._script, fqn)
         # The local closure is first to be pushed and last to be popped.
-        for name in self.codeScript.closureNames:
-            if name == self.codeScript.displayName:
+        for name in codeScript.closureNames:
+            if name == codeScript.displayName:
                 # Put in a null and patch it later via UserObject.patchSelf().
                 compiler.literal(NullObject)
                 continue
@@ -1691,7 +1691,7 @@ class Obj(Expr):
                 compiler.addInstruction("BINDING_GLOBAL", index)
 
         # Globals are pushed after closure, so they'll be popped first.
-        for name in self.codeScript.globalNames:
+        for name in codeScript.globalNames:
             localIndex = compiler.locals.find(name)
             if localIndex >= 0:
                 compiler.addInstruction("BINDING_LOCAL", localIndex)
@@ -1709,7 +1709,7 @@ class Obj(Expr):
             self._as.compile(subc)
         for stamp in self._implements:
             stamp.compile(subc)
-        index = compiler.addScript(self.codeScript)
+        index = compiler.addScript(codeScript)
         compiler.addInstruction("BINDOBJECT", index)
         if isinstance(self._n, IgnorePattern):
             compiler.addInstruction("POP", 0)
@@ -1758,10 +1758,7 @@ class Obj(Expr):
         return Expr.recv(self, atom, args)
 
 
-class CodeScript(object):
-
-    _immutable_fields_ = ("displayName", "fqn", "objectAst", "numAuditors",
-                          "closureNames", "globalNames")
+class CompilingScript(object):
 
     def __init__(self, displayName, objectAst, numAuditors, availableClosure,
                  doc, fqn):
@@ -1785,32 +1782,10 @@ class CodeScript(object):
         self.closureNames = OrderedDict()
         self.globalNames = OrderedDict()
 
-        self.auditions = {}
-
-    def makeObject(self, closure, globals, auditors):
-        if len(self.closureNames):
-            obj = BusyObject(self, globals, closure, auditors)
-        else:
-            obj = QuietObject(self, globals, auditors)
-        return obj
-
-    # Picking 3 for the common case of:
-    # `as DeepFrozen implements Selfless, Transparent`
-    @look_inside_iff(lambda self, auditors, guards: len(auditors) <= 3)
-    def audit(self, auditors, guards):
-        with Audition(self.fqn, self.objectAst, guards, self.auditions) as audition:
-            for a in auditors:
-                audition.ask(a)
-        return audition.approvers
-
-    @elidable
-    def selfIndex(self):
-        """
-        The index at which this codescript's objects should reference
-        themselves, or -1 if the objects are not self-referential.
-        """
-
-        return self.closureNames.get(self.displayName, -1)
+    def freeze(self):
+        return CodeScript(self.displayName, self.objectAst, self.numAuditors,
+                          self.doc, self.fqn, self.methods, self.methodDocs,
+                          self.matchers, self.closureNames, self.globalNames)
 
     def addScript(self, script, fqn):
         assert isinstance(script, Script)
@@ -1866,14 +1841,6 @@ class CodeScript(object):
 
         code = compiler.makeCode()
         self.matchers.append(code)
-
-    @elidable_promote()
-    def lookupMethod(self, atom):
-        return self.methods.get(atom, None)
-
-    @elidable
-    def getMatchers(self):
-        return self.matchers
 
 @autohelp
 @withMaker

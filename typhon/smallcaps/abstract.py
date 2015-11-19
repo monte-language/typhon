@@ -92,8 +92,8 @@ class AbstractInterpreter(object):
             self.push(index * 2)
         elif instruction == BINDOBJECT:
             self.pop(self.code.scripts[index].numAuditors)
-            self.pop(len(self.code.scripts[index].globalNames))
-            self.pop(len(self.code.scripts[index].closureNames))
+            self.pop(self.code.scripts[index].globalSize)
+            self.pop(self.code.scripts[index].closureSize)
             self.push()
             self.push()
             self.push()
