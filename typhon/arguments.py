@@ -54,9 +54,8 @@ class Configuration(object):
     benchmark = False
 
     # User settings for the JIT. By default:
-    # * The trace limit is quite low, to prevent known-problematic stuff like
-    #   DeepFrozen.supersetOf/1 from chewing up too much JIT time.
-    jit = "trace_limit=1000"
+    # * The trace limit is over 9000 and prime.
+    jit = "trace_limit=9001"
 
     def __init__(self, argv):
         # Arguments not consumed by Typhon. Will be available to the main
