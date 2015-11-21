@@ -1,11 +1,125 @@
 imports
 exports (main)
 
-def concatMap(it, f) as DeepFrozen:
+def [=> makeIterFount :DeepFrozen] | _ := import("lib/tubes/iterFount")
+
+def concatMap(it, f) :List as DeepFrozen:
     var result := [].diverge()
     for k => v in it:
         result.extend(f(k, v))
     return result.snapshot()
+
+def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
+    var lastSource := null
+
+    def formatError(err):
+        return "\n".join(err[1].reverse()) + "\n\n" + err[0] + "\n"
+
+    return object testDrain:
+        to flowingFrom(fount):
+            return testDrain
+
+        to receive([k, test]):
+            def st :Str := M.toString(test)
+            return when (test<-(asserter(st))) ->
+                if (lastSource != k):
+                    stdout.receive(`$k$\n`)
+                    lastSource := k
+                stdout.receive(`    $st    OK$\n`)
+            catch p:
+                if (lastSource != k):
+                    stdout.receive(`$k$\n`)
+                    lastSource := k
+                stdout.receive(`    $st    FAIL$\n`)
+                def msg := formatError(unsealException(p, throw))
+                stdout.receive(msg + "\n")
+
+        to flowStopped(reason):
+            traceln(`flow stopped $reason`)
+
+        to flowAborted(reason):
+            traceln(`flow aborted $reason`)
+
+def runTests(collectTests, testDrain) as DeepFrozen:
+    def testInfo := concatMap(
+            collectTests(),
+            fn k, v { [for t in (v) [k, t]] })
+    def fount := makeIterFount(testInfo)
+    fount<-flowTo(testDrain)
+    return fount.completion()
+
+def makeAsserter() as DeepFrozen:
+    var successes :Int := 0
+    var fails :Int := 0
+
+    def errors := [].asMap().diverge()
+
+    def logIt(loc :Str, msg :Str):
+        def errs := errors.fetch(loc, fn {[]})
+        errors[loc] := errs.with(msg)
+        return msg
+
+    return object asserter:
+        "Track assertions made during unit testing."
+
+        to total() :Int:
+            return successes + fails
+
+        to successes() :Int:
+            return successes
+
+        to fails() :Int:
+            return fails
+
+        to errors() :Map[Str, List[Str]]:
+            return errors.snapshot()
+
+        to run(label :Str):
+            "Make a new `assert` with the given logging label."
+
+            return object assert:
+                "Assert stuff."
+
+                to fail(message :Str):
+                    fails += 1
+                    throw(logIt(label, message))
+
+                to doesNotEject(f):
+                    escape e:
+                        f(e)
+                        successes += 1
+                    catch _:
+                        assert.fail("Ejector was fired")
+
+                to ejects(f):
+                    escape e:
+                        f(e)
+                        assert.fail("Ejector was not fired")
+                    catch _:
+                        successes += 1
+
+                to equal(l, r):
+                    def isEqual := __equalizer.sameYet(l, r)
+                    if (isEqual == null):
+                        assert.fail(`Equality not settled: $l ≟ $r`)
+                    if (!isEqual):
+                        assert.fail(`Not equal: $l != $r`)
+                    successes += 1
+
+                to notEqual(l, r):
+                    def isEqual := __equalizer.sameYet(l, r)
+                    if (isEqual == null):
+                        assert.fail(`Equality not settled: $l ≟ $r`)
+                    if (isEqual):
+                        assert.fail(`Equal: $l == $r`)
+                    successes += 1
+
+                to throws(f):
+                    try:
+                        f()
+                        assert.fail("No exception was thrown")
+                    catch _:
+                        successes += 1
 
 def main(=> makeStdOut, => Timer, => currentProcess, => unsealException, => collectTests) as DeepFrozen:
     def [=> makeUTF8EncodePump] | _ := import.script("lib/tubes/utf8")
@@ -15,85 +129,18 @@ def main(=> makeStdOut, => Timer, => currentProcess, => unsealException, => coll
     for path in args.slice(2, args.size()):
         import.script(path)
 
-    def errors := [].asMap().diverge()
-
-    var successes := 0
-    var fails := 0
-
-    def logIt(loc, msg):
-        def errs := errors.fetch(loc, fn {[]})
-        errors[loc] := errs.with(msg)
-        return msg
-
-    def makeAsserter(label):
-        return object assert:
-            to doesNotEject(f):
-                escape e:
-                    f(e)
-                catch _:
-                    throw(logIt(label, "Ejector was fired"))
-
-            to ejects(f):
-                escape e:
-                   f(e)
-                   throw(logIt(label, "Ejector was not fired"))
-
-            to equal(l, r):
-                def isEqual := __equalizer.sameYet(l, r)
-                if (isEqual == null):
-                    throw(logIt(label, `Equality not settled: $l ?= $r`))
-                if (!isEqual):
-                    throw(logIt(label, `Not equal: $l != $r`))
-
-            to notEqual(l, r):
-                def isEqual := __equalizer.sameYet(l, r)
-                if (isEqual == null):
-                    throw(logIt(label, `Equality not settled: $l ?= $r`))
-                if (isEqual):
-                    throw(logIt(label, `Equal: $l == $r`))
-
-            to throws(f):
-                try:
-                    f()
-                    throw(logIt(label, "No exception was thrown"))
-                catch _:
-                    null
-
-    def formatError(err):
-        return "\n".join(err[1].reverse()) + "\n\n" + err[0] + "\n"
-
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout<-flowTo(makeStdOut())
 
-    def runTests():
-        def testInfo := concatMap(
-                collectTests(),
-                fn k, v { [for t in (v) [k, t]] })
-        var lastSource := null
-        def testsIterator := testInfo._makeIterator()
-        def done := __return
-        def runTest([i, [k, t]]):
-            if (lastSource != k):
-                stdout.receive(`$k$\n`)
-                lastSource := k
-            def st := M.toString(t)
-            stdout.receive(`    $st`)
-            return when (t <- (makeAsserter(st))) ->
-                stdout.receive("    OK\n")
-                successes += 1
-            catch p:
-                stdout.receive("    FAIL\n")
-                fails += 1
-                def msg := formatError(unsealException(p, throw))
-                logIt(st, msg)
-                stdout.receive(msg + "\n")
-            finally:
-                escape e:
-                    runTest(testsIterator.next(e))
-        escape e:
-            return runTest(testsIterator.next(e))
+    def asserter := makeAsserter()
+    def testDrain := makeTestDrain(stdout, unsealException, asserter)
 
-    return when (runTests()) ->
-        stdout.receive(`${successes + fails} tests run, ${fails} failures$\n`)
+    return when (runTests(collectTests, testDrain)) ->
+        def fails := asserter.fails()
+        stdout.receive(`${asserter.total()} tests run, $fails failures$\n`)
+        # Exit code: Only returns 0 if there were 0 failures.
+        for loc => errors in asserter.errors():
+            stdout.receive(`In $loc:$\n`)
+            for error in errors:
+                stdout.receive(`~ $error$\n`)
         fails.min(1)
-

@@ -104,7 +104,8 @@ tubes: mast/lib/tubes/itubes.ty \
 	mast/lib/tubes/pumpTube.ty mast/lib/tubes/statefulPump.ty \
 	mast/lib/tubes/splitPump.mast mast/lib/tubes/utf8.ty \
 	mast/lib/tubes/chain.ty \
-	mast/lib/tubes/pureDrain.mast
+	mast/lib/tubes/pureDrain.mast \
+	mast/lib/tubes/iterFount.mast
 
 http: mast/lib/http/client.ty mast/lib/http/server.ty \
 	mast/lib/http/tag.ty mast/lib/http/resource.ty \
