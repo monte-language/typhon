@@ -1,5 +1,5 @@
-imports
-exports (json__quasiParser)
+imports => unittest
+exports (JSON, json__quasiParser)
 
 object valueHoleMarker as DeepFrozen:
     pass
@@ -8,7 +8,7 @@ object patternHoleMarker as DeepFrozen:
     pass
 
 
-def makeStream(s) as DeepFrozen:
+def makeStream(s :Str) as DeepFrozen:
     var index :Int := 0
     return object stream:
         to next():
@@ -135,14 +135,6 @@ def parse(var tokens) as DeepFrozen:
     return stack[0][0]
 
 
-# def l := makeLexer()
-# l.lex(makeStream("{ \"testing\": true, \"production\": false, \"arr\": [1, 2, 3, 4] }"))
-# def lexed := l.getTokens()
-# traceln(lexed)
-# def parsed := parse(lexed)
-# traceln(parsed)
-
-
 def makeJSON(value) as DeepFrozen:
     return object JSON:
         to substitute(values):
@@ -233,9 +225,65 @@ object json__quasiParser as DeepFrozen:
         return [patternHoleMarker, index]
 
 
-# def parsing := json`{"nested": "structures"}`
-# traceln(parsing.getValue())
-# traceln(json`{"quasi": $parsing}`.getValue())
+def specialChars :Map[Char, Str] := [
+    '"' => "\\\"",
+    '\\' => "\\\\",
+    '/' => "\\/",
+    '\b' => "\\b",
+    '\f' => "\\f",
+    '\n' => "\\n",
+    '\r' => "\\r",
+    '\t' => "\\t",
+]
 
-# def json`{"nested": @stuff}` := parsing
-# traceln(stuff.getValue())
+
+object JSON as DeepFrozen:
+    "The JSON data format."
+
+    to decode(specimen, ej):
+        def s :Str exit ej := specimen
+        def lexer := makeLexer()
+        def stream := makeStream(s)
+        lexer.lex(stream)
+        return parse(lexer.getTokens())
+
+    to encode(specimen, ej) :Str:
+        return switch (specimen):
+            match m :Map:
+                def pieces := [].diverge()
+                for k => v in m:
+                    def s :Str exit ej := k
+                    def es := JSON.encodeStr(s)
+                    def ev := JSON.encode(v, ej)
+                    pieces.push(`$es:$ev`)
+                `{${",".join(pieces)}}`
+            match l :List:
+                def pieces := [for i in (l) JSON.encode(i, ej)]
+                `[${",".join(pieces)}]`
+            match i :Int:
+                M.toString(i)
+            match d :Double:
+                M.toString(d)
+            match s :Str:
+                JSON.encodeStr(s)
+            match c :Char:
+                JSON.encodeStr(c.asString())
+            match _:
+                throw.eject(ej, `$specimen isn't representable in JSON`)
+
+    to encodeStr(s :Str) :Str:
+        def pieces := [for c in (s) specialChars.fetch(c, fn {c.asString()})]
+        return `"${"".join(pieces)}"`
+
+
+def testJSONDecode(assert):
+    def specimen := "{\"first\":42,\"second\":[5,7]}"
+    assert.equal(JSON.decode(specimen, null),
+                 ["first" => 42, "second" => [5, 7]])
+
+def testJSONEncode(assert):
+    def specimen := ["first" => 42, "second" => [5, 7]]
+    assert.equal(JSON.encode(specimen, null),
+                 "{\"first\":42,\"second\":[5,7]}")
+
+unittest([testJSONDecode, testJSONEncode])
