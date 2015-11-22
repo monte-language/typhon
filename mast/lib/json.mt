@@ -16,6 +16,9 @@ def makeStream(s :Str) as DeepFrozen:
             index += 1
             return rv
 
+        to peek():
+            return s[index]
+
         to fastForward(count):
             index += count
 
@@ -59,7 +62,13 @@ def makeLexer() as DeepFrozen:
                     lexer.nextString(stream)
 
                 match digit ? ("0123456789".contains(digit)):
-                    tokens.push(digit.asInteger() - '0'.asInteger())
+                    # Things I miss from C: do-while. ~ C.
+                    var i := digit.asInteger() - '0'.asInteger()
+                    while ("0123456789".contains(stream.peek())):
+                        def nextDigit := stream.next()
+                        i *= 10
+                        i += nextDigit.asInteger() - '0'.asInteger()
+                    tokens.push(i)
 
                 match c:
                     throw(`Unknown character $c`)
@@ -102,7 +111,7 @@ def parse(var tokens) as DeepFrozen:
             stack[stack.size() - 1].push(value)
 
     while (tokens.size() > 0):
-        traceln("Tokens", tokens)
+        # traceln("Tokens", tokens)
         switch (tokens):
             match [==','] + rest:
                 tokens := rest
@@ -131,7 +140,7 @@ def parse(var tokens) as DeepFrozen:
                 pushValue(v)
                 tokens := rest
 
-    traceln("final stack", stack)
+    # traceln("final stack", stack)
     return stack[0][0]
 
 
