@@ -181,6 +181,8 @@ def entryPoint(argv):
     if config.verbose:
         enableDebugPrint()
 
+    config.enableLogging()
+
     if len(config.argv) < 2:
         print "No file provided?"
         return 1

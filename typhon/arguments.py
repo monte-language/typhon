@@ -65,6 +65,9 @@ class Configuration(object):
         # The paths from which to draw imports and the prelude.
         self.libraryPaths = []
 
+        # Tags for the logger.
+        self.loggerTags = []
+
         stream = ListStream(argv)
         # argv[0] is always the name that we were invoked with. Always.
         self.argv.append(stream.nextItem())
@@ -76,6 +79,8 @@ class Configuration(object):
                 self.verbose = True
             elif item == "-l":
                 self.libraryPaths.append(stream.nextItem())
+            elif item == "-t":
+                self.loggerTags.extend(stream.nextItem().split(":"))
             elif item == "-load":
                 self.loadOnly = True
             elif item == "-p":
@@ -86,3 +91,8 @@ class Configuration(object):
                 self.jit = stream.nextItem()
             else:
                 self.argv.append(item)
+
+    def enableLogging(self):
+        from typhon import log
+        for tag in self.loggerTags:
+            log.logger.tags[tag] = None

@@ -14,11 +14,12 @@
 
 from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 
+from typhon import log
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, UserException
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.root import Object, runnable
+from typhon.objects.root import Object
 from typhon.objects.data import StrObject, unwrapStr
 
 
@@ -48,6 +49,9 @@ class Vat(Object):
         self._pendingLock = allocate_lock()
         self._pending = []
 
+    def log(self, message):
+        log.log(["vat"], u"Vat %s: %s" % (self.name, message))
+
     def toString(self):
         return u"<vat(%s, %d turns pending)>" % (self.name, len(self._pending))
 
@@ -56,8 +60,8 @@ class Vat(Object):
         if atom is SEED_1:
             f = args[0]
             if not f.auditedBy(deepFrozenStamp):
-                print "seed/1: Warning: Seeded receiver is not DeepFrozen"
-                print "seed/1: Warning: This is gonna be an error soon!"
+                self.log(u"seed/1: Warning: Seeded receiver is not DeepFrozen")
+                self.log(u"seed/1: Warning: This is gonna be an error soon!")
             from typhon.objects.refs import LocalVatRef
             return LocalVatRef(self.send(f, RUN_0, [], EMPTY_MAP), self)
 
@@ -74,13 +78,17 @@ class Vat(Object):
         promise, resolver = makePromise()
         with self._pendingLock:
             self._pending.append((resolver, target, atom, args, namedArgs))
-            # print "Planning to send", target, atom, args
+            self.log(u"Planning to send %s <-%s(%s) (resolver: yes)" %
+                     (target.toString(), atom.verb,
+                      u", ".join([arg.toString() for arg in args])))
         return promise
 
     def sendOnly(self, target, atom, args, namedArgs):
         with self._pendingLock:
             self._pending.append((None, target, atom, args, namedArgs))
-            # print "Planning to sendOnly", target, atom, args
+            self.log(u"Planning to send %s <-%s(%s) (resolver: no)" %
+                     (target.toString(), atom.verb,
+                      u", ".join([arg.toString() for arg in args])))
 
     def hasTurns(self):
         # Note that if we have pending callbacks but no pending turns, we
@@ -100,7 +108,10 @@ class Vat(Object):
         # calling. Try to resolve it as much as possible first, though.
         target = resolution(target)
 
-        # print "Taking turn:", self, resolver, target, atom, args
+        self.log(u"Taking turn %s <-%s(%s) (resolver: %s)" %
+                 (target.toString(), atom.verb,
+                  u", ".join([arg.toString() for arg in args]),
+                  u"yes" if resolver is not None else u"no"))
         if resolver is None:
             try:
                 # callOnly/sendOnly.
