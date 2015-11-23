@@ -245,9 +245,11 @@ class FileDrain(Object):
 
     def receive(self, data):
         if self._state in (self.READY, self.WRITING, self.BUSY):
+            print "receive"
             self.bufs.append(data)
 
             if self._state is self.READY:
+                print "receive ready"
                 # We're not writing right now, so queue a write.
                 self.queueWrite()
                 self._state = self.WRITING
@@ -264,11 +266,13 @@ class FileDrain(Object):
         self.closing()
 
     def queueWrite(self):
+        print "queueWrite"
         with ruv.scopedBufs(self.bufs) as bufs:
             ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
                         len(self.bufs), self.pos, writeCB)
 
     def closing(self):
+        print "closing"
         if self._state is self.READY:
             # Optimization: proceed directly to CLOSED if there's no
             # outstanding writes.
@@ -276,10 +280,12 @@ class FileDrain(Object):
         self._state = self.CLOSING
 
     def queueClose(self):
+        print "queueClose"
         ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
         self._state = self.CLOSED
 
     def written(self, size):
+        print "written", size
         self.pos += size
         bufs = []
         for buf in self.bufs:
@@ -326,7 +332,9 @@ def openFountCB(fs):
     except:
         print "Exception in openFountCB"
 
+
 def openDrainCB(fs):
+    print "Entering openDrainCB"
     # As above.
     try:
         fd = intmask(fs.c_result)
@@ -334,14 +342,109 @@ def openDrainCB(fs):
         assert isinstance(r, LocalResolver)
         with scopedVat(vat):
             if fd < 0:
+                print "failed with", ruv.formatError(fd)
                 msg = ruv.formatError(fd).decode("utf-8")
                 r.smash(StrObject(u"Couldn't open file drain: %s" % msg))
                 # Done with fs.
                 ruv.free(fs)
             else:
+                print "succeeded with", fd
                 r.resolve(FileDrain(fs, fd, vat))
     except:
         print "Exception in openDrainCB"
+
+
+class GetContents(Object):
+    """
+    Struct used to manage getContents/0 calls.
+
+    Has to be an Object so that it can be unified with LocalResolver.
+    No, seriously.
+    """
+
+    # Our position reading from the file.
+    pos = 0
+
+    def __init__(self, vat, fs, fd, resolver):
+        self.vat = vat
+        self.fs = fs
+        self.fd = fd
+        self.resolver = resolver
+
+        self.pieces = []
+
+        # XXX read size should be tunable
+        self.buf = ruv.allocBuf(16384)
+
+        # Do our initial stashing.
+        ruv.stashFS(fs, (vat, self))
+
+    def append(self, data):
+        self.pieces.append(data)
+        self.pos += len(data)
+        # Queue another!
+        ruv.stashFS(self.fs, (self.vat, self))
+        self.queueRead()
+
+    def succeed(self):
+        # Clean up libuv stuff.
+        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
+
+        # Finally, resolve.
+        buf = "".join(self.pieces)
+        self.resolver.resolve(BytesObject(buf))
+
+    def fail(self, reason):
+        # Clean up libuv stuff.
+        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
+
+        # And resolve.
+        self.resolver.smash(StrObject(u"libuv error: %s" % reason))
+
+    def queueRead(self):
+        with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
+            bufs[0].c_base = self.buf.c_base
+            bufs[0].c_len = self.buf.c_len
+            ruv.fsRead(self.vat.uv_loop, self.fs, self.fd, bufs, 1, self.pos,
+                       getContentsCB)
+
+def openGetContentsCB(fs):
+    try:
+        fd = intmask(fs.c_result)
+        vat, r = ruv.unstashFS(fs)
+        assert isinstance(r, LocalResolver)
+        if fd < 0:
+            msg = ruv.formatError(fd).decode("utf-8")
+            r.smash(StrObject(u"Couldn't open file fount: %s" % msg))
+            # Done with fs.
+            ruv.free(fs)
+        else:
+            # Strategy: Read and use the callback to queue additional reads
+            # until done. This call is known to its caller to be expensive, so
+            # there's not much point in trying to be clever about things yet.
+            gc = GetContents(vat, fs, fd, r)
+            gc.queueRead()
+    except:
+        print "Exception in openGetContentsCB"
+
+def getContentsCB(fs):
+    try:
+        size = intmask(fs.c_result)
+        # Don't use with-statements here; instead, each next action in
+        # GetContents will re-stash if necessary. ~ C.
+        vat, self = ruv.unstashFS(fs)
+        assert isinstance(self, GetContents)
+        if size > 0:
+            data = charpsize2str(self.buf.c_base, size)
+            self.append(data)
+        elif size < 0:
+            msg = ruv.formatError(size).decode("utf-8")
+            self.fail(msg)
+        else:
+            # End of file! Complete the callback.
+            self.succeed()
+    except Exception:
+        print "Exception in getContentsCB"
 
 
 @autohelp
@@ -361,19 +464,16 @@ class FileResource(Object):
         self.path = path
 
     def recv(self, atom, args):
-        # XXX this is racy.
-        # if atom is GETCONTENTS_0:
-        #     p, r = makePromise()
-        #     vat = currentVat.get()
-        #     uv_loop = vat.uv_loop
-        #     fs = ruv.alloc_fs()
+        if atom is GETCONTENTS_0:
+            p, r = makePromise()
+            vat = currentVat.get()
+            uv_loop = vat.uv_loop
+            fs = ruv.alloc_fs()
 
-        #     fd = ruv.fsOpen(uv_loop, fs, self.path, 0, os.O_RDONLY, None)
-        #     # XXX Ugh. We're going to stat() and then read from however large
-        #     # the stat() was. This is probably racy in a fundamental way.
-        #     ruv.fsRead(uv_loop, fs,
-        #     r.resolve()
-        #     return p
+            ruv.fsOpen(uv_loop, fs, self.path, 0, os.O_RDONLY,
+                       openGetContentsCB)
+            ruv.stashFS(fs, (vat, r))
+            return p
 
         # XXX lots of effort, no users in mast yet
         # if atom is SETCONTENTS_1:
@@ -403,6 +503,7 @@ class FileResource(Object):
             flags = os.O_CREAT | os.O_WRONLY
             # XXX this behavior should be configurable via namedarg?
             flags |= os.O_TRUNC
+            print "Calling fsOpen"
             ruv.fsOpen(vat.uv_loop, fs, self.path, flags, 0777, openDrainCB)
             return p
 

@@ -503,7 +503,6 @@ def IP4Name(sockaddr):
     size = 16
     with rffi.scoped_alloc_buffer(size) as buf:
         check("ip4_name", ip4_name(sockaddr, buf.raw, size))
-        i = 0
         return buf.str(size).split('\x00', 1)[0]
 
 def IP6Name(sockaddr):

@@ -79,16 +79,16 @@ class Vat(Object):
         with self._pendingLock:
             self._pending.append((resolver, target, atom, args, namedArgs))
             self.log(u"Planning to send %s <-%s(%s) (resolver: yes)" %
-                     (target.toString(), atom.verb,
-                      u", ".join([arg.toString() for arg in args])))
+                     (target.toQuote(), atom.verb,
+                      u", ".join([arg.toQuote() for arg in args])))
         return promise
 
     def sendOnly(self, target, atom, args, namedArgs):
         with self._pendingLock:
             self._pending.append((None, target, atom, args, namedArgs))
             self.log(u"Planning to send %s <-%s(%s) (resolver: no)" %
-                     (target.toString(), atom.verb,
-                      u", ".join([arg.toString() for arg in args])))
+                     (target.toQuote(), atom.verb,
+                      u", ".join([arg.toQuote() for arg in args])))
 
     def hasTurns(self):
         # Note that if we have pending callbacks but no pending turns, we
@@ -109,8 +109,8 @@ class Vat(Object):
         target = resolution(target)
 
         self.log(u"Taking turn %s <-%s(%s) (resolver: %s)" %
-                 (target.toString(), atom.verb,
-                  u", ".join([arg.toString() for arg in args]),
+                 (target.toQuote(), atom.verb,
+                  u", ".join([arg.toQuote() for arg in args]),
                   u"yes" if resolver is not None else u"no"))
         if resolver is None:
             try:
