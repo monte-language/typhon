@@ -18,7 +18,7 @@ from rpython.rlib.rarithmetic import intmask
 from rpython.rtyper.lltypesystem.lltype import scoped_alloc
 from rpython.rtyper.lltypesystem.rffi import charpsize2str
 
-from typhon import ruv
+from typhon import log, rsodium, ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
@@ -459,9 +459,20 @@ class FileResource(Object):
     # in that order, though.
 
     _immutable_ = True
+    _immutable_fields_ = "segments[*]",
 
-    def __init__(self, path):
-        self.path = path
+    def __init__(self, segments):
+        self.segments = segments
+
+    def asBytes(self):
+        return "/".join(self.segments)
+
+    def sibling(self, segment):
+        return FileResource(self.segments[:-1] + [segment])
+
+    def temporarySibling(self, suffix):
+        fileName = rsodium.randomHex() + suffix
+        return self.sibling(fileName)
 
     def recv(self, atom, args):
         if atom is GETCONTENTS_0:
@@ -470,7 +481,7 @@ class FileResource(Object):
             uv_loop = vat.uv_loop
             fs = ruv.alloc_fs()
 
-            ruv.fsOpen(uv_loop, fs, self.path, 0, os.O_RDONLY,
+            ruv.fsOpen(uv_loop, fs, self.asBytes(), 0, os.O_RDONLY,
                        openGetContentsCB)
             ruv.stashFS(fs, (vat, r))
             return p
@@ -481,7 +492,7 @@ class FileResource(Object):
 
         #     p, r = makePromise()
         #     vat = currentVat.get()
-        #     vat.afterTurn(SetContents(self.path, data, r))
+        #     vat.afterTurn(SetContents(self.asBytes(), data, r))
         #     return p
 
         if atom is OPENFOUNT_0:
@@ -489,7 +500,7 @@ class FileResource(Object):
             vat = currentVat.get()
             fs = ruv.alloc_fs()
             ruv.stashFS(fs, (vat, r))
-            ruv.fsOpen(vat.uv_loop, fs, self.path, os.O_RDONLY, 0,
+            ruv.fsOpen(vat.uv_loop, fs, self.asBytes(), os.O_RDONLY, 0,
                        openFountCB)
             return p
 
@@ -503,8 +514,8 @@ class FileResource(Object):
             flags = os.O_CREAT | os.O_WRONLY
             # XXX this behavior should be configurable via namedarg?
             flags |= os.O_TRUNC
-            print "Calling fsOpen"
-            ruv.fsOpen(vat.uv_loop, fs, self.path, flags, 0777, openDrainCB)
+            ruv.fsOpen(vat.uv_loop, fs, self.asBytes(), flags, 0777,
+                       openDrainCB)
             return p
 
         raise Refused(self, atom, args)
@@ -516,5 +527,10 @@ def makeFileResource(args):
     Make a file Resource.
     """
 
-    path = unwrapStr(args[0]).encode("utf-8")
-    return FileResource(path)
+    path = unwrapStr(args[0])
+    segments = [segment.encode("utf-8") for segment in path.split(u'/')]
+    if not path.startswith(u'/'):
+        # Relative path.
+        segments = os.getcwd().split('/') + segments
+        log.log(["fs"], u"makeFileResource.run/1: Relative path '%s'" % path)
+    return FileResource(segments)
