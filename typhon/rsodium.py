@@ -6,7 +6,7 @@ Import as `from typhon import rsodium` and then use namespaced.
 
 import os
 
-from rpython.rtyper.lltypesystem import lltype, rffi
+from rpython.rtyper.lltypesystem import rffi
 from rpython.rtyper.tool import rffi_platform
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
@@ -33,3 +33,13 @@ init = rffi.llexternal("sodium_init", [], rffi.INT, compilation_info=eci)
 
 randombytesRandom = rffi.llexternal("randombytes_random", [], rffi.UINT,
                                     compilation_info=eci)
+
+def randomBytes():
+    r = randombytesRandom()
+    return "".join(chr((r >> i) & 0xff) for i in range(0, 32, 8))
+
+hexList = ["%02x" % i for i in range(256)]
+
+def randomHex():
+    r = randomBytes()
+    return "".join(hexList[ord(i)] for i in r)
