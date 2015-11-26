@@ -36,10 +36,10 @@ randombytesRandom = rffi.llexternal("randombytes_random", [], rffi.UINT,
 
 def randomBytes():
     r = randombytesRandom()
-    return "".join(chr((r >> i) & 0xff) for i in range(0, 32, 8))
+    return "".join([chr((r >> i) & 0xff) for i in range(0, 32, 8)])
 
 hexList = ["%02x" % i for i in range(256)]
 
 def randomHex():
     r = randomBytes()
-    return "".join(hexList[ord(i)] for i in r)
+    return "".join([hexList[ord(i)] for i in r])

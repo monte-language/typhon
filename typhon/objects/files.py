@@ -41,9 +41,12 @@ OPENFOUNT_0 = getAtom(u"openFount", 0)
 PAUSEFLOW_0 = getAtom(u"pauseFlow", 0)
 RECEIVE_1 = getAtom(u"receive", 1)
 SETCONTENTS_1 = getAtom(u"setContents", 1)
+SIBLING_1 = getAtom(u"sibling", 1)
+RENAME_1 = getAtom(u"rename", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 STOPFLOW_0 = getAtom(u"stopFlow", 0)
+TEMPORARYSIBLING_0 = getAtom(u"temporarySibling", 0)
 UNPAUSE_0 = getAtom(u"unpause", 0)
 
 
@@ -447,6 +450,19 @@ def getContentsCB(fs):
         print "Exception in getContentsCB"
 
 
+def renameCB(fs):
+    try:
+        success = intmask(fs.c_result)
+        vat, r = ruv.unstashFS(fs)
+        if success < 0:
+            msg = ruv.formatError(success).decode("utf-8")
+            r.smash(StrObject(u"Couldn't rename file: %s" % msg))
+        else:
+            r.resolve(NullObject)
+    except Exception:
+        print "Exception in renameCB"
+
+
 @autohelp
 class FileResource(Object):
     """
@@ -464,8 +480,22 @@ class FileResource(Object):
     def __init__(self, segments):
         self.segments = segments
 
+    def toString(self):
+        return u"<file resource %s>" % self.asBytes().decode("utf-8")
+
     def asBytes(self):
         return "/".join(self.segments)
+
+    def rename(self, dest):
+        p, r = makePromise()
+        vat = currentVat.get()
+        uv_loop = vat.uv_loop
+        fs = ruv.alloc_fs()
+
+        src = self.asBytes()
+        ruv.fsRename(uv_loop, fs, src, dest, renameCB)
+        ruv.stashFS(fs, (vat, r))
+        return p
 
     def sibling(self, segment):
         return FileResource(self.segments[:-1] + [segment])
@@ -517,6 +547,21 @@ class FileResource(Object):
             ruv.fsOpen(vat.uv_loop, fs, self.asBytes(), flags, 0777,
                        openDrainCB)
             return p
+
+        if atom is RENAME_1:
+            fr = args[0]
+            if not isinstance(fr, FileResource):
+                raise userError(u"rename/1: Must be file resource")
+            return self.rename(fr.asBytes())
+
+        if atom is SIBLING_1:
+            name = unwrapStr(args[0])
+            if u'/' in name:
+                raise userError(u"sibling/1: Illegal file name '%s'" % name)
+            return self.sibling(name.encode("utf-8"))
+
+        if atom is TEMPORARYSIBLING_0:
+            return self.temporarySibling(".new")
 
         raise Refused(self, atom, args)
 

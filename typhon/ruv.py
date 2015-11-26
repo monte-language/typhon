@@ -470,6 +470,10 @@ fs_write = rffi.llexternal("uv_fs_write", [loop_tp, fs_tp, rffi.INT,
                                            rffi.LONGLONG, fs_cb],
                             rffi.INT, compilation_info=eci)
 fsWrite = checking("fs_write", fs_write)
+fs_rename = rffi.llexternal("uv_fs_rename", [loop_tp, fs_tp, rffi.CCHARP,
+                                             rffi.CCHARP, fs_cb],
+                            rffi.INT, compilation_info=eci)
+fsRename = checking("fs_rename", fs_rename)
 
 def alloc_fs():
     return lltype.malloc(cConfig["fs_t"], flavor="raw", zero=True)
