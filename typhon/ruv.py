@@ -451,6 +451,8 @@ def alloc_tty(loop, fd, readable):
 
 fs_cb = rffi.CCallback([fs_tp], lltype.Void)
 
+fs_req_cleanup = rffi.llexternal("uv_fs_req_cleanup", [fs_tp], lltype.Void,
+                                 compilation_info=eci)
 fs_close = rffi.llexternal("uv_fs_close", [loop_tp, fs_tp, rffi.INT, fs_cb],
                            rffi.INT, compilation_info=eci)
 fsClose = checking("fs_close", fs_close)
@@ -471,6 +473,10 @@ fsWrite = checking("fs_write", fs_write)
 
 def alloc_fs():
     return lltype.malloc(cConfig["fs_t"], flavor="raw", zero=True)
+
+def fsDiscard(fs):
+    fs_req_cleanup(fs)
+    free(fs)
 
 
 gai_cb = rffi.CCallback([gai_tp, rffi.INT, s.addrinfo_ptr], lltype.Void)

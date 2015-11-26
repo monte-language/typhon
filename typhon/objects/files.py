@@ -88,7 +88,7 @@ def readCB(fs):
 
 def closeCB(fs):
     # Done with fs.
-    ruv.free(fs)
+    ruv.fsDiscard(fs)
 
 
 @autohelp
@@ -326,7 +326,7 @@ def openFountCB(fs):
                 msg = ruv.formatError(fd).decode("utf-8")
                 r.smash(StrObject(u"Couldn't open file fount: %s" % msg))
                 # Done with fs.
-                ruv.free(fs)
+                ruv.fsDiscard(fs)
             else:
                 r.resolve(FileFount(fs, fd, vat))
     except:
@@ -346,7 +346,7 @@ def openDrainCB(fs):
                 msg = ruv.formatError(fd).decode("utf-8")
                 r.smash(StrObject(u"Couldn't open file drain: %s" % msg))
                 # Done with fs.
-                ruv.free(fs)
+                ruv.fsDiscard(fs)
             else:
                 print "succeeded with", fd
                 r.resolve(FileDrain(fs, fd, vat))
@@ -417,7 +417,7 @@ def openGetContentsCB(fs):
             msg = ruv.formatError(fd).decode("utf-8")
             r.smash(StrObject(u"Couldn't open file fount: %s" % msg))
             # Done with fs.
-            ruv.free(fs)
+            ruv.fsDiscard(fs)
         else:
             # Strategy: Read and use the callback to queue additional reads
             # until done. This call is known to its caller to be expensive, so
