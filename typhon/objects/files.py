@@ -90,11 +90,6 @@ def readCB(fs):
         print "Exception in readCB"
 
 
-def closeCB(fs):
-    # Done with fs.
-    ruv.fsDiscard(fs)
-
-
 @autohelp
 class FileFount(Object):
     """
@@ -149,7 +144,7 @@ class FileFount(Object):
 
     def close(self):
         uv_loop = self.vat.uv_loop
-        ruv.fsClose(uv_loop, self.fs, self.fd, closeCB)
+        ruv.fsClose(uv_loop, self.fs, self.fd, ruv.fsDiscard)
         ruv.freeBuf(self.buf)
         self.drain = None
 
@@ -285,7 +280,7 @@ class FileDrain(Object):
 
     def queueClose(self):
         print "queueClose"
-        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
+        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, ruv.fsDiscard)
         self._state = self.CLOSED
 
     def written(self, size):
@@ -392,7 +387,7 @@ class GetContents(Object):
 
     def succeed(self):
         # Clean up libuv stuff.
-        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
+        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, ruv.fsDiscard)
 
         # Finally, resolve.
         buf = "".join(self.pieces)
@@ -400,7 +395,7 @@ class GetContents(Object):
 
     def fail(self, reason):
         # Clean up libuv stuff.
-        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, closeCB)
+        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, ruv.fsDiscard)
 
         # And resolve.
         self.resolver.smash(StrObject(u"libuv error: %s" % reason))
