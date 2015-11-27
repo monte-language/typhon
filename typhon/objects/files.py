@@ -14,6 +14,7 @@
 
 import os
 
+from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rarithmetic import intmask
 from rpython.rtyper.lltypesystem.lltype import scoped_alloc
 from rpython.rtyper.lltypesystem.rffi import charpsize2str
@@ -21,8 +22,8 @@ from rpython.rtyper.lltypesystem.rffi import charpsize2str
 from typhon import log, rsodium, ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
 from typhon.enum import makeEnum
+from typhon.errors import Refused, userError
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapBytes, unwrapStr
 from typhon.objects.refs import LocalResolver, makePromise
@@ -486,6 +487,22 @@ class FileResource(Object):
     def asBytes(self):
         return "/".join(self.segments)
 
+    @specialize.call_location()
+    def open(self, callback, flags=None, mode=None):
+        # Always call this as .open(callback, flags=..., mode=...)
+        assert flags is not None
+        assert mode is not None
+
+        p, r = makePromise()
+        vat = currentVat.get()
+        uv_loop = vat.uv_loop
+        fs = ruv.alloc_fs()
+
+        path = self.asBytes()
+        ruv.stashFS(fs, (vat, r))
+        ruv.fsOpen(uv_loop, fs, path, flags, mode, callback)
+        return p
+
     def rename(self, dest):
         p, r = makePromise()
         vat = currentVat.get()
@@ -506,15 +523,7 @@ class FileResource(Object):
 
     def recv(self, atom, args):
         if atom is GETCONTENTS_0:
-            p, r = makePromise()
-            vat = currentVat.get()
-            uv_loop = vat.uv_loop
-            fs = ruv.alloc_fs()
-
-            ruv.fsOpen(uv_loop, fs, self.asBytes(), 0, os.O_RDONLY,
-                       openGetContentsCB)
-            ruv.stashFS(fs, (vat, r))
-            return p
+            return self.open(openGetContentsCB, flags=os.O_RDONLY, mode=0000)
 
         # XXX lots of effort, no users in mast yet
         # if atom is SETCONTENTS_1:
@@ -526,27 +535,15 @@ class FileResource(Object):
         #     return p
 
         if atom is OPENFOUNT_0:
-            p, r = makePromise()
-            vat = currentVat.get()
-            fs = ruv.alloc_fs()
-            ruv.stashFS(fs, (vat, r))
-            ruv.fsOpen(vat.uv_loop, fs, self.asBytes(), os.O_RDONLY, 0,
-                       openFountCB)
-            return p
+            return self.open(openFountCB, flags=os.O_RDONLY, mode=0000)
 
         if atom is OPENDRAIN_0:
-            p, r = makePromise()
-            vat = currentVat.get()
-            fs = ruv.alloc_fs()
-            ruv.stashFS(fs, (vat, r))
             # Create the file if it doesn't yet exist, and truncate it if it
             # does. Trust the umask to be reasonable for now.
             flags = os.O_CREAT | os.O_WRONLY
             # XXX this behavior should be configurable via namedarg?
             flags |= os.O_TRUNC
-            ruv.fsOpen(vat.uv_loop, fs, self.asBytes(), flags, 0777,
-                       openDrainCB)
-            return p
+            return self.open(openDrainCB, flags=flags, mode=0777)
 
         if atom is RENAME_1:
             fr = args[0]
