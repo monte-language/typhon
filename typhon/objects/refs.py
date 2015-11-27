@@ -16,6 +16,7 @@ import weakref
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
+from typhon.enum import makeEnum
 from typhon.errors import Refused, UserException, userError
 from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
@@ -24,14 +25,8 @@ from typhon.objects.root import Object, audited
 from typhon.vats import currentVat
 
 
-class RefState(object):
-
-    def __init__(self, repr):
-        self.repr = repr
-
-BROKEN = RefState(u"BROKEN")
-EVENTUAL = RefState(u"EVENTUAL")
-NEAR = RefState(u"NEAR")
+BROKEN, EVENTUAL, NEAR = makeEnum(u"RefState",
+                                  u"broken eventual near".split())
 
 BROKEN_1 = getAtom(u"broken", 1)
 FULFILLMENT_1 = getAtom(u"fulfillment", 1)
