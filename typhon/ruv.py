@@ -18,6 +18,8 @@ from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rtyper.tool import rffi_platform
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
+from typhon.log import log
+
 
 class UVError(Exception):
     """
@@ -42,7 +44,8 @@ def check(message, rv):
     rv = intmask(rv)
     if rv < 0:
         uve = UVError(rv, message)
-        print "uv:", uve.repr()
+        log(["uv", "error"],
+            u"libuv API error: %s" % uve.repr().decode("utf-8"))
         raise uve
     return rv
 
@@ -173,13 +176,13 @@ def stashFor(name, struct):
         # uv_t = rffi.cast(struct, uv_t)
         index = theStash.put(obj)
         uv_t.c_data = rffi.cast(rffi.VOIDP, index)
-        # print "stash", name, obj, id(uv_t)
+        log(["uv"], u"Stash %s: Storing %s to 0x%x" % (name, obj, id(uv_t)))
 
     def unstash(uv_t):
         # uv_t = rffi.cast(struct, uv_t)
         index = rffi.cast(rffi.INT, uv_t.c_data)
         obj = theStash.get(index)
-        # print "unstash", name, obj, id(uv_t)
+        log(["uv"], u"Stash %s: Getting %s from 0x%x" % (name, obj, id(uv_t)))
         return obj
 
     class unstashing(object):
