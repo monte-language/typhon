@@ -450,13 +450,112 @@ def renameCB(fs):
     try:
         success = intmask(fs.c_result)
         vat, r = ruv.unstashFS(fs)
+        print "fs", fs, "vat", vat, "resolver", r
         if success < 0:
             msg = ruv.formatError(success).decode("utf-8")
             r.smash(StrObject(u"Couldn't rename file: %s" % msg))
         else:
             r.resolve(NullObject)
-    except Exception:
+        # Done with fs.
+        ruv.fsDiscard(fs)
+    except:
         print "Exception in renameCB"
+
+
+class SetContents(Object):
+
+    pos = 0
+
+    def __init__(self, vat, data, resolver, src, dest):
+        print "sc init"
+        self.vat = vat
+        self.data = data
+        self.resolver = resolver
+        self.src = src
+        self.dest = dest
+
+    def fail(self, reason):
+        print "sc fail"
+        self.resolver.smash(StrObject(reason))
+
+    def queueWrite(self):
+        print "sc queueWrite"
+        with ruv.scopedBufs([self.data]) as bufs:
+            ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
+                        1, self.pos, writeSetContentsCB)
+
+    def startWriting(self, fd, fs):
+        print "sc startWriting"
+        self.fd = fd
+        self.fs = fs
+        self.queueWrite()
+
+    def written(self, size):
+        print "sc written", size
+        self.pos += size
+        self.data = self.data[size:]
+        if self.data:
+            self.queueWrite()
+        else:
+            # Finished writing; let's move on to the rename.
+            ruv.fsClose(self.vat.uv_loop, self.fs, self.fd,
+                        closeSetContentsCB)
+
+    def rename(self):
+        print "sc rename"
+        p = self.src.rename(self.dest.asBytes())
+        self.resolver.resolve(p)
+        # At last, done with fs.
+        ruv.unstashFS(self.fs)
+        ruv.fsDiscard(self.fs)
+
+
+def openSetContentsCB(fs):
+    try:
+        fd = intmask(fs.c_result)
+        with ruv.unstashingFS(fs) as (vat, sc):
+            assert isinstance(sc, SetContents)
+            if fd < 0:
+                msg = ruv.formatError(fd).decode("utf-8")
+                sc.fail(u"Couldn't open file fount: %s" % msg)
+                # Done with fs.
+                ruv.fsDiscard(fs)
+            else:
+                sc.startWriting(fd, fs)
+    except:
+        print "Exception in openSetContentsCB"
+
+
+def writeSetContentsCB(fs):
+    try:
+        with ruv.unstashingFS(fs) as (vat, sc):
+            assert isinstance(sc, SetContents)
+            size = intmask(fs.c_result)
+            if size > 0:
+                sc.written(size)
+            elif size < 0:
+                msg = ruv.formatError(size).decode("utf-8")
+                sc.fail(u"libuv error: %s" % msg)
+    except:
+        print "Exception in writeSetContentsCB"
+
+
+def closeSetContentsCB(fs):
+    print "closeSetContentsCB"
+    try:
+        vat, sc = ruv.unstashFS(fs)
+        # Need to scope vat here.
+        with scopedVat(vat):
+            assert isinstance(sc, SetContents)
+            size = intmask(fs.c_result)
+            print "status", size
+            if size >= 0:
+                sc.rename()
+            elif size < 0:
+                msg = ruv.formatError(size).decode("utf-8")
+                sc.fail(u"libuv error: %s" % msg)
+    except:
+        print "Exception in closeSetContentsCB"
 
 
 @autohelp
@@ -505,8 +604,9 @@ class FileResource(Object):
         fs = ruv.alloc_fs()
 
         src = self.asBytes()
-        ruv.fsRename(uv_loop, fs, src, dest, renameCB)
         ruv.stashFS(fs, (vat, r))
+        print "fs", fs, "vat", vat, "resolver", r
+        ruv.fsRename(uv_loop, fs, src, dest, renameCB)
         return p
 
     def sibling(self, segment):
@@ -520,14 +620,23 @@ class FileResource(Object):
         if atom is GETCONTENTS_0:
             return self.open(openGetContentsCB, flags=os.O_RDONLY, mode=0000)
 
-        # XXX lots of effort, no users in mast yet
-        # if atom is SETCONTENTS_1:
-        #     data = unwrapBytes(args[0])
+        if atom is SETCONTENTS_1:
+            data = unwrapBytes(args[0])
+            sibling = self.temporarySibling(".setContents")
 
-        #     p, r = makePromise()
-        #     vat = currentVat.get()
-        #     vat.afterTurn(SetContents(self.asBytes(), data, r))
-        #     return p
+            p, r = makePromise()
+            vat = currentVat.get()
+            uv_loop = vat.uv_loop
+            fs = ruv.alloc_fs()
+
+            path = sibling.asBytes()
+            # Use CREAT | EXCL to cause a failure if the temporary file
+            # already exists.
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            sc = SetContents(vat, data, r, sibling, self)
+            ruv.stashFS(fs, (vat, sc))
+            ruv.fsOpen(uv_loop, fs, path, flags, 0777, openSetContentsCB)
+            return p
 
         if atom is OPENFOUNT_0:
             return self.open(openFountCB, flags=os.O_RDONLY, mode=0000)
