@@ -11,7 +11,7 @@ import os
 from functools import wraps
 
 from rpython.rlib import _rsocket_rffi as s
-from rpython.rlib.objectmodel import specialize
+from rpython.rlib.objectmodel import current_object_addr_as_int, specialize
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.rawstorage import alloc_raw_storage, free_raw_storage
 from rpython.rtyper.lltypesystem import lltype, rffi
@@ -141,6 +141,7 @@ def stashFor(name, struct):
             self.storage = [(None, None)] * initialSize
 
         def get(self, index):
+            assert index not in self.freeList, "stash: Double get()"
             rv = self.storage[index]
             # Zero out the reference in storage so that the object doesn't live
             # too long.
@@ -172,17 +173,24 @@ def stashFor(name, struct):
 
     theStash = Stash()
 
+    def formatTuple((fst, snd)):
+        return u"(%s, %s)" % (fst.toQuote(), snd.toQuote())
+
     def stash(uv_t, obj):
         # uv_t = rffi.cast(struct, uv_t)
         index = theStash.put(obj)
         uv_t.c_data = rffi.cast(rffi.VOIDP, index)
-        log(["uv"], u"Stash %s: Storing %s to 0x%x" % (name, obj, id(uv_t)))
+        log(["uv"], u"Stash %s: Storing %s to %d (0x%x)" %
+                    (name.decode("utf-8"), formatTuple(obj), intmask(index),
+                     current_object_addr_as_int(uv_t)))
 
     def unstash(uv_t):
         # uv_t = rffi.cast(struct, uv_t)
         index = rffi.cast(rffi.INT, uv_t.c_data)
         obj = theStash.get(index)
-        log(["uv"], u"Stash %s: Getting %s from 0x%x" % (name, obj, id(uv_t)))
+        log(["uv"], u"Stash %s: Getting %s from %d (0x%x)" %
+                    (name.decode("utf-8"), formatTuple(obj), intmask(index),
+                     current_object_addr_as_int(uv_t)))
         return obj
 
     class unstashing(object):

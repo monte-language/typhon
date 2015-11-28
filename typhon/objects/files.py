@@ -244,11 +244,9 @@ class FileDrain(Object):
 
     def receive(self, data):
         if self._state in (self.READY, self.WRITING, self.BUSY):
-            print "receive"
             self.bufs.append(data)
 
             if self._state is self.READY:
-                print "receive ready"
                 # We're not writing right now, so queue a write.
                 self.queueWrite()
                 self._state = self.WRITING
@@ -257,7 +255,6 @@ class FileDrain(Object):
                             self._state.repr)
 
     def abort(self, reason):
-        print "Aborting file drain:", reason
         if self.fount is not None:
             with scopedVat(self.vat):
                 from typhon.objects.collections import EMPTY_MAP
@@ -265,13 +262,11 @@ class FileDrain(Object):
         self.closing()
 
     def queueWrite(self):
-        print "queueWrite"
         with ruv.scopedBufs(self.bufs) as bufs:
             ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
                         len(self.bufs), self.pos, writeCB)
 
     def closing(self):
-        print "closing"
         if self._state is self.READY:
             # Optimization: proceed directly to CLOSED if there's no
             # outstanding writes.
@@ -279,12 +274,10 @@ class FileDrain(Object):
         self._state = self.CLOSING
 
     def queueClose(self):
-        print "queueClose"
         ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, ruv.fsDiscard)
         self._state = self.CLOSED
 
     def written(self, size):
-        print "written", size
         self.pos += size
         bufs = []
         for buf in self.bufs:
@@ -333,7 +326,6 @@ def openFountCB(fs):
 
 
 def openDrainCB(fs):
-    print "Entering openDrainCB"
     # As above.
     try:
         fd = intmask(fs.c_result)
@@ -341,13 +333,11 @@ def openDrainCB(fs):
         assert isinstance(r, LocalResolver)
         with scopedVat(vat):
             if fd < 0:
-                print "failed with", ruv.formatError(fd)
                 msg = ruv.formatError(fd).decode("utf-8")
                 r.smash(StrObject(u"Couldn't open file drain: %s" % msg))
                 # Done with fs.
                 ruv.fsDiscard(fs)
             else:
-                print "succeeded with", fd
                 r.resolve(FileDrain(fs, fd, vat))
     except:
         print "Exception in openDrainCB"
@@ -450,7 +440,6 @@ def renameCB(fs):
     try:
         success = intmask(fs.c_result)
         vat, r = ruv.unstashFS(fs)
-        print "fs", fs, "vat", vat, "resolver", r
         if success < 0:
             msg = ruv.formatError(success).decode("utf-8")
             r.smash(StrObject(u"Couldn't rename file: %s" % msg))
@@ -467,7 +456,6 @@ class SetContents(Object):
     pos = 0
 
     def __init__(self, vat, data, resolver, src, dest):
-        print "sc init"
         self.vat = vat
         self.data = data
         self.resolver = resolver
@@ -475,23 +463,19 @@ class SetContents(Object):
         self.dest = dest
 
     def fail(self, reason):
-        print "sc fail"
         self.resolver.smash(StrObject(reason))
 
     def queueWrite(self):
-        print "sc queueWrite"
         with ruv.scopedBufs([self.data]) as bufs:
             ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
                         1, self.pos, writeSetContentsCB)
 
     def startWriting(self, fd, fs):
-        print "sc startWriting"
         self.fd = fd
         self.fs = fs
         self.queueWrite()
 
     def written(self, size):
-        print "sc written", size
         self.pos += size
         self.data = self.data[size:]
         if self.data:
@@ -502,11 +486,11 @@ class SetContents(Object):
                         closeSetContentsCB)
 
     def rename(self):
-        print "sc rename"
+        # And issuing the rename is surprisingly straightforward.
         p = self.src.rename(self.dest.asBytes())
         self.resolver.resolve(p)
-        # At last, done with fs.
-        ruv.unstashFS(self.fs)
+        # At last, done with fs. No need to unstash; it was already unstashed
+        # in the callback. (We're being called *from the callback*.)
         ruv.fsDiscard(self.fs)
 
 
@@ -541,19 +525,18 @@ def writeSetContentsCB(fs):
 
 
 def closeSetContentsCB(fs):
-    print "closeSetContentsCB"
     try:
         vat, sc = ruv.unstashFS(fs)
         # Need to scope vat here.
         with scopedVat(vat):
             assert isinstance(sc, SetContents)
             size = intmask(fs.c_result)
-            print "status", size
-            if size >= 0:
-                sc.rename()
-            elif size < 0:
+            if size < 0:
                 msg = ruv.formatError(size).decode("utf-8")
                 sc.fail(u"libuv error: %s" % msg)
+            else:
+                # Success.
+                sc.rename()
     except:
         print "Exception in closeSetContentsCB"
 
@@ -605,7 +588,6 @@ class FileResource(Object):
 
         src = self.asBytes()
         ruv.stashFS(fs, (vat, r))
-        print "fs", fs, "vat", vat, "resolver", r
         ruv.fsRename(uv_loop, fs, src, dest, renameCB)
         return p
 
