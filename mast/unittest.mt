@@ -77,12 +77,29 @@ def makeAsserter() as DeepFrozen:
         to run(label :Str):
             "Make a new `assert` with the given logging label."
 
+            var todo :Bool := false
+
             return object assert:
                 "Assert stuff."
 
                 to fail(message :Str):
-                    fails += 1
-                    throw(logIt(label, message))
+                    "Indicate that an invariant failed, with a customizeable
+                     message."
+
+                    if (todo):
+                        logIt(label, `SILENCED (todo): $message`)
+                    else:
+                        fails += 1
+                        throw(logIt(label, message))
+
+                to todo(reason :Str):
+                    "Neuter this asserter.
+
+                     Messages will still be logged, but failures will not be
+                     counted."
+
+                    logIt(label, `TODO: $reason`)
+                    todo := true
 
                 to doesNotEject(f):
                     escape e:
