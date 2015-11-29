@@ -128,7 +128,7 @@ def main(=> makeStdOut, => Timer, => currentProcess, => unsealException,
 
     def args := currentProcess.getArguments()
     for path in args.slice(2, args.size()):
-        import(path, [=> unittest])
+        import.script(path, [=> &&unittest])
 
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout<-flowTo(makeStdOut())
