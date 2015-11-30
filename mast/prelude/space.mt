@@ -11,8 +11,8 @@ object _makeOrderedSpace extends OrderedSpaceMaker as DeepFrozen:
     to spaceOfValue(value):
         "Return the ordered space corresponding to a given value.
 
-         The correspondence is obtained via Miranda _getAllegedType(), with
-         special cases for `Char`, `Double`, and `Int`."
+         The correspondence is obtained via Miranda _getAllegedInterface(),
+         with special cases for `Char`, `Double`, and `Int`."
 
         if (value =~ i :Int):
             return intSpace
@@ -21,8 +21,7 @@ object _makeOrderedSpace extends OrderedSpaceMaker as DeepFrozen:
         else if (value =~ c :Char):
             return charSpace
         else:
-            # XXX does not work in any known implementation
-            def type := value._getAllegedType()
+            def type := value._getAllegedInterface()
             return OrderedSpaceMaker(type, M.toQuote(type))
 
     to op__till(start, bound):
