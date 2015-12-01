@@ -664,7 +664,8 @@ def [=> SubrangeGuard, => DeepFrozen] := import.script(
     [=> &&_comparer, => &&_booleanFlow, => &&_makeVerbFacet,
      => &&_validateFor, => &&_bind,
      => &&DeepFrozenStamp, => &&TransparentStamp,
-     => &&Bool, => &&Char, => &&Double, => &&Int, => &&Str, => &&Void,
+     => &&Bool, => &&Bytes, => &&Char, => &&Double, => &&Int, => &&Str,
+     => &&Void,
      => &&List, => &&Map, => &&NullOk, => &&Same, => &&Set,
      ])
 

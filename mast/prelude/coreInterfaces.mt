@@ -168,9 +168,44 @@ interface coreStr extends Comparable:
     to _makeIterator()
 
 
+interface coreBytes extends Comparable:
+    "Octet strings."
+
+    to getSpan()
+
+    to asList() :List[Int]
+    to asSet() :Set[Int]
+
+    to add(other) :Bytes
+    to join(pieces :List[Bytes]) :Bytes
+    to multiply(count :Int) :Bytes
+    to replace(old :Bytes, new :Bytes) :Bytes
+    to with(last :Int) :Bytes
+
+    to contains(needle) :Bool
+    to endsWith(needle :Bytes) :Bool
+    to startsWith(needle :Bytes) :Bool
+
+    to get(index :Int) :Int
+    to slice(start :Int) :Bytes
+    to slice(start :Int, stop :Int) :Bytes
+    to split(needle :Bytes) :List[Bytes]
+    to split(needle :Bytes, count :Int) :List[Bytes]
+
+    to indexOf(needle :Bytes) :Int
+    to indexOf(needle :Bytes, offset :Int) :Int
+    to lastIndexOf(needle :Bytes) :Int
+    to lastIndexOf(needle :Bytes, offset :Int) :Int
+
+    to size() :Int
+
+    to _makeIterator()
+
+
 [
     "Void" => compose(Void, coreVoid),
     "Bool" => compose(Bool, coreBool),
+    "Bytes" => compose(Bytes, coreBytes),
     "Char" => compose(Char, coreChar),
     "Double" => compose(Double, coreDouble),
     "Int" => compose(Int, coreInt),

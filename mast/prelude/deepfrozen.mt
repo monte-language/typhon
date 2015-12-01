@@ -73,7 +73,7 @@ def checkDeepFrozen(specimen, sofar, ej, root) as DeepFrozenStamp:
 
 
 def auditDeepFrozen
-def dataGuards := [Bool, Char, Double, Int, Str, Void]
+def dataGuards := [Bool, Bytes, Char, Double, Int, Str, Void]
 object DeepFrozen implements DeepFrozenStamp:
     "Transitive immutability.
 
