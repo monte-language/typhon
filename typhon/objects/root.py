@@ -125,8 +125,11 @@ class Object(object):
 
             if atom is _GETALLEGEDINTERFACE_0:
                 # Welcome to _getAllegedInterface/0.
-                from typhon.objects.interfaces import ComputedInterface
-                return ComputedInterface(self)
+                interface = self.optInterface()
+                if interface is None:
+                    from typhon.objects.interfaces import ComputedInterface
+                    interface = ComputedInterface(self)
+                return interface
 
             if atom is _PRINTON_1:
                 # Welcome to _printOn/1.
@@ -213,6 +216,11 @@ class Object(object):
 
         # Sorry, but nope.
         return False
+
+    def optInterface(self):
+        return None
+
+    # Pretty-printing.
 
     def printOn(self, printer):
         # Note that the printer is a Monte-level object.

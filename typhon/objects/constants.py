@@ -16,6 +16,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.root import Object, audited
+from typhon.prelude import getGlobalValue
 
 
 AND_1 = getAtom(u"and", 1)
@@ -39,6 +40,9 @@ class _NullObject(Object):
     def toString(self):
         return u"null"
 
+    def optInterface(self):
+        return getGlobalValue(u"Void")
+
 
 NullObject = _NullObject()
 
@@ -57,6 +61,9 @@ class BoolObject(Object):
 
     def toString(self):
         return u"true" if self._b else u"false"
+
+    def optInterface(self):
+        return getGlobalValue(u"Bool")
 
     def recv(self, atom, args):
 

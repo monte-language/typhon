@@ -32,6 +32,7 @@ from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.root import Object, audited, runnable
+from typhon.prelude import getGlobalValue
 from typhon.quoting import quoteChar, quoteStr
 
 
@@ -142,6 +143,9 @@ class CharObject(Object):
         # Don't waste time with the traditional string hash.
         return ord(self._c)
 
+    def optInterface(self):
+        return getGlobalValue(u"Char")
+
     def recv(self, atom, args):
         if atom is ADD_1:
             other = unwrapInt(args[0])
@@ -214,6 +218,9 @@ class DoubleObject(Object):
 
     def hash(self):
         return _hash_float(self._d)
+
+    def optInterface(self):
+        return getGlobalValue(u"Double")
 
     def recv(self, atom, args):
         # Doubles can be compared.
@@ -334,6 +341,9 @@ class IntObject(Object):
     def hash(self):
         # This is what CPython and RPython do.
         return self._i
+
+    def optInterface(self):
+        return getGlobalValue(u"Int")
 
     def recv(self, atom, args):
         # Ints can be compared to ints and also to doubles.
@@ -579,6 +589,9 @@ class BigInt(Object):
 
     def hash(self):
         return self.bi.hash()
+
+    def optInterface(self):
+        return getGlobalValue(u"Int")
 
     def sizeOf(self):
         return (rgc.get_rpy_memory_usage(self) +
@@ -960,6 +973,9 @@ class StrObject(Object):
         return (rgc.get_rpy_memory_usage(self) +
                 rgc.get_rpy_memory_usage(self._s))
 
+    def optInterface(self):
+        return getGlobalValue(u"Str")
+
     def recv(self, atom, args):
         if atom is ADD_1:
             other = args[0]
@@ -1232,6 +1248,9 @@ class BytesObject(Object):
     def sizeOf(self):
         return (rgc.get_rpy_memory_usage(self) +
                 rgc.get_rpy_memory_usage(self._bs))
+
+    def optInterface(self):
+        return getGlobalValue(u"Bytes")
 
     def recv(self, atom, args):
         if atom is ADD_1:

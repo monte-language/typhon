@@ -28,3 +28,15 @@ def registerGlobals(d):
 def getGlobal(k):
     assert isinstance(k, unicode)
     return gs.get(k, None)
+
+getGlobalBinding = getGlobal
+
+
+def getGlobalValue(k):
+    assert isinstance(k, unicode)
+    binding = gs.get(k, None)
+    if binding is not None:
+        from typhon.objects.slots import Binding
+        assert isinstance(binding, Binding)
+        return binding.getValue()
+    return None
