@@ -21,7 +21,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import IntObject, StrObject, unwrapInt
+from typhon.objects.data import IntObject, StrObject, unwrapBool, unwrapInt
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
@@ -66,9 +66,13 @@ def monteLessThan(left, right):
     # Yes, this is ugly, but it *does* work. ~ C.
     # XXX Oh wait, it doesn't work. Try sorting a list of regions~
     try:
-        return unwrapInt(left.call(u"op__cmp", [right])) < 0
+        comparison = left.call(u"op__cmp", [right])
+        b = comparison.call(u"belowZero", [])
+        return unwrapBool(b)
     except UserException:
-        return unwrapInt(right.call(u"op__cmp", [left])) > 0
+        comparison = right.call(u"op__cmp", [left])
+        b = comparison.call(u"aboveZero", [])
+        return unwrapBool(b)
 
 MonteSorter = make_timsort_class(lt=monteLessThan)
 
