@@ -8,6 +8,29 @@ object patternHoleMarker as DeepFrozen:
     pass
 
 
+def specialDecodeChars :Map[Char, Str] := [
+    '"' => "\"",
+    '\\' => "\\",
+    '/' => "/",
+    'b' => "\b",
+    'f' => "\f",
+    'n' => "\n",
+    'r' => "\r",
+    't' => "\t",
+]
+
+def specialEncodeChars :Map[Char, Str] := [
+    '"' => "\\\"",
+    '\\' => "\\\\",
+    '/' => "\\/",
+    '\b' => "\\b",
+    '\f' => "\\f",
+    '\n' => "\\n",
+    '\r' => "\\r",
+    '\t' => "\\t",
+]
+
+
 def makeStream(s :Str) as DeepFrozen:
     var index :Int := 0
     return object stream:
@@ -80,6 +103,10 @@ def makeLexer() as DeepFrozen:
                 switch (stream.next()):
                     match =='"':
                         break
+                    match =='\\':
+                        def c := stream.next()
+                        buf.push(specialDecodeChars.fetch(c,
+                            fn {throw(`Bad escape character $c`)}))
                     match c:
                         buf.push(c.asString())
 
@@ -234,18 +261,6 @@ object json__quasiParser as DeepFrozen:
         return [patternHoleMarker, index]
 
 
-def specialChars :Map[Char, Str] := [
-    '"' => "\\\"",
-    '\\' => "\\\\",
-    '/' => "\\/",
-    '\b' => "\\b",
-    '\f' => "\\f",
-    '\n' => "\\n",
-    '\r' => "\\r",
-    '\t' => "\\t",
-]
-
-
 object JSON as DeepFrozen:
     "The JSON data format."
 
@@ -281,7 +296,8 @@ object JSON as DeepFrozen:
                 throw.eject(ej, `$specimen isn't representable in JSON`)
 
     to encodeStr(s :Str) :Str:
-        def pieces := [for c in (s) specialChars.fetch(c, fn {c.asString()})]
+        def pieces := [for c in (s)
+                       specialEncodeChars.fetch(c, fn {c.asString()})]
         return `"${"".join(pieces)}"`
 
 
@@ -290,9 +306,17 @@ def testJSONDecode(assert):
     assert.equal(JSON.decode(specimen, null),
                  ["first" => 42, "second" => [5, 7]])
 
+def testJSONDecodeSlash(assert):
+    def specimen := "{\"face\\/off\":1997}"
+    assert.equal(JSON.decode(specimen, null), ["face/off" => 1997])
+
 def testJSONEncode(assert):
     def specimen := ["first" => 42, "second" => [5, 7]]
     assert.equal(JSON.encode(specimen, null),
                  "{\"first\":42,\"second\":[5,7]}")
 
-unittest([testJSONDecode, testJSONEncode])
+unittest([
+    testJSONDecode,
+    testJSONDecodeSlash,
+    testJSONEncode,
+])
