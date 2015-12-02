@@ -20,7 +20,7 @@ from unittest import TestCase
 from rpython.rlib.rbigint import rbigint
 
 from typhon.errors import Ejecting, UserException
-from typhon.objects.collections import ConstList, unwrapList
+from typhon.objects.collections.lists import ConstList, unwrapList
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.ejectors import Ejector

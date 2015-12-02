@@ -1,11 +1,12 @@
 from rpython.rlib import rgc
 from rpython.rlib.rerased import new_erasing_pair
 
-from typhon import ruv
+# from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.collections import ConstList, ConstMap, monteDict
+from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.maps import ConstMap, monteMap
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object
 from typhon.objects.user import ScriptObject
@@ -77,7 +78,7 @@ class Heap(Object):
 
     def recv(self, atom, args):
         if atom is GETBUCKETS_0:
-            d = monteDict()
+            d = monteMap()
             for name, count in self.buckets.items():
                 size = self.sizes.get(name, -1)
                 d[StrObject(name)] = ConstList([IntObject(size),

@@ -45,7 +45,7 @@ class Timer(Object):
     """
 
     def recv(self, atom, args):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         if atom is FROMNOW_1:
             duration = promoteToDouble(args[0])
             p, r = makePromise()

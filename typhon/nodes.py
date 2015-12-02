@@ -17,7 +17,7 @@ import textwrap
 from collections import OrderedDict
 
 from rpython.rlib import rvmprof
-from rpython.rlib.jit import elidable, elidable_promote
+from rpython.rlib.jit import elidable
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rbigint import BASE10
@@ -27,8 +27,9 @@ from typhon.autohelp import autohelp
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.collections import (ConstList, ConstSet, EMPTY_MAP,
-                                        monteDict, unwrapList)
+from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.maps import EMPTY_MAP, monteMap
+from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, promoteToBigInt, unwrapStr)
 from typhon.objects.ejectors import throw
@@ -370,7 +371,8 @@ class Node(Object):
 
 
 def wrapNameList(names):
-    d = monteDict()
+    # XXX monteMap()
+    d = monteMap()
     for name in names:
         d[StrObject(name)] = None
     return ConstSet(d)

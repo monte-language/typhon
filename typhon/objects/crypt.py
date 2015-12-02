@@ -8,7 +8,7 @@ from typhon import rsodium
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.collections import ConstList
+from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object
 

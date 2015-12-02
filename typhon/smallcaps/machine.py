@@ -19,8 +19,8 @@ from rpython.rlib.objectmodel import specialize
 from typhon.atoms import getAtom
 from typhon.env import Environment
 from typhon.errors import Ejecting, UserException, userError
-from typhon.objects.collections import (EMPTY_MAP, ConstMap, monteDict,
-                                        unwrapList, unwrapMap)
+from typhon.objects.collections.lists import unwrapList
+from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, theThrower, throw
@@ -36,7 +36,8 @@ PUT_1 = getAtom(u"put", 1)
 
 
 def mkMirandaArgs():
-    _d = monteDict()
+    # XXX monteMap()
+    _d = monteMap()
     _d[StrObject(u"FAIL")] = theThrower
     return ConstMap(_d)
 
@@ -143,7 +144,8 @@ class SmallCaps(object):
 
     @unroll_safe
     def buildMap(self, index):
-        d = monteDict()
+        # XXX monteMap()
+        d = monteMap()
         for i in range(index):
             # Yikes, the order of operations here is dangerous.
             d[self.pop()] = self.pop()

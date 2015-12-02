@@ -17,7 +17,8 @@ from rpython.rlib.jit import JitDriver, promote
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.collections import EMPTY_MAP, unwrapList
+from typhon.objects.collections.lists import unwrapList
+from typhon.objects.collections.maps import EMPTY_MAP
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.root import runnable

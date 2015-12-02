@@ -16,7 +16,7 @@ from unittest import TestCase
 
 from rpython.rlib.rbigint import rbigint
 
-from typhon.objects.collections import ConstList
+from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, isSettled, optSame

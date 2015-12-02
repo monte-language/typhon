@@ -2,7 +2,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.constants import NullObject
-from typhon.objects.collections import ConstSet, monteDict
+from typhon.objects.collections.sets import ConstSet, monteSet
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object
 
@@ -66,7 +66,7 @@ class ComputedInterface(Object):
             return NullObject
 
         if atom is GETMETHODS_0:
-            d = monteDict()
+            d = monteSet()
             for atom in self.atoms:
                 d[ComputedMethod(atom.arity, None, atom.verb)] = None
             return ConstSet(d)

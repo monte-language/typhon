@@ -30,13 +30,13 @@ PUT_1 = getAtom(u"put", 1)
 def bindingToSlot(binding):
     if isinstance(binding, Binding):
         return binding.get()
-    from typhon.objects.collections import EMPTY_MAP
+    from typhon.objects.collections.maps import EMPTY_MAP
     return binding.callAtom(GET_0, [], EMPTY_MAP)
 
 
 @always_inline
 def bindingToValue(binding):
-    from typhon.objects.collections import EMPTY_MAP
+    from typhon.objects.collections.maps import EMPTY_MAP
     if isinstance(binding, Binding):
         slot = binding.get()
     else:
@@ -46,7 +46,7 @@ def bindingToValue(binding):
 
 @always_inline
 def assignValue(binding, value):
-    from typhon.objects.collections import EMPTY_MAP
+    from typhon.objects.collections.maps import EMPTY_MAP
     slot = binding.callAtom(GET_0, [], EMPTY_MAP)
     # Speed up VarSlots.
     if isinstance(slot, VarSlot):

@@ -131,13 +131,13 @@ class FileFount(Object):
         raise Refused(self, atom, args)
 
     def stop(self, reason):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         self.vat.sendOnly(self.drain, FLOWSTOPPED_1, [StrObject(reason)],
                           EMPTY_MAP)
         self.close()
 
     def abort(self, reason):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         self.vat.sendOnly(self.drain, FLOWABORTED_1, [StrObject(reason)],
                           EMPTY_MAP)
         self.close()
@@ -165,7 +165,7 @@ class FileFount(Object):
                        readCB)
 
     def receive(self, data):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         # Advance the file pointer.
         self.pos += len(data)
         self.vat.sendOnly(self.drain, RECEIVE_1, [BytesObject(data)],
@@ -257,7 +257,7 @@ class FileDrain(Object):
     def abort(self, reason):
         if self.fount is not None:
             with scopedVat(self.vat):
-                from typhon.objects.collections import EMPTY_MAP
+                from typhon.objects.collections.maps import EMPTY_MAP
                 self.vat.sendOnly(self.fount, ABORTFLOW_0, [], EMPTY_MAP)
         self.closing()
 

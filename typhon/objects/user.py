@@ -18,7 +18,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
-from typhon.objects.collections import ConstList
+from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector
 from typhon.objects.guards import anyGuard

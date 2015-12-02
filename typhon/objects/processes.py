@@ -4,8 +4,8 @@ import signal
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.collections import (ConstList, ConstMap, monteDict,
-                                        unwrapList, unwrapMap)
+from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapStr
 from typhon.objects.root import Object, runnable
@@ -36,7 +36,8 @@ class CurrentProcess(Object):
                               for arg in self.config.argv])
 
         if atom is GETENVIRONMENT_0:
-            d = monteDict()
+            # XXX monteMap()
+            d = monteMap()
             for key, value in os.environ.items():
                 k = StrObject(key.decode("utf-8"))
                 v = StrObject(value.decode("utf-8"))
@@ -73,7 +74,8 @@ class SubProcess(Object):
                               for arg in self.argv])
 
         if atom is GETENVIRONMENT_0:
-            d = monteDict()
+            # XXX monteMap()
+            d = monteMap()
             for key, value in self.env.items():
                 k = StrObject(key.decode("utf-8"))
                 v = StrObject(value.decode("utf-8"))

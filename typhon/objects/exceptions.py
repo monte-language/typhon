@@ -1,7 +1,7 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.collections import ConstList
+from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import throw
 from typhon.objects.root import Object, runnable

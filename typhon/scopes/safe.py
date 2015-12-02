@@ -20,8 +20,9 @@ from typhon.autohelp import autohelp
 from typhon.env import finalize
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
-from typhon.objects.collections import (EMPTY_MAP, ConstList, ConstMap,
-                                        listFromIterable, unwrapList)
+from typhon.objects.collections.lists import (ConstList, listFromIterable,
+                                              unwrapList)
+from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
                                  StrObject, makeSourceSpan, unwrapInt,

@@ -56,7 +56,7 @@ class Vat(Object):
         return u"<vat(%s, %d turns pending)>" % (self.name, len(self._pending))
 
     def recv(self, atom, args):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         if atom is SEED_1:
             f = args[0]
             if not f.auditedBy(deepFrozenStamp):
@@ -124,9 +124,10 @@ class Vat(Object):
                 print "Uncaught exception while taking turn:", ue.formatError()
 
         else:
-            from typhon.objects.collections import ConstMap, monteDict
+            from typhon.objects.collections.maps import ConstMap, monteMap
             from typhon.objects.refs import Smash
-            _d = monteDict()
+            # XXX monteMap()
+            _d = monteMap()
             _d[StrObject(u"FAIL")] = Smash(resolver)
             MIRANDA_ARGS = ConstMap(_d)
             namedArgs = namedArgs._or(MIRANDA_ARGS)

@@ -19,7 +19,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.collections import ConstList, unwrapList
+from typhon.objects.collections.lists import ConstList, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject, unwrapBytes, unwrapInt
 from typhon.objects.networking.streams import StreamDrain, StreamFount
@@ -159,7 +159,7 @@ def connectionCB(uv_server, status):
             # Actually accept the connection.
             ruv.accept(uv_server, uv_client)
             # Incant the handler.
-            from typhon.objects.collections import EMPTY_MAP
+            from typhon.objects.collections.maps import EMPTY_MAP
             vat.sendOnly(handler, RUN_2, [StreamFount(uv_client, vat),
                                           StreamDrain(uv_client, vat)],
                          EMPTY_MAP)

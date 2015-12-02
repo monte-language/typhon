@@ -109,7 +109,7 @@ class StreamFount(Object):
             # flowingFrom/1 has been called, *but* flush/0 will be queued in a
             # subsequent send to the the one queued here, so we're fine as far
             # as ordering. ~ C.
-            from typhon.objects.collections import EMPTY_MAP
+            from typhon.objects.collections.maps import EMPTY_MAP
             rv = self.vat.send(self._drain, FLOWINGFROM_1, [self], EMPTY_MAP)
             self.considerFlush()
             return rv
@@ -133,14 +133,14 @@ class StreamFount(Object):
 
     def abort(self, reason):
         if self._drain is not None:
-            from typhon.objects.collections import EMPTY_MAP
+            from typhon.objects.collections.maps import EMPTY_MAP
             self.vat.sendOnly(self._drain, FLOWABORTED_1, [StrObject(reason)],
                               EMPTY_MAP)
         self.cleanup()
 
     def stop(self, reason):
         if self._drain is not None:
-            from typhon.objects.collections import EMPTY_MAP
+            from typhon.objects.collections.maps import EMPTY_MAP
             self.vat.sendOnly(self._drain, FLOWSTOPPED_1, [StrObject(reason)],
                               EMPTY_MAP)
         self.cleanup()
@@ -183,7 +183,7 @@ class StreamFount(Object):
                 ruv.stashStream(self.stream, (self.vat, self))
                 ruv.readStart(self.stream, ruv.allocCB, readCB)
                 self._reading = True
-            from typhon.objects.collections import EMPTY_MAP
+            from typhon.objects.collections.maps import EMPTY_MAP
             self.vat.sendOnly(self, FLUSH_0, [], EMPTY_MAP)
 
     def flush(self):

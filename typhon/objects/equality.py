@@ -18,7 +18,8 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.auditors import selfless, transparentStamp
-from typhon.objects.collections import ConstList, ConstMap, unwrapList
+from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.maps import ConstMap
 from typhon.objects.constants import BoolObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)

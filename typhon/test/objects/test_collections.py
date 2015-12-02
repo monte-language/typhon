@@ -17,22 +17,23 @@
 from unittest import TestCase
 
 from typhon.errors import UserException
-from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
-                                        FlexList, monteDict, unwrapList)
+from typhon.objects.collections.lists import ConstList, FlexList, unwrapList
+from typhon.objects.collections.maps import ConstMap, monteMap
+from typhon.objects.collections.sets import ConstSet, monteSet
 from typhon.objects.data import CharObject, IntObject
 
 
 class TestConstMap(TestCase):
 
     def testContains(self):
-        d = monteDict()
+        d = monteMap()
         d[IntObject(42)] = IntObject(5)
         m = ConstMap(d)
         self.assertTrue(m.contains(IntObject(42)))
         self.assertFalse(m.contains(IntObject(7)))
 
     def testToString(self):
-        d = monteDict()
+        d = monteMap()
         self.assertEqual(ConstMap(d).toString(), u"[].asMap()")
 
 
@@ -121,7 +122,7 @@ class TestFlexList(TestCase):
 class TestConstSet(TestCase):
 
     def testHashEqual(self):
-        d = monteDict()
+        d = monteSet()
         d[IntObject(42)] = None
         d[CharObject(u'¡')] = None
         a = ConstSet(d)
@@ -129,10 +130,10 @@ class TestConstSet(TestCase):
         self.assertEqual(a.hash(), b.hash())
 
     def testToStringEmpty(self):
-        d = monteDict()
+        d = monteSet()
         self.assertEqual(ConstSet(d).toString(), u"[].asSet()")
 
     def testToString(self):
-        d = monteDict()
+        d = monteSet()
         d[IntObject(42)] = None
         self.assertEqual(ConstSet(d).toString(), u"[42].asSet()")

@@ -18,7 +18,7 @@ from rpython.rlib.jit import dont_look_inside
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.collections import ConstMap, monteDict, unwrapMap
+from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.guards import anyGuard
@@ -59,7 +59,7 @@ class Import(Object):
         # Get module.
         module, _ = evaluateRaise([term], self.scope)
 
-        scope = monteDict()
+        scope = monteMap()
         DFb = getGlobal(u"DeepFrozen")
         if DFb is None:
             g = anyGuard

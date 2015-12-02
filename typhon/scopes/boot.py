@@ -19,8 +19,9 @@ from typhon.errors import LoadFailed, Refused, userError
 from typhon.importing import evaluateRaise, obtainModuleFromSource
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
-from typhon.objects.collections import (ConstList, ConstMap, ConstSet,
-                                        monteDict, unwrapMap)
+from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
+from typhon.objects.collections.sets import ConstSet
 from typhon.objects.constants import BoolObject
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject,
@@ -98,7 +99,8 @@ def evalToPair(source, envMap, recorder):
     # eval() or whatnot.
     result, newEnv = evaluateRaise([code], environment)
     if newEnv is not None:
-        d = monteDict()
+        # XXX monteMap()
+        d = monteMap()
         for k, vi in topLocals.items():
             d[StrObject(k)] = newEnv.local[vi]
         addendum = ConstMap(d)

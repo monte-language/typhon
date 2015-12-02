@@ -14,8 +14,8 @@
 
 from unittest import TestCase
 
-from typhon.objects.collections import (ConstList, ConstMap, unwrapList,
-                                        unwrapMap)
+from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.maps import ConstMap, unwrapMap
 from typhon.objects.constants import unwrapBool, wrapBool
 from typhon.objects.data import (DoubleObject, IntObject, promoteToDouble,
                                  unwrapInt)

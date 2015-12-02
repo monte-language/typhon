@@ -11,7 +11,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.collections import ConstList
+from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import (bytesToString, unwrapBytes, BytesObject,
                                  StrObject)
 from typhon.objects.refs import LocalResolver, makePromise

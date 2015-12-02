@@ -861,7 +861,8 @@ class SourceSpan(Object):
         if atom is NOTONETOONE_0:
             return self.notOneToOne()
         if atom is _UNCALL_0:
-            from typhon.objects.collections import EMPTY_MAP, ConstList
+            from typhon.objects.collections.lists import ConstList
+            from typhon.objects.collections.maps import EMPTY_MAP
             return ConstList([
                 makeSourceSpan, StrObject(u"run"),
                 ConstList([wrapBool(self._isOneToOne), IntObject(self.startLine),
@@ -927,7 +928,7 @@ class strIterator(Object):
     def recv(self, atom, args):
         if atom is NEXT_1:
             if self._index < len(self.s):
-                from typhon.objects.collections import ConstList
+                from typhon.objects.collections.lists import ConstList
                 rv = [IntObject(self._index), CharObject(self.s[self._index])]
                 self._index += 1
                 return ConstList(rv)
@@ -985,11 +986,11 @@ class StrObject(Object):
                 return StrObject(self._s + unicode(other._c))
 
         if atom is ASLIST_0:
-            from typhon.objects.collections import ConstList
+            from typhon.objects.collections.lists import ConstList
             return ConstList(self.asList())
 
         if atom is ASSET_0:
-            from typhon.objects.collections import ConstSet
+            from typhon.objects.collections.sets import ConstSet
             return ConstSet(self.asSet())
 
         if atom is CONTAINS_1:
@@ -1025,7 +1026,7 @@ class StrObject(Object):
             return IntObject(self._s.find(needle, offset))
 
         if atom is JOIN_1:
-            from typhon.objects.collections import unwrapList
+            from typhon.objects.collections.lists import unwrapList
             return StrObject(self.join(unwrapList(args[0])))
 
         if atom is LASTINDEXOF_1:
@@ -1067,11 +1068,11 @@ class StrObject(Object):
             return StrObject(self._s[start:stop])
 
         if atom is SPLIT_1:
-            from typhon.objects.collections import ConstList
+            from typhon.objects.collections.lists import ConstList
             return ConstList(self.split(unwrapStr(args[0])))
 
         if atom is SPLIT_2:
-            from typhon.objects.collections import ConstList
+            from typhon.objects.collections.lists import ConstList
             return ConstList(self.split(unwrapStr(args[0]),
                                         unwrapInt(args[1])))
 
@@ -1102,8 +1103,8 @@ class StrObject(Object):
         return [CharObject(c) for c in self._s]
 
     def asSet(self):
-        from typhon.objects.collections import monteDict
-        d = monteDict()
+        from typhon.objects.collections.sets import monteSet
+        d = monteSet()
         for c in self._s:
             d[CharObject(c)] = None
         return d
@@ -1187,7 +1188,7 @@ class bytesIterator(Object):
     def recv(self, atom, args):
         if atom is NEXT_1:
             if self._index < len(self.s):
-                from typhon.objects.collections import ConstList
+                from typhon.objects.collections.lists import ConstList
                 rv = [IntObject(self._index),
                       IntObject(ord(self.s[self._index]))]
                 self._index += 1
@@ -1261,11 +1262,11 @@ class BytesObject(Object):
                 return BytesObject(self._bs + str(chr(other._i)))
 
         if atom is ASLIST_0:
-            from typhon.objects.collections import ConstList
+            from typhon.objects.collections.lists import ConstList
             return ConstList(self.asList())
 
         if atom is ASSET_0:
-            from typhon.objects.collections import ConstSet
+            from typhon.objects.collections.sets import ConstSet
             return ConstSet(self.asSet())
 
         if atom is CONTAINS_1:
@@ -1295,7 +1296,7 @@ class BytesObject(Object):
             return IntObject(self._bs.find(needle, offset))
 
         if atom is JOIN_1:
-            from typhon.objects.collections import unwrapList
+            from typhon.objects.collections.lists import unwrapList
             return BytesObject(self.join(unwrapList(args[0])))
 
         if atom is LASTINDEXOF_1:
@@ -1334,11 +1335,11 @@ class BytesObject(Object):
             return BytesObject(self._bs[start:stop])
 
         if atom is SPLIT_1:
-            from typhon.objects.collections import ConstList
+            from typhon.objects.collections.lists import ConstList
             return ConstList(self.split(unwrapBytes(args[0])))
 
         if atom is SPLIT_2:
-            from typhon.objects.collections import ConstList
+            from typhon.objects.collections.lists import ConstList
             return ConstList(self.split(unwrapBytes(args[0]),
                                         unwrapInt(args[1])))
 
@@ -1366,8 +1367,8 @@ class BytesObject(Object):
         return [IntObject(ord(c)) for c in self._bs]
 
     def asSet(self):
-        from typhon.objects.collections import monteDict
-        d = monteDict()
+        from typhon.objects.collections.sets import monteSet
+        d = monteSet()
         for c in self._bs:
             d[IntObject(ord(c))] = None
         return d
@@ -1423,7 +1424,7 @@ def unwrapBytes(o):
     if isinstance(s, BytesObject):
         return s.getBytes()
     # XXX temporary only: Permit lists of ints.
-    from typhon.objects.collections import ConstList, unwrapList
+    from typhon.objects.collections.lists import ConstList, unwrapList
     if isinstance(s, ConstList):
         buf = ""
         l = unwrapList(s)

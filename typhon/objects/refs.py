@@ -162,7 +162,7 @@ class RefOps(Object):
         raise Refused(self, atom, args)
 
     def promise(self):
-        from typhon.objects.collections import ConstList
+        from typhon.objects.collections.lists import ConstList
         p, r = makePromise()
         return ConstList([p, r])
 
@@ -203,7 +203,7 @@ class RefOps(Object):
         return self.isEventual(ref) and isResolved(ref)
 
     def whenResolved(self, o, callback):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         p, r = makePromise()
         vat = currentVat.get()
         vat.sendOnly(o, _WHENMORERESOLVED_1,
@@ -212,14 +212,14 @@ class RefOps(Object):
         return p
 
     def whenResolvedOnly(self, o, callback):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         vat = currentVat.get()
         return vat.sendOnly(o, _WHENMORERESOLVED_1,
                             [WhenResolvedReactor(callback, o, None, vat)],
                             EMPTY_MAP)
 
     def whenBroken(self, o, callback):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         p, r = makePromise()
         vat = currentVat.get()
         vat.sendOnly(o, _WHENMORERESOLVED_1,
@@ -228,7 +228,7 @@ class RefOps(Object):
         return p
 
     def whenBrokenOnly(self, o, callback):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         vat = currentVat.get()
         return vat.sendOnly(o, _WHENMORERESOLVED_1,
                             [WhenBrokenReactor(callback, o, None, vat)],
@@ -257,7 +257,7 @@ class WhenBrokenReactor(Object):
         return u"<whenBrokenReactor>"
 
     def recv(self, atom, args):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         if atom is RUN_1:
             if not isinstance(self._ref, Promise):
                 return NullObject
@@ -291,7 +291,7 @@ class WhenResolvedReactor(Object):
         return u"<whenResolvedReactor>"
 
     def recv(self, atom, args):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         if atom is RUN_1:
             if self.done:
                 return NullObject
@@ -399,7 +399,7 @@ class Promise(Object):
     # Monte core.
 
     def recv(self, atom, args):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         if atom is _PRINTON_1:
             out = args[0]
             self.printOn(out)
@@ -411,7 +411,7 @@ class Promise(Object):
         return self.callAll(atom, args, EMPTY_MAP)
 
     def _whenMoreResolved(self, callback):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         # Welcome to _whenMoreResolved.
         # This method's implementation, in Monte, should be:
         # to _whenMoreResolved(callback): callback<-(self)
@@ -649,11 +649,12 @@ class LocalVatRef(Promise):
                         atom.repr.decode("utf-8"))
 
     def sendAll(self, atom, args, namedArgs):
-        from typhon.objects.collections import ConstMap, monteDict
+        from typhon.objects.collections.maps import ConstMap, monteMap
         vat = currentVat.get()
         # XXX Upgrade this to honor the real serialization protocol.
         refs = [LocalVatRef(arg, vat) for arg in args]
-        namedRefs = monteDict()
+        # XXX monteMap()
+        namedRefs = monteMap()
         for k, v in namedArgs.objectMap.items():
             namedRefs[LocalVatRef(k, vat)] = LocalVatRef(v, vat)
         return LocalVatRef(self.vat.send(self.target, atom, refs,
@@ -661,10 +662,11 @@ class LocalVatRef(Promise):
                            self.vat)
 
     def sendAllOnly(self, atom, args, namedArgs):
-        from typhon.objects.collections import ConstMap, monteDict
+        from typhon.objects.collections.maps import ConstMap, monteMap
         vat = currentVat.get()
         refs = [LocalVatRef(arg, vat) for arg in args]
-        namedRefs = monteDict()
+        # XXX monteMap()
+        namedRefs = monteMap()
         for k, v in namedArgs.objectMap.items():
             namedRefs[LocalVatRef(k, vat)] = LocalVatRef(v, vat)
         # NB: None is returned here and it's turned into null up above.
@@ -720,7 +722,7 @@ class UnconnectedRef(Promise):
         return self
 
     def _doBreakage(self, atom, args, namedArgs):
-        from typhon.objects.collections import EMPTY_MAP
+        from typhon.objects.collections.maps import EMPTY_MAP
         if atom in (_WHENMORERESOLVED_1, _WHENBROKEN_1):
             vat = currentVat.get()
             return vat.sendOnly(args[0], RUN_1, [self], EMPTY_MAP)

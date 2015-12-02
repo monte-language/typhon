@@ -15,8 +15,7 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.auditors import selfless, transparentStamp
-from typhon.objects.collections import ConstList
+from typhon.objects.collections.lists import ConstList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object, audited
@@ -61,7 +60,7 @@ class Binding(Object):
             return self.guard
 
         if atom is _UNCALL_0:
-            from typhon.objects.collections import EMPTY_MAP
+            from typhon.objects.collections.maps import EMPTY_MAP
             from typhon.scopes.safe import theSlotBinder
             return ConstList([
                 ConstList([theSlotBinder, StrObject(u"run"),
@@ -126,7 +125,7 @@ class FinalSlot(Slot):
     def recv(self, atom, args):
         if atom is _UNCALL_0:
             from typhon.scopes.safe import theFinalSlotMaker
-            from typhon.objects.collections import EMPTY_MAP
+            from typhon.objects.collections.maps import EMPTY_MAP
             return ConstList([theFinalSlotMaker, StrObject(u"run"),
                               ConstList([self._obj, self._guard, NullObject]),
                               EMPTY_MAP])

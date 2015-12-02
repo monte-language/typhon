@@ -17,8 +17,8 @@ from rpython.rlib.debug import debug_print
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException
-from typhon.objects.collections import (ConstList, ConstMap, monteDict,
-                                        unwrapList)
+from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.maps import ConstMap, monteMap
 from typhon.objects.data import StrObject
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
@@ -144,7 +144,8 @@ class TestCollector(Object):
 
     def recv(self, atom, args):
         if atom is RUN_0:
-            d = monteDict()
+            # XXX monteMap()
+            d = monteMap()
             for k in self._tests:
                 d[StrObject(k)] = ConstList(self._tests[k][:])
             return ConstMap(d)

@@ -26,7 +26,7 @@ from typhon.debug import enableDebugPrint, TyphonJitHooks
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, instantiateModule, obtainModule
 from typhon.metrics import Recorder
-from typhon.objects.collections import ConstMap, monteDict, unwrapMap
+from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapStr
 from typhon.objects.guards import anyGuard
@@ -154,8 +154,9 @@ def runModule(exports, scope):
     if main is None:
         return None
 
-    namedArgs = monteDict()
-    reflectedUnsafeScope = monteDict()
+    # XXX monteMap()
+    namedArgs = monteMap()
+    reflectedUnsafeScope = monteMap()
     for k, b in scope.iteritems():
         v = b.getValue()
         namedArgs[StrObject(k)] = v
@@ -222,7 +223,8 @@ def entryPoint(argv):
     ss[u"import"] = finalBinding(
         Import(config.libraryPaths, ss, recorder, collectTests),
         DF)
-    reflectedSS = monteDict()
+    # XXX monteMap()
+    reflectedSS = monteMap()
     for k, b in ss.iteritems():
         reflectedSS[StrObject(u"&&" + k)] = b
     ss[u"safeScope"] = finalBinding(ConstMap(reflectedSS), DF)

@@ -3,8 +3,9 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.auditors import deepFrozenStamp, selfless, transparentStamp
-from typhon.objects.collections import ConstList, ConstSet, monteDict
+from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.sets import ConstSet, monteSet
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, throw
@@ -81,7 +82,7 @@ class AnyGuard(Object):
                 ej.call(u"run", [StrObject(u"Not an AnyOf guard")])
 
         if atom is GETMETHODS_0:
-            return ConstSet(monteDict())
+            return ConstSet(monteSet())
 
         if atom.verb == u"get":
             return AnyOfGuard(args)
@@ -124,7 +125,7 @@ class AnyOfGuard(Object):
             return wrapBool(True)
 
         if atom is _UNCALL_0:
-            from typhon.objects.collections import EMPTY_MAP
+            from typhon.objects.collections.maps import EMPTY_MAP
             return ConstList([anyGuard, StrObject(u"get"),
                               ConstList(self.subguards), EMPTY_MAP])
         raise Refused(self, atom, args)
