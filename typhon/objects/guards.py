@@ -288,7 +288,7 @@ class SameGuard(Guard):
 
     def recv(self, atom, args):
         if atom is _UNCALL_0:
-            from typhon.objects.collections import EMPTY_MAP
+            from typhon.objects.collections.maps import EMPTY_MAP
             return ConstList([sameGuardMaker, StrObject(u"get"),
                               ConstList([self.value]), EMPTY_MAP])
         if atom is COERCE_2:
@@ -304,8 +304,8 @@ class SameGuard(Guard):
 
 
 @autohelp
+@audited.DF
 class SameGuardMaker(Object):
-    stamps = [deepFrozenStamp]
 
     def printOn(self, out):
         out.call(u"print", [StrObject(u"Same")])
