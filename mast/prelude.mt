@@ -386,37 +386,37 @@ unittest([
     testNullOkInt,
 ])
 
-object _SameGuardStamp:
-    to audit(audition):
-        return true
+# object _SameGuardStamp:
+#     to audit(audition):
+#         return true
 
-object Same as DeepFrozenStamp:
-    to _printOn(out):
-        out.print("Same")
+# object Same as DeepFrozenStamp:
+#     to _printOn(out):
+#         out.print("Same")
 
-    to get(value):
-        return object SameGuard implements _SameGuardStamp, Selfless, TransparentStamp:
-            to _printOn(out):
-                out.print("Same[")
-                value._printOn(out)
-                out.print("]")
+#     to get(value):
+#         return object SameGuard implements _SameGuardStamp, Selfless, TransparentStamp:
+#             to _printOn(out):
+#                 out.print("Same[")
+#                 value._printOn(out)
+#                 out.print("]")
 
-            to _uncall():
-                return [Same, "get", [value], [].asMap()]
+#             to _uncall():
+#                 return [Same, "get", [value], [].asMap()]
 
-            to coerce(specimen, ej):
-                if (!__equalizer.sameYet(value, specimen)):
-                    throw.eject(ej, [specimen, "is not", value])
-                return specimen
+#             to coerce(specimen, ej):
+#                 if (!__equalizer.sameYet(value, specimen)):
+#                     throw.eject(ej, [specimen, "is not", value])
+#                 return specimen
 
-            to getValue():
-                return value
+#             to getValue():
+#                 return value
 
-    to extractValue(specimen, ej):
-        if (__auditedBy(_SameGuardStamp, specimen)):
-            return specimen.getValue()
-        else:
-            throw.eject(ej, "Not a Same guard")
+#     to extractValue(specimen, ej):
+#         if (__auditedBy(_SameGuardStamp, specimen)):
+#             return specimen.getValue()
+#         else:
+#             throw.eject(ej, "Not a Same guard")
 
 
 def testSame(assert):

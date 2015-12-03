@@ -17,7 +17,9 @@ from typhon.objects.slots import FinalSlot, VarSlot
 COERCE_2 = getAtom(u"coerce", 2)
 EXTRACTGUARDS_2 = getAtom(u"extractGuards", 2)
 EXTRACTGUARD_2 = getAtom(u"extractGuard", 2)
+EXTRACTVALUE_2 = getAtom(u"extractValue", 2)
 GETGUARD_0 = getAtom(u"getGuard", 0)
+GETVALUE_0 = getAtom(u"getValue", 0)
 GETMETHODS_0 = getAtom(u"getMethods", 0)
 GET_1 = getAtom(u"get", 1)
 SUPERSETOF_1 = getAtom(u"supersetOf", 1)
@@ -268,3 +270,57 @@ class BindingGuard(Guard):
         from typhon.objects.slots import Binding
         if isinstance(specimen, Binding):
             return specimen
+
+
+@audited.Transparent
+class SameGuard(Guard):
+    """
+    A guard that admits a single value.
+    """
+
+    def __init__(self, value):
+        self.value = value
+
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"Same[")])
+        out.call(u"print", [self.value])
+        out.call(u"print", [StrObject(u"]")])
+
+    def recv(self, atom, args):
+        if atom is _UNCALL_0:
+            from typhon.objects.collections import EMPTY_MAP
+            return ConstList([sameGuardMaker, StrObject(u"get"),
+                              ConstList([self.value]), EMPTY_MAP])
+        if atom is COERCE_2:
+            from typhon.objects.equality import optSame, EQUAL
+            specimen, ej = args[0], args[1]
+            if optSame(specimen, self.value) is EQUAL:
+                return specimen
+            ej.call(u"run", [ConstList([specimen, StrObject(u"is not"),
+                                        self.value])])
+        if atom is GETVALUE_0:
+            return self.value
+        raise Refused(self, atom, args)
+
+
+@autohelp
+class SameGuardMaker(Object):
+    stamps = [deepFrozenStamp]
+
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"Same")])
+
+    def recv(self, atom, args):
+        if atom is GET_1:
+            return SameGuard(args[0])
+
+        if atom is EXTRACTVALUE_2:
+            specimen, ej = args[0], args[1]
+            if isinstance(specimen, SameGuard):
+                return specimen.value
+            else:
+                ej.call(u"run", [StrObject(u"Not a Same guard")])
+        raise Refused(self, atom, args)
+
+
+sameGuardMaker = SameGuardMaker()
