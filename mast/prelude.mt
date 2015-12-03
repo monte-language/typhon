@@ -536,78 +536,9 @@ object _makeVerbFacet as DeepFrozenStamp:
                 M.call(target, verb, args, namedArgs)
 
 
-def _flexMap(var m):
-    return object flexMap:
-        to _makeIterator():
-            return m._makeIterator()
-
-        to _printOn(out):
-            out.print(M.toString(m))
-            out.print(".diverge()")
-
-        to asSet() :Set:
-            return m.asSet()
-
-        to contains(k) :Bool:
-            return m.contains(k)
-
-        to diverge():
-            return _flexMap(m)
-
-        to fetch(k, thunk):
-            return m.fetch(k, thunk)
-
-        to get(k):
-            return m.get(k)
-
-        to or(other):
-            return _flexMap(m | other)
-
-        to put(k, v):
-            m := m.with(k, v)
-
-        to removeKey(k):
-            m := m.without(k)
-
-        to size():
-            return m.size()
-
-        to slice(start):
-            return flexMap.slice(start, flexMap.size())
-
-        # XXX need to guard non-negative
-        to slice(start, stop):
-            return _flexMap(m.slice(start, stop))
-
-        to snapshot():
-            return m
-
-        to sortKeys():
-            return m.sortKeys()
-
-        to sortValues():
-            return m.sortValues()
-
-
-def testFlexMapPrinting(assert):
-    assert.equal(M.toString(_flexMap([].asMap())), "[].asMap().diverge()")
-    assert.equal(M.toString(_flexMap([5 => 42])), "[5 => 42].diverge()")
-
-def testFlexMapRemoveKey(assert):
-    def m := _flexMap([1 => 2])
-    m.removeKey(1)
-    assert.equal(m.contains(1), false)
-
-
-unittest([
-    testFlexMapPrinting,
-    testFlexMapRemoveKey,
-])
-
-
 object _makeMap as DeepFrozenStamp:
     to fromPairs(l):
-        def m := _flexMap([].asMap())
+        def m := [].asMap().diverge()
         for [k, v] in l:
             m[k] := v
         return m.snapshot()
@@ -754,4 +685,4 @@ preludeScope := scopeAsDF(
 
 # The final scope exported from the prelude. This *must* be the final
 # expression in the module!
-preludeScope | [=> &&_flexMap]
+preludeScope

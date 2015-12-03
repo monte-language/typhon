@@ -79,7 +79,7 @@ testVM: default
 
 testMast: default mast infer mast/tests/lexer.ty mast/tests/parser.ty \
 	mast/tests/auditors.ty mast/tests/fail-arg.ty mast/tests/expander.ty \
-	mast/tests/optimizer.mast
+	mast/tests/optimizer.mast mast/tests/flexMap.mast
 	./mt-typhon -l mast mast/unittest all-tests
 
 test: testVM testMast
