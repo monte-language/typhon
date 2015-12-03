@@ -63,8 +63,8 @@ class AnyGuard(Object):
     subguards: Any[X, Y, Z] =~ X ∪ Y ∪ Z
     """
 
-    def toString(self):
-        return u"Any"
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"Any")])
 
     def recv(self, atom, args):
         if atom is COERCE_2:
@@ -104,9 +104,13 @@ class AnyOfGuard(Object):
     def __init__(self, subguards):
         self.subguards = subguards
 
-    def toString(self):
-        substrings = [subguard.toString() for subguard in self.subguards]
-        return u"Any[%s]" % u", ".join(substrings)
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"Any[")])
+        for i, subguard in enumerate(self.subguards):
+            out.call(u"print", [subguard])
+            if i < (len(self.subguards) - 1):
+                out.call(u"print", [StrObject(u", ")])
+        out.call(u"print", [StrObject(u"]")])
 
     def recv(self, atom, args):
         if atom is COERCE_2:
@@ -163,8 +167,10 @@ class FinalSlotGuard(Guard):
             return wrapBool(False)
         raise Refused(self, atom, args)
 
-    def toString(self):
-        return u"FinalSlot[" + self.valueGuard.toString() + u"]"
+    def printOn(self, out):
+        out.call(u"print", [StrObject(u"FinalSlot[")])
+        out.call(u"print", [self.valueGuard]),
+        out.call(u"print", [StrObject(u"]")])
 
 
 class VarSlotGuard(Guard):
