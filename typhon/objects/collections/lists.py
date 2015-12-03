@@ -13,15 +13,15 @@
 # under the License.
 
 from rpython.rlib.jit import elidable
-from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import import_from_mixin
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException, userError
+from typhon.objects.collections.helpers import MonteSorter
 from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import IntObject, StrObject, unwrapBool, unwrapInt
+from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
@@ -60,21 +60,6 @@ WITH_2 = getAtom(u"with", 2)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 _PRINTON_1 = getAtom(u"_printOn", 1)
 _UNCALL_0 = getAtom(u"_uncall", 0)
-
-
-def monteLessThan(left, right):
-    # Yes, this is ugly, but it *does* work. ~ C.
-    # XXX Oh wait, it doesn't work. Try sorting a list of regions~
-    try:
-        comparison = left.call(u"op__cmp", [right])
-        b = comparison.call(u"belowZero", [])
-        return unwrapBool(b)
-    except UserException:
-        comparison = right.call(u"op__cmp", [left])
-        b = comparison.call(u"aboveZero", [])
-        return unwrapBool(b)
-
-MonteSorter = make_timsort_class(lt=monteLessThan)
 
 
 @autohelp

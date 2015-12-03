@@ -12,12 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.objectmodel import r_ordereddict
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, WrongType, userError
+from typhon.objects.collections.helpers import monteSet
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.printers import toString
@@ -50,29 +50,6 @@ WITH_1 = getAtom(u"with", 1)
 _MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
 _PRINTON_1 = getAtom(u"_printOn", 1)
 _UNCALL_0 = getAtom(u"_uncall", 0)
-
-# Same hashing machinery as maps.
-
-def resolveKey(key):
-    from typhon.objects.refs import Promise, isResolved
-    if isinstance(key, Promise):
-        key = key.resolution()
-    if not isResolved(key):
-        raise userError(u"Unresolved promises cannot be used as map keys")
-    return key
-
-def keyEq(first, second):
-    from typhon.objects.equality import optSame, EQUAL
-    first = resolveKey(first)
-    second = resolveKey(second)
-    return optSame(first, second) is EQUAL
-
-def keyHash(key):
-    from typhon.objects.equality import samenessHash
-    return samenessHash(resolveKey(key), 10, None, None)
-
-def monteSet():
-    return r_ordereddict(keyEq, keyHash)
 
 
 @autohelp

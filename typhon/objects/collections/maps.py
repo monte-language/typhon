@@ -12,13 +12,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.listsort import make_timsort_class
-from rpython.rlib.objectmodel import r_ordereddict
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, UserException, WrongType, userError
+from typhon.errors import Refused, WrongType, userError
+from typhon.objects.collections.helpers import (KeySorter, ValueSorter,
+                                                monteMap)
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.printers import toString
@@ -51,24 +51,6 @@ _PRINTON_1 = getAtom(u"_printOn", 1)
 _UNCALL_0 = getAtom(u"_uncall", 0)
 
 
-def monteLessThan(left, right):
-    # XXX centralize
-    try:
-        return unwrapInt(left.call(u"op__cmp", [right])) < 0
-    except UserException:
-        return unwrapInt(right.call(u"op__cmp", [left])) > 0
-
-def monteLTKey(left, right):
-    return monteLessThan(left[0], right[0])
-
-def monteLTValue(left, right):
-    return monteLessThan(left[1], right[1])
-
-
-KeySorter = make_timsort_class(lt=monteLTKey)
-ValueSorter = make_timsort_class(lt=monteLTValue)
-
-
 @autohelp
 class mapIterator(Object):
     """
@@ -98,46 +80,6 @@ class mapIterator(Object):
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
         raise Refused(self, atom, args)
-
-
-# Let's talk about maps for a second.
-# Maps are backed by ordered dictionaries. This is an RPython-level hash table
-# that is ordered, using insertion order, and has predictable
-# insertion-order-based iteration order. Therefore, they should back Monte
-# maps perfectly.
-# The ordered dictionary at RPython level requires a few extra pieces of
-# plumbing. We are asked to provide `key_eq` and `key_hash`. These are
-# functions. `key_eq` is a key equality function which determines whether two
-# keys are equal. `key_hash` is a key hashing function which returns a hash
-# for a key.
-# If two objects are equal, then they hash equal.
-# We forbid unsettled refs from being used as keys, since their equality can
-# change at any time.
-
-
-def resolveKey(key):
-    from typhon.objects.refs import Promise, isResolved
-    if isinstance(key, Promise):
-        key = key.resolution()
-    if not isResolved(key):
-        raise userError(u"Unresolved promises cannot be used as map keys")
-    return key
-
-
-def keyEq(first, second):
-    from typhon.objects.equality import optSame, EQUAL
-    first = resolveKey(first)
-    second = resolveKey(second)
-    return optSame(first, second) is EQUAL
-
-
-def keyHash(key):
-    from typhon.objects.equality import samenessHash
-    return samenessHash(resolveKey(key), 10, None, None)
-
-
-def monteMap():
-    return r_ordereddict(keyEq, keyHash)
 
 
 @autohelp
