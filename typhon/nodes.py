@@ -24,6 +24,7 @@ from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
+from typhon.enum import makeEnum
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
@@ -94,6 +95,16 @@ def lt0(a, b):
 TimSort0 = make_timsort_class(lt=lt0)
 
 
+DEPTH_NOUN, DEPTH_SLOT, DEPTH_BINDING = makeEnum(u"extent",
+    u"noun slot binding".split())
+
+def deepen(old, new):
+    if old is DEPTH_BINDING or new is DEPTH_BINDING:
+        return DEPTH_BINDING
+    if old is DEPTH_SLOT or new is DEPTH_SLOT:
+        return DEPTH_SLOT
+    return DEPTH_NOUN
+
 class LocalScope(object):
     def __init__(self, parent):
         self.map = OrderedDict()
@@ -117,23 +128,30 @@ class LocalScope(object):
     def addChildScope(self, child):
         self.children.append(child)
 
-    def add(self, name):
+    def add(self, name, depth):
         i = self.getOffset()
         if name in self.map:
             raise InvalidAST(name.encode("utf-8") +
                              " is already defined in this scope")
-        self.map[name] = i
+        # print "Adding", name, "at slot", i, "and depth", depth.repr
+        self.map[name] = i, depth
         return i
 
-    def find(self, name):
-        i = self.map.get(name, -1)
+    def find(self, name, newDepth):
+        i, oldDepth = self.map.get(name, (-1, None))
         if i == -1:
             if self.parent is not None:
-                return self.parent.find(name)
+                return self.parent.find(name, newDepth)
+            # Not found.
+            return -1
+        depth = deepen(oldDepth, newDepth)
+        if depth != oldDepth:
+            # print "Promoting", name, "at slot", i, "to depth", depth.repr
+            self.map[name] = i, depth
         return i
 
     def _nameList(self):
-        names = [(i, k) for k, i in self.map.items()]
+        names = [(i, k) for k, (i, _) in self.map.items()]
         for ch in self.children:
             names.extend(ch._nameList())
         return names
@@ -141,8 +159,14 @@ class LocalScope(object):
     def nameList(self):
         names = self._nameList()
         TimSort0(names).sort()
-        assert [i for i, k in names] == range(len(names))
+        assert [i for i, k in names] == range(len(names)), "wait what!?"
         return [k for i, k in names]
+
+    def nameMap(self):
+        d = {}
+        for k, (v, _) in self.map.iteritems():
+            d[k] = v
+        return d
 
 
 class Compiler(object):
@@ -273,7 +297,7 @@ def compile(node, origin):
 def interactiveCompile(node, origin):
     compiler = Compiler(fqn=origin)
     node.compile(compiler)
-    return compiler.makeCode(), compiler.locals.map
+    return compiler.makeCode(), compiler.locals.nameMap()
 
 
 class InvalidAST(LoadFailed):
@@ -790,7 +814,7 @@ class Assign(Expr):
         # whether the name is already known to be local; if not, then it must
         # be in the outer frame. Unless it's not in there, in which case it
         # must be global.
-        localIndex = compiler.locals.find(self.target)
+        localIndex = compiler.locals.find(self.target, DEPTH_NOUN)
         if localIndex >= 0:
             compiler.addInstruction("ASSIGN_LOCAL", localIndex)
             # [rvalue]
@@ -842,7 +866,7 @@ class Binding(Expr):
         return f(self)
 
     def compile(self, compiler):
-        localIndex = compiler.locals.find(self.name)
+        localIndex = compiler.locals.find(self.name, DEPTH_BINDING)
         if localIndex >= 0:
             compiler.addInstruction("BINDING_LOCAL", localIndex)
             # [binding]
@@ -1567,7 +1591,7 @@ class Noun(Expr):
         out.write(self.name.encode("utf-8"))
 
     def compile(self, compiler):
-        localIndex = compiler.locals.find(self.name)
+        localIndex = compiler.locals.find(self.name, DEPTH_NOUN)
         if localIndex >= 0:
             compiler.addInstruction("NOUN_LOCAL", localIndex)
             # print "I think", self.name, "is local"
@@ -1669,7 +1693,7 @@ class Obj(Expr):
     def compile(self, compiler):
         # Create a code object for this object.
         availableClosure = compiler.frame.copy()
-        availableClosure.update(compiler.locals.map)
+        availableClosure.update(compiler.locals.nameMap())
         numAuditors = len(self._implements) + 1
         oname = formatName(self._n)
         fqn = compiler.fqn + u"$" + oname
@@ -1682,7 +1706,7 @@ class Obj(Expr):
                 # Put in a null and patch it later via UserObject.patchSelf().
                 compiler.literal(NullObject)
                 continue
-            localIndex = compiler.locals.find(name)
+            localIndex = compiler.locals.find(name, DEPTH_BINDING)
             if localIndex >= 0:
                 compiler.addInstruction("BINDING_LOCAL", localIndex)
             elif compiler.canCloseOver(name):
@@ -1694,7 +1718,7 @@ class Obj(Expr):
 
         # Globals are pushed after closure, so they'll be popped first.
         for name in codeScript.globalNames:
-            localIndex = compiler.locals.find(name)
+            localIndex = compiler.locals.find(name, DEPTH_BINDING)
             if localIndex >= 0:
                 compiler.addInstruction("BINDING_LOCAL", localIndex)
             elif compiler.canCloseOver(name):
@@ -1718,7 +1742,7 @@ class Obj(Expr):
             compiler.addInstruction("POP", 0)
             compiler.addInstruction("POP", 0)
         elif isinstance(self._n, FinalPattern):
-            slotIndex = compiler.locals.add(self._n._n)
+            slotIndex = compiler.locals.add(self._n._n, DEPTH_SLOT)
             compiler.addInstruction("BINDFINALSLOT", slotIndex)
         else:
             # Bail!?
@@ -2084,7 +2108,7 @@ class BindingPattern(Pattern):
         out.write(self._noun.encode("utf-8"))
 
     def compile(self, compiler):
-        index = compiler.locals.add(self._noun)
+        index = compiler.locals.add(self._noun, DEPTH_BINDING)
         compiler.addInstruction("POP", 0)
         compiler.addInstruction("BIND", index)
 
@@ -2132,7 +2156,7 @@ class FinalPattern(Pattern):
         else:
             self._g.compile(compiler)
             # [specimen ej guard]
-        index = compiler.locals.add(self._n)
+        index = compiler.locals.add(self._n, DEPTH_SLOT)
         compiler.addInstruction("BINDFINALSLOT", index)
         # []
 
@@ -2373,7 +2397,7 @@ class VarPattern(Pattern):
         else:
             self._g.compile(compiler)
             # [specimen ej guard]
-        index = compiler.locals.add(self._n)
+        index = compiler.locals.add(self._n, DEPTH_SLOT)
         compiler.addInstruction("BINDVARSLOT", index)
 
     def getStaticScope(self):
