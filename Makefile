@@ -120,7 +120,8 @@ fun: mast/fun/elements.ty mast/fun/repl.ty mast/fun/brot.ty \
 	mast/fun/termParser.ty
 
 bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty \
-	mast/bench/primeCount.ty mast/bench/brot.ty
+	mast/bench/primeCount.ty mast/bench/brot.ty bench.ty
+	./mt-typhon -l mast -b bench
 
 monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 	mast/lib/monte/monte_parser.ty mast/lib/monte/monte_expander.ty \

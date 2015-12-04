@@ -17,8 +17,8 @@ import time
 from rpython.rlib.debug import debug_print
 
 from typhon.atoms import getAtom
-from typhon.objects.constants import NullObject
-from typhon.objects.data import unwrapStr
+from typhon.objects.collections.lists import ConstList
+from typhon.objects.data import DoubleObject, IntObject, unwrapStr
 from typhon.objects.root import runnable
 
 RUN_2 = getAtom(u"run", 2)
@@ -31,7 +31,7 @@ def bench(args):
     if not benchmarkSettings.enabled:
         debug_print("Not running benchmark", name,
                     "since benchmarking is disabled")
-        return NullObject
+        return ConstList([IntObject(0), DoubleObject(0.0)])
 
     debug_print("Benchmarking", name)
 
@@ -77,23 +77,8 @@ def bench(args):
         if taken < result:
             result = taken
 
-    # Step 3: Calculate results.
-    usec = taken * 1000000 / loops
-    if usec < 1000:
-        timing = "%f us/iteration" % usec
-    else:
-        msec = usec / 1000
-        if msec < 1000:
-            timing = "%f ms/iteration" % msec
-        else:
-            sec = msec / 1000
-            timing = "%f s/iteration" % sec
-
-    debug_print(name + ":",
-                "Took %d loops in %f seconds (%s)" % (loops, taken, timing))
-
     # All done!
-    return NullObject
+    return ConstList([IntObject(loops), DoubleObject(taken)])
 
 
 class BenchmarkSettings(object):
