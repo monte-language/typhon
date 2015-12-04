@@ -105,6 +105,12 @@ def deepen(old, new):
         return DEPTH_SLOT
     return DEPTH_NOUN
 
+depthMap = {
+    "ASSIGN": DEPTH_NOUN,
+    "BINDING": DEPTH_BINDING,
+    "NOUN": DEPTH_NOUN,
+}
+
 class LocalScope(object):
     def __init__(self, parent):
         self.map = OrderedDict()
@@ -234,7 +240,7 @@ class Compiler(object):
     def canCloseOver(self, name):
         return name in self.frame or name in self.availableClosure
 
-    @specialize.arg(1)
+    @specialize.call_location()
     def addInstruction(self, name, index):
         self.instructions.append((ops[name], index))
 
@@ -263,6 +269,27 @@ class Compiler(object):
         index = len(self.scripts)
         self.scripts.append(script)
         return index
+
+    @specialize.arg(2)
+    def accessFrame(self, name, accessType):
+        """
+        Interact with the frame.
+        """
+
+        # It's unknown yet whether the assignment is to a local slot or an
+        # (outer) frame slot, or even to a global frame slot. Check to see
+        # whether the name is already known to be local; if not, then it must
+        # be in the outer frame. Unless it's not in there, in which case it
+        # must be global.
+        localIndex = self.locals.find(name, depthMap[accessType])
+        if localIndex >= 0:
+            self.addInstruction("%s_LOCAL" % accessType, localIndex)
+        elif self.canCloseOver(name):
+            index = self.addFrame(name)
+            self.addInstruction("%s_FRAME" % accessType, index)
+        else:
+            index = self.addGlobal(name)
+            self.addInstruction("%s_GLOBAL" % accessType, index)
 
     def literal(self, literal):
         index = self.addLiteral(literal)
@@ -809,23 +836,8 @@ class Assign(Expr):
         # [rvalue]
         compiler.addInstruction("DUP", 0)
         # [rvalue rvalue]
-        # It's unknown yet whether the assignment is to a local slot or an
-        # (outer) frame slot, or even to a global frame slot. Check to see
-        # whether the name is already known to be local; if not, then it must
-        # be in the outer frame. Unless it's not in there, in which case it
-        # must be global.
-        localIndex = compiler.locals.find(self.target, DEPTH_NOUN)
-        if localIndex >= 0:
-            compiler.addInstruction("ASSIGN_LOCAL", localIndex)
-            # [rvalue]
-        elif compiler.canCloseOver(self.target):
-            index = compiler.addFrame(self.target)
-            compiler.addInstruction("ASSIGN_FRAME", index)
-            # [rvalue]
-        else:
-            index = compiler.addGlobal(self.target)
-            compiler.addInstruction("ASSIGN_GLOBAL", index)
-            # [rvalue]
+        compiler.accessFrame(self.target, "ASSIGN")
+        # [rvalue]
 
     def getStaticScope(self):
         scope = StaticScope([], [self.target], [], [], False)
@@ -866,18 +878,8 @@ class Binding(Expr):
         return f(self)
 
     def compile(self, compiler):
-        localIndex = compiler.locals.find(self.name, DEPTH_BINDING)
-        if localIndex >= 0:
-            compiler.addInstruction("BINDING_LOCAL", localIndex)
-            # [binding]
-        elif compiler.canCloseOver(self.name):
-            index = compiler.addFrame(self.name)
-            compiler.addInstruction("BINDING_FRAME", index)
-            # [binding]
-        else:
-            index = compiler.addGlobal(self.name)
-            compiler.addInstruction("BINDING_GLOBAL", index)
-            # [binding]
+        compiler.accessFrame(self.name, "BINDING")
+        # [binding]
 
     def getStaticScope(self):
         return StaticScope([self.name], [], [], [], False)
@@ -1591,18 +1593,7 @@ class Noun(Expr):
         out.write(self.name.encode("utf-8"))
 
     def compile(self, compiler):
-        localIndex = compiler.locals.find(self.name, DEPTH_NOUN)
-        if localIndex >= 0:
-            compiler.addInstruction("NOUN_LOCAL", localIndex)
-            # print "I think", self.name, "is local"
-        elif compiler.canCloseOver(self.name):
-            index = compiler.addFrame(self.name)
-            compiler.addInstruction("NOUN_FRAME", index)
-            # print "I think", self.name, "is frame"
-        else:
-            index = compiler.addGlobal(self.name)
-            compiler.addInstruction("NOUN_GLOBAL", index)
-            # print "I think", self.name, "is global"
+        compiler.accessFrame(self.name, "NOUN")
 
     def getStaticScope(self):
         return StaticScope([self.name], [], [], [], False)
@@ -1705,28 +1696,12 @@ class Obj(Expr):
             if name == codeScript.displayName:
                 # Put in a null and patch it later via UserObject.patchSelf().
                 compiler.literal(NullObject)
-                continue
-            localIndex = compiler.locals.find(name, DEPTH_BINDING)
-            if localIndex >= 0:
-                compiler.addInstruction("BINDING_LOCAL", localIndex)
-            elif compiler.canCloseOver(name):
-                index = compiler.addFrame(name)
-                compiler.addInstruction("BINDING_FRAME", index)
             else:
-                index = compiler.addGlobal(name)
-                compiler.addInstruction("BINDING_GLOBAL", index)
+                compiler.accessFrame(name, "BINDING")
 
         # Globals are pushed after closure, so they'll be popped first.
         for name in codeScript.globalNames:
-            localIndex = compiler.locals.find(name, DEPTH_BINDING)
-            if localIndex >= 0:
-                compiler.addInstruction("BINDING_LOCAL", localIndex)
-            elif compiler.canCloseOver(name):
-                index = compiler.addFrame(name)
-                compiler.addInstruction("BINDING_FRAME", index)
-            else:
-                index = compiler.addGlobal(name)
-                compiler.addInstruction("BINDING_GLOBAL", index)
+            compiler.accessFrame(name, "BINDING")
         subc = compiler.pushScope()
         if self._as is None:
             index = compiler.addGlobal(u"null")
