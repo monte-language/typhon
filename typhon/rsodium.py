@@ -64,6 +64,9 @@ cryptoBoxMacbytes = rffi.llexternal("crypto_box_macbytes", [], rffi.SIZE_T,
 cryptoBoxKeypair = rffi.llexternal("crypto_box_keypair",
                                    [rffi.CCHARP, rffi.CCHARP], rffi.INT,
                                    compilation_info=eci)
+cryptoScalarmultBase = rffi.llexternal("crypto_scalarmult_base",
+                                       [rffi.CCHARP, rffi.CCHARP], rffi.INT,
+                                       compilation_info=eci)
 cryptoBoxEasy = rffi.llexternal("crypto_box_easy",
                                 [rffi.CCHARP, rffi.CCHARP, rffi.ULONGLONG,
                                  rffi.CCHARP, rffi.CCHARP, rffi.CCHARP],
@@ -87,6 +90,20 @@ def freshKeypair():
             if rv:
                 raise SodiumError("crypto_box_keypair: %d" % rv)
             return public.str(publicSize), secret.str(secretSize)
+
+def regenerateKey(secretKey):
+    """
+    Regenerate a public key from a secret key.
+    """
+
+    publicSize = intmask(cryptoBoxPublickeybytes())
+
+    with rffi.scoped_alloc_buffer(publicSize) as public:
+        with rffi.scoped_str2charp(secretKey) as rawSecret:
+            rv = cryptoScalarmultBase(public.raw, rawSecret)
+            if rv:
+                raise SodiumError("crypto_scalarmult_base: %d" % rv)
+            return public.str(publicSize)
 
 def freshNonce():
     """

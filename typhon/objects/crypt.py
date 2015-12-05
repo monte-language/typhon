@@ -4,7 +4,7 @@ Some cryptographic services.
 
 from rpython.rlib.rarithmetic import intmask
 
-from typhon import rsodium
+from typhon import log, rsodium
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, WrongType, userError
@@ -14,11 +14,13 @@ from typhon.objects.data import (BytesObject, IntObject, StrObject,
 from typhon.objects.root import Object
 
 
+ASBYTES_0 = getAtom(u"asBytes", 0)
 GETALGORITHM_0 = getAtom(u"getAlgorithm", 0)
 GETENTROPY_0 = getAtom(u"getEntropy", 0)
 KEYMAKER_0 = getAtom(u"keyMaker", 0)
 MAKESECUREENTROPY_0 = getAtom(u"makeSecureEntropy", 0)
 PAIRWITH_1 = getAtom(u"pairWith", 1)
+PUBLICKEY_0 = getAtom(u"publicKey", 0)
 RUN_0 = getAtom(u"run", 0)
 SEAL_1 = getAtom(u"seal", 1)
 UNSEAL_2 = getAtom(u"unseal", 2)
@@ -56,6 +58,9 @@ class PublicKey(Object):
         self.publicKey = publicKey
 
     def recv(self, atom, args):
+        if atom is ASBYTES_0:
+            return BytesObject(self.publicKey)
+
         if atom is PAIRWITH_1:
             secret = args[0]
             if not isinstance(secret, SecretKey):
@@ -79,11 +84,20 @@ class SecretKey(Object):
         self.secretKey = secretKey
 
     def recv(self, atom, args):
+        if atom is ASBYTES_0:
+            # XXX should figure this out
+            log.log(["sodium"], u"asBytes/0: Revealing secret key")
+            return BytesObject(self.secretKey)
+
         if atom is PAIRWITH_1:
             public = args[0]
             if not isinstance(public, PublicKey):
                 raise WrongType(u"Not a public key!")
             return KeyPair(public.publicKey, self.secretKey)
+
+        if atom is PUBLICKEY_0:
+            publicKey = rsodium.regenerateKey(self.secretKey)
+            return PublicKey(publicKey)
 
         raise Refused(self, atom, args)
 
