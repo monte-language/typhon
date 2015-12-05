@@ -15,6 +15,9 @@ from typhon.objects.root import Object
 
 
 ASBYTES_0 = getAtom(u"asBytes", 0)
+FROMBYTES_1 = getAtom(u"fromBytes", 1)
+FROMPUBLICBYTES_1 = getAtom(u"fromPublicBytes", 1)
+FROMSECRETBYTES_1 = getAtom(u"fromSecretBytes", 1)
 GETALGORITHM_0 = getAtom(u"getAlgorithm", 0)
 GETENTROPY_0 = getAtom(u"getEntropy", 0)
 KEYMAKER_0 = getAtom(u"keyMaker", 0)
@@ -145,6 +148,24 @@ class KeyMaker(Object):
     """
 
     def recv(self, atom, args):
+        if atom is FROMPUBLICBYTES_1:
+            publicKey = unwrapBytes(args[0])
+            expectedSize = intmask(rsodium.cryptoBoxPublickeybytes())
+            if len(publicKey) != expectedSize:
+                message = u"Expected key length of %d bytes, not %d" % (
+                    expectedSize, len(publicKey))
+                raise userError(message)
+            return PublicKey(publicKey)
+
+        if atom is FROMSECRETBYTES_1:
+            secretKey = unwrapBytes(args[0])
+            expectedSize = intmask(rsodium.cryptoBoxSecretkeybytes())
+            if len(secretKey) != expectedSize:
+                message = u"Expected key length of %d bytes, not %d" % (
+                    expectedSize, len(secretKey))
+                raise userError(message)
+            return SecretKey(secretKey)
+
         if atom is RUN_0:
             public, secret = rsodium.freshKeypair()
             return ConstList([PublicKey(public), SecretKey(secret)])
