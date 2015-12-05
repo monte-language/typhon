@@ -165,7 +165,8 @@ class Code(object):
         elif instruction in (NOUN_LOCAL, ASSIGN_LOCAL, SLOT_LOCAL,
                              BINDING_LOCAL, BIND, BINDFINALSLOT,
                              BINDVARSLOT):
-            base += " (%s)" % self.locals[index].encode("utf-8")
+            name, depth = self.locals[index]
+            base += " (%s (%s))" % (name.encode("utf-8"), depth.repr)
         return base
 
     def disAt(self, index):

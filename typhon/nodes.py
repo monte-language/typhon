@@ -157,7 +157,7 @@ class LocalScope(object):
         return i
 
     def _nameList(self):
-        names = [(i, k) for k, (i, _) in self.map.items()]
+        names = [(i, k, d) for k, (i, d) in self.map.items()]
         for ch in self.children:
             names.extend(ch._nameList())
         return names
@@ -165,8 +165,12 @@ class LocalScope(object):
     def nameList(self):
         names = self._nameList()
         TimSort0(names).sort()
-        assert [i for i, k in names] == range(len(names)), "wait what!?"
-        return [k for i, k in names]
+        l = []
+        for index, (i, k, d) in enumerate(names):
+            # This invariant was established by the sort routine above.
+            assert index == i
+            l.append((k, d))
+        return l
 
     def nameMap(self):
         d = {}
