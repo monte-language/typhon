@@ -288,6 +288,7 @@ class scopedBufs(object):
         for i, datum in enumerate(self.data):
             # get_nonmovingbuffer tries its hardest to avoid copies. Don't
             # forget that we have to deallocate each one later.
+            assert datum is not None
             charp, pinned, copied = rffi.get_nonmovingbuffer(datum)
             bufs[i].c_base = charp
             rffi.setintfield(bufs[i], "c_len", len(datum))
