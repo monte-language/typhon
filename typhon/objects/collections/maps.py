@@ -35,6 +35,7 @@ GET_1 = getAtom(u"get", 1)
 NEXT_1 = getAtom(u"next", 1)
 OP__CMP_1 = getAtom(u"op__cmp", 1)
 OR_1 = getAtom(u"or", 1)
+POP_0 = getAtom(u"pop", 0)
 PUT_2 = getAtom(u"put", 2)
 REMOVEKEY_1 = getAtom(u"removeKey", 1)
 REVERSE_0 = getAtom(u"reverse", 0)
@@ -357,6 +358,14 @@ class FlexMap(Object):
         except KeyError:
             raise userError(u"removeKey/1: Key not in map")
 
+    def pop(self):
+        from typhon.objects.collections.lists import ConstList
+        if self.objectMap:
+            key, value = self.objectMap.popitem()
+            return ConstList([key, value])
+        else:
+            raise userError(u"pop/0: Pop from empty map")
+
     def recv(self, atom, args):
         # _makeIterator/0: Create an iterator for this collection's contents.
         if atom is _MAKEITERATOR_0:
@@ -487,6 +496,9 @@ class FlexMap(Object):
             key = args[0]
             self.removeKey(key)
             return NullObject
+
+        if atom is POP_0:
+            return self.pop()
 
         raise Refused(self, atom, args)
 

@@ -39,6 +39,7 @@ INDEXOF_2 = getAtom(u"indexOf", 2)
 INSERT_2 = getAtom(u"insert", 2)
 OP__CMP_1 = getAtom(u"op__cmp", 1)
 OR_1 = getAtom(u"or", 1)
+POP_0 = getAtom(u"pop", 0)
 REMOVE_1 = getAtom(u"remove", 1)
 SIZE_0 = getAtom(u"size", 0)
 SLICE_1 = getAtom(u"slice", 1)
@@ -328,6 +329,13 @@ class FlexSet(Object):
         except KeyError:
             raise userError(u"remove/1: Key not in set")
 
+    def pop(self):
+        if self.objectSet:
+            key, _ = self.objectSet.popitem()
+            return key
+        else:
+            raise userError(u"pop/0: Pop from empty set")
+
     def recv(self, atom, args):
         from typhon.objects.collections.lists import ConstList
 
@@ -424,6 +432,9 @@ class FlexSet(Object):
             key = args[0]
             self.remove(key)
             return NullObject
+
+        if atom is POP_0:
+            return self.pop()
 
         raise Refused(self, atom, args)
 
