@@ -15,7 +15,7 @@ stdenv.mkDerivation {
       chmod +x $out/bin/monte
       mkdir -p $out/nix-support/
       cp bench.html $out/
-      echo "benchmark html $out/bench.html" > $out/nix-support/hydra-build-products
+      echo "report benchmark $out/bench.html" > $out/nix-support/hydra-build-products
       '';
     checkPhase = "make testMast";
     doCheck = true;
