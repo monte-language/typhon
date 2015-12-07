@@ -19,7 +19,8 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.env import finalize
 from typhon.errors import Refused, WrongType, userError
-from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
+from typhon.objects.auditors import (auditedBy, deepFrozenGuard,
+                                     deepFrozenStamp, selfless)
 from typhon.objects.collections.lists import (ConstList, listFromIterable,
                                               unwrapList)
 from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
@@ -31,7 +32,8 @@ from typhon.objects.ejectors import throw, theThrower
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
 from typhon.objects.guards import (BindingGuard, FinalSlotGuardMaker,
-                                   VarSlotGuardMaker, anyGuard, sameGuardMaker)
+                                   VarSlotGuardMaker, anyGuard, sameGuardMaker,
+                                   subrangeGuardMaker)
 from typhon.objects.printers import toString
 from typhon.objects.refs import Promise, RefOps, resolution
 from typhon.objects.root import Object, audited, runnable
@@ -436,9 +438,11 @@ def safeScope():
         u"true": wrapBool(True),
 
         u"Binding": BindingGuard(),
+        u"DeepFrozen": deepFrozenGuard,
         u"Near": nearGuard(),
         u"Same": sameGuardMaker,
         u"Selfless": selfless,
+        u"SubrangeGuard": subrangeGuardMaker,
 
         u"M": MObject(),
         u"Ref": RefOps(),

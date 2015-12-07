@@ -90,41 +90,41 @@ def makeStaticScope(read, set, defs, vars, metaStateExpr :Bool) as DeepFrozenSta
 
 def emptyScope :DeepFrozen := makeStaticScope([], [], [], [], false)
 
-def sumScopes(nodes) as DeepFrozen:
+def sumScopes(nodes) as DeepFrozenStamp:
     var result := emptyScope
     for node in nodes:
         if (node != null):
             result += node.getStaticScope()
     return result
 
-def scopeMaybe(optNode) as DeepFrozen:
+def scopeMaybe(optNode) as DeepFrozenStamp:
     if (optNode == null):
         return emptyScope
     return optNode.getStaticScope()
 
-def all(iterable, pred) as DeepFrozen:
+def all(iterable, pred) as DeepFrozenStamp:
     for item in iterable:
         if (!pred(item)):
             return false
     return true
 
-def maybeTransform(node, f) as DeepFrozen:
+def maybeTransform(node, f) as DeepFrozenStamp:
     if (node == null):
         return null
     return node.transform(f)
 
-def transformAll(nodes, f) as DeepFrozen:
+def transformAll(nodes, f) as DeepFrozenStamp:
     def results := [].diverge()
     for n in nodes:
         results.push(n.transform(f))
     return results.snapshot()
 
-def isIdentifier(name :Str) :Bool as DeepFrozen:
+def isIdentifier(name :Str) :Bool as DeepFrozenStamp:
     if (MONTE_KEYWORDS.contains(name.toLowerCase())):
         return false
     return idStart.contains(name[0]) && all(name.slice(1), idPart.contains)
 
-def printListOn(left, nodes, sep, right, out, priority) as DeepFrozen:
+def printListOn(left, nodes, sep, right, out, priority) as DeepFrozenStamp:
     out.print(left)
     if (nodes.size() >= 1):
         for n in nodes.slice(0, nodes.size() - 1):
@@ -133,7 +133,7 @@ def printListOn(left, nodes, sep, right, out, priority) as DeepFrozen:
         nodes.last().subPrintOn(out, priority)
     out.print(right)
 
-def printDocstringOn(docstring, out, indentLastLine) as DeepFrozen:
+def printDocstringOn(docstring, out, indentLastLine) as DeepFrozenStamp:
     if (docstring == null):
         if (indentLastLine):
             out.println("")
@@ -150,7 +150,7 @@ def printDocstringOn(docstring, out, indentLastLine) as DeepFrozen:
         out.print("\"")
 
 def printSuiteOn(leaderFn, printContents, cuddle, noLeaderNewline, out,
-                 priority) as DeepFrozen:
+                 priority) as DeepFrozenStamp:
     def indentOut := out.indent(INDENT)
     if (priorities["braceExpr"] <= priority):
         if (cuddle):
@@ -173,22 +173,22 @@ def printSuiteOn(leaderFn, printContents, cuddle, noLeaderNewline, out,
             indentOut.println(":")
         printContents(indentOut, priorities["indentExpr"])
 
-def printExprSuiteOn(leaderFn, suite, cuddle, out, priority) as DeepFrozen:
+def printExprSuiteOn(leaderFn, suite, cuddle, out, priority) as DeepFrozenStamp:
         printSuiteOn(leaderFn, suite.subPrintOn, cuddle, false, out, priority)
 
-def printDocExprSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozen:
+def printDocExprSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozenStamp:
         printSuiteOn(leaderFn, fn o, p {
             printDocstringOn(docstring, o, true)
             suite.subPrintOn(o, p)
             }, false, true, out, priority)
 
-def printObjectSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozen:
+def printObjectSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozenStamp:
         printSuiteOn(leaderFn, fn o, p {
             printDocstringOn(docstring, o, false)
             suite.subPrintOn(o, p)
             }, false, true, out, priority)
 
-object astStamp as DeepFrozen:
+object astStamp as DeepFrozenStamp:
     to audit(audition):
         return true
 
@@ -203,14 +203,14 @@ object Ast as DeepFrozenStamp:
         return specimen
 
     match [=="get", nodeNames :List[Str], _]:
-        object nodeGuard as DeepFrozen:
+        object nodeGuard as DeepFrozenStamp:
             to coerce(specimen, ej):
                 def sp := Ast.coerce(specimen, ej)
                 if (nodeNames.contains(sp.getNodeName())):
                     return sp
                 throw.eject(ej, "m`" + M.toString(sp) + "`'s type is not one of " + M.toString(nodeNames))
 
-object Pattern as DeepFrozen:
+object Pattern as DeepFrozenStamp:
     to coerce(specimen, ej):
         def sp := Ast.coerce(specimen, ej)
         def n := sp.getNodeName()
@@ -219,7 +219,7 @@ object Pattern as DeepFrozen:
         throw.eject(ej, "m`" + M.toString(sp) + "` is not a pattern")
 
 
-object Expr as DeepFrozen:
+object Expr as DeepFrozenStamp:
     to coerce(specimen, ej):
         def sp := Ast.coerce(specimen, ej)
         def n := sp.getNodeName()
@@ -236,7 +236,7 @@ def Noun :DeepFrozen := Ast["NounExpr", "TempNounExpr", "LiteralExpr"]
 
 # The story of &scope:
 # Lemme make sure that this works first, okay? ~ C.
-def astWrapper(node, maker, args, span, &scope, nodeName, transformArgs) as DeepFrozen:
+def astWrapper(node, maker, args, span, &scope, nodeName, transformArgs) as DeepFrozenStamp:
     return object astNode extends node implements Selfless, TransparentStamp, astStamp:
         to getStaticScope():
             return scope
@@ -263,7 +263,7 @@ def astWrapper(node, maker, args, span, &scope, nodeName, transformArgs) as Deep
 
 # 'value' is unguarded because the optimized uses LiteralExprs for non-literal
 # constants.
-def makeLiteralExpr(value, span) as DeepFrozen:
+def makeLiteralExpr(value, span) as DeepFrozenStamp:
     object literalExpr:
         to getValue():
             return value
@@ -272,7 +272,7 @@ def makeLiteralExpr(value, span) as DeepFrozen:
     return astWrapper(literalExpr, makeLiteralExpr, [value], span,
         &emptyScope, "LiteralExpr", fn f {[value]})
 
-def makeNounExpr(name :Str, span) as DeepFrozen:
+def makeNounExpr(name :Str, span) as DeepFrozenStamp:
     object nounExpr:
         to getName():
             return name
@@ -289,7 +289,7 @@ def makeNounExpr(name :Str, span) as DeepFrozen:
     return node
 
 # Doesn't use astWrapper because it is compared by identity, not Transparent.
-def makeTempNounExpr(namePrefix :Str, span) as DeepFrozen:
+def makeTempNounExpr(namePrefix :Str, span) as DeepFrozenStamp:
     def scope
     object tempNounExpr implements DeepFrozenStamp, astStamp:
         to getStaticScope():
@@ -318,7 +318,7 @@ def makeTempNounExpr(namePrefix :Str, span) as DeepFrozen:
     bind scope := makeStaticScope([tempNounExpr.withoutSpan()], [], [], [], false)
     return tempNounExpr
 
-def makeSlotExpr(noun :Noun, span) as DeepFrozen:
+def makeSlotExpr(noun :Noun, span) as DeepFrozenStamp:
     def scope := noun.getStaticScope()
     object slotExpr:
         to getNoun():
@@ -329,7 +329,7 @@ def makeSlotExpr(noun :Noun, span) as DeepFrozen:
     return astWrapper(slotExpr, makeSlotExpr, [noun], span,
         &scope, "SlotExpr", fn f {[noun.transform(f)]})
 
-def makeMetaContextExpr(span) as DeepFrozen:
+def makeMetaContextExpr(span) as DeepFrozenStamp:
     def scope := emptyScope
     object metaContextExpr:
         to subPrintOn(out, priority):
@@ -337,7 +337,7 @@ def makeMetaContextExpr(span) as DeepFrozen:
     return astWrapper(metaContextExpr, makeMetaContextExpr, [], span,
         &scope, "MetaContextExpr", fn f {[]})
 
-def makeMetaStateExpr(span) as DeepFrozen:
+def makeMetaStateExpr(span) as DeepFrozenStamp:
     def scope := makeStaticScope([], [], [], [], true)
     object metaStateExpr:
         to subPrintOn(out, priority):
@@ -345,7 +345,7 @@ def makeMetaStateExpr(span) as DeepFrozen:
     return astWrapper(metaStateExpr, makeMetaStateExpr, [], span,
         &scope, "MetaStateExpr", fn f {[]})
 
-def makeBindingExpr(noun :Noun, span) as DeepFrozen:
+def makeBindingExpr(noun :Noun, span) as DeepFrozenStamp:
     def scope := noun.getStaticScope()
     object bindingExpr:
         to getNoun():
@@ -356,7 +356,7 @@ def makeBindingExpr(noun :Noun, span) as DeepFrozen:
     return astWrapper(bindingExpr, makeBindingExpr, [noun], span,
         &scope, "BindingExpr", fn f {[noun.transform(f)]})
 
-def makeSeqExpr(exprs :List[Expr], span) as DeepFrozen:
+def makeSeqExpr(exprs :List[Expr], span) as DeepFrozenStamp:
     # Let's not allocate unnecessarily.
     if (exprs.size() == 1):
         return exprs[0]
@@ -390,7 +390,7 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozen:
     return astWrapper(seqExpr, makeSeqExpr, [fixedExprs], span, &scope,
                       "SeqExpr", fn f {[transformAll(fixedExprs, f)]})
 
-def makeModule(importsList, exportsList, body, span) as DeepFrozen:
+def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(importsList + exportsList)})
     object ::"module":
         to getImports():
@@ -417,7 +417,7 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozen:
                           body.transform(f)]})
 
 
-def makeNamedArg(k :Expr, v :Expr, span) as DeepFrozen:
+def makeNamedArg(k :Expr, v :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {k.getStaticScope() + v.getStaticScope()})
     object namedArg:
         to getKey():
@@ -431,7 +431,7 @@ def makeNamedArg(k :Expr, v :Expr, span) as DeepFrozen:
     return astWrapper(namedArg, makeNamedArg, [k, v], span, &scope, "NamedArg",
                       fn f {[k.transform(f), v.transform(f)]})
 
-def makeNamedArgExport(v :Expr, span) as DeepFrozen:
+def makeNamedArgExport(v :Expr, span) as DeepFrozenStamp:
     def scope := v.getStaticScope()
     object namedArgExport:
         to getValue():
@@ -443,7 +443,7 @@ def makeNamedArgExport(v :Expr, span) as DeepFrozen:
                       fn f {[v.transform(f)]})
 
 def makeMethodCallExpr(rcvr :Expr, verb :Str, arglist :List[Expr],
-                       namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozen:
+                       namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes([rcvr] + arglist + namedArgs)})
 
     object methodCallExpr:
@@ -473,7 +473,7 @@ def makeMethodCallExpr(rcvr :Expr, verb :Str, arglist :List[Expr],
                transformAll(namedArgs, f)]})
 
 def makeFunCallExpr(receiver :Expr, args :List[Expr],
-                    namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozen:
+                    namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes([receiver] + args + namedArgs)})
     object funCallExpr:
         to getReceiver():
@@ -494,7 +494,7 @@ def makeFunCallExpr(receiver :Expr, args :List[Expr],
                                       transformAll(namedArgs, f)]})
 
 def makeSendExpr(rcvr :Ast, verb :Str, arglist :List[Ast],
-                 namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozen:
+                 namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes([rcvr] + arglist + namedArgs)})
     object sendExpr:
         to getReceiver():
@@ -523,7 +523,7 @@ def makeSendExpr(rcvr :Ast, verb :Str, arglist :List[Ast],
                transformAll(namedArgs, f)]})
 
 def makeFunSendExpr(receiver :Expr, args :List[Expr],
-                    namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozen:
+                    namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes([receiver] + args + namedArgs)})
     object funSendExpr:
         to getReceiver():
@@ -542,7 +542,7 @@ def makeFunSendExpr(receiver :Expr, args :List[Expr],
     return astWrapper(funSendExpr, makeFunSendExpr, [receiver, args, namedArgs], span,
         &scope, "FunSendExpr", fn f {[receiver.transform(f), transformAll(args, f), transformAll(namedArgs, f)]})
 
-def makeGetExpr(receiver :Expr, indices :List[Expr], span) as DeepFrozen:
+def makeGetExpr(receiver :Expr, indices :List[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(indices + [receiver])})
     object getExpr:
         to getReceiver():
@@ -556,7 +556,7 @@ def makeGetExpr(receiver :Expr, indices :List[Expr], span) as DeepFrozen:
     return astWrapper(getExpr, makeGetExpr, [receiver, indices], span,
         &scope, "GetExpr", fn f {[receiver.transform(f), transformAll(indices, f)]})
 
-def makeAndExpr(left :Expr, right :Expr, span) as DeepFrozen:
+def makeAndExpr(left :Expr, right :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {left.getStaticScope() +
                                    right.getStaticScope()})
     object andExpr:
@@ -575,7 +575,7 @@ def makeAndExpr(left :Expr, right :Expr, span) as DeepFrozen:
     return astWrapper(andExpr, makeAndExpr, [left, right], span,
         &scope, "AndExpr", fn f {[left.transform(f), right.transform(f)]})
 
-def makeOrExpr(left :Expr, right :Expr, span) as DeepFrozen:
+def makeOrExpr(left :Expr, right :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {left.getStaticScope() +
                                    right.getStaticScope()})
     object orExpr:
@@ -609,7 +609,7 @@ def operatorsToNamePrio :Map[Str, List[Str]] := [
     "<<" => ["shiftLeft", "comp"],
     ">>" => ["shiftRight", "comp"]]
 
-def makeBinaryExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
+def makeBinaryExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {left.getStaticScope() +
                                    right.getStaticScope()})
     object binaryExpr:
@@ -640,7 +640,7 @@ def comparatorsToName :Map[Str, Str] := [
     ">=" => "geq", "<=" => "leq",
     "<=>" => "asBigAs"]
 
-def makeCompareExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
+def makeCompareExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {left.getStaticScope() +
                                    right.getStaticScope()})
     object compareExpr:
@@ -665,7 +665,7 @@ def makeCompareExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
     return astWrapper(compareExpr, makeCompareExpr, [left, op, right], span,
         &scope, "CompareExpr", fn f {[left.transform(f), op, right.transform(f)]})
 
-def makeRangeExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
+def makeRangeExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {left.getStaticScope() +
                                    right.getStaticScope()})
     object rangeExpr:
@@ -691,7 +691,7 @@ def makeRangeExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozen:
     return astWrapper(rangeExpr, makeRangeExpr, [left, op, right], span,
         &scope, "RangeExpr", fn f {[left.transform(f), op, right.transform(f)]})
 
-def makeSameExpr(left :Expr, right :Expr, direction :Bool, span) as DeepFrozen:
+def makeSameExpr(left :Expr, right :Expr, direction :Bool, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {left.getStaticScope() +
                                    right.getStaticScope()})
     object sameExpr:
@@ -715,7 +715,7 @@ def makeSameExpr(left :Expr, right :Expr, direction :Bool, span) as DeepFrozen:
     return astWrapper(sameExpr, makeSameExpr, [left, right, direction], span,
         &scope, "SameExpr", fn f {[left.transform(f), right.transform(f), direction]})
 
-def makeMatchBindExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozen:
+def makeMatchBindExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {specimen.getStaticScope() +
                                    pattern.getStaticScope()})
     object matchBindExpr:
@@ -734,7 +734,7 @@ def makeMatchBindExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozen:
     return astWrapper(matchBindExpr, makeMatchBindExpr, [specimen, pattern], span,
         &scope, "MatchBindExpr", fn f {[specimen.transform(f), pattern.transform(f)]})
 
-def makeMismatchExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozen:
+def makeMismatchExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {specimen.getStaticScope() +
                                    pattern.getStaticScope()})
     object mismatchExpr:
@@ -756,7 +756,7 @@ def makeMismatchExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozen:
 def unaryOperatorsToName :Map[Str, Str] := [
     "~" => "complement", "!" => "not", "-" => "negate"]
 
-def makePrefixExpr(op :Str, receiver :Expr, span) as DeepFrozen:
+def makePrefixExpr(op :Str, receiver :Expr, span) as DeepFrozenStamp:
     def scope := receiver.getStaticScope()
     object prefixExpr:
         to getOp():
@@ -775,7 +775,7 @@ def makePrefixExpr(op :Str, receiver :Expr, span) as DeepFrozen:
     return astWrapper(prefixExpr, makePrefixExpr, [op, receiver], span,
         &scope, "PrefixExpr", fn f {[op, receiver.transform(f)]})
 
-def makeCoerceExpr(specimen :Expr, guard :NullOk[Expr], span) as DeepFrozen:
+def makeCoerceExpr(specimen :Expr, guard :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {specimen.getStaticScope() +
                                    guard.getStaticScope()})
     object coerceExpr:
@@ -794,7 +794,7 @@ def makeCoerceExpr(specimen :Expr, guard :NullOk[Expr], span) as DeepFrozen:
     return astWrapper(coerceExpr, makeCoerceExpr, [specimen, guard], span,
         &scope, "CoerceExpr", fn f {[specimen.transform(f), guard.transform(f)]})
 
-def makeCurryExpr(receiver :Expr, verb :Str, isSend :Bool, span) as DeepFrozen:
+def makeCurryExpr(receiver :Expr, verb :Str, isSend :Bool, span) as DeepFrozenStamp:
     def scope := receiver.getStaticScope()
     object curryExpr:
         to getReceiver():
@@ -820,7 +820,7 @@ def makeCurryExpr(receiver :Expr, verb :Str, isSend :Bool, span) as DeepFrozen:
     return astWrapper(curryExpr, makeCurryExpr, [receiver, verb, isSend], span,
         &scope, "CurryExpr", fn f {[receiver.transform(f), verb, isSend]})
 
-def makeExitExpr(name :Str, value :NullOk[Expr], span) as DeepFrozen:
+def makeExitExpr(name :Str, value :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {scopeMaybe(value)})
     object exitExpr:
         to getName():
@@ -839,7 +839,7 @@ def makeExitExpr(name :Str, value :NullOk[Expr], span) as DeepFrozen:
     return astWrapper(exitExpr, makeExitExpr, [name, value], span,
         &scope, "ExitExpr", fn f {[name, maybeTransform(value, f)]})
 
-def makeForwardExpr(patt :Ast["FinalPattern"], span) as DeepFrozen:
+def makeForwardExpr(patt :Ast["FinalPattern"], span) as DeepFrozenStamp:
     def scope := patt.getStaticScope()
     object forwardExpr:
         to getNoun():
@@ -854,7 +854,7 @@ def makeForwardExpr(patt :Ast["FinalPattern"], span) as DeepFrozen:
     return astWrapper(forwardExpr, makeForwardExpr, [patt], span,
         &scope, "ForwardExpr", fn f {[patt.transform(f)]})
 
-def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
+def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {makeStaticScope([], [], [],
                                                    [noun.getName()],
                                                    false) +
@@ -876,7 +876,7 @@ def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
         &scope, "VarPattern",
         fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
-def makeBindPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
+def makeBindPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {makeStaticScope([], [],
                                                    [noun.getName()], [],
                                                    false) +
@@ -893,7 +893,7 @@ def makeBindPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozen:
     return astWrapper(bindPattern, makeBindPattern, [noun, guard], span,
         &scope, "BindPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
-def makeDefExpr(pattern :Pattern, exit_ :NullOk[Expr], expr :Expr, span) as DeepFrozen:
+def makeDefExpr(pattern :Pattern, exit_ :NullOk[Expr], expr :Expr, span) as DeepFrozenStamp:
     def &scope := if (exit_ == null) {
         makeLazySlot(fn {pattern.getStaticScope() + expr.getStaticScope()})
     } else {
@@ -924,7 +924,7 @@ def makeDefExpr(pattern :Pattern, exit_ :NullOk[Expr], expr :Expr, span) as Deep
     return astWrapper(defExpr, makeDefExpr, [pattern, exit_, expr], span,
         &scope, "DefExpr", fn f {[pattern.transform(f), if (exit_ == null) {null} else {exit_.transform(f)}, expr.transform(f)]})
 
-def makeAssignExpr(lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
+def makeAssignExpr(lvalue :Expr, rvalue :Expr, span) as DeepFrozenStamp:
     def lname := lvalue.getNodeName()
     def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
         makeStaticScope([], [lvalue.getName()], [], [], false)
@@ -948,7 +948,7 @@ def makeAssignExpr(lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
     return astWrapper(assignExpr, makeAssignExpr, [lvalue, rvalue], span,
         &scope, "AssignExpr", fn f {[lvalue.transform(f), rvalue.transform(f)]})
 
-def makeVerbAssignExpr(verb :Str, lvalue :Expr, rvalues :List[Expr], span) as DeepFrozen:
+def makeVerbAssignExpr(verb :Str, lvalue :Expr, rvalues :List[Expr], span) as DeepFrozenStamp:
     def lname := lvalue.getNodeName()
     def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
         makeStaticScope([], [lvalue.getName()], [], [], false)
@@ -978,7 +978,7 @@ def makeVerbAssignExpr(verb :Str, lvalue :Expr, rvalues :List[Expr], span) as De
         &scope, "VerbAssignExpr", fn f {[verb, lvalue.transform(f), transformAll(rvalues, f)]})
 
 
-def makeAugAssignExpr(op :Str, lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
+def makeAugAssignExpr(op :Str, lvalue :Expr, rvalue :Expr, span) as DeepFrozenStamp:
     def lname := lvalue.getNodeName()
     def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
         makeStaticScope([], [lvalue.getName()], [], [], false)
@@ -1010,7 +1010,7 @@ def makeAugAssignExpr(op :Str, lvalue :Expr, rvalue :Expr, span) as DeepFrozen:
 
 def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
                namedPatts :List[Ast["NamedParam", "NamedParamImport"]], resultGuard :NullOk[Expr],
-               body :Expr, span) as DeepFrozen:
+               body :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatts +
                                              [resultGuard, body]).hide()})
     object ::"method":
@@ -1054,7 +1054,7 @@ def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
 
 def makeTo(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
            namedPatts :List[Ast["NamedParam", "NamedParamImport"]], resultGuard :NullOk[Expr],
-           body :Expr, span) as DeepFrozen:
+           body :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatts +
                                              [resultGuard, body]).hide()})
     object ::"to":
@@ -1092,7 +1092,7 @@ def makeTo(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
     return astWrapper(::"to", makeTo, [docstring, verb, patterns, namedPatts, resultGuard, body], span,
         &scope, "To", fn f {[docstring, verb, transformAll(patterns, f), transformAll(namedPatts, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
-def makeMatcher(pattern :Pattern, body :Expr, span) as DeepFrozen:
+def makeMatcher(pattern :Pattern, body :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {(pattern.getStaticScope() +
                                     body.getStaticScope()).hide()})
     object matcher:
@@ -1108,7 +1108,7 @@ def makeMatcher(pattern :Pattern, body :Expr, span) as DeepFrozen:
     return astWrapper(matcher, makeMatcher, [pattern, body], span,
         &scope, "Matcher", fn f {[pattern.transform(f), body.transform(f)]})
 
-def makeCatcher(pattern :Pattern, body :Expr, span) as DeepFrozen:
+def makeCatcher(pattern :Pattern, body :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {(pattern.getStaticScope() +
                                     body.getStaticScope()).hide()})
     object catcher:
@@ -1125,7 +1125,7 @@ def makeCatcher(pattern :Pattern, body :Expr, span) as DeepFrozen:
         &scope, "Catcher", fn f {[pattern.transform(f), body.transform(f)]})
 
 def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
-               matchers :List[Ast["Matcher"]], span) as DeepFrozen:
+               matchers :List[Ast["Matcher"]], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(methods + matchers)})
     object script:
         to getExtends():
@@ -1159,7 +1159,7 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
 
 def makeFunctionScript(patterns :List[Pattern],
                        namedPatterns :List[Ast["NamedParam", "NamedParamImport"]],
-                       resultGuard :NullOk[Expr], body :Expr, span) as DeepFrozen:
+                       resultGuard :NullOk[Expr], body :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatterns +
                                              [resultGuard, body]).hide()})
     object functionScript:
@@ -1190,7 +1190,7 @@ def makeFunctionScript(patterns :List[Pattern],
     return astWrapper(functionScript, makeFunctionScript, [patterns, namedPatterns, resultGuard, body], span,
         &scope, "FunctionScript", fn f {[transformAll(patterns, f), transformAll(namedPatterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
-def makeFunctionExpr(patterns :List[Pattern], body :Expr, span) as DeepFrozen:
+def makeFunctionExpr(patterns :List[Pattern], body :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {(sumScopes(patterns) +
                                     body.getStaticScope()).hide()})
     object functionExpr:
@@ -1205,7 +1205,7 @@ def makeFunctionExpr(patterns :List[Pattern], body :Expr, span) as DeepFrozen:
     return astWrapper(functionExpr, makeFunctionExpr, [patterns, body], span,
         &scope, "FunctionExpr", fn f {[transformAll(patterns, f), body.transform(f)]})
 
-def makeListExpr(items :List[Expr], span) as DeepFrozen:
+def makeListExpr(items :List[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(items)})
     object listExpr:
         to getItems():
@@ -1217,7 +1217,7 @@ def makeListExpr(items :List[Expr], span) as DeepFrozen:
 
 def makeListComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
                               key :NullOk[Pattern], value :Pattern,
-                              body :Expr, span) as DeepFrozen:
+                              body :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes([iterable, key, value, filter,
                                               body]).hide()})
     object listComprehensionExpr:
@@ -1249,7 +1249,7 @@ def makeListComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
     return astWrapper(listComprehensionExpr, makeListComprehensionExpr, [iterable, filter, key, value, body], span,
         &scope, "ListComprehensionExpr", fn f {[iterable.transform(f), maybeTransform(filter, f), maybeTransform(key, f), value.transform(f), body.transform(f)]})
 
-def makeMapExprAssoc(key :Expr, value :Expr, span) as DeepFrozen:
+def makeMapExprAssoc(key :Expr, value :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {key.getStaticScope() +
                                    value.getStaticScope()})
     object mapExprAssoc:
@@ -1264,7 +1264,7 @@ def makeMapExprAssoc(key :Expr, value :Expr, span) as DeepFrozen:
     return astWrapper(mapExprAssoc, makeMapExprAssoc, [key, value], span,
         &scope, "MapExprAssoc", fn f {[key.transform(f), value.transform(f)]})
 
-def makeMapExprExport(value :Ast["NounExpr", "BindingExpr", "SlotExpr", "TempNounExpr"], span) as DeepFrozen:
+def makeMapExprExport(value :Ast["NounExpr", "BindingExpr", "SlotExpr", "TempNounExpr"], span) as DeepFrozenStamp:
     def scope := value.getStaticScope()
     object mapExprExport:
         to getValue():
@@ -1275,7 +1275,7 @@ def makeMapExprExport(value :Ast["NounExpr", "BindingExpr", "SlotExpr", "TempNou
     return astWrapper(mapExprExport, makeMapExprExport, [value], span,
         &scope, "MapExprExport", fn f {[value.transform(f)]})
 
-def makeMapExpr(pairs :List[Ast["MapExprAssoc", "MapExprExport"]] ? (pairs.size() > 0), span) as DeepFrozen:
+def makeMapExpr(pairs :List[Ast["MapExprAssoc", "MapExprExport"]] ? (pairs.size() > 0), span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(pairs)})
     object mapExpr:
         to getPairs():
@@ -1287,7 +1287,7 @@ def makeMapExpr(pairs :List[Ast["MapExprAssoc", "MapExprExport"]] ? (pairs.size(
 
 def makeMapComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
                              key :NullOk[Pattern], value :Pattern,
-                             bodyk :Expr, bodyv :Expr, span) as DeepFrozen:
+                             bodyk :Expr, bodyv :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes([iterable, key, value, filter,
                                               bodyk, bodyv]).hide()})
     object mapComprehensionExpr:
@@ -1325,7 +1325,7 @@ def makeMapComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
 
 def makeForExpr(iterable :Expr, key :NullOk[Pattern], value :Pattern,
                 body :Expr, catchPattern :NullOk[Pattern],
-                catchBody :NullOk[Expr], span) as DeepFrozen:
+                catchBody :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes([iterable, key, value,
                                               body]).hide()})
     object forExpr:
@@ -1363,7 +1363,7 @@ def makeForExpr(iterable :Expr, key :NullOk[Pattern], value :Pattern,
 
 def makeObjectExpr(docstring :NullOk[Str], name :NamePattern,
                    asExpr :NullOk[Expr], auditors :List[Expr],
-                   script :Ast["Script", "FunctionScript"], span) as DeepFrozen:
+                   script :Ast["Script", "FunctionScript"], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {name.getStaticScope() +
                                    sumScopes([asExpr] + auditors).hide() +
                                    script.getStaticScope()})
@@ -1395,7 +1395,7 @@ def makeObjectExpr(docstring :NullOk[Str], name :NamePattern,
     return astWrapper(ObjectExpr, makeObjectExpr, [docstring, name, asExpr, auditors, script], span,
         &scope, "ObjectExpr", fn f {[docstring, name.transform(f), maybeTransform(asExpr, f), transformAll(auditors, f), script.transform(f)]})
 
-def makeParamDesc(name :Str, guard :NullOk[Expr], span) as DeepFrozen:
+def makeParamDesc(name :Str, guard :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {scopeMaybe(guard)})
     object paramDesc:
         to getName():
@@ -1415,7 +1415,7 @@ def makeParamDesc(name :Str, guard :NullOk[Expr], span) as DeepFrozen:
 
 def makeMessageDesc(docstring :NullOk[Str], verb :Str,
                     params :List[Ast["ParamDesc"]], resultGuard :NullOk[Expr],
-                    span) as DeepFrozen:
+                    span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(params + [resultGuard])})
     object messageDesc:
         to getDocstring():
@@ -1458,7 +1458,7 @@ def makeMessageDesc(docstring :NullOk[Str], verb :Str,
 def makeInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
                       stamp :NullOk[NamePattern], parents :List[Expr],
                       auditors :List[Expr],
-                      messages :List[Ast["MessageDesc"]], span) as DeepFrozen:
+                      messages :List[Ast["MessageDesc"]], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {name.getStaticScope() +
                                    sumScopes(parents + [stamp] + auditors +
                                              messages)})
@@ -1502,7 +1502,7 @@ def makeInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
 def makeFunctionInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
                               stamp :NullOk[NamePattern], parents :List[Expr],
                               auditors :List[Expr],
-                              messageDesc :Ast["MessageDesc"], span) as DeepFrozen:
+                              messageDesc :Ast["MessageDesc"], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {name.getStaticScope() +
                                    sumScopes(parents + [stamp] + auditors +
                                              [messageDesc])})
@@ -1553,7 +1553,7 @@ def makeFunctionInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
     return astWrapper(functionInterfaceExpr, makeFunctionInterfaceExpr, [docstring, name, stamp, parents, auditors, messageDesc], span,
         &scope, "FunctionInterfaceExpr", fn f {[docstring, name.transform(f), maybeTransform(stamp, f), transformAll(parents, f), transformAll(auditors, f), messageDesc.transform(f)]})
 
-def makeCatchExpr(body :Expr, pattern :Pattern, catcher :Expr, span) as DeepFrozen:
+def makeCatchExpr(body :Expr, pattern :Pattern, catcher :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {body.getStaticScope().hide() +
                                    (pattern.getStaticScope() +
                                     catcher.getStaticScope()).hide()})
@@ -1574,7 +1574,7 @@ def makeCatchExpr(body :Expr, pattern :Pattern, catcher :Expr, span) as DeepFroz
         &scope, "CatchExpr", fn f {[body.transform(f), pattern.transform(f),
                                        catcher.transform(f)]})
 
-def makeFinallyExpr(body :Expr, unwinder :Expr, span) as DeepFrozen:
+def makeFinallyExpr(body :Expr, unwinder :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {body.getStaticScope().hide() +
                                    unwinder.getStaticScope().hide()})
     object finallyExpr:
@@ -1590,7 +1590,7 @@ def makeFinallyExpr(body :Expr, unwinder :Expr, span) as DeepFrozen:
         &scope, "FinallyExpr", fn f {[body.transform(f), unwinder.transform(f)]})
 
 def makeTryExpr(body :Expr, catchers :List[Ast["Catcher"]],
-                finallyBlock :NullOk[Expr], span) as DeepFrozen:
+                finallyBlock :NullOk[Expr], span) as DeepFrozenStamp:
     # Definition of baseScope is duplicated in order to avoid chaining lazy
     # slots. ~ C.
     def &scope := if (finallyBlock == null) {
@@ -1620,7 +1620,7 @@ def makeTryExpr(body :Expr, catchers :List[Ast["Catcher"]],
 
 def makeEscapeExpr(ejectorPattern :Pattern, body :Expr,
                    catchPattern :NullOk[Pattern], catchBody :NullOk[Expr],
-                   span) as DeepFrozen:
+                   span) as DeepFrozenStamp:
     # Definition of baseScope is duplicated in order to avoid chaining lazy
     # slots. ~ C.
     def &scope := if (catchPattern == null) {
@@ -1662,7 +1662,7 @@ def makeEscapeExpr(ejectorPattern :Pattern, body :Expr,
          fn f {[ejectorPattern.transform(f), body.transform(f),
                 maybeTransform(catchPattern, f), maybeTransform(catchBody, f)]})
 
-def makeSwitchExpr(specimen :Expr, matchers :List[Ast["Matcher"]], span) as DeepFrozen:
+def makeSwitchExpr(specimen :Expr, matchers :List[Ast["Matcher"]], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {specimen.getStaticScope() +
                                    sumScopes(matchers)})
     object switchExpr:
@@ -1688,7 +1688,7 @@ def makeSwitchExpr(specimen :Expr, matchers :List[Ast["Matcher"]], span) as Deep
         &scope, "SwitchExpr", fn f {[specimen.transform(f), transformAll(matchers, f)]})
 
 def makeWhenExpr(args :List[Expr], body :Expr, catchers :List[Ast["Catcher"]],
-                 finallyBlock :NullOk[Expr], span) as DeepFrozen:
+                 finallyBlock :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(args + [body]).hide() +
                                    sumScopes(catchers) +
                                    scopeMaybe(finallyBlock).hide()})
@@ -1721,7 +1721,7 @@ def makeWhenExpr(args :List[Expr], body :Expr, catchers :List[Ast["Catcher"]],
     return astWrapper(whenExpr, makeWhenExpr, [args, body, catchers, finallyBlock], span,
         &scope, "WhenExpr", fn f {[transformAll(args, f), body.transform(f), transformAll(catchers, f), maybeTransform(finallyBlock, f)]})
 
-def makeIfExpr(test :Expr, consq :Expr, alt :NullOk[Expr], span) as DeepFrozen:
+def makeIfExpr(test :Expr, consq :Expr, alt :NullOk[Expr], span) as DeepFrozenStamp:
     # Definition of baseScope is duplicated in order to avoid chaining lazy
     # slots. ~ C.
     def &scope := if (alt == null) {
@@ -1759,7 +1759,7 @@ def makeIfExpr(test :Expr, consq :Expr, alt :NullOk[Expr], span) as DeepFrozen:
     return astWrapper(ifExpr, makeIfExpr, [test, consq, alt], span,
         &scope, "IfExpr", fn f {[test.transform(f), consq.transform(f), maybeTransform(alt, f)]})
 
-def makeWhileExpr(test :Expr, body :Expr, catcher :NullOk[Ast["Catcher"]], span) as DeepFrozen:
+def makeWhileExpr(test :Expr, body :Expr, catcher :NullOk[Ast["Catcher"]], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes([test, body, catcher])})
     object whileExpr:
         to getTest():
@@ -1779,7 +1779,7 @@ def makeWhileExpr(test :Expr, body :Expr, catcher :NullOk[Ast["Catcher"]], span)
     return astWrapper(whileExpr, makeWhileExpr, [test, body, catcher], span,
         &scope, "WhileExpr", fn f {[test.transform(f), body.transform(f), maybeTransform(catcher, f)]})
 
-def makeHideExpr(body :Expr, span) as DeepFrozen:
+def makeHideExpr(body :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {body.getStaticScope().hide()})
     object hideExpr:
         to getBody():
@@ -1794,7 +1794,7 @@ def makeHideExpr(body :Expr, span) as DeepFrozen:
     return astWrapper(hideExpr, makeHideExpr, [body], span,
         &scope, "HideExpr", fn f {[body.transform(f)]})
 
-def makeValueHoleExpr(index :Int, span) as DeepFrozen:
+def makeValueHoleExpr(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
     object valueHoleExpr:
         to getIndex():
@@ -1806,7 +1806,7 @@ def makeValueHoleExpr(index :Int, span) as DeepFrozen:
     return astWrapper(valueHoleExpr, makeValueHoleExpr, [index], span,
         &scope, "ValueHoleExpr", fn f {[index]})
 
-def makePatternHoleExpr(index :Int, span) as DeepFrozen:
+def makePatternHoleExpr(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
     object patternHoleExpr:
         to getIndex():
@@ -1818,7 +1818,7 @@ def makePatternHoleExpr(index :Int, span) as DeepFrozen:
     return astWrapper(patternHoleExpr, makePatternHoleExpr, [index], span,
         &scope, "PatternHoleExpr", fn f {[index]})
 
-def makeValueHolePattern(index :Int, span) as DeepFrozen:
+def makeValueHolePattern(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
     object valueHolePattern:
         to getIndex():
@@ -1830,7 +1830,7 @@ def makeValueHolePattern(index :Int, span) as DeepFrozen:
     return astWrapper(valueHolePattern, makeValueHolePattern, [index], span,
         &scope, "ValueHolePattern", fn f {[index]})
 
-def makePatternHolePattern(index :Int, span) as DeepFrozen:
+def makePatternHolePattern(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
     object patternHolePattern:
         to getIndex():
@@ -1843,7 +1843,7 @@ def makePatternHolePattern(index :Int, span) as DeepFrozen:
         &scope, "PatternHolePattern", fn f {[index]})
 
 # Guard  would be 'noun :Noun' but optimizer will fold some constants here.
-def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozen:
+def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozenStamp:
     def gs := scopeMaybe(guard)
     if (noun.getNodeName() == "NounExpr" &&
         gs.namesUsed().contains(noun.getName())):
@@ -1865,7 +1865,7 @@ def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozen:
         &scope, "FinalPattern",
         fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
-def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozen:
+def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozenStamp:
     def gs := scopeMaybe(guard)
     if (noun.getNodeName() == "NounExpr" &&
         gs.namesUsed().contains(noun.getName())):
@@ -1883,7 +1883,7 @@ def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozen:
     return astWrapper(slotPattern, makeSlotPattern, [noun, guard], span,
         &scope, "SlotPattern", fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
-def makeBindingPattern(noun :Noun, span) as DeepFrozen:
+def makeBindingPattern(noun :Noun, span) as DeepFrozenStamp:
     def scope := makeStaticScope([], [], [], [noun.getName()], false)
     object bindingPattern:
         to getNoun():
@@ -1894,7 +1894,7 @@ def makeBindingPattern(noun :Noun, span) as DeepFrozen:
     return astWrapper(bindingPattern, makeBindingPattern, [noun], span,
         &scope, "BindingPattern", fn f {[noun.transform(f)]})
 
-def makeIgnorePattern(guard :NullOk[Expr], span) as DeepFrozen:
+def makeIgnorePattern(guard :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {scopeMaybe(guard)})
     object ignorePattern:
         to getGuard():
@@ -1909,7 +1909,7 @@ def makeIgnorePattern(guard :NullOk[Expr], span) as DeepFrozen:
     return astWrapper(ignorePattern, makeIgnorePattern, [guard], span,
         &scope, "IgnorePattern", fn f {[maybeTransform(guard, f)]})
 
-def makeListPattern(patterns :List[Pattern], tail :NullOk[Pattern], span) as DeepFrozen:
+def makeListPattern(patterns :List[Pattern], tail :NullOk[Pattern], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(patterns + [tail])})
     object listPattern:
         to getPatterns():
@@ -1924,7 +1924,7 @@ def makeListPattern(patterns :List[Pattern], tail :NullOk[Pattern], span) as Dee
     return astWrapper(listPattern, makeListPattern, [patterns, tail], span,
         &scope, "ListPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
 
-def makeMapPatternAssoc(key :Expr, value :Pattern, default :NullOk[Expr], span) as DeepFrozen:
+def makeMapPatternAssoc(key :Expr, value :Pattern, default :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {key.getStaticScope() +
                                    value.getStaticScope() + scopeMaybe(default)})
     object mapPatternAssoc:
@@ -1950,7 +1950,7 @@ def makeMapPatternAssoc(key :Expr, value :Pattern, default :NullOk[Expr], span) 
     return astWrapper(mapPatternAssoc, makeMapPatternAssoc, [key, value, default], span,
         &scope, "MapPatternAssoc", fn f {[key.transform(f), value.transform(f), maybeTransform(default, f)]})
 
-def makeMapPatternImport(pattern :NamePattern, default :NullOk[Expr], span) as DeepFrozen:
+def makeMapPatternImport(pattern :NamePattern, default :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {pattern.getStaticScope() + scopeMaybe(default)})
     object mapPatternImport:
         to getPattern():
@@ -1967,7 +1967,7 @@ def makeMapPatternImport(pattern :NamePattern, default :NullOk[Expr], span) as D
     return astWrapper(mapPatternImport, makeMapPatternImport, [pattern, default], span,
         &scope, "MapPatternImport", fn f {[pattern.transform(f), maybeTransform(default, f)]})
 
-def makeMapPattern(patterns :List[Ast["MapPatternAssoc", "MapPatternImport"]], tail :NullOk[Pattern], span) as DeepFrozen:
+def makeMapPattern(patterns :List[Ast["MapPatternAssoc", "MapPatternImport"]], tail :NullOk[Pattern], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(patterns + [tail])})
     object mapPattern:
         to getPatterns():
@@ -1982,7 +1982,7 @@ def makeMapPattern(patterns :List[Ast["MapPatternAssoc", "MapPatternImport"]], t
     return astWrapper(mapPattern, makeMapPattern, [patterns, tail], span,
         &scope, "MapPattern", fn f {[transformAll(patterns, f), maybeTransform(tail, f)]})
 
-def makeNamedParam(key :Expr, patt :Pattern, default :NullOk[Expr], span) as DeepFrozen:
+def makeNamedParam(key :Expr, patt :Pattern, default :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {key.getStaticScope() +
                                    patt.getStaticScope() +
                                    scopeMaybe(default)})
@@ -2009,7 +2009,7 @@ def makeNamedParam(key :Expr, patt :Pattern, default :NullOk[Expr], span) as Dee
     return astWrapper(namedParam, makeNamedParam, [key, patt, default], span,
         &scope, "NamedParam", fn f {[key.transform(f), patt.transform(f), maybeTransform(default, f)]})
 
-def makeNamedParamImport(patt :NamePattern, default :NullOk[Expr], span) as DeepFrozen:
+def makeNamedParamImport(patt :NamePattern, default :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {patt.getStaticScope() +
                                    scopeMaybe(default)})
     object namedParamImport:
@@ -2027,7 +2027,7 @@ def makeNamedParamImport(patt :NamePattern, default :NullOk[Expr], span) as Deep
     return astWrapper(namedParamImport, makeNamedParamImport, [patt, default], span,
         &scope, "NamedParamImport", fn f {[patt.transform(f), maybeTransform(default, f)]})
 
-def makeViaPattern(expr :Expr, subpattern :Pattern, span) as DeepFrozen:
+def makeViaPattern(expr :Expr, subpattern :Pattern, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {expr.getStaticScope() +
                                    subpattern.getStaticScope()})
     object viaPattern:
@@ -2043,7 +2043,7 @@ def makeViaPattern(expr :Expr, subpattern :Pattern, span) as DeepFrozen:
     return astWrapper(viaPattern, makeViaPattern, [expr, subpattern], span,
         &scope, "ViaPattern", fn f {[expr.transform(f), subpattern.transform(f)]})
 
-def makeSuchThatPattern(subpattern :Pattern, expr :Expr, span) as DeepFrozen:
+def makeSuchThatPattern(subpattern :Pattern, expr :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {expr.getStaticScope() +
                                    subpattern.getStaticScope()})
     object suchThatPattern:
@@ -2059,7 +2059,7 @@ def makeSuchThatPattern(subpattern :Pattern, expr :Expr, span) as DeepFrozen:
     return astWrapper(suchThatPattern, makeSuchThatPattern, [subpattern, expr], span,
         &scope, "SuchThatPattern", fn f {[subpattern.transform(f), expr.transform(f)]})
 
-def makeSamePattern(value :Expr, direction :Bool, span) as DeepFrozen:
+def makeSamePattern(value :Expr, direction :Bool, span) as DeepFrozenStamp:
     def scope := value.getStaticScope()
     object samePattern:
         to getValue():
@@ -2075,7 +2075,7 @@ def makeSamePattern(value :Expr, direction :Bool, span) as DeepFrozen:
     return astWrapper(samePattern, makeSamePattern, [value, direction], span,
         &scope, "SamePattern", fn f {[value.transform(f), direction]})
 
-def makeQuasiText(text :Str, span) as DeepFrozen:
+def makeQuasiText(text :Str, span) as DeepFrozenStamp:
     def scope := emptyScope
     object quasiText:
         to getText():
@@ -2085,7 +2085,7 @@ def makeQuasiText(text :Str, span) as DeepFrozen:
     return astWrapper(quasiText, makeQuasiText, [text], span,
         &scope, "QuasiText", fn f {[text]})
 
-def makeQuasiExprHole(expr :Expr, span) as DeepFrozen:
+def makeQuasiExprHole(expr :Expr, span) as DeepFrozenStamp:
     def scope := expr.getStaticScope()
     object quasiExprHole:
         to getExpr():
@@ -2103,7 +2103,7 @@ def makeQuasiExprHole(expr :Expr, span) as DeepFrozen:
         &scope, "QuasiExprHole", fn f {[expr.transform(f)]})
 
 
-def makeQuasiPatternHole(pattern :Pattern, span) as DeepFrozen:
+def makeQuasiPatternHole(pattern :Pattern, span) as DeepFrozenStamp:
     def scope := pattern.getStaticScope()
     object quasiPatternHole:
         to getPattern():
@@ -2121,7 +2121,7 @@ def makeQuasiPatternHole(pattern :Pattern, span) as DeepFrozen:
     return astWrapper(quasiPatternHole, makeQuasiPatternHole, [pattern], span,
         &scope, "QuasiPatternHole", fn f {[pattern.transform(f)]})
 
-def quasiPrint(name, quasis, out, priority) as DeepFrozen:
+def quasiPrint(name, quasis, out, priority) as DeepFrozenStamp:
     if (name != null):
         out.print(name)
     out.print("`")
@@ -2138,7 +2138,7 @@ def quasiPrint(name, quasis, out, priority) as DeepFrozen:
 def QuasiPiece :DeepFrozen := Ast["QuasiText", "QuasiExprHole",
                                   "QuasiPatternHole"]
 
-def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozen:
+def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {
         if (name == null) {emptyScope} else {
             makeStaticScope([name + "__quasiParser"], [],
@@ -2155,7 +2155,7 @@ def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as De
     return astWrapper(quasiParserExpr, makeQuasiParserExpr, [name, quasis], span,
         &scope, "QuasiParserExpr", fn f {[name, transformAll(quasis, f)]})
 
-def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozen:
+def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {
         if (name == null) {emptyScope} else {
             makeStaticScope([name + "__quasiParser"], [],
@@ -2172,7 +2172,7 @@ def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as
     return astWrapper(quasiParserPattern, makeQuasiParserPattern, [name, quasis], span,
         &scope, "QuasiParserPattern", fn f {[name, transformAll(quasis, f)]})
 
-object astBuilder as DeepFrozen:
+object astBuilder as DeepFrozenStamp:
     to getAstGuard():
         return Ast
     to getPatternGuard():

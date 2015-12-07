@@ -54,20 +54,6 @@ object _comparer as DeepFrozenStamp:
         return left.op__cmp(right).belowZero()
 
 
-object Void as DeepFrozenStamp:
-    "Nothingness.
-
-     This guard admits only `null`."
-
-    to _printOn(out):
-        out.print("Void")
-
-    to coerce(specimen, ej):
-        if (specimen != null):
-            throw.eject(ej, "not null")
-        return null
-
-
 def makePredicateGuard(predicate :DeepFrozenStamp, label :Str) as DeepFrozenStamp:
     return object predicateGuard as DeepFrozenStamp:
         "A predicate guard.
@@ -577,17 +563,6 @@ def makeLazySlot(var thunk, => guard := Any) as DeepFrozenStamp:
                 evaluated := true
                 thunk := thunk()
             return thunk
-
-
-def [=> SubrangeGuard, => DeepFrozen] := import.script(
-    "prelude/deepfrozen",
-    [=> &&_comparer, => &&_booleanFlow, => &&_makeVerbFacet,
-     => &&_validateFor, => &&_bind,
-     => &&DeepFrozenStamp, => &&TransparentStamp,
-     => &&Bool, => &&Bytes, => &&Char, => &&Double, => &&Int, => &&Str,
-     => &&Void,
-     => &&List, => &&Map, => &&NullOk, => &&Same, => &&Set,
-     ])
 
 
 def scopeAsDF(scope):

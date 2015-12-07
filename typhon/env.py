@@ -16,7 +16,7 @@ from rpython.rlib.jit import promote, unroll_safe
 from rpython.rlib.objectmodel import always_inline
 
 from typhon.atoms import getAtom
-from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.auditors import deepFrozenGuard, deepFrozenStamp
 from typhon.objects.data import StrObject
 from typhon.objects.guards import anyGuard
 from typhon.objects.slots import Binding, finalBinding, VarSlot
@@ -58,16 +58,11 @@ def assignValue(binding, value):
 
 
 def finalize(scope):
-    from typhon.prelude import getGlobal
-    # This is kind of stupid, but it does resolve the circularity in time.
-    DFb = getGlobal(u"DeepFrozen")
-    if DFb is None and u"DeepFrozen" in scope:
-        DFb = scope[u"DeepFrozen"]
     rv = {}
     for key in scope:
         o = scope[key]
-        if deepFrozenStamp in o.auditorStamps() and DFb is not None:
-            g = DFb.getValue()
+        if deepFrozenStamp in o.auditorStamps():
+            g = deepFrozenGuard
         else:
             g = anyGuard
         rv[key] = finalBinding(o, g)

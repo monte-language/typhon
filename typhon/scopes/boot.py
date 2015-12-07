@@ -24,7 +24,7 @@ from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import StrObject, unwrapBytes, wrapBool, unwrapStr
 from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
-                                   DoubleGuard, IntGuard, StrGuard)
+                                   DoubleGuard, IntGuard, StrGuard, VoidGuard)
 from typhon.objects.root import Object, audited, runnable
 from typhon.objects.tests import UnitTest
 
@@ -104,6 +104,7 @@ def bootScope(recorder, collectTests):
         u"Double": DoubleGuard(),
         u"Int": IntGuard(),
         u"Str": StrGuard(),
+        u"Void": VoidGuard(),
 
         u"KernelAstStamp": kernelAstStamp,
 

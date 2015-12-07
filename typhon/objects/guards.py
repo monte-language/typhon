@@ -11,11 +11,12 @@ from typhon.objects.constants import (BoolObject, NullObject, unwrapBool,
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
 from typhon.objects.ejectors import Ejector, throw
-from typhon.errors import Ejecting
+from typhon.errors import Ejecting, userError
 from typhon.objects.refs import resolution
 from typhon.objects.root import Object, audited
 from typhon.objects.slots import FinalSlot, VarSlot
 
+AUDIT_1 = getAtom(u"audit", 1)
 COERCE_2 = getAtom(u"coerce", 2)
 EXTRACTGUARDS_2 = getAtom(u"extractGuards", 2)
 EXTRACTGUARD_2 = getAtom(u"extractGuard", 2)
@@ -24,6 +25,7 @@ GETGUARD_0 = getAtom(u"getGuard", 0)
 GETVALUE_0 = getAtom(u"getValue", 0)
 GETMETHODS_0 = getAtom(u"getMethods", 0)
 GET_1 = getAtom(u"get", 1)
+PASSES_1 = getAtom(u"passes", 1)
 SUPERSETOF_1 = getAtom(u"supersetOf", 1)
 _UNCALL_0 = getAtom(u"_uncall", 0)
 
@@ -103,6 +105,14 @@ class IntGuard(Guard):
     def subCoerce(self, specimen):
         if (isinstance(specimen, IntObject) or
                 isinstance(specimen, BigInt)):
+            return specimen
+
+
+@autohelp
+@audited.DF
+class VoidGuard(Guard):
+    def subCoerce(self, specimen):
+        if specimen is NullObject:
             return specimen
 
 
@@ -375,3 +385,97 @@ class SameGuardMaker(Object):
 
 
 sameGuardMaker = SameGuardMaker()
+
+
+@autohelp
+class SubrangeGuardMaker(Object):
+
+    def auditorStamps(self):
+        return [deepFrozenStamp]
+
+    def printOn(self, out):
+        from typhon.objects.data import StrObject
+        out.call(u"print", [StrObject(u"SubrangeGuard")])
+
+    def recv(self, atom, args):
+        if atom is GET_1:
+            return SubrangeGuard(args[0])
+        raise Refused(self, atom, args)
+
+
+subrangeGuardMaker = SubrangeGuardMaker()
+
+
+@autohelp
+@audited.Transparent
+class SubrangeGuard(Object):
+
+    def __init__(self, superguard):
+        self.superGuard = superguard
+
+    def printOn(self, out):
+        from typhon.objects.data import StrObject
+        out.call(u"print", [subrangeGuardMaker])
+        out.call(u"print", [StrObject(u"[")])
+        out.call(u"print", [self.superGuard])
+        out.call(u"print", [StrObject(u"]")])
+
+    def recv(self, atom, args):
+        from typhon.nodes import Noun, Method, Obj
+        from typhon.objects.equality import optSame, EQUAL
+        from typhon.objects.user import Audition
+        if atom is _UNCALL_0:
+            from typhon.objects.collections.maps import EMPTY_MAP
+            return ConstList([subrangeGuardMaker, StrObject(u"get"),
+                              ConstList([self.superGuard]), EMPTY_MAP])
+
+        if atom is AUDIT_1:
+            audition = args[0]
+            if not isinstance(audition, Audition):
+                raise userError(u"not invoked with an Audition")
+            ast = audition.ast
+            if not isinstance(ast, Obj):
+                raise userError(u"audition not created with an object expr")
+            methods = ast._script._methods
+            for m in methods:
+                if isinstance(m, Method) and m._verb == u"coerce":
+                    mguard = m._g
+                    if isinstance(mguard, Noun):
+                        rGSG = audition.getGuard(mguard.name)
+                        if isinstance(rGSG, FinalSlotGuard):
+                            rGSG0 = rGSG.valueGuard
+                            if isinstance(rGSG0, SameGuard):
+                                resultGuard = rGSG0.value
+
+                                if (optSame(resultGuard, self.superGuard)
+                                    is EQUAL or
+                                    (SUPERSETOF_1
+                                     in self.superGuard.respondingAtoms()
+                                     and self.superGuard.call(u"supersetOf",
+                                                              [resultGuard])
+                                     is wrapBool(True))):
+                                    return wrapBool(True)
+                                raise userError(
+                                    u"%s does not have a result guard implying "
+                                    u"%s, but %s" % (audition.fqn,
+                                                     self.superGuard.toQuote(),
+                                                     resultGuard.toQuote()))
+                            raise userError(u"%s does not have a determinable "
+                                            u"result guard, but <& %s> :%s" % (
+                                                audition.fqn, mguard.name,
+                                                rGSG.toQuote()))
+                    break
+            return self
+        if atom is PASSES_1:
+            return wrapBool(args[0].auditedBy(self))
+        if atom is COERCE_2:
+            specimen, ej = args[0], args[1]
+            if specimen.auditedBy(self):
+                return specimen
+            c = specimen.call(u"_conformTo", [self])
+            if c.auditedBy(self):
+                return c
+            throw(ej, StrObject(u"%s does not conform to %s" % (
+                specimen.toQuote(), self.toQuote())))
+
+        raise Refused(self, atom, args)

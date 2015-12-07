@@ -26,6 +26,7 @@ from typhon.debug import enableDebugPrint, TyphonJitHooks
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, instantiateModule, obtainModule
 from typhon.metrics import Recorder
+from typhon.objects.auditors import deepFrozenGuard
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapStr
@@ -62,7 +63,8 @@ def loadPrelude(config, recorder, vat):
                      u"Char": scope[u"Char"],
                      u"Double": scope[u"Double"],
                      u"Int": scope[u"Int"],
-                     u"Str": scope[u"Str"]})
+                     u"Str": scope[u"Str"],
+                     u"Void": scope[u"Void"]})
 
     # Boot imports.
     scope = addImportToScope(config.libraryPaths, scope, recorder, bootTC)
@@ -223,17 +225,16 @@ def entryPoint(argv):
 
     scope = safeScope()
     scope.update(prelude)
-    DF = prelude[u"DeepFrozen"].getValue()
     collectTests = TestCollector()
     ss = scope.copy()
     ss[u"import"] = finalBinding(
         Import(config.libraryPaths, ss, recorder, collectTests),
-        DF)
+        deepFrozenGuard)
     # XXX monteMap()
     reflectedSS = monteMap()
     for k, b in ss.iteritems():
         reflectedSS[StrObject(u"&&" + k)] = b
-    ss[u"safeScope"] = finalBinding(ConstMap(reflectedSS), DF)
+    ss[u"safeScope"] = finalBinding(ConstMap(reflectedSS), deepFrozenGuard)
     reflectedSS[StrObject(u"&&safeScope")] = ss[u"safeScope"]
     scope[u"safeScope"] = ss[u"safeScope"]
     scope[u"import"] = ss[u"import"]
