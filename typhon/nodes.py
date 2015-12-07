@@ -17,7 +17,7 @@ import textwrap
 from collections import OrderedDict
 
 from rpython.rlib import rvmprof
-from rpython.rlib.jit import elidable
+from rpython.rlib.jit import elidable, unroll_safe
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rbigint import BASE10
@@ -425,7 +425,9 @@ class Node(Object):
         raise Refused(self, atom, args)
 
 
+@unroll_safe
 def wrapNameList(names):
+    # unroll_safe justified by inputs always being immutable. ~ C.
     # XXX monteMap()
     d = monteMap()
     for name in names:
