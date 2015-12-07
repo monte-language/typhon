@@ -19,7 +19,8 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.env import finalize
 from typhon.errors import Refused, WrongType, userError
-from typhon.objects.auditors import auditedBy, deepFrozenStamp, selfless
+from typhon.objects.auditors import (auditedBy, deepFrozenGuard,
+                                     deepFrozenStamp, selfless)
 from typhon.objects.collections.lists import (ConstList, listFromIterable,
                                               unwrapList)
 from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
@@ -436,6 +437,7 @@ def safeScope():
         u"true": wrapBool(True),
 
         u"Binding": BindingGuard(),
+        u"DeepFrozen": deepFrozenGuard,
         u"Near": nearGuard(),
         u"Same": sameGuardMaker,
         u"Selfless": selfless,

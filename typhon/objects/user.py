@@ -38,6 +38,7 @@ GETFQN_0 = getAtom(u"getFQN", 0)
 @autohelp
 class Audition(Object):
 
+    _immutable_fields_ = "fqn", "ast", "guards"
     # Whether the audition is still fresh and usable.
     active = True
 

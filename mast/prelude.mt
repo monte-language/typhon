@@ -590,7 +590,7 @@ def makeLazySlot(var thunk, => guard := Any) as DeepFrozenStamp:
             return thunk
 
 
-def [=> SubrangeGuard, => DeepFrozen] := import.script(
+def [=> SubrangeGuard] := import.script(
     "prelude/deepfrozen",
     [=> &&_comparer, => &&_booleanFlow, => &&_makeVerbFacet,
      => &&_validateFor, => &&_bind,
