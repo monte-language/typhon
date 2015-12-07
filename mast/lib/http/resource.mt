@@ -7,7 +7,7 @@ exports (smallBody,
          main)
 
 def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
-def [=> tag :DeepFrozen] | _ := import.script("lib/http/tag")
+def [=> tag :DeepFrozen] | _ := import("lib/http/tag")
 
 
 def smallBody(s) as DeepFrozen:

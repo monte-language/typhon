@@ -1,3 +1,6 @@
+imports => unittest
+exports (makeHTTPEndpoint)
+
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,19 +15,22 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> UTF8] | _ := import.script("lib/codec/utf8")
-def [=> makeMapPump] := import.script("lib/tubes/mapPump")
-def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
-def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
-def [=> percentDecode] | _ := import.script("lib/percent")
-def [=> chain] | _ := import.script("lib/tubes/chain")
+def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
+def [=> makeMapPump :DeepFrozen] := import.script("lib/tubes/mapPump")
+def [=> makePumpTube :DeepFrozen] := import.script("lib/tubes/pumpTube")
+def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
+def [=> PercentEncoding :DeepFrozen] | _ := import("lib/percent",
+                                                   [=> unittest])
+def [=> chain :DeepFrozen] | _ := import("lib/tubes/chain")
 
-def [RequestState, REQUEST, HEADER, BODY] := makeEnum(
-    ["request", "header", "body"])
+def [RequestState :DeepFrozen,
+     REQUEST :DeepFrozen,
+     HEADER :DeepFrozen,
+     BODY :DeepFrozen] := makeEnum(["request", "header", "body"])
 
-def makeRequestPump():
+def makeRequestPump() as DeepFrozen:
     var state :RequestState := REQUEST
-    var buf := b``
+    var buf :Bytes := b``
     var pendingRequest := null
     var pendingRequestLine := null
     var pendingHeaders := null
@@ -39,7 +45,7 @@ def makeRequestPump():
         to stopped(_):
             null
 
-        to received(bytes) :List:
+        to received(bytes :Bytes) :List:
             # traceln(`received bytes $bytes`)
             buf += bytes
 
@@ -68,8 +74,8 @@ def makeRequestPump():
                         return false
 
                     # XXX it'd be swell if these were subpatterns
-                    def b`@{via (UTF8.decode) verb} @uri HTTP/1.1$\r$\n@t` exit ej := buf
-                    pendingRequestLine := [verb, percentDecode(uri)]
+                    def b`@{via (UTF8.decode) verb} @{via (PercentEncoding.decode) uri} HTTP/1.1$\r$\n@t` exit ej := buf
+                    pendingRequestLine := [verb, uri]
                     pendingHeaders := [].asMap()
                     state := HEADER
                     buf := t
@@ -95,11 +101,11 @@ def makeRequestPump():
                     return true
 
 
-def makeRequestTube():
+def makeRequestTube() as DeepFrozen:
     return makePumpTube(makeRequestPump())
 
 
-def statusMap :Map := [
+def statusMap :Map[Int, Str] := [
     200 => "OK",
     301 => "Moved Permanently",
     303 => "See Other",
@@ -109,7 +115,7 @@ def statusMap :Map := [
 ]
 
 
-def makeResponsePump():
+def makeResponsePump() as DeepFrozen:
     return object responsePump:
         to started():
             null
@@ -134,13 +140,15 @@ def makeResponsePump():
             return rv
 
 
-def makeResponseTube():
+def makeResponseTube() as DeepFrozen:
     return makePumpTube(makeResponsePump())
 
 
-def serverHeader := ["Server" => "Monte (Typhon) (.i ma'a tarci pulce)"]
+def serverHeader :Map[Str, Str] := [
+    "Server" => "Monte (Typhon) (.i ma'a tarci pulce)",
+]
 
-def processorWrapper(app):
+def processorWrapper(app) as DeepFrozen:
     def wrappedProcessor(request):
         # null means a bad request that was unparseable.
         def [statusCode, headers, body] := if (request == null) {
@@ -152,11 +160,11 @@ def processorWrapper(app):
     return wrappedProcessor
 
 
-def makeProcessingTube(app):
+def makeProcessingTube(app) as DeepFrozen:
     return makePumpTube(makeMapPump(processorWrapper(app)))
 
 
-def makeHTTPEndpoint(endpoint):
+def makeHTTPEndpoint(endpoint) as DeepFrozen:
     return object HTTPEndpoint:
         to listen(processor):
             def responder(fount, drain):
@@ -168,6 +176,3 @@ def makeHTTPEndpoint(endpoint):
                     drain,
                 ])
             endpoint.listen(responder)
-
-
-[=> makeHTTPEndpoint]

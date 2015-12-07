@@ -1,3 +1,6 @@
+imports
+exports (tag)
+
 def entities :Map[Str, Str] := [
     "&" => "&amp;",
     "<" => "&lt;",
@@ -32,5 +35,3 @@ object tag as DeepFrozen:
                     for fragment in fragments:
                         out.print(`$fragment`)
                     out.print(`</$tagType>`)
-
-[=> tag]
