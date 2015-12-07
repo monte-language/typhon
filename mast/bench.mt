@@ -4,6 +4,7 @@ exports (main)
 def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
 
 def benchmarks :List[Str] := [
+    "brot",
     "montstone",
     "nqueens",
     "richards",
@@ -21,6 +22,14 @@ def formatResults(loops :Int, duration :Double) :Str as DeepFrozen:
             def sec := msec / 1000
             return `$sec s`
 
+def makeFakeStdOut() as DeepFrozen:
+    return object fakeStdOut:
+        to flowingFrom(_):
+            null
+
+        to receive(_):
+            null
+
 def main(=> bench, => makeFileResource, => unittest) as DeepFrozen:
     traceln(`Benchmark time!`)
 
@@ -31,7 +40,8 @@ def main(=> bench, => makeFileResource, => unittest) as DeepFrozen:
 
     for benchmark in benchmarks:
         def module := import(`bench/$benchmark`)
-        module["main"]("bench" => benchCollector(benchmark), => unittest)
+        module["main"]("bench" => benchCollector(benchmark),
+                       "makeStdOut" => makeFakeStdOut, => unittest)
 
     var pieces :List[Str] := []
 
