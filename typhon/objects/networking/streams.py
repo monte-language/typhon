@@ -58,26 +58,21 @@ class StreamUnpauser(Object):
 def readCB(stream, status, buf):
     status = intmask(status)
     try:
-        with ruv.unstashingStream(stream) as (vat, fount):
-            assert isinstance(fount, StreamFount), "Implementation error"
-            with scopedVat(vat):
-                if status > 0:
-                    data = charpsize2str(buf.c_base, status)
-                    fount.receive(data)
-                elif status == 0:
-                    # EOF.
-                    fount.stop(u"End of stream")
-                else:
-                    msg = ruv.formatError(status).decode("utf-8")
-                    fount.abort(u"libuv error: %s" % msg)
+        # If restashing is required, it'll be done by the fount. ~ C.
+        vat, fount = ruv.unstashStream(stream)
+        assert isinstance(fount, StreamFount), "Implementation error"
+        with scopedVat(vat):
+            if status > 0:
+                data = charpsize2str(buf.c_base, status)
+                fount.receive(data)
+            elif status == 0:
+                # EOF.
+                fount.stop(u"End of stream")
+            else:
+                msg = ruv.formatError(status).decode("utf-8")
+                fount.abort(u"libuv error: %s" % msg)
     except Exception as e:
         print "Exception in readCB", e
-
-
-def closeCB(handle):
-    # XXX actually, did we allocate this handle? I'm not sure that we did!
-    # ruv.free(handle)
-    pass
 
 
 @autohelp
@@ -152,14 +147,11 @@ class StreamFount(Object):
             self._drain = None
             # Stop reading.
             ruv.readStop(self.stream)
-            # Unstash ourselves from the stream, so that we can be GC'd. We have
-            # to stop reading first.
-            ruv.unstashStream(self.stream)
             # And, finally, close and reap the stream.
             # print "active" if ruv.isActive(self.stream) else "inactive"
             # print "closing" if ruv.isClosing(self.stream) else "not closing"
             if not ruv.isClosing(self.stream):
-                ruv.close(self.stream, closeCB)
+                ruv.closeAndFree(self.stream)
 
     def pause(self):
         # uv_read_stop() is idempotent.
@@ -265,7 +257,7 @@ class StreamDrain(Object):
             # print "active" if ruv.isActive(self.stream) else "inactive"
             # print "closing" if ruv.isClosing(self.stream) else "not closing"
             if not ruv.isClosing(self.stream):
-                ruv.close(self.stream, closeCB)
+                ruv.closeAndFree(self.stream)
 
     def flush(self):
         pass

@@ -325,6 +325,10 @@ uv_close = rffi.llexternal("uv_close", [handle_tp, close_cb], lltype.Void,
                            compilation_info=eci)
 def close(handleish, cb):
     uv_close(rffi.cast(handle_tp, handleish), cb)
+def closeAndFree(handleish):
+    uv_close(rffi.cast(handle_tp, handleish), closeAndFreeCB)
+def closeAndFreeCB(handleish):
+    free(handleish)
 
 
 timer_cb = rffi.CCallback([timer_tp], lltype.Void)
