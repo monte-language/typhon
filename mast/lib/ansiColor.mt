@@ -1,4 +1,4 @@
-def HSVToRGB(h :Double, s :Double, v :Double) :List[Double]:
+def HSVToRGB(h :Double, s :Double, v :Double) :List[Double] as DeepFrozen:
     "Like Python's colorsys."
     if (s <=> 0.0):
         return [v, v, v]
@@ -23,21 +23,21 @@ def HSVToRGB(h :Double, s :Double, v :Double) :List[Double]:
         match ==5:
             [v, p, q]
 
-def HSVToANSI(h :Double, s :Double, v :Double) :Int:
+def HSVToANSI(h :Double, s :Double, v :Double) :Int as DeepFrozen:
     if (s < 0.1):
         return (v * 23).floor() + 232
 
     def [r, g, b] := [for d in (HSVToRGB(h, s, v)) (d * 5).floor()]
     return 16 + r * 36 + g * 6 + b
 
-def rampIndex(i :Int, num :(Int > i)) :Int:
+def rampIndex(i :Int, num :(Int > i)) :Int as DeepFrozen:
     def i0 := i / num
     def h := 0.57 + i0
     def s := 1 - (i0 * i0 * i0)
     def v := 1.0
     return HSVToANSI(h, s, v)
 
-def ramp(size :Int) :List[Int]:
+def ramp(size :Int) :List[Int] as DeepFrozen:
     return [for i in (0..!size) rampIndex(i, size)]
 
 [=> ramp]
