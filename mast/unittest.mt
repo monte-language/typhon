@@ -141,7 +141,7 @@ def makeAsserter() as DeepFrozen:
 def main(=> makeStdOut, => Timer, => currentProcess, => unsealException,
          => collectTests, => unittest) as DeepFrozen:
     def [=> makeUTF8EncodePump] | _ := import("lib/tubes/utf8")
-    def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
+    def [=> makePumpTube] := import("lib/tubes/pumpTube")
 
     def args := currentProcess.getArguments()
     for path in args.slice(2, args.size()):

@@ -1,3 +1,6 @@
+imports
+exports (makeStatefulPump)
+
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,9 +15,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> nullPump] | _ := import.script("lib/tubes/nullPump")
+def [=> nullPump :DeepFrozen] | _ := import("lib/tubes/nullPump")
 
-def makeStatefulPump(machine):
+def makeStatefulPump(machine) as DeepFrozen:
     def State := machine.getStateGuard()
     def [var state :State, var size :Int] := machine.getInitialState()
     var buf := []
@@ -30,5 +33,3 @@ def makeStatefulPump(machine):
                 size := newSize
 
             return machine.results()
-
-[=> makeStatefulPump]

@@ -1,24 +1,33 @@
+imports
+exports (Pump, Unpauser, Fount, Drain, Tube)
+
 interface Pump:
     "A stream processor which does not care about flow control.
 
      Pumps transform incoming items each into zero or more outgoing
      elements."
 
-    to started():
+    to started() :Void:
         "Flow has started; items will be received soon.
 
          Pumps should use this method to initialize any required mutable
          state."
 
+    # XXX :Promise[List]
     to received(item):
         "Process an item and send zero or more items downstream.
         
          The return value must be a list of items, but it can be a promise."
 
-    to progressed(amount :Double):
-        "To be honest, this method's on the chopping block."
+    # XXX :(Double >= 0.0)
+    to progressed(amount :Double) :Void:
+        "The current flow control around the pump has updated its load.
+        
+         `amount` is 1.0 for every task queued further up the pipeline. Pumps
+         might use this method to adjust their processing parameters to trade
+         speed for memory or quality."
 
-    to stopped(reason :Str):
+    to stopped(reason :Str) :Void:
         "Flow has stopped.
 
          Pumps should use this method to tear down any allocated resources
@@ -34,15 +43,19 @@ interface Unpauser:
          Flow will resume when all extant pauses are removed, so unpausing
          this object will not necessarily cause flow to resume.
 
-         Flow could resume during this turn.
+         Calling `unpause()` more than once will have no effect.
+
+         Flow could resume during this turn; use an eventual send if you want
+         to defer it to a subsequent turn.
         
          The spice must flow."
 
 
+# XXX Fount[X]
 interface Fount:
     "A source of streaming data."
 
-    to flowTo(drain):
+    to flowTo(drain) :Any:
         "Designate a drain to receive data from this fount.
 
          Once called, flow could happen immediately, within the current turn;
@@ -56,42 +69,45 @@ interface Fount:
     to pauseFlow() :Unpauser:
         "Interrupt the flow.
 
-         An unpauser corresponding to the pause on this object is returned,
-         which can be used to resume flow."
+         Returns an `Unpauser` which can resume flow."
 
-    to stopFlow():
+    to stopFlow() :Void:
         "Terminate the flow.
 
          This fount should cleanly terminate its resources. This fount may
          send more data to its drain, but should eventually cease flow and
          call `to flowStopped()` on its drain when quiescent."
 
-    to abortFlow():
+    to abortFlow() :Void:
         "Terminate the flow with extreme prejudice.
 
          This fount must not send any more data downstream. Instead, it must
          uncleanly release its resources and abort any further upstream flow."
 
 
+# XXX Drain[X]
 interface Drain:
     "A sink of streaming data."
 
-    to flowingFrom(fount): 
+    to flowingFrom(fount) :Any:
         "Inform this drain that a fount will be flowing to it.
         
          The return value is a fount which can `to flowTo()` another drain;
          this is normally done by treating this drain as a tube and returning
          itself."
 
-    to receive(item):
+    to receive(item) :Void:
         "Accept some data.
 
          This method is the main workhorse of the entire tube subsystem.
          Founts call `to receive()` on their drains repeatedly to move data
          downstream."
 
-    to progress(amount :Double):
-        "Deprecated."
+    to progress(amount :Double) :Void:
+        "Inform a drain of incoming task load.
+        
+         In response to extra load, a drain may choose to pause its upstream
+         founts; this backpressure should be propagated as far as necessary."
 
     to flowStopped(reason :Str):
         "Flow has ceased.
@@ -109,6 +125,3 @@ interface Drain:
 
 interface Tube extends Drain, Fount:
     "A pressure-sensitive segment in a stream processing workflow."
-
-
-[=> Pump, => Drain, => Fount, => Tube]

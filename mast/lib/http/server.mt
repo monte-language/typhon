@@ -16,8 +16,8 @@ exports (makeHTTPEndpoint)
 # under the License.
 
 def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
-def [=> makeMapPump :DeepFrozen] := import.script("lib/tubes/mapPump")
-def [=> makePumpTube :DeepFrozen] := import.script("lib/tubes/pumpTube")
+def [=> makeMapPump :DeepFrozen] := import("lib/tubes/mapPump")
+def [=> makePumpTube :DeepFrozen] := import("lib/tubes/pumpTube")
 def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
 def [=> PercentEncoding :DeepFrozen] | _ := import("lib/percent",
                                                    [=> unittest])

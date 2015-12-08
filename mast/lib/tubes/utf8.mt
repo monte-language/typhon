@@ -2,8 +2,8 @@ imports
 exports (makeUTF8DecodePump, makeUTF8EncodePump)
 
 def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
-def [=> nullPump :DeepFrozen] | _ := import.script("lib/tubes/nullPump")
-def [=> makeMapPump :DeepFrozen] | _ := import.script("lib/tubes/mapPump")
+def [=> nullPump :DeepFrozen] | _ := import("lib/tubes/nullPump")
+def [=> makeMapPump :DeepFrozen] | _ := import("lib/tubes/mapPump")
 
 def makeUTF8DecodePump() as DeepFrozen:
     var buf :Bytes := b``

@@ -8,7 +8,7 @@ def bench(_, _) as DeepFrozen:
 def [=> makePureDrain :DeepFrozen] | _ := import("lib/tubes/pureDrain")
 def [=> makeUTF8EncodePump :DeepFrozen,
      => makeUTF8DecodePump :DeepFrozen] | _ := import("lib/tubes/utf8")
-def [=> makePumpTube :DeepFrozen] | _ := import.script("lib/tubes/pumpTube")
+def [=> makePumpTube :DeepFrozen] | _ := import("lib/tubes/pumpTube")
 def [=> parseModule :DeepFrozen] | _ := import.script("lib/monte/monte_parser")
 def [=> makeMonteLexer :DeepFrozen] | _ := import.script("lib/monte/monte_lexer")
 

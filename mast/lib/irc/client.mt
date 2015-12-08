@@ -17,10 +17,10 @@ def [
     => makeUTF8DecodePump,
     => makeUTF8EncodePump
 ] | _ := import("lib/tubes/utf8")
-def [=> makeMapPump] := import.script("lib/tubes/mapPump")
+def [=> makeMapPump] := import("lib/tubes/mapPump")
 def [=> makeSplitPump] := import("lib/tubes/splitPump", [=> unittest])
-def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
-def [=> chain] := import.script("lib/tubes/chain")
+def [=> makePumpTube] := import("lib/tubes/pumpTube")
+def [=> chain] := import("lib/tubes/chain")
 def [=> makeSingleUse] := import.script("lib/singleUse")
 def [=> makeTokenBucket] := import.script("lib/tokenBucket")
 def [=> makeUser, => sourceToUser] | _ := import.script("lib/irc/user")
