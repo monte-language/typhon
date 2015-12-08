@@ -7,6 +7,7 @@ def [
     => makeUTF8DecodePump :DeepFrozen,
     => makeUTF8EncodePump :DeepFrozen,
 ] | _ := import("lib/tubes/utf8")
+def [=> makePumpTube :DeepFrozen] := import("lib/tubes/pumpTube")
 
 # We *could* use lib/parsers/monte, but it's got a flaw; it can't interoperate
 # with eval() at the moment. Instead we just wrap eval() here. It's not like
@@ -61,7 +62,6 @@ def main(=> Timer, => bench, => unittest,
          => unsealException, => unsafeScope) as DeepFrozen:
 
     def [=> makeREPLTube] | _ := import.script("fun/repl")
-    def [=> makePumpTube] := import.script("lib/tubes/pumpTube")
 
     def baseEnvironment := safeScope | [
         # Typhon unsafe scope.
