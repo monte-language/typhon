@@ -58,11 +58,13 @@ class StreamUnpauser(Object):
 def readCB(stream, status, buf):
     status = intmask(status)
     try:
-        # If restashing is required, it'll be done by the fount. ~ C.
+        # We only restash in the success case, not the error cases.
         vat, fount = ruv.unstashStream(stream)
         assert isinstance(fount, StreamFount), "Implementation error"
         with scopedVat(vat):
             if status > 0:
+                # Restash required.
+                ruv.stashStream(stream, (vat, fount))
                 data = charpsize2str(buf.c_base, status)
                 fount.receive(data)
             elif status == 0:
@@ -93,6 +95,9 @@ class StreamFount(Object):
         self.vat = vat
 
         self.bufs = []
+
+        # The initial stashing.
+        ruv.stashStream(stream, (vat, self))
 
     def toString(self):
         return u"<StreamFount>"
@@ -171,8 +176,6 @@ class StreamFount(Object):
     def considerFlush(self):
         if not self.pauses and self._drain is not None:
             if not self._reading:
-                # Stash ourselves so that the read CB can get at us.
-                ruv.stashStream(self.stream, (self.vat, self))
                 ruv.readStart(self.stream, ruv.allocCB, readCB)
                 self._reading = True
             from typhon.objects.collections.maps import EMPTY_MAP
