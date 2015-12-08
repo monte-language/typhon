@@ -29,9 +29,33 @@ interface Comparison:
 
 
 interface Comparable:
-    "An object with total ordering."
+    "Objects which are totally ordered.
+
+     Not all comparable objects are comparable to each other; in general,
+     comparable objects are only aware of other objects with the same
+     interface."
 
     to op__cmp(other) :Comparison
+
+
+interface WellOrdered:
+    "Objects which are well ordered.
+
+     Well-ordering for Monte generalizes in both directions: Neither `next()`
+     nor `previous()` are required to reach fixed points under repeated
+     application."
+
+    to previous():
+        "The preceding element.
+
+         There is at most one element `x` such that `x.previous() == x`; if it
+         exists, it is the least element."
+
+    to next():
+        "The following element.
+
+         There is at most one element `x` such that `x.next() == x`; if it
+         exists, it is the least element."
 
 
 interface coreVoid:
@@ -52,7 +76,7 @@ interface coreBool extends Comparable:
         "Return `ifTrue` if true, else `ifFalse` if false."
 
 
-interface coreChar extends Comparable:
+interface coreChar extends Comparable, WellOrdered:
     "The Unicode codepoints."
 
     to add(other :Int) :Char
@@ -66,12 +90,10 @@ interface coreChar extends Comparable:
     to max(other :Char) :Char
     to min(other :Char) :Char
 
-    to previous() :Char
-    to next() :Char
-
     to quote() :Str
 
 
+# XXX should Double be WellOrdered?
 interface coreDouble extends Comparable, Comparison:
     "IEEE 754 double-precision floating-point numbers."
 
@@ -97,7 +119,7 @@ interface coreDouble extends Comparable, Comparison:
     to tan() :Double
 
 
-interface coreInt extends Comparable, Comparison:
+interface coreInt extends Comparable, Comparison, WellOrdered:
     "Integers."
 
     to and(other :Int) :Int
@@ -119,9 +141,6 @@ interface coreInt extends Comparable, Comparison:
 
     to max(other :Int) :Int
     to min(other :Int) :Int
-
-    to next() :Int
-    to previous() :Int
 
     to bitLength() :Int
     to shiftLeft(width :Int) :Int
@@ -203,6 +222,9 @@ interface coreBytes extends Comparable:
 
 
 [
+    => Comparison,
+    => Comparable,
+    => WellOrdered,
     "Void" => compose(Void, coreVoid),
     "Bool" => compose(Bool, coreBool),
     "Bytes" => compose(Bytes, coreBytes),
