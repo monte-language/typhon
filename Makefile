@@ -116,8 +116,7 @@ irc: mast/lib/irc/client.ty mast/lib/irc/user.ty \
 
 games: mast/games/mafia.ty mast/lib/uKanren.ty
 
-fun: mast/fun/elements.ty mast/fun/repl.ty mast/fun/brot.ty \
-	mast/fun/termParser.ty
+fun: mast/fun/elements.ty mast/fun/repl.ty mast/fun/termParser.ty
 
 bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty \
 	mast/bench/primeCount.ty mast/bench/brot.ty mast/bench.ty
