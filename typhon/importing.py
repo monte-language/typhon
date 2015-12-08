@@ -15,8 +15,8 @@
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rpath import rjoin
-from rpython.rlib.unroll import unrolling_iterable
 
+from typhon import log
 from typhon.debug import debugPrint
 from typhon.errors import LoadFailed, UserException, userError
 from typhon.load.mast import loadMASTBytes
@@ -78,10 +78,11 @@ def obtainModule(libraryPaths, filePath, recorder):
         path = rjoin(libraryPath, filePath)
 
         if path in moduleCache.cache:
-            debugPrint("Importing (cached):", path)
+            log.log(["import"], u"Importing %s (cached)" %
+                    path.decode("utf-8"))
             return moduleCache.cache[path]
 
-        debugPrint("Importing:", path)
+        log.log(["import"], u"Importing %s" % path.decode("utf-8"))
         code = tryExtensions(path, recorder)
         if code is None:
             continue
@@ -90,6 +91,8 @@ def obtainModule(libraryPaths, filePath, recorder):
         moduleCache.cache[path] = code
         return code
     else:
+        log.log(["import", "error"], u"Failed to import from %s" %
+                filePath.decode("utf-8"))
         debugPrint("Failed to import:", filePath)
         raise userError(u"Module '%s' couldn't be found" %
                         filePath.decode("utf-8"))
