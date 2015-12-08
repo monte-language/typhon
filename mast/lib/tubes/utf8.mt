@@ -1,3 +1,6 @@
+imports
+exports (makeUTF8DecodePump, makeUTF8EncodePump)
+
 def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
 def [=> nullPump :DeepFrozen] | _ := import.script("lib/tubes/nullPump")
 def [=> makeMapPump :DeepFrozen] | _ := import.script("lib/tubes/mapPump")
@@ -14,8 +17,3 @@ def makeUTF8DecodePump() as DeepFrozen:
 
 def makeUTF8EncodePump() as DeepFrozen:
     return makeMapPump(fn s {UTF8.encode(s, null)})
-
-[
-    => makeUTF8DecodePump,
-    => makeUTF8EncodePump,
-]

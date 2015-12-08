@@ -41,7 +41,7 @@ def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut, => ben
     def [=> expand :DeepFrozen] := import.script("lib/monte/monte_expander", scope)
     def [=> optimize :DeepFrozen] := import.script("lib/monte/monte_optimizer", scope)
     def [=> makeUTF8EncodePump :DeepFrozen,
-         => makeUTF8DecodePump :DeepFrozen] | _ := import.script("lib/tubes/utf8", scope)
+         => makeUTF8DecodePump :DeepFrozen] | _ := import("lib/tubes/utf8")
     def [=> makePumpTube :DeepFrozen] | _ := import.script("lib/tubes/pumpTube", scope)
     def [=> findUndefinedNames :DeepFrozen] | _ := import("lib/monte/monte_verifier")
 

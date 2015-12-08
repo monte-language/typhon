@@ -16,7 +16,7 @@ def [=> UTF8] | _ := import.script("lib/codec/utf8")
 def [
     => makeUTF8DecodePump,
     => makeUTF8EncodePump
-] | _ := import.script("lib/tubes/utf8")
+] | _ := import("lib/tubes/utf8")
 def [=> makeMapPump] := import.script("lib/tubes/mapPump")
 def [=> makeSplitPump] := import("lib/tubes/splitPump", [=> unittest])
 def [=> makePumpTube] := import.script("lib/tubes/pumpTube")

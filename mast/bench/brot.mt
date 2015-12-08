@@ -74,7 +74,7 @@ def brotAt(xCenter :Double, yCenter :Double, xScale :Double, yScale :Double) :St
     return fullBrot(yStart, yScale, xStart, xScale)
 
 
-def [=> makeUTF8EncodePump :DeepFrozen] | _ := import.script("lib/tubes/utf8")
+def [=> makeUTF8EncodePump :DeepFrozen] | _ := import("lib/tubes/utf8")
 def [=> makePumpTube :DeepFrozen] | _ := import.script("lib/tubes/pumpTube")
 
 def main(=> bench, => makeStdOut) :Int as DeepFrozen:
