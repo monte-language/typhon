@@ -74,10 +74,11 @@ def brotAt(xCenter :Double, yCenter :Double, xScale :Double, yScale :Double) :St
     return fullBrot(yStart, yScale, xStart, xScale)
 
 
-def [=> makeUTF8EncodePump :DeepFrozen] | _ := import("lib/tubes/utf8")
-def [=> makePumpTube :DeepFrozen] | _ := import("lib/tubes/pumpTube")
+def main(=> bench, => unittest, => makeStdOut) :Int as DeepFrozen:
+    def [=> makeUTF8EncodePump :DeepFrozen,
+         => makePumpTube :DeepFrozen,
+    ] | _ := import("lib/tubes", [=> unittest])
 
-def main(=> bench, => makeStdOut) :Int as DeepFrozen:
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout.flowTo(makeStdOut())
     # And you thought Pokémon Snap was hard. ~ C.

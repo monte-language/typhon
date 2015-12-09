@@ -15,12 +15,12 @@
 def [=> UTF8] | _ := import.script("lib/codec/utf8")
 def [
     => makeUTF8DecodePump,
-    => makeUTF8EncodePump
-] | _ := import("lib/tubes/utf8")
-def [=> makeMapPump] := import("lib/tubes/mapPump")
-def [=> makeSplitPump] := import("lib/tubes/splitPump", [=> unittest])
-def [=> makePumpTube] := import("lib/tubes/pumpTube")
-def [=> chain] := import("lib/tubes/chain")
+    => makeUTF8EncodePump,
+    => makeMapPump,
+    => makeSplitPump,
+    => makePumpTube,
+    => chain,
+] | _ := import("lib/tubes", [=> unittest])
 def [=> makeSingleUse] := import.script("lib/singleUse")
 def [=> makeTokenBucket] := import.script("lib/tokenBucket")
 def [=> makeUser, => sourceToUser] | _ := import.script("lib/irc/user")

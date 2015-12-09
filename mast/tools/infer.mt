@@ -5,10 +5,11 @@ exports (main, makeInference)
 def bench(_, _) as DeepFrozen:
     null
 
-def [=> makePureDrain :DeepFrozen] | _ := import("lib/tubes/pureDrain")
-def [=> makeUTF8EncodePump :DeepFrozen,
-     => makeUTF8DecodePump :DeepFrozen] | _ := import("lib/tubes/utf8")
-def [=> makePumpTube :DeepFrozen] | _ := import("lib/tubes/pumpTube")
+def [=> makePureDrain :DeepFrozen,
+     => makeUTF8EncodePump :DeepFrozen,
+     => makeUTF8DecodePump :DeepFrozen,
+     => makePumpTube :DeepFrozen,
+] | _ := import("lib/tubes", [=> unittest])
 def [=> parseModule :DeepFrozen] | _ := import.script("lib/monte/monte_parser")
 def [=> makeMonteLexer :DeepFrozen] | _ := import.script("lib/monte/monte_lexer")
 

@@ -1,8 +1,6 @@
 imports
 exports (main)
 
-def [=> makeIterFount :DeepFrozen] | _ := import("lib/tubes/iterFount")
-
 def concatMap(it, f) :List as DeepFrozen:
     var result := [].diverge()
     for k => v in it:
@@ -40,7 +38,7 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
         to flowAborted(reason):
             traceln(`flow aborted $reason`)
 
-def runTests(collectTests, testDrain) as DeepFrozen:
+def runTests(collectTests, testDrain, makeIterFount) as DeepFrozen:
     def testInfo := concatMap(
             collectTests(),
             fn k, v { [for t in (v) [k, t]] })
@@ -140,8 +138,10 @@ def makeAsserter() as DeepFrozen:
 
 def main(=> makeStdOut, => Timer, => currentProcess, => unsealException,
          => collectTests, => unittest) as DeepFrozen:
-    def [=> makeUTF8EncodePump] | _ := import("lib/tubes/utf8")
-    def [=> makePumpTube] := import("lib/tubes/pumpTube")
+    def [=> makeIterFount :DeepFrozen,
+         => makeUTF8EncodePump,
+         => makePumpTube,
+    ] | _ := import("lib/tubes", [=> unittest])
 
     def args := currentProcess.getArguments()
     for path in args.slice(2, args.size()):
@@ -153,7 +153,7 @@ def main(=> makeStdOut, => Timer, => currentProcess, => unsealException,
     def asserter := makeAsserter()
     def testDrain := makeTestDrain(stdout, unsealException, asserter)
 
-    return when (runTests(collectTests, testDrain)) ->
+    return when (runTests(collectTests, testDrain, makeIterFount)) ->
         def fails := asserter.fails()
         stdout.receive(`${asserter.total()} tests run, $fails failures$\n`)
         # Exit code: Only returns 0 if there were 0 failures.

@@ -15,8 +15,9 @@
 def [=> bytesToInt] | _ := import.script("lib/atoi")
 def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
 def [=> UTF8] | _ := import.script("lib/codec/utf8")
-def [=> makeMapPump] := import("lib/tubes/mapPump")
-def [=> makePumpTube] := import("lib/tubes/pumpTube")
+def [=> makeMapPump,
+     => makePumpTube,
+] := import("lib/tubes", [=> unittest])
 
 
 def lowercase(s :Str, _):
