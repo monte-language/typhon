@@ -99,7 +99,7 @@ entropy: mast/lib/entropy/pool.ty mast/lib/entropy/entropy.ty \
 parsers: mast/lib/parsers/http.ty mast/lib/parsers/html.ty \
 	mast/lib/parsers/marley.ty mast/lib/parsers/monte.ty
 
-tubes: mast/lib/tubes/itubes.ty \
+tubes: mast/lib/tubes.mast mast/lib/tubes/itubes.ty \
 	mast/lib/tubes/nullPump.ty mast/lib/tubes/mapPump.ty \
 	mast/lib/tubes/pumpTube.ty mast/lib/tubes/statefulPump.ty \
 	mast/lib/tubes/splitPump.mast mast/lib/tubes/utf8.ty \

@@ -71,7 +71,7 @@ def main(=> Timer, => bench, => unittest,
         => &&makeStdOut, => &&makeTCP4ClientEndpoint, => &&makeTCP4ServerEndpoint,
         => &&unsealException,
         # REPL-only fun.
-        => &&help,
+        => &&help, => &&unittest,
     ]
 
     var environment := [for `&&@name` => binding in (baseEnvironment) name => binding]
