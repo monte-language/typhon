@@ -3,12 +3,6 @@ exports (main)
 
 def [=> help :DeepFrozen] | _ := import("lib/help")
 
-def [
-    => makeUTF8DecodePump :DeepFrozen,
-    => makeUTF8EncodePump :DeepFrozen,
-] | _ := import("lib/tubes/utf8")
-def [=> makePumpTube :DeepFrozen] := import("lib/tubes/pumpTube")
-
 # We *could* use lib/parsers/monte, but it's got a flaw; it can't interoperate
 # with eval() at the moment. Instead we just wrap eval() here. It's not like
 # the current MiM parser can deal with secondary prompts, anyway.
@@ -60,6 +54,11 @@ def main(=> Timer, => bench, => unittest,
          => makeStdErr, => makeStdIn, => makeStdOut,
          => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
          => unsealException, => unsafeScope) as DeepFrozen:
+    def [
+        => makeUTF8DecodePump :DeepFrozen,
+        => makeUTF8EncodePump :DeepFrozen,
+        => makePumpTube :DeepFrozen,
+    ] | _ := import("lib/tubes", [=> unittest])
 
     def [=> makeREPLTube] | _ := import.script("fun/repl")
 

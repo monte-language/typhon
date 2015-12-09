@@ -1,0 +1,61 @@
+1 < '!+#*DeepFrozen2 '!3 ##run' ' .+##Map##get'"+##Str+#*DeepFrozen' -'&/;+#$Pump  8.+#1_makeProtocolDesc##run'%*#®!A stream processor which does not care about flow control.
+
+     Pumps transform incoming items each into zero or more outgoing
+     elements...:#'context#,getFQNPrefix' ' ##add'!*#&Pump_T' .+#*__makeList##run' ' .+#*__makeList##run' ' .+#*__makeList##run'$8.+#0_makeMessageDesc##run'$*#¨!Flow has started; items will be received soon.
+
+         Pumps should use this method to initialize any required mutable
+         state.*#'started.+#*__makeList##run' ' +#$Void' 8.+#0_makeMessageDesc##run'$*#¬!Process an item and send zero or more items downstream.
+        
+         The return value must be a list of items, but it can be a promise.*#(received.+#*__makeList##run'!.+#._makeParamDesc##run'"*#$item+##Any' ' +##Any' 8.+#0_makeMessageDesc##run'$*#©"The current flow control around the pump has updated its load.
+        
+         `amount` is 1.0 for every task queued further up the pipeline. Pumps
+         might use this method to adjust their processing parameters to trade
+         speed for memory or quality.*#*progressed.+#*__makeList##run'!.+#._makeParamDesc##run'"*#&amount+#&Double' ' +#$Void' 8.+#0_makeMessageDesc##run'$*# !Flow has stopped.
+
+         Pumps should use this method to tear down any allocated resources
+         that they may be holding.*#'stopped.+#*__makeList##run'!.+#._makeParamDesc##run'"*#&reason+##Str' ' +#$Void' ' ' /;+#(Unpauser  8.+#1_makeProtocolDesc##run'%*#,An unpauser...:#'context#,getFQNPrefix' ' ##add'!*#*Unpauser_T' .+#*__makeList##run' ' .+#*__makeList##run' ' .+#*__makeList##run'!8.+#0_makeMessageDesc##run'$*#¿#Remove the pause corresponding to this unpauser.
+
+         Flow will resume when all extant pauses are removed, so unpausing
+         this object will not necessarily cause flow to resume.
+
+         Calling `unpause()` more than once will have no effect.
+
+         Flow could resume during this turn; use an eventual send if you want
+         to defer it to a subsequent turn.
+        
+         The spice must flow.*#'unpause.+#*__makeList##run' ' +##Any' ' ' /;+#%Fount  8.+#1_makeProtocolDesc##run'%*#;A source of streaming data...:#'context#,getFQNPrefix' ' ##add'!*#'Fount_T' .+#*__makeList##run' ' .+#*__makeList##run' ' .+#*__makeList##run'$8.+#0_makeMessageDesc##run'$*#Ï#Designate a drain to receive data from this fount.
+
+         Once called, flow could happen immediately, within the current turn;
+         this fount must merely call `to flowingFrom(fount)` before starting
+         to flow.
+         
+         The return value should be a fount which can `to flowTo()` another
+         drain. This is typically achieved by returning the drain that was
+         flowed to and treating it as a tube.*#&flowTo.+#*__makeList##run'!.+#._makeParamDesc##run'"*#%drain+##Any' ' +##Any' 8.+#0_makeMessageDesc##run'$*#jInterrupt the flow.
+
+         Returns an `Unpauser` which can resume flow.*#)pauseFlow.+#*__makeList##run' ' +#(Unpauser' 8.+#0_makeMessageDesc##run'$*#!Terminate the flow.
+
+         This fount should cleanly terminate its resources. This fount may
+         send more data to its drain, but should eventually cease flow and
+         call `to flowStopped()` on its drain when quiescent.*#(stopFlow.+#*__makeList##run' ' +#$Void' 8.+#0_makeMessageDesc##run'$*#æ!Terminate the flow with extreme prejudice.
+
+         This fount must not send any more data downstream. Instead, it must
+         uncleanly release its resources and abort any further upstream flow.*#)abortFlow.+#*__makeList##run' ' +#$Void' ' ' /;+#%Drain  8.+#1_makeProtocolDesc##run'%*#9A sink of streaming data...:#'context#,getFQNPrefix' ' ##add'!*#'Drain_T' .+#*__makeList##run' ' .+#*__makeList##run' ' .+#*__makeList##run'%8.+#0_makeMessageDesc##run'$*#	!Inform this drain that a fount will be flowing to it.
+        
+         The return value is a fount which can `to flowTo()` another drain;
+         this is normally done by treating this drain as a tube and returning
+         itself.*#+flowingFrom.+#*__makeList##run'!.+#._makeParamDesc##run'"*#%fount+##Any' ' +##Any' 8.+#0_makeMessageDesc##run'$*#Ü!Accept some data.
+
+         This method is the main workhorse of the entire tube subsystem.
+         Founts call `to receive()` on their drains repeatedly to move data
+         downstream.*#'receive.+#*__makeList##run'!.+#._makeParamDesc##run'"*#$item+##Any' ' +#$Void' 8.+#0_makeMessageDesc##run'$*#è!Inform a drain of incoming task load.
+        
+         In response to extra load, a drain may choose to pause its upstream
+         founts; this backpressure should be propagated as far as necessary.*#(progress.+#*__makeList##run'!.+#._makeParamDesc##run'"*#&amount+#&Double' ' +#$Void' 8.+#0_makeMessageDesc##run'$*#!Flow has ceased.
+
+         This drain should allow itself to drain cleanly to the next drain in
+         the flow or whatever external resource this drain represents, and
+         then call `to flowStopped()` on the next drain.*#+flowStopped.+#*__makeList##run'!.+#._makeParamDesc##run'"*#&reason+##Str' ' +##Any' 8.+#0_makeMessageDesc##run'$*#³!Flow has been aborted.
+
+         This drain should uncleanly release its resources and abort the
+         remainder of the downstream flow, if any.*#+flowAborted.+#*__makeList##run'!.+#._makeParamDesc##run'"*#&reason+##Str' ' +##Any' ' ' /;+#$Tube  8.+#1_makeProtocolDesc##run'%*#]A pressure-sensitive segment in a stream processing workflow...:#'context#,getFQNPrefix' ' ##add'!*#&Tube_T' .+#*__makeList##run'"+#%Drain+#%Fount' .+#*__makeList##run' ' .+#*__makeList##run' ' ' .+#)__makeMap#)fromPairs'!.+#*__makeList##run'%.+#*__makeList##run'"*#$Pump+#$Pump' .+#*__makeList##run'"*#(Unpauser+#(Unpauser' .+#*__makeList##run'"*#%Fount+#%Fount' .+#*__makeList##run'"*#%Drain+#%Drain' .+#*__makeList##run'"*#$Tube+#$Tube' ' ' ' 

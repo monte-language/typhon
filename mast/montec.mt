@@ -31,7 +31,8 @@ def parseArguments([processName, scriptName] + var argv) as DeepFrozen:
         to arguments() :List[Str]:
             return arguments
 
-def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut, => bench) as DeepFrozen:
+def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut,
+         => bench, => unittest) as DeepFrozen:
     def scope := safeScope | [=> &&bench]
     def [=> dump :DeepFrozen] := import.script("lib/monte/ast_dumper", scope)
     def [=> UTF8 :DeepFrozen] := import.script("lib/codec/utf8", scope)
@@ -41,8 +42,9 @@ def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut, => ben
     def [=> expand :DeepFrozen] := import.script("lib/monte/monte_expander", scope)
     def [=> optimize :DeepFrozen] := import.script("lib/monte/monte_optimizer", scope)
     def [=> makeUTF8EncodePump :DeepFrozen,
-         => makeUTF8DecodePump :DeepFrozen] | _ := import("lib/tubes/utf8")
-    def [=> makePumpTube :DeepFrozen] | _ := import("lib/tubes/pumpTube", scope)
+         => makeUTF8DecodePump :DeepFrozen,
+         => makePumpTube :DeepFrozen,
+    ] | _ := import("lib/tubes", [=> unittest])
     def [=> findUndefinedNames :DeepFrozen] | _ := import("lib/monte/monte_verifier")
 
     def compile(config, inT, inputFile, outputFile, Timer, makeFileResource,

@@ -470,7 +470,7 @@ def _mapExtract(key) as DeepFrozenStamp:
     return def mapExtractor(specimen, ej):
         if (specimen.contains(key)):
             return [specimen[key], specimen.without(key)]
-        throw.eject(ej, "Key " + M.toQuote(specimen) + " not in map")
+        throw.eject(ej, "Key " + M.toQuote(key) + " not in map")
 
 
 def _quasiMatcher(matchMaker, values) as DeepFrozenStamp:

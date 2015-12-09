@@ -1,4 +1,4 @@
-imports
+imports => nullPump :DeepFrozen
 exports (makeStatefulPump)
 
 # Copyright (C) 2015 Google Inc. All rights reserved.
@@ -14,8 +14,6 @@ exports (makeStatefulPump)
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
-def [=> nullPump :DeepFrozen] | _ := import("lib/tubes/nullPump")
 
 def makeStatefulPump(machine) as DeepFrozen:
     def State := machine.getStateGuard()

@@ -1,7 +1,5 @@
-imports => unittest
+imports => nullPump :DeepFrozen, => unittest
 exports (makeSplitPump)
-
-def [=> nullPump :DeepFrozen] := import("lib/tubes/nullPump")
 
 def splitAt(needle, var haystack) as DeepFrozen:
     def pieces := [].diverge()

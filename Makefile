@@ -7,11 +7,13 @@ boot_objects = boot/lib/monte/monte_lexer.ty \
 	boot/lib/monte/mast.ty \
 	boot/lib/parsers/monte.ty \
 	boot/montec.ty \
-	boot/lib/codec/utf8.ty \
-	boot/lib/tubes/nullPump.ty \
-	boot/lib/tubes/mapPump.ty \
-	boot/lib/tubes/utf8.ty \
-	boot/lib/tubes/pumpTube.ty \
+    boot/lib/tubes.mast boot/lib/tubes/itubes.ty \
+	boot/lib/tubes/nullPump.ty boot/lib/tubes/mapPump.ty \
+	boot/lib/tubes/pumpTube.ty boot/lib/tubes/statefulPump.ty \
+	boot/lib/tubes/splitPump.mast boot/lib/tubes/utf8.ty \
+	boot/lib/tubes/chain.ty \
+	boot/lib/tubes/pureDrain.mast \
+	boot/lib/tubes/iterFount.mast \
 	boot/prelude.ty \
 	boot/prelude/monte_ast.ty \
 	boot/prelude/b.ty \
@@ -45,7 +47,7 @@ mt-typhon:
 
 boot: $(boot_objects) | mt-typhon
 
-$(boot_objects): boot/%.ty: mast/%.ty
+$(boot_objects): boot/%: mast/%
 	@ echo "BOOT $<"
 	@ cp $< $@
 
