@@ -6,8 +6,10 @@ from typhon.errors import Refused
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.sets import ConstSet, monteSet
-from typhon.objects.constants import NullObject, unwrapBool, wrapBool
-from typhon.objects.data import StrObject
+from typhon.objects.constants import (BoolObject, NullObject, unwrapBool,
+                                      wrapBool)
+from typhon.objects.data import (BigInt, BytesObject, CharObject,
+                                 DoubleObject, IntObject, StrObject)
 from typhon.objects.ejectors import Ejector, throw
 from typhon.errors import Ejecting
 from typhon.objects.refs import resolution
@@ -53,6 +55,55 @@ class Guard(Object):
             return self.supersetOf(args[0])
 
         raise Refused(self, atom, args)
+
+
+@autohelp
+@audited.DF
+class BoolGuard(Guard):
+    def subCoerce(self, specimen):
+        if isinstance(specimen, BoolObject):
+            return specimen
+
+
+@autohelp
+@audited.DF
+class StrGuard(Guard):
+    def subCoerce(self, specimen):
+        if isinstance(specimen, StrObject):
+            return specimen
+
+
+@autohelp
+@audited.DF
+class DoubleGuard(Guard):
+    def subCoerce(self, specimen):
+        if isinstance(specimen, DoubleObject):
+            return specimen
+
+
+@autohelp
+@audited.DF
+class CharGuard(Guard):
+    def subCoerce(self, specimen):
+        if isinstance(specimen, CharObject):
+            return specimen
+
+
+@autohelp
+@audited.DF
+class BytesGuard(Guard):
+    def subCoerce(self, specimen):
+        if isinstance(specimen, BytesObject):
+            return specimen
+
+
+@autohelp
+@audited.DF
+class IntGuard(Guard):
+    def subCoerce(self, specimen):
+        if (isinstance(specimen, IntObject) or
+                isinstance(specimen, BigInt)):
+            return specimen
 
 
 @autohelp

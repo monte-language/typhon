@@ -68,10 +68,7 @@ object Void as DeepFrozenStamp:
         return null
 
 
-def makePredicateGuard(predicate :DeepFrozenStamp, label) as DeepFrozenStamp:
-    # No Str guard yet, and we need to preserve DFness
-    if (!isStr(label)):
-        throw("Predicate guard label must be string")
+def makePredicateGuard(predicate :DeepFrozenStamp, label :Str) as DeepFrozenStamp:
     return object predicateGuard as DeepFrozenStamp:
         "A predicate guard.
 
@@ -92,14 +89,6 @@ def makePredicateGuard(predicate :DeepFrozenStamp, label) as DeepFrozenStamp:
             def error := "Failed guard (" + label + "):"
             throw.eject(ej, [error, specimen])
 
-
-# Data guards. These must come before any while-expressions.
-def Bool := makePredicateGuard(isBool, "Bool")
-def Bytes := makePredicateGuard(isBytes, "Bytes")
-def Char := makePredicateGuard(isChar, "Char")
-def Double := makePredicateGuard(isDouble, "Double")
-def Int := makePredicateGuard(isInt, "Int")
-def Str := makePredicateGuard(isStr, "Str")
 
 
 def Empty := makePredicateGuard(def pred(specimen) as DeepFrozenStamp {return specimen.size() == 0}, "Empty")

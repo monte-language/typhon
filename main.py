@@ -57,6 +57,12 @@ def loadPrelude(config, recorder, vat):
     # For the prelude (and only the prelude), permit the boot scope.
     bootTC = TestCollector()
     scope.update(bootScope(recorder, bootTC))
+    registerGlobals({u"Bool": scope[u"Bool"],
+                     u"Bytes": scope[u"Bytes"],
+                     u"Char": scope[u"Char"],
+                     u"Double": scope[u"Double"],
+                     u"Int": scope[u"Int"],
+                     u"Str": scope[u"Str"]})
 
     # Boot imports.
     scope = addImportToScope(config.libraryPaths, scope, recorder, bootTC)

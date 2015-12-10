@@ -22,47 +22,15 @@ from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.collections.sets import ConstSet
-from typhon.objects.constants import BoolObject
-from typhon.objects.data import (BigInt, BytesObject, CharObject,
-                                 DoubleObject, IntObject, StrObject,
-                                 unwrapBytes, unwrapStr, wrapBool)
+from typhon.objects.data import StrObject, unwrapBytes, wrapBool, unwrapStr
+from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
+                                   DoubleGuard, IntGuard, StrGuard)
 from typhon.objects.root import Object, audited, runnable
 from typhon.objects.tests import UnitTest
 
 EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
-
-
-@runnable(RUN_1, [deepFrozenStamp])
-def isBool(args):
-    return wrapBool(isinstance(args[0], BoolObject))
-
-
-@runnable(RUN_1, [deepFrozenStamp])
-def isBytes(args):
-    return wrapBool(isinstance(args[0], BytesObject))
-
-
-@runnable(RUN_1, [deepFrozenStamp])
-def isChar(args):
-    return wrapBool(isinstance(args[0], CharObject))
-
-
-@runnable(RUN_1, [deepFrozenStamp])
-def isDouble(args):
-    return wrapBool(isinstance(args[0], DoubleObject))
-
-
-@runnable(RUN_1, [deepFrozenStamp])
-def isInt(args):
-    return wrapBool(isinstance(args[0], IntObject)
-                    or isinstance(args[0], BigInt))
-
-
-@runnable(RUN_1, [deepFrozenStamp])
-def isStr(args):
-    return wrapBool(isinstance(args[0], StrObject))
 
 
 @runnable(RUN_1, [deepFrozenStamp])
@@ -127,16 +95,15 @@ class TyphonEval(Object):
 
 def bootScope(recorder, collectTests):
     return finalize({
-        u"isBool": isBool(),
-        u"isBytes": isBytes(),
-        u"isChar": isChar(),
-        u"isDouble": isDouble(),
-        u"isInt": isInt(),
-        u"isStr": isStr(),
-
         u"isList": isList(),
         u"isMap": isMap(),
         u"isSet": isSet(),
+        u"Bool": BoolGuard(),
+        u"Bytes": BytesGuard(),
+        u"Char": CharGuard(),
+        u"Double": DoubleGuard(),
+        u"Int": IntGuard(),
+        u"Str": StrGuard(),
 
         u"KernelAstStamp": kernelAstStamp,
 
