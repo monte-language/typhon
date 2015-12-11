@@ -4,7 +4,7 @@ exports (main)
 
 def parseArguments([processName, scriptName] + var argv) as DeepFrozen:
     var useMixer :Bool := false
-    var useNewFormat :Bool := false
+    var useNewFormat :Bool := true
     var arguments :List[Str] := []
 
     while (argv.size() > 0):
@@ -13,9 +13,9 @@ def parseArguments([processName, scriptName] + var argv) as DeepFrozen:
                 useMixer := true
                 argv := tail
             match [=="-format", =="mast"] + tail:
-                useNewFormat := true
                 argv := tail
             match [=="-format", =="trash"] + tail:
+                useNewFormat := false
                 argv := tail
             match [arg] + tail:
                 arguments with= (arg)

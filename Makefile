@@ -1,32 +1,33 @@
-boot_objects = boot/lib/monte/monte_lexer.ty \
-	boot/lib/monte/monte_parser.ty \
-	boot/lib/monte/ast_dumper.ty \
-	boot/lib/monte/monte_expander.ty \
-	boot/lib/monte/monte_optimizer.ty \
-	boot/lib/monte/monte_verifier.ty \
-	boot/lib/monte/mast.ty \
-	boot/lib/parsers/monte.ty \
-	boot/montec.ty \
-    boot/lib/tubes.mast boot/lib/tubes/itubes.ty \
-	boot/lib/tubes/nullPump.ty boot/lib/tubes/mapPump.ty \
-	boot/lib/tubes/pumpTube.ty boot/lib/tubes/statefulPump.ty \
-	boot/lib/tubes/splitPump.mast boot/lib/tubes/utf8.ty \
-	boot/lib/tubes/chain.ty \
+boot_objects = boot/lib/monte/monte_lexer.mast \
+	boot/lib/monte/monte_parser.mast \
+	boot/lib/monte/ast_dumper.mast \
+	boot/lib/monte/monte_expander.mast \
+	boot/lib/monte/monte_optimizer.mast \
+	boot/lib/monte/monte_verifier.mast \
+	boot/lib/monte/mast.mast \
+	boot/lib/codec/utf8.mast \
+	boot/lib/parsers/monte.mast \
+	boot/montec.mast \
+	boot/lib/tubes.mast boot/lib/tubes/itubes.mast \
+	boot/lib/tubes/nullPump.mast boot/lib/tubes/mapPump.mast \
+	boot/lib/tubes/pumpTube.mast boot/lib/tubes/statefulPump.mast \
+	boot/lib/tubes/splitPump.mast boot/lib/tubes/utf8.mast \
+	boot/lib/tubes/chain.mast \
 	boot/lib/tubes/pureDrain.mast \
 	boot/lib/tubes/iterFount.mast \
-	boot/prelude.ty \
-	boot/prelude/monte_ast.ty \
-	boot/prelude/b.ty \
-	boot/prelude/brand.ty \
-	boot/prelude/m.ty \
-	boot/prelude/ql.ty \
-	boot/prelude/deepfrozen.ty \
-	boot/prelude/protocolDesc.ty \
-	boot/prelude/region.ty \
-	boot/prelude/simple.ty \
-	boot/prelude/space.ty \
-	boot/prelude/transparent.ty \
-	boot/prelude/coreInterfaces.ty
+	boot/prelude.mast \
+	boot/prelude/monte_ast.mast \
+	boot/prelude/b.mast \
+	boot/prelude/brand.mast \
+	boot/prelude/m.mast \
+	boot/prelude/ql.mast \
+	boot/prelude/deepfrozen.mast \
+	boot/prelude/protocolDesc.mast \
+	boot/prelude/region.mast \
+	boot/prelude/simple.mast \
+	boot/prelude/space.mast \
+	boot/prelude/transparent.mast \
+	boot/prelude/coreInterfaces.mast
 
 .PRECIOUS: $(boot_objects)
 
@@ -51,18 +52,18 @@ $(boot_objects): boot/%: mast/%
 	@ echo "BOOT $<"
 	@ cp $< $@
 
-mast: mast/lib/atoi.ty mast/lib/enum.ty mast/lib/record.ty \
-	mast/lib/netstring.ty \
-	mast/lib/regex.ty mast/lib/words.ty \
-	mast/lib/percent.ty \
-	mast/lib/continued.ty \
-	mast/lib/tokenBucket.ty mast/lib/loopingCall.ty mast/lib/singleUse.ty \
-	mast/lib/cache.ty mast/lib/paths.ty \
-	mast/lib/amp.ty \
-	mast/lib/slow/exp.ty \
-	mast/lib/ansiColor.ty \
-	mast/lib/json.ty \
-	mast/lib/help.ty \
+mast: mast/lib/atoi.mast mast/lib/enum.mast mast/lib/record.mast \
+	mast/lib/netstring.mast \
+	mast/lib/regex.mast mast/lib/words.mast \
+	mast/lib/percent.mast \
+	mast/lib/continued.mast \
+	mast/lib/tokenBucket.mast mast/lib/loopingCall.mast mast/lib/singleUse.mast \
+	mast/lib/cache.mast mast/lib/paths.mast \
+	mast/lib/amp.mast \
+	mast/lib/slow/exp.mast \
+	mast/lib/ansiColor.mast \
+	mast/lib/json.mast \
+	mast/lib/help.mast \
 	prelude \
 	codec \
 	entropy \
@@ -79,55 +80,55 @@ infer: mast mast/tools/infer.mast
 testVM: default
 	trial typhon
 
-testMast: default mast infer mast/tests/lexer.ty mast/tests/parser.ty \
-	mast/tests/auditors.ty mast/tests/fail-arg.ty mast/tests/expander.ty \
+testMast: default mast infer mast/tests/lexer.mast mast/tests/parser.mast \
+	mast/tests/auditors.mast mast/tests/fail-arg.mast mast/tests/expander.mast \
 	mast/tests/optimizer.mast mast/tests/flexMap.mast
 	./mt-typhon -l mast mast/unittest all-tests
 
 test: testVM testMast
 
-prelude: mast/prelude.ty mast/prelude/brand.ty mast/prelude/m.ty \
-	mast/prelude/monte_ast.ty mast/prelude/ql.ty mast/prelude/region.ty \
-	mast/prelude/simple.ty mast/prelude/space.ty mast/prelude/deepfrozen.ty \
-	mast/prelude/protocolDesc.ty mast/prelude/b.ty mast/prelude/transparent.ty \
-	mast/prelude/coreInterfaces.ty
+prelude: mast/prelude.mast mast/prelude/brand.mast mast/prelude/m.mast \
+	mast/prelude/monte_ast.mast mast/prelude/ql.mast mast/prelude/region.mast \
+	mast/prelude/simple.mast mast/prelude/space.mast mast/prelude/deepfrozen.mast \
+	mast/prelude/protocolDesc.mast mast/prelude/b.mast mast/prelude/transparent.mast \
+	mast/prelude/coreInterfaces.mast
 
-codec: mast/lib/codec/utf8.ty
+codec: mast/lib/codec/utf8.mast
 
-entropy: mast/lib/entropy/pool.ty mast/lib/entropy/entropy.ty \
-	mast/lib/entropy/xorshift.ty mast/lib/entropy/pi.ty \
+entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
+	mast/lib/entropy/xorshift.mast mast/lib/entropy/pi.mast \
 	mast/lib/entropy/pcg.ty
 
-parsers: mast/lib/parsers/http.ty mast/lib/parsers/html.ty \
-	mast/lib/parsers/marley.ty mast/lib/parsers/monte.ty
+parsers: mast/lib/parsers/http.mast mast/lib/parsers/html.mast \
+	mast/lib/parsers/marley.mast mast/lib/parsers/monte.mast
 
-tubes: mast/lib/tubes.mast mast/lib/tubes/itubes.ty \
-	mast/lib/tubes/nullPump.ty mast/lib/tubes/mapPump.ty \
-	mast/lib/tubes/pumpTube.ty mast/lib/tubes/statefulPump.ty \
-	mast/lib/tubes/splitPump.mast mast/lib/tubes/utf8.ty \
-	mast/lib/tubes/chain.ty \
+tubes: mast/lib/tubes.mast mast/lib/tubes/itubes.mast \
+	mast/lib/tubes/nullPump.mast mast/lib/tubes/mapPump.mast \
+	mast/lib/tubes/pumpTube.mast mast/lib/tubes/statefulPump.mast \
+	mast/lib/tubes/splitPump.mast mast/lib/tubes/utf8.mast \
+	mast/lib/tubes/chain.mast \
 	mast/lib/tubes/pureDrain.mast \
 	mast/lib/tubes/iterFount.mast
 
-http: mast/lib/http/client.ty mast/lib/http/server.ty \
-	mast/lib/http/tag.ty mast/lib/http/resource.ty \
+http: mast/lib/http/client.mast mast/lib/http/server.mast \
+	mast/lib/http/tag.mast mast/lib/http/resource.mast \
 	tubes
 
-irc: mast/lib/irc/client.ty mast/lib/irc/user.ty \
+irc: mast/lib/irc/client.mast mast/lib/irc/user.mast \
 	tubes
 
-games: mast/games/mafia.ty mast/lib/uKanren.ty
+games: mast/games/mafia.mast mast/lib/uKanren.mast
 
-fun: mast/fun/elements.ty mast/fun/repl.ty mast/fun/termParser.ty
+fun: mast/fun/elements.mast mast/fun/repl.mast mast/fun/termParser.mast
 
-bench: mast/bench/nqueens.ty mast/bench/richards.ty mast/bench/montstone.ty \
-	mast/bench/primeCount.ty mast/bench/brot.ty mast/bench.ty
+bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mast \
+	mast/bench/primeCount.mast mast/bench/brot.mast mast/bench.mast
 
-monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
-	mast/lib/monte/monte_parser.ty mast/lib/monte/monte_expander.ty \
-	mast/lib/monte/monte_optimizer.ty mast/lib/monte/ast_dumper.ty \
-	mast/lib/monte/mast.ty mast/lib/monte/monte_verifier.ty \
-	mast/montec.ty mast/unittest.ty mast/all-tests.ty
+monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
+	mast/lib/monte/monte_parser.mast mast/lib/monte/monte_expander.mast \
+	mast/lib/monte/monte_optimizer.mast mast/lib/monte/ast_dumper.mast \
+	mast/lib/monte/mast.mast mast/lib/monte/monte_verifier.mast \
+	mast/montec.mast mast/unittest.mast mast/all-tests.mast
 
 %.ty: %.mt
 	@ echo "MONTEC (trash) $<"
@@ -139,4 +140,4 @@ monte:  mast/prelude/monte_ast.ty mast/lib/monte/monte_lexer.ty \
 
 clean:
 	@ echo "CLEAN"
-	@ find -iname mast/\*.ty -delete
+	@ find -iname mast/\*.mast -delete

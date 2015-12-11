@@ -52,7 +52,7 @@ def makeMASTContext() as DeepFrozen:
 
         to packNamedArgs(exprs) :Bytes:
             def namedArgs := [for na in (exprs)
-                              packStr(na.getKey()) + MASTContext.packExpr(na.getValue())]
+                              MASTContext.packExpr(na.getKey()) + MASTContext.packExpr(na.getValue())]
             return packInt(namedArgs.size()) + b``.join(namedArgs)
 
         to appendPatt(bs :Bytes) :Int:
