@@ -295,6 +295,12 @@ class TestInt(TestCase):
         result = i.call(u"op__cmp", [DoubleObject(2.0)])
         self.assertEqual(result.getInt(), 0)
 
+    def testOpCmpBigInt(self):
+        i = IntObject(2)
+        bi = BigInt(rbigint.fromint(6))
+        result = i.call(u"op__cmp", [bi])
+        self.assertEqual(result.getInt(), -1)
+
     def testOr(self):
         i = IntObject(0x3)
         result = i.call(u"or", [IntObject(0x5)])
@@ -393,3 +399,9 @@ class TestBigInt(TestCase):
         bi = BigInt(rbigint.fromint(6))
         result = bi.call(u"complement", [])
         self.assertTrue(result.bi.int_eq(-7))
+
+    def testOpCmpInt(self):
+        bi = BigInt(rbigint.fromint(6))
+        i = IntObject(2)
+        result = bi.call(u"op__cmp", [i])
+        self.assertEqual(result.getInt(), 1)

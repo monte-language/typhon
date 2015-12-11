@@ -352,8 +352,19 @@ class IntObject(Object):
                 other = unwrapInt(args[0])
                 return polyCmp(self._i, other)
             except WrongType:
-                other = unwrapDouble(args[0])
-                return polyCmp(self._i, other)
+                try:
+                    other = unwrapBigInt(args[0])
+                    # This has to be switched around.
+                    if other.int_lt(self._i):
+                        return IntObject(1)
+                    elif other.int_gt(self._i):
+                        return IntObject(-1)
+                    else:
+                        # Using a property of integers here.
+                        return IntObject(0)
+                except WrongType:
+                    other = unwrapDouble(args[0])
+                    return polyCmp(self._i, other)
 
         # Ints are usually used to store the results of comparisons.
         if atom is ABOVEZERO_0:
