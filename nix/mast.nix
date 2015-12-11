@@ -27,7 +27,7 @@ stdenv.mkDerivation {
        in ((lib.hasPrefix (loc "/mast/") p &&
             (type == "directory" || lib.hasSuffix ".mt" p)) ||
            (lib.hasPrefix (loc "/boot/") p &&
-            (type == "directory" || lib.hasSuffix ".ty" p)) ||
+            (type == "directory" || lib.hasSuffix ".ty" p || lib.hasSuffix ".mast" p)) ||
         p == loc "/mast" ||
         p == loc "/boot" ||
         p == loc "/Makefile" ||
