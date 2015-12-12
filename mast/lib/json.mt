@@ -49,7 +49,7 @@ def makeStream(s :Str) as DeepFrozen:
             return index >= s.size()
 
 
-def makeLexer() as DeepFrozen:
+def makeLexer(ej) as DeepFrozen:
     def tokens := [].diverge()
 
     return object lexer:
@@ -94,7 +94,7 @@ def makeLexer() as DeepFrozen:
                     tokens.push(i)
 
                 match c:
-                    throw(`Unknown character $c`)
+                    throw.eject(ej, `Unknown character $c`)
 
         to nextString(stream):
             def buf := [].diverge()
@@ -106,7 +106,7 @@ def makeLexer() as DeepFrozen:
                     match =='\\':
                         def c := stream.next()
                         buf.push(specialDecodeChars.fetch(c,
-                            fn {throw(`Bad escape character $c`)}))
+                            fn {throw.eject(ej, `Bad escape character $c`)}))
                     match c:
                         buf.push(c.asString())
 
@@ -126,16 +126,18 @@ def makeLexer() as DeepFrozen:
             tokens.push([patternHoleMarker, index])
 
 
-def parse(var tokens) as DeepFrozen:
+def parse(var tokens, ej) as DeepFrozen:
     var state := ["arr"].diverge()
     var stack := [[].diverge()].diverge()
     var key := null
 
     def pushValue(value):
-        if (state[state.size() - 1] == "obj"):
-            stack[stack.size() - 1][key] := value
+        if (state.size() == 0 || stack.size() == 0):
+            throw.eject(ej, "underflow in JSON parser")
+        if (state.last() == "obj"):
+            stack.last()[key] := value
         else:
-            stack[stack.size() - 1].push(value)
+            stack.last().push(value)
 
     while (tokens.size() > 0):
         # traceln("Tokens", tokens)
@@ -168,6 +170,8 @@ def parse(var tokens) as DeepFrozen:
                 tokens := rest
 
     # traceln("final stack", stack)
+    if (stack.size() == 0 || stack[0].size() == 0):
+        throw.eject(ej, "Underflow in JSON parser")
     return stack[0][0]
 
 
@@ -200,7 +204,7 @@ def makeJSON(value) as DeepFrozen:
                 match ss :List:
                     def l :List exit ej := value
                     if (l.size() != ss.size()):
-                        throw(ej, "Lists are not of the same size")
+                        throw.eject(ej, "Lists are not of the same size")
                     var i := 0
                     while (i < l.size()):
                         def v := makeJSON(l[i])
@@ -248,7 +252,7 @@ object json__quasiParser as DeepFrozen:
                     def stream := makeStream(piece)
                     lexer.lex(stream)
 
-        def parsed := parse(lexer.getTokens())
+        def parsed := parse(lexer.getTokens(), null)
         return makeJSON(parsed)
 
     to matchMaker(pieces):
@@ -266,10 +270,10 @@ object JSON as DeepFrozen:
 
     to decode(specimen, ej):
         def s :Str exit ej := specimen
-        def lexer := makeLexer()
+        def lexer := makeLexer(ej)
         def stream := makeStream(s)
         lexer.lex(stream)
-        return parse(lexer.getTokens())
+        return parse(lexer.getTokens(), ej)
 
     to encode(specimen, ej) :Str:
         return switch (specimen):
@@ -310,6 +314,17 @@ def testJSONDecodeSlash(assert):
     def specimen := "{\"face\\/off\":1997}"
     assert.equal(JSON.decode(specimen, null), ["face/off" => 1997])
 
+def testJSONDecodeInvalid(assert):
+    def specimens := [
+        "",
+        "{",
+        "}",
+        "asdf",
+        "{asdf}",
+    ]
+    for s in specimens:
+        assert.ejects(fn ej {def via (JSON.decode) _ exit ej := s})
+
 def testJSONEncode(assert):
     def specimen := ["first" => 42, "second" => [5, 7]]
     assert.equal(JSON.encode(specimen, null),
@@ -318,5 +333,6 @@ def testJSONEncode(assert):
 unittest([
     testJSONDecode,
     testJSONDecodeSlash,
+    testJSONDecodeInvalid,
     testJSONEncode,
 ])
