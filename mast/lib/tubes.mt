@@ -1,5 +1,6 @@
 imports => unittest
 exports (Pump, Unpauser, Fount, Drain, Tube,
+         nullPump,
          makeMapPump, makeSplitPump, makeStatefulPump,
          makeUTF8DecodePump, makeUTF8EncodePump,
          makeIterFount,
@@ -132,26 +133,24 @@ interface Drain:
 interface Tube extends Drain, Fount:
     "A pressure-sensitive segment in a stream processing workflow."
 
-object nullPump as DeepFrozen:
+object nullPump as DeepFrozen implements Pump:
+    "The do-nothing pump."
+
     to started():
         null
 
-    to received(item):
+    to received(item) :List:
         return []
 
     to stopped(_):
         null
 
-def makeMapPump(f) as DeepFrozen:
-    return object mapPump:
-        to started():
-            null
 
+def makeMapPump(f) :Pump as DeepFrozen:
+    return object mapPump extends nullPump as Pump:
         to received(item):
             return [f(item)]
 
-        to stopped(_):
-            null
 
 def splitAt(needle, var haystack) as DeepFrozen:
     def pieces := [].diverge()
@@ -175,13 +174,11 @@ def testSplitAtColons(assert):
     assert.equal(pieces, [b`colon`, b`splitting`])
     assert.equal(leftovers, b`things`)
 
-
 def testSplitAtWide(assert):
     def specimen := b`it's##an##octagon#not##an#octothorpe`
     def [pieces, leftovers] := splitAt(b`##`, specimen)
     assert.equal(pieces, [b`it's`, b`an`, b`octagon#not`])
     assert.equal(leftovers, b`an#octothorpe`)
-
 
 unittest([
     testSplitAtColons,
@@ -189,22 +186,22 @@ unittest([
 ])
 
 
-def makeSplitPump(separator :Bytes) as DeepFrozen:
+def makeSplitPump(separator :Bytes) :Pump as DeepFrozen:
     var buf :Bytes := b``
 
-    return object splitPump extends nullPump:
+    return object splitPump extends nullPump as Pump:
         to received(item):
             buf += item
             def [pieces, leftovers] := splitAt(separator, buf)
             buf := leftovers
             return pieces
 
-def makeStatefulPump(machine) as DeepFrozen:
+def makeStatefulPump(machine) :Pump as DeepFrozen:
     def State := machine.getStateGuard()
     def [var state :State, var size :Int] := machine.getInitialState()
     var buf := []
 
-    return object statefulPump extends nullPump:
+    return object statefulPump extends nullPump as Pump:
         to received(item) :List:
             buf += item
             while (buf.size() >= size):
@@ -218,20 +215,20 @@ def makeStatefulPump(machine) as DeepFrozen:
 
 def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
 
-def makeUTF8DecodePump() as DeepFrozen:
+def makeUTF8DecodePump() :Pump as DeepFrozen:
     var buf :Bytes := b``
 
-    return object UTF8DecodePump extends nullPump:
+    return object UTF8DecodePump extends nullPump as Pump:
         to received(bs :Bytes) :List[Str]:
             buf += bs
             def [s, leftovers] := UTF8.decodeExtras(buf, null)
             buf := leftovers
             return if (s.size() != 0) {[s]} else {[]}
 
-def makeUTF8EncodePump() as DeepFrozen:
+def makeUTF8EncodePump() :Pump as DeepFrozen:
     return makeMapPump(fn s {UTF8.encode(s, null)})
 
-def makeIterFount(iterable) as DeepFrozen:
+def makeIterFount(iterable) :Fount as DeepFrozen:
     def iterator := iterable._makeIterator()
     var drain := null
     var pauses :Int := 0
@@ -257,7 +254,7 @@ def makeIterFount(iterable) as DeepFrozen:
                 for completion in completions:
                     completion.resolve(problem)
 
-    return object iterFount:
+    return object iterFount as Fount:
         "A fount which feeds an iterator to its drain."
 
         to completion():
@@ -293,12 +290,12 @@ def makeIterFount(iterable) as DeepFrozen:
             drain.flowAborted("abortFlow/0")
             drain := null
 
-def makePureDrain() as DeepFrozen:
+def makePureDrain() :Drain as DeepFrozen:
     def buf := [].diverge()
     var itemsPromise := null
     var itemsResolver := null
 
-    return object pureDrain:
+    return object pureDrain as Drain:
         "A drain that has no external effects."
 
         to flowingFrom(fount):
@@ -328,12 +325,12 @@ def makePureDrain() as DeepFrozen:
                 itemsResolver := r
             return itemsPromise
 
-def makePumpTube(pump) as DeepFrozen:
+def makePumpTube(pump) :Pump as DeepFrozen:
     var upstream := var downstream := null
     var pause := null
     var stash := []
 
-    return object pumpTube:
+    return object pumpTube as Pump:
         to flowingFrom(fount):
             upstream := fount
             return pumpTube
