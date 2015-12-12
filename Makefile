@@ -8,13 +8,7 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 	boot/lib/codec/utf8.mast \
 	boot/lib/parsers/monte.mast \
 	boot/montec.mast \
-	boot/lib/tubes.mast boot/lib/tubes/itubes.mast \
-	boot/lib/tubes/nullPump.mast boot/lib/tubes/mapPump.mast \
-	boot/lib/tubes/pumpTube.mast boot/lib/tubes/statefulPump.mast \
-	boot/lib/tubes/splitPump.mast boot/lib/tubes/utf8.mast \
-	boot/lib/tubes/chain.mast \
-	boot/lib/tubes/pureDrain.mast \
-	boot/lib/tubes/iterFount.mast \
+	boot/lib/tubes.mast \
 	boot/prelude.mast \
 	boot/prelude/monte_ast.mast \
 	boot/prelude/b.mast \
@@ -102,13 +96,7 @@ entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 parsers: mast/lib/parsers/http.mast mast/lib/parsers/html.mast \
 	mast/lib/parsers/marley.mast mast/lib/parsers/monte.mast
 
-tubes: mast/lib/tubes.mast mast/lib/tubes/itubes.mast \
-	mast/lib/tubes/nullPump.mast mast/lib/tubes/mapPump.mast \
-	mast/lib/tubes/pumpTube.mast mast/lib/tubes/statefulPump.mast \
-	mast/lib/tubes/splitPump.mast mast/lib/tubes/utf8.mast \
-	mast/lib/tubes/chain.mast \
-	mast/lib/tubes/pureDrain.mast \
-	mast/lib/tubes/iterFount.mast
+tubes: mast/lib/tubes.mast
 
 http: mast/lib/http/client.mast mast/lib/http/server.mast \
 	mast/lib/http/tag.mast mast/lib/http/resource.mast \
