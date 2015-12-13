@@ -235,7 +235,13 @@ def NamePattern :DeepFrozen := Ast["FinalPattern", "VarPattern",
 def Noun :DeepFrozen := Ast["NounExpr", "TempNounExpr", "LiteralExpr"]
 
 # The story of &scope:
-# Lemme make sure that this works first, okay? ~ C.
+# Scopes are not used very often. They are expensive to calculate:
+# * Visits every node (O(n))
+#   * Calls Set methods: or/1 (O(n)), subtract/1 (O(n))
+# So scope calculation is O(n**2). Not cheap.
+# We amortize scope calculation by only computing used scopes, using lazy
+# slots to defer the calculations. Since those slots have to be preserved to
+# keep the laziness effect, we pass around &scope instead of scope. ~ C.
 def astWrapper(node, maker, args, span, &scope, nodeName, transformArgs) as DeepFrozenStamp:
     return object astNode extends node implements Selfless, TransparentStamp, astStamp:
         to getStaticScope():
@@ -864,8 +870,13 @@ def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozenStamp:
             return noun
         to getGuard():
             return guard
+
         to withGuard(newGuard):
             return makeVarPattern(noun, newGuard, span)
+
+        to refutable() :Bool:
+            return guard != null
+
         to subPrintOn(out, priority):
             out.print("var ")
             noun.subPrintOn(out, priority)
@@ -884,6 +895,10 @@ def makeBindPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozenStamp:
     object bindPattern:
         to getNoun():
             return noun
+
+        to refutable() :Bool:
+            return guard != null
+
         to subPrintOn(out, priority):
             out.print("bind ")
             noun.subPrintOn(out, priority)
@@ -1134,11 +1149,33 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
             return methods
         to getMatchers():
             return matchers
+
         to getMethodNamed(verb, ej):
+            "Look up the first method with the given verb, or eject if no such
+             method exists."
+
             for meth in methods:
                 if (meth.getVerb() == verb):
                     return meth
             throw.eject(ej, "No method named " + verb)
+
+        to getCompleteMatcher(ej):
+            "Obtain the pattern and body of the 'complete' matcher, or eject
+             if it is not present.
+
+             A 'complete' matcher is a matcher which is last in the list of
+             matchers and which has a pattern that cannot fail. Such matchers
+             are common in transparent forwarders and other composed objects."
+
+            if (matchers.size() > 0):
+                def last := matchers.last()
+                def pattern := last.getPattern()
+                if (pattern.refutable()):
+                    throw.eject(ej, "getCompleteMatcher/1: Ultimate matcher pattern is refutable")
+                else:
+                    return [pattern, last.getBody()]
+            throw.eject(ej, "getCompleteMatcher/1: No matchers")
+
         to printObjectHeadOn(name, asExpr, auditors, out, priority):
             out.print("object ")
             name.subPrintOn(out, priorities["pattern"])
@@ -1854,8 +1891,13 @@ def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozenStamp:
             return noun
         to getGuard():
             return guard
+
         to withGuard(newGuard):
             return makeFinalPattern(noun, newGuard, span)
+
+        to refutable() :Bool:
+            return guard != null
+
         to subPrintOn(out, priority):
             noun.subPrintOn(out, priority)
             if (guard != null):
@@ -1874,6 +1916,10 @@ def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozenStamp:
     object slotPattern:
         to getNoun():
             return noun
+
+        to refutable() :Bool:
+            return guard != null
+
         to subPrintOn(out, priority):
             out.print("&")
             noun.subPrintOn(out, priority)
@@ -1888,6 +1934,10 @@ def makeBindingPattern(noun :Noun, span) as DeepFrozenStamp:
     object bindingPattern:
         to getNoun():
             return noun
+
+        to refutable() :Bool:
+            return false
+
         to subPrintOn(out, priority):
             out.print("&&")
             noun.subPrintOn(out, priority)
@@ -1899,8 +1949,13 @@ def makeIgnorePattern(guard :NullOk[Expr], span) as DeepFrozenStamp:
     object ignorePattern:
         to getGuard():
             return guard
+
         to withGuard(newGuard):
             return makeIgnorePattern(newGuard, span)
+
+        to refutable() :Bool:
+            return guard != null
+
         to subPrintOn(out, priority):
             out.print("_")
             if (guard != null):
@@ -1916,6 +1971,10 @@ def makeListPattern(patterns :List[Pattern], tail :NullOk[Pattern], span) as Dee
             return patterns
         to getTail():
             return tail
+
+        to refutable() :Bool:
+            return true
+
         to subPrintOn(out, priority):
             printListOn("[", patterns, ", ", "]", out, priorities["pattern"])
             if (tail != null):
@@ -1974,6 +2033,10 @@ def makeMapPattern(patterns :List[Ast["MapPatternAssoc", "MapPatternImport"]], t
             return patterns
         to getTail():
             return tail
+
+        to refutable() :Bool:
+            return true
+
         to subPrintOn(out, priority):
             printListOn("[", patterns, ", ", "]", out, priorities["pattern"])
             if (tail != null):
@@ -2035,6 +2098,10 @@ def makeViaPattern(expr :Expr, subpattern :Pattern, span) as DeepFrozenStamp:
             return expr
         to getPattern():
             return subpattern
+
+        to refutable() :Bool:
+            return true
+
         to subPrintOn(out, priority):
             out.print("via (")
             expr.subPrintOn(out, priorities["braceExpr"])
@@ -2051,6 +2118,10 @@ def makeSuchThatPattern(subpattern :Pattern, expr :Expr, span) as DeepFrozenStam
             return expr
         to getPattern():
             return subpattern
+
+        to refutable() :Bool:
+            return true
+
         to subPrintOn(out, priority):
             subpattern.subPrintOn(out, priority)
             out.print(" ? (")
@@ -2066,6 +2137,10 @@ def makeSamePattern(value :Expr, direction :Bool, span) as DeepFrozenStamp:
             return value
         to getDirection():
             return direction
+
+        to refutable() :Bool:
+            return true
+
         to subPrintOn(out, priority):
             if (direction):
                 out.print("==")
@@ -2167,6 +2242,10 @@ def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as
             return name
         to getQuasis():
             return quasis
+
+        to refutable() :Bool:
+            return true
+
         to subPrintOn(out, priority):
             quasiPrint(name, quasis, out, priority)
     return astWrapper(quasiParserPattern, makeQuasiParserPattern, [name, quasis], span,
