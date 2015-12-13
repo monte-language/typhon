@@ -13,6 +13,7 @@
 # under the License.
 
 from rpython.rlib.debug import debug_print
+from rpython.rlib.objectmodel import we_are_translated
 from rpython.rlib.rarithmetic import intmask
 
 from typhon import ruv
@@ -40,22 +41,26 @@ def connectCB(connect, status):
     stream = connect.c_handle
 
     try:
-        with ruv.unstashingStream(stream) as (vat, resolvers):
-            with scopedVat(vat):
-                fountResolver, drainResolver = unwrapList(resolvers)
-                assert isinstance(fountResolver, LocalResolver)
-                assert isinstance(drainResolver, LocalResolver)
-                if status >= 0:
-                    debug_print("Made connection!")
-                    fountResolver.resolve(StreamFount(stream, vat))
-                    drainResolver.resolve(StreamDrain(stream, vat))
-                else:
-                    error = "Connection failed: " + ruv.formatError(status)
-                    debug_print(error)
-                    fountResolver.smash(StrObject(error.decode("utf-8")))
-                    drainResolver.smash(StrObject(error.decode("utf-8")))
+        vat, resolvers = ruv.unstashStream(stream)
+        fountResolver, drainResolver = unwrapList(resolvers)
+        assert isinstance(fountResolver, LocalResolver)
+        assert isinstance(drainResolver, LocalResolver)
+
+        with scopedVat(vat):
+            if status >= 0:
+                debug_print("Made connection!")
+                fountResolver.resolve(StreamFount(stream, vat))
+                drainResolver.resolve(StreamDrain(stream, vat))
+            else:
+                error = "Connection failed: " + ruv.formatError(status)
+                debug_print(error)
+                fountResolver.smash(StrObject(error.decode("utf-8")))
+                drainResolver.smash(StrObject(error.decode("utf-8")))
+                # Done with stream.
+                ruv.closeAndFree(stream)
     except:
-        print "Exception in connectCB"
+        if not we_are_translated():
+            raise
 
 
 @autohelp
@@ -113,7 +118,8 @@ def shutdownCB(shutdown, status):
         ruv.free(shutdown)
         # print "Shut down server, status", status
     except:
-        print "Exception in shutdownCB"
+        if not we_are_translated():
+            raise
 
 
 @autohelp
@@ -164,7 +170,8 @@ def connectionCB(uv_server, status):
                                           StreamDrain(uv_client, vat)],
                          EMPTY_MAP)
     except:
-        print "Exception in connectionCB"
+        if not we_are_translated():
+            raise
 
 
 @autohelp

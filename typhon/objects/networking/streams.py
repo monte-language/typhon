@@ -12,6 +12,7 @@
 # under the License.
 
 from rpython.rlib.rarithmetic import intmask
+from rpython.rlib.objectmodel import we_are_translated
 from rpython.rtyper.lltypesystem.rffi import charpsize2str
 
 from typhon import ruv
@@ -73,8 +74,9 @@ def readCB(stream, status, buf):
             else:
                 msg = ruv.formatError(status).decode("utf-8")
                 fount.abort(u"libuv error: %s" % msg)
-    except Exception as e:
-        print "Exception in readCB", e
+    except:
+        if not we_are_translated():
+            raise
 
 
 @autohelp
