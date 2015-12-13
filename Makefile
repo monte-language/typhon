@@ -91,7 +91,7 @@ codec: mast/lib/codec/utf8.mast
 
 entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 	mast/lib/entropy/xorshift.mast mast/lib/entropy/pi.mast \
-	mast/lib/entropy/pcg.ty
+	mast/lib/entropy/pcg.mast
 
 parsers: mast/lib/parsers/http.mast mast/lib/parsers/html.mast \
 	mast/lib/parsers/marley.mast mast/lib/parsers/monte.mast
@@ -117,10 +117,6 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 	mast/lib/monte/monte_optimizer.mast mast/lib/monte/ast_dumper.mast \
 	mast/lib/monte/mast.mast mast/lib/monte/monte_verifier.mast \
 	mast/montec.mast mast/unittest.mast mast/all-tests.mast
-
-%.ty: %.mt
-	@ echo "MONTEC (trash) $<"
-	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec -mix -format trash $< $@ # 2> /dev/null
 
 %.mast: %.mt
 	@ echo "MONTEC $<"
