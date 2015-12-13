@@ -51,8 +51,9 @@ GETARGS_0 = getAtom(u"getArgs", 0)
 GETASEXPR_0 = getAtom(u"getAsExpr", 0)
 GETAUDITORS_0 = getAtom(u"getAuditors", 0)
 GETBODY_0 = getAtom(u"getBody", 0)
-GETDEFNAMES_0 = getAtom(u"getDefNames", 0)
+GETCOMPLETEMATCHER_1 = getAtom(u"getCompleteMatcher", 1)
 GETDEFAULT_1 = getAtom(u"getDefault", 1)
+GETDEFNAMES_0 = getAtom(u"getDefNames", 0)
 GETDOCSTRING_0 = getAtom(u"getDocstring", 0)
 GETEXPRS_0 = getAtom(u"getExprs", 0)
 GETGUARD_0 = getAtom(u"getGuard", 0)
@@ -60,15 +61,15 @@ GETKEY_0 = getAtom(u"getKey", 0)
 GETMETASTATEEXPRFLAG_0 = getAtom(u"getMetaStateExprFlag", 0)
 GETMETHODNAMED_2 = getAtom(u"getMethodNamed", 2)
 GETMETHODS_0 = getAtom(u"getMethods", 0)
+GETNAMEDARGS_0 = getAtom(u"getNamedArgs", 0)
+GETNAMEDPATTERNS_0 = getAtom(u"getNamedPatterns", 0)
 GETNAMESREAD_0 = getAtom(u"getNamesRead", 0)
 GETNAMESSET_0 = getAtom(u"getNamesSet", 0)
 GETNAME_0 = getAtom(u"getName", 0)
-GETNAMEDARGS_0 = getAtom(u"getNamedArgs", 0)
-GETNAMEDPATTERNS_0 = getAtom(u"getNamedPatterns", 0)
 GETNODENAME_0 = getAtom(u"getNodeName", 0)
 GETNOUN_0 = getAtom(u"getNoun", 0)
-GETPATTERN_0 = getAtom(u"getPattern", 0)
 GETPATTERNS_0 = getAtom(u"getPatterns", 0)
+GETPATTERN_0 = getAtom(u"getPattern", 0)
 GETRECEIVER_0 = getAtom(u"getReceiver", 0)
 GETRESULTGUARD_0 = getAtom(u"getResultGuard", 0)
 GETSCRIPT_0 = getAtom(u"getScript", 0)
@@ -80,6 +81,7 @@ GETVERB_0 = getAtom(u"getVerb", 0)
 HIDE_0 = getAtom(u"hide", 0)
 NAMESUSED_0 = getAtom(u"namesUsed", 0)
 OUTNAMES_0 = getAtom(u"outNames", 0)
+REFUTABLE_0 = getAtom(u"refutable", 0)
 RUN_0 = getAtom(u"run", 0)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
@@ -1908,6 +1910,18 @@ class Script(Expr):
         return scope
 
     def recv(self, atom, args):
+        if atom is GETCOMPLETEMATCHER_1:
+            import pdb; pdb.set_trace()
+            ej = args[0]
+            if self._matchers:
+                matcher = self._matchers[-1]
+                pattern = matcher._pattern
+                if pattern.refutable():
+                    throw(ej, StrObject(u"getCompleteMatcher/1: Ultimate matcher pattern is refutable"))
+                return ConstList([pattern, matcher._block])
+            else:
+                throw(ej, StrObject(u"getCompleteMatcher/1: No matchers"))
+
         if atom is GETMETHODNAMED_2:
             name = unwrapStr(args[0])
             for method in self._methods:
@@ -1915,7 +1929,7 @@ class Script(Expr):
                 if method._verb == name:
                     return method
             ej = args[1]
-            throw(ej, StrObject(u"No method named %s" % name))
+            throw(ej, StrObject(u"getMethodNamed/2: No method named %s" % name))
 
         if atom is GETNODENAME_0:
             return StrObject(u"ScriptExpr")
@@ -2071,6 +2085,12 @@ class Pattern(Expr):
     def repr(self):
         return self.__repr__()
 
+    def recv(self, atom, args):
+        if atom is REFUTABLE_0:
+            return wrapBool(self.refutable())
+
+        raise Refused(self, atom, args)
+
 
 @autohelp
 @withMaker
@@ -2095,6 +2115,9 @@ class BindingPattern(Pattern):
 
     def getStaticScope(self):
         return StaticScope([], [], [], [self._noun], False)
+
+    def refutable(self):
+        return False
 
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
@@ -2146,6 +2169,9 @@ class FinalPattern(Pattern):
         if self._g is not None:
             scope = scope.add(self._g.getStaticScope())
         return scope
+
+    def refutable(self):
+        return self._g is not None
 
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
@@ -2203,6 +2229,9 @@ class IgnorePattern(Pattern):
         if self._g is not None:
             scope = scope.add(self._g.getStaticScope())
         return scope
+
+    def refutable(self):
+        return self._g is not None
 
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
@@ -2266,6 +2295,9 @@ class ListPattern(Pattern):
         for patt in self._ps:
             scope = scope.add(patt.getStaticScope())
         return scope
+
+    def refutable(self):
+        return True
 
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
@@ -2387,6 +2419,9 @@ class VarPattern(Pattern):
             scope = scope.add(self._g.getStaticScope())
         return scope
 
+    def refutable(self):
+        return self._g is not None
+
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
             return StrObject(u"VarPattern")
@@ -2439,6 +2474,9 @@ class ViaPattern(Pattern):
 
     def getStaticScope(self):
         return self._expr.getStaticScope().add(self._pattern.getStaticScope())
+
+    def refutable(self):
+        return True
 
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
