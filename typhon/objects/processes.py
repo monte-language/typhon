@@ -1,14 +1,16 @@
 import os
 import signal
 
+from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
 from typhon.objects.collections.lists import ConstList, unwrapList
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
-from typhon.objects.data import IntObject, StrObject, unwrapStr
+from typhon.objects.data import BytesObject, IntObject, StrObject, unwrapBytes
 from typhon.objects.root import Object, runnable
+from typhon.vats import currentVat
 
 
 GETARGUMENTS_0 = getAtom(u"getArguments", 0)
@@ -70,15 +72,14 @@ class SubProcess(Object):
 
     def recv(self, atom, args):
         if atom is GETARGUMENTS_0:
-            return ConstList([StrObject(arg.decode("utf-8"))
-                              for arg in self.argv])
+            return ConstList([BytesObject(arg) for arg in self.argv])
 
         if atom is GETENVIRONMENT_0:
             # XXX monteMap()
             d = monteMap()
             for key, value in self.env.items():
-                k = StrObject(key.decode("utf-8"))
-                v = StrObject(value.decode("utf-8"))
+                k = BytesObject(key)
+                v = BytesObject(value)
                 d[k] = v
             return ConstMap(d)
 
@@ -99,25 +100,24 @@ def makeProcess(args):
     executable, arguments, and environment.
     """
 
-    # XXX second draft: Done, but ugh.
-    # Next time around, I'll make this into a Callback. And then eventually a
-    # Selectable, probably...
-    executable = unwrapStr(args[0]).encode("utf-8")
-    argv = [unwrapStr(arg).encode("utf-8") for arg in unwrapList(args[1])]
+    # Third incarnation: libuv-powered and requiring bytes.
+    executable = unwrapBytes(args[0])
+    # This could be an LC, but doing it this way fixes the RPython annotation
+    # for the list to be non-None.
+    argv = []
+    for arg in unwrapList(args[1]):
+        s = unwrapBytes(arg)
+        assert s is not None, "proven impossible by hand"
+        argv.append(s)
     env = {}
-    for k, v in unwrapMap(args[2]).items():
-        env[unwrapStr(k).encode("utf-8")] = unwrapStr(v).encode("utf-8")
+    for (k, v) in unwrapMap(args[2]).items():
+        env[unwrapBytes(k)] = unwrapBytes(v)
+    packedEnv = [k + '=' + v for (k, v) in env.items()]
 
-    pid = os.fork()
-    if pid < 0:
-        # fork() errored.
-        raise userError(u"Couldn't spawn subprocess")
-    elif pid == 0:
-        # Child.
-        os.execve(executable, argv, env)
-    else:
-        # Parent.
+    vat = currentVat.get()
+    try:
+        pid = ruv.spawn(vat.uv_loop, file=executable, args=argv, env=packedEnv)
         return SubProcess(pid, argv, env)
-
-    # Convince RPython that all exits out of this function return an object.
-    return NullObject
+    except ruv.UVError as uve:
+        raise userError(u"makeProcess: Couldn't spawn process: %s" %
+                        uve.repr().decode("utf-8"))

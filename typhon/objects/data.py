@@ -1435,14 +1435,14 @@ def unwrapBytes(o):
     if isinstance(s, BytesObject):
         return s.getBytes()
     # XXX temporary only: Permit lists of ints.
-    from typhon.objects.collections.lists import ConstList, unwrapList
-    if isinstance(s, ConstList):
-        buf = ""
-        l = unwrapList(s)
-        for obj in l:
-            if isinstance(obj, IntObject):
-                buf += chr(obj._i)
-            else:
-                raise WrongType(u"Not a byte!")
-        return buf
+    # from typhon.objects.collections.lists import ConstList, unwrapList
+    # if isinstance(s, ConstList):
+    #     buf = ""
+    #     l = unwrapList(s)
+    #     for obj in l:
+    #         if isinstance(obj, IntObject):
+    #             buf += chr(obj._i)
+    #         else:
+    #             raise WrongType(u"Not a byte!")
+    #     return buf
     raise WrongType(u"Not a bytestring!")

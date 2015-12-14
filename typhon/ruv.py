@@ -6,6 +6,7 @@ absolutely required. You're welcome.
 
 Import as `from typhon import ruv` and then use namespaced. Please.
 """
+
 import os
 
 from functools import wraps
@@ -78,6 +79,16 @@ class CConfig:
     timer_t = rffi_platform.Struct("uv_timer_t", [("data", rffi.VOIDP)])
     prepare_t = rffi_platform.Struct("uv_prepare_t", [("data", rffi.VOIDP)])
     idle_t = rffi_platform.Struct("uv_idle_t", [("data", rffi.VOIDP)])
+    process_options_t = rffi_platform.Struct("uv_process_options_t",
+                                     [("file", rffi.CCHARP),
+                                      ("args", rffi.CCHARPP),
+                                      ("env", rffi.CCHARPP),
+                                      ("cwd", rffi.CCHARP),
+                                      ("flags", rffi.UINT),
+                                      ("stdio_count", rffi.INT)])
+    process_t = rffi_platform.Struct("uv_process_t",
+                                     [("data", rffi.VOIDP),
+                                      ("pid", rffi.INT)])
     stream_t = rffi_platform.Struct("uv_stream_t", [("data", rffi.VOIDP)])
     connect_t = rffi_platform.Struct("uv_connect_t",
                                      [("handle",
@@ -106,6 +117,8 @@ handle_tp = lltype.Ptr(cConfig["handle_t"])
 timer_tp = rffi.lltype.Ptr(cConfig["timer_t"])
 prepare_tp = rffi.lltype.Ptr(cConfig["prepare_t"])
 idle_tp = rffi.lltype.Ptr(cConfig["idle_t"])
+process_options_tp = rffi.lltype.Ptr(cConfig["process_options_t"])
+process_tp = rffi.lltype.Ptr(cConfig["process_t"])
 stream_tp = rffi.lltype.Ptr(cConfig["stream_t"])
 connect_tp = rffi.lltype.Ptr(cConfig["connect_t"])
 shutdown_tp = rffi.lltype.Ptr(cConfig["shutdown_t"])
@@ -375,6 +388,32 @@ def alloc_idle(loop):
     idle = lltype.malloc(cConfig["idle_t"], flavor="raw", zero=True)
     check("idle_init", idle_init(loop, idle))
     return idle
+
+
+UV_PROCESS_WINDOWS_HIDE = 1 << 4
+uv_spawn = rffi.llexternal("uv_spawn", [loop_tp, process_tp,
+                                        process_options_tp], rffi.INT,
+                           compilation_info=eci)
+def spawn(loop, file, args, env):
+    process = lltype.malloc(cConfig["process_t"], flavor="raw", zero=True)
+    with rffi.scoped_str2charp(file) as rawFile:
+        rawArgs = rffi.liststr2charpp(args)
+        rawEnv = rffi.liststr2charpp(env)
+        with rffi.scoped_str2charp(".") as rawCWD:
+            options = rffi.make(cConfig["process_options_t"], c_file=rawFile,
+                                c_args=rawArgs, c_env=rawEnv, c_cwd=rawCWD)
+            rffi.setintfield(options, "c_flags", UV_PROCESS_WINDOWS_HIDE)
+            rffi.setintfield(options, "c_stdio_count", 0)
+            rv = uv_spawn(loop, process, options)
+            free(options)
+        rffi.free_charpp(rawEnv)
+        rffi.free_charpp(rawArgs)
+    try:
+        check("spawn", rv)
+        return intmask(process.c_pid)
+    except:
+        free(process)
+        raise
 
 
 read_cb = rffi.CCallback([stream_tp, rffi.SSIZE_T, buf_tp], lltype.Void)
