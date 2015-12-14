@@ -1001,6 +1001,14 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 return quasiliteral(t, false, ej)
             else:
                 return builder.NounExpr(t[1], t[2])
+        if (tag == "&"):
+            advance(ej)
+            def spanStart := spanHere()
+            return builder.SlotExpr(noun(ej), spanFrom(spanStart))
+        if (tag == "&&"):
+            advance(ej)
+            def spanStart := spanHere()
+            return builder.BindingExpr(noun(ej), spanFrom(spanStart))
         if (tag == "::"):
             def spanStart := spanHere()
             advance(ej)
@@ -1170,12 +1178,6 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         if (["~", "!"].contains(op)):
             advance(ej)
             return builder.PrefixExpr(op, call(ej), spanFrom(spanStart))
-        if (op == "&"):
-            advance(ej)
-            return builder.SlotExpr(noun(ej), spanFrom(spanStart))
-        if (op == "&&"):
-            advance(ej)
-            return builder.BindingExpr(noun(ej), spanFrom(spanStart))
         def base := call(ej)
         if (peekTag() == ":"):
             advance(ej)
