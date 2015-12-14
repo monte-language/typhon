@@ -1911,16 +1911,15 @@ class Script(Expr):
 
     def recv(self, atom, args):
         if atom is GETCOMPLETEMATCHER_1:
-            import pdb; pdb.set_trace()
             ej = args[0]
             if self._matchers:
                 matcher = self._matchers[-1]
-                pattern = matcher._pattern
-                if pattern.refutable():
-                    throw(ej, StrObject(u"getCompleteMatcher/1: Ultimate matcher pattern is refutable"))
-                return ConstList([pattern, matcher._block])
-            else:
-                throw(ej, StrObject(u"getCompleteMatcher/1: No matchers"))
+                if isinstance(matcher, Matcher):
+                    pattern = matcher._pattern
+                    if pattern.refutable():
+                        throw(ej, StrObject(u"getCompleteMatcher/1: Ultimate matcher pattern is refutable"))
+                    return ConstList([pattern, matcher._block])
+            throw(ej, StrObject(u"getCompleteMatcher/1: No matchers"))
 
         if atom is GETMETHODNAMED_2:
             name = unwrapStr(args[0])
