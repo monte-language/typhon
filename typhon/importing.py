@@ -18,8 +18,8 @@ from rpython.rlib.rpath import rjoin
 
 from typhon import log
 from typhon.debug import debugPrint
-from typhon.errors import LoadFailed, UserException, userError
-from typhon.load.mast import loadMASTBytes
+from typhon.errors import UserException, userError
+from typhon.load.mast import InvalidMAST, loadMASTBytes
 from typhon.load.trash import load
 from typhon.nodes import Sequence, interactiveCompile
 from typhon.objects.constants import NullObject
@@ -42,10 +42,10 @@ moduleCache = ModuleCache()
 def obtainModuleFromSource(source, recorder, origin):
     with recorder.context("Deserialization"):
         try:
-            term = Sequence(load(source)[:])
-        except LoadFailed as le:
-            print "Load (trash) failed:", le
             term = loadMASTBytes(source)
+        except InvalidMAST as im:
+            print "Load (mast) failed:", im
+            term = Sequence(load(source)[:])
 
     with recorder.context("Compilation"):
         code, topLocals = interactiveCompile(term, origin)
