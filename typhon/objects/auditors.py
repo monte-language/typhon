@@ -237,13 +237,15 @@ def deepFrozenSupersetOf(guard):
             subGuard = superGuard.call(u"extractGuard", [guard, ej])
             return deepFrozenSupersetOf(subGuard)
         except Ejecting:
+            # XXX lets other ejectors get through
+            pass
+    for pairGuardName in [u"Map", u"Pair"]:
+        pairGuard = getGlobalValue(pairGuardName)
+        if pairGuard is None:
             continue
-    Map = getGlobalValue(u"Map")
-    if Map is not None:
         ej = Ejector()
         try:
-
-            guardPair = Map.call(u"extractGuards", [guard, ej])
+            guardPair = pairGuard.call(u"extractGuards", [guard, ej])
             if isinstance(guardPair, ConstList) and guardPair.size() == 2:
                 return wrapBool(
                     (deepFrozenSupersetOf(guardPair.strategy.fetch(
@@ -251,6 +253,7 @@ def deepFrozenSupersetOf(guard):
                     (deepFrozenSupersetOf(guardPair.strategy.fetch(
                         guardPair, 1)) is wrapBool(True)))
         except Ejecting:
+            # XXX lets other ejectors get through
             pass
     if (SubrangeGuard(deepFrozenGuard).call(u"passes", [guard])
             is wrapBool(True)):

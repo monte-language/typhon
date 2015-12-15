@@ -361,6 +361,70 @@ unittest([
     testNullOkInt,
 ])
 
+object _PairGuardStamp:
+    to audit(audition):
+        return true
+
+object Pair as DeepFrozenStamp:
+    "A guard which admits immutable pairs."
+
+    to _printOn(out):
+        out.print("Pair")
+
+    to coerce(specimen, ej):
+        if (isList(specimen) && specimen.size() == 2):
+            return specimen
+
+        def conformed := specimen._conformTo(Map)
+
+        if (isList(conformed) && conformed.size() == 2):
+            return conformed
+
+        throw.eject(ej, ["(Probably) not a pair:", specimen])
+
+    to get(firstGuard, secondGuard):
+        return object SubPair implements _PairGuardStamp, Selfless, TransparentStamp:
+            to _printOn(out):
+                out.print("Pair[")
+                firstGuard._printOn(out)
+                out.print(", ")
+                secondGuard._printOn(out)
+                out.print("]")
+
+            to _uncall():
+                return [Pair, "get", [firstGuard, secondGuard], [].asMap()]
+
+            to getGuards():
+                return [firstGuard, secondGuard]
+
+            to coerce(var specimen, ej):
+                if (!isList(specimen) || specimen.size() != 2):
+                    specimen := specimen._conformTo(SubPair)
+
+                def [first :firstGuard, second :secondGuard] exit ej := specimen
+                return specimen
+
+    to extractGuards(specimen, ej):
+        if (specimen == Pair):
+            return [Any, Any]
+        else if (__auditedBy(_PairGuardStamp, specimen)):
+            return specimen.getGuards()
+        else:
+            throw.eject(ej, "Not a Pair guard")
+
+def testPairGuard(assert):
+    assert.ejects(fn ej {def x :Pair exit ej := 42})
+    assert.doesNotEject(fn ej {def x :Pair exit ej := [6, 9]})
+
+def testPairGuardIntStr(assert):
+    assert.ejects(fn ej {def x :Pair[Int, Str] exit ej := ["lue", 42]})
+    assert.doesNotEject(fn ej {def x :Pair[Int, Str] exit ej := [42, "lue"]})
+
+unittest([
+    testPairGuard,
+    testPairGuardIntStr,
+])
+
 # object _SameGuardStamp:
 #     to audit(audition):
 #         return true
@@ -574,7 +638,7 @@ def scopeAsDF(scope):
 # the other modules.
 var preludeScope := scopeAsDF([
     => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
-    => Int, => List, => Map, => NullOk, => Ref, => Near, => Same, => Set,
+    => Int, => List, => Map, => NullOk, => Near, => Pair, => Same, => Set,
     => Selfless, => Str, => SubrangeGuard, => Void,
     => null, => Infinity, => NaN, => false, => true,
     => __auditedBy, => __equalizer, => __loop,
@@ -587,7 +651,7 @@ var preludeScope := scopeAsDF([
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
-    => M, => import, => throw, => typhonEval,
+    => M, => Ref, => import, => throw, => typhonEval,
     => makeLazySlot,
 ])
 
