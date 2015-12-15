@@ -14,7 +14,7 @@ def makeRecord(name :Str, fields :Map[Str, DeepFrozen]) as DeepFrozen:
                                         capitalize(fieldName)]
 
     # XXX used to be a curry, but curries can't be DF.
-    def checkSlug(slug) as DeepFrozen:
+    def checkSlug(slug) :Int as DeepFrozen:
         return capitalizedNames.indexOf(slug)
 
     def checkElements(elts, ej) as DeepFrozen:
@@ -28,9 +28,12 @@ def makeRecord(name :Str, fields :Map[Str, DeepFrozen]) as DeepFrozen:
     interface Record :DeepFrozen guards RecordStamp :DeepFrozen:
         "An interface for a record."
 
-        to asMap() :Map[Int, Any]
+        to asMap() :Map[Str, Any]
 
     object recordMaker as DeepFrozen:
+        to _uncall():
+            return [makeRecord, "run", [name, fields], [].asMap()]
+
         match [=="run", via (checkElements) elements, _]:
             object record as RecordStamp:
                 "A record."
@@ -39,6 +42,9 @@ def makeRecord(name :Str, fields :Map[Str, DeepFrozen]) as DeepFrozen:
                     def parts := [for i => fieldName in (fieldNames)
                                   `$fieldName => ${M.toQuote(elements[i])}`]
                     out.print(`$name(${", ".join(parts)})`)
+
+                to _uncall():
+                    return [recordMaker, "run", elements, [].asMap()]
 
                 to asMap():
                     return [for i => element in (elements)

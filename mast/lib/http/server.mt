@@ -19,22 +19,39 @@ def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
 def [=> makeMapPump :DeepFrozen,
      => makePumpTube :DeepFrozen,
      => chain :DeepFrozen,
-] := import("lib/tubes", [=> unittest])
+] | _ := import("lib/tubes", [=> unittest])
 def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
 def [=> PercentEncoding :DeepFrozen] | _ := import("lib/percent",
                                                    [=> unittest])
+def [=> makeRecord :DeepFrozen] := import("lib/record", [=> unittest])
+
+def [Headers :DeepFrozen,
+     makeHeaders :DeepFrozen] := makeRecord("Headers",
+     ["contentLength" => NullOk[Int],
+      "spareHeaders" => Map[Str, Str]])
 
 def [RequestState :DeepFrozen,
      REQUEST :DeepFrozen,
      HEADER :DeepFrozen,
      BODY :DeepFrozen] := makeEnum(["request", "header", "body"])
 
+def [BodyState :DeepFrozen,
+     FIXED :DeepFrozen,
+     CHUNKED :DeepFrozen] := makeEnum(["fixed", "chunked"])
+
 def makeRequestPump() as DeepFrozen:
-    var state :RequestState := REQUEST
+    def [=> strToInt] | _ := import.script("lib/atoi", [=> &&unittest])
+
+    var requestState :RequestState := REQUEST
+    # How body state works: The int is how much is left to read in the current
+    # "chunk". For FIXED, that's how much body is left total; for CHUNKED,
+    # it's how much body is left in the current chunk of data.
+    var bodyState :Pair[BodyState, Int] := [FIXED, 0]
+
     var buf :Bytes := b``
     var pendingRequest := null
     var pendingRequestLine := null
-    var pendingHeaders := null
+    var headers :Headers := makeHeaders(null, [].asMap())
 
     return object requestPump:
         to started():
@@ -69,7 +86,7 @@ def makeRequestPump() as DeepFrozen:
             # Return whether more parsing can take place.
             # Eject if the parse fails.
 
-            switch (state):
+            switch (requestState):
                 match ==REQUEST:
                     if (buf.indexOf(b`$\r$\n`) == -1):
                         return false
@@ -77,8 +94,8 @@ def makeRequestPump() as DeepFrozen:
                     # XXX it'd be swell if these were subpatterns
                     def b`@{via (UTF8.decode) verb} @{via (PercentEncoding.decode) uri} HTTP/1.1$\r$\n@t` exit ej := buf
                     pendingRequestLine := [verb, uri]
-                    pendingHeaders := [].asMap()
-                    state := HEADER
+                    headers := makeHeaders(null, [].asMap())
+                    requestState := HEADER
                     buf := t
                     return true
 
@@ -87,18 +104,35 @@ def makeRequestPump() as DeepFrozen:
                         return false
 
                     if (buf =~ b`$\r$\n@t`):
-                        state := BODY
+                        requestState := BODY
                         buf := t
                         return true
 
                     def b`@{via (UTF8.decode) header}:@{via (UTF8.decode) value}$\r$\n@t` exit ej := buf
-                    pendingHeaders |= [header => value.trim()]
+                    switch (header.toLowerCase()):
+                        match `content-length`:
+                            def via (strToInt) len exit ej := value.trim()
+                            headers withContentLength= (len)
+                            bodyState := [FIXED, len]
+                        match _:
+                            def spareHeaders := headers.getSpareHeaders()
+                            headers withSpareHeaders= (spareHeaders.with(header, value.trim()))
                     buf := t
                     return true
 
                 match ==BODY:
-                    state := REQUEST
-                    pendingRequest := [pendingRequestLine, pendingHeaders]
+                    switch (bodyState):
+                        # XXX this should eventually just deliver each chunk
+                        # to a tube.
+                        match [==FIXED, len]:
+                            if (buf.size() >= len):
+                                def body := buf.slice(0, len)
+                                buf slice= (len)
+                                requestState := REQUEST
+                                pendingRequest := [pendingRequestLine, headers, body]
+                                bodyState := [FIXED, 0]
+                            else:
+                                return false
                     return true
 
 

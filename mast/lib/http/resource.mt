@@ -29,7 +29,7 @@ object notFoundResource as DeepFrozen:
     to get(_):
         return notFoundResource
 
-    to run(verb, headers):
+    to run(verb, headers, body):
         def [_, headers, body] := smallBody("Not found")
         return [404, headers, body]
 
@@ -53,7 +53,14 @@ def makeDebugResource(runtime) as DeepFrozen:
         to get(_):
             return notFoundResource
 
-        to run(_, headers):
+        to run(_, headers, body):
+            def requestTag := tag.div(
+                tag.h2("Request"),
+                tag.h3("Headers"),
+                tag.p(`$headers`),
+                tag.h3("Body"),
+                tag.p(`$body`))
+
             def heap := runtime.getHeapStatistics()
             def reactor := runtime.getReactorStatistics()
 
@@ -70,11 +77,11 @@ def makeDebugResource(runtime) as DeepFrozen:
                 tag.p(`Number of live objects: ${heap.getObjectCount()}`),
                 tag.p(`Conservative heap size: ${autoSI(heap.getMemoryUsage())}B`),
                 tag.p("Most common objects on the heap:"),
-                M.call(tag, "ul", bucketList), [].asMap())
+                M.call(tag, "ul", bucketList))
             def reactorTag := tag.div(
                 tag.h2("Reactor"),
                 tag.p(`Handles: ${reactor.getHandles()}`))
-            def body := tag.body(tag.h1("Debug Info"), heapTag, reactorTag)
+            def body := tag.body(tag.h1("Debug Info"), requestTag, heapTag, reactorTag)
             return smallBody(`$body`)
 
 
@@ -91,14 +98,14 @@ def makeResource(worker, var children :Map[Str, Any]) as DeepFrozen:
         to put(segment :Str, child):
             children |= [segment => child]
 
-        to run(verb, headers):
-            return worker(resource, verb, headers)
+        to run(verb, headers, body):
+            return worker(resource, verb, headers, body)
 
 
 def makeResourceApp(root) as DeepFrozen:
     def resourceApp(request):
         escape badRequest:
-            def [[verb, path], headers] exit badRequest := request
+            def [[verb, path], headers, body] exit badRequest := request
             def [==""] + segments exit badRequest := path.split("/")
             var resource := root
             for segment in segments.slice(0, segments.size() - 1):
@@ -106,14 +113,15 @@ def makeResourceApp(root) as DeepFrozen:
             def final := segments[segments.size() - 1]
             if (final != ""):
                 resource get= (final)
-            return resource(verb, headers)
+            return resource(verb, headers, body)
         catch _:
-            return null
+            def [_, headers, body] := smallBody("bad request?")
+            return [400, headers, body]
     return resourceApp
 
 
-def main(=> currentRuntime, => makeTCP4ServerEndpoint) as DeepFrozen:
-    def [=> makeHTTPEndpoint] | _ := import.script("lib/http/server")
+def main(=> currentRuntime, => makeTCP4ServerEndpoint, => unittest) as DeepFrozen:
+    def [=> makeHTTPEndpoint] | _ := import("lib/http/server", [=> unittest])
 
     # Just a single / that shows the debug page.
     def root := makeDebugResource(currentRuntime)
