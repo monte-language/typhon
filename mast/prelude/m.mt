@@ -58,7 +58,7 @@ def Expr :DeepFrozen := astBuilder.getExprGuard()
 def NamePattern :DeepFrozen := astBuilder.getNamePatternGuard()
 def Noun :DeepFrozen := astBuilder.getNounGuard()
 
-def makeM(ast, isKernel :Bool) as DeepFrozen:
+def makeM(ast :Ast, isKernel :Bool) as DeepFrozen:
     return object m extends ast implements Selfless, Transparent:
         "An abstract syntax tree in the Monte programming language."
 
