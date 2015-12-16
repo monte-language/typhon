@@ -1833,9 +1833,11 @@ def makeHideExpr(body :Expr, span) as DeepFrozenStamp:
 
 def makeValueHoleExpr(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
-    object valueHoleExpr:
+    object valueHoleExpr implements DeepFrozenStamp:
         to getIndex():
             return index
+        to getName():
+            return valueHoleExpr
         to subPrintOn(out, priority):
             out.print("${expr-hole ")
             out.print(index)
@@ -1845,9 +1847,11 @@ def makeValueHoleExpr(index :Int, span) as DeepFrozenStamp:
 
 def makePatternHoleExpr(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
-    object patternHoleExpr:
+    object patternHoleExpr implements DeepFrozenStamp:
         to getIndex():
             return index
+        to getName():
+            return patternHoleExpr
         to subPrintOn(out, priority):
             out.print("@{expr-hole ")
             out.print(index)
@@ -1857,9 +1861,11 @@ def makePatternHoleExpr(index :Int, span) as DeepFrozenStamp:
 
 def makeValueHolePattern(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
-    object valueHolePattern:
+    object valueHolePattern implements DeepFrozenStamp:
         to getIndex():
             return index
+        to getName():
+            return valueHolePattern
         to subPrintOn(out, priority):
             out.print("${pattern-hole ")
             out.print(index)
@@ -1869,9 +1875,11 @@ def makeValueHolePattern(index :Int, span) as DeepFrozenStamp:
 
 def makePatternHolePattern(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
-    object patternHolePattern:
+    object patternHolePattern implements DeepFrozenStamp:
         to getIndex():
             return index
+        to getName():
+            return patternHolePattern
         to subPrintOn(out, priority):
             out.print("@{pattern-hole ")
             out.print(index)
