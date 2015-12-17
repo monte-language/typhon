@@ -49,7 +49,6 @@ $(boot_objects): boot/%: mast/%
 mast: mast/lib/atoi.mast mast/lib/enum.mast mast/lib/record.mast \
 	mast/lib/netstring.mast \
 	mast/lib/regex.mast mast/lib/words.mast \
-	mast/lib/percent.mast \
 	mast/lib/continued.mast \
 	mast/lib/tokenBucket.mast mast/lib/loopingCall.mast mast/lib/singleUse.mast \
 	mast/lib/cache.mast mast/lib/paths.mast \
@@ -87,7 +86,7 @@ prelude: mast/prelude.mast mast/prelude/brand.mast mast/prelude/m.mast \
 	mast/prelude/protocolDesc.mast mast/prelude/b.mast mast/prelude/transparent.mast \
 	mast/prelude/coreInterfaces.mast
 
-codec: mast/lib/codec/utf8.mast
+codec: mast/lib/codec.mast mast/lib/codec/utf8.mast mast/lib/codec/percent.mast
 
 entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 	mast/lib/entropy/xorshift.mast mast/lib/entropy/pi.mast \
