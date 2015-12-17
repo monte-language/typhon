@@ -21,13 +21,19 @@ def [=> makeMapPump :DeepFrozen,
      => chain :DeepFrozen,
 ] | _ := import("lib/tubes", [=> unittest])
 def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
-def [=> PercentEncoding :DeepFrozen] | _ := import("lib/percent",
+def [=> PercentEncoding :DeepFrozen] | _ := import("lib/codec/percent",
                                                    [=> unittest])
+def [=> composeCodec :DeepFrozen] | _ := import("lib/codec")
 def [=> makeRecord :DeepFrozen] := import("lib/record", [=> unittest])
+
+# Strange as it sounds, the percent encoding is actually *outside* the UTF-8
+# encoding!
+def UTF8Percent :DeepFrozen := composeCodec(PercentEncoding, UTF8)
 
 def [Headers :DeepFrozen,
      makeHeaders :DeepFrozen] := makeRecord("Headers",
      ["contentLength" => NullOk[Int],
+      "contentType" => NullOk[Pair[Str, Str]],
       "spareHeaders" => Map[Str, Str]])
 
 def [RequestState :DeepFrozen,
@@ -51,7 +57,7 @@ def makeRequestPump() as DeepFrozen:
     var buf :Bytes := b``
     var pendingRequest := null
     var pendingRequestLine := null
-    var headers :Headers := makeHeaders(null, [].asMap())
+    var headers :Headers := makeHeaders(null, null, [].asMap())
 
     return object requestPump:
         to started():
@@ -92,9 +98,9 @@ def makeRequestPump() as DeepFrozen:
                         return false
 
                     # XXX it'd be swell if these were subpatterns
-                    def b`@{via (UTF8.decode) verb} @{via (PercentEncoding.decode) uri} HTTP/1.1$\r$\n@t` exit ej := buf
+                    def b`@{via (UTF8.decode) verb} @{via (UTF8Percent.decode) uri} HTTP/1.1$\r$\n@t` exit ej := buf
                     pendingRequestLine := [verb, uri]
-                    headers := makeHeaders(null, [].asMap())
+                    headers := makeHeaders(null, null, [].asMap())
                     requestState := HEADER
                     buf := t
                     return true
@@ -114,6 +120,10 @@ def makeRequestPump() as DeepFrozen:
                             def via (strToInt) len exit ej := value.trim()
                             headers withContentLength= (len)
                             bodyState := [FIXED, len]
+                        match `content-type`:
+                            # XXX should support options, right?
+                            def `@type/@subtype` exit ej := value.trim()
+                            headers withContentType= ([type, subtype])
                         match _:
                             def spareHeaders := headers.getSpareHeaders()
                             headers withSpareHeaders= (spareHeaders.with(header, value.trim()))
