@@ -29,7 +29,7 @@ object notFoundResource as DeepFrozen:
     to get(_):
         return notFoundResource
 
-    to run(verb, headers, body):
+    to run(request):
         def [_, headers, body] := smallBody("Not found")
         return [404, headers, body]
 
@@ -53,13 +53,14 @@ def makeDebugResource(runtime) as DeepFrozen:
         to get(_):
             return notFoundResource
 
-        to run(_, headers, body):
+        to run(request):
+            def headers := request.getHeaders()
             def requestTag := tag.div(
                 tag.h2("Request"),
                 tag.h3("Headers"),
                 tag.p(`$headers`),
                 tag.h3("Body"),
-                tag.p(`$body`))
+                tag.p(`${request.getBody()}`))
 
             def heap := runtime.getHeapStatistics()
             def reactor := runtime.getReactorStatistics()
@@ -98,22 +99,22 @@ def makeResource(worker, var children :Map[Str, Any]) as DeepFrozen:
         to put(segment :Str, child):
             children |= [segment => child]
 
-        to run(verb, headers, body):
-            return worker(resource, verb, headers, body)
+        to run(request):
+            return worker(resource, request)
 
 
 def makeResourceApp(root) as DeepFrozen:
     def resourceApp(request):
+        traceln(`resourceApp $request`)
         escape badRequest:
-            def [[verb, path], headers, body] exit badRequest := request
-            def [==""] + segments exit badRequest := path.split("/")
+            def [==""] + segments exit badRequest := request.getPath().split("/")
             var resource := root
             for segment in segments.slice(0, segments.size() - 1):
                 resource get= (segment)
             def final := segments[segments.size() - 1]
             if (final != ""):
                 resource get= (final)
-            return resource(verb, headers, body)
+            return resource(request)
         catch _:
             def [_, headers, body] := smallBody("bad request?")
             return [400, headers, body]

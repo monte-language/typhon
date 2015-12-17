@@ -36,6 +36,14 @@ def [Headers :DeepFrozen,
       "contentType" => NullOk[Pair[Str, Str]],
       "spareHeaders" => Map[Str, Str]])
 
+def [Request :DeepFrozen,
+     makeRequest :DeepFrozen] := makeRecord("Request",
+     ["verb" => Str,
+      "path" => Str,
+      "headers" => Headers,
+      # XXX can/should/will be a tube, especially once we have chunked
+      "body" => Bytes])
+
 def [RequestState :DeepFrozen,
      REQUEST :DeepFrozen,
      HEADER :DeepFrozen,
@@ -139,7 +147,9 @@ def makeRequestPump() as DeepFrozen:
                                 def body := buf.slice(0, len)
                                 buf slice= (len)
                                 requestState := REQUEST
-                                pendingRequest := [pendingRequestLine, headers, body]
+                                def [verb, uri] := pendingRequestLine
+                                pendingRequest := makeRequest(verb, uri,
+                                                              headers, body)
                                 bodyState := [FIXED, 0]
                             else:
                                 return false
