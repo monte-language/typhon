@@ -9,10 +9,9 @@ def digitToInt :Map[Int, Int] := [for i => b in (hexDigits) b => i] | [for i => 
 object PercentEncoding as DeepFrozen:
     "Percent-encoding as per RFC 3986."
 
-    to encode(s :Str, _) :Bytes:
+    to encode(bs :Bytes, _) :Bytes:
         var rv := b``
-        for c :(Int < 256) in s:
-            def i := c.asInteger()
+        for i in bs:
             if (unreserved.contains(i)):
                 rv with= (i)
             else:
@@ -21,7 +20,7 @@ object PercentEncoding as DeepFrozen:
                 rv with= (hexDigits[i & 0xf])
         return rv
 
-    to decode(bs :Bytes, _) :Str:
+    to decode(bs :Bytes, _) :Bytes:
         def rv := [].diverge()
         var i := 0
         while (i < bs.size()):
@@ -31,19 +30,19 @@ object PercentEncoding as DeepFrozen:
                     def upper := digitToInt[bs[i]]
                     i += 1
                     def lower := digitToInt[bs[i]]
-                    rv.push('\x00' + (upper << 4) + lower)
+                    rv.push((upper << 4) + lower)
                 match b:
-                    rv.push('\x00' + b)
+                    rv.push(b)
             i += 1
-        return "".join([for c in (rv) c.asString()])
+        return _makeBytes.fromInts(rv)
 
 def testPercentEncode(assert):
-    assert.equal(PercentEncoding.encode("/test stuff", null),
+    assert.equal(PercentEncoding.encode(b`/test stuff`, null),
                  b`/test%20stuff`)
 
 def testPercentDecode(assert):
     assert.equal(PercentEncoding.decode(b`/test%20stuff`, null),
-                 "/test stuff")
+                 b`/test stuff`)
 
 unittest([
     testPercentEncode,
