@@ -101,17 +101,26 @@ def specialize(name, value) as DeepFrozen:
 def nodeUsesName(node, name :Str) as DeepFrozen:
     return node.getStaticScope().namesUsed().contains(name)
 
-def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
+def mix(expr,
+        => staticValues :Map := [].asMap(),
+        => safeFinalNames :List := []) as DeepFrozen:
     "Partially evaluate a thawed Monte expression.
+
+     `staticValues` should be a mapping of names to live values. The values
+     should be closed under their union with the safe scope with uncall; this
+     is necessary to freeze them should the need arise.
     
      This function recurses on its own, to avoid visiting every node."
+
+    def remix(e):
+        return mix(e, => staticValues, => safeFinalNames)
 
     # traceln(`Mixing ${expr.getNodeName()}: $expr`)
     return switch (expr.getNodeName()):
         match =="CatchExpr":
             # Nothing fancy yet; just recurse.
-            def body := mix(expr.getBody(), => safeFinalNames)
-            def catcher := mix(expr.getCatcher(), => safeFinalNames)
+            def body := remix(expr.getBody())
+            def catcher := remix(expr.getCatcher())
             def pattern := weakenPattern(expr.getPattern(), [catcher])
             a.CatchExpr(body, pattern, catcher, expr.getSpan())
 
@@ -126,11 +135,11 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                     switch (pattern.getGuard()):
                         match ==null:
                             # m`def _ := expr` -> m`expr`
-                            mix(rhs)
+                            remix(rhs)
                         match guard:
                             # m`def _ :Guard exit ej := expr` ->
                             # m`Guard.coerce(expr, ej)`
-                            a.MethodCallExpr(guard, "coerce", [mix(rhs), ej],
+                            a.MethodCallExpr(guard, "coerce", [remix(rhs), ej],
                                              [], span)
 
                 # The expander shouldn't ever give us list patterns with
@@ -149,7 +158,7 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                                             a.DefExpr(p, ej, a.LiteralExpr(v,
                                                                            span),
                                                      span)]
-                                mix(sequence(seq, span))
+                                remix(sequence(seq, span))
                             else:
                                 throw(`mix/1: $expr: List pattern ` +
                                       `assignment from literal list will ` +
@@ -167,8 +176,9 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                                 def l := rhs.getArgs()
                                 if (l.size() == patterns.size()):
                                     def seq := [for [p, v] in (zip(patterns, l))
-                                                a.DefExpr(p, ej, mix(v), span)]
-                                    mix(sequence(seq, span))
+                                                a.DefExpr(p, ej, remix(v),
+                                                          span)]
+                                    remix(sequence(seq, span))
                                 else:
                                     throw(`mix/1: $expr: List pattern ` +
                                           `assignment from __makeList will ` +
@@ -182,7 +192,7 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                 match =="FinalPattern":
                     if (ej != null && pattern.getGuard() == null):
                         # m`def name exit ej := expr` -> m`def name := expr`
-                        a.DefExpr(pattern, null, mix(rhs), span)
+                        a.DefExpr(pattern, null, remix(rhs), span)
                     else:
                         expr
 
@@ -194,7 +204,7 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
             def ejPatt := weakenPattern(expr.getEjectorPattern(), [body])
             # m`escape ej {expr}` -> m`expr`
             if (ejPatt.getNodeName() == "IgnorePattern"):
-                mix(body, => safeFinalNames)
+                remix(body)
             else:
                 switch (body.getNodeName()):
                     match =="MethodCallExpr":
@@ -220,10 +230,9 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                                     # remix. Otherwise, strip the escape
                                     # entirely.
                                     if (nodeUsesName(arg, name)):
-                                        mix(expr.withBody(arg),
-                                            => safeFinalNames)
+                                        remix(expr.withBody(arg))
                                     else:
-                                        mix(arg, => safeFinalNames)
+                                        remix(arg)
                                 else:
                                     throw(`mix/1: $expr: Known ejector ` + 
                                           `called with wrong arity ${args.size()}`)
@@ -256,12 +265,12 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                         if (slicePoint != -1 && slicePoint < exprs.size()):
                             def slice := [for n
                                           in (exprs.slice(0, slicePoint))
-                                          mix(n, => safeFinalNames)]
+                                          remix(n)]
                             def newSeq := sequence(slice, body.getSpan())
                             # Since we must have chosen a slicePoint, we've
                             # definitely opened up new possibilities and we
                             # should recurse.
-                            mix(expr.withBody(newSeq), => safeFinalNames)
+                            remix(expr.withBody(newSeq))
                         else:
                             expr
 
@@ -270,8 +279,8 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
 
         match =="FinallyExpr":
             # Nothing fancy yet; just recurse.
-            def body := mix(expr.getBody(), => safeFinalNames)
-            def unwinder := mix(expr.getUnwinder(), => safeFinalNames)
+            def body := remix(expr.getBody())
+            def unwinder := remix(expr.getUnwinder())
             a.FinallyExpr(body, unwinder, expr.getSpan())
 
         match =="IfExpr":
@@ -281,7 +290,7 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
             if (test.getNodeName() == "LiteralExpr"):
                 escape wrongType:
                     def b :Bool exit wrongType := test.getValue()
-                    return mix(b.pick(cons, alt))
+                    return remix(b.pick(cons))
                 catch _:
                     throw(`mix/1: $expr: if-test evaluates to non-Bool $test`)
             else:
@@ -304,12 +313,12 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                                     throw.eject(badLength, null)
                                 def [consArg] exit badLength := cons.getArgs()
                                 def [altArg] exit badLength := alt.getArgs()
-                                var newIf := a.IfExpr(test, mix(consArg),
-                                                      mix(altArg),
+                                var newIf := a.IfExpr(test, remix(consArg),
+                                                      remix(altArg),
                                                       expr.getSpan())
                                 return a.MethodCallExpr(consReceiver,
                                                         cons.getVerb(),
-                                                        [mix(newIf)],
+                                                        [remix(newIf)],
                                                         cons.getNamedArgs(),
                                                         expr.getSpan())
 
@@ -320,14 +329,14 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                 def consNoun := cons.getLvalue()
                 def altNoun := alt.getLvalue()
                 if (consNoun.getName() == altNoun.getName()):
-                    var newIf := a.IfExpr(test, mix(cons.getRvalue()),
-                                          mix(alt.getRvalue()),
+                    var newIf := a.IfExpr(test, remix(cons.getRvalue()),
+                                          remix(alt.getRvalue()),
                                           expr.getSpan())
-                    return a.AssignExpr(consNoun, mix(newIf), expr.getSpan())
+                    return a.AssignExpr(consNoun, remix(newIf), expr.getSpan())
             expr
 
         match =="Matcher":
-            def body := mix(expr.getBody(), => safeFinalNames)
+            def body := remix(expr.getBody())
             def pattern := weakenPattern(expr.getPattern(), [body])
             a.Matcher(pattern, body, expr.getSpan())
 
@@ -335,23 +344,24 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
             def safeNames := [for patt in (expr.getPatterns())
                               if (patt =~ via (finalPatternToName) name) name]
             # traceln(`method $expr safeNames $safeNames`)
-            def body := mix(expr.getBody(), "safeFinalNames" => safeNames)
+            def body := mix(expr.getBody(), => staticValues,
+                            "safeFinalNames" => safeNames)
             expr.withBody(body)
 
         match =="MethodCallExpr":
             def receiver := expr.getReceiver()
             def verb := expr.getVerb()
-            def args := [for arg in (expr.getArgs()) mix(arg)]
+            def args := [for arg in (expr.getArgs()) remix(arg)]
             def namedArgs := expr.getNamedArgs()
             a.MethodCallExpr(receiver, verb, args, namedArgs, expr.getSpan())
 
         match =="ObjectExpr":
-            def script := mix(expr.getScript())
+            def script := remix(expr.getScript())
             expr.withScript(script)
 
         match =="Script":
-            def methods := [for m in (expr.getMethods()) mix(m)]
-            def matchers := [for m in (expr.getMatchers()) mix(m)]
+            def methods := [for m in (expr.getMethods()) remix(m)]
+            def matchers := [for m in (expr.getMatchers()) remix(m)]
             a.Script(expr.getExtends(), methods, matchers, expr.getSpan())
 
         match =="SeqExpr":
@@ -370,7 +380,7 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                 # Now, optimize. This probably won't be too expensive and lets
                 # us take advantage of the substitutions that have already
                 # been performed.
-                item := mix(item, => safeFinalNames)
+                item := remix(item)
 
                 if (item.getNodeName() == "DefExpr"):
                     # traceln(`defexpr $item`)
@@ -400,7 +410,7 @@ def mix(expr, => safeFinalNames :List := []) as DeepFrozen:
                         continue
 
                 # Whatever survived to the end is clearly worthy.
-                newExprs with= (mix(item, => safeFinalNames))
+                newExprs with= (remix(item))
             # And rebuild.
             sequence(newExprs, expr.getSpan())
 
