@@ -1686,6 +1686,10 @@ def makeEscapeExpr(ejectorPattern :Pattern, body :Expr,
             return makeEscapeExpr(ejectorPattern, newBody, catchPattern,
                                   catchBody, span)
 
+        to withCatchBody(newBody :NullOk[Expr]):
+            return makeEscapeExpr(ejectorPattern, body, catchPattern,
+                                  newBody, span)
+
         to subPrintOn(out, priority):
             printExprSuiteOn(fn {
                 out.print("escape ")
