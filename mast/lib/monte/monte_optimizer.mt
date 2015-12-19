@@ -101,6 +101,9 @@ def specialize(name, value) as DeepFrozen:
 def nodeUsesName(node, name :Str) as DeepFrozen:
     return node.getStaticScope().namesUsed().contains(name)
 
+object NOUN as DeepFrozen:
+    "The tag for static values that are actually nouns."
+
 def mix(expr,
         => staticValues :Map := [].asMap(),
         => safeFinalNames :List := []) as DeepFrozen:
@@ -117,6 +120,33 @@ def mix(expr,
 
     # traceln(`Mixing ${expr.getNodeName()}: $expr`)
     return switch (expr.getNodeName()):
+        match =="AssignExpr":
+            def lhs := expr.getLvalue()
+            def rhs := remix(expr.getRvalue())
+            a.AssignExpr(lhs, rhs, expr.getSpan())
+
+        match =="BindingExpr":
+            def name := expr.getNoun().getName()
+            def span := expr.getSpan()
+            if (staticValues.contains(name)):
+                # We'll synthesize a binding.
+                switch (staticValues[name]):
+                    match [==NOUN, redirect]:
+                        # This is not quite kosher, but close enough. In the
+                        # case of this kind of redirected name, it was a
+                        # boring unguarded FinalPatt; I think that this is
+                        # okay? ~ C.
+                        a.BindingExpr(a.NounExpr(redirect, span), span)
+                    match df :DeepFrozen:
+                        # Whoo! It's polite to give a DF binding to those
+                        # literals that qualify.
+                        a.LiteralExpr(&&df, span)
+                    match literal:
+                        # And these literals are good too.
+                        a.LiteralExpr(&&literal, span)
+            else:
+                expr
+
         match =="CatchExpr":
             # Nothing fancy yet; just recurse.
             def body := remix(expr.getBody())
@@ -283,6 +313,10 @@ def mix(expr,
             def unwinder := remix(expr.getUnwinder())
             a.FinallyExpr(body, unwinder, expr.getSpan())
 
+        match =="HideExpr":
+            # Just recursion.
+            a.HideExpr(remix(expr.getBody()), expr.getSpan())
+
         match =="IfExpr":
             def test := expr.getTest()
             def cons := exprOrNull(expr.getThen())
@@ -354,6 +388,22 @@ def mix(expr,
             def args := [for arg in (expr.getArgs()) remix(arg)]
             def namedArgs := expr.getNamedArgs()
             a.MethodCallExpr(receiver, verb, args, namedArgs, expr.getSpan())
+
+        match =="NounExpr":
+            def name := expr.getName()
+            return if (staticValues.contains(name)) {
+                switch (staticValues[name]) {
+                    match [==NOUN, n] {
+                        # Triangular substitution.
+                        # traceln(`Triangle for $name excludes $staticValues`)
+                        a.NounExpr(n, expr.getSpan())
+                    } match l {
+                        # It's alive. It's alive! Mwahahahaha~
+                        # traceln(`Propagated [$name => $l] from $staticValues`)
+                        a.LiteralExpr(l, expr.getSpan())
+                    }
+                }
+            } else {expr}
 
         match =="ObjectExpr":
             def script := remix(expr.getScript())
