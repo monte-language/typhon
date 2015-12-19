@@ -38,10 +38,12 @@ def makeMASTContext() as DeepFrozen:
             return b``.join(streams)
 
         to appendExpr(bs :Bytes) :Int:
-            def rv := exprs.size()
-            exprs.push(bs)
-            streams.push(bs)
-            return rv
+            var index := exprs.indexOf(bs)
+            if (index == -1):
+                index := exprs.size()
+                exprs.push(bs)
+                streams.push(bs)
+            return index
 
         to packExpr(expr) :Bytes:
             return packInt(MASTContext.addExpr(expr))
@@ -56,10 +58,12 @@ def makeMASTContext() as DeepFrozen:
             return packInt(namedArgs.size()) + b``.join(namedArgs)
 
         to appendPatt(bs :Bytes) :Int:
-            def rv := patts.size()
-            patts.push(bs)
-            streams.push(bs)
-            return rv
+            var index := patts.indexOf(bs)
+            if (index == -1):
+                index := patts.size()
+                patts.push(bs)
+                streams.push(bs)
+            return index
 
         to packPatt(patt) :Bytes:
             return packInt(MASTContext.addPatt(patt))
