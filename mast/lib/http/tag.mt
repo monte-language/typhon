@@ -9,6 +9,15 @@ def entities :Map[Str, Str] := [
     "\"" => "&quot;",
 ]
 
+def flatten(pieces) as DeepFrozen:
+    var rv := []
+    for piece in pieces:
+        if (piece =~ l :List):
+            rv += l
+        else:
+            rv with= (piece)
+    return rv
+
 def escapeEntities(specimen, ej) :Str as DeepFrozen:
     def unescaped :Str exit ej := specimen
     var escaped := unescaped
@@ -25,7 +34,8 @@ def escapeFragment(fragment) as DeepFrozen:
 
 object tag as DeepFrozen:
     match [tagType, pieces, _]:
-        def fragments := [for piece in (pieces) escapeFragment(piece)]
+        def allPieces := flatten(pieces)
+        def fragments := [for piece in (allPieces) escapeFragment(piece)]
         object HTMLTag:
             to _printOn(out):
                 if (fragments.size() == 0):
