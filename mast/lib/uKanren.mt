@@ -1,10 +1,10 @@
 imports
-exports (makeState, unifyGoal, callFresh, conj, disj)
+exports (makeState, runGoal, iterGoal,
+         unifyGoal, callFresh, delay, anyOf, allOf)
 "μKanren."
 
 object VARS as DeepFrozen:
     "Variables are tagged with this object."
-
 
 def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
     return object state:
@@ -25,6 +25,9 @@ def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
         to reifiedMap() :Map[Int, Any]:
             return [for k => v in (s) k => state.walk(v)]
 
+        to reifiedList() :List:
+            return [for k => v in (s) state.walk(v)]
+
         to fresh():
             return [makeState(s, c + 1), [VARS, c]]
 
@@ -44,6 +47,31 @@ def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
             traceln(`Unify: $u ≡ $v in $s: $rv`)
             return rv
 
+def runGoal(g) as DeepFrozen:
+    def emptyState := makeState([].asMap(), 0)
+    return g(emptyState)
+
+def iterGoal(g) as DeepFrozen:
+    return object kanrenGoalIterable:
+        to _makeIterator():
+            var i :Int := 0
+            var results := runGoal(g)
+
+            def nextState(ej):
+                while (true):
+                    switch (results) {
+                        match ==null {ej(`No more states`)}
+                        match [x] {results := null; return x}
+                        match [x, f] {results := f; return x}
+                        match f {results := f()}
+                    }
+
+            return object kanrenGoalIterator:
+                to next(ej):
+                    def state := nextState(ej)
+                    def rv := [i, state.reifiedList()]
+                    i += 1
+                    return rv
 
 def unifyGoal(u, v) as DeepFrozen:
     return def unifyingGoal(state) :List:
@@ -76,3 +104,26 @@ def disj(g1, g2) as DeepFrozen:
 def conj(g1, g2) as DeepFrozen:
     return def andGoal(state):
         return mbind(g1(state), g2)
+
+def delay(g) as DeepFrozen:
+    return def delayingGoal(state):
+        return def delayedGoal():
+            return g(state)
+
+object anyOf as DeepFrozen:
+    match [=="run", [goal], _]:
+        goal
+    match [=="run", goals, _]:
+        var g := goals.last()
+        for goal in goals.slice(0, goals.size() - 1).reverse():
+            g := disj(goal, g)
+        g
+
+object allOf as DeepFrozen:
+    match [=="run", [goal], _]:
+        goal
+    match [=="run", goals, _]:
+        var g := goals.last()
+        for goal in goals.slice(0, goals.size() - 1).reverse():
+            g := conj(goal, g)
+        g
