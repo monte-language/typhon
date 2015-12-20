@@ -402,17 +402,18 @@ def openGetContentsCB(fs):
         fd = intmask(fs.c_result)
         vat, r = ruv.unstashFS(fs)
         assert isinstance(r, LocalResolver)
-        if fd < 0:
-            msg = ruv.formatError(fd).decode("utf-8")
-            r.smash(StrObject(u"Couldn't open file fount: %s" % msg))
-            # Done with fs.
-            ruv.fsDiscard(fs)
-        else:
-            # Strategy: Read and use the callback to queue additional reads
-            # until done. This call is known to its caller to be expensive, so
-            # there's not much point in trying to be clever about things yet.
-            gc = GetContents(vat, fs, fd, r)
-            gc.queueRead()
+        with scopedVat(vat):
+            if fd < 0:
+                msg = ruv.formatError(fd).decode("utf-8")
+                r.smash(StrObject(u"Couldn't open file fount: %s" % msg))
+                # Done with fs.
+                ruv.fsDiscard(fs)
+            else:
+                # Strategy: Read and use the callback to queue additional reads
+                # until done. This call is known to its caller to be expensive, so
+                # there's not much point in trying to be clever about things yet.
+                gc = GetContents(vat, fs, fd, r)
+                gc.queueRead()
     except:
         print "Exception in openGetContentsCB"
 
@@ -576,6 +577,7 @@ class FileResource(Object):
         fs = ruv.alloc_fs()
 
         path = self.asBytes()
+        log.log(["fs"], u"makeFileResource: Opening file '%s'" % path.decode("utf-8"))
         ruv.stashFS(fs, (vat, r))
         ruv.fsOpen(uv_loop, fs, path, flags, mode, callback)
         return p
