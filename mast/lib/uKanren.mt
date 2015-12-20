@@ -1,5 +1,5 @@
 imports
-exports (makeState, runGoal, iterGoal,
+exports (makeState, runGoal, iterGoal, satisfiable,
          unifyGoal, callFresh, delay, anyOf, allOf)
 "μKanren."
 
@@ -60,8 +60,8 @@ def iterGoal(g) as DeepFrozen:
             def nextState(ej):
                 while (true):
                     switch (results) {
-                        match ==null {ej(`No more states`)}
-                        match [x] {results := null; return x}
+                        match [] {ej(`No more states`)}
+                        match [x] {results := []; return x}
                         match [x, f] {results := f; return x}
                         match f {results := f()}
                     }
@@ -72,6 +72,18 @@ def iterGoal(g) as DeepFrozen:
                     def rv := [i, state.reifiedList()]
                     i += 1
                     return rv
+
+def satisfiable(g) :Bool as DeepFrozen:
+    "Whether a goal, as stated, can possibly be satisfied."
+
+    var results := runGoal(g)
+    while (true):
+        switch (results) {
+            match [] {return false}
+            match [x] {return true}
+            match [x, f] {return true}
+            match f {results := f()}
+        }
 
 def unifyGoal(u, v) as DeepFrozen:
     return def unifyingGoal(state) :List:

@@ -12,8 +12,32 @@ def [=> makeUTF8EncodePump :DeepFrozen,
 def [=> parseModule :DeepFrozen] | _ := import.script("lib/monte/monte_parser")
 def [=> makeMonteLexer :DeepFrozen] | _ := import.script("lib/monte/monte_lexer")
 
+def [=> iterGoal :DeepFrozen,
+     => satisfiable :DeepFrozen,
+     => unifyGoal :DeepFrozen,
+     => callFresh :DeepFrozen,
+     => allOf :DeepFrozen,
+     => anyOf :DeepFrozen,
+     => delay :DeepFrozen,
+] | _ := import("lib/uKanren")
+
 def Expr :DeepFrozen := astBuilder.getExprGuard()
 def Patt :DeepFrozen := astBuilder.getPatternGuard()
+
+object MysteryBox as DeepFrozen:
+    "An unspecified type."
+
+def consistent(left, right) :Bool as DeepFrozen:
+    "Whether the two types are consistent."
+
+    def g := anyOf(
+        # Reflexivity.
+        unifyGoal(left, right),
+        # All types are consistent with the mystery box.
+        unifyGoal(MysteryBox, left),
+        unifyGoal(MysteryBox, right),
+    )
+    return satisfiable(g)
 
 def assigning(rhs, lhs) :Bool as DeepFrozen:
     "Consider whether the `rhs` can be assigned to the `lhs`."
