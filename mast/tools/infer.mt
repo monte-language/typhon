@@ -1,13 +1,12 @@
-imports => unittest := null
+imports => unittest := fn _ {null}
 exports (main, makeInference)
 "Type inference for Monte."
 
 def bench(_, _) as DeepFrozen:
     null
 
-def [=> makePureDrain :DeepFrozen,
-     => makeUTF8EncodePump :DeepFrozen,
-     => makeUTF8DecodePump :DeepFrozen,
+def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8", [=> &&unittest])
+def [=> makeUTF8EncodePump :DeepFrozen,
      => makePumpTube :DeepFrozen,
 ] | _ := import("lib/tubes", [=> unittest])
 def [=> parseModule :DeepFrozen] | _ := import.script("lib/monte/monte_parser")
@@ -205,27 +204,21 @@ def testInferLiteral(assert):
     assert.equal(makeInference().inferType(m`42`, [].asMap()),
                  [Int, [].asMap()])
 
-if (unittest != null):
-    unittest([
-        testInferLiteral,
-    ])
+unittest([
+    testInferLiteral,
+])
 
-def spongeFile(resource) as DeepFrozen:
-    def fileFount := resource.openFount()
-    def utf8Fount := fileFount<-flowTo(makePumpTube(makeUTF8DecodePump()))
-    def pureDrain := makePureDrain()
-    utf8Fount<-flowTo(pureDrain)
-    return pureDrain.promisedItems()
-
-def main(=> currentProcess, => makeFileResource, => makeStdOut) as DeepFrozen:
+def main(=> currentProcess, => makeFileResource, => makeStdOut,
+         => unsealException) as DeepFrozen:
     def path := currentProcess.getArguments().last()
 
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout.flowTo(makeStdOut())
-    def p := spongeFile(makeFileResource(path))
+    def p := makeFileResource(path).getContents()
     return when (p) ->
+        def via (UTF8.decode) s := p
         def tree := escape ej {
-            def t := parseModule(makeMonteLexer("".join(p), path), astBuilder,
+            def t := parseModule(makeMonteLexer(s, path), astBuilder,
                                  ej)
             if (t.getNodeName() == "Module") {t.getBody()} else {t}
         } catch parseErrorMsg {
@@ -239,3 +232,6 @@ def main(=> currentProcess, => makeFileResource, => makeStdOut) as DeepFrozen:
         for [problem, span] in inference.getBugs():
             stdout.receive(`Error: $span: $problem$\n`)
         0
+    catch via (unsealException) [problem, _]:
+        stdout.receive(`Couldn't get Monte source file: $problem$\n`)
+        1
