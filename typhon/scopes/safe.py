@@ -430,13 +430,12 @@ NaN = DoubleObject(float("nan"))
 def safeScope():
     return finalize({
         u"null": NullObject,
-        u"any": anyGuard,
-        u"Any": anyGuard,
         u"Infinity": Infinity,
         u"NaN": NaN,
         u"false": wrapBool(False),
         u"true": wrapBool(True),
 
+        u"Any": anyGuard,
         u"Binding": BindingGuard(),
         u"DeepFrozen": deepFrozenGuard,
         u"Near": nearGuard(),
@@ -446,16 +445,6 @@ def safeScope():
 
         u"M": MObject(),
         u"Ref": RefOps(),
-        u"__auditedBy": auditedBy(),
-        u"__equalizer": Equalizer(),
-        u"__loop": loop(),
-        u"__makeDouble": MakeDouble(),
-        u"__makeInt": MakeInt(),
-        u"__makeList": theMakeList,
-        u"__makeMap": theMakeMap,
-        u"__makeSourceSpan": makeSourceSpan,
-        u"__makeString": MakeString(),
-        u"__slotToBinding": theSlotBinder,
         u"_auditedBy": auditedBy(),
         u"_equalizer": Equalizer(),
         u"_loop": loop(),
