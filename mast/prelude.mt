@@ -161,7 +161,7 @@ object List as DeepFrozenStamp:
     to extractGuard(specimen, ej):
         if (specimen == List):
             return Any
-        else if (__auditedBy(_ListGuardStamp, specimen)):
+        else if (_auditedBy(_ListGuardStamp, specimen)):
             return specimen.getGuard()
         else:
             throw.eject(ej, "Not a List guard")
@@ -220,7 +220,7 @@ object Set as DeepFrozenStamp:
     to extractGuard(specimen, ej):
         if (specimen == Set):
             return Any
-        else if (__auditedBy(_SetGuardStamp, specimen)):
+        else if (_auditedBy(_SetGuardStamp, specimen)):
             return specimen.getGuard()
         else:
             throw.eject(ej, "Not a Set guard")
@@ -281,7 +281,7 @@ object Map as DeepFrozenStamp:
     to extractGuards(specimen, ej):
         if (specimen == Map):
             return [Any, Any]
-        else if (__auditedBy(_MapGuardStamp, specimen)):
+        else if (_auditedBy(_MapGuardStamp, specimen)):
             return specimen.getGuards()
         else:
             throw.eject(ej, "Not a Map guard")
@@ -341,7 +341,7 @@ object NullOk as DeepFrozenStamp:
     to extractGuard(specimen, ej):
         if (specimen == NullOk):
             return Any
-        else if (__auditedBy(_NullOkStamp, specimen)):
+        else if (_auditedBy(_NullOkStamp, specimen)):
             return specimen.getGuard()
         else:
             throw.eject(ej, "Not a NullOk guard")
@@ -407,7 +407,7 @@ object Pair as DeepFrozenStamp:
     to extractGuards(specimen, ej):
         if (specimen == Pair):
             return [Any, Any]
-        else if (__auditedBy(_PairGuardStamp, specimen)):
+        else if (_auditedBy(_PairGuardStamp, specimen)):
             return specimen.getGuards()
         else:
             throw.eject(ej, "Not a Pair guard")
@@ -452,7 +452,7 @@ unittest([
 #                 return value
 
 #     to extractValue(specimen, ej):
-#         if (__auditedBy(_SameGuardStamp, specimen)):
+#         if (_auditedBy(_SameGuardStamp, specimen)):
 #             return specimen.getValue()
 #         else:
 #             throw.eject(ej, "Not a Same guard")
@@ -641,7 +641,7 @@ var preludeScope := scopeAsDF([
     => Int, => List, => Map, => NullOk, => Near, => Pair, => Same, => Set,
     => Selfless, => Str, => SubrangeGuard, => Void,
     => null, => Infinity, => NaN, => false, => true,
-    => __auditedBy, => __equalizer, => _loop,
+    => _auditedBy, => __equalizer, => _loop,
     => _makeList, => __makeMap, => __makeInt, => __makeDouble,
     => __makeSourceSpan, => __makeString, => __slotToBinding,
     => _makeBytes, => _makeFinalSlot, => _makeVarSlot,

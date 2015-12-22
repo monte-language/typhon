@@ -21,9 +21,9 @@ object SubrangeGuard as DeepFrozenStamp:
                     throw(audition.getFQN() + " does not have a determinable result guard, but <& " + M.toString(resultGuardExpr) + "> :" + M.toQuote(resultGuardSlotGuard))
 
             to coerce(specimen, ej):
-                if (__auditedBy(SpecializedSubrangeGuard, specimen)):
+                if (_auditedBy(SpecializedSubrangeGuard, specimen)):
                     return specimen
-                else if (__auditedBy(SpecializedSubrangeGuard,
+                else if (_auditedBy(SpecializedSubrangeGuard,
                                     def c := specimen._conformTo(SpecializedSubrangeGuard))):
                     return c
                 else:
@@ -48,14 +48,14 @@ object SubrangeGuard as DeepFrozenStamp:
 #         # Oops, been here already.
 #         return
 #     def sofarther := sofar.with(key)
-#     if (__auditedBy(DeepFrozenStamp, specimen)):
+#     if (_auditedBy(DeepFrozenStamp, specimen)):
 #         return
 #     else if (Ref.isBroken(specimen)):
 #         # Broken refs are DF if their problem is DF.
 #         checkDeepFrozen(Ref.optProblem(specimen), sofarther, ej, root)
 #         return
-#     else if (__auditedBy(Selfless, specimen) &&
-#              __auditedBy(TransparentStamp, specimen)):
+#     else if (_auditedBy(Selfless, specimen) &&
+#              _auditedBy(TransparentStamp, specimen)):
 #         def [maker, verb, args :List, namedArgs :Map] := specimen._uncall()
 #         checkDeepFrozen(maker, sofarther, ej, root)
 #         checkDeepFrozen(verb, sofarther, ej, root)

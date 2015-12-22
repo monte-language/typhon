@@ -113,11 +113,11 @@ object _makeProtocolDesc as DeepFrozen:
             to coerce(specimen, ej):
                 "Admit objects which implement this object's interface."
 
-                if (__auditedBy(protocolDesc, specimen)):
+                if (_auditedBy(protocolDesc, specimen)):
                     return specimen
 
                 def conformed := specimen._conformTo(protocolDesc)
-                if (__auditedBy(protocolDesc, conformed)):
+                if (_auditedBy(protocolDesc, conformed)):
                     return conformed
 
                 throw.eject(ej, "Specimen did not implement " + name)

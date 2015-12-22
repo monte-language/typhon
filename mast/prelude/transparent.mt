@@ -8,7 +8,7 @@ object Transparent as DeepFrozenStamp:
     state. Objects that are both Selfless and Transparent are compared for sameness
     by comparing their uncalls."
     to coerce(specimen, ej):
-        if (__auditedBy(TransparentStamp, specimen)):
+        if (_auditedBy(TransparentStamp, specimen)):
             return specimen
         throw.eject(ej, M.toQuote(specimen) + " is not Transparent")
 

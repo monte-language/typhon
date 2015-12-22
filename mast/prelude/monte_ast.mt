@@ -194,9 +194,9 @@ object astStamp as DeepFrozenStamp:
 
 object Ast as DeepFrozenStamp:
     to coerce(specimen, ej):
-        if (!__auditedBy(astStamp, specimen) && !__auditedBy(KernelAstStamp, specimen)):
+        if (!_auditedBy(astStamp, specimen) && !_auditedBy(KernelAstStamp, specimen)):
             def conformed := specimen._conformTo(Ast)
-            if (!__auditedBy(astStamp, conformed) && !__auditedBy(KernelAstStamp, conformed)):
+            if (!_auditedBy(astStamp, conformed) && !_auditedBy(KernelAstStamp, conformed)):
                 throw.eject(ej, "not an ast node")
             else:
                 return conformed
