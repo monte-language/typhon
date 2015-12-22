@@ -444,7 +444,7 @@ unittest([
 #                 return [Same, "get", [value], [].asMap()]
 
 #             to coerce(specimen, ej):
-#                 if (!__equalizer.sameYet(value, specimen)):
+#                 if (!_equalizer.sameYet(value, specimen)):
 #                     throw.eject(ej, [specimen, "is not", value])
 #                 return specimen
 
@@ -641,7 +641,7 @@ var preludeScope := scopeAsDF([
     => Int, => List, => Map, => NullOk, => Near, => Pair, => Same, => Set,
     => Selfless, => Str, => SubrangeGuard, => Void,
     => null, => Infinity, => NaN, => false, => true,
-    => _auditedBy, => __equalizer, => _loop,
+    => _auditedBy, => _equalizer, => _loop,
     => _makeList, => __makeMap, => __makeInt, => __makeDouble,
     => __makeSourceSpan, => __makeString, => __slotToBinding,
     => _makeBytes, => _makeFinalSlot, => _makeVarSlot,

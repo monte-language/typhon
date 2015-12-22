@@ -593,10 +593,10 @@ def expand(node, builder, fail) as DeepFrozen:
         else if (nodeName == "SameExpr"):
             def [left, right, same] := args
             if (same):
-                return builder.MethodCallExpr(builder.NounExpr("__equalizer", span), "sameEver",
+                return builder.MethodCallExpr(builder.NounExpr("_equalizer", span), "sameEver",
                     [left, right], [], span)
             else:
-                return builder.MethodCallExpr(builder.MethodCallExpr(builder.NounExpr("__equalizer", span), "sameEver", [left, right], [], span), "not", [], [], span)
+                return builder.MethodCallExpr(builder.MethodCallExpr(builder.NounExpr("_equalizer", span), "sameEver", [left, right], [], span), "not", [], [], span)
         else if (nodeName == "AndExpr"):
             def [left, right] := args
             return expandLogical(

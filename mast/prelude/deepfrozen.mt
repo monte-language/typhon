@@ -43,7 +43,7 @@ object SubrangeGuard as DeepFrozenStamp:
 
 
 # def checkDeepFrozen(specimen, sofar, ej, root) as DeepFrozenStamp:
-#     def key := __equalizer.makeTraversalKey(specimen)
+#     def key := _equalizer.makeTraversalKey(specimen)
 #     if (sofar.contains(key)):
 #         # Oops, been here already.
 #         return
@@ -65,7 +65,7 @@ object SubrangeGuard as DeepFrozenStamp:
 #             checkDeepFrozen(argkey, sofarther, ej, root)
 #             checkDeepFrozen(argval, sofarther, ej, root)
 #     else:
-#         if (__equalizer.sameYet(specimen, root)):
+#         if (_equalizer.sameYet(specimen, root)):
 #             throw.eject(ej, M.toQuote(root) + " is not DeepFrozen")
 #         else:
 #             throw.eject(ej, M.toQuote(root) + " is not DeepFrozen because " +

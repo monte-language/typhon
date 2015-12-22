@@ -114,7 +114,7 @@ def makeAsserter() as DeepFrozen:
                         successes += 1
 
                 to equal(l, r):
-                    def isEqual := __equalizer.sameYet(l, r)
+                    def isEqual := _equalizer.sameYet(l, r)
                     if (isEqual == null):
                         assert.fail(`Equality not settled: $l ≟ $r`)
                     if (!isEqual):
@@ -122,7 +122,7 @@ def makeAsserter() as DeepFrozen:
                     successes += 1
 
                 to notEqual(l, r):
-                    def isEqual := __equalizer.sameYet(l, r)
+                    def isEqual := _equalizer.sameYet(l, r)
                     if (isEqual == null):
                         assert.fail(`Equality not settled: $l ≟ $r`)
                     if (isEqual):

@@ -144,8 +144,8 @@ def specimens := [
     ["x >= y", "_comparer.geq(x, y)"],
     ["x <=> y", "_comparer.asBigAs(x, y)"],
 
-    ["x == y", "__equalizer.sameEver(x, y)"],
-    ["x != y", "__equalizer.sameEver(x, y).not()"],
+    ["x == y", "_equalizer.sameEver(x, y)"],
+    ["x != y", "_equalizer.sameEver(x, y).not()"],
 
     ["x..y", "_makeOrderedSpace.op__thru(x, y)"],
     ["x..!y", "_makeOrderedSpace.op__till(x, y)"],
