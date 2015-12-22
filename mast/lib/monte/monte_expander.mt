@@ -151,7 +151,7 @@ def expand(node, builder, fail) as DeepFrozen:
 
     def emitMap(items, span):
         return builder.MethodCallExpr(
-            builder.NounExpr("__makeMap", span),
+            builder.NounExpr("_makeMap", span),
             "fromPairs", [emitList(items, span)], [], span)
 
     def makeSlotPatt(n, span):
@@ -483,7 +483,7 @@ def expand(node, builder, fail) as DeepFrozen:
             for a in assocs:
                 lists with= (emitList(a, span))
             return builder.MethodCallExpr(
-                builder.NounExpr("__makeMap", span), "fromPairs",
+                builder.NounExpr("_makeMap", span), "fromPairs",
                 [emitList(lists, span)], [], span)
         else if (nodeName == "MapExprAssoc"):
             return args

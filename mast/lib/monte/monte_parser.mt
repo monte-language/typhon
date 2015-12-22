@@ -543,7 +543,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             advance(ej)[1]
         } else {
             def t := acceptTag("IDENTIFIER", ej)
-            __makeString.fromString(t[1], t[2])
+            _makeString.fromString(t[1], t[2])
         }
         acceptTag("(", ej)
         def patts := acceptList(positionalParam)
@@ -660,7 +660,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             null
         } else if (peekTag() == "IDENTIFIER") {
             def t := advance(ej)
-            __makeString.fromString(t[1], t[2])
+            _makeString.fromString(t[1], t[2])
         } else {
             acceptTag("::", ej)
             acceptTag(".String.", ej)
@@ -706,7 +706,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             advance(ej)
         } else {
             def t := acceptTag("IDENTIFIER", ej)
-            __makeString.fromString(t[1], t[2])
+            _makeString.fromString(t[1], t[2])
         }
         def [doco, params, resultguard] := messageDescInner(indent, ej, ej)
         return builder.MessageDesc(doco, verb, params, resultguard, spanFrom(spanStart))
@@ -1118,7 +1118,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 advance(ej)[1]
             } else {
                 def t := acceptTag("IDENTIFIER", ej)
-                __makeString.fromString(t[1], t[2])
+                _makeString.fromString(t[1], t[2])
             }
             if (peekTag() == "("):
                 advance(ej)

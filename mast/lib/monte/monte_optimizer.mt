@@ -486,7 +486,7 @@ def allSatisfy(pred, specimens) :Bool as DeepFrozen:
 # * Must have a transitive closure (under calls) obeying the above rule.
 def thawable :Map[Str, DeepFrozen] := [
     # => _makeList,
-    # => __makeMap,
+    # => _makeMap,
     => _booleanFlow,
     => false,
     => null,

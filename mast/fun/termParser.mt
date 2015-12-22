@@ -380,21 +380,21 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
         def tok := endToken(fail)
         def s := tok.replace("_", "")
         if (floating):
-            return builder.leafInternal(makeTag(null, ".float64.", Any), __makeDouble(s), tok.getSpan())
+            return builder.leafInternal(makeTag(null, ".float64.", Any), _makeDouble(s), tok.getSpan())
         else:
             if (radix == 16):
-                return builder.leafInternal(makeTag(null, ".int.", Any), __makeInt(s.slice(2), 16), tok.getSpan())
+                return builder.leafInternal(makeTag(null, ".int.", Any), _makeInt(s.slice(2), 16), tok.getSpan())
             else:
-                return builder.leafInternal(makeTag(null, ".int.", Any), __makeInt(s), tok.getSpan())
+                return builder.leafInternal(makeTag(null, ".int.", Any), _makeInt(s), tok.getSpan())
 
     def charConstant(fail):
         if (currentChar == '\\'):
             def nex := advance()
             if (nex == 'u'):
-                def hexstr := __makeString.fromChars([advance(), advance(), advance(), advance()])
+                def hexstr := _makeString.fromChars([advance(), advance(), advance(), advance()])
                 def v
                 try:
-                    bind v := __makeInt(hexstr, 16)
+                    bind v := _makeInt(hexstr, 16)
                 catch _:
                     throw.eject(fail, "\\u escape must be four hex digits")
                 advance()
@@ -402,7 +402,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
             else if (nex == 'x'):
                 def v
                 try:
-                    bind v := __makeInt(__makeString.fromChars([advance(), advance()]), 16)
+                    bind v := _makeInt(_makeString.fromChars([advance(), advance()]), 16)
                 catch _:
                     throw.eject(fail, "\\x escape must be two hex digits")
                 advance()
@@ -446,7 +446,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
             if (cc != null):
                buf.push(cc)
         advance()
-        return __makeString.fromChars(buf.snapshot())
+        return _makeString.fromChars(buf.snapshot())
 
     def charLiteral(fail):
         advance()

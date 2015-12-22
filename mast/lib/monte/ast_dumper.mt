@@ -73,7 +73,7 @@ def dump(item, write) as DeepFrozen:
         match _ :Char:
             # Char holds a Str internally.
             write(asciiShift(b`$\x21$\x03`))
-            def bs := UTF8.encode(__makeString.fromChars([item]), throw)
+            def bs := UTF8.encode(_makeString.fromChars([item]), throw)
             dumpVarint(bs.size(), write)
             write(bs)
         match _ :List:

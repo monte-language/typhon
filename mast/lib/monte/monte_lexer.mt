@@ -84,7 +84,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
     def spanAtPoint():
         #XXX use twine
-        return __makeSourceSpan(inputName, true, lineNumber, colNumber, lineNumber, colNumber + 1)
+        return _makeSourceSpan(inputName, true, lineNumber, colNumber, lineNumber, colNumber + 1)
 
     def advance():
         position += 1
@@ -159,7 +159,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     def endToken():
         def pos := position
         def tok := input.slice(startPos, pos)
-        def span := __makeSourceSpan(inputName, tokenStartLine == lineNumber,
+        def span := _makeSourceSpan(inputName, tokenStartLine == lineNumber,
                     tokenStartLine, tokenStartCol, lineNumber, colNumber)
         startPos := -1
         return [tok, span]
@@ -208,32 +208,32 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         def [tok, span] := endToken()
         def s := tok.replace("_", "")
         if (floating):
-            return composite(".float64.", __makeDouble(s), span)
+            return composite(".float64.", _makeDouble(s), span)
         else:
             if (radix == 16):
-                return composite(".int.", __makeInt(s.slice(2), 16), span)
+                return composite(".int.", _makeInt(s.slice(2), 16), span)
             else:
-                return composite(".int.", __makeInt(s), span)
+                return composite(".int.", _makeInt(s), span)
 
 
     def charConstant(fail):
         if (currentChar == '\\'):
             def nex := advance()
             if (nex == 'U'):
-                def hexstr := __makeString.fromChars([
+                def hexstr := _makeString.fromChars([
                     advance(), advance(), advance(), advance(),
                     advance(), advance(), advance(), advance()])
                 def v := try {
-                    __makeInt(hexstr, 16)
+                    _makeInt(hexstr, 16)
                 } catch _ {
                     throw.eject(fail, ["\\U escape must be eight hex digits, not " + hexstr, spanAtPoint()])
                 }
                 advance()
                 return '\x00' + v
             if (nex == 'u'):
-                def hexstr := __makeString.fromChars([advance(), advance(), advance(), advance()])
+                def hexstr := _makeString.fromChars([advance(), advance(), advance(), advance()])
                 def v := try {
-                    __makeInt(hexstr, 16)
+                    _makeInt(hexstr, 16)
                 } catch _ {
                     throw.eject(fail, ["\\u escape must be four hex digits", spanAtPoint()])
                 }
@@ -241,7 +241,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 return '\x00' + v
             else if (nex == 'x'):
                 def v := try {
-                    __makeInt(__makeString.fromChars([advance(), advance()]), 16)
+                    _makeInt(_makeString.fromChars([advance(), advance()]), 16)
                 } catch _ {
                     throw.eject(fail, ["\\x escape must be two hex digits", spanAtPoint()])
                 }
@@ -286,7 +286,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             if (cc != null):
                buf.push(cc)
         advance()
-        return __makeString.fromChars(buf.snapshot())
+        return _makeString.fromChars(buf.snapshot())
 
     def charLiteral(fail):
         advance()
@@ -333,7 +333,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 # close backtick
                 advance()
                 popBrace('`', fail)
-                return composite("QUASI_CLOSE", __makeString.fromChars(buf.snapshot()),
+                return composite("QUASI_CLOSE", _makeString.fromChars(buf.snapshot()),
                                  endToken()[1])
             else if (currentChar == '$' && peekChar() == '\\'):
                 # it's a character constant like $\u2603 or a line continuation like $\
@@ -344,7 +344,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             else:
                 def [opener, span] := endToken()
                 pushBrace(opener, spanAtPoint(), "hole", nestLevel * 4, true)
-                return composite("QUASI_OPEN", __makeString.fromChars(buf.snapshot()),
+                return composite("QUASI_OPEN", _makeString.fromChars(buf.snapshot()),
                                  span)
 
 
@@ -372,14 +372,14 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         while (!['\n', EOF].contains(currentChar)):
             advance()
         def [comment, _] := endToken()
-        return composite("#", comment.slice(1), __makeSourceSpan(inputName, true, lineNumber, startCol, lineNumber, colNumber))
+        return composite("#", comment.slice(1), _makeSourceSpan(inputName, true, lineNumber, startCol, lineNumber, colNumber))
 
     def consumeWhitespaceAndComments():
         var startLine := lineNumber
         var startCol := colNumber
         var spaces := skipSpaces()
         while (currentChar == '\n'):
-            queuedTokens.insert(0, composite("EOL", null, __makeSourceSpan(inputName, false, startLine, startCol, lineNumber, colNumber)))
+            queuedTokens.insert(0, composite("EOL", null, _makeSourceSpan(inputName, false, startLine, startCol, lineNumber, colNumber)))
             advance()
             spaces := skipSpaces()
             if (currentChar == '#'):
@@ -450,7 +450,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
         if ([';', ',', '~', '?'].contains(cur)):
             advance()
-            return leaf(__makeString.fromChars([cur]))
+            return leaf(_makeString.fromChars([cur]))
 
         if (cur == '('):
             return openBracket(")", null, fail)

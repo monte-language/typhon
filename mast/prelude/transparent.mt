@@ -172,7 +172,7 @@ object Transparent as DeepFrozenStamp:
                                 ej(`Serializer argument names must be literals or nouns, not $kn`)
                         def naNames := if (namedArgs != null &&
                                 namedArgs.getNodeName() == "MethodCallExpr" &&
-                                namedArgs.getReceiver() =~ m`__makeMap` &&
+                                namedArgs.getReceiver() =~ m`_makeMap` &&
                                 namedArgs.getVerb() == "fromPairs") {
                                     def [pairListExpr] := namedArgs.getArgs()
                                     if (pairListExpr.getNodeName() != "MethodCallExpr" ||

@@ -160,7 +160,7 @@ object _makeProtocolDesc as DeepFrozen:
         return [protocolDesc, protocolDescStamp]
 
 [=> _makeMessageDesc, => _makeParamDesc, => _makeProtocolDesc,
- "__makeMessageDesc" => _makeMessageDesc,
- "__makeParamDesc" => _makeParamDesc,
- "__makeProtocolDesc" => _makeProtocolDesc,
+ "_makeMessageDesc" => _makeMessageDesc,
+ "_makeParamDesc" => _makeParamDesc,
+ "_makeProtocolDesc" => _makeProtocolDesc,
 ]

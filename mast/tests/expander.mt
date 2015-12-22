@@ -154,7 +154,7 @@ def specimens := [
      "object foo {method baz(a, \"b\" => b, \"&c\" =>  via (__slotToBinding) &&c := (0), \"&&d\" => &&d) {1}}"],
 
     ["foo <- bar(x, y)",
-     "M.send(foo, \"bar\", _makeList.run(x, y), __makeMap.fromPairs(_makeList.run()))"],
+     "M.send(foo, \"bar\", _makeList.run(x, y), _makeMap.fromPairs(_makeList.run()))"],
 
     ["def [x, y] := [1, x]",
      "
@@ -283,10 +283,10 @@ def specimens := [
      "def via (_mapExtract.run(\"&b\")) [via (__slotToBinding) &&b, _ :_mapEmpty] := x"],
 
     [`["a" => b, "c" => d]`,
-     `__makeMap.fromPairs(_makeList.run(_makeList.run("a", b), _makeList.run("c", d)))`],
+     `_makeMap.fromPairs(_makeList.run(_makeList.run("a", b), _makeList.run("c", d)))`],
 
     [`[=> a, => &b]`,
-     `__makeMap.fromPairs(_makeList.run(_makeList.run("a", a), _makeList.run("&b", (&&b).get())))`],
+     `_makeMap.fromPairs(_makeList.run(_makeList.run("a", a), _makeList.run("&b", (&&b).get())))`],
 
     ["
      for x in y:
