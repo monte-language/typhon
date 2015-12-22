@@ -395,7 +395,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 builder.DefExpr(builder.VarPattern(fTemp, null, span), null,
                     builder.NounExpr("true", span), span),
                 builder.FinallyExpr(
-                    builder.MethodCallExpr(builder.NounExpr("__loop", span),
+                    builder.MethodCallExpr(builder.NounExpr("_loop", span),
                         "run", [coll, obj], [], span),
                     builder.AssignExpr(fTemp, builder.NounExpr("false", span), span), span),
                 builder.NounExpr("null", span)
@@ -916,7 +916,7 @@ def expand(node, builder, fail) as DeepFrozen:
             def [test, block, catcher] := args
             return builder.EscapeExpr(
                 builder.FinalPattern(builder.NounExpr("__break", span), null, span),
-                    builder.MethodCallExpr(builder.NounExpr("__loop", span), "run",
+                    builder.MethodCallExpr(builder.NounExpr("_loop", span), "run",
                         [builder.NounExpr("_iterForever", span),
                          builder.ObjectExpr(null, builder.IgnorePattern(null, span), null, [],
                             builder.Script(null,

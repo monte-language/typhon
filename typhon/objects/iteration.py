@@ -68,7 +68,7 @@ def loop(args):
     # If the consumer is *not* a ScriptObject, then damn them to the slow
     # path. In order for the consumer to not be ScriptObject, though, the
     # compiler and optimizer must have decided that an object could be
-    # directly passed to __loop(), which is currently impossible to do without
+    # directly passed to _loop(), which is currently impossible to do without
     # manual effort. It's really not a common pathway at all.
     if not isinstance(consumer, ScriptObject):
         return slowLoop(iterable, consumer)

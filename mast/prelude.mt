@@ -641,7 +641,7 @@ var preludeScope := scopeAsDF([
     => Int, => List, => Map, => NullOk, => Near, => Pair, => Same, => Set,
     => Selfless, => Str, => SubrangeGuard, => Void,
     => null, => Infinity, => NaN, => false, => true,
-    => __auditedBy, => __equalizer, => __loop,
+    => __auditedBy, => __equalizer, => _loop,
     => _makeList, => __makeMap, => __makeInt, => __makeDouble,
     => __makeSourceSpan, => __makeString, => __slotToBinding,
     => _makeBytes, => _makeFinalSlot, => _makeVarSlot,

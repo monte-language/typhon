@@ -296,7 +296,7 @@ def specimens := [
      escape __break:
          var validFlag_1 := true
          try:
-             __loop.run(y, object _ {
+             _loop.run(y, object _ {
                  \"For-loop body\"
                  method run(key_2, value_3) {
                      _validateFor.run(validFlag_1)
@@ -361,7 +361,7 @@ def specimens := [
 
      "
      escape __break:
-         __loop.run(_iterForever, object _ {
+         _loop.run(_iterForever, object _ {
              method run(_, _) :Bool {
                  if (x) {
                      escape __continue {
