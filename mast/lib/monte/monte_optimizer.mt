@@ -197,8 +197,8 @@ def mix(expr,
                         match =="MethodCallExpr":
                             def receiver := rhs.getReceiver()
                             if (receiver.getNodeName() == "NounExpr" &&
-                                receiver.getName() == "__makeList"):
-                                # m`def [name] := __makeList.run(item)` ->
+                                receiver.getName() == "_makeList"):
+                                # m`def [name] := _makeList.run(item)` ->
                                 # m`def name := item`
                                 # XXX why doesn't this work for multiples? It
                                 # should, right?
@@ -211,7 +211,7 @@ def mix(expr,
                                     remix(sequence(seq, span))
                                 else:
                                     throw(`mix/1: $expr: List pattern ` +
-                                          `assignment from __makeList will ` +
+                                          `assignment from _makeList will ` +
                                           `always fail`)
                             else:
                                 expr
@@ -485,7 +485,7 @@ def allSatisfy(pred, specimens) :Bool as DeepFrozen:
 #   * Anything in this list of objects; e.g. _booleanFlow is acceptable
 # * Must have a transitive closure (under calls) obeying the above rule.
 def thawable :Map[Str, DeepFrozen] := [
-    # => __makeList,
+    # => _makeList,
     # => __makeMap,
     => _booleanFlow,
     => false,
@@ -609,7 +609,7 @@ def freeze(ast, maker, args, span) as DeepFrozen:
                 # Generate the uncall for lists by hand.
                 def newArgs := [for v in (l)
                                 a.LiteralExpr(v, span).transform(freeze)]
-                return a.MethodCallExpr(a.NounExpr("__makeList", span), "run",
+                return a.MethodCallExpr(a.NounExpr("_makeList", span), "run",
                                         newArgs, [], span)
             match k ? (freezeMap.contains(k)):
                 return a.NounExpr(freezeMap[k], span)

@@ -154,12 +154,12 @@ def specimens := [
      "object foo {method baz(a, \"b\" => b, \"&c\" =>  via (__slotToBinding) &&c := (0), \"&&d\" => &&d) {1}}"],
 
     ["foo <- bar(x, y)",
-     "M.send(foo, \"bar\", __makeList.run(x, y), __makeMap.fromPairs(__makeList.run()))"],
+     "M.send(foo, \"bar\", _makeList.run(x, y), __makeMap.fromPairs(_makeList.run()))"],
 
     ["def [x, y] := [1, x]",
      "
      def [x_1, xR_2] := Ref.promise()
-     def value_3 := def [x, y] := __makeList.run(1, x_1)
+     def value_3 := def [x, y] := _makeList.run(1, x_1)
      xR_2.resolve(x)
      value_3"],
 
@@ -197,7 +197,7 @@ def specimens := [
      "
      def [ok_1] := if (x) {
          if (y) {
-             __makeList.run(true)
+             _makeList.run(true)
          } else {
              _booleanFlow.failureList(0)
          }
@@ -210,7 +210,7 @@ def specimens := [
      "
      (def [ok_1, &&x, &&y] := if (def x := 1) {
          if (def y := 2) {
-             __makeList.run(true, &&x, &&y)
+             _makeList.run(true, &&x, &&y)
          } else {
              _booleanFlow.failureList(2)
          }
@@ -222,9 +222,9 @@ def specimens := [
     ["x || y",
      "
      (def [ok_1] := if (x) {
-         __makeList.run(true)
+         _makeList.run(true)
      } else if (y) {
-         __makeList.run(true)
+         _makeList.run(true)
      } else {
          _booleanFlow.failureList(0)
      }
@@ -234,10 +234,10 @@ def specimens := [
      "
      (def [ok_1, &&x, &&y] := if (def x := 1) {
          def &&y := _booleanFlow.broken()
-         __makeList.run(true, &&x, &&y)
+         _makeList.run(true, &&x, &&y)
      } else if (def y := 2) {
          def &&x := _booleanFlow.broken()
-         __makeList.run(true, &&x, &&y)
+         _makeList.run(true, &&x, &&y)
      } else {
          _booleanFlow.failureList(2)
      }
@@ -248,10 +248,10 @@ def specimens := [
      def sp_1 := x
      def [ok_2, &&y] := escape fail_3 {
          def y exit fail_3 := sp_1
-         __makeList.run(true, &&y)
+         _makeList.run(true, &&y)
      } catch problem_4 {
          def via (__slotToBinding) &&broken_5 := Ref.broken(problem_4)
-         __makeList.run(false, &&broken_5)
+         _makeList.run(false, &&broken_5)
      }
      ok_2"],
 
@@ -263,10 +263,10 @@ def specimens := [
      def via (_suchThat) [x, via (_suchThat.run((def sp_1 := f.run(x)
      def [ok_2, &&y] := escape fail_3 {
          def y exit fail_3 := sp_1
-         __makeList.run(true, &&y)
+         _makeList.run(true, &&y)
      } catch problem_4 {
          def via (__slotToBinding) &&broken_5 := Ref.broken(problem_4)
-         __makeList.run(false, &&broken_5)
+         _makeList.run(false, &&broken_5)
      }
      ok_2))) _] := z"],
 
@@ -283,10 +283,10 @@ def specimens := [
      "def via (_mapExtract.run(\"&b\")) [via (__slotToBinding) &&b, _ :_mapEmpty] := x"],
 
     [`["a" => b, "c" => d]`,
-     `__makeMap.fromPairs(__makeList.run(__makeList.run("a", b), __makeList.run("c", d)))`],
+     `__makeMap.fromPairs(_makeList.run(_makeList.run("a", b), _makeList.run("c", d)))`],
 
     [`[=> a, => &b]`,
-     `__makeMap.fromPairs(__makeList.run(__makeList.run("a", a), __makeList.run("&b", (&&b).get())))`],
+     `__makeMap.fromPairs(_makeList.run(_makeList.run("a", a), _makeList.run("&b", (&&b).get())))`],
 
     ["
      for x in y:
@@ -344,7 +344,7 @@ def specimens := [
                  def _ := key_2
                  def x := value_3
                  if (a) {
-                     __makeList.run(k, v)
+                     _makeList.run(k, v)
                  } else {
                      skip_4.run()
                  }
@@ -454,7 +454,7 @@ def specimens := [
       ",
       "
       def foo := {
-          _makeProtocolDesc.run(null, meta.context().getFQNPrefix().add(\"foo_T\"), __makeList.run(), __makeList.run(), __makeList.run())
+          _makeProtocolDesc.run(null, meta.context().getFQNPrefix().add(\"foo_T\"), _makeList.run(), _makeList.run(), _makeList.run())
       }"],
      [`
       interface foo extends x, y implements a, b:
@@ -465,10 +465,10 @@ def specimens := [
       `,
       `
       def foo := {
-          _makeProtocolDesc.run("yay", meta.context().getFQNPrefix().add("foo_T"), __makeList.run(x, y), __makeList.run(a, b), __makeList.run({
-              _makeMessageDesc.run("blee", "baz", __makeList.run(_makeParamDesc.run("c", Int)), Any)
+          _makeProtocolDesc.run("yay", meta.context().getFQNPrefix().add("foo_T"), _makeList.run(x, y), _makeList.run(a, b), _makeList.run({
+              _makeMessageDesc.run("blee", "baz", _makeList.run(_makeParamDesc.run("c", Int)), Any)
           }, {
-              _makeMessageDesc.run(null, "boz", __makeList.run(_makeParamDesc.run("d", Any)), Double)
+              _makeMessageDesc.run(null, "boz", _makeList.run(_makeParamDesc.run("d", Any)), Double)
           }))
       }`],
      ["
@@ -563,11 +563,11 @@ def specimens := [
 
      })"],
      ["`hello $x world`",
-      `simple__quasiParser.valueMaker(__makeList.run("hello ", simple__quasiParser.valueHole(0), " world")).substitute(__makeList.run(x))`],
+      `simple__quasiParser.valueMaker(_makeList.run("hello ", simple__quasiParser.valueHole(0), " world")).substitute(_makeList.run(x))`],
      ["def foo`(@x)` := 1",
-      `def via (_quasiMatcher.run(foo__quasiParser.matchMaker(__makeList.run("(", foo__quasiParser.patternHole(0), ")")), __makeList.run())) [x] := 1`],
+      `def via (_quasiMatcher.run(foo__quasiParser.matchMaker(_makeList.run("(", foo__quasiParser.patternHole(0), ")")), _makeList.run())) [x] := 1`],
      ["def foo`(@x:$y)` := 1",
-      `def via (_quasiMatcher.run(foo__quasiParser.matchMaker(__makeList.run("(", foo__quasiParser.patternHole(0), ":", foo__quasiParser.valueHole(0), ")")), __makeList.run(y))) [x] := 1`],
+      `def via (_quasiMatcher.run(foo__quasiParser.matchMaker(_makeList.run("(", foo__quasiParser.patternHole(0), ":", foo__quasiParser.valueHole(0), ")")), _makeList.run(y))) [x] := 1`],
 ]
 
 def trim(var s):

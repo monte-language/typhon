@@ -576,7 +576,7 @@ object OrderedSpaceMaker as DeepFrozenStamp:
 def testIterable(assert):
     def intspace := OrderedSpaceMaker(Int, "Int")
     def reg := (intspace >= 0) & (intspace < 5)
-    assert.equal(__makeList.fromIterable(reg), [0, 1, 2, 3, 4])
+    assert.equal(_makeList.fromIterable(reg), [0, 1, 2, 3, 4])
 
 def testContainment(assert):
     def intspace := OrderedSpaceMaker(Int, "Int")

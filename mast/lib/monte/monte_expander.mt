@@ -19,7 +19,7 @@ object zip as DeepFrozen:
 
 
 def reversed(it) as DeepFrozen:
-    def items := __makeList.fromIterable(it)
+    def items := _makeList.fromIterable(it)
     return items.reverse()
 
 def buildQuasi(builder, name, inputs) as DeepFrozen:
@@ -146,7 +146,7 @@ def expand(node, builder, fail) as DeepFrozen:
 
     def emitList(items, span):
         return builder.MethodCallExpr(
-            builder.NounExpr("__makeList", span),
+            builder.NounExpr("_makeList", span),
             "run", items, [], span)
 
     def emitMap(items, span):

@@ -783,12 +783,12 @@ class Tuple(Expr):
 
     def compile(self, compiler):
         size = len(self._t)
-        makeList = compiler.addGlobal(u"__makeList")
+        makeList = compiler.addGlobal(u"_makeList")
         compiler.addInstruction("NOUN_FRAME", makeList)
-        # [__makeList]
+        # [_makeList]
         for node in self._t:
             node.compile(compiler)
-            # [__makeList x0 x1 ...]
+            # [_makeList x0 x1 ...]
         compiler.call(u"run", size)
         # [ConstList]
 

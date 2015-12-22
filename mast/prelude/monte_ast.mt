@@ -5,8 +5,8 @@ def MONTE_KEYWORDS :List[Str] := [
 "object", "pass", "pragma", "return", "switch", "to", "try", "var",
 "via", "when", "while", "_"]
 
-def idStart :List[Char] := __makeList.fromIterable("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
-def idPart :List[Char] := idStart + __makeList.fromIterable("0123456789")
+def idStart :List[Char] := _makeList.fromIterable("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
+def idPart :List[Char] := idStart + _makeList.fromIterable("0123456789")
 def INDENT :Str := "    "
 
 # note to future drunk self: lower precedence number means add parens when

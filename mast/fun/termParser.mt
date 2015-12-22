@@ -1044,7 +1044,7 @@ object qBuilder as DeepFrozen:
 
 def _parseTerm(lex, builder, err) as DeepFrozen:
     def [VALUE_HOLE, PATTERN_HOLE] := [lex.valueHole(), lex.patternHole()]
-    def tokens := __makeList.fromIterable(lex)
+    def tokens := _makeList.fromIterable(lex)
     var dollarHoleValueIndex := -1
     var atHoleValueIndex := -1
     var position := -1

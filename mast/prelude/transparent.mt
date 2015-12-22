@@ -158,7 +158,7 @@ object Transparent as DeepFrozenStamp:
                         uncallExpr := exprs.last()
                 def collectSerializerArgs(args, namedArgs):
                     if (args.getNodeName() == "MethodCallExpr" &&
-                        args.getReceiver() =~ m`__makeList` &&
+                        args.getReceiver() =~ m`_makeList` &&
                         args.getVerb() == "run"):
                         def paNames := [for a in (args.getArgs())
                                         if (a.getNodeName() == "NounExpr")
@@ -176,11 +176,11 @@ object Transparent as DeepFrozenStamp:
                                 namedArgs.getVerb() == "fromPairs") {
                                     def [pairListExpr] := namedArgs.getArgs()
                                     if (pairListExpr.getNodeName() != "MethodCallExpr" ||
-                                        pairListExpr.getReceiver() !~ m`__makeList` ||
+                                        pairListExpr.getReceiver() !~ m`_makeList` ||
                                         pairListExpr.getVerb() != "run") {
                                         throw(`Named args map must be a literal, not $pairListExpr`)
                                     }
-                                    [for m`__makeList.run(@{via (unwrapKey) k}, @v)` in (pairListExpr.getArgs())
+                                    [for m`_makeList.run(@{via (unwrapKey) k}, @v)` in (pairListExpr.getArgs())
                                      if (v.getNodeName() == "NounExpr")
                                      k => (v :Ast)]
                                 } else { [].asMap() }
