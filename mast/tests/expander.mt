@@ -151,7 +151,7 @@ def specimens := [
     ["x..!y", "_makeOrderedSpace.op__till(x, y)"],
 
     ["object foo { method baz(a, => b, => &c := (0), => &&d) {1} }",
-     "object foo {method baz(a, \"b\" => b, \"&c\" =>  via (__slotToBinding) &&c := (0), \"&&d\" => &&d) {1}}"],
+     "object foo {method baz(a, \"b\" => b, \"&c\" =>  via (_slotToBinding) &&c := (0), \"&&d\" => &&d) {1}}"],
 
     ["foo <- bar(x, y)",
      "M.send(foo, \"bar\", _makeList.run(x, y), _makeMap.fromPairs(_makeList.run()))"],
@@ -173,7 +173,7 @@ def specimens := [
 #     "ValueGuard.coerce(y, throw).coerce(x, throw)"],
 
     ["def &x := y",
-     "def via (__slotToBinding) &&x := y"],
+     "def via (_slotToBinding) &&x := y"],
 
     ["return",
      "__return.run()"],
@@ -250,7 +250,7 @@ def specimens := [
          def y exit fail_3 := sp_1
          _makeList.run(true, &&y)
      } catch problem_4 {
-         def via (__slotToBinding) &&broken_5 := Ref.broken(problem_4)
+         def via (_slotToBinding) &&broken_5 := Ref.broken(problem_4)
          _makeList.run(false, &&broken_5)
      }
      ok_2"],
@@ -265,7 +265,7 @@ def specimens := [
          def y exit fail_3 := sp_1
          _makeList.run(true, &&y)
      } catch problem_4 {
-         def via (__slotToBinding) &&broken_5 := Ref.broken(problem_4)
+         def via (_slotToBinding) &&broken_5 := Ref.broken(problem_4)
          _makeList.run(false, &&broken_5)
      }
      ok_2))) _] := z"],
@@ -280,7 +280,7 @@ def specimens := [
      "def via (_mapExtract.run(\"b\")) [b, _ :_mapEmpty] := x"],
 
     ["def [=> &b] := x",
-     "def via (_mapExtract.run(\"&b\")) [via (__slotToBinding) &&b, _ :_mapEmpty] := x"],
+     "def via (_mapExtract.run(\"&b\")) [via (_slotToBinding) &&b, _ :_mapEmpty] := x"],
 
     [`["a" => b, "c" => d]`,
      `_makeMap.fromPairs(_makeList.run(_makeList.run("a", b), _makeList.run("c", d)))`],

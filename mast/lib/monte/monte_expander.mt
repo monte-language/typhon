@@ -155,7 +155,7 @@ def expand(node, builder, fail) as DeepFrozen:
             "fromPairs", [emitList(items, span)], [], span)
 
     def makeSlotPatt(n, span):
-        return builder.ViaPattern(builder.NounExpr("__slotToBinding", span),
+        return builder.ViaPattern(builder.NounExpr("_slotToBinding", span),
              builder.BindingPattern(n, span), span)
 
     def makeFn(doc, args, body, span):
@@ -202,7 +202,7 @@ def expand(node, builder, fail) as DeepFrozen:
                     builder.FinalPattern(problem, null, span),
                     builder.SeqExpr([
                         builder.DefExpr(builder.ViaPattern(
-                            builder.NounExpr("__slotToBinding", span),
+                            builder.NounExpr("_slotToBinding", span),
                         builder.BindingPattern(broken, span), span),
                             null,
                             builder.MethodCallExpr(builder.NounExpr("Ref", span),
@@ -737,11 +737,11 @@ def expand(node, builder, fail) as DeepFrozen:
         else if (nodeName == "SlotPattern"):
             def [noun, guard] := args
             if (guard == null):
-                return builder.ViaPattern(builder.NounExpr("__slotToBinding", span),
+                return builder.ViaPattern(builder.NounExpr("_slotToBinding", span),
                     builder.BindingPattern(noun, span), span)
             else:
                 return builder.ViaPattern(
-                    builder.MethodCallExpr(builder.NounExpr("__slotToBinding", span),
+                    builder.MethodCallExpr(builder.NounExpr("_slotToBinding", span),
                         "run", [guard], [],
                         span),
                     builder.BindingPattern(noun, span), span)
@@ -863,10 +863,10 @@ def expand(node, builder, fail) as DeepFrozen:
             def [pattern, default] := args
             def k := if (pattern.getNodeName() == "BindingPattern") {
                 builder.LiteralExpr("&&" + pattern.getNoun().getName(), span)
-            ## via (__slotToBinding) &&foo
+            ## via (_slotToBinding) &&foo
             } else if (pattern.getNodeName() == "ViaPattern" &&
                        pattern.getExpr().getNodeName() == "NounExpr" &&
-                       pattern.getExpr().getName() == "__slotToBinding" &&
+                       pattern.getExpr().getName() == "_slotToBinding" &&
                        pattern.getPattern().getNodeName() == "BindingPattern") {
                 builder.LiteralExpr("&" + pattern.getPattern().getNoun().getName(), span)
             } else if (["BindPattern", "VarPattern", "FinalPattern"].contains(pattern.getNodeName())) {
