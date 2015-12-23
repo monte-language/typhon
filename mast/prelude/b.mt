@@ -20,6 +20,16 @@ object byteValue as DeepFrozen:
 
 
 object b__quasiParser as DeepFrozen:
+    "A quasiparser for `Bytes`.
+    
+     This object behaves like `simple__quasiParser`; it takes some textual
+     descriptions of bytes and returns a bytestring. It can interpolate
+     objects which coerce to `Bytes` and `Str`.
+
+     As a pattern, this object performs slicing of bytestrings. Semantics
+     mirror `simple__quasiParser` with respect to concatenated patterns and
+     greediness."
+
     to patternHole(index):
         return [bytePattern, index]
 

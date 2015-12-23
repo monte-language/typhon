@@ -8,6 +8,12 @@ def compose(f :DeepFrozen, g :DeepFrozen):
     def F :Same[f] := f
 
     return object composition as DeepFrozen implements SubrangeGuard[DeepFrozen]:
+        "A composite core interface.
+        
+         As an interface, this object represents the collections of methods
+         available on core objects. As a guard, this object guards precisely
+         those core objects with those methods."
+
         to coerce(specimen, ej) :F:
             return f.coerce(specimen, ej)
 

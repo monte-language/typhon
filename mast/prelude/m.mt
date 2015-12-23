@@ -208,6 +208,11 @@ object m__quasiParser as DeepFrozen:
 
 
 object eval as DeepFrozen:
+    "Evaluate Monte source.
+    
+     This object respects POLA and grants no privileges whatsoever to
+     evaluated code. To grant a safe scope, pass `safeScope`."
+
     to run(source :Str, environment):
         "Evaluate a Monte source expression.
 

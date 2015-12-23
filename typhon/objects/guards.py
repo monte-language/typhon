@@ -62,6 +62,12 @@ class Guard(Object):
 @autohelp
 @audited.DF
 class BoolGuard(Guard):
+    """
+    The set of Boolean values: `[true, false].asSet()`
+
+    This guard is unretractable.
+    """
+
     def subCoerce(self, specimen):
         if isinstance(specimen, BoolObject):
             return specimen
@@ -70,6 +76,12 @@ class BoolGuard(Guard):
 @autohelp
 @audited.DF
 class StrGuard(Guard):
+    """
+    The set of string literals.
+
+    This guard is unretractable.
+    """
+
     def subCoerce(self, specimen):
         if isinstance(specimen, StrObject):
             return specimen
@@ -78,6 +90,12 @@ class StrGuard(Guard):
 @autohelp
 @audited.DF
 class DoubleGuard(Guard):
+    """
+    The set of double literals.
+
+    This guard is unretractable.
+    """
+
     def subCoerce(self, specimen):
         if isinstance(specimen, DoubleObject):
             return specimen
@@ -86,6 +104,12 @@ class DoubleGuard(Guard):
 @autohelp
 @audited.DF
 class CharGuard(Guard):
+    """
+    The set of character literals.
+
+    This guard is unretractable.
+    """
+
     def subCoerce(self, specimen):
         if isinstance(specimen, CharObject):
             return specimen
@@ -94,6 +118,12 @@ class CharGuard(Guard):
 @autohelp
 @audited.DF
 class BytesGuard(Guard):
+    """
+    The set of bytestrings produced by `b__quasiParser` and `_makeBytes`.
+
+    This guard is unretractable.
+    """
+
     def subCoerce(self, specimen):
         if isinstance(specimen, BytesObject):
             return specimen
@@ -102,6 +132,12 @@ class BytesGuard(Guard):
 @autohelp
 @audited.DF
 class IntGuard(Guard):
+    """
+    The set of integer literals.
+
+    This guard is unretractable.
+    """
+
     def subCoerce(self, specimen):
         if (isinstance(specimen, IntObject) or
                 isinstance(specimen, BigInt)):
@@ -111,6 +147,12 @@ class IntGuard(Guard):
 @autohelp
 @audited.DF
 class VoidGuard(Guard):
+    """
+    The singleton set of null: `[null].asSet()`
+
+    This guard is unretractable.
+    """
+
     def subCoerce(self, specimen):
         if specimen is NullObject:
             return specimen
@@ -124,6 +166,8 @@ class AnyGuard(Object):
 
     This object specializes to a guard which admits the union of its
     subguards: Any[X, Y, Z] =~ X ∪ Y ∪ Z
+
+    This guard is unretractable.
     """
 
     def printOn(self, out):
@@ -161,7 +205,11 @@ anyGuard = AnyGuard()
 class AnyOfGuard(Object):
     """
     A guard which admits a union of its subguards.
+
+    This guard is unretractable if, and only if, all of its subguards are
+    unretractable.
     """
+
     _immutable_fields_ = 'subguards[*]',
 
     def __init__(self, subguards):
@@ -198,6 +246,7 @@ class AnyOfGuard(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 class FinalSlotGuard(Guard):
     """
     A guard which admits FinalSlots.
@@ -236,6 +285,7 @@ class FinalSlotGuard(Guard):
         out.call(u"print", [StrObject(u"]")])
 
 
+@autohelp
 class VarSlotGuard(Guard):
     """
     A guard which admits VarSlots.
@@ -257,6 +307,7 @@ class VarSlotGuard(Guard):
             return specimen
 
 
+@autohelp
 @audited.DF
 class FinalSlotGuardMaker(Guard):
     """
@@ -289,6 +340,7 @@ class FinalSlotGuardMaker(Guard):
             return specimen
 
 
+@autohelp
 @audited.DF
 class VarSlotGuardMaker(Guard):
     """
@@ -321,6 +373,7 @@ class VarSlotGuardMaker(Guard):
             return specimen
 
 
+@autohelp
 @audited.DF
 class BindingGuard(Guard):
     """
@@ -333,10 +386,13 @@ class BindingGuard(Guard):
             return specimen
 
 
+@autohelp
 @audited.Transparent
 class SameGuard(Guard):
     """
-    A guard that admits a single value.
+    A guard which admits a single value.
+
+    This guard is unretractable.
     """
 
     def __init__(self, value):
@@ -367,6 +423,13 @@ class SameGuard(Guard):
 @autohelp
 @audited.DF
 class SameGuardMaker(Object):
+    """
+    When specialized, this object yields a guard which only admits precisely
+    the object used to specialize it.
+
+    In simpler terms, `Same[x]` will match only those objects `o` for which `o
+    == x`.
+    """
 
     def printOn(self, out):
         out.call(u"print", [StrObject(u"Same")])
@@ -388,10 +451,14 @@ sameGuardMaker = SameGuardMaker()
 
 
 @autohelp
+@audited.DF
 class SubrangeGuardMaker(Object):
+    """
+    The maker of subrange guards.
 
-    def auditorStamps(self):
-        return [deepFrozenStamp]
+    When specialized with a guard, this object produces a auditor for those
+    guards which admit proper subsets of that guard.
+    """
 
     def printOn(self, out):
         from typhon.objects.data import StrObject
@@ -409,6 +476,12 @@ subrangeGuardMaker = SubrangeGuardMaker()
 @autohelp
 @audited.Transparent
 class SubrangeGuard(Object):
+    """
+    An auditor specialized on a guard.
+
+    This auditor proves that its specimens are guards, and that those guards
+    admit proper subsets of what this auditor's guard admits.
+    """
 
     def __init__(self, superguard):
         self.superGuard = superguard

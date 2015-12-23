@@ -20,7 +20,7 @@
 object _comparer as DeepFrozenStamp:
     "A comparison helper.
 
-     This object implements the comparison operators."
+     This object implements the various comparison operators."
 
     to asBigAs(left, right):
         "The operator `left` <=> `right`.
@@ -56,7 +56,7 @@ object _comparer as DeepFrozenStamp:
 
 def makePredicateGuard(predicate :DeepFrozenStamp, label :Str) as DeepFrozenStamp:
     return object predicateGuard as DeepFrozenStamp:
-        "A predicate guard.
+        "An unretractable predicate guard.
 
          This guard admits any object which passes its predicate."
 
@@ -366,7 +366,9 @@ object _PairGuardStamp:
         return true
 
 object Pair as DeepFrozenStamp:
-    "A guard which admits immutable pairs."
+    "A guard which admits immutable pairs.
+    
+     Pairs are merely lists of size two."
 
     to _printOn(out):
         out.print("Pair")
@@ -471,6 +473,8 @@ unittest([testSame])
 
 
 object _iterForever as DeepFrozenStamp:
+    "Implementation of while-expression syntax."
+
     to _makeIterator():
         return _iterForever
     to next(ej):
@@ -478,6 +482,11 @@ object _iterForever as DeepFrozenStamp:
 
 
 def _splitList(position :Int) as DeepFrozenStamp:
+    "Implementation of tail pattern-matching syntax in list patterns.
+    
+     m`def [x] + xs := l`.expand() ==
+     m`def via (_splitList.run(1)) [x, xs] := l`"
+
     return def listSplitter(specimen, ej):
         if (specimen.size() < position):
             throw.eject(ej, ["List is too short:", specimen])
@@ -485,6 +494,8 @@ def _splitList(position :Int) as DeepFrozenStamp:
 
 
 def _accumulateList(iterable, mapper) as DeepFrozenStamp:
+    "Implementation of list comprehension syntax."
+
     def iterator := iterable._makeIterator()
     var rv := []
 
@@ -506,6 +517,8 @@ def _matchSame(expected) as DeepFrozenStamp:
 
 
 def _mapExtract(key) as DeepFrozenStamp:
+    "Implementation of key pattern-matching syntax in map patterns."
+
     return def mapExtractor(specimen, ej):
         if (specimen.contains(key)):
             return [specimen[key], specimen.without(key)]
@@ -513,6 +526,8 @@ def _mapExtract(key) as DeepFrozenStamp:
 
 
 def _quasiMatcher(matchMaker, values) as DeepFrozenStamp:
+    "Implementation of quasiliteral pattern syntax."
+
     return def quasiMatcher(specimen, ej):
         return matchMaker.matchBind(values, specimen, ej)
 
@@ -553,6 +568,10 @@ unittest([testAnySubGuard])
 
 
 object _switchFailed as DeepFrozenStamp:
+    "The implicit default matcher in a switch expression.
+    
+     This object throws an exception."
+
     match [=="run", args, _]:
         throw("Switch failed:", args)
 
@@ -576,6 +595,8 @@ object _makeVerbFacet as DeepFrozenStamp:
 
 
 object _makeMap as DeepFrozenStamp:
+    "A maker of maps."
+
     to fromPairs(l):
         def m := [].asMap().diverge()
         for [k, v] in l:
@@ -584,11 +605,15 @@ object _makeMap as DeepFrozenStamp:
 
 
 def _accumulateMap(iterable, mapper) as DeepFrozenStamp:
+    "Implementation of map comprehension syntax."
+
     def l := _accumulateList(iterable, mapper)
     return _makeMap.fromPairs(l)
 
 
 def _bind(resolver, guard) as DeepFrozenStamp:
+    "Resolve a forward declaration."
+
     def viaBinder(specimen, ej):
         if (guard == null):
             resolver.resolve(specimen)
@@ -601,6 +626,9 @@ def _bind(resolver, guard) as DeepFrozenStamp:
 
 
 object _booleanFlow as DeepFrozenStamp:
+    "Implementation of implicit breakage semantics in conditionally-defined
+     names."
+
     to broken():
         return Ref.broken("Boolean flow expression failed")
 

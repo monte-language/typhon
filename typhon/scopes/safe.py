@@ -69,8 +69,15 @@ TOQUOTE_1 = getAtom(u"toQuote", 1)
 TOSTRING_1 = getAtom(u"toString", 1)
 
 
+@autohelp
 @audited.DF
 class TraceLn(Object):
+    """
+    Write a line to the trace log.
+
+    This object is a Typhon standard runtime `traceln`. It prints prefixed
+    lines to stderr.
+    """
 
     def toString(self):
         return u"<traceln>"
@@ -83,8 +90,12 @@ class TraceLn(Object):
         raise Refused(self, atom, args)
 
 
+@autohelp
 @audited.DF
 class MakeList(Object):
+    """
+    A maker of `List`s.
+    """
 
     def toString(self):
         return u"<makeList>"
@@ -104,7 +115,7 @@ theMakeList = MakeList()
 @runnable(FROMPAIRS_1, [deepFrozenStamp])
 def makeMap(args):
     """
-    Create ConstMaps.
+    Given a `List[Pair]`, produce a `Map`.
     """
 
     return ConstMap.fromPairs(args[0])
@@ -115,6 +126,9 @@ theMakeMap = makeMap()
 @autohelp
 @audited.DF
 class MakeDouble(Object):
+    """
+    A maker of `Double`s.
+    """
 
     def toString(self):
         return u"<makeDouble>"
@@ -135,6 +149,9 @@ class MakeDouble(Object):
 @autohelp
 @audited.DF
 class MakeInt(Object):
+    """
+    A maker of `Int`s.
+    """
 
     def toString(self):
         return u"<makeInt>"
@@ -165,6 +182,9 @@ class MakeInt(Object):
 @autohelp
 @audited.DF
 class MakeString(Object):
+    """
+    A maker of `Str`s.
+    """
 
     def toString(self):
         return u"<makeString>"
@@ -188,6 +208,9 @@ class MakeString(Object):
 @autohelp
 @audited.DF
 class MakeBytes(Object):
+    """
+    A maker of `Bytes`.
+    """
 
     def toString(self):
         return u"<makeBytes>"
@@ -207,6 +230,9 @@ class MakeBytes(Object):
 @autohelp
 @audited.DF
 class SlotBinder(Object):
+    """
+    Implementation of bind-pattern syntax for forward declarations.
+    """
 
     def recv(self, atom, args):
         if atom is RUN_1:
@@ -369,6 +395,9 @@ theVarSlotGuardMaker = VarSlotGuardMaker()
 @autohelp
 @audited.DF
 class FinalSlotMaker(Object):
+    """
+    A maker of final slots.
+    """
 
     def recv(self, atom, args):
         if atom is RUN_3:
@@ -390,6 +419,9 @@ theFinalSlotMaker = FinalSlotMaker()
 @autohelp
 @audited.DF
 class VarSlotMaker(Object):
+    """
+    A maker of var slots.
+    """
 
     def recv(self, atom, args):
         if atom is RUN_3:
@@ -410,6 +442,11 @@ class VarSlotMaker(Object):
 def nearGuard(args):
     """
     A guard over references to near values.
+
+    This guard admits any near value, as well as any resolved reference to any
+    near value.
+
+    This guard is unretractable.
     """
 
     specimen = args[0]

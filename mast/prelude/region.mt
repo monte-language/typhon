@@ -464,6 +464,7 @@ object OrderedRegionMaker as DeepFrozenStamp:
         return self
 
 object OrderedSpaceMaker as DeepFrozenStamp:
+    "Make ordered spaces."
 
     # Given a type whose reflexive (x <=> x) instances are fully
     # ordered, this makes an OrderedSpace for making Regions and
