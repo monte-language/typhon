@@ -739,6 +739,8 @@ preludeScope := scopeAsDF(
     import.script("prelude/coreInterfaces",
                   preludeScope)) | preludeScope
 
+preludeScope without= ("&&typhonEval")
+
 # The final scope exported from the prelude. This *must* be the final
 # expression in the module!
 preludeScope
