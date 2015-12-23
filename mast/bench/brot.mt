@@ -1,23 +1,7 @@
 imports
 exports (main)
 
-
-def makeComplex(r :Double, i :Double) as DeepFrozen:
-    return object complex:
-        to real():
-            return r
-
-        to imag():
-            return i
-
-        to abs():
-            return (r * r + i * i).sqrt()
-
-        to add(other):
-            return makeComplex(r + other.real(), i + other.imag())
-
-        to multiply(other):
-            return makeComplex(r * r - i * i, 2.0 * r * i)
+def [=> makeComplex :DeepFrozen] | _ := import("lib/complex")
 
 
 def ITERATIONS :Int := 170
