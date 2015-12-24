@@ -17,11 +17,11 @@ from rpython.rlib.jit import elidable, elidable_promote, look_inside_iff
 
 from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.smallcaps.abstract import AbstractInterpreter
-from typhon.smallcaps.ops import (reverseOps, ASSIGN_GLOBAL, ASSIGN_FRAME,
-                                  ASSIGN_LOCAL, BIND, BINDFINALSLOT,
-                                  BINDVARSLOT, SLOT_GLOBAL, SLOT_FRAME,
-                                  SLOT_LOCAL, NOUN_GLOBAL, NOUN_FRAME,
-                                  NOUN_LOCAL, BINDING_GLOBAL, BINDING_FRAME,
+from typhon.smallcaps.ops import (ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
+                                  BIND, BINDFINALSLOT, BINDVARSLOT,
+                                  SLOT_GLOBAL, SLOT_FRAME, SLOT_LOCAL,
+                                  NOUN_GLOBAL, NOUN_FRAME, NOUN_LOCAL,
+                                  BINDING_GLOBAL, BINDING_FRAME,
                                   BINDING_LOCAL, CALL, CALL_MAP)
 
 
@@ -148,7 +148,7 @@ class Code(object):
         return self.scripts[i]
 
     def dis(self, instruction, index):
-        base = "%s %d" % (reverseOps[instruction], index)
+        base = "%s %d" % (instruction.repr.encode("utf-8"), index)
         if instruction == CALL or instruction == CALL_MAP:
             base += " (%s)" % self.atoms[index].repr
         # XXX enabling this requires the JIT to be able to traverse a lot of

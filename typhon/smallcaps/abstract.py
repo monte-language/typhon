@@ -129,7 +129,8 @@ class AbstractInterpreter(object):
             self.suspended = True
             # print "Suspending at pc", pc
         else:
-            raise RuntimeError("Unknown instruction %d" % instruction)
+            raise RuntimeError("Unknown instruction %s" %
+                    instruction.repr.encode("utf-8"))
 
     def run(self):
         for pc, instruction in enumerate(self.code.instructions):

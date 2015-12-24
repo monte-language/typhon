@@ -153,7 +153,7 @@ class SmallCaps(object):
 
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)
-        jit_debug(reverseOps[instruction], index, pc)
+        jit_debug(instruction.repr.encode("utf-8"), index, pc)
 
         if instruction == DUP:
             self.push(self.peek())
@@ -294,7 +294,8 @@ class SmallCaps(object):
         elif instruction == JUMP:
             return index
         else:
-            raise RuntimeError("Unknown instruction %d" % instruction)
+            raise RuntimeError("Unknown instruction %s" %
+                    instruction.repr.encode("utf-8"))
 
     # Second argument is how to get a code object from a machine object.
     @rvmprof.vmprof_execute_code("smallcaps", lambda self: self.code)

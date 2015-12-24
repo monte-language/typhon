@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.enum import makeEnum
+
 (
     DUP, ROT, POP, SWAP,
     ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
@@ -25,7 +27,20 @@
     EJECTOR, TRY, UNWIND, END_HANDLER,
     BRANCH, CALL, CALL_MAP, BUILD_MAP, NAMEDARG_EXTRACT,
     NAMEDARG_EXTRACT_OPTIONAL, JUMP,
-) = range(34)
+) = makeEnum("SmallCaps op", [s.strip() for s in """
+dup rot pop swap
+assignGlobal assignFrame assignLocal
+bind bindFinalSlot bindVarSlot
+slotGlobal slotFrame slotLocal
+nounGlobal nounFrame nounLocal
+bindingGlobal bindingFrame bindingLocal
+listPatt
+literal
+bindObject scope
+ejector try unwind endHandler
+branch call callMap buildMap namedArgExtract
+namedArgExtractOptional jump
+""".split()])
 
 ops = {
     "DUP": DUP,
@@ -63,7 +78,3 @@ ops = {
     "NAMEDARG_EXTRACT_OPTIONAL": NAMEDARG_EXTRACT_OPTIONAL,
     "JUMP": JUMP,
 }
-
-reverseOps = [""] * 34
-for k, v in ops.iteritems():
-    reverseOps[v] = k
