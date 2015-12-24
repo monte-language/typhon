@@ -1,9 +1,14 @@
-# https://bjpelc.wordpress.com/2015/01/10/yet-another-language-speed-test-counting-primes-c-c-java-javascript-php-python-and-ruby-2/
+imports
+exports (main)
 
-def sqrt(i :Int) :Double:
+# https://bjpelc.wordpress.com/2015/01/10/yet-another-language-speed-test-counting-primes-c-c-java-javascript-php-python-and-ruby-2/
+# Please don't change the structure; it is meant to mirror similar programs in
+# other languages, per the original microbenchmark.
+
+def sqrt(i :Int) :Double as DeepFrozen:
     return (i + 0.0).sqrt()
 
-def isPrime(n :Int) :Bool:
+def isPrime(n :Int) :Bool as DeepFrozen:
     if (n < 2):
         return true
     else if (n == 2):
@@ -21,11 +26,7 @@ def isPrime(n :Int) :Bool:
 
     return true
 
-
-def lim :Int := 2 ** 12
-
-
-def main():
+def countPrimes(lim :Int) :Int as DeepFrozen:
     var noPrimes :Int := 0
     var n :Int := 0
 
@@ -36,4 +37,7 @@ def main():
 
     return noPrimes
 
-bench(main, `Prime-counting function: π($lim)`)
+def main(=> bench) :Int as DeepFrozen:
+    def lim :Int := 2 ** 12
+    bench(fn {countPrimes(lim)}, `Prime-counting function: π($lim)`)
+    return 0
