@@ -58,6 +58,7 @@ mast: mast/lib/atoi.mast mast/lib/enum.mast mast/lib/record.mast \
 	mast/lib/json.mast \
 	mast/lib/help.mast \
 	mast/lib/complex.mast \
+	mast/lib/gai.mast \
 	prelude \
 	codec \
 	entropy \

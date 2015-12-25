@@ -18,6 +18,7 @@ exports (main)
 def unittest(_):
     null
 
+def [=> makeGAI :DeepFrozen] | _ := import("lib/gai")
 def [=> bytesToInt :DeepFrozen] | _ := import.script("lib/atoi")
 def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
 def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
@@ -26,7 +27,8 @@ def [=> makeMapPump :DeepFrozen,
 ] | _ := import("lib/tubes", [=> unittest])
 
 
-def lowercase(s :Str, _) as DeepFrozen:
+def lowercase(specimen, ej) as DeepFrozen:
+    def s :Str exit ej := specimen
     return s.toLowerCase()
 
 
@@ -59,7 +61,7 @@ def [HTTPState, REQUEST, HEADER, BODY, BUFFERBODY, FOUNTBODY] := makeEnum(
 
 def makeResponseDrain(resolver) as DeepFrozen:
     var state :HTTPState := REQUEST
-    var buf := []
+    var buf :Bytes := b``
     var headers := null
     var status :NullOk[Int] := null
     var label := null
@@ -171,9 +173,13 @@ def makeRequest(makeTCP4ClientEndpoint, host :Bytes, resource :Str) as DeepFroze
             return request.send("GET")
 
 
-def main(=> makeTCP4ClientEndpoint) as DeepFrozen:
-    def response := makeRequest(makeTCP4ClientEndpoint, b`example.com`, "/").get()
-    return when (response) ->
-        traceln("Finished request with response", response)
-        traceln(UTF8.decode(response.getBody(), null))
-        0
+def main(=> getAddrInfo, => makeTCP4ClientEndpoint) as DeepFrozen:
+    def addrs := getAddrInfo(b`example.com`, b``)
+    return when (addrs) ->
+        def gai := makeGAI(addrs)
+        def [addr] + _ := gai.TCP4()
+        def response := makeRequest(makeTCP4ClientEndpoint, addr.getAddress(), "/").get()
+        when (response) ->
+            traceln("Finished request with response", response)
+            traceln(UTF8.decode(response.getBody(), null))
+            0
