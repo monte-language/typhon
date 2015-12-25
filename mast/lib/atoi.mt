@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def strToInt(var cs :Str, ej) :Int:
+def strToInt(var cs :Str, ej) :Int as DeepFrozen:
     def neg :Bool := cs[0] == '-'
     if (neg):
         cs := cs.slice(1)
@@ -41,7 +41,7 @@ unittest([
 ])
 
 
-def bytesToInt(bs :Bytes, ej) :Int:
+def bytesToInt(bs :Bytes, ej) :Int as DeepFrozen:
     var rv :Int := 0
     for b in bs:
         def i :(0..!10) exit ej := b - 48

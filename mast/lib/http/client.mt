@@ -1,3 +1,6 @@
+imports
+exports (main)
+
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,19 +15,22 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> bytesToInt] | _ := import.script("lib/atoi")
-def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
-def [=> UTF8] | _ := import.script("lib/codec/utf8")
-def [=> makeMapPump,
-     => makePumpTube,
-] := import("lib/tubes", [=> unittest])
+def unittest(_):
+    null
+
+def [=> bytesToInt :DeepFrozen] | _ := import.script("lib/atoi")
+def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
+def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
+def [=> makeMapPump :DeepFrozen,
+     => makePumpTube :DeepFrozen,
+] | _ := import("lib/tubes", [=> unittest])
 
 
-def lowercase(s :Str, _):
+def lowercase(s :Str, _) as DeepFrozen:
     return s.toLowerCase()
 
 
-def makeCommonHeaders(contentLength :NullOk[Int]):
+def makeCommonHeaders(contentLength :NullOk[Int]) as DeepFrozen:
     return object commonHeaders:
         to _printOn(out):
             out.print("<common HTTP headers: ")
@@ -38,7 +44,7 @@ def makeCommonHeaders(contentLength :NullOk[Int]):
             return contentLength != null && contentLength < 1024 * 1024
 
 
-def makeResponse(status :Int, commonHeaders, extraHeaders, body):
+def makeResponse(status :Int, commonHeaders, extraHeaders, body) as DeepFrozen:
     return object response:
         to _printOn(out):
             out.print(`<response $status: $commonHeaders ($extraHeaders)>`)
@@ -51,7 +57,7 @@ def [HTTPState, REQUEST, HEADER, BODY, BUFFERBODY, FOUNTBODY] := makeEnum(
     ["request", "header", "body", "body (buffered)", "body (streaming)"])
 
 
-def makeResponseDrain(resolver):
+def makeResponseDrain(resolver) as DeepFrozen:
     var state :HTTPState := REQUEST
     var buf := []
     var headers := null
@@ -131,21 +137,21 @@ def makeResponseDrain(resolver):
             resolver.resolve(response)
 
 
-def makeRequest(host :Str, resource :Str):
+def makeRequest(makeTCP4ClientEndpoint, host :Bytes, resource :Str) as DeepFrozen:
     var port :Int := 80
     def headers := [
         "Host" => host,
-        "Connection" => "close",
+        "Connection" => b`close`,
     ].diverge()
 
     return object request:
-        to put(key, value):
+        to put(key, value :Bytes):
             headers[key] := value
 
         to write(verb, drain):
             drain.receive(UTF8.encode(`$verb $resource HTTP/1.1$\r$\n`, null))
-            for k => v in headers:
-                drain.receive(UTF8.encode(`$k: $v$\r$\n`, null))
+            for via (UTF8.encode) k => v in headers:
+                drain.receive(b`$k: $v$\r$\n`)
             drain.receive(b`$\r$\n`)
 
         to send(verb :Str):
@@ -165,7 +171,9 @@ def makeRequest(host :Str, resource :Str):
             return request.send("GET")
 
 
-def response := makeRequest("example.com", "/").get()
-when (response) ->
-    traceln("Finished request with response", response)
-    traceln(UTF8.decode(response.getBody(), null))
+def main(=> makeTCP4ClientEndpoint) as DeepFrozen:
+    def response := makeRequest(makeTCP4ClientEndpoint, b`example.com`, "/").get()
+    return when (response) ->
+        traceln("Finished request with response", response)
+        traceln(UTF8.decode(response.getBody(), null))
+        0
