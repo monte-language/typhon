@@ -237,7 +237,7 @@ class Compiler(object):
                     literals, globals, frame, locals, scripts)
 
         # Register the code for profiling.
-        rvmprof.register_code(code, Code.profileName)
+        rvmprof.register_code(code, lambda code: code.profileName)
 
         # Run optimizations on code, including inner code.
         peephole(code)

@@ -32,7 +32,7 @@ class CodeScript(object):
 
     _immutable_ = True
     _immutable_fields_ = ("displayName", "objectAst", "numAuditors", "doc",
-                          "fqn", "methods", "methodDocs", "matchers[*]",
+                          "fqn", "methods[*]", "methodDocs", "matchers[*]",
                           "closureNames", "globalNames")
 
     def __init__(self, displayName, objectAst, numAuditors, doc, fqn, methods,
@@ -94,7 +94,7 @@ class Code(object):
     """
 
     _immutable_ = True
-    _immutable_fields_ = ("fqn", "methodName",
+    _immutable_fields_ = ("fqn", "methodName", "profileName",
                           "instructions[*]?", "indices[*]?",
                           "atoms[*]", "globals[*]", "frame[*]", "literals[*]",
                           "locals[*]", "scripts[*]", "maxDepth",
@@ -104,6 +104,7 @@ class Code(object):
                  globals, frame, locals, scripts):
         self.fqn = fqn
         self.methodName = methodName
+        self.profileName = self._profileName()
         # Copy all of the lists on construction, to satisfy RPython's need for
         # these lists to be immutable.
         self.instructions = [pair[0] for pair in instructions]
@@ -166,9 +167,11 @@ class Code(object):
                              BINDING_LOCAL, BIND, BINDFINALSLOT,
                              BINDVARSLOT):
             name, depth = self.locals[index]
-            base += " (%s (%s))" % (name.encode("utf-8"), depth.repr)
+            base += " (%s (%s))" % (name.encode("utf-8"),
+                    depth.repr.encode("utf-8"))
         return base
 
+    @elidable
     def disAt(self, index):
         instruction = self.instructions[index]
         index = self.indices[index]
@@ -186,7 +189,8 @@ class Code(object):
         ai.run()
         self.maxDepth, self.maxHandlerDepth = ai.getDepth()
 
-    def profileName(self):
+    @elidable
+    def _profileName(self):
         try:
             filename, objname = self.fqn.encode("utf-8").split('$', 1)
         except ValueError:
@@ -195,4 +199,4 @@ class Code(object):
         method = self.methodName.encode("utf-8")
         return "mt:%s.%s:1:%s" % (objname, method, filename)
 
-rvmprof.register_code_object_class(Code, Code.profileName)
+rvmprof.register_code_object_class(Code, lambda code: code.profileName)

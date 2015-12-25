@@ -153,7 +153,7 @@ class SmallCaps(object):
 
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)
-        jit_debug(instruction.repr.encode("utf-8"), index, pc)
+        jit_debug(self.code.disAt(pc))
 
         if instruction == DUP:
             self.push(self.peek())
@@ -301,19 +301,13 @@ class SmallCaps(object):
     @rvmprof.vmprof_execute_code("smallcaps", lambda self: self.code)
     @unroll_safe
     def run(self):
+        jit_debug(self.code.profileName)
         # print ">" * 10
         pc = 0
         while pc < self.code.instSize():
             instruction = self.code.inst(promote(pc))
             try:
-                # print ">", pc, self.code.dis(instruction,
-                #                              self.code.indices[pc])
-                # jit_debug("Before run")
                 pc = self.runInstruction(instruction, pc)
-                # jit_debug("After run")
-                # print "Stack:", self.env.valueStack[:self.env.depth]
-                # if self.env.handlerDepth:
-                #     print "Handlers:", self.env.handlerStack[:self.env.handlerDepth]
             except Ejecting as e:
                 pc = self.unwindEjector(e)
             except UserException as ue:
