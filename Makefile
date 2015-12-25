@@ -124,4 +124,4 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 
 clean:
 	@ echo "CLEAN"
-	@ find -iname mast/\*.mast -delete
+	@ find -iwholename './mast/*.mast' -delete
