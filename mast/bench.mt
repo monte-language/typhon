@@ -7,6 +7,7 @@ def benchmarks :List[Str] := [
     "brot",
     "montstone",
     "nqueens",
+    "primeCount",
     "richards",
 ]
 
@@ -39,10 +40,13 @@ def main(=> bench, => makeFileResource, => unittest) as DeepFrozen:
             benches with= (`$moduleName: $name`, runnable)
 
     for benchmark in benchmarks:
+        traceln(`Importing $benchmark`)
         def module := import(`bench/$benchmark`)
+        traceln(`Running $benchmark`)
         module["main"]("bench" => benchCollector(benchmark),
                        "makeStdOut" => makeFakeStdOut, => unittest)
 
+    traceln(`Preparing report`)
     var pieces :List[Str] := []
 
     pieces with= (`<!doctype HTML>
