@@ -96,7 +96,8 @@ entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 	mast/lib/entropy/pcg.mast
 
 parsers: mast/lib/parsers/http.mast mast/lib/parsers/html.mast \
-	mast/lib/parsers/marley.mast mast/lib/parsers/monte.mast
+	mast/lib/parsers/marley.mast mast/lib/parsers/monte.mast \
+	mast/lib/parsers/regex.mast
 
 tubes: mast/lib/tubes.mast
 

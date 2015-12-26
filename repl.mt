@@ -15,6 +15,7 @@ def makeMonteParser(var environment, unsealException) as DeepFrozen:
         def map := import(module)
         for k :Str => v :DeepFrozen in map:
             environment with= (k, &&v)
+            traceln(`Adding $k to environment`)
     environment with= ("playWith", &&playWith)
 
     return object monteEvalParser:
