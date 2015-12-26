@@ -4,6 +4,9 @@ exports (Regex)
 interface _Regex :DeepFrozen:
     "Regular expressions."
 
+    to possible() :Bool:
+        "Whether this regular expression can match anything ever."
+
     to acceptsEmpty() :Bool:
         "Whether this regular expression accepts the empty string.
         
@@ -28,6 +31,9 @@ object Regex extends _Regex as DeepFrozen:
         return object nullRegex as DeepFrozen implements _Regex:
             "∅, the regular expression which doesn't match."
 
+            to possible() :Bool:
+                return false
+
             to acceptsEmpty() :Bool:
                 return false
 
@@ -44,6 +50,9 @@ object Regex extends _Regex as DeepFrozen:
         return object emptyRegex as DeepFrozen implements _Regex:
             "ε, the regular expression which matches only the empty string."
 
+            to possible() :Bool:
+                return true
+
             to acceptsEmpty() :Bool:
                 return true
 
@@ -57,8 +66,15 @@ object Regex extends _Regex as DeepFrozen:
                 return ""
 
     to "|"(left :_Regex, right :_Regex) :Regex:
+        if (!left.possible()):
+            return right
+        if (!right.possible()):
+            return left
         return object orRegex as DeepFrozen implements _Regex:
             "An alternating regular expression."
+
+            to possible() :Bool:
+                return left.possible() || right.possible()
 
             to acceptsEmpty() :Bool:
                 return left.acceptsEmpty() || right.acceptsEmpty()
@@ -74,11 +90,17 @@ object Regex extends _Regex as DeepFrozen:
                 return `(${left.asString()}|${right.asString()})`
 
     to "&"(left :_Regex, right :_Regex) :Regex:
+        if (!left.possible() || !right.possible()):
+            return Regex."ø"()
+
         # Honest Q: Would using a lazy slot to cache left.acceptsEmpty() help here
         # at all? ~ C.
 
         return object andRegex as DeepFrozen implements _Regex:
             "A catenated regular expression."
+
+            to possible() :Bool:
+                return left.possible() && right.possible()
 
             to acceptsEmpty() :Bool:
                 return left.acceptsEmpty() && right.acceptsEmpty()
@@ -103,6 +125,9 @@ object Regex extends _Regex as DeepFrozen:
         return object starRegex as DeepFrozen implements _Regex:
             "The Kleene star of a regular expression."
 
+            to possible() :Bool:
+                return true
+
             to acceptsEmpty() :Bool:
                 return true
 
@@ -118,6 +143,9 @@ object Regex extends _Regex as DeepFrozen:
     to "=="(value :DeepFrozen) :Regex:
         return object equalRegex as DeepFrozen implements _Regex:
             "A regular expression that matches exactly one value."
+
+            to possible() :Bool:
+                return true
 
             to acceptsEmpty() :Bool:
                 return false
@@ -137,6 +165,9 @@ object Regex extends _Regex as DeepFrozen:
     to "∈"(values :Set[DeepFrozen]) :Regex:
         return object containsRegex as DeepFrozen implements _Regex:
             "A regular expression that matches any value in a finite set."
+
+            to possible() :Bool:
+                return true
 
             to acceptsEmpty() :Bool:
                 return false
@@ -160,6 +191,9 @@ object Regex extends _Regex as DeepFrozen:
 
              The predicate must be `DeepFrozen` to prevent certain stateful
              shenanigans."
+
+            to possible() :Bool:
+                return true
 
             to acceptsEmpty() :Bool:
                 return false
