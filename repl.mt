@@ -10,9 +10,9 @@ def makeMonteParser(var environment, unsealException) as DeepFrozen:
     var failure :NullOk[Str] := null
     var result := null
 
-    def playWith(module :Str) :Void:
+    def playWith(module :Str, scope :Map) :Void:
         "Import a module and bring it into the environment."
-        def map := import(module)
+        def map := import(module, scope)
         for k :Str => v :DeepFrozen in map:
             environment with= (k, &&v)
             traceln(`Adding $k to environment`)

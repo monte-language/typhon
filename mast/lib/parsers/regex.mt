@@ -1,5 +1,8 @@
-imports
-exports (Regex)
+imports => unittest
+exports (Regex, parseRegex)
+
+def [=> marley__quasiParser :DeepFrozen,
+] | _ := import("lib/parsers/marley", [=> unittest])
 
 interface _Regex :DeepFrozen:
     "Regular expressions."
@@ -209,3 +212,43 @@ object Regex extends _Regex as DeepFrozen:
 
             to asString() :Str:
                 return M.toString(predicate)
+
+def parseRegex(regex :Str) as DeepFrozen:
+    def reduce(l) :Regex:
+        return switch (l):
+            match [=="choice", rule, rules]:
+                Regex."|"(reduce(rule), reduce(rules))
+            match [=="choice", rule]:
+                reduce(rule)
+            match [=="rules", rule, rules]:
+                Regex."&"(reduce(rule), reduce(rules))
+            match [=="rules", rule]:
+                reduce(rule)
+            match [=="rule", rule]:
+                reduce(rule)
+            match [=="char", character]:
+                Regex."=="(character)
+            match [=="group", =='(', rules, ==')']:
+                reduce(rules)
+            match [=="choice", left, =='|', right]:
+                Regex."|"(reduce(left), reduce(right))
+            match [=="star", rule, =='*']:
+                Regex."*"(reduce(rule))
+
+    def regexGrammar := marley`
+        choice -> rules | rules '|' rules
+        rules -> rule rules | rule
+        rule -> char | class | exclusion | group | star
+        char -> 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' |
+                'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' |
+                'W' | 'X' | 'Y' | 'Z'
+        chars -> char chars | char
+        class -> '[' chars ']'
+        exclusion -> '[' '^' chars ']'
+        group -> '(' choice ')'
+        star -> rule '*'
+    `
+    def parser := regexGrammar("choice")
+    traceln(`Made parser; preparing to feed parser`)
+    parser.feedMany(regex)
+    return [for result in (parser.results()) reduce(result)]

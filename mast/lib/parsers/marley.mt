@@ -160,10 +160,13 @@ def makeMarley(grammar, startRule) as DeepFrozen:
             return rv.snapshot()
 
         to feed(token):
+            traceln(`Feeding $token to $table`)
             if (failure != null):
+                traceln(`Parser already failed: $failure`)
                 return
 
             position += 1
+            traceln(`Advancing position $position in table $table`)
             escape ej:
                 advance(position, token, grammar, table, ej)
             catch reason:
@@ -282,14 +285,18 @@ def makeScanner(characters) as DeepFrozen:
         to nextToken():
             scanner.eatWhitespace()
             while (true):
+                traceln(`Scanning ${scanner.peek()}`)
                 switch (scanner.nextChar()):
                     match c ? (alphanumeric.contains(c)):
                         # Identifier.
                         var s := c.asString()
+                        traceln(`Found identifier $s`)
                         while (true):
                             if (scanner.peek() =~ c ? (alphanumeric.contains(c))):
                                 s += c.asString()
+                                traceln(`Now it's $s`)
                             else:
+                                traceln(`Finally, $s`)
                                 return ["identifier", s]
                             scanner.advance()
                     match =='-':
@@ -308,6 +315,7 @@ def makeScanner(characters) as DeepFrozen:
                         return ["unknown", c]
 
         to hasTokens() :Bool:
+            traceln(`Considering whether we have more tokens`)
             scanner.eatWhitespace()
             return pos < characters.size()
 
@@ -408,7 +416,8 @@ object marley__quasiParser as DeepFrozen:
         def parser := makeMarley(marleyQLGrammar, "grammar")
         while (scanner.hasTokens()):
             def token := scanner.nextToken()
-            # traceln(`Next token: $token`)
+            traceln(`Next token: $token`)
+            traceln(`Parser: ${parser.getFailure()}`)
             parser.feed(token)
         def r := parser.results()[0]
         return object ruleSubstituter:
