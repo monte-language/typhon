@@ -26,6 +26,7 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 .PRECIOUS: $(boot_objects)
 
 PYTHON=venv/bin/python
+MT_TYPHON=./mt-typhon
 
 ifdef PROFILE
 	PROFILE_FLAGS=-p
@@ -78,7 +79,7 @@ testVM: default
 testMast: default mast infer mast/tests/lexer.mast mast/tests/parser.mast \
 	mast/tests/auditors.mast mast/tests/fail-arg.mast mast/tests/expander.mast \
 	mast/tests/optimizer.mast mast/tests/flexMap.mast
-	./mt-typhon -l mast mast/unittest all-tests
+	$(MT_TYPHON) -l mast mast/unittest all-tests
 
 test: testVM testMast
 
@@ -121,8 +122,8 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 
 %.mast: %.mt
 	@ echo "MONTEC $<"
-	@ ./mt-typhon $(PROFILE_FLAGS) -l boot boot/montec -mix -format mast $< $@ # 2> /dev/null
+	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot boot/montec -mix -format mast $< $@ # 2> /dev/null
 
 clean:
 	@ echo "CLEAN"
-	@ find -iname mast/\*.mast -delete
+	@ find -iwholename './mast/*.mast' -delete
