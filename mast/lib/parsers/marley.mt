@@ -1,3 +1,6 @@
+imports => unittest
+exports (makeMarley, marley__quasiParser)
+
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -20,14 +23,18 @@
 # polymorphic over the token and input types and can support non-character
 # parses.
 
-object terminal:
+def Rule := List[Pair[DeepFrozen, DeepFrozen]]
+def Rules := List[Rule]
+def Grammar := Map[Str, Rules]
+
+object terminal as DeepFrozen:
     pass
 
-object nonterminal:
+object nonterminal as DeepFrozen:
     pass
 
 
-def makeTable(grammar, startRule):
+def makeTable(grammar, startRule) as DeepFrozen:
     def tableList := [[].asSet()].diverge()
     var queue := [].diverge()
 
@@ -83,7 +90,7 @@ def makeTable(grammar, startRule):
             return queue.size() > 0
 
 
-def advance(position, token, grammar, table, ej):
+def advance(position, token, grammar, table, ej) as DeepFrozen:
     table.queueStates(position - 1)
     if (!table.hasQueuedStates()):
         # The table isn't going to advance at all from this token; the parse
@@ -127,7 +134,7 @@ def advance(position, token, grammar, table, ej):
         throw.eject(ej, `Expected one of $heads`)
 
 
-def makeMarley(grammar, startRule):
+def makeMarley(grammar, startRule) as DeepFrozen:
     def table := makeTable(grammar, startRule)
     var position :Int := 0
     var failure :NullOk[Str] := null
@@ -167,8 +174,11 @@ def makeMarley(grammar, startRule):
                 marley.feed(token)
 
 
-def exactly(token):
-    return object exactlyMatcher:
+def exactly(token :DeepFrozen) as DeepFrozen:
+    "Create a matcher which matches only a single `DeepFrozen` token by
+     equality."
+
+    return object exactlyMatcher as DeepFrozen:
         to _uncall():
             return [exactly, [token], [].asMap()]
 
@@ -179,7 +189,7 @@ def exactly(token):
             return `exactly $token`
 
 
-def parens := [
+def parens :Grammar := [
     "parens" => [
         [],
         [[terminal, exactly('(')], [nonterminal, "parens"],
@@ -239,10 +249,10 @@ def testMarleyWP(assert):
 #     testMarleyWP,
 # ])
 
-def alphanumeric := 'a'..'z' | 'A'..'Z' | '0'..'9'
-def escapeTable := ['n' => '\n']
+def alphanumeric :Set[Char] := ([for c in ('a'..'z' | 'A'..'Z' | '0'..'9') c]).asSet()
+def escapeTable :Map[Char, Char] := ['n' => '\n']
 
-def makeScanner(characters):
+def makeScanner(characters) as DeepFrozen:
     var pos :Int := 0
 
     return object scanner:
@@ -273,11 +283,11 @@ def makeScanner(characters):
             scanner.eatWhitespace()
             while (true):
                 switch (scanner.nextChar()):
-                    match c :alphanumeric:
+                    match c ? (alphanumeric.contains(c)):
                         # Identifier.
                         var s := c.asString()
                         while (true):
-                            if (scanner.peek() =~ c :alphanumeric):
+                            if (scanner.peek() =~ c ? (alphanumeric.contains(c))):
                                 s += c.asString()
                             else:
                                 return ["identifier", s]
@@ -302,8 +312,8 @@ def makeScanner(characters):
             return pos < characters.size()
 
 
-def tag(t :Str):
-    return object tagMatcher:
+def tag(t :Str) as DeepFrozen:
+    return object tagMatcher as DeepFrozen:
         to _uncall():
             return [tag, [t], [].asMap()]
 
@@ -318,7 +328,7 @@ def tag(t :Str):
             return `tag $t`
 
 
-def marleyQLGrammar := [
+def marleyQLGrammar :Grammar := [
     "charLiteral" => [
         [[terminal, tag("character")]],
     ],
@@ -350,7 +360,7 @@ def marleyQLGrammar := [
 
 
 # It's assumed that left is the bigger of the two.
-def combineProductions(left :Map, right :Map) :Map:
+def combineProductions(left :Map, right :Map) :Map as DeepFrozen:
     var rv := left
     for head => rules in right:
         if (rv.contains(head)):
@@ -368,7 +378,7 @@ def testCombineProductions(assert):
 unittest([testCombineProductions])
 
 
-def marleyQLReducer(t):
+def marleyQLReducer(t) as DeepFrozen:
     switch (t):
         match [=="charLiteral", [_, c]]:
             return [terminal, exactly(c)]
@@ -392,7 +402,7 @@ def marleyQLReducer(t):
             return marleyQLReducer(p)
 
 
-object marley__quasiParser:
+object marley__quasiParser as DeepFrozen:
     to valueMaker([piece]):
         def scanner := makeScanner(piece)
         def parser := makeMarley(marleyQLGrammar, "grammar")
@@ -403,7 +413,8 @@ object marley__quasiParser:
         def r := parser.results()[0]
         return object ruleSubstituter:
             to substitute(_):
-                return marleyQLReducer(r)
+                return def reduced(head):
+                    return makeMarley(marleyQLReducer(r), head)
 
 
 def testMarleyQPSingle(assert):
@@ -428,35 +439,3 @@ def testMarleyQPDouble(assert):
 #     testMarleyQPSingle,
 #     testMarleyQPDouble,
 # ])
-
-
-def marleyBench():
-    def wp := marley`
-        P -> S
-        S -> S '+' M | M
-        M -> M '*' T | T
-        T -> '1' | '2' | '3' | '4'
-    `
-    def reduce(l):
-        switch (l):
-            match [=="P", s]:
-                return reduce(s)
-            match [=="S", s, _, m]:
-                return reduce(s) + reduce(m)
-            match [=="S", m]:
-                return reduce(m)
-            match [=="M", m, _, t]:
-                return reduce(m) * reduce(t)
-            match [=="M", t]:
-                return reduce(t)
-            match [=="T", c]:
-                return c.asInteger() - '0'.asInteger()
-
-    def wpParser := makeMarley(wp, "P")
-    wpParser.feedMany("1*2+3*4+1*2+3*4")
-    return reduce(wpParser.results()[0]) == 28
-
-bench(marleyBench, "Marley arithmetic")
-
-
-[=> makeMarley, => marley__quasiParser]

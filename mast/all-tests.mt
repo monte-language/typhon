@@ -15,7 +15,7 @@ import.script("lib/netstring")
 import.script("lib/parsers/html")
 ## Depends on derp, not in the repo.
 # import.script("lib/parsers/http")
-import.script("lib/parsers/marley", [=> &&bench])
+import("lib/parsers/marley", [=> bench, => unittest])
 import.script("lib/paths")
 import("lib/codec/percent", [=> unittest])
 import("lib/record", [=> unittest])
