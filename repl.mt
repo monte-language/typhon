@@ -10,6 +10,13 @@ def makeMonteParser(var environment, unsealException) as DeepFrozen:
     var failure :NullOk[Str] := null
     var result := null
 
+    def playWith(module :Str) :Void:
+        "Import a module and bring it into the environment."
+        def map := import(module)
+        for k :Str => v :DeepFrozen in map:
+            environment with= (k, &&v)
+    environment with= ("playWith", &&playWith)
+
     return object monteEvalParser:
         to getFailure() :NullOk[Str]:
             return failure
@@ -35,7 +42,8 @@ def makeMonteParser(var environment, unsealException) as DeepFrozen:
             try:
                 def [val, newEnv] := eval.evalToPair(tokens, environment)
                 result := val
-                environment := newEnv
+                # Preserve side-effected new stuff from e.g. playWith.
+                environment := newEnv | environment
             catch via (unsealException) [problem, trail]:
                 failure := `$problem`
                 # Discard the first line from the trail since it's always the
