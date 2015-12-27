@@ -332,6 +332,12 @@ class TestInt(TestCase):
         bi = rbigint.fromint(0x5c5c).lshift(64)
         self.assertTrue(result.bi.eq(bi))
 
+    def testShiftLeftFar(self):
+        i = IntObject(0x1)
+        result = i.call(u"shiftLeft", [IntObject(65)])
+        bi = rbigint.fromint(0x1).lshift(65)
+        self.assertTrue(result.bi.eq(bi))
+
     def testShiftRight(self):
         i = IntObject(0xf0)
         result = i.call(u"shiftRight", [IntObject(5)])

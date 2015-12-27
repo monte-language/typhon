@@ -488,6 +488,10 @@ class IntObject(Object):
         if atom is SHIFTLEFT_1:
             other = unwrapInt(args[0])
             try:
+                if other >= LONG_BIT:
+                    # Definite overflow won't always be detected by
+                    # ovfcheck(). Raise manually in this case.
+                    raise OverflowError
                 return IntObject(ovfcheck(self._i << other))
             except OverflowError:
                 return BigInt(rbigint.fromint(self._i).lshift(other))
