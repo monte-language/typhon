@@ -35,10 +35,11 @@ def makeEntropy(generator) as DeepFrozen:
             # then discard it and take another one.
             def k := n.bitLength()
             var rv := pool.getSomeBits(k)
-            # traceln(`nextInt $n $rv`)
+            # traceln(`nextInt($n) k=$k -> $rv`)
             while (rv >= n):
+                # traceln(`Was too big!`)
                 rv := pool.getSomeBits(k)
-                # traceln(`nextInt too big; $n $rv`)
+                # traceln(`nextInt($n) k=$k -> $rv`)
             return rv
 
         to nextDouble() :Double:

@@ -22,7 +22,7 @@ def makePool(entropy) as DeepFrozen:
 
     def fill():
         def [size, data] := entropy.getEntropy()
-        # traceln(`fill $pool $bits $data $size`)
+        # traceln(`fill pool=$pool bits=$bits data=$data size=$size`)
         pool |= data << bits
         bits += size
 
@@ -32,10 +32,11 @@ def makePool(entropy) as DeepFrozen:
         to getSomeBits(k :(Int >= 0)) :Int:
             while (bits < k):
                 fill()
+            # traceln(`k=$k; 1 << k=${1 << k}`)
             def rv := pool & ((1 << k) - 1)
             pool >>= k
             bits -= k
-            # traceln(`getSomeBits $pool $bits $rv`)
+            # traceln(`getSomeBits($k) pool=$pool bits=$bits -> $rv`)
             return rv
 
         to availableEntropy() :Int:
