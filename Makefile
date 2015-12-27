@@ -78,7 +78,7 @@ testVM: default
 
 testMast: default mast infer mast/tests/lexer.mast mast/tests/parser.mast \
 	mast/tests/auditors.mast mast/tests/fail-arg.mast mast/tests/expander.mast \
-	mast/tests/optimizer.mast mast/tests/flexMap.mast
+	mast/tests/optimizer.mast mast/tests/flexMap.mast mast/tests/proptests.mast
 	$(MT_TYPHON) -l mast mast/unittest all-tests
 
 test: testVM testMast
