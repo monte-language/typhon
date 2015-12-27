@@ -1,3 +1,6 @@
+imports => unittest
+exports (makeEntropy)
+
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,9 +15,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> makePool] := import.script("lib/entropy/pool")
+def [=> makePool :DeepFrozen] | _ := import("lib/entropy/pool", [=> unittest])
 
-def makeEntropy(generator):
+def makeEntropy(generator) as DeepFrozen:
     def pool := makePool(generator)
 
     return object entropy:
@@ -48,12 +51,3 @@ def makeEntropy(generator):
             # before taking a logarithm.
             def d := 1.0 - entropy.nextDouble()
             return -(d.log()) / lambda
-
-def [=> makePCG] := import.script("lib/entropy/pcg")
-def e := makeEntropy(makePCG(0x12345678, 0))
-bench(e.nextBool, "entropy nextBool")
-bench(fn {e.nextInt(4096)}, "entropy nextInt (best case)")
-bench(fn {e.nextInt(4097)}, "entropy nextInt (worst case)")
-bench(e.nextDouble, "entropy nextDouble")
-
-[=> makeEntropy]

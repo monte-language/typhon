@@ -1,7 +1,10 @@
-def [=> continued] := import.script("lib/continued")
+imports => unittest
+exports (makePiEntropy)
+
+def [=> continued :DeepFrozen] := import("lib/continued")
 
 
-def makePiEntropy():
+def makePiEntropy() as DeepFrozen:
     def pi := continued.pi().extractDigits(2)
     # Move past the first digit (3)
     pi.produceDigit(null)
@@ -27,6 +30,3 @@ def testPiEntropy(assert):
     assert.equal(x.getEntropy()[1], 0x0) # 0.03125
 
 unittest([testPiEntropy])
-
-
-[=> makePiEntropy]

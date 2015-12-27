@@ -1,3 +1,6 @@
+imports => unittest
+exports (makeXORShift)
+
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,7 +15,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def makeXORShift(seed :Int ? (seed != 0)):
+def makeXORShift(seed :Int ? (seed != 0)) as DeepFrozen:
     var s0 :Int := seed >> 64
     var s1 :Int := seed & 0xffffffffffffffff
 
@@ -41,6 +44,3 @@ def testXORShift(assert):
     assert.equal(x.getEntropy()[1], 0x0000800000902041)
 
 unittest([testXORShift])
-
-
-[=> makeXORShift]

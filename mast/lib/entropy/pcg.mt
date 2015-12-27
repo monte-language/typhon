@@ -1,3 +1,6 @@
+imports
+exports (makePCG)
+
 # PCG: Permuted congruent generators, based on descriptions at
 # http://www.pcg-random.org/ .
 
@@ -7,7 +10,7 @@ def PCGBits :Int := 0x5851f42d4c957f2d
 def mask64 :Int := (2 ** 64) - 1
 def mask32 :Int := 0xffffffff
 
-def makePCG(initialState :Int, sequence :Int):
+def makePCG(initialState :Int, sequence :Int) as DeepFrozen:
     var state :Int := initialState & mask64
 
     object PCG:
@@ -28,5 +31,3 @@ def makePCG(initialState :Int, sequence :Int):
 
     PCG.getEntropy()
     return PCG
-
-[=> makePCG]

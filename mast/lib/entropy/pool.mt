@@ -1,3 +1,6 @@
+imports => unittest
+exports (makePool)
+
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,7 +15,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def makePool(entropy):
+def makePool(entropy) as DeepFrozen:
     # Convention: Fill on the left, slice on the right.
     var pool :Int := 0
     var bits :(Int >= 0) := 0
@@ -52,5 +55,3 @@ def testPool(assert):
     assert.equal(pool.getSomeBits(3), 0x5)
 
 unittest([testPool])
-
-[=> makePool]
