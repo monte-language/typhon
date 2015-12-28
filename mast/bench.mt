@@ -1,7 +1,7 @@
 imports
 exports (main)
 
-def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
+def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
 
 def benchmarks :List[Str] := [
     "brot",
@@ -42,7 +42,7 @@ def main(=> bench, => makeFileResource, => unittest) as DeepFrozen:
 
     for benchmark in benchmarks:
         traceln(`Importing $benchmark`)
-        def module := import(`bench/$benchmark`)
+        def module := ::"import"(`bench/$benchmark`)
         traceln(`Running $benchmark`)
         module["main"]("bench" => benchCollector(benchmark),
                        "makeStdOut" => makeFakeStdOut, => unittest)

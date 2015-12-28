@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> makeDerp, => anything, => ex] | _ := import.script("lib/parsers/derp")
+def [=> makeDerp, => anything, => ex] | _ := ::"import".script("lib/parsers/derp")
 
 def anyChar := ex('.') % fn _ {anything}
 

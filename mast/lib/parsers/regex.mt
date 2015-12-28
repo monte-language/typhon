@@ -2,7 +2,7 @@ imports => unittest
 exports (Regex, parseRegex)
 
 def [=> marley__quasiParser :DeepFrozen,
-] | _ := import("lib/parsers/marley", [=> unittest])
+] | _ := ::"import"("lib/parsers/marley", [=> unittest])
 
 interface _Regex :DeepFrozen:
     "Regular expressions."

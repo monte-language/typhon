@@ -1,4 +1,4 @@
-def [=> makeMonteLexer] := import.script("lib/monte/monte_lexer")
+def [=> makeMonteLexer] := ::"import".script("lib/monte/monte_lexer")
 
 def lex(s):
     def l := makeMonteLexer(s, "test")

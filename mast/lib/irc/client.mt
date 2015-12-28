@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> UTF8] | _ := import.script("lib/codec/utf8")
+def [=> UTF8] | _ := ::"import".script("lib/codec/utf8")
 def [
     => makeUTF8DecodePump,
     => makeUTF8EncodePump,
@@ -20,10 +20,10 @@ def [
     => makeSplitPump,
     => makePumpTube,
     => chain,
-] | _ := import("lib/tubes", [=> unittest])
-def [=> makeSingleUse] := import.script("lib/singleUse")
-def [=> makeTokenBucket] := import.script("lib/tokenBucket")
-def [=> makeUser, => sourceToUser] | _ := import.script("lib/irc/user")
+] | _ := ::"import"("lib/tubes", [=> unittest])
+def [=> makeSingleUse] := ::"import".script("lib/singleUse")
+def [=> makeTokenBucket] := ::"import".script("lib/tokenBucket")
+def [=> makeUser, => sourceToUser] | _ := ::"import".script("lib/irc/user")
 
 
 def makeLineTube():

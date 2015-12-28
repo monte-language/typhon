@@ -20,7 +20,7 @@ exports (main)
 # benchmark. ~ C.
 
 def main(=> bench, => unittest) as DeepFrozen:
-    def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
+    def [=> makeEnum] | _ := ::"import"("lib/enum", [=> unittest])
 
     def [Enumeration, Ident1, Ident2, Ident3, Ident4, Ident5] := makeEnum(
         ["Ident1", "Ident2", "Ident3", "Ident4", "Ident5"])

@@ -1,7 +1,7 @@
 imports
 exports (main)
 
-def [=> makeComplex :DeepFrozen] | _ := import("lib/complex")
+def [=> makeComplex :DeepFrozen] | _ := ::"import"("lib/complex")
 
 
 def ITERATIONS :Int := 170
@@ -24,7 +24,7 @@ def getScaled(l, count :Int) as DeepFrozen:
     return l[index]
 
 
-def [=> ramp :DeepFrozen] | _ := import.script("lib/ansiColor")
+def [=> ramp :DeepFrozen] | _ := ::"import".script("lib/ansiColor")
 def chars :Str := "@#&%!*+-."
 def colors :List[Str] := ["37", "32", "33", "31", "36", "35", "34"]
 def ramp80 :List[Str] := [for i in (ramp(80)) `38;5;$i`].reverse()
@@ -61,7 +61,7 @@ def brotAt(xCenter :Double, yCenter :Double, xScale :Double, yScale :Double) :St
 def main(=> bench, => unittest, => makeStdOut) :Int as DeepFrozen:
     def [=> makeUTF8EncodePump :DeepFrozen,
          => makePumpTube :DeepFrozen,
-    ] | _ := import("lib/tubes", [=> unittest])
+    ] | _ := ::"import"("lib/tubes", [=> unittest])
 
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout.flowTo(makeStdOut())

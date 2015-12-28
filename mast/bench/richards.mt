@@ -21,7 +21,7 @@ exports (main)
 
 def main(=> bench, => unittest) as DeepFrozen:
 
-    def [=> makeEnum] := import("lib/enum", [=> unittest])
+    def [=> makeEnum] := ::"import"("lib/enum", [=> unittest])
 
     # Task states.
     def [TaskType, BLANK, IDLE, WORK, HANDLERA, HANDLERB, DEVA, DEVB] := makeEnum(

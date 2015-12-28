@@ -34,17 +34,17 @@ def parseArguments([processName, scriptName] + var argv) as DeepFrozen:
 def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut,
          => unsealException, => bench, => unittest) as DeepFrozen:
     def scope := safeScope | [=> &&bench]
-    def [=> dump :DeepFrozen] := import.script("lib/monte/ast_dumper", scope)
-    def [=> UTF8 :DeepFrozen] := import.script("lib/codec/utf8", scope)
-    def [=> makeMASTContext :DeepFrozen] := import("lib/monte/mast", [=> UTF8])
-    def makeMonteLexer :DeepFrozen := import.script("lib/monte/monte_lexer", scope)["makeMonteLexer"]
-    def parseModule :DeepFrozen := import.script("lib/monte/monte_parser", scope)["parseModule"]
-    def [=> expand :DeepFrozen] := import.script("lib/monte/monte_expander", scope)
-    def [=> optimize :DeepFrozen] := import.script("lib/monte/monte_optimizer", scope)
+    def [=> dump :DeepFrozen] := ::"import".script("lib/monte/ast_dumper", scope)
+    def [=> UTF8 :DeepFrozen] := ::"import".script("lib/codec/utf8", scope)
+    def [=> makeMASTContext :DeepFrozen] := ::"import"("lib/monte/mast", [=> UTF8])
+    def makeMonteLexer :DeepFrozen := ::"import".script("lib/monte/monte_lexer", scope)["makeMonteLexer"]
+    def parseModule :DeepFrozen := ::"import".script("lib/monte/monte_parser", scope)["parseModule"]
+    def [=> expand :DeepFrozen] := ::"import".script("lib/monte/monte_expander", scope)
+    def [=> optimize :DeepFrozen] := ::"import".script("lib/monte/monte_optimizer", scope)
     def [=> makeUTF8EncodePump :DeepFrozen,
          => makePumpTube :DeepFrozen,
-    ] | _ := import("lib/tubes", [=> unittest])
-    def [=> findUndefinedNames :DeepFrozen] | _ := import("lib/monte/monte_verifier")
+    ] | _ := ::"import"("lib/tubes", [=> unittest])
+    def [=> findUndefinedNames :DeepFrozen] | _ := ::"import"("lib/monte/monte_verifier")
 
     def config := parseArguments(currentProcess.getArguments())
 

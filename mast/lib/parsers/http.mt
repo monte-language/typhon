@@ -17,8 +17,8 @@ def [
     => ex,
     => anything,
     => set
-] | _ := import.script("lib/parsers/derp")
-def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
+] | _ := ::"import".script("lib/parsers/derp")
+def [=> makeEnum] | _ := ::"import"("lib/enum", [=> unittest])
 
 def bytes(bs):
     # Flip the bytes around, and then build up a tree which leans in the

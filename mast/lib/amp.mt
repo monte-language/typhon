@@ -12,15 +12,15 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> strToInt] | _ := import.script("lib/atoi")
-def [=> makeEnum] | _ := import("lib/enum", [=> unittest])
-def [=> UTF8] | _ := import.script("lib/codec/utf8")
+def [=> strToInt] | _ := ::"import".script("lib/atoi")
+def [=> makeEnum] | _ := ::"import"("lib/enum", [=> unittest])
+def [=> UTF8] | _ := ::"import".script("lib/codec/utf8")
 def [=> nullPump,
      => makeMapPump,
      => makeStatefulPump,
      => makePumpTube,
      => chain,
-] := import("lib/tubes", [=> unittest])
+] := ::"import"("lib/tubes", [=> unittest])
 
 # Either we await a key length, value length, or string.
 def [AMPState, KEY, VALUE, STRING] := makeEnum([
