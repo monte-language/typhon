@@ -94,6 +94,12 @@ object b__quasiParser as DeepFrozen:
                     # The final piece was a pattern.
                     patterns.push(specimen.slice(patternMarker,
                                                  specimen.size()))
+                else:
+                    # The final piece was a value. Make sure that we're not
+                    # behind; if we are, it's usually because our specimen had
+                    # too many characters.
+                    if (specimen.size() > position):
+                        throw.eject(ej, "Specimen too long")
 
                 return patterns.snapshot()
 
