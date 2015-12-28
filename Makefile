@@ -60,6 +60,7 @@ mast: mast/lib/atoi.mast mast/lib/enum.mast mast/lib/record.mast \
 	mast/lib/help.mast \
 	mast/lib/complex.mast \
 	mast/lib/gai.mast \
+	mast/lib/gopher.mast \
 	prelude \
 	codec \
 	entropy \
