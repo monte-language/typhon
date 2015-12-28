@@ -19,7 +19,7 @@ from rpython.rlib.rarithmetic import intmask
 from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused
+from typhon.errors import Refused, userError
 from typhon.objects.collections.lists import ConstList, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject, unwrapBytes, unwrapInt
@@ -195,7 +195,11 @@ class TCP4ServerEndpoint(Object):
     def listen(self, handler):
         vat = currentVat.get()
         uv_server = ruv.alloc_tcp(vat.uv_loop)
-        ruv.tcpBind(uv_server, "0.0.0.0", self.port)
+        try:
+            ruv.tcpBind(uv_server, "0.0.0.0", self.port)
+        except ruv.UVError as uve:
+            raise userError(u"makeTCP4ServerEndpoint: Couldn't listen: %s" %
+                            uve.repr().decode("utf-8"))
 
         uv_stream = ruv.rffi.cast(ruv.stream_tp, uv_server)
         ruv.stashStream(uv_stream, (vat, handler))
