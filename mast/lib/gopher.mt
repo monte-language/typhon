@@ -3,14 +3,32 @@ exports (main)
 
 def unittest(_) {null}
 
+def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8", [=> &&unittest])
 def [=> nullPump :DeepFrozen,
      => makePumpTube :DeepFrozen,
      => chain :DeepFrozen,
 ] | _ := import("lib/tubes", [=> unittest])
+def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
+def [=> makeRecord :DeepFrozen] | _ := import("lib/record", [=> unittest])
 
-def gopherLine(name :Bytes, selector :Bytes, host :Bytes, port :Int) :Bytes as DeepFrozen:
-    def portBytes := b`${M.toString(port)}`
-    return b`0$name$\x09$selector$\x09$host$\x09$portBytes`
+def [ItemType :DeepFrozen,
+     FILE :DeepFrozen,
+] := makeEnum(["file"])
+
+def [Item :DeepFrozen, makeItem :DeepFrozen
+] := makeRecord("Item", [
+    "type" => ItemType,
+    "label" => Bytes,
+    "data" => Any,
+    "host" => Bytes,
+    "port" => Int,
+])
+
+def gopherLine(selector :Bytes, item :Item) :Bytes as DeepFrozen:
+    def label := item.getLabel()
+    def host := item.getHost()
+    def portBytes := b`${M.toString(item.getPort())}`
+    return b`0$label$\x09$selector$\x09$host$\x09$portBytes`
 
 def gopherLines(lines :List[Bytes]) :Bytes as DeepFrozen:
     return b`$\r$\n`.join(lines) + b`.$\r$\n`
@@ -22,18 +40,25 @@ def makeGopherPump(resource) as DeepFrozen:
         to received(data :Bytes):
             buf += data
             if (buf =~ b`@query$\r$\n`):
-                def lines := [for [name, selector, host, port]
-                              in (resource.search(query))
-                              gopherLine(name, selector, host, port)]
-                return [gopherLines(lines), null]
+                switch (query):
+                    match b``:
+                        def lines := [for selector => item in (resource)
+                                      gopherLine(selector, item)]
+                        return [gopherLines(lines), null]
+                    match selector ? (resource.contains(selector)):
+                        def item := resource[selector]
+                        def bs := UTF8.encode(item.getData(), null)
+                        return [b`$bs$\r$\n.$\r$\n`, null]
+                    match _:
+                        return [b`3$\r$\n`, null]
             return []
 
-object tree:
-    to search(query :Bytes):
-        return [
-            [b`This is '$\xc3$\xa9' title`, b`selector`, b`localhost`, 70],
-            [b`Next one`, b`next-selector`, b`localhost`, 70],
-        ]
+def tree := [
+    b`selector` => makeItem(FILE, b`Derp label`, `Test file!`, b`localhost`,
+                            70),
+    b`another-selector` => makeItem(FILE, b`Herp label`, `Another test file!`,
+                                    b`localhost`, 70),
+]
 
 def listener(fount, drain) as DeepFrozen:
     chain([fount, makePumpTube(makeGopherPump(tree)), drain])
