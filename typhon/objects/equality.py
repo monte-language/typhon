@@ -267,6 +267,7 @@ def samenessHash(obj, depth, path, fringe):
     if (isinstance(o, BoolObject) or isinstance(o, CharObject)
         or isinstance(o, DoubleObject) or isinstance(o, IntObject)
         or isinstance(o, BigInt) or isinstance(o, StrObject)
+        or isinstance(o, BytesObject)
         or isinstance(o, TraversalKey)):
         return o.hash()
 
