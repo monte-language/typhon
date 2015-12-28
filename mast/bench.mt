@@ -5,7 +5,7 @@ def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
 
 def benchmarks :List[Str] := [
     "brot",
-    "marley",
+    # XXX stack overflow? "marley",
     "montstone",
     "nqueens",
     "primeCount",
