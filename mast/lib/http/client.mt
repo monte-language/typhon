@@ -18,13 +18,13 @@ exports (main)
 def unittest(_):
     null
 
-def [=> makeGAI :DeepFrozen] | _ := import("lib/gai")
-def [=> bytesToInt :DeepFrozen] | _ := import.script("lib/atoi")
-def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
-def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
+def [=> makeGAI :DeepFrozen] | _ := ::"import"("lib/gai")
+def [=> bytesToInt :DeepFrozen] | _ := ::"import".script("lib/atoi")
+def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
+def [=> makeEnum :DeepFrozen] | _ := ::"import"("lib/enum", [=> unittest])
 def [=> makeMapPump :DeepFrozen,
      => makePumpTube :DeepFrozen,
-] | _ := import("lib/tubes", [=> unittest])
+] | _ := ::"import"("lib/tubes", [=> unittest])
 
 
 def lowercase(specimen, ej) as DeepFrozen:

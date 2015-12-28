@@ -6,8 +6,8 @@ exports (smallBody,
          makeResourceApp,
          main)
 
-def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
-def [=> tag :DeepFrozen] | _ := import("lib/http/tag")
+def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
+def [=> tag :DeepFrozen] | _ := ::"import"("lib/http/tag")
 
 
 def smallBody(s) as DeepFrozen:
@@ -122,7 +122,7 @@ def makeResourceApp(root) as DeepFrozen:
 
 
 def main(=> currentRuntime, => makeTCP4ServerEndpoint, => unittest) as DeepFrozen:
-    def [=> makeHTTPEndpoint] | _ := import("lib/http/server", [=> unittest])
+    def [=> makeHTTPEndpoint] | _ := ::"import"("lib/http/server", [=> unittest])
 
     # Just a single / that shows the debug page.
     def root := makeDebugResource(currentRuntime)

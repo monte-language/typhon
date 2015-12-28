@@ -1,6 +1,6 @@
-def makeMonteLexer := import.script("lib/monte/monte_lexer", safeScope)["makeMonteLexer"]
-def parseModule := import.script("lib/monte/monte_parser", safeScope)["parseModule"]
-def expand := import.script("lib/monte/monte_expander")["expand"]
+def makeMonteLexer := ::"import".script("lib/monte/monte_lexer", safeScope)["makeMonteLexer"]
+def parseModule := ::"import".script("lib/monte/monte_parser", safeScope)["parseModule"]
+def expand := ::"import".script("lib/monte/monte_expander")["expand"]
 def tests := [].diverge()
 def astBuilder := m__quasiParser.getAstBuilder()
 

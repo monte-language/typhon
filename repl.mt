@@ -1,7 +1,7 @@
 imports
 exports (main)
 
-def [=> help :DeepFrozen] | _ := import("lib/help")
+def [=> help :DeepFrozen] | _ := ::"import"("lib/help")
 
 # We *could* use lib/parsers/monte, but it's got a flaw; it can't interoperate
 # with eval() at the moment. Instead we just wrap eval() here. It's not like
@@ -12,7 +12,7 @@ def makeMonteParser(var environment, unsealException) as DeepFrozen:
 
     def playWith(module :Str, scope :Map) :Void:
         "Import a module and bring it into the environment."
-        def map := import(module, scope)
+        def map := ::"import"(module, scope)
         for k :Str => v :DeepFrozen in map:
             environment with= (k, &&v)
             traceln(`Adding $k to environment`)
@@ -67,9 +67,9 @@ def main(=> Timer, => bench, => unittest,
         => makeUTF8DecodePump :DeepFrozen,
         => makeUTF8EncodePump :DeepFrozen,
         => makePumpTube :DeepFrozen,
-    ] | _ := import("lib/tubes", [=> unittest])
+    ] | _ := ::"import"("lib/tubes", [=> unittest])
 
-    def [=> makeREPLTube] | _ := import.script("fun/repl")
+    def [=> makeREPLTube] | _ := ::"import".script("fun/repl")
 
     def baseEnvironment := safeScope | [
         # Typhon unsafe scope.

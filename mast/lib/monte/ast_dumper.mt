@@ -1,4 +1,4 @@
-def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8", safeScope | [=> &&bench])
+def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8", safeScope | [=> &&bench])
 
 def astCodes :DeepFrozen := [
     "LiteralExpr" => 10,

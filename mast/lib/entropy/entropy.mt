@@ -15,7 +15,7 @@ exports (makeEntropy)
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> makePool :DeepFrozen] | _ := import("lib/entropy/pool", [=> unittest])
+def [=> makePool :DeepFrozen] | _ := ::"import"("lib/entropy/pool", [=> unittest])
 
 def makeEntropy(generator) as DeepFrozen:
     def pool := makePool(generator)

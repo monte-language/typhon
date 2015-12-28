@@ -30,6 +30,6 @@ def runBench(bench, marley__quasiParser) as DeepFrozen:
     bench(marleyBench, "Marley arithmetic")
 
 def main(=> bench, => unittest) :Int as DeepFrozen:
-    def [=> marley__quasiParser] | _ := import("lib/parsers/marley", [=> unittest])
+    def [=> marley__quasiParser] | _ := ::"import"("lib/parsers/marley", [=> unittest])
     runBench(bench, marley__quasiParser)
     return 0

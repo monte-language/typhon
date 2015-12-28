@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> bytesToInt] | _ := import.script("lib/atoi")
+def [=> bytesToInt] | _ := ::"import".script("lib/atoi")
 
 def toNetstring(cs :Bytes) :Bytes:
     def header := `${cs.size()}`

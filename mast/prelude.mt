@@ -687,12 +687,12 @@ var preludeScope := scopeAsDF([
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
-    => M, => Ref, => import, => throw, => typhonEval,
+    => M, => Ref, => ::"import", => throw, => typhonEval,
     => makeLazySlot,
 ])
 
 def importIntoScope(name, moduleScope):
-    preludeScope |= scopeAsDF(import.script(name, moduleScope))
+    preludeScope |= scopeAsDF(::"import".script(name, moduleScope))
 
 # AST (needed for auditors).
 importIntoScope(
@@ -713,12 +713,12 @@ importIntoScope("prelude/protocolDesc",
 # Upgrade all guards with interfaces. These are the core-most guards; they
 # cannot be uncalled or anything like that.
 preludeScope := scopeAsDF(
-    import.script("prelude/coreInterfaces",
+    ::"import".script("prelude/coreInterfaces",
                   preludeScope)) | preludeScope
 
 # Spaces and regions require simple QP. They also upgrade the guards.
 preludeScope := scopeAsDF(
-    import.script("prelude/region",
+    ::"import".script("prelude/region",
                   preludeScope)) | preludeScope
 
 # b__quasiParser desires spaces.

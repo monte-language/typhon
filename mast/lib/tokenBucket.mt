@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> makeLoopingCall] := import.script("lib/loopingCall")
+def [=> makeLoopingCall] := ::"import".script("lib/loopingCall")
 
 def makeTokenBucket(maximumSize :Int, refillRate :Double):
     var currentSize :Int := maximumSize

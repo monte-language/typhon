@@ -15,16 +15,16 @@ exports (makeHTTPEndpoint)
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
+def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
 def [=> makeMapPump :DeepFrozen,
      => makePumpTube :DeepFrozen,
      => chain :DeepFrozen,
-] | _ := import("lib/tubes", [=> unittest])
-def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
-def [=> PercentEncoding :DeepFrozen] | _ := import("lib/codec/percent",
+] | _ := ::"import"("lib/tubes", [=> unittest])
+def [=> makeEnum :DeepFrozen] | _ := ::"import"("lib/enum", [=> unittest])
+def [=> PercentEncoding :DeepFrozen] | _ := ::"import"("lib/codec/percent",
                                                    [=> unittest])
-def [=> composeCodec :DeepFrozen] | _ := import("lib/codec")
-def [=> makeRecord :DeepFrozen] := import("lib/record", [=> unittest])
+def [=> composeCodec :DeepFrozen] | _ := ::"import"("lib/codec")
+def [=> makeRecord :DeepFrozen] := ::"import"("lib/record", [=> unittest])
 
 # Strange as it sounds, the percent encoding is actually *outside* the UTF-8
 # encoding!
@@ -54,7 +54,7 @@ def [BodyState :DeepFrozen,
      CHUNKED :DeepFrozen] := makeEnum(["fixed", "chunked"])
 
 def makeRequestPump() as DeepFrozen:
-    def [=> strToInt] | _ := import.script("lib/atoi", [=> &&unittest])
+    def [=> strToInt] | _ := ::"import".script("lib/atoi", [=> &&unittest])
 
     var requestState :RequestState := REQUEST
     # How body state works: The int is how much is left to read in the current

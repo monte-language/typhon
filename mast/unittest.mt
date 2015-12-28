@@ -141,11 +141,11 @@ def main(=> makeStdOut, => Timer, => currentProcess, => unsealException,
     def [=> makeIterFount :DeepFrozen,
          => makeUTF8EncodePump,
          => makePumpTube,
-    ] | _ := import("lib/tubes", [=> unittest])
+    ] | _ := ::"import"("lib/tubes", [=> unittest])
 
     def args := currentProcess.getArguments()
     for path in args.slice(2, args.size()):
-        import.script(path, [=> &&unittest])
+        ::"import".script(path, [=> &&unittest])
 
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout<-flowTo(makeStdOut())

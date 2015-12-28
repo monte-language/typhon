@@ -1,6 +1,6 @@
-def [=> makeMonteLexer] := import.script("lib/monte/monte_lexer")
-def [=> parseExpression, => parsePattern] | _ := import.script("lib/monte/monte_parser")
-def [=> term__quasiParser] | _ := import.script("fun/termParser")
+def [=> makeMonteLexer] := ::"import".script("lib/monte/monte_lexer")
+def [=> parseExpression, => parsePattern] | _ := ::"import".script("lib/monte/monte_parser")
+def [=> term__quasiParser] | _ := ::"import".script("fun/termParser")
 
 def astBuilder := m__quasiParser.getAstBuilder()
 

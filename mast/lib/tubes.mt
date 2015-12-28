@@ -213,7 +213,7 @@ def makeStatefulPump(machine) :Pump as DeepFrozen:
 
             return machine.results()
 
-def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8")
+def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
 
 def makeUTF8DecodePump() :Pump as DeepFrozen:
     var buf :Bytes := b``

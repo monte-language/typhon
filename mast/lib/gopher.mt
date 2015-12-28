@@ -3,13 +3,13 @@ exports (main)
 
 def unittest(_) {null}
 
-def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8", [=> &&unittest])
+def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8", [=> &&unittest])
 def [=> nullPump :DeepFrozen,
      => makePumpTube :DeepFrozen,
      => chain :DeepFrozen,
-] | _ := import("lib/tubes", [=> unittest])
-def [=> makeEnum :DeepFrozen] | _ := import("lib/enum", [=> unittest])
-def [=> makeRecord :DeepFrozen] | _ := import("lib/record", [=> unittest])
+] | _ := ::"import"("lib/tubes", [=> unittest])
+def [=> makeEnum :DeepFrozen] | _ := ::"import"("lib/enum", [=> unittest])
+def [=> makeRecord :DeepFrozen] | _ := ::"import"("lib/record", [=> unittest])
 
 def [ItemType :DeepFrozen,
      FILE :DeepFrozen,

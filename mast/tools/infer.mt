@@ -5,12 +5,12 @@ exports (main, makeInference)
 def bench(_, _) as DeepFrozen:
     null
 
-def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8", [=> &&unittest])
+def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8", [=> &&unittest])
 def [=> makeUTF8EncodePump :DeepFrozen,
      => makePumpTube :DeepFrozen,
-] | _ := import("lib/tubes", [=> unittest])
-def [=> parseModule :DeepFrozen] | _ := import.script("lib/monte/monte_parser")
-def [=> makeMonteLexer :DeepFrozen] | _ := import.script("lib/monte/monte_lexer")
+] | _ := ::"import"("lib/tubes", [=> unittest])
+def [=> parseModule :DeepFrozen] | _ := ::"import".script("lib/monte/monte_parser")
+def [=> makeMonteLexer :DeepFrozen] | _ := ::"import".script("lib/monte/monte_lexer")
 
 def [=> iterGoal :DeepFrozen,
      => satisfiable :DeepFrozen,
@@ -19,7 +19,7 @@ def [=> iterGoal :DeepFrozen,
      => allOf :DeepFrozen,
      => anyOf :DeepFrozen,
      => delay :DeepFrozen,
-] | _ := import("lib/uKanren")
+] | _ := ::"import"("lib/uKanren")
 
 def Expr :DeepFrozen := astBuilder.getExprGuard()
 def Patt :DeepFrozen := astBuilder.getPatternGuard()
