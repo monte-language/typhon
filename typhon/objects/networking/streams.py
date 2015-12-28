@@ -178,7 +178,11 @@ class StreamFount(Object):
     def considerFlush(self):
         if not self.pauses and self._drain is not None:
             if not self._reading:
-                ruv.readStart(self.stream, ruv.allocCB, readCB)
+                try:
+                    ruv.readStart(self.stream, ruv.allocCB, readCB)
+                except ruv.UVError as uve:
+                    raise userError(u"StreamFount couldn't read: %s" %
+                                    uve.repr().decode("utf-8"))
                 self._reading = True
             from typhon.objects.collections.maps import EMPTY_MAP
             self.vat.sendOnly(self, FLUSH_0, [], EMPTY_MAP)
@@ -225,6 +229,12 @@ class StreamDrain(Object):
         if atom is RECEIVE_1:
             if self._closed:
                 raise userError(u"Can't send data to a closed stream!")
+
+            if args[0] is NullObject:
+                # Pump-style notification that we're supposed to close.
+                self.flush()
+                self.cleanup()
+                return NullObject
 
             # XXX we are punting completely on any notion of backpressure for
             # now. How to fix:
