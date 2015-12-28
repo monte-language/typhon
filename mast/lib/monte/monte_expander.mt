@@ -762,7 +762,7 @@ def expand(node, builder, fail) as DeepFrozen:
                                                "run", [k], [], span), v]
             else:
                 return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
-                                               "depr", [k, default], [], span), v]
+                                               "withDefault", [k, default], [], span), v]
 
         else if (nodeName == "MapPatternImport"):
             def [subnode, default] := args
@@ -779,7 +779,7 @@ def expand(node, builder, fail) as DeepFrozen:
                                                "run", [k], [], span), v]
             else:
                 return [builder.MethodCallExpr(builder.NounExpr("_mapExtract", span),
-                                               "depr", [k, default], [], span), v]
+                                               "withDefault", [k, default], [], span), v]
 
         else if (nodeName == "ListPattern"):
             def [patterns, tail] := args

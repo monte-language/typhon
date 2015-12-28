@@ -516,13 +516,21 @@ def _matchSame(expected) as DeepFrozenStamp:
             throw.eject(ej, ["Not the same:", expected, specimen])
 
 
-def _mapExtract(key) as DeepFrozenStamp:
+object _mapExtract as DeepFrozenStamp:
     "Implementation of key pattern-matching syntax in map patterns."
 
-    return def mapExtractor(specimen, ej):
-        if (specimen.contains(key)):
-            return [specimen[key], specimen.without(key)]
-        throw.eject(ej, "Key " + M.toQuote(key) + " not in map")
+    to run(key):
+        return def mapExtractor(specimen, ej):
+            if (specimen.contains(key)):
+                return [specimen[key], specimen.without(key)]
+            throw.eject(ej, "Key " + M.toQuote(key) + " not in map")
+
+    to withDefault(key, default):
+        return def mapDefaultExtractor(specimen, _):
+            if (specimen.contains(key)):
+                return [specimen[key], specimen.without(key)]
+            else:
+                return [default, specimen]
 
 
 def _quasiMatcher(matchMaker, values) as DeepFrozenStamp:

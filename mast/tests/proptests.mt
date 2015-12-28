@@ -41,11 +41,11 @@ object arb:
 object proptest:
     "A property-based tester."
 
-    match [=="run", [test] + arbs, _]:
-        traceln(`testing $test`)
-        for i in 0..!10:
+    match [=="run", [test] + arbs, [=> iterations :Int := 500] | _]:
+        # traceln(`testing $test`)
+        for i in 0..!iterations:
             def args := [for arb in (arbs) arb.arbitrary()]
-            traceln(`Trying $args`)
+            # traceln(`Trying $args`)
             M.call(test, "run", args)
 
 def IntFormsARing(assert):
