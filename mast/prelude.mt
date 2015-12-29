@@ -710,18 +710,16 @@ importIntoScope("prelude/brand", preludeScope)
 importIntoScope("prelude/protocolDesc",
                 preludeScope | scopeAsDF([=> TransparentStamp]))
 
-# Regions require simple QP.
-def [=> OrderedRegionMaker, => OrderedSpaceMaker] := (
-        import.script("prelude/region", preludeScope))
+# Upgrade all guards with interfaces. These are the core-most guards; they
+# cannot be uncalled or anything like that.
+preludeScope := scopeAsDF(
+    import.script("prelude/coreInterfaces",
+                  preludeScope)) | preludeScope
 
-# Spaces require regions. We're doing this import slightly differently since
-# we want to replace some of our names with spaces; look at the order of
-# operations.
-preludeScope := scopeAsDF(import.script(
-    "prelude/space",
-    preludeScope | scopeAsDF([
-        => OrderedRegionMaker,
-        => OrderedSpaceMaker]))) | preludeScope
+# Spaces and regions require simple QP. They also upgrade the guards.
+preludeScope := scopeAsDF(
+    import.script("prelude/region",
+                  preludeScope)) | preludeScope
 
 # b__quasiParser desires spaces.
 importIntoScope("prelude/b", preludeScope)
@@ -741,11 +739,6 @@ importIntoScope("prelude/m", preludeScope0)
 # This has to do some significant AST groveling so it uses AST quasipatterns
 # for convenience.
 importIntoScope("prelude/transparent", preludeScope)
-
-# And once again, to upgrade all the guards with interfaces.
-preludeScope := scopeAsDF(
-    import.script("prelude/coreInterfaces",
-                  preludeScope)) | preludeScope
 
 preludeScope without= ("&&typhonEval")
 

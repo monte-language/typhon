@@ -42,13 +42,13 @@ def get(list, index) as DeepFrozenStamp:
  # @param myEdges is an ascending list of one-dimensional fully ordered
  #                positions.
  # @author Mark S. Miller
-object OrderedRegionMaker as DeepFrozenStamp:
+object _makeOrderedRegion as DeepFrozenStamp:
     to run(myType :DeepFrozen, myName :Str, var initBoundedLeft :Bool,
            var initEdges):
 
         # Notational convenience
         def region(boundedLeft :Bool, edges) as DeepFrozenStamp:
-            return OrderedRegionMaker(myType, myName, boundedLeft, edges)
+            return _makeOrderedRegion(myType, myName, boundedLeft, edges)
 
 
         if (initEdges.size() >= 1 && initEdges[0].previous() <=> initEdges[0]):
@@ -118,7 +118,7 @@ object OrderedRegionMaker as DeepFrozenStamp:
                         printEdge(true, myEdges[i])
 
             to _uncall():
-                return [OrderedRegionMaker, "run", [myType, myName,
+                return [_makeOrderedRegion, "run", [myType, myName,
                                                     myBoundedLeft,
                                                     myEdges], [].asMap()]
 
@@ -463,8 +463,45 @@ object OrderedRegionMaker as DeepFrozenStamp:
                         return 0.0
         return self
 
-object OrderedSpaceMaker as DeepFrozenStamp:
-    "Make ordered spaces."
+object _makeOrderedSpace as DeepFrozenStamp:
+    "The maker of ordered vector spaces.
+
+     This object implements several Monte operators, including those which
+     provide ordered space syntax."
+
+    to spaceOfValue(value):
+        "Return the ordered space corresponding to a given value.
+
+         The correspondence is obtained via Miranda _getAllegedInterface(),
+         with special cases for `Char`, `Double`, and `Int`."
+
+        if (value =~ i :Int):
+            return _makeOrderedSpace(Int, "Int")
+        else if (value =~ d :Double):
+            return _makeOrderedSpace(Double, "Double")
+        else if (value =~ c :Char):
+            return _makeOrderedSpace(Char, "Char")
+        else:
+            def type := value._getAllegedInterface()
+            return _makeOrderedSpace(type, M.toQuote(type))
+
+    to op__till(start, bound):
+        "The operator `start`..!`bound`.
+
+         This is equivalent to (space ≥ `start`) ∪ (space < `bound`) for the
+         ordered space containing `start` and `bound`."
+
+        def space := _makeOrderedSpace.spaceOfValue(start)
+        return (space >= start) & (space < bound)
+
+    to op__thru(start, stop):
+        "The operator `start`..`bound`.
+
+         This is equivalent to (space ≥ `start`) ∪ (space ≤ `bound`) for the
+         ordered space containing `start` and `bound`."
+
+        def space := _makeOrderedSpace.spaceOfValue(start)
+        return (space >= start) & (space <= stop)
 
     # Given a type whose reflexive (x <=> x) instances are fully
     # ordered, this makes an OrderedSpace for making Regions and
@@ -473,7 +510,7 @@ object OrderedSpaceMaker as DeepFrozenStamp:
 
         # Notational convenience
         def region(boundedLeft :Bool, edges) as DeepFrozenStamp:
-            return OrderedRegionMaker(myType, myName, boundedLeft, edges)
+            return _makeOrderedRegion(myType, myName, boundedLeft, edges)
 
 
         object maybeSubrangeDeepFrozen:
@@ -486,7 +523,7 @@ object OrderedSpaceMaker as DeepFrozenStamp:
         def myTypeR :Same[myType] := myType
 
         # The OrderedSpace delegates to the myType.
-        object OrderedSpace extends myType as DeepFrozenStamp implements maybeSubrangeDeepFrozen:
+        object OrderedSpace extends myType as DeepFrozenStamp implements maybeSubrangeDeepFrozen, Selfless, TransparentStamp:
             "An ordered vector space.
 
              As a guard, this object admits any value in the set of objects in
@@ -498,7 +535,7 @@ object OrderedSpaceMaker as DeepFrozenStamp:
                 out.print(myName)
 
             to _uncall():
-                return [OrderedSpaceMaker, "run", [myType, myName], [].asMap()]
+                return [_makeOrderedSpace, "run", [myType, myName], [].asMap()]
 
             to coerce(specimen, ej) :myTypeR:
                 return myType.coerce(specimen, ej)
@@ -575,25 +612,25 @@ object OrderedSpaceMaker as DeepFrozenStamp:
 
 
 def testIterable(assert):
-    def intspace := OrderedSpaceMaker(Int, "Int")
+    def intspace := _makeOrderedSpace(Int, "Int")
     def reg := (intspace >= 0) & (intspace < 5)
     assert.equal(_makeList.fromIterable(reg), [0, 1, 2, 3, 4])
 
 def testContainment(assert):
-    def intspace := OrderedSpaceMaker(Int, "Int")
+    def intspace := _makeOrderedSpace(Int, "Int")
     def reg := (intspace >= 0) & (intspace < 5)
     assert.equal(reg(3), true)
     assert.equal(reg(5), false)
     assert.throws(fn {reg(1.0)})
 
 def testGuard(assert):
-    def intspace := OrderedSpaceMaker(Int, "Int")
+    def intspace := _makeOrderedSpace(Int, "Int")
     def reg := (intspace >= 0) & (intspace < 5)
     assert.equal(def x :reg := 3, 3)
     assert.ejects(fn ej {def x :reg exit ej := 7})
 
 def testDeepFrozen(assert):
-    def intspace := OrderedSpaceMaker(Int, "Int")
+    def intspace := _makeOrderedSpace(Int, "Int")
     def reg := (intspace >= 0) & (intspace < 5)
     def x :reg := 2
     #traceln("welp")
@@ -604,4 +641,10 @@ def testDeepFrozen(assert):
 
 unittest([testIterable, testContainment, testGuard, testDeepFrozen])
 
-[=> OrderedRegionMaker, => OrderedSpaceMaker]
+[
+    "Char" => _makeOrderedSpace.spaceOfValue('m'),
+    "Int" => _makeOrderedSpace.spaceOfValue(42),
+    "Double" => _makeOrderedSpace.spaceOfValue(4.2),
+    => _makeOrderedRegion,
+    => _makeOrderedSpace,
+]

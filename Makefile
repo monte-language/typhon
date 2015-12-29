@@ -19,7 +19,6 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 	boot/prelude/protocolDesc.mast \
 	boot/prelude/region.mast \
 	boot/prelude/simple.mast \
-	boot/prelude/space.mast \
 	boot/prelude/transparent.mast \
 	boot/prelude/coreInterfaces.mast
 
@@ -86,7 +85,7 @@ test: testVM testMast
 
 prelude: mast/prelude.mast mast/prelude/brand.mast mast/prelude/m.mast \
 	mast/prelude/monte_ast.mast mast/prelude/ql.mast mast/prelude/region.mast \
-	mast/prelude/simple.mast mast/prelude/space.mast mast/prelude/deepfrozen.mast \
+	mast/prelude/simple.mast mast/prelude/deepfrozen.mast \
 	mast/prelude/protocolDesc.mast mast/prelude/b.mast mast/prelude/transparent.mast \
 	mast/prelude/coreInterfaces.mast
 
