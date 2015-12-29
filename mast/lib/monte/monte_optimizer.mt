@@ -118,6 +118,13 @@ def mix(expr,
     def remix(e):
         return mix(e, => staticValues, => safeFinalNames)
 
+    def const(node, ej):
+        return switch (node.getNodeName()) {
+            match =="LiteralExpr" {node.getValue()}
+            match =="NounExpr" {staticValues.fetch(node.getName(), ej)}
+            match expr {throw.eject(ej, `Not constant: $expr`)}
+        }
+
     # traceln(`Mixing ${expr.getNodeName()}: $expr`)
     return switch (expr.getNodeName()):
         match =="AssignExpr":
@@ -367,7 +374,9 @@ def mix(expr,
                                           remix(alt.getRvalue()),
                                           expr.getSpan())
                     return a.AssignExpr(consNoun, remix(newIf), expr.getSpan())
-            expr
+            a.IfExpr(remix(test), remix(cons),
+                     if (expr.getElse() == null) {null} else {remix(alt)},
+                     expr.getSpan())
 
         match =="Matcher":
             def body := remix(expr.getBody())
@@ -384,10 +393,22 @@ def mix(expr,
 
         match =="MethodCallExpr":
             def receiver := expr.getReceiver()
-            def verb := expr.getVerb()
+            def verb :Str := expr.getVerb()
             def args := [for arg in (expr.getArgs()) remix(arg)]
             def namedArgs := expr.getNamedArgs()
-            a.MethodCallExpr(receiver, verb, args, namedArgs, expr.getSpan())
+            # Trying for a constant-fold.
+            escape nonConst:
+                def constReceiver := const(remix(receiver), nonConst)
+                def constArgs := [for arg in (args) const(arg, nonConst)]
+                def constNamedArgs := [for arg in (namedArgs)
+                                       const(remix(arg.getKey()), nonConst) =>
+                                       const(remix(arg.getValue()), nonConst)]
+                # Success! Box it up.
+                def rv := M.call(constReceiver, verb, constArgs, constNamedArgs)
+                a.LiteralExpr(rv, expr.getSpan())
+            catch problem:
+                # traceln(`mix/1: Couldn't constant-fold: $problem`)
+                a.MethodCallExpr(receiver, verb, args, namedArgs, expr.getSpan())
 
         match =="NounExpr":
             def name := expr.getName()
@@ -621,14 +642,14 @@ def freeze(ast, maker, args, span) as DeepFrozen:
                                                                span),
                                                  newVerb, wrappedArgs, [], span)
                     return call.transform(freeze)
-                traceln(`Warning: Couldn't freeze $obj: Bad uncall`)
+                traceln(`Warning: Couldn't freeze $obj: Bad uncall ${obj._uncall()}`)
 
     return M.call(maker, "run", args + [span], [].asMap())
 
 def optimize(var expr) as DeepFrozen:
     # expr transform= (thaw)
     expr := mix(expr)
-    # expr transform= (freeze)
+    expr transform= (freeze)
     return expr
 
 [=> optimize]
