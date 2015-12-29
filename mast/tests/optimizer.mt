@@ -20,6 +20,7 @@ def specimens := [for [this, that] in ([
     [m`if (x) {2 + 2}`, m`if (x) {4}`],
     [m`2 + 2`, m`4`],
     [m`r.v(2 + 2)`, m`r.v(4)`],
+    [m`if (false | true) {x} else {y}`, m`x`],
 ]) [this.expand(), that.expand()]]
 
 for [this, that] in (specimens):

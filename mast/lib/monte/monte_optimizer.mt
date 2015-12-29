@@ -325,17 +325,13 @@ def mix(expr,
             a.HideExpr(remix(expr.getBody()), expr.getSpan())
 
         match =="IfExpr":
-            def test := expr.getTest()
+            def test := remix(expr.getTest())
             def cons := exprOrNull(expr.getThen())
             def alt := exprOrNull(expr.getElse())
-            if (test.getNodeName() == "LiteralExpr"):
-                escape wrongType:
-                    def b :Bool exit wrongType := test.getValue()
-                    return remix(b.pick(cons))
-                catch _:
-                    throw(`mix/1: $expr: if-test evaluates to non-Bool $test`)
-            else:
-                expr
+
+            # Try to constant-fold.
+            if (test =~ via (const) b :Bool):
+                return remix(b.pick(cons, alt))
 
             # m`if (test) {r.v(cons)} else {r.v(alt)}` ->
             # m`r.v(if (test) {cons} else {alt})`
@@ -648,7 +644,10 @@ def freeze(ast, maker, args, span) as DeepFrozen:
 
 def optimize(var expr) as DeepFrozen:
     # expr transform= (thaw)
-    expr := mix(expr)
+    expr := mix(expr, "staticValues" => [
+        => false,
+        => true,
+    ])
     expr transform= (freeze)
     return expr
 
