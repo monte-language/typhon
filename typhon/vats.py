@@ -17,7 +17,7 @@ from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 from typhon import log
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, UserException
+from typhon.errors import Refused, UserException, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object
 from typhon.objects.data import StrObject, unwrapInt, unwrapStr
@@ -58,8 +58,8 @@ class Vat(Object):
         self._pendingLock = allocate_lock()
         self._pending = []
 
-    def log(self, message):
-        log.log(["vat"], u"Vat %s: %s" % (self.name, message))
+    def log(self, message, tags=[]):
+        log.log(["vat"] + tags, u"Vat %s: %s" % (self.name, message))
 
     def toString(self):
         if self.checkpoints >= 0:
@@ -100,7 +100,7 @@ class Vat(Object):
         promise, resolver = makePromise()
         with self._pendingLock:
             self._pending.append((resolver, target, atom, args, namedArgs))
-            self.log(u"Planning to send %s <-%s(%s) (resolver: yes)" %
+            self.log(u"Planning to send: %s<-%s(%s) (resolver: yes)" %
                      (target.toQuote(), atom.verb,
                       u", ".join([arg.toQuote() for arg in args])))
         return promise
@@ -108,7 +108,7 @@ class Vat(Object):
     def sendOnly(self, target, atom, args, namedArgs):
         with self._pendingLock:
             self._pending.append((None, target, atom, args, namedArgs))
-            self.log(u"Planning to send %s <-%s(%s) (resolver: no)" %
+            self.log(u"Planning to send: %s<-%s(%s) (resolver: no)" %
                      (target.toQuote(), atom.verb,
                       u", ".join([arg.toQuote() for arg in args])))
 
@@ -130,7 +130,7 @@ class Vat(Object):
         # calling. Try to resolve it as much as possible first, though.
         target = resolution(target)
 
-        self.log(u"Taking turn %s <-%s(%s) (resolver: %s)" %
+        self.log(u"Taking turn: %s<-%s(%s) (resolver: %s)" %
                  (target.toQuote(), atom.verb,
                   u", ".join([arg.toQuote() for arg in args]),
                   u"yes" if resolver is not None else u"no"))
@@ -143,10 +143,17 @@ class Vat(Object):
                     # Oh, that's right; we don't do callOnly since it's silly.
                     target.callAtom(atom, args, namedArgs)
             except UserException as ue:
-                print "Uncaught exception while taking turn:", ue.formatError()
+                self.log(u"Uncaught user exception while taking turn"
+                         u" (and no resolver): %s" %
+                         ue.formatError().decode("utf-8"),
+                         tags=["serious"])
+            except VatCheckpointed:
+                self.log(u"Ran out of checkpoints while taking turn",
+                         tags=["serious"])
 
         else:
             from typhon.objects.collections.maps import ConstMap, monteMap
+            from typhon.objects.exceptions import sealException
             from typhon.objects.refs import Smash
             # XXX monteMap()
             _d = monteMap()
@@ -162,9 +169,12 @@ class Vat(Object):
                 # Resolver may be invoked from the code in this turn, so
                 # strict=False to skip this if already resolved.
                 resolver.resolve(result, strict=False)
-            except UserException, ue:
-                from typhon.objects.exceptions import sealException
+            except UserException as ue:
                 resolver.smash(sealException(ue))
+            except VatCheckpointed:
+                self.log(u"Ran out of checkpoints while taking turn; breaking resolver",
+                         tags=["serious"])
+                resolver.smash(sealException(userError(u"Vat ran out of checkpoints")))
 
     def takeSomeTurns(self):
         # Limit the number of continuous turns to keep network latency low.

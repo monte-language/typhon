@@ -65,8 +65,8 @@ class Configuration(object):
         # The paths from which to draw imports and the prelude.
         self.libraryPaths = []
 
-        # Tags for the logger.
-        self.loggerTags = []
+        # Tags for the logger. Defaults to only the most serious logs.
+        self.loggerTags = ["serious"]
 
         stream = ListStream(argv)
         # argv[0] is always the name that we were invoked with. Always.
@@ -80,7 +80,12 @@ class Configuration(object):
             elif item == "-l":
                 self.libraryPaths.append(stream.nextItem())
             elif item == "-t":
-                self.loggerTags.extend(stream.nextItem().split(":"))
+                item = stream.nextItem()
+                if item:
+                    self.loggerTags.extend(item.split(":"))
+                else:
+                    # -t '' will clear the tags.
+                    del self.loggerTags[:]
             elif item == "-load":
                 self.loadOnly = True
             elif item == "-p":
