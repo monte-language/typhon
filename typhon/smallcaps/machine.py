@@ -27,7 +27,6 @@ from typhon.objects.ejectors import Ejector, theThrower, throw
 from typhon.objects.exceptions import sealException
 from typhon.objects.guards import anyGuard
 from typhon.objects.slots import finalBinding, varBinding
-from typhon.profile import csp
 from typhon.smallcaps.ops import *
 
 
@@ -57,6 +56,10 @@ class SmallCaps(object):
         self.env = Environment(frame, globals, self.code.localSize(),
                                promote(self.code.maxDepth + 20),
                                promote(self.code.maxHandlerDepth + 5))
+
+        # For vat checkpointing.
+        from typhon.vats import currentVat
+        self.vat = currentVat.get()
 
     @staticmethod
     def withDictScope(code, scope):
@@ -118,6 +121,10 @@ class SmallCaps(object):
     @unroll_safe
     @specialize.arg(2)
     def call(self, index, withMap):
+        # Checkpoint the vat. This will, rarely, cause an exception to escape
+        # from within us.
+        self.vat.checkpoint()
+
         atom = self.code.atom(index)
 
         if withMap:
@@ -134,13 +141,12 @@ class SmallCaps(object):
 
         # We used to add the call trail for tracebacks here, but it's been
         # moved to t.o.root. Happy bug hunting! ~ C.
-        with csp.startCall(target, atom):
-            rv = target.callAtom(atom, args, namedArgs)
-            if rv is None:
-                print "A call to", target.__class__.__name__, "with atom", \
-                      atom.repr, "returned None"
-                raise RuntimeError("Implementation error")
-            self.push(rv)
+        rv = target.callAtom(atom, args, namedArgs)
+        if rv is None:
+            print "A call to", target.__class__.__name__, "with atom", \
+                  atom.repr, "returned None"
+            raise RuntimeError("Implementation error")
+        self.push(rv)
 
     @unroll_safe
     def buildMap(self, index):
@@ -267,10 +273,10 @@ class SmallCaps(object):
             else:
                 return index
         elif instruction == CALL:
-            self.call(index, False)
+            self.call(index, withMap=False)
             return pc + 1
         elif instruction == CALL_MAP:
-            self.call(index, True)
+            self.call(index, withMap=True)
             return pc + 1
         elif instruction == BUILD_MAP:
             self.buildMap(index)

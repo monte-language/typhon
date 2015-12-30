@@ -243,7 +243,6 @@ class Environment(object):
         # If these invariants are broken, then the stack can contain Nones, so
         # we'll guard against it here.
         assert depth <= self.depth, "Implementation error: Value stack UB"
-        assert (handlerDepth <= self.handlerDepth,
-                "Implementation error: Handler stack UB")
+        assert handlerDepth <= self.handlerDepth, "Implementation error: Handler stack UB"
         self.depth = depth
         self.handlerDepth = handlerDepth

@@ -20,13 +20,19 @@ from typhon.autohelp import autohelp
 from typhon.errors import Refused, UserException
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object
-from typhon.objects.data import StrObject, unwrapStr
+from typhon.objects.data import StrObject, unwrapInt, unwrapStr
 
 
 RUN_0 = getAtom(u"run", 0)
 RUN_1 = getAtom(u"run", 1)
 SEED_1 = getAtom(u"seed", 1)
-SPROUT_1 = getAtom(u"sprout", 1)
+SPROUT_2 = getAtom(u"sprout", 2)
+
+
+class VatCheckpointed(Exception):
+    """
+    The raising vat decided to abort its current turn.
+    """
 
 
 @autohelp
@@ -37,7 +43,10 @@ class Vat(Object):
 
     name = u"pa"
 
-    def __init__(self, manager, uv_loop, name=None):
+    def __init__(self, manager, uv_loop, name=None, checkpoints=0):
+        assert checkpoints != 0, "No, you can't create a zero-checkpoint vat"
+        self.checkpoints = checkpoints
+
         self._manager = manager
         self.uv_loop = uv_loop
 
@@ -53,7 +62,12 @@ class Vat(Object):
         log.log(["vat"], u"Vat %s: %s" % (self.name, message))
 
     def toString(self):
-        return u"<vat(%s, %d turns pending)>" % (self.name, len(self._pending))
+        if self.checkpoints >= 0:
+            checkpoints = u"%d checkpoints left" % self.checkpoints
+        else:
+            checkpoints = u"immortal"
+        return u"<vat(%s, %s, %d turns pending)>" % (self.name, checkpoints,
+                                                     len(self._pending))
 
     def recv(self, atom, args):
         from typhon.objects.collections.maps import EMPTY_MAP
@@ -65,13 +79,21 @@ class Vat(Object):
             from typhon.objects.refs import LocalVatRef
             return LocalVatRef(self.send(f, RUN_0, [], EMPTY_MAP), self)
 
-        if atom is SPROUT_1:
+        if atom is SPROUT_2:
             name = unwrapStr(args[0])
-            vat = Vat(self._manager, self.uv_loop, name)
+            checkpoints = unwrapInt(args[1])
+            vat = Vat(self._manager, self.uv_loop, name,
+                      checkpoints=checkpoints)
             self._manager.vats.append(vat)
             return vat
 
         raise Refused(self, atom, args)
+
+    def checkpoint(self):
+        if self.checkpoints > 0:
+            self.checkpoints -= 1
+        elif not self.checkpoints:
+            raise VatCheckpointed("Out of checkpoints")
 
     def send(self, target, atom, args, namedArgs):
         from typhon.objects.refs import makePromise
@@ -158,7 +180,7 @@ currentVat = ThreadLocalReference(Vat)
 
 
 def testingVat():
-    return Vat(None, None, name="testing")
+    return Vat(None, None, name="testing", checkpoints=1000)
 
 
 class scopedVat(object):

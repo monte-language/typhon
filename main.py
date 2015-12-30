@@ -205,9 +205,9 @@ def entryPoint(argv):
     # Usurp SIGPIPE, as libuv does not handle it.
     rsignal.pypysig_ignore(rsignal.SIGPIPE)
 
-    # Initialize our first vat.
+    # Initialize our first vat. It shall be immortal.
     vatManager = VatManager()
-    vat = Vat(vatManager, uv_loop)
+    vat = Vat(vatManager, uv_loop, checkpoints=-1)
     vatManager.vats.append(vat)
 
     # Update loop timing information. Until the loop really gets going, we
