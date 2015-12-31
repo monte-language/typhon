@@ -18,6 +18,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.enum import makeEnum
 from typhon.errors import Refused, UserException, userError
+from typhon.log import log
 from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
@@ -625,6 +626,14 @@ class NearRef(Promise):
 def packLocalRef(obj, objVat, originVat):
     assert objVat is not None, "Vat cannot be None"
     assert originVat is not None, "Vat cannot be None"
+    if objVat is originVat:
+        log(["ref"], u"Eliding ref from (and to) vat %s" % objVat.name)
+        return obj
+    elif (isinstance(obj, LocalVatRef) and obj.originVat is objVat and
+          obj.targetVat is originVat):
+        log(["ref"], u"Short-circuiting round-trip ref for vat %s" %
+            objVat.name)
+        return obj.target
     return LocalVatRef(obj, objVat, originVat)
 
 def packLocalRefs(args, targetVat, originVat):
