@@ -13,6 +13,7 @@ def [=> expand :DeepFrozen] | _ := import.script("lib/monte/monte_expander",
                                           scope)
 def [=> optimize :DeepFrozen] | _ := import.script("lib/monte/monte_optimizer",
                                             scope)
+def [=> dump :DeepFrozen] | _ := import.script("lib/monte/ast_dumper", scope)
 
 def Transparent :DeepFrozen := TransparentStamp
 
@@ -213,21 +214,27 @@ object eval as DeepFrozen:
      This object respects POLA and grants no privileges whatsoever to
      evaluated code. To grant a safe scope, pass `safeScope`."
 
-    to run(source :Str, environment):
-        "Evaluate a Monte source expression.
+    to run(expr, environment):
+        "Evaluate a Monte expression, from source or from m``.
 
          The expression will be provided only the given environment. No other
          values will be passed in."
 
-        return eval.evalToPair(source, environment)[0]
+        return eval.evalToPair(expr, environment)[0]
 
-    to evalToPair(source :Str, environment):
-        def parser := makeMonteParser("<eval>")
-        parser.feedMany(source)
-        if (parser.failed()):
-            throw(parser.getFailure())
+    to evalToPair(expr, environment):
+        if (expr =~ source :Str):
+            def parser := makeMonteParser("<eval>")
+            parser.feedMany(source)
+            if (parser.failed()):
+                throw(parser.getFailure())
+            else:
+                def result := parser.dump()
+                return typhonEval.evalToPair(result, environment)
         else:
-            def result := parser.dump()
-            return typhonEval.evalToPair(result, environment)
+            def ast :Expr := expr.expand().mix()
+            var data := b``
+            dump(ast, fn bs {data += bs})
+            return typhonEval.evalToPair(data, environment)
 
 [=> m__quasiParser, => eval]
