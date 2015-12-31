@@ -76,8 +76,9 @@ class Vat(Object):
             if not f.auditedBy(deepFrozenStamp):
                 self.log(u"seed/1: Warning: Seeded receiver is not DeepFrozen")
                 self.log(u"seed/1: Warning: This is gonna be an error soon!")
-            from typhon.objects.refs import LocalVatRef
-            return LocalVatRef(self.send(f, RUN_0, [], EMPTY_MAP), self)
+            from typhon.objects.refs import packLocalRef
+            return packLocalRef(self.send(f, RUN_0, [], EMPTY_MAP), self,
+                                currentVat.get())
 
         if atom is SPROUT_2:
             name = unwrapStr(args[0])

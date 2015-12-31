@@ -622,6 +622,23 @@ class NearRef(Promise):
         pass
 
 
+def packLocalRef(obj, objVat, originVat):
+    assert objVat is not None, "Vat cannot be None"
+    assert originVat is not None, "Vat cannot be None"
+    return LocalVatRef(obj, objVat, originVat)
+
+def packLocalRefs(args, targetVat, originVat):
+    # XXX Upgrade this to honor the real serialization protocol.
+    return [packLocalRef(arg, targetVat, originVat) for arg in args]
+
+def packLocalNamedRefs(namedArgs, targetVat, originVat):
+    from typhon.objects.collections.maps import ConstMap, monteMap
+    # XXX monteMap()
+    namedRefs = monteMap()
+    for k, v in namedArgs.objectMap.items():
+        namedRefs[packLocalRef(k, targetVat, originVat)] = packLocalRef(v, targetVat, originVat)
+    return ConstMap(namedRefs)
+
 class LocalVatRef(Promise):
     """
     A reference to an object in a different vat in the same runtime.
@@ -630,14 +647,16 @@ class LocalVatRef(Promise):
     vat are different vats.
     """
 
-    def __init__(self, target, vat):
-        assert vat is not None, "Vat cannot be None"
+    def __init__(self, target, targetVat, originVat):
         self.target = target
-        self.vat = vat
+        self.targetVat = targetVat
+        self.originVat = originVat
 
     def printOn(self, out):
-        out.call(u"print", [StrObject(u"<farref into vat ")])
-        out.call(u"print", [self.vat])
+        out.call(u"print", [StrObject(u"<farref from vat ")])
+        out.call(u"print", [StrObject(self.originVat.name)])
+        out.call(u"print", [StrObject(u" into vat ")])
+        out.call(u"print", [StrObject(self.targetVat.name)])
         out.call(u"print", [StrObject(u">")])
 
     def hash(self):
@@ -649,28 +668,22 @@ class LocalVatRef(Promise):
                         atom.repr.decode("utf-8"))
 
     def sendAll(self, atom, args, namedArgs):
-        from typhon.objects.collections.maps import ConstMap, monteMap
         vat = currentVat.get()
-        # XXX Upgrade this to honor the real serialization protocol.
-        refs = [LocalVatRef(arg, vat) for arg in args]
-        # XXX monteMap()
-        namedRefs = monteMap()
-        for k, v in namedArgs.objectMap.items():
-            namedRefs[LocalVatRef(k, vat)] = LocalVatRef(v, vat)
-        return LocalVatRef(self.vat.send(self.target, atom, refs,
-                                         ConstMap(namedRefs)),
-                           self.vat)
+        # Think about it: These args are in the current vat, and we're
+        # accessing them from our target's vat. Therefore, these refs should
+        # be from our target's vat into the current vat.
+        refs = packLocalRefs(args, vat, self.targetVat)
+        namedRefs = packLocalNamedRefs(namedArgs, vat, self.targetVat)
+        return packLocalRef(self.targetVat.send(self.target, atom, refs,
+                                                namedRefs),
+                            self.targetVat, vat)
 
     def sendAllOnly(self, atom, args, namedArgs):
-        from typhon.objects.collections.maps import ConstMap, monteMap
         vat = currentVat.get()
-        refs = [LocalVatRef(arg, vat) for arg in args]
-        # XXX monteMap()
-        namedRefs = monteMap()
-        for k, v in namedArgs.objectMap.items():
-            namedRefs[LocalVatRef(k, vat)] = LocalVatRef(v, vat)
+        refs = packLocalRefs(args, vat, self.targetVat)
+        namedRefs = packLocalNamedRefs(namedArgs, vat, self.targetVat)
         # NB: None is returned here and it's turned into null up above.
-        return self.vat.sendOnly(self.target, atom, refs, ConstMap(namedRefs))
+        return self.targetVat.sendOnly(self.target, atom, refs, namedRefs)
 
     def optProblem(self):
         return NullObject
@@ -679,6 +692,8 @@ class LocalVatRef(Promise):
         return EVENTUAL
 
     def resolution(self):
+        if self.target.auditedBy(deepFrozenStamp):
+            return self.target
         return self
 
     def resolutionRef(self):
