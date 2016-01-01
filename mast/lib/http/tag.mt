@@ -33,15 +33,23 @@ def escapeFragment(fragment) as DeepFrozen:
             return someTag
 
 object tag as DeepFrozen:
-    match [tagType, pieces, _]:
+    match [tagType :Str, pieces, namedArgs]:
         def allPieces := flatten(pieces)
-        def fragments := [for piece in (allPieces) escapeFragment(piece)]
-        object HTMLTag:
+        def fragments :List[DeepFrozen] := [for piece in (allPieces)
+                                            escapeFragment(piece)]
+        def attributes :Map[Str, Str] := [for k => v in (namedArgs)
+                                          if (k =~ sk :Str && v =~ sv :Str)
+                                          sk => sv]
+        object HTMLTag as DeepFrozen:
             to _printOn(out):
+                def attrStr := "".join([for k => v in (attributes) `$k="$v"`])
                 if (fragments.size() == 0):
-                    out.print(`<$tagType />`)
+                    out.print(`<$tagType $attrStr />`)
                 else:
-                    out.print(`<$tagType>`)
+                    if (attributes.size() == 0):
+                        out.print(`<$tagType>`)
+                    else:
+                        out.print(`<$tagType $attrStr>`)
                     for fragment in fragments:
                         out.print(`$fragment`)
                     out.print(`</$tagType>`)
