@@ -39,6 +39,7 @@ GET_1 = getAtom(u"get", 1)
 INDEXOF_1 = getAtom(u"indexOf", 1)
 INDEXOF_2 = getAtom(u"indexOf", 2)
 INSERT_2 = getAtom(u"insert", 2)
+JOIN_1 = getAtom(u"join", 1)
 LAST_0 = getAtom(u"last", 0)
 MULTIPLY_1 = getAtom(u"multiply", 1)
 NEXT_1 = getAtom(u"next", 1)
@@ -140,7 +141,26 @@ class List(object):
         if atom is SNAPSHOT_0:
             return self.snapshot()
 
+        if atom is JOIN_1:
+            l = unwrapList(args[0])
+            return self.join(l)
+
         return self._recv(atom, args)
+
+    def join(self, pieces):
+        l = []
+        filler = self.strategy.fetch_all(self)
+        first = True
+        for piece in pieces:
+            # For all iterations except the first, append a copy of
+            # ourselves.
+            if first:
+                first = False
+            else:
+                l.extend(filler)
+
+            l.append(piece)
+        return ConstList(l[:])
 
 
 @autohelp
