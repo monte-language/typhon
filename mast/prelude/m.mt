@@ -207,6 +207,14 @@ object m__quasiParser as DeepFrozen:
         def qast := parseExpression(chain, astBuilder, throw)
         return makeM(qast, false)
 
+    to fromStr(source :Str):
+        def parser := makeMonteParser("m``.fromStr/1")
+        parser.feedMany(source)
+        if (parser.failed()):
+            throw(parser.getFailure())
+        else:
+            return makeM(parser.results()[0], false)
+
 
 object eval as DeepFrozen:
     "Evaluate Monte source.
