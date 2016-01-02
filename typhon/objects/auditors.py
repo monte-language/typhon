@@ -109,10 +109,12 @@ class TransparentGuard(Object):
 
 @autohelp
 class Selfless(Object):
-    """A stamp for objects that do not wish to be compared by identity.
+    """
+    A stamp for incomparable objects.
 
-    Selfless objects are not comparable with == unless they implement some
-    protocol for comparison (such as Transparent).
+    `Selfless` objects are generally not equal to any objects but themselves.
+    They may choose to implement alternative comparison protocols such as
+    `Transparent`.
     """
 
     def auditorStamps(self):
@@ -191,7 +193,6 @@ def checkDeepFrozen(specimen, seen, ej, root):
 
 def deepFrozenSupersetOf(guard):
     from typhon.objects.collections.lists import ConstList
-    from typhon.objects.constants import wrapBool
     from typhon.objects.ejectors import Ejector
     from typhon.objects.guards import (
         AnyOfGuard, BoolGuard, BytesGuard, CharGuard, DoubleGuard,
@@ -199,32 +200,32 @@ def deepFrozenSupersetOf(guard):
         VoidGuard)
     from typhon.prelude import getGlobalValue
     if guard is deepFrozenGuard:
-        return wrapBool(True)
+        return True
     if guard is deepFrozenStamp:
-        return wrapBool(True)
+        return True
     if isinstance(guard, BoolGuard):
-        return wrapBool(True)
+        return True
     if isinstance(guard, BytesGuard):
-        return wrapBool(True)
+        return True
     if isinstance(guard, CharGuard):
-        return wrapBool(True)
+        return True
     if isinstance(guard, DoubleGuard):
-        return wrapBool(True)
+        return True
     if isinstance(guard, IntGuard):
-        return wrapBool(True)
+        return True
     if isinstance(guard, StrGuard):
-        return wrapBool(True)
+        return True
     if isinstance(guard, VoidGuard):
-        return wrapBool(True)
+        return True
 
     if isinstance(guard, SameGuard):
         ej = Ejector()
         try:
             v = guard.value
             checkDeepFrozen(v, {}, ej, v)
-            return wrapBool(True)
+            return True
         except Ejecting:
-            return wrapBool(False)
+            return False
 
     if isinstance(guard, FinalSlotGuard):
         return deepFrozenSupersetOf(guard.valueGuard)
@@ -247,23 +248,22 @@ def deepFrozenSupersetOf(guard):
         try:
             guardPair = pairGuard.call(u"extractGuards", [guard, ej])
             if isinstance(guardPair, ConstList) and guardPair.size() == 2:
-                return wrapBool(
+                return (
                     (deepFrozenSupersetOf(guardPair.strategy.fetch(
-                        guardPair, 0)) is wrapBool(True)) and
+                        guardPair, 0))) and
                     (deepFrozenSupersetOf(guardPair.strategy.fetch(
-                        guardPair, 1)) is wrapBool(True)))
+                        guardPair, 1))))
         except Ejecting:
             # XXX lets other ejectors get through
             pass
-    if (SubrangeGuard(deepFrozenGuard).call(u"passes", [guard])
-            is wrapBool(True)):
-        return wrapBool(True)
+    if SubrangeGuard(deepFrozenGuard).call(u"passes", [guard]):
+        return True
     if isinstance(guard, AnyOfGuard):
         for g in guard.subguards:
-            if deepFrozenSupersetOf(g) is wrapBool(False):
-                return wrapBool(False)
-        return wrapBool(True)
-    return wrapBool(False)
+            if not deepFrozenSupersetOf(g):
+                return False
+        return True
+    return False
 
 
 def auditDeepFrozen(audition):
@@ -319,7 +319,7 @@ class DeepFrozen(Object):
             return args[0]
 
         if atom is SUPERSETOF_1:
-            return deepFrozenSupersetOf(args[0])
+            return wrapBool(deepFrozenSupersetOf(args[0]))
         raise Refused(self, atom, args)
 
     def printOn(self, out):
