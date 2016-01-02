@@ -193,18 +193,18 @@ def specimens := [
     ["continue 1",
      "__continue.run(1)"],
 
+    # Hi! This expansion is no longer as inefficient as it used to be due to a
+    # special case. ~ C.
     ["x && y",
-     "
-     def [ok_1] := if (x) {
+     "if (x) {
          if (y) {
-             _makeList.run(true)
+             true
          } else {
-             _booleanFlow.failureList(0)
+             false
          }
      } else {
-         _booleanFlow.failureList(0)
-     }
-     ok_1"],
+         false
+     }"],
 
     ["(def x := 1) && (def y := 2)",
      "
@@ -220,15 +220,13 @@ def specimens := [
      ok_1)"],
 
     ["x || y",
-     "
-     (def [ok_1] := if (x) {
-         _makeList.run(true)
+     "(if (x) {
+         true
      } else if (y) {
-         _makeList.run(true)
+         true
      } else {
-         _booleanFlow.failureList(0)
-     }
-     ok_1)"],
+         false
+     })"],
 
     ["(def x := 1) || (def y := 2)",
      "

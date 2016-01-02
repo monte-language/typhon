@@ -222,18 +222,27 @@ def expand(node, builder, fail) as DeepFrozen:
             bindingpatts with= (builder.BindingPattern(nounFromScopeName(n, span), span))
             bindingexprs with= (builder.BindingExpr(nounFromScopeName(n, span), span))
 
-        def result := builder.TempNounExpr("ok", span)
-        def success := emitList([builder.NounExpr("true", span)] +
-            bindingexprs, span)
-        def failure := builder.MethodCallExpr(builder.NounExpr("_booleanFlow", span),
-            "failureList", [builder.LiteralExpr(bindingexprs.size(), span)], [], span)
-        return builder.SeqExpr([
-            builder.DefExpr(
-                builder.ListPattern([builder.FinalPattern(result, null, span)] +
-                    bindingpatts, null, span),
-                null,
-                f(success, failure), span),
-                result], span)
+        if ((def exprSize := bindingexprs.size()) != 0):
+            # Annoying path; we must consider the possibility that some names
+            # are conditionally defined and must be broken.
+            def result := builder.TempNounExpr("ok", span)
+            def success := emitList([builder.NounExpr("true", span)] +
+                bindingexprs, span)
+            def failure := builder.MethodCallExpr(builder.NounExpr("_booleanFlow", span),
+                "failureList", [builder.LiteralExpr(exprSize, span)], [], span)
+            return builder.SeqExpr([
+                builder.DefExpr(
+                    builder.ListPattern([builder.FinalPattern(result, null, span)] +
+                        bindingpatts, null, span),
+                    null,
+                    f(success, failure), span),
+                    result], span)
+        else:
+            # Awesome path! _booleanFlow.failureList(0) constant-folds to
+            # [false], so we can elide almost all of the scaffolding.
+            def success := builder.NounExpr("true", span)
+            def failure := builder.NounExpr("false", span)
+            return f(success, failure)
 
     def expandCallAssign([rcvr, verb, margs, namedArgs], right, fail, span):
         def ares := builder.TempNounExpr("ares", span)
