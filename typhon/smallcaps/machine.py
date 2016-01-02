@@ -98,6 +98,9 @@ class SmallCaps(object):
         globals = self.popSlice(script.globalSize)
         closure = self.popSlice(script.closureSize)
         obj = script.makeObject(closure, globals, auditors)
+        # Not a typo. The first copy is the actual return value from creating
+        # the object expression; the second copy is given to the slot
+        # constructor.
         self.push(obj)
         self.push(obj)
         self.push(theThrower)

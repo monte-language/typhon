@@ -32,16 +32,15 @@ class AbstractInterpreter(object):
 
     _immutable_fields_ = "code",
 
-    currentDepth = 0
     currentHandlerDepth = 0
     maxDepth = 0
-    minDepth = 0
     maxHandlerDepth = 0
 
     suspended = False
 
     def __init__(self, code):
         self.code = code
+        self.currentDepth = code.startingDepth
         # pc: depth, handlerDepth
         self.branches = {}
 
@@ -51,8 +50,7 @@ class AbstractInterpreter(object):
 
     def pop(self, count=1):
         self.currentDepth -= count
-        if self.currentDepth < self.minDepth:
-            self.minDepth = self.currentDepth
+        assert self.currentDepth >= 0, "Stack underflow"
 
     def push(self, count=1):
         self.currentDepth += count
@@ -68,10 +66,7 @@ class AbstractInterpreter(object):
             self.maxHandlerDepth = self.currentHandlerDepth
 
     def getDepth(self):
-        depth = self.maxDepth
-        if self.minDepth < 0:
-            depth -= self.minDepth
-        return depth, self.maxHandlerDepth
+        return self.maxDepth, self.maxHandlerDepth
 
     def runInstruction(self, instruction, pc):
         index = self.code.indices[pc]
@@ -94,10 +89,8 @@ class AbstractInterpreter(object):
             self.pop(self.code.scripts[index].numAuditors)
             self.pop(self.code.scripts[index].globalSize)
             self.pop(self.code.scripts[index].closureSize)
-            self.push()
-            self.push()
-            self.push()
-            self.push()
+            # Two copies of the object, a thrower, and the as-auditor.
+            self.push(4)
         elif instruction == EJECTOR:
             self.push()
             self.pushHandler()
@@ -145,4 +138,7 @@ class AbstractInterpreter(object):
                 self.runInstruction(instruction, pc)
             elif not self.suspended:
                 self.runInstruction(instruction, pc)
+
+            self.code.stackDepth[pc] = self.currentDepth
+            self.code.handlerDepth[pc] = self.currentHandlerDepth
         # print "Completed all", len(self.branches), "branches"

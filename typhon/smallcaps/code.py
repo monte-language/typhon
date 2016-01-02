@@ -98,10 +98,10 @@ class Code(object):
                           "instructions[*]?", "indices[*]?",
                           "atoms[*]", "globals[*]", "frame[*]", "literals[*]",
                           "locals[*]", "scripts[*]", "maxDepth",
-                          "maxHandlerDepth")
+                          "maxHandlerDepth", "startingDepth")
 
     def __init__(self, fqn, methodName, instructions, atoms, literals,
-                 globals, frame, locals, scripts):
+                 globals, frame, locals, scripts, startingDepth):
         self.fqn = fqn
         self.methodName = methodName
         self.profileName = self._profileName()
@@ -115,6 +115,11 @@ class Code(object):
         self.frame = frame[:]
         self.locals = locals[:]
         self.scripts = scripts[:]
+        self.startingDepth = startingDepth
+
+        # Arrays for tracking expected stack depth
+        self.stackDepth = [0] * len(instructions)
+        self.handlerDepth = [0] * len(instructions)
 
     @elidable_promote()
     def instSize(self):
@@ -148,8 +153,9 @@ class Code(object):
     def script(self, i):
         return self.scripts[i]
 
-    def dis(self, instruction, index):
-        base = "%s %d" % (instruction.repr.encode("utf-8"), index)
+    def dis(self, instruction, index, stackDepth, handlerDepth):
+        base = "S:%d H:%d | %s %d" % (stackDepth, handlerDepth,
+                                      instruction.repr.encode("utf-8"), index)
         if instruction == CALL or instruction == CALL_MAP:
             base += " (%s)" % self.atoms[index].repr
         # XXX enabling this requires the JIT to be able to traverse a lot of
@@ -172,16 +178,17 @@ class Code(object):
         return base
 
     @elidable
-    def disAt(self, index):
-        instruction = self.instructions[index]
-        index = self.indices[index]
-        return self.dis(instruction, index)
+    def disAt(self, pc):
+        instruction = self.instructions[pc]
+        index = self.indices[pc]
+        stackDepth = self.stackDepth[pc]
+        handlerDepth = self.handlerDepth[pc]
+        return self.dis(instruction, index, stackDepth, handlerDepth)
 
     def disassemble(self):
-        rv = []
-        for i, instruction in enumerate(self.instructions):
-            index = self.indices[i]
-            rv.append("%d: %s" % (i, self.dis(instruction, index)))
+        rv = ["Code for %s: S:%d" % (self.profileName, self.startingDepth)]
+        for i in range(len(self.instructions)):
+            rv.append("%d: %s" % (i, self.disAt(i)))
         return "\n".join(rv)
 
     def figureMaxDepth(self):

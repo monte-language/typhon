@@ -225,7 +225,7 @@ class Compiler(object):
 
         return c
 
-    def makeCode(self):
+    def makeCode(self, startingDepth=0):
         atoms = self.atoms.keys()
         frame = self.frame.keys()
         literals = self.literals.keys()
@@ -234,7 +234,7 @@ class Compiler(object):
         scripts = [script.freeze() for script in self.scripts]
 
         code = Code(self.fqn, self.methodName, self.instructions, atoms,
-                    literals, globals, frame, locals, scripts)
+                    literals, globals, frame, locals, scripts, startingDepth)
 
         # Register the code for profiling.
         rvmprof.register_code(code, lambda code: code.profileName)
@@ -1720,6 +1720,7 @@ class Obj(Expr):
             stamp.compile(subc)
         index = compiler.addScript(codeScript)
         compiler.addInstruction("BINDOBJECT", index)
+        # [obj obj ej auditor]
         if isinstance(self._n, IgnorePattern):
             compiler.addInstruction("POP", 0)
             compiler.addInstruction("POP", 0)
@@ -1812,7 +1813,10 @@ class CompilingScript(object):
                             self.availableClosure, fqn=fqn, methodName=verb)
         # [... specimen1 ej1 specimen0 ej0 namedArgs]
         for np in method._namedParams:
+            # Zero stack effect; they all extract from the map and assign to
+            # the environment.
             np.compile(compiler)
+        # [... specimen1 ej1 specimen0 ej0 namedArgs]
         compiler.addInstruction("POP", 0)
         # [... specimen1 ej1 specimen0 ej0]
         for param in method._ps:
@@ -1832,7 +1836,9 @@ class CompilingScript(object):
             compiler.call(u"coerce", 2)
             # [coerced]
 
-        code = compiler.makeCode()
+        # The starting depth is two (specimen and ejector) for each param, as
+        # well as one for the named map, which is unconditionally passed.
+        code = compiler.makeCode(startingDepth=arity * 2 + 1)
         atom = getAtom(verb, arity)
         self.methods[atom] = code
         if method._d is not None:
@@ -1842,13 +1848,13 @@ class CompilingScript(object):
         compiler = Compiler(self.closureNames, self.globalNames,
                             self.availableClosure, fqn=fqn,
                             methodName=u"<matcher>")
-        # [[verb, args] ej]
+        # [message ej]
         matcher._pattern.compile(compiler)
         # []
         matcher._block.compile(compiler)
         # [retval]
 
-        code = compiler.makeCode()
+        code = compiler.makeCode(startingDepth=2)
         self.matchers.append(code)
 
 @autohelp
@@ -2048,7 +2054,11 @@ class Try(Expr):
         end = compiler.markInstruction("END_HANDLER")
         compiler.patch(index)
         subc = compiler.pushScope()
+        # [problem]
+        compiler.literal(NullObject)
+        # [problem null]
         self._pattern.compile(subc)
+        # []
         self._then.compile(subc)
         compiler.patch(end)
 
@@ -2361,18 +2371,22 @@ class NamedParam(Pattern):
     def compile(self, compiler):
         # [argmap]
         compiler.addInstruction("DUP", 0)
+        # [argmap argmap]
         self._k.compile(compiler)
-        # [argmap argmap0 key]
+        # [argmap argmap key]
         if self._default is Null:
             compiler.addInstruction("NAMEDARG_EXTRACT", 0)
+            # [argmap value]
         else:
             useDefault = compiler.markInstruction("NAMEDARG_EXTRACT_OPTIONAL")
+            # [argmap null]
             compiler.addInstruction("POP", 0)
+            # [argmap]
             self._default.compile(compiler)
+            # [argmap default]
             compiler.patch(useDefault)
         # [argmap specimen]
-        throwIdx = compiler.addGlobal(u"throw")
-        compiler.addInstruction("NOUN_GLOBAL", throwIdx)
+        compiler.literal(NullObject)
         # [argmap specimen ej]
         self._p.compile(compiler)
         # [argmap]

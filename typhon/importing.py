@@ -53,7 +53,8 @@ def obtainModuleFromSource(source, recorder, origin):
 
     with recorder.context("Optimization"):
         peephole(code)
-    # debug_print("Optimized code:", code.disassemble())
+    # if origin == u"<eval>":
+    #     debug_print("Optimized code:", code.disassemble())
 
     return code, topLocals
 
