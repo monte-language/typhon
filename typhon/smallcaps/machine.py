@@ -54,8 +54,8 @@ class SmallCaps(object):
     def __init__(self, code, frame, globals):
         self.code = code
         self.env = Environment(frame, globals, self.code.localSize(),
-                               promote(self.code.maxDepth + 20),
-                               promote(self.code.maxHandlerDepth + 5))
+                               promote(self.code.maxDepth),
+                               promote(self.code.maxHandlerDepth))
 
         # For vat checkpointing.
         from typhon.vats import currentVat

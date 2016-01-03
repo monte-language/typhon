@@ -194,7 +194,8 @@ class Code(object):
     def figureMaxDepth(self):
         ai = AbstractInterpreter(self)
         ai.run()
-        self.maxDepth, self.maxHandlerDepth = ai.getDepth()
+        maxDepth, self.maxHandlerDepth = ai.getDepth()
+        self.maxDepth = max(maxDepth, self.startingDepth)
 
     @elidable
     def _profileName(self):

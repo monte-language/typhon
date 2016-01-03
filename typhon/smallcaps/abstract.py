@@ -94,6 +94,7 @@ class AbstractInterpreter(object):
         elif instruction == EJECTOR:
             self.push()
             self.pushHandler()
+            self.addBranch(index)
         elif instruction in (TRY, UNWIND):
             self.pushHandler()
         elif instruction == END_HANDLER:
