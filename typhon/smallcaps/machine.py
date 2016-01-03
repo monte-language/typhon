@@ -162,7 +162,7 @@ class SmallCaps(object):
 
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)
-        jit_debug(self.code.disAt(pc))
+        # jit_debug(self.code.disAt(pc))
 
         if instruction == DUP:
             self.push(self.peek())
