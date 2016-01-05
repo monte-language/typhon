@@ -164,10 +164,10 @@ class SmallCaps(object):
         index = self.code.index(pc)
         # jit_debug(self.code.disAt(pc))
 
-        if instruction == DUP:
+        if instruction.asInt == DUP.asInt:
             self.push(self.peek())
             return pc + 1
-        elif instruction == ROT:
+        elif instruction.asInt == ROT.asInt:
             z = self.pop()
             y = self.pop()
             x = self.pop()
@@ -175,82 +175,82 @@ class SmallCaps(object):
             self.push(z)
             self.push(x)
             return pc + 1
-        elif instruction == POP:
+        elif instruction.asInt == POP.asInt:
             self.pop()
             return pc + 1
-        elif instruction == SWAP:
+        elif instruction.asInt == SWAP.asInt:
             y = self.pop()
             x = self.pop()
             self.push(y)
             self.push(x)
             return pc + 1
-        elif instruction == ASSIGN_GLOBAL:
+        elif instruction.asInt == ASSIGN_GLOBAL.asInt:
             value = self.pop()
             self.env.putValueGlobal(index, value)
             return pc + 1
-        elif instruction == ASSIGN_FRAME:
+        elif instruction.asInt == ASSIGN_FRAME.asInt:
             value = self.pop()
             self.env.putValueFrame(index, value)
             return pc + 1
-        elif instruction == ASSIGN_LOCAL:
+        elif instruction.asInt == ASSIGN_LOCAL.asInt:
             value = self.pop()
             self.env.putValueLocal(index, value)
             return pc + 1
-        elif instruction == BIND:
+        elif instruction.asInt == BIND.asInt:
             binding = self.pop()
             self.env.createBindingLocal(index, binding)
             return pc + 1
-        elif instruction == BINDFINALSLOT:
+        elif instruction.asInt == BINDFINALSLOT.asInt:
             guard = self.pop()
             ej = self.pop()
             specimen = self.pop()
             val = guard.call(u"coerce", [specimen, ej])
             self.env.createBindingLocal(index, finalBinding(val, guard))
             return pc + 1
-        elif instruction == BINDVARSLOT:
+        elif instruction.asInt == BINDVARSLOT.asInt:
             guard = self.pop()
             ej = self.pop()
             specimen = self.pop()
             val = guard.call(u"coerce", [specimen, ej])
             self.env.createBindingLocal(index, varBinding(val, guard))
             return pc + 1
-        elif instruction == SLOT_GLOBAL:
+        elif instruction.asInt == SLOT_GLOBAL.asInt:
             self.push(self.env.getSlotGlobal(index))
             return pc + 1
-        elif instruction == SLOT_FRAME:
+        elif instruction.asInt == SLOT_FRAME.asInt:
             self.push(self.env.getSlotFrame(index))
             return pc + 1
-        elif instruction == SLOT_LOCAL:
+        elif instruction.asInt == SLOT_LOCAL.asInt:
             self.push(self.env.getSlotLocal(index))
             return pc + 1
-        elif instruction == NOUN_GLOBAL:
+        elif instruction.asInt == NOUN_GLOBAL.asInt:
             self.push(self.env.getValueGlobal(index))
             return pc + 1
-        elif instruction == NOUN_FRAME:
+        elif instruction.asInt == NOUN_FRAME.asInt:
             self.push(self.env.getValueFrame(index))
             return pc + 1
-        elif instruction == NOUN_LOCAL:
+        elif instruction.asInt == NOUN_LOCAL.asInt:
             self.push(self.env.getValueLocal(index))
             return pc + 1
-        elif instruction == BINDING_GLOBAL:
+        elif instruction.asInt == BINDING_GLOBAL.asInt:
             self.push(self.env.getBindingGlobal(index))
             return pc + 1
-        elif instruction == BINDING_FRAME:
+        elif instruction.asInt == BINDING_FRAME.asInt:
             self.push(self.env.getBindingFrame(index))
             return pc + 1
-        elif instruction == BINDING_LOCAL:
+        elif instruction.asInt == BINDING_LOCAL.asInt:
             self.push(self.env.getBindingLocal(index))
             return pc + 1
-        elif instruction == LIST_PATT:
+        elif instruction.asInt == LIST_PATT.asInt:
             self.listPattern(index)
             return pc + 1
-        elif instruction == LITERAL:
+        elif instruction.asInt == LITERAL.asInt:
             self.push(self.code.literal(index))
             return pc + 1
-        elif instruction == BINDOBJECT:
+        elif instruction.asInt == BINDOBJECT.asInt:
             self.bindObject(index)
             return pc + 1
-        elif instruction == EJECTOR:
+        elif instruction.asInt == EJECTOR.asInt:
             # Look carefully at the order of operations. The handler captures
             # the depth of the stack, so it's important to create it *before*
             # pushing the ejector onto the stack. Otherwise, the handler
@@ -260,31 +260,31 @@ class SmallCaps(object):
             self.push(ej)
             self.env.pushHandler(handler)
             return pc + 1
-        elif instruction == TRY:
+        elif instruction.asInt == TRY.asInt:
             self.env.pushHandler(Catch(self, index))
             return pc + 1
-        elif instruction == UNWIND:
+        elif instruction.asInt == UNWIND.asInt:
             self.env.pushHandler(Unwind(self, index))
             return pc + 1
-        elif instruction == END_HANDLER:
+        elif instruction.asInt == END_HANDLER.asInt:
             handler = self.env.popHandler()
             return handler.drop(self, pc, index)
-        elif instruction == BRANCH:
+        elif instruction.asInt == BRANCH.asInt:
             cond = unwrapBool(self.pop())
             if cond:
                 return pc + 1
             else:
                 return index
-        elif instruction == CALL:
+        elif instruction.asInt == CALL.asInt:
             self.call(index, withMap=False)
             return pc + 1
-        elif instruction == CALL_MAP:
+        elif instruction.asInt == CALL_MAP.asInt:
             self.call(index, withMap=True)
             return pc + 1
-        elif instruction == BUILD_MAP:
+        elif instruction.asInt == BUILD_MAP.asInt:
             self.buildMap(index)
             return pc + 1
-        elif instruction == NAMEDARG_EXTRACT:
+        elif instruction.asInt == NAMEDARG_EXTRACT.asInt:
             k = self.pop()
             d = unwrapMap(self.pop())
             if k not in d:
@@ -292,7 +292,7 @@ class SmallCaps(object):
                     k.toString(),))
             self.push(d[k])
             return pc + 1
-        elif instruction == NAMEDARG_EXTRACT_OPTIONAL:
+        elif instruction.asInt == NAMEDARG_EXTRACT_OPTIONAL.asInt:
             k = self.pop()
             d = unwrapMap(self.pop())
             if k not in d:
@@ -300,7 +300,7 @@ class SmallCaps(object):
                 return pc + 1
             self.push(d[k])
             return index
-        elif instruction == JUMP:
+        elif instruction.asInt == JUMP.asInt:
             return index
         else:
             raise RuntimeError("Unknown instruction %s" %

@@ -10,7 +10,8 @@ def makeEnum(group, labels):
 
         _immutable_ = True
 
-        def __init__(self, label):
+        def __init__(self, i, label):
+            self.asInt = i
             self.repr = u"<%s(%s)>" % (group, label)
 
-    return [Enum(label) for label in labels]
+    return [Enum(i, label) for (i, label) in enumerate(labels)]
