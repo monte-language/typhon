@@ -1,5 +1,7 @@
 from time import time
 
+from rpython.rlib.debug import debug_print
+
 
 def percent(part, whole):
     f = 100 * part / whole
@@ -52,11 +54,11 @@ class Recorder(object):
 
     def printResults(self):
         total = self.endTime - self.startTime
-        print "Total recorded time:", total
-        print "Recorded times:"
+        debug_print("Total recorded time:", total)
+        debug_print("Recorded times:")
         for label in self.timings:
             t = self.timings[label]
-            print "~", label, ":", t, percent(t, total)
+            debug_print("~", label, ":", t, percent(t, total))
 
     def context(self, label):
         return RecorderContext(self, label)
