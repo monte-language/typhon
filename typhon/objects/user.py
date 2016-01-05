@@ -13,10 +13,12 @@
 # under the License.
 
 from rpython.rlib.jit import unroll_safe
+from rpython.rlib.objectmodel import specialize
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException, userError
+from typhon.log import log
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import StrObject, unwrapStr
@@ -35,21 +37,40 @@ GETOBJECTEXPR_0 = getAtom(u"getObjectExpr", 0)
 GETFQN_0 = getAtom(u"getFQN", 0)
 
 
+pemci = u".".join([
+    u"lo lebna cu rivbi",
+    u"lo nu fi ri facki",
+    u"fa le vi larmuzga",
+    u"fe le zi ca du'u",
+    u"le lebna pu jbera",
+    u"lo catlu pe ro da",
+])
+
+def boolStr(b):
+    return u"true" if b else u"false"
+
+
 @autohelp
 class Audition(Object):
+    """
+    The context for an object's performance review.
+
+    During audition, an object's structure is examined by a series of auditors
+    which the object has specified. This object is capable of verifying to any
+    concerned parties that the object has undergone the specified auditions.
+    """
 
     _immutable_fields_ = "fqn", "ast", "guards"
     # Whether the audition is still fresh and usable.
     active = True
 
-    def __init__(self, fqn, ast, guards, cache):
+    def __init__(self, fqn, ast, guards):
         assert isinstance(fqn, unicode)
         self.fqn = fqn
         self.ast = ast
         self.guards = guards
-        self.cache = cache
 
-        self.approvers = []
+        self.cache = {}
         self.askedLog = []
         self.guardLog = []
 
@@ -59,8 +80,13 @@ class Audition(Object):
     def __exit__(self, *args):
         self.active = False
 
+    @specialize.call_location()
+    def log(self, message, tags=[]):
+        log(["audit"] + tags, u"Auditor for %s: %s" % (self.fqn, message))
+
     def ask(self, auditor):
         if not self.active:
+            self.log(u"ask/1: Stolen audition: %s" % pemci, tags=["serious"])
             raise userError(u"Audition is out of scope")
 
         cached = False
@@ -68,16 +94,14 @@ class Audition(Object):
         self.askedLog.append(auditor)
         if auditor in self.cache:
             answer, asked, guards = self.cache[auditor]
-            # msg = u"'%s': %s (cached)" % (auditor.toString(),
-            #                               u"true" if answer else u"false")
-            # debug_print(msg.encode("utf-8"))
+            self.log(u"ask/1: %s: %s (cached)" % (auditor.toString(),
+                boolStr(answer)))
             for name, value in guards:
                 # We remember what the binding guards for the previous
                 # invocation were.
                 if self.guards[name] != value:
                     # If any of them have changed, we need to re-audit.
-                    # msg = u"Name '%s' is invalid; reauditing" % name
-                    # debug_print(msg.encode("utf-8"))
+                    self.log(u"ask/1: %s: Invalidating" % name)
                     break
             else:
                 # XXX stopgap: Ignore negative answers in the cache.
@@ -88,12 +112,8 @@ class Audition(Object):
                 # We remember the other auditors invoked during this
                 # audition. Let's re-ask them since not all of them may have
                 # cacheable results.
-                # msg = u"Re-asking '%s'" % a.toString()
-                # debug_print(msg.encode("utf-8"))
+                self.log(u"ask/1: Reasking %s" % auditor.toString())
                 answer = self.ask(a)
-            if answer:
-                # debug_print("Reapproving from cache")
-                self.approvers.append(auditor)
             return answer
         else:
             # This seems a little convoluted, but the idea is that the logs
@@ -107,12 +127,8 @@ class Audition(Object):
                 if self.guardLog is not None:
                     self.cache[auditor] = (result, self.askedLog[:],
                                            self.guardLog[:])
-                    # msg = u"'%s': %s (cached)" % (auditor.toString(),
-                    #                               u"true" if result else u"false")
-                    # debug_print(msg.encode("utf-8"))
-                if result:
-                    # debug_print("Approving")
-                    self.approvers.append(auditor)
+                    self.log(u"ask/1: %s: %s" %
+                            (auditor.toString(), boolStr(result)))
                 return result
             finally:
                 self.askedLog, self.guardLog = prevlogs
@@ -131,6 +147,11 @@ class Audition(Object):
             else:
                 self.guardLog = None
         return answer
+
+    def prepareReport(self, auditors):
+        from typhon.smallcaps.code import AuditorReport
+        stamps = [k for (k, (result, _, _)) in self.cache.items() if result]
+        return AuditorReport(stamps)
 
     def recv(self, atom, args):
         if atom is ASK_1:
@@ -153,7 +174,9 @@ class ScriptObject(Object):
     An object whose behavior depends on a Monte script.
     """
 
-    _immutable_fields_ = "codeScript", "globals[*]", "stamps[*]"
+    _immutable_fields_ = "codeScript", "globals[*]", "report"
+
+    report = None
 
     def toString(self):
         # Easily the worst part of the entire stringifying experience. We must
@@ -176,7 +199,10 @@ class ScriptObject(Object):
                      [StrObject(u"<%s>" % self.codeScript.displayName)])
 
     def auditorStamps(self):
-        return self.stamps
+        if self.report is None:
+            return []
+        else:
+            return self.report.getStamps()
 
     def docString(self):
         return self.codeScript.doc
@@ -235,9 +261,7 @@ class QuietObject(ScriptObject):
         # Grab the guards of our globals and send them off for processing.
         if auditors:
             guards = self.getGuards()
-            self.stamps = self.codeScript.audit(auditors, guards)[:]
-        else:
-            self.stamps = []
+            self.report = self.codeScript.audit(auditors, guards)
 
     def getGuards(self):
         guards = {}
@@ -287,12 +311,10 @@ class BusyObject(ScriptObject):
             self.patchSelf(auditors[0])
         self.auditors = auditors
 
-        # Grab the guards of our closure and send them off for processing.
+        # Grab the guards of our globals and send them off for processing.
         if auditors:
             guards = self.getGuards()
-            self.stamps = self.codeScript.audit(auditors, guards)[:]
-        else:
-            self.stamps = []
+            self.report = self.codeScript.audit(auditors, guards)
 
     def getGuards(self):
         guards = {}

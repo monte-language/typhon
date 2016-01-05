@@ -219,12 +219,12 @@ def optSame(first, second, cache=None):
     # we need the specimens to cooperate with further investigation.
 
     # First, see if either object wants to stop with just identity comparison.
-    if selfless in first.auditorStamps():
-        if selfless not in second.auditorStamps():
+    if first.auditedBy(selfless):
+        if not second.auditedBy(selfless):
             return INEQUAL
         # Then see if both objects can be compared by contents.
-        if (transparentStamp in first.auditorStamps() and
-                transparentStamp in second.auditorStamps()):
+        if (first.auditedBy(transparentStamp) and
+                second.auditedBy(transparentStamp)):
 
             # This could recurse.
             if cache is None:
@@ -301,8 +301,8 @@ def samenessHash(obj, depth, path, fringe):
         return samenessHash(o.handler, depth, path, fringe)
 
     # Other objects compared by structure.
-    if selfless in o.auditorStamps():
-        if transparentStamp in o.auditorStamps():
+    if o.auditedBy(selfless):
+        if o.auditedBy(transparentStamp):
             return samenessHash(o.call(u"_uncall", []), depth, path, fringe)
         # XXX Semitransparent support goes here
 
@@ -361,8 +361,8 @@ def samenessFringe(original, path, fringe, sofar=None):
         sofar[o] = None
         return listFringe(o, fringe, path, sofar)
 
-    if selfless in o.auditorStamps():
-        if transparentStamp in o.auditorStamps():
+    if o.auditedBy(selfless):
+        if o.auditedBy(transparentStamp):
             return samenessFringe(o.call(u"_uncall", []), path, fringe, sofar)
         # XXX Semitransparent support goes here
 

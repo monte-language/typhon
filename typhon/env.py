@@ -61,7 +61,7 @@ def finalize(scope):
     rv = {}
     for key in scope:
         o = scope[key]
-        if deepFrozenStamp in o.auditorStamps():
+        if o.auditedBy(deepFrozenStamp):
             g = deepFrozenGuard
         else:
             g = anyGuard

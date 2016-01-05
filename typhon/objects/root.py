@@ -207,18 +207,10 @@ class Object(object):
         # promoted.
         prospect = promote(prospect)
 
-        from typhon.objects.equality import optSame, EQUAL
-
-        # Already audited with an identical stamp?
-        for stamp in self.auditorStamps():
-            if prospect is stamp:
-                return True
-
-            if optSame(prospect, stamp) is EQUAL:
-                return True
-
-        # Sorry, but nope.
-        return False
+        # The knot doesn't tie properly if we do equality comparison. I wonder
+        # why that is, but suspect it to be something that cannot be revisited
+        # for a long while.
+        return prospect in self.auditorStamps()
 
     def optInterface(self):
         return None

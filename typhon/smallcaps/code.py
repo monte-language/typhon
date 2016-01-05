@@ -13,7 +13,7 @@
 # under the License.
 
 from rpython.rlib import rvmprof
-from rpython.rlib.jit import elidable, elidable_promote, look_inside_iff
+from rpython.rlib.jit import elidable, elidable_promote
 
 from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.smallcaps.abstract import AbstractInterpreter
@@ -156,6 +156,36 @@ def chooseStrategy(methods, matchers):
         return JumboStrategy(methods)
 
 
+class AuditorReport(object):
+    """
+    Artifact of an audition.
+    """
+
+    _immutable_ = True
+    _immutable_fields_ = "stamps[*]",
+
+    def __init__(self, stamps):
+        self.stamps = stamps
+
+    def getStamps(self):
+        return self.stamps
+
+
+def compareAuditorLists(this, that):
+    from typhon.objects.equality import isSameEver
+    for i, x in enumerate(this):
+        if not isSameEver(x, that[i]):
+            return False
+    return True
+
+def compareGuardMaps(this, that):
+    from typhon.objects.equality import isSameEver
+    for i, x in enumerate(this):
+        if not isSameEver(x[1], that[i][1]):
+            return False
+    return True
+
+
 class CodeScript(object):
     """
     A single compiled script object.
@@ -181,7 +211,7 @@ class CodeScript(object):
         self.globalNames = globalNames
         self.globalSize = len(globalNames)
 
-        self.auditions = {}
+        self.reportCabinet = []
 
     def makeObject(self, closure, globals, auditors):
         if self.closureSize:
@@ -190,14 +220,42 @@ class CodeScript(object):
             obj = QuietObject(self, globals, auditors)
         return obj
 
-    # Picking 3 for the common case of:
-    # `as DeepFrozen implements Selfless, Transparent`
-    @look_inside_iff(lambda self, auditors, guards: len(auditors) <= 3)
-    def audit(self, auditors, guards):
-        with Audition(self.fqn, self.objectAst, guards, self.auditions) as audition:
+    def getReport(self, auditors, guards):
+        for auditorList, guardFile in self.reportCabinet:
+            if compareAuditorLists(auditors, auditorList):
+                guardItems = guards.items()
+                for guardMap, report in guardFile:
+                    if compareGuardMaps(guardItems, guardMap):
+                        return report
+        return None
+
+    def putReport(self, auditors, guards, report):
+        guardItems = guards.items()
+        for auditorList, guardFile in self.reportCabinet:
+            if compareAuditorLists(auditors, auditorList):
+                guardFile.append((guardItems, report))
+                break
+        else:
+            self.reportCabinet.append((auditors, [(guardItems, report)]))
+
+    def createReport(self, auditors, guards):
+        with Audition(self.fqn, self.objectAst, guards) as audition:
             for a in auditors:
                 audition.ask(a)
-        return audition.approvers
+        return audition.prepareReport(auditors)
+
+    def audit(self, auditors, guards):
+        """
+        Hold an audition and return a report of the results.
+
+        Auditions are cached for quality assurance and training purposes.
+        """
+
+        report = self.getReport(auditors, guards)
+        if report is None:
+            report = self.createReport(auditors, guards)
+            self.putReport(auditors, guards, report)
+        return report
 
     @elidable
     def selfIndex(self):
