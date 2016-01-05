@@ -25,26 +25,156 @@ from typhon.smallcaps.ops import (ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
                                   BINDING_LOCAL, CALL, CALL_MAP)
 
 
+class MethodStrategy(object):
+    """
+    A Strategy for storing method and matcher information.
+    """
+
+    _immutable_ = True
+
+class _EmptyStrategy(MethodStrategy):
+    """
+    A Strategy for an object with neither methods nor matchers.
+    """
+
+    _immutable_ = True
+
+    def lookupMethod(self, atom):
+        return None
+
+    def getAtoms(self):
+        return []
+
+    def getMatchers(self):
+        return []
+
+EmptyStrategy = _EmptyStrategy()
+
+class FunctionStrategy(MethodStrategy):
+    """
+    A Strategy for an object with exactly one method and no matchers.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, atom, method):
+        self.atom = atom
+        self.method = method
+
+    def lookupMethod(self, atom):
+        if atom is self.atom:
+            return self.method
+        return None
+
+    def getAtoms(self):
+        return [self.atom]
+
+    def getMatchers(self):
+        return []
+
+class FnordStrategy(MethodStrategy):
+    """
+    A Strategy for an object with two to five methods and no matchers.
+
+    The Law of Fives.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, methods):
+        # `methods` is still a dictionary here.
+        self.methods = [(k, v) for (k, v) in methods.items()]
+
+    @elidable_promote()
+    def lookupMethod(self, atom):
+        for (ourAtom, method) in self.methods:
+            if ourAtom is atom:
+                return method
+        return None
+
+    def getAtoms(self):
+        return [atom for (atom, _) in self.methods]
+
+    def getMatchers(self):
+        return []
+
+class JumboStrategy(MethodStrategy):
+    """
+    A Strategy for an object with many methods and no matchers.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, methods):
+        # `methods` is still a dictionary here.
+        self.methods = methods
+
+    @elidable_promote()
+    def lookupMethod(self, atom):
+        return self.methods.get(atom, None)
+
+    def getAtoms(self):
+        return self.methods.keys()
+
+    def getMatchers(self):
+        return []
+
+class GenericStrategy(MethodStrategy):
+    """
+    A Strategy for an object with some methods and some matchers.
+    """
+
+    _immutable_ = True
+    _immutable_fields_ = "methods", "matchers[*]"
+
+    def __init__(self, methods, matchers):
+        self.methods = methods
+        self.matchers = matchers
+
+    @elidable_promote()
+    def lookupMethod(self, atom):
+        return self.methods.get(atom, None)
+
+    def getAtoms(self):
+        return self.methods.keys()
+
+    def getMatchers(self):
+        return self.matchers
+
+def chooseStrategy(methods, matchers):
+    if matchers:
+        return GenericStrategy(methods, matchers)
+    elif not methods:
+        return EmptyStrategy
+    elif len(methods) == 1:
+        atom, method = methods.items()[0]
+        return FunctionStrategy(atom, method)
+    elif len(methods) <= 5:
+        return FnordStrategy(methods)
+    else:
+        return JumboStrategy(methods)
+
+
 class CodeScript(object):
     """
     A single compiled script object.
     """
 
     _immutable_ = True
-    _immutable_fields_ = ("displayName", "objectAst", "numAuditors", "doc",
-                          "fqn", "methods[*]", "methodDocs", "matchers[*]",
+    _immutable_fields_ = ("strategy", "displayName", "objectAst",
+                          "numAuditors", "doc", "fqn", "methodDocs",
                           "closureNames", "globalNames")
 
     def __init__(self, displayName, objectAst, numAuditors, doc, fqn, methods,
                  methodDocs, matchers, closureNames, globalNames):
+        self.strategy = chooseStrategy(methods, matchers)
+
         self.displayName = displayName
         self.objectAst = objectAst
         self.numAuditors = numAuditors
         self.doc = doc
         self.fqn = fqn
-        self.methods = methods
         self.methodDocs = methodDocs
-        self.matchers = matchers[:]
         self.closureNames = closureNames
         self.closureSize = len(closureNames)
         self.globalNames = globalNames
@@ -76,14 +206,6 @@ class CodeScript(object):
         """
 
         return self.closureNames.get(self.displayName, -1)
-
-    @elidable_promote()
-    def lookupMethod(self, atom):
-        return self.methods.get(atom, None)
-
-    @elidable
-    def getMatchers(self):
-        return self.matchers
 
 
 class Code(object):

@@ -184,13 +184,13 @@ class ScriptObject(Object):
     def respondingAtoms(self):
         # Only do methods for now. Matchers will be dealt with in other ways.
         d = {}
-        for atom in self.codeScript.methods.keys():
+        for atom in self.codeScript.strategy.getAtoms():
             d[atom] = self.codeScript.methodDocs.get(atom, None)
 
         return d
 
     def recvNamed(self, atom, args, namedArgs):
-        method = self.codeScript.lookupMethod(atom)
+        method = self.codeScript.strategy.lookupMethod(atom)
         if method:
             return self.runMethod(method, args, namedArgs)
         else:
@@ -202,7 +202,7 @@ class ScriptObject(Object):
     def runMatchers(self, atom, args, namedArgs):
         message = ConstList([StrObject(atom.verb), ConstList(args),
                              namedArgs])
-        for matcher in self.codeScript.getMatchers():
+        for matcher in self.codeScript.strategy.getMatchers():
             with Ejector() as ej:
                 try:
                     return self.runMatcher(matcher, message, ej)

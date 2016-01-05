@@ -1795,7 +1795,8 @@ class CompilingScript(object):
     def freeze(self):
         return CodeScript(self.displayName, self.objectAst, self.numAuditors,
                           self.doc, self.fqn, self.methods, self.methodDocs,
-                          self.matchers, self.closureNames, self.globalNames)
+                          self.matchers[:], self.closureNames,
+                          self.globalNames)
 
     def addScript(self, script, fqn):
         assert isinstance(script, Script)

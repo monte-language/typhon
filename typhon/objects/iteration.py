@@ -76,7 +76,7 @@ def loop(args):
     # Rarer path: If the consumer doesn't actually have RUN_2, then they're
     # not going to be JIT'd. Again, the compiler and optimizer won't ever do
     # this to us; it has to be intentional.
-    code = consumer.codeScript.lookupMethod(RUN_2)
+    code = consumer.codeScript.strategy.lookupMethod(RUN_2)
     if code is None:
         return slowLoop(iterable, consumer)
 
