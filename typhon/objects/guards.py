@@ -3,7 +3,8 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.auditors import (deepFrozenStamp, selfless,
+                                     transparentStamp)
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.sets import ConstSet, monteSet
 from typhon.objects.constants import (BoolObject, NullObject, unwrapBool,
@@ -257,9 +258,9 @@ class FinalSlotGuard(Guard):
 
     def auditorStamps(self):
         if self.valueGuard.auditedBy(deepFrozenStamp):
-            return [deepFrozenStamp]
+            return [deepFrozenStamp, selfless, transparentStamp]
         else:
-            return []
+            return [selfless, transparentStamp]
 
     def subCoerce(self, specimen):
         if (isinstance(specimen, FinalSlot) and
@@ -268,6 +269,12 @@ class FinalSlotGuard(Guard):
             return specimen
 
     def recv(self, atom, args):
+        if atom is _UNCALL_0:
+            from typhon.objects.collections.maps import EMPTY_MAP
+            from typhon.scopes.safe import theFinalSlotGuardMaker
+            return ConstList([theFinalSlotGuardMaker, StrObject(u"get"),
+                              ConstList([self.valueGuard]), EMPTY_MAP])
+
         if atom is GETGUARD_0:
             return self.valueGuard
         if atom is COERCE_2:
@@ -296,15 +303,23 @@ class VarSlotGuard(Guard):
 
     def auditorStamps(self):
         if self.valueGuard.auditedBy(deepFrozenStamp):
-            return [deepFrozenStamp]
+            return [deepFrozenStamp, selfless, transparentStamp]
         else:
-            return []
+            return [selfless, transparentStamp]
 
     def subCoerce(self, specimen):
         if (isinstance(specimen, VarSlot) and
-           self.valueGuard == specimen._guard or
-           self.valueGuard.supersetOf(specimen.call(u"getGuard", []))):
+            self.valueGuard == specimen._guard or
+            self.valueGuard.supersetOf(specimen.call(u"getGuard", []))):
             return specimen
+
+    def recv(self, atom, args):
+        if atom is _UNCALL_0:
+            from typhon.objects.collections.maps import EMPTY_MAP
+            from typhon.scopes.safe import theVarSlotGuardMaker
+            return ConstList([theVarSlotGuardMaker, StrObject(u"get"),
+                              ConstList([self.valueGuard]), EMPTY_MAP])
+        raise Refused(self, atom, args)
 
 
 @autohelp
