@@ -4,8 +4,8 @@
 let pypySrc = fetchFromBitbucket {
     owner = "pypy";
     repo = "pypy";
-    rev = "5f8302b8bf9f";
-    sha256 = "19ql1brvn0vmhcx9rax6csikmf3irmb1b7bi1qprdydx5ylp28rp";
+    rev = "850edf14b2c7";
+    sha256 = "0275rk3ps9rh55g79740xi4f5gz047iw8d3r8c6i658j84nv85hm";
   };
   optLevel = if buildJIT then "-Ojit" else "-O2";
 in
