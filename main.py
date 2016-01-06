@@ -176,6 +176,18 @@ def runModule(exports, scope):
     return main.call(u"run", [], ConstMap(namedArgs))
 
 
+def cleanUpEverything():
+    """
+    Put back any ambient-authority mutable global state that we may have
+    altered.
+    """
+
+    try:
+        ruv.TTYResetMode()
+    except ruv.UVError as uve:
+        print "ruv.TTYResetMode() failed:", uve.repr()
+
+
 def entryPoint(argv):
     recorder = Recorder()
     recorder.start()
@@ -295,6 +307,8 @@ def entryPoint(argv):
             recorder.stop()
             recorder.printResults()
 
+    # Clean up and exit.
+    cleanUpEverything()
     return exitStatus
 
 

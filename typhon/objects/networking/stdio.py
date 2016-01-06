@@ -22,6 +22,9 @@ def makeStdOut(_):
     vat = currentVat.get()
     uv_loop = vat.uv_loop
     tty = ruv.alloc_tty(uv_loop, 1, False)
+    # XXX works exactly as expected, including disabling most TTY signal
+    # generation
+    # ruv.TTYSetMode(tty, ruv.TTY_MODE_RAW)
 
     return StreamDrain(ruv.rffi.cast(ruv.stream_tp, tty), vat)
 
@@ -31,5 +34,6 @@ def makeStdErr(_):
     vat = currentVat.get()
     uv_loop = vat.uv_loop
     tty = ruv.alloc_tty(uv_loop, 2, False)
+    # ruv.TTYSetMode(tty, ruv.TTY_MODE_RAW)
 
     return StreamDrain(ruv.rffi.cast(ruv.stream_tp, tty), vat)

@@ -494,9 +494,19 @@ def tcpConnect(stream, address, port, callback):
     return rv
 
 
+TTY_MODE_NORMAL = 0x0
+TTY_MODE_RAW = 0x1
+TTY_MODE_IO = 0x2
+
 tty_init = rffi.llexternal("uv_tty_init", [loop_tp, tty_tp, rffi.INT,
                                            rffi.INT],
                            rffi.INT, compilation_info=eci)
+tty_set_mode = rffi.llexternal("uv_tty_set_mode", [tty_tp, rffi.INT],
+                               rffi.INT, compilation_info=eci)
+TTYSetMode = checking("tty_set_mode", tty_set_mode)
+tty_reset_mode = rffi.llexternal("uv_tty_reset_mode", [], rffi.INT,
+                                 compilation_info=eci)
+TTYResetMode = checking("tty_reset_mode", tty_reset_mode)
 
 def alloc_tty(loop, fd, readable):
     tty = lltype.malloc(cConfig["tty_t"], flavor="raw", zero=True)
