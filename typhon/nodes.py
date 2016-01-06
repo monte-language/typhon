@@ -2055,9 +2055,7 @@ class Try(Expr):
         end = compiler.markInstruction("END_HANDLER")
         compiler.patch(index)
         subc = compiler.pushScope()
-        # [problem]
-        compiler.literal(NullObject)
-        # [problem null]
+        # [problem ej]
         self._pattern.compile(subc)
         # []
         self._then.compile(subc)

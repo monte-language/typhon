@@ -44,9 +44,10 @@ class AbstractInterpreter(object):
         # pc: depth, handlerDepth
         self.branches = {}
 
-    def addBranch(self, pc):
+    def addBranch(self, pc, extraDepth=0):
         # print "Adding a branch", pc
-        self.branches[pc] = self.currentDepth, self.currentHandlerDepth
+        self.branches[pc] = (self.currentDepth + extraDepth,
+                             self.currentHandlerDepth)
 
     def pop(self, count=1):
         self.currentDepth -= count
@@ -97,8 +98,10 @@ class AbstractInterpreter(object):
             self.addBranch(index)
         elif instruction in (TRY, UNWIND):
             self.pushHandler()
+            self.addBranch(index, extraDepth=2)
         elif instruction == END_HANDLER:
             self.popHandler()
+            self.addBranch(index)
         elif instruction == BRANCH:
             self.pop()
             self.addBranch(index)
@@ -128,7 +131,7 @@ class AbstractInterpreter(object):
 
     def run(self):
         for pc, instruction in enumerate(self.code.instructions):
-            if self.suspended and pc in self.branches:
+            if pc in self.branches:
                 # print "Unsuspending at pc", pc
                 depth, handlerDepth = self.branches[pc]
                 self.currentDepth = max(self.currentDepth, depth)
