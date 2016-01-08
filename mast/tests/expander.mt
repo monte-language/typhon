@@ -291,25 +291,22 @@ def specimens := [
           z
      ",
      "
-     escape __break:
-         var validFlag_1 := true
-         try:
-             _loop.run(y, object _ {
-                 \"For-loop body\"
-                 method run(key_2, value_3) {
-                     _validateFor.run(validFlag_1)
-                     escape __continue {
-                         def _ := key_2
-                         def x := value_3
-                         z
-                         null
-                     }
-                 }
+     var validFlag_1 := true
+     try:
+         _loop.run(y, object _ {
+             \"For-loop body\"
+             method run(key_2, value_3) {
+                 _validateFor.run(validFlag_1)
+                 def _ := key_2
+                 def x := value_3
+                 z
+                 null
+             }
 
-             })
-         finally:
-             validFlag_1 := false
-         null"],
+         })
+     finally:
+         validFlag_1 := false
+     null"],
     ["[for x in (y) if (a) z]",
      "
      var validFlag_1 := true
@@ -362,9 +359,7 @@ def specimens := [
          _loop.run(_iterForever, object _ {
              method run(_, _) :Bool {
                  if (x) {
-                     escape __continue {
-                         y
-                     }
+                     y
                      true
                  } else {
                      __break.run()
@@ -394,9 +389,8 @@ def specimens := [
      "
      object foo:
          method baz():
-             escape __return:
-                 x
-                 null
+             x
+             null
      "],
     ["
      def foo():
@@ -405,9 +399,8 @@ def specimens := [
      "
      object foo:
          method run():
-             escape __return:
-                 x
-                 null
+             x
+             null
      "],
     ["
      switch (x):
