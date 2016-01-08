@@ -154,6 +154,20 @@ def expand(node, builder, fail) as DeepFrozen:
             builder.NounExpr("_makeMap", span),
             "fromPairs", [emitList(items, span)], [], span)
 
+    def makeEscapeExpr(ejPatt, ejExpr, catchPatt, catchExpr, span):
+        if (catchPatt == null && catchExpr == null):
+            # Stage one looks good. Let's do the scope check.
+            def pattNames := ejPatt.getStaticScope().outNames()
+            def exprNames := ejExpr.getStaticScope().namesUsed()
+            if ((pattNames & exprNames).size() == 0):
+                # Stage two succeeded: The expr doesn't use the ejector at
+                # all. Elide.
+                # traceln(`Eliding: $ejPatt isn't used by $ejExpr`)
+                # traceln(`pattNames := $pattNames`)
+                # traceln(`exprNames := $exprNames`)
+                return ejExpr
+        return builder.EscapeExpr(ejPatt, ejExpr, catchPatt, catchExpr, span)
+
     def makeSlotPatt(n, span):
         return builder.ViaPattern(builder.NounExpr("_slotToBinding", span),
              builder.BindingPattern(n, span), span)
@@ -193,7 +207,7 @@ def expand(node, builder, fail) as DeepFrozen:
             builder.DefExpr(builder.ListPattern([builder.FinalPattern(result, null, span)] +
                                         bindingpatts, null, span),
                 null,
-                builder.EscapeExpr(
+                makeEscapeExpr(
                     builder.FinalPattern(ejector, null, span),
                     builder.SeqExpr([
                         builder.DefExpr(patt, ejector, sp, span),
@@ -387,7 +401,7 @@ def expand(node, builder, fail) as DeepFrozen:
                     builder.MethodCallExpr(
                         builder.NounExpr("_validateFor", span),
                         "run", [fTemp], [], span),
-                    builder.EscapeExpr(
+                    makeEscapeExpr(
                         builder.FinalPattern(builder.NounExpr("__continue", span), null, span),
                         builder.SeqExpr([
                             builder.DefExpr(key, null, kTemp, span),
@@ -398,7 +412,7 @@ def expand(node, builder, fail) as DeepFrozen:
                     null, null, span),
                 ], span), span)],
             [], span), span)
-        return builder.EscapeExpr(
+        return makeEscapeExpr(
             builder.FinalPattern(builder.NounExpr("__break", span), null, span),
             builder.SeqExpr([
                 builder.DefExpr(builder.VarPattern(fTemp, null, span), null,
@@ -856,13 +870,13 @@ def expand(node, builder, fail) as DeepFrozen:
         else if (nodeName == "FunctionScript"):
             def [params, namedParams, guard, block] := args
             return [null, [builder."Method"(null, "run", params, namedParams, guard,
-                builder.EscapeExpr(builder.FinalPattern(builder.NounExpr("__return", span), null, span),
+                makeEscapeExpr(builder.FinalPattern(builder.NounExpr("__return", span), null, span),
                     builder.SeqExpr([block, builder.NounExpr("null", span)], span), null, null, span),
                         span)], []]
         else if (nodeName == "To"):
             def [doco, verb, params, namedParams, guard, block] := args
             return builder."Method"(doco, verb, params, namedParams, guard,
-                builder.EscapeExpr(builder.FinalPattern(builder.NounExpr("__return", span), null, span),
+                makeEscapeExpr(builder.FinalPattern(builder.NounExpr("__return", span), null, span),
                     builder.SeqExpr([block, builder.NounExpr("null", span)], span), null, null, span),
                         span)
         else if (nodeName == "Method"):
@@ -903,7 +917,7 @@ def expand(node, builder, fail) as DeepFrozen:
             var block := builder.MethodCallExpr(builder.NounExpr("_switchFailed", span), "run",
                 [sp] + failures, [], span)
             for [m, fail, ej] in reversed(zip(matchers, failures, ejs)):
-                block := builder.EscapeExpr(
+                block := makeEscapeExpr(
                     builder.FinalPattern(ej, null, span),
                     builder.SeqExpr([
                         builder.DefExpr(m.getPattern(), ej, sp, span),
@@ -923,7 +937,7 @@ def expand(node, builder, fail) as DeepFrozen:
             return block
         else if (nodeName == "WhileExpr"):
             def [test, block, catcher] := args
-            return builder.EscapeExpr(
+            return makeEscapeExpr(
                 builder.FinalPattern(builder.NounExpr("__break", span), null, span),
                     builder.MethodCallExpr(builder.NounExpr("_loop", span), "run",
                         [builder.NounExpr("_iterForever", span),
@@ -937,7 +951,7 @@ def expand(node, builder, fail) as DeepFrozen:
                                          builder.IfExpr(
                                              test,
                                              builder.SeqExpr([
-                                                 builder.EscapeExpr(
+                                                 makeEscapeExpr(
                                                      builder.FinalPattern(
                                                          builder.NounExpr("__continue", span),
                                                          null, span),
@@ -975,7 +989,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 return wr
             for cat in catchers:
                 def fail := builder.TempNounExpr("fail", cat.getSpan())
-                handler := builder.EscapeExpr(
+                handler := makeEscapeExpr(
                     builder.FinalPattern(fail, null, cat.getSpan()),
                     builder.SeqExpr([
                         builder.DefExpr(cat.getPattern(),
