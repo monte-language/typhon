@@ -406,11 +406,11 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
         to getBody():
             return body
         to subPrintOn(out, priority):
-            out.print("module")
-            if (importsList.size() > 0):
-                out.print(" ")
-                printListOn("", importsList, ", ", "", out, priorities["braceExpr"])
-            out.println("")
+            for [petname, patt] in importsList:
+                out.print("import ")
+                out.quote(petname)
+                out.print(" =~ ")
+                out.println(patt)
             if (exportsList.size() > 0):
                 out.print("exports ")
                 printListOn("(", exportsList, ", ", ")", out, priorities["braceExpr"])
@@ -418,7 +418,7 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
             body.subPrintOn(out, priorities["indentExpr"])
     return astWrapper(::"module", makeModule, [importsList, exportsList, body], span,
                       &scope, "Module", fn f {[
-                          transformAll(importsList, f),
+                          [for [n, v] in (importsList) [n, v.transform(f)]],
                           transformAll(exportsList, f),
                           body.transform(f)]})
 

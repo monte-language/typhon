@@ -1,5 +1,5 @@
 def [=> makeMonteLexer] := ::"import".script("lib/monte/monte_lexer")
-def [=> parseExpression, => parsePattern] | _ := ::"import".script("lib/monte/monte_parser")
+def [=> parseExpression, => parsePattern, => parseModule] | _ := ::"import".script("lib/monte/monte_parser")
 def [=> term__quasiParser] | _ := ::"import".script("fun/termParser")
 
 def astBuilder := m__quasiParser.getAstBuilder()
@@ -35,6 +35,10 @@ def expr(s):
 def pattern(s):
     return parsePattern(makeMonteLexer(s, "<test>"), astBuilder,
                         throw).canonical()
+
+def module(s):
+    return parseModule(makeMonteLexer(s + "\n", "<test>"), astBuilder,
+                       throw).canonical()
 
 def test_Literal(assert):
     assert.equal(expr("\"foo bar\""), ta`LiteralExpr("foo bar")`)
@@ -382,6 +386,14 @@ def test_QuasiliteralPattern(assert):
 def test_SuchThatPattern(assert):
     assert.equal(pattern("x :y ? (1)"), ta`SuchThatPattern(FinalPattern(NounExpr("x"), NounExpr("y")), LiteralExpr(1))`)
 
+def test_bareModule(assert):
+    assert.equal(module("object foo {}"), ta`Module([], [], ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [], [])))`)
+
+def test_moduleExports(assert):
+    assert.equal(module("exports (a)\ndef a := 1"), ta`Module([], ["a"], DefExpr(FinalPattern(NounExpr("a"), null), null, LiteralExpr(1)))`)
+
+def test_module(assert):
+    assert.equal(module("import \"foo\" =~ foo\nimport \"blee\" =~ [=> a, => b]\nexports (a)\ndef a := 1"), ta`Module([["foo", FinalPattern(NounExpr("foo"), null)], ["blee", MapPattern([MapPatternImport(FinalPattern(NounExpr("a"), null), null), MapPatternImport(FinalPattern(NounExpr("b"), null), null)], IgnorePattern(null))]], [NounExpr("a")], DefExpr(FinalPattern(NounExpr("a"), null), null, LiteralExpr(1)))`)
 
 # def test_holes(assert):
 #     assert.equal(quasiMonteParser.valueMaker(["foo(", quasiMonteParser.valueHole(0), ")"]), ta`ValueHoleExpr(0)`)
@@ -389,4 +401,4 @@ def test_SuchThatPattern(assert):
 #     assert.equal(pattern("${2}"), ta`ValueHoleExpr(0)`)
 #     assert.equal(pattern("@{2}"), ta`PatternHoleExpr(0)`)
 
-unittest([test_Literal, test_Noun, test_QuasiliteralExpr, test_Hide, test_Call, test_Send, test_Get, test_Meta, test_List, test_Map, test_ListComprehensionExpr, test_MapComprehensionExpr, test_IfExpr, test_EscapeExpr, test_ForExpr, test_FunctionExpr, test_SwitchExpr, test_TryExpr, test_WhileExpr, test_WhenExpr, test_ObjectExpr, test_Function, test_Interface, test_Def, test_Assign, test_Prefix, test_Coerce, test_Infix, test_Exits, test_IgnorePattern, test_FinalPattern, test_VarPattern, test_BindPattern, test_SamePattern, test_NotSamePattern, test_SlotPattern, test_BindingPattern, test_ViaPattern, test_ListPattern, test_MapPattern, test_QuasiliteralPattern, test_SuchThatPattern])
+unittest([test_Literal, test_Noun, test_QuasiliteralExpr, test_Hide, test_Call, test_Send, test_Get, test_Meta, test_List, test_Map, test_ListComprehensionExpr, test_MapComprehensionExpr, test_IfExpr, test_EscapeExpr, test_ForExpr, test_FunctionExpr, test_SwitchExpr, test_TryExpr, test_WhileExpr, test_WhenExpr, test_ObjectExpr, test_Function, test_Interface, test_Def, test_Assign, test_Prefix, test_Coerce, test_Infix, test_Exits, test_IgnorePattern, test_FinalPattern, test_VarPattern, test_BindPattern, test_SamePattern, test_NotSamePattern, test_SlotPattern, test_BindingPattern, test_ViaPattern, test_ListPattern, test_MapPattern, test_QuasiliteralPattern, test_SuchThatPattern, test_module])
