@@ -19,7 +19,7 @@ def isIdentifierPart(c) as DeepFrozen:
 def MONTE_KEYWORDS :DeepFrozen := [
     "as", "bind", "break", "catch", "continue", "def", "else", "escape",
     "exit", "extends", "exports", "finally", "fn", "for", "guards", "if",
-    "implements", "imports", "in", "interface", "match", "meta", "method",
+    "implements", "import", "in", "interface", "match", "meta", "method",
     "object", "pass", "pragma", "return", "switch", "to", "try", "var",
     "via", "when", "while"].asSet()
 

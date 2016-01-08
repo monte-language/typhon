@@ -1355,24 +1355,42 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
 
     def module_(ej):
         def start := spanHere()
-        def modKw := acceptTag("imports", ej)
-        def importsList := acceptList(namedParam)
-        acceptEOLs()
+        def importsList := [].diverge()
+        while (true):
+            acceptEOLs()
+            acceptTag("import", __break)
+            def importName := acceptTag(".String.", ej)[1]
+            acceptTag("=~", ej)
+            var importPattern := pattern(ej)
+            # This might be better placed in the expander, but pre-expansion
+            # rewriting of patterns doesn't fit our current bottom-up expansion
+            # strategy. Good idea to move it if that changes. ~ A.
+            if (importPattern.getNodeName() == "MapPattern" && importPattern.getTail() == null):
+                importPattern := builder.MapPattern(
+                importPattern.getPatterns(),
+                builder.IgnorePattern(null, importPattern.getSpan()),
+                importPattern.getSpan())
+
+            importsList.push([importName, importPattern])
+            seqSep(ej)
         def exportsList := if (peekTag() == "exports") {
             advance(ej)
             acceptTag("(", ej)
             def nouns := acceptList(noun)
             acceptTag(")", ej)
-            acceptEOLs()
+            seqSep(ej)
             nouns
-        } else {[]}
+        } else {
+            []
+        }
         def body := seq(true, ej)
-        return builder."Module"(importsList, exportsList, body,
+        return builder."Module"(importsList.snapshot(),
+                                exportsList, body,
                                 spanFrom(start))
 
     def start(ej):
         acceptEOLs()
-        if (peekTag() == "imports"):
+        if (["import", "exports"].contains(peekTag())):
             return module_(ej)
         else:
             return seq(true, ej)
