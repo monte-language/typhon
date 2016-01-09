@@ -13,6 +13,21 @@ stdenv.mkDerivation {
   name = "typhon-vm";
   buildInputs = [ pypy pypyPackages.pytest pypyPackages.twisted pypySrc
                   pkgconfig libffi libuv libsodium ];
+  shellHook = ''
+    export TYPHON_LIBRARY_PATH=${libuv}/lib:${libsodium}/lib
+    export PYTHONPATH=$TMP/typhon
+    if [ -e $TMP/typhon ]; then
+        rm -rf $TMP/typhon
+    fi
+    mkdir -p $TMP/typhon/rpython/_cache
+    # Ridiculous, but necessary.
+    cp -r ${pypySrc}/* $TMP/typhon
+    chmod -R 755 $TMP/typhon
+    typhon_cleanup () {
+        rm -rf $TMP/typhon
+    }
+    trap typhon_cleanup EXIT
+  '';
   buildPhase = ''
     source $stdenv/setup
     mkdir -p ./rpython/_cache
