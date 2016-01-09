@@ -146,11 +146,13 @@ def checkDeepFrozen(specimen, seen, ej, root):
     from typhon.objects.collections.maps import ConstMap
     from typhon.objects.data import StrObject
     from typhon.objects.equality import TraversalKey
-    from typhon.objects.refs import isBroken
+    from typhon.objects.refs import Promise, isBroken
     key = TraversalKey(specimen)
     if key in seen:
         return
     seen[key] = None
+    if isinstance(specimen, Promise):
+        specimen = specimen.resolution()
     if specimen.auditedBy(deepFrozenStamp):
         return
     elif isBroken(specimen):
@@ -194,6 +196,7 @@ def checkDeepFrozen(specimen, seen, ej, root):
 def deepFrozenSupersetOf(guard):
     from typhon.objects.collections.lists import ConstList
     from typhon.objects.ejectors import Ejector
+    from typhon.objects.refs import Promise
     from typhon.objects.guards import (
         AnyOfGuard, BoolGuard, BytesGuard, CharGuard, DoubleGuard,
         FinalSlotGuard, IntGuard, SameGuard, StrGuard, SubrangeGuard,
@@ -203,6 +206,8 @@ def deepFrozenSupersetOf(guard):
         return True
     if guard is deepFrozenStamp:
         return True
+    if isinstance(guard, Promise):
+        guard = guard.resolution()
     if isinstance(guard, BoolGuard):
         return True
     if isinstance(guard, BytesGuard):
@@ -269,6 +274,7 @@ def deepFrozenSupersetOf(guard):
 def auditDeepFrozen(audition):
     from typhon.nodes import FinalPattern, Obj
     from typhon.objects.user import Audition
+    from typhon.objects.printers import toString
     if not isinstance(audition, Audition):
         raise userError(u"not invoked with an Audition")
     ast = audition.ast
@@ -289,7 +295,7 @@ def auditDeepFrozen(audition):
         if not deepFrozenSupersetOf(guard):
             errors.append(u'"%s" in the lexical scope of %s does not have a '
                           u'guard implying DeepFrozen, but %s' %
-                          (name, audition.fqn, guard.toQuote()))
+                          (name, audition.fqn, toString(guard)))
     if len(errors) > 0:
         raise userError(u'\n'.join(errors))
 
