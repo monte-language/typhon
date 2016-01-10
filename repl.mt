@@ -1,4 +1,3 @@
-imports
 exports (main)
 
 def [=> help :DeepFrozen] | _ := ::"import"("lib/help")

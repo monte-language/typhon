@@ -397,7 +397,7 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozenStamp:
                       "SeqExpr", fn f {[transformAll(fixedExprs, f)]})
 
 def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
-    def &scope := makeLazySlot(fn {sumScopes(importsList + exportsList)})
+    def &scope := makeLazySlot(fn {sumScopes([for [n, p] in (importsList) p] + exportsList)})
     object ::"module":
         to getImports():
             return importsList

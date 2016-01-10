@@ -1,4 +1,3 @@
-imports
 exports (main)
 
 # https://bjpelc.wordpress.com/2015/01/10/yet-another-language-speed-test-counting-primes-c-c-java-javascript-php-python-and-ruby-2/

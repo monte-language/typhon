@@ -1,4 +1,4 @@
-imports => unittest
+import "unittest" =~ [=> unittest]
 exports (JSON, json__quasiParser)
 
 object valueHoleMarker as DeepFrozen:
