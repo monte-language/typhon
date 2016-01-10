@@ -1,4 +1,4 @@
-imports => unittest
+import "unittest" =~ [=> unittest]
 exports ()
 
 def bench(_, _) {null}

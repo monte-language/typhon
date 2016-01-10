@@ -1,4 +1,4 @@
-imports => unittest
+import "unittest" =~ [=> unittest]
 exports (Pump, Unpauser, Fount, Drain, Tube,
          nullPump,
          makeMapPump, makeSplitPump, makeStatefulPump,

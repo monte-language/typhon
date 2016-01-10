@@ -1,4 +1,4 @@
-imports => unittest := fn _ {null}
+import "unittest" =~ [=> unittest := fn _ {null}]
 exports (main, makeInference)
 "Type inference for Monte."
 

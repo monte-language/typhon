@@ -1,4 +1,4 @@
-imports => unittest
+import "unittest" =~ [=> unittest]
 exports (Regex, parseRegex)
 
 def [=> marley__quasiParser :DeepFrozen,

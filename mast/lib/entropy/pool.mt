@@ -1,4 +1,4 @@
-imports => unittest
+import "unittest" =~ [=> unittest]
 exports (makePool)
 
 # Copyright (C) 2015 Google Inc. All rights reserved.

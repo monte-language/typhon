@@ -1,4 +1,3 @@
-imports
 exports (composeCodec)
 
 def composeCodec(outer :DeepFrozen, inner :DeepFrozen) as DeepFrozen:

@@ -1,4 +1,4 @@
-imports => unittest
+import "unittest" =~ [=> unittest]
 exports (makePiEntropy)
 
 def [=> continued :DeepFrozen] := ::"import"("lib/continued")

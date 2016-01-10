@@ -1,4 +1,3 @@
-imports
 exports (makePCG)
 
 # PCG: Permuted congruent generators, based on descriptions at

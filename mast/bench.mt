@@ -1,4 +1,3 @@
-imports
 exports (main)
 
 def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")

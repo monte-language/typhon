@@ -1,4 +1,3 @@
-imports
 exports (makeState, runGoal, iterGoal, satisfiable,
          unifyGoal, callFresh, delay, anyOf, allOf)
 "μKanren."

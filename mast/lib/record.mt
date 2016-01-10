@@ -1,4 +1,4 @@
-imports => unittest
+import "unittest" =~ [=> unittest]
 exports (makeRecord)
 
 def capitalize(s :Str) :Str as DeepFrozen:
