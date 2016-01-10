@@ -1,11 +1,9 @@
-{stdenv, fetchFromBitbucket, lib, libsodium, libuv, libffi, pkgconfig, pypy, pypyPackages, buildJIT}:
+{stdenv, fetchzip, lib, libsodium, libuv, libffi, pkgconfig, pypy, pypyPackages, buildJIT}:
 
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
-let pypySrc = fetchFromBitbucket {
-    owner = "pypy";
-    repo = "pypy";
-    rev = "850edf14b2c7";
-    sha256 = "0275rk3ps9rh55g79740xi4f5gz047iw8d3r8c6i658j84nv85hm";
+let pypySrc = fetchzip {
+    url = "https://bitbucket.org/pypy/pypy/downloads/pypy-4.0.1-src.tar.bz2";
+    sha256 = "0saq5qd18wnqx9piyqcc3c23qbdnwbw8gxab5yyqpd0c44xymxw2";
   };
   optLevel = if buildJIT then "-Ojit" else "-O2";
 in
