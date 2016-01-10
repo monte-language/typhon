@@ -556,7 +556,7 @@ def allSatisfy(pred, specimens) :Bool as DeepFrozen:
 #   * broken refs;
 #   * Anything in this list of objects; e.g. _booleanFlow is acceptable
 # * Must have a transitive closure (under calls) obeying the above rule.
-def thawable :Map[Str, DeepFrozen] := [
+def thawable :DeepFrozen := [
     # => _makeList,
     # => _makeMap,
     # => Int,
@@ -567,7 +567,7 @@ def thawable :Map[Str, DeepFrozen] := [
     => true,
 ]
 
-def freezeMap :Map[DeepFrozen, Str] := [for k => v in (thawable) v => k]
+def freezeMap :DeepFrozen := [for k => v in (thawable) v => k]
 
 def freeze(ast, maker, args, span) as DeepFrozen:
     "Uncall literal expressions."

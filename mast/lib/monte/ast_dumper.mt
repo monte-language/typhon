@@ -1,6 +1,6 @@
 def [=> UTF8 :DeepFrozen] | _ := import.script("lib/codec/utf8", safeScope | [=> &&bench])
 
-def astCodes :Map[Str, Int] := [
+def astCodes :DeepFrozen := [
     "LiteralExpr" => 10,
     "NounExpr" => 11,
     "BindingExpr" => 12,

@@ -8,7 +8,7 @@ exports (Pump, Unpauser, Fount, Drain, Tube,
          makePumpTube,
          chain)
 
-interface Pump:
+interface Pump :DeepFrozen:
     "A stream processor which does not care about flow control.
 
      Pumps transform incoming items each into zero or more outgoing
@@ -41,7 +41,7 @@ interface Pump:
          that they may be holding."
 
 
-interface Unpauser:
+interface Unpauser :DeepFrozen:
     "An unpauser."
 
     to unpause():
@@ -59,7 +59,7 @@ interface Unpauser:
 
 
 # XXX Fount[X]
-interface Fount:
+interface Fount :DeepFrozen:
     "A source of streaming data."
 
     to flowTo(drain) :Any:
@@ -93,7 +93,7 @@ interface Fount:
 
 
 # XXX Drain[X]
-interface Drain:
+interface Drain :DeepFrozen:
     "A sink of streaming data."
 
     to flowingFrom(fount) :Any:
@@ -130,7 +130,7 @@ interface Drain:
          remainder of the downstream flow, if any."
 
 
-interface Tube extends Drain, Fount:
+interface Tube :DeepFrozen extends Drain, Fount:
     "A pressure-sensitive segment in a stream processing workflow."
 
 object nullPump as DeepFrozen implements Pump:

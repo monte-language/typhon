@@ -27,15 +27,16 @@ def test_makerauditor_reuse(assert):
 
 def test_require_deepfrozen_bindings(assert):
     def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
-    def z := 1
+
     assert.throws(fn {
+        def z() { return 1 }
         def makeFoo(x, y) implements makerAuditor {
             return object foo implements valueAuditor {
                 to _uncall() {
                     return serializer(makeFoo, [x, y])
                 }
                 to blee() {
-                    return z
+                    return z()
                 }
             }
         }
@@ -77,5 +78,5 @@ def test_require_finalpatts(assert):
         }
     })
 
-unittest([test_transparent_success, test_makerauditor_reuse, test_require_deepfrozen_bindings,
-          test_require_valueauditor, test_require_serializer, test_require_finalpatts,])
+unittest([test_require_deepfrozen_bindings])
+

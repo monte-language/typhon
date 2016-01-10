@@ -195,6 +195,7 @@ def checkDeepFrozen(specimen, seen, ej, root):
 
 def deepFrozenSupersetOf(guard):
     from typhon.objects.collections.lists import ConstList
+    from typhon.objects.constants import wrapBool
     from typhon.objects.ejectors import Ejector
     from typhon.objects.refs import Promise
     from typhon.objects.guards import (
@@ -261,7 +262,8 @@ def deepFrozenSupersetOf(guard):
         except Ejecting:
             # XXX lets other ejectors get through
             pass
-    if SubrangeGuard(deepFrozenGuard).call(u"passes", [guard]):
+    if (SubrangeGuard(deepFrozenGuard).call(u"passes", [guard])
+            is wrapBool(True)):
         return True
     if isinstance(guard, AnyOfGuard):
         for g in guard.subguards:

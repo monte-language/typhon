@@ -4,19 +4,19 @@ def regionToSet(r):
 object VALUE_HOLE as DeepFrozen {}
 object PATTERN_HOLE as DeepFrozen {}
 object EOF as DeepFrozen {}
-def decimalDigits :Set[Char] := regionToSet('0'..'9')
-def hexDigits :Set[Char] := decimalDigits | regionToSet('a'..'f' | 'A'..'F')
+def decimalDigits :DeepFrozen := regionToSet('0'..'9')
+def hexDigits :DeepFrozen := decimalDigits | regionToSet('a'..'f' | 'A'..'F')
 
-def idStart :Set[Char] := regionToSet('a'..'z' | 'A'..'Z' | '_'..'_')
-def idPart :Set[Char] := idStart | decimalDigits
-def closers :Map[Char, Char] := ['(' => ')', '[' => ']', '{' => '}']
+def idStart :DeepFrozen := regionToSet('a'..'z' | 'A'..'Z' | '_'..'_')
+def idPart :DeepFrozen := idStart | decimalDigits
+def closers :DeepFrozen := ['(' => ')', '[' => ']', '{' => '}']
 
 def isIdentifierPart(c) as DeepFrozen:
     if (c == EOF):
         return false
     return idPart.contains(c)
 
-def MONTE_KEYWORDS :Set[Str] := [
+def MONTE_KEYWORDS :DeepFrozen := [
     "as", "bind", "break", "catch", "continue", "def", "else", "escape",
     "exit", "extends", "exports", "finally", "fn", "for", "guards", "if",
     "implements", "imports", "in", "interface", "match", "meta", "method",
