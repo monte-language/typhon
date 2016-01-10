@@ -17,14 +17,21 @@ from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rpath import rjoin
 
 from typhon import log
+from typhon.atoms import getAtom
 from typhon.debug import debugPrint
-from typhon.errors import UserException, userError
+from typhon.errors import Refused, UserException, userError
 from typhon.load.mast import InvalidMAST, loadMASTBytes
 from typhon.load.trash import load
 from typhon.nodes import Sequence, interactiveCompile
+from typhon.objects.collections.maps import ConstMap
+from typhon.objects.collections.helpers import monteMap
 from typhon.objects.constants import NullObject
+from typhon.objects.data import unwrapStr
+from typhon.objects.root import Object
 from typhon.smallcaps.machine import SmallCaps
 from typhon.smallcaps.peephole import peephole
+
+IMPORT_1 = getAtom(u"import", 1)
 
 
 class ModuleCache(object):
@@ -36,6 +43,27 @@ class ModuleCache(object):
         self.cache = {}
 
 moduleCache = ModuleCache()
+
+
+class PackageEnv(Object):
+    """
+    A transitional object that provides something like the package-environment
+    interface we want.
+    """
+    def __init__(self, importer, importList):
+        self.importer = importer
+        self.importList = importList
+
+    def recv(self, atom, args):
+        if atom is IMPORT_1:
+            path = unwrapStr(args[0])
+            # this is a hack, but the whole class is a hack :)
+            if path == u"unittest":
+                d = monteMap()
+                d[args[0]] = self.importList.call(u"get", args)
+                return ConstMap(d)
+            return self.importer.performModule(path, self.importList)
+        raise Refused(self, atom, args)
 
 
 @dont_look_inside
@@ -133,9 +161,9 @@ def evaluateRaise(codes, scope):
     return result, env
 
 
-def instantiateModule(module, importList=None):
+def instantiateModule(importer, module, importList=None):
     """
     Instantiate a top-level module.
     """
-
-    return module.call(u"run", [], namedArgs=importList)
+    return module.call(u"run", [PackageEnv(importer, importList)],
+                       namedArgs=importList)

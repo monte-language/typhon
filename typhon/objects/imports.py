@@ -74,7 +74,7 @@ class Import(Object):
             scope.update(importList.objectMap)
 
         # Instantiate the module.
-        mapping = instantiateModule(module, ConstMap(scope))
+        mapping = instantiateModule(self, module, ConstMap(scope))
 
         if mapping is None:
             debug_print("Result was None :c")

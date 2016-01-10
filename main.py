@@ -239,8 +239,9 @@ def entryPoint(argv):
     scope.update(prelude)
     collectTests = TestCollector()
     ss = scope.copy()
+    importer = Import(config.libraryPaths, ss, recorder, collectTests)
     ss[u"import"] = finalBinding(
-        Import(config.libraryPaths, ss, recorder, collectTests),
+        importer,
         deepFrozenGuard)
     # XXX monteMap()
     reflectedSS = monteMap()
@@ -283,7 +284,7 @@ def entryPoint(argv):
         with scopedVat(vat):
             debug_print("Instantiating module...")
             try:
-                module = instantiateModule(result)
+                module = instantiateModule(importer, result)
                 # Hey, we've got a module! Run it.
                 ruv.update_time(uv_loop)
                 debug_print("Running module...")
