@@ -2097,7 +2097,7 @@ class Pattern(Expr):
         if atom is REFUTABLE_0:
             return wrapBool(self.refutable())
 
-        raise Refused(self, atom, args)
+        return Expr.recv(self, atom, args)
 
 
 @autohelp
