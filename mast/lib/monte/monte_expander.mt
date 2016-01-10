@@ -557,7 +557,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 builder.IgnorePattern(null, span),
                 builder.NounExpr("DeepFrozen", span), [],
                 builder.Script(null,
-                     [builder."Method"(null, "run", [], importsList, DFMap, body, span)],
+                     [builder."Method"(null, "run", [builder.IgnorePattern(null, span)], importsList, DFMap, body, span)],
                      [], span), span)
         else if (nodeName == "SeqExpr"):
             def [exprs] := args
