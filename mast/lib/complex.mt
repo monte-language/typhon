@@ -1,6 +1,6 @@
 exports (Complex, makeComplex)
 
-interface Complex:
+interface Complex :DeepFrozen:
     "Complex numbers in ℂ."
 
     to real() :Double
