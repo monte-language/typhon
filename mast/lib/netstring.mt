@@ -1,3 +1,7 @@
+import "unittest" =~ [=> unittest]
+import "lib/atoi" =~ [=> bytesToInt]
+exports ()
+
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -11,8 +15,6 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
-def [=> bytesToInt] | _ := ::"import".script("lib/atoi")
 
 def toNetstring(cs :Bytes) :Bytes:
     def header := `${cs.size()}`

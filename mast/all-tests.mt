@@ -1,7 +1,7 @@
 def bench(_, _) as DeepFrozen:
     return null
 
-::"import".script("lib/atoi")
+::"import"("lib/atoi", [=> unittest])
 ::"import".script("lib/cache")
 ::"import".script("lib/codec/utf8")
 ::"import".script("lib/continued", [=> &&bench])

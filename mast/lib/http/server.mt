@@ -1,4 +1,5 @@
 import "unittest" =~ [=> unittest]
+import "lib/atoi" =~ [=> strToInt :DeepFrozen]
 exports (makeHTTPEndpoint)
 
 # Copyright (C) 2014 Google Inc. All rights reserved.
@@ -54,8 +55,6 @@ def [BodyState :DeepFrozen,
      CHUNKED :DeepFrozen] := makeEnum(["fixed", "chunked"])
 
 def makeRequestPump() as DeepFrozen:
-    def [=> strToInt] | _ := ::"import".script("lib/atoi", [=> &&unittest])
-
     var requestState :RequestState := REQUEST
     # How body state works: The int is how much is left to read in the current
     # "chunk". For FIXED, that's how much body is left total; for CHUNKED,
