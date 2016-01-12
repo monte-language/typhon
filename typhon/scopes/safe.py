@@ -26,8 +26,9 @@ from typhon.objects.collections.lists import (ConstList, listFromIterable,
 from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
-                                 StrObject, makeSourceSpan, unwrapInt,
-                                 unwrapStr, unwrapChar)
+                                 StrObject, bytesToString, makeSourceSpan,
+                                 unwrapBytes, unwrapInt, unwrapStr,
+                                 unwrapChar)
 from typhon.objects.ejectors import throw, theThrower
 from typhon.objects.equality import Equalizer
 from typhon.objects.iteration import loop
@@ -50,6 +51,7 @@ CALL_4 = getAtom(u"call", 4)
 COERCE_2 = getAtom(u"coerce", 2)
 FAILURELIST_1 = getAtom(u"failureList", 1)
 FROMBYTES_1 = getAtom(u"fromBytes", 1)
+FROMBYTES_2 = getAtom(u"fromBytes", 2)
 FROMCHARS_1 = getAtom(u"fromChars", 1)
 FROMINTS_1 = getAtom(u"fromInts", 1)
 FROMITERABLE_1 = getAtom(u"fromIterable", 1)
@@ -171,10 +173,17 @@ class MakeInt(Object):
             return IntObject(v)
 
         if atom is FROMBYTES_1:
-            data = unwrapList(args[0])
-            x = unpack_float("".join([chr(unwrapInt(byte)) for byte in data]),
-                             True)
-            return DoubleObject(x)
+            return IntObject(int(unwrapBytes(args[0])))
+
+        if atom is FROMBYTES_2:
+            bs = unwrapBytes(args[0])
+            radix = unwrapInt(args[1])
+            try:
+                v = int(bs, radix)
+            except ValueError:
+                raise userError(u"Invalid literal for base %d: %s" % (
+                        radix, bytesToString(bs)))
+            return IntObject(v)
 
         raise Refused(self, atom, args)
 
