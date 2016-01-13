@@ -64,3 +64,7 @@ def makeRational(n :Int, d :Int) as DeepFrozen:
         to floorDivide(other :Rational) :Rational:
             def [p, q] := other.asPair()
             return makeRational(q * n, p * d)
+
+        to op__cmp(other :Rational):
+            def [p, q] := other.asPair()
+            return (q * n).op__cmp(p * d)
