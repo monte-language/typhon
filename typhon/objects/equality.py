@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import math
+
 from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.atoms import getAtom
@@ -135,9 +137,14 @@ def optSame(first, second, cache=None):
         return eq(isinstance(second, CharObject) and first._c == second._c)
 
     # Doubles.
-    if isinstance(first, DoubleObject):
-        return eq(isinstance(second, DoubleObject)
-                and first.getDouble() == second.getDouble())
+    if isinstance(first, DoubleObject) and isinstance(second, DoubleObject):
+        fd = first.getDouble()
+        sd = second.getDouble()
+        # NaN == NaN
+        if math.isnan(fd) and math.isnan(sd):
+            return eq(True)
+        else:
+            return eq(fd == sd)
 
     # Ints.
     if isinstance(first, IntObject):

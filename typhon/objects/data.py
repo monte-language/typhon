@@ -30,6 +30,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.comparison import Incomparable
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.root import Object, audited, runnable
 from typhon.prelude import getGlobalValue
@@ -214,7 +215,12 @@ class DoubleObject(Object):
         self._d = d
 
     def toString(self):
-        return u"%f" % (self._d,)
+        if math.isinf(self._d):
+            return u"Infinity" if self._d > 0 else u"-Infinity"
+        elif math.isnan(self._d):
+            return u"NaN"
+        else:
+            return u"%f" % (self._d,)
 
     def hash(self):
         return _hash_float(self._d)
@@ -226,6 +232,9 @@ class DoubleObject(Object):
         # Doubles can be compared.
         if atom is OP__CMP_1:
             other = promoteToDouble(args[0])
+            # NaN cannot compare equal to any float.
+            if math.isnan(self._d) or math.isnan(other):
+                return Incomparable
             return polyCmp(self._d, other)
 
         # Doubles are related to zero.

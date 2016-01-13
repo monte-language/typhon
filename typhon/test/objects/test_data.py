@@ -247,6 +247,13 @@ class TestDouble(TestCase):
         b = DoubleObject(5.0)
         self.assertNotEqual(a.hash(), b.hash())
 
+    def testCmpNaN(self):
+        a = DoubleObject(float("nan"))
+        comparison = a.call(u"op__cmp", [a])
+        self.assertFalse(comparison.call(u"aboveZero", []).isTrue())
+        self.assertFalse(comparison.call(u"belowZero", []).isTrue())
+        self.assertFalse(comparison.call(u"isZero", []).isTrue())
+
 
 class TestInt(TestCase):
 

@@ -54,6 +54,11 @@ class TestOptSame(TestCase):
         second = DoubleObject(4.2)
         self.assertEqual(optSame(first, second), EQUAL)
 
+    def testDoubleEqualityNaN(self):
+        first = DoubleObject(float("nan"))
+        second = DoubleObject(float("nan"))
+        self.assertEqual(optSame(first, second), EQUAL)
+
     def testIntEquality(self):
         first = IntObject(42)
         second = IntObject(42)
