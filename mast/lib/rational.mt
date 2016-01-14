@@ -19,7 +19,13 @@ interface Rational :DeepFrozen:
 def reduce(p :Int, q :Int) :Pair[Int, Int] as DeepFrozen:
     "Reduce a rational pair."
 
-    return [p, q]
+    def [var a :Int, var b :Int] := if (p > q) {[p, q]} else {[q, p]}
+    while (b != 0):
+        def temp := a % b
+        a := b
+        b := temp
+
+    return [p // a, q // a]
 
 def makeRational(n :Int, d :Int) as DeepFrozen:
     "Make a rational number with numerator `n` and denominator `d`."
