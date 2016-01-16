@@ -560,13 +560,52 @@ def specimens := [
      ["def foo`(@x:$y)` := 1",
       `def via (_quasiMatcher.run(foo__quasiParser.matchMaker(_makeList.run("(", foo__quasiParser.patternHole(0), ":", foo__quasiParser.valueHole(0), ")")), _makeList.run(y))) [x] := 1`],
     ["exports (foo); def foo := 1",
-     `object _ as DeepFrozen { method run(package_1) :(Map.get(Str, DeepFrozen)) { def foo := 1; _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))} }`],
+     `object _ as DeepFrozen {
+          method run(package_1) :(Map.get(Str, DeepFrozen)) {
+              def foo := 1
+              _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))
+          }
+          method dependencies() :(List.get(Str)) {
+              "The dependencies of this module."
+              _makeList.run()
+          }
+      }`],
     [`import "blee" =~ p; exports (foo); def foo := 1`,
-     `object _ as DeepFrozen { method run(package_1) :(Map.get(Str, DeepFrozen)) { def p := package_1."import"("blee"); def foo := 1; _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))} }`],
+     `object _ as DeepFrozen {
+          method run(package_1) :(Map.get(Str, DeepFrozen)) {
+              def p := package_1."import"("blee")
+              def foo := 1
+              _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))
+          }
+          method dependencies() :(List.get(Str)) {
+              "The dependencies of this module."
+              _makeList.run("blee")
+          }
+      }`],
     [`import "blee" =~ [=> a] | b; exports (foo); def foo := 1`,
-     `object _ as DeepFrozen { method run(package_1) :(Map.get(Str, DeepFrozen)) { def via (_mapExtract.run("a")) [a, b] := package_1."import"("blee"); def foo := 1; _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))} }`],
+     `object _ as DeepFrozen {
+          method run(package_1) :(Map.get(Str, DeepFrozen)) {
+              def via (_mapExtract.run("a")) [a, b] := package_1."import"("blee")
+              def foo := 1
+              _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))
+          }
+          method dependencies() :(List.get(Str)) {
+              "The dependencies of this module."
+              _makeList.run("blee")
+          }
+      }`],
     [`import "blee" =~ [=> a]; exports (foo); def foo := 1`,
-     `object _ as DeepFrozen { method run(package_1) :(Map.get(Str, DeepFrozen)) { def via (_mapExtract.run("a")) [a, _] := package_1."import"("blee"); def foo := 1; _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))} }`]
+     `object _ as DeepFrozen {
+          method run(package_1) :(Map.get(Str, DeepFrozen)) {
+              def via (_mapExtract.run("a")) [a, _] := package_1."import"("blee")
+              def foo := 1
+              _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))
+          }
+          method dependencies() :(List.get(Str)) {
+              "The dependencies of this module."
+              _makeList.run("blee")
+          }
+      }`]
 ]
 
 def trim(var s):
