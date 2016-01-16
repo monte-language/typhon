@@ -1,6 +1,5 @@
+import "lib/complex" =~ [=> makeComplex :DeepFrozen]
 exports (main)
-
-def [=> makeComplex :DeepFrozen] | _ := ::"import"("lib/complex")
 
 
 def ITERATIONS :Int := 170

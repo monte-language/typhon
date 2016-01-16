@@ -545,27 +545,40 @@ def expand(node, builder, fail) as DeepFrozen:
         else if (nodeName == "Module"):
             def [importsList, exportsList, expr] := args
             def pkg := builder.TempNounExpr("package", span)
+            # Build the dependency list and import list at the same time.
+            def dependencies := [].diverge()
             def importExprs := [].diverge()
             for [source, patt] in importsList:
+                def dependency := builder.LiteralExpr(source, span)
+                dependencies.push(dependency)
                 importExprs.push(builder.DefExpr(
                     patt, null,
-                    builder.MethodCallExpr(
-                        pkg,
-                        "import", [builder.LiteralExpr(source, span)], [], span), span))
+                    builder.MethodCallExpr(pkg, "import", [dependency], [],
+                                           span), span))
             def exportExpr := emitMap([for noun in (exportsList)
                                emitList([builder.LiteralExpr(noun.getName(),
                                                     noun.getSpan()), noun],
                                         span)], span)
-            def body := builder.SeqExpr(importExprs.snapshot() +
-                                        [expr, exportExpr], span)
+            def runBody := builder.SeqExpr(importExprs.snapshot() +
+                                           [expr, exportExpr], span)
             def DFMap := builder.MethodCallExpr(builder.NounExpr("Map", span),
                 "get", [builder.NounExpr("Str", span),
                         builder.NounExpr("DeepFrozen", span)], [], span)
+            def ListOfStr := builder.MethodCallExpr(
+                builder.NounExpr("List", span), "get",
+                [builder.NounExpr("Str", span)], [], span)
+            def dependenciesMethod := builder."Method"(
+                "The dependencies of this module.",
+                "dependencies", [], [], ListOfStr,
+                emitList(dependencies.snapshot(), span), span)
             return builder.ObjectExpr(null,
                 builder.IgnorePattern(null, span),
                 builder.NounExpr("DeepFrozen", span), [],
                 builder.Script(null,
-                     [builder."Method"(null, "run", [builder.FinalPattern(pkg, null, span)], [], DFMap, body, span)],
+                     [builder."Method"(null, "run",
+                                       [builder.FinalPattern(pkg, null,
+                                       span)], [], DFMap, runBody, span),
+                      dependenciesMethod],
                      [], span), span)
         else if (nodeName == "SeqExpr"):
             def [exprs] := args
