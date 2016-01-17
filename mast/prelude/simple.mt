@@ -24,6 +24,8 @@ def _makeString(chunks):
                 switch (chunk):
                     match [==VALUE_HOLE, index]:
                         rv.push(M.toString(values[index]))
+                    match [==PATTERN_HOLE, _]:
+                        throw("valueMaker/1: Pattern in expression context")
                     match _:
                         rv.push(M.toString(chunk))
             return "".join(rv.snapshot())
@@ -113,7 +115,6 @@ object simple__quasiParser as DeepFrozenStamp:
                     return bindings.snapshot()
 
                 throw.eject(ej, "Excess unmatched: " + M.toQuote(specimen.slice(i, j)))
-
 
     to valueMaker(pieces):
         return _makeString(pieces)
