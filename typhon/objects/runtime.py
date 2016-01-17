@@ -8,12 +8,13 @@ from typhon.errors import Refused
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.maps import ConstMap, monteMap
 from typhon.objects.data import IntObject, StrObject
-from typhon.objects.root import Object
+from typhon.objects.root import Object, runnable
 from typhon.objects.user import ScriptObject
 
 
 GETBUCKETS_0 = getAtom(u"getBuckets", 0)
 GETCRYPT_0 = getAtom(u"getCrypt", 0)
+GETDISASSEMBLER_0 = getAtom(u"getDisassembler", 0)
 GETHANDLES_0 = getAtom(u"getHandles", 0)
 GETHEAPSTATISTICS_0 = getAtom(u"getHeapStatistics", 0)
 GETMEMORYUSAGE_0 = getAtom(u"getMemoryUsage", 0)
@@ -153,6 +154,45 @@ def makeReactorStats():
 
 
 @autohelp
+class Disassembly(Object):
+    """
+    A structure of Typhon bytecode.
+
+    The precise structure offered by this object is subject to change at any
+    time.
+
+    e'o ko na lacri mi lo ka mi stodi
+    """
+
+    codeScript = None
+
+    def __init__(self, obj):
+        if isinstance(obj, ScriptObject):
+            self.codeScript = obj.codeScript
+            self.description = self.describeCodeScript()
+        else:
+            self.description = u"Ah-ah-ah! You didn't say the magic word!"
+
+    def describeCodeScript(self):
+        cs = self.codeScript
+        buf = []
+        buf.append(u"Disassembly of %s" % cs.fqn)
+        for atom in self.codeScript.strategy.getAtoms():
+            code = self.codeScript.strategy.lookupMethod(atom)
+            atomRepr = atom.repr.decode("utf-8")
+            text = code.disassemble().decode("utf-8")
+            buf.append(u"Method %s: %s" % (atomRepr, text))
+        return u"\n".join(buf)
+
+    def toString(self):
+        return self.description
+
+@runnable()
+def disassemble(obj):
+    return Disassembly(obj)
+
+
+@autohelp
 class CurrentRuntime(Object):
     """
     The Typhon runtime.
@@ -167,6 +207,9 @@ class CurrentRuntime(Object):
         if atom is GETCRYPT_0:
             from typhon.objects.crypt import Crypt
             return Crypt()
+
+        if atom is GETDISASSEMBLER_0:
+            return disassemble()
 
         if atom is GETHEAPSTATISTICS_0:
             return makeHeapStats()

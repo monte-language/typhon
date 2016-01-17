@@ -255,7 +255,7 @@ def runnable(singleAtom=None, _stamps=[]):
     """
 
     def inner(f):
-        name = u"<%s>" % f.__name__.decode("utf-8")
+        name = f.__name__.decode("utf-8")
         doc = f.__doc__.decode("utf-8") if f.__doc__ else None
 
         if singleAtom is None:
@@ -269,7 +269,7 @@ def runnable(singleAtom=None, _stamps=[]):
         class runnableObject(Object):
 
             def toString(self):
-                return name
+                return u"<%s>" % name
 
             def auditorStamps(self):
                 return _stamps
