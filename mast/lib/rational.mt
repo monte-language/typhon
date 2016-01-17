@@ -8,7 +8,7 @@ interface Rational :DeepFrozen:
 
     to asPair() :Pair[Int, Int]
 
-    to abs() :Int
+    to abs()
     to reduced()
 
     to add(other)
@@ -32,6 +32,10 @@ def makeRational(n :Int, d :Int) as DeepFrozen:
 
     return object rational as DeepFrozen implements Rational:
         "A rational number in ℚ."
+
+        to _getAllegedInterface():
+            # XXX for regions
+            return DeepFrozen
 
         to _printOn(out):
             out.print(`$n/$d`)
