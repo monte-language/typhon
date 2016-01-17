@@ -22,7 +22,8 @@ from typhon.smallcaps.ops import (ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
                                   SLOT_GLOBAL, SLOT_FRAME, SLOT_LOCAL,
                                   NOUN_GLOBAL, NOUN_FRAME, NOUN_LOCAL,
                                   BINDING_GLOBAL, BINDING_FRAME,
-                                  BINDING_LOCAL, CALL, CALL_MAP)
+                                  BINDING_LOCAL, CALL, CALL_MAP,
+                                  LITERAL)
 
 
 class MethodStrategy(object):
@@ -280,11 +281,8 @@ class Code(object):
                                       instruction.repr.encode("utf-8"), index)
         if instruction == CALL or instruction == CALL_MAP:
             base += " (%s)" % self.atoms[index].repr
-        # XXX enabling this requires the JIT to be able to traverse a lot of
-        # otherwise-unsafe code. You're free to try to fix it, but you've been
-        # warned.
-        # elif instruction == LITERAL:
-        #     base += " (%s)" % self.literals[index].toString().encode("utf-8")
+        elif instruction == LITERAL:
+            base += " (%s)" % self.literals[index].toQuote().encode("utf-8")
         elif instruction in (NOUN_GLOBAL, ASSIGN_GLOBAL, SLOT_GLOBAL,
                              BINDING_GLOBAL):
             base += " (%s)" % self.globals[index].encode("utf-8")
