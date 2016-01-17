@@ -180,7 +180,7 @@ class Disassembly(Object):
         for atom in self.codeScript.strategy.getAtoms():
             code = self.codeScript.strategy.lookupMethod(atom)
             atomRepr = atom.repr.decode("utf-8")
-            text = code.disassemble().decode("utf-8")
+            text = code.disassemble()
             buf.append(u"Method %s: %s" % (atomRepr, text))
         return u"\n".join(buf)
 

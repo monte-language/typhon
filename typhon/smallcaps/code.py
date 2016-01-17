@@ -18,7 +18,7 @@ from rpython.rlib.jit import elidable, elidable_promote, look_inside_iff
 from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.smallcaps.abstract import AbstractInterpreter
 from typhon.smallcaps.ops import (ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
-                                  BIND, BINDFINALSLOT, BINDVARSLOT,
+                                  BIND, BINDOBJECT, BINDFINALSLOT, BINDVARSLOT,
                                   SLOT_GLOBAL, SLOT_FRAME, SLOT_LOCAL,
                                   NOUN_GLOBAL, NOUN_FRAME, NOUN_LOCAL,
                                   BINDING_GLOBAL, BINDING_FRAME,
@@ -277,24 +277,25 @@ class Code(object):
         return self.scripts[i]
 
     def dis(self, instruction, index, stackDepth, handlerDepth):
-        base = "S:%d H:%d | %s %d" % (stackDepth, handlerDepth,
-                                      instruction.repr.encode("utf-8"), index)
+        base = u"S:%d H:%d | %s %d" % (stackDepth, handlerDepth,
+                                       instruction.repr, index)
         if instruction == CALL or instruction == CALL_MAP:
-            base += " (%s)" % self.atoms[index].repr
+            base += u" (%s)" % self.atoms[index].repr.decode("utf-8")
         elif instruction == LITERAL:
-            base += " (%s)" % self.literals[index].toQuote().encode("utf-8")
+            base += u" (%s)" % self.literals[index].toQuote()
+        elif instruction == BINDOBJECT:
+            base += u" (%s)" % self.scripts[index].fqn
         elif instruction in (NOUN_GLOBAL, ASSIGN_GLOBAL, SLOT_GLOBAL,
                              BINDING_GLOBAL):
-            base += " (%s)" % self.globals[index].encode("utf-8")
+            base += u" (%s)" % self.globals[index]
         elif instruction in (NOUN_FRAME, ASSIGN_FRAME, SLOT_FRAME,
                              BINDING_FRAME):
-            base += " (%s)" % self.frame[index].encode("utf-8")
+            base += u" (%s)" % self.frame[index]
         elif instruction in (NOUN_LOCAL, ASSIGN_LOCAL, SLOT_LOCAL,
                              BINDING_LOCAL, BIND, BINDFINALSLOT,
                              BINDVARSLOT):
             name, depth = self.locals[index]
-            base += " (%s (%s))" % (name.encode("utf-8"),
-                    depth.repr.encode("utf-8"))
+            base += u" (%s (%s))" % (name, depth.repr)
         return base
 
     @elidable
@@ -306,10 +307,11 @@ class Code(object):
         return self.dis(instruction, index, stackDepth, handlerDepth)
 
     def disassemble(self):
-        rv = ["Code for %s: S:%d" % (self.profileName, self.startingDepth)]
+        rv = [u"Code for %s: S:%d" % (self.profileName.decode("utf-8"),
+                                      self.startingDepth)]
         for i in range(len(self.instructions)):
-            rv.append("%d: %s" % (i, self.disAt(i)))
-        return "\n".join(rv)
+            rv.append(u"%d: %s" % (i, self.disAt(i)))
+        return u"\n".join(rv)
 
     def figureMaxDepth(self):
         ai = AbstractInterpreter(self)
