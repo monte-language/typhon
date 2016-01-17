@@ -384,15 +384,18 @@ object _makeOrderedSpace as DeepFrozenStamp:
          The correspondence is obtained via Miranda _getAllegedInterface(),
          with special cases for `Char`, `Double`, and `Int`."
 
-        if (value =~ i :Int):
-            return _makeOrderedSpace(Int, "Int")
-        else if (value =~ d :Double):
-            return _makeOrderedSpace(Double, "Double")
-        else if (value =~ c :Char):
-            return _makeOrderedSpace(Char, "Char")
-        else:
-            def type := value._getAllegedInterface()
-            return _makeOrderedSpace(type, M.toQuote(type))
+        return switch (value):
+            match i :Int:
+                _makeOrderedSpace(Int, "Int")
+            match d :Double:
+                _makeOrderedSpace(Double, "Double")
+            match c :Char:
+                _makeOrderedSpace(Char, "Char")
+            match s :Str:
+                _makeOrderedSpace(Str, "Str")
+            match _:
+                def type := value._getAllegedInterface()
+                _makeOrderedSpace(type, M.toQuote(type))
 
     to op__till(start, bound):
         "The operator `start`..!`bound`.
@@ -536,6 +539,7 @@ unittest([testIterable, testContainment, testGuard, testDeepFrozen])
     "Char" => _makeOrderedSpace.spaceOfValue('m'),
     "Int" => _makeOrderedSpace.spaceOfValue(42),
     "Double" => _makeOrderedSpace.spaceOfValue(4.2),
+    "Str" => _makeOrderedSpace.spaceOfValue("Monte"),
     => _makeTopSet,
     => _makeOrderedRegion,
     => _makeOrderedSpace,
