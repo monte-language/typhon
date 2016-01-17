@@ -57,13 +57,10 @@ def slowLoop(iterable, consumer):
 
 
 @runnable(RUN_2, [deepFrozenStamp])
-def loop(args):
+def loop(iterable, consumer):
     """
     Perform an iterative loop.
     """
-
-    iterable = args[0]
-    consumer = args[1]
 
     # If the consumer is *not* a ScriptObject, then damn them to the slow
     # path. In order for the consumer to not be ScriptObject, though, the

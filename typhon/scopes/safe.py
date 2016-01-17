@@ -115,12 +115,12 @@ theMakeList = MakeList()
 
 
 @runnable(FROMPAIRS_1, [deepFrozenStamp])
-def makeMap(args):
+def makeMap(pairs):
     """
     Given a `List[Pair]`, produce a `Map`.
     """
 
-    return ConstMap.fromPairs(args[0])
+    return ConstMap.fromPairs(pairs)
 
 theMakeMap = makeMap()
 
@@ -448,7 +448,7 @@ class VarSlotMaker(Object):
 
 
 @runnable(COERCE_2, _stamps=[deepFrozenStamp])
-def nearGuard(args):
+def nearGuard(specimen, ej):
     """
     A guard over references to near values.
 
@@ -457,9 +457,6 @@ def nearGuard(args):
 
     This guard is unretractable.
     """
-
-    specimen = args[0]
-    ej = args[1]
 
     specimen = resolution(specimen)
     if isinstance(specimen, Promise):

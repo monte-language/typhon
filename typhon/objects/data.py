@@ -793,8 +793,7 @@ def promoteToBigInt(o):
 
 
 @runnable(RUN_6, [deepFrozenStamp])
-def _makeSourceSpan(args):
-    uri, isOneToOne, startLine, startCol, endLine, endCol = args
+def _makeSourceSpan(uri, isOneToOne, startLine, startCol, endLine, endCol):
     return SourceSpan(uri, unwrapBool(isOneToOne),
                       unwrapInt(startLine), unwrapInt(startCol),
                       unwrapInt(endLine), unwrapInt(endCol))

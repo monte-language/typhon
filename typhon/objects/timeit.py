@@ -24,9 +24,8 @@ from typhon.objects.root import runnable
 RUN_2 = getAtom(u"run", 2)
 
 @runnable(RUN_2)
-def bench(args):
-    obj = args[0]
-    name = unwrapStr(args[1]).encode("utf-8")
+def bench(obj, name):
+    name = unwrapStr(name).encode("utf-8")
 
     if not benchmarkSettings.enabled:
         debug_print("Not running benchmark", name,

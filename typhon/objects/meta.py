@@ -19,7 +19,7 @@ from typhon.objects.root import runnable
 GETFQNPREFIX_0 = getAtom(u"getFQNPrefix", 0)
 
 @runnable(GETFQNPREFIX_0)
-def MetaContext(_):
+def MetaContext():
     """
     Obtain the fully qualified name prefix.
     """

@@ -9,7 +9,7 @@ RUN_0 = getAtom(u"run", 0)
 
 
 @runnable(RUN_0)
-def makeStdIn(_):
+def makeStdIn():
     vat = currentVat.get()
     uv_loop = vat.uv_loop
     tty = ruv.alloc_tty(uv_loop, 0, True)
@@ -18,7 +18,7 @@ def makeStdIn(_):
 
 
 @runnable(RUN_0)
-def makeStdOut(_):
+def makeStdOut():
     vat = currentVat.get()
     uv_loop = vat.uv_loop
     tty = ruv.alloc_tty(uv_loop, 1, False)
@@ -30,7 +30,7 @@ def makeStdOut(_):
 
 
 @runnable(RUN_0)
-def makeStdErr(_):
+def makeStdErr():
     vat = currentVat.get()
     uv_loop = vat.uv_loop
     tty = ruv.alloc_tty(uv_loop, 2, False)

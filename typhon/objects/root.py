@@ -12,9 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import inspect
+
 from rpython.rlib import rgc
+from rpython.rlib.unroll import unrolling_iterable
 from rpython.rlib.jit import jit_debug, promote, unroll_safe
-from rpython.rlib.objectmodel import compute_identity_hash
+from rpython.rlib.objectmodel import compute_identity_hash, specialize
 from rpython.rlib.rstackovf import StackOverflow, check_stack_overflow
 
 from typhon.atoms import getAtom
@@ -239,17 +242,29 @@ class Object(object):
         return {}
 
 
-def runnable(singleAtom, _stamps=[]):
+@specialize.call_location()
+def runnable(singleAtom=None, _stamps=[]):
     """
     Promote a function to a Monte object type.
 
     The resulting class object can be called multiple times to create multiple
     Monte objects.
+
+    If you don't provide an atom, then I will guess based on the arity of the
+    passed-in function and the function's name.
     """
 
     def inner(f):
         name = u"<%s>" % f.__name__.decode("utf-8")
         doc = f.__doc__.decode("utf-8") if f.__doc__ else None
+
+        if singleAtom is None:
+            arity = len(inspect.getargspec(f).args)
+            theAtom = getAtom(name, arity)
+        else:
+            arity = singleAtom.arity
+            theAtom = singleAtom
+        unrolledArity = unrolling_iterable(range(arity))
 
         class runnableObject(Object):
 
@@ -263,12 +278,16 @@ def runnable(singleAtom, _stamps=[]):
                 return doc
 
             def respondingAtoms(self):
-                return {singleAtom: doc}
+                return {theAtom: doc}
 
-            def recv(self, atom, args):
-                if atom is singleAtom:
-                    return f(args)
-                raise Refused(self, atom, args)
+            def recv(self, atom, listArgs):
+                if atom is theAtom:
+                    args = ()
+                    for i in unrolledArity:
+                        args += (listArgs[i],)
+                    return f(*args)
+                else:
+                    raise Refused(self, atom, listArgs)
 
         return runnableObject
 

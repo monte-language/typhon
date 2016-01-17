@@ -103,13 +103,13 @@ class TCP4ClientEndpoint(Object):
 
 
 @runnable(RUN_2)
-def makeTCP4ClientEndpoint(args):
+def makeTCP4ClientEndpoint(host, port):
     """
     Make a TCPv4 client endpoint.
     """
 
-    host = unwrapBytes(args[0])
-    port = unwrapInt(args[1])
+    host = unwrapBytes(host)
+    port = unwrapInt(port)
     return TCP4ClientEndpoint(host, port)
 
 
@@ -210,10 +210,9 @@ class TCP4ServerEndpoint(Object):
 
 
 @runnable(RUN_1)
-def makeTCP4ServerEndpoint(args):
+def makeTCP4ServerEndpoint(port):
     """
     Make a TCPv4 server endpoint.
     """
 
-    port = unwrapInt(args[0])
-    return TCP4ServerEndpoint(port)
+    return TCP4ServerEndpoint(unwrapInt(port))

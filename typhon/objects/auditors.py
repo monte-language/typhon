@@ -52,15 +52,11 @@ deepFrozenStamp = DeepFrozenStamp()
 
 
 @runnable(RUN_2, [deepFrozenStamp])
-def auditedBy(args):
+def auditedBy(auditor, specimen):
     """
     Whether an auditor has audited a specimen.
     """
     from typhon.objects.refs import resolution
-
-    auditor = args[0]
-    specimen = args[1]
-
     from typhon.objects.constants import wrapBool
     return wrapBool(resolution(specimen).auditedBy(auditor))
 

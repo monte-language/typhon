@@ -34,18 +34,18 @@ RUN_2 = getAtom(u"run", 2)
 
 
 @runnable(RUN_1, [deepFrozenStamp])
-def isList(args):
-    return wrapBool(isinstance(args[0], ConstList))
+def isList(specimen):
+    return wrapBool(isinstance(specimen, ConstList))
 
 
 @runnable(RUN_1, [deepFrozenStamp])
-def isMap(args):
-    return wrapBool(isinstance(args[0], ConstMap))
+def isMap(specimen):
+    return wrapBool(isinstance(specimen, ConstMap))
 
 
 @runnable(RUN_1, [deepFrozenStamp])
-def isSet(args):
-    return wrapBool(isinstance(args[0], ConstSet))
+def isSet(specimen):
+    return wrapBool(isinstance(specimen, ConstSet))
 
 
 def evalToPair(source, envMap, recorder):

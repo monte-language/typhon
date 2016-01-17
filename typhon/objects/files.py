@@ -652,12 +652,12 @@ class FileResource(Object):
 
 
 @runnable(RUN_1)
-def makeFileResource(args):
+def makeFileResource(path):
     """
     Make a file Resource.
     """
 
-    path = unwrapStr(args[0])
+    path = unwrapStr(path)
     segments = [segment.encode("utf-8") for segment in path.split(u'/')]
     if not path.startswith(u'/'):
         # Relative path.

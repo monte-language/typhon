@@ -94,23 +94,23 @@ class SubProcess(Object):
 
 
 @runnable(RUN_3)
-def makeProcess(args):
+def makeProcess(executable, args, environment):
     """
     Create a subordinate process on the current node from the given
     executable, arguments, and environment.
     """
 
     # Third incarnation: libuv-powered and requiring bytes.
-    executable = unwrapBytes(args[0])
+    executable = unwrapBytes(executable)
     # This could be an LC, but doing it this way fixes the RPython annotation
     # for the list to be non-None.
     argv = []
-    for arg in unwrapList(args[1]):
+    for arg in unwrapList(args):
         s = unwrapBytes(arg)
         assert s is not None, "proven impossible by hand"
         argv.append(s)
     env = {}
-    for (k, v) in unwrapMap(args[2]).items():
+    for (k, v) in unwrapMap(environment).items():
         env[unwrapBytes(k)] = unwrapBytes(v)
     packedEnv = [k + '=' + v for (k, v) in env.items()]
 

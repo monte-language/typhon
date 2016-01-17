@@ -35,13 +35,10 @@ class SealedException(Object):
 
 
 @runnable(RUN_2, _stamps=[deepFrozenStamp])
-def unsealException(args):
+def unsealException(specimen, ej):
     """
     Unseal a specimen.
     """
-
-    specimen = args[0]
-    ej = args[1]
 
     if isinstance(specimen, SealedException):
         trail = ConstList([StrObject(s) for s in specimen.trail])

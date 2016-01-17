@@ -129,9 +129,9 @@ def gaiCB(gai, status, ai):
 
 
 @runnable(RUN_2)
-def getAddrInfo(args):
-    node = unwrapBytes(args[0])
-    service = unwrapBytes(args[1])
+def getAddrInfo(node, service):
+    node = unwrapBytes(node)
+    service = unwrapBytes(service)
     vat = currentVat.get()
     gai = ruv.alloc_gai()
     p, r = makePromise()
