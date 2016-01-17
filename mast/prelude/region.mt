@@ -1,467 +1,376 @@
-# A min where null represents positive infinity
-def min(a, b) as DeepFrozenStamp:
-    if (a == null):
-        return b
-    else if (b == null):
-        return a
-    else:
-        return a.min(b)
+def cmpInf(left, right) as DeepFrozenStamp:
+    "Compare, but treat `null` as -∞ on the left and ∞ on the right."
+
+    # -∞ is smaller than anything else.
+    if (left == null):
+        return -1
+
+    # ∞ is larger than anything else.
+    if (right == null):
+        return 1
+
+    # Business as usual.
+    return left.op__cmp(right)
 
 
-# A max where null represents negative infinity
-def max(a, b) as DeepFrozenStamp:
-    if (a == null):
-        return b
-    else if (b == null):
-        return a
-    else:
-        return a.max(b)
+# Convention: Null means -infinity on the LHS and +infinity on the RHS.
+def _makeTopSet(guard :DeepFrozen, left :NullOk[guard], leftClosed :Bool,
+                right :NullOk[guard], rightClosed :Bool) as DeepFrozenStamp:
 
-# A get that returns null if index is out of bounds
-def get(list, index) as DeepFrozenStamp:
-    if (index < 0 || index >= list.size()):
-        return null
-    else:
-        return list[index]
+    # Invariant: The LHS is less than or equal to the RHS. It's fine for them
+    # to be equal, although in that case, both the LHS and RHS must be closed.
+    # (Otherwise, there'd be an indeterminate number of members in the set. A
+    # closed set with LHS <=> RHS has one member.)
+    if (left != null && right != null):
+        if (left > right):
+            throw(`Invariant failed: $left > $right`)
+        else if (left <=> right &! (leftClosed & rightClosed)):
+            throw(`Invariant failed: $left <=> $right but not closed`)
 
- # Makes inequality-based regions for fully ordered positions like
- # integers, float64s, and chars, where, for every position, there is a
- # 'next()' and 'previous()' operation.
+    return object topSet as DeepFrozenStamp:
+        "A set in the topological sense, with a left-hand and right-hand
+         endpoint."
 
- # If you want similar regions over, for example, Strings or rational numbers,
- # you'd have to do something else.
+        to _printOn(out):
+            out.print(leftClosed.pick("[", "("))
+            out.print((left == null).pick("-∞", M.toQuote(left)))
+            out.print(", ")
+            out.print((right == null).pick("∞", M.toQuote(right)))
+            out.print(rightClosed.pick("]", ")"))
 
- # The in edges are members of the region, as are the non-edges
- # immediately following them. The out edges are not in the region, as
- # are the non-edges immediately following them. Therefore, the empty
- # region has args (true, []) while the full region has args
- # (false, [])
- #
- # @param myBoundedLeft If true, then the even egdes are in-edges and the odd
- #                      edges are out-edges. Otherwise, vice verse.
- # @param myEdges is an ascending list of one-dimensional fully ordered
- #                positions.
- # @author Mark S. Miller
-object _makeOrderedRegion as DeepFrozenStamp:
-    to run(myType :DeepFrozen, myName :Str, var initBoundedLeft :Bool,
-           var initEdges):
+        to _uncall():
+            return [_makeTopSet, "run", [guard, left, leftClosed, right,
+                                         rightClosed], [].asMap()]
 
-        # Notational convenience
-        def region(boundedLeft :Bool, edges) as DeepFrozenStamp:
-            return _makeOrderedRegion(myType, myName, boundedLeft, edges)
+        # We will be calling .next() in this iterator. If .next() doesn't
+        # work, then we allow the exception to raise. This might be annoying
+        # for Str and Double, but I don't want to special-case them and cause
+        # people to be surprised when user-defined interfaces also fail. ~ C.
+        to _makeIterator():
+            var i :Int := 0
+            var position :guard := left
 
+            if (!leftClosed):
+                position := position.next()
 
-        if (initEdges.size() >= 1 && initEdges[0].previous() <=> initEdges[0]):
-            # if the first edge is the least element, get rid of it and
-            # flip parity
-            initEdges := initEdges(1, initEdges.size())
-            initBoundedLeft := !initBoundedLeft
+            return object topSetIterator:
+                "An iterator for a topset."
 
-        initEdges := initEdges.snapshot()
-        def myInParity :Int := if (initBoundedLeft) {0} else {1}
-        def myLen :Int := initEdges.size()
-        def myTypeR :Same[myType] := myType # for SubrangeGuard audit
+                to _makeIterator():
+                    return topSetIterator
 
-        def myBoundedLeft :Bool := initBoundedLeft
-        def myEdges :DeepFrozen := initEdges
+                to next(ej):
+                    def cmp := cmpInf(position, right)
+                    if (cmp.aboveZero() || (cmp.isZero() & !rightClosed)):
+                        throw.eject(ej, "Iteration stopped: topset exhausted")
 
-        # As guards, regions only accept positions in the region.
+                    def rv := [i, position]
+                    i += 1
+                    position := position.next()
 
-        # XXX needs "implements Guard", when that makes sense
-        object self implements DeepFrozenStamp, SubrangeGuard[myType], SubrangeGuard[DeepFrozen]:
+                    return rv
 
-            # Returns a ConstList of edge positions in ascending order
-            to getEdges():
-                return myEdges
+        to asTuple():
+            "Easily-unpacked value for pattern-matching."
+            return [left, leftClosed, right, rightClosed]
 
-             # mostly prints in Monte sugared expression syntax
-             #
-            to _printOn(out):
-                def printEdge(boundedLeft, edge :myType):
-                    out.print("(")
-                    out.print(myName)
-                    out.print(if (boundedLeft) {" >= "} else {" < "})
-                    out.print(`$edge`)
-                    out.print(")")
+        to contains(value :guard) :Bool:
+            "Whether a value is in this topset."
 
-                def printInterval(left :myType, right :myType):
-                    out.print(`$left`)
-                    out.print("..!")
-                    out.print(`$right`)
-
-                if (myLen == 0):
-                    if (myBoundedLeft):
-                        out.print("<empty ")
-                        out.print(myName)
-                        out.print(" region>")
-                    else:
-                        out.print("<full ")
-                        out.print(myName)
-                        out.print(" region>")
-
-                else if (myLen == 1):
-                    printEdge(myBoundedLeft, myEdges[0])
-                else:
-                    var i := if (myBoundedLeft) {
-                        printInterval(myEdges[0], myEdges[1])
-                        2
-                    } else {
-                        printEdge(false, myEdges[0])
-                        1
-                    }
-                    while (i + 1 < myLen):
-                        out.print(" | ")
-                        printInterval(myEdges[i], myEdges[i+1])
-                        i += 2
-                    if (i < myLen):
-                        out.print(" | ")
-                        printEdge(true, myEdges[i])
-
-            to _uncall():
-                return [_makeOrderedRegion, "run", [myType, myName,
-                                                    myBoundedLeft,
-                                                    myEdges], [].asMap()]
-
-            # Is pos in the region?
-
-            # If it's in the type but not in the region, the answer is false.
-            # If it's not in the type, a problem is thrown.
-            to run(pos :myType) :Bool:
-                # XXX linear time algorithm. For long myEdges lists,
-                # it should do a binary search.
-                for i => edge in myEdges:
-                    if (edge > pos):
-                        # it's on or above an in edge if it's below
-                        # an out edge
-                        return i % 2 != myInParity
-                # or if it's past the last edge, and we aren't
-                # bounded right
-                return myLen % 2 != myInParity
-
-            # Alias for run/1.
-            to contains(pos :myType) :Bool:
-                return self(pos)
-
-            # All Regions are also Guards, either coercing a
-            # specimen to a position in the region, or rejecting it.
-            to coerce(var specimen, optEjector) :myTypeR:
-                specimen := myType.coerce(specimen, optEjector)
-                if (self(specimen)):
-                    return specimen
-                else:
-                    throw.eject(optEjector,
-                                `${M.toQuote(specimen)} is not in the region ${M.toQuote(self)}`)
-
-            # Return the type's trivial value if it is in the region,
-            # otherwise fail.
-            to getTheTrivialValue():
-                return self.coerce(
-                    def t := myType.getTheTrivialValue(),
-                    def cantTrivialize(_) {
-                        throw(`trivial value $t is not available in region $self`)})
-
-            # Note that the empty region is bounded left, but it doesn't
-            #  have a start
-            to isBoundedLeft() :Bool:
-                return myBoundedLeft
-
-
-            # Note that the empty region is bounded left, but it doesn't
-            # have a start.
-
-            # Returns the start or null. The start is the least element
-            # which is *in* the region.
-            to getOptStart() :NullOk[myType]:
-                if (myBoundedLeft && myLen >= 1):
-                    return myEdges[0]
-                else:
-                    return null
-
-            # Note that the empty region is bounded right, but it doesn't
-            # have a bound
-            to isBoundedRight() :Bool:
-                return myLen % 2 == myInParity
-
-            # Note that the empty region is bounded right, but it doesn't
-            # have a bound.
-
-            # Returns the bound or null. The right bound is the least
-            # element greater than all elements in the region. Unlike the
-            # left bound, it is *not* in the region.
-            to getOptBound() :NullOk[myType]:
-                if (myLen >= 1 && myLen % 2 == myInParity):
-                    return myEdges[myLen - 1]
-                else:
-                    return null
-
-            # Does this region contain no positions?
-
-            # An empty region can always be constructed by the intersection
-            # of a distinction and its complement, and is therefore an
-            # interval, but not a distinction.
-            to isEmpty() :Bool:
-                return myLen == 0 && myBoundedLeft
-
-            # Does this region contain all positions?
-
-            # The full region is the intersection (and) of no regions, and
-            # is therefore a interval but not a distinction.
-            to isFull() :Bool:
-                return myLen == 0 && !myBoundedLeft
-
-            # All regions of a coordinate space can be made by and/or/nots
-            # of distinctions.
-
-            # The not of a distinction must be a distinction. For this space,
-            # the distinctions are (myType < y) and (myType >= y).
-            to isDistinction() :Bool:
-                return myLen == 1
-
-            # The intersection of distinctions must be an interval (it may
-            # or may not also be a distinction).
-
-            # Therefore, the
-            # intersection of intervals is also an interval. The
-            # intersection of no regions is the full region, which is a
-            # interval. The intersection of a distinction and its
-            # complement is the empty region, which is an interval. All
-            # distinctions are intervals. The complement of an interval
-            # need not be an interval. A non-interval is a complex
-            # region.
-            to isSimpleRegion() :Bool:
-                if (myLen <= 1):
-                    # distinctions, empty, and full are all intervals
-                    return true
-                else if (myLen == 2):
-                    # x..!y is an interval
-                    return myBoundedLeft
-                else:
-                    # nothing else is an interval
+            # Start on the left.
+            if (left != null):
+                if (value < left):
+                    return false
+                else if (value <=> left &! leftClosed):
                     return false
 
-            # A region can be asked to decompose itself into intervals.
+            # And now the right.
+            if (right != null):
+                if (value > right):
+                    return false
+                else if (value <=> right &! rightClosed):
+                    return false
 
-            # The original region is the union (or) of these intervals.
-            # In the case of an OrderedRegion, the intervals returned are
-            # disjoint and ascending.
+            # It doesn't lie outside the set; therefore, it's within the set.
+            return true
 
-            # If the region is full, this returns a singleton list
-            # containing the full interval. If this region is empty, then
-            # this return an empty list, since the empty region is the
-            # union of no regions.
-            to getSimpleRegions() :List:
-                def flex := [].diverge()
-                if (! myBoundedLeft):
-                    if (myLen == 0):
-                        flex.push(region(false, []))
+        to isFull() :Bool:
+            "Whether this topset contains all values of its type."
+            return left == null & right == null
+
+        to intersects(other) :Bool:
+            "Whether this topset and another topset have any overlap."
+            def [otherLeft, otherLC, otherRight, otherRC] := other.asTuple()
+            def leftFits := ((left == null | otherRight == null) ||
+                             left < otherRight ||
+                             (left <=> otherRight && (otherRC & leftClosed)))
+            def rightFits := ((right == null | otherLeft == null) ||
+                              right > otherLeft ||
+                              (right <=> otherLeft &&
+                               (otherLC & rightClosed)))
+            return leftFits & rightFits
+
+# This no longer really resembles MarkM's original regions. Instead of the
+# edgelist, these regions use a closed-open endpoint representation, with a
+# simpler composition.
+def _makeOrderedRegion(guard :DeepFrozen, myName :Str,
+                       topSets :List[DeepFrozen]) as DeepFrozenStamp:
+    "Make regions for sets of objects with total ordering."
+
+    def region(newTopSets) as DeepFrozenStamp:
+        return _makeOrderedRegion(guard, myName, newTopSets)
+
+    def size :Int := topSets.size()
+
+    def myTypeR :Same[guard] := guard # for SubrangeGuard audit
+
+    # XXX needs "implements Guard", when that makes sense
+    object self implements DeepFrozenStamp, SubrangeGuard[guard], SubrangeGuard[DeepFrozen]:
+        "An ordered region."
+
+        # mostly prints in Monte sugared expression syntax
+        to _printOn(out):
+            if (size == 0):
+                out.print("<empty ")
+            else:
+                out.print("<")
+                # Cannot fail since size is non-zero.
+                def [head] + tail := topSets
+                out.print(head)
+                for topSet in tail:
+                    out.print(" | ")
+                    out.print(topSet)
+            out.print(` $myName region>`)
+
+        to _uncall():
+            return [_makeOrderedRegion, "run", [guard, myName, topSets],
+                    [].asMap()]
+
+        to getTopSets():
+            "The topsets of this region."
+            return topSets
+
+        to contains(pos :guard) :Bool:
+            "Whether a given position is in this region."
+
+            # XXX linear search. This can, and should, be binary search, *but*
+            # we must prove that our list of topsets is sorted.
+            for topSet in topSets:
+                if (topSet.contains(pos)):
+                    return true
+            return false
+
+        to run(pos) :Bool:
+            "Whether a given position is in this region.
+            
+             Alias of `contains/1`."
+            return self.contains(pos)
+
+        to coerce(var specimen, ej) :myTypeR:
+            "This guard is unretractable."
+
+            specimen := guard.coerce(specimen, ej)
+            if (self(specimen)):
+                return specimen
+            else:
+                throw.eject(ej, `${M.toQuote(specimen)} is not in $self`)
+
+        to isEmpty() :Bool:
+            "Whether there are any positions in this region."
+            return size == 0
+
+        to isFull() :Bool:
+            "Whether this region contains all possible positions."
+            return size == 1 && topSets[0].isFull()
+
+        to add(offset):
+            "Translate this region by an offset."
+            return region([for topSet in (topSets) topSet + offset])
+
+        to subtract(offset):
+            "Translate this region by an offset."
+            return region([for topSet in (topSets) topSet - offset])
+
+        to not():
+            "The region containing precisely those positions not in this
+             region."
+
+            if (size == 0):
+                # We are the empty region; return the full region.
+                return region([_makeTopSet(guard, null, false, null, false)])
+
+            # We move from left to right for obvious reasons.
+            # XXX this requires that we are sorted!
+            def rv := [].diverge()
+            def [head] + tail := topSets
+            def [left, leftClosed, var right, var rightClosed] := head.asTuple()
+            if (left != null):
+                # We don't include -∞, so our complement must.
+                rv.push(_makeTopSet(guard, null, false, left, !leftClosed))
+            for topSet in tail:
+                def [nextLeft, nextLC, nextRight, nextRC] := topSet.asTuple()
+                rv.push(_makeTopSet(guard, right, !rightClosed, nextLeft,
+                                    !nextLC))
+                right := nextRight
+                rightClosed := nextRC
+            if (right != null):
+                # We don't include ∞, so our complement must.
+                rv.push(_makeTopSet(guard, right, !rightClosed, null, false))
+
+            return region(rv.snapshot())
+
+        to and(other):
+            "The intersection of this region with another region."
+
+            # If we are empty, then we can't possibly intersect the other
+            # region. If they are full, then we are already our own
+            # intersection.
+            if (size == 0 || other.isFull()):
+                return self
+
+            # Ditto for them.
+            if (self.isFull() || other.isEmpty()):
+                return other
+
+            def otherTopSets := other.getTopSets()
+            def otherSize := otherTopSets.size()
+
+            # Invariant: Neither list of topsets is empty, proved above.
+            # Invariant: Neither region is full, proved above.
+
+            def rv := [].diverge()
+            var ourIter := topSets._makeIterator()
+            var otherIter := otherTopSets._makeIterator()
+            # Won't fail this time.
+            var ourNext := ourIter.next(null)[1]
+            var otherNext := otherIter.next(null)[1]
+
+            while (true):
+                def [ourLeft, ourLC, ourRight, ourRC] := ourNext.asTuple()
+                def [otherLeft, otherLC, otherRight, otherRC] := otherNext.asTuple()
+                if (ourNext.intersects(otherNext)):
+                    # Hit! Perform the intersection and trim the top. We
+                    # already know that our left edge is the leading edge,
+                    # so we're going to go with their left edge. We'll
+                    # select whichever right edge is next.
+
+                    # Whether our left edge is before their left edge.
+                    def weAreFirst := (ourLeft == null ||
+                                       (otherLeft != null &&
+                                        (ourLeft < otherLeft ||
+                                        (ourLeft <=> otherLeft &&
+                                         (ourLC | !otherLC)))))
+                    # And whether our right edge is after their right edge.
+                    def weAreLast := (ourRight == null ||
+                                      (otherRight != null &&
+                                       (ourRight > otherRight ||
+                                       (ourRight <=> otherRight &&
+                                        (!ourRC | otherRC)))))
+
+                    # We should be set. Based on the judgments we just made,
+                    # we'll make the intersecting topset and push it onto the
+                    # list. We'll also rebuild the right-hand leftovers from
+                    # the intersection for the next iteration.
+                    def [newLeft, newLC] := if (weAreFirst) {
+                        [otherLeft, otherLC]
+                    } else {
+                        [ourLeft, ourLC]
+                    }
+                    def [newRight, newRC] := if (weAreLast) {
+                        [otherRight, otherRC]
+                    } else {
+                        [ourRight, ourRC]
+                    }
+                    rv.push(_makeTopSet(guard, newLeft, newLC, newRight,
+                                        newRC))
+                    # Reassemble the remainder. We're using right-hand edges
+                    # as left-hand edges here, so we need a null check. If a
+                    # new LHS would be null, but it was on the RHS, then it
+                    # used to be +∞, and we cannot forge another edge there,
+                    # so we'll break instead.
+                    if (weAreLast):
+                        if (otherRight == null):
+                            break
+                        ourNext := _makeTopSet(guard, otherRight, !otherRC,
+                                               ourRight, ourRC)
                     else:
-                        flex.push(region(false, [myEdges[0]]))
-                var i := myInParity
-                while (i < myLen):
-                    flex.push(region(true, myEdges(i, myLen.min(i+2))))
-                    i += 2
-                return flex.snapshot()
-
-            # An interval can be asked to decompose itself into distinctions.
-
-            # The original interval is the intersection (and) of these
-            # distinctions.
-
-            # The full interval returns a list of no distinctions. The
-            # empty interval return the list [(myType < 0), (myType >= 0)],
-            # ie, 0..!0.
-            to getDistinctions() :List:
-                if (myLen == 1):
-                    # a distinctions is one inequality
-                    return [self]
-                else if (myLen == 2 && myBoundedLeft):
-                    # an interval is the intersection of two inequalities
-                    return [region(true, [myEdges[0]]),
-                           region(false, [myEdges[1]])]
-                else if (myLen == 0):
-                    if (myBoundedLeft):
-                        # the empty region is the intersection of two
-                        # disjoint distinctions, for example, a
-                        # distinction and its complement, for example,
-                        # (myType < 0) and (myType >= 0)
-                        [region(false, [0]),
-                         region(true, [0])]
-                    else:
-                        # the full region is the intersection of no
-                        # distinctions
-                        return []
+                        if (ourRight == null):
+                            break
+                        otherNext := _makeTopSet(guard, ourRight, !ourRC,
+                                                 otherRight, otherRC)
                 else:
-                    throw("can only get distinctions from an interval")
-
-            # the region you get if you displace all my positions by
-            # offset.
-
-            # Note that offset may not be of myType. For example,
-            # "(char > 'a') + 3" is fine.
-            to add(offset):
-                def flex := [].diverge()
-                for edge in myEdges:
-                    flex.push(edge + offset)
-                return region(myBoundedLeft, flex)
-
-            # the region you get if you displace all my positions by -offset
-            to subtract(offset):
-                return self + -offset
-
-
-            # A region whose membership is the opposite of this one.
-            to not():
-                return region(!myBoundedLeft, myEdges)
-
-            # only those positions in both regions
-            to and(other):
-                def otherEdges := other.getEdges()
-                def otherLen := otherEdges.size()
-                def flex := [].diverge()
-                var i := -myInParity
-                var j := if (other.isBoundedLeft()) {0} else {-1}
-                var newBoundedLeft := true
-                while (i < myLen && j < otherLen):
-                    def in1 := get(myEdges, i)
-                    def in2 := get(otherEdges, j)
-                    def out1 := get(myEdges, i + 1)
-                    def out2 := get(otherEdges, j + 1)
-                    def maxin := max(in1, in2)
-                    def minout := min(out1, out2)
-                    #XXX compiler bug workaround
-                    def bleh := maxin == null || minout == null
-                    if (bleh || maxin < minout):
-                        if (maxin == null):
-                            newBoundedLeft := false
-                        else:
-                            flex.push(maxin)
-                        if (minout != null):
-                            flex.push(minout)
-                    # XXX compiler bug workaround
-                    if (out2 == null):
-                        i += 2
-                    else if (out1 != null && out1 < out2):
-                        i += 2
+                    # No intersection. Drop the earlier topset and continue.
+                    def weAreFirst := (ourLeft == null ||
+                                       (otherLeft != null &&
+                                        (ourLeft < otherLeft ||
+                                        (ourLeft <=> otherLeft &&
+                                         (ourLC | !otherLC)))))
+                    if (weAreFirst):
+                        ourNext := ourIter.next(__break)[1]
                     else:
-                        j += 2
-                return region(newBoundedLeft, flex)
+                        otherNext := otherIter.next(__break)[1]
+            return region(rv.snapshot())
 
-            # all positions in either region
-            to or(other):
-                return !(!self & !other)
+        to or(other):
+            "The union of this region with another region."
+            return !(!self & !other)
 
-            # all position in me but not in other.
-            to butNot(other):
-                return self & !other
+        to butNot(other):
+            "The union of this region with the complement of another region."
+            return self & !other
 
-            # enumerates positions in ascending order.
+        to _makeIterator():
+            "Finite iteration over discrete positions in the region."
 
-            # This doesn't necessarily terminate.
-            to _makeIterator():
-                if (! myBoundedLeft):
-                    throw("No least position")
-                if (myLen == 0):
-                    return []._makeIterator()
+            if (size == 0):
+                return []._makeIterator()
 
-                # Iteration covers each position between start and end edges.
-                # i - iteration counter, produced as key
-                # index - index of current start edge.
-                # pos - next value to be produced by iterator.
-                # lim - value at current end edge.
-                var i := 0
-                var index := 0
-                var pos := myEdges[0]
-                var lim := null
-                if (myLen > 1):
-                    lim := myEdges[1]
-                var endReached := false
-                return object iterator:
-                    to next(done):
-                        if (endReached):
-                            throw.eject(done, "iteration done")
-                        if (index + 1 < myLen):
-                            def val := [i, pos]
-                            i += 1
-                            pos := pos.next()
-                            if (!(pos < lim)):
-                                index += 2
-                                if (index >= myLen):
-                                    endReached := true
-                                else:
-                                    pos := myEdges[index]
-                                    lim := myEdges[index + 1]
-                            return val
-                        else if (index < myLen):
-                            def val := [i, pos]
-                            def nextPos := pos.next()
-                            i += 1
-                            if (pos <=> nextPos):
-                                endReached := true
-                            else:
-                                pos := nextPos
-                            return val
+            # Our locals. The strategy is to iterate over each iterator from
+            # each topset in order.
+            var i :Int := 0
+            var topSetIndex :Int := 0
+            var currentIterator := topSets[0]._makeIterator()
 
-            # returned object will enumerate positions in descending order
-            to descending():
-                if (myLen == 0):
-                    return []._makeIterator()
-                var i := 0
-                var index := myLen - 1
-                var pos := myEdges[index].previous()
-                var lim := myEdges[index - 1]
-                var endReached := false
-                return object descender:
-                    to _makeIterator():
-                        if (!(self.isBoundedRight())):
-                            throw("No greatest position")
-                        return descender
-                    to next(done):
-                        if (endReached):
-                            throw.eject(done, "Iteration done")
-                        if (index >= 1):
-                            def val := [i, pos]
-                            i += 1
-                            pos := pos.previous()
-                            if (!(pos >= lim)):
-                                index -= 2
-                                if (index < 0):
-                                    endReached := true
-                                else:
-                                    pos := myEdges[index].previous()
-                                    if (index > 0):
-                                        lim := myEdges[index - 1]
-                            return val
-                        else if (index == 0):
-                            def val := [i, pos]
-                            def prevPos := pos.previous()
-                            i += 1
-                            if (!(pos < prevPos)):
-                                endReached := true
-                            else:
-                                pos := prevPos
-                            return val
+            return object regionIterator:
+                "Iterator for a region."
 
-            # As a region, my comparison is a subset test.
-            to op__cmp(other) :Double:
-                def selfExtra := !(self & !other).isEmpty()
-                def otherExtra := !(other & !self).isEmpty()
-                if (selfExtra):
-                    if (otherExtra):
-                        # Both have left-overs, so they're incomparable.
-                        return NaN
-                    else:
-                        # Only self has left-overs, so we're a strict
-                        # superset of other
-                        return 1.0
+                to next(ej):
+                    escape ejTopSet:
+                        def rv := [i, currentIterator.next(ejTopSet)[1]]
+                        i += 1
+                        return rv
+                    catch _:
+                        topSetIndex += 1
+                        if (topSetIndex >= size):
+                            throw.eject(ej, "Iteration finished")
+                        currentIterator := topSets[topSetIndex]._makeIterator()
+                        return regionIterator.next(ej)
+
+        # NB: I have omitted .descending/0 but it is not hard to implement.
+        # You will want to add it to topsets first and then to regions. ~ C.
+
+        to op__cmp(other) :Double:
+            "Whether the other region is a proper subset of this region."
+
+            def selfExtra := !(self & !other).isEmpty()
+            def otherExtra := !(other & !self).isEmpty()
+            if (selfExtra):
+                if (otherExtra):
+                    # Both have left-overs, so they're incomparable.
+                    return NaN
                 else:
-                    if (otherExtra):
-                        # Only other has left-overs, so we're a strict
-                        # subset of other
-                        return -1.0
-                    else:
-                        # No left-overs, so we're as-big-as each other
-                        return 0.0
-        return self
+                    # Only self has left-overs, so we're a strict
+                    # superset of other
+                    return 1.0
+            else:
+                if (otherExtra):
+                    # Only other has left-overs, so we're a strict
+                    # subset of other
+                    return -1.0
+                else:
+                    # No left-overs, so we're as-big-as each other
+                    return 0.0
+    return self
 
 object _makeOrderedSpace as DeepFrozenStamp:
     "The maker of ordered vector spaces.
@@ -508,10 +417,8 @@ object _makeOrderedSpace as DeepFrozenStamp:
     # Twisters for those instances using operator notation.
     to run(myType :DeepFrozen, myName :Str):
 
-        # Notational convenience
-        def region(boundedLeft :Bool, edges) as DeepFrozenStamp:
-            return _makeOrderedRegion(myType, myName, boundedLeft, edges)
-
+        def region(newTopSets) as DeepFrozenStamp:
+            return _makeOrderedRegion(myType, myName, newTopSets)
 
         object maybeSubrangeDeepFrozen:
             to audit(audition):
@@ -540,56 +447,40 @@ object _makeOrderedSpace as DeepFrozenStamp:
             to coerce(specimen, ej) :myTypeR:
                 return myType.coerce(specimen, ej)
 
-            # One step in executing the expansion of the relational
-            # operators
             to op__cmp(myY :myType):
-                return object regionMaker:
+                "Return regions representing the possible positions for
+                 comparisons."
 
+                return object regionMaker:
                     # (myType < myY)
                     to belowZero():
-                        return region(false, [myY])
+                        return region([_makeTopSet(myType, null, false, myY,
+                                                   false)])
 
                     # (myType <= myY)
                     to atMostZero():
-                        def nextY := myY.next()
-                        if (myY <=> nextY):
-                            # all positions <= the last position means
-                            # all positions period.
-                            return region(false, [])
-                        else:
-                            return region(false, [nextY])
+                        return region([_makeTopSet(myType, null, false, myY,
+                                                   true)])
 
                     # (myType <=> myY)
                     to isZero():
-                        def nextY := myY.next()
-                        if (myY <=> nextY):
-                            # If myY is the last position, then myY..myY is
-                            # equivalent to myType >= myY
-                            return region(true, [myY])
-                        else:
-                            return region(true, [myY, nextY])
-
+                        return region([_makeTopSet(myType, myY, true, myY,
+                                                   true)])
 
                     # (myType >= myY)
                     to atLeastZero():
-                        return region(true, [myY])
+                        return region([_makeTopSet(myType, myY, true, null,
+                                                   false)])
 
                     # (myType > myY)
                     to aboveZero():
-                        def nextY := myY.next()
-                        if (myY <=> nextY):
-                            # If myY is the last position, then all positions
-                            # after it are no positions at all.
-                            return region(true, [])
-                        else:
-                            return region(true, [nextY])
+                        return region([_makeTopSet(myType, myY, false, null,
+                                                   false)])
 
-            # (myType + myOffset).
-            # <p>
-            # Note that myOffset doesn't have to be a member of myType. For
-            # example, "char + 3" is legal.
             to add(myOffset):
-                object twister:
+                "Add an offset to all positions in this space."
+
+                return object twister:
                     to _printOn(out):
                         out.print(`($myName + $myOffset)`)
 
@@ -605,9 +496,10 @@ object _makeOrderedSpace as DeepFrozenStamp:
                     to subtract(moreOffset):
                         return twister + -moreOffset
 
-            # (myType - offset)
             to subtract(offset):
+                "Subtract an offset from all positions in this space."
                 return OrderedSpace + -offset
+
         return OrderedSpace
 
 
@@ -633,7 +525,6 @@ def testDeepFrozen(assert):
     def intspace := _makeOrderedSpace(Int, "Int")
     def reg := (intspace >= 0) & (intspace < 5)
     def x :reg := 2
-    #traceln("welp")
     object y implements DeepFrozenStamp:
         to add(a):
             return a + x
@@ -645,6 +536,7 @@ unittest([testIterable, testContainment, testGuard, testDeepFrozen])
     "Char" => _makeOrderedSpace.spaceOfValue('m'),
     "Int" => _makeOrderedSpace.spaceOfValue(42),
     "Double" => _makeOrderedSpace.spaceOfValue(4.2),
+    => _makeTopSet,
     => _makeOrderedRegion,
     => _makeOrderedSpace,
 ]
