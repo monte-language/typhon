@@ -154,6 +154,9 @@ class VoidGuard(Guard):
     This guard is unretractable.
     """
 
+    def toString(self):
+        return u"Void"
+
     def subCoerce(self, specimen):
         if specimen is NullObject:
             return specimen
