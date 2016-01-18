@@ -688,20 +688,22 @@ var preludeScope := scopeAsDF([
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
     => M, => Ref, => ::"import", => throw, => typhonEval,
-    => makeLazySlot,
+    => makeLazySlot, => unittest, => DeepFrozenStamp,
 ])
 
 def importIntoScope(name, moduleScope):
-    preludeScope |= scopeAsDF(::"import".script(name, moduleScope))
+    preludeScope |= scopeAsDF(getMonteFile(name, moduleScope))
 
 # AST (needed for auditors).
 importIntoScope(
     "prelude/monte_ast",
-    preludeScope | scopeAsDF([=> DeepFrozenStamp, => TransparentStamp,
+    preludeScope | scopeAsDF([=> DeepFrozenStamp,
+                              => TransparentStamp,
                               => KernelAstStamp]))
 
 # Simple QP.
-importIntoScope("prelude/simple", preludeScope)
+importIntoScope("prelude/simple",
+                preludeScope | scopeAsDF([=> DeepFrozenStamp]))
 
 # Brands require simple QP.
 importIntoScope("prelude/brand", preludeScope)
@@ -712,9 +714,11 @@ importIntoScope("prelude/protocolDesc",
 
 # Upgrade all guards with interfaces. These are the core-most guards; they
 # cannot be uncalled or anything like that.
-# preludeScope := scopeAsDF(
-#     ::"import".script("prelude/coreInterfaces",
-#                   preludeScope)) | preludeScope
+
+#preludeScope := scopeAsDF(
+#    getMonteFile("prelude/coreInterfaces",
+#                 preludeScope | scopeAsDF([=> DeepFrozenStamp])
+#    )) | preludeScope
 
 # Spaces and regions require simple QP. They also upgrade the guards.
 preludeScope := scopeAsDF(
@@ -731,14 +735,14 @@ importIntoScope("prelude/b", preludeScope)
 # doesn't support evaluation, and I'd expect it to be slow, so we're not doing
 # that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
 # hook, and that'll do for now. ~ C.
-def preludeScope0 := preludeScope | ["&&safeScope" => &&preludeScope0]
+def preludeScope0 := preludeScope | ["&&safeScope" => &&preludeScope0, => &&TransparentStamp]
 importIntoScope("prelude/m", preludeScope0)
 
 
 # Transparent auditor and guard.
 # This has to do some significant AST groveling so it uses AST quasipatterns
 # for convenience.
-importIntoScope("prelude/transparent", preludeScope)
+importIntoScope("prelude/transparent", preludeScope | [=> &&TransparentStamp])
 
 preludeScope without= ("&&typhonEval")
 

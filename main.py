@@ -57,7 +57,7 @@ def loadPrelude(config, recorder, vat):
     scope = safeScope()
     # For the prelude (and only the prelude), permit the boot scope.
     bootTC = TestCollector()
-    scope.update(bootScope(recorder, bootTC))
+    scope.update(bootScope(config.libraryPaths, recorder, bootTC))
     registerGlobals({u"Bool": scope[u"Bool"],
                      u"Bytes": scope[u"Bytes"],
                      u"Char": scope[u"Char"],

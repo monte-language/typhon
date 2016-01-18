@@ -16,7 +16,8 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.env import finalize
 from typhon.errors import LoadFailed, Refused, userError
-from typhon.importing import evaluateRaise, obtainModuleFromSource
+from typhon.importing import (evaluateRaise, obtainModule,
+                              obtainModuleFromSource)
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
@@ -48,11 +49,8 @@ def isSet(specimen):
     return wrapBool(isinstance(specimen, ConstSet))
 
 
-def evalToPair(source, envMap, recorder):
+def moduleFromString(source, recorder):
     source = unwrapBytes(source)
-    environment = {}
-    for k, v in unwrapMap(envMap).items():
-        environment[unwrapStr(k)] = v
 
     # *Do* catch this particular exception, as it is not a
     # UserException and thus will kill the process (!!!) if allowed to
@@ -61,7 +59,13 @@ def evalToPair(source, envMap, recorder):
         code, topLocals = obtainModuleFromSource(source, recorder, u"<eval>")
     except LoadFailed:
         raise userError(u"Couldn't load invalid AST")
+    return code, topLocals
 
+
+def evalToPair(code, topLocals, envMap):
+    environment = {}
+    for k, v in unwrapMap(envMap).items():
+        environment[unwrapStr(k)] = v
     # Don't catch user exceptions; on traceback, we'll have a trail
     # auto-added that indicates that the exception came through
     # eval() or whatnot.
@@ -85,15 +89,40 @@ class TyphonEval(Object):
 
     def recv(self, atom, args):
         if atom is RUN_2:
-            return evalToPair(args[0], args[1], self.recorder)[0]
+            code, topLocals = moduleFromString(args[0], self.recorder)
+            return evalToPair(code, topLocals, args[1])[0]
         if atom is EVALTOPAIR_2:
-            result, envMap = evalToPair(args[0], args[1], self.recorder)
+            code, topLocals = moduleFromString(args[0], self.recorder)
+            result, envMap = evalToPair(code, topLocals, args[1])
             return ConstList([result, envMap])
-
         raise Refused(self, atom, args)
 
 
-def bootScope(recorder, collectTests):
+@autohelp
+@audited.DF
+class EvalMonteFile(Object):
+    def __init__(self, paths, recorder):
+        self.paths = paths
+        self.recorder = recorder
+
+    def recv(self, atom, args):
+        if atom is RUN_2:
+            scope = unwrapMap(args[1])
+            d = {}
+            for k, v in scope.items():
+                s = unwrapStr(k)
+                if not s.startswith("&&"):
+                    raise userError(u"evalMonteFile scope map must be of the "
+                                    "form '[\"&&name\" => binding]'")
+                d[s[2:]] = scope[k]
+
+            code = obtainModule(self.paths, unwrapStr(args[0]).encode("utf-8"),
+                                self.recorder)
+            return evaluateRaise([code], d)[0]
+        raise Refused(self, atom, args)
+
+
+def bootScope(paths, recorder, collectTests):
     return finalize({
         u"isList": isList(),
         u"isMap": isMap(),
@@ -111,6 +140,7 @@ def bootScope(recorder, collectTests):
         u"DeepFrozenStamp": deepFrozenStamp,
         u"TransparentStamp": transparentStamp,
 
+        u"getMonteFile": EvalMonteFile(paths, recorder),
         u"typhonEval": TyphonEval(recorder),
         u"unittest": UnitTest(u"<boot>", collectTests),
     })
