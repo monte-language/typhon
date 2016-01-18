@@ -209,7 +209,15 @@ def processorWrapper(app) as DeepFrozen:
             # We must close the connection after a bad request, since a parse
             # failure leaves the request tube in an indeterminate state.
             [400, ["Connection" => "close"], []]
-        } else {app(request)}
+        } else {
+            try {
+                app(request)
+            } catch problem {
+                traceln(`Caught problem in app:`)
+                traceln.exception(problem)
+                [500, ["Connection" => "close"], []]
+            }
+        }
         return [statusCode, headers | serverHeader, body]
     return wrappedProcessor
 
