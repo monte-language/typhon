@@ -373,6 +373,9 @@ class IntObject(Object):
                         return IntObject(0)
                 except WrongType:
                     other = unwrapDouble(args[0])
+                    if math.isnan(other):
+                        # Whoa there! Gotta watch out for those pesky NaNs.
+                        return Incomparable
                     return polyCmp(self._i, other)
 
         # Ints are usually used to store the results of comparisons.
