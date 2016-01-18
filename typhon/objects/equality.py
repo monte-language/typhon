@@ -137,14 +137,16 @@ def optSame(first, second, cache=None):
         return eq(isinstance(second, CharObject) and first._c == second._c)
 
     # Doubles.
-    if isinstance(first, DoubleObject) and isinstance(second, DoubleObject):
-        fd = first.getDouble()
-        sd = second.getDouble()
-        # NaN == NaN
-        if math.isnan(fd) and math.isnan(sd):
-            return eq(True)
-        else:
-            return eq(fd == sd)
+    if isinstance(first, DoubleObject):
+        if isinstance(second, DoubleObject):
+            fd = first.getDouble()
+            sd = second.getDouble()
+            # NaN == NaN
+            if math.isnan(fd) and math.isnan(sd):
+                return eq(True)
+            else:
+                return eq(fd == sd)
+        return INEQUAL
 
     # Ints.
     if isinstance(first, IntObject):

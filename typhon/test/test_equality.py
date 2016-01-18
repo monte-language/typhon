@@ -30,6 +30,10 @@ class TestIsSettled(TestCase):
         i = IntObject(42)
         self.assertTrue(isSettled(i))
 
+    def testNaN(self):
+        d = DoubleObject(float("nan"))
+        self.assertTrue(isSettled(d))
+
     def testPromise(self):
         with scopedVat(testingVat()):
             p, r = makePromise()
@@ -135,3 +139,9 @@ class TestOptSame(TestCase):
             second, r = makePromise()
             r.resolve(IntObject(42))
             self.assertEqual(optSame(first, second), EQUAL)
+
+    def testNaNFail(self):
+        # Found by accident.
+        first = DoubleObject(float("nan"))
+        second = IntObject(42)
+        self.assertEqual(optSame(first, second), INEQUAL)
