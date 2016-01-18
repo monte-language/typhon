@@ -31,6 +31,7 @@ from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
                                  unwrapChar)
 from typhon.objects.ejectors import throw, theThrower
 from typhon.objects.equality import Equalizer
+from typhon.objects.exceptions import SealedException
 from typhon.objects.iteration import loop
 from typhon.objects.guards import (BindingGuard, FinalSlotGuardMaker,
                                    VarSlotGuardMaker, anyGuard, sameGuardMaker,
@@ -49,6 +50,7 @@ CALL_3 = getAtom(u"call", 3)
 CALLWITHMESSAGE_2 = getAtom(u"callWithMessage", 2)
 CALL_4 = getAtom(u"call", 4)
 COERCE_2 = getAtom(u"coerce", 2)
+EXCEPTION_1 = getAtom(u"exception", 1)
 FAILURELIST_1 = getAtom(u"failureList", 1)
 FROMBYTES_1 = getAtom(u"fromBytes", 1)
 FROMBYTES_2 = getAtom(u"fromBytes", 2)
@@ -79,16 +81,36 @@ class TraceLn(Object):
 
     This object is a Typhon standard runtime `traceln`. It prints prefixed
     lines to stderr.
+
+    Call `.exception(problem)` to print a problem to stderr, including
+    a formatted traceback.
     """
 
     def toString(self):
         return u"<traceln>"
 
+    def writeLine(self, line):
+        debug_print(line.encode("utf-8"))
+
+    def writeTraceLine(self, line):
+        debug_print("TRACE: [%s]" % line.encode("utf-8"))
+
     def recv(self, atom, args):
         if atom.verb == u"run":
             guts = u", ".join([obj.toQuote() for obj in args])
-            debug_print("TRACE: [%s]" % guts.encode("utf-8"))
+            self.writeTraceLine(guts)
             return NullObject
+
+        if atom is EXCEPTION_1:
+            problem = args[0]
+            if isinstance(problem, SealedException):
+                self.writeLine(u"Problem: %s" % problem.value.toString())
+                for crumb in problem.trail:
+                    self.writeLine(crumb)
+            else:
+                self.writeLine(u"Problem: %s" % problem.toString())
+            return NullObject
+
         raise Refused(self, atom, args)
 
 
