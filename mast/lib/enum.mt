@@ -14,7 +14,7 @@ exports (makeEnum)
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def makeEnumObject(i :Int, name :Str) as DeepFrozen:
+def makeEnumObject(i :DeepFrozen, name :DeepFrozen) as DeepFrozen:
     return object enumObject as DeepFrozen:
         to _printOn(out):
             out.print(name)

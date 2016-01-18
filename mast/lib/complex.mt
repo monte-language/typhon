@@ -12,7 +12,7 @@ interface Complex :DeepFrozen:
     to subtract(other)
 
 
-def makeComplex(r :Double, i :Double) as DeepFrozen:
+def makeComplex(r :DeepFrozen, i :DeepFrozen) as DeepFrozen:
     return object complex as DeepFrozen implements Complex:
         "A complex number in ℂ.
 
