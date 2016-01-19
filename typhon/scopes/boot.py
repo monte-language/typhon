@@ -11,14 +11,17 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+import os
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.env import finalize
 from typhon.errors import LoadFailed, Refused, userError
-from typhon.importing import (evaluateRaise, obtainModule,
+from typhon.importing import (codeFromAst, evaluateRaise, obtainModule,
                               obtainModuleFromSource)
-from typhon.nodes import kernelAstStamp
+from typhon.load.mast import InvalidMAST, loadMASTBytes
+from typhon.load.trash import load
+from typhon.nodes import Sequence, kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
@@ -30,6 +33,7 @@ from typhon.objects.root import Object, audited, runnable
 from typhon.objects.tests import UnitTest
 
 EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
+FROMAST_3 = getAtom(u"fromAST", 3)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 
@@ -62,10 +66,18 @@ def moduleFromString(source, recorder):
     return code, topLocals
 
 
-def evalToPair(code, topLocals, envMap):
+def evalToPair(code, topLocals, envMap, bindingNames=False):
     environment = {}
-    for k, v in unwrapMap(envMap).items():
-        environment[unwrapStr(k)] = v
+    if bindingNames:
+        for k, v in unwrapMap(envMap).items():
+            s = unwrapStr(k)
+            if not s.startswith("&&"):
+                raise userError(u"evalMonteFile scope map must be of the "
+                                "form '[\"&&name\" => binding]'")
+            environment[s[2:]] = v
+    else:
+        for k, v in unwrapMap(envMap).items():
+            environment[unwrapStr(k)] = v
     # Don't catch user exceptions; on traceback, we'll have a trail
     # auto-added that indicates that the exception came through
     # eval() or whatnot.
@@ -88,6 +100,10 @@ class TyphonEval(Object):
         self.recorder = recorder
 
     def recv(self, atom, args):
+        if atom is FROMAST_3:
+            code, topLocals = codeFromAst(args[0], self.recorder,
+                                          unwrapStr(args[2]))
+            return evalToPair(code, topLocals, args[1], True)[0]
         if atom is RUN_2:
             code, topLocals = moduleFromString(args[0], self.recorder)
             return evalToPair(code, topLocals, args[1])[0]
@@ -100,12 +116,31 @@ class TyphonEval(Object):
 
 @autohelp
 @audited.DF
-class EvalMonteFile(Object):
+class GetMonteFile(Object):
     def __init__(self, paths, recorder):
         self.paths = paths
         self.recorder = recorder
 
     def recv(self, atom, args):
+        if atom is RUN_1:
+            pname = unwrapStr(args[0])
+            for extension in [".ty", ".mast"]:
+                path = pname.encode("utf-8") + extension
+                for base in self.paths:
+                    try:
+                        with open(os.path.join(base, path), "rb") as handle:
+                            source = handle.read()
+                            with self.recorder.context("Deserialization"):
+                                try:
+                                    term = loadMASTBytes(source)
+                                except InvalidMAST as im:
+                                    print "Load (mast) failed:", im
+                                    term = Sequence(load(source)[:])
+                                return term
+                    except IOError:
+                        continue
+            raise userError(u"Could not locate " + pname)
+
         if atom is RUN_2:
             scope = unwrapMap(args[1])
             d = {}
@@ -140,7 +175,7 @@ def bootScope(paths, recorder, collectTests):
         u"DeepFrozenStamp": deepFrozenStamp,
         u"TransparentStamp": transparentStamp,
 
-        u"getMonteFile": EvalMonteFile(paths, recorder),
+        u"getMonteFile": GetMonteFile(paths, recorder),
         u"typhonEval": TyphonEval(recorder),
         u"unittest": UnitTest(u"<boot>", collectTests),
     })

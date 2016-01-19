@@ -691,8 +691,12 @@ var preludeScope := scopeAsDF([
     => makeLazySlot, => unittest, => DeepFrozenStamp,
 ])
 
+def loadit(name, scope):
+    def ast := getMonteFile(name)
+    return typhonEval.fromAST(ast, scope, name)
+
 def importIntoScope(name, moduleScope):
-    preludeScope |= scopeAsDF(getMonteFile(name, moduleScope))
+    preludeScope |= scopeAsDF(loadit(name, moduleScope))
 
 # AST (needed for auditors).
 importIntoScope(
@@ -722,8 +726,8 @@ importIntoScope("prelude/protocolDesc",
 
 # Spaces and regions require simple QP. They also upgrade the guards.
 preludeScope := scopeAsDF(
-    ::"import".script("prelude/region",
-                  preludeScope)) | preludeScope
+    getMonteFile("prelude/region",
+                  preludeScope | [=> &&TransparentStamp])) | preludeScope
 
 # b__quasiParser desires spaces.
 importIntoScope("prelude/b", preludeScope)
@@ -735,7 +739,8 @@ importIntoScope("prelude/b", preludeScope)
 # doesn't support evaluation, and I'd expect it to be slow, so we're not doing
 # that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
 # hook, and that'll do for now. ~ C.
-def preludeScope0 := preludeScope | ["&&safeScope" => &&preludeScope0, => &&TransparentStamp]
+def preludeScope0 := preludeScope | ["&&safeScope" => &&preludeScope0,
+                                     => &&TransparentStamp, => &&getMonteFile]
 importIntoScope("prelude/m", preludeScope0)
 
 

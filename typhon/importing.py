@@ -22,7 +22,7 @@ from typhon.debug import debugPrint
 from typhon.errors import Refused, UserException, userError
 from typhon.load.mast import InvalidMAST, loadMASTBytes
 from typhon.load.trash import load
-from typhon.nodes import Sequence, interactiveCompile
+from typhon.nodes import Expr, Sequence, interactiveCompile
 from typhon.objects.collections.maps import ConstMap
 from typhon.objects.collections.helpers import monteMap
 from typhon.objects.constants import NullObject
@@ -74,7 +74,13 @@ def obtainModuleFromSource(source, recorder, origin):
         except InvalidMAST as im:
             print "Load (mast) failed:", im
             term = Sequence(load(source)[:])
+    return codeFromAst(term, recorder, origin)
 
+
+@dont_look_inside
+def codeFromAst(term, recorder, origin):
+    if not isinstance(term, Expr):
+        raise userError(u"A kernel-AST expression node is required")
     with recorder.context("Compilation"):
         code, topLocals = interactiveCompile(term, origin)
     # debug_print("Compiled code:", code.disassemble())
