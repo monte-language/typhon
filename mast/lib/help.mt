@@ -10,7 +10,7 @@ def mirandaMessages :Set[DeepFrozen] := [
     ["_whenMoreResolved", 1],
 ].asSet()
 
-def defaultMessages :Map[DeepFrozen, Str] := [
+def defaultMessages :Map[DeepFrozen, DeepFrozen] := [
     ["coerce", 2] => "Coerce a specimen with this object, ejecting on failure.",
 
     # Miranda.
