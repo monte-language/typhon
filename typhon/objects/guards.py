@@ -405,13 +405,14 @@ class BindingGuard(Guard):
 
 
 @autohelp
-@audited.Transparent
 class SameGuard(Guard):
     """
     A guard which admits a single value.
 
     This guard is unretractable.
     """
+
+    _immutable_ = True
 
     def __init__(self, value):
         self.value = value
@@ -420,6 +421,13 @@ class SameGuard(Guard):
         out.call(u"print", [StrObject(u"Same[")])
         out.call(u"print", [self.value])
         out.call(u"print", [StrObject(u"]")])
+
+    def auditorStamps(self):
+        # Pass on DF-ness if we got it from our value.
+        if self.value.auditedBy(deepFrozenStamp):
+            return [deepFrozenStamp, selfless, transparentStamp]
+        else:
+            return [selfless, transparentStamp]
 
     def recv(self, atom, args):
         if atom is _UNCALL_0:

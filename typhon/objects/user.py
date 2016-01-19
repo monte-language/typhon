@@ -19,6 +19,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.log import log
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import StrObject, unwrapStr
@@ -124,15 +125,19 @@ class Audition(Object):
             self.guardLog = []
             try:
                 result = unwrapBool(auditor.call(u"audit", [self]))
-                if self.guardLog is not None:
-                    self.cache[auditor] = (result, self.askedLog[:],
-                                           self.guardLog[:])
+                if self.guardLog is None:
+                    self.log(u"ask/1: %s: %s (uncacheable)" %
+                            (auditor.toString(), boolStr(result)))
+                else:
                     self.log(u"ask/1: %s: %s" %
                             (auditor.toString(), boolStr(result)))
+                    self.cache[auditor] = (result, self.askedLog[:],
+                                           self.guardLog[:])
                 return result
             finally:
                 self.askedLog, self.guardLog = prevlogs
 
+        self.log(u"ask/1: %s: failure" % auditor.toString())
         return False
 
     def getGuard(self, name):
@@ -142,9 +147,11 @@ class Audition(Object):
                             (name, self.fqn))
         answer = self.guards[name]
         if self.guardLog is not None:
-            if False:  # DF check
+            if answer.auditedBy(deepFrozenStamp):
+                self.log(u"getGuard/1: %s (DF)" % name)
                 self.guardLog.append((name, answer))
             else:
+                self.log(u"getGuard/1: %s (not DF)" % name)
                 self.guardLog = None
         return answer
 
