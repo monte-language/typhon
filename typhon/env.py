@@ -158,7 +158,8 @@ class Environment(object):
 
         # Oh, and we can promote globals too.
         assert self.globals[index] is not None, "Global binding never defined?"
-        return promote(self.globals[index])
+        # return promote(self.globals[index])
+        return self.globals[index]
 
     def getSlotGlobal(self, index):
         binding = self.getBindingGlobal(index)
