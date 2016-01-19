@@ -372,48 +372,11 @@ def _makeOrderedRegion(guard :DeepFrozen, myName :Str,
                     return 0.0
     return self
 
-object _makeOrderedSpace as DeepFrozenStamp:
+object _selmipriMakeOrderedSpace as DeepFrozenStamp:
     "The maker of ordered vector spaces.
 
      This object implements several Monte operators, including those which
      provide ordered space syntax."
-
-    to spaceOfValue(value):
-        "Return the ordered space corresponding to a given value.
-
-         The correspondence is obtained via Miranda _getAllegedInterface(),
-         with special cases for `Char`, `Double`, and `Int`."
-
-        return switch (value):
-            match i :Int:
-                _makeOrderedSpace(Int, "Int")
-            match d :Double:
-                _makeOrderedSpace(Double, "Double")
-            match c :Char:
-                _makeOrderedSpace(Char, "Char")
-            match s :Str:
-                _makeOrderedSpace(Str, "Str")
-            match _:
-                def type := value._getAllegedInterface()
-                _makeOrderedSpace(type, M.toQuote(type))
-
-    to op__till(start, bound):
-        "The operator `start`..!`bound`.
-
-         This is equivalent to (space ≥ `start`) ∪ (space < `bound`) for the
-         ordered space containing `start` and `bound`."
-
-        def space := _makeOrderedSpace.spaceOfValue(start)
-        return (space >= start) & (space < bound)
-
-    to op__thru(start, stop):
-        "The operator `start`..`bound`.
-
-         This is equivalent to (space ≥ `start`) ∪ (space ≤ `bound`) for the
-         ordered space containing `start` and `bound`."
-
-        def space := _makeOrderedSpace.spaceOfValue(start)
-        return (space >= start) & (space <= stop)
 
     # Given a type whose reflexive (x <=> x) instances are fully
     # ordered, this makes an OrderedSpace for making Regions and
@@ -445,7 +408,7 @@ object _makeOrderedSpace as DeepFrozenStamp:
                 out.print(myName)
 
             to _uncall():
-                return [_makeOrderedSpace, "run", [myType, myName], [].asMap()]
+                return [_selmipriMakeOrderedSpace, "run", [myType, myName], [].asMap()]
 
             to coerce(specimen, ej) :myTypeR:
                 return myType.coerce(specimen, ej)
@@ -503,7 +466,53 @@ object _makeOrderedSpace as DeepFrozenStamp:
                 "Subtract an offset from all positions in this space."
                 return OrderedSpace + -offset
 
+            to makeRegion(left :myType, leftClosed :Bool, right :myType,
+                          rightClosed :Bool):
+                "Make a region from a pair of endpoints."
+                return region([_makeTopSet(myType, left, leftClosed, right,
+                                           rightClosed)])
+
         return OrderedSpace
+
+
+def spaces :DeepFrozen := [for guard in ([Bytes, Char, Double, Int, Str])
+                           guard => _selmipriMakeOrderedSpace(guard, `$guard`)]
+
+
+object _makeOrderedSpace extends _selmipriMakeOrderedSpace as DeepFrozenStamp:
+    "The maker of ordered vector spaces.
+
+     This object implements several Monte operators, including those which
+     provide ordered space syntax."
+
+    to spaceOfValue(value):
+        "Return the ordered space corresponding to a given value.
+
+         The correspondence is obtained via Miranda _getAllegedInterface(),
+         with special cases for `Bytes`, `Char`, `Double`, `Int`, and `Str`."
+
+        def guard := value._getAllegedInterface()
+        return spaces.fetch(guard, fn {_makeOrderedSpace(guard, M.toQuote(guard))})
+
+    to op__till(start, bound):
+        "The operator `start`..!`bound`.
+
+         This is equivalent to (space ≥ `start`) ∪ (space < `bound`) for the
+         ordered space containing `start` and `bound`."
+
+        def space := _makeOrderedSpace.spaceOfValue(start)
+        # Closed on bottom but not on top.
+        return space.makeRegion(start, true, bound, false)
+
+    to op__thru(start, stop):
+        "The operator `start`..`bound`.
+
+         This is equivalent to (space ≥ `start`) ∪ (space ≤ `bound`) for the
+         ordered space containing `start` and `bound`."
+
+        def space := _makeOrderedSpace.spaceOfValue(start)
+        # Closed on both ends.
+        return space.makeRegion(start, true, stop, true)
 
 
 def testIterable(assert):
@@ -536,10 +545,11 @@ def testDeepFrozen(assert):
 unittest([testIterable, testContainment, testGuard, testDeepFrozen])
 
 [
-    "Char" => _makeOrderedSpace.spaceOfValue('m'),
-    "Int" => _makeOrderedSpace.spaceOfValue(42),
-    "Double" => _makeOrderedSpace.spaceOfValue(4.2),
-    "Str" => _makeOrderedSpace.spaceOfValue("Monte"),
+    "Bytes" => spaces[Bytes],
+    "Char" => spaces[Char],
+    "Double" => spaces[Double],
+    "Int" => spaces[Int],
+    "Str" => spaces[Str],
     => _makeTopSet,
     => _makeOrderedRegion,
     => _makeOrderedSpace,
