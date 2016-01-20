@@ -719,10 +719,10 @@ importIntoScope("prelude/protocolDesc",
 # Upgrade all guards with interfaces. These are the core-most guards; they
 # cannot be uncalled or anything like that.
 
-#preludeScope := scopeAsDF(
-#    getMonteFile("prelude/coreInterfaces",
-#                 preludeScope | scopeAsDF([=> DeepFrozenStamp])
-#    )) | preludeScope
+preludeScope := scopeAsDF(
+    getMonteFile("prelude/coreInterfaces",
+                 preludeScope | scopeAsDF([=> DeepFrozenStamp])
+    )) | preludeScope
 
 # Spaces and regions require simple QP. They also upgrade the guards.
 preludeScope := scopeAsDF(
