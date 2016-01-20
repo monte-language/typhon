@@ -30,8 +30,10 @@ SPROUT_2 = getAtom(u"sprout", 2)
 
 
 class VatCheckpointed(Exception):
-    """
-    The raising vat decided to abort its current turn.
+    """The raising vat decided to abort its current turn.
+
+    "Arrakis teaches the attitude of the knife — chopping off what's incomplete
+    and saying: ‘Now it's complete because it's ended here.’"
     """
 
 

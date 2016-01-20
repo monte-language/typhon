@@ -158,6 +158,10 @@ class GetMonteFile(Object):
 
 
 def bootScope(paths, recorder, collectTests):
+    """
+    "A beginning is the time for taking the most delicate care that the
+     balances are correct."
+    """
     return finalize({
         u"isList": isList(),
         u"isMap": isMap(),
