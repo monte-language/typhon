@@ -11,8 +11,13 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+import os
 
+from typhon.atoms import getAtom
 from typhon.env import finalize
+from typhon.objects.constants import NullObject
+from typhon.objects.data import StrObject, unwrapStr
+from typhon.errors import Refused
 from typhon.objects.exceptions import unsealException
 from typhon.objects.files import makeFileResource
 from typhon.objects.networking.dns import getAddrInfo
@@ -20,11 +25,33 @@ from typhon.objects.networking.endpoints import (makeTCP4ClientEndpoint,
                                                  makeTCP4ServerEndpoint)
 from typhon.objects.networking.stdio import makeStdErr, makeStdIn, makeStdOut
 from typhon.objects.processes import CurrentProcess, makeProcess
+from typhon.objects.root import Object, audited
 from typhon.objects.runtime import CurrentRuntime
 from typhon.objects.tests import UnitTest
 from typhon.objects.timeit import bench
 from typhon.objects.timers import Timer
 from typhon.vats import CurrentVatProxy
+
+
+RUN_1 = getAtom("run", 1)
+
+
+@audited.DF
+class FindTyphonFile(Object):
+    def __init__(self, paths):
+        self.paths = paths
+
+    def recv(self, atom, args):
+        if atom is RUN_1:
+            pname = unwrapStr(args[0])
+            for extension in [".ty", ".mast"]:
+                path = pname.encode("utf-8") + extension
+                for base in self.paths:
+                    fullpath = os.path.join(base, path)
+                    if os.path.exists(fullpath):
+                        return StrObject(fullpath.decode("utf-8"))
+            return NullObject
+        raise Refused(self, atom, args)
 
 
 def unsafeScope(config, collectTests):
@@ -35,6 +62,7 @@ def unsafeScope(config, collectTests):
         u"currentProcess": CurrentProcess(config),
         u"currentRuntime": CurrentRuntime(),
         u"currentVat": CurrentVatProxy(),
+        u"_findTyphonFile": FindTyphonFile(config.libraryPaths),
         u"getAddrInfo": getAddrInfo(),
         u"makeFileResource": makeFileResource(),
         u"makeProcess": makeProcess(),
