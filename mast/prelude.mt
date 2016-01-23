@@ -427,51 +427,6 @@ unittest([
     testPairGuardIntStr,
 ])
 
-# object _SameGuardStamp:
-#     to audit(audition):
-#         return true
-
-# object Same as DeepFrozenStamp:
-#     to _printOn(out):
-#         out.print("Same")
-
-#     to get(value):
-#         return object SameGuard implements _SameGuardStamp, Selfless, TransparentStamp:
-#             to _printOn(out):
-#                 out.print("Same[")
-#                 value._printOn(out)
-#                 out.print("]")
-
-#             to _uncall():
-#                 return [Same, "get", [value], [].asMap()]
-
-#             to coerce(specimen, ej):
-#                 if (!_equalizer.sameYet(value, specimen)):
-#                     throw.eject(ej, [specimen, "is not", value])
-#                 return specimen
-
-#             to getValue():
-#                 return value
-
-#     to extractValue(specimen, ej):
-#         if (_auditedBy(_SameGuardStamp, specimen)):
-#             return specimen.getValue()
-#         else:
-#             throw.eject(ej, "Not a Same guard")
-
-
-def testSame(assert):
-    object o:
-        pass
-    object p:
-        pass
-    assert.ejects(fn ej {def x :Same[o] exit ej := p})
-    assert.doesNotEject(fn ej {def x :Same[o] exit ej := o})
-    assert.equal(Same[o].getValue(), o)
-
-unittest([testSame])
-
-
 object _iterForever as DeepFrozenStamp:
     "Implementation of while-expression syntax."
 
@@ -483,7 +438,7 @@ object _iterForever as DeepFrozenStamp:
 
 def _splitList(position :Int) as DeepFrozenStamp:
     "Implementation of tail pattern-matching syntax in list patterns.
-    
+
      m`def [x] + xs := l`.expand() ==
      m`def via (_splitList.run(1)) [x, xs] := l`"
 
@@ -577,7 +532,7 @@ unittest([testAnySubGuard])
 
 object _switchFailed as DeepFrozenStamp:
     "The implicit default matcher in a switch expression.
-    
+
      This object throws an exception."
 
     match [=="run", args, _]:
@@ -665,6 +620,22 @@ def makeLazySlot(var thunk, => guard := Any) as DeepFrozenStamp:
             return thunk
 
 
+def promiseAllFulfilled(vows) as DeepFrozenStamp:
+    var counter := vows.size()
+    if (counter == 0):
+        return vows
+    def [p, r] := Ref.promise()
+    for v in vows:
+        Ref.whenResolvedOnly(v, def done(_) {
+            if (Ref.isBroken(v)) {
+                r.resolve(v, false)
+            } else if ((counter -= 1) <= 0) {
+                r.resolve(vows)
+            }
+        })
+    return p
+
+
 def scopeAsDF(scope):
     return [for k => v in (scope)
             "&&" + k => (def v0 :DeepFrozen := v; &&v0)]
@@ -687,7 +658,7 @@ var preludeScope := scopeAsDF([
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
-    => M, => Ref, => ::"import", => throw, => typhonEval,
+    => M, => Ref, => ::"import", => throw, => typhonEval, => promiseAllFulfilled,
     => makeLazySlot, => unittest, => DeepFrozenStamp,
 ])
 
