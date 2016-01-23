@@ -30,15 +30,15 @@ def makeLineTube():
     return makePumpTube(makeSplitPump(b`$\r$\n`))
 
 
-def makeIncoming():
+def makeIncoming() as DeepFrozen:
     return makePumpTube(makeUTF8DecodePump())
 
 
-def makeOutgoing():
+def makeOutgoing() as DeepFrozen:
     return makePumpTube(makeUTF8EncodePump())
 
 
-def makeIRCClient(handler):
+def makeIRCClient(handler, Timer) as DeepFrozen:
     var drain := null
     var pauses :Int := 0
 
@@ -267,7 +267,7 @@ def makeIRCClient(handler):
                 return p
 
 
-def connectIRCClient(client, endpoint):
+def connectIRCClient(client, endpoint) as DeepFrozen:
     def [fount, drain] := endpoint.connect()
     chain([
         fount,

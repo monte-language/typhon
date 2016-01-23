@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def makeSingleUse(thunk):
+def makeSingleUse(thunk) as DeepFrozen:
     var called :Bool := false
     def singleUse() :Void:
         if (!called):

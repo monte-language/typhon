@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def makeLoopingCall(timer, task):
+def makeLoopingCall(timer, task) as DeepFrozen:
     var loopDuration :NullOk[Double] := null
     var running :Bool := false
 

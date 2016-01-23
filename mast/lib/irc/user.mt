@@ -1,4 +1,4 @@
-def makeUser(nick :Str, user :Str, host :Str):
+def makeUser(nick :Str, user :Str, host :Str) as DeepFrozen:
     return object completeUser:
         to _printOn(out):
             out.print(`$nick!$user@@$host`)
@@ -16,7 +16,7 @@ def makeUser(nick :Str, user :Str, host :Str):
             return host
 
 
-def sourceToUser(specimen, ej):
+def sourceToUser(specimen, ej) as DeepFrozen:
     switch (specimen):
         match `@nick!@user@@@host`:
             return makeUser(nick, user, host)

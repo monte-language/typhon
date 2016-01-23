@@ -12,9 +12,9 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> makeLoopingCall] := ::"import".script("lib/loopingCall")
+def [=> makeLoopingCall :DeepFrozen] := ::"import".script("lib/loopingCall")
 
-def makeTokenBucket(maximumSize :Int, refillRate :Double):
+def makeTokenBucket(maximumSize :Int, refillRate :Double) as DeepFrozen:
     var currentSize :Int := maximumSize
     var resolvers := []
     var loopingCall := null
