@@ -190,6 +190,7 @@ def checkDeepFrozen(specimen, seen, ej, root):
 
 
 def deepFrozenSupersetOf(guard):
+    from typhon.objects.collections.helpers import monteMap
     from typhon.objects.collections.lists import ConstList
     from typhon.objects.constants import wrapBool
     from typhon.objects.ejectors import Ejector
@@ -224,7 +225,7 @@ def deepFrozenSupersetOf(guard):
         ej = Ejector()
         try:
             v = guard.value
-            checkDeepFrozen(v, {}, ej, v)
+            checkDeepFrozen(v, monteMap(), ej, v)
             return True
         except Ejecting:
             return False
@@ -309,6 +310,7 @@ class DeepFrozen(Object):
 
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool
+        from typhon.objects.collections.helpers import monteMap
         from typhon.objects.user import Audition
         if atom is AUDIT_1:
             audition = args[0]
@@ -319,7 +321,12 @@ class DeepFrozen(Object):
             return wrapBool(False)
 
         if atom is COERCE_2:
-            checkDeepFrozen(args[0], {}, args[1], args[0])
+            from typhon.objects.constants import NullObject
+            from typhon.objects.ejectors import theThrower
+            ej = args[1]
+            if ej is NullObject:
+                ej = theThrower
+            checkDeepFrozen(args[0], monteMap(), ej, args[0])
             return args[0]
 
         if atom is SUPERSETOF_1:
