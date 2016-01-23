@@ -50,6 +50,7 @@ SMASH_1 = getAtom(u"smash", 1)
 STATE_1 = getAtom(u"state", 1)
 WHENBROKEN_2 = getAtom(u"whenBroken", 2)
 WHENRESOLVED_2 = getAtom(u"whenResolved", 2)
+WHENRESOLVEDONLY_2 = getAtom(u"whenResolvedOnly", 2)
 _PRINTON_1 = getAtom(u"_printOn", 1)
 _WHENBROKEN_1 = getAtom(u"_whenBroken", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
@@ -160,6 +161,9 @@ class RefOps(Object):
         if atom is WHENRESOLVED_2:
             return self.whenResolved(args[0], args[1])
 
+        if atom is WHENRESOLVEDONLY_2:
+            return self.whenResolvedOnly(args[0], args[1])
+
         raise Refused(self, atom, args)
 
     def promise(self):
@@ -215,9 +219,10 @@ class RefOps(Object):
     def whenResolvedOnly(self, o, callback):
         from typhon.objects.collections.maps import EMPTY_MAP
         vat = currentVat.get()
-        return vat.sendOnly(o, _WHENMORERESOLVED_1,
-                            [WhenResolvedReactor(callback, o, None, vat)],
-                            EMPTY_MAP)
+        vat.sendOnly(o, _WHENMORERESOLVED_1,
+                     [WhenResolvedReactor(callback, o, None, vat)],
+                     EMPTY_MAP)
+        return NullObject
 
     def whenBroken(self, o, callback):
         from typhon.objects.collections.maps import EMPTY_MAP
