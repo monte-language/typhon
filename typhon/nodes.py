@@ -1475,7 +1475,8 @@ class Method(Expr):
 
     _immutable_ = True
 
-    _immutable_fields_ = "_ps[*]",
+    _immutable_fields_ = ("_d", "_verb", "_ps[*]", "_namedParams[*]", "_g",
+                          "_b")
 
     def __init__(self, doc, verb, params, namedParams, guard, block):
         self._d = doc
@@ -1554,6 +1555,9 @@ class Method(Expr):
         scope = scope.add(self._g.getStaticScope())
         scope = scope.add(self._b.getStaticScope())
         return scope.hide()
+
+    def getAtom(self):
+        return getAtom(self._verb, len(self._ps))
 
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
@@ -1840,7 +1844,7 @@ class CompilingScript(object):
         # The starting depth is two (specimen and ejector) for each param, as
         # well as one for the named map, which is unconditionally passed.
         code = compiler.makeCode(startingDepth=arity * 2 + 1)
-        atom = getAtom(verb, arity)
+        atom = method.getAtom(verb, arity)
         self.methods[atom] = code
         if method._d is not None:
             self.methodDocs[atom] = method._d
