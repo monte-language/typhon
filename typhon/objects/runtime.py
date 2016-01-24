@@ -65,7 +65,7 @@ class Heap(Object):
 
     def accountObject(self, obj):
         if isinstance(obj, ScriptObject):
-            name = obj.codeScript.displayName
+            name = obj.script.getFQN()
         else:
             name = obj.__class__.__name__.decode("utf-8")
         if name not in self.buckets:
@@ -208,8 +208,8 @@ class CurrentRuntime(Object):
             from typhon.objects.crypt import Crypt
             return Crypt()
 
-        if atom is GETDISASSEMBLER_0:
-            return disassemble()
+        # if atom is GETDISASSEMBLER_0:
+        #     return disassemble()
 
         if atom is GETHEAPSTATISTICS_0:
             return makeHeapStats()

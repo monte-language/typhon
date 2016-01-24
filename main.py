@@ -23,6 +23,7 @@ from rpython.rlib.jit import set_user_param
 from typhon import rsodium, ruv
 from typhon.arguments import Configuration
 from typhon.debug import enableDebugPrint, TyphonJitHooks
+from typhon.env import scopeToEnv
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, instantiateModule, obtainModule
 from typhon.metrics import Recorder
@@ -69,9 +70,10 @@ def loadPrelude(config, recorder, vat):
     # Boot imports.
     scope = addImportToScope(config.libraryPaths, scope, recorder, bootTC)
 
-    code = obtainModule(config.libraryPaths, "prelude", recorder)
+    env = scopeToEnv(scope)
+    term = obtainModule(config.libraryPaths, "prelude", recorder)
     with recorder.context("Time spent in prelude"):
-        result = evaluateTerms([code], scope)
+        result = evaluateTerms([term], env)
 
     if result is None:
         print "Prelude returned None!?"
@@ -272,7 +274,7 @@ def entryPoint(argv):
         result = NullObject
         with recorder.context("Time spent in vats"):
             with scopedVat(vat):
-                result = evaluateTerms([code], ss)
+                result = evaluateTerms([code], scopeToEnv(ss))
         if result is None:
             return 1
 

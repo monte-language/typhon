@@ -16,10 +16,12 @@ from rpython.rlib.jit import promote, unroll_safe
 from rpython.rlib.objectmodel import always_inline
 
 from typhon.atoms import getAtom
+from typhon.errors import userError
 from typhon.objects.auditors import deepFrozenGuard, deepFrozenStamp
+from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
-from typhon.objects.guards import anyGuard
-from typhon.objects.slots import Binding, finalBinding, VarSlot
+from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
+from typhon.objects.slots import Binding, VarSlot, finalBinding, varBinding
 
 
 GET_0 = getAtom(u"get", 0)
@@ -247,3 +249,215 @@ class Environment(object):
         assert handlerDepth <= self.handlerDepth, "Implementation error: Handler stack UB"
         self.depth = depth
         self.handlerDepth = handlerDepth
+
+
+class NameStrategy(object):
+    """
+    A strategy for handling a name.
+    """
+
+class AnyFinalStrategy(NameStrategy):
+    """
+    A final noun guarded either by Any or no guard.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, value):
+        self.value = value
+
+    def assign(self, value):
+        raise userError(u"Tried to assign to final slot")
+
+    def getBinding(self):
+        return finalBinding(self.value, anyGuard)
+
+    def getGuard(self):
+        return FinalSlotGuard(anyGuard)
+
+    def getNoun(self):
+        return self.value
+
+class FinalStrategy(NameStrategy):
+    """
+    A final noun.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, value, guard):
+        self.value = value
+        self.guard = guard
+
+    def assign(self, value):
+        raise userError(u"Tried to assign to final slot")
+
+    def getBinding(self):
+        return finalBinding(self.value, self.guard)
+
+    def getGuard(self):
+        return FinalSlotGuard(self.guard)
+
+    def getNoun(self):
+        return self.value
+
+class AnyVarStrategy(NameStrategy):
+    """
+    A var noun guarded either by Any or no guard.
+    """
+
+    def __init__(self, value):
+        self.value = value
+
+    def assign(self, value):
+        self.value = value
+
+    def getBinding(self):
+        return varBinding(self.value, anyGuard)
+
+    def getGuard(self):
+        return VarSlotGuard(anyGuard)
+
+    def getNoun(self):
+        return self.value
+
+class VarStrategy(NameStrategy):
+    """
+    A var noun.
+    """
+
+    _immutable_ = True
+    _immutable_fields_ = "guard",
+
+    def __init__(self, value, guard):
+        self.value = value
+        self.guard = guard
+
+    def assign(self, value):
+        self.value = self.guard.call(u"coerce", [value, NullObject])
+
+    def getBinding(self):
+        return varBinding(self.value, self.guard)
+
+    def getGuard(self):
+        return VarSlotGuard(self.guard)
+
+    def getNoun(self):
+        return self.value
+
+class SlotStrategy(NameStrategy):
+    """
+    A slot.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, slot):
+        self.slot = slot
+
+    def assign(self, value):
+        self.slot.call(u"put", [value])
+
+    def getBinding(self):
+        return Binding(self.slot, anyGuard)
+
+    def getGuard(self):
+        return anyGuard
+
+    def getNoun(self):
+        return self.slot.call(u"get", [])
+
+class BindingStrategy(NameStrategy):
+    """
+    A binding.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, binding):
+        self.binding = binding
+
+    def assign(self, value):
+        slot = self.binding.call(u"get", [])
+        slot.call(u"put", [value])
+
+    def getBinding(self):
+        return self.binding
+
+    def getGuard(self):
+        return self.binding.call(u"getGuard", [])
+
+    def getNoun(self):
+        slot = self.binding.call(u"get", [])
+        return slot.call(u"get", [])
+
+
+class FlavorEnv(object):
+    """
+    An environment for evaluating ASTs.
+    """
+
+    def __init__(self, mapping):
+        self.mapping = mapping
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    def new(self, shadows):
+        copy = self.mapping.copy()
+        for shadow in shadows:
+            if shadow in copy:
+                del copy[shadow]
+        return FlavorEnv(copy)
+
+    def closureOf(self, staticScope):
+        d = {}
+        for name in staticScope.namesUsed():
+            d[name] = self.mapping[name]
+        return FlavorEnv(d)
+
+    def assign(self, name, value):
+        self.mapping[name].assign(value)
+
+    def binding(self, name, value):
+        assert name not in self.mapping
+        self.mapping[name] = BindingStrategy(value)
+
+    def final(self, name, value):
+        assert name not in self.mapping
+        self.mapping[name] = AnyFinalStrategy(value)
+
+    def finalGuarded(self, name, value, guard):
+        assert name not in self.mapping
+        self.mapping[name] = FinalStrategy(value, guard)
+
+    def var(self, name, value):
+        assert name not in self.mapping
+        self.mapping[name] = AnyVarStrategy(value)
+
+    def varGuarded(self, name, value, guard):
+        assert name not in self.mapping
+        self.mapping[name] = VarStrategy(value, guard)
+
+    def getBinding(self, name):
+        return self.mapping[name].getBinding()
+
+    def getNoun(self, name):
+        return self.mapping[name].getNoun()
+
+    def getGuards(self):
+        guards = {}
+        for name, strategy in self.mapping.iteritems():
+            guards[name] = strategy.getGuard()
+        return guards
+
+emptyEnv = FlavorEnv({})
+
+def scopeToEnv(scope):
+    d = {}
+    for name, binding in scope.iteritems():
+        d[name] = BindingStrategy(binding)
+    return FlavorEnv(d)

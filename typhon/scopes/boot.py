@@ -15,7 +15,7 @@ import os
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.env import finalize
+from typhon.env import finalize, scopeToEnv
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.importing import (codeFromAst, evaluateRaise, obtainModule,
                               obtainModuleFromSource)
@@ -60,19 +60,23 @@ def moduleFromString(source, recorder):
     # UserException and thus will kill the process (!!!) if allowed to
     # propagate. ~ C.
     try:
-        code, topLocals = obtainModuleFromSource(source, recorder, u"<eval>")
+        term, topLocals = obtainModuleFromSource(source, recorder, u"<eval>")
     except LoadFailed:
         raise userError(u"Couldn't load invalid AST")
-    return code, topLocals
+    return term, topLocals
 
 
-def evalToPair(code, topLocals, envMap, bindingNames=False):
+def evalToPair(term, topLocals, envMap, bindingNames=False):
+    """
+    Evaluate a term, capturing names defined during evaluation.
+    """
+
     environment = {}
     if bindingNames:
         for k, v in unwrapMap(envMap).items():
             s = unwrapStr(k)
             if not s.startswith("&&"):
-                raise userError(u"evalMonteFile scope map must be of the "
+                raise userError(u"evalToPair: Scope map must be of the "
                                 "form '[\"&&name\" => binding]'")
             environment[s[2:]] = v
     else:
@@ -80,8 +84,8 @@ def evalToPair(code, topLocals, envMap, bindingNames=False):
             environment[unwrapStr(k)] = v
     # Don't catch user exceptions; on traceback, we'll have a trail
     # auto-added that indicates that the exception came through
-    # eval() or whatnot.
-    result, newEnv = evaluateRaise([code], environment)
+    # eval() or whatnot. ~ C.
+    result, newEnv = evaluateRaise([term], scopeToEnv(environment))
     if newEnv is not None:
         # XXX monteMap()
         d = monteMap()
@@ -153,7 +157,7 @@ class GetMonteFile(Object):
 
             code = obtainModule(self.paths, unwrapStr(args[0]).encode("utf-8"),
                                 self.recorder)
-            return evaluateRaise([code], d)[0]
+            return evaluateRaise([code], scopeToEnv(d))[0]
         raise Refused(self, atom, args)
 
 

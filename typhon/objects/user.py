@@ -12,11 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import unroll_safe
+from rpython.rlib.jit import elidable, elidable_promote, unroll_safe
 from rpython.rlib.objectmodel import specialize
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
+from typhon.env import emptyEnv
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.log import log
 from typhon.objects.auditors import deepFrozenStamp
@@ -28,7 +29,6 @@ from typhon.objects.guards import anyGuard
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
 from typhon.objects.slots import finalBinding
-from typhon.smallcaps.machine import SmallCaps
 
 # XXX AuditionStamp, Audition guard
 
@@ -176,12 +176,221 @@ class Audition(Object):
         raise Refused(self, atom, args)
 
 
+class MethodStrategy(object):
+    """
+    A Strategy for storing method and matcher information.
+    """
+
+    _immutable_ = True
+
+class _EmptyStrategy(MethodStrategy):
+    """
+    A Strategy for an object with neither methods nor matchers.
+    """
+
+    _immutable_ = True
+
+    def lookupMethod(self, atom):
+        return None
+
+    def getAtoms(self):
+        return []
+
+    def getMatchers(self):
+        return []
+
+EmptyStrategy = _EmptyStrategy()
+
+class FunctionStrategy(MethodStrategy):
+    """
+    A Strategy for an object with exactly one method and no matchers.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, atom, method):
+        self.atom = atom
+        self.method = method
+
+    def lookupMethod(self, atom):
+        if atom is self.atom:
+            return self.method
+        return None
+
+    def getAtoms(self):
+        return [self.atom]
+
+    def getMatchers(self):
+        return []
+
+class FnordStrategy(MethodStrategy):
+    """
+    A Strategy for an object with two to five methods and no matchers.
+
+    The Law of Fives.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, methods):
+        # `methods` is still a dictionary here.
+        self.methods = [(k, v) for (k, v) in methods.items()]
+
+    @elidable_promote()
+    def lookupMethod(self, atom):
+        for (ourAtom, method) in self.methods:
+            if ourAtom is atom:
+                return method
+        return None
+
+    def getAtoms(self):
+        return [atom for (atom, _) in self.methods]
+
+    def getMatchers(self):
+        return []
+
+class JumboStrategy(MethodStrategy):
+    """
+    A Strategy for an object with many methods and no matchers.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, methods):
+        # `methods` is still a dictionary here.
+        self.methods = methods
+
+    @elidable_promote()
+    def lookupMethod(self, atom):
+        return self.methods.get(atom, None)
+
+    def getAtoms(self):
+        return self.methods.keys()
+
+    def getMatchers(self):
+        return []
+
+class GenericStrategy(MethodStrategy):
+    """
+    A Strategy for an object with some methods and some matchers.
+    """
+
+    _immutable_ = True
+    _immutable_fields_ = "methods", "matchers[*]"
+
+    def __init__(self, methods, matchers):
+        self.methods = methods
+        self.matchers = matchers
+
+    @elidable_promote()
+    def lookupMethod(self, atom):
+        return self.methods.get(atom, None)
+
+    def getAtoms(self):
+        return self.methods.keys()
+
+    def getMatchers(self):
+        return self.matchers
+
+def chooseStrategy(methods, matchers):
+    if matchers:
+        return GenericStrategy(methods, matchers)
+    elif not methods:
+        return EmptyStrategy
+    elif len(methods) == 1:
+        atom, method = methods.items()[0]
+        return FunctionStrategy(atom, method)
+    elif len(methods) <= 5:
+        return FnordStrategy(methods)
+    else:
+        return JumboStrategy(methods)
+
+
+def compareAuditorLists(this, that):
+    from typhon.objects.equality import isSameEver
+    for i, x in enumerate(this):
+        if not isSameEver(x, that[i]):
+            return False
+    return True
+
+def compareGuardMaps(this, that):
+    from typhon.objects.equality import isSameEver
+    for i, x in enumerate(this):
+        if not isSameEver(x[1], that[i][1]):
+            return False
+    return True
+
+
+class FunScript(Object):
+    """
+    A recipe for laughter and merriment.
+    """
+
+    _immutable_ = True
+
+    def __init__(self, objectAST):
+        self.objectAST = objectAST
+        self.fileName = u"unknown.mt"
+        self.objectName = objectAST._n.repr().decode("utf-8")
+        self.docstring = objectAST._d
+
+        script = objectAST._script
+        methodDict = {}
+        for method in script._methods:
+            methodDict[method.getAtom()] = method
+        self.strategy = chooseStrategy(methodDict, script._matchers)
+
+        self.reportCabinet = []
+        # XXX
+        self.methodDocs = {}
+
+    def getFQN(self):
+        return u"%s$%s" % (self.fileName, self.objectName)
+
+    def audit(self, auditors, guards):
+        """
+        Hold an audition and return a report of the results.
+
+        Auditions are cached for quality assurance and training purposes.
+        """
+
+        report = self.getReport(auditors, guards)
+        if report is None:
+            report = self.createReport(auditors, guards)
+            self.putReport(auditors, guards, report)
+        return report
+
+    def getReport(self, auditors, guards):
+        for auditorList, guardFile in self.reportCabinet:
+            if compareAuditorLists(auditors, auditorList):
+                guardItems = guards.items()
+                for guardMap, report in guardFile:
+                    if compareGuardMaps(guardItems, guardMap):
+                        return report
+        return None
+
+    def putReport(self, auditors, guards, report):
+        guardItems = guards.items()
+        for auditorList, guardFile in self.reportCabinet:
+            if compareAuditorLists(auditors, auditorList):
+                guardFile.append((guardItems, report))
+                break
+        else:
+            self.reportCabinet.append((auditors, [(guardItems, report)]))
+
+    def createReport(self, auditors, guards):
+        with Audition(self.getFQN(), self.objectAST, guards) as audition:
+            for a in auditors:
+                audition.ask(a)
+        return audition.prepareReport(auditors)
+
+
 class ScriptObject(Object):
     """
     An object whose behavior depends on a Monte script.
     """
 
-    _immutable_fields_ = "codeScript", "globals[*]", "report"
+    _immutable_fields_ = "script", "globals[*]", "report"
 
     report = None
 
@@ -193,17 +402,16 @@ class ScriptObject(Object):
             self.call(u"_printOn", [printer])
             return printer.value()
         except Refused:
-            return u"<%s>" % self.codeScript.displayName
+            return u"<%s>" % self.script.objectName
         except UserException, e:
             return (u"<%s (threw exception %s when printed)>" %
-                    (self.codeScript.displayName, e.error()))
-
+                    (self.script.objectName, e.error()))
     def printOn(self, printer):
         # Note that the printer is a Monte-level object. Also note that, at
         # this point, we have had a bad day; we did not respond to _printOn/1.
         from typhon.objects.data import StrObject
         printer.call(u"print",
-                     [StrObject(u"<%s>" % self.codeScript.displayName)])
+                     [StrObject(u"<%s>" % self.script.objectName)])
 
     def auditorStamps(self):
         if self.report is None:
@@ -212,18 +420,18 @@ class ScriptObject(Object):
             return self.report.getStamps()
 
     def docString(self):
-        return self.codeScript.doc
+        return self.script.docstring
 
     def respondingAtoms(self):
         # Only do methods for now. Matchers will be dealt with in other ways.
         d = {}
-        for atom in self.codeScript.strategy.getAtoms():
-            d[atom] = self.codeScript.methodDocs.get(atom, None)
+        for atom in self.script.strategy.getAtoms():
+            d[atom] = self.script.methodDocs.get(atom, None)
 
         return d
 
     def recvNamed(self, atom, args, namedArgs):
-        method = self.codeScript.strategy.lookupMethod(atom)
+        method = self.script.strategy.lookupMethod(atom)
         if method:
             return self.runMethod(method, args, namedArgs)
         else:
@@ -235,7 +443,7 @@ class ScriptObject(Object):
     def runMatchers(self, atom, args, namedArgs):
         message = ConstList([StrObject(atom.verb), ConstList(args),
                              namedArgs])
-        for matcher in self.codeScript.strategy.getMatchers():
+        for matcher in self.script.strategy.getMatchers():
             with Ejector() as ej:
                 try:
                     return self.runMatcher(matcher, message, ej)
@@ -256,45 +464,25 @@ class QuietObject(ScriptObject):
     An object without a closure.
     """
 
-    def __init__(self, codeScript, globals, auditors):
-        self.codeScript = codeScript
-        self.globals = globals
+    _immutable_ = True
+
+    def __init__(self, script, auditors):
+        self.script = script
 
         # The first auditor is our as-auditor, and it can be null.
         if auditors[0] is NullObject:
             auditors = auditors[1:]
         self.auditors = auditors
 
-        # Grab the guards of our globals and send them off for processing.
+        # Do the auditing dance.
         if auditors:
-            guards = self.getGuards()
-            self.report = self.codeScript.audit(auditors, guards)
+            self.report = self.script.audit(auditors, {})
 
-    def getGuards(self):
-        guards = {}
-        for name, i in self.codeScript.globalNames.items():
-            guards[name] = self.globals[i].call(u"getGuard", [])
-        return guards
-
-    @unroll_safe
     def runMethod(self, method, args, namedArgs):
-        machine = SmallCaps(method, None, self.globals)
-        # print "--- Running", self.displayName, atom, args
-        # Push the arguments onto the stack, backwards.
-        machine.push(namedArgs)
-        for arg in reversed(args):
-            machine.push(arg)
-            machine.push(NullObject)
-        machine.push(namedArgs)
-        machine.run()
-        return machine.pop()
+        return method.evalMethod(args, namedArgs, emptyEnv)
 
-    def runMatcher(self, code, message, ej):
-        machine = SmallCaps(code, None, self.globals)
-        machine.push(message)
-        machine.push(ej)
-        machine.run()
-        return machine.pop()
+    def runMatcher(self, matcher, message, ej):
+        return matcher.evalMatcher(message, ej, emptyEnv)
 
 
 class BusyObject(ScriptObject):
@@ -302,11 +490,11 @@ class BusyObject(ScriptObject):
     An object with a closure.
     """
 
-    _immutable_fields_ = "closure[*]",
+    _immutable_ = True
+    _immutable_fields_ = "closure",
 
-    def __init__(self, codeScript, globals, closure, auditors):
-        self.codeScript = codeScript
-        self.globals = globals
+    def __init__(self, script, closure, auditors):
+        self.script = script
         self.closure = closure
 
         # The first auditor is our as-auditor, so it'll also be the guard. If
@@ -320,38 +508,19 @@ class BusyObject(ScriptObject):
 
         # Grab the guards of our globals and send them off for processing.
         if auditors:
-            guards = self.getGuards()
-            self.report = self.codeScript.audit(auditors, guards)
-
-    def getGuards(self):
-        guards = {}
-        for name, i in self.codeScript.globalNames.items():
-            guards[name] = self.globals[i].call(u"getGuard", [])
-        for name, i in self.codeScript.closureNames.items():
-            guards[name] = self.closure[i].call(u"getGuard", [])
-        return guards
+            guards = self.closure.getGuards()
+            self.report = self.script.audit(auditors, guards)
 
     def patchSelf(self, guard):
-        selfIndex = self.codeScript.selfIndex()
+        return
+        selfIndex = self.script.selfIndex()
         if selfIndex != -1:
             self.closure[selfIndex] = finalBinding(self, guard)
 
-    @unroll_safe
     def runMethod(self, method, args, namedArgs):
-        machine = SmallCaps(method, self.closure, self.globals)
-        # print "--- Running", self.displayName, atom, args
-        # Push the arguments onto the stack, backwards.
-        machine.push(namedArgs)
-        for arg in reversed(args):
-            machine.push(arg)
-            machine.push(NullObject)
-        machine.push(namedArgs)
-        machine.run()
-        return machine.pop()
+        return method.evalMethod(args, namedArgs,
+                self.closure.new(method.getStaticScope().outNames()))
 
-    def runMatcher(self, code, message, ej):
-        machine = SmallCaps(code, self.closure, self.globals)
-        machine.push(message)
-        machine.push(ej)
-        machine.run()
-        return machine.pop()
+    def runMatcher(self, matcher, message, ej):
+        return matcher.evalMatcher(message, ej,
+                self.closure.new(matcher.getStaticScope().outNames()))

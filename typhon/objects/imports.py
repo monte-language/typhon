@@ -17,6 +17,7 @@ from rpython.rlib.jit import dont_look_inside
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
+from typhon.env import scopeToEnv
 from typhon.errors import Refused, userError
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
@@ -57,7 +58,7 @@ class Import(Object):
         term = obtainModule(self.path, p, self.recorder)
 
         # Get module.
-        module, _ = evaluateRaise([term], self.scope)
+        module, _ = evaluateRaise([term], scopeToEnv(self.scope))
 
         scope = monteMap()
         DFb = getGlobal(u"DeepFrozen")
@@ -97,7 +98,7 @@ class Import(Object):
         term = obtainModule(self.path, p, self.recorder)
 
         # Get results.
-        result, _ = evaluateRaise([term], scope)
+        result, _ = evaluateRaise([term], scopeToEnv(scope))
         return result
 
     def recv(self, atom, args):

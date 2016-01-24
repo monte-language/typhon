@@ -62,6 +62,9 @@ def loop(iterable, consumer):
     Perform an iterative loop.
     """
 
+    # This isn't ready yet.
+    return slowLoop(iterable, consumer)
+
     # If the consumer is *not* a ScriptObject, then damn them to the slow
     # path. In order for the consumer to not be ScriptObject, though, the
     # compiler and optimizer must have decided that an object could be
@@ -73,8 +76,8 @@ def loop(iterable, consumer):
     # Rarer path: If the consumer doesn't actually have RUN_2, then they're
     # not going to be JIT'd. Again, the compiler and optimizer won't ever do
     # this to us; it has to be intentional.
-    code = consumer.codeScript.strategy.lookupMethod(RUN_2)
-    if code is None:
+    term = consumer.script.strategy.lookupMethod(RUN_2)
+    if term is None:
         return slowLoop(iterable, consumer)
 
     iterator = iterable.call(u"_makeIterator", [])
@@ -83,7 +86,7 @@ def loop(iterable, consumer):
     try:
         while True:
             # JIT merge point.
-            loopDriver.jit_merge_point(code=code, consumer=consumer,
+            loopDriver.jit_merge_point(term=term, consumer=consumer,
                                        ejector=ej, iterator=iterator)
             globals = promote(consumer.globals)
             if isinstance(consumer, BusyObject):

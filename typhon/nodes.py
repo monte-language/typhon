@@ -17,7 +17,7 @@ import textwrap
 from collections import OrderedDict
 
 from rpython.rlib import rvmprof
-from rpython.rlib.jit import elidable, unroll_safe
+from rpython.rlib.jit import assert_green, elidable, jit_debug, unroll_safe
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rbigint import BASE10
@@ -25,17 +25,21 @@ from rpython.rlib.rbigint import BASE10
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.enum import makeEnum
-from typhon.errors import LoadFailed, Refused, userError
+from typhon.errors import (Ejecting, LoadFailed, Refused, UserException,
+                           userError)
 from typhon.objects.auditors import selfless, transparentStamp
-from typhon.objects.constants import NullObject, wrapBool
+from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.collections.lists import ConstList, unwrapList
-from typhon.objects.collections.maps import EMPTY_MAP, monteMap
+from typhon.objects.collections.maps import (EMPTY_MAP, ConstMap, monteMap,
+                                             unwrapMap)
 from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, promoteToBigInt, unwrapStr)
-from typhon.objects.ejectors import throw
+from typhon.objects.ejectors import Ejector, throw
+from typhon.objects.exceptions import sealException
 from typhon.objects.meta import MetaContext
 from typhon.objects.root import Object, audited
+from typhon.objects.user import BusyObject, FunScript, QuietObject
 from typhon.pretty import Buffer, LineWriter
 from typhon.quoting import quoteChar, quoteStr
 from typhon.smallcaps.code import Code, CodeScript
@@ -333,6 +337,13 @@ def interactiveCompile(node, origin):
     return compiler.makeCode(), compiler.locals.nameMap()
 
 
+def evaluate(node, env):
+    # Want to see nodes in JIT traces? Uncomment these two lines. ~ C.
+    # assert_green(node)
+    # jit_debug(node.repr())
+    return node.evaluate(env)
+
+
 class InvalidAST(LoadFailed):
     """
     An AST was ill-formed.
@@ -579,6 +590,9 @@ class _Null(Expr):
     def pretty(self, out):
         out.write("null")
 
+    def evaluate(self, env):
+        return NullObject
+
     def compile(self, compiler):
         compiler.literal(NullObject)
 
@@ -620,6 +634,12 @@ class Int(Expr):
     def pretty(self, out):
         out.write(self.bi.format(BASE10))
 
+    def evaluate(self, env):
+        try:
+            return IntObject(self.bi.toint())
+        except OverflowError:
+            return BigInt(self.bi)
+
     def compile(self, compiler):
         try:
             compiler.literal(IntObject(self.bi.toint()))
@@ -635,7 +655,6 @@ class Int(Expr):
 
         if atom is GETSTATICSCOPE_0:
             return self.getStaticScope()
-
 
         if atom is GETVALUE_0:
             try:
@@ -661,6 +680,9 @@ class Str(Expr):
 
     def pretty(self, out):
         out.write(quoteStr(self._s).encode("utf-8"))
+
+    def evaluate(self, env):
+        return StrObject(self._s)
 
     def compile(self, compiler):
         compiler.literal(StrObject(self._s))
@@ -702,6 +724,9 @@ class Double(Expr):
     def pretty(self, out):
         out.write("%f" % self._d)
 
+    def evaluate(self, env):
+        return DoubleObject(self._d)
+
     def compile(self, compiler):
         compiler.literal(DoubleObject(self._d))
 
@@ -736,6 +761,9 @@ class Char(Expr):
 
     def pretty(self, out):
         out.write(quoteChar(self._c[0]).encode("utf-8"))
+
+    def evaluate(self, env):
+        return CharObject(self._c)
 
     def compile(self, compiler):
         compiler.literal(CharObject(self._c))
@@ -786,6 +814,9 @@ class Tuple(Expr):
     def transform(self, f):
         # I don't care if it's cheating. It's elegant and simple and pretty.
         return f(Tuple([node.transform(f) for node in self._t]))
+
+    def evaluate(self, env):
+        assert False, "Not possible with modern ASTs"
 
     def compile(self, compiler):
         size = len(self._t)
@@ -845,6 +876,11 @@ class Assign(Expr):
     def transform(self, f):
         return f(Assign(self.target, self.rvalue.transform(f)))
 
+    def evaluate(self, env):
+        value = evaluate(self.rvalue, env)
+        env.assign(self.target, value)
+        return value
+
     def compile(self, compiler):
         self.rvalue.compile(compiler)
         # [rvalue]
@@ -890,6 +926,9 @@ class Binding(Expr):
 
     def transform(self, f):
         return f(self)
+
+    def evaluate(self, env):
+        return env.getBinding(self.name)
 
     def compile(self, compiler):
         compiler.accessFrame(self.name, "BINDING")
@@ -1014,6 +1053,20 @@ class Call(Expr):
                       [arg.transform(f) for arg in self._args],
                       [narg.transform(f) for narg in self._namedArgs]))
 
+    def evaluate(self, env):
+        # Target, args, named args; left to right.
+        target = evaluate(self._target, env)
+        args = [evaluate(arg, env) for arg in self._args]
+        d = monteMap()
+        for namedArg in self._namedArgs:
+            assert isinstance(namedArg, NamedArg), "Implementation error"
+            key = evaluate(namedArg.key, env)
+            value = evaluate(namedArg.value, env)
+            d[key] = value
+        namedArgs = ConstMap(d)
+
+        return target.call(self._verb, args, namedArgs)
+
     def compile(self, compiler):
         self._target.compile(compiler)
         # [target]
@@ -1104,6 +1157,17 @@ class Def(Expr):
     def transform(self, f):
         return f(Def(self._p, self._e, self._v.transform(f)))
 
+    def evaluate(self, env):
+        rval = evaluate(self._v, env)
+
+        if self._e is None:
+            ej = None
+        else:
+            ej = evaluate(self._e, env)
+
+        self._p.unify(rval, ej, env)
+        return rval
+
     def compile(self, compiler):
         self._v.compile(compiler)
         # [value]
@@ -1176,6 +1240,40 @@ class Escape(Expr):
 
         return f(Escape(self._pattern, self._node.transform(f),
             self._catchPattern, catchNode))
+
+    def evaluate(self, env):
+        with Ejector() as ej:
+            rv = None
+
+            staticScope = self._pattern.getStaticScope()
+            staticScope = staticScope.add(self._node.getStaticScope())
+            with env.new(staticScope.outNames()) as newEnv:
+                # Strange, but by spec, it's possible for this pattern to
+                # fail.
+                self._pattern.unify(ej, None, newEnv)
+
+                try:
+                    return evaluate(self._node, newEnv)
+                except Ejecting as e:
+                    # Is it the ejector that we created in this frame? If not,
+                    # reraise.
+                    if e.ejector is ej:
+                        # If no catch, then return as-is.
+                        rv = e.value
+                    else:
+                        raise
+
+            # If we have no catch block, then let's just return the value that
+            # we captured earlier.
+            if self._catchPattern is None or self._catchNode is None:
+                return rv
+
+            # Else, let's set up another frame and handle the catch block.
+            staticScope = self._catchPattern.getStaticScope()
+            staticScope = staticScope.add(self._catchNode.getStaticScope())
+            with env.new(staticScope.outNames()) as newEnv:
+                self._catchPattern.unify(rv, None, newEnv)
+                return evaluate(self._catchNode, newEnv)
 
     def compile(self, compiler):
         ejector = compiler.markInstruction("EJECTOR")
@@ -1250,6 +1348,17 @@ class Finally(Expr):
     def transform(self, f):
         return f(Finally(self._block.transform(f), self._atLast.transform(f)))
 
+    def evaluate(self, env):
+        # Y'know what I'm thankful for? RPython has finally-statements. That's
+        # what I'm thankful for. ~ C.
+        try:
+            with env.new(self._block.getStaticScope().outNames()) as env:
+                rv = evaluate(self._block, env)
+            return rv
+        finally:
+            with env.new(self._atLast.getStaticScope().outNames()) as env:
+                evaluate(self._atLast, env)
+
     def compile(self, compiler):
         unwind = compiler.markInstruction("UNWIND")
         subc = compiler.pushScope()
@@ -1297,6 +1406,10 @@ class Hide(Expr):
     def transform(self, f):
         return f(Hide(self._inner.transform(f)))
 
+    def evaluate(self, env):
+        with env.new(self._inner.getStaticScope().outNames()) as env:
+            return evaluate(self._inner, env)
+
     def compile(self, compiler):
         self._inner.compile(compiler.pushScope())
 
@@ -1341,6 +1454,19 @@ class If(Expr):
     def transform(self, f):
         return f(If(self._test.transform(f), self._then.transform(f),
             self._otherwise.transform(f)))
+
+    def evaluate(self, env):
+        # Monte conditional statements are lazy in exactly the same way as
+        # Python's. We evaluate the condition but only one branch. Annoyingly,
+        # we must fork our env twice; once for the test, and once for the
+        # branch that we choose.
+        with env.new(self._test.getStaticScope().outNames()) as env:
+            if unwrapBool(evaluate(self._test, env)):
+                with env.new(self._then.getStaticScope().outNames()) as env:
+                    return evaluate(self._then, env)
+            else:
+                with env.new(self._otherwise.getStaticScope().outNames()) as env:
+                    return evaluate(self._otherwise, env)
 
     def compile(self, compiler):
         # BRANCH otherwise
@@ -1405,6 +1531,10 @@ class Matcher(Expr):
         scope = scope.add(self._block.getStaticScope())
         return scope.hide()
 
+    def evalMatcher(self, message, ej, env):
+        self._pattern.unify(message, ej, env)
+        return evaluate(self._block, env)
+
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
             return StrObject(u"Matcher")
@@ -1426,6 +1556,9 @@ class MetaContextExpr(Expr):
 
     def pretty(self, out):
         out.write("meta.context()")
+
+    def evaluate(self, env):
+        return MetaContext()
 
     def compile(self, compiler):
         compiler.literal(MetaContext())
@@ -1569,6 +1702,29 @@ class Method(Expr):
     def getAtom(self):
         return getAtom(self._verb, len(self._ps))
 
+    def evalMethod(self, args, namedArgs, env):
+        with Ejector() as ej:
+            try:
+                if len(args) != len(self._ps):
+                    raise userError(u"Method signature mismatch")
+                for i, patt in enumerate(self._ps):
+                    patt.unify(args[i], ej, env)
+                if self._namedParams:
+                    d = unwrapMap(namedArgs)
+                    for namedParam in self._namedParams:
+                        namedParam.extract(d, ej, env)
+                rv = evaluate(self._b, env)
+                if self._g is not None:
+                    guard = evaluate(self._g, env)
+                    rv = guard.call(u"coerce", [rv, ej])
+                return rv
+            except Ejecting as e:
+                if e.ejector is ej:
+                    print "Method didn't apply (should be log message)"
+                    raise userError(u"Method failed to apply")
+                else:
+                    raise
+
     def recv(self, atom, args):
         if atom is GETNODENAME_0:
             return StrObject(u"MethodExpr")
@@ -1613,6 +1769,9 @@ class Noun(Expr):
 
     def pretty(self, out):
         out.write(self.name.encode("utf-8"))
+
+    def evaluate(self, env):
+        return env.getNoun(self.name)
 
     def compile(self, compiler):
         compiler.accessFrame(self.name, "NOUN")
@@ -1702,6 +1861,37 @@ class Obj(Expr):
     def transform(self, f):
         return f(Obj(self._d, self._n, self._as, self._implements,
                      self._script.transform(f)))
+
+    def makeObject(self, closure, auditors):
+        funScript = FunScript(self)
+        if closure.mapping:
+            obj = BusyObject(funScript, closure, auditors)
+        else:
+            obj = QuietObject(funScript, auditors)
+        return obj
+
+    def evaluate(self, env):
+        if self._as is None:
+            asAuditor = NullObject
+            auditors = [evaluate(auditor, env)
+                        for auditor in self._implements]
+        else:
+            asAuditor = evaluate(self._as, env)
+            auditors = [asAuditor] + [evaluate(auditor, env)
+                                      for auditor in self._implements]
+        closure = env.closureOf(self.getStaticScope())
+        obj = self.makeObject(closure, auditors)
+        # Unify the object into its closure and finally unify the object into
+        # its defining scope.
+        # XXX these stanzas are terrible.
+        if asAuditor is not NullObject and isinstance(self._n, FinalPattern):
+            obj = asAuditor.call(u"coerce", [obj, NullObject])
+            closure.finalGuarded(self._n._n, obj, asAuditor)
+            env.finalGuarded(self._n._n, obj, asAuditor)
+        else:
+            self._n.unify(obj, None, closure)
+            self._n.unify(obj, None, env)
+        return obj
 
     def compile(self, compiler):
         # Create a code object for this object.
@@ -2005,6 +2195,13 @@ class Sequence(Expr):
     def transform(self, f):
         return f(Sequence([node.transform(f) for node in self._l]))
 
+    @unroll_safe
+    def evaluate(self, env):
+        rv = NullObject
+        for node in self._l:
+            rv = evaluate(node, env)
+        return rv
+
     def compile(self, compiler):
         if self._l:
             for node in self._l[:-1]:
@@ -2062,6 +2259,21 @@ class Try(Expr):
     def transform(self, f):
         return f(Try(self._first.transform(f), self._pattern,
             self._then.transform(f)))
+
+    def evaluate(self, env):
+        # Try the first block, and if an exception is raised, pattern-match it
+        # against the catch-pattern in the then-block.
+        try:
+            with env.new(self._first.getStaticScope().outNames()) as env:
+                return evaluate(self._first, env)
+        except UserException as ue:
+            staticScope = self._pattern.getStaticScope()
+            staticScope = staticScope.add(self._then.getStaticScope())
+            with env.new(staticScope.outNames()) as env:
+                # Seal away the exception data from safe code.
+                sealed = sealException(ue)
+                self._pattern.unify(sealed, None, env)
+                return evaluate(self._then, env)
 
     def compile(self, compiler):
         index = compiler.markInstruction("TRY")
@@ -2130,6 +2342,9 @@ class BindingPattern(Pattern):
         out.write("&&")
         out.write(self._noun.encode("utf-8"))
 
+    def unify(self, specimen, ej, env):
+        env.binding(self._noun, specimen)
+
     def compile(self, compiler):
         index = compiler.locals.add(self._noun, DEPTH_BINDING)
         compiler.addInstruction("POP", 0)
@@ -2172,6 +2387,14 @@ class FinalPattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
+
+    def unify(self, specimen, ej, env):
+        if self._g is None:
+            env.final(self._n, specimen)
+        else:
+            guard = evaluate(self._g, env)
+            specimen = guard.call(u"coerce", [specimen, ej])
+            env.finalGuarded(self._n, specimen, guard)
 
     def compile(self, compiler):
         # [specimen ej]
@@ -2227,6 +2450,11 @@ class IgnorePattern(Pattern):
 
     def uncall(self):
         return ConstList([self._g if self._g is not None else NullObject])
+
+    def unify(self, specimen, ej, env):
+        if self._g is not None:
+            guard = evaluate(self._g, env)
+            guard.call(u"coerce", [specimen, ej])
 
     def compile(self, compiler):
         # [specimen ej]
@@ -2305,6 +2533,15 @@ class ListPattern(Pattern):
                 item.pretty(out)
         out.write("]")
 
+    def unify(self, specimen, ej, env):
+        if not isinstance(specimen, ConstList):
+            throw(ej, StrObject(u"List pattern failed; specimen was not list"))
+        l = unwrapList(specimen)
+        if len(l) != len(self._ps):
+            throw(ej, StrObject(u"List pattern failed; lengths differ"))
+        for i, patt in enumerate(self._ps):
+            patt.unify(l[i], ej, env)
+
     def compile(self, compiler):
         # [specimen ej]
         compiler.addInstruction("LIST_PATT", len(self._ps))
@@ -2381,6 +2618,16 @@ class NamedParam(Pattern):
 
         return Pattern.recv(self, atom, args)
 
+    def extract(self, argMap, ej, env):
+        key = evaluate(self._k, env)
+        if key in argMap:
+            value = argMap[key]
+        elif self._default is not None:
+            value = evaluate(self._default, env)
+        else:
+            raise userError(u"Couldn't extract %s" % key.toQuote())
+        self._p.unify(value, ej, env)
+
     def compile(self, compiler):
         # [argmap]
         compiler.addInstruction("DUP", 0)
@@ -2426,6 +2673,14 @@ class VarPattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
+
+    def unify(self, specimen, ej, env):
+        if self._g is None:
+            env.var(self._n, specimen)
+        else:
+            guard = evaluate(self._g, env)
+            specimen = guard.call(u"coerce", [specimen, ej])
+            env.varGuarded(self._n, specimen, guard)
 
     def compile(self, compiler):
         # [specimen ej]
@@ -2478,6 +2733,11 @@ class ViaPattern(Pattern):
         self._expr.pretty(out)
         out.write(") ")
         self._pattern.pretty(out)
+
+    def unify(self, specimen, ej, env):
+        examiner = evaluate(self._expr, env)
+        specimen = examiner.call(u"run", [specimen, ej])
+        self._pattern.unify(specimen, ej, env)
 
     def compile(self, compiler):
         # [specimen ej]
