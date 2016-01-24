@@ -1486,7 +1486,7 @@ class Method(Expr):
             if not isinstance(np, NamedParam):
                 raise InvalidAST("Named parameters must be NamedParam nodes")
         self._namedParams = namedParams
-        self._g = guard
+        self._g = nullToNone(guard)
         self._b = block
 
     @staticmethod
@@ -1535,9 +1535,12 @@ class Method(Expr):
             for item in self._namedParams[1:]:
                 out.write(", ")
                 item.pretty(out)
-        out.write(") :")
-        self._g.pretty(out)
-        out.writeLine(" {")
+        if self._g is None:
+            out.writeLine(") {")
+        else:
+            out.write(") :")
+            self._g.pretty(out)
+            out.writeLine(" {")
         self._b.pretty(out.indent())
         out.writeLine("")
         out.writeLine("}")
@@ -1552,7 +1555,8 @@ class Method(Expr):
             scope = scope.add(patt.getStaticScope())
         for patt in self._namedParams:
             scope = scope.add(patt.getStaticScope())
-        scope = scope.add(self._g.getStaticScope())
+        if self._g is not None:
+            scope = scope.add(self._g.getStaticScope())
         scope = scope.add(self._b.getStaticScope())
         return scope.hide()
 
@@ -1830,7 +1834,7 @@ class CompilingScript(object):
             # []
         method._b.compile(compiler)
         # [retval]
-        if method._g is not Null:
+        if method._g is not None:
             # [retval]
             method._g.compile(compiler)
             # [retval guard]
