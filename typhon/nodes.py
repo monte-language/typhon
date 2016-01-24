@@ -1643,7 +1643,7 @@ class Obj(Expr):
 
     _immutable_ = True
 
-    _immutable_fields_ = "_implements[*]",
+    _immutable_fields_ = "_d", "_n", "_as", "_implements[*]", "_script"
 
     def __init__(self, doc, name, objectAs, implements, script):
         self._d = doc
