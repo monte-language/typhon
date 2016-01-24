@@ -225,19 +225,6 @@ object Set as DeepFrozenStamp:
         else:
             throw.eject(ej, "Not a Set guard")
 
-
-object _makeMap as DeepFrozenStamp:
-    "A maker of maps."
-
-    to fromPairs(l):
-        "For any object passing `List[Pair[K, V]]`, make an object passing
-         `Map[K, V]`."
-
-        def m := [].asMap().diverge()
-        for [k, v] in l:
-            m[k] := v
-        return m.snapshot()
-
 object _MapGuardStamp:
     to audit(audition):
         return true
@@ -299,7 +286,6 @@ object Map as DeepFrozenStamp:
         else:
             throw.eject(ej, "Not a Map guard")
 
-# We need _makeMap at this point. ~ C.
 def testMapGuard(assert):
     assert.ejects(fn ej {def x :Map exit ej := 42})
     assert.doesNotEject(fn ej {def x :Map exit ej := [].asMap()})

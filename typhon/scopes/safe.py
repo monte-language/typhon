@@ -136,6 +136,17 @@ class MakeList(Object):
 theMakeList = MakeList()
 
 
+@runnable(FROMPAIRS_1, [deepFrozenStamp])
+def makeMap(pairs):
+    """
+    Given a `List[Pair]`, produce a `Map`.
+    """
+
+    return ConstMap.fromPairs(pairs)
+
+theMakeMap = makeMap()
+
+
 @autohelp
 @audited.DF
 class MakeDouble(Object):
@@ -507,6 +518,7 @@ def safeScope():
         u"_makeFinalSlot": theFinalSlotMaker,
         u"_makeInt": MakeInt(),
         u"_makeList": theMakeList,
+        u"_makeMap": theMakeMap,
         u"_makeSourceSpan": makeSourceSpan,
         u"_makeString": MakeString(),
         u"_makeVarSlot": VarSlotMaker(),
