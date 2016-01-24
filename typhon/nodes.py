@@ -1844,7 +1844,7 @@ class CompilingScript(object):
         # The starting depth is two (specimen and ejector) for each param, as
         # well as one for the named map, which is unconditionally passed.
         code = compiler.makeCode(startingDepth=arity * 2 + 1)
-        atom = method.getAtom(verb, arity)
+        atom = method.getAtom()
         self.methods[atom] = code
         if method._d is not None:
             self.methodDocs[atom] = method._d
