@@ -16,7 +16,7 @@ object LITERAL {}
 object PATTERN_HOLE {}
 object VALUE_HOLE {}
 
-def _makeString(chunks):
+def makeString(chunks):
     return object stringMaker as DeepFrozenStamp:
         to substitute(values) :Str:
             def rv := [].diverge()
@@ -117,7 +117,7 @@ object simple__quasiParser as DeepFrozenStamp:
                 throw.eject(ej, "Excess unmatched: " + M.toQuote(specimen.slice(i, j)))
 
     to valueMaker(pieces):
-        return _makeString(pieces)
+        return makeString(pieces)
 
 
 def testQuasiValues(assert):
