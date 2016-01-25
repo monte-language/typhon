@@ -491,6 +491,12 @@ class StaticScope(Object):
     def hide(self):
         return StaticScope(self.read, self.set, [], [], self.meta)
 
+    def namesUsed(self):
+        return self.read + self.set
+
+    def outNames(self):
+        return self.defs + self.vars
+
     def recv(self, atom, args):
         if atom is GETNAMESREAD_0:
             return wrapNameList(self.read)
@@ -514,10 +520,10 @@ class StaticScope(Object):
             return self.add(args[0])
 
         if atom is NAMESUSED_0:
-            return wrapNameList(self.read + self.set)
+            return wrapNameList(self.namesUsed())
 
         if atom is OUTNAMES_0:
-            return wrapNameList(self.defs + self.vars)
+            return wrapNameList(self.outNames())
 
         raise Refused(self, atom, args)
 
