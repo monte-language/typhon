@@ -86,7 +86,8 @@ def evalToPair(code, topLocals, envMap, bindingNames=False):
         # XXX monteMap()
         d = monteMap()
         for k, vi in topLocals.items():
-            d[StrObject(k)] = newEnv.local[vi]
+            # Wow, rude.
+            d[StrObject(k)] = newEnv.local[vi].getBinding()
         addendum = ConstMap(d)
         envMap = addendum._or(envMap)
     return result, envMap

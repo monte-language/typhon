@@ -17,7 +17,7 @@ from rpython.rlib.jit import jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import specialize
 
 from typhon.atoms import getAtom
-from typhon.env import Environment
+from typhon.env import BindingStrategy, Environment
 from typhon.errors import Ejecting, UserException, userError
 from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
@@ -65,7 +65,7 @@ class SmallCaps(object):
     def withDictScope(code, scope):
         try:
             frame = [scope[key] for key in code.frame]
-            globals = [scope[key] for key in code.globals]
+            globals = [BindingStrategy(scope[key]) for key in code.globals]
         except KeyError:
             missing = []
             for key in code.frame:
@@ -97,6 +97,7 @@ class SmallCaps(object):
         auditors = self.popSlice(script.numAuditors)
         globals = self.popSlice(script.globalSize)
         closure = self.popSlice(script.closureSize)
+        globals = [BindingStrategy(g) for g in globals]
         obj = script.makeObject(closure, globals, auditors)
         # Not a typo. The first copy is the actual return value from creating
         # the object expression; the second copy is given to the slot

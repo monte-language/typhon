@@ -12,11 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import unroll_safe
+from rpython.rlib.jit import elidable, unroll_safe
 from rpython.rlib.objectmodel import specialize
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
+from typhon.env import BindingStrategy
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.log import log
 from typhon.objects.auditors import deepFrozenStamp
@@ -181,6 +182,7 @@ class ScriptObject(Object):
     An object whose behavior depends on a Monte script.
     """
 
+    _immutable_ = True
     _immutable_fields_ = "codeScript", "globals[*]", "report"
 
     report = None
@@ -206,6 +208,12 @@ class ScriptObject(Object):
                      [StrObject(u"<%s>" % self.codeScript.displayName)])
 
     def auditorStamps(self):
+        # The JIT requires an indirection before polymorphic calls to elidable
+        # functions. ~ C.
+        return self._auditorStamps()
+
+    @elidable
+    def _auditorStamps(self):
         if self.report is None:
             return []
         else:
@@ -256,6 +264,8 @@ class QuietObject(ScriptObject):
     An object without a closure.
     """
 
+    _immutable_ = True
+
     def __init__(self, codeScript, globals, auditors):
         self.codeScript = codeScript
         self.globals = globals
@@ -273,7 +283,7 @@ class QuietObject(ScriptObject):
     def getGuards(self):
         guards = {}
         for name, i in self.codeScript.globalNames.items():
-            guards[name] = self.globals[i].call(u"getGuard", [])
+            guards[name] = self.globals[i].getGuard()
         return guards
 
     @unroll_safe
@@ -302,6 +312,7 @@ class BusyObject(ScriptObject):
     An object with a closure.
     """
 
+    _immutable_ = True
     _immutable_fields_ = "closure[*]",
 
     def __init__(self, codeScript, globals, closure, auditors):
@@ -326,7 +337,7 @@ class BusyObject(ScriptObject):
     def getGuards(self):
         guards = {}
         for name, i in self.codeScript.globalNames.items():
-            guards[name] = self.globals[i].call(u"getGuard", [])
+            guards[name] = self.globals[i].getGuard()
         for name, i in self.codeScript.closureNames.items():
             guards[name] = self.closure[i].call(u"getGuard", [])
         return guards
