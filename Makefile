@@ -80,7 +80,7 @@ testVM: default
 testMast: default mast infer mast/tests/lexer.mast mast/tests/parser.mast \
 	mast/tests/auditors.mast mast/tests/fail-arg.mast mast/tests/expander.mast \
 	mast/tests/optimizer.mast mast/tests/flexMap.mast mast/tests/proptests.mast
-	$(MT_TYPHON) -l mast mast/unittest all-tests
+	$(MT_TYPHON) -l mast loader test all-tests
 
 test: testVM testMast
 
@@ -115,13 +115,13 @@ fun: mast/fun/elements.mast mast/fun/repl.mast mast/fun/termParser.mast
 
 bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mast \
 	mast/bench/primeCount.mast mast/bench/brot.mast mast/bench/marley.mast \
-	mast/bench/entropy.mast mast/bench.mast
+	mast/bench/entropy.mast mast/benchRunner.mast
 
 monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 	mast/lib/monte/monte_parser.mast mast/lib/monte/monte_expander.mast \
 	mast/lib/monte/monte_optimizer.mast mast/lib/monte/ast_dumper.mast \
 	mast/lib/monte/mast.mast mast/lib/monte/monte_verifier.mast \
-	mast/montec.mast mast/unittest.mast mast/all-tests.mast
+	mast/montec.mast mast/testRunner.mast mast/all-tests.mast
 
 %.mast: %.mt
 	@ echo "MONTEC $<"

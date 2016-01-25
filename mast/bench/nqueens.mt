@@ -1,4 +1,5 @@
-exports (main)
+import "bench" =~ [=> bench]
+exports ()
 
 def hitAt(ranks, size :Int) :Bool as DeepFrozen:
     def i := size - 1
@@ -43,6 +44,4 @@ def showBoard(ranks):
         traceln(s)
 
 
-def main(=> bench) as DeepFrozen:
-    bench(fn {nQueen(8)}, "n queens (8)")
-    return 0
+bench(fn {nQueen(8)}, "n queens (8)")

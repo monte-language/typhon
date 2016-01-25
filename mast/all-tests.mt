@@ -1,24 +1,22 @@
+import "lib/atoi" =~ _
+import "lib/entropy/pool" =~ _
+import "lib/enum" =~ _
+# Needs fake Timer.
+# ::"import".script("lib/irc/client")
+
+## Depends on derp, not in the repo.
+# ::"import".script("lib/parsers/http")
+import "lib/parsers/marley" =~ _
+import "lib/codec/percent" =~ _
+import "lib/record" =~ _
+import "tools/infer" =~ _
+import "lib/json" =~ _
+import "tests/proptests" =~ _
+exports ()
+
 def bench(_, _) as DeepFrozen:
     return null
 
-::"import"("lib/atoi", [=> unittest])
-::"import".script("lib/cache")
-::"import".script("lib/codec/utf8")
-::"import".script("lib/continued", [=> &&bench])
-::"import"("lib/entropy/pool", [=> unittest])
-::"import"("lib/enum", [=> unittest])
-# Needs fake Timer.
-# ::"import".script("lib/irc/client")
-::"import".script("lib/irc/user")
-::"import".script("lib/monte/monte_optimizer")
-::"import".script("lib/netstring")
-::"import".script("lib/parsers/html")
-## Depends on derp, not in the repo.
-# ::"import".script("lib/parsers/http")
-::"import"("lib/parsers/marley", [=> bench, => unittest])
-::"import".script("lib/paths")
-::"import"("lib/codec/percent", [=> unittest])
-::"import"("lib/record", [=> unittest])
 ::"import".script("lib/singleUse")
 ::"import".script("lib/slow/exp", [=> &&bench])
 ::"import".script("lib/words")
@@ -30,6 +28,11 @@ def bench(_, _) as DeepFrozen:
 ::"import".script("tests/expander")
 ::"import".script("tests/optimizer")
 ::"import".script("tests/flexMap")
-::"import"("tools/infer", [=> unittest])
-::"import"("lib/json", [=> unittest])
-::"import"("tests/proptests", [=> unittest])
+::"import".script("lib/paths")
+::"import".script("lib/irc/user")
+::"import".script("lib/monte/monte_optimizer")
+::"import".script("lib/netstring")
+::"import".script("lib/parsers/html")
+::"import".script("lib/cache")
+::"import".script("lib/codec/utf8")
+::"import".script("lib/continued", [=> &&bench])

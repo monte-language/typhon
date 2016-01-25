@@ -9,6 +9,7 @@ stdenv.mkDerivation {
       '';
     installPhase = ''
       mkdir -p $out/bin
+      cp -r mast loader.mast $out/
       cp -r mast repl.mast $out/
       echo "${typhonVm}/mt-typhon -l $out/mast $out/repl" > $out/bin/monte
       chmod +x $out/bin/monte
@@ -25,5 +26,6 @@ stdenv.mkDerivation {
         p == loc "/mast" ||
         p == loc "/boot" ||
         p == loc "/Makefile" ||
+        p == loc "/loader.mast" ||
         p == loc "/repl.mast")) ./..;
 }

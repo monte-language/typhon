@@ -5,8 +5,8 @@ stdenv.mkDerivation {
     buildInputs = [ typhonVm mast ];
     buildPhase = ''
       ln -s ${typhonVm}/mt-typhon .
-      ./mt-typhon -l ${mast}/mast -b ${mast}/mast/bench
-      '';
+      ./mt-typhon -l ${mast} -l ${mast}/mast -b ${mast}/loader bench $PWD `echo ${mast}/mast/bench/*.mt|sed s/\.mt//g`
+      '';#*/
     installPhase = ''
       mkdir -p $out/nix-support/
       cp bench.html $out/
@@ -19,5 +19,5 @@ stdenv.mkDerivation {
       let p = toString path;
        in ((lib.hasPrefix (loc "/mast/bench/") p &&
             (type == "directory" || lib.hasSuffix ".mt" p)) ||
-        p == loc "/mast/bench.mt")) ./..;
+        p == loc "/mast/benchRunner.mt")) ./..;
 }

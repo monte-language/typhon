@@ -1,4 +1,5 @@
-exports (main)
+import "bench" =~ [=> bench]
+exports ()
 
 # https://bjpelc.wordpress.com/2015/01/10/yet-another-language-speed-test-counting-primes-c-c-java-javascript-php-python-and-ruby-2/
 # Please don't change the structure; it is meant to mirror similar programs in
@@ -36,7 +37,6 @@ def countPrimes(lim :Int) :Int as DeepFrozen:
 
     return noPrimes
 
-def main(=> bench) :Int as DeepFrozen:
-    def lim :Int := 2 ** 12
-    bench(fn {countPrimes(lim)}, `Prime-counting function: π($lim)`)
-    return 0
+
+def lim :Int := 2 ** 12
+bench(fn {countPrimes(lim)}, `Prime-counting function: π($lim)`)

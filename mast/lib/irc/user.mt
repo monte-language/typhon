@@ -1,3 +1,4 @@
+import "unittest" =~ [=> unittest]
 exports (makeUser, sourceToUser)
 
 def makeUser(nick :Str, user :Str, host :Str) as DeepFrozen:

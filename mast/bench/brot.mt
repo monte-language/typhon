@@ -1,5 +1,9 @@
+import "unittest" =~ [=> unittest]
+import "bench" =~ [=> bench]
 import "lib/complex" =~ [=> makeComplex :DeepFrozen]
-exports (main)
+import "lib/tubes" =~ [=> makeUTF8EncodePump :DeepFrozen,
+                       => makePumpTube :DeepFrozen]
+exports ()
 
 
 def ITERATIONS :Int := 170
@@ -56,20 +60,16 @@ def brotAt(xCenter :Double, yCenter :Double, xScale :Double, yScale :Double) :St
     return fullBrot(yStart, yScale, xStart, xScale)
 
 
-def main(=> bench, => unittest, => makeStdOut) :Int as DeepFrozen:
-    def [=> makeUTF8EncodePump :DeepFrozen,
-         => makePumpTube :DeepFrozen,
-    ] | _ := ::"import"("lib/tubes", [=> unittest])
+bench(fn {brotAt(-0.25, -0.4, 1 / 32.0, 1 / 20.0)},
+      "Burning ship (large)")
+bench(fn {brotAt(-1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)},
+      "Burning ship (small)")
 
+def main(=> makeStdOut) :Int as DeepFrozen:
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout.flowTo(makeStdOut())
     # And you thought Pokémon Snap was hard. ~ C.
     stdout.receive(brotAt(-0.25, -0.4, 1 / 32.0, 1 / 20.0))
     stdout.receive(brotAt(-1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0))
-
-    bench(fn {brotAt(-0.25, -0.4, 1 / 32.0, 1 / 20.0)},
-          "Burning ship (large)")
-    bench(fn {brotAt(-1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)},
-          "Burning ship (small)")
 
     return 0
