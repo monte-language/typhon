@@ -1688,7 +1688,14 @@ class Method(Expr):
         return f(Method(self._d, self._verb, self._ps, self._namedParams, self._g,
                         self._b.transform(f)))
 
-    def getStaticScope(self):
+    def getCompleteStaticScope(self):
+        """
+        The full static scope of this method, including otherwise-hidden
+        names.
+
+        Useful for anybody doing shadowing work. Hint, hint.
+        """
+
         scope = emptyScope
         for patt in self._ps:
             scope = scope.add(patt.getStaticScope())
@@ -1696,8 +1703,10 @@ class Method(Expr):
             scope = scope.add(patt.getStaticScope())
         if self._g is not None:
             scope = scope.add(self._g.getStaticScope())
-        scope = scope.add(self._b.getStaticScope())
-        return scope.hide()
+        return scope.add(self._b.getStaticScope())
+
+    def getStaticScope(self):
+        return self.getCompleteStaticScope().hide()
 
     def getAtom(self):
         return getAtom(self._verb, len(self._ps))

@@ -518,8 +518,9 @@ class BusyObject(ScriptObject):
             self.closure[selfIndex] = finalBinding(self, guard)
 
     def runMethod(self, method, args, namedArgs):
+        staticScope = method.getCompleteStaticScope()
         return method.evalMethod(args, namedArgs,
-                self.closure.new(method.getStaticScope().outNames()))
+                self.closure.new(staticScope.outNames()))
 
     def runMatcher(self, matcher, message, ej):
         return matcher.evalMatcher(message, ej,
