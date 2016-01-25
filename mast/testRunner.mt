@@ -1,10 +1,4 @@
-exports (main)
-
-def concatMap(it, f) :List as DeepFrozen:
-    var result := [].diverge()
-    for k => v in it:
-        result.extend(f(k, v))
-    return result.snapshot()
+exports (makeAsserter, makeTestDrain, runTests)
 
 def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
     var lastSource := null
@@ -37,10 +31,7 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
         to flowAborted(reason):
             traceln(`flow aborted $reason`)
 
-def runTests(collectTests, testDrain, makeIterFount) as DeepFrozen:
-    def testInfo := concatMap(
-            collectTests(),
-            fn k, v { [for t in (v) [k, t]] })
+def runTests(testInfo, testDrain, makeIterFount) as DeepFrozen:
     def fount := makeIterFount(testInfo)
     fount<-flowTo(testDrain)
     return fount.completion()
@@ -135,7 +126,7 @@ def makeAsserter() as DeepFrozen:
                     catch _:
                         successes += 1
 
-def main(=> makeStdOut, => Timer, => currentProcess, => unsealException,
+def main(args, => makeStdOut, => Timer, => currentProcess, => unsealException,
          => collectTests, => unittest) as DeepFrozen:
     def [=> makeIterFount :DeepFrozen,
          => makeUTF8EncodePump,

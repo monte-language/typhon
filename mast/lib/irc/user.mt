@@ -1,3 +1,5 @@
+exports (makeUser, sourceToUser)
+
 def makeUser(nick :Str, user :Str, host :Str) as DeepFrozen:
     return object completeUser:
         to _printOn(out):
@@ -28,6 +30,3 @@ def testSourceToUser(assert):
     assert.doesNotEject(fn ej {def via (sourceToUser) x exit ej := "nick!user@host"})
 
 unittest([testSourceToUser])
-
-
-[=> makeUser, => sourceToUser]

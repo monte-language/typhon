@@ -710,7 +710,7 @@ importIntoScope("prelude/m", preludeScope0)
 # for convenience.
 importIntoScope("prelude/transparent", preludeScope | [=> &&TransparentStamp])
 
-preludeScope without= ("&&typhonEval")
+# preludeScope without= ("&&typhonEval")
 
 # The final scope exported from the prelude. This *must* be the final
 # expression in the module!

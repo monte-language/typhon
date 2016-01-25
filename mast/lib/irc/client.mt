@@ -12,21 +12,20 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> UTF8] | _ := ::"import".script("lib/codec/utf8")
-def [
-    => makeUTF8DecodePump,
-    => makeUTF8EncodePump,
-    => makeMapPump,
-    => makeSplitPump,
-    => makePumpTube,
-    => chain,
-] | _ := ::"import"("lib/tubes", [=> unittest])
-def [=> makeSingleUse] := ::"import".script("lib/singleUse")
-def [=> makeTokenBucket] := ::"import".script("lib/tokenBucket")
-def [=> makeUser, => sourceToUser] | _ := ::"import".script("lib/irc/user")
+import "lib/tubes" =~ [
+    => makeUTF8DecodePump :DeepFrozen,
+    => makeUTF8EncodePump :DeepFrozen,
+    => makeMapPump :DeepFrozen,
+    => makeSplitPump :DeepFrozen,
+    => makePumpTube :DeepFrozen,
+    => chain :DeepFrozen]
+import "lib/irc/user" =~ [=> sourceToUser :DeepFrozen]
+exports (makeIRCClient, connectIRCClient)
 
+def [=> makeSingleUse :DeepFrozen] := ::"import".script("lib/singleUse")
+def [=> makeTokenBucket :DeepFrozen] := ::"import".script("lib/tokenBucket")
 
-def makeLineTube():
+def makeLineTube() as DeepFrozen:
     return makePumpTube(makeSplitPump(b`$\r$\n`))
 
 
@@ -277,5 +276,3 @@ def connectIRCClient(client, endpoint) as DeepFrozen:
         makeOutgoing(),
         drain,
     ])
-
-[=> makeIRCClient, => connectIRCClient]
