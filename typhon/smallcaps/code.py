@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib import rvmprof
+# from rpython.rlib import rvmprof
 from rpython.rlib.jit import elidable, elidable_promote
 
 from typhon.objects.user import Audition, BusyObject, QuietObject
@@ -257,4 +257,4 @@ class Code(object):
         method = self.methodName.encode("utf-8")
         return "mt:%s.%s:1:%s" % (objname, method, filename)
 
-rvmprof.register_code_object_class(Code, lambda code: code.profileName)
+# rvmprof.register_code_object_class(Code, lambda code: code.profileName)

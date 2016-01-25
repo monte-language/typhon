@@ -16,7 +16,7 @@ import sys
 
 from rpython.jit.codewriter.policy import JitPolicy
 from rpython.rlib import rsignal
-from rpython.rlib import rvmprof
+# from rpython.rlib import rvmprof
 from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import set_user_param
 
@@ -135,21 +135,21 @@ class profiling(object):
         if not self.enabled:
             return
 
-        self.handle = open(self.path, "wb")
-        try:
-            rvmprof.enable(self.handle.fileno(), 0.00042)
-        except rvmprof.VMProfError as vmpe:
-            print "Couldn't enable vmprof:", vmpe.msg
+        # self.handle = open(self.path, "wb")
+        # try:
+        #     rvmprof.enable(self.handle.fileno(), 0.00042)
+        # except rvmprof.VMProfError as vmpe:
+        #     print "Couldn't enable vmprof:", vmpe.msg
 
     def __exit__(self, *args):
         if not self.enabled:
             return
 
-        try:
-            rvmprof.disable()
-        except rvmprof.VMProfError as vmpe:
-            print "Couldn't disable vmprof:", vmpe.msg
-        self.handle.close()
+        # try:
+        #     rvmprof.disable()
+        # except rvmprof.VMProfError as vmpe:
+        #     print "Couldn't disable vmprof:", vmpe.msg
+        # self.handle.close()
 
 
 def runModule(exports, scope):

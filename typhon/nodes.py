@@ -16,7 +16,7 @@ import inspect
 import textwrap
 from collections import OrderedDict
 
-from rpython.rlib import rvmprof
+# from rpython.rlib import rvmprof
 from rpython.rlib.jit import assert_green, elidable, jit_debug, unroll_safe
 from rpython.rlib.listsort import make_timsort_class
 from rpython.rlib.objectmodel import specialize
@@ -241,7 +241,7 @@ class Compiler(object):
                     literals, globals, frame, locals, scripts, startingDepth)
 
         # Register the code for profiling.
-        rvmprof.register_code(code, lambda code: code.profileName)
+        # rvmprof.register_code(code, lambda code: code.profileName)
 
         # Run optimizations on code, including inner code.
         peephole(code)

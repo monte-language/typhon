@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib import rvmprof
+# from rpython.rlib import rvmprof
 from rpython.rlib.jit import jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import specialize
 
@@ -307,7 +307,7 @@ class SmallCaps(object):
                     instruction.repr.encode("utf-8"))
 
     # Second argument is how to get a code object from a machine object.
-    @rvmprof.vmprof_execute_code("smallcaps", lambda self: self.code)
+    # @rvmprof.vmprof_execute_code("smallcaps", lambda self: self.code)
     @unroll_safe
     def run(self):
         jit_debug(self.code.profileName)
