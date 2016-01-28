@@ -23,119 +23,137 @@ exports (makeMarley, marley__quasiParser)
 # polymorphic over the token and input types and can support non-character
 # parses.
 
-def Rule := List[Pair[DeepFrozen, DeepFrozen]]
-def Rules := List[Rule]
-def Grammar := Map[Str, Rules]
-
 object terminal as DeepFrozen:
     pass
 
 object nonterminal as DeepFrozen:
     pass
 
+def RuleTag :DeepFrozen := Any[Same[terminal], Same[nonterminal]]
+def Rule :DeepFrozen := List[Pair[RuleTag, DeepFrozen]]
+def Rules :DeepFrozen := List[Rule]
+def Grammar :DeepFrozen := Map[Str, Rules]
 
-def makeTable(grammar, startRule) as DeepFrozen:
-    def tableList := [[].asSet()].diverge()
-    var queue := [].diverge()
 
-    for production in grammar[startRule]:
-        tableList[0] with= ([startRule, production, 0, [startRule]])
-
-    def grow(k):
-        while (tableList.size() <= k):
-            # traceln(`Size is ${tableList.size()} and k is $k, so growing`)
-            tableList.push([].asSet())
-
+def makeTable(grammar :Grammar, tables :List[Set]) as DeepFrozen:
     return object table:
         to _printOn(out):
             out.print("Parsing table: ")
-            for i => states in tableList:
-                out.print(`State $i: `)
-                for [head, rules, j] in states:
+            for i => states in tables:
+                out.print(`State $i:`)
+                for [head, rules, j, _] in states:
                     def formattedRules := [for [_, item] in (rules) item]
-                    out.print(`: $head → $formattedRules ($j) ;`)
+                    out.print(` : $head → $formattedRules ($j) ;`)
 
-        to addState(k :Int, state):
-            grow(k)
-            if (!tableList[k].contains(state)):
-                tableList[k] with= (state)
-                queue.push([k, state])
+        to _uncall():
+            [makeTable, "run", [grammar, tables], [].asMap()]
 
-        to nextState():
-            if (queue.size() != 0):
-                return queue.pop()
-            return null
+        to addState(k :(0..tables.size()), state):
+            return if (k == tables.size()):
+                makeTable(grammar, tables.with([state].asSet()))
+            else:
+                def states := tables[k].with(state)
+                makeTable(grammar, tables.with(k, states))
 
-        to queueStates(k :Int):
-            grow(k)
-            for state in tableList[k]:
-                queue.push([k, state])
+        to contains(index :(0..tables.size()), state) :Bool:
+            return index < tables.size() && tables[index].contains(state)
 
-        to get(index :Int) :Set:
-            grow(index)
-            return tableList[index]
+        to get(index :(0..tables.size())) :Set:
+            return if (index == tables.size()):
+                [].asSet()
+            else:
+                tables[index]
 
-        to headsAt(position :Int) :List:
-            if (position >= tableList.size()):
+        to getRuleNamed(rule :Str):
+            return grammar[rule]
+
+        to headsAt(position :(0..tables.size())) :List:
+            return if (position == tables.size()):
                 # We have no results (yet) at this position.
-                return []
-
-            def rv := [].diverge()
-            for [head, rules, j, result] in tableList[position]:
-                if (rules == [] && j == 0):
-                    rv.push([head, result])
-            return rv.snapshot()
-
-        to hasQueuedStates() :Bool:
-            return queue.size() > 0
+                []
+            else:
+                def rv := [].diverge()
+                for [head, rules, j, result] in tables[position]:
+                    if (rules == [] && j == 0):
+                        rv.push([head, result])
+                rv.snapshot()
 
 
-def advance(position, token, grammar, table, ej) as DeepFrozen:
-    table.queueStates(position - 1)
-    if (!table.hasQueuedStates()):
+def advance(position :Int, token, var table, ej) as DeepFrozen:
+    def prior := position - 1
+    def queue := [for state in (table[prior]) [prior, state]].diverge()
+    if (queue.size() == 0):
         # The table isn't going to advance at all from this token; the parse
         # has failed.
         throw.eject(ej, "Parser cannot advance")
 
-    var heads := []
+    def enqueue(k, state):
+        if (!table.contains(k, state)):
+            queue.push([k, state])
+            table addState= (k, state)
 
-    while (true):
-        def [k, state] exit __break := table.nextState()
+    var heads :List[Str] := []
+
+    while (queue.size() != 0):
+        def [k, state] := queue.pop()
         # traceln(`Twiddling $state with k $k at position $position`)
+        # This switch cannot fail, since it only dispatches on the second
+        # field of the state and is exhaustive.
         switch (state):
             match [head, ==[], j, result]:
                 # Completion.
                 for oldState in table[j]:
                     if (oldState =~
                         [oldHead, [==[nonterminal, head]] + tail, i, tree]):
-                        table.addState(k,
-                                       [oldHead, tail, i, tree.with(result)])
+                        # traceln(`Completed $oldHead $i..$k`)
+                        enqueue(k, [oldHead, tail, i, tree.with(result)])
             match [_, [[==nonterminal, rule]] + _, _, _]:
                 # Prediction.
-                for production in grammar[rule]:
-                    table.addState(k, [rule, production, k, [rule]])
+                for production in table.getRuleNamed(rule):
+                    # traceln(`Predicted $rule → $production`)
+                    enqueue(k, [rule, production, k, [rule]])
             match [head, [[==terminal, literal]] + tail, j, result]:
                 # Scan.
                 # Scans can only take place when the token is in the position
                 # immediately following the position of the scanning rule.
-                if (k == position - 1):
+                if (k == prior):
                     if (literal.matches(token)):
-                        table.addState(k + 1,
-                                       [head, tail, j, result.with(token)])
+                        # traceln(`Scanned ${M.toQuote(token)} =~ $literal`)
+                        enqueue(k + 1, [head, tail, j, result.with(token)])
                     else:
+                        # traceln(`Failed ${M.toQuote(token)} !~ $literal`)
                         heads with= (literal.error())
-            match _:
-                # This usually means that the table got corrupted somehow.
-                # Double imports can cause this.
-                pass
 
     if (table[position].size() == 0):
         # Parse error: No progress was made.
-        throw.eject(ej, `Expected one of $heads`)
+        def headStrs := ", ".join(heads)
+        throw.eject(ej, `Expected one of: $headStrs`)
+
+    return table
 
 
-def makeMarley(grammar, startRule) as DeepFrozen:
-    def table := makeTable(grammar, startRule)
+def initialTable(grammar :Grammar, startRule :Str) as DeepFrozen:
+    var startingSet := [].asSet()
+    def queue := [].diverge()
+    # Do the initial prediction.
+    for production in grammar[startRule]:
+        queue.push([startRule, production, 0, [startRule]])
+    while (queue.size() != 0):
+        def rule := queue.pop()
+        # traceln(`initialTable: Initially predicting rule $rule`)
+        if (!startingSet.contains(rule)):
+            startingSet with= (rule)
+            # If nonterminal, then predict into that nonterminal's next rule.
+            if (rule =~ [_, [[==nonterminal, nextRule]] + _, _, _]):
+                for production in grammar[nextRule]:
+                    queue.push([nextRule, production, 0, [nextRule]])
+
+    def tables := [startingSet]
+    return makeTable(grammar, tables)
+
+
+def makeMarley(grammar :Grammar, startRule :Str) as DeepFrozen:
+    var table := initialTable(grammar, startRule)
     var position :Int := 0
     var failure :NullOk[Str] := null
 
@@ -160,15 +178,14 @@ def makeMarley(grammar, startRule) as DeepFrozen:
             return rv.snapshot()
 
         to feed(token):
-            traceln(`Feeding $token to $table`)
             if (failure != null):
                 traceln(`Parser already failed: $failure`)
                 return
 
             position += 1
-            traceln(`Advancing position $position in table $table`)
+            # traceln(`feed(${M.toQuote(token)}): Position $position, table $table`)
             escape ej:
-                advance(position, token, grammar, table, ej)
+                table := advance(position, token, table, ej)
             catch reason:
                 failure := reason
 
@@ -177,13 +194,17 @@ def makeMarley(grammar, startRule) as DeepFrozen:
                 marley.feed(token)
 
 
+# def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
 def exactly(token :DeepFrozen) as DeepFrozen:
     "Create a matcher which matches only a single `DeepFrozen` token by
      equality."
 
-    return object exactlyMatcher as DeepFrozen:
+    return object exactlyMatcher as DeepFrozen implements Selfless:
+        to _printOn(out):
+            out.print(`==${M.toQuote(token)}`)
+
         to _uncall():
-            return [exactly, [token], [].asMap()]
+            return [exactly, "run", [token], [].asMap()]
 
         to matches(specimen) :Bool:
             return token == specimen
@@ -244,13 +265,13 @@ def testMarleyWP(assert):
     wpParser.feedMany("2+3*4")
     assert.equal(wpParser.finished(), true)
 
-## Disabled until Transparent auditor available.
-# unittest([
-#     testMarleyParensFailed,
-#     testMarleyParensFinished,
-#     testMarleyParensPartial,
-#     testMarleyWP,
-# ])
+# Disabled until Transparent auditor available.
+unittest([
+    testMarleyParensFailed,
+    testMarleyParensFinished,
+    testMarleyParensPartial,
+    testMarleyWP,
+])
 
 def alphanumeric :Set[Char] := ([for c in ('a'..'z' | 'A'..'Z' | '0'..'9') c]).asSet()
 def escapeTable :Map[Char, Char] := ['n' => '\n']
@@ -422,15 +443,20 @@ object marley__quasiParser as DeepFrozen:
         def r := parser.results()[0]
         return object ruleSubstituter:
             to substitute(_):
-                return def reduced(head):
-                    return makeMarley(marleyQLReducer(r), head)
+                def grammar := marleyQLReducer(r)
+                return object marleyMaker:
+                    to run(startRule :Str):
+                        return makeMarley(grammar, startRule)
+
+                    to getGrammar():
+                        return grammar
 
 
 def testMarleyQPSingle(assert):
     def handwritten := ["breakfast" => [[[nonterminal, "eggs"],
                                          [terminal, exactly('&')],
                                          [nonterminal, "bacon"]]]]
-    def generated := marley`breakfast -> eggs '&' bacon`
+    def generated := marley`breakfast -> eggs '&' bacon`.getGrammar()
     assert.equal(handwritten, generated)
 
 def testMarleyQPDouble(assert):
@@ -441,9 +467,10 @@ def testMarleyQPDouble(assert):
     def generated := marley`
         empty ->
         nonempty -> empty
-    `
+    `.getGrammar()
     assert.equal(handwritten, generated)
 
+# XXX fix Transparent first ~ C.
 # unittest([
 #     testMarleyQPSingle,
 #     testMarleyQPDouble,
