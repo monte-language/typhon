@@ -1,3 +1,6 @@
+import "unittest" =~ [=> unittest]
+exports (elementsOf)
+
 def table :Str := "
 h                                                  he
 li be                               b  c  n  o  f  ne
@@ -11,15 +14,15 @@ fr ra    rf db sg bh hs mt ds rg cn    fl    lv
       ac th pa u  np pu am cm bk cf es fm md no lr
 "
 
-var elements :Set[Str] := [].asSet()
+var elements0 :Set[Str] := [].asSet()
 for line in table.split("\n"):
     for element in line.split(" "):
-        elements with= (element.trim())
-elements without= ("")
+        elements0 with= (element.trim())
+def elements :Set[Str] := elements0.without("")
 
 # traceln(`Elements: $elements`)
 
-def elementsOf(word :Str):
+def elementsOf(word :Str) as DeepFrozen:
     "Return a list of lists of elements which concatenate to the given word."
 
     if (word.size() == 0):
@@ -61,5 +64,3 @@ unittest([
     testElementsOfXenon,
     testElementsOfZero,
 ])
-
-[=> elementsOf]

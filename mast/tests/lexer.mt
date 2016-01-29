@@ -1,4 +1,6 @@
-def [=> makeMonteLexer] := ::"import".script("lib/monte/monte_lexer")
+import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
+import "unittest" =~ [=> unittest]
+exports ()
 
 def lex(s):
     def l := makeMonteLexer(s, "test")

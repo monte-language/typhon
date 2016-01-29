@@ -17,9 +17,11 @@
 # non-modular version leaks exponent information via the overall magnitude of
 # the intermediate results, which can be measured in the time taken to perform
 # each multiplication.
+import "unittest" =~ [=> unittest]
+import "bench" =~ [=> bench]
+exports (slowPow, slowModPow)
 
-
-def slowPow(x :Int, e :Int) :Int:
+def slowPow(x :Int, e :Int) :Int as DeepFrozen:
     var r0 := 1
     var r1 := x
     for i in (0..!(e.bitLength())).descending():
@@ -32,7 +34,7 @@ def slowPow(x :Int, e :Int) :Int:
     return r0
 
 
-def slowModPow(x :Int, e :Int, m :Int) :Int:
+def slowModPow(x :Int, e :Int, m :Int) :Int as DeepFrozen:
     var r0 := 1
     var r1 := x
     for i in (0..!(e.bitLength())).descending():
@@ -69,5 +71,3 @@ bench(fn {slowModPow(13, 0x7000000, 65537)},
 bench(fn {slowModPow(13, 0xfffffff, 65537)},
       "slowModPow(e=0xfffffff, m=65537)")
 
-
-[=> slowPow, => slowModPow]

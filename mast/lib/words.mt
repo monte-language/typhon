@@ -11,8 +11,9 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
-object Word:
+import "unittest" =~ [=> unittest]
+exports (Word)
+object Word as DeepFrozen:
     to get(width :Int):
         # Precomputed.
         def mask :Int := (1 << width) - 1
@@ -35,5 +36,3 @@ def testWord(assert):
     assert.equal(x, 255)
 
 unittest([testWord])
-
-[=> Word]

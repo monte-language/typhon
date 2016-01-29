@@ -1,6 +1,9 @@
-def makeMonteLexer := ::"import".script("lib/monte/monte_lexer", safeScope)["makeMonteLexer"]
-def parseModule := ::"import".script("lib/monte/monte_parser", safeScope)["parseModule"]
-def expand := ::"import".script("lib/monte/monte_expander")["expand"]
+import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
+import "lib/monte/monte_parser" =~ [=> parseModule]
+import "lib/monte/monte_expander" =~ [=> expand]
+import "unittest" =~ [=> unittest]
+exports ()
+
 def tests := [].diverge()
 
 def fixedPointSpecimens := [

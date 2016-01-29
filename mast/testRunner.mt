@@ -12,12 +12,13 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
 
         to receive([k, test]):
             def st :Str := M.toString(test)
-            return when (test<-(asserter(st))) ->
+            return when (test(asserter(st))) ->
                 if (lastSource != k):
                     stdout.receive(`$k$\n`)
                     lastSource := k
                 stdout.receive(`    $st    OK$\n`)
             catch p:
+                asserter.addFail()
                 if (lastSource != k):
                     stdout.receive(`$k$\n`)
                     lastSource := k
@@ -59,6 +60,9 @@ def makeAsserter() as DeepFrozen:
         to fails() :Int:
             return fails
 
+        to addFail():
+            fails += 1
+
         to errors() :Map[Str, List[Str]]:
             return errors.snapshot()
 
@@ -77,7 +81,6 @@ def makeAsserter() as DeepFrozen:
                     if (todo):
                         logIt(label, `SILENCED (todo): $message`)
                     else:
-                        fails += 1
                         throw(logIt(label, message))
 
                 to todo(reason :Str):

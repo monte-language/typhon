@@ -1,3 +1,5 @@
+import "unittest" =~ [=> unittest]
+exports ()
 def noFail(x):
     return x + 1
 

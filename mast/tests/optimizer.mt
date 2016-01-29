@@ -1,3 +1,6 @@
+import "unittest" =~ [=> unittest]
+exports ()
+
 # m`` has a flag which prevents mixing unexpanded ASTs. Humor it for now and
 # pre-expand all specimens. ~ C.
 def specimens := [for [this, that] in ([

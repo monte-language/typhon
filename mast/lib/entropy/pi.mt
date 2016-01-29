@@ -1,7 +1,6 @@
+import "lib/continued" =~ [=> continued :DeepFrozen]
 import "unittest" =~ [=> unittest]
 exports (makePiEntropy)
-
-def [=> continued :DeepFrozen] := ::"import"("lib/continued")
 
 
 def makePiEntropy() as DeepFrozen:

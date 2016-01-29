@@ -11,20 +11,24 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+import "lib/enum" =~ [=> makeEnum]
+import "unittest" =~ [=> unittest]
+import "bench" =~ [=> bench]
+exports (continued)
 
 # Continued fractions. Nearly all maths here comes from Gosper in the early
 # 70s. Nothing interesting here, aside from the wonders of maths.
 
-def [=> makeEnum] | _ := ::"import"("lib/enum", [=> unittest])
-
-object infinity:
+object infinity as DeepFrozen:
     to _printOn(out):
         out.print("∞")
 
-def [Finity, FINITE, INFINITE] := makeEnum(["finite", "infinite"])
+def [Finity :DeepFrozen,
+     FINITE :DeepFrozen,
+     INFINITE: DeepFrozen] := makeEnum(["finite", "infinite"])
 
 
-def makeDigitExtractor(machine, base :Int):
+def makeDigitExtractor(machine, base :Int) as DeepFrozen:
     var a :Int := 1
     var b :Int := 0
     var c :Int := 0
@@ -75,9 +79,9 @@ def makeDigitExtractor(machine, base :Int):
             return digit
 
 
-def makeMachine(feed):
+def makeMachine(feed) as DeepFrozen:
     "Make a machine for a generalized continued fraction.
-    
+
      `feed` should be a stateful function which returns a [p, q] pair on every
      call."
 
@@ -155,9 +159,9 @@ def makeMachine(feed):
             return makeDigitExtractor(machine, base)
 
 
-def makeRegularMachine(feed):
+def makeRegularMachine(feed) as DeepFrozen:
     "Make a machine for a regular continued fraction.
-    
+
      `feed` should be a stateful function which provides digits on every
      call."
 
@@ -169,7 +173,7 @@ def makeRegularMachine(feed):
             return super.forceFeed(p, 1)
 
 
-object continued:
+object continued as DeepFrozen:
     "Continued fraction arithmetic."
 
     to e():
@@ -277,6 +281,3 @@ def piBench():
     return [for _ in (0..!100) pi.produceDigit(null)]
 
 bench(piBench, "100 digits of pi")
-
-
-[=> continued]

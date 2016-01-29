@@ -57,8 +57,11 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
                                               subload(d, depMap, => collectTests,
                                                       => collectBenchmarks)}])
             when (deps) ->
+                def pre := collectedTests.size()
                 valMap[modname] := mod(loader)
-
+                if (collectTests):
+                    traceln(`collected ${collectedTests.size() - pre} tests`)
+                valMap[modname]
     def args := currentProcess.getArguments().slice(2)
     def usage := "Usage: loader run <modname> <args> | loader test <modname>"
     if (args.size() < 1):
@@ -102,6 +105,7 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
                 def asserter := makeAsserter()
                 def testDrain := makeTestDrain(stdout, unsealException, asserter)
 
+                traceln(`Running ${collectedTests.size()} tests.`)
                 when (runTests(collectedTests, testDrain, makeIterFount)) ->
                     def fails := asserter.fails()
                     stdout.receive(`${asserter.total()} tests run, $fails failures$\n`)

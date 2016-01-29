@@ -1,6 +1,8 @@
-def [=> makeMonteLexer] := ::"import".script("lib/monte/monte_lexer")
-def [=> parseExpression, => parsePattern, => parseModule] | _ := ::"import".script("lib/monte/monte_parser")
-def [=> term__quasiParser] | _ := ::"import".script("fun/termParser")
+import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
+import "lib/monte/monte_parser" =~ [=> parseExpression, => parsePattern, => parseModule]
+import "fun/termParser" =~ [=> term__quasiParser]
+import "unittest" =~ [=> unittest]
+exports ()
 
 def astFromTerm(t):
     if ((def data := t.getData()) != null):

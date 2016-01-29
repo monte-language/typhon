@@ -11,6 +11,8 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+import "unittest" =~ [=> unittest]
+exports (makeSingleUse)
 
 def makeSingleUse(thunk) as DeepFrozen:
     var called :Bool := false
@@ -34,5 +36,3 @@ def testSingleUse(assert):
     assert.equal(cell, 31)
 
 unittest([testSingleUse])
-
-[=> makeSingleUse]

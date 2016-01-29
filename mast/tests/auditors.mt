@@ -1,4 +1,5 @@
-
+import "unittest" =~ [=> unittest]
+exports ()
 def test_transparent_success(assert):
     def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
     def z :DeepFrozen := 1

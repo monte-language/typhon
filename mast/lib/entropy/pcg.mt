@@ -1,9 +1,9 @@
+import "lib/words" =~ [=> Word]
 exports (makePCG)
 
 # PCG: Permuted congruent generators, based on descriptions at
 # http://www.pcg-random.org/ .
 
-def [=> Word] | _ := ::"import".script("lib/words")
 
 def PCGBits :Int := 0x5851f42d4c957f2d
 def mask64 :Int := (2 ** 64) - 1
