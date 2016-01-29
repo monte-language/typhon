@@ -5,7 +5,8 @@ stdenv.mkDerivation {
     buildInputs = [ typhonVm mast ];
     buildPhase = ''
       ln -s ${typhonVm}/mt-typhon .
-      ./mt-typhon -l ${mast} -l ${mast}/mast -b ${mast}/loader bench $PWD ${mast}/mast/bench/nqueens
+      ./mt-typhon -l ${mast} -l ${mast}/mast -b ${mast}/loader bench \
+         ${mast}/mast/bench/{brot,nqueens,primeCount,richards}
       '';#*/
     installPhase = ''
       mkdir -p $out/nix-support/

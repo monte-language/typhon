@@ -111,9 +111,7 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
                         for error in errors:
                             stdout.receive(`~ $error$\n`)
                     fails.min(1)
-        match [=="bench", outDir] + modnames:
-            def outPath := outDir + "/bench.html"
-            traceln(`welp $outPath`)
+        match [=="bench"] + modnames:
             def someMods := promiseAllFulfilled(
                 [for modname in (modnames)
                  subload(modname, [].asMap().diverge(),
@@ -124,8 +122,8 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
             return when (someMods) ->
                 def [=> runBenchmarks] := benchRunner
                 when (runBenchmarks(collectedBenches, bench,
-                                    makeFileResource(outPath))) ->
-                    traceln(`Benchmark report written to $outPath.`)
+                                    makeFileResource("bench.html"))) ->
+                    traceln(`Benchmark report written to bench.html.`)
 
         match _:
             throw(usage)
