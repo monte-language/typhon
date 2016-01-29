@@ -95,24 +95,24 @@ def advance(position :Int, token, var table, ej) as DeepFrozen:
     var heads :List[Str] := []
 
     while (queue.size() != 0):
-        def [k, state] := queue.pop()
+        def [k, [head, rules, j, result]] := queue.pop()
         # traceln(`Twiddling $state with k $k at position $position`)
         # This switch cannot fail, since it only dispatches on the second
         # field of the state and is exhaustive.
-        switch (state):
-            match [head, ==[], j, result]:
+        switch (rules):
+            match []:
                 # Completion.
                 for oldState in table[j]:
                     if (oldState =~
                         [oldHead, [==[nonterminal, head]] + tail, i, tree]):
                         # traceln(`Completed $oldHead $i..$k`)
                         enqueue(k, [oldHead, tail, i, tree.with(result)])
-            match [_, [[==nonterminal, rule]] + _, _, _]:
+            match [[==nonterminal, rule]] + _:
                 # Prediction.
                 for production in table.getRuleNamed(rule):
                     # traceln(`Predicted $rule → $production`)
                     enqueue(k, [rule, production, k, [rule]])
-            match [head, [[==terminal, literal]] + tail, j, result]:
+            match [[==terminal, literal]] + tail:
                 # Scan.
                 # Scans can only take place when the token is in the position
                 # immediately following the position of the scanning rule.
@@ -320,9 +320,16 @@ def makeScanner(characters) as DeepFrozen:
                                 traceln(`Finally, $s`)
                                 return ["identifier", s]
                             scanner.advance()
+                    match =='<':
+                        scanner.expect('-')
+                        return "arrowhead"
+                    match =='←':
+                        return "arrowhead"
                     match =='-':
-                        scanner.expect('>')
-                        return "arrow"
+                        scanner.expect('<')
+                        return "arrowtail"
+                    match =='⤙':
+                        return "arrowtail"
                     match =='\'':
                         var c := scanner.nextChar()
                         if (c == '\\'):
@@ -357,6 +364,19 @@ def tag(t :Str) as DeepFrozen:
             return `tag $t`
 
 
+object exprHoleTag as DeepFrozen {}
+
+def unExprHole([==exprHoleTag, value]) as DeepFrozen:
+    return value
+
+object exprHole as DeepFrozen:
+    to matches(specimen) :Bool:
+        return specimen =~ [==exprHoleTag, _]
+
+    to error() :Str:
+        return "an expression hole"
+
+
 def marleyQLGrammar :Grammar := [
     "charLiteral" => [
         [[terminal, tag("character")]],
@@ -374,12 +394,21 @@ def marleyQLGrammar :Grammar := [
          [nonterminal, "alternation"]],
         [[nonterminal, "rule"]],
     ],
-    "arrow" => [
-        [[terminal, tag("arrow")]],
+    "arrowhead" => [
+        [[terminal, tag("arrowhead")]],
+    ],
+    "arrowtail" => [
+        [[terminal, tag("arrowtail")]],
+    ],
+    "reduction" => [
+        [[terminal, exprHole]],
     ],
     "production" => [
-        [[nonterminal, "identifier"], [nonterminal, "arrow"],
+        [[nonterminal, "identifier"], [nonterminal, "arrowhead"],
          [nonterminal, "alternation"]],
+        [[nonterminal, "identifier"], [nonterminal, "arrowhead"],
+         [nonterminal, "alternation"], [nonterminal, "arrowtail"],
+         [nonterminal, "reduction"]],
     ],
     "grammar" => [
         [[nonterminal, "production"], [nonterminal, "grammar"]],
@@ -456,7 +485,7 @@ def testMarleyQPSingle(assert):
     def handwritten := ["breakfast" => [[[nonterminal, "eggs"],
                                          [terminal, exactly('&')],
                                          [nonterminal, "bacon"]]]]
-    def generated := marley`breakfast -> eggs '&' bacon`.getGrammar()
+    def generated := marley`breakfast ← eggs '&' bacon`.getGrammar()
     assert.equal(handwritten, generated)
 
 def testMarleyQPDouble(assert):
@@ -465,8 +494,8 @@ def testMarleyQPDouble(assert):
         "nonempty" => [[[nonterminal, "empty"]]],
     ]
     def generated := marley`
-        empty ->
-        nonempty -> empty
+        empty ←
+        nonempty ← empty
     `.getGrammar()
     assert.equal(handwritten, generated)
 
