@@ -1,21 +1,20 @@
+import "lib/tubes" =~ [
+    => makeUTF8DecodePump :DeepFrozen,
+    => makeUTF8EncodePump :DeepFrozen,
+    => makePumpTube :DeepFrozen,
+]
+import "fun/repl" =~ [=> makeREPLTube :DeepFrozen]
+import "lib/help" =~ [=> help :DeepFrozen]
 exports (main)
 
-def [=> help :DeepFrozen] | _ := ::"import"("lib/help")
+
 
 # We *could* use lib/parsers/monte, but it's got a flaw; it can't interoperate
 # with eval() at the moment. Instead we just wrap eval() here. It's not like
 # the current MiM parser can deal with secondary prompts, anyway.
-def makeMonteParser(var environment, unsealException) as DeepFrozen:
+def makeMonteParser(&environment, unsealException) as DeepFrozen:
     var failure :NullOk[Str] := null
     var result := null
-
-    def playWith(module :Str, scope :Map) :Void:
-        "Import a module and bring it into the environment."
-        def map := ::"import"(module, scope)
-        for k :Str => v :DeepFrozen in map:
-            environment with= (k, &&v)
-            traceln(`Adding $k to environment`)
-    environment with= ("playWith", &&playWith)
 
     return object monteEvalParser:
         to getFailure() :NullOk[Str]:
@@ -55,40 +54,39 @@ def makeMonteParser(var environment, unsealException) as DeepFrozen:
 def reduce(result) as DeepFrozen:
     return result
 
-def main(=> Timer, => bench, => unittest,
-         => currentProcess, => currentRuntime, => currentVat,
-         => getAddrInfo,
+def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
+         => getAddrInfo, => packageLoader,
          => makeFileResource, => makeProcess,
          => makeStdErr, => makeStdIn, => makeStdOut,
          => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
          => unsealException, => unsafeScope) as DeepFrozen:
-    def [
-        => makeUTF8DecodePump :DeepFrozen,
-        => makeUTF8EncodePump :DeepFrozen,
-        => makePumpTube :DeepFrozen,
-    ] | _ := ::"import"("lib/tubes", [=> unittest])
 
-    def [=> makeREPLTube] | _ := ::"import".script("fun/repl")
-
+    var environment := null
+    def playWith(module :Str, scope :Map) :Void:
+        "Import a module and bring it into the environment."
+        def map := packageLoader."import"(module)
+        for k :Str => v :DeepFrozen in map:
+            environment with= (k, &&v)
+            traceln(`Adding $k to environment`)
     def baseEnvironment := safeScope | [
         # Typhon unsafe scope.
-        => &&Timer, => &&bench, => &&currentProcess, => &&currentRuntime, => &&currentVat,
+        => &&Timer, => &&currentProcess, => &&currentRuntime, => &&currentVat,
         => &&getAddrInfo,
         => &&makeFileResource, => &&makeProcess, => &&makeStdErr, => &&makeStdIn,
         => &&makeStdOut, => &&makeTCP4ClientEndpoint, => &&makeTCP4ServerEndpoint,
         => &&unsealException,
         # REPL-only fun.
-        => &&help, => &&unittest,
+        => &&help, => &&playWith
     ]
 
-    var environment := [for `&&@name` => binding in (baseEnvironment) name => binding]
+    environment := [for `&&@name` => binding in (baseEnvironment) name => binding]
 
-    def stdin := makeStdIn()<-flowTo(makePumpTube(makeUTF8DecodePump()))
+    def stdin := makeStdIn() <- flowTo(makePumpTube(makeUTF8DecodePump()))
     def stdout := makePumpTube(makeUTF8EncodePump())
-    stdout<-flowTo(makeStdOut())
-    def parser := makeMonteParser(environment, unsealException)
+    stdout <- flowTo(makeStdOut())
+    def parser := makeMonteParser(&environment, unsealException)
     def replTube := makeREPLTube(fn {parser.reset()}, reduce,
                                  "▲> ", "…> ", stdout)
-    stdin<-flowTo(replTube)
+    stdin <- flowTo(replTube)
 
     return 0

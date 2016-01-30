@@ -1,9 +1,10 @@
-def [=> makeEnum] | _ := ::"import"("lib/enum", [=> unittest])
+import "lib/enum" =~ [=> makeEnum]
+exports (makeREPLTube)
 
 # XXX these names are pretty lame
-def [REPLState, PS1, PS2] := makeEnum(["PS1", "PS2"])
+def [REPLState :DeepFrozen, PS1 :DeepFrozen, PS2 :DeepFrozen] := makeEnum(["PS1", "PS2"])
 
-def makeREPLTube(makeParser, reducer, ps1 :Str, ps2 :Str, drain):
+def makeREPLTube(makeParser, reducer, ps1 :Str, ps2 :Str, drain) as DeepFrozen:
     var replState : REPLState := PS1
     var parser := null
 
@@ -47,5 +48,3 @@ def makeREPLTube(makeParser, reducer, ps1 :Str, ps2 :Str, drain):
                     drain.receive(ps1)
                 match ==PS2:
                     drain.receive(ps2)
-
-[=> makeREPLTube]

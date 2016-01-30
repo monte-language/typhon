@@ -22,6 +22,11 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
             return def benchBucket(aBench, name :Str):
                 collectedBenches.push([`$locus: $name`, aBench])
 
+    object loader:
+            to "import"(name):
+                traceln(`import requested: $name`)
+                return valMap[name]
+
     def subload(modname, depMap,
                 => collectTests := false,
                 => collectBenchmarks := false):
@@ -39,10 +44,6 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
             else:
                 return valMap["bench"] := ["bench" => fn _, _ {null}]
 
-        object loader:
-            to "import"(name):
-                traceln(`import requested: $name`)
-                return valMap[name]
         def fname := _findTyphonFile(modname)
         if (fname == null):
             throw(`Unable to locate $modname`)
@@ -76,7 +77,7 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
             def excludes := ["typhonEval", "_findTyphonFile", "bench"]
             def unsafeScopeValues := [for `&&@n` => &&v in (unsafeScope)
                                       if (!excludes.contains(n))
-                                      n => v]
+                                      n => v].with("packageLoader", loader)
             return when (exps) ->
                 def [=> main] | _ := exps
                 traceln(`loaded, running`)
