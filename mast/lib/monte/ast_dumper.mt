@@ -1,4 +1,5 @@
-def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8", safeScope | [=> &&bench])
+import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
+exports (dump)
 
 def astCodes :DeepFrozen := [
     "LiteralExpr" => 10,
@@ -110,6 +111,3 @@ def dump(item, write) as DeepFrozen:
                 def nodeArgs := arglist.slice(0, arglist.size() - 1)
                 for a in nodeArgs:
                     dump(a, write)
-
-
-[=> dump]

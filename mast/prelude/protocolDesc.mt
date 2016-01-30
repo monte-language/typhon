@@ -1,3 +1,5 @@
+exports (_makeMessageDesc, _makeParamDesc, _makeProtocolDesc)
+
 def _makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
     "Describe a parameter."
 
@@ -158,5 +160,3 @@ object _makeProtocolDesc as DeepFrozen:
                 throw("Can't audit with this object")
 
         return [protocolDesc, protocolDescStamp]
-
-[=> _makeMessageDesc, => _makeParamDesc, => _makeProtocolDesc]

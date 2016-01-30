@@ -16,6 +16,8 @@ import "tests/proptests" =~ _
 import "lib/words" =~ _
 import "fun/elements" =~ _
 import "tests/auditors" =~ _
+import "tests/region" =~ _
+import "tests/b" =~ _
 import "tests/fail-arg" =~ _
 # import "tests/lexer" =~ _
 # import "tests/parser" =~ _
@@ -24,12 +26,12 @@ import "tests/fail-arg" =~ _
 import "lib/continued" =~ _
 exports ()
 
+null
+# ::"import".script("tests/flexMap")
+# ::"import".script("lib/paths")
+# ::"import".script("lib/irc/user")
+# ::"import".script("lib/monte/monte_optimizer")
+# ::"import".script("lib/netstring")
+# ::"import".script("lib/parsers/html")
+# ::"import".script("lib/cache")
 
-::"import".script("tests/flexMap")
-::"import".script("lib/paths")
-::"import".script("lib/irc/user")
-::"import".script("lib/monte/monte_optimizer")
-::"import".script("lib/netstring")
-::"import".script("lib/parsers/html")
-::"import".script("lib/cache")
-::"import".script("lib/codec/utf8")

@@ -1,8 +1,8 @@
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 exports (main)
 
 def unittest(_) {null}
 
-def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8", [=> &&unittest])
 def [=> nullPump :DeepFrozen,
      => makePumpTube :DeepFrozen,
      => chain :DeepFrozen,

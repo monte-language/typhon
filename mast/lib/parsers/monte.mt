@@ -1,13 +1,9 @@
-def scope := safeScope | [=> &&bench]
-def [=> dump :DeepFrozen] | _ := ::"import".script("lib/monte/ast_dumper", scope)
-def [=> makeMonteLexer :DeepFrozen] | _ := ::"import".script("lib/monte/monte_lexer",
-                                                  scope)
-def [=> parseExpression :DeepFrozen] | _ := ::"import".script("lib/monte/monte_parser",
-                                                   scope)
-def [=> expand :DeepFrozen] | _ := ::"import".script("lib/monte/monte_expander",
-                                          scope)
-def [=> optimize :DeepFrozen] | _ := ::"import".script("lib/monte/monte_optimizer",
-                                            scope)
+import "lib/monte/ast_dumper" =~ [=> dump :DeepFrozen]
+import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
+import "lib/monte/monte_parser" =~ [=> parseExpression :DeepFrozen]
+import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
+import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
+exports (makeMonteParser)
 
 def makeMonteParser(inputName) as DeepFrozen:
     var failure := null
@@ -46,4 +42,4 @@ def makeMonteParser(inputName) as DeepFrozen:
             dump(result, fn bs {data += bs})
             return data
 
-[=> makeMonteParser]
+

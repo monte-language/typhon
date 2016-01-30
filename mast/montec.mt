@@ -1,7 +1,17 @@
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
+import "lib/monte/ast_dumper" =~ [=> dump :DeepFrozen]
+import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
+import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
+import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
+import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
+import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
+import "lib/tubes" =~ [=> makeUTF8EncodePump :DeepFrozen, => makePumpTube :DeepFrozen]
+import "lib/monte/monte_verifier" =~ [=> findUndefinedNames :DeepFrozen]
+
 exports (main)
 
 
-def parseArguments([processName, scriptName] + var argv) as DeepFrozen:
+def parseArguments(var argv) as DeepFrozen:
     var useMixer :Bool := false
     var useNewFormat :Bool := true
     var arguments :List[Str] := []
@@ -30,22 +40,10 @@ def parseArguments([processName, scriptName] + var argv) as DeepFrozen:
         to arguments() :List[Str]:
             return arguments
 
-def main(=> Timer, => currentProcess, => makeFileResource, => makeStdOut,
-         => unsealException, => bench, => unittest) as DeepFrozen:
-    def scope := safeScope | [=> &&bench]
-    def [=> dump :DeepFrozen] := ::"import".script("lib/monte/ast_dumper", scope)
-    def [=> UTF8 :DeepFrozen] := ::"import".script("lib/codec/utf8", scope)
-    def [=> makeMASTContext :DeepFrozen] := ::"import"("lib/monte/mast", [=> UTF8])
-    def makeMonteLexer :DeepFrozen := ::"import".script("lib/monte/monte_lexer", scope)["makeMonteLexer"]
-    def parseModule :DeepFrozen := ::"import".script("lib/monte/monte_parser", scope)["parseModule"]
-    def [=> expand :DeepFrozen] := ::"import".script("lib/monte/monte_expander", scope)
-    def [=> optimize :DeepFrozen] := ::"import".script("lib/monte/monte_optimizer", scope)
-    def [=> makeUTF8EncodePump :DeepFrozen,
-         => makePumpTube :DeepFrozen,
-    ] | _ := ::"import"("lib/tubes", [=> unittest])
-    def [=> findUndefinedNames :DeepFrozen] | _ := ::"import"("lib/monte/monte_verifier")
+def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
+         => unsealException) as DeepFrozen:
 
-    def config := parseArguments(currentProcess.getArguments())
+    def config := parseArguments(argv)
 
     def [inputFile, outputFile] := config.arguments()
 

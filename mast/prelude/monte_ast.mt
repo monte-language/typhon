@@ -1,3 +1,6 @@
+import "boot" =~ [=> DeepFrozenStamp, => TransparentStamp, => KernelAstStamp]
+exports (astBuilder)
+
 def MONTE_KEYWORDS :List[Str] := [
 "as", "bind", "break", "catch", "continue", "def", "else", "escape",
 "exit", "extends", "exports", "finally", "fn", "for", "guards", "if",
@@ -2447,5 +2450,3 @@ object astBuilder as DeepFrozenStamp:
         return makeQuasiParserExpr(name, quasis, span)
     to QuasiParserPattern(name, quasis, span):
         return makeQuasiParserPattern(name, quasis, span)
-
-[=> astBuilder]

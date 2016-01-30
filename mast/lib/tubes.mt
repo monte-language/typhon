@@ -1,3 +1,4 @@
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 import "unittest" =~ [=> unittest]
 exports (Pump, Unpauser, Fount, Drain, Tube,
          nullPump,
@@ -212,8 +213,6 @@ def makeStatefulPump(machine) :Pump as DeepFrozen:
                 size := newSize
 
             return machine.results()
-
-def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
 
 def makeUTF8DecodePump() :Pump as DeepFrozen:
     var buf :Bytes := b``

@@ -1,6 +1,5 @@
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 exports (runBenchmarks)
-
-def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
 
 def benchmarks :List[Str] := [
     "brot",

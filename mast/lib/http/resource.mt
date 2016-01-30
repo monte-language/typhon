@@ -1,3 +1,4 @@
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 exports (smallBody,
          notFoundResource,
          makeDebugResource,
@@ -5,7 +6,6 @@ exports (smallBody,
          makeResourceApp,
          main)
 
-def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
 def [=> tag :DeepFrozen] | _ := ::"import"("lib/http/tag")
 
 

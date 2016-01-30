@@ -79,7 +79,8 @@ testVM: default
 
 testMast: default mast infer mast/tests/lexer.mast mast/tests/parser.mast \
 	mast/tests/auditors.mast mast/tests/fail-arg.mast mast/tests/expander.mast \
-	mast/tests/optimizer.mast mast/tests/flexMap.mast mast/tests/proptests.mast
+	mast/tests/optimizer.mast mast/tests/flexMap.mast mast/tests/proptests.mast \
+        mast/tests/b.mast mast/tests/region.mast
 	$(MT_TYPHON) -l mast loader test all-tests
 
 test: testVM testMast
@@ -125,7 +126,7 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 
 %.mast: %.mt
 	@ echo "MONTEC $<"
-	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot boot/montec -mix -format mast $< $@ # 2> /dev/null
+	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -mix -format mast $< $@ # 2> /dev/null
 
 clean:
 	@ echo "CLEAN"

@@ -1,3 +1,5 @@
+exports (parseModule, parseExpression, parsePattern)
+
 def spanCover(left, right) as DeepFrozen:
     if (left == null || right == null):
         return null
@@ -1424,6 +1426,3 @@ def parseModule(lex, builder, err) as DeepFrozen:
 
 def parsePattern(lex, builder, err) as DeepFrozen:
     return parseMonte(lex, builder, "pattern", err)
-
-
-[=> parseModule, => parseExpression, => parsePattern]

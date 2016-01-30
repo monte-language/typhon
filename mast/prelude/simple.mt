@@ -11,6 +11,9 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+import "boot" =~ [=> DeepFrozenStamp]
+import "unittest" =~ [=> unittest]
+exports (simple__quasiParser)
 
 object LITERAL {}
 object PATTERN_HOLE {}
@@ -177,5 +180,3 @@ unittest([
     testQuasiPatternEmptyTail,
     testSampleIRCLine,
 ])
-
-[=> simple__quasiParser]

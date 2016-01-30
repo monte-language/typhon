@@ -1,19 +1,10 @@
-
-def bench(_, _) as DeepFrozen {null}
-
-def scope := safeScope | [=> &&bench]
-
-def [=> makeMonteParser :DeepFrozen] | _ := getMonteFile("lib/parsers/monte",
-                                                   scope)
-def [=> makeMonteLexer :DeepFrozen] | _ := getMonteFile("lib/monte/monte_lexer",
-                                                  scope)
-def [=> parseExpression :DeepFrozen] | _ := getMonteFile("lib/monte/monte_parser",
-                                                   scope)
-def [=> expand :DeepFrozen] | _ := getMonteFile("lib/monte/monte_expander",
-                                          scope)
-def [=> optimize :DeepFrozen] | _ := getMonteFile("lib/monte/monte_optimizer",
-                                            scope)
-def [=> dump :DeepFrozen] | _ := getMonteFile("lib/monte/ast_dumper", scope)
+import "lib/parsers/monte" =~ [=> makeMonteParser :DeepFrozen]
+import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
+import "lib/monte/monte_parser" =~ [=> parseExpression :DeepFrozen]
+import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
+import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
+import "lib/monte/ast_dumper" =~ [=> dump :DeepFrozen]
+exports (m__quasiParser, eval)
 
 def Transparent :DeepFrozen := TransparentStamp
 
@@ -218,7 +209,7 @@ object m__quasiParser as DeepFrozen:
 
 object eval as DeepFrozen:
     "Evaluate Monte source.
-    
+
      This object respects POLA and grants no privileges whatsoever to
      evaluated code. To grant a safe scope, pass `safeScope`."
 
@@ -244,5 +235,3 @@ object eval as DeepFrozen:
             var data := b``
             dump(ast, fn bs {data += bs})
             return typhonEval.evalToPair(data, environment)
-
-[=> m__quasiParser, => eval]

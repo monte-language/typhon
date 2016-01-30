@@ -1,3 +1,5 @@
+exports (makeMonteLexer)
+
 def regionToSet(r):
     return [for i in (r) i].asSet()
 
@@ -780,6 +782,3 @@ object makeMonteLexer as DeepFrozen:
 
     to holes():
         return [VALUE_HOLE, PATTERN_HOLE]
-
-
-[=> makeMonteLexer]

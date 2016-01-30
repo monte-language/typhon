@@ -14,7 +14,7 @@
 
 def [=> strToInt] | _ := ::"import".script("lib/atoi")
 def [=> makeEnum] | _ := ::"import"("lib/enum", [=> unittest])
-def [=> UTF8] | _ := ::"import".script("lib/codec/utf8")
+def [=> UTF8] | _ := ::"import"("lib/codec/utf8")
 def [=> nullPump,
      => makeMapPump,
      => makeStatefulPump,

@@ -626,14 +626,7 @@ def promiseAllFulfilled(vows) as DeepFrozenStamp:
     return p
 
 
-def scopeAsDF(scope):
-    return [for k => v in (scope)
-            "&&" + k => (def v0 :DeepFrozen := v; &&v0)]
-
-# New approach to importing the rest of the prelude: Collate the entirety of
-# the module and boot scope into a single map which is then passed as-is to
-# the other modules.
-var preludeScope := scopeAsDF([
+def scopeNames := [
     => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
     => Int, => List, => Map, => NullOk, => Near, => Pair, => Same, => Set,
     => Selfless, => Str, => SubrangeGuard, => Void,
@@ -649,22 +642,38 @@ var preludeScope := scopeAsDF([
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
     => M, => Ref, => ::"import", => throw, => typhonEval, => promiseAllFulfilled,
-    => makeLazySlot, => unittest, => DeepFrozenStamp,
-])
+    => makeLazySlot]
+
+def scopeAsDF(scope):
+    return [for k => v in (scope)
+            "&&" + k => (def v0 :DeepFrozen := v; &&v0)]
+
+
+var preludeScope := scopeAsDF(scopeNames)
+def preludeStamps := [=> DeepFrozenStamp, => TransparentStamp, => KernelAstStamp]
+def dependencies := [].asMap().diverge()
+object stubLoader:
+    to "import"(name):
+        if (name == "boot"):
+            return preludeStamps
+        if (name == "unittest"):
+            return ["unittest" => fn _ {null}]
+        if (name == "bench"):
+            return ["bench" => fn _, _ {null}]
+        return dependencies[name]
+
 
 def loadit(name, scope):
     def ast := getMonteFile(name)
-    return typhonEval.fromAST(ast, scope, name)
+    def m := typhonEval.fromAST(ast, scope, name)
+    return m(stubLoader)
+    re
 
 def importIntoScope(name, moduleScope):
     preludeScope |= scopeAsDF(loadit(name, moduleScope))
 
 # AST (needed for auditors).
-importIntoScope(
-    "prelude/monte_ast",
-    preludeScope | scopeAsDF([=> DeepFrozenStamp,
-                              => TransparentStamp,
-                              => KernelAstStamp]))
+importIntoScope("prelude/monte_ast", preludeScope)
 
 # Simple QP.
 importIntoScope("prelude/simple",
@@ -680,18 +689,23 @@ importIntoScope("prelude/protocolDesc",
 # Upgrade all guards with interfaces. These are the core-most guards; they
 # cannot be uncalled or anything like that.
 
-preludeScope := scopeAsDF(
-    getMonteFile("prelude/coreInterfaces",
-                 preludeScope | scopeAsDF([=> DeepFrozenStamp])
-    )) | preludeScope
+preludeScope := scopeAsDF(loadit("prelude/coreInterfaces", preludeScope)) | preludeScope
 
 # Spaces and regions require simple QP. They also upgrade the guards.
-preludeScope := scopeAsDF(
-    getMonteFile("prelude/region",
+preludeScope := scopeAsDF(loadit("prelude/region",
                   preludeScope | [=> &&TransparentStamp])) | preludeScope
 
 # b__quasiParser desires spaces.
 importIntoScope("prelude/b", preludeScope)
+
+# Parsing stack. These don't directly contribute to scope but are loaded by m.
+dependencies["lib/monte/monte_lexer"] := loadit("lib/monte/monte_lexer", preludeScope)
+dependencies["lib/monte/monte_parser"] := loadit("lib/monte/monte_parser", preludeScope)
+dependencies["lib/monte/monte_expander"] := loadit("lib/monte/monte_expander", preludeScope)
+dependencies["lib/monte/monte_optimizer"] := loadit("lib/monte/monte_optimizer", preludeScope)
+dependencies["lib/codec/utf8"] := loadit("lib/codec/utf8", preludeScope)
+dependencies["lib/monte/ast_dumper"] := loadit("lib/monte/ast_dumper", preludeScope)
+dependencies["lib/parsers/monte"] := loadit("lib/parsers/monte", preludeScope)
 
 # The big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This

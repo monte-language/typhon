@@ -1,4 +1,5 @@
 import "unittest" =~ [=> unittest]
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 import "lib/atoi" =~ [=> strToInt :DeepFrozen]
 exports (makeHTTPEndpoint)
 
@@ -16,7 +17,6 @@ exports (makeHTTPEndpoint)
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
 def [=> makeMapPump :DeepFrozen,
      => makePumpTube :DeepFrozen,
      => chain :DeepFrozen,

@@ -1,3 +1,4 @@
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 exports (main)
 
 # Copyright (C) 2014 Google Inc. All rights reserved.
@@ -19,7 +20,6 @@ def unittest(_):
 
 def [=> makeGAI :DeepFrozen] | _ := ::"import"("lib/gai")
 def [=> bytesToInt :DeepFrozen] | _ := ::"import".script("lib/atoi")
-def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8")
 def [=> makeEnum :DeepFrozen] | _ := ::"import"("lib/enum", [=> unittest])
 def [=> makeMapPump :DeepFrozen,
      => makePumpTube :DeepFrozen,

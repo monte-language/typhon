@@ -44,6 +44,8 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
                 traceln(`import requested: $name`)
                 return valMap[name]
         def fname := _findTyphonFile(modname)
+        if (fname == null):
+            throw(`Unable to locate $modname`)
         def loadModuleFile():
             traceln(`reading file $fname`)
             def code := makeFileResource(fname).getContents()

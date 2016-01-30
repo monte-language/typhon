@@ -11,6 +11,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+exports (b__quasiParser)
 
 object bytePattern as DeepFrozen:
     pass
@@ -21,7 +22,7 @@ object byteValue as DeepFrozen:
 
 object b__quasiParser as DeepFrozen:
     "A quasiparser for `Bytes`.
-    
+
      This object behaves like `simple__quasiParser`; it takes some textual
      descriptions of bytes and returns a bytestring. It can interpolate
      objects which coerce to `Bytes` and `Str`.
@@ -125,32 +126,3 @@ object b__quasiParser as DeepFrozen:
                         match bs :Bytes:
                             rv += bs
                 return rv
-
-
-def testQuasiValues(assert):
-    def v := b`value`
-    assert.equal(b`such value`, b`such $v`)
-
-def testQuasiPatterns(assert):
-    def v := b`123`
-
-    def b`@{head}23` := v
-    assert.equal(head, b`1`)
-
-    def b`1@{middle}3` := v
-    assert.equal(middle, b`2`)
-
-    def b`12@{tail}` := v
-    assert.equal(tail, b`3`)
-
-    def sep := b`\r\n`
-    def b`@car$sep@cdr` := b`first\r\nsecond\r\nthird`
-    assert.equal(car, b`first`)
-    assert.equal(cdr, b`second\r\nthird`)
-
-unittest([
-    testQuasiValues,
-    testQuasiPatterns,
-])
-
-[=> b__quasiParser]

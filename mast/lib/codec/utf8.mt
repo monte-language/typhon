@@ -12,17 +12,10 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+exports (UTF8)
 
 def chr(i :Int) :Char as DeepFrozen:
     return '\x00' + i
-
-def testChr(assert):
-    assert.equal('\x00', chr(0x00))
-    assert.equal('\n', chr(0x0a))
-    # XXX assert.equal('▲', chr(0x25b2))
-    assert.equal('\u25b2', chr(0x25b2))
-
-unittest([testChr])
 
 
 def decodeCore(var bs :Bytes, ej) as DeepFrozen:
@@ -75,25 +68,6 @@ def decodeCore(var bs :Bytes, ej) as DeepFrozen:
             offset += 1
     return [rv, bs.slice(offset)]
 
-def testDecodeCore(assert):
-    # One byte.
-    assert.equal(["\x00", b``], decodeCore(b`$\x00`, null))
-    assert.equal(["\n", b``], decodeCore(b`$\x0a`, null))
-    # One byte as leftover.
-    assert.equal(["", b`$\xc3`], decodeCore(b`$\xc3`, null))
-    # Two bytes.
-    # XXX é
-    assert.equal(["\u00e9", b``], decodeCore(b`$\xc3$\xa9`, null))
-    # Three bytes.
-    # XXX ▲
-    assert.equal(["\u25b2", b``], decodeCore(b`$\xe2$\x96$\xb2`, null))
-    # Four bytes.
-    # XXX this codepoint is generally not in any font
-    assert.equal(["\U0001f3d4", b``],
-                 decodeCore(b`$\xf0$\x9f$\x8f$\x94`, null))
-
-unittest([testDecodeCore])
-
 
 def encodeCore(c :Char) :Bytes as DeepFrozen:
     return _makeBytes.fromInts(switch (c.asInteger()) {
@@ -114,21 +88,6 @@ def encodeCore(c :Char) :Bytes as DeepFrozen:
                 0x80 | (i & 0x3f), ]
         }
     })
-
-def testEncodeCore(assert):
-    # One byte.
-    assert.equal(b`$\x00`, encodeCore('\x00'))
-    # Two bytes.
-    # XXX é
-    assert.equal(b`$\xc3$\xa9`, encodeCore('\u00e9'))
-    # Three bytes.
-    # XXX ▲
-    assert.equal(b`$\xe2$\x96$\xb2`, encodeCore('\u25b2'))
-    # Four bytes.
-    # XXX this codepoint is generally not in any font
-    assert.equal(b`$\xf0$\x9f$\x8f$\x94`, encodeCore('\U0001f3d4'))
-
-unittest([testEncodeCore])
 
 
 # The codec itself.
@@ -151,20 +110,6 @@ object UTF8 as DeepFrozen:
         for c in s:
             rv += encodeCore(c)
         return rv
-
-def testUTF8Decode(assert):
-    assert.ejects(fn ej {def via (UTF8.decode) x exit ej := b`$\xc3`})
-    assert.doesNotEject(
-        fn ej {def via (UTF8.decode) x exit ej := b`$\xc3$\xa9`})
-
-def testUTF8Encode(assert):
-    assert.ejects(fn ej {def via (UTF8.encode) x exit ej := 42})
-    assert.doesNotEject(fn ej {def via (UTF8.encode) x exit ej := "yes"})
-
-unittest([
-    testUTF8Decode,
-    testUTF8Encode,
-])
 
 # def encodeBench():
 #     def via (UTF8.encode) xs := "This is a test of the UTF-8 encoder… "
@@ -205,8 +150,3 @@ unittest([
 #     return xs + ys
 
 # bench(decodeBench, "UTF-8 decoding")
-
-
-[
-    => UTF8,
-]

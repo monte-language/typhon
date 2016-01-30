@@ -1,3 +1,5 @@
+exports (expand)
+
 # Maybe Python isn't so bad after all.
 object zip as DeepFrozen:
     match [=="run", iterables, _]:
@@ -1094,5 +1096,3 @@ def expand(node, builder, fail) as DeepFrozen:
     ast transform= (modPow)
 
     return ast
-
-[=> expand]

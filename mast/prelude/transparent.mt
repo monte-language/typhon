@@ -1,3 +1,5 @@
+import "boot" =~ [=> DeepFrozenStamp, => TransparentStamp]
+exports (Transparent)
 "
 Transparent guard and auditor factory.
 "
@@ -219,4 +221,3 @@ object Transparent as DeepFrozenStamp:
         def valueAuditor :Same[_valueAuditor] := _valueAuditor
         def serializer :Same[_serializer] := _serializer
         return [makerAuditor, &&valueAuditor, &&serializer]
-[=> Transparent]

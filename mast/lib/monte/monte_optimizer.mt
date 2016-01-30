@@ -1,3 +1,4 @@
+exports (optimize)
 # I don't know what this all is yet.
 
 def a :DeepFrozen := astBuilder
@@ -623,5 +624,3 @@ def optimize(var expr) as DeepFrozen:
     ])
     expr transform= (freeze)
     return expr
-
-[=> optimize]

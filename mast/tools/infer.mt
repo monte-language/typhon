@@ -1,16 +1,16 @@
-import "unittest" =~ [=> unittest := fn _ {null}]
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
+import "unittest" =~ [=> unittest]
 exports (main, makeInference)
 "Type inference for Monte."
 
 def bench(_, _) as DeepFrozen:
     null
 
-def [=> UTF8 :DeepFrozen] | _ := ::"import".script("lib/codec/utf8", [=> &&unittest])
 def [=> makeUTF8EncodePump :DeepFrozen,
      => makePumpTube :DeepFrozen,
 ] | _ := ::"import"("lib/tubes", [=> unittest])
-def [=> parseModule :DeepFrozen] | _ := ::"import".script("lib/monte/monte_parser")
-def [=> makeMonteLexer :DeepFrozen] | _ := ::"import".script("lib/monte/monte_lexer")
+def [=> parseModule :DeepFrozen] | _ := ::"import"("lib/monte/monte_parser")
+def [=> makeMonteLexer :DeepFrozen] | _ := ::"import"("lib/monte/monte_lexer")
 
 def [=> iterGoal :DeepFrozen,
      => satisfiable :DeepFrozen,
