@@ -1,3 +1,11 @@
+import "lib/tubes" =~ [=> makeMapPump :DeepFrozen,
+     => makePumpTube :DeepFrozen,
+     => chain :DeepFrozen,
+]
+import "lib/enum" =~ [=> makeEnum :DeepFrozen]
+import "lib/codec/percent" =~ [=> PercentEncoding :DeepFrozen]
+import "lib/codec" =~ [=> composeCodec :DeepFrozen]
+import "lib/record" =~ [=> makeRecord :DeepFrozen]
 import "unittest" =~ [=> unittest]
 import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 exports (makeHTTPEndpoint)
@@ -16,14 +24,6 @@ exports (makeHTTPEndpoint)
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import "lib/tubes" =~ [=> makeMapPump :DeepFrozen,
-     => makePumpTube :DeepFrozen,
-     => chain :DeepFrozen,
-]
-import "lib/enum" =~ [=> makeEnum :DeepFrozen]
-import "lib/codec/percent" =~ [=> PercentEncoding :DeepFrozen]
-import "lib/codec" =~ [=> composeCodec :DeepFrozen]
-import "lib/record" =~ [=> makeRecord :DeepFrozen]
 
 # Strange as it sounds, the percent encoding is actually *outside* the UTF-8
 # encoding!

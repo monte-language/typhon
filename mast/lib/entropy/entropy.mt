@@ -1,5 +1,3 @@
-import "unittest" =~ [=> unittest]
-exports (makeEntropy)
 
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
@@ -16,6 +14,7 @@ exports (makeEntropy)
 # under the License.
 
 import "lib/entropy/pool" =~  [=> makePool :DeepFrozen]
+import "unittest" =~ [=> unittest]
 exports (makeEntropy)
 
 def makeEntropy(generator) as DeepFrozen:

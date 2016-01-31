@@ -82,20 +82,6 @@ def Empty := makePredicateGuard(def pred(specimen) as DeepFrozenStamp {return sp
 def _mapEmpty := Empty
 
 
-def testIntGuard(assert):
-    assert.ejects(fn ej {def x :Int exit ej := 5.0})
-    assert.doesNotEject(fn ej {def x :Int exit ej := 42})
-
-def testEmptyGuard(assert):
-    assert.ejects(fn ej {def x :Empty exit ej := [7]})
-    assert.doesNotEject(fn ej {def x :Empty exit ej := []})
-
-unittest([
-    testIntGuard,
-    testEmptyGuard,
-])
-
-
 # Must come before List. Must come after Void and Bool.
 def _validateFor(flag :Bool) :Void as DeepFrozenStamp:
     "Ensure that `flag` is `true`.
@@ -286,19 +272,6 @@ object Map as DeepFrozenStamp:
         else:
             throw.eject(ej, "Not a Map guard")
 
-def testMapGuard(assert):
-    assert.ejects(fn ej {def x :Map exit ej := 42})
-    assert.doesNotEject(fn ej {def x :Map exit ej := [].asMap()})
-
-def testMapGuardIntStr(assert):
-    assert.ejects(fn ej {def x :Map[Int, Str] exit ej := ["lue" => 42]})
-    assert.doesNotEject(fn ej {def x :Map[Int, Str] exit ej := [42 => "lue"]})
-
-unittest([
-    testMapGuard,
-    testMapGuardIntStr,
-])
-
 object _NullOkStamp:
     to audit(audition):
         return true
@@ -346,28 +319,13 @@ object NullOk as DeepFrozenStamp:
         else:
             throw.eject(ej, "Not a NullOk guard")
 
-
-def testNullOkUnsubbed(assert):
-    assert.ejects(fn ej {def x :NullOk exit ej := 42})
-    assert.doesNotEject(fn ej {def x :NullOk exit ej := null})
-
-def testNullOkInt(assert):
-    assert.ejects(fn ej {def x :NullOk[Int] exit ej := "42"})
-    assert.doesNotEject(fn ej {def x :NullOk[Int] exit ej := 42})
-    assert.doesNotEject(fn ej {def x :NullOk[Int] exit ej := null})
-
-unittest([
-    testNullOkUnsubbed,
-    testNullOkInt,
-])
-
 object _PairGuardStamp:
     to audit(audition):
         return true
 
 object Pair as DeepFrozenStamp:
     "A guard which admits immutable pairs.
-    
+
      Pairs are merely lists of size two."
 
     to _printOn(out):
@@ -413,19 +371,6 @@ object Pair as DeepFrozenStamp:
             return specimen.getGuards()
         else:
             throw.eject(ej, "Not a Pair guard")
-
-def testPairGuard(assert):
-    assert.ejects(fn ej {def x :Pair exit ej := 42})
-    assert.doesNotEject(fn ej {def x :Pair exit ej := [6, 9]})
-
-def testPairGuardIntStr(assert):
-    assert.ejects(fn ej {def x :Pair[Int, Str] exit ej := ["lue", 42]})
-    assert.doesNotEject(fn ej {def x :Pair[Int, Str] exit ej := [42, "lue"]})
-
-unittest([
-    testPairGuard,
-    testPairGuardIntStr,
-])
 
 object _iterForever as DeepFrozenStamp:
     "Implementation of while-expression syntax."
@@ -505,29 +450,6 @@ object _suchThat as DeepFrozenStamp:
 
     to run(specimen, _):
         return [specimen, null]
-
-
-def testSuchThatTrue(assert):
-    def f(ej):
-        def x ? (true) exit ej := 42
-        assert.equal(x, 42)
-    assert.doesNotEject(f)
-
-def testSuchThatFalse(assert):
-    assert.ejects(fn ej {def x ? (false) exit ej := 42})
-
-unittest([
-    testSuchThatTrue,
-    testSuchThatFalse,
-])
-
-
-def testAnySubGuard(assert):
-    assert.ejects(fn ej {def x :Any[Int, Char] exit ej := "test"})
-    assert.doesNotEject(fn ej {def x :Any[Int, Char] exit ej := 42})
-    assert.doesNotEject(fn ej {def x :Any[Int, Char] exit ej := 'x'})
-
-unittest([testAnySubGuard])
 
 
 object _switchFailed as DeepFrozenStamp:
