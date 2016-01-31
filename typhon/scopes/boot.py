@@ -30,7 +30,6 @@ from typhon.objects.data import StrObject, unwrapBytes, wrapBool, unwrapStr
 from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
                                    DoubleGuard, IntGuard, StrGuard, VoidGuard)
 from typhon.objects.root import Object, audited, runnable
-from typhon.objects.tests import UnitTest
 
 EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
 FROMAST_3 = getAtom(u"fromAST", 3)
@@ -157,7 +156,7 @@ class GetMonteFile(Object):
         raise Refused(self, atom, args)
 
 
-def bootScope(paths, recorder, collectTests):
+def bootScope(paths, recorder):
     """
     "A beginning is the time for taking the most delicate care that the
      balances are correct."
@@ -181,5 +180,4 @@ def bootScope(paths, recorder, collectTests):
 
         u"getMonteFile": GetMonteFile(paths, recorder),
         u"typhonEval": TyphonEval(recorder),
-        u"unittest": UnitTest(u"<boot>", collectTests),
     })

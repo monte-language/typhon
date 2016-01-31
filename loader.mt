@@ -1,12 +1,6 @@
-# Once this is all hooked up we can rip module support out of the runtime and
-# the following line can go away.
-exports (main)
-
 def safeScopeBindings :DeepFrozen := [for `&&@n` => v in (safeScope) n => v]
 
-def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
-         => currentProcess, => unsafeScope, => unsealException, => Timer,
-         => makeStdOut, => bench) as DeepFrozen:
+def main():
 
     def valMap := [].asMap().diverge()
     def collectedTests := [].diverge()
@@ -125,3 +119,4 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
 
         match _:
             throw(usage)
+main()

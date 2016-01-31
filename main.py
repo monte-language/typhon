@@ -24,17 +24,15 @@ from typhon import rsodium, ruv
 from typhon.arguments import Configuration
 from typhon.debug import enableDebugPrint, TyphonJitHooks
 from typhon.errors import LoadFailed, UserException
-from typhon.importing import evaluateTerms, instantiateModule, obtainModule
+from typhon.importing import evaluateTerms, obtainModule
 from typhon.metrics import Recorder
 from typhon.objects.auditors import deepFrozenGuard
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapStr
 from typhon.objects.guards import anyGuard
-from typhon.objects.imports import Import, addImportToScope
 from typhon.objects.refs import resolution
 from typhon.objects.slots import finalBinding
-from typhon.objects.tests import TestCollector
 from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
 from typhon.scopes.boot import bootScope
@@ -56,8 +54,7 @@ def dirname(p):
 def loadPrelude(config, recorder, vat):
     scope = safeScope()
     # For the prelude (and only the prelude), permit the boot scope.
-    bootTC = TestCollector()
-    scope.update(bootScope(config.libraryPaths, recorder, bootTC))
+    scope.update(bootScope(config.libraryPaths, recorder))
     registerGlobals({u"Bool": scope[u"Bool"],
                      u"Bytes": scope[u"Bytes"],
                      u"Char": scope[u"Char"],
@@ -65,9 +62,6 @@ def loadPrelude(config, recorder, vat):
                      u"Int": scope[u"Int"],
                      u"Str": scope[u"Str"],
                      u"Void": scope[u"Void"]})
-
-    # Boot imports.
-    scope = addImportToScope(config.libraryPaths, scope, recorder, bootTC)
 
     code = obtainModule(config.libraryPaths, "prelude", recorder)
     with recorder.context("Time spent in prelude"):
@@ -150,32 +144,6 @@ class profiling(object):
         self.handle.close()
 
 
-def runModule(exports, scope):
-    """
-    Run a main entrypoint.
-    """
-
-    if not isinstance(exports, ConstMap):
-        return None
-
-    main = exports.objectMap.get(StrObject(u"main"), None)
-    if main is None:
-        return None
-
-    # XXX monteMap()
-    namedArgs = monteMap()
-    reflectedUnsafeScope = monteMap()
-    for k, b in scope.iteritems():
-        v = b.getValue()
-        namedArgs[StrObject(k)] = v
-        reflectedUnsafeScope[StrObject(u"&&" + k)] = b
-    rus = ConstMap(reflectedUnsafeScope)
-    reflectedUnsafeScope[StrObject(u"&&unsafeScope")] = finalBinding(
-        rus, anyGuard)
-    namedArgs[StrObject(u"unsafeScope")] = rus
-    return main.call(u"run", [], ConstMap(namedArgs))
-
-
 def cleanUpEverything():
     """
     Put back any ambient-authority mutable global state that we may have
@@ -237,21 +205,22 @@ def entryPoint(argv):
 
     scope = safeScope()
     scope.update(prelude)
-    collectTests = TestCollector()
     ss = scope.copy()
-    importer = Import(config.libraryPaths, ss, recorder, collectTests)
-    ss[u"import"] = finalBinding(
-        importer,
-        deepFrozenGuard)
-    # XXX monteMap()
     reflectedSS = monteMap()
     for k, b in ss.iteritems():
         reflectedSS[StrObject(u"&&" + k)] = b
     ss[u"safeScope"] = finalBinding(ConstMap(reflectedSS), deepFrozenGuard)
     reflectedSS[StrObject(u"&&safeScope")] = ss[u"safeScope"]
     scope[u"safeScope"] = ss[u"safeScope"]
-    scope[u"import"] = ss[u"import"]
-    scope.update(unsafeScope(config, collectTests))
+    scope.update(unsafeScope(config))
+    reflectedUnsafeScope = monteMap()
+    unsafeScopeDict = {}
+    for k, b in scope.iteritems():
+        reflectedUnsafeScope[StrObject(u"&&" + k)] = b
+        unsafeScopeDict[k] = b
+    rus = finalBinding(ConstMap(reflectedUnsafeScope), anyGuard)
+    reflectedUnsafeScope[StrObject(u"&&unsafeScope")] = rus
+    unsafeScopeDict[u"unsafeScope"] = rus
     try:
         code = obtainModule([""], config.argv[1], recorder)
     except LoadFailed as lf:
@@ -272,32 +241,17 @@ def entryPoint(argv):
         result = NullObject
         with recorder.context("Time spent in vats"):
             with scopedVat(vat):
-                result = evaluateTerms([code], ss)
+                result = evaluateTerms([code], unsafeScopeDict)
         if result is None:
             return 1
 
         # Exit status code.
         exitStatus = 0
-
-        # Were we started with a script or a module? Check to see if it's a
-        # module. Note that this'll instantiate the module.
-        with scopedVat(vat):
-            debug_print("Instantiating module...")
-            try:
-                module = instantiateModule(importer, result)
-                # Hey, we've got a module! Run it.
-                ruv.update_time(uv_loop)
-                debug_print("Running module...")
-                rv = runModule(module, scope)
-            except UserException as ue:
-                debug_print("Caught exception while instantiating:",
-                            ue.formatError())
-                return 1
         # Update loop timing information.
         ruv.update_time(uv_loop)
         try:
             runUntilDone(vatManager, uv_loop, recorder)
-            rv = resolution(rv) if rv is not None else NullObject
+            rv = resolution(result) if result is not None else NullObject
             if isinstance(rv, IntObject):
                 exitStatus = rv.getInt()
         except SystemExit:
