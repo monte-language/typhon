@@ -46,9 +46,8 @@ $(boot_objects): boot/%: mast/%
 	@ echo "BOOT $<"
 	@ cp $< $@
 
-mast: mast/lib/atoi.mast mast/lib/enum.mast mast/lib/record.mast \
-	mast/lib/netstring.mast \
-	mast/lib/regex.mast mast/lib/words.mast \
+mast: mast/lib/enum.mast mast/lib/record.mast \
+	mast/lib/netstring.mast mast/lib/words.mast \
 	mast/lib/continued.mast \
 	mast/lib/tokenBucket.mast mast/lib/loopingCall.mast mast/lib/singleUse.mast \
 	mast/lib/cache.mast mast/lib/paths.mast \
@@ -97,7 +96,7 @@ entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 	mast/lib/entropy/xorshift.mast mast/lib/entropy/pi.mast \
 	mast/lib/entropy/pcg.mast
 
-parsers: mast/lib/parsers/http.mast mast/lib/parsers/html.mast \
+parsers: mast/lib/parsers/html.mast \
 	mast/lib/parsers/marley.mast mast/lib/parsers/monte.mast \
 	mast/lib/parsers/regex.mast
 

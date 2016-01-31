@@ -24,15 +24,12 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
 
     object loader:
             to "import"(name):
-                traceln(`import requested: $name`)
                 return valMap[name]
 
     def subload(modname, depMap,
                 => collectTests := false,
                 => collectBenchmarks := false):
-        traceln(`Entering $modname`)
         if (modname == "unittest"):
-            traceln(`unittest caught`)
             if (collectTests):
                 trace(`test collector invoked`)
                 return valMap["unittest"] := ["unittest" => testCollector[modname]]
@@ -48,7 +45,6 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
         if (fname == null):
             throw(`Unable to locate $modname`)
         def loadModuleFile():
-            traceln(`reading file $fname`)
             def code := makeFileResource(fname).getContents()
             def mod := when (code) -> {typhonEval(code, safeScopeBindings)}
             depMap[modname] := mod
@@ -56,9 +52,8 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
         def mod := depMap.fetch(modname, loadModuleFile)
         return when (mod) ->
             def deps := promiseAllFulfilled([for d in (mod.dependencies())
-                                             {traceln(`load $d`);
                                               subload(d, depMap, => collectTests,
-                                                      => collectBenchmarks)}])
+                                                      => collectBenchmarks)])
             when (deps) ->
                 def pre := collectedTests.size()
                 valMap[modname] := mod(loader)
@@ -71,16 +66,13 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
         throw(usage)
     switch (args):
         match [=="run", modname] + subargs:
-            traceln(`starting load $modname $subargs`)
             def exps := subload(modname, [].asMap().diverge())
-            traceln(`loaded $exps`)
             def excludes := ["typhonEval", "_findTyphonFile", "bench"]
             def unsafeScopeValues := [for `&&@n` => &&v in (unsafeScope)
                                       if (!excludes.contains(n))
                                       n => v].with("packageLoader", loader)
             return when (exps) ->
                 def [=> main] | _ := exps
-                traceln(`loaded, running`)
                 M.call(main, "run", [subargs], unsafeScopeValues)
         match [=="test"] + modnames:
             def someMods := promiseAllFulfilled(
@@ -108,7 +100,6 @@ def main(=> _findTyphonFile, => makeFileResource, => typhonEval,
                 def asserter := makeAsserter()
                 def testDrain := makeTestDrain(stdout, unsealException, asserter)
 
-                traceln(`Running ${collectedTests.size()} tests.`)
                 when (runTests(collectedTests, testDrain, makeIterFount)) ->
                     def fails := asserter.fails()
                     stdout.receive(`${asserter.total()} tests run, $fails failures$\n`)

@@ -1,11 +1,6 @@
-import "lib/atoi" =~ _
 import "lib/entropy/pool" =~ _
 import "lib/enum" =~ _
-# Needs fake Timer.
-# ::"import".script("lib/irc/client")
 import "lib/singleUse" =~ _
-## Depends on derp, not in the repo.
-# ::"import".script("lib/parsers/http")
 import "lib/parsers/marley" =~ _
 import "lib/codec/percent" =~ _
 import "lib/record" =~ _
@@ -19,19 +14,18 @@ import "tests/auditors" =~ _
 import "tests/region" =~ _
 import "tests/b" =~ _
 import "tests/fail-arg" =~ _
-# import "tests/lexer" =~ _
-# import "tests/parser" =~ _
-# import "tests/expander" =~ _
-# import "tests/optimizer" =~ _
+import "tests/lexer" =~ _
+import "tests/parser" =~ _
+import "tests/expander" =~ _
+import "tests/optimizer" =~ _
 import "lib/continued" =~ _
+import "tests/flexMap" =~ _
+import "lib/paths" =~ _
+import "lib/irc/user" =~ _
+import "lib/netstring" =~ _
+import "lib/parsers/html" =~ _
+import "lib/cache" =~ _
 exports ()
 
 null
-# ::"import".script("tests/flexMap")
-# ::"import".script("lib/paths")
-# ::"import".script("lib/irc/user")
-# ::"import".script("lib/monte/monte_optimizer")
-# ::"import".script("lib/netstring")
-# ::"import".script("lib/parsers/html")
-# ::"import".script("lib/cache")
 

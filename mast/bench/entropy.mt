@@ -1,10 +1,8 @@
 import "bench" =~ [=> bench]
+import "lib/entropy/pcg" =~ [=> makePCG]
+import "lib/entropy/entropy" =~ [=> makeEntropy]
 exports ()
-
-
-def [=> makePCG] | _ := ::"import"("lib/entropy/pcg", [=> unittest])
-def [=> makeEntropy] | _ := ::"import"("lib/entropy/entropy", [=> unittest])
-
+c
 def e := makeEntropy(makePCG(0x12345678, 0))
 bench(e.nextBool, "entropy nextBool")
 bench(fn {e.nextInt(4096)}, "entropy nextInt (best case)")

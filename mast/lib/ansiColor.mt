@@ -1,3 +1,5 @@
+exports (ramp)
+
 def HSVToRGB(h :Double, s :Double, v :Double) :List[Double] as DeepFrozen:
     "Like Python's colorsys."
     if (s <=> 0.0):
@@ -39,5 +41,3 @@ def rampIndex(i :Int, num :(Int > i)) :Int as DeepFrozen:
 
 def ramp(size :Int) :List[Int] as DeepFrozen:
     return [for i in (0..!size) rampIndex(i, size)]
-
-[=> ramp]

@@ -11,9 +11,10 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
+import "unittest" =~ [=> unittest]
+exports (makeLFU)
 # An object which is greater than all integers.
-object INF:
+object INF as DeepFrozen:
     to op__cmp(other :Int):
         return 1
 
@@ -26,7 +27,7 @@ def testINF(assert):
 unittest([testINF])
 
 
-def makeLFU(size :Int):
+def makeLFU(size :Int) as DeepFrozen:
     def storage := [].asMap().diverge()
 
     return object LFU:
@@ -69,4 +70,3 @@ def testLFU(assert):
 
 unittest([testLFU])
 
-[=> makeLFU]

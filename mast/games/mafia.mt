@@ -14,11 +14,13 @@
 
 # An implementation of the Mafia party game state machine.
 
-def [=> makeEnum] | _ := ::"import".script("lib/enum", [=> unittest])
+import "lib/enum" =~ [=> makeEnum]
+exports (makeMafia)
+def [MafiaState :DeepFrozen,
+     DAY :DeepFrozen,
+     NIGHT :DeepFrozen] := makeEnum(["day", "night"])
 
-def [MafiaState, DAY, NIGHT] := makeEnum(["day", "night"])
-
-def makeMafia(var players :Set):
+def makeMafia(var players :Set) as DeepFrozens:
     # We don't keep this value updated during play; it's just to make it
     # easier to tune/tweak the mafia/village slice.
     def mafiosoCount :Int := players.size() // 3
@@ -98,5 +100,3 @@ def makeMafia(var players :Set):
                 return `With $count votes ($quorum needed), $victim was killed.`
             catch _:
                 return "Nobody was lynched."
-
-[=> makeMafia]

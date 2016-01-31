@@ -21,9 +21,10 @@ import "lib/tubes" =~ [
     => chain :DeepFrozen]
 import "lib/irc/user" =~ [=> sourceToUser :DeepFrozen]
 import "lib/singleUse" =~ [=> makeSingleUse :DeepFrozen]
+import "lib/tokenBucket" =~ [=> makeTokenBucket :DeepFrozen]
 exports (makeIRCClient, connectIRCClient)
 
-def [=> makeTokenBucket :DeepFrozen] := ::"import".script("lib/tokenBucket")
+
 
 def makeLineTube() as DeepFrozen:
     return makePumpTube(makeSplitPump(b`$\r$\n`))

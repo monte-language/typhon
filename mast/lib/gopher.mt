@@ -1,14 +1,12 @@
 import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
+import "lib/tubes" =~ [
+    => nullPump :DeepFrozen,
+    => makePumpTube :DeepFrozen,
+    => chain :DeepFrozen,
+]
+import "lib/enum" =~ [=> makeEnum :DeepFrozen]
+import "lib/record" =~ [=> makeRecord :DeepFrozen]
 exports (main)
-
-def unittest(_) {null}
-
-def [=> nullPump :DeepFrozen,
-     => makePumpTube :DeepFrozen,
-     => chain :DeepFrozen,
-] | _ := ::"import"("lib/tubes", [=> unittest])
-def [=> makeEnum :DeepFrozen] | _ := ::"import"("lib/enum", [=> unittest])
-def [=> makeRecord :DeepFrozen] | _ := ::"import"("lib/record", [=> unittest])
 
 def [ItemType :DeepFrozen,
      FILE :DeepFrozen,
@@ -62,7 +60,7 @@ def tree := [
 def listener(fount, drain) as DeepFrozen:
     chain([fount, makePumpTube(makeGopherPump(tree)), drain])
 
-def main(=> makeTCP4ServerEndpoint) :Int as DeepFrozen:
+def main(argv, => makeTCP4ServerEndpoint) :Int as DeepFrozen:
     def endpoint := makeTCP4ServerEndpoint(70)
     endpoint.listen(listener)
     return 0

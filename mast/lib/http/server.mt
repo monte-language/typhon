@@ -1,6 +1,5 @@
 import "unittest" =~ [=> unittest]
 import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
-import "lib/atoi" =~ [=> strToInt :DeepFrozen]
 exports (makeHTTPEndpoint)
 
 # Copyright (C) 2014 Google Inc. All rights reserved.
@@ -17,15 +16,14 @@ exports (makeHTTPEndpoint)
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> makeMapPump :DeepFrozen,
+import "lib/tubes" =~ [=> makeMapPump :DeepFrozen,
      => makePumpTube :DeepFrozen,
      => chain :DeepFrozen,
-] | _ := ::"import"("lib/tubes", [=> unittest])
-def [=> makeEnum :DeepFrozen] | _ := ::"import"("lib/enum", [=> unittest])
-def [=> PercentEncoding :DeepFrozen] | _ := ::"import"("lib/codec/percent",
-                                                   [=> unittest])
-def [=> composeCodec :DeepFrozen] | _ := ::"import"("lib/codec")
-def [=> makeRecord :DeepFrozen] := ::"import"("lib/record", [=> unittest])
+]
+import "lib/enum" =~ [=> makeEnum :DeepFrozen]
+import "lib/codec/percent" =~ [=> PercentEncoding :DeepFrozen]
+import "lib/codec" =~ [=> composeCodec :DeepFrozen]
+import "lib/record" =~ [=> makeRecord :DeepFrozen]
 
 # Strange as it sounds, the percent encoding is actually *outside* the UTF-8
 # encoding!
@@ -124,9 +122,12 @@ def makeRequestPump() as DeepFrozen:
                     def b`@{via (UTF8.decode) header}:@{via (UTF8.decode) value}$\r$\n@t` exit ej := buf
                     switch (header.toLowerCase()):
                         match `content-length`:
-                            def via (strToInt) len exit ej := value.trim()
-                            headers withContentLength= (len)
-                            bodyState := [FIXED, len]
+                            try:
+                                def len  := _makeInt(value.trim())
+                                headers withContentLength= (len)
+                                bodyState := [FIXED, len]
+                            catch p:
+                                throw.eject(ej, p)
                         match `content-type`:
                             # XXX should support options, right?
                             def `@type/@subtype` exit ej := value.trim()

@@ -1,8 +1,8 @@
 import "unittest" =~ [=> unittest]
+import "lib/parsers/marley" =~ [=> marley__quasiParser :DeepFrozen]
 exports (Regex, parseRegex)
 
-def [=> marley__quasiParser :DeepFrozen,
-] | _ := ::"import"("lib/parsers/marley", [=> unittest])
+
 
 interface _Regex :DeepFrozen:
     "Regular expressions."
@@ -12,13 +12,13 @@ interface _Regex :DeepFrozen:
 
     to acceptsEmpty() :Bool:
         "Whether this regular expression accepts the empty string.
-        
+
          Might calls this function δ()."
 
     to derive(character):
         "Compute the derivative of this regular expression with respect to the
          given character.
-         
+
          The derivative is fully polymorphic."
 
     to leaders() :Set:

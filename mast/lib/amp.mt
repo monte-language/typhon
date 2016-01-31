@@ -12,21 +12,27 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def [=> strToInt] | _ := ::"import".script("lib/atoi")
-def [=> makeEnum] | _ := ::"import"("lib/enum", [=> unittest])
-def [=> UTF8] | _ := ::"import"("lib/codec/utf8")
-def [=> nullPump,
-     => makeMapPump,
-     => makeStatefulPump,
-     => makePumpTube,
-     => chain,
-] := ::"import"("lib/tubes", [=> unittest])
+
+import "lib/enum" =~ [=> makeEnum]
+import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
+import "lib/tubes" =~ [
+    => nullPump :DeepFrozen,
+     => makeMapPump :DeepFrozen,
+     => makeStatefulPump :DeepFrozen,
+     => makePumpTube :DeepFrozen,
+     => chain :DeepFrozen,
+]
+
+exports (makeAMPServer, makeAMPClient)
 
 # Either we await a key length, value length, or string.
-def [AMPState, KEY, VALUE, STRING] := makeEnum([
-    "AMP key length", "AMP value length", "AMP string"])
+def [AMPState :DeepFrozen,
+     KEY :DeepFrozen,
+     VALUE :DeepFrozen,
+     STRING :DeepFrozen
+] := makeEnum(["AMP key length", "AMP value length", "AMP string"])
 
-def makeAMPPacketMachine():
+def makeAMPPacketMachine() as DeepFrozen:
     var packetMap :Map := [].asMap()
     var pendingKey :Str := ""
     var results :List := []
@@ -76,7 +82,7 @@ def makeAMPPacketMachine():
             return results
 
 
-def packAMPPacket(packet):
+def packAMPPacket(packet) as DeepFrozen:
     var buf := []
     for via (UTF8.encode) key => via (UTF8.encode) value in packet:
         def keySize :(Int <= 0xff) := key.size()
@@ -89,7 +95,7 @@ def packAMPPacket(packet):
     return buf
 
 
-def makeAMP(drain):
+def makeAMP(drain) as DeepFrozen:
     var responder := null
     var buf := []
     var serial :Int := 0
@@ -138,7 +144,7 @@ def makeAMP(drain):
                             AMP.sendPacket(packAMPPacket(packet))
                 match [=> _answer] | arguments:
                     # Successful reply.
-                    def via (strToInt) answer := _answer
+                    def answer := _makeInt.fromBytes(_answer)
                     if (pending.contains(answer)):
                         pending[answer].resolve(arguments)
                         pending without= (answer)
@@ -167,7 +173,7 @@ def makeAMP(drain):
             responder := r
 
 
-def makeAMPServer(endpoint):
+def makeAMPServer(endpoint) as DeepFrozen:
     return object AMPServerEndpoint:
         to listen(callback):
             def f(fount, drain):
@@ -181,7 +187,7 @@ def makeAMPServer(endpoint):
             endpoint.listen(f)
 
 
-def makeAMPClient(endpoint):
+def makeAMPClient(endpoint) as DeepFrozen:
     return object AMPClientEndpoint:
         to connect():
             def [fount, drain] := endpoint.connect()
@@ -192,6 +198,3 @@ def makeAMPClient(endpoint):
                 amp,
             ])
             return amp
-
-
-[=> makeAMPServer, => makeAMPClient]

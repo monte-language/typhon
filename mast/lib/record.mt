@@ -100,5 +100,3 @@ unittest([
     testRecordMutationGuard,
     testRecordAsMap,
 ])
-
-[=> makeRecord]

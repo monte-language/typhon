@@ -1,6 +1,3 @@
-import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
-exports (main)
-
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -15,15 +12,15 @@ exports (main)
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def unittest(_):
-    null
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
+import "lib/gai" =~ [=> makeGAI :DeepFrozen]
+import "lib/enum" =~ [=> makeEnum :DeepFrozen]
+import "lib/tubes" =~ [
+    => makeMapPump :DeepFrozen,
+    => makePumpTube :DeepFrozen,
+]
 
-def [=> makeGAI :DeepFrozen] | _ := ::"import"("lib/gai")
-def [=> bytesToInt :DeepFrozen] | _ := ::"import".script("lib/atoi")
-def [=> makeEnum :DeepFrozen] | _ := ::"import"("lib/enum", [=> unittest])
-def [=> makeMapPump :DeepFrozen,
-     => makePumpTube :DeepFrozen,
-] | _ := ::"import"("lib/tubes", [=> unittest])
+exports (main)
 
 
 def lowercase(specimen, ej) as DeepFrozen:
@@ -83,6 +80,11 @@ def makeResponseDrain(resolver) as DeepFrozen:
             traceln(`End of response: $reason`)
 
         to parseStatus(ej):
+            def bytesToInt(s, e):
+                try:
+                    return _makeInt.fromBytes(s)
+                catch p:
+                    e(p)
             def b`HTTP/1.1 @{via (bytesToInt) statusCode} @{via (UTF8.decode) label}$\r$\n@tail` exit ej := buf
             status := statusCode
             traceln(`Status: $status ($label)`)

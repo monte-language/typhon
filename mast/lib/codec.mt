@@ -2,7 +2,7 @@ exports (composeCodec)
 
 def composeCodec(outer :DeepFrozen, inner :DeepFrozen) as DeepFrozen:
     "Compose an outer codec with an inner codec.
-    
+
      The nesting is always oriented so that the 'outer' codec is on the
      encoding side, and the 'inner' codec is on the decoding side."
 

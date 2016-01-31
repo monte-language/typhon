@@ -1,6 +1,5 @@
 import "unittest" =~ [=> unittest]
-import "lib/atoi" =~ [=> bytesToInt]
-exports ()
+exports (toNetstring, findNetstring)
 
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
@@ -16,11 +15,16 @@ exports ()
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def toNetstring(cs :Bytes) :Bytes:
+def toNetstring(cs :Bytes) :Bytes as DeepFrozen:
     def header := `${cs.size()}`
     return b`$header:$cs,`
 
-def findNetstring(cs :Bytes):
+def findNetstring(cs :Bytes) as DeepFrozen:
+    def bytesToInt(s, e):
+        try:
+            return _makeInt.fromBytes(s)
+        catch p:
+            e(p)
     escape ej:
         def b`@{via (bytesToInt) size}:@tail` exit ej := cs
         if (tail.size() < size):

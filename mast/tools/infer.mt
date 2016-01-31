@@ -1,3 +1,18 @@
+import "lib/tubes" =~ [
+    => makeUTF8EncodePump :DeepFrozen,
+    => makePumpTube :DeepFrozen
+]
+import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
+import "lib/monte/monte_lexer" =~  [=> makeMonteLexer :DeepFrozen]
+import "lib/uKanren" =~ [
+    => iterGoal :DeepFrozen,
+    => satisfiable :DeepFrozen,
+    => unifyGoal :DeepFrozen,
+    => callFresh :DeepFrozen,
+    => allOf :DeepFrozen,
+    => anyOf :DeepFrozen,
+    => delay :DeepFrozen,
+]
 import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 import "unittest" =~ [=> unittest]
 exports (main, makeInference)
@@ -5,21 +20,6 @@ exports (main, makeInference)
 
 def bench(_, _) as DeepFrozen:
     null
-
-def [=> makeUTF8EncodePump :DeepFrozen,
-     => makePumpTube :DeepFrozen,
-] | _ := ::"import"("lib/tubes", [=> unittest])
-def [=> parseModule :DeepFrozen] | _ := ::"import"("lib/monte/monte_parser")
-def [=> makeMonteLexer :DeepFrozen] | _ := ::"import"("lib/monte/monte_lexer")
-
-def [=> iterGoal :DeepFrozen,
-     => satisfiable :DeepFrozen,
-     => unifyGoal :DeepFrozen,
-     => callFresh :DeepFrozen,
-     => allOf :DeepFrozen,
-     => anyOf :DeepFrozen,
-     => delay :DeepFrozen,
-] | _ := ::"import"("lib/uKanren")
 
 def Expr :DeepFrozen := astBuilder.getExprGuard()
 def Patt :DeepFrozen := astBuilder.getPatternGuard()

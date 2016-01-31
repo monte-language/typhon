@@ -128,30 +128,3 @@ def makeAsserter() as DeepFrozen:
                         assert.fail("No exception was thrown")
                     catch _:
                         successes += 1
-
-def main(args, => makeStdOut, => Timer, => currentProcess, => unsealException,
-         => collectTests, => unittest) as DeepFrozen:
-    def [=> makeIterFount :DeepFrozen,
-         => makeUTF8EncodePump,
-         => makePumpTube,
-    ] | _ := ::"import"("lib/tubes", [=> unittest])
-
-    def args := currentProcess.getArguments()
-    for path in args.slice(2, args.size()):
-        ::"import".script(path, [=> &&unittest])
-
-    def stdout := makePumpTube(makeUTF8EncodePump())
-    stdout<-flowTo(makeStdOut())
-
-    def asserter := makeAsserter()
-    def testDrain := makeTestDrain(stdout, unsealException, asserter)
-
-    return when (runTests(collectTests, testDrain, makeIterFount)) ->
-        def fails := asserter.fails()
-        stdout.receive(`${asserter.total()} tests run, $fails failures$\n`)
-        # Exit code: Only returns 0 if there were 0 failures.
-        for loc => errors in asserter.errors():
-            stdout.receive(`In $loc:$\n`)
-            for error in errors:
-                stdout.receive(`~ $error$\n`)
-        fails.min(1)

@@ -3,6 +3,7 @@ import "bench" =~ [=> bench]
 import "lib/complex" =~ [=> makeComplex :DeepFrozen]
 import "lib/tubes" =~ [=> makeUTF8EncodePump :DeepFrozen,
                        => makePumpTube :DeepFrozen]
+import "lib/ansiColor" =~ [=> ramp :DeepFrozen]
 exports ()
 
 
@@ -26,7 +27,6 @@ def getScaled(l, count :Int) as DeepFrozen:
     return l[index]
 
 
-def [=> ramp :DeepFrozen] | _ := ::"import".script("lib/ansiColor")
 def chars :Str := "@#&%!*+-."
 def colors :List[Str] := ["37", "32", "33", "31", "36", "35", "34"]
 def ramp80 :List[Str] := [for i in (ramp(80)) `38;5;$i`].reverse()

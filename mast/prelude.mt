@@ -641,7 +641,7 @@ def scopeNames := [
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
-    => M, => Ref, => ::"import", => throw, => typhonEval, => promiseAllFulfilled,
+    => M, => Ref,  => throw, => typhonEval, => promiseAllFulfilled,
     => makeLazySlot]
 
 def scopeAsDF(scope):

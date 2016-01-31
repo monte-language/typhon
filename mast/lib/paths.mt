@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import "unittest" =~ [=> unittest]
+exports ()
 def makePath(segments :List[Str]):
     return object path:
         to _uncall():

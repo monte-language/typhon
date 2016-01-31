@@ -11,7 +11,8 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
+import "unittest" =~ [=> unittest]
+exports (parseFragment)
 def lowercase :Set[Char] := "abcdefghijklmnopqrstuvwxyz".asSet()
 def uppercase :Set[Char] := "ABCDEFGHIJKLMNOPQRSTUVWXYZ".asSet()
 def digits :Set[Char] := "0123456789".asSet()
@@ -20,7 +21,7 @@ def identifierSet :Set[Char] := lowercase | uppercase | digits
 
 def whitespace :Set[Char] := " \t\n".asSet()
 
-def makeCharStream(input :Str, ej):
+def makeCharStream(input :Str, ej) as DeepFrozen:
     var pos :Int := 0
     return object charStream:
         to eof() :Bool:
@@ -80,7 +81,7 @@ unittest([
     testCharStreamIdentifier,
 ])
 
-def makeTag(name :Str, fragments :List):
+def makeTag(name :Str, fragments :List) as DeepFrozen:
     return object tag:
         to _printOn(out):
             if (fragments.size() != 0):
@@ -91,7 +92,7 @@ def makeTag(name :Str, fragments :List):
             else:
                 out.print(`<$name/>`)
 
-def parseFragment(cs):
+def parseFragment(cs) as DeepFrozen:
     if (cs.choose('<')):
         # Tag.
         cs.whitespace()
@@ -117,7 +118,3 @@ def parseFragment(cs):
         # Not a tag, but a plain text fragment.
         cs.whitespace()
         return cs.until('<')
-
-traceln(parseFragment(makeCharStream("<p>test</p>", null)))
-traceln(parseFragment(makeCharStream("<p>tests are <b>fun</b></p>", null)))
-traceln(parseFragment(makeCharStream("<p><img /></p>", null)))

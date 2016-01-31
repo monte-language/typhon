@@ -1,10 +1,9 @@
 import "unittest" =~ [=> unittest]
+import "lib/entropy/entropy" =~ [=> makeEntropy]
+import "lib/entropy/pcg" =~ [=> makePCG]
+
 exports ()
 
-def bench(_, _) {null}
-
-def [=> makeEntropy] | _ := ::"import"("lib/entropy/entropy", [=> unittest])
-def [=> makePCG] := ::"import"("lib/entropy/pcg", [=> unittest])
 
 def entropy := makeEntropy(makePCG(42, 5))
 

@@ -18,9 +18,8 @@
 
 import "unittest" =~ [=> unittest]
 import "bench" =~ [=> bench]
+import "lib/enum" =~ [=> makeEnum]
 exports ()
-
-def [=> makeEnum] | _ := ::"import"("lib/enum", [=> unittest])
 
 def [Enumeration, Ident1, Ident2, Ident3, Ident4, Ident5] := makeEnum(
     ["Ident1", "Ident2", "Ident3", "Ident4", "Ident5"])
