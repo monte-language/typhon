@@ -123,6 +123,14 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 	mast/lib/monte/mast.mast mast/lib/monte/monte_verifier.mast \
 	mast/montec.mast mast/testRunner.mast mast/all-tests.mast
 
+mast/prelude.mast: mast/prelude.mt
+	@ echo "MONTEC-UNSAFE $<"
+	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -noverify -mix -format mast $< $@ # 2> /dev/null
+
+loader.mast: loader.mt
+	@ echo "MONTEC-UNSAFE $<"
+	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -noverify -mix -format mast $< $@ # 2> /dev/null
+
 %.mast: %.mt
 	@ echo "MONTEC $<"
 	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -mix -format mast $< $@ # 2> /dev/null

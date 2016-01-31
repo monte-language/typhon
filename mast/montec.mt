@@ -15,11 +15,14 @@ def parseArguments(var argv) as DeepFrozen:
     var useMixer :Bool := false
     var useNewFormat :Bool := true
     var arguments :List[Str] := []
-
+    var verifyNames :Bool := true
     while (argv.size() > 0):
         switch (argv):
             match [=="-mix"] + tail:
                 useMixer := true
+                argv := tail
+            match [=="-noverify"] + tail:
+                verifyNames := false
                 argv := tail
             match [=="-format", =="mast"] + tail:
                 argv := tail
@@ -37,8 +40,12 @@ def parseArguments(var argv) as DeepFrozen:
         to useNewFormat() :Bool:
             return useNewFormat
 
+        to verifyNames() :Bool:
+            return verifyNames
+
         to arguments() :List[Str]:
             return arguments
+
 
 def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
          => unsealException) as DeepFrozen:
@@ -62,17 +69,18 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
                 throw("Syntax error")
             }
         })
-        def undefineds := findUndefinedNames(tree, safeScope)
-        if (undefineds.size() > 0):
-                def stdout := makePumpTube(makeUTF8EncodePump())
-                stdout.flowTo(makeStdOut())
-                for n in undefineds:
-                    escape x:
-                        lex.formatError(
-                            [`Undefined name ${n.getName()}`, n.getSpan()], x)
-                    catch msg:
-                        stdout.receive(msg)
-                throw("Name usage error")
+        if (config.verifyNames()):
+            def undefineds := findUndefinedNames(tree, safeScope)
+            if (undefineds.size() > 0):
+                    def stdout := makePumpTube(makeUTF8EncodePump())
+                    stdout.flowTo(makeStdOut())
+                    for n in undefineds:
+                        escape x:
+                            lex.formatError(
+                                [`Undefined name ${n.getName()}`, n.getSpan()], x)
+                        catch msg:
+                            stdout.receive(msg)
+                    throw("Name usage error")
 
         when (parseTime) ->
             traceln(`Parsed source file (${parseTime}s)`)

@@ -18,6 +18,13 @@ def findUndefinedNames(expr, outers) as DeepFrozen:
         if ((offenders & names).size() > 0):
             if (["NounExpr", "SlotExpr", "BindingExpr"].contains(item.getNodeName())):
                 results.push(item)
-            stack.extend([for a in (item._uncall()[2]) if (a =~ _ :Ast) a])
+            for a in (item._uncall()[2]):
+                switch (a):
+                    match _ :Ast:
+                        stack.push(a)
+                    match _ :List[Ast]:
+                        stack.extend(a)
+                    match _:
+                        null
     return results
 
