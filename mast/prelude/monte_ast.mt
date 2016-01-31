@@ -1369,8 +1369,12 @@ def makeMapComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
 def makeForExpr(iterable :Expr, key :NullOk[Pattern], value :Pattern,
                 body :Expr, catchPattern :NullOk[Pattern],
                 catchBody :NullOk[Expr], span) as DeepFrozenStamp:
-    def &scope := makeLazySlot(fn {sumScopes([iterable, key, value,
-                                              body]).hide()})
+    def &scope := makeLazySlot(fn {
+        ((makeStaticScope([], [], ["__break"], [], false) +
+          sumScopes([iterable, key, value]) +
+          makeStaticScope([], [], ["__continue"], [], false) +
+          body.getStaticScope()).hide() +
+         scopeMaybe(catchPattern) + scopeMaybe(catchBody)).hide()})
     object forExpr:
         to getKey():
             return key
@@ -1807,7 +1811,12 @@ def makeIfExpr(test :Expr, consq :Expr, alt :NullOk[Expr], span) as DeepFrozenSt
         &scope, "IfExpr", fn f {[test.transform(f), consq.transform(f), maybeTransform(alt, f)]})
 
 def makeWhileExpr(test :Expr, body :Expr, catcher :NullOk[Ast["Catcher"]], span) as DeepFrozenStamp:
-    def &scope := makeLazySlot(fn {sumScopes([test, body, catcher])})
+    def &scope := makeLazySlot(fn {
+        ((makeStaticScope([], [], ["__break"], [], false) +
+        test.getStaticScope() +
+         makeStaticScope([], [], ["__continue"], [], false) +
+         body.getStaticScope()).hide() +
+        scopeMaybe(catcher)).hide()})
     object whileExpr:
         to getTest():
             return test
