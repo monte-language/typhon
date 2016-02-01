@@ -22,7 +22,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
     def formatError(var error, ej):
         if (error == null):
             error := ["Syntax error", tokens[position][2]]
-        lex.formatError(error, ej)
+        throw.eject(ej, lex.makeParseError(error))
 
     def giveUp(e):
         formatError(e, err)

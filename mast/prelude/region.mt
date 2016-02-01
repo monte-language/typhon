@@ -1,7 +1,7 @@
 # Module sugar cannot be used here since we are replacing names we received from preludeScope.
 def region(loader):
     def DeepFrozenStamp := loader."import"("boot")["DeepFrozenStamp"]
-
+    def TransparentStamp := loader."import"("boot")["TransparentStamp"]
     def cmpInf(left, right) as DeepFrozenStamp:
         "Compare, but treat `null` as -∞ on the left and ∞ on the right."
 

@@ -50,43 +50,62 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     def queuedTokens := [].diverge()
     def indentPositionStack := [0].diverge()
 
-    def formatError(error, err):
-        if (error =~ [errMsg, span]):
-            if (span == null):
-                # There's no span information. This is legal and caused by
-                # token exhaustion.
-                throw.eject(err, "Error at end of input: " + errMsg)
+    def makeParseError(error):
+        return object parseError:
+            to formatCompact():
+                if (error =~ [errMsg, span]):
+                    if (span == null):
+                        def allLines := input.split("\n")
+                        return `${allLines.size()}.${allLines.last().size() - 1}: $errMsg`
+                    def [sl, el, sc, ec] := [span.getStartLine(), span.getEndLine(),
+                                             span.getStartCol(), span.getEndCol()]
+                    if (sl == el):
+                        if (sc == ec):
+                            return `$sl.$sc: $errMsg`
+                        return `$sl.$sc-$ec: $errMsg`
+                    return `$sl.$sc-$el.$ec: $errMsg`
 
-            def front := (span.getStartLine() - 3).max(0)
-            def back := span.getEndLine() + 3
-            def allLines := input.split("\n")
-            def lines := allLines.slice(front, back.min(allLines.size()))
-            def msg := [].diverge()
-            var i := front
-            for line in lines:
-                i += 1
-                def lnum := M.toString(i)
-                def pad := " " * (4 - lnum.size())
-                msg.push(`$pad$lnum $line`)
-                if (i == span.getStartLine()):
-                    def errLine := "    " + " " * span.getStartCol() + "^"
-                    if (span.getStartLine() == span.getEndLine()):
-                        msg.push(errLine + "~" * (span.getEndCol() - span.getStartCol()))
-                    else:
-                        msg.push(errLine)
-            msg.push(errMsg)
-            def msglines := msg.snapshot()
-            def fullMsg := "\n".join(msglines) + "\n"
-            throw.eject(err, fullMsg)
-        else:
-            throw.eject(err, `Unrecognized parser error data $error`)
+            to formatPretty():
+                if (error =~ [errMsg, span]):
+                    if (span == null):
+                        # There's no span information. This is legal and caused
+                        # by token exhaustion.
+                        return "Error at end of input: " + errMsg
+
+                    def front := (span.getStartLine() - 3).max(0)
+                    def back := span.getEndLine() + 3
+                    def allLines := input.split("\n")
+                    def lines := allLines.slice(front,
+                                                back.min(allLines.size()))
+                    def msg := [].diverge()
+                    var i := front
+                    for line in lines:
+                        i += 1
+                        def lnum := M.toString(i)
+                        def pad := " " * (4 - lnum.size())
+                        msg.push(`$pad$lnum $line`)
+                        if (i == span.getStartLine()):
+                            def errLine := ("    " + " " *
+                                            span.getStartCol() + "^")
+                            if (span.getStartLine() == span.getEndLine()):
+                                msg.push(errLine + "~" * (span.getEndCol() -
+                                                          span.getStartCol()))
+                            else:
+                                msg.push(errLine)
+                    msg.push(errMsg)
+                    def msglines := msg.snapshot()
+                    def fullMsg := "\n".join(msglines) + "\n"
+                    return fullMsg
+                else:
+                    return `Unrecognized parser error data $error`
 
     def atEnd():
         return position == input.size()
 
     def spanAtPoint():
         #XXX use twine
-        return _makeSourceSpan(inputName, true, lineNumber, colNumber, lineNumber, colNumber + 1)
+        return _makeSourceSpan(inputName, true, lineNumber, colNumber,
+                               lineNumber, colNumber + 1)
 
     def advance():
         position += 1
@@ -758,18 +777,18 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     return [count += 1, t]
                 catch msg:
                     if (msg == null):
-                        checkParenBalance(fn msg {formatError(msg, ej)})
+                        checkParenBalance(fn msg {throw.eject(ej, makeParseError(msg))})
                         throw.eject(ej, null)
                     else:
-                        formatError(msg, ej)
+                        throw.eject(ej, makeParseError(msg))
             finally:
                 startPos := -1
 
         to lexerForNextChunk(chunk):
             return _makeMonteLexer(chunk, braceStack, nestLevel, inputName)
 
-        to formatError(e, ej):
-            formatError(e, ej)
+        to makeParseError(e):
+            return makeParseError(e)
 
         to getInput():
             return input

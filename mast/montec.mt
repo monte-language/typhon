@@ -16,6 +16,7 @@ def parseArguments(var argv) as DeepFrozen:
     var useNewFormat :Bool := true
     var arguments :List[Str] := []
     var verifyNames :Bool := true
+    var terseErrors :Bool := false
     while (argv.size() > 0):
         switch (argv):
             match [=="-mix"] + tail:
@@ -23,6 +24,9 @@ def parseArguments(var argv) as DeepFrozen:
                 argv := tail
             match [=="-noverify"] + tail:
                 verifyNames := false
+                argv := tail
+            match [=="-terse"] + tail:
+                terseErrors := true
                 argv := tail
             match [=="-format", =="mast"] + tail:
                 argv := tail
@@ -43,6 +47,9 @@ def parseArguments(var argv) as DeepFrozen:
         to verifyNames() :Bool:
             return verifyNames
 
+        to terseErrors() :Bool:
+            return terseErrors
+
         to arguments() :List[Str]:
             return arguments
 
@@ -62,10 +69,10 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
         def parseTime := Timer.trial(fn {
             escape e {
                 tree := parseModule(lex, astBuilder, e)
-            } catch parseErrorMsg {
+            } catch parseError {
                 def stdout := makePumpTube(makeUTF8EncodePump())
                 stdout.flowTo(makeStdOut())
-                stdout.receive(parseErrorMsg)
+                stdout.receive(parseError.formatPretty())
                 throw("Syntax error")
             }
         })
@@ -75,11 +82,12 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
                     def stdout := makePumpTube(makeUTF8EncodePump())
                     stdout.flowTo(makeStdOut())
                     for n in undefineds:
-                        escape x:
-                            lex.formatError(
-                                [`Undefined name ${n.getName()}`, n.getSpan()], x)
-                        catch msg:
-                            stdout.receive(msg)
+                        def err := lex.makeParseError(
+                            [`Undefined name ${n.getName()}`,
+                             n.getSpan()])
+                        stdout.receive(
+                            if (config.terseErrors()) {inputFile + ":" + err.formatCompact() + "\n"
+                            } else {err.formatPretty()})
                     throw("Name usage error")
 
         when (parseTime) ->
