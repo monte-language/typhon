@@ -72,7 +72,11 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
             } catch parseError {
                 def stdout := makePumpTube(makeUTF8EncodePump())
                 stdout.flowTo(makeStdOut())
-                stdout.receive(parseError.formatPretty())
+                stdout.receive(
+                    if (config.terseErrors()) {
+                        inputFile + ":" + parseError.formatCompact() + "\n"
+                    } else {parseError.formatPretty()})
+
                 throw("Syntax error")
             }
         })
@@ -86,14 +90,16 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
                             [`Undefined name ${n.getName()}`,
                              n.getSpan()])
                         stdout.receive(
-                            if (config.terseErrors()) {inputFile + ":" + err.formatCompact() + "\n"
+                            if (config.terseErrors()) {
+                                inputFile + ":" + err.formatCompact() + "\n"
                             } else {err.formatPretty()})
                     throw("Name usage error")
 
         when (parseTime) ->
             traceln(`Parsed source file (${parseTime}s)`)
 
-        def expandTime := Timer.trial(fn {tree := expand(tree, astBuilder, throw)})
+        def expandTime := Timer.trial(fn {tree := expand(tree, astBuilder,
+                                                         throw)})
         when (expandTime) ->
             traceln(`Expanded source file (${expandTime}s)`)
 
