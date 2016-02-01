@@ -11,6 +11,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+exports (makeLoopingCall)
 
 def makeLoopingCall(timer, task) as DeepFrozen:
     var loopDuration :NullOk[Double] := null
@@ -30,5 +31,3 @@ def makeLoopingCall(timer, task) as DeepFrozen:
 
         to stop() :Void:
             running := false
-
-[=> makeLoopingCall]
