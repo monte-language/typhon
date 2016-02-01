@@ -626,8 +626,8 @@ dependencies["lib/monte/monte_parser"] := loadit("lib/monte/monte_parser", prelu
 dependencies["lib/monte/monte_expander"] := loadit("lib/monte/monte_expander", preludeScope)
 dependencies["lib/monte/monte_optimizer"] := loadit("lib/monte/monte_optimizer", preludeScope)
 dependencies["lib/codec/utf8"] := loadit("lib/codec/utf8", preludeScope)
-dependencies["lib/monte/ast_dumper"] := loadit("lib/monte/ast_dumper", preludeScope)
 dependencies["lib/parsers/monte"] := loadit("lib/parsers/monte", preludeScope)
+dependencies["lib/monte/mast"] := loadit("lib/monte/mast", preludeScope)
 
 # The big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This

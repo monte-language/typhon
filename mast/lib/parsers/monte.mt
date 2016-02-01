@@ -1,4 +1,3 @@
-import "lib/monte/ast_dumper" =~ [=> dump :DeepFrozen]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseExpression :DeepFrozen]
 import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
@@ -35,11 +34,4 @@ def makeMonteParser(inputName) as DeepFrozen:
                 results := [expand(tree, astBuilder, throw)]
             catch problem:
                 failure := problem
-
-        to dump():
-            def result := monteParser.results()[0]
-            var data := b``
-            dump(result, fn bs {data += bs})
-            return data
-
 

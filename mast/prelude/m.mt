@@ -3,7 +3,7 @@ import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseExpression :DeepFrozen]
 import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
 import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
-import "lib/monte/ast_dumper" =~ [=> dump :DeepFrozen]
+import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
 exports (m__quasiParser, eval)
 
 def Transparent :DeepFrozen := TransparentStamp
@@ -232,6 +232,6 @@ object eval as DeepFrozen:
                 return typhonEval.evalToPair(result, environment)
         else:
             def ast :Expr := expr.expand().mix()
-            var data := b``
-            dump(ast, fn bs {data += bs})
-            return typhonEval.evalToPair(data, environment)
+            def context := makeMASTContext()
+            context(ast)
+            return typhonEval.evalToPair(context.bytes(), environment)

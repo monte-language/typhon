@@ -1,5 +1,4 @@
 import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
-import "lib/monte/ast_dumper" =~ [=> dump :DeepFrozen]
 import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
@@ -10,10 +9,8 @@ import "lib/monte/monte_verifier" =~ [=> findUndefinedNames :DeepFrozen]
 
 exports (main)
 
-
 def parseArguments(var argv, ej) as DeepFrozen:
     var useMixer :Bool := false
-    var useNewFormat :Bool := true
     var arguments :List[Str] := []
     var verifyNames :Bool := true
     var terseErrors :Bool := false
@@ -34,11 +31,6 @@ def parseArguments(var argv, ej) as DeepFrozen:
             match [=="-lint"] + tail:
                 justLint := true
                 argv := tail
-            match [=="-format", =="mast"] + tail:
-                argv := tail
-            match [=="-format", =="trash"] + tail:
-                useNewFormat := false
-                argv := tail
             match [arg] + tail:
                 arguments with= (arg)
                 argv := tail
@@ -55,9 +47,6 @@ def parseArguments(var argv, ej) as DeepFrozen:
 
         to justLint() :Bool:
             return justLint
-
-        to useNewFormat() :Bool:
-            return useNewFormat
 
         to verifyNames() :Bool:
             return verifyNames
@@ -130,18 +119,9 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
             when (optimizeTime) -> {traceln(`Optimized source file (${optimizeTime}s)`)}
         }
 
-        return if (config.useNewFormat()) {
-            def context := makeMASTContext()
-            context(tree)
-            context.bytes()
-        } else {
-            var bs := [].diverge()
-            def dumpTime := Timer.trial(fn {
-                dump(tree, fn stuff :Bytes {bs.push(stuff)})
-            })
-            when (dumpTime) -> {traceln(`Dumped source file (${dumpTime}s)`)}
-            b``.join(bs)
-        }
+        def context := makeMASTContext()
+        context(tree)
+        return context.bytes()
 
     def p := makeFileResource(inputFile) <- getContents()
     return when (p) ->
