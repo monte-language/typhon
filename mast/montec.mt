@@ -11,12 +11,15 @@ import "lib/monte/monte_verifier" =~ [=> findUndefinedNames :DeepFrozen]
 exports (main)
 
 
-def parseArguments(var argv) as DeepFrozen:
+def parseArguments(var argv, ej) as DeepFrozen:
     var useMixer :Bool := false
     var useNewFormat :Bool := true
     var arguments :List[Str] := []
     var verifyNames :Bool := true
     var terseErrors :Bool := false
+    var justLint :Bool := false
+    def inputFile
+    def outputFile
     while (argv.size() > 0):
         switch (argv):
             match [=="-mix"] + tail:
@@ -28,6 +31,9 @@ def parseArguments(var argv) as DeepFrozen:
             match [=="-terse"] + tail:
                 terseErrors := true
                 argv := tail
+            match [=="-lint"] + tail:
+                justLint := true
+                argv := tail
             match [=="-format", =="mast"] + tail:
                 argv := tail
             match [=="-format", =="trash"] + tail:
@@ -36,10 +42,19 @@ def parseArguments(var argv) as DeepFrozen:
             match [arg] + tail:
                 arguments with= (arg)
                 argv := tail
+    if (justLint):
+        bind outputFile := null
+        if (arguments !~ [bind inputFile]):
+            throw.eject(ej, "Usage: montec -lint [-noverify] [-terse] inputFile")
+    else if (arguments !~ [bind inputFile, bind outputFile]):
+        throw.eject(ej, "Usage: montec [-mix] [-noverify] [-terse] inputFile outputFile")
 
     return object configuration:
         to useMixer() :Bool:
             return useMixer
+
+        to justLint() :Bool:
+            return justLint
 
         to useNewFormat() :Bool:
             return useNewFormat
@@ -50,25 +65,29 @@ def parseArguments(var argv) as DeepFrozen:
         to terseErrors() :Bool:
             return terseErrors
 
-        to arguments() :List[Str]:
-            return arguments
+        to getInputFile() :Str:
+            return inputFile
+
+        to getOutputFile() :NullOk[Str]:
+            return outputFile
 
 
 def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
          => unsealException) as DeepFrozen:
 
-    def config := parseArguments(argv)
+    def config := parseArguments(argv, throw)
+    def inputFile := config.getInputFile()
+    def outputFile := config.getOutputFile()
 
-    def [inputFile, outputFile] := config.arguments()
 
-    def compile(data :Str) :Bytes:
-        "Compile a module and serialize it to a bytestring."
+    def parse(data :Str):
+        "Parse and verify a Monte source file."
 
-        var tree := null
+        def tree
         def lex := makeMonteLexer(data, inputFile)
         def parseTime := Timer.trial(fn {
             escape e {
-                tree := parseModule(lex, astBuilder, e)
+                bind tree := parseModule(lex, astBuilder, e)
             } catch parseError {
                 def stdout := makePumpTube(makeUTF8EncodePump())
                 stdout.flowTo(makeStdOut())
@@ -97,7 +116,10 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
 
         when (parseTime) ->
             traceln(`Parsed source file (${parseTime}s)`)
+        return tree
 
+    def compile(var tree) :Bytes:
+        "Compile a module and serialize it to a bytestring."
         def expandTime := Timer.trial(fn {tree := expand(tree, astBuilder,
                                                          throw)})
         when (expandTime) ->
@@ -121,17 +143,21 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
             b``.join(bs)
         }
 
-    def p := makeFileResource(inputFile)<-getContents()
+    def p := makeFileResource(inputFile) <- getContents()
     return when (p) ->
         def via (UTF8.decode) data := p
         traceln("Read in source file")
-        def bs :Bytes := compile(data)
-        traceln("Writing out source file")
-        when (makeFileResource(outputFile)<-setContents(bs)) ->
+        def tree := parse(data)
+        if (!config.justLint()):
+            def bs :Bytes := compile(tree)
+            traceln("Writing out source file")
+            when (makeFileResource(outputFile) <- setContents(bs)) ->
+                0
+            catch via (unsealException) problem:
+                traceln(`Problem writing file: $problem`)
+                1
+        else:
             0
-        catch via (unsealException) problem:
-            traceln(`Problem writing file: $problem`)
-            1
     catch via (unsealException) problem:
         traceln(`Problem: $problem`)
         1
