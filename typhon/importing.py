@@ -21,8 +21,7 @@ from typhon.atoms import getAtom
 from typhon.debug import debugPrint
 from typhon.errors import Refused, UserException, userError
 from typhon.load.mast import InvalidMAST, loadMASTBytes
-from typhon.load.trash import load
-from typhon.nodes import Expr, Sequence, interactiveCompile
+from typhon.nodes import Expr, interactiveCompile
 from typhon.objects.collections.maps import ConstMap
 from typhon.objects.collections.helpers import monteMap
 from typhon.objects.constants import NullObject
@@ -69,11 +68,7 @@ class PackageEnv(Object):
 @dont_look_inside
 def obtainModuleFromSource(source, recorder, origin):
     with recorder.context("Deserialization"):
-        try:
-            term = loadMASTBytes(source)
-        except InvalidMAST as im:
-            print "Load (mast) failed:", im
-            term = Sequence(load(source)[:])
+        term = loadMASTBytes(source)
     return codeFromAst(term, recorder, origin)
 
 
@@ -94,15 +89,15 @@ def codeFromAst(term, recorder, origin):
 
 
 def tryExtensions(filePath, recorder):
-    ### for extension in unrolling_iterable([".ty", ".mast"]):
-    for extension in [".ty", ".mast"]:
+    # Leaving this in loop form in case we change formats again.
+    for extension in [".mast"]:
         path = filePath + extension
         try:
             with open(path, "rb") as handle:
                 debugPrint("Reading:", path)
                 source = handle.read()
                 return obtainModuleFromSource(source, recorder,
-                                               path.decode('utf-8'))[0]
+                                              path.decode('utf-8'))[0]
         except IOError:
             continue
     return None

@@ -19,9 +19,8 @@ from typhon.env import finalize
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.importing import (codeFromAst, evaluateRaise, obtainModule,
                               obtainModuleFromSource)
-from typhon.load.mast import InvalidMAST, loadMASTBytes
-from typhon.load.trash import load
-from typhon.nodes import Sequence, kernelAstStamp
+from typhon.load.mast import loadMASTBytes
+from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
@@ -130,12 +129,7 @@ class GetMonteFile(Object):
                         with open(os.path.join(base, path), "rb") as handle:
                             source = handle.read()
                             with self.recorder.context("Deserialization"):
-                                try:
-                                    term = loadMASTBytes(source)
-                                except InvalidMAST as im:
-                                    print "Load (mast) failed:", im
-                                    term = Sequence(load(source)[:])
-                                return term
+                                return loadMASTBytes(source)
                     except IOError:
                         continue
             raise userError(u"Could not locate " + pname)
