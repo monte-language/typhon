@@ -9,9 +9,6 @@ exports (main)
 
 
 
-# We *could* use lib/parsers/monte, but it's got a flaw; it can't interoperate
-# with eval() at the moment. Instead we just wrap eval() here. It's not like
-# the current MiM parser can deal with secondary prompts, anyway.
 def makeMonteParser(&environment, unsealException) as DeepFrozen:
     var failure :NullOk[Str] := null
     var result := null

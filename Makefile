@@ -5,7 +5,6 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 	boot/lib/monte/monte_verifier.mast \
 	boot/lib/monte/mast.mast \
 	boot/lib/codec/utf8.mast \
-	boot/lib/parsers/monte.mast \
 	boot/montec.mast \
 	boot/lib/tubes.mast \
 	boot/prelude.mast \
@@ -96,7 +95,7 @@ entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 	mast/lib/entropy/pcg.mast
 
 parsers: mast/lib/parsers/html.mast \
-	mast/lib/parsers/marley.mast mast/lib/parsers/monte.mast \
+	mast/lib/parsers/marley.mast \
 	mast/lib/parsers/regex.mast
 
 tubes: mast/lib/tubes.mast

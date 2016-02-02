@@ -1,10 +1,10 @@
-import "lib/parsers/monte" =~ [=> makeMonteParser :DeepFrozen]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseExpression :DeepFrozen]
 import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
 import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
 import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
 exports (m__quasiParser, eval)
+
 
 def Transparent :DeepFrozen := TransparentStamp
 
@@ -199,12 +199,9 @@ object m__quasiParser as DeepFrozen:
         return makeM(qast, false)
 
     to fromStr(source :Str):
-        def parser := makeMonteParser("m``.fromStr/1")
-        parser.feedMany(source)
-        if (parser.failed()):
-            throw(parser.getFailure())
-        else:
-            return makeM(parser.results()[0], false)
+        def tree := parseExpression(makeMonteLexer(source, "m``.fromStr/1"),
+                                    astBuilder, throw)
+        return makeM(tree, false)
 
 
 object eval as DeepFrozen:
@@ -222,16 +219,10 @@ object eval as DeepFrozen:
         return eval.evalToPair(expr, environment)[0]
 
     to evalToPair(expr, environment):
-        if (expr =~ source :Str):
-            def parser := makeMonteParser("<eval>")
-            parser.feedMany(source)
-            if (parser.failed()):
-                throw(parser.getFailure())
-            else:
-                def result := parser.dump()
-                return typhonEval.evalToPair(result, environment)
-        else:
-            def ast :Expr := expr.expand().mix()
-            def context := makeMASTContext()
-            context(ast)
-            return typhonEval.evalToPair(context.bytes(), environment)
+        def ast :Expr := if (expr =~ source :Str) {
+            parseExpression(makeMonteLexer(source, "<eval>"), astBuilder,
+                            throw)
+        } else {expr}
+        def context := makeMASTContext()
+        context(optimize(expand(ast, astBuilder, throw)))
+        return typhonEval.evalToPair(context.bytes(), environment)
