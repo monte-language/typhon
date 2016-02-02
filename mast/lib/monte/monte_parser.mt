@@ -416,7 +416,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
     def seq(indent, ej):
         def ex := if (indent) {blockExpr} else {expr}
         def start := spanHere()
-        def exprs := [ex(ej)].diverge()
+        def exprs := [].diverge()
+        def first := opt(ex, ej)
+        if (first != null):
+            exprs.push(first)
         while (true):
             seqSep(__break)
             exprs.push(ex(__break))
@@ -507,17 +510,17 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
 
     def methBody(indent, ej):
         acceptEOLs()
-        def doco := if (peekTag() == ".String.") {
-            advance(ej)[1]
+        def [_, doco, docoSpan] := if (peekTag() == ".String.") {
+            advance(ej)
         } else {
-            null
+            [null, null, null]
         }
         acceptEOLs()
-        def contents := escape e {
-            seq(indent, ej)
-        } catch _ {
-            builder.SeqExpr([], null)
-        }
+        var contents := seq(indent, ej)
+        if (doco != null &&
+            contents.getNodeName() == "SeqExpr" &&
+            contents.getExprs().size() == 0):
+            contents := builder.LiteralExpr(doco, docoSpan)
         return [doco, contents]
 
     def positionalParam(ej):

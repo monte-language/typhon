@@ -99,6 +99,9 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 else:
                     return `Unrecognized parser error data $error`
 
+            to _printOn(out):
+                out.print(parseError.formatPretty())
+
     def atEnd():
         return position == input.size()
 

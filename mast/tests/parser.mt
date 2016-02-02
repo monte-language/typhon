@@ -160,6 +160,8 @@ def test_ObjectExpr(assert):
     assert.equal(expr("object foo { to doA(x, y, \"a\" => b) :z {0} method blee(=> a := 9) {1} to \"object\"(=> &b, \"c\" => d :Int := 99) {2} match p {3} match q {4}}"),
         ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To(null, "doA", [FinalPattern(NounExpr("x"), null), FinalPattern(NounExpr("y"), null)], [NamedParam(LiteralExpr("a"), FinalPattern(NounExpr("b"), null), null)], NounExpr("z"), LiteralExpr(0)), Method(null, "blee", [], [NamedParamImport(FinalPattern(NounExpr("a"), null), LiteralExpr(9))], null, LiteralExpr(1)), To(null, "object", [], [NamedParamImport(SlotPattern(NounExpr("b"), null), null), NamedParam(LiteralExpr("c"), FinalPattern(NounExpr("d"), NounExpr("Int")), LiteralExpr(99))], null, LiteralExpr(2))], [Matcher(FinalPattern(NounExpr("p"), null), LiteralExpr(3)), Matcher(FinalPattern(NounExpr("q"), null), LiteralExpr(4))]))`)
     assert.equal(expr("object foo {\"hello\" to blee() {\"yes\"\n1}}"), ta`ObjectExpr("hello", FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To("yes", "blee", [], [], null, LiteralExpr(1))], []))`)
+    assert.equal(expr("object foo {to blee() {}}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To(null, "blee", [], [], null, SeqExpr([]))], []))`)
+    assert.equal(expr("object foo {to blee() {\"yes\"}}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(null, [To("yes", "blee", [], [], null, LiteralExpr("yes"))], []))`)
     assert.equal(expr("object foo as A implements B, C {}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), NounExpr("A"), [NounExpr("B"), NounExpr("C")], Script(null, [], []))`)
     assert.equal(expr("object foo extends baz {}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(NounExpr("baz"), [], []))`)
 
@@ -176,6 +178,8 @@ def test_ObjectExpr(assert):
 
 def test_Function(assert):
     assert.equal(expr("def foo() {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], [], null, LiteralExpr(1)))`)
+    assert.equal(expr("def foo() {}\n"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], [], null, SeqExpr([])))`)
+    assert.equal(expr("def foo() {\"yes\"}"), ta`ObjectExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], [], null, LiteralExpr("yes")))`)
     assert.equal(expr("def foo(a, b) :c {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], [], NounExpr("c"), LiteralExpr(1)))`)
     assert.equal(expr("def foo():\n  1"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], [], null, LiteralExpr(1)))`)
     assert.equal(expr("def foo(a, b) :c:\n  1"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], [], NounExpr("c"), LiteralExpr(1)))`)
