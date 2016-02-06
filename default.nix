@@ -8,12 +8,16 @@ let
     mast = callPackage ./nix/mast.nix { typhonVm = typhonVm; };
     bench = callPackage ./nix/bench.nix { typhonVm = typhonVm; mast = mast; };
 
-    montePackage = s @ { name, version, src, ... }: let
+    montePackage = s @ { name, version, src, entrypoints, ... }: let
       mtSources = builtins.attrNames (builtins.readDir src);
       mastNames = map (builtins.replaceStrings [".mt"] [".mast"]) mtSources;
       montec = source: dest:
-        "${typhonVm}/mt-typhon -l ${mast}/mast ${mast}/mast/montec -mix -format mast $src/${source} ${dest}";
+        "${typhonVm}/mt-typhon -l ${mast}/mast ${mast}/loader run ${mast}/mast/montec -mix $src/${source} ${dest}";
       mastInstall = mast: "cp ${mast} $out/mast/";
+      mastEntrypoint = exe: ''
+        echo "${typhonVm}/mt-typhon -l ${mast}/mast $out/mast/${exe} \"\$@\"" > $out/bin/${exe}
+        chmod +x $out/bin/${exe}
+        '';
       stuff = {
         name = "monte-${name}-${version}";
         buildInputs = [ typhonVm mast ];
@@ -22,7 +26,9 @@ let
           (lib.zipListsWith montec mtSources mastNames);
         installPhase = ''
           mkdir -p $out/mast
-          '' + lib.concatStringsSep "\n" (map mastInstall mastNames);
+          mkdir -p $out/bin
+          '' + lib.concatStringsSep "\n" (map mastInstall mastNames) + "\n"
+          + lib.concatStringsSep "\n" (map mastEntrypoint entrypoints);
       };
     in
       nixpkgs.stdenv.mkDerivation (s // stuff);
