@@ -15,7 +15,7 @@ let
         "${typhonVm}/mt-typhon -l ${mast}/mast ${mast}/loader run ${mast}/mast/montec -mix $src/${source} ${dest}";
       mastInstall = mast: "cp ${mast} $out/mast/";
       mastEntrypoint = exe: ''
-        echo "${typhonVm}/mt-typhon -l ${mast}/mast $out/mast/${exe} \"\$@\"" > $out/bin/${exe}
+        echo "${typhonVm}/mt-typhon -l ${mast}/mast ${mast}/loader run $out/mast/${exe} \"\$@\"" > $out/bin/${exe}
         chmod +x $out/bin/${exe}
         '';
       stuff = {
