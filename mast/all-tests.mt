@@ -1,7 +1,6 @@
 import "lib/entropy/pool" =~ _
 import "lib/enum" =~ _
 import "lib/singleUse" =~ _
-import "lib/parsers/marley" =~ _
 import "lib/codec/percent" =~ _
 import "lib/record" =~ _
 import "lib/slow/exp" =~ _

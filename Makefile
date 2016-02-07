@@ -55,7 +55,6 @@ mast: mast/lib/enum.mast mast/lib/record.mast \
 	mast/lib/json.mast \
 	mast/lib/help.mast \
 	mast/lib/complex.mast \
-	mast/lib/rational.mast \
 	mast/lib/gai.mast \
 	mast/lib/gopher.mast \
 	prelude \
@@ -95,7 +94,6 @@ entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 	mast/lib/entropy/pcg.mast
 
 parsers: mast/lib/parsers/html.mast \
-	mast/lib/parsers/marley.mast \
 	mast/lib/parsers/regex.mast
 
 tubes: mast/lib/tubes.mast
@@ -112,7 +110,7 @@ games: mast/games/mafia.mast mast/lib/uKanren.mast
 fun: mast/fun/elements.mast mast/fun/repl.mast mast/fun/termParser.mast
 
 bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mast \
-	mast/bench/primeCount.mast mast/bench/brot.mast mast/bench/marley.mast \
+	mast/bench/primeCount.mast mast/bench/brot.mast \
 	mast/bench/entropy.mast mast/benchRunner.mast
 
 monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
