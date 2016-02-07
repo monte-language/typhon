@@ -390,24 +390,49 @@ def expand(node, builder, fail) as DeepFrozen:
         validateFor(key.getStaticScope() + value.getStaticScope(),
                     coll.getStaticScope(), fail, span)
         def fTemp := builder.TempNounExpr("validFlag", span)
-        def kTemp := builder.TempNounExpr("key", span)
-        def vTemp := builder.TempNounExpr("value", span)
+        # `key` and `value` are patterns. We cannot permit any code to run
+        # within the loop until we've done _validateFor(), which normally
+        # means that we use temp nouns and postpone actually unifying the key
+        # and value until afterwards. This is a bit of a waste of time,
+        # especially in very tight loops, and none of our optimizers can
+        # improve it since it's (ironically) unsafe to move any defs around
+        # the _validateFor() call! So, instead, we're considering whether the
+        # patterns can be refuted. If a pattern is irrefutable, then we'll
+        # unify it directly in the method's parameters. ~ C.
+        def [patts, defs] := if (key.refutable()) {
+            # The key is refutable, so we go with the traditional layout.
+            def kTemp := builder.TempNounExpr("key", span)
+            def vTemp := builder.TempNounExpr("value", span)
+            [
+                [builder.FinalPattern(kTemp, null, span),
+                 builder.FinalPattern(vTemp, null, span)],
+                [builder.DefExpr(key, null, kTemp, span),
+                 builder.DefExpr(value, null, vTemp, span)],
+            ]
+        } else if (value.refutable()) {
+            # Irrefutable key, refutable value. Split the difference.
+            def vTemp := builder.TempNounExpr("value", span)
+            [
+                [key, builder.FinalPattern(vTemp, null, span)],
+                [builder.DefExpr(value, null, vTemp, span)],
+            ]
+        } else {
+            # Yay, both are irrefutable!
+            [
+                [key, value], [],
+            ]
+        }
         def obj := builder.ObjectExpr("For-loop body",
             builder.IgnorePattern(null, span), null, [], builder.Script(
                 null,
-                [builder."Method"(null, "run",
-                    [builder.FinalPattern(kTemp, null, span),
-                     builder.FinalPattern(vTemp, null, span)],
-                    [], null,
+                [builder."Method"(null, "run", patts, [], null,
                 builder.SeqExpr([
                     builder.MethodCallExpr(
                         builder.NounExpr("_validateFor", span),
                         "run", [fTemp], [], span),
                     makeEscapeExpr(
                         builder.FinalPattern(builder.NounExpr("__continue", span), null, span),
-                        builder.SeqExpr([
-                            builder.DefExpr(key, null, kTemp, span),
-                            builder.DefExpr(value, null, vTemp, span),
+                        builder.SeqExpr(defs + [
                             block,
                             builder.NounExpr("null", span)
                         ], span),
@@ -434,29 +459,52 @@ def expand(node, builder, fail) as DeepFrozen:
         validateFor(exp.getStaticScope(), coll.getStaticScope(), fail, span)
         validateFor(key.getStaticScope() + value.getStaticScope(), coll.getStaticScope(), fail, span)
         def fTemp := builder.TempNounExpr("validFlag", span)
-        def kTemp := builder.TempNounExpr("key", span)
-        def vTemp := builder.TempNounExpr("value", span)
-        def skip := builder.TempNounExpr("skip", span)
+        # Same concept as expandFor(). ~ C.
+        def [patts, defs] := if (key.refutable()) {
+            # The key is refutable, so we go with the traditional layout.
+            def kTemp := builder.TempNounExpr("key", span)
+            def vTemp := builder.TempNounExpr("value", span)
+            [
+                [builder.FinalPattern(kTemp, null, span),
+                 builder.FinalPattern(vTemp, null, span)],
+                [builder.DefExpr(key, null, kTemp, span),
+                 builder.DefExpr(value, null, vTemp, span)],
+            ]
+        } else if (value.refutable()) {
+            # Irrefutable key, refutable value. Split the difference.
+            def vTemp := builder.TempNounExpr("value", span)
+            [
+                [key, builder.FinalPattern(vTemp, null, span)],
+                [builder.DefExpr(value, null, vTemp, span)],
+            ]
+        } else {
+            # Yay, both are irrefutable!
+            [
+                [key, value], [],
+            ]
+        }
+        # Same logic, applied to the filter/skip stuff. ~ C.
+        def [skipPatt, maybeFilterExpr] := if (filter != null) {
+            def skip := builder.TempNounExpr("skip", span)
+            [
+                builder.FinalPattern(skip, null, span), 
+                builder.IfExpr(filter, exp,
+                    builder.MethodCallExpr(skip, "run", [], [], span), span),
+            ]
+        } else {
+            [builder.IgnorePattern(null, span), exp]
+        }
         def kv := []
-        def maybeFilterExpr := if (filter != null) {
-            builder.IfExpr(filter, exp, builder.MethodCallExpr(skip, "run", [], [], span), span)
-        } else {exp}
         def obj := builder.ObjectExpr("For-loop body",
             builder.IgnorePattern(null, span), null, [], builder.Script(
                 null,
-                [builder."Method"(null, "run",
-                    [builder.FinalPattern(kTemp, null, span),
-                     builder.FinalPattern(vTemp, null, span),
-                     builder.FinalPattern(skip, null, span)],
-                    [], null,
+                [builder."Method"(null, "run", patts.with(skipPatt), [], null,
                 builder.SeqExpr([
                     builder.MethodCallExpr(
                         builder.NounExpr("_validateFor", span),
-                        "run", [fTemp], [], span),
-                    builder.DefExpr(key, null, kTemp, span),
-                    builder.DefExpr(value, null, vTemp, span),
-                    maybeFilterExpr
-                ], span), span)],
+                        "run", [fTemp], [], span)] +
+                        defs.with(maybeFilterExpr), span),
+                    span)],
             [], span), span)
         return builder.SeqExpr([
             builder.DefExpr(builder.VarPattern(fTemp, null, span), null,

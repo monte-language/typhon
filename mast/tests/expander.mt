@@ -297,10 +297,8 @@ def specimens := [
      try:
          _loop.run(y, object _ {
              \"For-loop body\"
-             method run(key_2, value_3) {
+             method run(_, x) {
                  _validateFor.run(validFlag_1)
-                 def _ := key_2
-                 def x := value_3
                  z
                  null
              }
@@ -315,14 +313,12 @@ def specimens := [
      try:
          _accumulateList.run(y, object _ {
              \"For-loop body\"
-             method run(key_2, value_3, skip_4) {
+             method run(_, x, skip_2) {
                  _validateFor.run(validFlag_1)
-                 def _ := key_2
-                 def x := value_3
                  if (a) {
                      z
                  } else {
-                     skip_4.run()
+                     skip_2.run()
                  }
              }
 
@@ -336,14 +332,12 @@ def specimens := [
      try:
          _accumulateMap.run(y, object _ {
              \"For-loop body\"
-             method run(key_2, value_3, skip_4) {
+             method run(_, x, skip_2) {
                  _validateFor.run(validFlag_1)
-                 def _ := key_2
-                 def x := value_3
                  if (a) {
                      _makeList.run(k, v)
                  } else {
-                     skip_4.run()
+                     skip_2.run()
                  }
              }
 
