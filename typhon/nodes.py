@@ -163,6 +163,18 @@ class LocalScope(object):
             self.map[name] = i, slotType
         return i
 
+    def escaping(self, name):
+        i, slotType = self.map.get(name, (-1, None))
+        if i == -1:
+            # And what if the parent is None? Then it implies that the slot
+            # type is some sort of global binding, which is already as
+            # reified/deoptimized as it can get. ~ C.
+            if self.parent is not None:
+                self.parent.escaping(name)
+        else:
+            slotType = slotType.escaping()
+            self.map[name] = i, slotType
+
     def _nameList(self):
         names = [(i, k, d) for k, (i, d) in self.map.items()]
         for ch in self.children:
@@ -1725,10 +1737,12 @@ class Obj(Expr):
                 compiler.literal(NullObject)
             else:
                 compiler.accessFrame(name, "BINDING")
+                compiler.locals.escaping(name)
 
         # Globals are pushed after closure, so they'll be popped first.
         for name in codeScript.globalNames:
             compiler.accessFrame(name, "BINDING")
+            compiler.locals.escaping(name)
         subc = compiler.pushScope()
         if self._as is None:
             index = compiler.addGlobal(u"null")
