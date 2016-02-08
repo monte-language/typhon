@@ -352,8 +352,8 @@ class Code(object):
         elif instruction in (NOUN_LOCAL, ASSIGN_LOCAL, SLOT_LOCAL,
                              BINDING_LOCAL, BIND, BINDFINALSLOT,
                              BINDVARSLOT):
-            name, depth = self.locals[index]
-            base += u" (%s (%s))" % (name, depth.repr)
+            name, slotType = self.locals[index]
+            base += u" (%s (%s))" % (name, slotType.repr())
         return base
 
     @elidable

@@ -41,6 +41,7 @@ from typhon.quoting import quoteChar, quoteStr
 from typhon.smallcaps.code import Code, CodeScript
 from typhon.smallcaps.ops import ops
 from typhon.smallcaps.peephole import peephole
+from typhon.smallcaps.slots import SlotType, binding, finalAny, varAny
 
 
 ADD_1 = getAtom(u"add", 1)
@@ -136,26 +137,30 @@ class LocalScope(object):
     def addChildScope(self, child):
         self.children.append(child)
 
-    def add(self, name, depth):
+    def add(self, name, slotType):
         i = self.getOffset()
         if name in self.map:
             raise InvalidAST(name.encode("utf-8") +
                              " is already defined in this scope")
         # print "Adding", name, "at slot", i, "and depth", depth.repr
-        self.map[name] = i, depth
+        self.map[name] = i, slotType
         return i
 
     def find(self, name, newDepth):
-        i, oldDepth = self.map.get(name, (-1, None))
+        i, slotType = self.map.get(name, (-1, None))
         if i == -1:
             if self.parent is not None:
                 return self.parent.find(name, newDepth)
             # Not found.
             return -1
-        depth = deepen(oldDepth, newDepth)
-        if depth != oldDepth:
-            # print "Promoting", name, "at slot", i, "to depth", depth.repr
-            self.map[name] = i, depth
+        if newDepth is DEPTH_BINDING:
+            print "Reifying binding for", name, "at slot", i
+            slotType = slotType.withReifiedBinding()
+            self.map[name] = i, slotType
+        elif newDepth is DEPTH_SLOT:
+            print "Reifying slot for", name, "at slot", i
+            slotType = slotType.withReifiedSlot()
+            self.map[name] = i, slotType
         return i
 
     def _nameList(self):
@@ -1740,7 +1745,7 @@ class Obj(Expr):
             compiler.addInstruction("POP", 0)
             compiler.addInstruction("POP", 0)
         elif isinstance(self._n, FinalPattern):
-            slotIndex = compiler.locals.add(self._n._n, DEPTH_SLOT)
+            slotIndex = compiler.locals.add(self._n._n, SlotType(binding, False))
             compiler.addInstruction("BINDFINALSLOT", slotIndex)
         else:
             # Bail!?
@@ -2131,7 +2136,7 @@ class BindingPattern(Pattern):
         out.write(self._noun.encode("utf-8"))
 
     def compile(self, compiler):
-        index = compiler.locals.add(self._noun, DEPTH_BINDING)
+        index = compiler.locals.add(self._noun, SlotType(binding, False))
         compiler.addInstruction("POP", 0)
         compiler.addInstruction("BIND", index)
 
@@ -2174,15 +2179,17 @@ class FinalPattern(Pattern):
             self._g.pretty(out)
 
     def compile(self, compiler):
+        slotType = SlotType(finalAny, False)
         # [specimen ej]
         if self._g is None:
             index = compiler.addGlobal(u"Any")
             compiler.addInstruction("NOUN_GLOBAL", index)
             # [specimen ej guard]
         else:
+            slotType = slotType.guarded()
             self._g.compile(compiler)
             # [specimen ej guard]
-        index = compiler.locals.add(self._n, DEPTH_SLOT)
+        index = compiler.locals.add(self._n, slotType)
         compiler.addInstruction("BINDFINALSLOT", index)
         # []
 
@@ -2428,15 +2435,17 @@ class VarPattern(Pattern):
             self._g.pretty(out)
 
     def compile(self, compiler):
+        slotType = SlotType(varAny, False)
         # [specimen ej]
         if self._g is None:
             index = compiler.addGlobal(u"Any")
             compiler.addInstruction("NOUN_GLOBAL", index)
             # [specimen ej guard]
         else:
+            slotType = slotType.guarded()
             self._g.compile(compiler)
             # [specimen ej guard]
-        index = compiler.locals.add(self._n, DEPTH_SLOT)
+        index = compiler.locals.add(self._n, slotType)
         compiler.addInstruction("BINDVARSLOT", index)
 
     def getStaticScope(self):
