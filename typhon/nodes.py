@@ -154,11 +154,11 @@ class LocalScope(object):
             # Not found.
             return -1
         if newDepth is DEPTH_BINDING:
-            print "Reifying binding for", name, "at slot", i
+            # print "Reifying binding for", name, "at slot", i
             slotType = slotType.withReifiedBinding()
             self.map[name] = i, slotType
         elif newDepth is DEPTH_SLOT:
-            print "Reifying slot for", name, "at slot", i
+            # print "Reifying slot for", name, "at slot", i
             slotType = slotType.withReifiedSlot()
             self.map[name] = i, slotType
         return i
