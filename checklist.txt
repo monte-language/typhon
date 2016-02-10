@@ -3,7 +3,7 @@ Original at http://colinm.org/language_checklist.html
 You appear to be advocating a new:
 [x] functional  [ ] imperative  [x] object-oriented  [ ] procedural [ ] stack-based
 [ ] "multi-paradigm"  [ ] lazy  [x] eager  [ ] statically-typed  [x] dynamically-typed
-[ ] pure  [ ] impure  [ ] non-hygienic  [ ] visual  [ ] beginner-friendly
+[x] pure  [ ] impure  [ ] non-hygienic  [ ] visual  [ ] beginner-friendly
 [ ] non-programmer-friendly  [ ] completely incomprehensible
 programming language.  Your language will not work.  Here is why it will not work.
 
@@ -27,20 +27,20 @@ Unfortunately, your language (has/lacks):
 [ ] goto  [x] exceptions  [x] closures  [ ] tail recursion  [ ] coroutines
 [x] reflection  [x] subtyping  [ ] multiple inheritance  [x] operator overloading
 [ ] algebraic datatypes  [x] recursive types  [x] polymorphic types
-[ ] covariant array typing  [ ] monads  [x] dependent types
+[x] covariant array typing  [ ] monads  [x] dependent types
 [x] infix operators  [ ] nested comments  [x] multi-line strings  [ ] regexes
 [x] call-by-value  [ ] call-by-name  [ ] call-by-reference  [ ] call-cc
 
 The following philosophical objections apply:
 [ ] Programmers should not need to understand category theory to write "Hello, World!"
 [ ] Programmers should not develop RSI from writing "Hello, World!"
-[x] The most significant program written in your language is its own compiler
+[ ] The most significant program written in your language is its own compiler
 [ ] The most significant program written in your language isn't even its own compiler
 [x] No language spec
 [x] "The implementation is the spec"
-   [ ] The implementation is closed-source  [ ] covered by patents  [ ] not owned by you
-[ ] Your type system is unsound  [ ] Your language cannot be unambiguously parsed
-   [ ] a proof of same is attached
+   [ ] The implementation is closed-source  [ ] covered by patents  [x] not owned by you
+[ ] Your type system is unsound  [x] Your language cannot be unambiguously parsed
+   [x] a proof of same is attached
    [ ] invoking this proof crashes the compiler
 [x] The name of your language makes it impossible to find on Google
 [x] Interpreted languages will never be as fast as C
@@ -52,10 +52,10 @@ The following philosophical objections apply:
 [ ] ____________________________ is known to be undecidable
 
 Your implementation has the following flaws:
-[ ] CPUs do not work that way
-[ ] RAM does not work that way
-[ ] VMs do not work that way
-[ ] Compilers do not work that way
+[x] CPUs do not work that way
+[x] RAM does not work that way
+[x] VMs do not work that way
+[x] Compilers do not work that way
 [ ] Compilers cannot work that way
 [ ] Shift-reduce conflicts in parsing seem to be resolved using rand()
 [x] You require the compiler to be present at runtime
@@ -67,7 +67,7 @@ Your implementation has the following flaws:
 [x] You don't seem to understand basic optimization techniques
 [x] You don't seem to understand basic systems programming
 [ ] You don't seem to understand pointers
-[ ] You don't seem to understand functions
+[x] You don't seem to understand functions
 
 Additionally, your marketing has the following problems:
 [x] Unsupported claims of increased productivity
@@ -92,7 +92,7 @@ Taking the wider ecosystem into account, I would like to note that:
 [ ] You have reinvented Lisp but worse
 [x] You have reinvented Javascript but worse
 [x] You have reinvented Java but worse
-[ ] You have reinvented C++ but worse
+[x] You have reinvented C++ but worse
 [ ] You have reinvented PHP but worse
 [x] You have reinvented PHP better, but that's still no justification
 [ ] You have reinvented Brainfuck but non-ironically
