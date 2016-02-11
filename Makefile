@@ -62,7 +62,6 @@ mast: mast/lib/enum.mast mast/lib/record.mast \
 	entropy \
 	parsers \
 	http \
-	irc \
 	tubes \
 	games \
 	bench \
@@ -100,9 +99,6 @@ tubes: mast/lib/tubes.mast
 
 http: mast/lib/http/client.mast mast/lib/http/server.mast \
 	mast/lib/http/tag.mast mast/lib/http/resource.mast \
-	tubes
-
-irc: mast/lib/irc/client.mast mast/lib/irc/user.mast \
 	tubes
 
 games: mast/games/mafia.mast mast/lib/uKanren.mast

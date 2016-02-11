@@ -1,0 +1,66 @@
+# -*- mode: python -*-
+import os
+import json
+import subprocess
+
+data = json.load(open("mt.json"))
+out = {}
+# Generate snippets for fetching all dependencies specified in the package.
+deps = data.get("dependencies", {}).items()
+depUrlsSeen = set(d[1]['url'] for d in deps)
+srcDepExprs = []
+depExprs = []
+env = os.environ.copy()
+env["PRINT_PATH"] = "1"
+out['sources'] = {}
+out['packages'] = {}
+depNamesSet = set([data['name']])
+
+
+def genName(name):
+    i = 0
+    while name in depNamesSet():
+        name = "%s_%s" % (name, i)
+    depNamesSet.add(name)
+    return name
+
+out['sources'][data['name']] = {
+    'type': 'local',
+    'path': os.getcwd()}
+
+for depname, dep in deps:
+    result = subprocess.check_output(
+        [FETCHERS[dep.get("type", "git")], dep["url"]],
+        env=env)
+    lines = result.split("\n")
+    commitStr = lines[0].strip().split()[-1]
+    hashStr = lines[2].strip()
+    depPath = lines[3].strip()
+    out['sources'][depname] = {
+        'url': dep['url'],
+        'type': dep.get('type', 'git'),
+        'commit': commitStr, 'hash': hashStr}
+    subdata = json.load(open(os.path.join(depPath, "mt.json")))
+    # Collect all dependencies of this library and append new ones to the list.
+    subdepNames = []
+    for (k, v) in subdata.get("dependencies", {}).iteritems():
+        if v not in depUrlsSeen:
+            n = genName(k)
+            depUrlsSeen.add(v['url'])
+            deps.append(n, v)
+            subdepNames.append(n)
+    out['packages'][subdata["name"]] = {
+        'source': depname,
+        'dependencies': subdepNames,
+        'entrypoint': None,
+        'paths': subdata['paths']}
+
+out['packages'][data['name']] = {
+    'source': data['name'],
+    'dependencies': [d[0] for d in deps],
+    'entrypoint': data.get('entrypoint'),
+    'paths': data['paths']}
+
+out['entrypoint'] = data['name']
+
+json.dump(out, open("mt-lock.json", "w"))
