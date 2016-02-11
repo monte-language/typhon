@@ -7,7 +7,8 @@ let
     typhonVm = callPackage ./nix/vm.nix { buildJIT = true; };
     mast = callPackage ./nix/mast.nix { typhonVm = typhonVm; };
     bench = callPackage ./nix/bench.nix { typhonVm = typhonVm; mast = mast; };
-
+    mt = callPackage ./nix/mt.nix { typhonVm = typhonVm; mast = mast; };
+    mtBake = {pkgFile}: callPackage pkgFile {typhonVm = typhonVm; mast = mast; };
     montePackage = s @ { name, version, src, entrypoints, ... }: let
       mtSources = builtins.attrNames (builtins.readDir src);
       mastNames = map (builtins.replaceStrings [".mt"] [".mast"]) mtSources;
