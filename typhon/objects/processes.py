@@ -13,7 +13,7 @@ from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, IntObject, StrObject, unwrapBytes
 from typhon.objects.root import Object, runnable
 from typhon.objects.refs import makePromise
-from typhon.vats import currentVat
+from typhon.vats import currentVat, scopedVat
 
 
 GETARGUMENTS_0 = getAtom(u"getArguments", 0)
@@ -93,44 +93,48 @@ class SubProcess(Object):
     """
     A subordinate process of the current process, on the local node.
     """
+    EMPTY_PID = -1
+    EMPTY_EXIT_AND_SIGNAL = (-1, -1)
 
     def __init__(self, vat, process, argv, env):
-        self.pid = None
+        self.pid = self.EMPTY_PID
         self.process = process
         self.argv = argv
         self.env = env
-        self.exit_and_signal = None
+        self.exit_and_signal = self.EMPTY_EXIT_AND_SIGNAL
         self.resolvers = []
-        ruv.stashProcess(process, (vat, self))
+        self.vat = vat
+        ruv.stashProcess(process, (self.vat, self))
 
     def retrievePID(self):
-        if self.pid is None:
+        if self.pid == self.EMPTY_PID:
             self.pid = intmask(self.process.c_pid)
 
     def exited(self, exit_status, term_signal):
-        if self.pid is None:
+        if self.pid == self.EMPTY_PID:
             self.retrievePID()
-        self.exit_and_signal = (exit_status, term_signal)
+        self.exit_and_signal = (intmask(exit_status), intmask(term_signal))
         toResolve, self.resolvers = self.resolvers, []
 
-        for resolver in toResolve:
-            self.resolveWaiter(resolver)
+        with scopedVat(self.vat):
+            for resolver in toResolve:
+                self.resolveWaiter(resolver)
 
     def resolveWaiter(self, resolver):
         resolver.resolve(ProcessExitInformation(*self.exit_and_signal))
 
     def makeWaiter(self):
         p, r = makePromise()
-        if self.exit_and_signal:
+        if self.exit_and_signal != self.EMPTY_EXIT_AND_SIGNAL:
             self.resolveWaiter(r)
         else:
             self.resolvers.append(r)
         return p
 
     def toString(self):
-        if self.pid:
-            return u"<child process (PID %d)>" % self.pid
-        return u"<child process (unspawned)>"
+        if self.pid == self.EMPTY_PID:
+            return u"<child process (unspawned)>"
+        return u"<child process (PID %d)>" % self.pid
 
     def recv(self, atom, args):
         if atom is GETARGUMENTS_0:

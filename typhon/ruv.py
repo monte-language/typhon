@@ -11,8 +11,6 @@ import os
 
 from functools import wraps
 
-import py
-
 from rpython.rlib import _rsocket_rffi as s
 from rpython.rlib.objectmodel import current_object_addr_as_int, specialize
 from rpython.rlib.rarithmetic import intmask
