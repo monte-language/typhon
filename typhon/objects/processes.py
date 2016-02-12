@@ -23,6 +23,9 @@ INTERRUPT_0 = getAtom(u"interrupt", 0)
 RUN_3 = getAtom(u"run", 3)
 WAIT_0 = getAtom(u"wait", 0)
 
+EXITSTATUS_0 = getAtom(u"exitStatus", 0)
+TERMINATIONSIGNAL_0 = getAtom(u"terminationSignal", 0)
+
 
 @autohelp
 class CurrentProcess(Object):
@@ -61,6 +64,31 @@ class CurrentProcess(Object):
 
 
 @autohelp
+class ProcessExitInformation(Object):
+    """
+    Holds a process' exitStatus and terminationSignal
+    """
+
+    def __init__(self, exitStatus, terminationSignal):
+        self.exitStatus = exitStatus
+        self.terminationSignal = terminationSignal
+
+    def toString(self):
+        return (u'<ProcessExitInformation exitStatus=%d,'
+                u' terminationSignal=%d>' % (self.exitStatus,
+                                             self.terminationSignal))
+
+    def recv(self, atom, args):
+        if atom is EXITSTATUS_0:
+            return IntObject(self.exitStatus)
+
+        if atom is TERMINATIONSIGNAL_0:
+            return IntObject(self.terminationSignal)
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
 class SubProcess(Object):
     """
     A subordinate process of the current process, on the local node.
@@ -89,8 +117,7 @@ class SubProcess(Object):
             self.resolveWaiter(resolver)
 
     def resolveWaiter(self, resolver):
-        resolver.resolve(ConstList([IntObject(i)
-                                    for i in self.exit_and_signal]))
+        resolver.resolve(ProcessExitInformation(*self.exit_and_signal))
 
     def makeWaiter(self):
         p, r = makePromise()
