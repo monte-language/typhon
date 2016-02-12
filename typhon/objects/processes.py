@@ -1,6 +1,8 @@
 import os
 import signal
 
+from rpython.rlib.rarithmetic import intmask
+
 from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -10,6 +12,7 @@ from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, IntObject, StrObject, unwrapBytes
 from typhon.objects.root import Object, runnable
+from typhon.objects.refs import makePromise
 from typhon.vats import currentVat
 
 
@@ -18,6 +21,7 @@ GETENVIRONMENT_0 = getAtom(u"getEnvironment", 0)
 GETPID_0 = getAtom(u"getPID", 0)
 INTERRUPT_0 = getAtom(u"interrupt", 0)
 RUN_3 = getAtom(u"run", 3)
+WAIT_0 = getAtom(u"wait", 0)
 
 
 @autohelp
@@ -62,13 +66,44 @@ class SubProcess(Object):
     A subordinate process of the current process, on the local node.
     """
 
-    def __init__(self, pid, argv, env):
-        self.pid = pid
+    def __init__(self, vat, process, argv, env):
+        self.pid = None
+        self.process = process
         self.argv = argv
         self.env = env
+        self.exit_and_signal = None
+        self.resolvers = []
+        ruv.stashProcess(process, (vat, self))
+
+    def retrievePID(self):
+        if self.pid is None:
+            self.pid = intmask(self.process.c_pid)
+
+    def exited(self, exit_status, term_signal):
+        if self.pid is None:
+            self.retrievePID()
+        self.exit_and_signal = (exit_status, term_signal)
+        toResolve, self.resolvers = self.resolvers, []
+
+        for resolver in toResolve:
+            self.resolveWaiter(resolver)
+
+    def resolveWaiter(self, resolver):
+        resolver.resolve(ConstList([IntObject(i)
+                                    for i in self.exit_and_signal]))
+
+    def makeWaiter(self):
+        p, r = makePromise()
+        if self.exit_and_signal:
+            self.resolveWaiter(r)
+        else:
+            self.resolvers.append(r)
+        return p
 
     def toString(self):
-        return u"<child process (PID %d)>" % self.pid
+        if self.pid:
+            return u"<child process (PID %d)>" % self.pid
+        return u"<child process (unspawned)>"
 
     def recv(self, atom, args):
         if atom is GETARGUMENTS_0:
@@ -89,6 +124,9 @@ class SubProcess(Object):
         if atom is INTERRUPT_0:
             os.kill(self.pid, signal.SIGINT)
             return NullObject
+
+        if atom is WAIT_0:
+            return self.makeWaiter()
 
         raise Refused(self, atom, args)
 
@@ -116,8 +154,12 @@ def makeProcess(executable, args, environment):
 
     vat = currentVat.get()
     try:
-        pid = ruv.spawn(vat.uv_loop, file=executable, args=argv, env=packedEnv)
-        return SubProcess(pid, argv, env)
+        process = ruv.allocProcess()
+        sub = SubProcess(vat, process, argv, env)
+        ruv.spawn(vat.uv_loop, process,
+                  file=executable, args=argv, env=packedEnv)
+        sub.retrievePID()
+        return sub
     except ruv.UVError as uve:
         raise userError(u"makeProcess: Couldn't spawn process: %s" %
                         uve.repr().decode("utf-8"))

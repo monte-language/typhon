@@ -421,7 +421,13 @@ add_exit_cb = rffi.llexternal('monte_helper_add_exit_cb', [process_options_tp,
                               compilation_info=_add_exit_cb_eci)
 
 
+def allocProcess():
+    return lltype.malloc(cConfig["process_t"], flavor="raw", zero=True)
+
+
 def processDiscard(process, exit_status, term_signal):
+    vat, subprocess = unstashProcess(process)
+    subprocess.exited(exit_status, term_signal)
     free(process)
 
 
@@ -429,8 +435,7 @@ UV_PROCESS_WINDOWS_HIDE = 1 << 4
 uv_spawn = rffi.llexternal("uv_spawn", [loop_tp, process_tp,
                                         process_options_tp], rffi.INT,
                            compilation_info=eci)
-def spawn(loop, file, args, env):
-    process = lltype.malloc(cConfig["process_t"], flavor="raw", zero=True)
+def spawn(loop, process, file, args, env):
     with rffi.scoped_str2charp(file) as rawFile:
         rawArgs = rffi.liststr2charpp(args)
         rawEnv = rffi.liststr2charpp(env)
@@ -444,12 +449,8 @@ def spawn(loop, file, args, env):
             free(options)
         rffi.free_charpp(rawEnv)
         rffi.free_charpp(rawArgs)
-    try:
-        check("spawn", rv)
-        return intmask(process.c_pid)
-    except:
-        free(process)
-        raise
+
+    check("spawn", rv)
 
 
 read_cb = rffi.CCallback([stream_tp, rffi.SSIZE_T, buf_tp], lltype.Void)
