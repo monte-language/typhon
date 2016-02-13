@@ -92,7 +92,21 @@ repository, will let git display textual diffs of the binary ASTs.
 RPython Quirks
 --------------
 
-Here's what you need to know about things imported from ``rpython.rlib``.
+Here's what you need to know about RPython and things imported from
+``rpython.rlib``.
+
+Immutability
+~~~~~~~~~~~~
+
+Like Monte, RPython values immutable structures. Whenever a class is
+immutable, adding the ``_immutable_ = True`` annotation will cause RPython to
+enforce an immutability variant: The fields of an instance of that class can
+only be assigned to once.
+
+It's possible to make only some fields immutable; just list all the immutable
+fields in a tuple with ``_immutable_fields_ = "this", "that"``. To make a
+field an immutable list with immutable elements, use a ``[*]``, as in
+``_immutable_fields_ = "this", "that", "those[*]"``.
 
 The JIT (``rpython.rlib.jit``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
