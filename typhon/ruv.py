@@ -71,6 +71,7 @@ eci = ExternalCompilationInfo(includes=["uv.h"],
                               library_dirs=envPaths("TYPHON_LIBRARY_PATH"),
                               libraries=["nsl", "rt", "uv"])
 
+
 class CConfig:
     _compilation_info_ = eci
 
@@ -224,6 +225,8 @@ stashTimer, unstashTimer, unstashingTimer = stashFor("timer", timer_tp)
 stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
 stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
 stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
+stashProcess, unstashProcess, unstashingProcess = stashFor("process",
+                                                           process_tp)
 
 
 @specialize.ll()
@@ -390,30 +393,62 @@ def alloc_idle(loop):
     return idle
 
 
+_ADD_EXIT_CB = '''
+#include <uv.h>
+
+RPY_EXTERN
+void
+monte_helper_add_exit_cb(uv_process_options_t* options,
+                        void (*uv_exit_cb)(uv_process_t*,
+                                           int64_t exit_status,
+                                           int term_signal))
+{
+    options->exit_cb = uv_exit_cb;
+}
+'''
+
+_add_exit_cb_eci = ExternalCompilationInfo(
+    includes=['uv.h'],
+    include_dirs=envPaths("TYPHON_INCLUDE_PATH"),
+    separate_module_sources=[_ADD_EXIT_CB])
+
+exit_cb = rffi.CCallback([process_tp, rffi.LONG, rffi.INT], lltype.Void)
+add_exit_cb = rffi.llexternal('monte_helper_add_exit_cb', [process_options_tp,
+                                                           exit_cb],
+                              lltype.Void,
+                              compilation_info=_add_exit_cb_eci)
+
+
+def allocProcess():
+    return lltype.malloc(cConfig["process_t"], flavor="raw", zero=True)
+
+
+def processDiscard(process, exit_status, term_signal):
+    vat, subprocess = unstashProcess(process)
+    subprocess.exited(exit_status, term_signal)
+    free(process)
+
+
 UV_PROCESS_WINDOWS_HIDE = 1 << 4
 uv_spawn = rffi.llexternal("uv_spawn", [loop_tp, process_tp,
                                         process_options_tp], rffi.INT,
                            compilation_info=eci)
-def spawn(loop, file, args, env):
-    process = lltype.malloc(cConfig["process_t"], flavor="raw", zero=True)
+def spawn(loop, process, file, args, env):
     with rffi.scoped_str2charp(file) as rawFile:
         rawArgs = rffi.liststr2charpp(args)
         rawEnv = rffi.liststr2charpp(env)
         with rffi.scoped_str2charp(".") as rawCWD:
             options = rffi.make(cConfig["process_options_t"], c_file=rawFile,
                                 c_args=rawArgs, c_env=rawEnv, c_cwd=rawCWD)
+            add_exit_cb(options, processDiscard)
             rffi.setintfield(options, "c_flags", UV_PROCESS_WINDOWS_HIDE)
             rffi.setintfield(options, "c_stdio_count", 0)
             rv = uv_spawn(loop, process, options)
             free(options)
         rffi.free_charpp(rawEnv)
         rffi.free_charpp(rawArgs)
-    try:
-        check("spawn", rv)
-        return intmask(process.c_pid)
-    except:
-        free(process)
-        raise
+
+    check("spawn", rv)
 
 
 read_cb = rffi.CCallback([stream_tp, rffi.SSIZE_T, buf_tp], lltype.Void)

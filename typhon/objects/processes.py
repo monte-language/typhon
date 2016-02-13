@@ -1,6 +1,8 @@
 import os
 import signal
 
+from rpython.rlib.rarithmetic import intmask
+
 from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -10,7 +12,8 @@ from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, IntObject, StrObject, unwrapBytes
 from typhon.objects.root import Object, runnable
-from typhon.vats import currentVat
+from typhon.objects.refs import makePromise
+from typhon.vats import currentVat, scopedVat
 
 
 GETARGUMENTS_0 = getAtom(u"getArguments", 0)
@@ -18,6 +21,10 @@ GETENVIRONMENT_0 = getAtom(u"getEnvironment", 0)
 GETPID_0 = getAtom(u"getPID", 0)
 INTERRUPT_0 = getAtom(u"interrupt", 0)
 RUN_3 = getAtom(u"run", 3)
+WAIT_0 = getAtom(u"wait", 0)
+
+EXITSTATUS_0 = getAtom(u"exitStatus", 0)
+TERMINATIONSIGNAL_0 = getAtom(u"terminationSignal", 0)
 
 
 @autohelp
@@ -57,17 +64,76 @@ class CurrentProcess(Object):
 
 
 @autohelp
+class ProcessExitInformation(Object):
+    """
+    Holds a process' exitStatus and terminationSignal
+    """
+
+    def __init__(self, exitStatus, terminationSignal):
+        self.exitStatus = exitStatus
+        self.terminationSignal = terminationSignal
+
+    def toString(self):
+        return (u'<ProcessExitInformation exitStatus=%d,'
+                u' terminationSignal=%d>' % (self.exitStatus,
+                                             self.terminationSignal))
+
+    def recv(self, atom, args):
+        if atom is EXITSTATUS_0:
+            return IntObject(self.exitStatus)
+
+        if atom is TERMINATIONSIGNAL_0:
+            return IntObject(self.terminationSignal)
+
+        raise Refused(self, atom, args)
+
+
+@autohelp
 class SubProcess(Object):
     """
     A subordinate process of the current process, on the local node.
     """
+    EMPTY_PID = -1
+    EMPTY_EXIT_AND_SIGNAL = (-1, -1)
 
-    def __init__(self, pid, argv, env):
-        self.pid = pid
+    def __init__(self, vat, process, argv, env):
+        self.pid = self.EMPTY_PID
+        self.process = process
         self.argv = argv
         self.env = env
+        self.exit_and_signal = self.EMPTY_EXIT_AND_SIGNAL
+        self.resolvers = []
+        self.vat = vat
+        ruv.stashProcess(process, (self.vat, self))
+
+    def retrievePID(self):
+        if self.pid == self.EMPTY_PID:
+            self.pid = intmask(self.process.c_pid)
+
+    def exited(self, exit_status, term_signal):
+        if self.pid == self.EMPTY_PID:
+            self.retrievePID()
+        self.exit_and_signal = (intmask(exit_status), intmask(term_signal))
+        toResolve, self.resolvers = self.resolvers, []
+
+        with scopedVat(self.vat):
+            for resolver in toResolve:
+                self.resolveWaiter(resolver)
+
+    def resolveWaiter(self, resolver):
+        resolver.resolve(ProcessExitInformation(*self.exit_and_signal))
+
+    def makeWaiter(self):
+        p, r = makePromise()
+        if self.exit_and_signal != self.EMPTY_EXIT_AND_SIGNAL:
+            self.resolveWaiter(r)
+        else:
+            self.resolvers.append(r)
+        return p
 
     def toString(self):
+        if self.pid == self.EMPTY_PID:
+            return u"<child process (unspawned)>"
         return u"<child process (PID %d)>" % self.pid
 
     def recv(self, atom, args):
@@ -89,6 +155,9 @@ class SubProcess(Object):
         if atom is INTERRUPT_0:
             os.kill(self.pid, signal.SIGINT)
             return NullObject
+
+        if atom is WAIT_0:
+            return self.makeWaiter()
 
         raise Refused(self, atom, args)
 
@@ -116,8 +185,12 @@ def makeProcess(executable, args, environment):
 
     vat = currentVat.get()
     try:
-        pid = ruv.spawn(vat.uv_loop, file=executable, args=argv, env=packedEnv)
-        return SubProcess(pid, argv, env)
+        process = ruv.allocProcess()
+        sub = SubProcess(vat, process, argv, env)
+        ruv.spawn(vat.uv_loop, process,
+                  file=executable, args=argv, env=packedEnv)
+        sub.retrievePID()
+        return sub
     except ruv.UVError as uve:
         raise userError(u"makeProcess: Couldn't spawn process: %s" %
                         uve.repr().decode("utf-8"))
