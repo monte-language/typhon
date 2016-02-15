@@ -407,8 +407,13 @@ class Promise(Object):
     def recv(self, atom, args):
         from typhon.objects.collections.maps import EMPTY_MAP
         if atom is _PRINTON_1:
-            out = args[0]
-            self.printOn(out)
+            # Same implementation as the root Object. We have to provide our
+            # own implementation because .callAll() defaults to raising a
+            # userError instead of Refused. ~ C.
+            # Note that the printer is a Monte-level object. We'll just
+            # delegate to .toString() as normal.
+            printer = args[0]
+            printer.call(u"print", [StrObject(self.toString())])
             return NullObject
 
         if atom is _WHENMORERESOLVED_1:
@@ -470,12 +475,12 @@ class SwitchableRef(Promise):
     def __init__(self, target):
         self._target = target
 
-    def printOn(self, printer):
+    def toString(self):
         if self.isSwitchable:
-            printer.call(u"print", [StrObject(u"<Promise>")])
+            return u"<promise>"
         else:
             self.resolutionRef()
-            self._target.printOn(printer)
+            return self._target.toString()
 
     def callAll(self, atom, args, namedArgs):
         if self.isSwitchable:
@@ -548,8 +553,8 @@ class BufferingRef(Promise):
         # Note to self: Weakref.
         self._buf = weakref.ref(buf)
 
-    def printOn(self, out):
-        out.call(u"print", [StrObject(u"<bufferingRef>")])
+    def toString(self):
+        return u"<bufferingRef>"
 
     def callAll(self, atom, args, namedArgs):
         raise userError(u"not synchronously callable (%s)" %
@@ -594,8 +599,8 @@ class NearRef(Promise):
         self.target = target
         self.vat = vat
 
-    def printOn(self, out):
-        out.call(u"print", [self.target])
+    def toString(self):
+        return self.target.toString()
 
     def hash(self):
         return self.target.hash()
@@ -666,12 +671,9 @@ class LocalVatRef(Promise):
         self.targetVat = targetVat
         self.originVat = originVat
 
-    def printOn(self, out):
-        out.call(u"print", [StrObject(u"<farref from vat ")])
-        out.call(u"print", [StrObject(self.originVat.name)])
-        out.call(u"print", [StrObject(u" into vat ")])
-        out.call(u"print", [StrObject(self.targetVat.name)])
-        out.call(u"print", [StrObject(u">")])
+    def toString(self):
+        return u"<farRef from vat %s into vat %s>" % (
+                self.originVat.name, self.targetVat.name)
 
     def hash(self):
         # XXX shouldn't this simply be unhashable?
@@ -726,9 +728,8 @@ class UnconnectedRef(Promise):
         assert isinstance(problem, Object)
         self._problem = problem
 
-    def printOn(self, out):
-        out.call(u"print", [StrObject(u"<ref broken by " +
-                                      self._problem.toString() + u">")])
+    def toString(self):
+        return u"<ref broken by %s>" % self._problem.toString()
 
     def callAll(self, atom, args, namedArgs):
         self._doBreakage(atom, args, namedArgs)
