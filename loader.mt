@@ -79,8 +79,13 @@ def main():
         def loadModuleFile():
             def code := makeFileResource(fname).getContents()
             return when (code) ->
-                def modObj := typhonEval(code, safeScopeBindings)
-                depMap[modname] := makeModuleConfiguration(modObj, [].asMap())
+                try:
+                    def modObj := typhonEval(code, safeScopeBindings)
+                    depMap[modname] := makeModuleConfiguration(modObj, [].asMap())
+                catch problem:
+                    traceln(`Unable to eval file ${M.toQuote(fname)}`)
+                    traceln.exception(problem)
+                    throw(problem)
         var config := depMap.fetch(modname, loadModuleFile)
         return when (config) ->
             def deps := promiseAllFulfilled([for d in (config.dependencyNames())
