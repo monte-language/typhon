@@ -1,5 +1,44 @@
 def safeScopeBindings :DeepFrozen := [for `&&@n` => v in (safeScope) n => v]
 
+object moduleGraphUnsatisfiedExit as DeepFrozen:
+    "An unsatisfied exit point on a module configuration graph."
+
+object moduleGraphLiveExit as DeepFrozen:
+    "A live (non-`DeepFrozen`) exit point on a module configuration graph."
+
+def makeModuleConfiguration(module :DeepFrozen,
+                            knownDependencies :Map[Str, DeepFrozen]) as DeepFrozen:
+    traceln(`making config $module $knownDependencies`)
+    return object moduleConfiguration as DeepFrozen:
+        "Information about the metadata and state of a module."
+
+        to _printOn(out):
+            out.print(`moduleConfiguration($knownDependencies)`)
+
+        to getModule() :DeepFrozen:
+            return module
+
+        to dependencyNames() :List[Str]:
+            return module.dependencies()
+
+        to dependencyMap() :Map[Str, DeepFrozen]:
+            return knownDependencies
+
+        to withDependency(petname :Str, dep :DeepFrozen) :DeepFrozen:
+            return makeModuleConfiguration(module,
+                knownDependencies.with(petname, dep))
+
+        to withLiveDependency(petname :Str) :DeepFrozen:
+            return makeModuleConfiguration(module,
+                knownDependencies.with(petname, moduleGraphLiveExit))
+
+        to withMissingDependency(petname :Str) :DeepFrozen:
+            return makeModuleConfiguration(module,
+                knownDependencies.with(petname, moduleGraphUnsatisfiedExit))
+
+        to run(loader):
+            return module(loader)
+
 def main():
 
     def valMap := [].asMap().diverge()
@@ -40,15 +79,31 @@ def main():
             throw(`Unable to locate $modname`)
         def loadModuleFile():
             def code := makeFileResource(fname).getContents()
-            def mod := when (code) -> {typhonEval(code, safeScopeBindings)}
-            depMap[modname] := mod
-            return mod
+            return when (code) ->
+                def modObj := typhonEval(code, safeScopeBindings)
+                depMap[modname] := makeModuleConfiguration(modObj, [].asMap())
         def mod := depMap.fetch(modname, loadModuleFile)
         return when (mod) ->
-            def deps := promiseAllFulfilled([for d in (mod.dependencies())
-                                              subload(d, depMap, => collectTests,
-                                                      => collectBenchmarks)])
+            def deps := promiseAllFulfilled([for d in (mod.dependencyNames())
+                                             subload(d, depMap, => collectTests,
+                                                     => collectBenchmarks)])
             when (deps) ->
+                # Fill in the module configuration.
+                var config := mod
+                def depNames := mod.dependencyNames()
+                for depName in depNames:
+                    if (depMap.contains(depName)):
+                        def dep := depMap[depName]
+                        # If the dependency is DF, then add it to the map.
+                        # Otherwise, put in the stub.
+                        if (dep =~ frozenDep :DeepFrozen):
+                            config withDependency= (depName, frozenDep)
+                        else:
+                            config withLiveDependency= (depName)
+                    else:
+                        config withMissingDependency= (depName)
+                # Update the dependency map.
+                depMap[modname] := config
                 def pre := collectedTests.size()
                 valMap[modname] := mod(loader)
                 if (collectTests):
