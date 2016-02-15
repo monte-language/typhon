@@ -406,16 +406,6 @@ class Promise(Object):
 
     def recv(self, atom, args):
         from typhon.objects.collections.maps import EMPTY_MAP
-        if atom is _PRINTON_1:
-            # Same implementation as the root Object. We have to provide our
-            # own implementation because .callAll() defaults to raising a
-            # userError instead of Refused. ~ C.
-            # Note that the printer is a Monte-level object. We'll just
-            # delegate to .toString() as normal.
-            printer = args[0]
-            printer.call(u"print", [StrObject(self.toString())])
-            return NullObject
-
         if atom is _WHENMORERESOLVED_1:
             return self._whenMoreResolved(args[0])
 
@@ -429,8 +419,6 @@ class Promise(Object):
         vat = currentVat.get()
         vat.sendOnly(callback, RUN_1, [self], EMPTY_MAP)
         return NullObject
-
-    # Synchronous calls.
 
     # Eventual sends.
 
@@ -477,7 +465,9 @@ class SwitchableRef(Promise):
 
     def toString(self):
         if self.isSwitchable:
-            return u"<promise>"
+            # NB: This should be an exceptional state, but some stuff in our
+            # stack can't handle it yet. ~ C.
+            return u"<unsafely-printed promise>"
         else:
             self.resolutionRef()
             return self._target.toString()

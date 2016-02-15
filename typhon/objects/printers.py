@@ -19,7 +19,7 @@ from typhon.autohelp import autohelp
 from typhon.errors import Refused, UserException
 from typhon.objects.constants import NullObject
 from typhon.objects.data import CharObject, StrObject, unwrapStr
-from typhon.objects.refs import resolution
+from typhon.objects.refs import Promise, resolution
 from typhon.objects.root import Object
 
 INDENT_1 = getAtom(u"indent", 1)
@@ -94,7 +94,11 @@ class Printer(Object):
         raise Refused(self, atom, args)
 
     def objPrint(self, item):
-        if item in self.context:
+        item = resolution(item)
+        if isinstance(item, Promise):
+            self.ub.append(u"<promise>")
+            return
+        elif item in self.context:
             self.ub.append(u"<**CYCLE**>")
             return
         self.context[item] = None
