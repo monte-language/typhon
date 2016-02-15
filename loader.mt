@@ -8,7 +8,6 @@ object moduleGraphLiveExit as DeepFrozen:
 
 def makeModuleConfiguration(module :DeepFrozen,
                             knownDependencies :Map[Str, DeepFrozen]) as DeepFrozen:
-    traceln(`making config $module $knownDependencies`)
     return object moduleConfiguration as DeepFrozen:
         "Information about the metadata and state of a module."
 
@@ -82,15 +81,14 @@ def main():
             return when (code) ->
                 def modObj := typhonEval(code, safeScopeBindings)
                 depMap[modname] := makeModuleConfiguration(modObj, [].asMap())
-        def mod := depMap.fetch(modname, loadModuleFile)
-        return when (mod) ->
-            def deps := promiseAllFulfilled([for d in (mod.dependencyNames())
+        var config := depMap.fetch(modname, loadModuleFile)
+        return when (config) ->
+            def deps := promiseAllFulfilled([for d in (config.dependencyNames())
                                              subload(d, depMap, => collectTests,
                                                      => collectBenchmarks)])
             when (deps) ->
                 # Fill in the module configuration.
-                var config := mod
-                def depNames := mod.dependencyNames()
+                def depNames := config.dependencyNames()
                 for depName in depNames:
                     if (depMap.contains(depName)):
                         def dep := depMap[depName]
@@ -102,13 +100,14 @@ def main():
                             config withLiveDependency= (depName)
                     else:
                         config withMissingDependency= (depName)
-                # Update the dependency map.
+                # Update the dependency map with the latest config.
                 depMap[modname] := config
                 def pre := collectedTests.size()
-                valMap[modname] := mod(loader)
+                valMap[modname] := config(loader)
                 if (collectTests):
                     traceln(`collected ${collectedTests.size() - pre} tests`)
-                valMap[modname]
+                [valMap[modname], config]
+
     def args := currentProcess.getArguments().slice(2)
     def usage := "Usage: loader run <modname> <args> | loader test <modname>"
     if (args.size() < 1):
@@ -121,8 +120,38 @@ def main():
                                       if (!excludes.contains(n))
                                       n => v].with("packageLoader", loader)
             return when (exps) ->
-                def [=> main] | _ := exps
+                # We don't care about config or anything that isn't the
+                # entrypoint named `main`.
+                def [[=> main] | _, _] := exps
                 M.call(main, "run", [subargs], unsafeScopeValues)
+        match [=="dot", modname] + subargs:
+            def tubes := subload("lib/tubes", [].asMap().diverge())
+            return when (tubes) ->
+                # An unconventional import statement, to be sure.
+                def [[=> makeUTF8EncodePump,
+                      => makePumpTube,
+                ] | _, _] := tubes
+
+                def stdout := makePumpTube(makeUTF8EncodePump())
+                stdout<-flowTo(makeStdOut())
+
+                def exps := subload(modname, [].asMap().diverge())
+                when (exps) ->
+                    # We only care about the config.
+                    def [_, topConfig] := exps
+                    stdout.receive(`digraph "$modname" {$\n`)
+                    # Iteration order doesn't really matter.
+                    def stack := [[modname, topConfig]].diverge()
+                    while (stack.size() != 0):
+                        def [name, config] := stack.pop()
+                        for depName => depConfig in config.dependencyMap():
+                            stdout.receive(`  "$name" -> "$depName";$\n`)
+                            if (depConfig != moduleGraphUnsatisfiedExit &&
+                                depConfig != moduleGraphLiveExit):
+                                stack.push([depName, depConfig])
+                    stdout.receive(`}$\n`)
+                    # Success!
+                    0
         match [=="test"] + modnames:
             def someMods := promiseAllFulfilled(
                 [for modname in (modnames)
