@@ -10,10 +10,10 @@ stdenv.mkDerivation {
       mkdir -p $out/nix
       cp default.nix $out
       cp nix/mt.nix $out/nix
-      cp nix/mt-instantiate.py $out/nix
+      cp nix/montePackage.nix $out/nix
       cat <(echo "FETCHERS = {'git': '${nix-prefetch-scripts + "/bin/nix-prefetch-git"}'}")  nix/mt-bake.py.in > $out/nix/mt-bake.py
       echo "${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} loader run repl" > $out/bin/mt-repl
-      echo "${pypy}/bin/pypy $out/nix/mt-bake.py; ${pypy}/bin/pypy $out/nix/mt-instantiate.py; ${nix}/bin/nix-build -E \"let pkgs = import <nixpkgs> {}; in pkgs.callPackage \$PWD/default.nix { typhonVm = ${typhonVm}; mast = ${mast}; }\"" > $out/bin/mt-bake
+      echo "${pypy}/bin/pypy $out/nix/mt-bake.py; ${nix}/bin/nix-build -E \"let pkgs = import <nixpkgs> {}; in pkgs.callPackage $out/nix/montePackage.nix { typhonVm = ${typhonVm}; mast = ${mast}; } ./mt-lock.json \"" > $out/bin/mt-bake
       chmod +x $out/bin/mt-repl
       chmod +x $out/bin/mt-bake
       '';
