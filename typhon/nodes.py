@@ -378,7 +378,10 @@ def withMaker(cls):
     Implements the SausageFactory design pattern.
     """
     nodeName = cls.__name__.decode("utf-8")
-    names = inspect.getargspec(cls.__init__).args[1:]
+    if cls.__init__ is object.__init__:
+        names = ()
+    else:
+        names = inspect.getargspec(cls.__init__).args[1:]
     verb = nodeName
     if getattr(cls, "fromMonte", None) is not None:
         verb += ".fromMonte"
