@@ -20,7 +20,6 @@ import "tests/optimizer" =~ _
 import "lib/continued" =~ _
 import "tests/flexMap" =~ _
 import "lib/paths" =~ _
-import "lib/irc/user" =~ _
 import "lib/netstring" =~ _
 import "lib/parsers/html" =~ _
 import "lib/cache" =~ _
