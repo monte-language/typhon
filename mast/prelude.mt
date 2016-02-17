@@ -421,16 +421,18 @@ object _mapExtract as DeepFrozenStamp:
 
     to run(key):
         return def mapExtractor(specimen, ej):
-            if (specimen.contains(key)):
-                return [specimen[key], specimen.without(key)]
+            def map :Map exit ej := specimen
+            if (map.contains(key)):
+                return [map[key], map.without(key)]
             throw.eject(ej, "Key " + M.toQuote(key) + " not in map")
 
     to withDefault(key, default):
-        return def mapDefaultExtractor(specimen, _):
-            if (specimen.contains(key)):
-                return [specimen[key], specimen.without(key)]
+        return def mapDefaultExtractor(specimen, ej):
+            def map :Map exit ej := specimen
+            if (map.contains(key)):
+                return [map[key], map.without(key)]
             else:
-                return [default, specimen]
+                return [default, map]
 
 
 def _quasiMatcher(matchMaker, values) as DeepFrozenStamp:
