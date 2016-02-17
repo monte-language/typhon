@@ -169,13 +169,14 @@ def main():
                      "lib/tubes",
                      [].asMap().diverge()))])
             return when (someMods) ->
-                def [=> makeIterFount,
-                     => makeUTF8EncodePump,
-                     => makePumpTube
-                ] | _ := tubes
-                def [=> makeAsserter,
-                     => makeTestDrain,
-                     => runTests] | _ := testRunner
+                def [[=> makeIterFount,
+                      => makeUTF8EncodePump,
+                      => makePumpTube
+                ] | _, _] := tubes
+                def [[=> makeAsserter,
+                      => makeTestDrain,
+                      => runTests
+                ] | _, _] := testRunner
 
                 def stdout := makePumpTube(makeUTF8EncodePump())
                 stdout <- flowTo(makeStdOut())
@@ -201,7 +202,7 @@ def main():
                     "benchRunner",
                     [].asMap().diverge()))])
             return when (someMods) ->
-                def [=> runBenchmarks] := benchRunner
+                def [[=> runBenchmarks] | _, _] := benchRunner
                 when (runBenchmarks(collectedBenches, bench,
                                     makeFileResource("bench.html"))) ->
                     traceln(`Benchmark report written to bench.html.`)
