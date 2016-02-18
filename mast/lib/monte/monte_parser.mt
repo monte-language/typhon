@@ -479,22 +479,25 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             lastError := msg
         return contents.snapshot()
 
-    def forExprHead(needParens, ej):
+    def forExprHead(ej):
+        var hasParens :Bool := true
         def p1 := pattern(ej)
         def p2 := if (peekTag() == "=>") {advance(ej); pattern(ej)
                   } else {null}
-        if (needParens):
-            acceptEOLs()
+        acceptEOLs()
         acceptTag("in", ej)
-        if (needParens):
-            acceptEOLs()
+        acceptEOLs()
+        if (peekTag() != "("):
+            traceln("Warning:", spanHere(), "For-loop without parens")
+            hasParens := false
+        else:
             acceptTag("(", ej)
-            acceptEOLs()
+        acceptEOLs()
         def it := comp(ej)
-        if (needParens):
-            acceptEOLs()
+        acceptEOLs()
+        if (hasParens):
             acceptTag(")", ej)
-            acceptEOLs()
+        acceptEOLs()
         return if (p2 == null) {[null, p1, it]} else {[p1, p2, it]}
 
     def matchers(indent, ej):
@@ -773,7 +776,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         if (tag == "for"):
             def spanStart := spanHere()
             advance(ej)
-            def [k, v, it] := forExprHead(false, ej)
+            def [k, v, it] := forExprHead(ej)
             if (indent):
                 blockLookahead(tryAgain)
             def body := block(indent, ej)
@@ -1052,7 +1055,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             acceptEOLs()
             if (peekTag() == "for"):
                 advance(ej)
-                def [k, v, it] := forExprHead(true, ej)
+                def [k, v, it] := forExprHead(ej)
                 def filt := if (peekTag() == "if") {
                     advance(ej)
                     acceptTag("(", ej)
