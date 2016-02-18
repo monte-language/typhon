@@ -156,7 +156,7 @@ def cleanUpEverything():
         print "ruv.TTYResetMode() failed:", uve.repr()
 
 
-def entryPoint(argv):
+def runTyphon(argv):
     recorder = Recorder()
     recorder.start()
 
@@ -265,6 +265,23 @@ def entryPoint(argv):
     # Clean up and exit.
     cleanUpEverything()
     return exitStatus
+
+
+def entryPoint(argv):
+    """
+    A wrapper that refuses to let errors pass silently.
+    """
+
+    try:
+        return runTyphon(argv)
+    except EnvironmentError as ee:
+        print "RPython EnvironmentError:", ee.strerror, ee.filename
+        print "If you can reproduce this, please send me a test case."
+        raise
+    except ruv.UVError as uve:
+        print "RPython UVError:", uve.repr()
+        print "If you can reproduce this, please send me a test case."
+        raise
 
 
 def jitpolicy(driver):
