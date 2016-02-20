@@ -19,7 +19,7 @@ from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 from typhon import log
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, UserException, userError
+from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object
 from typhon.objects.data import StrObject, unwrapInt, unwrapStr
@@ -155,6 +155,9 @@ class Vat(Object):
             except VatCheckpointed:
                 self.log(u"Ran out of checkpoints while taking turn",
                          tags=["serious"])
+            except Ejecting:
+                self.log(u"Ejector tried to escape vat turn boundary",
+                         tags=["serious"])
 
         else:
             from typhon.objects.collections.maps import ConstMap, monteMap
@@ -180,6 +183,10 @@ class Vat(Object):
                 self.log(u"Ran out of checkpoints while taking turn; breaking resolver",
                          tags=["serious"])
                 resolver.smash(sealException(userError(u"Vat ran out of checkpoints")))
+            except Ejecting:
+                self.log(u"Ejector tried to escape vat turn boundary",
+                         tags=["serious"])
+                resolver.smash(sealException(userError(u"Ejector tried to escape from vat")))
 
     def takeSomeTurns(self):
         # Limit the number of continuous turns to keep network latency low.

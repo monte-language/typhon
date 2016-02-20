@@ -14,7 +14,7 @@
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Ejecting, Refused, UserException
+from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object, audited
@@ -59,7 +59,10 @@ class Ejector(Object):
 
     def fire(self, payload=NullObject):
         if self.active:
+            self.disable()
             raise Ejecting(self, payload)
+        else:
+            raise userError(u"Inactive ejector was fired")
 
     def fireString(self, message):
         return self.fire(StrObject(message))
@@ -81,7 +84,7 @@ def throw(ej, payload):
         ej.fire(payload)
     else:
         ej.call(u"run", [payload])
-    raise UserException(StrObject(u"Ejector did not exit"))
+    raise userError(u"Ejector did not exit")
 
 @autohelp
 @audited.DF
