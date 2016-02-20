@@ -119,7 +119,7 @@ def main():
         def moduleAndConfig := subload(modname)
         return when (moduleAndConfig) ->
             def [[(modname) => module], config] := moduleAndConfig
-            return [module, config]
+            [module, config]
 
     def args := currentProcess.getArguments().slice(2)
     def usage := "Usage: loader run <modname> <args> | loader test <modname>"
