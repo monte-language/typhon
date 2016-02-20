@@ -861,7 +861,7 @@ def expand(node, builder, fail) as DeepFrozen:
         else if (nodeName == "MapPatternImport"):
             def [subnode, default] := args
             def pattName := node.getPattern().getNodeName()
-            def [k, v] := if (pattName == "FinalPattern") {
+            def [k, v] := if (pattName == "FinalPattern" || pattName == "VarPattern") {
                 [builder.LiteralExpr(node.getPattern().getNoun().getName(), span), subnode]
             } else if (pattName == "SlotPattern") {
                 [builder.LiteralExpr("&" + node.getPattern().getNoun().getName(), span), subnode]
