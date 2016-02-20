@@ -45,7 +45,7 @@ def main():
     object testCollector:
         to get(locus):
             return def testBucket(tests):
-                for t in tests:
+                for t in (tests):
                     collectedTests.push([locus, t])
 
     object benchCollector:
@@ -95,7 +95,7 @@ def main():
                 when (deps) ->
                     # Fill in the module configuration.
                     def depNames := config.dependencyNames()
-                    for depName in depNames:
+                    for depName in (depNames):
                         if (depMap.contains(depName)):
                             def dep := depMap[depName]
                             # If the dependency is DF, then add it to the map.
@@ -159,7 +159,7 @@ def main():
                     def stack := [[modname, topConfig]].diverge()
                     while (stack.size() != 0):
                         def [name, config] := stack.pop()
-                        for depName => depConfig in config.dependencyMap():
+                        for depName => depConfig in (config.dependencyMap()):
                             stdout.receive(`  "$name" -> "$depName";$\n`)
                             if (depConfig != moduleGraphUnsatisfiedExit &&
                                 depConfig != moduleGraphLiveExit):
@@ -194,9 +194,9 @@ def main():
                     def fails := asserter.fails()
                     stdout.receive(`${asserter.total()} tests run, $fails failures$\n`)
                     # Exit code: Only returns 0 if there were 0 failures.
-                    for loc => errors in asserter.errors():
+                    for loc => errors in (asserter.errors()):
                         stdout.receive(`In $loc:$\n`)
-                        for error in errors:
+                        for error in (errors):
                             stdout.receive(`~ $error$\n`)
                     fails.min(1)
         match [=="bench"] + modnames:
