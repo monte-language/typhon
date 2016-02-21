@@ -47,7 +47,7 @@ let
     buildMtPkg {
       name = name;
       src = let s = sources.${pkg.source}; in
-        if s.type == "local" && name == data.entrypoint then
+        if name == data.entrypoint then
           builtins.filterSource (path: type:
             lib.any (p:
                lib.hasPrefix (builtins.toString (builtins.toPath (s + ("/" + p)))) path) pkg.paths)
