@@ -1,6 +1,5 @@
-{stdenv, lib, fetchgit, bash, typhonVm, mast}: lockfile:
+{stdenv, lib, fetchgit, bash, typhonVm, mast}: lock:
 let
-  data = builtins.fromJSON (builtins.readFile lockfile);
   fetchSrc = (name: srcDesc:
     if srcDesc.type == "git" then
       fetchgit {
@@ -48,7 +47,7 @@ let
     buildMtPkg {
       name = name;
       src = let s = sources.${pkg.source}; in
-        if name == data.entrypoint then
+        if name == lock.entrypoint then
           builtins.filterSource (path: type:
             lib.any (p:
                lib.hasPrefix (builtins.toString (builtins.toPath (s + ("/" + p)))) path) pkg.paths)
@@ -59,7 +58,7 @@ let
       entrypoint = pkg.entrypoint;
       pathNames = pkg.paths;
     };
-  sources = lib.mapAttrs fetchSrc data.sources;
-  packages = lib.mapAttrs makePkg data.packages;
+  sources = lib.mapAttrs fetchSrc lock.sources;
+  packages = lib.mapAttrs makePkg lock.packages;
 in
-packages.${data.entrypoint}
+packages.${lock.entrypoint}

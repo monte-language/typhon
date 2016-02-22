@@ -10,18 +10,20 @@ let
     mt = callPackage ./nix/mt.nix { typhonVm = typhonVm; mast = mast; };
     montePackage = callPackage ./nix/montePackage.nix { typhonVm = typhonVm; mast = mast; };
     dockerize = {lockfile, name}:
-      # XXX shouldn't have to read the lockfile twice
-      let scriptName = (builtins.fromJSON (builtins.readFile lockfile)).entrypoint;
+      let
+        # Decode the lockfile once, and use it multiple times.
+        lockSet = builtins.fromJSON (builtins.readFile lockfile);
+        scriptName = lockSet.entrypoint;
       in
-      nixpkgs.dockerTools.buildImage {
-        name = name;
-        tag = "latest";
-        contents = montePackage lockfile;
-        config = {
-          Cmd = [ ("/bin/" + scriptName) ];
-          WorkingDir = "/";
+        nixpkgs.dockerTools.buildImage {
+          name = name;
+          tag = "latest";
+          contents = montePackage lockSet;
+          config = {
+            Cmd = [ ("/bin/" + scriptName) ];
+            WorkingDir = "/";
+          };
         };
-      };
   };
 in
   typhon
