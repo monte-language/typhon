@@ -1,4 +1,4 @@
-{stdenv, lib, fetchgit, typhonVm, mast}: lockfile:
+{stdenv, lib, fetchgit, bash, typhonVm, mast}: lockfile:
 let
   data = builtins.fromJSON (builtins.readFile lockfile);
   fetchSrc = (name: srcDesc:
@@ -37,7 +37,8 @@ let
         let dependencySearchPaths = lib.concatStringsSep " " (map (x: "-l " + x) dependencies);
         in ''
         mkdir -p $out/bin
-      echo "${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader run ${entrypoint} \"\$@\"" > $out/bin/${entrypoint}
+      echo "#!${bash}/bin/bash" > $out/bin/${entrypoint}
+      echo "${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader run ${entrypoint} \"\$@\"" >> $out/bin/${entrypoint}
       chmod +x $out/bin/${entrypoint}
       '' else "");
       doCheck = false;
