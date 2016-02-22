@@ -137,7 +137,7 @@ object List as DeepFrozenStamp:
                     specimen := specimen._conformTo(SubList)
 
                 if (isList(specimen)):
-                    for element in specimen:
+                    for element in (specimen):
                         subGuard.coerce(element, ej)
                     return specimen
 
@@ -196,7 +196,7 @@ object Set as DeepFrozenStamp:
                     specimen := specimen._conformTo(SubSet)
 
                 var set := [].asSet()
-                for element in specimen:
+                for element in (specimen):
                     set with= (subGuard.coerce(element, ej))
                 return set
 
@@ -256,7 +256,7 @@ object Map as DeepFrozenStamp:
                     specimen := specimen._conformTo(SubMap)
 
                 if (isMap(specimen)):
-                    for key => value in specimen:
+                    for key => value in (specimen):
                         keyGuard.coerce(key, ej)
                         valueGuard.coerce(value, ej)
                     return specimen
@@ -539,7 +539,7 @@ def promiseAllFulfilled(vows) as DeepFrozenStamp:
     if (counter == 0):
         return vows
     def [p, r] := Ref.promise()
-    for v in vows:
+    for v in (vows):
         Ref.whenResolvedOnly(v, def done(_) {
             if (Ref.isBroken(v)) {
                 r.resolve(v, false)

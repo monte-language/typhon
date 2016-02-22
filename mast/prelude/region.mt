@@ -141,7 +141,7 @@ def region(loader):
                     # Cannot fail since size is non-zero.
                     def [head] + tail := topSets
                     out.print(head)
-                    for topSet in tail:
+                    for topSet in (tail):
                         out.print(" | ")
                         out.print(topSet)
                 out.print(` $myName region>`)
@@ -159,7 +159,7 @@ def region(loader):
 
                 # XXX linear search. This can, and should, be binary search, *but*
                 # we must prove that our list of topsets is sorted.
-                for topSet in topSets:
+                for topSet in (topSets):
                     if (topSet.contains(pos)):
                         return true
                 return false
@@ -211,7 +211,7 @@ def region(loader):
                 if (left != null):
                     # We don't include -∞, so our complement must.
                     rv.push(_makeTopSet(guard, null, false, left, !leftClosed))
-                for topSet in tail:
+                for topSet in (tail):
                     def [nextLeft, nextLC, nextRight, nextRC] := topSet.asTuple()
                     rv.push(_makeTopSet(guard, right, !rightClosed, nextLeft,
                                         !nextLC))

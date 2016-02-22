@@ -52,7 +52,7 @@ object b__quasiParser as DeepFrozen:
                 def patterns := [].diverge()
                 var patternMarker := 0
 
-                for var piece in pieces:
+                for var piece in (pieces):
                     if (piece =~ [==bytePattern, index]):
                         if (inPattern):
                             throw.eject(ej,
@@ -106,7 +106,7 @@ object b__quasiParser as DeepFrozen:
 
     to valueMaker(pieces):
         def chunks := [].diverge()
-        for piece in pieces:
+        for piece in (pieces):
             if (piece =~ _ :Str):
                 chunks.push(_makeBytes.fromString(piece))
             else:
@@ -115,7 +115,7 @@ object b__quasiParser as DeepFrozen:
         return object bytes:
             to substitute(values) :Bytes:
                 var rv := _makeBytes.fromInts([])
-                for chunk in chunks.snapshot():
+                for chunk in (chunks.snapshot()):
                     switch (chunk):
                         match [==byteValue, index]:
                             switch (values[index]):

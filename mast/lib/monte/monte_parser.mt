@@ -821,7 +821,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             }
             # make life easier on expander and expander tests
             var n := tryblock
-            for [cp, cb] in catchers:
+            for [cp, cb] in (catchers):
                 n := builder.CatchExpr(n, cp, cb, spanFrom(spanStart))
             if (finallyblock != null):
                 n := builder.FinallyExpr(n, finallyblock, spanFrom(spanStart))
@@ -1096,7 +1096,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         # XXX maybe parameterize mapItem instead of doing this
         def unpackMapItems(items):
             var pairs := []
-            for node in items:
+            for node in (items):
                 def nn := node.getNodeName()
                 if (nn == "MapExprExport"):
                     def sub := node.getValue()
@@ -1173,7 +1173,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             else:
                 break
         var result := base
-        for tr in trailers:
+        for tr in (trailers):
             result := M.call(builder, tr[0], [result] + tr[1], [].asMap())
         return result
 

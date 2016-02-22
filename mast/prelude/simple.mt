@@ -23,7 +23,7 @@ def makeString(chunks):
     return object stringMaker as DeepFrozenStamp:
         to substitute(values) :Str:
             def rv := [].diverge()
-            for chunk in chunks:
+            for chunk in (chunks):
                 switch (chunk):
                     match [==VALUE_HOLE, index]:
                         rv.push(M.toString(values[index]))
@@ -55,7 +55,7 @@ object simple__quasiParser as DeepFrozenStamp:
 
     to matchMaker(segments):
         def pieces := [].diverge()
-        for p in segments:
+        for p in (segments):
             escape e:
                 def s :Str exit e := p
                 if (s.size() > 0):
@@ -69,7 +69,7 @@ object simple__quasiParser as DeepFrozenStamp:
                 var i := 0
                 var j := 0
                 def bindings := [].diverge()
-                for n => piece in pieces:
+                for n => piece in (pieces):
                     def [typ, val] := piece
                     if (typ == LITERAL):
                         j := i + val.size()

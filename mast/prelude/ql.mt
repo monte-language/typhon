@@ -2,7 +2,7 @@
 
 def tokensOf(pieces, makeLexer) as DeepFrozen:
     var rv := []
-    for piece in pieces:
+    for piece in (pieces):
         # Yes, this will pick up value and pattern holes which are
         # strings. However, this is a feature; presumably, if your
         # lexer and parser prefer to handle holes this way, then this

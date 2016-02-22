@@ -79,7 +79,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                                                 back.min(allLines.size()))
                     def msg := [].diverge()
                     var i := front
-                    for line in lines:
+                    for line in (lines):
                         i += 1
                         def lnum := M.toString(i)
                         def pad := " " * (4 - lnum.size())
@@ -753,7 +753,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             startPos := -1
             getNextToken(false, __break)
         if (braceStack.size() != 0):
-            for b in braceStack:
+            for b in (braceStack):
                 if (!["INDENT", null].contains(b[0])):
                     throw.eject(fail, [`No matching ${b[2]} found`, b[1]])
 

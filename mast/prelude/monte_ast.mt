@@ -95,7 +95,7 @@ def emptyScope :DeepFrozen := makeStaticScope([], [], [], [], false)
 
 def sumScopes(nodes) as DeepFrozenStamp:
     var result := emptyScope
-    for node in nodes:
+    for node in (nodes):
         if (node != null):
             result += node.getStaticScope()
     return result
@@ -106,7 +106,7 @@ def scopeMaybe(optNode) as DeepFrozenStamp:
     return optNode.getStaticScope()
 
 def all(iterable, pred) as DeepFrozenStamp:
-    for item in iterable:
+    for item in (iterable):
         if (!pred(item)):
             return false
     return true
@@ -118,7 +118,7 @@ def maybeTransform(node, f) as DeepFrozenStamp:
 
 def transformAll(nodes, f) as DeepFrozenStamp:
     def results := [].diverge()
-    for n in nodes:
+    for n in (nodes):
         results.push(n.transform(f))
     return results.snapshot()
 
@@ -130,7 +130,7 @@ def isIdentifier(name :Str) :Bool as DeepFrozenStamp:
 def printListOn(left, nodes, sep, right, out, priority) as DeepFrozenStamp:
     out.print(left)
     if (nodes.size() >= 1):
-        for n in nodes.slice(0, nodes.size() - 1):
+        for n in (nodes.slice(0, nodes.size() - 1)):
             n.subPrintOn(out, priority)
             out.print(sep)
         nodes.last().subPrintOn(out, priority)
@@ -143,7 +143,7 @@ def printDocstringOn(docstring, out, indentLastLine) as DeepFrozenStamp:
         return
     out.lnPrint("\"")
     def lines := docstring.split("\n")
-    for line in lines.slice(0, 0.max(lines.size() - 2)):
+    for line in (lines.slice(0, 0.max(lines.size() - 2))):
         out.println(line)
     if (lines.size() > 0):
         out.print(lines.last())
@@ -373,7 +373,7 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozenStamp:
     # semantically unsurprising (distributive, etc.) So we un-nest them here
     # as a courtesy. ~ C.
     def _exprs := [].diverge()
-    for ex in exprs:
+    for ex in (exprs):
         if (ex.getNodeName() == "SeqExpr"):
             _exprs.extend(ex.getExprs())
         else:
@@ -389,7 +389,7 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozenStamp:
             var first := true
             if (priorities["braceExpr"] >= priority && fixedExprs == []):
                 out.print("pass")
-            for e in fixedExprs:
+            for e in (fixedExprs):
                 if (!first):
                     out.println("")
                 first := false
@@ -409,7 +409,7 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
         to getBody():
             return body
         to subPrintOn(out, priority):
-            for [petname, patt] in importsList:
+            for [petname, patt] in (importsList):
                 out.print("import ")
                 out.quote(petname)
                 out.print(" =~ ")
@@ -1160,7 +1160,7 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
             "Look up the first method with the given verb, or eject if no such
              method exists."
 
-            for meth in methods:
+            for meth in (methods):
                 if (meth.getVerb() == verb):
                     return meth
             throw.eject(ej, "No method named " + verb)
@@ -1194,7 +1194,7 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
                 out.print(" extends ")
                 extend.subPrintOn(out, priorities["order"])
         to subPrintOn(out, priority):
-            for m in methods + matchers:
+            for m in (methods + matchers):
                 m.subPrintOn(out, priority)
                 out.print("\n")
     return astWrapper(script, makeScript, [extend, methods, matchers], span,
@@ -1538,7 +1538,7 @@ def makeInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
             else:
                 indentOut.print(":")
             printDocstringOn(docstring, indentOut, false)
-            for m in messages:
+            for m in (messages):
                 m.subPrintOn("to", indentOut, priority)
                 indentOut.print("\n")
             if (priorities["braceExpr"] <= priority):
@@ -1657,7 +1657,7 @@ def makeTryExpr(body :Expr, catchers :List[Ast["Catcher"]],
             return finallyBlock
         to subPrintOn(out, priority):
             printExprSuiteOn(fn {out.print("try")}, body, false, out, priority)
-            for m in catchers:
+            for m in (catchers):
                 m.subPrintOn(out, priority)
             if (finallyBlock != null):
                 printExprSuiteOn(fn {out.print("finally")},
@@ -1730,7 +1730,7 @@ def makeSwitchExpr(specimen :Expr, matchers :List[Ast["Matcher"]], span) as Deep
                 indentOut.print(" {")
             else:
                 indentOut.print(":")
-            for m in matchers:
+            for m in (matchers):
                 m.subPrintOn(indentOut, priority)
                 indentOut.print("\n")
             if (priorities["braceExpr"] <= priority):
@@ -1763,7 +1763,7 @@ def makeWhenExpr(args :List[Expr], body :Expr, catchers :List[Ast["Catcher"]],
             if (priorities["braceExpr"] <= priority):
                 out.println("")
                 out.print("}")
-            for c in catchers:
+            for c in (catchers):
                 c.subPrintOn(out, priority)
             if (finallyBlock != null):
                 printExprSuiteOn(fn {
@@ -2227,7 +2227,7 @@ def quasiPrint(name, quasis, out, priority) as DeepFrozenStamp:
     if (name != null):
         out.print(name)
     out.print("`")
-    for i => q in quasis:
+    for i => q in (quasis):
         var p := priorities["prim"]
         if (i + 1 < quasis.size()):
             def next := quasis[i + 1]

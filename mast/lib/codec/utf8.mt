@@ -107,7 +107,7 @@ object UTF8 as DeepFrozen:
     to encode(specimen, ej) :Bytes:
         def s :Str exit ej := specimen
         var rv :Bytes := b``
-        for c in s:
+        for c in (s):
             rv += encodeCore(c)
         return rv
 

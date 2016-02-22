@@ -10,7 +10,7 @@ object zip as DeepFrozen:
 
     match [=="run", iterables, _]:
         def _its := [].diverge()
-        for it in iterables:
+        for it in (iterables):
             _its.push(it._makeIterator())
         def its := _its.snapshot()
         object ziperator:
@@ -19,7 +19,7 @@ object zip as DeepFrozen:
             to next(ej):
                 def ks := [].diverge()
                 def vs := [].diverge()
-                for it in its:
+                for it in (its):
                     def [k, v] := it.next(ej)
                     ks.push(k)
                     vs.push(v)
@@ -47,7 +47,7 @@ def weakenPattern(var pattern, nodes) as DeepFrozen:
 
     if (pattern.getNodeName() == "VarPattern"):
         def name :Str := pattern.getNoun().getName()
-        for node in nodes:
+        for node in (nodes):
             if (node.getStaticScope().getNamesSet().contains(name)):
                 return pattern
         # traceln(`Weakening var $name`)
@@ -56,7 +56,7 @@ def weakenPattern(var pattern, nodes) as DeepFrozen:
 
     if (pattern.getNodeName() == "FinalPattern"):
         def name :Str := pattern.getNoun().getName()
-        for node in nodes:
+        for node in (nodes):
             if (node.getStaticScope().namesUsed().contains(name)):
                 return pattern
         # traceln(`Weakening def $name`)
@@ -82,7 +82,7 @@ def specialize(name, value) as DeepFrozen:
                     # defined.
                     var newExprs := []
                     var change := true
-                    for i => expr in ast.getExprs():
+                    for i => expr in (ast.getExprs()):
                         if (expr.getStaticScope().outNames().contains(name)):
                             change := false
                         newExprs with= (if (change) {args[0][i]} else {expr})
@@ -285,7 +285,7 @@ def mix(expr,
                         var slicePoint := -1
                         def exprs := body.getExprs()
 
-                        for i => expr in exprs:
+                        for i => expr in (exprs):
                             switch (expr.getNodeName()):
                                 match =="MethodCallExpr":
                                     def receiver := expr.getReceiver()
@@ -439,10 +439,10 @@ def mix(expr,
             # m`def x := 42; expr; x` -> m`expr; 42` ? x is replaced in expr
             var nameMap := [].asMap()
             var newExprs := []
-            for i => var item in exprs:
+            for i => var item in (exprs):
                 # First, rewrite. This ensures that all propagations are
                 # fulfilled.
-                for name => rhs in nameMap:
+                for name => rhs in (nameMap):
                     item transform= (specialize(name, rhs))
 
                 # Now, optimize. This probably won't be too expensive and lets
@@ -488,7 +488,7 @@ def mix(expr,
 
 def allSatisfy(pred, specimens) :Bool as DeepFrozen:
     "Return whether every specimen satisfies the predicate."
-    for specimen in specimens:
+    for specimen in (specimens):
         if (!pred(specimen)):
             return false
     return true

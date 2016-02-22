@@ -50,7 +50,7 @@ def getMethods(auditor) :Set as DeepFrozen:
 
 def reduce(sets :List[Set]) :Set as DeepFrozen:
     var rv := [].asSet()
-    for set in sets:
+    for set in (sets):
         rv |= set
     return rv
 
@@ -95,7 +95,7 @@ object _makeProtocolDesc as DeepFrozen:
                  interface."
 
                 # XXX should we fail if any parent fails?
-                for parent in parents:
+                for parent in (parents):
                     if (!audition.ask(parent)):
                         traceln(`audit/1: Failed parent: $parent`)
 

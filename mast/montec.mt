@@ -93,7 +93,7 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
             if (undefineds.size() > 0):
                     def stdout := makePumpTube(makeUTF8EncodePump())
                     stdout.flowTo(makeStdOut())
-                    for n in undefineds:
+                    for n in (undefineds):
                         def err := lex.makeParseError(
                             [`Undefined name ${n.getName()}`,
                              n.getSpan()])

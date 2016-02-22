@@ -90,7 +90,7 @@ def makeM(ast :Ast, isKernel :Bool) as DeepFrozen:
                 # Let's look at node contents now.
                 def argPairs := zipList(patternNode._uncall()[2],
                                         specimenNode._uncall()[2])
-                for [pattArg, specArg] in argPairs:
+                for [pattArg, specArg] in (argPairs):
                     if (pattArg =~ _ :Ast):
                         if (specArg =~ _ :Ast):
                             nextNodePairs.push([pattArg, specArg])

@@ -4,7 +4,7 @@ exports (expand)
 object zip as DeepFrozen:
     match [=="run", iterables, _]:
         def _its := [].diverge()
-        for it in iterables:
+        for it in (iterables):
             _its.push(it._makeIterator())
         def its := _its.snapshot()
         object ziperator:
@@ -13,7 +13,7 @@ object zip as DeepFrozen:
             to next(ej):
                 def ks := [].diverge()
                 def vs := [].diverge()
-                for it in its:
+                for it in (its):
                     def [k, v] := it.next(ej)
                     ks.push(k)
                     vs.push(v)
@@ -28,7 +28,7 @@ def buildQuasi(builder, name, inputs) as DeepFrozen:
     def parts := ["parts" => [].diverge(),
                   "expr" => [].diverge(),
                   "patt" => [].diverge()]
-    for [typ, node, span] in inputs:
+    for [typ, node, span] in (inputs):
         if (typ == "expr"):
             parts["parts"].push(builder.MethodCallExpr(
                 builder.NounExpr(name, span),
@@ -46,7 +46,7 @@ def buildQuasi(builder, name, inputs) as DeepFrozen:
         else if (typ == "text"):
             parts["parts"].push(node)
     var ps := []
-    for p in parts:
+    for p in (parts):
         ps with= (p.snapshot())
     return ps
 
@@ -199,7 +199,7 @@ def expand(node, builder, fail) as DeepFrozen:
 
         var bindingpatts := []
         var bindingexprs := []
-        for nn in pattScope.outNames():
+        for nn in (pattScope.outNames()):
             def noun := nounFromScopeName(nn, span)
             bindingpatts with= (builder.BindingPattern(noun, span))
             bindingexprs with= (builder.BindingExpr(noun, span))
@@ -234,7 +234,7 @@ def expand(node, builder, fail) as DeepFrozen:
     def expandLogical(leftNames, rightNames, f, span):
         var bindingpatts := []
         var bindingexprs := []
-        for n in leftNames | rightNames:
+        for n in (leftNames | rightNames):
             bindingpatts with= (builder.BindingPattern(nounFromScopeName(n, span), span))
             bindingexprs with= (builder.BindingExpr(nounFromScopeName(n, span), span))
 
@@ -281,7 +281,7 @@ def expand(node, builder, fail) as DeepFrozen:
                                 null, lspan),
                             null, rcvr, lspan)].diverge()
                 def setArgs := [].diverge()
-                for arg in margs:
+                for arg in (margs):
                     def a := builder.TempNounExpr("arg", span)
                     seq.push(builder.DefExpr(builder.FinalPattern(a, null, lspan),
                          null, arg, lspan))
@@ -553,7 +553,7 @@ def expand(node, builder, fail) as DeepFrozen:
         else if (nodeName == "MapExpr"):
             def [assocs] := args
             var lists := []
-            for a in assocs:
+            for a in (assocs):
                 lists with= (emitList(a, span))
             return builder.MethodCallExpr(
                 builder.NounExpr("_makeMap", span), "fromPairs",
@@ -598,7 +598,7 @@ def expand(node, builder, fail) as DeepFrozen:
             # Build the dependency list and import list at the same time.
             def dependencies := [].diverge()
             def importExprs := [].diverge()
-            for [source, patt] in importsList:
+            for [source, patt] in (importsList):
                 def dependency := builder.LiteralExpr(source, span)
                 dependencies.push(dependency)
                 importExprs.push(builder.DefExpr(
@@ -705,7 +705,7 @@ def expand(node, builder, fail) as DeepFrozen:
             def rightmap := right.getStaticScope().outNames()
             def partialFail(failed, s, broken):
                 var failedDefs := []
-                for n in failed:
+                for n in (failed):
                     failedDefs with= (builder.DefExpr(
                         builder.BindingPattern(nounFromScopeName(n, span), span), null, broken, span))
                 return builder.SeqExpr(failedDefs + [s], span)
@@ -716,11 +716,11 @@ def expand(node, builder, fail) as DeepFrozen:
                         builder.NounExpr("_booleanFlow", span),
                         "broken", [], [], span)
                     var rightOnly := []
-                    for n in rightmap - leftmap {
+                    for n in (rightmap - leftmap) {
                         rightOnly with= (n)
                     }
                     var leftOnly := []
-                    for n in leftmap - rightmap {
+                    for n in (leftmap - rightmap) {
                         leftOnly with= (n)
                     }
                     builder.IfExpr(left, partialFail(rightOnly, s, broken),
@@ -748,7 +748,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 def promises := [].diverge()
                 def resolvers := [].diverge()
                 def renamings := [].asMap().diverge()
-                for oldname in conflicts:
+                for oldname in (conflicts):
                     # Not calling nounFromScope because temp names won't conflict
                     def newname := builder.TempNounExpr(oldname, span)
                     def newnameR := builder.TempNounExpr(oldname + "R", span)
@@ -844,7 +844,7 @@ def expand(node, builder, fail) as DeepFrozen:
             var nub := if (tail == null) {
                   builder.IgnorePattern(builder.NounExpr("_mapEmpty", span), span)
                   } else {tail}
-            for [left, right] in assocs.reverse():
+            for [left, right] in (assocs.reverse()):
                 nub := builder.ViaPattern(
                     left,
                     builder.ListPattern([right, nub], null, span), span)
@@ -982,12 +982,12 @@ def expand(node, builder, fail) as DeepFrozen:
             def sp := builder.TempNounExpr("specimen", span)
             var failures := []
             var ejs := []
-            for _ in matchers:
+            for _ in (matchers):
                 failures with= (builder.TempNounExpr("failure", span))
                 ejs with= (builder.TempNounExpr("ej", span))
             var block := builder.MethodCallExpr(builder.NounExpr("_switchFailed", span), "run",
                 [sp] + failures, [], span)
-            for [m, fail, ej] in reversed(zip(matchers, failures, ejs)):
+            for [m, fail, ej] in (reversed(zip(matchers, failures, ejs))):
                 block := makeEscapeExpr(
                     builder.FinalPattern(ej, null, span),
                     builder.SeqExpr([
@@ -1001,7 +1001,7 @@ def expand(node, builder, fail) as DeepFrozen:
         else if (nodeName == "TryExpr"):
             def [tryblock, catchers, finallyblock] := args
             var block := tryblock
-            for cat in catchers:
+            for cat in (catchers):
                 block := builder.CatchExpr(block, cat.getPattern(), cat.getBody(), span)
             if (finallyblock != null):
                 block := builder.FinallyExpr(block, finallyblock, span)
@@ -1058,7 +1058,7 @@ def expand(node, builder, fail) as DeepFrozen:
             var handler := prob2
             if (catchers.size() == 0):
                 return wr
-            for cat in catchers:
+            for cat in (catchers):
                 def fail := builder.TempNounExpr("fail", cat.getSpan())
                 handler := makeEscapeExpr(
                     builder.FinalPattern(fail, null, cat.getSpan()),

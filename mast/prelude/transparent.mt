@@ -44,12 +44,12 @@ object Transparent as DeepFrozenStamp:
                 def objNouns := patternSS.getDefNames().asList()
                 def objName := if (objNouns.size() > 0 && objNouns[0] != null) {objNouns[0]} else {null}
                 def closureNames := [].diverge()
-                for name in objectExpr.getScript().getStaticScope().namesUsed():
+                for name in (objectExpr.getScript().getStaticScope().namesUsed()):
                     if (name != objName):
                         closureNames.push(name)
                 var valueAuditorNoun := null
                 var serializerNoun := null
-                for n in closureNames:
+                for n in (closureNames):
                     def g := audition.getGuard(n)
                     if (g =~ via (FinalSlot.extractGuard) via (Same.extractValue) ==_valueAuditor):
                         valueAuditorNoun := n
@@ -71,14 +71,14 @@ object Transparent as DeepFrozenStamp:
                 def params := meth.getPatterns()
                 def pnames := [].diverge()
                 def npnames := [].asMap().diverge()
-                for p in params:
+                for p in (params):
                     if (p.getNodeName() != "FinalPattern" || p.getGuard() != null):
                         throw("Makers of Transparent objects currently must " +
                               "have only unguarded FinalSlot patterns in " +
                               "their signature, not " + M.toQuote(p))
                     pnames.push(p.getNoun().getName())
                 def namedParams := meth.getNamedPatterns()
-                for np in namedParams:
+                for np in (namedParams):
                     def p := np.getPattern()
                     if (p.getNodeName() != "FinalPattern" || p.getGuard() != null):
                         throw("Makers of Transparent objects currently must " +
@@ -102,7 +102,7 @@ object Transparent as DeepFrozenStamp:
                     def exprs := if (ebody.getNodeName() == "SeqExpr") {
                             ebody.getExprs()} else {[ebody]}
                     var returnFound := false
-                    for ex in exprs:
+                    for ex in (exprs):
                         if (ex.getStaticScope().getNamesRead().contains("__return")):
                             if (ex.getNodeName() == "MethodCallExpr" && ex.getReceiver() =~ m`__return`):
                                 returnFound := true
@@ -122,7 +122,7 @@ object Transparent as DeepFrozenStamp:
                     if (targetExpr.getNodeName() != "ObjectExpr"):
                             throw("Maker body must have \"object ...\" as final expr")
                 var usesValueAuditor := false
-                for audPatt in [targetExpr.getAsExpr()] + targetExpr.getAuditors():
+                for audPatt in ([targetExpr.getAsExpr()] + targetExpr.getAuditors()):
                     if (audPatt != null && audPatt.getNodeName() == "NounExpr" &&
                         audPatt.getName() == valueAuditorNoun):
                         usesValueAuditor := true
@@ -188,7 +188,7 @@ object Transparent as DeepFrozenStamp:
                                 } else { [].asMap() }
                         if (paNames == positionalArgNames &&
                             naNames.size() == namedArgNames.size()):
-                            for k => v in naNames:
+                            for k => v in (naNames):
                                 if (!namedArgNames.contains(k) ||
                                     namedArgNames[k].getName() != v.getName()):
                                     return false

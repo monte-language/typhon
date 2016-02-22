@@ -245,12 +245,12 @@ def makeIterFount(iterable) :Fount as DeepFrozen:
                     next()
                 catch problem:
                     drain.flowAborted(problem)
-                    for completion in completions:
+                    for completion in (completions):
                         completion.smash(problem)
             catch problem:
                 # No more items.
                 drain.flowStopped(problem)
-                for completion in completions:
+                for completion in (completions):
                     completion.resolve(problem)
 
     return object iterFount as Fount:
@@ -401,6 +401,6 @@ def makePumpTube(pump) :Pump as DeepFrozen:
                 downstream.receive(piece)
 
 def chain([var fount] + drains) as DeepFrozen:
-    for drain in drains:
+    for drain in (drains):
         fount := fount<-flowTo(drain)
     return fount
