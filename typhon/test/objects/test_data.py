@@ -272,6 +272,13 @@ class TestInt(TestCase):
         result = i.call(u"approxDivide", [IntObject(2)])
         self.assertAlmostEqual(result.getDouble(), 2.0)
 
+    def testApproxDivideBigInt(self):
+        i = IntObject(7937000378463977)
+        # Hack.
+        bi = BigInt(rbigint.fromint(1000000000000000000).int_mul(10))
+        result = i.call(u"approxDivide", [bi])
+        self.assertAlmostEqual(result._d, 0.0007937000378463977)
+
     def testComplement(self):
         i = IntObject(5)
         result = i.call(u"complement", [])
@@ -418,3 +425,10 @@ class TestBigInt(TestCase):
         i = IntObject(2)
         result = bi.call(u"op__cmp", [i])
         self.assertEqual(result.getInt(), 1)
+
+    def testApproxDivide(self):
+        bi = BigInt(rbigint.fromint(7937000378463977))
+        # Hack.
+        bj = BigInt(rbigint.fromint(1000000000000000000).int_mul(10))
+        result = bi.call(u"approxDivide", [bj])
+        self.assertAlmostEqual(result._d, 0.0007937000378463977)

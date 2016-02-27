@@ -329,6 +329,8 @@ def promoteToDouble(o):
         return float(n.getInt())
     if isinstance(n, DoubleObject):
         return n.getDouble()
+    if isinstance(n, BigInt):
+        return n.bi.tofloat()
     raise WrongType(u"Failed to promote to double")
 
 
