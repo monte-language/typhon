@@ -39,7 +39,10 @@ def makeModuleConfiguration(module :DeepFrozen,
             return module(loader)
 
 def main():
-
+    def excludes := ["typhonEval", "_findTyphonFile", "bench"]
+    def unsafeScopeValues := [for `&&@n` => &&v in (unsafeScope)
+                              if (!excludes.contains(n))
+                              n => v]
     def collectedTests := [].diverge()
     def collectedBenches := [].diverge()
     object testCollector:
@@ -130,15 +133,11 @@ def main():
             def exps := makeModuleAndConfiguration(modname)
             return when (exps) ->
                 def [module, _] := exps
-                def excludes := ["typhonEval", "_findTyphonFile", "bench"]
-                def unsafeScopeValues := [for `&&@n` => &&v in (unsafeScope)
-                                          if (!excludes.contains(n))
-                                          n => v].with("packageLoader", makeLoader(module))
-
                 # We don't care about config or anything that isn't the
                 # entrypoint named `main`.
                 def [=> main] | _ := module
-                M.call(main, "run", [subargs], unsafeScopeValues)
+                M.call(main, "run", [subargs], unsafeScopeValues.with("packageLoader",
+                     makeLoader(module)))
         match [=="dot", modname] + subargs:
             def tubes := makeModuleAndConfiguration("lib/tubes")
             return when (tubes) ->
@@ -188,7 +187,8 @@ def main():
                 stdout <- flowTo(makeStdOut())
 
                 def asserter := makeAsserter()
-                def testDrain := makeTestDrain(stdout, unsealException, asserter)
+                def testDrain := makeTestDrain(stdout, unsealException, asserter,
+                     unsafeScopeValues)
 
                 when (runTests(collectedTests, testDrain, makeIterFount)) ->
                     def fails := asserter.fails()
