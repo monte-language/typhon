@@ -174,52 +174,48 @@ def makeLexer(ej) as DeepFrozen:
 
 
 def parse(var tokens, ej) as DeepFrozen:
-    var state := ["arr"].diverge()
-    var stack := [[].diverge()].diverge()
+    var stack := [].diverge()
     var key := null
+    var rv := null
 
     def pushValue(value):
-        if (state.size() == 0 || stack.size() == 0):
-            throw.eject(ej, "underflow in JSON parser")
-        if (state.last() == "obj"):
-            stack.last()[key] := value
+        if (stack.size() == 0):
+            rv := value
         else:
-            stack.last().push(value)
+            switch (stack.last()):
+                match [=="object", map, _]:
+                    map[key] := value
+                match [=="array", list, _]:
+                    list.push(value)
 
     while (tokens.size() > 0):
-        # traceln("Tokens", tokens)
         switch (tokens):
             match [==','] + rest:
                 tokens := rest
             match [=='{'] + rest:
-                state.push("obj")
-                stack.push([].asMap().diverge())
+                stack.push(["object", [].asMap().diverge(), key])
                 tokens := rest
             match [=='}'] + rest:
-                state.pop()
-                def obj := stack.pop().snapshot()
-                pushValue(obj)
+                def [=="object", obj, k] exit ej := stack.pop().snapshot()
+                key := k
+                pushValue(obj.snapshot())
                 tokens := rest
             match [=='['] + rest:
-                state.push("arr")
-                stack.push([].diverge())
+                stack.push(["array", [].diverge(), key])
                 tokens := rest
             match [==']'] + rest:
-                state.pop()
-                def arr := stack.pop().snapshot()
-                pushValue(arr)
+                def [=="array", arr, k] exit ej := stack.pop().snapshot()
+                key := k
+                pushValue(arr.snapshot())
                 tokens := rest
             match [k, ==':'] + rest:
                 key := k
                 tokens := rest
             match [v] + rest:
                 pushValue(v)
+                key := null
                 tokens := rest
-
-    # traceln("final stack", stack)
-    if (stack.size() == 0 || stack[0].size() == 0):
-        throw.eject(ej, "Underflow in JSON parser")
-    return stack[0][0]
+    return rv
 
 
 def makeJSON(value) as DeepFrozen:
@@ -361,11 +357,22 @@ def testJSONDecodeSlash(assert):
     def specimen := "{\"face\\/off\":1997}"
     assert.equal(JSON.decode(specimen, null), ["face/off" => 1997])
 
+def testJSONDecodeNested(assert):
+    def specimen := `{"first":{"second":{"third":42}}}`
+    assert.equal(JSON.decode(specimen, null),
+        ["first" => ["second" => ["third" => 42]]])
+
 def testJSONDecodeDouble(assert):
     def specimen := `{"pi":3.14}`
     # Yeah, this test really is supposed to be this precise. Any imprecisions
     # here should be due to implementation error, AFAICT.
     assert.equal(JSON.decode(specimen, null), ["pi" => 3.14])
+
+def testJSONDecodeDoubleTooPrecise(assert):
+    def specimen := `{"digits":0.7937000378463977}`
+    # Yeah, this test really is supposed to be this precise. Any imprecisions
+    # here should be due to implementation error, AFAICT.
+    assert.equal(JSON.decode(specimen, null), ["digits" => 0.7937000378463977])
 
 def testJSONDecodeInvalid(assert):
     def specimens := [
@@ -386,7 +393,9 @@ def testJSONEncode(assert):
 unittest([
     testJSONDecode,
     testJSONDecodeSlash,
+    testJSONDecodeNested,
     testJSONDecodeDouble,
+    testJSONDecodeDoubleTooPrecise,
     testJSONDecodeInvalid,
     testJSONEncode,
 ])
