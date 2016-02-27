@@ -42,11 +42,24 @@ def makeStream(s :Str) as DeepFrozen:
         to peek():
             return s[index]
 
+        to accept(c :Char):
+            return if (s[index] == c) {index += 1; true} else {false}
+
         to fastForward(count):
             index += count
 
         to finished() :Bool:
             return index >= s.size()
+
+
+def charDigit(c :('0'..'9')) :(0..9) as DeepFrozen:
+    "Lex a character into an integer.
+
+     The definition of this function should leave little room for doubt on its
+     behavior."
+
+    # 0x30 == '0'.asInteger()
+    return c.asInteger() - 0x30
 
 
 def makeLexer(ej) as DeepFrozen:
@@ -88,9 +101,43 @@ def makeLexer(ej) as DeepFrozen:
                     # Things I miss from C: do-while. ~ C.
                     var i := digit.asInteger() - '0'.asInteger()
                     while ("0123456789".contains(stream.peek())):
-                        def nextDigit := stream.next()
                         i *= 10
-                        i += nextDigit.asInteger() - '0'.asInteger()
+                        i += charDigit(stream.next())
+                    # We now check for the fraction and exponent. Either,
+                    # both, or neither.
+                    if (stream.accept('.')):
+                        # Fraction.
+                        var fraction := 0
+                        var divisor := 1
+                        while ("0123456789".contains(stream.peek())):
+                            divisor *= 10
+                            fraction *= 10
+                            fraction += charDigit(stream.next())
+                        # Scale the fraction.
+                        fraction /= divisor
+                        # And apply the fraction.
+                        i += fraction
+                    # Safe; the second branch only executes when the first
+                    # branch fails, and the stream is not advanced on failure.
+                    if (stream.accept('E') || stream.accept('e')):
+                        def negative :Bool := stream.accept('-')
+                        # If not negative, could be explicitly positive.
+                        if (!negative):
+                            stream.accept('+')
+                        # Y'know, maybe this should be a function or a method
+                        # on the stream...
+                        var exponent := charDigit(stream.next())
+                        while ("0123456789".contains(stream.peek())):
+                            exponent *= 10
+                            exponent += charDigit(stream.next())
+                        # Apply the negative flag.
+                        if (negative):
+                            exponent := -exponent
+                        # And now apply the exponent. Note that the RHS is an
+                        # integer; whether this results in an integer or
+                        # double is dependent on whether the LHS was converted
+                        # to a double by matching the fraction.
+                        i *= 10 ** exponent
                     tokens.push(i)
 
                 match c:
@@ -314,6 +361,12 @@ def testJSONDecodeSlash(assert):
     def specimen := "{\"face\\/off\":1997}"
     assert.equal(JSON.decode(specimen, null), ["face/off" => 1997])
 
+def testJSONDecodeDouble(assert):
+    def specimen := `{"pi":3.14}`
+    # Yeah, this test really is supposed to be this precise. Any imprecisions
+    # here should be due to implementation error, AFAICT.
+    assert.equal(JSON.decode(specimen, null), ["pi" => 3.14])
+
 def testJSONDecodeInvalid(assert):
     def specimens := [
         "",
@@ -333,6 +386,7 @@ def testJSONEncode(assert):
 unittest([
     testJSONDecode,
     testJSONDecodeSlash,
+    testJSONDecodeDouble,
     testJSONDecodeInvalid,
     testJSONEncode,
 ])
