@@ -1,3 +1,4 @@
+import "lib/json" =~ [=> JSON :DeepFrozen]
 import "lib/tubes" =~ [
     => makeUTF8DecodePump :DeepFrozen,
     => makeUTF8EncodePump :DeepFrozen,
@@ -73,7 +74,7 @@ def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
         => &&makeStdOut, => &&makeTCP4ClientEndpoint, => &&makeTCP4ServerEndpoint,
         => &&unsealException,
         # REPL-only fun.
-        => &&help, => &&playWith
+        => &&JSON, => &&help, => &&playWith,
     ]
 
     environment := [for `&&@name` => binding in (baseEnvironment) name => binding]
