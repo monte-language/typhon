@@ -385,8 +385,6 @@ def withMaker(cls):
     verb = nodeName
     if getattr(cls, "fromMonte", None) is not None:
         verb += ".fromMonte"
-    elif getattr(cls, "fromAST", None) is not None:
-        verb += ".fromAST"
     arglist = u", ".join([u"args[%s]" % i for i in range(len(names))])
     runverb = 'RUN_%s' % len(names)
     src = """\
@@ -777,70 +775,6 @@ class Char(Expr):
 
 
 @autohelp
-class Tuple(Expr):
-
-    _immutable_ = True
-
-    _immutable_fields_ = "_t[*]",
-
-    def __init__(self, t):
-        from typhon.scopes.safe import theMakeList
-        self._t = t
-        self.nodeMaker = theMakeList
-
-    def uncall(self):
-        return ConstList(self._t)
-
-    def pretty(self, out):
-        out.write("[")
-        l = self._t
-        if l:
-            head = l[0]
-            tail = l[1:]
-            head.pretty(out)
-            for item in tail:
-                out.write(", ")
-                item.pretty(out)
-        out.write("]")
-
-    def transform(self, f):
-        # I don't care if it's cheating. It's elegant and simple and pretty.
-        return f(Tuple([node.transform(f) for node in self._t]))
-
-    def compile(self, compiler):
-        size = len(self._t)
-        makeList = compiler.addGlobal(u"_makeList")
-        compiler.addInstruction("NOUN_FRAME", makeList)
-        # [_makeList]
-        for node in self._t:
-            node.compile(compiler)
-            # [_makeList x0 x1 ...]
-        compiler.call(u"run", size)
-        # [ConstList]
-
-    def getStaticScope(self):
-        scope = emptyScope
-        for expr in self._t:
-            scope = scope.add(expr.getStaticScope())
-        return scope
-
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"MethodCallExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
-
-
-def tupleToList(t):
-    if not isinstance(t, Tuple):
-        raise InvalidAST("not a Tuple: " + t.__repr__())
-    return t._t
-
-
-@autohelp
 @withMaker
 class Assign(Expr):
 
@@ -851,7 +785,7 @@ class Assign(Expr):
         self.rvalue = rvalue
 
     @staticmethod
-    def fromAST(target, rvalue):
+    def fromMonte(target, rvalue):
         return Assign(nounToString(target), rvalue)
 
     def uncall(self):
@@ -898,7 +832,7 @@ class Binding(Expr):
         self.name = name
 
     @staticmethod
-    def fromAST(noun):
+    def fromMonte(noun):
         return Binding(nounToString(noun))
 
     def uncall(self):
@@ -986,20 +920,6 @@ class Call(Expr):
                 raise InvalidAST("named args must be NamedArg nodes")
         return Call(target, strToString(verb), unwrapList(args),
                     namedArgs)
-
-    @staticmethod
-    def fromAST(target, verb, args, namedArgs):
-        if not isinstance(args, Tuple):
-            raise InvalidAST("args must be a tuple")
-        if not isinstance(namedArgs, Tuple):
-            raise InvalidAST("namedArgs must be a tuple")
-        nargs = []
-        for pair in namedArgs._t:
-            if not (isinstance(pair, Tuple) and len(pair._t) == 2):
-                raise InvalidAST("namedArgs must contain key/value pairs")
-            k, patt = pair._t
-            nargs.append(NamedArg(k, patt))
-        return Call(target, strToString(verb), args._t, nargs)
 
     def uncall(self):
         return ConstList([self._target, StrObject(self._verb),
@@ -1099,7 +1019,7 @@ class Def(Expr):
         self._v = value
 
     @staticmethod
-    def fromAST(pattern, ejector, value):
+    def fromMonte(pattern, ejector, value):
         if pattern is None:
             raise InvalidAST("Def pattern cannot be None")
 
@@ -1516,17 +1436,6 @@ class Method(Expr):
         self._b = block
 
     @staticmethod
-    def fromAST(doc, verb, params, namedParams, guard, block):
-        for param in params:
-            if param is None:
-                raise InvalidAST("Parameter patterns cannot be None")
-        for np in namedParams:
-            if not isinstance(np, NamedParam):
-                raise InvalidAST("Named parameters must be NamedParam nodes")
-        doc = doc._s if isinstance(doc, Str) else None
-        return Method(doc, strToString(verb), params, namedParams, guard, block)
-
-    @staticmethod
     def fromMonte(doc, verb, params, namedParams, guard, block):
         if doc is NullObject:
             d = u""
@@ -1625,7 +1534,7 @@ class Noun(Expr):
         self.name = noun
 
     @staticmethod
-    def fromAST(noun):
+    def fromMonte(noun):
         return Noun(strToString(noun))
 
     def uncall(self):
@@ -1680,20 +1589,15 @@ class Obj(Expr):
 
     @staticmethod
     def fromMonte(doc, name, asExpr, auditors, script):
-        return Obj.fromAST(doc, name, Tuple([asExpr] + unwrapList(auditors)), script)
-
-    @staticmethod
-    def fromAST(doc, name, auditors, script):
         if not (isinstance(name, FinalPattern) or isinstance(name, IgnorePattern)):
             raise InvalidAST("Kernel object pattern must be FinalPattern or IgnorePattern")
 
-        auditors = tupleToList(auditors)
         if not isinstance(script, Script):
             raise InvalidAST("Object's script isn't a Script")
 
         doc = doc._s if isinstance(doc, Str) else None
 
-        return Obj(doc, name, nullToNone(auditors[0]), auditors[1:], script)
+        return Obj(doc, name, nullToNone(asExpr), unwrapList(auditors), script)
 
     def uncall(self):
         return ConstList(
@@ -1910,20 +1814,12 @@ class Script(Expr):
 
     @staticmethod
     def fromMonte(extends, methods, matchers):
-        return Script.fromAST(extends, Tuple(unwrapList(methods)),
-                              Tuple(unwrapList(matchers)))
-
-    @staticmethod
-    def fromAST(extends, methods, matchers):
         extends = nullToNone(extends)
-        methods = tupleToList(methods)
+        methods = unwrapList(methods)
         for method in methods:
             if not isinstance(method, Method):
                 raise InvalidAST("Script method isn't a Method")
-        if matchers is Null:
-            matchers = []
-        else:
-            matchers = tupleToList(matchers)
+        matchers = unwrapList(matchers)
         for matcher in matchers:
             if not isinstance(matcher, Matcher):
                 raise InvalidAST("Script matcher isn't a Matcher")
@@ -2005,10 +1901,6 @@ class Sequence(Expr):
     @staticmethod
     def fromMonte(l):
         return Sequence(unwrapList(l))
-
-    @staticmethod
-    def fromAST(t):
-        return Sequence(tupleToList(t))
 
     def uncall(self):
         return ConstList([ConstList(self._l)])
@@ -2302,10 +2194,7 @@ class ListPattern(Pattern):
 
     @staticmethod
     def fromMonte(patterns, tail):
-        return ListPattern.fromAST(unwrapList(patterns), tail)
-
-    @staticmethod
-    def fromAST(patterns, tail):
+        patterns = unwrapList(patterns)
         for p in patterns:
             if p is None:
                 raise InvalidAST("List subpattern cannot be None")
