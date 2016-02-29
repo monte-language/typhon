@@ -342,7 +342,7 @@ class Code(object):
         elif instruction == LITERAL:
             base += u" (%s)" % self.literals[index].toQuote()
         elif instruction == BINDOBJECT:
-            base += u" (%s)" % self.scripts[index].fqn
+            base += u" (%s)" % self.scripts[index][0].fqn
         elif instruction in (NOUN_GLOBAL, ASSIGN_GLOBAL, SLOT_GLOBAL,
                              BINDING_GLOBAL):
             base += u" (%s)" % self.globals[index]

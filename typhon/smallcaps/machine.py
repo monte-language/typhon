@@ -93,10 +93,10 @@ class SmallCaps(object):
     @unroll_safe
     def bindObject(self, scriptIndex):
         from typhon.objects.ejectors import theThrower
-        script = self.code.script(scriptIndex)
+        script, closureLabels, globalLabels = self.code.script(scriptIndex)
+        closure = self.env.gatherLabels(closureLabels)[:]
+        globals = self.env.gatherLabels(globalLabels)[:]
         auditors = self.popSlice(script.numAuditors)
-        globals = self.popSlice(script.globalSize)
-        closure = self.popSlice(script.closureSize)
         obj = script.makeObject(closure, globals, auditors)
         # Not a typo. The first copy is the actual return value from creating
         # the object expression; the second copy is given to the slot

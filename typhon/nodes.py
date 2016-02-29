@@ -248,7 +248,8 @@ class Compiler(object):
         literals = self.literals.keys()
         globals = self.globals.keys()
         locals = self.locals.nameList()
-        scripts = [script.freeze() for script in self.scripts]
+        scripts = [(script.freeze(), cs, gs)
+                   for (script, cs, gs) in self.scripts]
 
         code = Code(self.fqn, self.methodName, self.instructions, atoms,
                     literals, globals, frame, locals, scripts, startingDepth)
@@ -288,15 +289,17 @@ class Compiler(object):
             self.literals[literal] = len(self.literals)
         return self.literals[literal]
 
-    def addScript(self, script):
+    def addScript(self, script, closureLabels, globalLabels):
         index = len(self.scripts)
-        self.scripts.append(script)
+        self.scripts.append((script, closureLabels, globalLabels))
         return index
 
-    @specialize.arg(2)
-    def accessFrame(self, name, accessType):
+    def chooseFrame(self, name, accessType):
         """
-        Interact with the frame.
+        Choose which frame type and index a name should have.
+
+        If this is the first use of this name in the current frame, then a new
+        frame location will be chosen for the name.
         """
 
         # It's unknown yet whether the assignment is to a local slot or an
@@ -306,13 +309,22 @@ class Compiler(object):
         # must be global.
         localIndex = self.locals.find(name, depthMap[accessType])
         if localIndex >= 0:
-            self.addInstruction("%s_LOCAL" % accessType, localIndex)
+            return "LOCAL", localIndex
         elif self.canCloseOver(name):
             index = self.addFrame(name)
-            self.addInstruction("%s_FRAME" % accessType, index)
+            return "FRAME", index
         else:
             index = self.addGlobal(name)
-            self.addInstruction("%s_GLOBAL" % accessType, index)
+            return "GLOBAL", index
+
+    @specialize.arg(2)
+    def accessFrame(self, name, accessType):
+        """
+        Interact with the frame.
+        """
+
+        frameType, frameIndex = self.chooseFrame(name, accessType)
+        self.addInstruction("%s_%s" % (accessType, frameType), frameIndex)
 
     def literal(self, literal):
         index = self.addLiteral(literal)
@@ -1636,20 +1648,22 @@ class Obj(Expr):
         fqn = compiler.fqn + u"$" + oname
         codeScript = CompilingScript(oname, self, numAuditors,
                                      availableClosure, self._d, fqn)
+        # Compile all of our script pieces.
         codeScript.addScript(self._script, fqn)
-        # The local closure is first to be pushed and last to be popped.
+        # And now tally up and prepare our closure and globals.
+        closureLabels = []
         for name in codeScript.closureNames:
             if name == codeScript.displayName:
-                # Put in a null and patch it later via UserObject.patchSelf().
-                compiler.literal(NullObject)
+                closureLabels.append((None, -1))
             else:
-                compiler.accessFrame(name, "BINDING")
+                closureLabels.append(compiler.chooseFrame(name, "BINDING"))
                 compiler.locals.escaping(name)
 
-        # Globals are pushed after closure, so they'll be popped first.
+        globalLabels = []
         for name in codeScript.globalNames:
-            compiler.accessFrame(name, "BINDING")
+            globalLabels.append(compiler.chooseFrame(name, "BINDING"))
             compiler.locals.escaping(name)
+
         subc = compiler.pushScope()
         if self._as is None:
             index = compiler.addGlobal(u"null")
@@ -1658,7 +1672,7 @@ class Obj(Expr):
             self._as.compile(subc)
         for stamp in self._implements:
             stamp.compile(subc)
-        index = compiler.addScript(codeScript)
+        index = compiler.addScript(codeScript, closureLabels, globalLabels)
         compiler.addInstruction("BINDOBJECT", index)
         # [obj obj ej auditor]
         if isinstance(self._n, IgnorePattern):

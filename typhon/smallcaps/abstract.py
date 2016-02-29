@@ -87,9 +87,7 @@ class AbstractInterpreter(object):
             self.pop(2)
             self.push(index * 2)
         elif instruction == BINDOBJECT:
-            self.pop(self.code.scripts[index].numAuditors)
-            self.pop(self.code.scripts[index].globalSize)
-            self.pop(self.code.scripts[index].closureSize)
+            self.pop(self.code.script(index)[0].numAuditors)
             # Two copies of the object, a thrower, and the as-auditor.
             self.push(4)
         elif instruction == EJECTOR:

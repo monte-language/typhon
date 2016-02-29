@@ -247,3 +247,25 @@ class Environment(object):
         assert handlerDepth <= self.handlerDepth, "Implementation error: Handler stack UB"
         self.depth = depth
         self.handlerDepth = handlerDepth
+
+    def gatherLabels(self, labels):
+        """
+        Collect some labeled stuff.
+        """
+
+        rv = []
+        for label in labels:
+            frameType, frameIndex = label
+            if frameType == "LOCAL":
+                frame = self.local
+            elif frameType == "FRAME":
+                frame = self.frame
+            elif frameType == "GLOBAL":
+                frame = self.globals
+            elif frameType is None:
+                rv.append(None)
+                continue
+            else:
+                assert False, "impossible"
+            rv.append(frame[frameIndex])
+        return rv
