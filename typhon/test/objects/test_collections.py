@@ -36,6 +36,15 @@ class TestConstMap(TestCase):
         d = monteMap()
         self.assertEqual(ConstMap(d).toString(), u"[].asMap()")
 
+    def testSurprisingMapCorruption(self):
+        d = monteMap()
+        d[IntObject(1)] = IntObject(2)
+        m = ConstMap(d)
+        f = m.call(u"diverge", [])
+        f.call(u"removeKey", [IntObject(1)])
+        result = m.call(u"get", [IntObject(1)])
+        self.assertEqual(result.getInt(), 2)
+
 
 class TestConstList(TestCase):
 

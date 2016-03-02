@@ -185,7 +185,8 @@ class ConstMap(Object):
             return ConstSet(self.objectMap)
 
         if atom is DIVERGE_0:
-            return FlexMap(self.objectMap)
+            # Split off a copy so that we are not mutated.
+            return FlexMap(self.objectMap.copy())
 
         if atom is FETCH_2:
             key = args[0]
