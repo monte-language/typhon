@@ -12,6 +12,10 @@ let
     else
       null);
   buildMtPkg = {src, name, dependencies, entrypoint, pathNames}:
+    let
+      dependencySearchPaths = lib.concatStringsSep " " (map (x: "-l " + x) dependencies);
+      doCheck = entrypoint != null;
+    in
     stdenv.mkDerivation {
       name = name;
       buildInputs = [ typhonVm mast ] ++ dependencies;
@@ -27,20 +31,21 @@ let
         done
       done
       ";
+      doCheck = doCheck;
+      checkPhase = if doCheck then ''
+        ${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l . ${mast}/loader test ${entrypoint}
+      '' else null;
       installPhase = "
       for p in ${lib.concatStringsSep " " pathNames}; do
         mkdir -p $out/$p
         cp -r $p/ $out/$p
       done
-      " + (if (entrypoint != null) then
-        let dependencySearchPaths = lib.concatStringsSep " " (map (x: "-l " + x) dependencies);
-        in ''
+      " + (if doCheck then ''
         mkdir -p $out/bin
-      echo "#!${bash}/bin/bash" > $out/bin/${entrypoint}
-      echo "${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader run ${entrypoint} \"\$@\"" >> $out/bin/${entrypoint}
-      chmod +x $out/bin/${entrypoint}
+        echo "#!${bash}/bin/bash" > $out/bin/${entrypoint}
+        echo "${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader run ${entrypoint} \"\$@\"" >> $out/bin/${entrypoint}
+        chmod +x $out/bin/${entrypoint}
       '' else "");
-      doCheck = false;
       src = src;
     };
   makePkg = name: pkg:
