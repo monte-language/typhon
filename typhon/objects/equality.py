@@ -246,8 +246,9 @@ def optSame(first, second, cache=None):
     # By default, objects are not equal.
     return INEQUAL
 
-#Only look at a few levels of the object graph for hash values
+# Only look at a few levels of the object graph for hash values
 HASH_DEPTH = 10
+
 
 def samenessHash(obj, depth, path, fringe):
     """
@@ -274,10 +275,10 @@ def samenessHash(obj, depth, path, fringe):
 
     # Objects that do their own hashing.
     if (isinstance(o, BoolObject) or isinstance(o, CharObject)
-        or isinstance(o, DoubleObject) or isinstance(o, IntObject)
-        or isinstance(o, BigInt) or isinstance(o, StrObject)
-        or isinstance(o, BytesObject)
-        or isinstance(o, TraversalKey)):
+            or isinstance(o, DoubleObject) or isinstance(o, IntObject)
+            or isinstance(o, BigInt) or isinstance(o, StrObject)
+            or isinstance(o, BytesObject)
+            or isinstance(o, TraversalKey)):
         return o.hash()
 
     # Lists.
@@ -323,7 +324,7 @@ def listFringe(o, fringe, path, sofar):
             fr = None
         else:
             fr = FringePath(i, path)
-        result &= samenessFringe(o, fr, fringe, sofar)
+        result &= samenessFringe(x, fr, fringe, sofar)
         if (not result) and fringe is None:
             # Unresolved promise found.
             return False
@@ -363,6 +364,7 @@ def samenessFringe(original, path, fringe, sofar=None):
 
     if selfless in o.auditorStamps():
         if transparentStamp in o.auditorStamps():
+            sofar[o] = None
             return samenessFringe(o.call(u"_uncall", []), path, fringe, sofar)
         # XXX Semitransparent support goes here
 
