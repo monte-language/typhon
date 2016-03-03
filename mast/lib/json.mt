@@ -187,6 +187,8 @@ def parse(var tokens, ej) as DeepFrozen:
                     map[key] := value
                 match [=="array", list, _]:
                     list.push(value)
+                match _:
+                    throw.eject(ej, "Congrats, you broke the JSON parser.")
 
     while (tokens.size() > 0):
         switch (tokens):
@@ -196,6 +198,8 @@ def parse(var tokens, ej) as DeepFrozen:
                 stack.push(["object", [].asMap().diverge(), key])
                 tokens := rest
             match [=='}'] + rest:
+                if (stack.size() == 0):
+                    throw.eject(ej, "Stack underflow (unbalanced object)")
                 def [=="object", obj, k] exit ej := stack.pop().snapshot()
                 key := k
                 pushValue(obj.snapshot())
@@ -204,6 +208,8 @@ def parse(var tokens, ej) as DeepFrozen:
                 stack.push(["array", [].diverge(), key])
                 tokens := rest
             match [==']'] + rest:
+                if (stack.size() == 0):
+                    throw.eject(ej, "Stack underflow (unbalanced array)")
                 def [=="array", arr, k] exit ej := stack.pop().snapshot()
                 key := k
                 pushValue(arr.snapshot())
@@ -215,6 +221,11 @@ def parse(var tokens, ej) as DeepFrozen:
                 pushValue(v)
                 key := null
                 tokens := rest
+    if (stack.size() != 0):
+        throw.eject(ej, "Nonempty stack (unclosed object/array)")
+    if (rv == null):
+        throw.eject(ej, "No object decoded (empty string)")
+
     return rv
 
 
