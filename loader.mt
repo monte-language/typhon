@@ -58,7 +58,7 @@ def main():
             to "import"(name):
                 return valMap[name]
 
-    def subload(modname, depMap,
+    def subload(modname :Str, depMap,
                 => collectTests := false,
                 => collectBenchmarks := false):
         if (modname == "unittest"):
