@@ -1,6 +1,6 @@
 exports (makeAsserter, makeTestDrain, runTests)
 
-def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
+def makeTestDrain(stdout, unsealException, asserter, unsafeScope) as DeepFrozen:
     var lastSource := null
 
     def formatError(err):
@@ -12,7 +12,7 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
 
         to receive([k, test]):
             def st :Str := M.toString(test)
-            return when (test(asserter(st))) ->
+            return when (M.call(test, "run", [asserter(st)], unsafeScope)) ->
                 if (lastSource != k):
                     stdout.receive(`$k$\n`)
                     lastSource := k
