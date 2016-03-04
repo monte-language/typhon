@@ -66,7 +66,6 @@ class BoolObject(Object):
         return getGlobalValue(u"Bool")
 
     def recv(self, atom, args):
-
         # and/1
         if atom is AND_1:
             return wrapBool(self._b and unwrapBool(args[0]))

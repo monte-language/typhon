@@ -1680,6 +1680,7 @@ class Obj(Expr):
             compiler.addInstruction("POP", 0)
             compiler.addInstruction("POP", 0)
         elif isinstance(self._n, FinalPattern):
+            # XXX we could support more general guarding here.
             slotIndex = compiler.locals.add(self._n._n, SlotType(binding, False))
             compiler.addInstruction("BINDFINALSLOT", slotIndex)
         else:
@@ -2105,15 +2106,18 @@ class FinalPattern(Pattern):
         slotType = SlotType(finalAny, False)
         # [specimen ej]
         if self._g is None:
-            index = compiler.addGlobal(u"Any")
-            compiler.addInstruction("NOUN_GLOBAL", index)
-            # [specimen ej guard]
+            compiler.addInstruction("POP", 0)
+            # [specimen]
+            index = compiler.locals.add(self._n, slotType)
+            compiler.addInstruction("BINDANYFINAL", index)
+            # []
         else:
             slotType = slotType.guarded()
             self._g.compile(compiler)
             # [specimen ej guard]
-        index = compiler.locals.add(self._n, slotType)
-        compiler.addInstruction("BINDFINALSLOT", index)
+            index = compiler.locals.add(self._n, slotType)
+            compiler.addInstruction("BINDFINALSLOT", index)
+            # []
         # []
 
     def getStaticScope(self):
@@ -2358,15 +2362,19 @@ class VarPattern(Pattern):
         slotType = SlotType(varAny, False)
         # [specimen ej]
         if self._g is None:
-            index = compiler.addGlobal(u"Any")
-            compiler.addInstruction("NOUN_GLOBAL", index)
-            # [specimen ej guard]
+            compiler.addInstruction("POP", 0)
+            # [specimen]
+            index = compiler.locals.add(self._n, slotType)
+            compiler.addInstruction("BINDANYVAR", index)
+            # []
         else:
             slotType = slotType.guarded()
             self._g.compile(compiler)
             # [specimen ej guard]
-        index = compiler.locals.add(self._n, slotType)
-        compiler.addInstruction("BINDVARSLOT", index)
+            index = compiler.locals.add(self._n, slotType)
+            compiler.addInstruction("BINDVARSLOT", index)
+            # []
+        # []
 
     def getStaticScope(self):
         scope = StaticScope([], [], [], [self._n], False)

@@ -18,7 +18,8 @@ from rpython.rlib.jit import elidable, elidable_promote
 from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.smallcaps.abstract import AbstractInterpreter
 from typhon.smallcaps.ops import (ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
-                                  BIND, BINDOBJECT, BINDFINALSLOT, BINDVARSLOT,
+                                  BIND, BINDOBJECT, BINDFINALSLOT,
+                                  BINDVARSLOT, BINDANYFINAL, BINDANYVAR,
                                   SLOT_GLOBAL, SLOT_FRAME, SLOT_LOCAL,
                                   NOUN_GLOBAL, NOUN_FRAME, NOUN_LOCAL,
                                   BINDING_GLOBAL, BINDING_FRAME,
@@ -351,7 +352,7 @@ class Code(object):
             base += u" (%s)" % self.frame[index]
         elif instruction in (NOUN_LOCAL, ASSIGN_LOCAL, SLOT_LOCAL,
                              BINDING_LOCAL, BIND, BINDFINALSLOT,
-                             BINDVARSLOT):
+                             BINDVARSLOT, BINDANYFINAL, BINDANYVAR):
             name, slotType = self.locals[index]
             base += u" (%s (%s))" % (name, slotType.repr())
         return base

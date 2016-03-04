@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+from typhon.smallcaps import ops
 from typhon.smallcaps.ops import (DUP, ROT, POP, SWAP, ASSIGN_FRAME,
                                   ASSIGN_GLOBAL, ASSIGN_LOCAL, BIND,
                                   BINDFINALSLOT, BINDVARSLOT,
@@ -83,6 +84,8 @@ class AbstractInterpreter(object):
             self.pop()
         elif instruction in (BINDFINALSLOT, BINDVARSLOT):
             self.pop(3)
+        elif instruction in (ops.BINDANYFINAL, ops.BINDANYVAR):
+            self.pop()
         elif instruction == LIST_PATT:
             self.pop(2)
             self.push(index * 2)

@@ -214,6 +214,14 @@ class SmallCaps(object):
             val = guard.call(u"coerce", [specimen, ej])
             self.env.createBindingLocal(index, varBinding(val, guard))
             return pc + 1
+        elif instruction.asInt == ops.BINDANYFINAL.asInt:
+            val = self.pop()
+            self.env.createBindingLocal(index, finalBinding(val, anyGuard))
+            return pc + 1
+        elif instruction.asInt == ops.BINDANYVAR.asInt:
+            val = self.pop()
+            self.env.createBindingLocal(index, varBinding(val, anyGuard))
+            return pc + 1
         elif instruction.asInt == ops.SLOT_GLOBAL.asInt:
             self.push(self.env.getSlotGlobal(index))
             return pc + 1

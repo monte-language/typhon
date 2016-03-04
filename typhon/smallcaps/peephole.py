@@ -14,6 +14,7 @@
 
 from collections import OrderedDict
 
+from typhon.smallcaps import ops
 from typhon.smallcaps.ops import (DUP, POP, SWAP, ASSIGN_FRAME, ASSIGN_LOCAL,
                                   BIND, BINDFINALSLOT, BINDVARSLOT, SLOT_FRAME,
                                   SLOT_LOCAL, NOUN_FRAME, NOUN_LOCAL,
@@ -110,7 +111,8 @@ class PeepholeOptimizer(object):
     def addBranch(self):
         start = self.pc
         instruction = self.code.inst(start)
-        if instruction in (EJECTOR, TRY, UNWIND, BRANCH, JUMP, END_HANDLER):
+        if instruction in (EJECTOR, TRY, UNWIND, BRANCH, JUMP, END_HANDLER,
+                           ops.NAMEDARG_EXTRACT_OPTIONAL):
             end = self.code.index(start)
             self.branches[start] = end
 
@@ -141,8 +143,8 @@ class PeepholeOptimizer(object):
         newLocal = []
 
         for pc, instruction in enumerate(self.code.instructions):
-            if instruction in (ASSIGN_LOCAL, BIND, BINDFINALSLOT,
-                               BINDVARSLOT, SLOT_LOCAL,
+            if instruction in (ASSIGN_LOCAL, BIND, ops.BINDANYFINAL, ops.BINDANYVAR,
+                               BINDFINALSLOT, BINDVARSLOT, SLOT_LOCAL,
                                NOUN_LOCAL, BINDING_LOCAL):
                 index = self.code.index(pc)
                 if index not in newLocalMap:

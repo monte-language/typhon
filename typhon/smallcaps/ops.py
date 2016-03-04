@@ -18,9 +18,10 @@ from typhon.enum import makeEnum
     DUP, ROT, POP, SWAP,
     ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
     BIND, BINDFINALSLOT, BINDVARSLOT,
+    BINDANYFINAL, BINDANYVAR,
     SLOT_GLOBAL, SLOT_FRAME, SLOT_LOCAL,
     NOUN_GLOBAL, NOUN_FRAME, NOUN_LOCAL,
-    BINDING_GLOBAL,  BINDING_FRAME, BINDING_LOCAL,
+    BINDING_GLOBAL, BINDING_FRAME, BINDING_LOCAL,
     LIST_PATT,
     LITERAL,
     BINDOBJECT, SCOPE,
@@ -31,6 +32,7 @@ from typhon.enum import makeEnum
 dup rot pop swap
 assignGlobal assignFrame assignLocal
 bind bindFinalSlot bindVarSlot
+bindAnyFinal bindAnyVar
 slotGlobal slotFrame slotLocal
 nounGlobal nounFrame nounLocal
 bindingGlobal bindingFrame bindingLocal
@@ -53,6 +55,8 @@ ops = {
     "BIND": BIND,
     "BINDFINALSLOT": BINDFINALSLOT,
     "BINDVARSLOT": BINDVARSLOT,
+    "BINDANYFINAL": BINDANYFINAL,
+    "BINDANYVAR": BINDANYVAR,
     "SLOT_GLOBAL": SLOT_GLOBAL,
     "SLOT_FRAME": SLOT_FRAME,
     "SLOT_LOCAL": SLOT_LOCAL,
