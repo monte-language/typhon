@@ -27,6 +27,8 @@ from typhon.vats import currentVat
 
 FROMNOW_1 = getAtom(u"fromNow", 1)
 RESOLVE_1 = getAtom(u"resolve", 1)
+RUN_1 = getAtom(u"run", 1)
+SENDTIMESTAMP_1 = getAtom(u"sendTimestamp", 1)
 TRIAL_1 = getAtom(u"trial", 1)
 
 
@@ -40,6 +42,14 @@ def resolveTimer(uv_timer):
 class Timer(Object):
     """
     An unsafe nondeterministic clock.
+
+    This object provides a useful collection of time-related methods:
+     * `fromNow(delay :Double)`: Produce a promise which will fully resolve
+       after at least `delay` seconds have elapsed in the runtime.
+     * `sendTimestamp(callable)`: Send a `Double` representing the runtime's
+       clock to `callable`.
+
+    And there's some deprecated stuff on the chopping block.
 
     Use with caution.
     """
@@ -57,6 +67,12 @@ class Timer(Object):
             ruv.timerStart(uv_timer, resolveTimer, int(duration * 1000), 0)
             assert ruv.isActive(uv_timer), "Timer isn't active!?"
             return p
+
+        if atom is SENDTIMESTAMP_1:
+            now = time.time()
+            vat = currentVat.get()
+            vat.sendOnly(args[0], RUN_1, [DoubleObject(now)], EMPTY_MAP)
+            return NullObject
 
         if atom is TRIAL_1:
             obj = args[0]
