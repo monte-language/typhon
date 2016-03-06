@@ -71,8 +71,7 @@ class Timer(Object):
         if atom is SENDTIMESTAMP_1:
             now = time.time()
             vat = currentVat.get()
-            vat.sendOnly(args[0], RUN_1, [DoubleObject(now)], EMPTY_MAP)
-            return NullObject
+            return vat.send(args[0], RUN_1, [DoubleObject(now)], EMPTY_MAP)
 
         if atom is TRIAL_1:
             obj = args[0]
