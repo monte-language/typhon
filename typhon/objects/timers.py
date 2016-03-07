@@ -29,7 +29,6 @@ FROMNOW_1 = getAtom(u"fromNow", 1)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RUN_1 = getAtom(u"run", 1)
 SENDTIMESTAMP_1 = getAtom(u"sendTimestamp", 1)
-TRIAL_1 = getAtom(u"trial", 1)
 UNSAFENOW_0 = getAtom(u"unsafeNow", 0)
 
 
@@ -52,8 +51,6 @@ class Timer(Object):
 
     There is extremely unsafe functionality as well:
      * `unsafeNow()`: The current system time.
-
-    And there's some deprecated stuff on the chopping block.
 
     Use with caution.
     """
@@ -79,20 +76,5 @@ class Timer(Object):
             now = time.time()
             vat = currentVat.get()
             return vat.send(args[0], RUN_1, [DoubleObject(now)], EMPTY_MAP)
-
-        if atom is TRIAL_1:
-            obj = args[0]
-            then = time.time()
-            obj.call(u"run", [])
-            now = time.time()
-
-            # We can't give the value up immediately, due to determinism
-            # requirements. Instead, provide it as a promise which will be
-            # available on subsequent turns.
-            rv = DoubleObject(now - then)
-            p, r = makePromise()
-            vat = currentVat.get()
-            vat.sendOnly(r, RESOLVE_1, [rv], EMPTY_MAP)
-            return p
 
         raise Refused(self, atom, args)
