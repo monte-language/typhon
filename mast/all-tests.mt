@@ -3,7 +3,6 @@ import "lib/enum" =~ _
 import "lib/singleUse" =~ _
 import "lib/codec/percent" =~ _
 import "lib/record" =~ _
-import "lib/slow/exp" =~ _
 import "tools/infer" =~ _
 import "lib/json" =~ _
 import "tests/proptests" =~ _
