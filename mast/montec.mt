@@ -1,4 +1,4 @@
-import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
+import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
@@ -8,6 +8,43 @@ import "lib/tubes" =~ [=> makeUTF8EncodePump :DeepFrozen, => makePumpTube :DeepF
 import "lib/monte/monte_verifier" =~ [=> findUndefinedNames :DeepFrozen]
 
 exports (main)
+
+def makePipeline(timer, [var stage] + var stages) as DeepFrozen:
+    var data := null
+    def resultPromises := [].diverge()
+
+    return object pipeline:
+        to promisedResult():
+            def [p, r] := Ref.promise()
+            resultPromises.push(r)
+            return p
+
+        to advance():
+            def p := timer.sendTimestamp(fn then {
+                def rv := stage<-(data)
+                when (rv) -> {
+                    timer.sendTimestamp(fn now {
+                        def taken := now - then
+                        traceln(`$stage took $taken seconds`)
+                        data := rv
+                    })
+                }
+            })
+            when (p) ->
+                if (stages.size() == 0):
+                    # Done; notify everybody.
+                    for r in (resultPromises):
+                        r.resolve(data)
+                else:
+                    def [s] + ss := stages
+                    stage := s
+                    stages := ss
+                    pipeline.advance()
+            catch problem:
+                traceln.exception(problem)
+                # Done in a different sort of way.
+                for r in (resultPromises):
+                    r.smash(problem)
 
 def parseArguments(var argv, ej) as DeepFrozen:
     var useMixer :Bool := false
@@ -68,76 +105,68 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
     def inputFile := config.getInputFile()
     def outputFile := config.getOutputFile()
 
+    def readInputFile(_):
+        def p := makeFileResource(inputFile)<-getContents()
+        return when (p) ->
+            UTF8.decode(p, null)
 
     def parse(data :Str):
         "Parse and verify a Monte source file."
 
         def tree
         def lex := makeMonteLexer(data, inputFile)
-        def parseTime := Timer.trial(fn {
-            escape e {
-                bind tree := parseModule(lex, astBuilder, e)
-            } catch parseError {
-                def stdout := makePumpTube(makeUTF8EncodePump())
-                stdout.flowTo(makeStdOut())
-                stdout.receive(
-                    if (config.terseErrors()) {
-                        inputFile + ":" + parseError.formatCompact() + "\n"
-                    } else {parseError.formatPretty()})
+        escape e {
+            bind tree := parseModule(lex, astBuilder, e)
+        } catch parseError {
+            def stdout := makePumpTube(makeUTF8EncodePump())
+            stdout.flowTo(makeStdOut())
+            stdout.receive(
+                if (config.terseErrors()) {
+                    inputFile + ":" + parseError.formatCompact() + "\n"
+                } else {parseError.formatPretty()})
 
-                throw("Syntax error")
-            }
-        })
+            throw("Syntax error")
+        }
         if (config.verifyNames()):
             def undefineds := findUndefinedNames(tree, safeScope)
             if (undefineds.size() > 0):
-                    def stdout := makePumpTube(makeUTF8EncodePump())
-                    stdout.flowTo(makeStdOut())
-                    for n in (undefineds):
-                        def err := lex.makeParseError(
-                            [`Undefined name ${n.getName()}`,
-                             n.getSpan()])
-                        stdout.receive(
-                            if (config.terseErrors()) {
-                                inputFile + ":" + err.formatCompact() + "\n"
-                            } else {err.formatPretty()})
-                    throw("Name usage error")
-
-        when (parseTime) ->
-            traceln(`Parsed source file (${parseTime}s)`)
+                def stdout := makePumpTube(makeUTF8EncodePump())
+                stdout.flowTo(makeStdOut())
+                for n in (undefineds):
+                    def err := lex.makeParseError(
+                        [`Undefined name ${n.getName()}`,
+                         n.getSpan()])
+                    stdout.receive(
+                        if (config.terseErrors()) {
+                            inputFile + ":" + err.formatCompact() + "\n"
+                        } else {err.formatPretty()})
+                throw("Name usage error")
         return tree
 
-    def compile(var tree) :Bytes:
-        "Compile a module and serialize it to a bytestring."
-        def expandTime := Timer.trial(fn {tree := expand(tree, astBuilder,
-                                                         throw)})
-        when (expandTime) ->
-            traceln(`Expanded source file (${expandTime}s)`)
+    def expandTree(tree):
+        return expand(tree, astBuilder, throw)
 
-        if (config.useMixer()) {
-            def optimizeTime := Timer.trial(fn {tree := optimize(tree)})
-            when (optimizeTime) -> {traceln(`Optimized source file (${optimizeTime}s)`)}
-        }
-
+    def serialize(tree):
         def context := makeMASTContext()
         context(tree)
         return context.bytes()
 
-    def p := makeFileResource(inputFile) <- getContents()
+    def writeOutputFile(bs):
+        return makeFileResource(outputFile)<-setContents(bs)
+
+    def stages := [
+        readInputFile,
+        parse,
+        expandTree,
+    ] + if (config.useMixer()) {[optimize]} else {[]} + [
+        serialize,
+    ] + if (config.justLint()) {[]} else {[writeOutputFile]}
+    def pipeline := makePipeline(Timer, stages)
+    def p := pipeline.promisedResult()
+    pipeline.advance()
     return when (p) ->
-        def via (UTF8.decode) data := p
-        traceln("Read in source file")
-        def tree := parse(data)
-        if (!config.justLint()):
-            def bs :Bytes := compile(tree)
-            traceln("Writing out source file")
-            when (makeFileResource(outputFile) <- setContents(bs)) ->
-                0
-            catch via (unsealException) problem:
-                traceln(`Problem writing file: $problem`)
-                1
-        else:
-            0
+        traceln("All done!")
+        0
     catch via (unsealException) problem:
         traceln(`Problem: $problem`)
         1
