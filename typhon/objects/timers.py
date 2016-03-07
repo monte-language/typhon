@@ -30,6 +30,7 @@ RESOLVE_1 = getAtom(u"resolve", 1)
 RUN_1 = getAtom(u"run", 1)
 SENDTIMESTAMP_1 = getAtom(u"sendTimestamp", 1)
 TRIAL_1 = getAtom(u"trial", 1)
+UNSAFENOW_0 = getAtom(u"unsafeNow", 0)
 
 
 def resolveTimer(uv_timer):
@@ -49,6 +50,9 @@ class Timer(Object):
      * `sendTimestamp(callable)`: Send a `Double` representing the runtime's
        clock to `callable`.
 
+    There is extremely unsafe functionality as well:
+     * `unsafeNow()`: The current system time.
+
     And there's some deprecated stuff on the chopping block.
 
     Use with caution.
@@ -56,6 +60,9 @@ class Timer(Object):
 
     def recv(self, atom, args):
         from typhon.objects.collections.maps import EMPTY_MAP
+        if atom is UNSAFENOW_0:
+            return DoubleObject(time.time())
+
         if atom is FROMNOW_1:
             duration = promoteToDouble(args[0])
             p, r = makePromise()
