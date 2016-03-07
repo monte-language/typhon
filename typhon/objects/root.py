@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -49,9 +51,13 @@ def addTrail(ue, target, atom, args):
     argStringList = []
     for arg in args:
         try:
+            s = arg.toQuote()
             argStringList.append(arg.toQuote())
         except UserException as ue2:
-            argStringList.append(u"<**object throws %r when printed**>" % ue2)
+            s = u"<**object throws %r when printed**>" % ue2
+        if len(s) > 40:
+            s = s[:39] + u"…"
+        argStringList.append(s)
     argString = u", ".join(argStringList)
     atomRepr = atom.repr.decode("utf-8")
     ue.trail.append(u"In %s.%s [%s]:" % (target.toQuote(), atomRepr,
