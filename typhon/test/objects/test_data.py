@@ -284,6 +284,10 @@ class TestInt(TestCase):
         result = i.call(u"approxDivide", [i])
         self.assertTrue(math.isnan(result.getDouble()))
 
+    def testFloorDivideNaN(self):
+        i = IntObject(0)
+        self.assertRaises(UserException, i.call, u"floorDivide", [i])
+
     def testComplement(self):
         i = IntObject(5)
         result = i.call(u"complement", [])
@@ -442,3 +446,7 @@ class TestBigInt(TestCase):
         i = BigInt(rbigint.fromint(0))
         result = i.call(u"approxDivide", [i])
         self.assertTrue(math.isnan(result.getDouble()))
+
+    def testFloorDivideNaN(self):
+        i = BigInt(rbigint.fromint(0))
+        self.assertRaises(UserException, i.call, u"floorDivide", [i])

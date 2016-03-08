@@ -448,6 +448,8 @@ class IntObject(Object):
                 other = unwrapBigInt(args[0])
                 bi = rbigint.fromint(self._i)
                 return BigInt(bi.floordiv(other))
+            except ZeroDivisionError:
+                raise userError(u"Integer division by zero")
 
         if atom is MAX_1:
             other = unwrapInt(args[0])
@@ -699,7 +701,10 @@ class BigInt(Object):
 
         if atom is FLOORDIVIDE_1:
             other = promoteToBigInt(args[0])
-            return BigInt(self.bi.floordiv(other))
+            try:
+                return BigInt(self.bi.floordiv(other))
+            except ZeroDivisionError:
+                raise userError(u"Integer division by zero")
 
         if atom is MAX_1:
             # XXX could specialize for ints
