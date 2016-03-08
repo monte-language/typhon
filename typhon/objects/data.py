@@ -314,6 +314,12 @@ class DoubleObject(Object):
         return self._d
 
 
+# These double objects are prebuilt (and free to use), since building
+# on-the-fly floats from strings doesn't work in RPython.
+Infinity = DoubleObject(float("inf"))
+NaN = DoubleObject(float("nan"))
+
+
 def unwrapDouble(o):
     from typhon.objects.refs import resolution
     d = resolution(o)
@@ -420,7 +426,11 @@ class IntObject(Object):
             # double, then perform division.
             d = float(self._i)
             other = promoteToDouble(args[0])
-            return DoubleObject(d / other)
+            try:
+                return DoubleObject(d / other)
+            except ZeroDivisionError:
+                # We tried to divide by zero.
+                return NaN
 
         if atom is BITLENGTH_0:
             # bitLength/0: The number of bits required to store this integer.
@@ -674,8 +684,12 @@ class BigInt(Object):
             # double, then perform division.
             other = promoteToBigInt(args[0])
             # The actual division is performed within the bigint.
-            d = self.bi.truediv(other)
-            return DoubleObject(d)
+            try:
+                d = self.bi.truediv(other)
+                return DoubleObject(d)
+            except ZeroDivisionError:
+                # Tried to divide by zero.
+                return NaN
 
         if atom is BITLENGTH_0:
             return IntObject(self.bi.bit_length())

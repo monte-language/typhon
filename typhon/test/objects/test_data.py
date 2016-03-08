@@ -279,6 +279,11 @@ class TestInt(TestCase):
         result = i.call(u"approxDivide", [bi])
         self.assertAlmostEqual(result._d, 0.0007937000378463977)
 
+    def testApproxDivideNaN(self):
+        i = IntObject(0)
+        result = i.call(u"approxDivide", [i])
+        self.assertTrue(math.isnan(result.getDouble()))
+
     def testComplement(self):
         i = IntObject(5)
         result = i.call(u"complement", [])
@@ -432,3 +437,8 @@ class TestBigInt(TestCase):
         bj = BigInt(rbigint.fromint(1000000000000000000).int_mul(10))
         result = bi.call(u"approxDivide", [bj])
         self.assertAlmostEqual(result._d, 0.0007937000378463977)
+
+    def testApproxDivideNaN(self):
+        i = BigInt(rbigint.fromint(0))
+        result = i.call(u"approxDivide", [i])
+        self.assertTrue(math.isnan(result.getDouble()))

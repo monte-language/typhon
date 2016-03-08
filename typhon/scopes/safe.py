@@ -26,9 +26,9 @@ from typhon.objects.collections.lists import (ConstList, listFromIterable,
 from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
-                                 StrObject, bytesToString, makeSourceSpan,
-                                 unwrapBytes, unwrapInt, unwrapStr,
-                                 unwrapChar)
+                                 StrObject, Infinity, NaN, bytesToString,
+                                 makeSourceSpan, unwrapBytes, unwrapInt,
+                                 unwrapStr, unwrapChar)
 from typhon.objects.ejectors import throw, theThrower
 from typhon.objects.equality import Equalizer
 from typhon.objects.exceptions import SealedException
@@ -486,11 +486,6 @@ def nearGuard(specimen, ej):
         throw(ej, StrObject(msg))
     return specimen
 
-
-# Prebuild, since building on-the-fly floats from strings doesn't work in
-# RPython.
-Infinity = DoubleObject(float("inf"))
-NaN = DoubleObject(float("nan"))
 
 def safeScope():
     return finalize({
