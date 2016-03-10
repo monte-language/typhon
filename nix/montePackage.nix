@@ -1,4 +1,4 @@
-{stdenv, lib, fetchgit, bash, typhonVm, mast}: lock:
+{stdenv, pkgs, lib, fetchgit, bash, typhonVm, mast}: lock:
 let
   fetchSrc = (name: srcDesc:
     if srcDesc.type == "git" then
@@ -42,10 +42,33 @@ let
       done
       " + (if doCheck then ''
         mkdir -p $out/bin
-        echo "#!${bash}/bin/bash" > $out/bin/${entrypoint}
-        echo "${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader run ${entrypoint} \"\$@\"" >> $out/bin/${entrypoint}
+        tee $out/bin/${entrypoint} <<EOF
+        #!${pkgs.stdenv.shell}
+        case \$1 in
+          --test)
+            shift
+            OPERATION=test
+            ;;
+          --bench)
+            shift
+            OPERATION=bench
+            ;;
+          --dot)
+            shift
+            OPERATION=dot
+            ;;
+          --run)
+            shift
+            OPERATION=run
+            ;;
+          *)
+            OPERATION=run
+            ;;
+        esac
+        ${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader \$OPERATION ${entrypoint} "\$@"
+        EOF
         chmod +x $out/bin/${entrypoint}
-      '' else "");
+        '' else "");
       src = src;
     };
   makePkg = name: pkg:
@@ -54,6 +77,8 @@ let
       src = let s = sources.${pkg.source}; in
         if name == lock.entrypoint then
           builtins.filterSource (path: type:
+            !(lib.hasPrefix ".git" path) &&
+            type != "symlink" &&
             lib.any (p:
                lib.hasPrefix (builtins.toString (builtins.toPath (s + ("/" + p)))) path) pkg.paths)
           s
