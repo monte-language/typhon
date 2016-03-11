@@ -53,19 +53,19 @@ def reduce(result) as DeepFrozen:
     return result
 
 def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
-         => getAddrInfo, => packageLoader,
+         => getAddrInfo, # => packageLoader,
          => makeFileResource, => makeProcess,
          => makeStdErr, => makeStdIn, => makeStdOut,
          => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
          => unsealException, => unsafeScope) as DeepFrozen:
 
     var environment := null
-    def playWith(module :Str, scope :Map) :Void:
-        "Import a module and bring it into the environment."
-        def map := packageLoader."import"(module)
-        for k :Str => v :DeepFrozen in map:
-            environment with= (k, &&v)
-            traceln(`Adding $k to environment`)
+    # def playWith(module :Str, scope :Map) :Void:
+    #     "Import a module and bring it into the environment."
+    #     def map := packageLoader."import"(module)
+    #     for k :Str => v :DeepFrozen in map:
+    #         environment with= (k, &&v)
+    #         traceln(`Adding $k to environment`)
     def baseEnvironment := safeScope | [
         # Typhon unsafe scope.
         => &&Timer, => &&currentProcess, => &&currentRuntime, => &&currentVat,
@@ -74,7 +74,7 @@ def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
         => &&makeStdOut, => &&makeTCP4ClientEndpoint, => &&makeTCP4ServerEndpoint,
         => &&unsealException,
         # REPL-only fun.
-        => &&JSON, => &&help, => &&playWith,
+        => &&JSON, => &&help, # => &&playWith,
     ]
 
     environment := [for `&&@name` => binding in (baseEnvironment) name => binding]

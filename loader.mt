@@ -6,9 +6,11 @@ object moduleGraphUnsatisfiedExit as DeepFrozen:
 object moduleGraphLiveExit as DeepFrozen:
     "A live (non-`DeepFrozen`) exit point on a module configuration graph."
 
+interface Config :DeepFrozen {}
+
 def makeModuleConfiguration(module :DeepFrozen,
                             knownDependencies :Map[Str, DeepFrozen]) as DeepFrozen:
-    return object moduleConfiguration as DeepFrozen:
+    return object moduleConfiguration as DeepFrozen implements Config:
         "Information about the metadata and state of a module."
 
         to _printOn(out):
@@ -38,6 +40,8 @@ def makeModuleConfiguration(module :DeepFrozen,
         to run(loader):
             return module(loader)
 
+def ModuleStructure :DeepFrozen := Pair[Map[Str, Map[Str, Any]], NullOk[Config]]
+
 def main():
 
     def collectedTests := [].diverge()
@@ -53,10 +57,11 @@ def main():
             return def benchBucket(aBench, name :Str):
                 collectedBenches.push([`$locus: $name`, aBench])
 
-    def makeLoader(imports):
+    def makeLoader(imports :Map):
         return object loader:
             to "import"(name):
                 return imports[name]
+
 
     def makeModuleAndConfiguration(modname,
                                    => collectTests := false,
@@ -110,15 +115,15 @@ def main():
                     depMap[modname] := config
                     def pre := collectedTests.size()
                     var imports := [].asMap()
-                    for [importable, _] in (deps):
+                    for [importable, _] in (deps :List[ModuleStructure]):
                         imports |= importable
-                    def module := config(makeLoader(imports.snapshot()))
+                    def module := config(makeLoader(imports))
                     if (collectTests):
                         traceln(`collected ${collectedTests.size() - pre} tests`)
                     [[modname => module], config]
         def moduleAndConfig := subload(modname)
         return when (moduleAndConfig) ->
-            def [[(modname) => module], config] := moduleAndConfig
+            def [[(modname) => module], config] := (moduleAndConfig :ModuleStructure)
             [module, config]
 
     def args := currentProcess.getArguments().slice(2)
@@ -131,9 +136,10 @@ def main():
             return when (exps) ->
                 def [module, _] := exps
                 def excludes := ["typhonEval", "_findTyphonFile", "bench"]
+                # Leave out loader-only objects.
                 def unsafeScopeValues := [for `&&@n` => &&v in (unsafeScope)
                                           if (!excludes.contains(n))
-                                          n => v].with("packageLoader", makeLoader(module))
+                                          n => v]
 
                 # We don't care about config or anything that isn't the
                 # entrypoint named `main`.
