@@ -4,8 +4,9 @@ from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.objects.constants import (BoolObject, FalseObject, NullObject,
                                       unwrapBool, wrapBool)
-from typhon.objects.data import (CharObject, IntObject, StrObject, unwrapChar,
-                                 unwrapStr)
+from typhon.objects.data import (BytesObject, CharObject, IntObject,
+                                 StrObject, unwrapBytes, unwrapChar,
+                                 unwrapInt, unwrapStr)
 from typhon.objects.refs import UnconnectedRef
 from typhon.rstrategies import rstrategies
 
@@ -48,111 +49,69 @@ class NullListStrategy(Strategy):
         return NullObject
 
 
-@rstrategies.strategy(generalize=[GenericListStrategy])
-class SmallIntListStrategy(Strategy):
+def makeUnboxedListStrategy(cls, box, unbox, exemplar):
     """
-    A list with only ints which are able to fit into machine words.
-    """
+    Create a strategy for unboxing a certain class.
 
-    import_from_mixin(rstrategies.SingleTypeStrategy)
+    The class must be a subclass of Object.
 
-    contained_type = IntObject
+    If there's not a homomorphism between the boxer and unboxer, you're going
+    to have a bad time. Or, at the least, it's not going to typecheck.
 
-    def default_value(self):
-        return IntObject(42)
+    The boxer and unboxer can be elidable, but it's not necessary.
 
-    def wrap(self, value):
-        return IntObject(value)
-
-    def unwrap(self, value):
-        return value.getInt()
-
-
-@rstrategies.strategy(generalize=[GenericListStrategy])
-class BooleanFlowStrategy(Strategy):
-    """
-    A list of unconnected refs.
+    The exemplar should be a prebuilt safe default value; it will be used to
+    pre-fill lists that are overallocated.
     """
 
-    import_from_mixin(rstrategies.SingleTypeStrategy)
+    @rstrategies.strategy(generalize=[GenericListStrategy])
+    class UnboxedListStrategy(Strategy):
+        """
+        A list of some monomorphic unboxed type.
+        """
 
-    contained_type = UnconnectedRef
+        import_from_mixin(rstrategies.SingleTypeStrategy)
 
-    def default_value(self):
-        return UnconnectedRef(StrObject(u"Implementation detail leaked"))
+        contained_type = cls
+        box = box
+        unbox = box
 
-    def wrap(self, value):
-        return UnconnectedRef(value)
+        def wrap(self, value):
+            return box(value)
 
-    def unwrap(self, value):
-        assert isinstance(value, UnconnectedRef), "Implementation detail"
-        return value._problem
+        def unwrap(self, value):
+            return unbox(value)
 
+        def default_value(self):
+            return exemplar
 
-@rstrategies.strategy(generalize=[GenericListStrategy])
-class CharListStrategy(Strategy):
-    """
-    A list with only characters.
-    """
-
-    import_from_mixin(rstrategies.SingleTypeStrategy)
-
-    contained_type = CharObject
-
-    def default_value(self):
-        return CharObject(u'▲')
-
-    def wrap(self, value):
-        return CharObject(value)
-
-    def unwrap(self, value):
-        return unwrapChar(value)
+    return UnboxedListStrategy
 
 
-@rstrategies.strategy(generalize=[GenericListStrategy])
-class StrListStrategy(Strategy):
-    """
-    A list with only characters.
-    """
+def unboxUnconnectedRef(value):
+    assert isinstance(value, UnconnectedRef), "Implementation detail"
+    return value._problem
 
-    import_from_mixin(rstrategies.SingleTypeStrategy)
-
-    contained_type = StrObject
-
-    def default_value(self):
-        return StrObject(u"▲")
-
-    def wrap(self, value):
-        return StrObject(value)
-
-    def unwrap(self, value):
-        return unwrapStr(value)
-
-
-@rstrategies.strategy(generalize=[BooleanFlowStrategy, GenericListStrategy])
-class BoolListStrategy(Strategy):
-    """
-    A list with only booleans.
-    """
-
-    import_from_mixin(rstrategies.SingleTypeStrategy)
-
-    contained_type = BoolObject
-
-    def default_value(self):
-        return FalseObject
-
-    def wrap(self, value):
-        return wrapBool(value)
-
-    def unwrap(self, value):
-        return unwrapBool(value)
+unboxedStrategies = [makeUnboxedListStrategy(cls, box, unbox, exemplar)
+for (cls, box, unbox, exemplar) in [
+    # Bools.
+    (BoolObject, wrapBool, unwrapBool, FalseObject),
+    # Chars.
+    (CharObject, CharObject, unwrapChar, CharObject(u'▲')),
+    # Small ints.
+    (IntObject, IntObject, unwrapInt, IntObject(42)),
+    # Unicode strings.
+    (StrObject, StrObject, unwrapStr, StrObject(u"▲")),
+    # Bytestrings.
+    (BytesObject, BytesObject, unwrapBytes, BytesObject("M")),
+    # _booleanFlow-generated lists of unconnected refs.
+    (UnconnectedRef, UnconnectedRef, unboxUnconnectedRef,
+        UnconnectedRef(StrObject(u"Implementation detail leaked"))),
+]]
 
 
-@rstrategies.strategy(generalize=[NullListStrategy, SmallIntListStrategy,
-                                  BooleanFlowStrategy, BoolListStrategy,
-                                  CharListStrategy, StrListStrategy,
-                                  GenericListStrategy])
+@rstrategies.strategy(generalize=[NullListStrategy] + unboxedStrategies +
+    [GenericListStrategy])
 class EmptyListStrategy(Strategy):
     """
     A list with no elements.
