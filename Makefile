@@ -65,12 +65,10 @@ mast: mast/lib/enum.mast mast/lib/record.mast \
 	bench \
 	monte
 
-infer: mast mast/tools/infer.mast
-
 testVM: default
 	trial typhon
 
-testMast: default mast infer mast/tests/lexer.mast mast/tests/parser.mast \
+testMast: default mast mast/tests/lexer.mast mast/tests/parser.mast \
 	mast/tests/auditors.mast mast/tests/fail-arg.mast mast/tests/expander.mast \
 	mast/tests/optimizer.mast mast/tests/flexMap.mast mast/tests/proptests.mast \
         mast/tests/b.mast mast/tests/region.mast
