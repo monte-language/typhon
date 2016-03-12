@@ -26,7 +26,7 @@ from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.rstrategies import rstrategies
-from typhon.strategies import strategyFactory
+from typhon.strategies.lists import strategyFactory
 
 
 ADD_1 = getAtom(u"add", 1)
