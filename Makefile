@@ -97,7 +97,7 @@ http: mast/lib/http/client.mast mast/lib/http/server.mast \
 	mast/lib/http/tag.mast mast/lib/http/resource.mast \
 	tubes
 
-games: mast/games/mafia.mast mast/lib/uKanren.mast
+games: mast/games/mafia.mast
 
 fun: mast/fun/elements.mast mast/fun/repl.mast mast/fun/termParser.mast
 
