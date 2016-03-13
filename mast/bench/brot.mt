@@ -4,7 +4,7 @@ import "lib/complex" =~ [=> makeComplex :DeepFrozen]
 import "lib/tubes" =~ [=> makeUTF8EncodePump :DeepFrozen,
                        => makePumpTube :DeepFrozen]
 import "lib/ansiColor" =~ [=> ramp :DeepFrozen]
-exports ()
+exports (main)
 
 
 def ITERATIONS :Int := 170
@@ -65,7 +65,7 @@ bench(fn {brotAt(-0.25, -0.4, 1 / 32.0, 1 / 20.0)},
 bench(fn {brotAt(-1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)},
       "Burning ship (small)")
 
-def main(=> makeStdOut) :Int as DeepFrozen:
+def main(argv, => makeStdOut) :Int as DeepFrozen:
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout.flowTo(makeStdOut())
     # And you thought Pokémon Snap was hard. ~ C.
