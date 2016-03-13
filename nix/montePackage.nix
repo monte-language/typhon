@@ -15,6 +15,7 @@ let
     let
       dependencySearchPaths = lib.concatStringsSep " " (map (x: "-l " + x) dependencies);
       doCheck = entrypoint != null;
+      entryPointName = if entrypoint != null then builtins.trace (baseNameOf entrypoint) (baseNameOf entrypoint) else null;
     in
     stdenv.mkDerivation {
       name = name;
@@ -36,13 +37,13 @@ let
         ${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l . ${mast}/loader test ${entrypoint}
       '' else null;
       installPhase = "
+      mkdir -p $out
       for p in ${lib.concatStringsSep " " pathNames}; do
-        mkdir -p $out/$p
-        cp -r $p/ $out/$p
+        cp -r $p $out/$p
       done
       " + (if doCheck then ''
         mkdir -p $out/bin
-        tee $out/bin/${entrypoint} <<EOF
+        tee $out/bin/${entryPointName} <<EOF
         #!${pkgs.stdenv.shell}
         case \$1 in
           --test)
@@ -67,7 +68,7 @@ let
         esac
         ${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader \$OPERATION ${entrypoint} "\$@"
         EOF
-        chmod +x $out/bin/${entrypoint}
+        chmod +x $out/bin/${entryPointName}
         '' else "");
       src = src;
     };

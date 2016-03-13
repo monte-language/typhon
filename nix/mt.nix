@@ -43,7 +43,7 @@ let
         lint)
             shift
             ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader \
-                       run montec -lint "$@"
+                       run montec -lint -terse "$@"
             ;;
         run|test|bench|dot)
             shift
