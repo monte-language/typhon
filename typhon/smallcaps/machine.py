@@ -124,10 +124,6 @@ class SmallCaps(object):
     @unroll_safe
     @specialize.arg(2)
     def call(self, index, withMap):
-        # Checkpoint the vat. This will, rarely, cause an exception to escape
-        # from within us.
-        self.vat.checkpoint()
-
         atom = self.code.atom(index)
 
         if withMap:
@@ -310,6 +306,10 @@ class SmallCaps(object):
             return index
         elif instruction.asInt == ops.JUMP.asInt:
             return index
+        elif instruction.asInt == ops.CHECKPOINT.asInt:
+            # Checkpoint the vat to the given number of points.
+            self.vat.checkpoint(points=index)
+            return pc + 1
         else:
             raise RuntimeError("Unknown instruction %s" %
                     instruction.repr.encode("utf-8"))

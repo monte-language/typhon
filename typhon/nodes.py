@@ -331,6 +331,8 @@ class Compiler(object):
         self.addInstruction("LITERAL", index)
 
     def call(self, verb, arity):
+        # Checkpoint before the call.
+        self.addInstruction("CHECKPOINT", 1)
         atom = self.addAtom(verb, arity)
         self.addInstruction("CALL", atom)
 

@@ -126,6 +126,9 @@ class AbstractInterpreter(object):
             self.addBranch(index)
             self.suspended = True
             # print "Suspending at pc", pc
+        elif instruction == ops.CHECKPOINT:
+            # Stack no-op.
+            pass
         else:
             raise RuntimeError("Unknown instruction %s" %
                     instruction.repr.encode("utf-8"))
