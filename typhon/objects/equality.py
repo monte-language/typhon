@@ -53,8 +53,58 @@ def eq(b):
     return EQUAL if b else INEQUAL
 
 
-def isSettled(o):
-    return samenessFringe(o, None, None)
+def listSettled(o, sofar):
+    for i, x in enumerate(unwrapList(o)):
+        if not isSettled(x, sofar):
+            # Unresolved promise found.
+            return False
+    return True
+
+
+def isSettled(original, sofar=None):
+    """
+    Determine whether an object is settled.
+
+    This function follows the same logic as samenessFringe(), but does not
+    build the graph.
+    """
+
+    # Resolve the object.
+    o = resolution(original)
+    # Handle primitive cases first.
+    if o is NullObject:
+        return True
+
+    if (isinstance(o, BoolObject) or isinstance(o, CharObject)
+            or isinstance(o, DoubleObject) or isinstance(o, IntObject)
+            or isinstance(o, BigInt) or isinstance(o, StrObject)
+            or isinstance(o, TraversalKey)):
+        return True
+
+    # Rude.
+    if isinstance(o, ConstMap) and len(o.objectMap) == 0:
+        return True
+
+    if sofar is None:
+        sofar = {}
+    elif o in sofar:
+        return True
+
+    if isinstance(o, ConstList):
+        sofar[o] = None
+        return listSettled(o, sofar)
+
+    if selfless in o.auditorStamps():
+        if transparentStamp in o.auditorStamps():
+            sofar[o] = None
+            return isSettled(o.call(u"_uncall", []), sofar)
+        # XXX Semitransparent support goes here
+
+    if isResolved(o):
+        return True
+
+    # Welp, it's unsettled.
+    return False
 
 
 def isSameEver(first, second):
