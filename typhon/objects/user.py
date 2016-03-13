@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import unroll_safe
+from rpython.rlib.jit import promote, unroll_safe
 from rpython.rlib.objectmodel import specialize
 
 from typhon.atoms import getAtom
@@ -294,7 +294,7 @@ class QuietObject(ScriptObject):
 
     @unroll_safe
     def runMethod(self, method, args, namedArgs):
-        machine = SmallCaps(method, None, self.globals)
+        machine = SmallCaps(method, None, promote(self.globals))
         # print "--- Running", self.displayName, atom, args
         # Push the arguments onto the stack, backwards.
         machine.push(namedArgs)
@@ -306,7 +306,7 @@ class QuietObject(ScriptObject):
         return machine.pop()
 
     def runMatcher(self, code, message, ej):
-        machine = SmallCaps(code, None, self.globals)
+        machine = SmallCaps(code, None, promote(self.globals))
         machine.push(message)
         machine.push(ej)
         machine.run()
@@ -354,7 +354,7 @@ class BusyObject(ScriptObject):
 
     @unroll_safe
     def runMethod(self, method, args, namedArgs):
-        machine = SmallCaps(method, self.closure, self.globals)
+        machine = SmallCaps(method, self.closure, promote(self.globals))
         # print "--- Running", self.displayName, atom, args
         # Push the arguments onto the stack, backwards.
         machine.push(namedArgs)
@@ -366,7 +366,7 @@ class BusyObject(ScriptObject):
         return machine.pop()
 
     def runMatcher(self, code, message, ej):
-        machine = SmallCaps(code, self.closure, self.globals)
+        machine = SmallCaps(code, self.closure, promote(self.globals))
         machine.push(message)
         machine.push(ej)
         machine.run()
