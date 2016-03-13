@@ -43,21 +43,22 @@ def doStep(start :Double, step :Double, iterations :Int) :List[Double] as DeepFr
     return [for i in (0..!iterations) start + i * step]
 
 
-def fullBrot(yStart :Double, yStep :Double, xStart :Double, xStep :Double) :Str as DeepFrozen:
+def fullBrot(write, yStart :Double, yStep :Double, xStart :Double,
+             xStep :Double) :Void as DeepFrozen:
     def pieces := [].diverge()
     for y in doStep(yStart, yStep, 40):
         for x in doStep(xStart, xStep, 80):
             def count := brotCount(makeComplex(x, y))
-            pieces.push(format(count))
-        pieces.push("\n")
-    pieces.push("\u001b[0m\n")
-    return "".join(pieces)
+            write(format(count))
+        write("\n")
+    write("\u001b[0m\n")
 
 
-def brotAt(xCenter :Double, yCenter :Double, xScale :Double, yScale :Double) :Str as DeepFrozen:
+def brotAt(write, xCenter :Double, yCenter :Double, xScale :Double, 
+           yScale :Double) :Void as DeepFrozen:
     def xStart := xCenter - xScale * 40
     def yStart := yCenter - yScale * 20
-    return fullBrot(yStart, yScale, xStart, xScale)
+    fullBrot(write, yStart, yScale, xStart, xScale)
 
 
 bench(fn {brotAt(-0.25, -0.4, 1 / 32.0, 1 / 20.0)},
@@ -68,8 +69,9 @@ bench(fn {brotAt(-1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)},
 def main(argv, => makeStdOut) :Int as DeepFrozen:
     def stdout := makePumpTube(makeUTF8EncodePump())
     stdout.flowTo(makeStdOut())
+
     # And you thought Pokémon Snap was hard. ~ C.
-    stdout.receive(brotAt(-0.25, -0.4, 1 / 32.0, 1 / 20.0))
-    stdout.receive(brotAt(-1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0))
+    brotAt(stdout.receive, -0.25, -0.4, 1 / 32.0, 1 / 20.0)
+    brotAt(stdout.receive, -1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)
 
     return 0
