@@ -135,6 +135,16 @@ class ConstMap(Object):
     def toString(self):
         return toString(self)
 
+    def isSettled(self, sofar=None):
+        if sofar is None:
+            sofar = {self: None}
+        for k, v in self.objectMap.iteritems():
+            if k not in sofar and not k.isSettled(sofar=sofar):
+                return False
+            if v not in sofar and not v.isSettled(sofar=sofar):
+                return False
+        return True
+
     def recv(self, atom, args):
         # _makeIterator/0: Create an iterator for this collection's contents.
         if atom is _MAKEITERATOR_0:

@@ -4,8 +4,7 @@ from typhon.vats import currentVat
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.maps import EMPTY_MAP
 from typhon.objects.data import NullObject, StrObject, unwrapBool
-from typhon.objects.equality import (EQUAL, TraversalKey, optSame,
-                                     isSameEver, isSettled)
+from typhon.objects.equality import EQUAL, TraversalKey, optSame, isSameEver
 from typhon.objects.guards import anyGuard
 from typhon.objects.refs import (EVENTUAL, NEAR, Promise, UnconnectedRef,
                                  isResolved, resolution)
@@ -35,7 +34,7 @@ def sendOnly(ref, atom, args, namedArgs):
 
 class Proxy(Promise):
     def __init__(self, handler, resolutionBox):
-        if not isSettled(handler):
+        if not handler.isSettled():
             raise userError(u"Proxy handler not settled: " +
                             handler.toString())
         self.handler = handler
@@ -235,7 +234,7 @@ class RemotePromise(Proxy):
 
 
 def makeProxy(handler, resolutionBox, resolved):
-    if not isSettled(handler):
+    if not handler.isSettled():
         raise userError(u"Proxy handler not settled")
     if unwrapBool(resolved):
         return FarRef(handler, resolutionBox)

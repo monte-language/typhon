@@ -53,60 +53,6 @@ def eq(b):
     return EQUAL if b else INEQUAL
 
 
-def listSettled(o, sofar):
-    for i, x in enumerate(unwrapList(o)):
-        if not isSettled(x, sofar):
-            # Unresolved promise found.
-            return False
-    return True
-
-
-def isSettled(original, sofar=None):
-    """
-    Determine whether an object is settled.
-
-    This function follows the same logic as samenessFringe(), but does not
-    build the graph.
-    """
-
-    # Resolve the object.
-    o = resolution(original)
-    # Handle primitive cases first.
-    if o is NullObject:
-        return True
-
-    if (isinstance(o, BoolObject) or isinstance(o, CharObject)
-            or isinstance(o, DoubleObject) or isinstance(o, IntObject)
-            or isinstance(o, BigInt) or isinstance(o, StrObject)
-            or isinstance(o, TraversalKey)):
-        return True
-
-    # Rude.
-    if isinstance(o, ConstMap) and len(o.objectMap) == 0:
-        return True
-
-    if sofar is None:
-        sofar = {}
-    elif o in sofar:
-        return True
-
-    if isinstance(o, ConstList):
-        sofar[o] = None
-        return listSettled(o, sofar)
-
-    if selfless in o.auditorStamps():
-        if transparentStamp in o.auditorStamps():
-            sofar[o] = None
-            return isSettled(o.call(u"_uncall", []), sofar)
-        # XXX Semitransparent support goes here
-
-    if isResolved(o):
-        return True
-
-    # Welp, it's unsettled.
-    return False
-
-
 def isSameEver(first, second):
     result = optSame(first, second)
     if result is NOTYET:
@@ -150,7 +96,7 @@ def optSame(first, second, cache=None):
     """
 
     # We need to see whether our objects are settled. If not, then give up.
-    if not isSettled(first) or not isSettled(second):
+    if not first.isSettled() or not second.isSettled():
         # Well, actually, there's one chance that they could be equal, if
         # they're the same object. But if they aren't, then we can't tell
         # anything else about them, so we'll call it quits.
@@ -506,7 +452,7 @@ class Equalizer(Object):
 
     def recv(self, atom, args):
         if atom is ISSETTLED_1:
-            return wrapBool(isSettled(args[0]))
+            return wrapBool(args[0].isSettled())
 
         if atom is OPTSAME_2:
             first, second = args

@@ -229,6 +229,22 @@ class Object(object):
     def optInterface(self):
         return None
 
+    # Eventuality.
+
+    def isSettled(self, sofar=None):
+        """
+        Whether this object is currently settled.
+
+        Objects may not unsettle themselves; once this method starts returning
+        True, it must not change to False.
+
+        `sofar`, if not None, is a dictionary of Objects to None (a set),
+        where all keys have been determined settled.
+        """
+
+        # This was a *difficult* decision. Sorry.
+        return True
+
     # Pretty-printing.
 
     def printOn(self, printer):
@@ -279,6 +295,9 @@ def runnable(singleAtom=None, _stamps=[]):
 
             def auditorStamps(self):
                 return _stamps
+
+            def isSettled(self, sofar=None):
+                return True
 
             def docString(self):
                 return doc

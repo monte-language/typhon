@@ -131,8 +131,8 @@ class RefOps(Object):
             return wrapBool(self.isSelfless(args[0]))
 
         if atom is ISSETTLED_1:
-            from typhon.objects.equality import isSettled
-            return wrapBool(isSettled(args[0]))
+            return wrapBool(args[0].isSettled())
+
         if atom is MAKEPROXY_3:
             from typhon.objects.proxy import makeProxy
             return makeProxy(args[0], args[1], args[2])
@@ -403,6 +403,10 @@ class Promise(Object):
     """
 
     # Monte core.
+
+    def isSettled(self, sofar=None):
+        # Strangely, we cannot be part of the looping problem here!
+        return self.isResolved()
 
     def recv(self, atom, args):
         from typhon.objects.collections.maps import EMPTY_MAP

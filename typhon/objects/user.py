@@ -19,7 +19,8 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.log import log
-from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.auditors import (deepFrozenStamp, selfless,
+                                     transparentStamp)
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import StrObject, unwrapStr
@@ -33,9 +34,10 @@ from typhon.smallcaps.machine import SmallCaps
 # XXX AuditionStamp, Audition guard
 
 ASK_1 = getAtom(u"ask", 1)
+GETFQN_0 = getAtom(u"getFQN", 0)
 GETGUARD_1 = getAtom(u"getGuard", 1)
 GETOBJECTEXPR_0 = getAtom(u"getObjectExpr", 0)
-GETFQN_0 = getAtom(u"getFQN", 0)
+_UNCALL_0 = getAtom(u"_uncall", 0)
 
 
 pemci = u".".join([
@@ -210,6 +212,20 @@ class ScriptObject(Object):
             return []
         else:
             return self.report.getStamps()
+
+    def isSettled(self, sofar=None):
+        if selfless in self.auditorStamps():
+            if transparentStamp in self.auditorStamps():
+                from typhon.objects.collections.maps import EMPTY_MAP
+                if sofar is None:
+                    sofar = {self: None}
+                # Uncall and recurse.
+                return self.recvNamed(_UNCALL_0, [],
+                                      EMPTY_MAP).isSettled(sofar=sofar)
+            # XXX Semitransparent support goes here
+
+        # Well, we're resolved, so I guess that we're good!
+        return True
 
     def docString(self):
         return self.codeScript.doc

@@ -19,7 +19,7 @@ from rpython.rlib.rbigint import rbigint
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
-from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, isSettled, optSame
+from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, optSame
 from typhon.objects.refs import makePromise
 from typhon.vats import scopedVat, testingVat
 
@@ -28,22 +28,22 @@ class TestIsSettled(TestCase):
 
     def testInt(self):
         i = IntObject(42)
-        self.assertTrue(isSettled(i))
+        self.assertTrue(i.isSettled())
 
     def testNaN(self):
         d = DoubleObject(float("nan"))
-        self.assertTrue(isSettled(d))
+        self.assertTrue(d.isSettled())
 
     def testPromise(self):
         with scopedVat(testingVat()):
             p, r = makePromise()
-            self.assertFalse(isSettled(p))
+            self.assertFalse(p.isSettled())
 
     def testPromiseResolved(self):
         with scopedVat(testingVat()):
             p, r = makePromise()
             r.resolve(IntObject(42))
-            self.assertTrue(isSettled(p))
+            self.assertTrue(p.isSettled())
 
 
 class TestOptSame(TestCase):

@@ -200,6 +200,14 @@ class ConstList(Object):
             x = intmask((1000003 * x) ^ y)
         return x
 
+    def isSettled(self, sofar=None):
+        if sofar is None:
+            sofar = {self: None}
+        for v in self.strategy.fetch_all(self):
+            if v not in sofar and not v.isSettled(sofar=sofar):
+                return False
+        return True
+
     def _recv(self, atom, args):
         if atom is ADD_1:
             other = unwrapList(args[0])
