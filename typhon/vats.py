@@ -94,10 +94,17 @@ class Vat(Object):
 
         raise Refused(self, atom, args)
 
-    def checkpoint(self):
-        if self.checkpoints > 0:
-            self.checkpoints -= 1
-        elif not self.checkpoints:
+    def checkpoint(self, points=1):
+        # If we're immortal, then pass. Otherwise, if we can perform the
+        # deduction, then do it; if we can't, then error out.
+        if self.checkpoints < 0:
+            # Immortal.
+            pass
+        elif self.checkpoints >= points:
+            # This can leave us with, at worst, zero points, which will render
+            # us non-immortal and guaranteed to raise on the next checkpoint.
+            self.checkpoints -= points
+        else:
             raise VatCheckpointed("Out of checkpoints")
 
     def send(self, target, atom, args, namedArgs):
