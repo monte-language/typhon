@@ -68,7 +68,7 @@ def readCB(stream, status, buf):
                 ruv.stashStream(stream, (vat, fount))
                 data = charpsize2str(buf.c_base, status)
                 fount.receive(data)
-            elif status == 0:
+            elif status == -4095:
                 # EOF.
                 fount.stop(u"End of stream")
             else:

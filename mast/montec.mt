@@ -4,7 +4,9 @@ import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
 import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
 import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
-import "lib/tubes" =~ [=> makeUTF8EncodePump :DeepFrozen, => makePumpTube :DeepFrozen]
+import "lib/tubes" =~ [=> makeUTF8EncodePump :DeepFrozen,
+                       => makeUTF8DecodePump :DeepFrozen,
+                       => makePumpTube :DeepFrozen]
 import "lib/monte/monte_verifier" =~ [=> findUndefinedNames :DeepFrozen]
 
 exports (main)
@@ -99,13 +101,35 @@ def parseArguments(var argv, ej) as DeepFrozen:
 
 
 def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
-         => unsealException) as DeepFrozen:
+         => makeStdIn, => unsealException) as DeepFrozen:
 
     def config := parseArguments(argv, throw)
     def inputFile := config.getInputFile()
     def outputFile := config.getOutputFile()
 
+    def readAllStdinText():
+        def s := makeStdIn() <- flowTo(makePumpTube(makeUTF8DecodePump()))
+        def buf := [].diverge()
+        def [output, outR] := Ref.promise()
+        object collector:
+            to flowingFrom(upstream):
+                null
+            to receive(chunk):
+                buf.push(chunk)
+            to progress(amount):
+                null
+            to flowStopped(reason):
+                def result := "".join(buf)
+                traceln(`STDIN: $result`)
+                outR.resolve(result)
+            to flowAborted(reason):
+                outR.smash(reason)
+        s <- flowTo(collector)
+        return output
+
     def readInputFile(_):
+        if (inputFile == "-"):
+            return readAllStdinText()
         def p := makeFileResource(inputFile)<-getContents()
         return when (p) ->
             UTF8.decode(p, null)
