@@ -1,4 +1,4 @@
-{stdenv, lib, fetchgit, bash, typhonVm, mast}: lock:
+{stdenv, pkgs, lib, fetchgit, bash, typhonVm, mast}: lock:
 let
   fetchSrc = (name: srcDesc:
     if srcDesc.type == "git" then
@@ -15,6 +15,7 @@ let
     let
       dependencySearchPaths = lib.concatStringsSep " " (map (x: "-l " + x) dependencies);
       doCheck = entrypoint != null;
+      entryPointName = if entrypoint != null then builtins.trace (baseNameOf entrypoint) (baseNameOf entrypoint) else null;
     in
     stdenv.mkDerivation {
       name = name;
@@ -36,16 +37,39 @@ let
         ${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l . ${mast}/loader test ${entrypoint}
       '' else null;
       installPhase = "
+      mkdir -p $out
       for p in ${lib.concatStringsSep " " pathNames}; do
-        mkdir -p $out/$p
-        cp -r $p/ $out/$p
+        cp -r $p $out/$p
       done
       " + (if doCheck then ''
         mkdir -p $out/bin
-        echo "#!${bash}/bin/bash" > $out/bin/${entrypoint}
-        echo "${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader run ${entrypoint} \"\$@\"" >> $out/bin/${entrypoint}
-        chmod +x $out/bin/${entrypoint}
-      '' else "");
+        tee $out/bin/${entryPointName} <<EOF
+        #!${pkgs.stdenv.shell}
+        case \$1 in
+          --test)
+            shift
+            OPERATION=test
+            ;;
+          --bench)
+            shift
+            OPERATION=bench
+            ;;
+          --dot)
+            shift
+            OPERATION=dot
+            ;;
+          --run)
+            shift
+            OPERATION=run
+            ;;
+          *)
+            OPERATION=run
+            ;;
+        esac
+        ${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader \$OPERATION ${entrypoint} "\$@"
+        EOF
+        chmod +x $out/bin/${entryPointName}
+        '' else "");
       src = src;
     };
   makePkg = name: pkg:
@@ -54,6 +78,8 @@ let
       src = let s = sources.${pkg.source}; in
         if name == lock.entrypoint then
           builtins.filterSource (path: type:
+            !(lib.hasPrefix ".git" path) &&
+            type != "symlink" &&
             lib.any (p:
                lib.hasPrefix (builtins.toString (builtins.toPath (s + ("/" + p)))) path) pkg.paths)
           s
