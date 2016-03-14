@@ -54,13 +54,6 @@ def eq(b):
     return EQUAL if b else INEQUAL
 
 
-def isSameEver(first, second):
-    result = optSame(first, second)
-    if result is NOTYET:
-        raise userError(u"Not yet settled!")
-    return result is EQUAL
-
-
 def fringeEq(first, second):
     if len(first) != len(second):
         return False
@@ -441,6 +434,18 @@ class TraversalKey(Object):
         return self.snapHash
 
 
+@profileTyphon("_equalizer.sameEver/2")
+def isSameEver(first, second):
+    """
+    Call this instead of _equalizer.sameEver/2.
+    """
+
+    result = optSame(first, second)
+    if result is NOTYET:
+        raise userError(u"Not yet settled!")
+    return result is EQUAL
+
+
 @autohelp
 @audited.DF
 class Equalizer(Object):
@@ -450,13 +455,6 @@ class Equalizer(Object):
     This object can discern whether any two objects are distinct from each
     other.
     """
-
-    @profileTyphon("_equalizer.sameEver/2")
-    def sameEver(self, first, second):
-        result = optSame(first, second)
-        if result is NOTYET:
-            raise userError(u"Not yet settled!")
-        return result is EQUAL
 
     def recv(self, atom, args):
         if atom is ISSETTLED_1:
@@ -470,7 +468,7 @@ class Equalizer(Object):
             return wrapBool(result is EQUAL)
 
         if atom is SAMEEVER_2:
-            return wrapBool(self.sameEver(args[0], args[1]))
+            return wrapBool(isSameEver(args[0], args[1]))
 
         if atom is SAMEYET_2:
             first, second = args
