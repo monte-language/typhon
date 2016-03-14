@@ -25,6 +25,7 @@ from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import Ejector, throw
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
+from typhon.profile import profileTyphon
 from typhon.rstrategies import rstrategies
 from typhon.strategies.lists import strategyFactory
 
@@ -331,6 +332,7 @@ class ConstList(Object):
         # Do a final length check.
         return 0 if self.size() == len(other) else -1
 
+    @profileTyphon("List.contains/1")
     def contains(self, needle):
         from typhon.objects.equality import EQUAL, optSame
         for specimen in self.strategy.fetch_all(self):
@@ -338,6 +340,7 @@ class ConstList(Object):
                 return True
         return False
 
+    @profileTyphon("List.indexOf/1")
     def indexOf(self, needle):
         from typhon.objects.equality import EQUAL, optSame
         for index, specimen in enumerate(self.strategy.fetch_all(self)):
@@ -373,6 +376,7 @@ class ConstList(Object):
     def snapshot(self):
         return ConstList(self.strategy.fetch_all(self))
 
+    @profileTyphon("List.sort/0")
     def sort(self):
         l = self.strategy.fetch_all(self)
         MonteSorter(l).sort()

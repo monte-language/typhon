@@ -23,6 +23,7 @@ from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
+from typhon.profile import profileTyphon
 
 
 ASSET_0 = getAtom(u"asSet", 0)
@@ -123,6 +124,7 @@ class ConstMap(Object):
         return x
 
     @staticmethod
+    @profileTyphon("_makeMap.fromPairs/1")
     def fromPairs(wrappedPairs):
         from typhon.objects.collections.lists import unwrapList
         d = monteMap()
@@ -280,6 +282,7 @@ class ConstMap(Object):
     def contains(self, needle):
         return needle in self.objectMap
 
+    @profileTyphon("Map.or/1")
     def _or(self, other):
         # XXX This is currently linear time. Can it be better? If not, prove
         # it, please.

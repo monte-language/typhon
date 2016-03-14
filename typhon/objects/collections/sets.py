@@ -23,6 +23,7 @@ from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.prelude import getGlobal
+from typhon.profile import profileTyphon
 
 
 AND_1 = getAtom(u"and", 1)
@@ -94,6 +95,7 @@ class ConstSet(Object):
     def contains(self, needle):
         return needle in self.objectSet
 
+    @profileTyphon("Set.and/1")
     def _and(self, otherSet):
         other = unwrapSet(otherSet)
         if (len(self.objectSet) > len(other)):
@@ -109,6 +111,7 @@ class ConstSet(Object):
                 rv[k] = None
         return ConstSet(rv)
 
+    @profileTyphon("Set.or/1")
     def _or(self, other):
         # XXX This is currently linear time. Can it be better? If not, prove
         # it, please.
@@ -118,6 +121,7 @@ class ConstSet(Object):
                 rv[ok] = None
         return ConstSet(rv)
 
+    @profileTyphon("Set.subtract/1")
     def subtract(self, otherSet):
         other = unwrapSet(otherSet)
         rv = self.objectSet.copy()
