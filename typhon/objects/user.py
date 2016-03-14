@@ -29,6 +29,7 @@ from typhon.objects.guards import anyGuard
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
 from typhon.objects.slots import finalBinding
+from typhon.profile import profileTyphon
 from typhon.smallcaps.machine import SmallCaps
 
 # XXX AuditionStamp, Audition guard
@@ -87,6 +88,7 @@ class Audition(Object):
     def log(self, message, tags=[]):
         log(["audit"] + tags, u"Auditor for %s: %s" % (self.fqn, message))
 
+    @profileTyphon("Auditor.ask/1")
     def ask(self, auditor):
         if not self.active:
             self.log(u"ask/1: Stolen audition: %s" % pemci, tags=["serious"])

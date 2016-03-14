@@ -35,6 +35,7 @@ from typhon.objects.refs import resolution
 from typhon.objects.slots import finalBinding
 from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
+from typhon.profile import registerProfileTyphon
 from typhon.scopes.boot import bootScope
 from typhon.scopes.safe import safeScope
 from typhon.scopes.unsafe import unsafeScope
@@ -124,12 +125,16 @@ class profiling(object):
         self.enabled = enabled
 
     def __enter__(self):
+        # We can only enter once, since we must register the profile handles,
+        # and that is a one-time sort of thing.
         if not self.enabled:
             return
 
         self.handle = open(self.path, "wb")
         try:
+            # Turn on vmprof, and *then* register the profile handles.
             rvmprof.enable(self.handle.fileno(), 0.00042)
+            registerProfileTyphon()
         except rvmprof.VMProfError as vmpe:
             print "Couldn't enable vmprof:", vmpe.msg
 
