@@ -204,7 +204,7 @@ def makeStatefulPump(machine) :Pump as DeepFrozen:
 
     return object statefulPump extends nullPump as Pump:
         to received(item) :List:
-            buf += item
+            buf += _makeList.fromIterable(item)
             while (buf.size() >= size):
                 def data := buf.slice(0, size)
                 buf := buf.slice(size, buf.size())
