@@ -54,6 +54,7 @@ def parseArguments(var argv, ej) as DeepFrozen:
     var verifyNames :Bool := true
     var terseErrors :Bool := false
     var justLint :Bool := false
+    var readStdin :Bool := false
     def inputFile
     def outputFile
     while (argv.size() > 0):
@@ -69,6 +70,9 @@ def parseArguments(var argv, ej) as DeepFrozen:
                 argv := tail
             match [=="-lint"] + tail:
                 justLint := true
+                argv := tail
+            match [=="-stdin"] + tail:
+                readStdin := true
                 argv := tail
             match [arg] + tail:
                 arguments with= (arg)
@@ -99,6 +103,9 @@ def parseArguments(var argv, ej) as DeepFrozen:
         to getOutputFile() :NullOk[Str]:
             return outputFile
 
+        to readStdin() :Bool:
+            return readStdin
+
 
 def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
          => makeStdIn, => unsealException) as DeepFrozen:
@@ -128,7 +135,7 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
         return output
 
     def readInputFile(_):
-        if (inputFile == "-"):
+        if (inputFile == "-" || config.readStdin()):
             return readAllStdinText()
         def p := makeFileResource(inputFile)<-getContents()
         return when (p) ->
