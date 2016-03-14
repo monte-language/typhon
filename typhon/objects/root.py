@@ -24,6 +24,7 @@ from rpython.rlib.rstackovf import StackOverflow, check_stack_overflow
 
 from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException, userError
+from typhon.profile import profileTyphon
 
 
 RUN_1 = getAtom(u"run", 1)
@@ -203,6 +204,7 @@ class Object(object):
         return []
 
     @unroll_safe
+    @profileTyphon("_auditedBy.run/2")
     def auditedBy(self, prospect):
         """
         Whether a prospective stamp has been left on this object.
@@ -217,9 +219,6 @@ class Object(object):
 
         # Already audited with an identical stamp?
         for stamp in self.auditorStamps():
-            if prospect is stamp:
-                return True
-
             if optSame(prospect, stamp) is EQUAL:
                 return True
 

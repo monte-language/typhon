@@ -89,6 +89,12 @@ def optSame(first, second, cache=None):
     This is a complex topic; expect lots of comments.
     """
 
+    # Two identical objects are equal. We do this twice; this first time is
+    # done prior to checking settledness, which takes time proportional to the
+    # size of the object graphs.
+    if first is second:
+        return EQUAL
+
     # We need to see whether our objects are settled. If not, then give up.
     if not first.isSettled() or not second.isSettled():
         # Well, actually, there's one chance that they could be equal, if
