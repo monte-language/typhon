@@ -17,6 +17,7 @@ from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, userError
 # Can't use audited, even thought it's importable; calling it causes a circle.
 from typhon.objects.root import Object, runnable
+from typhon.profile import profileTyphon
 
 
 AUDIT_1 = getAtom(u"audit", 1)
@@ -308,6 +309,12 @@ class DeepFrozen(Object):
     def auditorStamps(self):
         return [deepFrozenStamp]
 
+    @profileTyphon("DeepFrozen.audit/1")
+    def audit(self, audition):
+        auditDeepFrozen(audition)
+        audition.ask(deepFrozenStamp)
+        return False
+
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool
         from typhon.objects.collections.helpers import monteMap
@@ -316,9 +323,7 @@ class DeepFrozen(Object):
             audition = args[0]
             if not isinstance(audition, Audition):
                 raise userError(u"not an Audition")
-            auditDeepFrozen(audition)
-            audition.ask(deepFrozenStamp)
-            return wrapBool(False)
+            return wrapBool(self.audit(audition))
 
         if atom is COERCE_2:
             from typhon.objects.constants import NullObject

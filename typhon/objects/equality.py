@@ -27,6 +27,7 @@ from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
 from typhon.objects.refs import resolution, isResolved
 from typhon.objects.root import Object, audited
+from typhon.profile import profileTyphon
 
 
 ISSETTLED_1 = getAtom(u"isSettled", 1)
@@ -450,6 +451,13 @@ class Equalizer(Object):
     other.
     """
 
+    @profileTyphon("_equalizer.sameEver/2")
+    def sameEver(self, first, second):
+        result = optSame(first, second)
+        if result is NOTYET:
+            raise userError(u"Not yet settled!")
+        return result is EQUAL
+
     def recv(self, atom, args):
         if atom is ISSETTLED_1:
             return wrapBool(args[0].isSettled())
@@ -462,11 +470,7 @@ class Equalizer(Object):
             return wrapBool(result is EQUAL)
 
         if atom is SAMEEVER_2:
-            first, second = args
-            result = optSame(first, second)
-            if result is NOTYET:
-                raise userError(u"Not yet settled!")
-            return wrapBool(result is EQUAL)
+            return wrapBool(self.sameEver(args[0], args[1]))
 
         if atom is SAMEYET_2:
             first, second = args

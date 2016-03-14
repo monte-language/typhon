@@ -35,7 +35,7 @@ def profileTyphon(name):
         # Prepare the full location name.
         lineNo = inspect.getsourcelines(f)[1]
         moduleName = os.path.basename(inspect.getsourcefile(f))
-        fullLocation = "ty:%s:%d:%s" % (f.__name__, lineNo, moduleName)
+        fullLocation = "ty:%s:%d:%s" % (name, lineNo, moduleName)
 
         # Produce the code object class.
         class FakeCodeObj(object):
