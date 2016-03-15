@@ -543,11 +543,18 @@ tty_reset_mode = rffi.llexternal("uv_tty_reset_mode", [], rffi.INT,
                                  compilation_info=eci)
 TTYResetMode = checking("tty_reset_mode", tty_reset_mode)
 
+
 def alloc_tty(loop, fd, readable):
     tty = lltype.malloc(cConfig["tty_t"], flavor="raw", zero=True)
     check("tty_init", tty_init(loop, tty, fd, readable))
     return tty
 
+_guess_handle = rffi.llexternal("uv_guess_handle", [rffi.INT], rffi.INT,
+                                compilation_info=eci)
+
+
+def guess_handle(fd):
+    return check("guess_handle", _guess_handle(fd))
 
 fs_cb = rffi.CCallback([fs_tp], lltype.Void)
 
