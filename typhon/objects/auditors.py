@@ -11,6 +11,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
+from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -33,6 +34,9 @@ class DeepFrozenStamp(Object):
     """
     DeepFrozen's stamp.
     """
+
+    def computeHash(self, depth):
+        return compute_identity_hash(self)
 
     def auditorStamps(self):
         # Have you ever felt that sense of mischief and wonder as much as when
@@ -68,6 +72,8 @@ class TransparentStamp(Object):
     """
     Transparent's stamp.
     """
+    def computeHash(self, depth):
+        return compute_identity_hash(self)
 
     def auditorStamps(self):
         return asSet([deepFrozenStamp])
@@ -86,6 +92,8 @@ class TransparentGuard(Object):
     """
     Transparent's guard.
     """
+    def computeHash(self, depth):
+        return compute_identity_hash(self)
 
     def auditorStamps(self):
         return asSet([deepFrozenStamp])
@@ -114,6 +122,9 @@ class Selfless(Object):
     They may choose to implement alternative comparison protocols such as
     `Transparent`.
     """
+
+    def computeHash(self, depth):
+        return compute_identity_hash(self)
 
     def auditorStamps(self):
         return asSet([deepFrozenStamp])
@@ -306,6 +317,9 @@ class DeepFrozen(Object):
     """
     Auditor and guard for transitive immutability.
     """
+
+    def computeHash(self, depth):
+        return compute_identity_hash(self)
 
     def auditorStamps(self):
         return asSet([deepFrozenStamp])

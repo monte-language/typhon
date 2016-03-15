@@ -105,7 +105,11 @@ class Object(object):
         The `depth` parameter controls how many levels of structural recursion
         a nested object should include in the hash.
         """
-
+        from typhon.objects.auditors import selfless, transparentStamp
+        stamps = self.auditorStamps()
+        if selfless in stamps and transparentStamp in stamps:
+            return self.call(u"_uncall", []).computeHash(depth)
+        # Here, if it existed, would lie Semitransparent hashing.
         return compute_identity_hash(self)
 
     def samenessHash(self):

@@ -213,13 +213,6 @@ class ScriptObject(Object):
         printer.call(u"print",
                      [StrObject(u"<%s>" % self.codeScript.displayName)])
 
-    def computeHash(self, depth):
-        stamps = self.auditorStamps()
-        if selfless in stamps and transparentStamp in stamps:
-            return self.call(u"_uncall", []).computeHash(depth)
-        # Here, if it existed, would lie Semitransparent hashing.
-        return Object.computeHash(self, depth)
-
     def auditorStamps(self):
         if self.report is None:
             return emptySet
