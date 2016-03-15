@@ -36,7 +36,7 @@ socktypes = {
 
 class AddrInfo(Object):
 
-    _immutable_ = True
+    _immutable_fields_ = "family", "socktype", "addr"
 
     def recv(self, atom, args):
         if atom is GETADDRESS_0:
@@ -57,7 +57,7 @@ class IP4AddrInfo(AddrInfo):
     Information about an IPv4 network address.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "flags", "socktype", "protocol", "addr"
 
     family = u"INET"
 
@@ -81,7 +81,7 @@ class IP6AddrInfo(AddrInfo):
     Information about an IPv6 network address.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "flags", "socktype", "protocol", "addr"
 
     family = u"INET6"
 

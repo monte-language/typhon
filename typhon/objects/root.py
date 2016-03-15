@@ -70,6 +70,9 @@ class Object(object):
     A Monte object.
     """
 
+    _hashed = False
+    _samenessHash = 0
+
     def __repr__(self):
         return self.toQuote().encode("utf-8")
 
@@ -112,9 +115,10 @@ class Object(object):
         If two objects are equal, then their sameness hash will be equal.
         """
 
-        # What's up with this structure? Well, once I figure out the most
-        # efficient way to do it, we'll be caching the hash. Hash cache. ~ C.
-        return self.computeHash(7)
+        if not self._hashed:
+            self._samenessHash = self.computeHash(7)
+            self._hashed = True
+        return self._samenessHash
 
     def call(self, verb, arguments, namedArgs=None):
         """

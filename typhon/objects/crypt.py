@@ -55,7 +55,7 @@ class PublicKey(Object):
     Pair this object with a secret key to get a sealer/unsealer.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "publicKey",
 
     def __init__(self, publicKey):
         self.publicKey = publicKey
@@ -81,7 +81,7 @@ class SecretKey(Object):
     Pair this object with a public key to get a sealer/unsealer.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "secretKey",
 
     def __init__(self, secretKey):
         self.secretKey = secretKey
@@ -114,7 +114,7 @@ class KeyPair(Object):
     keypair of the corresponding secret and public keys.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "publicKey", "secretKey"
 
     def __init__(self, publicKey, secretKey):
         self.publicKey = publicKey

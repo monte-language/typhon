@@ -33,7 +33,7 @@ class Binding(Object):
     A slot and a guard describing the nature of the slot.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "slot", "guard"
 
     def __init__(self, slot, guard):
         self.slot = slot

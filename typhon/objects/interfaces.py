@@ -19,7 +19,7 @@ class ComputedMethod(Object):
     A method description.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "arity", "docstring", "verb"
 
     def __init__(self, arity, docstring, verb):
         self.arity = arity

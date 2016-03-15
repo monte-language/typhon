@@ -553,7 +553,6 @@ class FileResource(Object):
     # standards, and a bottle of your finest and strongest liquor. Perhaps not
     # in that order, though.
 
-    _immutable_ = True
     _immutable_fields_ = "segments[*]",
 
     def __init__(self, segments):

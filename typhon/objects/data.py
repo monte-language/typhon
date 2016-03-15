@@ -127,7 +127,7 @@ class CharObject(Object):
     A Unicode code point.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "_c",
 
     def __init__(self, c):
         # RPython needs to be reminded that, no matter what, we are always
@@ -209,7 +209,7 @@ class DoubleObject(Object):
     An IEEE 754 floating-point number with at least double precision.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "_d",
 
     def __init__(self, d):
         self._d = d
@@ -347,7 +347,7 @@ class IntObject(Object):
     A numeric value in ℤ.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "_i",
 
     def __init__(self, i):
         self._i = i
@@ -620,7 +620,7 @@ class BigInt(Object):
 
     __doc__ = IntObject.__doc__
 
-    _immutable_ = True
+    _immutable_fields_ = "_bi",
 
     def __init__(self, bi):
         self.bi = bi
@@ -993,7 +993,7 @@ class StrObject(Object):
     A string of Unicode text.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "_s",
 
     def __init__(self, s):
         self._s = s
@@ -1272,7 +1272,7 @@ class BytesObject(Object):
     A string of bytes.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "_bs",
 
     def __init__(self, s):
         self._bs = s

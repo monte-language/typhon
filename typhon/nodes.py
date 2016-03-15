@@ -422,8 +422,6 @@ class Node(Object):
     An AST node, either an expression or a pattern.
     """
 
-    _immutable_ = True
-
     def auditorStamps(self):
         return [selfless, transparentStamp, kernelAstStamp]
 
@@ -489,7 +487,6 @@ class StaticScope(Object):
     The sets of names which occur within this scope.
     """
 
-    _immutable_ = True
     _immutable_fields_ = "read[*]", "set[*]", "defs[*]", "vars[*]", "meta"
 
     def __init__(self, read, set, defs, vars, meta):
@@ -567,8 +564,6 @@ class Expr(Node):
     The root of all expressions.
     """
 
-    _immutable_ = True
-
 @autohelp
 @audited.DF
 class LiteralMaker(Object):
@@ -600,8 +595,6 @@ makeLiteral = LiteralMaker()
 
 @autohelp
 class _Null(Expr):
-
-    _immutable_ = True
 
     nodeMaker = makeLiteral
 
@@ -635,8 +628,6 @@ def nullToNone(node):
 
 @autohelp
 class Int(Expr):
-
-    _immutable_ = True
 
     def __init__(self, bi):
         self.bi = bi
@@ -681,8 +672,6 @@ class Int(Expr):
 @autohelp
 class Str(Expr):
 
-    _immutable_ = True
-
     def __init__(self, s):
         self._s = s
 
@@ -721,8 +710,6 @@ def strToString(s):
 
 class Double(Expr):
 
-    _immutable_ = True
-
     def __init__(self, d):
         self._d = d
 
@@ -755,8 +742,6 @@ class Double(Expr):
 
 @autohelp
 class Char(Expr):
-
-    _immutable_ = True
 
     def __init__(self, c):
         self._c = c
@@ -791,8 +776,6 @@ class Char(Expr):
 @autohelp
 @withMaker
 class Assign(Expr):
-
-    _immutable_ = True
 
     def __init__(self, target, rvalue):
         self.target = target
@@ -840,8 +823,6 @@ class Assign(Expr):
 @withMaker
 class Binding(Expr):
 
-    _immutable_ = True
-
     def __init__(self, name):
         self.name = name
 
@@ -879,7 +860,6 @@ class Binding(Expr):
 @autohelp
 @withMaker
 class NamedArg(Expr):
-    _immutable_ = True
 
     def __init__(self, key, value):
         self.key = key
@@ -917,8 +897,6 @@ class NamedArg(Expr):
 @autohelp
 @withMaker
 class Call(Expr):
-
-    _immutable_ = True
 
     def __init__(self, target, verb, args, namedArgs):
         self._target = target
@@ -1025,8 +1003,6 @@ class Call(Expr):
 @withMaker
 class Def(Expr):
 
-    _immutable_ = True
-
     def __init__(self, pattern, ejector, value):
         self._p = pattern
         self._e = ejector
@@ -1092,8 +1068,6 @@ class Def(Expr):
 @autohelp
 @withMaker
 class Escape(Expr):
-
-    _immutable_ = True
 
     def __init__(self, pattern, node, catchPattern, catchNode):
         self._pattern = pattern
@@ -1183,8 +1157,6 @@ class Escape(Expr):
 @withMaker
 class Finally(Expr):
 
-    _immutable_ = True
-
     def __init__(self, block, atLast):
         self._block = block
         self._atLast = atLast
@@ -1235,8 +1207,6 @@ class Finally(Expr):
 @withMaker
 class Hide(Expr):
 
-    _immutable_ = True
-
     def __init__(self, inner):
         self._inner = inner
 
@@ -1270,8 +1240,6 @@ class Hide(Expr):
 @autohelp
 @withMaker
 class If(Expr):
-
-    _immutable_ = True
 
     def __init__(self, test, then, otherwise):
         self._test = test
@@ -1332,8 +1300,6 @@ class If(Expr):
 @withMaker
 class Matcher(Expr):
 
-    _immutable_ = True
-
     def __init__(self, pattern, block):
         if pattern is None:
             raise InvalidAST("Matcher pattern cannot be None")
@@ -1373,8 +1339,6 @@ class Matcher(Expr):
 @withMaker
 class MetaContextExpr(Expr):
 
-    _immutable_ = True
-
     def uncall(self):
         return ConstList([])
 
@@ -1400,8 +1364,6 @@ class MetaContextExpr(Expr):
 @autohelp
 @withMaker
 class MetaStateExpr(Expr):
-
-    _immutable_ = True
 
     def pretty(self, out):
         out.write("meta.getState()")
@@ -1432,8 +1394,6 @@ class MetaStateExpr(Expr):
 @autohelp
 @withMaker
 class Method(Expr):
-
-    _immutable_ = True
 
     _immutable_fields_ = ("_d", "_verb", "_ps[*]", "_namedParams[*]", "_g",
                           "_b")
@@ -1541,7 +1501,6 @@ class Method(Expr):
 @withMaker
 class Noun(Expr):
 
-    _immutable_ = True
     _immutable_Fields_ = "noun",
 
     def __init__(self, noun):
@@ -1589,8 +1548,6 @@ class Obj(Expr):
     """
     An object.
     """
-
-    _immutable_ = True
 
     _immutable_fields_ = "_d", "_n", "_as", "_implements[*]", "_script"
 
@@ -1819,8 +1776,6 @@ class CompilingScript(object):
 @withMaker
 class Script(Expr):
 
-    _immutable_ = True
-
     _immutable_fields_ = "_methods[*]", "_matchers[*]"
 
     def __init__(self, extends, methods, matchers):
@@ -1902,8 +1857,6 @@ class Script(Expr):
 @withMaker
 class Sequence(Expr):
 
-    _immutable_ = True
-
     _immutable_fields_ = "_l[*]",
 
     def __init__(self, l):
@@ -1969,8 +1922,6 @@ class Sequence(Expr):
 @withMaker
 class Try(Expr):
 
-    _immutable_ = True
-
     def __init__(self, first, pattern, then):
         self._first = first
         self._pattern = pattern
@@ -2028,8 +1979,6 @@ class Pattern(Expr):
     The root of all patterns.
     """
 
-    _immutable_ = True
-
     def __repr__(self):
         b = Buffer()
         self.pretty(LineWriter(b))
@@ -2048,8 +1997,6 @@ class Pattern(Expr):
 @autohelp
 @withMaker
 class BindingPattern(Pattern):
-
-    _immutable_ = True
 
     def __init__(self, noun):
         self._noun = nounToString(noun)
@@ -2085,8 +2032,6 @@ class BindingPattern(Pattern):
 @autohelp
 @withMaker
 class FinalPattern(Pattern):
-
-    _immutable_ = True
 
     def __init__(self, noun, guard):
         self._actualNoun = noun
@@ -2150,8 +2095,6 @@ class FinalPattern(Pattern):
 @withMaker
 class IgnorePattern(Pattern):
 
-    _immutable_ = True
-
     def __init__(self, guard):
         self._g = nullToNone(guard)
 
@@ -2204,8 +2147,6 @@ class IgnorePattern(Pattern):
 @autohelp
 @withMaker
 class ListPattern(Pattern):
-
-    _immutable_ = True
 
     _immutable_fields_ = "_ps[*]",
 
@@ -2266,8 +2207,6 @@ class ListPattern(Pattern):
 @autohelp
 @withMaker
 class NamedParam(Pattern):
-
-    _immutable_ = True
 
     _immutable_fields_ = "_k", "_p", "_default"
 
@@ -2342,8 +2281,6 @@ class NamedParam(Pattern):
 @withMaker
 class VarPattern(Pattern):
 
-    _immutable_ = True
-
     def __init__(self, noun, guard):
         self._n = nounToString(noun)
         self._g = nullToNone(guard)
@@ -2400,8 +2337,6 @@ class VarPattern(Pattern):
 @autohelp
 @withMaker
 class ViaPattern(Pattern):
-
-    _immutable_ = True
 
     def __init__(self, expr, pattern):
         self._expr = expr

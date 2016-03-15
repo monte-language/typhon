@@ -35,8 +35,6 @@ class _NullObject(Object):
     The null object.
     """
 
-    _immutable_ = True
-
     def toString(self):
         return u"null"
 
@@ -54,7 +52,7 @@ class BoolObject(Object):
     A Boolean value.
     """
 
-    _immutable_ = True
+    _immutable_fields_ = "_b",
 
     def __init__(self, b):
         self._b = b
