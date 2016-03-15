@@ -221,7 +221,8 @@ class Object(object):
     # Auditors.
 
     def auditorStamps(self):
-        return []
+        from typhon.objects.collections.helpers import emptySet
+        return emptySet
 
     @unroll_safe
     @profileTyphon("_auditedBy.run/2")
@@ -235,15 +236,7 @@ class Object(object):
         # promoted.
         prospect = promote(prospect)
 
-        from typhon.objects.equality import optSame, EQUAL
-
-        # Already audited with an identical stamp?
-        for stamp in self.auditorStamps():
-            if optSame(prospect, stamp) is EQUAL:
-                return True
-
-        # Sorry, but nope.
-        return False
+        return prospect in self.auditorStamps()
 
     def optInterface(self):
         return None
@@ -313,7 +306,8 @@ def runnable(singleAtom=None, _stamps=[]):
                 return u"<%s>" % name
 
             def auditorStamps(self):
-                return _stamps
+                from typhon.objects.collections.helpers import asSet
+                return asSet(_stamps)
 
             def isSettled(self, sofar=None):
                 return True
@@ -350,7 +344,8 @@ class audited(object):
     def DF(cls):
         def auditorStamps(self):
             from typhon.objects.auditors import deepFrozenStamp
-            return [deepFrozenStamp]
+            from typhon.objects.collections.helpers import asSet
+            return asSet([deepFrozenStamp])
         cls.auditorStamps = auditorStamps
         return cls
 
@@ -358,7 +353,8 @@ class audited(object):
     def DFSelfless(cls):
         def auditorStamps(self):
             from typhon.objects.auditors import deepFrozenStamp, selfless
-            return [deepFrozenStamp, selfless]
+            from typhon.objects.collections.helpers import asSet
+            return asSet([deepFrozenStamp, selfless])
         cls.auditorStamps = auditorStamps
         return cls
 
@@ -367,7 +363,8 @@ class audited(object):
         def auditorStamps(self):
             from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                                  transparentStamp)
-            return [deepFrozenStamp, selfless, transparentStamp]
+            from typhon.objects.collections.helpers import asSet
+            return asSet([deepFrozenStamp, selfless, transparentStamp])
         cls.auditorStamps = auditorStamps
         return cls
 
@@ -375,7 +372,8 @@ class audited(object):
     def Selfless(cls):
         def auditorStamps(self):
             from typhon.objects.auditors import selfless
-            return [selfless]
+            from typhon.objects.collections.helpers import asSet
+            return asSet([selfless])
         cls.auditorStamps = auditorStamps
         return cls
 
@@ -383,6 +381,7 @@ class audited(object):
     def Transparent(cls):
         def auditorStamps(self):
             from typhon.objects.auditors import selfless, transparentStamp
-            return [selfless, transparentStamp]
+            from typhon.objects.collections.helpers import asSet
+            return asSet([selfless, transparentStamp])
         cls.auditorStamps = auditorStamps
         return cls

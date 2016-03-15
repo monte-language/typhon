@@ -21,6 +21,7 @@ from typhon.env import finalize
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import (auditedBy, deepFrozenGuard,
                                      deepFrozenStamp, selfless)
+from typhon.objects.collections.helpers import asSet, emptySet
 from typhon.objects.collections.lists import (ConstList, listFromIterable,
                                               unwrapList)
 from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
@@ -282,9 +283,9 @@ class SpecializedSlotBinder(Object):
 
     def auditorStamps(self):
         if self.guard.auditedBy(deepFrozenStamp):
-            return [deepFrozenStamp]
+            return asSet([deepFrozenStamp])
         else:
-            return []
+            return emptySet
 
     def recv(self, atom, args):
         if atom is RUN_2:

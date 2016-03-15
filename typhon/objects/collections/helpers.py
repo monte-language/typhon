@@ -36,10 +36,10 @@ def resolveKey(key):
     return key
 
 def keyEq(first, second):
-    from typhon.objects.equality import optSame, EQUAL
+    from typhon.objects.equality import isSameEver
     first = resolveKey(first)
     second = resolveKey(second)
-    return optSame(first, second) is EQUAL
+    return isSameEver(first, second)
 
 def keyHash(key):
     return resolveKey(key).samenessHash()
@@ -52,6 +52,19 @@ def monteMap():
 
 def monteSet():
     return r_ordereddict(keyEq, keyHash)
+
+def asSet(l):
+    """
+    Turn a list of Monte objects into a set of Monte objects.
+    """
+
+    s = monteSet()
+    for x in l:
+        s[x] = None
+    return s
+
+emptySet = monteSet()
+
 
 # Comparison routines.
 

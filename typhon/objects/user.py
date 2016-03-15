@@ -22,6 +22,7 @@ from typhon.log import log
 from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
+from typhon.objects.collections.helpers import emptySet, monteSet
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector
@@ -161,8 +162,11 @@ class Audition(Object):
 
     def prepareReport(self, auditors):
         from typhon.smallcaps.code import AuditorReport
-        stamps = [k for (k, (result, _, _)) in self.cache.items() if result]
-        return AuditorReport(stamps)
+        s = monteSet()
+        for (k, (result, _, _)) in self.cache.items():
+            if result:
+                s[k] = None
+        return AuditorReport(s)
 
     def recv(self, atom, args):
         if atom is ASK_1:
@@ -218,7 +222,7 @@ class ScriptObject(Object):
 
     def auditorStamps(self):
         if self.report is None:
-            return []
+            return emptySet
         else:
             return self.report.getStamps()
 

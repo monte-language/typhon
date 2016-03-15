@@ -163,7 +163,6 @@ class AuditorReport(object):
     """
 
     _immutable_ = True
-    _immutable_fields_ = "stamps[*]",
 
     def __init__(self, stamps):
         self.stamps = stamps

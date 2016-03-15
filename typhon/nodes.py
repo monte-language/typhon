@@ -28,6 +28,7 @@ from typhon.enum import makeEnum
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
+from typhon.objects.collections.helpers import asSet
 from typhon.objects.collections.lists import ConstList, unwrapList
 from typhon.objects.collections.maps import EMPTY_MAP, monteMap
 from typhon.objects.collections.sets import ConstSet
@@ -423,7 +424,7 @@ class Node(Object):
     """
 
     def auditorStamps(self):
-        return [selfless, transparentStamp, kernelAstStamp]
+        return asSet([selfless, transparentStamp, kernelAstStamp])
 
     def printOn(self, out):
         out.call(u"print", [StrObject(self.repr().decode("utf-8"))])

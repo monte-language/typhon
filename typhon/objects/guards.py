@@ -5,6 +5,7 @@ from typhon.autohelp import autohelp
 from typhon.errors import Refused
 from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
+from typhon.objects.collections.helpers import asSet
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.sets import ConstSet, monteSet
 from typhon.objects.constants import (BoolObject, NullObject, unwrapBool,
@@ -261,9 +262,9 @@ class FinalSlotGuard(Guard):
 
     def auditorStamps(self):
         if self.valueGuard.auditedBy(deepFrozenStamp):
-            return [deepFrozenStamp, selfless, transparentStamp]
+            return asSet([deepFrozenStamp, selfless, transparentStamp])
         else:
-            return [selfless, transparentStamp]
+            return asSet([selfless, transparentStamp])
 
     def subCoerce(self, specimen):
         if (isinstance(specimen, FinalSlot) and
@@ -306,9 +307,9 @@ class VarSlotGuard(Guard):
 
     def auditorStamps(self):
         if self.valueGuard.auditedBy(deepFrozenStamp):
-            return [deepFrozenStamp, selfless, transparentStamp]
+            return asSet([deepFrozenStamp, selfless, transparentStamp])
         else:
-            return [selfless, transparentStamp]
+            return asSet([selfless, transparentStamp])
 
     def subCoerce(self, specimen):
         if (isinstance(specimen, VarSlot) and
@@ -425,9 +426,9 @@ class SameGuard(Guard):
     def auditorStamps(self):
         # Pass on DF-ness if we got it from our value.
         if self.value.auditedBy(deepFrozenStamp):
-            return [deepFrozenStamp, selfless, transparentStamp]
+            return asSet([deepFrozenStamp, selfless, transparentStamp])
         else:
-            return [selfless, transparentStamp]
+            return asSet([selfless, transparentStamp])
 
     def recv(self, atom, args):
         if atom is _UNCALL_0:

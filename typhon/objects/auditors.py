@@ -16,6 +16,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Ejecting, Refused, userError
 # Can't use audited, even thought it's importable; calling it causes a circle.
+from typhon.objects.collections.helpers import asSet
 from typhon.objects.root import Object, runnable
 from typhon.profile import profileTyphon
 
@@ -36,7 +37,7 @@ class DeepFrozenStamp(Object):
     def auditorStamps(self):
         # Have you ever felt that sense of mischief and wonder as much as when
         # looking at this line? ~ C.
-        return [self]
+        return asSet([self])
 
     def recv(self, atom, args):
         from typhon.objects.data import StrObject
@@ -69,7 +70,7 @@ class TransparentStamp(Object):
     """
 
     def auditorStamps(self):
-        return [deepFrozenStamp]
+        return asSet([deepFrozenStamp])
 
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool
@@ -87,7 +88,7 @@ class TransparentGuard(Object):
     """
 
     def auditorStamps(self):
-        return [deepFrozenStamp]
+        return asSet([deepFrozenStamp])
 
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool, NullObject
@@ -115,7 +116,7 @@ class Selfless(Object):
     """
 
     def auditorStamps(self):
-        return [deepFrozenStamp]
+        return asSet([deepFrozenStamp])
 
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool
@@ -307,7 +308,7 @@ class DeepFrozen(Object):
     """
 
     def auditorStamps(self):
-        return [deepFrozenStamp]
+        return asSet([deepFrozenStamp])
 
     @profileTyphon("DeepFrozen.audit/1")
     def audit(self, audition):
