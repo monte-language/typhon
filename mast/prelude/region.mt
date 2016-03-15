@@ -400,7 +400,7 @@ def region(loader):
             def myTypeR :Same[myType] := myType
 
             # The OrderedSpace delegates to the myType.
-            object OrderedSpace extends myType as DeepFrozenStamp implements maybeSubrangeDeepFrozen, Selfless, TransparentStamp:
+            return object OrderedSpace extends myType as DeepFrozenStamp implements maybeSubrangeDeepFrozen, Selfless, TransparentStamp:
                 "An ordered vector space.
 
                  As a guard, this object admits any value in the set of objects in
@@ -476,11 +476,9 @@ def region(loader):
                     return region([_makeTopSet(myType, left, leftClosed, right,
                                                rightClosed)])
 
-            return OrderedSpace
 
-
-    def spaces :DeepFrozen := [for guard in ([Bytes, Char, Double, Int, Str])
-                               guard => _selmipriMakeOrderedSpace(guard, `$guard`)]
+    # The space cache. Hopefully this is not often-touched.
+    def spaces := [].asMap().diverge()
 
 
     object _makeOrderedSpace extends _selmipriMakeOrderedSpace as DeepFrozenStamp:
@@ -489,14 +487,26 @@ def region(loader):
          This object implements several Monte operators, including those which
          provide ordered space syntax."
 
+        to spaceOfGuard(guard):
+            "Return the ordered space corresponding to a given guard."
+
+            return spaces.fetch(guard, fn {
+                def space := _makeOrderedSpace(guard, M.toQuote(guard))
+                spaces[guard] := space
+                # Fixpoint, just in case.
+                spaces[space] := space
+                space
+            })
+
         to spaceOfValue(value):
             "Return the ordered space corresponding to a given value.
 
-             The correspondence is obtained via Miranda _getAllegedInterface(),
-             with special cases for `Bytes`, `Char`, `Double`, `Int`, and `Str`."
+             The correspondence is obtained via Miranda
+             _getAllegedInterface(), so values should be sure to override that
+             Miranda method."
 
             def guard := value._getAllegedInterface()
-            return spaces.fetch(guard, fn {_makeOrderedSpace(guard, M.toQuote(guard))})
+            return _makeOrderedSpace.spaceOfGuard(guard)
 
         to op__till(start, bound):
             "The operator `start`..!`bound`.
@@ -520,11 +530,11 @@ def region(loader):
 
 
     return [
-        "Bytes" => spaces[Bytes],
-        "Char" => spaces[Char],
-        "Double" => spaces[Double],
-        "Int" => spaces[Int],
-        "Str" => spaces[Str],
+        "Bytes" => _makeOrderedSpace.spaceOfGuard(Bytes),
+        "Char" => _makeOrderedSpace.spaceOfGuard(Char),
+        "Double" => _makeOrderedSpace.spaceOfGuard(Double),
+        "Int" => _makeOrderedSpace.spaceOfGuard(Int),
+        "Str" => _makeOrderedSpace.spaceOfGuard(Str),
         => _makeTopSet,
         => _makeOrderedRegion,
         => _makeOrderedSpace,
