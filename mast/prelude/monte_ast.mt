@@ -79,15 +79,15 @@ def makeStaticScope(read, set, defs, vars, metaStateExpr :Bool) as DeepFrozenSta
             return defNames | varNames
 
         to _printOn(out):
-            out.print("<")
-            out.print(namesSet)
-            out.print(" := ")
-            out.print(namesRead)
-            out.print(" =~ ")
-            out.print(defNames)
-            out.print(" + var ")
-            out.print(varNames)
-            out.print(" ")
+            out.print("<[")
+            out.print(" ".join(namesSet.asList()))
+            out.print("] := [")
+            out.print(" ".join(namesRead.asList()))
+            out.print("] =~ [")
+            out.print(" ".join(defNames.asList()))
+            out.print("] + var [")
+            out.print(" ".join(varNames.asList()))
+            out.print("] ")
             out.print(metaStateExpr)
             out.print(">")
 
@@ -400,8 +400,17 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozenStamp:
                       "SeqExpr", fn f {[transformAll(fixedExprs, f)]})
 
 def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
-    def &scope := makeLazySlot(fn {sumScopes([for [n, p] in (importsList) p] + exportsList)})
-    object ::"module":
+    def &scope := makeLazySlot(fn {
+        def interiorScope := (sumScopes([for [n, p] in (importsList) p]) +
+                              body.getStaticScope())
+        def exportListScope := sumScopes(exportsList)
+        def exportScope := makeStaticScope(
+            exportListScope.getNamesRead() - interiorScope.outNames(),
+            [], [for e in (exportsList)
+                 if (interiorScope.outNames().contains(e.getName()))
+                 e.getName()], [], false)
+        interiorScope.hide() + exportScope})
+    object module:
         to getImports():
             return importsList
         to getExports():
@@ -419,7 +428,7 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
                 printListOn("(", exportsList, ", ", ")", out, priorities["braceExpr"])
                 out.println("")
             body.subPrintOn(out, priorities["indentExpr"])
-    return astWrapper(::"module", makeModule, [importsList, exportsList, body], span,
+    return astWrapper(module, makeModule, [importsList, exportsList, body], span,
                       &scope, "Module", fn f {[
                           [for [n, v] in (importsList) [n, v.transform(f)]],
                           transformAll(exportsList, f),
