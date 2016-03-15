@@ -140,7 +140,7 @@ class CharObject(Object):
     def toQuote(self):
         return quoteChar(self._c)
 
-    def hash(self):
+    def computeHash(self, depth):
         # Don't waste time with the traditional string hash.
         return ord(self._c)
 
@@ -222,7 +222,7 @@ class DoubleObject(Object):
         else:
             return u"%f" % (self._d,)
 
-    def hash(self):
+    def computeHash(self, depth):
         return _hash_float(self._d)
 
     def optInterface(self):
@@ -355,7 +355,7 @@ class IntObject(Object):
     def toString(self):
         return u"%d" % self._i
 
-    def hash(self):
+    def computeHash(self, depth):
         # This is what CPython and RPython do.
         return self._i
 
@@ -628,7 +628,7 @@ class BigInt(Object):
     def toString(self):
         return self.bi.format(BASE10).decode("utf-8")
 
-    def hash(self):
+    def computeHash(self, depth):
         return self.bi.hash()
 
     def optInterface(self):
@@ -1004,7 +1004,7 @@ class StrObject(Object):
     def toQuote(self):
         return quoteStr(self._s)
 
-    def hash(self):
+    def computeHash(self, depth):
         # Cribbed from RPython's _hash_string.
         length = len(self._s)
         if length == 0:
@@ -1280,7 +1280,7 @@ class BytesObject(Object):
     def toString(self):
         return bytesToString(self._bs)
 
-    def hash(self):
+    def computeHash(self, depth):
         # Cribbed from RPython's _hash_string.
         length = len(self._bs)
         if length == 0:

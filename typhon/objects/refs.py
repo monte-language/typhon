@@ -476,6 +476,11 @@ class SwitchableRef(Promise):
             self.resolutionRef()
             return self._target.toString()
 
+    def computeHash(self, depth):
+        if self.isSwitchable:
+            raise userError(u"Unsettled promise is not hashable")
+        return Object.computeHash(self, depth)
+
     def callAll(self, atom, args, namedArgs):
         if self.isSwitchable:
             raise userError(u"not synchronously callable (%s)" %
@@ -550,6 +555,9 @@ class BufferingRef(Promise):
     def toString(self):
         return u"<bufferingRef>"
 
+    def computeHash(self, depth):
+        raise userError(u"Unsettled promise is not hashable")
+
     def callAll(self, atom, args, namedArgs):
         raise userError(u"not synchronously callable (%s)" %
                 atom.repr.decode("utf-8"))
@@ -596,8 +604,8 @@ class NearRef(Promise):
     def toString(self):
         return self.target.toString()
 
-    def hash(self):
-        return self.target.hash()
+    def computeHash(self, depth):
+        return self.target.computeHash(depth)
 
     def callAll(self, atom, args, namedArgs):
         return self.target.callAtom(atom, args, namedArgs)
@@ -669,9 +677,8 @@ class LocalVatRef(Promise):
         return u"<farRef from vat %s into vat %s>" % (
                 self.originVat.name, self.targetVat.name)
 
-    def hash(self):
-        # XXX shouldn't this simply be unhashable?
-        return self.target.hash()
+    def computeHash(self, depth):
+        raise userError(u"Non-local ref is not hashable")
 
     def callAll(self, atom, args, namedArgs):
         raise userError(u"not synchronously callable (%s)" %
@@ -724,6 +731,9 @@ class UnconnectedRef(Promise):
 
     def toString(self):
         return u"<ref broken by %s>" % self._problem.toString()
+
+    def computeHash(self, depth):
+        raise userError(u"Broken promise is not hashable")
 
     def callAll(self, atom, args, namedArgs):
         self._doBreakage(atom, args, namedArgs)

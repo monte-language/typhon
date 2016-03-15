@@ -72,11 +72,23 @@ class ConstSet(Object):
     def asDict(self):
         return self.objectSet
 
-    def hash(self):
-        # Hash as if we were a list.
-        x = 0x345678
+    def computeHash(self, depth):
+        # We're in too deep.
+        if depth <= 0:
+            # We won't continue hashing, but we do have to be certain that we
+            # are settled.
+            if self.isSettled():
+                # That settles it; they're settled.
+                return -63
+            else:
+                raise userError(u"Must be settled")
+
+
+        # Hash as if we were a list, but change our starting seed so that
+        # we won't hash exactly equal.
+        x = 0x3456789
         for obj in self.objectSet.keys():
-            y = obj.hash()
+            y = obj.computeHash(depth - 1)
             x = intmask((1000003 * x) ^ y)
         return x
 
@@ -251,14 +263,6 @@ class FlexSet(Object):
 
     def asDict(self):
         return self.objectSet
-
-    def hash(self):
-        # Hash as if we were a list.
-        x = 0x345678
-        for obj in self.objectSet.keys():
-            y = obj.hash()
-            x = intmask((1000003 * x) ^ y)
-        return x
 
     def printOn(self, printer):
         printer.call(u"print", [StrObject(u"[")])

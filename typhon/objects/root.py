@@ -91,14 +91,30 @@ class Object(object):
 
         return rgc.get_rpy_memory_usage(self)
 
-    def hash(self):
+    def computeHash(self, depth):
         """
-        Create a conservative integer hash of this object.
+        Compute the sameness hash.
 
-        If two objects are equal, then they must hash equal.
+        This is the correct method to override to customize the sameness hash.
+
+        Transparent objects are expected to customize their sameness hash.
+
+        The `depth` parameter controls how many levels of structural recursion
+        a nested object should include in the hash.
         """
 
         return compute_identity_hash(self)
+
+    def samenessHash(self):
+        """
+        The sameness hash for this object's settled state.
+
+        If two objects are equal, then their sameness hash will be equal.
+        """
+
+        # What's up with this structure? Well, once I figure out the most
+        # efficient way to do it, we'll be caching the hash. Hash cache. ~ C.
+        return self.computeHash(7)
 
     def call(self, verb, arguments, namedArgs=None):
         """

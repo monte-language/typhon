@@ -193,11 +193,21 @@ class ConstList(Object):
                 printer.call(u"print", [StrObject(u", ")])
         printer.call(u"print", [StrObject(u"]")])
 
-    def hash(self):
+    def computeHash(self, depth):
+        # We're in too deep.
+        if depth <= 0:
+            # We won't continue hashing, but we do have to be certain that we
+            # are settled.
+            if self.isSettled():
+                # That settles it; they're settled.
+                return -1
+            else:
+                raise userError(u"Must be settled")
+
         # Use the same sort of hashing as CPython's tuple hash.
         x = 0x345678
         for obj in self.strategy.fetch_all(self):
-            y = obj.hash()
+            y = obj.computeHash(depth - 1)
             x = intmask((1000003 * x) ^ y)
         return x
 
@@ -419,14 +429,6 @@ class FlexList(Object):
             if i + 1 < len(items):
                 printer.call(u"print", [StrObject(u", ")])
         printer.call(u"print", [StrObject(u"].diverge()")])
-
-    def hash(self):
-        # Use the same sort of hashing as CPython's tuple hash.
-        x = 0x345678
-        for obj in self.strategy.fetch_all(self):
-            y = obj.hash()
-            x = intmask((1000003 * x) ^ y)
-        return x
 
     def _recv(self, atom, args):
         if atom is _UNCALL_0:

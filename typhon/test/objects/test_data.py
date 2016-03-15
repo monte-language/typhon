@@ -67,12 +67,12 @@ class TestCharObject(TestCase):
     def testHashEqual(self):
         a = CharObject(u'a')
         b = CharObject(u'a')
-        self.assertEqual(a.hash(), b.hash())
+        self.assertEqual(a.samenessHash(), b.samenessHash())
 
     def testHashInequal(self):
         a = CharObject(u'a')
         b = CharObject(u'b')
-        self.assertNotEqual(a.hash(), b.hash())
+        self.assertNotEqual(a.samenessHash(), b.samenessHash())
 
     def testQuoteSlashes(self):
         c = CharObject(u'\\')
@@ -171,12 +171,12 @@ class TestStr(TestCase):
     def testHashEqual(self):
         a = StrObject(u"acidic")
         b = StrObject(u"acidic")
-        self.assertEqual(a.hash(), b.hash())
+        self.assertEqual(a.samenessHash(), b.samenessHash())
 
     def testHashInequal(self):
         a = StrObject(u"acerbic")
         b = StrObject(u"bitter")
-        self.assertNotEqual(a.hash(), b.hash())
+        self.assertNotEqual(a.samenessHash(), b.samenessHash())
 
     def testIndexOf(self):
         s = StrObject(u"needle")
@@ -240,12 +240,12 @@ class TestDouble(TestCase):
     def testHashEqual(self):
         a = DoubleObject(42.0)
         b = DoubleObject(42.0)
-        self.assertEqual(a.hash(), b.hash())
+        self.assertEqual(a.samenessHash(), b.samenessHash())
 
     def testHashInequal(self):
         a = DoubleObject(42.0)
         b = DoubleObject(5.0)
-        self.assertNotEqual(a.hash(), b.hash())
+        self.assertNotEqual(a.samenessHash(), b.samenessHash())
 
     def testCmpNaN(self):
         a = DoubleObject(float("nan"))
@@ -384,12 +384,12 @@ class TestInt(TestCase):
     def testHashEqual(self):
         a = DoubleObject(42)
         b = DoubleObject(42)
-        self.assertEqual(a.hash(), b.hash())
+        self.assertEqual(a.samenessHash(), b.samenessHash())
 
     def testHashInequal(self):
         a = DoubleObject(42)
         b = DoubleObject(5)
-        self.assertNotEqual(a.hash(), b.hash())
+        self.assertNotEqual(a.samenessHash(), b.samenessHash())
 
     def testBitLength(self):
         i = IntObject(42)

@@ -42,8 +42,7 @@ def keyEq(first, second):
     return optSame(first, second) is EQUAL
 
 def keyHash(key):
-    from typhon.objects.equality import samenessHash
-    return samenessHash(resolveKey(key), 10, None, None)
+    return resolveKey(key).samenessHash()
 
 def monteMap():
     return r_ordereddict(keyEq, keyHash)

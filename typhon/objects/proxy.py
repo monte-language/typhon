@@ -145,6 +145,9 @@ class DisconnectedRef(UnconnectedRef):
         self.handler = handler
         self.resolutionIdentity = resolutionIdentity
 
+    def computeHash(self, depth):
+        return self.handler.computeHash(depth)
+
     def eq(self, other):
         if not isinstance(other, DisconnectedRef):
             return False
@@ -170,6 +173,9 @@ class FarRef(Proxy):
     def __init__(self, handler, resolutionBox):
         Proxy.__init__(self, handler, resolutionBox)
         self.resolutionIdentity = TraversalKey(resolutionBox)
+
+    def computeHash(self, depth):
+        return self.handler.computeHash(depth)
 
     def eq(self, other):
         if not isinstance(other, FarRef):

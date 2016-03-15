@@ -242,11 +242,8 @@ def optSame(first, second, cache=None):
     # By default, objects are not equal.
     return INEQUAL
 
-# Only look at a few levels of the object graph for hash values
-HASH_DEPTH = 10
 
-
-def samenessHash(obj, depth, path, fringe):
+def samenessHash(obj, depth, fringe, path=None):
     """
     Generate a hash code for an object that may not be completely
     settled. Equality of hash code implies sameness of objects. The generated
@@ -275,7 +272,7 @@ def samenessHash(obj, depth, path, fringe):
             or isinstance(o, BigInt) or isinstance(o, StrObject)
             or isinstance(o, BytesObject)
             or isinstance(o, TraversalKey)):
-        return o.hash()
+        return o.computeHash(depth)
 
     # Lists.
     if isinstance(o, ConstList):
@@ -287,7 +284,7 @@ def samenessHash(obj, depth, path, fringe):
                 fr = None
             else:
                 fr = FringePath(i, path)
-            result ^= i ^ samenessHash(x, depth - 1, fr, fringe)
+            result ^= i ^ samenessHash(x, depth - 1, fringe, path=fr)
         return result
 
     # The empty map. (Uncalls contain maps, thus this base case.)
@@ -295,12 +292,13 @@ def samenessHash(obj, depth, path, fringe):
         return 127
     from typhon.objects.proxy import FarRef, DisconnectedRef
     if isinstance(o, FarRef) or isinstance(o, DisconnectedRef):
-        return samenessHash(o.handler, depth, path, fringe)
+        return samenessHash(o.handler, depth, fringe, path=path)
 
     # Other objects compared by structure.
     if selfless in o.auditorStamps():
         if transparentStamp in o.auditorStamps():
-            return samenessHash(o.call(u"_uncall", []), depth, path, fringe)
+            return samenessHash(o.call(u"_uncall", []), depth, fringe,
+                                path=path)
         # XXX Semitransparent support goes here
 
     # Objects compared by identity.
@@ -417,12 +415,8 @@ class FringeNode(object):
         return compute_identity_hash(self.identity) ^ hashFringePath(self.path)
 
 
-def sameYetHash(obj, fringe):
-    result = samenessHash(obj, HASH_DEPTH, None, fringe)
-    for f in fringe:
-        result ^= f.fringeHash()
-    return result
-
+# Only look at a few levels of the object graph for hash values.
+HASH_DEPTH = 7
 
 @autohelp
 @audited.DFSelfless
@@ -431,12 +425,18 @@ class TraversalKey(Object):
     def __init__(self, ref):
         self.ref = resolution(ref)
         self.fringe = []
-        self.snapHash = sameYetHash(self.ref, self.fringe)
+
+        # Compute a "sameYet" hash, which represents a snapshot of how this
+        # key's traversal had resolved at the time of key creation.
+        snapHash = samenessHash(self.ref, HASH_DEPTH, self.fringe)
+        for f in self.fringe:
+            snapHash ^= f.fringeHash()
+        self.snapHash = snapHash
 
     def toString(self):
         return u"<a traversal key>"
 
-    def hash(self):
+    def computeHash(self, depth):
         return self.snapHash
 
 

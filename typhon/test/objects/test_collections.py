@@ -67,17 +67,17 @@ class TestConstList(TestCase):
     def testHashEqual(self):
         a = ConstList([IntObject(42), CharObject(u'é')])
         b = ConstList([IntObject(42), CharObject(u'é')])
-        self.assertEqual(a.hash(), b.hash())
+        self.assertEqual(a.samenessHash(), b.samenessHash())
 
     def testHashInequalLength(self):
         a = ConstList([IntObject(42), CharObject(u'é')])
         b = ConstList([IntObject(42)])
-        self.assertNotEqual(a.hash(), b.hash())
+        self.assertNotEqual(a.samenessHash(), b.samenessHash())
 
     def testHashInequalItems(self):
         a = ConstList([IntObject(42), CharObject(u'é')])
         b = ConstList([IntObject(42), CharObject(u'e')])
-        self.assertNotEqual(a.hash(), b.hash())
+        self.assertNotEqual(a.samenessHash(), b.samenessHash())
 
     def testSlice(self):
         l = ConstList(map(CharObject, "abcdefg"))
@@ -136,7 +136,7 @@ class TestConstSet(TestCase):
         d[CharObject(u'¡')] = None
         a = ConstSet(d)
         b = ConstSet(d)
-        self.assertEqual(a.hash(), b.hash())
+        self.assertEqual(a.samenessHash(), b.samenessHash())
 
     def testToStringEmpty(self):
         d = monteSet()
