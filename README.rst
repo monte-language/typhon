@@ -8,65 +8,21 @@ Monte AST files.
 How To Monte
 ============
 
-You will need RPython from Mercurial::
+You will need Nix, either by dint of being on NixOS or by installing
+single-user Nix.
 
-    $ hg clone https://bitbucket.org/pypy/pypy
-    $ export PYTHONPATH=pypy:.
+Once you have Nix, you can build a complete toolchain by building the ``mt``
+target::
 
-Typhon operates in both untranslated and translated modes, with an optional
-JIT. Regardless of mode of operation, you'll need some dependencies (Twisted
-and RPython), so create a virtualenv::
+    $ nix-build -A mt
 
-    $ virtualenv local-typhon -p pypy
-    $ . local-typhon/bin/activate
-    $ pip install -r requirements.txt
+Note: Translation is not cheap. It will require approximately 0.5GiB memory
+and 5min CPU time on a 64-bit x86 system to translate a non-JIT Typhon
+executable, or 1GiB memory and 15min CPU time with the JIT enabled.
 
-If you don't have a system PyPy, you can leave off ``-p pypy``, but be warned
-that this will increase run times. Once that's done, Typhon can be run
-untranslated::
+For development, it can be useful to build only the VM::
 
-    $ python main.py your/awesome/script.ty
-
-Translation is done via the RPython toolchain::
-
-    $ python -m rpython -O2 main
-
-The JIT can be enabled with a switch::
-
-    $ python -m rpython -Ojit main
-
-You can also build a slow version with libgc, for testing purposes::
-
-    $ python -m rpython -O0 main
-
-The resulting executable is immediately usable for any scripts that don't use
-prelude features::
-
-    $ ./mt-typhon your/awesome/script.ty
-
-Note that translation is not cheap. It will require approximately 0.5GiB
-memory and 2min CPU time on a 64-bit x86 system to translate a non-JIT Typhon
-executable, or 1GiB memory and 9min CPU time with the JIT enabled.
-
-MAST Prelude
-============
-
-Without a prelude, Typhon doesn't do much. Most Monte applications have a
-reasonable expectation of certain non-kernel features, which are implemented
-in Monte via a prelude and library.
-
-Fortunately, Typhon comes with a self-hosting Monte compiler and a prebuilt
-prelude, in the ``boot`` directory. To use it::
-
-    $ ./mt-typhon -l boot script.ty
-
-And the rest of the MAST library can be built immediately::
-
-    $ make mast
-
-Then, you can use the newly built prelude and library::
-
-    $ ./mt-typhon -l mast another/awesome/script.ty
+    $ nix-build -A typhonVm
 
 Contributing
 ============
@@ -76,7 +32,7 @@ Contributions are welcome. Please ensure that you're okay with the license!
 Unit tests are tested by Travis. You can run them yourself; I recommend the
 Trial test runner::
 
-    $ trial typhon
+    $ nix-shell -A typhonVm --run 'trial typhon'
 
 Diffing Typhon Binaries
 -----------------------
@@ -87,7 +43,9 @@ However, with a bit of a filter, we can give git what it needs::
     $ git config diff.typhon.textconv ./dump.py
 
 This configuration option, along with the ``.gitattributes`` in the
-repository, will let git display textual diffs of the binary ASTs.
+repository, will let git display textual diffs of the binary ASTs::
+
+    $ nix-shell -A typhonVm --run 'git diff'
 
 RPython Quirks
 --------------
@@ -103,7 +61,8 @@ immutable, adding the ``_immutable_ = True`` annotation will cause RPython to
 enforce an immutability variant: The fields of an instance of that class can
 only be assigned to once.
 
-It's possible to make only some fields immutable; just list all the immutable
+Don't use ``_immutable_`` unless the class is *totally* immutable. It's
+possible to make only some fields immutable; just list all the immutable
 fields in a tuple with ``_immutable_fields_ = "this", "that"``. To make a
 field an immutable list with immutable elements, use a ``[*]``, as in
 ``_immutable_fields_ = "this", "that", "those[*]"``.
