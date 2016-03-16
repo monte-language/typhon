@@ -58,11 +58,9 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                         def allLines := input.split("\n")
                         return `${allLines.size()}.${allLines.last().size() - 1}: $errMsg`
                     def [sl, el, sc, ec] := [span.getStartLine(), span.getEndLine(),
-                                             span.getStartCol(), span.getEndCol()]
-                    if (sl == el):
-                        if (sc == ec):
-                            return `$sl.$sc: $errMsg`
-                        return `$sl.$sc-$ec: $errMsg`
+                                             span.getStartCol() + 1, span.getEndCol() + 1]
+                    if (sl == el && sc == ec):
+                        return `$sl.$sc: $errMsg`
                     return `$sl.$sc-$el.$ec: $errMsg`
 
             to formatPretty():
