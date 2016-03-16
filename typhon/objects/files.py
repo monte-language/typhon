@@ -161,7 +161,7 @@ class FileFount(Object):
         with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
             bufs[0].c_base = self.buf.c_base
             bufs[0].c_len = self.buf.c_len
-            ruv.fsRead(self.vat.uv_loop, self.fs, self.fd, bufs, 1, self.pos,
+            ruv.fsRead(self.vat.uv_loop, self.fs, self.fd, bufs, 1, -1,
                        readCB)
 
     def receive(self, data):
@@ -264,7 +264,7 @@ class FileDrain(Object):
     def queueWrite(self):
         with ruv.scopedBufs(self.bufs) as bufs:
             ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
-                        len(self.bufs), self.pos, writeCB)
+                        len(self.bufs), -1, writeCB)
 
     def closing(self):
         if self._state is self.READY:
@@ -394,7 +394,7 @@ class GetContents(Object):
         with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
             bufs[0].c_base = self.buf.c_base
             bufs[0].c_len = self.buf.c_len
-            ruv.fsRead(self.vat.uv_loop, self.fs, self.fd, bufs, 1, self.pos,
+            ruv.fsRead(self.vat.uv_loop, self.fs, self.fd, bufs, 1, -1,
                        getContentsCB)
 
 def openGetContentsCB(fs):
@@ -469,7 +469,7 @@ class SetContents(Object):
     def queueWrite(self):
         with ruv.scopedBufs([self.data]) as bufs:
             ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
-                        1, self.pos, writeSetContentsCB)
+                        1, -1, writeSetContentsCB)
 
     def startWriting(self, fd, fs):
         self.fd = fd
