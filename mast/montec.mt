@@ -198,6 +198,6 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
     return when (p) ->
         traceln("All done!")
         0
-    catch via (unsealException) problem:
+    catch via (unsealException) [problem, traceback]:
         traceln(`Problem: $problem`)
         1
