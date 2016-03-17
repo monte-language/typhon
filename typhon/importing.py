@@ -20,7 +20,7 @@ from typhon import log
 from typhon.atoms import getAtom
 from typhon.debug import debugPrint
 from typhon.errors import Refused, UserException, userError
-from typhon.load.mast import InvalidMAST, loadMASTBytes
+from typhon.load.mast import loadMASTBytes
 from typhon.nodes import Expr, interactiveCompile
 from typhon.objects.collections.maps import ConstMap
 from typhon.objects.collections.helpers import monteMap
@@ -128,22 +128,15 @@ def obtainModule(libraryPaths, filePath, recorder):
                         filePath.decode("utf-8"))
 
 
-def evaluateWithTraces(code, scope):
-    try:
-        machine = SmallCaps.withDictScope(code, scope)
-        machine.run()
-        return machine.pop()
-    except UserException as ue:
-        debug_print("Caught exception:", ue.formatError())
-        return None
-
-
 def evaluateTerms(codes, scope):
     result = NullObject
     for code in codes:
-        result = evaluateWithTraces(code, scope)
-        if result is None:
-            debug_print("Evaluation returned None!")
+        try:
+            machine = SmallCaps.withDictScope(code, scope)
+            machine.run()
+            result = machine.pop()
+        except UserException as ue:
+            debug_print("Caught exception:", ue.formatError())
     return result
 
 
