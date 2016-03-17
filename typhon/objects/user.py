@@ -249,9 +249,14 @@ class ScriptObject(Object):
         if method:
             return self.runMethod(method, args, namedArgs)
         else:
-            # No atoms matched, so there's no prebuilt methods. Instead, we'll
-            # use our matchers.
-            return self.runMatchers(atom, args, namedArgs)
+            # Maybe we should invoke a Miranda method.
+            val = self.mirandaMethods(atom, args, namedArgs)
+            if val is None:
+                # No atoms matched, so there's no prebuilt methods. Instead,
+                # we'll use our matchers.
+                return self.runMatchers(atom, args, namedArgs)
+            else:
+                return val
 
     @unroll_safe
     def runMatchers(self, atom, args, namedArgs):

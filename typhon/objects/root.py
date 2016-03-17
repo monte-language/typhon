@@ -64,7 +64,6 @@ def addTrail(ue, target, atom, args):
     ue.trail.append(u"In %s.%s [%s]:" % (target.toQuote(), atomRepr,
                                          argString))
 
-
 class Object(object):
     """
     A Monte object.
@@ -149,60 +148,8 @@ class Object(object):
         try:
             return self.recvNamed(atom, arguments, namedArgsMap)
         except Refused as r:
-            # This block of method implementations is Typhon's Miranda
-            # protocol. ~ C.
-
-            if atom is _CONFORMTO_1:
-                # Welcome to _conformTo/1.
-                # to _conformTo(_): return self
-                return self
-
-            if atom is _GETALLEGEDINTERFACE_0:
-                # Welcome to _getAllegedInterface/0.
-                interface = self.optInterface()
-                if interface is None:
-                    from typhon.objects.interfaces import ComputedInterface
-                    interface = ComputedInterface(self)
-                return interface
-
-            if atom is _PRINTON_1:
-                # Welcome to _printOn/1.
-                from typhon.objects.constants import NullObject
-                self.printOn(arguments[0])
-                return NullObject
-
-            if atom is _RESPONDSTO_2:
-                from typhon.objects.constants import wrapBool
-                from typhon.objects.data import unwrapInt, unwrapStr
-                verb = unwrapStr(arguments[0])
-                arity = unwrapInt(arguments[1])
-                atom = getAtom(verb, arity)
-                result = (atom in self.respondingAtoms() or
-                          atom in mirandaAtoms)
-                return wrapBool(result)
-
-            if atom is _SEALEDDISPATCH_1:
-                # to _sealedDispatch(_): return null
-                from typhon.objects.constants import NullObject
-                return NullObject
-
-            if atom is _UNCALL_0:
-                from typhon.objects.constants import NullObject
-                return NullObject
-
-            if atom is _WHENMORERESOLVED_1:
-                # Welcome to _whenMoreResolved.
-                # This method's implementation, in Monte, should be:
-                # to _whenMoreResolved(callback): callback<-(self)
-                from typhon.vats import currentVat
-                vat = currentVat.get()
-                vat.sendOnly(arguments[0], RUN_1, [self], EMPTY_MAP)
-                from typhon.objects.constants import NullObject
-                return NullObject
-
             addTrail(r, self, atom, arguments)
             raise
-
         except UserException as ue:
             addTrail(ue, self, atom, arguments)
             raise
@@ -216,8 +163,66 @@ class Object(object):
             addTrail(ue, self, atom, arguments)
             raise ue
 
+    def mirandaMethods(self, atom, arguments, namedArgsMap):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        if atom is _CONFORMTO_1:
+            # Welcome to _conformTo/1.
+            # to _conformTo(_): return self
+            return self
+
+        if atom is _GETALLEGEDINTERFACE_0:
+            # Welcome to _getAllegedInterface/0.
+            interface = self.optInterface()
+            if interface is None:
+                from typhon.objects.interfaces import ComputedInterface
+                interface = ComputedInterface(self)
+            return interface
+
+        if atom is _PRINTON_1:
+            # Welcome to _printOn/1.
+            from typhon.objects.constants import NullObject
+            self.printOn(arguments[0])
+            return NullObject
+
+        if atom is _RESPONDSTO_2:
+            from typhon.objects.constants import wrapBool
+            from typhon.objects.data import unwrapInt, unwrapStr
+            verb = unwrapStr(arguments[0])
+            arity = unwrapInt(arguments[1])
+            atom = getAtom(verb, arity)
+            result = (atom in self.respondingAtoms() or
+                      atom in mirandaAtoms)
+            return wrapBool(result)
+
+        if atom is _SEALEDDISPATCH_1:
+            # to _sealedDispatch(_): return null
+            from typhon.objects.constants import NullObject
+            return NullObject
+
+        if atom is _UNCALL_0:
+            from typhon.objects.constants import NullObject
+            return NullObject
+
+        if atom is _WHENMORERESOLVED_1:
+            # Welcome to _whenMoreResolved.
+            # This method's implementation, in Monte, should be:
+            # to _whenMoreResolved(callback): callback<-(self)
+            from typhon.vats import currentVat
+            vat = currentVat.get()
+            vat.sendOnly(arguments[0], RUN_1, [self], EMPTY_MAP)
+            from typhon.objects.constants import NullObject
+            return NullObject
+        return None
+
     def recvNamed(self, atom, args, namedArgs):
-        return self.recv(atom, args)
+        try:
+            return self.recv(atom, args)
+        except Refused:
+            val = self.mirandaMethods(atom, args, namedArgs)
+            if val is None:
+                raise
+            else:
+                return val
 
     def recv(self, atom, args):
         raise Refused(self, atom, args)
