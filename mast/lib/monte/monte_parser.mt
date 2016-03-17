@@ -1301,23 +1301,28 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             } else {
                 null
             }
-            # careful, this might be a trap
-            if (peekTag() == ":="):
-                advance(ej)
-                return builder.DefExpr(patt, ex, assign(ej), spanFrom(spanStart))
-            else:
-                # bail out!
+            # this might be a ForwardExpr or FunctionScript
+            if (["EOL", ";", "("].contains(peekTag())):
+                # YEP we should go do that instead
                 position := defStart
                 return basic(false, ej, ej)
+            else:
+                # Nah it's just a regular def
+                acceptTag(":=", ej)
+                return builder.DefExpr(patt, ex, assign(ej), spanFrom(spanStart))
+
+        # this might be "bind foo(..):" or even "bind foo:"
         if (["var", "bind"].contains(peekTag())):
             def patt := pattern(ej)
-            if (peekTag() == ":="):
-                advance(ej)
-                return builder.DefExpr(patt, null, assign(ej), spanFrom(spanStart))
-            else:
-                # curses, foiled again
+            if (["(", "implements", "as", "extends", "(", "{"].contains(peekTag()) ||
+                ((position + 2 >= tokens.size()) && peekTag() == ":" &&
+                 tokens[position + 2][0] == "EOL")):
                 position := defStart
                 return basic(false, ej, ej)
+            else:
+                acceptTag(":=", ej)
+                return builder.DefExpr(patt, null, assign(ej), spanFrom(spanStart))
+
         def lval := infix(ej)
         if (peekTag() == ":="):
             advance(ej)
