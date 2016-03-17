@@ -14,7 +14,6 @@
 import os
 
 from typhon.atoms import getAtom
-from typhon.env import finalize
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.errors import Refused
@@ -27,6 +26,7 @@ from typhon.objects.networking.stdio import makeStdErr, makeStdIn, makeStdOut
 from typhon.objects.processes import CurrentProcess, makeProcess
 from typhon.objects.root import Object, audited
 from typhon.objects.runtime import CurrentRuntime
+from typhon.objects.slots import finalize
 from typhon.objects.timeit import bench
 from typhon.objects.timers import Timer
 from typhon.vats import CurrentVatProxy

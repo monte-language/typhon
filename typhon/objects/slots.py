@@ -80,6 +80,19 @@ def varBinding(value, guard):
     from typhon.objects.guards import VarSlotGuard
     return Binding(VarSlot(value, guard), VarSlotGuard(guard))
 
+def finalize(scope):
+    from typhon.objects.auditors import deepFrozenGuard, deepFrozenStamp
+    from typhon.objects.guards import anyGuard
+    rv = {}
+    for key in scope:
+        o = scope[key]
+        if deepFrozenStamp in o.auditorStamps():
+            g = deepFrozenGuard
+        else:
+            g = anyGuard
+        rv[key] = finalBinding(o, g)
+    return rv
+
 
 @autohelp
 class Slot(Object):

@@ -14,10 +14,9 @@
 
 from rpython.rlib import rvmprof
 from rpython.rlib.jit import jit_debug, promote, unroll_safe
-from rpython.rlib.objectmodel import specialize
+from rpython.rlib.objectmodel import always_inline, specialize
 
 from typhon.atoms import getAtom
-from typhon.env import Environment
 from typhon.errors import Ejecting, UserException, userError
 from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
@@ -26,7 +25,7 @@ from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector, theThrower, throw
 from typhon.objects.exceptions import sealException
 from typhon.objects.guards import anyGuard
-from typhon.objects.slots import finalBinding, varBinding
+from typhon.objects.slots import Binding, VarSlot, finalBinding, varBinding
 from typhon.smallcaps import ops
 
 
@@ -43,19 +42,63 @@ def mkMirandaArgs():
 MIRANDA_ARGS = mkMirandaArgs()
 
 
+@always_inline
+def bindingToSlot(binding):
+    if isinstance(binding, Binding):
+        return binding.get()
+    from typhon.objects.collections.maps import EMPTY_MAP
+    return binding.callAtom(GET_0, [], EMPTY_MAP)
+
+
+@always_inline
+def bindingToValue(binding):
+    from typhon.objects.collections.maps import EMPTY_MAP
+    if isinstance(binding, Binding):
+        slot = binding.get()
+    else:
+        slot = binding.callAtom(GET_0, [], EMPTY_MAP)
+    return slot.callAtom(GET_0, [], EMPTY_MAP)
+
+
+@always_inline
+def assignValue(binding, value):
+    from typhon.objects.collections.maps import EMPTY_MAP
+    slot = binding.callAtom(GET_0, [], EMPTY_MAP)
+    # Speed up VarSlots.
+    if isinstance(slot, VarSlot):
+        slot.put(value)
+        return
+
+    # Slowest path.
+    slot.callAtom(PUT_1, [value], EMPTY_MAP)
+
+
 class SmallCaps(object):
     """
     A SmallCaps abstract bytecode interpreter.
     """
 
-    _immutable_ = True
-    _immutable_fields_ = "code", "env"
+    _immutable_fields_ = "code", "frame[*]", "globals[*]"
+
+    # The stack pointer. Always points to the *empty* cell above the top of
+    # the stack.
+    depth = 0
+
+    # The handler stack pointer. Same rules as stack pointer.
+    handlerDepth = 0
 
     def __init__(self, code, frame, globals):
         self.code = code
-        self.env = Environment(frame, globals, self.code.localSize(),
-                               promote(self.code.maxDepth),
-                               promote(self.code.maxHandlerDepth))
+        self.frame = frame
+        self.globals = globals
+
+        self.local = [None] * code.localSize()
+
+        # Plus one extra empty cell to ease stack pointer math.
+        self.stackSize = self.code.maxDepth + 1
+        self.valueStack = [None] * self.stackSize
+        self.handlerSize = self.code.maxHandlerDepth + 1
+        self.handlerStack = [None] * self.handlerSize
 
         # For vat checkpointing.
         from typhon.vats import currentVat
@@ -78,24 +121,156 @@ class SmallCaps(object):
             raise userError(message)
         return SmallCaps(code, frame, globals)
 
+    def push(self, obj):
+        i = self.depth
+        self.valueStack[i] = obj
+        self.depth += 1
+
     def pop(self):
-        return self.env.pop()
+        self.depth -= 1
+        i = self.depth
+        rv = self.valueStack[i]
+        self.valueStack[i] = None
+        return rv
 
+    @unroll_safe
     def popSlice(self, size):
-        return self.env.popSlice(promote(size))
-
-    def push(self, value):
-        self.env.push(value)
+        # XXX should be handwritten loop per fijal and arigato. ~ C.
+        rv = [self.pop() for _ in range(size)]
+        rv.reverse()
+        return rv
 
     def peek(self):
-        return self.env.peek()
+        i = self.depth - 1
+        return self.valueStack[i]
+
+    def pushHandler(self, handler):
+        i = self.handlerDepth
+        self.handlerStack[i] = handler
+        self.handlerDepth += 1
+
+    def popHandler(self):
+        self.handlerDepth -= 1
+        i = self.handlerDepth
+        rv = self.handlerStack[i]
+        self.handlerStack[i] = None
+        return rv
+
+    def getBindingGlobal(self, index):
+        # The promotion here is justified by a lack of ability for any code
+        # object to dynamically alter its frame index. If the code is green
+        # (and they're always green), then the index is green as well.
+        index = promote(index)
+
+        # Oh, and we can promote globals too.
+        # return promote(self.globals[index])
+        return self.globals[index]
+
+    def getSlotGlobal(self, index):
+        binding = self.getBindingGlobal(index)
+        return bindingToSlot(binding)
+
+    def getValueGlobal(self, index):
+        binding = self.getBindingGlobal(index)
+        return bindingToValue(binding)
+
+    def putValueGlobal(self, index, value):
+        binding = self.getBindingGlobal(index)
+        assignValue(binding, value)
+
+    def getBindingFrame(self, index):
+        # The promotion here is justified by a lack of ability for any code
+        # object to dynamically alter its frame index. If the code is green
+        # (and they're always green), then the index is green as well.
+        index = promote(index)
+        return self.frame[index]
+
+    def getSlotFrame(self, index):
+        binding = self.getBindingFrame(index)
+        return bindingToSlot(binding)
+
+    def getValueFrame(self, index):
+        binding = self.getBindingFrame(index)
+        return bindingToValue(binding)
+
+    def putValueFrame(self, index, value):
+        binding = self.getBindingFrame(index)
+        assignValue(binding, value)
+
+    def createBindingLocal(self, index, binding):
+        # Commented out because binding replacement is not that weird and also
+        # because the JIT doesn't permit doing this without making this
+        # function dont_look_inside.
+        # if self.frame[index] is not None:
+        #     debug_print(u"Warning: Replacing binding %d" % index)
+
+        self.local[index] = binding
+
+    def createSlotLocal(self, index, slot, bindingGuard):
+        self.createBindingLocal(index, Binding(slot, bindingGuard))
+
+    def getBindingLocal(self, index):
+        if self.local[index] is None:
+            print "Warning: Use-before-define on local index", index
+            print "Expect an imminent crash."
+            from typhon.objects.refs import UnconnectedRef
+            return UnconnectedRef(StrObject(
+                u"Local index %d used before definition" % index))
+
+        return self.local[index]
+
+    def getSlotLocal(self, index):
+        binding = self.getBindingLocal(index)
+        return bindingToSlot(binding)
+
+    def getValueLocal(self, index):
+        binding = self.getBindingLocal(index)
+        return bindingToValue(binding)
+
+    def putValueLocal(self, index, value):
+        binding = self.getBindingLocal(index)
+        assignValue(binding, value)
+
+    def saveDepth(self):
+        return self.depth, self.handlerDepth
+
+    def restoreDepth(self, depthPair):
+        depth, handlerDepth = depthPair
+        # If these invariants are broken, then the stack can contain Nones, so
+        # we'll guard against it here.
+        assert depth <= self.depth, "Implementation error: Value stack UB"
+        assert handlerDepth <= self.handlerDepth, "Implementation error: Handler stack UB"
+        self.depth = depth
+        self.handlerDepth = handlerDepth
+
+    def gatherLabels(self, labels):
+        """
+        Collect some labeled stuff.
+        """
+
+        rv = []
+        for label in labels:
+            frameType, frameIndex = label
+            if frameType == "LOCAL":
+                frame = self.local
+            elif frameType == "FRAME":
+                frame = self.frame
+            elif frameType == "GLOBAL":
+                frame = self.globals
+            elif frameType is None:
+                rv.append(None)
+                continue
+            else:
+                assert False, "impossible"
+            rv.append(frame[frameIndex])
+        return rv
 
     @unroll_safe
     def bindObject(self, scriptIndex):
         from typhon.objects.ejectors import theThrower
         script, closureLabels, globalLabels = self.code.script(scriptIndex)
-        closure = self.env.gatherLabels(closureLabels)[:]
-        globals = self.env.gatherLabels(globalLabels)[:]
+        closure = self.gatherLabels(closureLabels)[:]
+        globals = self.gatherLabels(globalLabels)[:]
         auditors = self.popSlice(script.numAuditors)
         obj = script.makeObject(closure, globals, auditors)
         # Not a typo. The first copy is the actual return value from creating
@@ -182,68 +357,68 @@ class SmallCaps(object):
             return pc + 1
         elif instruction.asInt == ops.ASSIGN_GLOBAL.asInt:
             value = self.pop()
-            self.env.putValueGlobal(index, value)
+            self.putValueGlobal(index, value)
             return pc + 1
         elif instruction.asInt == ops.ASSIGN_FRAME.asInt:
             value = self.pop()
-            self.env.putValueFrame(index, value)
+            self.putValueFrame(index, value)
             return pc + 1
         elif instruction.asInt == ops.ASSIGN_LOCAL.asInt:
             value = self.pop()
-            self.env.putValueLocal(index, value)
+            self.putValueLocal(index, value)
             return pc + 1
         elif instruction.asInt == ops.BIND.asInt:
             binding = self.pop()
-            self.env.createBindingLocal(index, binding)
+            self.createBindingLocal(index, binding)
             return pc + 1
         elif instruction.asInt == ops.BINDFINALSLOT.asInt:
             guard = self.pop()
             ej = self.pop()
             specimen = self.pop()
             val = guard.call(u"coerce", [specimen, ej])
-            self.env.createBindingLocal(index, finalBinding(val, guard))
+            self.createBindingLocal(index, finalBinding(val, guard))
             return pc + 1
         elif instruction.asInt == ops.BINDVARSLOT.asInt:
             guard = self.pop()
             ej = self.pop()
             specimen = self.pop()
             val = guard.call(u"coerce", [specimen, ej])
-            self.env.createBindingLocal(index, varBinding(val, guard))
+            self.createBindingLocal(index, varBinding(val, guard))
             return pc + 1
         elif instruction.asInt == ops.BINDANYFINAL.asInt:
             val = self.pop()
-            self.env.createBindingLocal(index, finalBinding(val, anyGuard))
+            self.createBindingLocal(index, finalBinding(val, anyGuard))
             return pc + 1
         elif instruction.asInt == ops.BINDANYVAR.asInt:
             val = self.pop()
-            self.env.createBindingLocal(index, varBinding(val, anyGuard))
+            self.createBindingLocal(index, varBinding(val, anyGuard))
             return pc + 1
         elif instruction.asInt == ops.SLOT_GLOBAL.asInt:
-            self.push(self.env.getSlotGlobal(index))
+            self.push(self.getSlotGlobal(index))
             return pc + 1
         elif instruction.asInt == ops.SLOT_FRAME.asInt:
-            self.push(self.env.getSlotFrame(index))
+            self.push(self.getSlotFrame(index))
             return pc + 1
         elif instruction.asInt == ops.SLOT_LOCAL.asInt:
-            self.push(self.env.getSlotLocal(index))
+            self.push(self.getSlotLocal(index))
             return pc + 1
         elif instruction.asInt == ops.NOUN_GLOBAL.asInt:
-            self.push(self.env.getValueGlobal(index))
+            self.push(self.getValueGlobal(index))
             return pc + 1
         elif instruction.asInt == ops.NOUN_FRAME.asInt:
-            self.push(self.env.getValueFrame(index))
+            self.push(self.getValueFrame(index))
             return pc + 1
         elif instruction.asInt == ops.NOUN_LOCAL.asInt:
-            self.push(self.env.getValueLocal(index))
+            self.push(self.getValueLocal(index))
             return pc + 1
         elif instruction.asInt == ops.BINDING_GLOBAL.asInt:
-            self.push(self.env.getBindingGlobal(index))
+            self.push(self.getBindingGlobal(index))
             return pc + 1
         elif instruction.asInt == ops.BINDING_FRAME.asInt:
-            self.push(self.env.getBindingFrame(index))
+            self.push(self.getBindingFrame(index))
             return pc + 1
         elif instruction.asInt == ops.BINDING_LOCAL.asInt:
-            self.push(self.env.getBindingLocal(index))
+            self.push(self.getBindingLocal(index))
             return pc + 1
         elif instruction.asInt == ops.LIST_PATT.asInt:
             self.listPattern(index)
@@ -262,16 +437,16 @@ class SmallCaps(object):
             ej = Ejector()
             handler = Eject(self, ej, index)
             self.push(ej)
-            self.env.pushHandler(handler)
+            self.pushHandler(handler)
             return pc + 1
         elif instruction.asInt == ops.TRY.asInt:
-            self.env.pushHandler(Catch(self, index))
+            self.pushHandler(Catch(self, index))
             return pc + 1
         elif instruction.asInt == ops.UNWIND.asInt:
-            self.env.pushHandler(Unwind(self, index))
+            self.pushHandler(Unwind(self, index))
             return pc + 1
         elif instruction.asInt == ops.END_HANDLER.asInt:
-            handler = self.env.popHandler()
+            handler = self.popHandler()
             return handler.drop(self, pc, index)
         elif instruction.asInt == ops.BRANCH.asInt:
             cond = unwrapBool(self.pop())
@@ -331,8 +506,8 @@ class SmallCaps(object):
                 pc = self.unwindEx(ue)
         # If there is a final handler, drop it; it may cause exceptions to
         # propagate or perform some additional stack unwinding.
-        if self.env.handlerDepth:
-            finalHandler = self.env.popHandler()
+        if self.handlerDepth:
+            finalHandler = self.popHandler()
             # Return value ignored here.
             finalHandler.drop(self, pc, pc)
         # print "<" * 10
@@ -340,8 +515,8 @@ class SmallCaps(object):
 
     @unroll_safe
     def unwindEjector(self, ex):
-        while self.env.handlerDepth:
-            handler = self.env.popHandler()
+        while self.handlerDepth:
+            handler = self.popHandler()
             rv = handler.eject(self, ex)
             if rv != -1:
                 return rv
@@ -349,8 +524,8 @@ class SmallCaps(object):
 
     @unroll_safe
     def unwindEx(self, ex):
-        while self.env.handlerDepth:
-            handler = self.env.popHandler()
+        while self.handlerDepth:
+            handler = self.popHandler()
             rv = handler.unwind(self, ex)
             if rv != -1:
                 return rv
@@ -377,7 +552,7 @@ class Eject(Handler):
     _immutable_ = True
 
     def __init__(self, machine, ejector, index):
-        self.savedDepth = machine.env.saveDepth()
+        self.savedDepth = machine.saveDepth()
         self.ejector = ejector
         self.index = index
 
@@ -386,7 +561,7 @@ class Eject(Handler):
 
     def eject(self, machine, ex):
         if ex.ejector is self.ejector:
-            machine.env.restoreDepth(self.savedDepth)
+            machine.restoreDepth(self.savedDepth)
             machine.push(ex.value)
             return self.index
         else:
@@ -398,14 +573,14 @@ class Catch(Handler):
     _immutable_ = True
 
     def __init__(self, machine, index):
-        self.savedDepth = machine.env.saveDepth()
+        self.savedDepth = machine.saveDepth()
         self.index = index
 
     def repr(self):
         return "Catch(%d)" % self.index
 
     def unwind(self, machine, ex):
-        machine.env.restoreDepth(self.savedDepth)
+        machine.restoreDepth(self.savedDepth)
         # Push the caught value.
         machine.push(sealException(ex))
         # And the ejector.
@@ -421,24 +596,24 @@ class Unwind(Handler):
     _immutable_ = True
 
     def __init__(self, machine, index):
-        self.savedDepth = machine.env.saveDepth()
+        self.savedDepth = machine.saveDepth()
         self.index = index
 
     def repr(self):
         return "Unwind(%d)" % self.index
 
     def eject(self, machine, ex):
-        machine.env.restoreDepth(self.savedDepth)
-        machine.env.pushHandler(Rethrower(ex))
+        machine.restoreDepth(self.savedDepth)
+        machine.pushHandler(Rethrower(ex))
         return self.index
 
     def unwind(self, machine, ex):
-        machine.env.restoreDepth(self.savedDepth)
-        machine.env.pushHandler(Rethrower(ex))
+        machine.restoreDepth(self.savedDepth)
+        machine.pushHandler(Rethrower(ex))
         return self.index
 
     def drop(self, machine, pc, index):
-        machine.env.pushHandler(Returner(index))
+        machine.pushHandler(Returner(index))
         # As you were, then.
         return pc + 1
 

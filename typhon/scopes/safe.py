@@ -17,7 +17,6 @@ from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.env import finalize
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import (auditedBy, deepFrozenGuard,
                                      deepFrozenStamp, selfless)
@@ -40,7 +39,7 @@ from typhon.objects.guards import (BindingGuard, FinalSlotGuardMaker,
 from typhon.objects.printers import toString
 from typhon.objects.refs import Promise, RefOps, resolution
 from typhon.objects.root import Object, audited, runnable
-from typhon.objects.slots import Binding, FinalSlot, VarSlot
+from typhon.objects.slots import Binding, FinalSlot, VarSlot, finalize
 from typhon.vats import currentVat
 
 ASTYPE_0 = getAtom(u"asType", 0)

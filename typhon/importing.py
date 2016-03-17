@@ -145,14 +145,13 @@ def evaluateRaise(codes, scope):
     Like evaluateTerms, but does not catch exceptions.
     """
 
-    env = None
+    machine = None
     result = NullObject
     for code in codes:
         machine = SmallCaps.withDictScope(code, scope)
         machine.run()
         result = machine.pop()
-        env = machine.env
-    return result, env
+    return result, machine
 
 
 def instantiateModule(importer, module, importList=None):

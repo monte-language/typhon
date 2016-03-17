@@ -15,7 +15,6 @@ import os
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.env import finalize
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.importing import (codeFromAst, evaluateRaise, obtainModule,
                               obtainModuleFromSource)
@@ -28,6 +27,7 @@ from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import StrObject, unwrapBytes, wrapBool, unwrapStr
 from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
                                    DoubleGuard, IntGuard, StrGuard, VoidGuard)
+from typhon.objects.slots import finalize
 from typhon.objects.root import Object, audited, runnable
 
 EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
@@ -79,12 +79,12 @@ def evalToPair(code, topLocals, envMap, bindingNames=False):
     # Don't catch user exceptions; on traceback, we'll have a trail
     # auto-added that indicates that the exception came through
     # eval() or whatnot.
-    result, newEnv = evaluateRaise([code], environment)
-    if newEnv is not None:
+    result, machine = evaluateRaise([code], environment)
+    if machine is not None:
         # XXX monteMap()
         d = monteMap()
         for k, vi in topLocals.items():
-            d[StrObject(k)] = newEnv.local[vi]
+            d[StrObject(k)] = machine.local[vi]
         addendum = ConstMap(d)
         envMap = addendum._or(envMap)
     return result, envMap
