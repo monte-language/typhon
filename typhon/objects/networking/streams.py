@@ -12,7 +12,7 @@
 # under the License.
 
 from rpython.rlib.rarithmetic import intmask
-from rpython.rlib.objectmodel import we_are_translated
+from rpython.rlib.objectmodel import specialize, we_are_translated
 from rpython.rtyper.lltypesystem.rffi import charpsize2str
 
 from typhon import ruv
@@ -91,9 +91,12 @@ class StreamFount(Object):
 
     _closed = False
 
+    @specialize.call_location()
     def __init__(self, stream, vat):
         # I hate C.
-        self.stream = ruv.rffi.cast(ruv.stream_tp, stream)
+        stream = ruv.rffi.cast(ruv.stream_tp, stream)
+
+        self.stream = stream
         self.vat = vat
 
         self.bufs = []
@@ -214,6 +217,7 @@ class StreamDrain(Object):
 
     _closed = False
 
+    @specialize.call_location()
     def __init__(self, stream, vat):
         # I hate C.
         self.stream = ruv.rffi.cast(ruv.stream_tp, stream)
