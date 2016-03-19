@@ -320,6 +320,13 @@ class ConstMap(Object):
     def snapshot(self):
         return ConstMap(self.objectMap.copy())
 
+    def extractStringKey(self, k, default):
+        """
+        Extract a string key from this map. On failure, return `default`.
+        """
+
+        return self.objectMap.get(StrObject(k), default)
+
 EMPTY_MAP = ConstMap(monteMap())
 
 

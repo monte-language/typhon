@@ -86,17 +86,22 @@ class CConfig:
                                       ("env", rffi.CCHARPP),
                                       ("cwd", rffi.CCHARP),
                                       ("flags", rffi.UINT),
-                                      ("stdio_count", rffi.INT)])
+                                      ("stdio_count", rffi.INT),
+                                      ("stdio",
+                                          lltype.Ptr(lltype.ForwardReference()))])
+    stdio_container_t = rffi_platform.Struct("uv_stdio_container_t",
+                                             [("flags", rffi.INT)])
     process_t = rffi_platform.Struct("uv_process_t",
                                      [("data", rffi.VOIDP),
                                       ("pid", rffi.INT)])
-    stream_t = rffi_platform.Struct("uv_stream_t", [("data", rffi.VOIDP)])
     connect_t = rffi_platform.Struct("uv_connect_t",
                                      [("handle",
                                        lltype.Ptr(lltype.ForwardReference()))])
+    stream_t = rffi_platform.Struct("uv_stream_t", [("data", rffi.VOIDP)])
     shutdown_t = rffi_platform.Struct("uv_shutdown_t", [])
     write_t = rffi_platform.Struct("uv_write_t", [])
     tcp_t = rffi_platform.Struct("uv_tcp_t", [("data", rffi.VOIDP)])
+    pipe_t = rffi_platform.Struct("uv_pipe_t", [("data", rffi.VOIDP)])
     tty_t = rffi_platform.Struct("uv_tty_t", [("data", rffi.VOIDP)])
     fs_t = rffi_platform.Struct("uv_fs_t",
                                 [("data", rffi.VOIDP),
@@ -119,12 +124,16 @@ timer_tp = rffi.lltype.Ptr(cConfig["timer_t"])
 prepare_tp = rffi.lltype.Ptr(cConfig["prepare_t"])
 idle_tp = rffi.lltype.Ptr(cConfig["idle_t"])
 process_options_tp = rffi.lltype.Ptr(cConfig["process_options_t"])
+stdio_container_t = cConfig["stdio_container_t"]
+stdio_container_tp = rffi.lltype.Ptr(cConfig["stdio_container_t"])
 process_tp = rffi.lltype.Ptr(cConfig["process_t"])
+stream_t = cConfig["stream_t"]
 stream_tp = rffi.lltype.Ptr(cConfig["stream_t"])
 connect_tp = rffi.lltype.Ptr(cConfig["connect_t"])
 shutdown_tp = rffi.lltype.Ptr(cConfig["shutdown_t"])
 write_tp = rffi.lltype.Ptr(cConfig["write_t"])
 tcp_tp = rffi.lltype.Ptr(cConfig["tcp_t"])
+pipe_tp = rffi.lltype.Ptr(cConfig["pipe_t"])
 tty_tp = rffi.lltype.Ptr(cConfig["tty_t"])
 fs_tp = rffi.lltype.Ptr(cConfig["fs_t"])
 gai_tp = rffi.lltype.Ptr(cConfig["getaddrinfo_t"])
@@ -135,6 +144,8 @@ array_buf_t = lltype.Ptr(lltype.Array(buf_t, hints={"nolength": True}))
 
 # Forward references.
 cConfig["connect_t"].c_handle.TO.become(cConfig["stream_t"])
+cConfig["process_options_t"].c_stdio.TO.become(lltype.Array(cConfig["stdio_container_t"],
+    hints={"nolength": True}))
 
 
 def stashFor(name, struct):
@@ -393,7 +404,7 @@ def alloc_idle(loop):
     return idle
 
 
-_ADD_EXIT_CB = '''
+_PROCESS_C = '''
 #include <uv.h>
 
 RPY_EXTERN
@@ -405,18 +416,30 @@ monte_helper_add_exit_cb(uv_process_options_t* options,
 {
     options->exit_cb = uv_exit_cb;
 }
+
+RPY_EXTERN
+void
+monte_helper_set_stdio_stream(uv_stdio_container_t *stdio,
+                              uv_stream_t *stream)
+{
+    stdio->data.stream = stream;
+}
 '''
 
-_add_exit_cb_eci = ExternalCompilationInfo(
+_helper_eci = ExternalCompilationInfo(
     includes=['uv.h'],
     include_dirs=envPaths("TYPHON_INCLUDE_PATH"),
-    separate_module_sources=[_ADD_EXIT_CB])
+    separate_module_sources=[_PROCESS_C])
 
 exit_cb = rffi.CCallback([process_tp, rffi.LONG, rffi.INT], lltype.Void)
 add_exit_cb = rffi.llexternal('monte_helper_add_exit_cb', [process_options_tp,
                                                            exit_cb],
                               lltype.Void,
-                              compilation_info=_add_exit_cb_eci)
+                              compilation_info=_helper_eci)
+set_stdio_stream = rffi.llexternal("monte_helper_set_stdio_stream",
+                                   [stdio_container_tp, stream_tp],
+                                   lltype.Void,
+                                   compilation_info=_helper_eci)
 
 
 def allocProcess():
@@ -430,21 +453,44 @@ def processDiscard(process, exit_status, term_signal):
 
 
 UV_PROCESS_WINDOWS_HIDE = 1 << 4
+UV_IGNORE = 0x00
+UV_CREATE_PIPE = 0x01
+UV_INHERIT_STREAM = 0x04
+UV_READABLE_PIPE = 0x10
+UV_WRITABLE_PIPE = 0x20
 uv_spawn = rffi.llexternal("uv_spawn", [loop_tp, process_tp,
                                         process_options_tp], rffi.INT,
                            compilation_info=eci)
-def spawn(loop, process, file, args, env):
+def spawn(loop, process, file, args, env, streams):
+    """
+    The file descriptor list should be a list of streams to wire up to FDs in
+    the child. A None stream is mapped to UV_IGNORE.
+    """
+
     with rffi.scoped_str2charp(file) as rawFile:
         rawArgs = rffi.liststr2charpp(args)
         rawEnv = rffi.liststr2charpp(env)
         with rffi.scoped_str2charp(".") as rawCWD:
             options = rffi.make(cConfig["process_options_t"], c_file=rawFile,
                                 c_args=rawArgs, c_env=rawEnv, c_cwd=rawCWD)
-            add_exit_cb(options, processDiscard)
-            rffi.setintfield(options, "c_flags", UV_PROCESS_WINDOWS_HIDE)
-            rffi.setintfield(options, "c_stdio_count", 0)
-            rv = uv_spawn(loop, process, options)
-            free(options)
+            with lltype.scoped_alloc(rffi.CArray(stdio_container_t), len(streams)) as rawStreams:
+                for i, stream in enumerate(streams):
+                    if stream == lltype.nullptr(stream_t):
+                        flags = UV_IGNORE
+                    else:
+                        flags = UV_CREATE_PIPE
+                        if i == 0:
+                            flags |= UV_READABLE_PIPE
+                        elif i in (1, 2):
+                            flags |= UV_WRITABLE_PIPE
+                        set_stdio_stream(rawStreams[i], stream)
+                    rffi.setintfield(rawStreams[i], "c_flags", flags)
+                options.c_stdio = rawStreams
+                rffi.setintfield(options, "c_stdio_count", len(streams))
+                add_exit_cb(options, processDiscard)
+                rffi.setintfield(options, "c_flags", UV_PROCESS_WINDOWS_HIDE)
+                rv = uv_spawn(loop, process, options)
+                free(options)
         rffi.free_charpp(rawEnv)
         rffi.free_charpp(rawArgs)
 
@@ -527,6 +573,15 @@ def tcpConnect(stream, address, port, callback):
 
     rv = check("tcp_connect", tcp_connect(connect, stream, sin, callback))
     return rv
+
+
+pipe_init = rffi.llexternal("uv_pipe_init", [loop_tp, pipe_tp, rffi.INT],
+                            rffi.INT, compilation_info=eci)
+
+def alloc_pipe(loop):
+    pipe = lltype.malloc(cConfig["pipe_t"], flavor="raw", zero=True)
+    check("pipe_init", pipe_init(loop, pipe, 0))
+    return pipe
 
 
 TTY_MODE_NORMAL = 0x0
