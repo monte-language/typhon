@@ -53,7 +53,6 @@ def addTrail(ue, target, atom, args):
     for arg in args:
         try:
             s = arg.toQuote()
-            argStringList.append(arg.toQuote())
         except UserException as ue2:
             s = u"<**object throws %r when printed**>" % ue2
         if len(s) > 40:
@@ -138,7 +137,6 @@ class Object(object):
         """
         This method is used to reuse atoms without having to rebuild them.
         """
-        from typhon.objects.collections.maps import EMPTY_MAP
         # Promote the atom, on the basis that atoms are generally reused.
         atom = promote(atom)
         # Log the atom to the JIT log. Don't do this if the atom's not
