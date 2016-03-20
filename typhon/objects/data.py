@@ -684,11 +684,15 @@ class BigInt(Object):
         if atom is APPROXDIVIDE_1:
             # approxDivide/1: Promote both this int and its argument to
             # double, then perform division.
-            other = promoteToBigInt(args[0])
             # The actual division is performed within the bigint.
             try:
+                other = promoteToBigInt(args[0])
                 d = self.bi.truediv(other)
                 return DoubleObject(d)
+            except WrongType:
+                # Other object is a double, maybe?
+                other = unwrapDouble(args[0])
+                return DoubleObject(self.bi.tofloat() / other)
             except ZeroDivisionError:
                 # Tried to divide by zero.
                 return NaN

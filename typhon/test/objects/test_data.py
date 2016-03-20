@@ -447,6 +447,11 @@ class TestBigInt(TestCase):
         result = i.call(u"approxDivide", [i])
         self.assertTrue(math.isnan(result.getDouble()))
 
+    def testApproxDivideDouble(self):
+        bi = BigInt(rbigint.fromint(1))
+        result = bi.call(u"approxDivide", [DoubleObject(32.0)])
+        self.assertAlmostEqual(result._d, 1.0 / 32.0)
+
     def testFloorDivideNaN(self):
         i = BigInt(rbigint.fromint(0))
         self.assertRaises(UserException, i.call, u"floorDivide", [i])
