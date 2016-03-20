@@ -26,10 +26,10 @@ from typhon.objects.collections.lists import (ConstList, listFromIterable,
                                               unwrapList)
 from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
 from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import (BytesObject, DoubleObject, IntObject,
-                                 StrObject, Infinity, NaN, bytesToString,
-                                 makeSourceSpan, unwrapBytes, unwrapInt,
-                                 unwrapStr, unwrapChar)
+from typhon.objects.data import (BigInt, BytesObject, DoubleObject, StrObject,
+                                 Infinity, NaN, bytesToString, makeSourceSpan,
+                                 unwrapBytes, unwrapInt, unwrapStr,
+                                 unwrapChar)
 from typhon.objects.ejectors import throw, theThrower
 from typhon.objects.equality import Equalizer
 from typhon.objects.exceptions import SealedException
@@ -41,6 +41,7 @@ from typhon.objects.printers import toString
 from typhon.objects.refs import Promise, RefOps, resolution
 from typhon.objects.root import Object, audited, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot, finalize
+from typhon.profile import profileTyphon
 from typhon.vats import currentVat
 
 ASTYPE_0 = getAtom(u"asType", 0)
@@ -181,32 +182,38 @@ class MakeInt(Object):
     def toString(self):
         return u"<makeInt>"
 
+    @staticmethod
+    @profileTyphon("_makeInt.fromBytes/2")
+    def fromBytes(bs, radix):
+        return rbigint.fromstr(bs, radix)
+
     def recv(self, atom, args):
         if atom is RUN_1:
-            return IntObject(rbigint.fromdecimalstr(unwrapStr(args[0]).encode('utf-8')))
+            bs = unwrapStr(args[0]).encode("utf-8")
+            return BigInt(self.fromBytes(bs, 10))
 
         if atom is RUN_2:
             inp = unwrapStr(args[0])
+            bs = inp.encode("utf-8")
             radix = unwrapInt(args[1])
             try:
-                v = rbigint.fromstr(inp.encode("utf-8"), radix)
+                return BigInt(self.fromBytes(bs, radix))
             except ValueError:
-                raise userError(u"Invalid literal for base %d: %s" % (
-                        radix, inp))
-            return IntObject(v)
+                raise userError(u"Invalid literal for base %d: %s" %
+                                (radix, inp))
 
         if atom is FROMBYTES_1:
-            return IntObject(int(unwrapBytes(args[0])))
+            bs = unwrapBytes(args[0])
+            return BigInt(self.fromBytes(bs, 10))
 
         if atom is FROMBYTES_2:
             bs = unwrapBytes(args[0])
             radix = unwrapInt(args[1])
             try:
-                v = int(bs, radix)
+                return BigInt(self.fromBytes(bs, radix))
             except ValueError:
-                raise userError(u"Invalid literal for base %d: %s" % (
-                        radix, bytesToString(bs)))
-            return IntObject(v)
+                raise userError(u"Invalid literal for base %d: %s" %
+                                (radix, bytesToString(bs)))
 
         raise Refused(self, atom, args)
 
