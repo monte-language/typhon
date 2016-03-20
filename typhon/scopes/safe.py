@@ -13,6 +13,7 @@
 # under the License.
 
 from rpython.rlib.debug import debug_print
+from rpython.rlib.rbigint import rbigint
 from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
@@ -182,13 +183,13 @@ class MakeInt(Object):
 
     def recv(self, atom, args):
         if atom is RUN_1:
-            return IntObject(int(unwrapStr(args[0]).encode('utf-8')))
+            return IntObject(rbigint.fromdecimalstr(unwrapStr(args[0]).encode('utf-8')))
 
         if atom is RUN_2:
             inp = unwrapStr(args[0])
             radix = unwrapInt(args[1])
             try:
-                v = int(inp.encode("utf-8"), radix)
+                v = rbigint.fromstr(inp.encode("utf-8"), radix)
             except ValueError:
                 raise userError(u"Invalid literal for base %d: %s" % (
                         radix, inp))
