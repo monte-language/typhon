@@ -19,7 +19,7 @@ depNamesSet = set([data['name']])
 
 def genName(name):
     i = 0
-    while name in depNamesSet():
+    while name in depNamesSet:
         name = "%s_%s" % (name, i)
     depNamesSet.add(name)
     return name
@@ -49,10 +49,11 @@ for depname, dep in deps:
     # Collect all dependencies of this library and append new ones to the list.
     subdepNames = []
     for (k, v) in subdata.get("dependencies", {}).iteritems():
-        if v not in depUrlsSeen:
+        url = v['url']
+        if url not in depUrlsSeen:
             n = genName(k)
-            depUrlsSeen.add(v['url'])
-            deps.append(n, v)
+            depUrlsSeen.add(url)
+            deps.append((n, v))
             subdepNames.append(n)
     out['packages'][subdata["name"]] = {
         'source': depname,
