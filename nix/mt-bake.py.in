@@ -29,13 +29,18 @@ out['sources'][data['name']] = {
     'path': os.getcwd()}
 
 for depname, dep in deps:
-    result = subprocess.check_output(
-        [FETCHERS[dep.get("type", "git")], dep["url"]],
-        env=env)
-    lines = result.split("\n")
-    commitStr = lines[0].strip().split()[-1]
-    hashStr = lines[2].strip()
-    depPath = lines[3].strip()
+    # For debugging only; don't bother quoting.
+    command = [FETCHERS[dep.get("type", "git")], dep["url"]]
+    print "$(", " ".join(command), ")"
+    process = subprocess.Popen(command, env=env, stdout=subprocess.PIPE)
+    stdout, _ = process.communicate()
+    assert process.returncode == 0, "Process failed"
+    # The stdout is JSON, plus a tail for the path. Very strange.
+    lines = stdout.strip().split("\n")
+    depPath = lines.pop()
+    d = json.loads("".join(lines))
+    commitStr = d["rev"]
+    hashStr = d["sha256"]
     out['sources'][depname] = {
         'url': dep['url'],
         'type': dep.get('type', 'git'),
