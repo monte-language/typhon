@@ -31,7 +31,7 @@ out['sources'][data['name']] = {
 for depname, dep in deps:
     # For debugging only; don't bother quoting.
     command = [FETCHERS[dep.get("type", "git")], dep["url"]]
-    print "$(", " ".join(command), ")"
+    # print "$(", " ".join(command), ")"
     process = subprocess.Popen(command, env=env, stdout=subprocess.PIPE)
     stdout, _ = process.communicate()
     assert process.returncode == 0, "Process failed"

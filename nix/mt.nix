@@ -47,7 +47,7 @@ let
             ;;
         run|test|bench|dot)
             shift
-            DEST=`doBuild`
+            DEST=$(doBuild)
             entrypoint=$1
             $DEST/bin/$entrypoint --$OPERATION
             ;;
