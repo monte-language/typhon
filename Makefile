@@ -47,7 +47,7 @@ $(boot_objects): boot/%: mast/%
 mast: mast/lib/enum.mast mast/lib/record.mast \
 	mast/lib/netstring.mast mast/lib/words.mast \
 	mast/lib/continued.mast \
-	mast/lib/tokenBucket.mast mast/lib/loopingCall.mast mast/lib/singleUse.mast \
+	mast/lib/singleUse.mast \
 	mast/lib/cache.mast mast/lib/paths.mast \
 	mast/lib/amp.mast \
 	mast/lib/ansiColor.mast \
