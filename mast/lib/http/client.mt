@@ -64,6 +64,11 @@ def makeResponseDrain(resolver) as DeepFrozen:
 
     var contentLength :NullOk[Int] := null
     var commonHeaders := null
+    def bytesToInt(s, e):
+        try:
+            return _makeInt.fromBytes(s)
+        catch p:
+            e(p)
 
     return object responseDrain:
         to receive(bytes):
@@ -80,11 +85,6 @@ def makeResponseDrain(resolver) as DeepFrozen:
             traceln(`End of response: $reason`)
 
         to parseStatus(ej):
-            def bytesToInt(s, e):
-                try:
-                    return _makeInt.fromBytes(s)
-                catch p:
-                    e(p)
             def b`HTTP/1.1 @{via (bytesToInt) statusCode} @{via (UTF8.decode) label}$\r$\n@tail` exit ej := buf
             status := statusCode
             traceln(`Status: $status ($label)`)
