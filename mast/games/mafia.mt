@@ -20,7 +20,7 @@ def [MafiaState :DeepFrozen,
      DAY :DeepFrozen,
      NIGHT :DeepFrozen] := makeEnum(["day", "night"])
 
-def makeMafia(var players :Set) as DeepFrozens:
+def makeMafia(var players :Set) as DeepFrozen:
     # We don't keep this value updated during play; it's just to make it
     # easier to tune/tweak the mafia/village slice.
     def mafiosoCount :Int := players.size() // 3
