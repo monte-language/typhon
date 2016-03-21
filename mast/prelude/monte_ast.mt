@@ -1156,7 +1156,13 @@ def makeCatcher(pattern :Pattern, body :Expr, span) as DeepFrozenStamp:
 
 def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
                matchers :List[Ast["Matcher"]], span) as DeepFrozenStamp:
-    def &scope := makeLazySlot(fn {sumScopes(methods + matchers)})
+    def &scope := makeLazySlot(fn {
+        def ss := sumScopes(methods + matchers)
+        if (extend == null) {
+            ss
+        } else {
+            makeStaticScope([], [], ["super"], [], false) + ss
+        }})
     object script:
         to getExtends():
             return extend
