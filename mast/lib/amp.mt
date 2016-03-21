@@ -65,7 +65,7 @@ def makeAMPPacketMachine() as DeepFrozen:
                     return [STRING, len]
                 match ==STRING:
                     # First, decode.
-                    def s := UTF8.decode(data, null)
+                    def s := UTF8.decode(_makeBytes.fromInts(data), null)
                     # Was this for a key or a value? We'll guess based on
                     # whether there's a pending key.
                     if (pendingKey == ""):
@@ -87,12 +87,12 @@ def packAMPPacket(packet) as DeepFrozen:
     for via (UTF8.encode) key => via (UTF8.encode) value in packet:
         def keySize :(Int <= 0xff) := key.size()
         buf += [0x00, keySize]
-        buf += key
+        buf += _makeList.fromIterable(key)
         def valueSize :(Int <= 0xffff) := value.size()
         buf += [valueSize >> 8, valueSize & 0xff]
-        buf += value
+        buf += _makeList.fromIterable(value)
     buf += [0x00, 0x00]
-    return buf
+    return _makeBytes.fromInts(buf)
 
 
 def makeAMP(drain) as DeepFrozen:
@@ -111,7 +111,7 @@ def makeAMP(drain) as DeepFrozen:
         to flowStopped(reason):
             null
 
-        to sendPacket(packet):
+        to sendPacket(packet :Bytes):
             buf with= (packet)
             when (drain) ->
                 if (drain != null):
@@ -150,11 +150,11 @@ def makeAMP(drain) as DeepFrozen:
                         pending without= (answer)
                 match [=> _error] | arguments:
                     # Error reply.
-                    def via (strToInt) error := _error
+                    def error := _makeInt(_error)
                     if (pending.contains(error)):
                         def [=> _error_description := "unknown error"] | _ := arguments
-                        pending[answer].smash(_error_description)
-                        pending without= (answer)
+                        pending[error].smash(_error_description)
+                        pending without= (error)
                 match _:
                     pass
 
