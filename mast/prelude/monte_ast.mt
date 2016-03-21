@@ -2147,8 +2147,8 @@ def makeViaPattern(expr :Expr, subpattern :Pattern, span) as DeepFrozenStamp:
         &scope, "ViaPattern", fn f {[expr.transform(f), subpattern.transform(f)]})
 
 def makeSuchThatPattern(subpattern :Pattern, expr :Expr, span) as DeepFrozenStamp:
-    def &scope := makeLazySlot(fn {expr.getStaticScope() +
-                                   subpattern.getStaticScope()})
+    def &scope := makeLazySlot(fn {subpattern.getStaticScope() +
+                                   expr.getStaticScope()})
     object suchThatPattern:
         to getExpr():
             return expr
