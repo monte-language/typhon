@@ -217,6 +217,11 @@ class TestStr(TestCase):
 
 class TestDouble(TestCase):
 
+    def testFloorDivide(self):
+        d = DoubleObject(3.2)
+        result = d.call(u"floorDivide", [IntObject(2)])
+        self.assertEqual(result.getInt(), 1)
+
     def testAdd(self):
         d = DoubleObject(3.2)
         result = d.call(u"add", [DoubleObject(1.1)])

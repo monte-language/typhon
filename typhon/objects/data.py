@@ -274,6 +274,10 @@ class DoubleObject(Object):
             divisor = promoteToDouble(args[0])
             return DoubleObject(self._d / divisor)
 
+        if atom is FLOORDIVIDE_1:
+            divisor = promoteToDouble(args[0])
+            return IntObject(int(math.floor(self._d / divisor)))
+
         # Logarithms.
 
         if atom is LOG_0:
