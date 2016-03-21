@@ -3,10 +3,9 @@ import "lib/monte/monte_parser" =~ [=> parseExpression :DeepFrozen]
 import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
 import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
 import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
+import "boot" =~ [=> TransparentStamp :DeepFrozen]
 exports (m__quasiParser, eval)
 
-
-def Transparent :DeepFrozen := TransparentStamp
 
 def [VALUE_HOLE :DeepFrozen,
      PATTERN_HOLE :DeepFrozen] := makeMonteLexer.holes()
@@ -51,7 +50,7 @@ def NamePattern :DeepFrozen := astBuilder.getNamePatternGuard()
 def Noun :DeepFrozen := astBuilder.getNounGuard()
 
 def makeM(ast :Ast, isKernel :Bool) as DeepFrozen:
-    return object m extends ast implements Selfless, Transparent:
+    return object m extends ast implements Selfless, TransparentStamp:
         "An abstract syntax tree in the Monte programming language."
 
         to _printOn(out):

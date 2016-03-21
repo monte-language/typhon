@@ -587,48 +587,45 @@ object stubLoader:
         return dependencies[name]
 
 
-def loadit(name, scope):
+def loadit(name):
     def ast := getMonteFile(name)
-    def m := typhonEval.fromAST(ast, scope, name)
+    def m := typhonEval.fromAST(ast, preludeScope, name)
     return m(stubLoader)
     re
 
-def importIntoScope(name, moduleScope):
-    preludeScope |= scopeAsDF(loadit(name, moduleScope))
+def importIntoScope(name):
+    preludeScope |= scopeAsDF(loadit(name))
 
 # AST (needed for auditors).
-importIntoScope("prelude/monte_ast", preludeScope)
+importIntoScope("prelude/monte_ast")
 
 # Simple QP.
-importIntoScope("prelude/simple",
-                preludeScope | scopeAsDF([=> DeepFrozenStamp]))
+importIntoScope("prelude/simple")
 
 # Brands require simple QP.
-importIntoScope("prelude/brand", preludeScope)
+importIntoScope("prelude/brand")
 
 # Interfaces require simple QP.
-importIntoScope("prelude/protocolDesc",
-                preludeScope | scopeAsDF([=> TransparentStamp]))
+importIntoScope("prelude/protocolDesc")
 
 # Upgrade all guards with interfaces. These are the core-most guards; they
 # cannot be uncalled or anything like that.
 
-# preludeScope := scopeAsDF(loadit("prelude/coreInterfaces", preludeScope)) | preludeScope
+# preludeScope := scopeAsDF(loadit("prelude/coreInterfaces")) | preludeScope
 
 # Spaces and regions require simple QP. They also upgrade the guards.
-preludeScope := scopeAsDF(loadit("prelude/region",
-                  preludeScope | [=> &&TransparentStamp])) | preludeScope
+preludeScope := scopeAsDF(loadit("prelude/region")) | preludeScope
 
 # b__quasiParser desires spaces.
-importIntoScope("prelude/b", preludeScope)
+importIntoScope("prelude/b")
 
 # Parsing stack. These don't directly contribute to scope but are loaded by m.
-dependencies["lib/monte/monte_lexer"] := loadit("lib/monte/monte_lexer", preludeScope)
-dependencies["lib/monte/monte_parser"] := loadit("lib/monte/monte_parser", preludeScope)
-dependencies["lib/monte/monte_expander"] := loadit("lib/monte/monte_expander", preludeScope)
-dependencies["lib/monte/monte_optimizer"] := loadit("lib/monte/monte_optimizer", preludeScope)
-dependencies["lib/codec/utf8"] := loadit("lib/codec/utf8", preludeScope)
-dependencies["lib/monte/mast"] := loadit("lib/monte/mast", preludeScope)
+dependencies["lib/monte/monte_lexer"] := loadit("lib/monte/monte_lexer")
+dependencies["lib/monte/monte_parser"] := loadit("lib/monte/monte_parser")
+dependencies["lib/monte/monte_expander"] := loadit("lib/monte/monte_expander")
+dependencies["lib/monte/monte_optimizer"] := loadit("lib/monte/monte_optimizer")
+dependencies["lib/codec/utf8"] := loadit("lib/codec/utf8")
+dependencies["lib/monte/mast"] := loadit("lib/monte/mast")
 
 # The big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This
@@ -637,15 +634,14 @@ dependencies["lib/monte/mast"] := loadit("lib/monte/mast", preludeScope)
 # doesn't support evaluation, and I'd expect it to be slow, so we're not doing
 # that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
 # hook, and that'll do for now. ~ C.
-def preludeScope0 := preludeScope | ["&&safeScope" => &&preludeScope0,
-                                     => &&TransparentStamp, => &&getMonteFile]
-importIntoScope("prelude/m", preludeScope0)
+preludeScope with= ("&&safeScope", &&preludeScope)
+importIntoScope("prelude/m")
 
 
 # Transparent auditor and guard.
 # This has to do some significant AST groveling so it uses AST quasipatterns
 # for convenience.
-importIntoScope("prelude/transparent", preludeScope | [=> &&TransparentStamp])
+importIntoScope("prelude/transparent")
 
 # preludeScope without= ("&&typhonEval")
 

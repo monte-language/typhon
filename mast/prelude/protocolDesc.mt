@@ -1,3 +1,4 @@
+import "boot" =~ [=> TransparentStamp :DeepFrozen]
 exports (_makeMessageDesc, _makeParamDesc, _makeProtocolDesc)
 
 def _makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
