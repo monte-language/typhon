@@ -400,9 +400,16 @@ def mix(expr,
                 def constNamedArgs := [for arg in (namedArgs)
                                        const(remix(arg.getKey()), nonConst) =>
                                        const(remix(arg.getValue()), nonConst)]
-                # Success! Box it up.
-                def rv := M.call(constReceiver, verb, constArgs, constNamedArgs)
-                a.LiteralExpr(rv, expr.getSpan())
+                # Run the constant-folded call.
+                try:
+                    def rv := M.call(constReceiver, verb, constArgs, constNamedArgs)
+                    # Success! Box it up.
+                    a.LiteralExpr(rv, expr.getSpan())
+                catch problem:
+                    traceln(`mix/1: Exception while constant-folding:`)
+                    traceln.exception(problem)
+                    # Return a default.
+                    a.MethodCallExpr(receiver, verb, args, namedArgs, expr.getSpan())
             catch problem:
                 # traceln(`mix/1: Couldn't constant-fold: $problem`)
                 a.MethodCallExpr(receiver, verb, args, namedArgs, expr.getSpan())
