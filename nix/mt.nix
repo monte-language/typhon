@@ -1,4 +1,5 @@
-{stdenv, pkgs, lib, python27, typhonVm, mast, nix, nix-prefetch-scripts}:
+{stdenv, pkgs, lib, python27, typhonVm, mast, nix, nix-prefetch-scripts,
+ rlwrap}:
 let
   mt-bake-py = pkgs.writeText "mt-bake.py" (
   "FETCHERS = {'git': '${nix-prefetch-scripts + "/bin/nix-prefetch-git"}'}\n" +
@@ -33,12 +34,13 @@ let
           in pkgs.callPackage ${./montePackage.nix} { \
               typhonVm = ${typhonVm}; mast = ${mast}; } lockSet"
     }
+    RLWRAP=${rlwrap}/bin/rlwrap
     case $OPERATION in
         build)
             doBuild
             ;;
         repl)
-            ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader run repl
+            $RLWRAP ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader run repl
             ;;
         lint)
             shift
@@ -75,7 +77,7 @@ let
 in
   stdenv.mkDerivation {
     name = "mt";
-    buildInputs = [ typhonVm mast nix-prefetch-scripts ];
+    buildInputs = [ typhonVm mast nix-prefetch-scripts rlwrap ];
     buildPhase = ''
       '';
     installPhase = ''
