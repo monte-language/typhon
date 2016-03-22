@@ -1089,9 +1089,8 @@ class StrObject(Object):
             return IntObject(self._s.rfind(needle))
 
         if atom is MULTIPLY_1:
-            amount = args[0]
-            if isinstance(amount, IntObject):
-                return StrObject(self._s * amount._i)
+            amount = unwrapInt(args[0])
+            return StrObject(self._s * amount)
 
         if atom is OP__CMP_1:
             return polyCmp(self._s, unwrapStr(args[0]))
@@ -1359,9 +1358,8 @@ class BytesObject(Object):
             return IntObject(self._bs.rfind(needle))
 
         if atom is MULTIPLY_1:
-            amount = args[0]
-            if isinstance(amount, IntObject):
-                return BytesObject(self._bs * amount._i)
+            amount = unwrapInt(args[0])
+            return BytesObject(self._bs * amount)
 
         if atom is OP__CMP_1:
             return polyCmp(self._bs, unwrapBytes(args[0]))
