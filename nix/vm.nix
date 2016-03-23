@@ -40,9 +40,6 @@ stdenv.mkDerivation {
     cp mt-typhon $out/
     '';
   dontStrip = true;
-  fixupPhase = ''
-    patchelf --shrink-rpath $out/mt-typhon
-    '';
   src = let loc = part: (toString ./..) + part;
    in builtins.filterSource (path: type:
     let p = toString path;
