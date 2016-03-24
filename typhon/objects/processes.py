@@ -235,5 +235,8 @@ class makeProcess(Object):
             except ruv.UVError as uve:
                 raise userError(u"makeProcess: Couldn't spawn process: %s" %
                                 uve.repr().decode("utf-8"))
-
-        raise Refused(self, atom, args)
+        val = self.mirandaMethods(atom, args, namedArgs)
+        if val is None:
+            raise Refused(self, atom, args)
+        else:
+            return val
