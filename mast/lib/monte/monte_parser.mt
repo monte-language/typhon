@@ -379,7 +379,6 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return builder.SuchThatPattern(p, e, spanFrom(spanStart))
         else:
             return p
-    "XXX buggy expander eats this line"
 
     def _pairItem(mkExport, mkPair, ej):
         def spanStart := spanHere()
@@ -406,7 +405,8 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
 
     def seqSep(ej):
         if (![";", "#", "EOL"].contains(peekTag())):
-            ej(["Expected a semicolon or newline after expression", tokens[position][2]])
+            ej(["Expected a semicolon or newline after expression",
+                tokens[position.min(tokens.size() - 1)][2]])
         advance(ej)
         while (true):
             if (![";", "#", "EOL"].contains(peekTag())):
@@ -417,9 +417,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         def ex := if (indent) {blockExpr} else {expr}
         def start := spanHere()
         def exprs := [].diverge()
-        def first := opt(ex, ej)
-        if (first != null):
-            exprs.push(first)
+        exprs.push(ex(ej))
         while (true):
             seqSep(__break)
             exprs.push(ex(__break))
@@ -519,6 +517,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             [null, null, null]
         }
         acceptEOLs()
+        if (!indent && peekTag() == "}"):
+            return [doco, builder.SeqExpr(
+                if (doco == null) {[]
+                } else {[builder.LiteralExpr(doco, docoSpan)]}, null)]
         var contents := seq(indent, ej)
         if (doco != null &&
             contents.getNodeName() == "SeqExpr" &&
@@ -581,12 +583,12 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         def meths := [].diverge()
         while (true):
             acceptEOLs()
+            if (["DEDENT", "}", "match"].contains(peekTag())):
+                break
             if (peekTag() == "pass"):
                 advance(ej)
                 continue
-            meths.push(meth(indent, __break))
-        catch msg:
-            lastError := msg
+            meths.push(meth(indent, ej))
         def matchs := [].diverge()
         while (true):
             if (peekTag() == "pass"):
@@ -594,7 +596,9 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 continue
             matchs.push(matchers(indent, __break))
         catch msg:
-            lastError := msg
+            acceptEOLs()
+            if (!["DEDENT", "}"].contains(peekTag())):
+                ej(msg)
         return [doco, meths.snapshot(), matchs.snapshot()]
 
     def oAuditors(ej):
@@ -995,7 +999,6 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return basic(true, e, ej)
         position := origPosition
         return expr(ej)
-    "XXX buggy expander eats this line"
 
     bind prim(ej):
         def tag := peekTag()
@@ -1087,7 +1090,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             else:
                 return builder.ListExpr(items, spanFrom(spanStart))
         return basic(false, ej, ej)
-    "XXX buggy expander eats this line"
+
     def call(ej):
         def spanStart := spanHere()
         def base := prim(ej)
@@ -1260,7 +1263,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 break
             advance(ej)
             acceptEOLs()
-            # XXX buggy expander can't handle compound booleans
+
             if (opstack.size() > 0):
                 def selfy := selfAssociative.contains(op) && (opstack.last()[1] == op)
                 def lefty := leftAssociative.contains(op) && opstack.last()[0] <= nextPrec
@@ -1280,14 +1283,12 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
 
     bind order(ej):
         return convertInfix(6, ej)
-    "XXX buggy expander eats this line"
 
     def infix(ej):
         return convertInfix(10, ej)
 
     bind comp(ej):
         return convertInfix(8, ej)
-    "XXX buggy expander eats this line"
 
     def _assign(ej):
         def spanStart := spanHere()
@@ -1421,8 +1422,9 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             }
         }
         acceptEOLs()
-        if (position < (tokens.size() - 1)):
-            formatError(lastError, err)
+        if (position == tokens.size()):
+            # Ran off the end.
+            throw(lastError)
         else:
             return val
     catch p:
