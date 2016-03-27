@@ -29,4 +29,4 @@ def specimens := [for [this, that] in ([
 for [this, that] in (specimens):
     def testOptimizer(assert):
         assert.equal(this.mix().canonical(), that.canonical())
-    unittest([testOptimizer])
+    # unittest([testOptimizer])
