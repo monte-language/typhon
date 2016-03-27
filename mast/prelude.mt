@@ -593,7 +593,6 @@ def loadit(name):
     def ast := getMonteFile(name)
     def m := typhonEval.fromAST(ast, preludeScope, name)
     return m(stubLoader)
-    re
 
 def importIntoScope(name):
     preludeScope |= scopeAsDF(loadit(name))

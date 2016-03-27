@@ -13,7 +13,6 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 	boot/prelude/brand.mast \
 	boot/prelude/m.mast \
 	boot/prelude/ql.mast \
-	boot/prelude/deepfrozen.mast \
 	boot/prelude/protocolDesc.mast \
 	boot/prelude/region.mast \
 	boot/prelude/simple.mast \
@@ -113,15 +112,15 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 
 mast/prelude.mast: mast/prelude.mt
 	@ echo "MONTEC-UNSAFE $<"
-	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -noverify -mix $< $@ # 2> /dev/null
+	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -noverify $< $@ # 2> /dev/null
 
 loader.mast: loader.mt
 	@ echo "MONTEC-UNSAFE $<"
-	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -noverify -mix $< $@ # 2> /dev/null
+	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -noverify $< $@ # 2> /dev/null
 
 %.mast: %.mt
 	@ echo "MONTEC $<"
-	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -mix $< $@ # 2> /dev/null
+	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec $< $@ # 2> /dev/null
 
 clean:
 	@ echo "CLEAN"
