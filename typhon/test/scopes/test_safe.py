@@ -32,3 +32,10 @@ class TestMakeInt(TestCase):
         makeInt = MakeInt()
         result = makeInt.call(u"fromBytes", [BytesObject("42"), IntObject(16)])
         self.assertEqual(result.bi, rbigint.fromint(66))
+
+    def testWithUnderscores(self):
+        makeInt = MakeInt()
+        s = StrObject(u"100_000")
+        result = makeInt.call(u"run", [s])
+        bi = rbigint.fromint(100000)
+        self.assertEqual(result.bi, bi)

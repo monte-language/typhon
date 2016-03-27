@@ -14,6 +14,7 @@
 
 from rpython.rlib.debug import debug_print
 from rpython.rlib.rbigint import rbigint
+from rpython.rlib.rstring import ParseStringError
 from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
@@ -185,7 +186,13 @@ class MakeInt(Object):
     @staticmethod
     @profileTyphon("_makeInt.fromBytes/2")
     def fromBytes(bs, radix):
-        return rbigint.fromstr(bs, radix)
+        # Ruby-style underscores are legal here but can't be handled by
+        # RPython, so remove them.
+        bs = bs.replace("_", "")
+        try:
+            return rbigint.fromstr(bs, radix)
+        except ParseStringError:
+            raise userError(u"Couldn't parse int from string")
 
     def recv(self, atom, args):
         if atom is RUN_1:
