@@ -808,16 +808,12 @@ def expand(node, builder, fail) as DeepFrozen:
             return builder.FinalPattern(noun, guard, span)
         else if (nodeName == "SamePattern"):
             def [value, isSame] := args
-            if (isSame):
-                return builder.ViaPattern(
-                    builder.MethodCallExpr(builder.NounExpr("_matchSame", span),
-                        "run", [value], [], span),
-                    builder.IgnorePattern(null, span), span)
-            else:
-                return builder.ViaPattern(
-                    builder.MethodCallExpr(builder.NounExpr("_matchSame", span),
-                        "different", [value], [], span),
-                    builder.IgnorePattern(null, span). span)
+            # Note: We use `isSame` only to choose which verb is given to
+            # `_matchSame`. ~ C.
+            return builder.ViaPattern(
+                builder.MethodCallExpr(builder.NounExpr("_matchSame", span),
+                    isSame.pick("run", "different"), [value], [], span),
+                builder.IgnorePattern(null, span), span)
         else if (nodeName == "VarPattern"):
             return builder.VarPattern(args[0], args[1], span)
         else if (nodeName == "BindPattern"):
