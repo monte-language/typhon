@@ -1,4 +1,3 @@
-import "safeScope" =~ safeScope :DeepFrozen
 exports (optimize)
 # I don't know what this all is yet.
 
@@ -114,7 +113,7 @@ def mix(expr,
      `staticValues` should be a mapping of names to live values. The values
      should be closed under their union with the safe scope with uncall; this
      is necessary to freeze them should the need arise.
-
+    
      This function recurses on its own, to avoid visiting every node."
 
     def remix(e):
@@ -577,7 +576,6 @@ def thawable :DeepFrozen := [
 ]
 
 def freezeMap :DeepFrozen := [for k => v in (thawable) v => k]
-def safeScopeItems :DeepFrozen := [for `&&@k` => &&v in (safeScope) v => k]
 
 def freeze(ast, maker, args, span) as DeepFrozen:
     "Uncall literal expressions."
@@ -609,15 +607,14 @@ def freeze(ast, maker, args, span) as DeepFrozen:
                 traceln(`Found $k in freezeMap`)
                 return a.NounExpr(freezeMap[k], span)
             match obj:
-                if (obj._uncall() =~ [newMaker, newVerb, newArgs, newNamedArgs] &&
-                    safeScopeItems.contains(newMaker)):
+                if (obj._uncall() =~ [newMaker, newVerb, newArgs, newNamedArgs]):
                     def wrappedArgs := [for arg in (newArgs)
                                         a.LiteralExpr(arg, span)]
                     def wrappedNamedArgs := [for k => v in (newNamedArgs)
                                              a.NamedArg(a.LiteralExpr(k),
                                                         a.LiteralExpr(v),
                                                         span)]
-                    def call := a.MethodCallExpr(a.LiteralExpr(safeScopeItems[newMaker],
+                    def call := a.MethodCallExpr(a.LiteralExpr(newMaker,
                                                                span),
                                                  newVerb, wrappedArgs,
                                                  wrappedNamedArgs, span)
