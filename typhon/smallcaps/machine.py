@@ -326,7 +326,8 @@ class SmallCaps(object):
     def buildMap(self, index):
         # XXX monteMap()
         d = monteMap()
-        for i in range(index):
+        while index:
+            index -= 1
             # Yikes, the order of operations here is dangerous.
             d[self.pop()] = self.pop()
         self.push(ConstMap(d))
@@ -494,9 +495,9 @@ class SmallCaps(object):
     @unroll_safe
     def run(self):
         jit_debug(self.code.profileName)
-        # print ">" * 10
         pc = 0
-        while pc < self.code.instSize():
+        instSize = self.code.instSize()
+        while pc < instSize:
             instruction = self.code.inst(promote(pc))
             try:
                 pc = self.runInstruction(instruction, pc)
@@ -510,8 +511,6 @@ class SmallCaps(object):
             finalHandler = self.popHandler()
             # Return value ignored here.
             finalHandler.drop(self, pc, pc)
-        # print "<" * 10
-        return 0
 
     @unroll_safe
     def unwindEjector(self, ex):
