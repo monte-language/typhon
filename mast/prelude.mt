@@ -409,11 +409,22 @@ def _accumulateList(iterable, mapper) as DeepFrozenStamp:
     return rv
 
 
-def _matchSame(expected) as DeepFrozenStamp:
-    "The pattern ==`expected`."
-    return def sameMatcher(specimen, ej):
-        if (expected != specimen):
-            throw.eject(ej, ["Not the same:", expected, specimen])
+object _matchSame as DeepFrozenStamp:
+    to run(expected):
+        "The pattern ==`expected`."
+
+        return def sameMatcher(specimen, ej):
+            if (expected != specimen):
+                throw.eject(ej, ["Not same:", expected, specimen])
+            return specimen
+
+    to different(expected):
+        "The pattern ==`expected`."
+
+        return def differentMatcher(specimen, ej):
+            if (expected == specimen):
+                throw.eject(ej, ["Same:", expected, specimen])
+            return specimen
 
 
 object _mapExtract as DeepFrozenStamp:
