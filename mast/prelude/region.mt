@@ -375,7 +375,7 @@ def region(loader):
                         # No left-overs, so we're as-big-as each other
                         return 0.0
         return self
-
+    def _makeOrderedSpace
     object _selmipriMakeOrderedSpace as DeepFrozenStamp:
         "The maker of ordered vector spaces.
 
@@ -412,7 +412,7 @@ def region(loader):
                     out.print(myName)
 
                 to _uncall():
-                    return [_selmipriMakeOrderedSpace, "run", [myType, myName], [].asMap()]
+                    return [_makeOrderedSpace, "run", [myType, myName], [].asMap()]
 
                 to coerce(specimen, ej) :myTypeR:
                     return myType.coerce(specimen, ej)
@@ -481,7 +481,7 @@ def region(loader):
     def spaces := [].asMap().diverge()
 
 
-    object _makeOrderedSpace extends _selmipriMakeOrderedSpace as DeepFrozenStamp:
+    object bind _makeOrderedSpace extends _selmipriMakeOrderedSpace as DeepFrozenStamp:
         "The maker of ordered vector spaces.
 
          This object implements several Monte operators, including those which

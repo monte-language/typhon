@@ -460,7 +460,7 @@ object _switchFailed as DeepFrozenStamp:
      This object throws an exception."
 
     match [=="run", args, _]:
-        throw("Switch failed:", args)
+        throw("Switch failed: " + M.toString(args))
 
 
 object _makeVerbFacet as DeepFrozenStamp:
@@ -580,6 +580,8 @@ object stubLoader:
     to "import"(name):
         if (name == "boot"):
             return preludeStamps
+        if (name == "safeScope"):
+            return preludeScope
         if (name == "unittest"):
             return ["unittest" => fn _ {null}]
         if (name == "bench"):
@@ -634,7 +636,6 @@ dependencies["lib/monte/mast"] := loadit("lib/monte/mast")
 # doesn't support evaluation, and I'd expect it to be slow, so we're not doing
 # that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
 # hook, and that'll do for now. ~ C.
-preludeScope with= ("&&safeScope", &&preludeScope)
 importIntoScope("prelude/m")
 
 
@@ -642,6 +643,7 @@ importIntoScope("prelude/m")
 # This has to do some significant AST groveling so it uses AST quasipatterns
 # for convenience.
 importIntoScope("prelude/transparent")
+preludeScope with= ("&&safeScope", &&preludeScope)
 
 # preludeScope without= ("&&typhonEval")
 
