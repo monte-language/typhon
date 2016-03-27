@@ -178,6 +178,7 @@ class ConstList(Object):
     rstrategies.make_accessors(strategy="strategy", storage="storage")
 
     strategy = None
+    _isSettled = False
 
     def __init__(self, objects):
         strategy = strategyFactory.strategy_type_for(objects)
@@ -212,11 +213,19 @@ class ConstList(Object):
         return x
 
     def isSettled(self, sofar=None):
+        # Check for a usable cached result.
+        if self._isSettled:
+            return True
+
+        # No cache; do this the hard way.
         if sofar is None:
             sofar = {self: None}
         for v in self.strategy.fetch_all(self):
             if v not in sofar and not v.isSettled(sofar=sofar):
                 return False
+
+        # Cache this success; we can't become unsettled.
+        self._isSettled = True
         return True
 
     def _recv(self, atom, args):
