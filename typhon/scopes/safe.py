@@ -188,7 +188,7 @@ class MakeInt(Object):
     def fromBytes(bs, radix):
         # Ruby-style underscores are legal here but can't be handled by
         # RPython, so remove them.
-        bs = bs.replace("_", "")
+        bs = ''.join([c for c in bs if c != '_'])
         try:
             return rbigint.fromstr(bs, radix)
         except ParseStringError:
