@@ -624,6 +624,8 @@ def freeze(ast, maker, args, span) as DeepFrozen:
     return M.call(maker, "run", args + [span], [].asMap())
 
 def optimize(var expr) as DeepFrozen:
+    return expr
+
     # expr transform= (thaw)
     expr := mix(expr, "staticValues" => [
         => false,
@@ -633,6 +635,6 @@ def optimize(var expr) as DeepFrozen:
     ## serializable, and right now there are several things that the AST dumper
     ## doesn't know what to do with. So constant folding is disabled.
 
-    # expr transform= (freeze)
+    expr transform= (freeze)
 
     return expr
