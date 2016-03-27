@@ -632,5 +632,10 @@ def optimize(var expr) as DeepFrozen:
         => false,
         => true,
     ])
-    expr transform= (freeze)
+    ## The optimizer and the AST dumper need to agree on what objects are
+    ## serializable, and right now there are several things that the AST dumper
+    ## doesn't know what to do with. So constant folding is disabled.
+
+    # expr transform= (freeze)
+
     return expr
