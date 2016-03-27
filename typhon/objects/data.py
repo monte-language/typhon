@@ -724,6 +724,12 @@ class BigInt(Object):
             other = promoteToBigInt(args[0])
             return self if self.bi.lt(other) else args[0]
 
+        if atom is MODPOW_2:
+            exponent = unwrapInt(args[0])
+            modulus = unwrapInt(args[1])
+            return BigInt(self.bi.pow(rbigint.fromint(exponent),
+                                      rbigint.fromint(modulus)))
+
         if atom is MOD_1:
             other = args[0]
             try:
