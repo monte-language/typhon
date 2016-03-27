@@ -860,6 +860,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 acceptTag("INDENT", tryAgain)
             else:
                 acceptTag("{", ej)
+                acceptEOLs()
             def whenblock := escape e {
                 seq(indent, ej)
             } catch _ {
