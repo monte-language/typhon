@@ -618,6 +618,14 @@ class ConstList(Object):
     def __init__(self, strategy):
         self.strategy = strategy
 
+    # Do some voodoo for pretty-printing. Cargo-culted voodoo. ~ C.
+
+    def toQuote(self):
+        return toString(self)
+
+    def toString(self):
+        return toString(self)
+
     def printOn(self, printer):
         printer.call(u"print", [StrObject(u"[")])
         items = self.strategy.asList()
