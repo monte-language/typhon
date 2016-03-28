@@ -52,7 +52,8 @@ def makeStream(s :Str) as DeepFrozen:
             return index >= s.size()
 
 
-def charDigit(c :('0'..'9')) :(0..9) as DeepFrozen:
+def Digits :DeepFrozen := '0'..'9'
+def charDigit(c :Digits) :(0..9) as DeepFrozen:
     "Lex a character into an integer.
 
      The definition of this function should leave little room for doubt on its
@@ -60,6 +61,24 @@ def charDigit(c :('0'..'9')) :(0..9) as DeepFrozen:
 
     # 0x30 == '0'.asInteger()
     return c.asInteger() - 0x30
+
+def Hex :DeepFrozen := Digits | ('a'..'f') | ('A'..'F')
+def charHex(c :Hex) :(0x0..0xf) as DeepFrozen:
+    "Lex a character into a hexadecimal integer.
+
+     The definition of this function should leave little room for doubt on its
+     behavior."
+
+    return switch (c):
+        match d :Digits:
+            # 0x30 == '0'.asInteger()
+            c.asInteger() - 0x30
+        match l :('a'..'f'):
+            # 0x57 - 0xa == 'a'.asInteger()
+            c.asInteger() - 0x57
+        match u :('A'..'F'):
+            # 0x37 - 0xa == 'A'.asInteger()
+            c.asInteger() - 0x37
 
 
 def makeLexer(ej) as DeepFrozen:
@@ -151,9 +170,20 @@ def makeLexer(ej) as DeepFrozen:
                     match =='"':
                         break
                     match =='\\':
-                        def c := stream.next()
-                        buf.push(specialDecodeChars.fetch(c,
-                            fn {throw.eject(ej, `Bad escape character $c`)}))
+                        switch (stream.next()):
+                            match =='u':
+                                # Unicode escape.
+                                var i := 0
+                                for _ in 0..!4:
+                                    def x :Hex exit ej := stream.next()
+                                    i *= 16
+                                    i += charHex(x)
+                                buf.push(('\x00' + i).asString())
+                            match via (specialDecodeChars.fetch) v:
+                                # Substituted from the table.
+                                buf.push(v)
+                            match c:
+                                throw.eject(ej, `Bad escape character $c`)
                     match c:
                         buf.push(c.asString())
 
@@ -364,6 +394,10 @@ def testJSONDecode(assert):
     assert.equal(JSON.decode(specimen, null),
                  ["first" => 42, "second" => [5, 7]])
 
+def testJSONDecodeEscapeUnicode(assert):
+    def specimen := `["\u00e9"]`
+    assert.equal(JSON.decode(specimen, null), ["é"])
+
 def testJSONDecodeSlash(assert):
     def specimen := "{\"face\\/off\":1997}"
     assert.equal(JSON.decode(specimen, null), ["face/off" => 1997])
@@ -403,6 +437,7 @@ def testJSONEncode(assert):
 
 unittest([
     testJSONDecode,
+    testJSONDecodeEscapeUnicode,
     testJSONDecodeSlash,
     testJSONDecodeNested,
     testJSONDecodeDouble,
