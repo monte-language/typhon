@@ -17,7 +17,7 @@
 from unittest import TestCase
 
 from typhon.errors import UserException
-from typhon.objects.collections.lists import ConstList, FlexList, unwrapList
+from typhon.objects.collections.lists import wrapList, FlexList, unwrapList
 from typhon.objects.collections.maps import ConstMap, monteMap
 from typhon.objects.collections.sets import ConstSet, monteSet
 from typhon.objects.data import CharObject, IntObject
@@ -46,41 +46,41 @@ class TestConstMap(TestCase):
         self.assertEqual(result.getInt(), 2)
 
 
-class TestConstList(TestCase):
+class TestwrapList(TestCase):
 
     def testCmpShortLeft(self):
-        a = ConstList([IntObject(2)])
-        b = ConstList([IntObject(2), IntObject(4)])
+        a = wrapList([IntObject(2)])
+        b = wrapList([IntObject(2), IntObject(4)])
         result = a.call(u"op__cmp", [b])
         self.assertEqual(result.getInt(), -1)
 
     def testCmpShortRight(self):
-        a = ConstList([IntObject(2), IntObject(4)])
-        b = ConstList([IntObject(2)])
+        a = wrapList([IntObject(2), IntObject(4)])
+        b = wrapList([IntObject(2)])
         result = a.call(u"op__cmp", [b])
         self.assertEqual(result.getInt(), 1)
 
     def testGetNegative(self):
-        l = ConstList([])
+        l = wrapList([])
         self.assertRaises(UserException, l.call, u"get", [IntObject(-1)])
 
     def testHashEqual(self):
-        a = ConstList([IntObject(42), CharObject(u'é')])
-        b = ConstList([IntObject(42), CharObject(u'é')])
+        a = wrapList([IntObject(42), CharObject(u'é')])
+        b = wrapList([IntObject(42), CharObject(u'é')])
         self.assertEqual(a.samenessHash(), b.samenessHash())
 
     def testHashInequalLength(self):
-        a = ConstList([IntObject(42), CharObject(u'é')])
-        b = ConstList([IntObject(42)])
+        a = wrapList([IntObject(42), CharObject(u'é')])
+        b = wrapList([IntObject(42)])
         self.assertNotEqual(a.samenessHash(), b.samenessHash())
 
     def testHashInequalItems(self):
-        a = ConstList([IntObject(42), CharObject(u'é')])
-        b = ConstList([IntObject(42), CharObject(u'e')])
+        a = wrapList([IntObject(42), CharObject(u'é')])
+        b = wrapList([IntObject(42), CharObject(u'e')])
         self.assertNotEqual(a.samenessHash(), b.samenessHash())
 
     def testSlice(self):
-        l = ConstList(map(CharObject, "abcdefg"))
+        l = wrapList(map(CharObject, "abcdefg"))
         result = l.call(u"slice", [IntObject(3), IntObject(6)])
         chars = [char._c for char in unwrapList(result)]
         self.assertEqual(chars, list("def"))

@@ -23,7 +23,7 @@ from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.collections.helpers import emptySet, monteSet
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import wrapList
 from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector
 from typhon.objects.guards import anyGuard
@@ -260,7 +260,7 @@ class ScriptObject(Object):
 
     @unroll_safe
     def runMatchers(self, atom, args, namedArgs):
-        message = ConstList([StrObject(atom.verb), ConstList(args),
+        message = wrapList([StrObject(atom.verb), wrapList(args),
                              namedArgs])
         for matcher in self.codeScript.strategy.getMatchers():
             with Ejector() as ej:

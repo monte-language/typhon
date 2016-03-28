@@ -5,7 +5,7 @@ from rpython.rlib.rerased import new_erasing_pair
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import wrapList
 from typhon.objects.collections.maps import ConstMap, monteMap
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object, runnable
@@ -82,7 +82,7 @@ class Heap(Object):
             d = monteMap()
             for name, count in self.buckets.items():
                 size = self.sizes.get(name, -1)
-                d[StrObject(name)] = ConstList([IntObject(size),
+                d[StrObject(name)] = wrapList([IntObject(size),
                                                 IntObject(count)])
             return ConstMap(d)
 
@@ -137,7 +137,7 @@ class LoopStats(Object):
         if atom is GETHANDLES_0:
             l = []
             # ruv.walk(self.loop, walkCB, eraseList(l))
-            return ConstList([LoopHandle(h) for h in l])
+            return wrapList([LoopHandle(h) for h in l])
 
         raise Refused(self, atom, args)
 

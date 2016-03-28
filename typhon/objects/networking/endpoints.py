@@ -20,7 +20,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.lists import wrapList, unwrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject, unwrapBytes, unwrapInt
 from typhon.objects.networking.streams import StreamDrain, StreamFount
@@ -91,7 +91,7 @@ class TCP4ClientEndpoint(Object):
         drain, drainResolver = makePromise()
 
         # Ugh, the hax.
-        resolvers = ConstList([fountResolver, drainResolver])
+        resolvers = wrapList([fountResolver, drainResolver])
         ruv.stashStream(ruv.rffi.cast(ruv.stream_tp, stream),
                         (vat, resolvers))
 
@@ -99,7 +99,7 @@ class TCP4ClientEndpoint(Object):
         ruv.tcpConnect(stream, self.host, self.port, connectCB)
 
         # Return the promises.
-        return ConstList([fount, drain])
+        return wrapList([fount, drain])
 
 
 @runnable(RUN_2)

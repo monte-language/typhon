@@ -20,7 +20,7 @@ from unittest import TestCase
 from rpython.rlib.rbigint import rbigint
 
 from typhon.errors import Ejecting, UserException
-from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.lists import wrapList, unwrapList
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.ejectors import Ejector
@@ -108,7 +108,7 @@ class TestStr(TestCase):
     def testJoin(self):
         s = StrObject(u"|")
         result = s.call(u"join",
-                [ConstList([StrObject(u"5"), StrObject(u"42")])])
+                [wrapList([StrObject(u"5"), StrObject(u"42")])])
         self.assertEqual(result._s, u"5|42")
 
     def testSliceStart(self):

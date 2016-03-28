@@ -16,7 +16,8 @@ from unittest import TestCase
 
 from rpython.rlib.rbigint import rbigint
 
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import wrapList
+from typhon.objects.constants import NullObject
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, optSame
@@ -84,31 +85,33 @@ class TestOptSame(TestCase):
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListEquality(self):
-        first = ConstList([IntObject(42)])
-        second = ConstList([IntObject(42)])
+        first = wrapList([IntObject(42)])
+        second = wrapList([IntObject(42)])
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListEqualityRecursionReflexive(self):
-        first = ConstList([IntObject(42)])
-        first.strategy.append(first, [first])
+        first = wrapList([IntObject(42), NullObject])
+        # Hax.
+        first.strategy.second = first
         self.assertEqual(optSame(first, first), EQUAL)
 
     def testListEqualityRecursion(self):
-        # Yes, this is very hacky.
-        first = ConstList([IntObject(42)])
-        first.strategy.append(first, [first])
-        second = ConstList([IntObject(42)])
-        second.strategy.append(second, [second])
+        first = wrapList([IntObject(42), NullObject])
+        # Hax.
+        first.strategy.second = first
+        second = wrapList([IntObject(42), NullObject])
+        # Hax.
+        second.strategy.second = first
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListInequality(self):
-        first = ConstList([IntObject(42)])
-        second = ConstList([IntObject(41)])
+        first = wrapList([IntObject(42)])
+        second = wrapList([IntObject(41)])
         self.assertEqual(optSame(first, second), INEQUAL)
 
     def testListInequalityLength(self):
-        first = ConstList([IntObject(42)])
-        second = ConstList([IntObject(42), IntObject(5)])
+        first = wrapList([IntObject(42)])
+        second = wrapList([IntObject(42), IntObject(5)])
         self.assertEqual(optSame(first, second), INEQUAL)
 
     def testStrEquality(self):

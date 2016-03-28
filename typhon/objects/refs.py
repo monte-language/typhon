@@ -167,9 +167,9 @@ class RefOps(Object):
         raise Refused(self, atom, args)
 
     def promise(self):
-        from typhon.objects.collections.lists import ConstList
+        from typhon.objects.collections.lists import wrapList
         p, r = makePromise()
-        return ConstList([p, r])
+        return wrapList([p, r])
 
     def broken(self, problem):
         return UnconnectedRef(problem)

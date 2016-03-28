@@ -8,7 +8,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, userError
-from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.lists import wrapList, unwrapList
 from typhon.objects.collections.maps import (EMPTY_MAP, ConstMap, monteMap,
                                              unwrapMap)
 from typhon.objects.constants import NullObject
@@ -45,7 +45,7 @@ class CurrentProcess(Object):
 
     def recv(self, atom, args):
         if atom is GETARGUMENTS_0:
-            return ConstList([StrObject(arg.decode("utf-8"))
+            return wrapList([StrObject(arg.decode("utf-8"))
                               for arg in self.config.argv])
 
         if atom is GETENVIRONMENT_0:
@@ -142,7 +142,7 @@ class SubProcess(Object):
 
     def recv(self, atom, args):
         if atom is GETARGUMENTS_0:
-            return ConstList([BytesObject(arg) for arg in self.argv])
+            return wrapList([BytesObject(arg) for arg in self.argv])
 
         if atom is GETENVIRONMENT_0:
             # XXX monteMap()

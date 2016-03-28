@@ -151,9 +151,10 @@ selfless = Selfless()
 
 
 def checkDeepFrozen(specimen, seen, ej, root):
-    from typhon.objects.collections.lists import ConstList
+    from typhon.objects.collections.lists import unwrapList
     from typhon.objects.collections.maps import ConstMap
     from typhon.objects.data import StrObject
+    from typhon.objects.ejectors import throw
     from typhon.objects.equality import TraversalKey
     from typhon.objects.refs import Promise, isBroken
     key = TraversalKey(specimen)
@@ -170,24 +171,19 @@ def checkDeepFrozen(specimen, seen, ej, root):
     elif (specimen.auditedBy(selfless) and
           specimen.auditedBy(transparentStamp)):
         portrayal = specimen.call(u"_uncall", [])
-        if not (isinstance(portrayal, ConstList) and
-                portrayal.size() == 4):
-            ej.call(u"run", [StrObject(u"can't happen: transparent object "
-                                       "gave bad portrayal")])
+        portrayalList = unwrapList(portrayal, ej)
+        if len(portrayalList) != 4:
+            throw(ej, StrObject(u"Transparent object gave bad portrayal"))
             return
-        checkDeepFrozen(portrayal.strategy.fetch(portrayal, 0), seen, ej, root)
-        checkDeepFrozen(portrayal.strategy.fetch(portrayal, 1), seen, ej, root)
-        args = portrayal.strategy.fetch(portrayal, 2)
-        if not isinstance(args, ConstList):
-            ej.call(u"run", [StrObject(u"can't happen: transparent object "
-                                       "gave bad portrayal")])
-            return
-        for item in args.strategy.fetch_all(args):
+        checkDeepFrozen(portrayalList[0], seen, ej, root)
+        checkDeepFrozen(portrayalList[1], seen, ej, root)
+        args = unwrapList(portrayalList[2], ej)
+        for item in args:
             checkDeepFrozen(item, seen, ej, root)
-        namedArgs = portrayal.strategy.fetch(portrayal, 3)
+        namedArgs = portrayalList[3]
+        # XXX unwrapMap
         if not isinstance(namedArgs, ConstMap):
-            ej.call(u"run", [StrObject(u"can't happen: transparent object "
-                                       "gave bad portrayal")])
+            throw(ej, StrObject(u"Transparent object gave bad portrayal"))
             return
         for k, v in namedArgs.objectMap.iteritems():
             checkDeepFrozen(k, seen, ej, root)
@@ -204,7 +200,7 @@ def checkDeepFrozen(specimen, seen, ej, root):
 
 def deepFrozenSupersetOf(guard):
     from typhon.objects.collections.helpers import monteMap
-    from typhon.objects.collections.lists import ConstList
+    from typhon.objects.collections.lists import unwrapList
     from typhon.objects.constants import wrapBool
     from typhon.objects.ejectors import Ejector
     from typhon.objects.refs import Promise
@@ -263,12 +259,9 @@ def deepFrozenSupersetOf(guard):
         ej = Ejector()
         try:
             guardPair = pairGuard.call(u"extractGuards", [guard, ej])
-            if isinstance(guardPair, ConstList) and guardPair.size() == 2:
-                return (
-                    (deepFrozenSupersetOf(guardPair.strategy.fetch(
-                        guardPair, 0))) and
-                    (deepFrozenSupersetOf(guardPair.strategy.fetch(
-                        guardPair, 1))))
+            l = unwrapList(guardPair, ej)
+            if len(l) == 2:
+                return deepFrozenSupersetOf(l[0]) and deepFrozenSupersetOf(l[1])
         except Ejecting:
             # XXX lets other ejectors get through
             pass

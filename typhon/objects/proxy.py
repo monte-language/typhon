@@ -1,7 +1,7 @@
 from typhon.atoms import getAtom
 from typhon.errors import userError
 from typhon.vats import currentVat
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import wrapList
 from typhon.objects.collections.maps import EMPTY_MAP
 from typhon.objects.data import NullObject, StrObject, unwrapBool
 from typhon.objects.equality import EQUAL, TraversalKey, optSame, isSameEver
@@ -113,7 +113,7 @@ class Proxy(Promise):
             return send(ref, atom, args, namedArgs)
         else:
             return send(self.handler, HANDLESEND_3, [StrObject(atom.verb),
-                                                     ConstList(args),
+                                                     wrapList(args),
                                                      namedArgs], EMPTY_MAP)
 
     def sendAllOnly(self, atom, args, namedArgs):
@@ -122,7 +122,7 @@ class Proxy(Promise):
             sendOnly(ref, atom, args, namedArgs)
         else:
             sendOnly(self.handler, HANDLESENDONLY_3, [StrObject(atom.verb),
-                                                      ConstList(args),
+                                                      wrapList(args),
                                                       namedArgs], EMPTY_MAP)
         return NullObject
 

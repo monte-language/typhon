@@ -922,11 +922,11 @@ class SourceSpan(Object):
         if atom is NOTONETOONE_0:
             return self.notOneToOne()
         if atom is _UNCALL_0:
-            from typhon.objects.collections.lists import ConstList
+            from typhon.objects.collections.lists import wrapList
             from typhon.objects.collections.maps import EMPTY_MAP
-            return ConstList([
+            return wrapList([
                 makeSourceSpan, StrObject(u"run"),
-                ConstList([wrapBool(self._isOneToOne), IntObject(self.startLine),
+                wrapList([wrapBool(self._isOneToOne), IntObject(self.startLine),
                            IntObject(self.startCol), IntObject(self.endLine),
                            IntObject(self.endCol)]), EMPTY_MAP])
         raise Refused(self, atom, args)
@@ -989,10 +989,10 @@ class strIterator(Object):
     def recv(self, atom, args):
         if atom is NEXT_1:
             if self._index < len(self.s):
-                from typhon.objects.collections.lists import ConstList
+                from typhon.objects.collections.lists import wrapList
                 rv = [IntObject(self._index), CharObject(self.s[self._index])]
                 self._index += 1
-                return ConstList(rv)
+                return wrapList(rv)
             else:
                 ej = args[0]
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
@@ -1047,8 +1047,8 @@ class StrObject(Object):
                 return StrObject(self._s + unicode(other._c))
 
         if atom is ASLIST_0:
-            from typhon.objects.collections.lists import ConstList
-            return ConstList(self.asList())
+            from typhon.objects.collections.lists import wrapList
+            return wrapList(self.asList())
 
         if atom is ASSET_0:
             from typhon.objects.collections.sets import ConstSet
@@ -1128,12 +1128,12 @@ class StrObject(Object):
             return StrObject(self._s[start:stop])
 
         if atom is SPLIT_1:
-            from typhon.objects.collections.lists import ConstList
-            return ConstList(self.split(unwrapStr(args[0])))
+            from typhon.objects.collections.lists import wrapList
+            return wrapList(self.split(unwrapStr(args[0])))
 
         if atom is SPLIT_2:
-            from typhon.objects.collections.lists import ConstList
-            return ConstList(self.split(unwrapStr(args[0]),
+            from typhon.objects.collections.lists import wrapList
+            return wrapList(self.split(unwrapStr(args[0]),
                                         unwrapInt(args[1])))
 
         if atom is STARTSWITH_1:
@@ -1248,11 +1248,11 @@ class bytesIterator(Object):
     def recv(self, atom, args):
         if atom is NEXT_1:
             if self._index < len(self.s):
-                from typhon.objects.collections.lists import ConstList
+                from typhon.objects.collections.lists import wrapList
                 rv = [IntObject(self._index),
                       IntObject(ord(self.s[self._index]))]
                 self._index += 1
-                return ConstList(rv)
+                return wrapList(rv)
             else:
                 ej = args[0]
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
@@ -1322,8 +1322,8 @@ class BytesObject(Object):
                 return BytesObject(self._bs + str(chr(other._i)))
 
         if atom is ASLIST_0:
-            from typhon.objects.collections.lists import ConstList
-            return ConstList(self.asList())
+            from typhon.objects.collections.lists import wrapList
+            return wrapList(self.asList())
 
         if atom is ASSET_0:
             from typhon.objects.collections.sets import ConstSet
@@ -1394,12 +1394,12 @@ class BytesObject(Object):
             return BytesObject(self._bs[start:stop])
 
         if atom is SPLIT_1:
-            from typhon.objects.collections.lists import ConstList
-            return ConstList(self.split(unwrapBytes(args[0])))
+            from typhon.objects.collections.lists import wrapList
+            return wrapList(self.split(unwrapBytes(args[0])))
 
         if atom is SPLIT_2:
-            from typhon.objects.collections.lists import ConstList
-            return ConstList(self.split(unwrapBytes(args[0]),
+            from typhon.objects.collections.lists import wrapList
+            return wrapList(self.split(unwrapBytes(args[0]),
                                         unwrapInt(args[1])))
 
         if atom is TOLOWERCASE_0:
@@ -1483,8 +1483,8 @@ def unwrapBytes(o):
     if isinstance(s, BytesObject):
         return s.getBytes()
     # XXX temporary only: Permit lists of ints.
-    # from typhon.objects.collections.lists import ConstList, unwrapList
-    # if isinstance(s, ConstList):
+    # from typhon.objects.collections.lists import wrapList, unwrapList
+    # if isinstance(s, wrapList):
     #     buf = ""
     #     l = unwrapList(s)
     #     for obj in l:

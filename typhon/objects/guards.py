@@ -6,7 +6,7 @@ from typhon.errors import Refused
 from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
 from typhon.objects.collections.helpers import asSet
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import wrapList
 from typhon.objects.collections.sets import ConstSet, monteSet
 from typhon.objects.constants import (BoolObject, NullObject, unwrapBool,
                                       wrapBool)
@@ -189,7 +189,7 @@ class AnyGuard(Object):
             g = args[0]
             ej = args[1]
             if isinstance(g, AnyOfGuard):
-                return ConstList(g.subguards)
+                return wrapList(g.subguards)
             else:
                 ej.call(u"run", [StrObject(u"Not an AnyOf guard")])
 
@@ -246,8 +246,8 @@ class AnyOfGuard(Object):
 
         if atom is _UNCALL_0:
             from typhon.objects.collections.maps import EMPTY_MAP
-            return ConstList([anyGuard, StrObject(u"get"),
-                              ConstList(self.subguards), EMPTY_MAP])
+            return wrapList([anyGuard, StrObject(u"get"),
+                              wrapList(self.subguards), EMPTY_MAP])
         raise Refused(self, atom, args)
 
 
@@ -276,8 +276,8 @@ class FinalSlotGuard(Guard):
         if atom is _UNCALL_0:
             from typhon.objects.collections.maps import EMPTY_MAP
             from typhon.scopes.safe import theFinalSlotGuardMaker
-            return ConstList([theFinalSlotGuardMaker, StrObject(u"get"),
-                              ConstList([self.valueGuard]), EMPTY_MAP])
+            return wrapList([theFinalSlotGuardMaker, StrObject(u"get"),
+                              wrapList([self.valueGuard]), EMPTY_MAP])
 
         if atom is GETGUARD_0:
             return self.valueGuard
@@ -321,8 +321,8 @@ class VarSlotGuard(Guard):
         if atom is _UNCALL_0:
             from typhon.objects.collections.maps import EMPTY_MAP
             from typhon.scopes.safe import theVarSlotGuardMaker
-            return ConstList([theVarSlotGuardMaker, StrObject(u"get"),
-                              ConstList([self.valueGuard]), EMPTY_MAP])
+            return wrapList([theVarSlotGuardMaker, StrObject(u"get"),
+                              wrapList([self.valueGuard]), EMPTY_MAP])
         raise Refused(self, atom, args)
 
 
@@ -433,14 +433,14 @@ class SameGuard(Guard):
     def recv(self, atom, args):
         if atom is _UNCALL_0:
             from typhon.objects.collections.maps import EMPTY_MAP
-            return ConstList([sameGuardMaker, StrObject(u"get"),
-                              ConstList([self.value]), EMPTY_MAP])
+            return wrapList([sameGuardMaker, StrObject(u"get"),
+                              wrapList([self.value]), EMPTY_MAP])
         if atom is COERCE_2:
             from typhon.objects.equality import optSame, EQUAL
             specimen, ej = args[0], args[1]
             if optSame(specimen, self.value) is EQUAL:
                 return specimen
-            ej.call(u"run", [ConstList([specimen, StrObject(u"is not"),
+            ej.call(u"run", [wrapList([specimen, StrObject(u"is not"),
                                         self.value])])
         if atom is GETVALUE_0:
             return self.value
@@ -526,8 +526,8 @@ class SubrangeGuard(Object):
         from typhon.objects.user import Audition
         if atom is _UNCALL_0:
             from typhon.objects.collections.maps import EMPTY_MAP
-            return ConstList([subrangeGuardMaker, StrObject(u"get"),
-                              ConstList([self.superGuard]), EMPTY_MAP])
+            return wrapList([subrangeGuardMaker, StrObject(u"get"),
+                              wrapList([self.superGuard]), EMPTY_MAP])
 
         if atom is AUDIT_1:
             audition = args[0]

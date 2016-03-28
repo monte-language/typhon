@@ -21,7 +21,7 @@ from typhon.importing import (codeFromAst, evaluateRaise, obtainModule,
 from typhon.load.mast import loadMASTBytes
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import ConstList, wrapList
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import StrObject, unwrapBytes, wrapBool, unwrapStr
@@ -108,7 +108,7 @@ class TyphonEval(Object):
         if atom is EVALTOPAIR_2:
             code, topLocals = moduleFromString(args[0], self.recorder)
             result, envMap = evalToPair(code, topLocals, args[1])
-            return ConstList([result, envMap])
+            return wrapList([result, envMap])
         raise Refused(self, atom, args)
 
 

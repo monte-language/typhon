@@ -23,7 +23,7 @@ from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import (auditedBy, deepFrozenGuard,
                                      deepFrozenStamp, selfless)
 from typhon.objects.collections.helpers import asSet, emptySet
-from typhon.objects.collections.lists import (ConstList, listFromIterable,
+from typhon.objects.collections.lists import (wrapList, listFromIterable,
                                               unwrapList)
 from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
 from typhon.objects.constants import NullObject, wrapBool
@@ -129,10 +129,10 @@ class MakeList(Object):
 
     def recv(self, atom, args):
         if atom.verb == u"run":
-            return ConstList(args)
+            return wrapList(args)
 
         if atom is FROMITERABLE_1:
-            return ConstList(listFromIterable(args[0])[:])
+            return wrapList(listFromIterable(args[0])[:])
 
         raise Refused(self, atom, args)
 

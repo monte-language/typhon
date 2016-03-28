@@ -1,7 +1,7 @@
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import wrapList
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import throw
 from typhon.objects.root import Object, runnable
@@ -41,6 +41,6 @@ def unsealException(specimen, ej):
     """
 
     if isinstance(specimen, SealedException):
-        trail = ConstList([StrObject(s) for s in specimen.trail])
-        return ConstList([specimen.value, trail])
+        trail = wrapList([StrObject(s) for s in specimen.trail])
+        return wrapList([specimen.value, trail])
     throw(ej, StrObject(u"Cannot unseal non-thrown object"))

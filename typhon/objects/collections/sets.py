@@ -160,7 +160,7 @@ class ConstSet(Object):
         return ConstSet(self.objectSet.copy())
 
     def recv(self, atom, args):
-        from typhon.objects.collections.lists import ConstList
+        from typhon.objects.collections.lists import wrapList
 
         # _makeIterator/0: Create an iterator for this collection's contents.
         if atom is _MAKEITERATOR_0:
@@ -174,8 +174,8 @@ class ConstSet(Object):
         if atom is _UNCALL_0:
             from typhon.objects.collections.maps import EMPTY_MAP
             # [1,2,3].asSet() -> [[1,2,3], "asSet"]
-            rv = ConstList(self.objectSet.keys())
-            return ConstList([rv, StrObject(u"asSet"), ConstList([]),
+            rv = wrapList(self.objectSet.keys())
+            return wrapList([rv, StrObject(u"asSet"), wrapList([]),
                               EMPTY_MAP])
 
         # contains/1: Determine whether an element is in this collection.
@@ -226,7 +226,7 @@ class ConstSet(Object):
             return self.subtract(args[0])
 
         if atom is ASLIST_0:
-            return ConstList(self.objectSet.keys())
+            return wrapList(self.objectSet.keys())
 
         if atom is BUTNOT_1:
             return self.subtract(args[0])
@@ -345,7 +345,7 @@ class FlexSet(Object):
             raise userError(u"pop/0: Pop from empty set")
 
     def recv(self, atom, args):
-        from typhon.objects.collections.lists import ConstList
+        from typhon.objects.collections.lists import wrapList
 
         # _makeIterator/0: Create an iterator for this collection's contents.
         if atom is _MAKEITERATOR_0:
@@ -359,8 +359,8 @@ class FlexSet(Object):
         if atom is _UNCALL_0:
             from typhon.objects.collections.maps import EMPTY_MAP
             # [1,2,3].asSet() -> [[1,2,3], "asSet"]
-            rv = ConstList(self.objectSet.keys())
-            return ConstList([rv, StrObject(u"asSet"), ConstList([]),
+            rv = wrapList(self.objectSet.keys())
+            return wrapList([rv, StrObject(u"asSet"), wrapList([]),
                               EMPTY_MAP])
 
         # contains/1: Determine whether an element is in this collection.
@@ -412,7 +412,7 @@ class FlexSet(Object):
             return self.subtract(args[0])
 
         if atom is ASLIST_0:
-            return ConstList(self.objectSet.keys())
+            return wrapList(self.objectSet.keys())
 
         if atom is BUTNOT_1:
             return self.subtract(args[0])

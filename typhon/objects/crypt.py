@@ -8,7 +8,7 @@ from typhon import log, rsodium
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused, WrongType, userError
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import wrapList
 from typhon.objects.data import (BytesObject, IntObject, StrObject,
                                  unwrapBytes)
 from typhon.objects.root import Object
@@ -41,7 +41,7 @@ class SecureEntropy(Object):
 
         if atom is GETENTROPY_0:
             # uint32_t in the FFI, so exactly 32 bits every time.
-            return ConstList([IntObject(32),
+            return wrapList([IntObject(32),
                               IntObject(intmask(rsodium.randombytesRandom()))])
 
         raise Refused(self, atom, args)
@@ -126,7 +126,7 @@ class KeyPair(Object):
             nonce = rsodium.freshNonce()
             cipher = rsodium.boxSeal(message, nonce, self.publicKey,
                                      self.secretKey)
-            return ConstList([BytesObject(cipher), BytesObject(nonce)])
+            return wrapList([BytesObject(cipher), BytesObject(nonce)])
 
         if atom is UNSEAL_2:
             cipher = unwrapBytes(args[0])
@@ -168,7 +168,7 @@ class KeyMaker(Object):
 
         if atom is RUN_0:
             public, secret = rsodium.freshKeypair()
-            return ConstList([PublicKey(public), SecretKey(secret)])
+            return wrapList([PublicKey(public), SecretKey(secret)])
 
         raise Refused(self, atom, args)
 

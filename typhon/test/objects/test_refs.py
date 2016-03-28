@@ -14,7 +14,7 @@
 
 from unittest import TestCase
 
-from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.lists import wrapList, unwrapList
 from typhon.objects.collections.maps import ConstMap, unwrapMap
 from typhon.objects.constants import unwrapBool, wrapBool
 from typhon.objects.data import (DoubleObject, IntObject, promoteToDouble,
@@ -81,7 +81,7 @@ class TestUnwrappers(TestCase):
 
     def testUnwrapListPromise(self):
         with scopedVat(testingVat()):
-            p = makeNear(ConstList([]))
+            p = makeNear(wrapList([]))
             self.assertEqual(unwrapList(p), [])
 
     def testUnwrapMapPromise(self):

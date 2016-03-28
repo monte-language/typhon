@@ -29,7 +29,7 @@ from typhon.errors import LoadFailed, Refused, userError
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.collections.helpers import asSet
-from typhon.objects.collections.lists import ConstList, unwrapList
+from typhon.objects.collections.lists import unwrapList, wrapList
 from typhon.objects.collections.maps import EMPTY_MAP, monteMap
 from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
@@ -452,8 +452,8 @@ class Node(Object):
         if atom is GETSPAN_0:
             return NullObject
         if atom is UNCALL_0:
-            span = ConstList([NullObject])
-            return ConstList([self.nodeMaker, StrObject(u"run"),
+            span = wrapList([NullObject])
+            return wrapList([self.nodeMaker, StrObject(u"run"),
                               self.uncall().call(u"add", [span]), EMPTY_MAP])
         raise Refused(self, atom, args)
 
@@ -600,7 +600,7 @@ class _Null(Expr):
     nodeMaker = makeLiteral
 
     def uncall(self):
-        return ConstList([NullObject])
+        return wrapList([NullObject])
 
     def pretty(self, out):
         out.write("null")
@@ -637,9 +637,9 @@ class Int(Expr):
 
     def uncall(self):
         try:
-            return ConstList([IntObject(self.bi.toint())])
+            return wrapList([IntObject(self.bi.toint())])
         except OverflowError:
-            return ConstList([BigInt(self.bi)])
+            return wrapList([BigInt(self.bi)])
 
     def pretty(self, out):
         out.write(self.bi.format(BASE10))
@@ -679,7 +679,7 @@ class Str(Expr):
     nodeMaker = makeLiteral
 
     def uncall(self):
-        return ConstList([StrObject(self._s)])
+        return wrapList([StrObject(self._s)])
 
     def pretty(self, out):
         out.write(quoteStr(self._s).encode("utf-8"))
@@ -717,7 +717,7 @@ class Double(Expr):
     nodeMaker = makeLiteral
 
     def uncall(self):
-        return ConstList([DoubleObject(self._d)])
+        return wrapList([DoubleObject(self._d)])
 
     def pretty(self, out):
         out.write("%f" % self._d)
@@ -750,7 +750,7 @@ class Char(Expr):
     nodeMaker = makeLiteral
 
     def uncall(self):
-        return ConstList([CharObject(self._c)])
+        return wrapList([CharObject(self._c)])
 
     def pretty(self, out):
         out.write(quoteChar(self._c[0]).encode("utf-8"))
@@ -787,7 +787,7 @@ class Assign(Expr):
         return Assign(nounToString(target), rvalue)
 
     def uncall(self):
-        return ConstList([Noun(self.target), self.rvalue])
+        return wrapList([Noun(self.target), self.rvalue])
 
     def pretty(self, out):
         out.write(self.target.encode("utf-8"))
@@ -832,7 +832,7 @@ class Binding(Expr):
         return Binding(nounToString(noun))
 
     def uncall(self):
-        return ConstList([Noun(self.name)])
+        return wrapList([Noun(self.name)])
 
     def pretty(self, out):
         out.write("&&")
@@ -867,7 +867,7 @@ class NamedArg(Expr):
         self.value = value
 
     def uncall(self):
-        return ConstList([self.key, self.value])
+        return wrapList([self.key, self.value])
 
     def pretty(self, out):
         self.key.pretty(out)
@@ -915,9 +915,9 @@ class Call(Expr):
                     namedArgs)
 
     def uncall(self):
-        return ConstList([self._target, StrObject(self._verb),
-                          ConstList(self._args),
-                          ConstList(self._namedArgs)])
+        return wrapList([self._target, StrObject(self._verb),
+                          wrapList(self._args),
+                          wrapList(self._namedArgs)])
 
     def pretty(self, out):
         self._target.pretty(out)
@@ -992,10 +992,10 @@ class Call(Expr):
             return StrObject(self._verb)
 
         if atom is GETARGS_0:
-            return ConstList(self._args)
+            return wrapList(self._args)
 
         if atom is GETNAMEDARGS_0:
-            return ConstList(self._namedArgs)
+            return wrapList(self._namedArgs)
 
         return Expr.recv(self, atom, args)
 
@@ -1018,7 +1018,7 @@ class Def(Expr):
                 value if value is not None else Null)
 
     def uncall(self):
-        return ConstList([self._p,
+        return wrapList([self._p,
                           self._e if self._e is not None else NullObject,
                           self._v])
 
@@ -1077,7 +1077,7 @@ class Escape(Expr):
         self._catchNode = nullToNone(catchNode)
 
     def uncall(self):
-        return ConstList(
+        return wrapList(
             [self._pattern, self._node,
              self._catchPattern if self._catchPattern is not None else NullObject,
              self._catchNode if self._catchNode is not None else NullObject])
@@ -1163,7 +1163,7 @@ class Finally(Expr):
         self._atLast = atLast
 
     def uncall(self):
-        return ConstList([self._block, self._atLast])
+        return wrapList([self._block, self._atLast])
 
     def pretty(self, out):
         out.writeLine("try {")
@@ -1212,7 +1212,7 @@ class Hide(Expr):
         self._inner = inner
 
     def uncall(self):
-        return ConstList([self._inner])
+        return wrapList([self._inner])
 
     def pretty(self, out):
         out.writeLine("hide {")
@@ -1248,7 +1248,7 @@ class If(Expr):
         self._otherwise = otherwise
 
     def uncall(self):
-        return ConstList([self._test, self._then, self._otherwise])
+        return wrapList([self._test, self._then, self._otherwise])
 
     def pretty(self, out):
         out.write("if (")
@@ -1309,7 +1309,7 @@ class Matcher(Expr):
         self._block = block
 
     def uncall(self):
-        return ConstList([self._pattern, self._block])
+        return wrapList([self._pattern, self._block])
 
     def pretty(self, out):
         out.write("match ")
@@ -1341,7 +1341,7 @@ class Matcher(Expr):
 class MetaContextExpr(Expr):
 
     def uncall(self):
-        return ConstList([])
+        return wrapList([])
 
     def pretty(self, out):
         out.write("meta.context()")
@@ -1370,7 +1370,7 @@ class MetaStateExpr(Expr):
         out.write("meta.getState()")
 
     def uncall(self):
-        return ConstList([])
+        return wrapList([])
 
     def compile(self, compiler):
         # XXX should this produce outers + locals when outside an object expr?
@@ -1421,9 +1421,9 @@ class Method(Expr):
                       guard if guard is not NullObject else None, block)
 
     def uncall(self):
-        return ConstList(
+        return wrapList(
             [StrObject(self._d if self._d else u""), StrObject(self._verb),
-             ConstList(self._ps), ConstList(self._namedParams), self._g,
+             wrapList(self._ps), wrapList(self._namedParams), self._g,
              self._b])
 
     def pretty(self, out):
@@ -1478,10 +1478,10 @@ class Method(Expr):
             return StrObject(u"MethodExpr")
 
         if atom is GETPATTERNS_0:
-            return ConstList(self._ps)
+            return wrapList(self._ps)
 
         if atom is GETNAMEDPATTERNS_0:
-            return ConstList(self._namedParams)
+            return wrapList(self._namedParams)
 
         if atom is GETRESULTGUARD_0:
             return NullObject if self._g is None else self._g
@@ -1512,7 +1512,7 @@ class Noun(Expr):
         return Noun(strToString(noun))
 
     def uncall(self):
-        return ConstList([StrObject(self.name)])
+        return wrapList([StrObject(self.name)])
 
     def pretty(self, out):
         out.write(self.name.encode("utf-8"))
@@ -1572,10 +1572,10 @@ class Obj(Expr):
         return Obj(doc, name, nullToNone(asExpr), unwrapList(auditors), script)
 
     def uncall(self):
-        return ConstList(
+        return wrapList(
             [StrObject(self._d if self._d else u""), self._n,
              self._as if self._as is not None else NullObject,
-             ConstList(self._implements), self._script])
+             wrapList(self._implements), self._script])
 
     def pretty(self, out):
         out.write("object ")
@@ -1669,7 +1669,7 @@ class Obj(Expr):
             return self._as if self._as is not None else NullObject
 
         if atom is GETAUDITORS_0:
-             return ConstList(self._implements)
+             return wrapList(self._implements)
 
         if atom is GETSCRIPT_0:
             return self._script
@@ -1800,8 +1800,8 @@ class Script(Expr):
         return Script(extends, methods, matchers)
 
     def uncall(self):
-        return ConstList([NullObject, ConstList(self._methods),
-                          ConstList(self._matchers)])
+        return wrapList([NullObject, wrapList(self._methods),
+                          wrapList(self._matchers)])
 
     def pretty(self, out):
         for method in self._methods:
@@ -1830,7 +1830,7 @@ class Script(Expr):
                     pattern = matcher._pattern
                     if pattern.refutable():
                         throw(ej, StrObject(u"getCompleteMatcher/1: Ultimate matcher pattern is refutable"))
-                    return ConstList([pattern, matcher._block])
+                    return wrapList([pattern, matcher._block])
             throw(ej, StrObject(u"getCompleteMatcher/1: No matchers"))
 
         if atom is GETMETHODNAMED_2:
@@ -1846,7 +1846,7 @@ class Script(Expr):
             return StrObject(u"ScriptExpr")
 
         if atom is GETMETHODS_0:
-            return ConstList(self._methods)
+            return wrapList(self._methods)
 
         if atom is GETSTATICSCOPE_0:
             return self.getStaticScope()
@@ -1874,7 +1874,7 @@ class Sequence(Expr):
         return Sequence(unwrapList(l))
 
     def uncall(self):
-        return ConstList([ConstList(self._l)])
+        return wrapList([wrapList(self._l)])
 
     def pretty(self, out):
         if not self._l:
@@ -1914,7 +1914,7 @@ class Sequence(Expr):
             return self.getStaticScope()
 
         if atom is GETEXPRS_0:
-            return ConstList(self._l)
+            return wrapList(self._l)
 
         return Expr.recv(self, atom, args)
 
@@ -1929,7 +1929,7 @@ class Try(Expr):
         self._then = then
 
     def uncall(self):
-        return ConstList([self._first, self._pattern, self._then])
+        return wrapList([self._first, self._pattern, self._then])
 
     def pretty(self, out):
         out.writeLine("try {")
@@ -2003,7 +2003,7 @@ class BindingPattern(Pattern):
         self._noun = nounToString(noun)
 
     def uncall(self):
-        return ConstList([Noun(self._noun)])
+        return wrapList([Noun(self._noun)])
 
     def pretty(self, out):
         out.write("&&")
@@ -2040,7 +2040,7 @@ class FinalPattern(Pattern):
         self._g = nullToNone(guard)
 
     def uncall(self):
-        return ConstList(
+        return wrapList(
             [self._actualNoun,
              self._g if self._g is not None else NullObject])
 
@@ -2106,7 +2106,7 @@ class IgnorePattern(Pattern):
             self._g.pretty(out)
 
     def uncall(self):
-        return ConstList([self._g if self._g is not None else NullObject])
+        return wrapList([self._g if self._g is not None else NullObject])
 
     def compile(self, compiler):
         # [specimen ej]
@@ -2166,7 +2166,7 @@ class ListPattern(Pattern):
         return ListPattern(patterns, None)
 
     def uncall(self):
-        return ConstList([ConstList(self._ps), NullObject])
+        return wrapList([wrapList(self._ps), NullObject])
 
     def pretty(self, out):
         out.write("[")
@@ -2227,7 +2227,7 @@ class NamedParam(Pattern):
             self._default.pretty(out)
 
     def uncall(self):
-        return ConstList(
+        return wrapList(
             [self._k, self._p,
              self._default if self._default is not None else NullObject])
 
@@ -2287,7 +2287,7 @@ class VarPattern(Pattern):
         self._g = nullToNone(guard)
 
     def uncall(self):
-        return ConstList(
+        return wrapList(
             [Noun(self._n),
              self._g if self._g is not None else NullObject])
 
@@ -2346,7 +2346,7 @@ class ViaPattern(Pattern):
         self._pattern = pattern
 
     def uncall(self):
-        return ConstList([self._expr, self._pattern])
+        return wrapList([self._expr, self._pattern])
 
     def pretty(self, out):
         out.write("via (")

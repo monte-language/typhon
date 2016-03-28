@@ -11,7 +11,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.errors import Refused
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import wrapList
 from typhon.objects.data import (bytesToString, unwrapBytes, BytesObject,
                                  StrObject)
 from typhon.objects.refs import LocalResolver, makePromise
@@ -123,7 +123,7 @@ def gaiCB(gai, status, ai):
             resolver.smash(StrObject(u"libuv error: %s" % msg))
         else:
             gaiList = walkAI(ai)
-            resolver.resolve(ConstList(gaiList[:]))
+            resolver.resolve(wrapList(gaiList[:]))
     ruv.freeAddrInfo(ai)
     ruv.free(gai)
 

@@ -71,12 +71,12 @@ class mapIterator(Object):
 
     def recv(self, atom, args):
         if atom is NEXT_1:
-            from typhon.objects.collections.lists import ConstList
+            from typhon.objects.collections.lists import wrapList
             if self._index < len(self.objects):
                 k, v = self.objects[self._index]
                 rv = [k, v]
                 self._index += 1
-                return ConstList(rv)
+                return wrapList(rv)
             else:
                 ej = args[0]
                 ej.call(u"run", [StrObject(u"Iterator exhausted")])
@@ -198,10 +198,10 @@ class ConstMap(Object):
         if atom is SNAPSHOT_0:
             return self.snapshot()
 
-        from typhon.objects.collections.lists import ConstList
+        from typhon.objects.collections.lists import wrapList
 
         if atom is _UNCALL_0:
-            return ConstList(self._uncall())
+            return wrapList(self._uncall())
 
         if atom is ASSET_0:
             from typhon.objects.collections.sets import ConstSet
@@ -220,10 +220,10 @@ class ConstMap(Object):
             return rv
 
         if atom is GETKEYS_0:
-            return ConstList(self.objectMap.keys())
+            return wrapList(self.objectMap.keys())
 
         if atom is GETVALUES_0:
-            return ConstList(self.objectMap.values())
+            return wrapList(self.objectMap.values())
 
         if atom is GET_1:
             key = args[0]
@@ -285,9 +285,9 @@ class ConstMap(Object):
         return mapIterator(self.objectMap.items())
 
     def _uncall(self):
-        from typhon.objects.collections.lists import ConstList
+        from typhon.objects.collections.lists import wrapList
         from typhon.scopes.safe import theMakeMap
-        rv = ConstList([ConstList([k, v]) for k, v in self.objectMap.items()])
+        rv = wrapList([wrapList([k, v]) for k, v in self.objectMap.items()])
         return [theMakeMap, StrObject(u"fromPairs"), rv, EMPTY_MAP]
 
     def contains(self, needle):
@@ -381,10 +381,10 @@ class FlexMap(Object):
             raise userError(u"removeKey/1: Key not in map")
 
     def pop(self):
-        from typhon.objects.collections.lists import ConstList
+        from typhon.objects.collections.lists import wrapList
         if self.objectMap:
             key, value = self.objectMap.popitem()
-            return ConstList([key, value])
+            return wrapList([key, value])
         else:
             raise userError(u"pop/0: Pop from empty map")
 
@@ -428,10 +428,10 @@ class FlexMap(Object):
         if atom is SNAPSHOT_0:
             return self.snapshot()
 
-        from typhon.objects.collections.lists import ConstList
+        from typhon.objects.collections.lists import wrapList
 
         if atom is _UNCALL_0:
-            return ConstList(self._uncall())
+            return wrapList(self._uncall())
 
         if atom is ASSET_0:
             from typhon.objects.collections.sets import ConstSet
@@ -449,10 +449,10 @@ class FlexMap(Object):
             return rv
 
         if atom is GETKEYS_0:
-            return ConstList(self.objectMap.keys())
+            return wrapList(self.objectMap.keys())
 
         if atom is GETVALUES_0:
-            return ConstList(self.objectMap.values())
+            return wrapList(self.objectMap.values())
 
         if atom is GET_1:
             key = args[0]
@@ -528,9 +528,9 @@ class FlexMap(Object):
         return mapIterator(self.objectMap.items())
 
     def _uncall(self):
-        from typhon.objects.collections.lists import ConstList
+        from typhon.objects.collections.lists import wrapList
         from typhon.scopes.safe import theMakeMap
-        rv = ConstList([ConstList([k, v]) for k, v in self.objectMap.items()])
+        rv = wrapList([wrapList([k, v]) for k, v in self.objectMap.items()])
         return [theMakeMap, StrObject(u"fromPairs"), rv, EMPTY_MAP]
 
     def contains(self, needle):

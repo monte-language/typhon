@@ -17,7 +17,7 @@ import time
 from rpython.rlib.debug import debug_print
 
 from typhon.atoms import getAtom
-from typhon.objects.collections.lists import ConstList
+from typhon.objects.collections.lists import wrapList
 from typhon.objects.data import DoubleObject, IntObject, unwrapStr
 from typhon.objects.root import runnable
 
@@ -30,7 +30,7 @@ def bench(obj, name):
     if not benchmarkSettings.enabled:
         debug_print("Not running benchmark", name,
                     "since benchmarking is disabled")
-        return ConstList([IntObject(0), DoubleObject(0.0)])
+        return wrapList([IntObject(0), DoubleObject(0.0)])
 
     debug_print("Benchmarking", name)
 
@@ -77,7 +77,7 @@ def bench(obj, name):
             result = taken
 
     # All done!
-    return ConstList([IntObject(loops), DoubleObject(taken)])
+    return wrapList([IntObject(loops), DoubleObject(taken)])
 
 
 class BenchmarkSettings(object):
