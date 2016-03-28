@@ -174,7 +174,7 @@ def makeLexer(ej) as DeepFrozen:
                             match =='u':
                                 # Unicode escape.
                                 var i := 0
-                                for _ in 0..!4:
+                                for _ in (0..!4):
                                     def x :Hex exit ej := stream.next()
                                     i *= 16
                                     i += charHex(x)
@@ -298,7 +298,7 @@ def makeJSON(value) as DeepFrozen:
                     # Asymmetry in the patterns for clarity: Only drill down
                     # into keys which are present in the pattern.
                     def m :Map exit ej := s
-                    for k => v in ss:
+                    for k => v in (ss):
                         rv |= makeJSON(v)._matchBind(values, makeJSON(m[k]), ej)
                 match ==value:
                     pass
@@ -311,7 +311,7 @@ def makeJSON(value) as DeepFrozen:
             def matched := JSON._matchBind(values, specimen, ej)
             def rv := [].diverge()
 
-            for k => v in matched:
+            for k => v in (matched):
                 while (k >= rv.size()):
                     rv.push(null)
                 rv[k] := v
@@ -326,7 +326,7 @@ object json__quasiParser as DeepFrozen:
     to valueMaker(pieces):
         def lexer := makeLexer()
 
-        for piece in pieces:
+        for piece in (pieces):
             switch (piece):
                 match [==valueHoleMarker, index]:
                     lexer.markValueHole(index)
@@ -363,7 +363,7 @@ object JSON as DeepFrozen:
         return switch (specimen):
             match m :Map:
                 def pieces := [].diverge()
-                for k => v in m:
+                for k => v in (m):
                     def s :Str exit ej := k
                     def es := JSON.encodeStr(s)
                     def ev := JSON.encode(v, ej)
@@ -427,7 +427,7 @@ def testJSONDecodeInvalid(assert):
         "asdf",
         "{asdf}",
     ]
-    for s in specimens:
+    for s in (specimens):
         assert.ejects(fn ej {def via (JSON.decode) _ exit ej := s})
 
 def testJSONEncode(assert):
