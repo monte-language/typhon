@@ -42,8 +42,9 @@ def makeModuleConfiguration(module :DeepFrozen,
 
 def ModuleStructure :DeepFrozen := Pair[Map[Str, Map[Str, Any]], NullOk[Config]]
 
-def main():
+traceln(`Defining main`)
 
+def main():
     def collectedTests := [].diverge()
     def collectedBenches := [].diverge()
     object testCollector:
@@ -127,13 +128,14 @@ def main():
             [module, config]
 
     def args := currentProcess.getArguments().slice(2)
+    traceln(`Loader args: $args`)
     def usage := "Usage: loader run <modname> <args> | loader test <modname>"
     if (args.size() < 1):
         throw(usage)
-    switch (args):
+    return switch (args):
         match [=="run", modname] + subargs:
             def exps := makeModuleAndConfiguration(modname)
-            return when (exps) ->
+            when (exps) ->
                 def [module, _] := exps
                 def excludes := ["typhonEval", "_findTyphonFile", "bench"]
                 # Leave out loader-only objects.
@@ -147,7 +149,7 @@ def main():
                 M.call(main, "run", [subargs], unsafeScopeValues)
         match [=="dot", modname] + subargs:
             def tubes := makeModuleAndConfiguration("lib/tubes")
-            return when (tubes) ->
+            when (tubes) ->
                 # An unconventional import statement, to be sure.
                 def [[=> makeUTF8EncodePump,
                       => makePumpTube,
@@ -180,7 +182,7 @@ def main():
                                             "collectTests" => true)] +
                 [(def testRunner := makeModuleAndConfiguration("testRunner")),
                  (def tubes := makeModuleAndConfiguration("lib/tubes"))])
-            return when (someMods) ->
+            when (someMods) ->
                 def [[=> makeIterFount,
                       => makeUTF8EncodePump,
                       => makePumpTube
@@ -216,7 +218,11 @@ def main():
                 when (runBenchmarks(collectedBenches, bench,
                                     makeFileResource("bench.html"))) ->
                     traceln(`Benchmark report written to bench.html.`)
+                    0
 
         match _:
             throw(usage)
+
+traceln(`Calling main`)
+
 main()

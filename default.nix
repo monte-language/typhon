@@ -6,7 +6,8 @@ let
     typhonVm = callPackage ./nix/vm.nix { buildJIT = false; };
     typhonVmCrashy = callPackage ./nix/vm.nix { buildJIT = true; };
     mast = callPackage ./nix/mast.nix { typhonVm = typhonVm; };
-    bench = callPackage ./nix/bench.nix { typhonVm = typhonVm; mast = mast; };
+    # XXX broken for unknown reasons
+    # bench = callPackage ./nix/bench.nix { typhonVm = typhonVm; mast = mast; };
     mt = callPackage ./nix/mt.nix { typhonVm = typhonVm; mast = mast; };
     montePackage = callPackage ./nix/montePackage.nix { typhonVm = typhonVm; mast = mast; };
     dockerize = {lockfile, name}:
