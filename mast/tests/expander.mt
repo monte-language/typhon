@@ -495,16 +495,12 @@ def specimens := [
          y
      ",
      "
-     Ref.whenResolved(try {
-          x
-     } catch problem_1 {
-         Ref.broken(problem_1)
-     },
+     Ref.whenResolved(x,
      object _ {
          \"when-catch 'done' function\"
-         method run(resolution_2) {
-             if (Ref.isBroken(resolution_2)) {
-                 resolution_2
+         method run(resolution_1) {
+             if (Ref.isBroken(resolution_1)) {
+                 resolution_1
              } else {
                  y
              }
@@ -520,16 +516,12 @@ def specimens := [
      ",
      "
      Ref.whenBroken(
-     Ref.whenResolved(try {
-         x
-     } catch problem_1 {
-         Ref.broken(problem_1)
-     },
+     Ref.whenResolved(x,
      object _ {
          \"when-catch 'done' function\"
-         method run(resolution_2) {
-             if (Ref.isBroken(resolution_2)) {
-                 resolution_2
+         method run(resolution_1) {
+             if (Ref.isBroken(resolution_1)) {
+                 resolution_1
              } else {
                  y
              }
@@ -538,13 +530,13 @@ def specimens := [
      }),
      object _ {
          \"when-catch 'catch' function\"
-         method run(broken_3) {
-             def problem_4 := Ref.optProblem(broken_3)
-             escape fail_5 {
-                 def p exit fail_5 := problem_4
+         method run(broken_2) {
+             def problem_3 := Ref.optProblem(broken_2)
+             escape fail_4 {
+                 def p exit fail_4 := problem_3
                  z
              } catch _ {
-                 problem_4
+                 problem_3
              }
          }
 

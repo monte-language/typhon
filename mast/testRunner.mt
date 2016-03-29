@@ -12,7 +12,7 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
 
         to receive([k, test]):
             def st :Str := M.toString(test)
-            return when (test(asserter(st))) ->
+            return when (test <- (asserter(st))) ->
                 if (lastSource != k):
                     stdout.receive(`$k$\n`)
                     lastSource := k
