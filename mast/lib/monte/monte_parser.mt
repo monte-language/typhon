@@ -1425,9 +1425,9 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             }
         }
         acceptEOLs()
-        if (position == tokens.size()):
-            # Ran off the end.
-            throw(lastError)
+        if (position != (tokens.size() - 1)):
+            # Ran off the end, or didn't consume enough.
+            formatError(lastError, err)
         else:
             return val
     catch p:
