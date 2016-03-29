@@ -860,11 +860,11 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
                 acceptTag("INDENT", tryAgain)
             else:
                 acceptTag("{", ej)
-                acceptEOLs()
-            def whenblock := escape e {
-                seq(indent, ej)
-            } catch _ {
+            acceptEOLs()
+            def whenblock := if (!indent && peekTag() == "}") {
                 builder.SeqExpr([], null)
+            } else {
+                seq(indent, fn e {traceln(`sad day! $e`); ej(e)})
             }
             if (indent):
                 acceptTag("DEDENT", ej)
