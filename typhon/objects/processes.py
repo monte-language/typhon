@@ -52,8 +52,8 @@ class CurrentProcess(Object):
             # XXX monteMap()
             d = monteMap()
             for key, value in os.environ.items():
-                k = StrObject(key.decode("utf-8"))
-                v = StrObject(value.decode("utf-8"))
+                k = BytesObject(key)
+                v = BytesObject(value)
                 d[k] = v
             return ConstMap(d)
 
