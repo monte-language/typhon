@@ -331,7 +331,6 @@ EMPTY_MAP = ConstMap(monteMap())
 
 
 @autohelp
-@audited.Transparent
 class FlexMap(Object):
     """
     An ordered map of objects.
@@ -529,9 +528,8 @@ class FlexMap(Object):
 
     def _uncall(self):
         from typhon.objects.collections.lists import wrapList
-        from typhon.scopes.safe import theMakeMap
-        rv = wrapList([wrapList([k, v]) for k, v in self.objectMap.items()])
-        return [theMakeMap, StrObject(u"fromPairs"), rv, EMPTY_MAP]
+        return [ConstMap(self.objectMap.copy()), StrObject(u"diverge"),
+                wrapList([]), EMPTY_MAP]
 
     def contains(self, needle):
         return needle in self.objectMap
