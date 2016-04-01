@@ -380,6 +380,12 @@ object JSON as DeepFrozen:
                 JSON.encodeStr(s)
             match c :Char:
                 JSON.encodeStr(c.asString())
+            match ==true:
+                "true"
+            match ==false:
+                "false"
+            match ==null:
+                "null"
             match _:
                 throw.eject(ej, `$specimen isn't representable in JSON`)
 
@@ -389,35 +395,22 @@ object JSON as DeepFrozen:
         return `"${"".join(pieces)}"`
 
 
-def testJSONDecode(assert):
-    def specimen := "{\"first\":42,\"second\":[5,7]}"
-    assert.equal(JSON.decode(specimen, null),
-                 ["first" => 42, "second" => [5, 7]])
+def decoderSamples := [
+    "{\"first\":42,\"second\":[5,7]}" => ["first" => 42, "second" => [5, 7]],
+    `["\u00e9"]` => ["é"],
+    "{\"face\\/off\":1997}" => ["face/off" => 1997],
+    `{"first":{"second":{"third":42}}}` => ["first" => ["second" => ["third" => 42]]],
+    # Yeah, this two test really are supposed to be this precise. Any
+    # imprecisions here should be due to implementation error, AFAICT.
+    `{"pi":3.14}` => ["pi" => 3.14],
+    `{"digits":0.7937000378463977}` => ["digits" => 0.7937000378463977],
+    `{"x": null}` => ["x" => null],
+]
 
-def testJSONDecodeEscapeUnicode(assert):
-    def specimen := `["\u00e9"]`
-    assert.equal(JSON.decode(specimen, null), ["é"])
-
-def testJSONDecodeSlash(assert):
-    def specimen := "{\"face\\/off\":1997}"
-    assert.equal(JSON.decode(specimen, null), ["face/off" => 1997])
-
-def testJSONDecodeNested(assert):
-    def specimen := `{"first":{"second":{"third":42}}}`
-    assert.equal(JSON.decode(specimen, null),
-        ["first" => ["second" => ["third" => 42]]])
-
-def testJSONDecodeDouble(assert):
-    def specimen := `{"pi":3.14}`
-    # Yeah, this test really is supposed to be this precise. Any imprecisions
-    # here should be due to implementation error, AFAICT.
-    assert.equal(JSON.decode(specimen, null), ["pi" => 3.14])
-
-def testJSONDecodeDoubleTooPrecise(assert):
-    def specimen := `{"digits":0.7937000378463977}`
-    # Yeah, this test really is supposed to be this precise. Any imprecisions
-    # here should be due to implementation error, AFAICT.
-    assert.equal(JSON.decode(specimen, null), ["digits" => 0.7937000378463977])
+for specimen => value in (decoderSamples):
+    def testJSONDecode(assert):
+        assert.equal(JSON.decode(specimen, null), value)
+    unittest([testJSONDecode])
 
 def testJSONDecodeInvalid(assert):
     def specimens := [
@@ -430,18 +423,15 @@ def testJSONDecodeInvalid(assert):
     for s in (specimens):
         assert.ejects(fn ej {def via (JSON.decode) _ exit ej := s})
 
-def testJSONEncode(assert):
-    def specimen := ["first" => 42, "second" => [5, 7]]
-    assert.equal(JSON.encode(specimen, null),
-                 "{\"first\":42,\"second\":[5,7]}")
-
 unittest([
-    testJSONDecode,
-    testJSONDecodeEscapeUnicode,
-    testJSONDecodeSlash,
-    testJSONDecodeNested,
-    testJSONDecodeDouble,
-    testJSONDecodeDoubleTooPrecise,
     testJSONDecodeInvalid,
-    testJSONEncode,
 ])
+
+def encoderSamples := [
+    ["first" => 42, "second" => [5, 7]] => "{\"first\":42,\"second\":[5,7]}",
+]
+
+for specimen => value in (encoderSamples):
+    def testJSONEncode(assert):
+        assert.equal(JSON.encode(specimen, null), value)
+    unittest([testJSONEncode])
