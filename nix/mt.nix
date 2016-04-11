@@ -51,7 +51,8 @@ let
             shift
             DEST=$(doBuild)
             entrypoint=$1
-            $DEST/bin/$entrypoint --$OPERATION
+            shift
+            $DEST/bin/$entrypoint --$OPERATION "$@"
             ;;
         bake)
             SOURCE=$2
