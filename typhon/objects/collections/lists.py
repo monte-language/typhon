@@ -90,7 +90,7 @@ class listIterator(Object):
                 return wrapList(rv)
             else:
                 ej = args[0]
-                ej.call(u"run", [StrObject(u"Iterator exhausted")])
+                throw(ej, StrObject(u"Iterator exhausted"))
 
         raise Refused(self, atom, args)
 
