@@ -397,6 +397,9 @@ class _EmptyCL(CL):
     def asList(self):
         return []
 
+    def reverse(self):
+        return self
+
     def get(self, index):
         raise IndexError
 
@@ -420,6 +423,9 @@ class SingletonCL(CL):
 
     def asList(self):
         return [self.obj]
+
+    def reverse(self):
+        return self
 
     def get(self, index):
         if index != 0:
@@ -449,6 +455,9 @@ class PairCL(CL):
 
     def asList(self):
         return [self.first, self.second]
+
+    def reverse(self):
+        return PairCL(self.second, self.first)
 
     def get(self, index):
         if index == 0:
@@ -489,10 +498,22 @@ class LongCL(CL):
     def asList(self):
         return self.objs
 
+    def reverse(self):
+        objs = self.objs[:]
+        objs.reverse()
+        return LongCL(objs)
+
     def get(self, index):
-        return self.objs[index]
+        if 0 <= index < len(self.objs):
+            return self.objs[index]
+        else:
+            raise IndexError
 
     def slice(self, start, stop):
+        if start < 0:
+            raise IndexError
+        if stop < 0:
+            raise IndexError
         return LongCL(self.objs[start:stop])
 
     def replace(self, index, value):
@@ -515,6 +536,9 @@ class NestedCL(CL):
     def asList(self):
         return self.left.asList() + self.right.asList()
 
+    def reverse(self):
+        return NestedCL(self.right.reverse(), self.left.reverse())
+
     def get(self, index):
         leftSize = self.left.size()
         if index < leftSize:
@@ -523,8 +547,14 @@ class NestedCL(CL):
             return self.right.get(index - leftSize)
 
     def slice(self, start, stop):
-        # XXX tired of typing, sorry
-        return LongCL(self.asList()[start:stop])
+        leftSize = self.left.size()
+        if stop < leftSize:
+            return self.left.slice(start, stop)
+        elif start >= leftSize:
+            return self.right.slice(start - leftSize, stop - leftSize)
+        else:
+            return NestedCL(self.left.slice(start, leftSize),
+                            self.right.slice(0, stop - leftSize))
 
     def replace(self, index, value):
         leftSize = self.left.size()
@@ -547,14 +577,23 @@ class RepeatCL(CL):
     def asList(self):
         return self.base.asList() * self.count
 
+    def reverse(self):
+        return RepeatCL(self.base.reverse(), self.count)
+
     def get(self, index):
         baseSize = self.base.size()
-        if baseSize * self.count >= index:
+        if baseSize * self.count < index:
             raise IndexError
         return self.base.get(index % baseSize)
 
     def slice(self, start, stop):
-        # XXX tired of typing, sorry
+        # I thought about it for a while, and I couldn't come up with a good
+        # way to make this especially efficient. You're welcome to go for it.
+        # ~ C.
+        if start < 0:
+            raise IndexError
+        if stop < 0:
+            raise IndexError
         return LongCL(self.asList()[start:stop])
 
     def replace(self, index, value):
@@ -577,12 +616,15 @@ class ReverseCL(CL):
         l.reverse()
         return l
 
+    def reverse(self):
+        return self.base
+
     def get(self, index):
         return self.base.get(self.base.size() - index)
 
     def slice(self, start, stop):
-        # XXX tired of typing, sorry
-        return LongCL(self.asList()[start:stop])
+        baseSize = self.base.size()
+        return ReverseCL(self.base.slice(baseSize - stop, baseSize - start))
 
     def replace(self, index, value):
         return self.base.replace(self.base.size() - index, value)
@@ -602,6 +644,36 @@ def unwrapCL(obj, ej):
         # If it's a FlexList, take a snapshot.
         return LongCL(l.strategy.fetch_all(l))
     throw(ej, StrObject(u"Not a list!"))
+
+
+@autohelp
+class CLIterator(Object):
+    """
+    An iterator on a list, producing its elements.
+    """
+
+    _immutable_fields_ = "strategy",
+
+    _index = 0
+
+    def __init__(self, strategy):
+        self.strategy = strategy
+
+    def toString(self):
+        return u"<listIterator>"
+
+    def recv(self, atom, args):
+        if atom is NEXT_1:
+            try:
+                index = self._index
+                rv = [IntObject(index), self.strategy.get(index)]
+                self._index += 1
+                return wrapList(rv)
+            except IndexError:
+                ej = args[0]
+                throw(ej, StrObject(u"Iterator exhausted"))
+
+        raise Refused(self, atom, args)
 
 
 @autohelp
@@ -740,8 +812,7 @@ class ConstList(Object):
             return IntObject(self.cmp(other))
 
         if atom is REVERSE_0:
-            # XXX this could be optimized for common cases, probably.
-            return ConstList(ReverseCL(self.strategy))
+            return ConstList(self.strategy.reverse())
 
         if atom is SORT_0:
             return self.sort()
@@ -817,8 +888,7 @@ class ConstList(Object):
 
     def _makeIterator(self):
         # XXX could be more efficient with case analysis
-        from typhon.objects.collections.lists import listIterator
-        return listIterator(self.strategy.asList())
+        return CLIterator(self.strategy)
 
     def asMap(self):
         from typhon.objects.collections.maps import monteMap
