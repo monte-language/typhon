@@ -27,7 +27,7 @@ from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import StrObject, unwrapBytes, wrapBool, unwrapStr
 from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
                                    DoubleGuard, IntGuard, StrGuard, VoidGuard)
-from typhon.objects.slots import finalize
+from typhon.objects.slots import Binding, finalize
 from typhon.objects.root import Object, audited, runnable
 
 EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
@@ -64,18 +64,14 @@ def moduleFromString(source, recorder):
     return code, topLocals
 
 
-def evalToPair(code, topLocals, envMap, bindingNames=False):
+def evalToPair(code, topLocals, envMap):
     environment = {}
-    if bindingNames:
-        for k, v in unwrapMap(envMap).items():
-            s = unwrapStr(k)
-            if not s.startswith("&&"):
-                raise userError(u"evalMonteFile scope map must be of the "
-                                "form '[\"&&name\" => binding]'")
-            environment[s[2:]] = v
-    else:
-        for k, v in unwrapMap(envMap).items():
-            environment[unwrapStr(k)] = v
+    for k, v in unwrapMap(envMap).items():
+        s = unwrapStr(k)
+        if not s.startswith("&&") or not isinstance(v, Binding):
+            raise userError(u"scope map must be of the "
+                            "form '[\"&&name\" => binding]'")
+        environment[s[2:]] = v
     # Don't catch user exceptions; on traceback, we'll have a trail
     # auto-added that indicates that the exception came through
     # eval() or whatnot.
@@ -101,7 +97,7 @@ class TyphonEval(Object):
         if atom is FROMAST_3:
             code, topLocals = codeFromAst(args[0], self.recorder,
                                           unwrapStr(args[2]))
-            return evalToPair(code, topLocals, args[1], True)[0]
+            return evalToPair(code, topLocals, args[1])[0]
         if atom is RUN_2:
             code, topLocals = moduleFromString(args[0], self.recorder)
             return evalToPair(code, topLocals, args[1])[0]

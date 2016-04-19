@@ -1,5 +1,3 @@
-def safeScopeBindings :DeepFrozen := [for `&&@n` => v in (safeScope) n => v]
-
 object moduleGraphUnsatisfiedExit as DeepFrozen:
     "An unsatisfied exit point on a module configuration graph."
 
@@ -88,7 +86,7 @@ def main():
                 def code := makeFileResource(fname).getContents()
                 return when (code) ->
                     try:
-                        def modObj := typhonEval(code, safeScopeBindings)
+                        def modObj := typhonEval(code, safeScope)
                         depMap[modname] := makeModuleConfiguration(modObj, [].asMap())
                     catch problem:
                         traceln(`Unable to eval file ${M.toQuote(fname)}`)

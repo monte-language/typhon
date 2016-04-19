@@ -46,7 +46,7 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
                 # Discard the first line from the trail since it's always the
                 # eval() frame, which is noisy and useless. Also the second
                 # line. And maybe more lines in the future?
-                for line in trail.reverse().slice(2):
+                for line in (trail.reverse().slice(2)):
                     traceln(line)
 
 def reduce(result) as DeepFrozen:
@@ -59,14 +59,13 @@ def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
          => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
          => unsealException, => unsafeScope) as DeepFrozen:
 
-    var environment := null
     # def playWith(module :Str, scope :Map) :Void:
     #     "Import a module and bring it into the environment."
     #     def map := packageLoader."import"(module)
     #     for k :Str => v :DeepFrozen in map:
     #         environment with= (k, &&v)
     #         traceln(`Adding $k to environment`)
-    def baseEnvironment := safeScope | [
+    var environment := safeScope | [
         # Typhon unsafe scope.
         => &&Timer, => &&currentProcess, => &&currentRuntime, => &&currentVat,
         => &&getAddrInfo,
@@ -76,8 +75,6 @@ def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
         # REPL-only fun.
         => &&JSON, => &&help, # => &&playWith,
     ]
-
-    environment := [for `&&@name` => binding in (baseEnvironment) name => binding]
 
     def stdin := makeStdIn() <- flowTo(makePumpTube(makeUTF8DecodePump()))
     def stdout := makePumpTube(makeUTF8EncodePump())
