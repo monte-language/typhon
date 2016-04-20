@@ -582,7 +582,7 @@ class RepeatCL(CL):
 
     def get(self, index):
         baseSize = self.base.size()
-        if baseSize * self.count < index:
+        if baseSize * self.count <= index:
             raise IndexError
         return self.base.get(index % baseSize)
 
