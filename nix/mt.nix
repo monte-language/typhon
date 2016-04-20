@@ -16,6 +16,7 @@ let
       repl                  Starts interactive prompt in current package.
       lint <filename>       Reads source file, reports syntax errors.
       bake <filename>       Creates a .mast file from a source file.
+      eval <filename>       Execute the code in a single source file.
       build                 Builds the current package, symlinks output as 'result'.
       add <name> <url>      Add a dependency to this package.
       rm <name>             Remove a dependency from this package.
@@ -61,6 +62,23 @@ let
             else
                 ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader \
                            run montec -mix "$SOURCE" "''${SOURCE%.mt}.mast"
+            fi
+            ;;
+        eval)
+            SOURCE=$2
+            if [[ -z $SOURCE ]]; then
+                usage 1
+            else
+                if [[ "$SOURCE" == *.mt ]]; then
+                   MASTSOURCE=''${SOURCE%.mt}.mast
+                   ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} \
+                       ${mast}/loader run montec -mix "$SOURCE" "$MASTSOURCE"
+                SOURCE=$MASTSOURCE
+                fi
+                if [[ "$SOURCE" == *.mast ]]; then
+                    ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} -l $PWD \
+                        ${mast}/loader run ''${SOURCE%.mast}
+                fi
             fi
             ;;
         add|rm)
