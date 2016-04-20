@@ -6,7 +6,6 @@ let
   builtins.readFile ./mt-bake.py.in);
   mt-script = pkgs.writeScript "mt" ''
     #!${pkgs.stdenv.shell}
-    set -x
     OPERATION=$1
     usage() {
         cat <<EOF
