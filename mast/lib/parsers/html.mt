@@ -86,7 +86,7 @@ def makeTag(name :Str, fragments :List) as DeepFrozen:
         to _printOn(out):
             if (fragments.size() != 0):
                 out.print(`<$name>`)
-                for fragment in fragments:
+                for fragment in (fragments):
                     out.print(`$fragment`)
                 out.print(`</$name>`)
             else:

@@ -153,7 +153,7 @@ def makeRequest(makeTCP4ClientEndpoint, host :Bytes, resource :Str) as DeepFroze
 
         to write(verb, drain):
             drain.receive(UTF8.encode(`$verb $resource HTTP/1.1$\r$\n`, null))
-            for via (UTF8.encode) k => v in headers:
+            for via (UTF8.encode) k => v in (headers):
                 drain.receive(b`$k: $v$\r$\n`)
             drain.receive(b`$\r$\n`)
 

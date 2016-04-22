@@ -11,7 +11,7 @@ object PercentEncoding as DeepFrozen:
 
     to encode(bs :Bytes, _) :Bytes:
         var rv := b``
-        for i in bs:
+        for i in (bs):
             if (unreserved.contains(i)):
                 rv with= (i)
             else:

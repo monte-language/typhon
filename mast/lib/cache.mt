@@ -51,7 +51,7 @@ def makeLFU(size :Int) as DeepFrozen:
 
             var minKey := null
             var minFrequency := INF
-            for key => [value, frequency] in storage:
+            for key => [value, frequency] in (storage):
                 # Important ordering here. Since INF has custom comparison, it
                 # must be on the LHS of the comparison.
                 if (minFrequency > frequency):

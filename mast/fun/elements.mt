@@ -15,8 +15,8 @@ fr ra    rf db sg bh hs mt ds rg cn    fl    lv
 "
 
 var elements0 :Set[Str] := [].asSet()
-for line in table.split("\n"):
-    for element in line.split(" "):
+for line in (table.split("\n")):
+    for element in (line.split(" ")):
         elements0 with= (element.trim())
 def elements :Set[Str] := elements0.without("")
 
@@ -39,7 +39,7 @@ def elementsOf(word :Str) as DeepFrozen:
         if (remainder.size() == 0):
             finished with= (pieces)
         else:
-            for element in elements:
+            for element in (elements):
                 switch (remainder):
                     match `$element@rest`:
                         partials with= ([rest, pieces.with(element)])

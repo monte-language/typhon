@@ -10,7 +10,7 @@ def entities :Map[Str, Str] := [
 
 def flatten(pieces) as DeepFrozen:
     var rv := []
-    for piece in pieces:
+    for piece in (pieces):
         if (piece =~ l :List):
             rv += l
         else:
@@ -20,7 +20,7 @@ def flatten(pieces) as DeepFrozen:
 def escapeEntities(specimen, ej) :Str as DeepFrozen:
     def unescaped :Str exit ej := specimen
     var escaped := unescaped
-    for needle => entity in entities:
+    for needle => entity in (entities):
         escaped replace= (needle, entity)
     return escaped
 
@@ -49,6 +49,6 @@ object tag as DeepFrozen:
                         out.print(`<$tagType>`)
                     else:
                         out.print(`<$tagType $attrStr>`)
-                    for fragment in fragments:
+                    for fragment in (fragments):
                         out.print(`$fragment`)
                     out.print(`</$tagType>`)

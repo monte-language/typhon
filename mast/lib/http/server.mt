@@ -187,7 +187,7 @@ def makeResponsePump() as DeepFrozen:
                                                      "Unknown Status")
             def status := `$statusCode $statusDescription`
             var rv := [b`HTTP/1.1 $status$\r$\n`]
-            for header => value in headers:
+            for header => value in (headers):
                 def headerLine := `$header: $value`
                 rv with= (b`$headerLine$\r$\n`)
             rv with= (b`$\r$\n`)

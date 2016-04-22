@@ -46,8 +46,8 @@ def doStep(start :Double, step :Double, iterations :Int) :List[Double] as DeepFr
 def fullBrot(write, yStart :Double, yStep :Double, xStart :Double,
              xStep :Double) :Void as DeepFrozen:
     def pieces := [].diverge()
-    for y in doStep(yStart, yStep, 40):
-        for x in doStep(xStart, xStep, 80):
+    for y in (doStep(yStart, yStep, 40)):
+        for x in (doStep(xStart, xStep, 80)):
             def count := brotCount(makeComplex(x, y))
             write(format(count))
         write("\n")

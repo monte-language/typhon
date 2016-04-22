@@ -315,7 +315,7 @@ def runWorkTask(task, packet, r):
     packet.setIdent(dest)
     packet.setDatum(0)
 
-    for i in 0..!BUFSIZE:
+    for i in (0..!BUFSIZE):
         r["count"] += 1
         if (r["count"] > 26):
             r["count"] := 1

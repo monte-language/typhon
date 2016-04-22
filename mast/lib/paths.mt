@@ -67,7 +67,7 @@ object path__quasiParser:
         return object pathMaker:
             to substitute(values):
                 def segments := [].diverge()
-                for piece in pieces:
+                for piece in (pieces):
                     switch (piece):
                         match [==pathValue, index]:
                             switch (values[index]):
@@ -75,15 +75,15 @@ object path__quasiParser:
                                     segments.push(s)
                                 match path:
                                     # XXX hopefully a path
-                                    for segment in path.segments():
+                                    for segment in (path.segments()):
                                         segments.push(segment)
                         match s :Str:
-                            for pathPiece in s.split("/"):
+                            for pathPiece in (s.split("/")):
                                 if (pathPiece != ""):
                                     segments.push(pathPiece)
                         match _:
                             # XXX assume it's a path
-                            for segment in piece.segments():
+                            for segment in (piece.segments()):
                                 segments.push(segment)
                 return makePath(segments.snapshot())
 

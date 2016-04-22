@@ -34,7 +34,7 @@ def runBenchmarks(benchmarks, bench, benchFile) as DeepFrozen:
     <h1>Benchmarks</h1>
     <ul>`)
 
-    for [label, runner] in benchmarks:
+    for [label, runner] in (benchmarks):
         def [loops :Int, duration :Double] := bench(runner, label)
         def formatted :Str := formatResults(loops, duration)
         pieces with= (`<li><em>$label</em>: $formatted/iteration</li>`)

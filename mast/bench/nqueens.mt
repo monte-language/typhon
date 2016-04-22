@@ -6,7 +6,7 @@ def hitAt(ranks, size :Int) :Bool as DeepFrozen:
     def x := ranks[i]
     var j := 0
 
-    for y in ranks.slice(0, i):
+    for y in (ranks.slice(0, i)):
         def d := x - y
         if (x == y | i - j == d | j - i == d):
             return true
@@ -39,7 +39,7 @@ def nQueen(n :Int) as DeepFrozen:
 
 def showBoard(ranks):
     def end := ranks.size()
-    for rank in ranks:
+    for rank in (ranks):
         def s := ("." * rank) + "*" + ("." * (end - rank - 1))
         traceln(s)
 

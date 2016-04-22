@@ -103,12 +103,12 @@ def test_EscapeExpr(assert):
         ta`EscapeExpr(FinalPattern(NounExpr("e"), null), LiteralExpr(1), null, null)`)
 
 def test_ForExpr(assert):
-    assert.equal(expr("for v in foo {1}"), ta`ForExpr(NounExpr("foo"), null, FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
-    assert.equal(expr("for k => v in foo {1}"), ta`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
-    assert.equal(expr("for k => v in foo {1} catch p {2}"), ta`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
-    assert.equal(expr("for v in foo:\n  1"), ta`ForExpr(NounExpr("foo"), null, FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
-    assert.equal(expr("for k => v in foo:\n  1"), ta`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
-    assert.equal(expr("for k => v in foo:\n  1\ncatch p:\n  2"), ta`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
+    assert.equal(expr("for v in (foo) {1}"), ta`ForExpr(NounExpr("foo"), null, FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
+    assert.equal(expr("for k => v in (foo) {1}"), ta`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
+    assert.equal(expr("for k => v in (foo) {1} catch p {2}"), ta`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
+    assert.equal(expr("for v in (foo):\n  1"), ta`ForExpr(NounExpr("foo"), null, FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
+    assert.equal(expr("for k => v in (foo):\n  1"), ta`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), null, null)`)
+    assert.equal(expr("for k => v in (foo):\n  1\ncatch p:\n  2"), ta`ForExpr(NounExpr("foo"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), LiteralExpr(1), FinalPattern(NounExpr("p"), null), LiteralExpr(2))`)
 
 
 def test_FunctionExpr(assert):

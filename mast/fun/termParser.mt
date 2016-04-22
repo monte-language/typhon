@@ -139,7 +139,7 @@ object makeTerm as DeepFrozen:
             to getHeight():
                 var myHeight := 1
                 if (args != null):
-                    for a in args:
+                    for a in (args):
                         def h := a.getHeight()
                         if (h + 1 > myHeight):
                             myHeight := h + 1
@@ -226,14 +226,14 @@ object makeTerm as DeepFrozen:
                     # We only have leaves, so we can probably get away with
                     # printing on a single line.
                     args[0].prettyPrintOn(out, isQuasi)
-                    for a in args.slice(1):
+                    for a in (args.slice(1)):
                         out.print(sep + " ")
                         a.prettyPrintOn(out, isQuasi)
                     out.print(close)
                 else:
                     def sub := out.indent(" " * reps)
                     args[0].prettyPrintOn(sub, isQuasi)
-                    for a in args.slice(1):
+                    for a in (args.slice(1)):
                         sub.println(sep)
                         a.prettyPrintOn(sub, isQuasi)
                     sub.print(close)
@@ -579,7 +579,7 @@ def convertToTerm(val, ej) as DeepFrozen:
     switch (val):
         match v :List:
             def ts := [].diverge()
-            for item in v:
+            for item in (v):
                ts.push(convertToTerm(item, ej))
             def l := ts.snapshot()
             return makeTerm(makeTag(null, ".tuple.", Any), null, l, null)
@@ -587,7 +587,7 @@ def convertToTerm(val, ej) as DeepFrozen:
         #   return mkt(".bag.", null, [for item in (v) convertToTerm(item)])
         match m :Map:
             def mm := [].diverge()
-            for k => v in m:
+            for k => v in (m):
                 mm.push(makeTerm(makeTag(null, ".attr.", Any), null, [convertToTerm(k, ej),
                        convertToTerm(v, ej)], null))
             return makeTerm(makeTag(null, ".bag.", Any), null,
@@ -797,7 +797,7 @@ def makeQFunctor(tag :Tag, data :TermData, span :DeepFrozen) as DeepFrozen:
 
 def multiget(args, num, indices, repeat) as DeepFrozen:
     var result := args[num]
-    for i in indices:
+    for i in (indices):
          if (result =~ rlist :List):
             result := rlist[i]
          else:
@@ -810,7 +810,7 @@ def multiget(args, num, indices, repeat) as DeepFrozen:
 def multiput(bindings, holeNum, indices, newVal) as DeepFrozen:
     var list := bindings
     var dest := holeNum
-    for i in indices:
+    for i in (indices):
         if (list.size() < dest + 1):
             throw("Index out of bounds")
         var next := list[dest]
@@ -982,7 +982,7 @@ def makeQSome(subPattern :DeepFrozen, quant :Str, span :DeepFrozen) as DeepFroze
             if (shape < 0):
                 throw(`Indeterminate repetition: $qsome`)
             def result := [].diverge()
-            for i in 0..!shape:
+            for i in (0..!shape):
                 result.extend(subPattern.substSlice(values, indices + [i]))
             subPattern.endShape([], indices, shape)
             if (!inBounds(result.size(), quant)):

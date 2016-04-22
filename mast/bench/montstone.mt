@@ -140,7 +140,7 @@ def Proc8(Array1Par :Array1Dim, Array2Par :Array2Dim, IntParI1 :OneToFifty,
     Array1Par[IntLoc] := IntParI2
     Array1Par[IntLoc + 1] := Array1Par[IntLoc]
     Array1Par[IntLoc + 30] := IntLoc
-    for IntIndex in IntLoc..(IntLoc + 1):
+    for IntIndex in (IntLoc..(IntLoc + 1)):
         Array2Par[IntLoc][IntIndex] := IntLoc
     Array2Par[IntLoc][IntLoc - 1] += 1
     Array2Par[IntLoc + 20][IntLoc] := Array1Par[IntLoc]

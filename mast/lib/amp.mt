@@ -84,7 +84,7 @@ def makeAMPPacketMachine() as DeepFrozen:
 
 def packAMPPacket(packet) as DeepFrozen:
     var buf := []
-    for via (UTF8.encode) key => via (UTF8.encode) value in packet:
+    for via (UTF8.encode) key => via (UTF8.encode) value in (packet):
         def keySize :(Int <= 0xff) := key.size()
         buf += [0x00, keySize]
         buf += _makeList.fromIterable(key)
@@ -115,7 +115,7 @@ def makeAMP(drain) as DeepFrozen:
             buf with= (packet)
             when (drain) ->
                 if (drain != null):
-                    for item in buf:
+                    for item in (buf):
                         drain.receive(item)
                     buf := []
 

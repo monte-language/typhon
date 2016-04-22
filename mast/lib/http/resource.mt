@@ -37,7 +37,7 @@ def autoSI(var amount) as DeepFrozen:
     if (amount < 1024):
         return `$amount `
     def prefixes := ["Ki", "Mi", "Gi", "Ti"]
-    for prefix in prefixes:
+    for prefix in (prefixes):
         amount /= 1024
         if (amount < 1024):
             return `$amount $prefix`
@@ -108,7 +108,7 @@ def makeResourceApp(root) as DeepFrozen:
         escape badRequest:
             def [==""] + segments exit badRequest := request.getPath().split("/")
             var resource := root
-            for segment in segments.slice(0, segments.size() - 1):
+            for segment in (segments.slice(0, segments.size() - 1)):
                 resource get= (segment)
             def final := segments[segments.size() - 1]
             if (final != ""):

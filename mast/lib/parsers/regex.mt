@@ -176,7 +176,7 @@ object Regex extends _Regex as DeepFrozen:
                 return false
 
             to derive(character) :_Regex:
-                for value in values:
+                for value in (values):
                     if (value == character):
                         return Regex."ε"()
                 return Regex."ø"()

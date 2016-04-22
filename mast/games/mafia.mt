@@ -84,7 +84,7 @@ def makeMafia(var players :Set) as DeepFrozen:
             lynched := true
 
             def counter := [].asMap().diverge()
-            for _ => v in votes:
+            for _ => v in (votes):
                 if (counter.contains(v)):
                     counter[v] += 1
                 else:

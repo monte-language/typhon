@@ -245,27 +245,27 @@ object continued as DeepFrozen:
 def testEDigits(assert):
     def e := continued.e()
     def extractor := e.extractDigits(10)
-    for digit in [2, 7, 1, 8, 2, 8]:
+    for digit in ([2, 7, 1, 8, 2, 8]):
         assert.equal(extractor.produceDigit(null), digit)
 
 def testPhiDigits(assert):
     def phi := continued.phi()
     def extractor := phi.extractDigits(10)
     # I don't have many digits of this memorized. :c
-    for digit in [1, 6, 1, 8]:
+    for digit in ([1, 6, 1, 8]):
         assert.equal(extractor.produceDigit(null), digit)
 
 def testPiDigits(assert):
     def pi := continued.pi()
     def extractor := pi.extractDigits(10)
     # That's all the digits I know.
-    for digit in [3, 1, 4, 1, 5, 9, 2, 6]:
+    for digit in ([3, 1, 4, 1, 5, 9, 2, 6]):
         assert.equal(extractor.produceDigit(null), digit)
 
 def testSqrt2Digits(assert):
     def sqrt2 := continued.sqrt(2)
     def extractor := sqrt2.extractDigits(10)
-    for digit in [1, 4, 1, 4]:
+    for digit in ([1, 4, 1, 4]):
         assert.equal(extractor.produceDigit(null), digit)
 
 unittest([

@@ -289,7 +289,7 @@ def specimens := [
      `_makeMap.fromPairs(_makeList.run(_makeList.run("a", a), _makeList.run("&b", (&&b).get())))`],
 
     ["
-     for x in y:
+     for x in (y):
           z
      ",
      "
@@ -601,14 +601,14 @@ def trim(var s):
         s := s.slice(1, s.size())
     def lines := s.split("\n")
     var dent := 0
-    for line in lines:
-        for i => c in line:
+    for line in (lines):
+        for i => c in (line):
             if (c != ' '):
                 dent := i
                 break
         break
     def trimmedLines := [].diverge()
-    for line in lines:
+    for line in (lines):
         trimmedLines.push(line.slice(dent, line.size()))
     def out := "\n".join(trimmedLines) + "\n"
     return out
@@ -617,14 +617,14 @@ def expandit(code):
     def node := parseModule(makeMonteLexer(trim(code), "<test>"), astBuilder, throw)
     return expand(node, astBuilder, throw)
 
-for item in fixedPointSpecimens:
+for item in (fixedPointSpecimens):
     tests.push(fn assert {
         def node := parseModule(makeMonteLexer(trim(item), "<test>"),
                                 astBuilder, throw)
         assert.equal(expand(node, astBuilder, throw).canonical(), node.canonical())
     })
 
-for [specimen, result] in specimens:
+for [specimen, result] in (specimens):
     tests.push(fn assert {
         def specimenNode := parseModule(
             makeMonteLexer(trim(specimen), "<test>"),
