@@ -99,6 +99,14 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             position := origPosition
             return false
 
+    def acceptVerb(ej):
+        return if (peekTag() == ".String.") {
+            advance(ej)[1]
+        } else {
+            def t := acceptTag("IDENTIFIER", ej)
+            _makeString.fromString(t[1], t[2])
+        }
+
     def acceptList(rule):
         acceptEOLs()
         def items := [].diverge()
@@ -549,12 +557,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             acceptTag("method", ej)
             builder."Method"
         }
-        def verb := if (peekTag() == ".String.") {
-            advance(ej)[1]
-        } else {
-            def t := acceptTag("IDENTIFIER", ej)
-            _makeString.fromString(t[1], t[2])
-        }
+        def verb := acceptVerb(ej)
         acceptTag("(", ej)
         def patts := acceptList(positionalParam)
         def namedPatts := acceptList(namedParam)
@@ -714,12 +717,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
     def messageDesc(indent, ej):
         def spanStart := spanHere()
         acceptTag("to", ej)
-        def verb := if (peekTag() == ".String.") {
-            advance(ej)
-        } else {
-            def t := acceptTag("IDENTIFIER", ej)
-            _makeString.fromString(t[1], t[2])
-        }
+        def verb := acceptVerb(ej)
         def [doco, params, resultguard] := messageDescInner(indent, ej, ej)
         return builder.MessageDesc(doco, verb, params, resultguard, spanFrom(spanStart))
 
@@ -1126,12 +1124,7 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             return v
 
         def callish(methodish, curryish):
-            def verb := if (peekTag() == ".String.") {
-                advance(ej)[1]
-            } else {
-                def t := acceptTag("IDENTIFIER", ej)
-                _makeString.fromString(t[1], t[2])
-            }
+            def verb := acceptVerb(ej)
             if (peekTag() == "("):
                 advance(ej)
                 def arglist := acceptList(positionalArg)
