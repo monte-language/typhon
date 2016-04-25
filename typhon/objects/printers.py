@@ -21,6 +21,7 @@ from typhon.objects.constants import NullObject
 from typhon.objects.data import CharObject, StrObject, unwrapStr
 from typhon.objects.refs import Promise, resolution
 from typhon.objects.root import Object
+from typhon.profile import profileTyphon
 
 INDENT_1 = getAtom(u"indent", 1)
 LNPRINT_1 = getAtom(u"lnPrint", 1)
@@ -58,34 +59,29 @@ class Printer(Object):
         self._print(self.newline)
         self._print(obj)
 
+    @profileTyphon("Printer.print/1")
     def _print(self, item):
+        item = resolution(item)
         if isinstance(item, StrObject):
             self.ub.append(unwrapStr(item))
         else:
-            self.objPrint(item)
+            self.quote(item)
 
     def recv(self, atom, args):
         if atom is PRINT_1:
-            item = resolution(args[0])
-            self._print(item)
+            self._print(args[0])
             return NullObject
 
         if atom is PRINTLN_1:
-            item = resolution(args[0])
-            self.println(item)
+            self.println(args[0])
             return NullObject
 
         if atom is LNPRINT_1:
-            item = resolution(args[0])
-            self.lnPrint(item)
+            self.lnPrint(args[0])
             return NullObject
 
         if atom is QUOTE_1:
-            item = resolution(args[0])
-            if isinstance(item, CharObject) or isinstance(item, StrObject):
-                self.ub.append(item.toQuote())
-            else:
-                self.objPrint(item)
+            self.quote(args[0])
             return NullObject
 
         if atom is INDENT_1:
@@ -93,21 +89,23 @@ class Printer(Object):
 
         raise Refused(self, atom, args)
 
-    def objPrint(self, item):
+    @profileTyphon("Printer.quote/1")
+    def quote(self, item):
         item = resolution(item)
-        if isinstance(item, Promise):
+        if isinstance(item, CharObject) or isinstance(item, StrObject):
+            self.ub.append(item.toQuote())
+        elif isinstance(item, Promise):
             self.ub.append(u"<promise>")
-            return
         elif item in self.context:
             self.ub.append(u"<**CYCLE**>")
-            return
-        self.context[item] = None
-        try:
-            item.call(u"_printOn", [self])
-        except UserException, e:
-            self.ub.append(u"<** %s throws %s when printed**>" % (
-                item.toString(), e.error()))
-        del self.context[item]
+        else:
+            self.context[item] = None
+            try:
+                item.call(u"_printOn", [self])
+            except UserException, e:
+                self.ub.append(u"<** %s throws %s when printed**>" % (
+                    item.toString(), e.error()))
+            del self.context[item]
 
     def printStr(self, s):
         self.ub.append(s)
@@ -119,7 +117,7 @@ class Printer(Object):
 def toString(self):
     try:
         printer = Printer()
-        printer.objPrint(self)
+        printer.quote(self)
         return printer.value()
     except UserException, e:
         return u"<%s (threw exception %s when printed)>" % (

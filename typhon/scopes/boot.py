@@ -29,6 +29,7 @@ from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
                                    DoubleGuard, IntGuard, StrGuard, VoidGuard)
 from typhon.objects.slots import Binding, finalize
 from typhon.objects.root import Object, audited, runnable
+from typhon.profile import profileTyphon
 
 EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
 FROMAST_3 = getAtom(u"fromAST", 3)
@@ -93,18 +94,32 @@ class TyphonEval(Object):
     def __init__(self, recorder):
         self.recorder = recorder
 
+    @profileTyphon("typhonEval.fromAST/3")
+    def fromAST(self, ast, scope, name):
+        code, topLocals = codeFromAst(ast, self.recorder, name)
+        return evalToPair(code, topLocals, scope)[0]
+
+    @profileTyphon("typhonEval.run/2")
+    def run(self, bs, scope):
+        code, topLocals = moduleFromString(bs, self.recorder)
+        return evalToPair(code, topLocals, scope)[0]
+
+    @profileTyphon("typhonEval.evalToPair/2")
+    def evalToPair(self, bs, scope):
+        code, topLocals = moduleFromString(bs, self.recorder)
+        result, envMap = evalToPair(code, topLocals, scope)
+        return wrapList([result, envMap])
+
     def recv(self, atom, args):
         if atom is FROMAST_3:
-            code, topLocals = codeFromAst(args[0], self.recorder,
-                                          unwrapStr(args[2]))
-            return evalToPair(code, topLocals, args[1])[0]
+            return self.fromAST(args[0], args[1], unwrapStr(args[2]))
+
         if atom is RUN_2:
-            code, topLocals = moduleFromString(args[0], self.recorder)
-            return evalToPair(code, topLocals, args[1])[0]
+            return self.run(args[0], args[1])
+
         if atom is EVALTOPAIR_2:
-            code, topLocals = moduleFromString(args[0], self.recorder)
-            result, envMap = evalToPair(code, topLocals, args[1])
-            return wrapList([result, envMap])
+            return self.evalToPair(args[0], args[1])
+
         raise Refused(self, atom, args)
 
 
