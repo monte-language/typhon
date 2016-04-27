@@ -57,7 +57,10 @@ class MASTStream(object):
 
     def nextDouble(self):
         # Second parameter is the big-endian flag.
-        return unpack_float(self.nextBytes(8), True)
+        try:
+            return unpack_float(self.nextBytes(8), True)
+        except ValueError:
+            raise InvalidMAST("Couldn't decode invalid double")
 
     def nextVarInt(self):
         shift = 0
