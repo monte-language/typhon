@@ -334,9 +334,13 @@ def loadMASTBytes(bs, noisy=False):
         context = MASTContext(noisy)
         while not stream.exhausted():
             context.decodeNextTag(stream)
-        return context.exprs[-1]
     except MemoryError:
         raise InvalidMAST("Insufficient memory to decode MAST")
+
+    try:
+        return context.exprs[-1]
+    except IndexError:
+        raise InvalidMAST("No expressions in MAST")
 
 
 def loadMASTHandle(handle, noisy=False):
