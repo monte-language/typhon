@@ -326,11 +326,14 @@ class MASTContext(object):
 def loadMASTBytes(bs, noisy=False):
     if not bs.startswith(MAGIC):
         raise InvalidMAST("Wrong magic bytes '%s'" % bs[:len(MAGIC)])
-    stream = MASTStream(bs[len(MAGIC):])
-    context = MASTContext(noisy)
-    while not stream.exhausted():
-        context.decodeNextTag(stream)
-    return context.exprs[-1]
+    try:
+        stream = MASTStream(bs[len(MAGIC):])
+        context = MASTContext(noisy)
+        while not stream.exhausted():
+            context.decodeNextTag(stream)
+        return context.exprs[-1]
+    except MemoryError:
+        raise InvalidMAST("Insufficient memory to decode MAST")
 
 
 def loadMASTHandle(handle, noisy=False):
