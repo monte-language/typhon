@@ -65,7 +65,7 @@ class Printer(Object):
         if isinstance(item, StrObject):
             self.ub.append(unwrapStr(item))
         else:
-            self.quote(item)
+            self.objPrint(item)
 
     def recv(self, atom, args):
         if atom is PRINT_1:
@@ -81,7 +81,11 @@ class Printer(Object):
             return NullObject
 
         if atom is QUOTE_1:
-            self.quote(args[0])
+            item = resolution(args[0])
+            if isinstance(item, CharObject) or isinstance(item, StrObject):
+                self.ub.append(item.toQuote())
+            else:
+                self.objPrint(item)
             return NullObject
 
         if atom is INDENT_1:
@@ -90,11 +94,9 @@ class Printer(Object):
         raise Refused(self, atom, args)
 
     @profileTyphon("Printer.quote/1")
-    def quote(self, item):
+    def objPrint(self, item):
         item = resolution(item)
-        if isinstance(item, CharObject) or isinstance(item, StrObject):
-            self.ub.append(item.toQuote())
-        elif isinstance(item, Promise):
+        if isinstance(item, Promise):
             self.ub.append(u"<promise>")
         elif item in self.context:
             self.ub.append(u"<**CYCLE**>")
@@ -117,7 +119,7 @@ class Printer(Object):
 def toString(self):
     try:
         printer = Printer()
-        printer.quote(self)
+        printer.objPrint(self)
         return printer.value()
     except UserException, e:
         return u"<%s (threw exception %s when printed)>" % (
