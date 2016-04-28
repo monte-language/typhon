@@ -1,4 +1,4 @@
-{stdenv, lib, typhonVm}:
+{stdenv, lib, typhonVm, mastSrc}:
 
 stdenv.mkDerivation {
     name = "typhon";
@@ -16,16 +16,5 @@ stdenv.mkDerivation {
       '';
     checkPhase = "make testMast";
     doCheck = true;
-    src = let loc = part: (toString ./..) + part;
-     in builtins.filterSource (path: type:
-      let p = toString path;
-       in ((lib.hasPrefix (loc "/mast/") p &&
-            (type == "directory" || lib.hasSuffix ".mt" p)) ||
-           (lib.hasPrefix (loc "/boot/") p &&
-            (type == "directory" || lib.hasSuffix ".ty" p || lib.hasSuffix ".mast" p)) ||
-        p == loc "/mast" ||
-        p == loc "/boot" ||
-        p == loc "/Makefile" ||
-        p == loc "/loader.mast" ||
-        p == loc "/repl.mast")) ./..;
+    src = mastSrc;
 }

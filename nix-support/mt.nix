@@ -1,5 +1,5 @@
 {stdenv, pkgs, lib, python27, typhonVm, mast, nix, nix-prefetch-scripts,
- rlwrap, withBuild ? true}:
+ rlwrap, vmSrc, mastSrc, withBuild ? true}:
 let
   mt-bake-py = pkgs.writeText "mt-bake.py" (
     (if withBuild then
@@ -13,27 +13,17 @@ let
   buildFuncs = if withBuild then ''
       doBuild() {
         ${python27}/bin/python ${mt-bake-py} &&
-        ${nix.out}/bin/nix-build -E "let pkgs = import <nixpkgs> {}; \
-          lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json); \
-          in pkgs.callPackage ${./montePackage.nix} { \
-              typhonVm = ${typhonVm}; mast = ${mast}; } lockSet"
+        ${nix.out}/bin/nix-build -E 'let lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
+          typhon = import @out@/nix-support/typhon.nix {
+              bakedVmSrc = "${vmSrc}"; bakedMastSrc = "${mastSrc}"; };
+            in typhon.montePackage lockSet'
     }
     doDockerBuild() {
         ${python27}/bin/python ${mt-bake-py} &&
-        ${nix.out}/bin/nix-build -E 'let pkgs = import <nixpkgs> {};
-          lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
-          scriptName = lockSet.entrypoint;
-          monteBase = pkgs.callPackage ${./montePackage.nix} {
-              typhonVm = ${typhonVm}; mast = ${mast}; };
-          in pkgs.dockerTools.buildImage {
-              name = scriptName;
-              tag = "latest";
-              contents = monteBase lockSet;
-              config = {
-                Cmd = [ ("/bin/" + scriptName) ];
-                WorkingDir = "";
-              };
-            }'
+        ${nix.out}/bin/nix-build -E 'let lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
+          typhon = import @out@/nix-support/typhon.nix {
+              bakedVmSrc = "${vmSrc}"; bakedMastSrc = "${mastSrc}"; };
+          in typhon.monteDockerPackage lockSet'
     }
   '' else "";
   buildCmds = if withBuild then ''
@@ -138,11 +128,12 @@ in
       set -e
       mkdir -p $out/bin
       mkdir -p $out/nix-support
-      cp nix-support/typhon.nix $out/nix-support
-      cp nix-support/mt.nix $out/nix-support
-      cp nix-support/montePackage.nix $out/nix-support
+      for expr in typhon vm mt montePackage mast; do
+        cp nix-support/$expr.nix $out/nix-support
+      done
       ln -s ${mt-bake-py} $out/nix-support/mt-bake.py
-      ln -s ${mt-script} $out/bin/mt
+      substituteAll ${mt-script} $out/bin/mt
+      chmod +x $out/bin/mt
       '';
     src = let loc = part: (toString ./..) + part;
      in builtins.filterSource (path: type:

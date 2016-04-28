@@ -1,4 +1,4 @@
-{stdenv, fetchzip, lib, libsodium, libuv, libffi, pkgconfig, python27, python27Packages, buildJIT}:
+{stdenv, fetchzip, lib, libsodium, libuv, libffi, pkgconfig, python27, python27Packages, vmSrc, buildJIT}:
 
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let pypySrc = fetchzip {
@@ -11,6 +11,7 @@ stdenv.mkDerivation {
   name = "typhon-vm";
   buildInputs = [ python27 python27Packages.pytest python27Packages.twisted pypySrc
                   pkgconfig libffi libuv libsodium ];
+  propagatedBuildInputs = [ libffi libuv libsodium ];
   shellHook = ''
     export TYPHON_LIBRARY_PATH=${libuv}/lib:${libsodium}/lib
     export PYTHONPATH=$TMP/typhon
@@ -37,14 +38,8 @@ stdenv.mkDerivation {
   checkPhase = "trial typhon.test";
   installPhase = ''
     mkdir $out
+    strip mt-typhon
     cp mt-typhon $out/
     '';
-  dontStrip = true;
-  src = let loc = part: (toString ./..) + part;
-   in builtins.filterSource (path: type:
-    let p = toString path;
-     in (lib.hasPrefix (loc "/typhon/") p &&
-         (type == "directory" || lib.hasSuffix ".py" p)) ||
-      p == loc "/typhon" ||
-      p == loc "/main.py") ./..;
+  src = vmSrc;
 }
