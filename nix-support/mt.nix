@@ -6,6 +6,7 @@ let
   builtins.readFile ./mt-bake.py.in);
   mt-script = pkgs.writeScript "mt" ''
     #!${pkgs.stdenv.shell}
+    set -x
     OPERATION=$1
     usage() {
         cat <<EOF
@@ -17,6 +18,7 @@ let
       bake <filename>       Creates a .mast file from a source file.
       eval <filename>       Execute the code in a single source file.
       build                 Builds the current package, symlinks output as 'result'.
+      docker-build          Builds the current package, creates a Docker image.
       add <name> <url>      Add a dependency to this package.
       rm <name>             Remove a dependency from this package.
       run <entrypoint>      Invokes an entrypoint in current package.
@@ -29,15 +31,36 @@ let
     }
     doBuild() {
         ${python27}/bin/python ${mt-bake-py} &&
-        ${nix}/bin/nix-build -E "let pkgs = import <nixpkgs> {}; \
+        ${nix.out}/bin/nix-build -E "let pkgs = import <nixpkgs> {}; \
           lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json); \
           in pkgs.callPackage ${./montePackage.nix} { \
               typhonVm = ${typhonVm}; mast = ${mast}; } lockSet"
     }
+    doDockerBuild() {
+        ${python27}/bin/python ${mt-bake-py} &&
+        ${nix.out}/bin/nix-build -E 'let pkgs = import <nixpkgs> {};
+          lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
+          scriptName = lockSet.entrypoint;
+          monteBase = pkgs.callPackage ${./montePackage.nix} {
+              typhonVm = ${typhonVm}; mast = ${mast}; };
+          in pkgs.dockerTools.buildImage {
+              name = scriptName;
+              tag = "latest";
+              contents = monteBase lockSet;
+              config = {
+                Cmd = [ ("/bin/" + scriptName) ];
+                WorkingDir = "";
+              };
+            }'
+    }
+
     RLWRAP=${rlwrap}/bin/rlwrap
     case $OPERATION in
         build)
             doBuild
+            ;;
+        docker-build)
+            doDockerBuild
             ;;
         repl)
             $RLWRAP ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader run repl
@@ -101,15 +124,14 @@ in
     installPhase = ''
       set -e
       mkdir -p $out/bin
-      mkdir -p $out/nix
-      cp default.nix $out
-      cp nix/mt.nix $out/nix
-      cp nix/montePackage.nix $out/nix
-      ln -s ${mt-bake-py} $out/nix/mt-bake.py
+      mkdir -p $out/nix-support
+      cp nix-support/typhon.nix $out/nix-support
+      cp nix-support/mt.nix $out/nix-support
+      cp nix-support/montePackage.nix $out/nix-support
+      ln -s ${mt-bake-py} $out/nix-support/mt-bake.py
       ln -s ${mt-script} $out/bin/mt
       '';
     src = let loc = part: (toString ./..) + part;
      in builtins.filterSource (path: type:
-      (toString path) == loc "/default.nix" ||
-      lib.hasPrefix (loc "/nix") (toString path)) ./..;
+      lib.hasPrefix (loc "/nix-support") (toString path)) ./..;
   }

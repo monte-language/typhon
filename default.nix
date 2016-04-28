@@ -1,3 +1,4 @@
+<<<<<<< 57cef78384e51c43cca440cddf01158efbbca93b
 { system ? builtins.currentSystem }:
 let
   nixpkgs = import <nixpkgs> { inherit system; };
@@ -29,3 +30,6 @@ let
   };
 in
   typhon
+=======
+import ./nix-support/typhon.nix
+>>>>>>> Support for REPL docker image.
