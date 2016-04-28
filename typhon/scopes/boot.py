@@ -81,7 +81,7 @@ def evalToPair(code, topLocals, envMap):
         # XXX monteMap()
         d = monteMap()
         for k, vi in topLocals.items():
-            d[StrObject(k)] = machine.local[vi]
+            d[StrObject(u"&&" + k)] = machine.local[vi]
         addendum = ConstMap(d)
         envMap = addendum._or(envMap)
     return result, envMap
