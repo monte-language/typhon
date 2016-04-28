@@ -1,35 +1,17 @@
 {stdenv, pkgs, lib, python27, typhonVm, mast, nix, nix-prefetch-scripts,
- rlwrap}:
+ rlwrap, withBuild ? true}:
 let
   mt-bake-py = pkgs.writeText "mt-bake.py" (
-  "FETCHERS = {'git': '${nix-prefetch-scripts + "/bin/nix-prefetch-git"}'}\n" +
+    (if withBuild then
+      "FETCHERS = {'git': '${nix-prefetch-scripts + "/bin/nix-prefetch-git"}'}\n"
+     else "") +
   builtins.readFile ./mt-bake.py.in);
-  mt-script = pkgs.writeScript "mt" ''
-    #!${pkgs.stdenv.shell}
-    set -x
-    OPERATION=$1
-    usage() {
-        cat <<EOF
-
-    Usage: mt <command>
-    Command list:
-      repl                  Starts interactive prompt in current package.
-      lint <filename>       Reads source file, reports syntax errors.
-      bake <filename>       Creates a .mast file from a source file.
-      eval <filename>       Execute the code in a single source file.
-      build                 Builds the current package, symlinks output as 'result'.
-      docker-build          Builds the current package, creates a Docker image.
-      add <name> <url>      Add a dependency to this package.
-      rm <name>             Remove a dependency from this package.
-      run <entrypoint>      Invokes an entrypoint in current package.
-      test <entrypoint>     Collects and executes tests defined for entrypoint.
-      bench <entrypoint>    Collects and executes benchmarks defined for entrypoint.
-      dot <entrypoint>      Creates a .dot graph of dependencies.
-
-    EOF
-        exit $1
-    }
-    doBuild() {
+  buildDoc = if withBuild then
+  ''  build                 Builds the current package, symlinks output as 'result'.
+      docker-build          Builds the current package, creates a Docker image.''
+  else "";
+  buildFuncs = if withBuild then ''
+      doBuild() {
         ${python27}/bin/python ${mt-bake-py} &&
         ${nix.out}/bin/nix-build -E "let pkgs = import <nixpkgs> {}; \
           lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json); \
@@ -53,15 +35,46 @@ let
               };
             }'
     }
-
-    RLWRAP=${rlwrap}/bin/rlwrap
-    case $OPERATION in
+  '' else "";
+  buildCmds = if withBuild then ''
         build)
             doBuild
             ;;
         docker-build)
             doDockerBuild
             ;;
+  '' else ''
+        build|docker-build)
+            echo "This Monte installation does not include package-building tools."
+            ;;
+  '';
+  mt-script = pkgs.writeScript "mt" ''
+    #!${pkgs.stdenv.shell}
+    set -x
+    OPERATION=$1
+    usage() {
+        cat <<EOF
+
+    Usage: mt <command>
+    Command list:
+      repl                  Starts interactive prompt in current package.
+      lint <filename>       Reads source file, reports syntax errors.
+      eval <filename>       Execute the code in a single source file.
+      add <name> <url>      Add a dependency to this package.
+      rm <name>             Remove a dependency from this package.
+      run <entrypoint>      Invokes an entrypoint in current package.
+      test <entrypoint>     Collects and executes tests defined for entrypoint.
+      bench <entrypoint>    Collects and executes benchmarks defined for entrypoint.
+      dot <entrypoint>      Creates a .dot graph of dependencies.
+      ${buildDoc}
+
+    EOF
+        exit $1
+    }
+    ${buildFuncs}
+    RLWRAP=${rlwrap}/bin/rlwrap
+    case $OPERATION in
+        ${buildCmds}
         repl)
             $RLWRAP ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader run repl
             ;;
@@ -118,7 +131,7 @@ let
 in
   stdenv.mkDerivation {
     name = "mt";
-    buildInputs = [ typhonVm mast nix-prefetch-scripts rlwrap ];
+    buildInputs = [ typhonVm mast rlwrap ] ++ (if withBuild then [ nix-prefetch-scripts ] else []);
     buildPhase = ''
       '';
     installPhase = ''
