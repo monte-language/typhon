@@ -14,6 +14,8 @@
 
 import time
 
+from rpython.rlib.rarithmetic import intmask
+
 from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -33,9 +35,12 @@ UNSAFENOW_0 = getAtom(u"unsafeNow", 0)
 
 
 def resolveTimer(uv_timer):
-    vat, resolver = ruv.unstashTimer(uv_timer)
+    vat, (resolver, then) = ruv.unstashTimer(uv_timer)
+    now = ruv.now(vat.uv_loop)
     assert isinstance(resolver, LocalResolver)
-    resolver.resolve(NullObject)
+    # Convert from ms to s.
+    d = intmask(now - then) / 1000.0
+    resolver.resolve(DoubleObject(d))
 
 
 @autohelp
@@ -45,7 +50,9 @@ class Timer(Object):
 
     This object provides a useful collection of time-related methods:
      * `fromNow(delay :Double)`: Produce a promise which will fully resolve
-       after at least `delay` seconds have elapsed in the runtime.
+       after at least `delay` seconds have elapsed in the runtime. The promise
+       will resolve to a `Double` representing the precise amount of time
+       elapsed, in seconds.
      * `sendTimestamp(callable)`: Send a `Double` representing the runtime's
        clock to `callable`.
 
@@ -65,16 +72,16 @@ class Timer(Object):
             p, r = makePromise()
             vat = currentVat.get()
             uv_timer = ruv.alloc_timer(vat.uv_loop)
+            now = ruv.now(vat.uv_loop)
             # Stash the resolver.
-            ruv.stashTimer(uv_timer, (vat, r))
+            ruv.stashTimer(uv_timer, (vat, (r, now)))
             # repeat of 0 means "don't repeat"
             ruv.timerStart(uv_timer, resolveTimer, int(duration * 1000), 0)
-            assert ruv.isActive(uv_timer), "Timer isn't active!?"
             return p
 
         if atom is SENDTIMESTAMP_1:
-            now = time.time()
             vat = currentVat.get()
+            now = intmask(ruv.now(vat.uv_loop)) / 1000.0
             return vat.send(args[0], RUN_1, [DoubleObject(now)], EMPTY_MAP)
 
         raise Refused(self, atom, args)

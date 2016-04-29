@@ -148,7 +148,7 @@ cConfig["process_options_t"].c_stdio.TO.become(lltype.Array(cConfig["stdio_conta
     hints={"nolength": True}))
 
 
-def stashFor(name, struct):
+def stashFor(name, struct, initial=None):
     class Stash(object):
         """
         Like a weaklist, but keeps a strong reference to its elements.
@@ -163,14 +163,14 @@ def stashFor(name, struct):
 
         def __init__(self, initialSize=4):
             self.freeList = range(initialSize)
-            self.storage = [(None, None)] * initialSize
+            self.storage = [(None, initial)] * initialSize
 
         def get(self, index):
             assert index not in self.freeList, "stash: Double get()"
             rv = self.storage[index]
             # Zero out the reference in storage so that the object doesn't live
             # too long.
-            self.storage[index] = None, None
+            self.storage[index] = None, initial
             self.freeList.append(index)
             return rv
 
@@ -190,7 +190,7 @@ def stashFor(name, struct):
 
             # Bogus. Slow: Reallocate storage.
             extraSize = len(self.storage)
-            newStorage = self.storage + [(None, None)] * extraSize
+            newStorage = self.storage + [(None, initial)] * extraSize
             self.freeList.extend(range(extraSize, extraSize * 2))
             self.storage = newStorage
             # We just extended freeList, so this should always be safe.
@@ -198,24 +198,21 @@ def stashFor(name, struct):
 
     theStash = Stash()
 
-    def formatTuple((fst, snd)):
-        return u"(%s, %s)" % (fst.toQuote(), snd.toQuote())
-
     def stash(uv_t, obj):
         # uv_t = rffi.cast(struct, uv_t)
         index = theStash.put(obj)
         uv_t.c_data = rffi.cast(rffi.VOIDP, index)
-        log(["uv"], u"Stash %s: Storing %s to %d (0x%x)" %
-                    (name.decode("utf-8"), formatTuple(obj), intmask(index),
-                     current_object_addr_as_int(uv_t)))
+        log(["uv"], u"Stash %s: Storing 0x%x to %d (0x%x)" %
+                    (name.decode("utf-8"), current_object_addr_as_int(obj),
+                     intmask(index), current_object_addr_as_int(uv_t)))
 
     def unstash(uv_t):
         # uv_t = rffi.cast(struct, uv_t)
         index = rffi.cast(rffi.INT, uv_t.c_data)
         obj = theStash.get(index)
-        log(["uv"], u"Stash %s: Getting %s from %d (0x%x)" %
-                    (name.decode("utf-8"), formatTuple(obj), intmask(index),
-                     current_object_addr_as_int(uv_t)))
+        log(["uv"], u"Stash %s: Getting 0x%x from %d (0x%x)" %
+                    (name.decode("utf-8"), current_object_addr_as_int(obj),
+                     intmask(index), current_object_addr_as_int(uv_t)))
         return obj
 
     class unstashing(object):
@@ -232,7 +229,8 @@ def stashFor(name, struct):
 
     return stash, unstash, unstashing
 
-stashTimer, unstashTimer, unstashingTimer = stashFor("timer", timer_tp)
+stashTimer, unstashTimer, unstashingTimer = stashFor("timer", timer_tp,
+        initial=(None, 0))
 stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
 stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
 stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
