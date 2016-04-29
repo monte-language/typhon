@@ -190,7 +190,7 @@ def makeLexer(ej) as DeepFrozen:
             tokens.push("".join(buf))
 
         to getTokens():
-            return tokens
+            return tokens.snapshot()
 
         to lex(stream):
             while (!stream.finished()):
@@ -203,7 +203,7 @@ def makeLexer(ej) as DeepFrozen:
             tokens.push([patternHoleMarker, index])
 
 
-def parse(var tokens, ej) as DeepFrozen:
+def parse(var tokens :List, ej) as DeepFrozen:
     var stack := [].diverge()
     var key := null
     var rv := null

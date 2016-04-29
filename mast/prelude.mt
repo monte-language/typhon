@@ -388,9 +388,10 @@ def _splitList(position :Int) as DeepFrozenStamp:
      m`def via (_splitList.run(1)) [x, xs] := l`"
 
     return def listSplitter(specimen, ej):
-        if (specimen.size() < position):
-            throw.eject(ej, ["List is too short:", specimen])
-        return specimen.slice(0, position).with(specimen.slice(position))
+        def l :List exit ej := specimen
+        if (l.size() < position):
+            throw.eject(ej, ["List is too short:", l])
+        return l.slice(0, position).with(l.slice(position))
 
 
 def _accumulateList(iterable, mapper) as DeepFrozenStamp:
