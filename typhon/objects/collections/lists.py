@@ -559,9 +559,10 @@ class NestedCL(CL):
     def replace(self, index, value):
         leftSize = self.left.size()
         if index < leftSize:
-            return self.left.replace(index, value)
+            return NestedCL(self.left.replace(index, value), self.right)
         else:
-            return self.right.replace(index - leftSize, value)
+            return NestedCL(self.left,
+                            self.right.replace(index - leftSize, value))
 
 class RepeatCL(CL):
 
@@ -627,7 +628,7 @@ class ReverseCL(CL):
         return ReverseCL(self.base.slice(baseSize - stop, baseSize - start))
 
     def replace(self, index, value):
-        return self.base.replace(self.base.size() - index, value)
+        return ReverseCL(self.base.replace(self.base.size() - index, value))
 
 
 def unwrapCL(obj, ej):
