@@ -57,6 +57,9 @@ def makeRecord(name :Str, fields :Map[Str, DeepFrozen]) as DeepFrozen:
                 match [`with@slug` ? ((def i := checkSlug(slug)) != -1),
                        [newValue :fields[fieldNames[i]]], _]:
                     def newElements := elements.with(i, newValue)
+                    traceln(`with$slug($newValue)`)
+                    traceln(`was $elements`)
+                    traceln(`now, $newElements`)
                     M.call(recordMaker, "run", newElements, [].asMap())
 
     return [Record, recordMaker]

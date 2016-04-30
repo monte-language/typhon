@@ -58,7 +58,6 @@ mast: mast/lib/enum.mast mast/lib/record.mast \
 	codec \
 	entropy \
 	parsers \
-	http \
 	tubes \
 	games \
 	bench \
@@ -91,10 +90,6 @@ parsers: mast/lib/parsers/html.mast \
 	mast/lib/parsers/regex.mast
 
 tubes: mast/lib/tubes.mast
-
-http: mast/lib/http/client.mast mast/lib/http/server.mast \
-	mast/lib/http/tag.mast mast/lib/http/resource.mast \
-	tubes
 
 games: mast/games/mafia.mast
 
