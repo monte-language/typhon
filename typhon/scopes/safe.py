@@ -165,10 +165,11 @@ class MakeDouble(Object):
             return DoubleObject(float(unwrapStr(args[0]).encode('utf-8')))
 
         if atom is FROMBYTES_1:
-            data = unwrapList(args[0])
-            x = unpack_float("".join([chr(unwrapInt(byte)) for byte in data]),
-                             True)
-            return DoubleObject(x)
+            bs = unwrapBytes(args[0])
+            try:
+                return DoubleObject(unpack_float(bs, True))
+            except ValueError:
+                raise userError(u"Couldn't unpack invalid IEEE 754 double")
 
         raise Refused(self, atom, args)
 
