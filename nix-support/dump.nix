@@ -20,8 +20,8 @@ stdenv.mkDerivation {
     '';
   doCheck = false;
   installPhase = ''
-    mkdir $out
-    cp mt-dump-mast $out/
+    mkdir -p $out/bin/
+    cp mt-dump-mast $out/bin/
     '';
   dontStrip = true;
   src = let loc = part: (toString ./..) + part;
