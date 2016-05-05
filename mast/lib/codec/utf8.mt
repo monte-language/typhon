@@ -71,24 +71,26 @@ def decodeCore(var bs :Bytes, ej) as DeepFrozen:
 
 
 def encodeCore(c :Char) :Bytes as DeepFrozen:
-    return _makeBytes.fromInts(switch (c.asInteger()) {
+    def i := c.asInteger()
+    def l := if (i < 0x80) {
         # One byte.
-        match i ? (i < 0x80) {[i]}
+        [i]
+    } else if (i < 0x800) {
         # Two bytes.
-        match i ? (i < 0x800) {[0xc0 | (i >> 6), 0x80 | (i & 0x3f)]}
+        [0xc0 | (i >> 6), 0x80 | (i & 0x3f)]
+    } else if (i < 0x10000) {
         # Three bytes.
-        match i ? (i < 0x10000) {
-            [0xe0 | (i >> 12), 0x80 | ((i >> 6) & 0x3f), 0x80 | (i & 0x3f)]
-        }
+        [0xe0 | (i >> 12), 0x80 | ((i >> 6) & 0x3f), 0x80 | (i & 0x3f)]
+    } else {
         # Four bytes.
-        match i {
-            [
-                0xf0 | (i >> 18),
-                0x80 | ((i >> 12) & 0x3f),
-                0x80 | ((i >> 6) & 0x3f),
-                0x80 | (i & 0x3f), ]
-        }
-    })
+        [
+            0xf0 | (i >> 18),
+            0x80 | ((i >> 12) & 0x3f),
+            0x80 | ((i >> 6) & 0x3f),
+            0x80 | (i & 0x3f),
+        ]
+    }
+    return _makeBytes.fromInts(l)
 
 
 # The codec itself.
