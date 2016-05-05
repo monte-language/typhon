@@ -12,6 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import "bench" =~ [=> bench]
 exports (UTF8)
 
 def chr(i :Int) :Char as DeepFrozen:
@@ -111,12 +112,12 @@ object UTF8 as DeepFrozen:
             rv += encodeCore(c)
         return rv
 
-# def encodeBench():
-#     def via (UTF8.encode) xs := "This is a test of the UTF-8 encoder… "
-#     def via (UTF8.encode) ys := "¥ · £ · € · $ · ¢ · ₡ · ₢ · ₣ · ₤ · ₥ · ₦ · ₧ · ₨ · ₩ · ₪ · ₫ · ₭ · ₮ · ₯ · ₹"
-#     return xs + ys
+def encodeBench():
+    def via (UTF8.encode) xs := "This is a test of the UTF-8 encoder… "
+    def via (UTF8.encode) ys := "¥ · £ · € · $ · ¢ · ₡ · ₢ · ₣ · ₤ · ₥ · ₦ · ₧ · ₨ · ₩ · ₪ · ₫ · ₭ · ₮ · ₯ · ₹"
+    return xs + ys
 
-# bench(encodeBench, "UTF-8 encoding")
+bench(encodeBench, "UTF-8 encoding")
 
 
 # def decodeBench():
