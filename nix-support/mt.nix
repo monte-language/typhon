@@ -40,7 +40,6 @@ let
   '';
   mt-script = pkgs.writeScript "mt" ''
     #!${pkgs.stdenv.shell}
-    set -x
     OPERATION=$1
     usage() {
         cat <<EOF
@@ -67,6 +66,10 @@ let
         ${buildCmds}
         repl)
             $RLWRAP ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader run repl
+            if [ $? == 1 ]; then
+                echo "Due to a Docker bug, readline-style editing is not currently available in this REPL. Sorry."
+                ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader run repl
+            fi
             ;;
         lint)
             shift
