@@ -76,7 +76,7 @@ let
     buildMtPkg {
       name = name;
       src = let s = sources.${pkg.source}; in
-        if name == lock.entrypoint then
+        if name == lock.mainPackage then
           builtins.filterSource (path: type:
             !(lib.hasPrefix ".git" path) &&
             type != "symlink" &&
@@ -92,4 +92,4 @@ let
   sources = lib.mapAttrs fetchSrc lock.sources;
   packages = lib.mapAttrs makePkg lock.packages;
 in
-packages.${lock.entrypoint}
+packages.${lock.mainPackage}

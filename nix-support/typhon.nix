@@ -36,11 +36,11 @@ let
     # bench = callPackage ./bench.nix { typhonVm = typhonVm; mast = mast; }
     montePackage = callPackage ./montePackage.nix { typhonVm = typhonVm; mast = mast; };
     monteDockerPackage = lockSet: pkgs.dockerTools.buildImage {
-              name = lockSet.entrypoint;
+              name = lockSet.mainPackage;
               tag = "latest";
               contents = typhon.montePackage lockSet;
               config = {
-                Cmd = [ ("/bin/" + lockSet.entrypoint) ];
+                Cmd = [ ("/bin/" + lockSet.packages.${lockSet.mainPackage}.entrypoint) ];
                 WorkingDir = "";
               };
             };

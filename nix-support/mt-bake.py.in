@@ -38,9 +38,9 @@ for depname, dep in deps:
     # The stdout is JSON, plus a tail for the path. Very strange.
     lines = stdout.strip().split("\n")
     depPath = lines.pop()
-    d = json.loads("".join(lines))
-    commitStr = d["rev"]
-    hashStr = d["sha256"]
+    g = json.loads("".join(lines))
+    commitStr = g["rev"]
+    hashStr = g["sha256"]
     out['sources'][depname] = {
         'url': dep['url'],
         'type': dep.get('type', 'git'),
@@ -67,6 +67,6 @@ out['packages'][data['name']] = {
     'entrypoint': data.get('entrypoint'),
     'paths': data['paths']}
 
-out['entrypoint'] = data['name']
+out['mainPackage'] = data['name']
 
 json.dump(out, open("mt-lock.json", "w"))
