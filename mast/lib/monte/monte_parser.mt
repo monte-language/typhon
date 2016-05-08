@@ -1058,7 +1058,17 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             if (peekTag() == "for"):
                 advance(ej)
                 def [k, v, it] := forExprHead(ej)
-                def filt := if (peekTag() == "if") {
+                def filt := if (peekTag() == "?") {
+                    advance(ej)
+                    acceptTag("(", ej)
+                    acceptEOLs()
+                    def e := expr(ej)
+                    acceptEOLs()
+                    acceptTag(")", ej)
+                    e
+                } else if (peekTag() == "if") {
+                    traceln("Warning:", spanHere(),
+                            "For-if deprecated; use for-such instead")
                     advance(ej)
                     acceptTag("(", ej)
                     acceptEOLs()
