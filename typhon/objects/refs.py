@@ -527,9 +527,11 @@ class SwitchableRef(Promise):
 
     def setTarget(self, newTarget):
         if self.isSwitchable:
-           self._target = newTarget.resolutionRef()
-           if self is self._target:
+           newTarget = newTarget.resolutionRef()
+           if self is newTarget:
                raise userError(u"Ref loop")
+           else:
+               self._target = newTarget
         else:
             raise userError(u"No longer switchable")
 

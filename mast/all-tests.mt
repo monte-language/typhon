@@ -21,6 +21,7 @@ import "lib/paths" =~ _
 import "lib/netstring" =~ _
 import "lib/parsers/html" =~ _
 import "lib/cache" =~ _
+import "tests/regressions" =~ _
 exports ()
 
 null
