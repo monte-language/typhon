@@ -278,6 +278,10 @@ class DoubleObject(Object):
             divisor = promoteToDouble(args[0])
             return IntObject(int(math.floor(self._d / divisor)))
 
+        if atom is POW_1:
+            exponent = promoteToDouble(args[0])
+            return DoubleObject(math.pow(self._d, exponent))
+
         # Logarithms.
 
         if atom is LOG_0:
