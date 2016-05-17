@@ -19,8 +19,7 @@ from typhon.smallcaps.ops import (DUP, POP, SWAP, ASSIGN_FRAME, ASSIGN_LOCAL,
                                   BIND, BINDFINALSLOT, BINDVARSLOT, SLOT_FRAME,
                                   SLOT_LOCAL, NOUN_FRAME, NOUN_LOCAL,
                                   BINDING_FRAME, BINDING_LOCAL, LITERAL,
-                                  EJECTOR, TRY, UNWIND, END_HANDLER, BRANCH,
-                                  JUMP)
+                                  BRANCH, JUMP)
 
 
 def peephole(code):
@@ -111,8 +110,7 @@ class PeepholeOptimizer(object):
     def addBranch(self):
         start = self.pc
         instruction = self.code.inst(start)
-        if instruction in (EJECTOR, TRY, UNWIND, BRANCH, JUMP, END_HANDLER,
-                           ops.NAMEDARG_EXTRACT_OPTIONAL):
+        if instruction in (BRANCH, JUMP, ops.NAMEDARG_EXTRACT_OPTIONAL):
             end = self.code.index(start)
             self.branches[start] = end
 
@@ -131,6 +129,7 @@ class PeepholeOptimizer(object):
     def removeInst(self, pc):
         del self.code.instructions[pc]
         del self.code.indices[pc]
+        self.code.table.removeInst(pc)
         self.adjustBranches(pc)
 
     def pruneLocals(self):

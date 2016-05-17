@@ -25,7 +25,7 @@ from typhon.enum import makeEnum
     LIST_PATT,
     LITERAL,
     BINDOBJECT, SCOPE,
-    EJECTOR, TRY, UNWIND, END_HANDLER,
+    EJECTOR, EJ_DISABLE, RERAISE,
     BRANCH, CALL, CALL_MAP, BUILD_MAP, NAMEDARG_EXTRACT,
     NAMEDARG_EXTRACT_OPTIONAL, JUMP,
     CHECKPOINT,
@@ -40,7 +40,7 @@ bindingGlobal bindingFrame bindingLocal
 listPatt
 literal
 bindObject scope
-ejector try unwind endHandler
+ejector ejDisable reraise
 branch call callMap buildMap namedArgExtract
 namedArgExtractOptional jump
 checkpoint
@@ -73,9 +73,8 @@ ops = {
     "BINDOBJECT": BINDOBJECT,
     "SCOPE": SCOPE,
     "EJECTOR": EJECTOR,
-    "TRY": TRY,
-    "UNWIND": UNWIND,
-    "END_HANDLER": END_HANDLER,
+    "EJ_DISABLE": EJ_DISABLE,
+    "RERAISE": RERAISE,
     "BRANCH": BRANCH,
     "CALL": CALL,
     "CALL_MAP": CALL_MAP,
@@ -85,3 +84,9 @@ ops = {
     "JUMP": JUMP,
     "CHECKPOINT": CHECKPOINT,
 }
+
+# The exception table symbols. These are both used during compilation, to
+# outline the table, and as symbols in the table once it is built.
+
+ET_FINALLY, ET_TRY, ET_ESCAPE = makeEnum("SmallCaps ET",
+        ["finally", "try", "escape"])

@@ -40,6 +40,7 @@ from typhon.objects.root import Object, audited
 from typhon.pretty import Buffer, LineWriter
 from typhon.quoting import quoteChar, quoteStr
 from typhon.smallcaps.code import Code, CodeScript
+from typhon.smallcaps.exceptions import ExceptionTable
 from typhon.smallcaps.ops import ops
 from typhon.smallcaps.peephole import peephole
 from typhon.smallcaps.slots import SlotType, binding, finalAny, varAny
@@ -231,6 +232,8 @@ class Compiler(object):
         self.locals = LocalScope(None)
         self.scripts = []
 
+        self.table = ExceptionTable()
+
     def pushScope(self):
         c = Compiler(initialFrame=self.frame, initialGlobals=self.globals,
                      availableClosure=self.availableClosure, fqn=self.fqn,
@@ -240,6 +243,7 @@ class Compiler(object):
         c.literals = self.literals
         c.locals = LocalScope(self.locals)
         c.scripts = self.scripts
+        c.table = self.table
 
         return c
 
@@ -253,7 +257,8 @@ class Compiler(object):
                    for (script, cs, gs) in self.scripts]
 
         code = Code(self.fqn, self.methodName, self.instructions, atoms,
-                    literals, globals, frame, locals, scripts, startingDepth)
+                    literals, globals, frame, locals, scripts, startingDepth,
+                    self.table)
 
         # Register the code for profiling.
         rvmprof.register_code(code, lambda code: code.profileName)
@@ -351,6 +356,7 @@ class Compiler(object):
     def patch(self, index):
         inst, _ = self.instructions[index]
         self.instructions[index] = inst, len(self.instructions)
+
 
 
 def compile(node, origin):
@@ -1107,7 +1113,8 @@ class Escape(Expr):
             self._catchPattern, catchNode))
 
     def compile(self, compiler):
-        ejector = compiler.markInstruction("EJECTOR")
+        ejIndex = compiler.table.beginEjector(len(compiler.instructions))
+        compiler.addInstruction("EJECTOR", ejIndex)
         # [ej]
         compiler.literal(NullObject)
         # [ej null]
@@ -1116,12 +1123,14 @@ class Escape(Expr):
         # []
         self._node.compile(subc)
         # [retval]
+        compiler.addInstruction("EJ_DISABLE", ejIndex)
+        # [retval]
 
         if self._catchNode is not None:
             jump = compiler.markInstruction("JUMP")
 
             # Control is resumed here by the ejector in case of ejection.
-            compiler.patch(ejector)
+            compiler.table.endEjector(len(compiler.instructions))
             # [retval]
             compiler.literal(NullObject)
             # [retval null]
@@ -1132,7 +1141,7 @@ class Escape(Expr):
             # [retval]
             compiler.patch(jump)
         else:
-            compiler.patch(ejector)
+            compiler.table.endEjector(len(compiler.instructions))
 
     def getStaticScope(self):
         scope = self._pattern.getStaticScope()
@@ -1178,16 +1187,18 @@ class Finally(Expr):
         return f(Finally(self._block.transform(f), self._atLast.transform(f)))
 
     def compile(self, compiler):
-        unwind = compiler.markInstruction("UNWIND")
-        subc = compiler.pushScope()
-        self._block.compile(subc)
-        handler = compiler.markInstruction("END_HANDLER")
-        compiler.patch(unwind)
-        self._atLast.compile(subc)
+        compiler.table.beginFinally(len(compiler.instructions))
+        self._block.compile(compiler.pushScope())
+        # [rv]
+        # NB: No stack effect, just making it obvious. ~ C.
+        compiler.table.endFinally(len(compiler.instructions))
+        # [rv]
+        self._atLast.compile(compiler.pushScope())
+        # [rv atLast]
         compiler.addInstruction("POP", 0)
-        dropper = compiler.markInstruction("END_HANDLER")
-        compiler.patch(handler)
-        compiler.patch(dropper)
+        # [rv]
+        compiler.addInstruction("RERAISE", 0)
+        # [rv]
 
     def getStaticScope(self):
         scope = self._block.getStaticScope().hide()
@@ -1947,10 +1958,10 @@ class Try(Expr):
             self._then.transform(f)))
 
     def compile(self, compiler):
-        index = compiler.markInstruction("TRY")
+        compiler.table.beginTry(len(compiler.instructions))
         self._first.compile(compiler.pushScope())
-        end = compiler.markInstruction("END_HANDLER")
-        compiler.patch(index)
+        end = compiler.markInstruction("JUMP")
+        compiler.table.endTry(len(compiler.instructions))
         subc = compiler.pushScope()
         # [problem ej]
         self._pattern.compile(subc)

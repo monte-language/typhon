@@ -55,6 +55,10 @@ class UserException(Exception):
     def getPayload(self):
         return self.payload
 
+    def chain(self, nextException):
+        # XXX implement plz
+        pass
+
 
 def userError(s):
     from typhon.objects.data import StrObject

@@ -84,8 +84,12 @@ class SmallCaps(object):
     # the stack.
     depth = 0
 
-    # The handler stack pointer. Same rules as stack pointer.
-    handlerDepth = 0
+    # The "next" exceptions. One slot for Ejecting-type and one for
+    # UserException-type exceptions. These are captured at the beginning of
+    # the finally-block in try-finally constructs, and reraised at the end of
+    # the block.
+    nextException = None
+    nextEjecting = None
 
     def __init__(self, code, frame, globals):
         self.code = code
@@ -97,8 +101,8 @@ class SmallCaps(object):
         # Plus one extra empty cell to ease stack pointer math.
         self.stackSize = self.code.maxDepth + 1
         self.valueStack = [None] * self.stackSize
-        self.handlerSize = self.code.maxHandlerDepth + 1
-        self.handlerStack = [None] * self.handlerSize
+
+        self.ejectors = [None] * code.ejectorSize
 
         # For vat checkpointing.
         from typhon.vats import currentVat
@@ -143,18 +147,6 @@ class SmallCaps(object):
     def peek(self):
         i = self.depth - 1
         return self.valueStack[i]
-
-    def pushHandler(self, handler):
-        i = self.handlerDepth
-        self.handlerStack[i] = handler
-        self.handlerDepth += 1
-
-    def popHandler(self):
-        self.handlerDepth -= 1
-        i = self.handlerDepth
-        rv = self.handlerStack[i]
-        self.handlerStack[i] = None
-        return rv
 
     def getBindingGlobal(self, index):
         # The promotion here is justified by a lack of ability for any code
@@ -230,18 +222,6 @@ class SmallCaps(object):
     def putValueLocal(self, index, value):
         binding = self.getBindingLocal(index)
         assignValue(binding, value)
-
-    def saveDepth(self):
-        return self.depth, self.handlerDepth
-
-    def restoreDepth(self, depthPair):
-        depth, handlerDepth = depthPair
-        # If these invariants are broken, then the stack can contain Nones, so
-        # we'll guard against it here.
-        assert depth <= self.depth, "Implementation error: Value stack UB"
-        assert handlerDepth <= self.handlerDepth, "Implementation error: Handler stack UB"
-        self.depth = depth
-        self.handlerDepth = handlerDepth
 
     def gatherLabels(self, labels):
         """
@@ -331,6 +311,34 @@ class SmallCaps(object):
             # Yikes, the order of operations here is dangerous.
             d[self.pop()] = self.pop()
         self.push(ConstMap(d))
+
+    def ejector(self, index):
+        # Look carefully at the order of operations. The handler captures
+        # the depth of the stack, so it's important to create it *before*
+        # pushing the ejector onto the stack. Otherwise, the handler
+        # thinks that the stack started off with an extra level of depth.
+        ej = Ejector()
+        self.ejectors[index] = ej
+        self.push(ej)
+
+    def ejDisable(self, index):
+        # The ejector should not be missing here, since we didn't ever unwind
+        # it. This relies on the bytecode generation being correct.
+        assert self.ejectors[index] is not None
+        self.ejectors[index].disable()
+        self.ejectors[index] = None
+
+    def reraise(self):
+        # Prefer raising exceptions to propagating ejectors.
+        if self.nextException is not None:
+            ex = self.nextException
+            self.nextException = None
+            self.nextEjecting = None
+            raise ex
+        if self.nextEjecting is not None:
+            ex = self.nextEjecting
+            self.nextEjecting = None
+            raise ex
 
     def runInstruction(self, instruction, pc):
         index = self.code.index(pc)
@@ -431,24 +439,14 @@ class SmallCaps(object):
             self.bindObject(index)
             return pc + 1
         elif instruction.asInt == ops.EJECTOR.asInt:
-            # Look carefully at the order of operations. The handler captures
-            # the depth of the stack, so it's important to create it *before*
-            # pushing the ejector onto the stack. Otherwise, the handler
-            # thinks that the stack started off with an extra level of depth.
-            ej = Ejector()
-            handler = Eject(self, ej, index)
-            self.push(ej)
-            self.pushHandler(handler)
+            self.ejector(index)
             return pc + 1
-        elif instruction.asInt == ops.TRY.asInt:
-            self.pushHandler(Catch(self, index))
+        elif instruction.asInt == ops.EJ_DISABLE.asInt:
+            self.ejDisable(index)
             return pc + 1
-        elif instruction.asInt == ops.UNWIND.asInt:
-            self.pushHandler(Unwind(self, index))
+        elif instruction.asInt == ops.RERAISE.asInt:
+            self.reraise()
             return pc + 1
-        elif instruction.asInt == ops.END_HANDLER.asInt:
-            handler = self.popHandler()
-            return handler.drop(self, pc, index)
         elif instruction.asInt == ops.BRANCH.asInt:
             cond = unwrapBool(self.pop())
             if cond:
@@ -502,145 +500,61 @@ class SmallCaps(object):
             try:
                 pc = self.runInstruction(instruction, pc)
             except Ejecting as e:
-                pc = self.unwindEjector(e)
+                pc = self.unwindEjector(e, pc)
             except UserException as ue:
-                pc = self.unwindEx(ue)
-        # If there is a final handler, drop it; it may cause exceptions to
-        # propagate or perform some additional stack unwinding.
-        if self.handlerDepth:
-            finalHandler = self.popHandler()
-            # Return value ignored here.
-            finalHandler.drop(self, pc, pc)
+                pc = self.unwindEx(ue, pc)
+
+    def clampStack(self, pc):
+        "Clamp the stack to be at the expected depth, after unwinding."
+        self.stackSize = self.code.stackDepth[pc] + 1
 
     @unroll_safe
-    def unwindEjector(self, ex):
-        while self.handlerDepth:
-            handler = self.popHandler()
-            rv = handler.eject(self, ex)
-            if rv != -1:
-                return rv
-        raise ex
+    def unwindEjector(self, ex, pc):
+        "Find the handler for an ejector, or reraise if no handler exists."
+        while True:
+            if not self.code.canCatch(pc):
+                raise ex
+            et, i, pc = self.code.catchAt(pc)
+            if et.asInt == ops.ET_FINALLY.asInt:
+                self.nextEjecting = ex
+                self.clampStack(pc)
+                return pc
+            elif et.asInt == ops.ET_TRY.asInt:
+                continue
+            elif et.asInt == ops.ET_ESCAPE.asInt:
+                # NB: This cannot possibly succeed twice (since we assign None
+                # this time around), so we've baked in the single-fire
+                # semantics. ~ C.
+                if self.ejectors[i] is ex.ejector:
+                    self.ejectors[i] = None
+                    self.clampStack(pc)
+                    self.push(ex.value)
+                    return pc
+            else:
+                assert False, "Impossible"
 
     @unroll_safe
-    def unwindEx(self, ex):
-        while self.handlerDepth:
-            handler = self.popHandler()
-            rv = handler.unwind(self, ex)
-            if rv != -1:
-                return rv
-        raise ex
-
-
-class Handler(object):
-
-    def __repr__(self):
-        return self.repr()
-
-    def eject(self, machine, ex):
-        return -1
-
-    def unwind(self, machine, ex):
-        return -1
-
-    def drop(self, machine, pc, index):
-        return pc + 1
-
-
-class Eject(Handler):
-
-    _immutable_ = True
-
-    def __init__(self, machine, ejector, index):
-        self.savedDepth = machine.saveDepth()
-        self.ejector = ejector
-        self.index = index
-
-    def repr(self):
-        return "Eject(%d)" % self.index
-
-    def eject(self, machine, ex):
-        if ex.ejector is self.ejector:
-            machine.restoreDepth(self.savedDepth)
-            machine.push(ex.value)
-            return self.index
-        else:
-            return -1
-
-
-class Catch(Handler):
-
-    _immutable_ = True
-
-    def __init__(self, machine, index):
-        self.savedDepth = machine.saveDepth()
-        self.index = index
-
-    def repr(self):
-        return "Catch(%d)" % self.index
-
-    def unwind(self, machine, ex):
-        machine.restoreDepth(self.savedDepth)
-        # Push the caught value.
-        machine.push(sealException(ex))
-        # And the ejector.
-        machine.push(NullObject)
-        return self.index
-
-    def drop(self, machine, pc, index):
-        return index
-
-
-class Unwind(Handler):
-
-    _immutable_ = True
-
-    def __init__(self, machine, index):
-        self.savedDepth = machine.saveDepth()
-        self.index = index
-
-    def repr(self):
-        return "Unwind(%d)" % self.index
-
-    def eject(self, machine, ex):
-        machine.restoreDepth(self.savedDepth)
-        machine.pushHandler(Rethrower(ex))
-        return self.index
-
-    def unwind(self, machine, ex):
-        machine.restoreDepth(self.savedDepth)
-        machine.pushHandler(Rethrower(ex))
-        return self.index
-
-    def drop(self, machine, pc, index):
-        machine.pushHandler(Returner(index))
-        # As you were, then.
-        return pc + 1
-
-
-class Rethrower(Handler):
-
-    _immutable_ = True
-
-    @specialize.argtype(1)
-    def __init__(self, ex):
-        self.ex = ex
-
-    def repr(self):
-        return "Rethrower"
-
-    def drop(self, machine, pc, index):
-        raise self.ex
-
-
-class Returner(Handler):
-
-    _immutable_ = True
-
-    def __init__(self, index):
-        self.index = index
-
-    def repr(self):
-        return "Returner"
-
-    def drop(self, machine, pc, index):
-        return index
+    def unwindEx(self, ex, pc):
+        "Find the handler for an ejector, or reraise if no handler exists."
+        while True:
+            if not self.code.canCatch(pc):
+                raise ex
+            et, _, pc = self.code.catchAt(pc)
+            if et.asInt == ops.ET_FINALLY.asInt:
+                if self.nextException is None:
+                    self.nextException = ex
+                else:
+                    self.nextException.chain(ex)
+                self.clampStack(pc)
+                return pc
+            elif et.asInt == ops.ET_TRY.asInt:
+                self.clampStack(pc)
+                # Push the caught value.
+                self.push(sealException(ex))
+                # And the ejector.
+                self.push(NullObject)
+                return pc
+            elif et.asInt == ops.ET_ESCAPE.asInt:
+                continue
+            else:
+                assert False, "Impossible"

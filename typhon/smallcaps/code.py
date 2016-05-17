@@ -17,6 +17,7 @@ from rpython.rlib.jit import elidable, elidable_promote
 
 from typhon.objects.user import Audition, BusyObject, QuietObject
 from typhon.smallcaps.abstract import AbstractInterpreter
+from typhon.smallcaps import ops
 from typhon.smallcaps.ops import (ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
                                   BIND, BINDOBJECT, BINDFINALSLOT,
                                   BINDVARSLOT, BINDANYFINAL, BINDANYVAR,
@@ -267,6 +268,14 @@ class CodeScript(object):
         return self.closureNames.get(self.displayName, -1)
 
 
+def formatET((op, index, end)):
+    codes = {ops.ET_FINALLY: u'F', ops.ET_TRY: u'T', ops.ET_ESCAPE: u'E'}
+    code = codes[op]
+    if code == u'E':
+        return u"%s%d: %d" % (code, index, end)
+    else:
+        return u"%s : %d" % (code, end)
+
 class Code(object):
     """
     SmallCaps code object.
@@ -274,15 +283,15 @@ class Code(object):
     I wish. It's machine code.
     """
 
-    _immutable_ = True
     _immutable_fields_ = ("fqn", "methodName", "profileName",
                           "instructions[*]?", "indices[*]?",
                           "atoms[*]", "globals[*]", "frame[*]", "literals[*]",
                           "locals[*]", "scripts[*]", "maxDepth",
-                          "maxHandlerDepth", "startingDepth")
+                          "startingDepth", "exceptionTable[*]?",
+                          "ejectorSize?")
 
     def __init__(self, fqn, methodName, instructions, atoms, literals,
-                 globals, frame, locals, scripts, startingDepth):
+            globals, frame, locals, scripts, startingDepth, table):
         self.fqn = fqn
         self.methodName = methodName
         self.profileName = self._profileName()
@@ -300,7 +309,14 @@ class Code(object):
 
         # Arrays for tracking expected stack depth
         self.stackDepth = [0] * len(instructions)
-        self.handlerDepth = [0] * len(instructions)
+
+        # The exception table.
+        self.table = table
+        self.refreshET()
+
+    def refreshET(self):
+        self.exceptionOffset, self.exceptionTable = self.table.finalize()
+        self.ejectorSize = self.table.ejectorSize()
 
     @elidable_promote()
     def instSize(self):
@@ -334,9 +350,17 @@ class Code(object):
     def script(self, i):
         return self.scripts[i]
 
-    def dis(self, instruction, index, stackDepth, handlerDepth):
-        base = u"S:%d H:%d | %s %d" % (stackDepth, handlerDepth,
-                                       instruction.repr, index)
+    @elidable
+    def disAt(self, pc):
+        instruction = self.instructions[pc]
+        index = self.indices[pc]
+        stackDepth = self.stackDepth[pc]
+        if self.canCatch(pc):
+            etString = formatET(self.catchAt(pc))
+        else:
+            etString = u'-' * 5
+        base = u"%s S:%d | %s %d" % (etString, stackDepth, instruction.repr,
+                                     index)
         if instruction == CALL or instruction == CALL_MAP:
             base += u" (%s)" % self.atoms[index].repr.decode("utf-8")
         elif instruction == LITERAL:
@@ -356,14 +380,6 @@ class Code(object):
             base += u" (%s (%s))" % (name, slotType.repr())
         return base
 
-    @elidable
-    def disAt(self, pc):
-        instruction = self.instructions[pc]
-        index = self.indices[pc]
-        stackDepth = self.stackDepth[pc]
-        handlerDepth = self.handlerDepth[pc]
-        return self.dis(instruction, index, stackDepth, handlerDepth)
-
     def disassemble(self):
         rv = [u"Code for %s: S:%d" % (self.profileName.decode("utf-8"),
                                       self.startingDepth)]
@@ -374,8 +390,8 @@ class Code(object):
     def figureMaxDepth(self):
         ai = AbstractInterpreter(self)
         ai.run()
-        maxDepth, self.maxHandlerDepth = ai.getDepth()
-        self.maxDepth = max(maxDepth, self.startingDepth)
+        self.maxDepth = max(ai.getDepth(), self.startingDepth)
+        self.refreshET()
 
     @elidable
     def _profileName(self):
@@ -386,5 +402,15 @@ class Code(object):
             objname = self.fqn.encode("utf-8")
         method = self.methodName.encode("utf-8")
         return "mt:%s.%s:1:%s" % (objname, method, filename)
+
+    @elidable_promote()
+    def canCatch(self, pc):
+        if not 0 <= (pc - self.exceptionOffset) < len(self.exceptionTable):
+            return False
+        return self.catchAt(pc)[0] is not None
+
+    @elidable_promote()
+    def catchAt(self, pc):
+        return self.exceptionTable[pc - self.exceptionOffset]
 
 rvmprof.register_code_object_class(Code, lambda code: code.profileName)

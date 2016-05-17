@@ -20,9 +20,8 @@ from typhon.smallcaps.ops import (DUP, ROT, POP, SWAP, ASSIGN_FRAME,
                                   NOUN_FRAME, NOUN_GLOBAL, NOUN_LOCAL,
                                   BINDING_FRAME, BINDING_GLOBAL,
                                   BINDING_LOCAL, LIST_PATT, LITERAL,
-                                  BINDOBJECT, SCOPE, EJECTOR, TRY, UNWIND,
-                                  END_HANDLER, BRANCH, CALL, CALL_MAP,
-                                  BUILD_MAP, JUMP, NAMEDARG_EXTRACT,
+                                  BINDOBJECT, SCOPE, EJECTOR, BRANCH, CALL,
+                                  CALL_MAP, BUILD_MAP, JUMP, NAMEDARG_EXTRACT,
                                   NAMEDARG_EXTRACT_OPTIONAL)
 
 
@@ -33,22 +32,19 @@ class AbstractInterpreter(object):
 
     _immutable_fields_ = "code",
 
-    currentHandlerDepth = 0
     maxDepth = 0
-    maxHandlerDepth = 0
 
     suspended = False
 
     def __init__(self, code):
         self.code = code
         self.currentDepth = code.startingDepth
-        # pc: depth, handlerDepth
+        # pc: depth
         self.branches = {}
 
     def addBranch(self, pc, extraDepth=0):
         # print "Adding a branch", pc
-        self.branches[pc] = (self.currentDepth + extraDepth,
-                             self.currentHandlerDepth)
+        self.branches[pc] = self.currentDepth + extraDepth
 
     def pop(self, count=1):
         self.currentDepth -= count
@@ -59,19 +55,16 @@ class AbstractInterpreter(object):
         if self.currentDepth > self.maxDepth:
             self.maxDepth = self.currentDepth
 
-    def popHandler(self):
-        self.currentHandlerDepth -= 1
-
-    def pushHandler(self):
-        self.currentHandlerDepth += 1
-        if self.currentHandlerDepth > self.maxHandlerDepth:
-            self.maxHandlerDepth = self.currentHandlerDepth
-
     def getDepth(self):
-        return self.maxDepth, self.maxHandlerDepth
+        return self.maxDepth
 
     def runInstruction(self, instruction, pc):
         index = self.code.indices[pc]
+
+        # These branches were compiled down, but they still exist.
+        maybeBranch = self.code.table.shouldBranchAt(pc)
+        if maybeBranch != -1:
+            self.addBranch(maybeBranch, extraDepth=2)
 
         if instruction in (DUP, SLOT_FRAME, SLOT_GLOBAL, SLOT_LOCAL,
                            NOUN_FRAME, NOUN_GLOBAL, NOUN_LOCAL, BINDING_FRAME,
@@ -95,14 +88,6 @@ class AbstractInterpreter(object):
             self.push(4)
         elif instruction == EJECTOR:
             self.push()
-            self.pushHandler()
-            self.addBranch(index)
-        elif instruction in (TRY, UNWIND):
-            self.pushHandler()
-            self.addBranch(index, extraDepth=2)
-        elif instruction == END_HANDLER:
-            self.popHandler()
-            self.addBranch(index)
         elif instruction == BRANCH:
             self.pop()
             self.addBranch(index)
@@ -126,7 +111,7 @@ class AbstractInterpreter(object):
             self.addBranch(index)
             self.suspended = True
             # print "Suspending at pc", pc
-        elif instruction == ops.CHECKPOINT:
+        elif instruction in (ops.CHECKPOINT, ops.RERAISE, ops.EJ_DISABLE):
             # Stack no-op.
             pass
         else:
@@ -137,10 +122,8 @@ class AbstractInterpreter(object):
         for pc, instruction in enumerate(self.code.instructions):
             if pc in self.branches:
                 # print "Unsuspending at pc", pc
-                depth, handlerDepth = self.branches[pc]
+                depth = self.branches[pc]
                 self.currentDepth = max(self.currentDepth, depth)
-                self.currentHandlerDepth = max(self.currentHandlerDepth,
-                                               handlerDepth)
                 self.suspended = False
 
                 self.runInstruction(instruction, pc)
@@ -148,5 +131,4 @@ class AbstractInterpreter(object):
                 self.runInstruction(instruction, pc)
 
             self.code.stackDepth[pc] = self.currentDepth
-            self.code.handlerDepth[pc] = self.currentHandlerDepth
         # print "Completed all", len(self.branches), "branches"
