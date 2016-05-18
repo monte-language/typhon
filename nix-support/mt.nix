@@ -105,7 +105,7 @@ let
                 fi
                 if [[ "$SOURCE" == *.mast ]]; then
                     ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} -l $PWD \
-                        ${mast}/loader run ''${SOURCE%.mast}
+                        ${mast}/loader run ''${SOURCE%.mast} "$@"
                 fi
             fi
             ;;

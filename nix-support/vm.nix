@@ -13,7 +13,7 @@ stdenv.mkDerivation {
                   pkgconfig libffi libuv libsodium ];
   propagatedBuildInputs = [ libffi libuv libsodium ];
   shellHook = ''
-    export TYPHON_LIBRARY_PATH=${libuv}/lib:${libsodium}/lib
+    export TYPHON_LIBRARY_PATH=${libuv.out}/lib:${libsodium.out}/lib
     export PYTHONPATH=$TMP/typhon
     if [ -e $TMP/typhon ]; then
         rm -rf $TMP/typhon
