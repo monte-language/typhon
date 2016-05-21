@@ -17,12 +17,10 @@ class RecorderContext(object):
         self.label = label
 
     def __enter__(self):
-        self.startTime = time()
+        self.recorder.pushContext(self.label)
 
     def __exit__(self, *unused):
-        after = time()
-        elapsed = after - self.startTime
-        self.recorder.addTiming(self.label, elapsed)
+        self.recorder.popContext()
 
 
 class Recorder(object):
@@ -31,6 +29,7 @@ class Recorder(object):
 
     def __init__(self):
         self.timings = {}
+        self.contextStack = []
 
     def start(self):
         self.startTime = time()
@@ -43,14 +42,24 @@ class Recorder(object):
             self.timings[label] = 0
         self.timings[label] += elapsed
 
-    def record(self, label, action):
-        before = time()
-        rv = action()
-        after = time()
+    def startSegment(self):
+        self.currentSegment = time()
 
-        self.addTiming(label, after - before)
+    def finishSegment(self):
+        elapsed = time() - self.currentSegment
+        self.addTiming(self.contextStack[-1], elapsed)
 
-        return rv
+    def pushContext(self, label):
+        if self.contextStack:
+            self.finishSegment()
+        self.contextStack.append(label)
+        self.startSegment()
+
+    def popContext(self):
+        self.finishSegment()
+        self.contextStack.pop()
+        if self.contextStack:
+            self.startSegment()
 
     def printResults(self):
         total = self.endTime - self.startTime
@@ -58,7 +67,7 @@ class Recorder(object):
         debug_print("Recorded times:")
         for label in self.timings:
             t = self.timings[label]
-            debug_print("~", label, ":", t, percent(t, total))
+            debug_print("~", label + ":", t, percent(t, total))
 
     def context(self, label):
         return RecorderContext(self, label)
