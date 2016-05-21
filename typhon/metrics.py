@@ -71,3 +71,8 @@ class Recorder(object):
 
     def context(self, label):
         return RecorderContext(self, label)
+
+
+_recorder = Recorder()
+def globalRecorder():
+    return _recorder

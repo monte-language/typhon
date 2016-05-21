@@ -25,7 +25,7 @@ from typhon.arguments import Configuration
 from typhon.debug import enableDebugPrint, TyphonJitHooks
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, obtainModule
-from typhon.metrics import Recorder
+from typhon.metrics import globalRecorder
 from typhon.objects.auditors import deepFrozenGuard
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
@@ -162,7 +162,8 @@ def cleanUpEverything():
 
 
 def runTyphon(argv):
-    recorder = Recorder()
+    # Start metrics.
+    recorder = globalRecorder()
     recorder.start()
 
     # Initialize libsodium.

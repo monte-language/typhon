@@ -319,9 +319,11 @@ class DeepFrozen(Object):
 
     @profileTyphon("DeepFrozen.audit/1")
     def audit(self, audition):
-        auditDeepFrozen(audition)
-        audition.ask(deepFrozenStamp)
-        return False
+        from typhon.metrics import globalRecorder
+        with globalRecorder().context("Audition (DF)"):
+            auditDeepFrozen(audition)
+            audition.ask(deepFrozenStamp)
+            return False
 
     def recv(self, atom, args):
         from typhon.objects.constants import wrapBool
