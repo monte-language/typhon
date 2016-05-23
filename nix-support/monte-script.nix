@@ -45,7 +45,7 @@ let
     usage() {
         cat <<EOF
 
-    Usage: mt <command>
+    Usage: monte <command>
     Command list:
       repl                  Starts interactive prompt in current package.
       lint <filename>       Reads source file, reports syntax errors.

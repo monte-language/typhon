@@ -63,14 +63,14 @@ let
           EOF
         '';
         config = {
-            Cmd = [ "${nixpkgs.busybox}/bin/sh" ];
+            Cmd = [ "${nixpkgs.busybox}/bin/sh" "-l" ];
             WorkingDir = "/";
             };
         };
     mtLiteDocker = nixpkgs.dockerTools.buildImage {
         name = "repl";
         tag = "latest";
-        contents = [monteLite typhonVm];
+        contents = [mtLite typhonVm];
         config = {
             Cmd = [ "/bin/monte" "repl" ];
             WorkingDir = "/";
