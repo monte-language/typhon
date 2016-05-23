@@ -46,14 +46,13 @@ let
                 WorkingDir = "";
               };
             };
-    mt = callPackage ./mt.nix { typhonVm = typhonVm; mast = mast;
+    monte = callPackage ./monte-script.nix { typhonVm = typhonVm; mast = mast;
                                 vmSrc = vmSrc; mastSrc = mastSrc; };
-    mtLite = callPackage ./mt.nix { typhonVm = typhonVm; mast = mast;
-                                    vmSrc = vmSrc; mastSrc = mastSrc; withBuild = false;};
+    monteLite = monte.override { withBuild = false; };
     mtDocker = nixpkgs.dockerTools.buildImage {
         name = "monte";
         tag = "latest";
-        contents = [mtLite typhonVm];
+        contents = [monteLite typhonVm];
         config = {
             Cmd = [ "/bin/mt" "repl" ];
             WorkingDir = "/";

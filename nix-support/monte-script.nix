@@ -38,7 +38,7 @@ let
             echo "This Monte installation does not include package-building tools."
             ;;
   '';
-  mt-script = pkgs.writeScript "mt" ''
+  mt-script = pkgs.writeScript "monte" ''
     #!${pkgs.stdenv.shell}
     OPERATION=$1
     usage() {
@@ -123,7 +123,7 @@ let
     '';
 in
   stdenv.mkDerivation {
-    name = if withBuild then "monte" else "montelite";
+    name = if withBuild then "monte" else "monteLite";
     buildInputs = [ typhonVm mast rlwrap ] ++ (if withBuild then [ nix-prefetch-scripts ] else []);
     buildPhase = ''
       '';
@@ -131,12 +131,12 @@ in
       set -e
       mkdir -p $out/bin
       mkdir -p $out/nix-support
-      for expr in typhon vm mt montePackage mast; do
+      for expr in typhon vm monte-script montePackage mast; do
         cp nix-support/$expr.nix $out/nix-support
       done
       ln -s ${mt-bake-py} $out/nix-support/mt-bake.py
-      substituteAll ${mt-script} $out/bin/mt
-      chmod +x $out/bin/mt
+      substituteAll ${mt-script} $out/bin/monte
+      chmod +x $out/bin/monte
       '';
     src = let loc = part: (toString ./..) + part;
      in builtins.filterSource (path: type:
