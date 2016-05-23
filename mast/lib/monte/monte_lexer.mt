@@ -415,7 +415,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
     def checkParenBalance
 
-    def getNextToken(strict, fail):
+    def getNextToken(strict, fail, partialFail):
         # 'strict' determines if indentation errors count as failures; this is
         # turned off when just doing parens-balance checks.
         if (queuedTokens.size() > 0):
@@ -436,7 +436,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             if (canStartIndentedBlock):
                 def spaces := consumeWhitespaceAndComments()
                 if (strict && !inStatementPosition()):
-                    checkParenBalance(fail)
+                    checkParenBalance(partialFail)
                     throw.eject(fail,
                         ["Indented blocks only allowed in statement position", spanAtPoint()])
                 if (spaces > indentPositionStack.last()):
@@ -446,7 +446,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     queuedTokens.insert(0, composite("INDENT", null, spanAtPoint()))
                     return leaf("EOL")
                 else if (strict):
-                    throw.eject(fail, ["Expected an indented block", spanAtPoint()])
+                    throw.eject(partialFail, ["Expected an indented block", spanAtPoint()])
             if (!inStatementPosition()):
                 return leaf("EOL")
             else:
@@ -723,7 +723,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             pushBrace('`', spanAtPoint(), '`', 0, false)
             def part := quasiPart(fail)
             if (part == null):
-                def next := getNextToken(strict, fail)
+                def next := getNextToken(strict, fail, partialFail)
                 if (next == EOF):
                     throw.eject(fail, ["File ends in quasiliteral", spanAtPoint()])
                 return next
@@ -749,7 +749,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     bind checkParenBalance(fail):
         while (true):
             startPos := -1
-            getNextToken(false, __break)
+            getNextToken(false, __break, __break)
         if (braceStack.size() != 0):
             for b in (braceStack):
                 if (!["INDENT", null].contains(b[0])):
@@ -770,15 +770,15 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         to patternHole():
             return PATTERN_HOLE
 
-        to next(ej):
+        to next(ej, ejPartial):
             try:
                 def errorStartPos := position
                 escape e:
-                    def t := getNextToken(true, e)
+                    def t := getNextToken(true, e, ejPartial)
                     return [count += 1, t]
                 catch msg:
                     if (msg == null):
-                        checkParenBalance(fn msg {throw.eject(ej, makeParseError(msg))})
+                        checkParenBalance(fn msg {throw.eject(ejPartial, makeParseError(msg))})
                         throw.eject(ej, null)
                     else:
                         throw.eject(ej, makeParseError(msg))

@@ -189,17 +189,17 @@ object m__quasiParser as DeepFrozen:
 
     to valueMaker(template):
         def chain := makeQuasiTokenChain(template)
-        def qast := parseExpression(chain, astBuilder, throw)
+        def qast := parseExpression(chain, astBuilder, throw, throw)
         return makeM(qast, false)
 
     to matchMaker(template):
         def chain := makeQuasiTokenChain(template)
-        def qast := parseExpression(chain, astBuilder, throw)
+        def qast := parseExpression(chain, astBuilder, throw, throw)
         return makeM(qast, false)
 
     to fromStr(source :Str):
         def tree := parseExpression(makeMonteLexer(source, "m``.fromStr/1"),
-                                    astBuilder, throw)
+                                    astBuilder, throw, throw)
         return makeM(tree, false)
 
 
@@ -217,10 +217,10 @@ object eval as DeepFrozen:
 
         return eval.evalToPair(expr, environment)[0]
 
-    to evalToPair(expr, environment):
+    to evalToPair(expr, environment, => ejPartial := throw):
         def ast :Expr := if (expr =~ source :Str) {
             parseExpression(makeMonteLexer(source, "<eval>"), astBuilder,
-                            throw)
+                            throw, ejPartial)
         } else {expr}
         def context := makeMASTContext()
         context(optimize(expand(ast, astBuilder, throw)))
