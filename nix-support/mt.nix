@@ -123,7 +123,7 @@ let
     '';
 in
   stdenv.mkDerivation {
-    name = "mt";
+    name = if withBuild then "monte" else "montelite";
     buildInputs = [ typhonVm mast rlwrap ] ++ (if withBuild then [ nix-prefetch-scripts ] else []);
     buildPhase = ''
       '';

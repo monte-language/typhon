@@ -66,7 +66,11 @@ let
             OPERATION=run
             ;;
         esac
-        ${typhonVm}/mt-typhon ${dependencySearchPaths} -l ${mast}/mast -l $out ${mast}/loader \$OPERATION ${entrypoint} "\$@"
+        LOCALPKGPATHS=""
+        for p in ${lib.concatStringsSep " " pathNames}; do
+          LOCALPKGPATHS+=" -l $out/$p"
+        done
+        ${typhonVm}/mt-typhon ${dependencySearchPaths} \$LOCALPKGPATHS -l ${mast}/mast ${mast}/loader \$OPERATION ${entrypoint} "\$@"
         EOF
         chmod +x $out/bin/${entryPointName}
         '' else "");
