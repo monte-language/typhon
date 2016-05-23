@@ -28,7 +28,9 @@ let
     typhonVm = callPackage ./vm.nix { vmSrc = vmSrc;
                                       buildJIT = false;
                                       libsodium = libsodium0; };
-    typhonVmCrashy = callPackage ./vm.nix { buildJIT = true; };
+    typhonVmCrashy = callPackage ./vm.nix { buildJIT = true;
+                                            vmSrc = vmSrc;
+                                            libsodium = libsodium0; };
     mast = callPackage ./mast.nix { mastSrc = mastSrc;
                                     typhonVm = typhonVm; };
     typhonDumpMAST = callPackage ./dump.nix {};
