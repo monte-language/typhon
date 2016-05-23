@@ -48,13 +48,31 @@ let
             };
     monte = callPackage ./monte-script.nix { typhonVm = typhonVm; mast = mast;
                                 vmSrc = vmSrc; mastSrc = mastSrc; };
-    monteLite = monte.override { withBuild = false; };
+    mtBusybox = monte.override { shellForMt = "${nixpkgs.busybox}/bin/sh"; };
+    mtLite = mtBusybox.override { withBuild = false; };
     mtDocker = nixpkgs.dockerTools.buildImage {
-        name = "monte";
+        name = "monte-dev";
+        tag = "latest";
+        contents = [nixpkgs.nix.out nixpkgs.busybox mtBusybox typhonVm];
+        runAsRoot = ''
+          #!${nixpkgs.busybox}/bin/sh
+          mkdir -p /etc
+          tee /etc/profile <<'EOF'
+          echo "Try \`monte repl' for an interactive Monte prompt."
+          echo "See \`monte --help' for more commands."
+          EOF
+        '';
+        config = {
+            Cmd = [ "${nixpkgs.busybox}/bin/sh" ];
+            WorkingDir = "/";
+            };
+        };
+    mtLiteDocker = nixpkgs.dockerTools.buildImage {
+        name = "repl";
         tag = "latest";
         contents = [monteLite typhonVm];
         config = {
-            Cmd = [ "/bin/mt" "repl" ];
+            Cmd = [ "/bin/monte" "repl" ];
             WorkingDir = "/";
             };
         };

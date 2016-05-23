@@ -1,5 +1,5 @@
 {stdenv, pkgs, lib, python27, typhonVm, mast, nix, nix-prefetch-scripts,
- rlwrap, vmSrc, mastSrc, withBuild ? true}:
+ rlwrap, vmSrc, mastSrc, withBuild ? true, shellForMt ? pkgs.stdenv.shell }:
 let
   mt-bake-py = pkgs.writeText "mt-bake.py" (
     (if withBuild then
@@ -8,7 +8,8 @@ let
   builtins.readFile ./mt-bake.py.in);
   buildDoc = if withBuild then
   ''  build                 Builds the current package, symlinks output as 'result'.
-      docker-build          Builds the current package, creates a Docker image.''
+    docker-build          Builds the current package, creates a Docker image.
+  ''
   else "";
   buildFuncs = if withBuild then ''
       doBuild() {
@@ -39,7 +40,7 @@ let
             ;;
   '';
   mt-script = pkgs.writeScript "monte" ''
-    #!${pkgs.stdenv.shell}
+    #!${shellForMt}
     OPERATION=$1
     usage() {
         cat <<EOF
