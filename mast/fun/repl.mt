@@ -16,7 +16,7 @@ def makeREPLTube(makeParser, reducer, ps1 :Str, ps2 :Str, drain) as DeepFrozen:
         to receive(s):
             def `@chars$\n` := s
             # If they just thoughtlessly hit Enter, then don't bother.
-            if (chars.size() == 0):
+            if (replState == PS1 && chars.size() == 0):
                 REPLTube.prompt()
                 return
             parser.feedMany(chars)

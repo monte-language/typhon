@@ -30,7 +30,7 @@ object ta__quasiParser:
 
 def expr(s):
     return parseExpression(makeMonteLexer(s + "\n", "<test>"), astBuilder,
-                           throw).canonical()
+                           throw, throw).canonical()
 
 def pattern(s):
     return parsePattern(makeMonteLexer(s, "<test>"), astBuilder,

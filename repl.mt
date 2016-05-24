@@ -13,6 +13,7 @@ exports (main)
 def makeMonteParser(&environment, unsealException) as DeepFrozen:
     var failure :NullOk[Str] := null
     var result := null
+    var buf := []
 
     return object monteEvalParser:
         to getFailure() :NullOk[Str]:
@@ -22,7 +23,7 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
             return failure != null
 
         to finished() :Bool:
-            return true
+            return buf == []
 
         to results() :List:
             return [result]
@@ -36,18 +37,34 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
             return monteEvalParser
 
         to feedMany(tokens):
+            if (buf.size() == 0):
+                # Buffer the first line.
+                buf with= (tokens)
+            else:
+                 if (tokens != ""):
+                     # If we know we need to buffer more, don't invoke the parser.
+                     buf with= (tokens)
+                     return
+                 # ... If there's data in the buffer and a blank line is
+                 # received, go ahead and parse.
             try:
-                def [val, newEnv] := eval.evalToPair(tokens, environment)
-                result := val
-                # Preserve side-effected new stuff from e.g. playWith.
-                environment := newEnv | environment
-            catch via (unsealException) [problem, trail]:
-                failure := `$problem`
-                # Discard the first line from the trail since it's always the
-                # eval() frame, which is noisy and useless. Also the second
-                # line. And maybe more lines in the future?
-                for line in (trail.reverse().slice(2)):
-                    traceln(line)
+                escape ejPartial:
+                    def [val, newEnv] := eval.evalToPair("\n".join(buf) + "\n", environment, => ejPartial)
+                    result := val
+                    # Preserve side-effected new stuff from e.g. playWith.
+                    environment := newEnv | environment
+                    buf := []
+            catch p:
+                # Typhon's exception handling is kinda broken so we try to cope
+                # by ignoring things that aren't sealed exceptions.
+                if (p =~ via (unsealException) [problem, trail]):
+                    failure := `$problem`
+                    # Discard the first line from the trail since it's always the
+                    # eval() frame, which is noisy and useless. Also the second
+                    # line. And maybe more lines in the future?
+                    for line in (trail.reverse().slice(2)):
+                        traceln(line)
+                    buf := []
 
 def reduce(result) as DeepFrozen:
     return result

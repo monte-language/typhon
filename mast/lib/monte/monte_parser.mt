@@ -5,11 +5,11 @@ def spanCover(left, right) as DeepFrozen:
         return null
     return left.combine(right)
 
-def parseMonte(lex, builder, mode, err) as DeepFrozen:
+def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def [VALUE_HOLE, PATTERN_HOLE] := [lex.valueHole(), lex.patternHole()]
     def _toks := [].diverge()
     while (true):
-         _toks.push(lex.next(__break)[1])
+         _toks.push(lex.next(__break, errPartial)[1])
     catch p:
         if (p != null):
             throw.eject(err, p)
@@ -624,6 +624,10 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         try:
             acceptTag(":", ej)
             acceptEOLs()
+            # This may be incomplete input from the REPL or such.
+            if (position == (tokens.size() - 1)):
+                # If so, don't try again with braces, just stop.
+                errPartial("hit EOF")
             acceptTag("INDENT", ej)
         finally:
             position := origPosition
@@ -1428,8 +1432,11 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
             }
         }
         acceptEOLs()
-        if (position != (tokens.size() - 1)):
-            # Ran off the end, or didn't consume enough.
+        if (position < (tokens.size() - 1)):
+            # Ran off the end.
+            formatError(lastError, errPartial)
+        if (position > (tokens.size() - 1)):
+            # Didn't consume enough.
             formatError(lastError, err)
         else:
             return val
@@ -1437,11 +1444,11 @@ def parseMonte(lex, builder, mode, err) as DeepFrozen:
         formatError(p, err)
 
 
-def parseExpression(lex, builder, err) as DeepFrozen:
-    return parseMonte(lex, builder, "expression", err)
+def parseExpression(lex, builder, err, errPartial) as DeepFrozen:
+    return parseMonte(lex, builder, "expression", err, errPartial)
 
 def parseModule(lex, builder, err) as DeepFrozen:
-    return parseMonte(lex, builder, "module", err)
+    return parseMonte(lex, builder, "module", err, err)
 
 def parsePattern(lex, builder, err) as DeepFrozen:
-    return parseMonte(lex, builder, "pattern", err)
+    return parseMonte(lex, builder, "pattern", err, err)
