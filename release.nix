@@ -1,4 +1,4 @@
-let t = import ./nix-support/typhon.nix;
+let t = import ./nix-support/typhon.nix {};
 in
 {
   typhonVm = t.typhonVm;
