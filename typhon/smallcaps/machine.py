@@ -135,11 +135,14 @@ class SmallCaps(object):
         self.valueStack[i] = None
         return rv
 
-    @unroll_safe
     def popSlice(self, size):
-        # XXX should be handwritten loop per fijal and arigato. ~ C.
-        rv = [self.pop() for _ in range(size)]
-        rv.reverse()
+        if size == 0:
+            return []
+        assert size > 0, "Implementation error"
+        self.depth -= size
+        i = self.depth
+        assert i >= 0, "Implementation error"
+        rv = self.valueStack[i:i + size]
         return rv
 
     def peek(self):
