@@ -279,7 +279,7 @@ class Code(object):
                           "instructions[*]?", "indices[*]?",
                           "atoms[*]", "globals[*]", "frame[*]", "literals[*]",
                           "locals[*]", "scripts[*]", "maxDepth",
-                          "maxHandlerDepth", "startingDepth")
+                          "maxHandlerDepth", "startingDepth", "checkpoints")
 
     def __init__(self, fqn, methodName, instructions, atoms, literals,
                  globals, frame, locals, scripts, startingDepth):
@@ -365,8 +365,11 @@ class Code(object):
         return self.dis(instruction, index, stackDepth, handlerDepth)
 
     def disassemble(self):
-        rv = [u"Code for %s: S:%d" % (self.profileName.decode("utf-8"),
-                                      self.startingDepth)]
+        rv = [
+            u"Code for %s: S:%d" % (self.profileName.decode("utf-8"),
+                                    self.startingDepth),
+            u"Checkpoints: %d" % self.checkpoints,
+        ]
         for i in range(len(self.instructions)):
             rv.append(u"%d: %s" % (i, self.disAt(i)))
         return u"\n".join(rv)

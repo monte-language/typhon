@@ -102,7 +102,9 @@ class SmallCaps(object):
 
         # For vat checkpointing.
         from typhon.vats import currentVat
-        self.vat = currentVat.get()
+        # Checkpoint the vat to the given number of points.
+        vat = currentVat.get()
+        vat.checkpoint(points=code.checkpoints)
 
     @staticmethod
     def withDictScope(code, scope):
@@ -482,10 +484,6 @@ class SmallCaps(object):
             return index
         elif instruction.asInt == ops.JUMP.asInt:
             return index
-        elif instruction.asInt == ops.CHECKPOINT.asInt:
-            # Checkpoint the vat to the given number of points.
-            self.vat.checkpoint(points=index)
-            return pc + 1
         else:
             raise RuntimeError("Unknown instruction %s" %
                     instruction.repr.encode("utf-8"))

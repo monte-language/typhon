@@ -201,6 +201,9 @@ class LocalScope(object):
 
 class Compiler(object):
 
+    # The number of checkpoints that we've incurred in this frame.
+    checkpoints = 0
+
     def __init__(self, initialFrame=None, initialGlobals=None,
                  availableClosure=None, fqn=u"", methodName=u"<noMethod>"):
         self.fqn = fqn
@@ -254,6 +257,7 @@ class Compiler(object):
 
         code = Code(self.fqn, self.methodName, self.instructions, atoms,
                     literals, globals, frame, locals, scripts, startingDepth)
+        code.checkpoints = self.checkpoints
 
         # Register the code for profiling.
         rvmprof.register_code(code, lambda code: code.profileName)
@@ -333,7 +337,7 @@ class Compiler(object):
 
     def call(self, verb, arity):
         # Checkpoint before the call.
-        self.addInstruction("CHECKPOINT", 1)
+        self.checkpoints += 1
         atom = self.addAtom(verb, arity)
         self.addInstruction("CALL", atom)
 
