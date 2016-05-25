@@ -61,9 +61,12 @@ def brotAt(write, xCenter :Double, yCenter :Double, xScale :Double,
     fullBrot(write, yStart, yScale, xStart, xScale)
 
 
-bench(fn {brotAt(-0.25, -0.4, 1 / 32.0, 1 / 20.0)},
+def voidWrite(_) :Void:
+    null
+
+bench(fn {brotAt(voidWrite, -0.25, -0.4, 1 / 32.0, 1 / 20.0)},
       "Burning ship (large)")
-bench(fn {brotAt(-1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)},
+bench(fn {brotAt(voidWrite, -1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)},
       "Burning ship (small)")
 
 def main(argv, => makeStdOut) :Int as DeepFrozen:
