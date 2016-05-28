@@ -9,7 +9,9 @@ let pypySrc = fetchzip {
 in
 stdenv.mkDerivation {
   name = "typhon-vm";
-  buildInputs = [ python27 python27Packages.pytest python27Packages.twisted pypySrc
+  buildInputs = [ python27
+                  python27Packages.py python27Packages.pytest python27Packages.twisted
+                  pypySrc
                   pkgconfig libffi libuv libsodium ];
   propagatedBuildInputs = [ libffi libuv libsodium ];
   shellHook = ''
