@@ -1,0 +1,134 @@
+import py
+
+from rpython.rlib.unroll import unrolling_iterable
+
+
+class IR(object):
+    """
+    An intermediate representation.
+    """
+
+    def __init__(self, terminals, nonterms):
+        self.terminals = terminals
+        self.nonterms = nonterms
+
+        for nonterm, constructors in nonterms.iteritems():
+            # Construct a superclass which every constructor will inherit
+            # from.
+            class NT(object):
+                _immutable_ = True
+            NT.__name__ = nonterm
+
+            def build(constructor, pieces):
+                class Constructor(NT):
+                    _immutable_ = True
+
+                    def __init__(self, *args):
+                        for i, piece in unrolling_iterable(enumerate(pieces)):
+                            setattr(self, piece, args[i])
+                Constructor.__name__ = constructor
+                setattr(self, constructor, Constructor)
+
+            for constructor, pieces in constructors.iteritems():
+                build(constructor, pieces)
+
+    def makePassTo(self, ir):
+        """
+        Construct a class for a visitor-pattern pass between this IR and the
+        next IR.
+        """
+
+        attrs = { "src": self, "dest": ir }
+        for terminal in self.terminals:
+            def visitor(x):
+                return x
+            visitor.__name__ = terminal
+            attrs[terminal] = visitor
+
+        for nonterm, constructors in self.nonterms.iteritems():
+            conClasses = []
+            for constructor, pieces in constructors.iteritems():
+                visitName = "visit%s" % constructor
+                # Recurse on non-terminals by type. Untyped elements are
+                # assumed to not be recursive.
+                mods = []
+                for piece, ty in pieces.iteritems():
+                    if ty:
+                        s = "%s = self.visit%s(%s)" % (piece, ty, piece)
+                        mods.append(s)
+                params = {
+                    "args": ",".join(pieces),
+                    "name": visitName,
+                    "constructor": constructor,
+                    "mods": ";".join(mods)
+                }
+                d = {}
+                exec py.code.Source("""
+                    def %(name)s(self, %(args)s):
+                        %(mods)s
+                        return self.dest.%(constructor)s(%(args)s)
+                """ % params).compile() in d
+                attrs[visitName] = d[visitName]
+                specimenPieces = ",".join("specimen.%s" % k for k in pieces)
+                callVisit = "self.%s(%s)" % (visitName, specimenPieces)
+                conClasses.append((constructor, callVisit))
+            # Construct subordinate clauses for the visitor on this
+            # constructor.
+            d = {}
+            clauses = []
+            for constructor, callVisit in conClasses:
+                clauses.append("if isinstance(specimen, self.src.%s): return %s" %
+                        (constructor, callVisit))
+            params = {
+                "name": nonterm,
+                "clauses": "\n    ".join(clauses),
+            }
+            exec py.code.Source("""
+def visit%(name)s(self, specimen):
+    %(clauses)s
+    assert False, "Implementation error"
+            """ % params).compile() in d
+            attrs.update(d)
+
+        return type("Pass", (object,), attrs)
+
+
+MastIR = IR(
+    ["Noun"],
+    {
+        "Expr": {
+            "NullExpr": {},
+            "IntExpr": { "i": None },
+            "NounExpr": { "noun": "Noun" },
+            "HideExpr": { "body": "Expr" },
+        },
+        "Patt": {
+            "FinalPatt": { "noun": "Noun", "guard": "Expr" },
+        },
+    }
+)
+
+class IncPass(MastIR.makePassTo(MastIR)):
+
+    def visitIntExpr(self, i):
+        return self.dest.IntExpr(i + 1)
+
+NoHideIR = IR(
+    ["Noun"],
+    {
+        "Expr": {
+            "NullExpr": {},
+            "IntExpr": { "i": None },
+            "NounExpr": { "noun": "Noun" },
+            "HideExpr": { "body": "Expr" },
+        },
+        "Patt": {
+            "FinalPatt": { "noun": "Noun", "guard": "Expr" },
+        },
+    }
+)
+
+class RemoveHide(MastIR.makePassTo(NoHideIR)):
+
+    def visitHideExpr(self, body):
+        return self.visitExpr(body)
