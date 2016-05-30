@@ -13,6 +13,9 @@ class IR(object):
     An intermediate representation.
     """
 
+    _immutable_ = True
+    _immutable_fields = "terminals[*]", "nonterms"
+
     def __init__(self, terminals, nonterms):
         self.terminals = terminals
         self.nonterms = nonterms
@@ -106,6 +109,36 @@ def visit%(name)s(self, specimen):
 
         return type("Pass", (object,), attrs)
 
+    def extend(self, terminals, nonterms):
+        ts = self.terminals[:]
+        for t in terminals:
+            if t.startswith("-"):
+                # Removal.
+                t = t[1:]
+                # I wanted to put an assert here, but list.remove() raises
+                # ValueError already, so it's not a problem. ~ C.
+                ts.remove(t)
+            else:
+                # Addition.
+                ts.append(t)
+        nts = self.nonterms.copy()
+        for nt, constructors in nonterms.iteritems():
+            # Recurse into every constructor, if we already have the
+            # non-terminal. Otherwise, just copy the new thing wholesale.
+            if nt in nts:
+                for constructor, pieces in constructors.iteritems():
+                    if constructor.startswith("-"):
+                        # Removal.
+                        constructor = constructor[1:]
+                        # As before, raise if not found.
+                        del nts[nt][constructor]
+                    else:
+                        # Addition to a possibly-already-extant constructor.
+                        # We'll overwrite the old constructor with the new.
+                        nts[nt][constructor] = pieces
+            else:
+                nts[nt] = constructors
+        return IR(ts, nts)
 
 MastIR = IR(
     ["Noun"],
@@ -128,21 +161,7 @@ class IncPass(MastIR.makePassTo(MastIR)):
     def visitIntExpr(self, i):
         return self.dest.IntExpr(i + 1)
 
-NoHideIR = IR(
-    ["Noun"],
-    {
-        "Expr": {
-            "NullExpr": {},
-            "IntExpr": { "i": None },
-            "NounExpr": { "noun": "Noun" },
-            "HideExpr": { "body": "Expr" },
-            "SeqExpr": { "exprs": "Expr*" },
-        },
-        "Patt": {
-            "FinalPatt": { "noun": "Noun", "guard": "Expr" },
-        },
-    }
-)
+NoHideIR = MastIR.extend([], {"Expr": {"-HideExpr": None}})
 
 class RemoveHide(MastIR.makePassTo(NoHideIR)):
 
