@@ -39,10 +39,11 @@ MastIR = IR(
             "ViaPatt": [("trans", "Expr"), ("patt", "Patt")],
         },
         "NamedArg": {
-            "NamedArg": [("key", "Expr"), ("value", "Expr")],
+            "NamedArgExpr": [("key", "Expr"), ("value", "Expr")],
         },
         "NamedPatt": {
-            "NamedPatt": [("key", "Expr"), ("patt", "Patt"), ("default", "Expr")],
+            "NamedPattern": [("key", "Expr"), ("patt", "Patt"),
+                             ("default", "Expr")],
         },
         "Matcher": {
             "MatcherExpr": [("patt", "Patt"), ("body", "Expr")],

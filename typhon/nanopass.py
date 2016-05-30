@@ -40,7 +40,6 @@ class IR(object):
                                           for field, ty in pieces]
 
                     def __init__(self, *args):
-                        print "build", constructor, pieces, args
                         for i, (piece, _) in ipieces:
                             setattr(self, piece, args[i])
 
@@ -58,10 +57,11 @@ class IR(object):
 
         attrs = { "src": self, "dest": ir }
         for terminal in self.terminals:
-            def visitor(x):
+            def visitor(self, x):
                 return x
-            visitor.__name__ = terminal
-            attrs[terminal] = visitor
+            name = "visit" + terminal
+            visitor.__name__ = name
+            attrs[name] = visitor
 
         for nonterm, constructors in self.nonterms.iteritems():
             conClasses = []
@@ -97,11 +97,7 @@ class IR(object):
                 callVisit = "self.%s(%s)" % (visitName, specimenPieces)
                 conClasses.append((constructor, callVisit))
             # Construct subordinate clauses for the visitor on this
-            # non-terminal. If there's only one constructor, then provide a
-            # newtype-style quick passthrough.
-            if len(constructors) == 1:
-                continue
-
+            # non-terminal.
             d = {}
             clauses = []
             for constructor, callVisit in conClasses:

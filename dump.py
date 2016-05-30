@@ -15,9 +15,9 @@ def entryPoint(argv):
     except InvalidMAST:
         print "Invalid MAST"
         return 1
-    import pdb; pdb.set_trace()
-    for line in term.repr().split("\n"):
-        print line.rstrip()
+    print term
+    # for line in term.repr().split("\n"):
+    #     print line.rstrip()
     return 0
 
 
