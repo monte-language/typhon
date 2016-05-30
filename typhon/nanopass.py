@@ -139,31 +139,3 @@ def visit%(name)s(self, specimen):
             else:
                 nts[nt] = constructors
         return IR(ts, nts)
-
-MastIR = IR(
-    ["Noun"],
-    {
-        "Expr": {
-            "NullExpr": {},
-            "IntExpr": { "i": None },
-            "NounExpr": { "noun": "Noun" },
-            "HideExpr": { "body": "Expr" },
-            "SeqExpr": { "exprs": "Expr*" },
-        },
-        "Patt": {
-            "FinalPatt": { "noun": "Noun", "guard": "Expr" },
-        },
-    }
-)
-
-class IncPass(MastIR.makePassTo(MastIR)):
-
-    def visitIntExpr(self, i):
-        return self.dest.IntExpr(i + 1)
-
-NoHideIR = MastIR.extend([], {"Expr": {"-HideExpr": None}})
-
-class RemoveHide(MastIR.makePassTo(NoHideIR)):
-
-    def visitHideExpr(self, body):
-        return self.visitExpr(body)
