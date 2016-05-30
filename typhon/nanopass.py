@@ -20,23 +20,30 @@ class IR(object):
         self.terminals = terminals
         self.nonterms = nonterms
 
+        # The parent class of all nonterminals. Important for manipulating
+        # ASTs in RPython.
+        class NonTerminal(object):
+            _immutable_ = True
+
         for nonterm, constructors in nonterms.iteritems():
             # Construct a superclass which every constructor will inherit
             # from.
-            class NT(object):
+            class NT(NonTerminal):
                 _immutable_ = True
             NT.__name__ = nonterm
 
             def build(constructor, pieces):
+                ipieces = unrolling_iterable(enumerate(pieces))
                 class Constructor(NT):
                     _immutable_ = True
                     _immutable_fields_ = [freezeField(field, ty)
-                                          for field, ty
-                                          in pieces.iteritems()]
+                                          for field, ty in pieces]
 
                     def __init__(self, *args):
-                        for i, piece in unrolling_iterable(enumerate(pieces)):
+                        print "build", constructor, pieces, args
+                        for i, (piece, _) in ipieces:
                             setattr(self, piece, args[i])
+
                 Constructor.__name__ = constructor
                 setattr(self, constructor, Constructor)
 
@@ -63,7 +70,7 @@ class IR(object):
                 # Recurse on non-terminals by type. Untyped elements are
                 # assumed to not be recursive.
                 mods = []
-                for piece, ty in pieces.iteritems():
+                for piece, ty in pieces:
                     if ty:
                         if ty.endswith('*'):
                             # List of elements.
@@ -74,7 +81,7 @@ class IR(object):
                             s = "%s = self.visit%s(%s)" % (piece, ty, piece)
                         mods.append(s)
                 params = {
-                    "args": ",".join(pieces),
+                    "args": ",".join(p[0] for p in pieces),
                     "name": visitName,
                     "constructor": constructor,
                     "mods": ";".join(mods)
@@ -86,11 +93,15 @@ class IR(object):
                         return self.dest.%(constructor)s(%(args)s)
                 """ % params).compile() in d
                 attrs[visitName] = d[visitName]
-                specimenPieces = ",".join("specimen.%s" % k for k in pieces)
+                specimenPieces = ",".join("specimen.%s" % p[0] for p in pieces)
                 callVisit = "self.%s(%s)" % (visitName, specimenPieces)
                 conClasses.append((constructor, callVisit))
             # Construct subordinate clauses for the visitor on this
-            # constructor.
+            # non-terminal. If there's only one constructor, then provide a
+            # newtype-style quick passthrough.
+            if len(constructors) == 1:
+                continue
+
             d = {}
             clauses = []
             for constructor, callVisit in conClasses:
@@ -126,7 +137,7 @@ def visit%(name)s(self, specimen):
             # Recurse into every constructor, if we already have the
             # non-terminal. Otherwise, just copy the new thing wholesale.
             if nt in nts:
-                for constructor, pieces in constructors.iteritems():
+                for constructor, pieces in constructors:
                     if constructor.startswith("-"):
                         # Removal.
                         constructor = constructor[1:]
