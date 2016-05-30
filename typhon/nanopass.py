@@ -2,6 +2,11 @@ import py
 
 from rpython.rlib.unroll import unrolling_iterable
 
+def freezeField(field, ty):
+    if ty and ty.endswith("*"):
+        # List.
+        return field + "[*]"
+    return field
 
 class IR(object):
     """
@@ -22,6 +27,9 @@ class IR(object):
             def build(constructor, pieces):
                 class Constructor(NT):
                     _immutable_ = True
+                    _immutable_fields_ = [freezeField(field, ty)
+                                          for field, ty
+                                          in pieces.iteritems()]
 
                     def __init__(self, *args):
                         for i, piece in unrolling_iterable(enumerate(pieces)):
@@ -54,7 +62,13 @@ class IR(object):
                 mods = []
                 for piece, ty in pieces.iteritems():
                     if ty:
-                        s = "%s = self.visit%s(%s)" % (piece, ty, piece)
+                        if ty.endswith('*'):
+                            # List of elements.
+                            ty = ty[:-1]
+                            s = "%s = [self.visit%s(x) for x in %s]" % (piece,
+                                    ty, piece)
+                        else:
+                            s = "%s = self.visit%s(%s)" % (piece, ty, piece)
                         mods.append(s)
                 params = {
                     "args": ",".join(pieces),
@@ -101,6 +115,7 @@ MastIR = IR(
             "IntExpr": { "i": None },
             "NounExpr": { "noun": "Noun" },
             "HideExpr": { "body": "Expr" },
+            "SeqExpr": { "exprs": "Expr*" },
         },
         "Patt": {
             "FinalPatt": { "noun": "Noun", "guard": "Expr" },
@@ -121,6 +136,7 @@ NoHideIR = IR(
             "IntExpr": { "i": None },
             "NounExpr": { "noun": "Noun" },
             "HideExpr": { "body": "Expr" },
+            "SeqExpr": { "exprs": "Expr*" },
         },
         "Patt": {
             "FinalPatt": { "noun": "Noun", "guard": "Expr" },
