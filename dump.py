@@ -1,22 +1,34 @@
 #!/usr/bin/env python
 
 import sys
-from typhon.load.mast import InvalidMAST, loadMAST
+from typhon.load.nano import InvalidMAST, loadMAST
+from typhon.nano.mast import PrettyMAST
+from typhon.nano.smallcaps import PrettySmallCaps, doNanoSmallCaps
 from typhon.nodes import InvalidAST
+
+
+def dumpLines(s):
+    for line in s.encode("utf-8").split("\n"):
+        print line.rstrip()
 
 
 def entryPoint(argv):
     path = argv[1]
     try:
-        term = loadMAST(path, noisy=False)
+        expr = loadMAST(path, noisy=False)
     except InvalidAST:
         print "Invalid AST"
         return 1
     except InvalidMAST:
         print "Invalid MAST"
         return 1
-    for line in term.repr().split("\n"):
-        print line.rstrip()
+    pretty = PrettyMAST()
+    pretty.visitExpr(expr)
+    dumpLines(pretty.asUnicode())
+    expr = doNanoSmallCaps(expr)
+    pretty = PrettySmallCaps()
+    pretty.visitExpr(expr)
+    dumpLines(pretty.asUnicode())
     return 0
 
 
