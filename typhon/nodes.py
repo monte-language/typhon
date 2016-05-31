@@ -442,14 +442,6 @@ class Node(Object):
     def repr(self):
         return self.__repr__()
 
-    def transform(self, f):
-        """
-        Apply the given transformation to all children of this node, and this
-        node, bottom-up.
-        """
-
-        return f(self)
-
     def recv(self, atom, args):
         if atom is CANONICAL_0:
             return self
@@ -798,9 +790,6 @@ class Assign(Expr):
         out.write(" := ")
         self.rvalue.pretty(out)
 
-    def transform(self, f):
-        return f(Assign(self.target, self.rvalue.transform(f)))
-
     def compile(self, compiler):
         self.rvalue.compile(compiler)
         # [rvalue]
@@ -842,9 +831,6 @@ class Binding(Expr):
         out.write("&&")
         out.write(self.name.encode("utf-8"))
 
-    def transform(self, f):
-        return f(self)
-
     def compile(self, compiler):
         compiler.accessFrame(self.name, "BINDING")
         # [binding]
@@ -877,9 +863,6 @@ class NamedArg(Expr):
         self.key.pretty(out)
         out.write(" => ")
         self.value.pretty(out)
-
-    def transform(self, f):
-        return f(NamedArg(self.key.transform(f), self.value.transform(f)))
 
     def getStaticScope(self):
         return self.key.getStaticScope().add(self.value.getStaticScope())
@@ -945,11 +928,6 @@ class Call(Expr):
             for na in na[1:]:
                 na.pretty(out)
         out.write(")")
-
-    def transform(self, f):
-        return f(Call(self._target.transform(f), self._verb,
-                      [arg.transform(f) for arg in self._args],
-                      [narg.transform(f) for narg in self._namedArgs]))
 
     def compile(self, compiler):
         self._target.compile(compiler)
@@ -1036,9 +1014,6 @@ class Def(Expr):
         out.write(" := ")
         self._v.pretty(out)
 
-    def transform(self, f):
-        return f(Def(self._p, self._e, self._v.transform(f)))
-
     def compile(self, compiler):
         self._v.compile(compiler)
         # [value]
@@ -1099,16 +1074,6 @@ class Escape(Expr):
             self._catchNode.pretty(out.indent())
         out.writeLine("")
         out.writeLine("}")
-
-    def transform(self, f):
-        # We have to write some extra code here since catchNode could be None.
-        if self._catchNode is None:
-            catchNode = None
-        else:
-            catchNode = self._catchNode.transform(f)
-
-        return f(Escape(self._pattern, self._node.transform(f),
-            self._catchPattern, catchNode))
 
     def compile(self, compiler):
         ejector = compiler.markInstruction("EJECTOR")
@@ -1178,9 +1143,6 @@ class Finally(Expr):
         out.writeLine("")
         out.writeLine("}")
 
-    def transform(self, f):
-        return f(Finally(self._block.transform(f), self._atLast.transform(f)))
-
     def compile(self, compiler):
         unwind = compiler.markInstruction("UNWIND")
         subc = compiler.pushScope()
@@ -1223,9 +1185,6 @@ class Hide(Expr):
         self._inner.pretty(out.indent())
         out.writeLine("}")
 
-    def transform(self, f):
-        return f(Hide(self._inner.transform(f)))
-
     def compile(self, compiler):
         self._inner.compile(compiler.pushScope())
 
@@ -1264,10 +1223,6 @@ class If(Expr):
         self._otherwise.pretty(out.indent())
         out.writeLine("")
         out.writeLine("}")
-
-    def transform(self, f):
-        return f(If(self._test.transform(f), self._then.transform(f),
-            self._otherwise.transform(f)))
 
     def compile(self, compiler):
         # BRANCH otherwise
@@ -1321,9 +1276,6 @@ class Matcher(Expr):
         out.writeLine(" {")
         self._block.pretty(out.indent())
         out.writeLine("}")
-
-    def transform(self, f):
-        return f(Matcher(self._pattern, self._block.transform(f)))
 
     def getStaticScope(self):
         scope = self._pattern.getStaticScope()
@@ -1458,10 +1410,6 @@ class Method(Expr):
         self._b.pretty(out.indent())
         out.writeLine("")
         out.writeLine("}")
-
-    def transform(self, f):
-        return f(Method(self._d, self._verb, self._ps, self._namedParams, self._g,
-                        self._b.transform(f)))
 
     def getStaticScope(self):
         scope = emptyScope
@@ -1598,10 +1546,6 @@ class Obj(Expr):
             out.indent().writeLine('"%s"' % self._d.encode("utf-8"))
         self._script.pretty(out.indent())
         out.writeLine("}")
-
-    def transform(self, f):
-        return f(Obj(self._d, self._n, self._as, self._implements,
-                     self._script.transform(f)))
 
     def compile(self, compiler):
         # Create a code object for this object.
@@ -1813,10 +1757,6 @@ class Script(Expr):
         for matcher in self._matchers:
             matcher.pretty(out)
 
-    def transform(self, f):
-        methods = [method.transform(f) for method in self._methods]
-        return f(Script(self._extends, methods, self._matchers))
-
     def getStaticScope(self):
         scope = emptyScope
         for expr in self._methods:
@@ -1891,9 +1831,6 @@ class Sequence(Expr):
             out.writeLine("")
         last.pretty(out)
 
-    def transform(self, f):
-        return f(Sequence([node.transform(f) for node in self._l]))
-
     def compile(self, compiler):
         if self._l:
             for node in self._l[:-1]:
@@ -1945,10 +1882,6 @@ class Try(Expr):
         self._then.pretty(out.indent())
         out.writeLine("")
         out.writeLine("}")
-
-    def transform(self, f):
-        return f(Try(self._first.transform(f), self._pattern,
-            self._then.transform(f)))
 
     def compile(self, compiler):
         index = compiler.markInstruction("TRY")
