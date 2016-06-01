@@ -86,13 +86,22 @@ class IR(object):
                     "constructor": constructor,
                     "mods": ";".join(mods)
                 }
-                d = {}
-                exec py.code.Source("""
-                    def %(name)s(self, %(args)s):
-                        %(mods)s
-                        return self.dest.%(constructor)s(%(args)s)
-                """ % params).compile() in d
-                attrs[visitName] = d[visitName]
+                if ir is None:
+                    # This pass extracts some sort of summary but does not
+                    # create more IR. Force the caller to override every
+                    # non-terminal.
+                    def mustImplement(self, *args):
+                        "NOT_RPYTHON"
+                        raise NotImplementedError("rutabaga")
+                    attrs[visitName] = mustImplement
+                else:
+                    d = {}
+                    exec py.code.Source("""
+                        def %(name)s(self, %(args)s):
+                            %(mods)s
+                            return self.dest.%(constructor)s(%(args)s)
+                    """ % params).compile() in d
+                    attrs[visitName] = d[visitName]
                 specimenPieces = ",".join("specimen.%s" % p[0] for p in pieces)
                 callVisit = "self.%s(%s)" % (visitName, specimenPieces)
                 conClasses.append((constructor, callVisit))

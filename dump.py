@@ -2,6 +2,7 @@
 
 import sys
 from typhon.load.nano import InvalidMAST, loadMAST
+from typhon.nano.mast import PrettyMAST
 from typhon.nodes import InvalidAST
 
 
@@ -15,9 +16,11 @@ def entryPoint(argv):
     except InvalidMAST:
         print "Invalid MAST"
         return 1
-    print term
-    # for line in term.repr().split("\n"):
-    #     print line.rstrip()
+    pretty = PrettyMAST()
+    pretty.visitExpr(term)
+    s = pretty.asUnicode()
+    for line in s.encode("utf-8").split("\n"):
+        print line.rstrip()
     return 0
 
 
