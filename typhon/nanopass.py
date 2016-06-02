@@ -8,6 +8,10 @@ def freezeField(field, ty):
         return field + "[*]"
     return field
 
+def increment(x=[0]):
+    x[0] += 1
+    return x[0]
+
 class IR(object):
     """
     An intermediate representation.
@@ -24,6 +28,9 @@ class IR(object):
         # ASTs in RPython.
         class NonTerminal(object):
             _immutable_ = True
+        # Please do *not* access this class outside of this implementation; it
+        # won't end well. ~ C.
+        self._NonTerminal = NonTerminal
 
         for nonterm, constructors in nonterms.iteritems():
             # Construct a superclass which every constructor will inherit
@@ -43,7 +50,7 @@ class IR(object):
                         for i, (piece, _) in ipieces:
                             setattr(self, piece, args[i])
 
-                Constructor.__name__ = constructor
+                Constructor.__name__ = constructor + str(increment())
                 setattr(self, constructor, Constructor)
 
             for constructor, pieces in constructors.iteritems():
@@ -92,6 +99,7 @@ class IR(object):
                     # non-terminal.
                     def mustImplement(self, *args):
                         "NOT_RPYTHON"
+                        import pdb; pdb.set_trace()
                         raise NotImplementedError("rutabaga")
                     attrs[visitName] = mustImplement
                 else:
@@ -102,6 +110,7 @@ class IR(object):
                             return self.dest.%(constructor)s(%(args)s)
                     """ % params).compile() in d
                     attrs[visitName] = d[visitName]
+                    attrs[visitName].__name__ += str(increment())
                 specimenPieces = ",".join("specimen.%s" % p[0] for p in pieces)
                 callVisit = "self.%s(%s)" % (visitName, specimenPieces)
                 conClasses.append((constructor, callVisit))
@@ -118,8 +127,9 @@ class IR(object):
             }
             exec py.code.Source("""
 def visit%(name)s(self, specimen):
+    assert isinstance(specimen, self.src._NonTerminal), "cabbage"
     %(clauses)s
-    assert False, "Implementation error"
+    assert False, "radish"
             """ % params).compile() in d
             attrs.update(d)
 

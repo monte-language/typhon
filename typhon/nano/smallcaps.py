@@ -6,6 +6,7 @@ from typhon.quoting import quoteChar, quoteStr
 def doNanoSmallCaps(expr):
     expr = checkpoints.AddCheckpoints().visitExpr(expr)
     expr = checkpoints.CollectCheckpoints().visitExpr(expr)
+    return expr
 
 class PrettySmallCaps(checkpoints.CheckpointIR.makePassTo(None)):
 
@@ -233,3 +234,8 @@ class PrettySmallCaps(checkpoints.CheckpointIR.makePassTo(None)):
         self.write(u" {")
         self.visitExpr(body)
         self.write(u"}")
+
+    def visitCheckpointExpr(self, count):
+        self.write(u"meta.checkpoint(")
+        self.write(u"%d" % count)
+        self.write(u")")
