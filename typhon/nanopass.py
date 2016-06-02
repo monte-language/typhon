@@ -12,49 +12,45 @@ def increment(x=[0]):
     x[0] += 1
     return x[0]
 
-class IR(object):
-    """
-    An intermediate representation.
-    """
+def makeIR(name, terminals, nonterms):
+    irAttrs = {
+        "_immutable_": True,
+        "_immutable_fields_": ("terminals[*]", "nonterms"),
+        "terminals": terminals,
+        "nonterms": nonterms,
+    }
 
-    _immutable_ = True
-    _immutable_fields = "terminals[*]", "nonterms"
+    # The parent class of all nonterminals. Important for manipulating
+    # ASTs in RPython.
+    class NonTerminal(object):
+        _immutable_ = True
+    # Please do *not* access this class outside of this implementation; it
+    # won't end well. ~ C.
+    irAttrs["_NonTerminal"] = NonTerminal
 
-    def __init__(self, terminals, nonterms):
-        self.terminals = terminals
-        self.nonterms = nonterms
-
-        # The parent class of all nonterminals. Important for manipulating
-        # ASTs in RPython.
-        class NonTerminal(object):
+    for nonterm, constructors in nonterms.iteritems():
+        # Construct a superclass which every constructor will inherit
+        # from.
+        class NT(NonTerminal):
             _immutable_ = True
-        # Please do *not* access this class outside of this implementation; it
-        # won't end well. ~ C.
-        self._NonTerminal = NonTerminal
+        NT.__name__ = nonterm
 
-        for nonterm, constructors in nonterms.iteritems():
-            # Construct a superclass which every constructor will inherit
-            # from.
-            class NT(NonTerminal):
+        def build(constructor, pieces):
+            ipieces = unrolling_iterable(enumerate(pieces))
+            class Constructor(NT):
                 _immutable_ = True
-            NT.__name__ = nonterm
+                _immutable_fields_ = [freezeField(field, ty)
+                                      for field, ty in pieces]
 
-            def build(constructor, pieces):
-                ipieces = unrolling_iterable(enumerate(pieces))
-                class Constructor(NT):
-                    _immutable_ = True
-                    _immutable_fields_ = [freezeField(field, ty)
-                                          for field, ty in pieces]
+                def __init__(self, *args):
+                    for i, (piece, _) in ipieces:
+                        setattr(self, piece, args[i])
 
-                    def __init__(self, *args):
-                        for i, (piece, _) in ipieces:
-                            setattr(self, piece, args[i])
+            Constructor.__name__ = constructor + str(increment())
+            irAttrs[constructor] = Constructor
 
-                Constructor.__name__ = constructor + str(increment())
-                setattr(self, constructor, Constructor)
-
-            for constructor, pieces in constructors.iteritems():
-                build(constructor, pieces)
+        for constructor, pieces in constructors.iteritems():
+            build(constructor, pieces)
 
     def makePassTo(self, ir):
         """
@@ -134,8 +130,9 @@ def visit%(name)s(self, specimen):
             attrs.update(d)
 
         return type("Pass", (object,), attrs)
+    irAttrs["makePassTo"] = makePassTo
 
-    def extend(self, terminals, nonterms):
+    def extend(self, name, terminals, nonterms):
         ts = self.terminals[:]
         for t in terminals:
             if t.startswith("-"):
@@ -167,7 +164,11 @@ def visit%(name)s(self, specimen):
                         nts[nt][constructor] = pieces
             else:
                 nts[nt] = constructors
-        return IR(ts, nts)
+        return makeIR(name, ts, nts)
+    irAttrs["extend"] = extend
 
     def selfPass(self):
         return self.makePassTo(self)
+    irAttrs["selfPass"] = selfPass
+
+    return type(name + "IR", (object,), irAttrs)()

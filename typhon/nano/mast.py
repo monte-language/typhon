@@ -1,9 +1,9 @@
 from rpython.rlib.rbigint import BASE10
 
-from typhon.nanopass import IR
+from typhon.nanopass import makeIR
 from typhon.quoting import quoteChar, quoteStr
 
-MastIR = IR(
+MastIR = makeIR("Mast",
     ["Noun"],
     {
         "Expr": {

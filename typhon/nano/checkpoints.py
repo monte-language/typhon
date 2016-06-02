@@ -1,6 +1,6 @@
 from typhon.nano.mast import MastIR
 
-CheckpointIR = MastIR.extend([],
+CheckpointIR = MastIR.extend("Checkpoint", [],
         {"Expr": {"CheckpointExpr": [("count", None)]}})
 
 
@@ -38,4 +38,4 @@ class CollectCheckpoints(CheckpointIR.selfPass()):
                     l.append(expr)
         if count != 0:
             l.insert(0, CheckpointIR.CheckpointExpr(count))
-        return CheckpointIR.SeqExpr(l)
+        return CheckpointIR.SeqExpr(l[:])
