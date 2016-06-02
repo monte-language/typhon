@@ -137,12 +137,15 @@ def visit%(name)s(self, specimen):
             else:
                 # Addition.
                 ts.append(t)
+        # Dammit Python.
         nts = self.nonterms.copy()
         for nt, constructors in nonterms.iteritems():
             # Recurse into every constructor, if we already have the
             # non-terminal. Otherwise, just copy the new thing wholesale.
             if nt in nts:
-                for constructor, pieces in constructors:
+                # Dammit Python!
+                nts[nt] = nts[nt].copy()
+                for constructor, pieces in constructors.iteritems():
                     if constructor.startswith("-"):
                         # Removal.
                         constructor = constructor[1:]
@@ -155,3 +158,6 @@ def visit%(name)s(self, specimen):
             else:
                 nts[nt] = constructors
         return IR(ts, nts)
+
+    def selfPass(self):
+        return self.makePassTo(self)
