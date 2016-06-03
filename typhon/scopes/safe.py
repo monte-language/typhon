@@ -13,9 +13,6 @@
 # under the License.
 
 from rpython.rlib.debug import debug_print
-from rpython.rlib.rbigint import rbigint
-from rpython.rlib.rstring import ParseStringError
-from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -23,14 +20,11 @@ from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import (auditedBy, deepFrozenGuard,
                                      deepFrozenStamp, selfless)
 from typhon.objects.collections.helpers import asSet, emptySet
-from typhon.objects.collections.lists import (wrapList, listFromIterable,
-                                              unwrapList)
+from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
 from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import (BigInt, BytesObject, DoubleObject, StrObject,
-                                 Infinity, NaN, bytesToString, makeSourceSpan,
-                                 unwrapBytes, unwrapInt, unwrapStr,
-                                 unwrapChar)
+from typhon.objects.data import (StrObject, Infinity, NaN, makeSourceSpan,
+                                 unwrapStr)
 from typhon.objects.ejectors import throw, theThrower
 from typhon.objects.equality import Equalizer
 from typhon.objects.exceptions import SealedException
@@ -38,11 +32,12 @@ from typhon.objects.iteration import loop
 from typhon.objects.guards import (BindingGuard, FinalSlotGuardMaker,
                                    VarSlotGuardMaker, anyGuard, sameGuardMaker,
                                    subrangeGuardMaker)
+from typhon.objects.makers import (theMakeBytes, theMakeDouble, theMakeInt,
+                                   theMakeList, theMakeMap, theMakeStr)
 from typhon.objects.printers import toString
 from typhon.objects.refs import Promise, RefOps, resolution
 from typhon.objects.root import Object, audited, runnable
 from typhon.objects.slots import Binding, FinalSlot, VarSlot, finalize
-from typhon.profile import profileTyphon
 from typhon.vats import currentVat
 
 ASTYPE_0 = getAtom(u"asType", 0)
@@ -55,14 +50,6 @@ CALL_4 = getAtom(u"call", 4)
 COERCE_2 = getAtom(u"coerce", 2)
 EXCEPTION_1 = getAtom(u"exception", 1)
 FAILURELIST_1 = getAtom(u"failureList", 1)
-FROMBYTES_1 = getAtom(u"fromBytes", 1)
-FROMBYTES_2 = getAtom(u"fromBytes", 2)
-FROMCHARS_1 = getAtom(u"fromChars", 1)
-FROMINTS_1 = getAtom(u"fromInts", 1)
-FROMITERABLE_1 = getAtom(u"fromIterable", 1)
-FROMPAIRS_1 = getAtom(u"fromPairs", 1)
-FROMSTRING_1 = getAtom(u"fromString", 1)
-FROMSTRING_2 = getAtom(u"fromString", 2)
 MAKEFINALSLOT_2 = getAtom(u"makeFinalSlot", 2)
 MAKEVARSLOT_2 = getAtom(u"makeVarSlot", 2)
 RUN_1 = getAtom(u"run", 1)
@@ -113,163 +100,6 @@ class TraceLn(Object):
             else:
                 self.writeLine(u"Problem: %s" % problem.toString())
             return NullObject
-
-        raise Refused(self, atom, args)
-
-
-@autohelp
-@audited.DF
-class MakeList(Object):
-    """
-    A maker of `List`s.
-    """
-
-    def toString(self):
-        return u"<makeList>"
-
-    def recv(self, atom, args):
-        if atom.verb == u"run":
-            return wrapList(args)
-
-        if atom is FROMITERABLE_1:
-            return wrapList(listFromIterable(args[0])[:])
-
-        raise Refused(self, atom, args)
-
-theMakeList = MakeList()
-
-
-@runnable(FROMPAIRS_1, [deepFrozenStamp])
-def makeMap(pairs):
-    """
-    Given a `List[Pair]`, produce a `Map`.
-    """
-
-    return ConstMap.fromPairs(pairs)
-
-theMakeMap = makeMap()
-
-
-@autohelp
-@audited.DF
-class MakeDouble(Object):
-    """
-    A maker of `Double`s.
-    """
-
-    def toString(self):
-        return u"<makeDouble>"
-
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            return DoubleObject(float(unwrapStr(args[0]).encode('utf-8')))
-
-        if atom is FROMBYTES_1:
-            bs = unwrapBytes(args[0])
-            try:
-                return DoubleObject(unpack_float(bs, True))
-            except ValueError:
-                raise userError(u"Couldn't unpack invalid IEEE 754 double")
-
-        raise Refused(self, atom, args)
-
-
-@autohelp
-@audited.DF
-class MakeInt(Object):
-    """
-    A maker of `Int`s.
-    """
-
-    def toString(self):
-        return u"<makeInt>"
-
-    @staticmethod
-    @profileTyphon("_makeInt.fromBytes/2")
-    def fromBytes(bs, radix):
-        # Ruby-style underscores are legal here but can't be handled by
-        # RPython, so remove them.
-        bs = ''.join([c for c in bs if c != '_'])
-        try:
-            return rbigint.fromstr(bs, radix)
-        except ParseStringError:
-            raise userError(u"Couldn't parse int from string")
-
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            bs = unwrapStr(args[0]).encode("utf-8")
-            return BigInt(self.fromBytes(bs, 10))
-
-        if atom is RUN_2:
-            inp = unwrapStr(args[0])
-            bs = inp.encode("utf-8")
-            radix = unwrapInt(args[1])
-            try:
-                return BigInt(self.fromBytes(bs, radix))
-            except ValueError:
-                raise userError(u"Invalid literal for base %d: %s" %
-                                (radix, inp))
-
-        if atom is FROMBYTES_1:
-            bs = unwrapBytes(args[0])
-            return BigInt(self.fromBytes(bs, 10))
-
-        if atom is FROMBYTES_2:
-            bs = unwrapBytes(args[0])
-            radix = unwrapInt(args[1])
-            try:
-                return BigInt(self.fromBytes(bs, radix))
-            except ValueError:
-                raise userError(u"Invalid literal for base %d: %s" %
-                                (radix, bytesToString(bs)))
-
-        raise Refused(self, atom, args)
-
-
-@autohelp
-@audited.DF
-class MakeString(Object):
-    """
-    A maker of `Str`s.
-    """
-
-    def toString(self):
-        return u"<makeString>"
-
-    def recv(self, atom, args):
-        if atom is FROMSTRING_1:
-            # XXX handle twineishness
-            return args[0]
-
-        if atom is FROMSTRING_2:
-            # XXX handle twineishness
-            return args[0]
-
-        if atom is FROMCHARS_1:
-            data = unwrapList(args[0])
-            return StrObject(u"".join([unwrapChar(c) for c in data]))
-
-        raise Refused(self, atom, args)
-
-
-@autohelp
-@audited.DF
-class MakeBytes(Object):
-    """
-    A maker of `Bytes`.
-    """
-
-    def toString(self):
-        return u"<makeBytes>"
-
-    def recv(self, atom, args):
-        if atom is FROMSTRING_1:
-            return BytesObject("".join([chr(ord(c))
-                                        for c in unwrapStr(args[0])]))
-
-        if atom is FROMINTS_1:
-            data = unwrapList(args[0])
-            return BytesObject("".join([chr(unwrapInt(i)) for i in data]))
 
         raise Refused(self, atom, args)
 
@@ -524,14 +354,15 @@ def safeScope():
         u"_auditedBy": auditedBy(),
         u"_equalizer": Equalizer(),
         u"_loop": loop(),
-        u"_makeBytes": MakeBytes(),
-        u"_makeDouble": MakeDouble(),
+        u"_makeBytes": theMakeBytes,
+        u"_makeDouble": theMakeDouble,
         u"_makeFinalSlot": theFinalSlotMaker,
-        u"_makeInt": MakeInt(),
+        u"_makeInt": theMakeInt,
         u"_makeList": theMakeList,
         u"_makeMap": theMakeMap,
         u"_makeSourceSpan": makeSourceSpan,
-        u"_makeString": MakeString(),
+        u"_makeStr": theMakeStr,
+        u"_makeString": theMakeStr,
         u"_makeVarSlot": VarSlotMaker(),
         u"_slotToBinding": theSlotBinder,
         u"throw": theThrower,
