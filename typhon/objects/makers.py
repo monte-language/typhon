@@ -30,9 +30,10 @@ FROMPAIRS_1 = getAtom(u"fromPairs", 1)
 FROMSTRING_1 = getAtom(u"fromString", 1)
 FROMSTRING_2 = getAtom(u"fromString", 2)
 FROMSTR_1 = getAtom(u"fromStr", 1)
+FROMSTR_2 = getAtom(u"fromStr", 2)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
-WITHBASE_1 = getAtom(u"withBase", 1)
+WITHRADIX_1 = getAtom(u"withRadix", 1)
 
 
 @autohelp
@@ -104,16 +105,16 @@ class MakeInt(Object):
     A maker of `Int`s.
     """
 
-    _immutable_fields_ = "base",
+    _immutable_fields_ = "radix",
 
-    def __init__(self, base):
-        self.base = base
+    def __init__(self, radix):
+        self.radix = radix
 
     def toString(self):
-        return u"<makeInt>"
+        return u"<makeInt(radix %d)>" % (self.radix,)
 
-    def withBase(self, base):
-        return MakeInt(base)
+    def withRadix(self, radix):
+        return MakeInt(radix)
 
     @staticmethod
     @profileTyphon("_makeInt.fromBytes/2")
@@ -124,17 +125,17 @@ class MakeInt(Object):
         try:
             return rbigint.fromstr(bs, radix)
         except ParseStringError:
-            throw(ej, StrObject(u"_makeInt: Couldn't make int in base %d from %s" %
+            throw(ej, StrObject(u"_makeInt: Couldn't make int in radix %d from %s" %
                 (radix, bytesToString(bs))))
 
     def recv(self, atom, args):
-        if atom is WITHBASE_1:
-            base = unwrapInt(args[0])
-            return self.withBase(base)
+        if atom is WITHRADIX_1:
+            radix = unwrapInt(args[0])
+            return self.withRadix(radix)
 
         if atom is RUN_1:
             bs = unwrapStr(args[0]).encode("utf-8")
-            return BigInt(self.fromBytes(bs, self.base, None))
+            return BigInt(self.fromBytes(bs, self.radix, None))
 
         if atom is RUN_2:
             bs = unwrapStr(args[0]).encode("utf-8")
@@ -143,7 +144,7 @@ class MakeInt(Object):
 
         if atom is FROMBYTES_1:
             bs = unwrapBytes(args[0])
-            return BigInt(self.fromBytes(bs, self.base, None))
+            return BigInt(self.fromBytes(bs, self.radix, None))
 
         if atom is FROMBYTES_2:
             bs = unwrapBytes(args[0])
@@ -195,14 +196,27 @@ class MakeStr(Object):
     def toString(self):
         return u"<makeStr>"
 
+    @deprecated(u"_makeStr.fromString/1: Use .fromStr/1 instead")
+    def fromString(self, s):
+        return self.fromStr(s)
+
+    def fromStr(self, s):
+        return StrObject(s)
+
     def recv(self, atom, args):
         if atom is FROMSTRING_1:
-            # XXX handle twineishness
-            return args[0]
+            return self.fromString(unwrapStr(args[0]))
+
+        if atom is FROMSTR_1:
+            return self.fromStr(unwrapStr(args[0]))
 
         if atom is FROMSTRING_2:
             # XXX handle twineishness
-            return args[0]
+            return self.fromString(unwrapStr(args[0]))
+
+        if atom is FROMSTR_2:
+            # XXX handle twineishness
+            return self.fromStr(unwrapStr(args[0]))
 
         if atom is FROMCHARS_1:
             data = unwrapList(args[0])
