@@ -1,3 +1,7 @@
+from functools import wraps
+
+from rpython.rlib.debug import debug_print
+
 """
 Simple tagged logger.
 """
@@ -20,8 +24,21 @@ class Logger(object):
 
     def write(self, tags, message):
         tagString = "(%s)" % ":".join(tags)
-        print "Log:", tagString, message.encode("utf-8")
+        debug_print("Log:", tagString, message.encode("utf-8"))
 
 
 logger = Logger()
 log = logger.log
+
+def deprecated(message):
+    """
+    Decorate a function so that it will log a deprecation warning when called.
+    """
+
+    def deco(f):
+        @wraps(f)
+        def inner(*args):
+            log(["serious", "deprecated"], message)
+            return f(*args)
+        return inner
+    return deco
