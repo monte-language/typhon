@@ -392,7 +392,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
         if (currentChar == '\\'):
             def nex := advance()
             if (nex == 'u'):
-                def hexstr := _makeString.fromChars([advance(), advance(), advance(), advance()])
+                def hexstr := _makeStr.fromChars([advance(), advance(), advance(), advance()])
                 def v
                 try:
                     bind v := _makeInt(hexstr, 16)
@@ -403,7 +403,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
             else if (nex == 'x'):
                 def v
                 try:
-                    bind v := _makeInt(_makeString.fromChars([advance(), advance()]), 16)
+                    bind v := _makeInt(_makeStr.fromChars([advance(), advance()]), 16)
                 catch _:
                     throw.eject(fail, "\\x escape must be two hex digits")
                 advance()
@@ -447,7 +447,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
             if (cc != null):
                buf.push(cc)
         advance()
-        return _makeString.fromChars(buf.snapshot())
+        return _makeStr.fromChars(buf.snapshot())
 
     def charLiteral(fail):
         advance()

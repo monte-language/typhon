@@ -65,7 +65,7 @@ object b__quasiParser as DeepFrozen:
                     if (piece =~ [==byteValue, index]):
                         piece := values[index]
                     else:
-                        piece := _makeBytes.fromString(piece)
+                        piece := _makeBytes.fromStr(piece)
 
                     def len := piece.size()
                     if (inPattern):
@@ -108,7 +108,7 @@ object b__quasiParser as DeepFrozen:
         def chunks := [].diverge()
         for piece in (pieces):
             if (piece =~ _ :Str):
-                chunks.push(_makeBytes.fromString(piece))
+                chunks.push(_makeBytes.fromStr(piece))
             else:
                 chunks.push(piece)
 
@@ -120,7 +120,7 @@ object b__quasiParser as DeepFrozen:
                         match [==byteValue, index]:
                             switch (values[index]):
                                 match s :Str:
-                                    rv += _makeBytes.fromString(s)
+                                    rv += _makeBytes.fromStr(s)
                                 match bs :Bytes:
                                     rv += bs
                         match bs :Bytes:

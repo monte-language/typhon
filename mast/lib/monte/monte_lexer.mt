@@ -233,7 +233,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             return composite(".float64.", _makeDouble(s), span)
         else:
             if (radix == 16):
-                return composite(".int.", _makeInt(s.slice(2), 16), span)
+                return composite(".int.", _makeInt.withRadix(16)(s.slice(2)), span)
             else:
                 return composite(".int.", _makeInt(s), span)
 
@@ -242,20 +242,20 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         if (currentChar == '\\'):
             def nex := advance()
             if (nex == 'U'):
-                def hexstr := _makeString.fromChars([
+                def hexstr := _makeStr.fromChars([
                     advance(), advance(), advance(), advance(),
                     advance(), advance(), advance(), advance()])
                 def v := try {
-                    _makeInt(hexstr, 16)
+                    _makeInt.withRadix(16)(hexstr)
                 } catch _ {
                     throw.eject(fail, ["\\U escape must be eight hex digits, not " + hexstr, spanAtPoint()])
                 }
                 advance()
                 return '\x00' + v
             if (nex == 'u'):
-                def hexstr := _makeString.fromChars([advance(), advance(), advance(), advance()])
+                def hexstr := _makeStr.fromChars([advance(), advance(), advance(), advance()])
                 def v := try {
-                    _makeInt(hexstr, 16)
+                    _makeInt.withRadix(16)(hexstr)
                 } catch _ {
                     throw.eject(fail, ["\\u escape must be four hex digits", spanAtPoint()])
                 }
@@ -263,7 +263,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 return '\x00' + v
             else if (nex == 'x'):
                 def v := try {
-                    _makeInt(_makeString.fromChars([advance(), advance()]), 16)
+                    _makeInt.withRadix(16)(_makeStr.fromChars([advance(), advance()]))
                 } catch _ {
                     throw.eject(fail, ["\\x escape must be two hex digits", spanAtPoint()])
                 }
@@ -308,7 +308,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             if (cc != null):
                buf.push(cc)
         advance()
-        return _makeString.fromChars(buf.snapshot())
+        return _makeStr.fromChars(buf.snapshot())
 
     def charLiteral(fail):
         advance()
@@ -355,7 +355,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 # close backtick
                 advance()
                 popBrace('`', fail)
-                return composite("QUASI_CLOSE", _makeString.fromChars(buf.snapshot()),
+                return composite("QUASI_CLOSE", _makeStr.fromChars(buf.snapshot()),
                                  endToken()[1])
             else if (currentChar == '$' && peekChar() == '\\'):
                 # it's a character constant like $\u2603 or a line continuation like $\
@@ -366,7 +366,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             else:
                 def [opener, span] := endToken()
                 pushBrace(opener, spanAtPoint(), "hole", nestLevel * 4, true)
-                return composite("QUASI_OPEN", _makeString.fromChars(buf.snapshot()),
+                return composite("QUASI_OPEN", _makeStr.fromChars(buf.snapshot()),
                                  span)
 
 
@@ -472,7 +472,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
         if ([';', ',', '~', '?'].contains(cur)):
             advance()
-            return leaf(_makeString.fromChars([cur]))
+            return leaf(_makeStr.fromChars([cur]))
 
         if (cur == '('):
             return openBracket(")", null, fail)

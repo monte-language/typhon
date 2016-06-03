@@ -104,7 +104,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             advance(ej)[1]
         } else {
             def t := acceptTag("IDENTIFIER", ej)
-            _makeString.fromString(t[1], t[2])
+            _makeString.fromStr(t[1], t[2])
         }
 
     def acceptList(rule):
@@ -679,7 +679,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             null
         } else if (peekTag() == "IDENTIFIER") {
             def t := advance(ej)
-            _makeString.fromString(t[1], t[2])
+            _makeString.fromStr(t[1], t[2])
         } else {
             acceptTag("::", ej)
             acceptTag(".String.", ej)
