@@ -8,7 +8,8 @@ from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
+from typhon.errors import Refused
+from typhon.log import deprecated
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections.lists import (listFromIterable, unwrapList,
                                               wrapList)
@@ -16,6 +17,7 @@ from typhon.objects.collections.maps import ConstMap
 from typhon.objects.data import (BigInt, BytesObject, DoubleObject, StrObject,
                                  bytesToString, unwrapBytes, unwrapInt,
                                  unwrapStr, unwrapChar)
+from typhon.objects.ejectors import throw
 from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
 
@@ -27,8 +29,10 @@ FROMITERABLE_1 = getAtom(u"fromIterable", 1)
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
 FROMSTRING_1 = getAtom(u"fromString", 1)
 FROMSTRING_2 = getAtom(u"fromString", 2)
+FROMSTR_1 = getAtom(u"fromStr", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
+WITHBASE_1 = getAtom(u"withBase", 1)
 
 
 @autohelp
@@ -41,10 +45,19 @@ class MakeBytes(Object):
     def toString(self):
         return u"<makeBytes>"
 
+    @deprecated(u"_makeBytes.fromString/1: Use .fromStr/1 instead")
+    def fromString(self, s):
+        return self.fromStr(s)
+
+    def fromStr(self, s):
+        return BytesObject("".join([chr(ord(c)) for c in s]))
+
     def recv(self, atom, args):
         if atom is FROMSTRING_1:
-            return BytesObject("".join([chr(ord(c))
-                                        for c in unwrapStr(args[0])]))
+            return self.fromString(unwrapStr(args[0]))
+
+        if atom is FROMSTR_1:
+            return self.fromStr(unwrapStr(args[0]))
 
         if atom is FROMINTS_1:
             data = unwrapList(args[0])
@@ -64,16 +77,21 @@ class MakeDouble(Object):
     def toString(self):
         return u"<makeDouble>"
 
+    def fromBytes(self, bs, ej):
+        try:
+            return DoubleObject(unpack_float(bs, True))
+        except ValueError:
+            throw(ej, StrObject(u"Couldn't unpack invalid IEEE 754 double"))
+
     def recv(self, atom, args):
         if atom is RUN_1:
             return DoubleObject(float(unwrapStr(args[0]).encode('utf-8')))
 
         if atom is FROMBYTES_1:
-            bs = unwrapBytes(args[0])
-            try:
-                return DoubleObject(unpack_float(bs, True))
-            except ValueError:
-                raise userError(u"Couldn't unpack invalid IEEE 754 double")
+            return self.fromBytes(unwrapBytes(args[0]), None)
+
+        if atom is FROMBYTES_2:
+            return self.fromBytes(unwrapBytes(args[0]), args[1])
 
         raise Refused(self, atom, args)
 theMakeDouble = MakeDouble()
@@ -83,53 +101,57 @@ theMakeDouble = MakeDouble()
 @audited.DF
 class MakeInt(Object):
     """
-    The maker of `Int`s.
+    A maker of `Int`s.
     """
+
+    _immutable_fields_ = "base",
+
+    def __init__(self, base):
+        self.base = base
 
     def toString(self):
         return u"<makeInt>"
 
+    def withBase(self, base):
+        return MakeInt(base)
+
     @staticmethod
     @profileTyphon("_makeInt.fromBytes/2")
-    def fromBytes(bs, radix):
+    def fromBytes(bs, radix, ej):
         # Ruby-style underscores are legal here but can't be handled by
         # RPython, so remove them.
         bs = ''.join([c for c in bs if c != '_'])
         try:
             return rbigint.fromstr(bs, radix)
         except ParseStringError:
-            raise userError(u"Couldn't parse int from string")
+            throw(ej, StrObject(u"_makeInt: Couldn't make int in base %d from %s" %
+                (radix, bytesToString(bs))))
 
     def recv(self, atom, args):
+        if atom is WITHBASE_1:
+            base = unwrapInt(args[0])
+            return self.withBase(base)
+
         if atom is RUN_1:
             bs = unwrapStr(args[0]).encode("utf-8")
-            return BigInt(self.fromBytes(bs, 10))
+            return BigInt(self.fromBytes(bs, self.base, None))
 
         if atom is RUN_2:
-            inp = unwrapStr(args[0])
-            bs = inp.encode("utf-8")
+            bs = unwrapStr(args[0]).encode("utf-8")
             radix = unwrapInt(args[1])
-            try:
-                return BigInt(self.fromBytes(bs, radix))
-            except ValueError:
-                raise userError(u"Invalid literal for base %d: %s" %
-                                (radix, inp))
+            return BigInt(self.fromBytes(bs, radix, None))
 
         if atom is FROMBYTES_1:
             bs = unwrapBytes(args[0])
-            return BigInt(self.fromBytes(bs, 10))
+            return BigInt(self.fromBytes(bs, self.base, None))
 
         if atom is FROMBYTES_2:
             bs = unwrapBytes(args[0])
             radix = unwrapInt(args[1])
-            try:
-                return BigInt(self.fromBytes(bs, radix))
-            except ValueError:
-                raise userError(u"Invalid literal for base %d: %s" %
-                                (radix, bytesToString(bs)))
+            return BigInt(self.fromBytes(bs, radix, None))
 
         raise Refused(self, atom, args)
-theMakeInt = MakeInt()
+theMakeInt = MakeInt(10)
 
 
 @autohelp
