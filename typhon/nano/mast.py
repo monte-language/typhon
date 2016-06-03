@@ -59,6 +59,29 @@ MastIR = makeIR("Mast",
     }
 )
 
+SaveScriptIR = MastIR.extend("SaveScript", [],
+    {
+        "Expr": {
+            "ObjectExpr": [("doc", None), ("patt", "Patt"),
+                           ("auditors", "Expr*"), ("methods", "Method*"),
+                           ("matchers", "Matcher*"), ("mast", None)],
+        },
+    }
+)
+
+
+class SaveScripts(MastIR.makePassTo(SaveScriptIR)):
+
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
+        mast = MastIR.ObjectExpr(doc, patt, auditors, methods, matchers)
+        patt = self.visitPatt(patt)
+        auditors = [self.visitExpr(auditor) for auditor in auditors]
+        methods = [self.visitMethod(method) for method in methods]
+        matchers = [self.visitMatcher(matcher) for matcher in matchers]
+        return self.dest.ObjectExpr(doc, patt, auditors, methods, matchers,
+                                    mast)
+
+
 class PrettyMAST(MastIR.makePassTo(None)):
 
     def __init__(self):
