@@ -383,10 +383,13 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
         if (floating):
             return builder.leafInternal(makeTag(null, ".float64.", Any), _makeDouble(s), tok.getSpan())
         else:
-            if (radix == 16):
-                return builder.leafInternal(makeTag(null, ".int.", Any), _makeInt(s.slice(2), 16), tok.getSpan())
-            else:
-                return builder.leafInternal(makeTag(null, ".int.", Any), _makeInt(s), tok.getSpan())
+            def i := if (radix == 16) {
+                _makeInt.withRadix(16)(s.slice(2))
+            } else {
+                _makeInt(s)
+            }
+            return builder.leafInternal(makeTag(null, ".int.", Any),
+                                        i, tok.getSpan())
 
     def charConstant(fail):
         if (currentChar == '\\'):
