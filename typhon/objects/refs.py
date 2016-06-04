@@ -202,7 +202,7 @@ class RefOps(Object):
                 raise UserException(ref.optProblem())
             return ref
         else:
-            raise RuntimeError("Not resolved: %r" % (ref,))
+            raise userError(u"Not resolved: %s" % (ref.toString(),))
 
     def isFar(self, ref):
         return self.isEventual(ref) and isResolved(ref)
