@@ -4,7 +4,7 @@ import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
 import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
 import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
 import "boot" =~ [=> TransparentStamp :DeepFrozen]
-exports (m__quasiParser, eval)
+exports (::"m``", m__quasiParser, eval)
 
 
 def [VALUE_HOLE :DeepFrozen,
@@ -171,7 +171,7 @@ def makeQuasiTokenChain(template) as DeepFrozen:
                 current := null
                 return chainer.next(ej)
 
-object m__quasiParser as DeepFrozen:
+object ::"m``" as DeepFrozen:
     "A quasiparser for the Monte programming language.
 
      This object will parse any Monte expression and return an opaque
@@ -201,6 +201,8 @@ object m__quasiParser as DeepFrozen:
         def tree := parseExpression(makeMonteLexer(source, "m``.fromStr/1"),
                                     astBuilder, throw, throw)
         return makeM(tree, false)
+
+def m__quasiParser :DeepFrozen := ::"m``"
 
 
 object eval as DeepFrozen:

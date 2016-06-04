@@ -13,7 +13,7 @@
 # under the License.
 import "boot" =~ [=> DeepFrozenStamp]
 import "unittest" =~ [=> unittest]
-exports (simple__quasiParser)
+exports (::"``", simple__quasiParser)
 
 object LITERAL {}
 object PATTERN_HOLE {}
@@ -34,7 +34,7 @@ def makeString(chunks):
             return "".join(rv.snapshot())
 
 
-object simple__quasiParser as DeepFrozenStamp:
+object ::"``" as DeepFrozenStamp:
     "A quasiparser of Unicode strings.
 
      This object is the default quasiparser. It can interpolate any object
@@ -121,6 +121,8 @@ object simple__quasiParser as DeepFrozenStamp:
 
     to valueMaker(pieces):
         return makeString(pieces)
+
+def simple__quasiParser :DeepFrozen := ::"``"
 
 
 def testQuasiValues(assert):
