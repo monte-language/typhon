@@ -78,6 +78,12 @@ class MakeDouble(Object):
     def toString(self):
         return u"<makeDouble>"
 
+    def run(self, bs, ej):
+        try:
+            return DoubleObject(float(bs))
+        except ValueError:
+            throw(ej, StrObject(u"Couldn't parse floating-point number"))
+
     def fromBytes(self, bs, ej):
         try:
             return DoubleObject(unpack_float(bs, True))
@@ -86,7 +92,10 @@ class MakeDouble(Object):
 
     def recv(self, atom, args):
         if atom is RUN_1:
-            return DoubleObject(float(unwrapStr(args[0]).encode('utf-8')))
+            return self.run(unwrapStr(args[0]).encode("utf-8"), None)
+
+        if atom is RUN_2:
+            return self.run(unwrapStr(args[0]).encode("utf-8"), args[1])
 
         if atom is FROMBYTES_1:
             return self.fromBytes(unwrapBytes(args[0]), None)
