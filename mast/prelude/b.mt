@@ -40,7 +40,7 @@ object b__quasiParser as DeepFrozen:
     to matchMaker(var pieces):
         # Filter out empty pieces. Sometimes the compiler generates them,
         # especially at the tail end, and it messes up pattern matching.
-        pieces := [for piece in (pieces) if (piece != "") piece]
+        pieces := [for piece in (pieces) ? (piece != "") piece]
 
         return object byteMatcher:
             to matchBind(values, specimen, ej):

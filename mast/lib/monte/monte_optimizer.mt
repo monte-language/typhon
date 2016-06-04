@@ -382,7 +382,7 @@ def mix(expr,
 
         match =="Method":
             def safeNames := [for patt in (expr.getPatterns())
-                              if (patt =~ via (finalPatternToName) name) name]
+                              ? (patt =~ via (finalPatternToName) name) name]
             # traceln(`method $expr safeNames $safeNames`)
             def body := mix(expr.getBody(), => staticValues,
                             "safeFinalNames" => safeNames)

@@ -407,7 +407,7 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
         def exportScope := makeStaticScope(
             exportListScope.getNamesRead() - interiorScope.outNames(),
             [], [for e in (exportsList)
-                 if (interiorScope.outNames().contains(e.getName()))
+                 ? (interiorScope.outNames().contains(e.getName()))
                  e.getName()], [], false)
         interiorScope.hide() + exportScope})
     object module:

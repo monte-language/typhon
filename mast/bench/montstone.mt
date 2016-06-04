@@ -246,7 +246,7 @@ def Proc0():
         IntLoc1 += 1
     Proc8(Array1Glob, Array2Glob, IntLoc1, IntLoc3)
     Proc1(PtrGlb)
-    for CharIndex in 'A'..Char2Glob:
+    for CharIndex in ('A'..Char2Glob):
         if (EnumLoc == Func1(CharIndex, 'C')):
             Proc6(Ident1, &EnumLoc)
     IntLoc3 := IntLoc2 * IntLoc1

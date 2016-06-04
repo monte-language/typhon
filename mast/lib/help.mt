@@ -26,7 +26,7 @@ def dedent(paragraph :Str) :Str as DeepFrozen:
     "Remove leading spaces from every line of a paragraph."
 
     def pieces := [for line in (paragraph.split("\n")) line.trim()]
-    return "\n".join([for piece in (pieces) if (piece.size() != 0) piece])
+    return "\n".join([for piece in (pieces) ? (piece.size() != 0) piece])
 
 object help as DeepFrozen:
     "A gentle introspection assistant."
@@ -45,7 +45,7 @@ object help as DeepFrozen:
             lines.push(dedent(doc))
 
         var anyMethods :Bool := false
-        for meth in iface.getMethods():
+        for meth in (iface.getMethods()):
             anyMethods := true
             def message := def [verb, arity] := [meth.getVerb(), meth.getArity()]
             if (showMiranda || !mirandaMessages.contains(message)):
@@ -68,7 +68,7 @@ object help as DeepFrozen:
         lines.push(`Object: $specimen Object type: $iface`)
 
         var found :Bool := false
-        for meth in iface.getMethods():
+        for meth in (iface.getMethods()):
             if (meth.getVerb() == verb && meth.getArity() == arity):
                 found := true
                 lines.push(`Method: $verb/$arity`)

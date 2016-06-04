@@ -92,7 +92,7 @@ def makeMafia(var players :Set) as DeepFrozen:
             traceln(`Counted votes as $counter`)
 
             escape ej:
-                def [victim] exit ej := [for k => v in (counter) if (v >= quorum) k]
+                def [victim] exit ej := [for k => v in (counter) ? (v >= quorum) k]
                 def count := counter[victim]
                 players without= (victim)
                 mafiosos without= (victim)

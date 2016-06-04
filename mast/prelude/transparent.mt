@@ -163,7 +163,7 @@ object Transparent as DeepFrozenStamp:
                         args.getReceiver() =~ m`_makeList` &&
                         args.getVerb() == "run"):
                         def paNames := [for a in (args.getArgs())
-                                        if (a.getNodeName() == "NounExpr")
+                                        ? (a.getNodeName() == "NounExpr")
                                         a.getName()]
                         def unwrapKey(kn, ej):
                             if (kn.getNodeName() == "NounExpr"):
@@ -183,7 +183,7 @@ object Transparent as DeepFrozenStamp:
                                         throw(`Named args map must be a literal, not $pairListExpr`)
                                     }
                                     [for m`_makeList.run(@{via (unwrapKey) k}, @v)` in (pairListExpr.getArgs())
-                                     if (v.getNodeName() == "NounExpr")
+                                     ? (v.getNodeName() == "NounExpr")
                                      k => (v :Ast)]
                                 } else { [].asMap() }
                         if (paNames == positionalArgNames &&
