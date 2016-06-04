@@ -245,8 +245,8 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 def hexstr := _makeStr.fromChars([
                     advance(), advance(), advance(), advance(),
                     advance(), advance(), advance(), advance()])
-                def v := try {
-                    _makeInt.withRadix(16)(hexstr)
+                def v := escape ej {
+                    _makeInt.withRadix(16)(hexstr, ej)
                 } catch _ {
                     throw.eject(fail, ["\\U escape must be eight hex digits, not " + hexstr, spanAtPoint()])
                 }
@@ -254,16 +254,17 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 return '\x00' + v
             if (nex == 'u'):
                 def hexstr := _makeStr.fromChars([advance(), advance(), advance(), advance()])
-                def v := try {
-                    _makeInt.withRadix(16)(hexstr)
+                def v := escape ej {
+                    _makeInt.withRadix(16)(hexstr, ej)
                 } catch _ {
                     throw.eject(fail, ["\\u escape must be four hex digits", spanAtPoint()])
                 }
                 advance()
                 return '\x00' + v
             else if (nex == 'x'):
-                def v := try {
-                    _makeInt.withRadix(16)(_makeStr.fromChars([advance(), advance()]))
+                def hexstr := _makeStr.fromChars([advance(), advance()])
+                def v := escape ej {
+                    _makeInt.withRadix(16)(hexstr, ej)
                 } catch _ {
                     throw.eject(fail, ["\\x escape must be two hex digits", spanAtPoint()])
                 }
