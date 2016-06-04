@@ -486,23 +486,17 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         return contents.snapshot()
 
     def forExprHead(ej):
-        var hasParens :Bool := true
         def p1 := pattern(ej)
         def p2 := if (peekTag() == "=>") {advance(ej); pattern(ej)
                   } else {null}
         acceptEOLs()
         acceptTag("in", ej)
         acceptEOLs()
-        if (peekTag() != "("):
-            traceln("Warning:", spanHere(), "For-loop without parens")
-            hasParens := false
-        else:
-            acceptTag("(", ej)
+        acceptTag("(", ej)
         acceptEOLs()
         def it := comp(ej)
         acceptEOLs()
-        if (hasParens):
-            acceptTag(")", ej)
+        acceptTag(")", ej)
         acceptEOLs()
         return if (p2 == null) {[null, p1, it]} else {[p1, p2, it]}
 
