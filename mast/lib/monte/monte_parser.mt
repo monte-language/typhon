@@ -1070,16 +1070,6 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                     acceptEOLs()
                     acceptTag(")", ej)
                     e
-                } else if (peekTag() == "if") {
-                    traceln("Warning:", spanHere(),
-                            "For-if deprecated; use for-such instead")
-                    advance(ej)
-                    acceptTag("(", ej)
-                    acceptEOLs()
-                    def e := expr(ej)
-                    acceptEOLs()
-                    acceptTag(")", ej)
-                    e
                 } else {
                     null
                 }
