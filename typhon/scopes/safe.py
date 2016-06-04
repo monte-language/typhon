@@ -36,7 +36,7 @@ from typhon.objects.makers import (theMakeBytes, theMakeDouble, theMakeInt,
                                    theMakeList, theMakeMap, theMakeStr)
 from typhon.objects.printers import toString
 from typhon.objects.refs import Promise, RefOps, resolution
-from typhon.objects.root import Object, audited, runnable
+from typhon.objects.root import Object, audited
 from typhon.objects.slots import Binding, FinalSlot, VarSlot, finalize
 from typhon.vats import currentVat
 
@@ -315,8 +315,9 @@ class VarSlotMaker(Object):
         raise Refused(self, atom, args)
 
 
-@runnable(COERCE_2, _stamps=[deepFrozenStamp])
-def nearGuard(specimen, ej):
+@autohelp
+@audited.DF
+class NearGuard(Object):
     """
     A guard over references to near values.
 
@@ -326,11 +327,18 @@ def nearGuard(specimen, ej):
     This guard is unretractable.
     """
 
-    specimen = resolution(specimen)
-    if isinstance(specimen, Promise):
-        msg = u"Specimen is in non-near state %s" % specimen.state().repr
-        throw(ej, StrObject(msg))
-    return specimen
+    def toString(self):
+        return u"Near"
+
+    def recv(self, atom, args):
+        if atom is COERCE_2:
+            specimen = resolution(args[0])
+            if isinstance(specimen, Promise):
+                msg = u"Specimen is in non-near state %s" % specimen.state().repr
+                throw(args[1], StrObject(msg))
+            return specimen
+
+        raise Refused(self, atom, args)
 
 
 def safeScope():
@@ -344,7 +352,7 @@ def safeScope():
         u"Any": anyGuard,
         u"Binding": BindingGuard(),
         u"DeepFrozen": deepFrozenGuard,
-        u"Near": nearGuard(),
+        u"Near": NearGuard(),
         u"Same": sameGuardMaker,
         u"Selfless": selfless,
         u"SubrangeGuard": subrangeGuardMaker,
