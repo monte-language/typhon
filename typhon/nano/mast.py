@@ -1,5 +1,6 @@
 from rpython.rlib.rbigint import BASE10
 
+from typhon import nodes
 from typhon.nanopass import makeIR
 from typhon.quoting import quoteChar, quoteStr
 
@@ -308,3 +309,114 @@ class PrettyMAST(MastIR.makePassTo(None)):
         self.write(u" {")
         self.visitExpr(body)
         self.write(u"}")
+
+
+class BuildKernelNodes(MastIR.makePassTo(None)):
+    def visitNullExpr(self):
+        return nodes.Null
+
+    def visitCharExpr(self, c):
+        return nodes.Char(c)
+
+    def visitDoubleExpr(self, d):
+        return nodes.Double(d)
+
+    def visitIntExpr(self, i):
+        return nodes.Int(i)
+
+    def visitStrExpr(self, s):
+        return nodes.Str(s)
+
+    def visitAssignExpr(self, name, rvalue):
+        return nodes.Assign(name, self.visitExpr(rvalue))
+
+    def visitBindingExpr(self, name):
+        return nodes.Binding(name)
+
+    def visitCallExpr(self, obj, verb, args, namedArgs):
+        return nodes.Call(self.visitExpr(obj), verb,
+                          [self.visitExpr(a) for a in args],
+                          [self.visitNamedArg(na) for na in namedArgs])
+
+    def visitDefExpr(self, patt, ex, rvalue):
+        return nodes.Def(self.visitPatt(patt), self.visitExpr(ex),
+                         self.visitExpr(rvalue))
+
+    def visitEscapeOnlyExpr(self, patt, body):
+        return nodes.Escape(self.visitPatt(patt), self.visitExpr(body),
+                            None, None)
+
+    def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
+        return nodes.Escape(self.visitPatt(patt), self.visitExpr(body),
+                            self.visitPatt(catchPatt),
+                            self.visitExpr(catchBody))
+
+    def visitFinallyExpr(self, body, atLast):
+        return nodes.Finally(self.visitExpr(body), self.visitExpr(atLast))
+
+    def visitHideExpr(self, body):
+        return nodes.Hide(self.visitExpr(body))
+
+    def visitIfExpr(self, test, cons, alt):
+        return nodes.If(self.visitExpr(test), self.visitExpr(cons),
+                        self.visitExpr(alt))
+
+    def visitMetaContextExpr(self):
+        return nodes.MetaContextExpr()
+
+    def visitMetaStateExpr(self):
+        return nodes.MetaStateExpr()
+
+    def visitNounExpr(self, name):
+        return nodes.Noun(name)
+
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
+        return nodes.Obj(doc, self.visitPatt(patt),
+                         self.visitExpr(auditors[0]),
+                         [self.visitExpr(a) for a in auditors[1:]],
+                         nodes.Script(
+                             None,
+                             [self.visitMethod(m) for m in methods],
+                             [self.visitMatcher(m) for m in matchers]))
+
+    def visitSeqExpr(self, exprs):
+        return nodes.Sequence([self.visitExpr(e) for e in exprs])
+
+    def visitTryExpr(self, body, catchPatt, catchBody):
+        return nodes.Try(self.visitExpr(body), self.visitPatt(catchPatt),
+                         self.visitExpr(catchBody))
+
+    def visitIgnorePatt(self, guard):
+        return nodes.IgnorePattern(self.visitExpr(guard))
+
+    def visitBindingPatt(self, name):
+        return nodes.BindingPattern(nodes.Noun(name))
+
+    def visitFinalPatt(self, name, guard):
+        return nodes.FinalPattern(nodes.Noun(name),
+                                  self.visitExpr(guard))
+
+    def visitVarPatt(self, name, guard):
+        return nodes.VarPattern(nodes.Noun(name), self.visitExpr(guard))
+
+    def visitListPatt(self, patts):
+        return nodes.ListPattern([self.visitPatt(p) for p in patts], nodes._Null)
+
+    def visitViaPatt(self, trans, patt):
+        return nodes.ViaPattern(self.visitExpr(trans), self.visitPatt(patt))
+
+    def visitNamedArgExpr(self, key, value):
+        return nodes.NamedArg(self.visitExpr(key), self.visitExpr(value))
+
+    def visitNamedPattern(self, key, patt, default):
+        return nodes.NamedParam(self.visitExpr(key), self.visitPatt(patt),
+                                self.visitExpr(default))
+
+    def visitMatcherExpr(self, patt, body):
+        return nodes.Matcher(self.visitPatt(patt),
+                             self.visitExpr(body))
+
+    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body):
+        return nodes.Method(doc, verb, [self.visitPatt(p) for p in patts],
+                            [self.visitNamedPatt(p) for p in namedPatts],
+                            self.visitExpr(guard), self.visitExpr(body))
