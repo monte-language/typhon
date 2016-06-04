@@ -583,8 +583,8 @@ def expand(node, builder, fail) as DeepFrozen:
             return ["patt", patt, span]
         else if (nodeName == "QuasiParserExpr"):
             def [name, quasis] := args
-            def qprefix := if (name == null) {"simple"} else {name}
-            def qname := qprefix + "__quasiParser"
+            def qprefix := if (name == null) {""} else {name}
+            def qname := qprefix + "``"
             def [parts, exprs, _] := buildQuasi(builder, qname, quasis)
             return builder.MethodCallExpr(
                 builder.MethodCallExpr(
@@ -889,8 +889,8 @@ def expand(node, builder, fail) as DeepFrozen:
                     builder.IgnorePattern(null, span), span)], null, span), span)
         else if (nodeName == "QuasiParserPattern"):
             def [name, quasis] := args
-            def qprefix := if (name == null) {"simple"} else {name}
-            def qname := qprefix + "__quasiParser"
+            def qprefix := if (name == null) {""} else {name}
+            def qname := qprefix + "``"
             def [parts, exprs, patterns] := buildQuasi(builder, qname, quasis)
             return builder.ViaPattern(
                 builder.MethodCallExpr(
