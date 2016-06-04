@@ -125,17 +125,16 @@ class MakeInt(Object):
     def withRadix(self, radix):
         return MakeInt(radix)
 
-    @staticmethod
     @profileTyphon("_makeInt.fromBytes/2")
-    def fromBytes(bs, radix, ej):
+    def fromBytes(self, bs, ej):
         # Ruby-style underscores are legal here but can't be handled by
         # RPython, so remove them.
         bs = ''.join([c for c in bs if c != '_'])
         try:
-            return rbigint.fromstr(bs, radix)
+            return rbigint.fromstr(bs, self.radix)
         except ParseStringError:
             throw(ej, StrObject(u"_makeInt: Couldn't make int in radix %d from %s" %
-                (radix, bytesToString(bs))))
+                (self.radix, bytesToString(bs))))
 
     def recv(self, atom, args):
         if atom is WITHRADIX_1:
@@ -144,21 +143,19 @@ class MakeInt(Object):
 
         if atom is RUN_1:
             bs = unwrapStr(args[0]).encode("utf-8")
-            return BigInt(self.fromBytes(bs, self.radix, None))
+            return BigInt(self.fromBytes(bs, None))
 
         if atom is RUN_2:
             bs = unwrapStr(args[0]).encode("utf-8")
-            radix = unwrapInt(args[1])
-            return BigInt(self.fromBytes(bs, radix, None))
+            return BigInt(self.fromBytes(bs, args[1]))
 
         if atom is FROMBYTES_1:
             bs = unwrapBytes(args[0])
-            return BigInt(self.fromBytes(bs, self.radix, None))
+            return BigInt(self.fromBytes(bs, None))
 
         if atom is FROMBYTES_2:
             bs = unwrapBytes(args[0])
-            radix = unwrapInt(args[1])
-            return BigInt(self.fromBytes(bs, radix, None))
+            return BigInt(self.fromBytes(bs, args[1]))
 
         raise Refused(self, atom, args)
 theMakeInt = MakeInt(10)

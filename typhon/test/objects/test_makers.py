@@ -26,7 +26,8 @@ class TestMakeInt(TestCase):
         self.assertEqual(result.bi, rbigint.fromint(42))
 
     def test_fromBytesRadix(self):
-        result = theMakeInt.call(u"fromBytes", [BytesObject("42"), IntObject(16)])
+        withRadix = theMakeInt.call(u"withRadix", [IntObject(16)])
+        result = withRadix.call(u"fromBytes", [BytesObject("42")])
         self.assertEqual(result.bi, rbigint.fromint(66))
 
     def testWithUnderscores(self):
