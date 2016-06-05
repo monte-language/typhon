@@ -1,6 +1,5 @@
 import "lib/entropy/pool" =~ _
 import "lib/enum" =~ _
-import "lib/singleUse" =~ _
 import "lib/codec/percent" =~ _
 import "lib/record" =~ _
 import "lib/json" =~ _
@@ -17,10 +16,7 @@ import "tests/expander" =~ _
 import "tests/optimizer" =~ _
 import "lib/continued" =~ _
 import "tests/flexMap" =~ _
-import "lib/paths" =~ _
-import "lib/netstring" =~ _
 import "lib/parsers/html" =~ _
-import "lib/cache" =~ _
 import "tests/regressions" =~ _
 exports ()
 
