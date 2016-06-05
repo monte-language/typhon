@@ -40,12 +40,11 @@ Diffing Typhon Binaries
 By default, git won't show diffs of binary files. I don't especially blame it.
 However, with a bit of a filter, we can give git what it needs::
 
-    $ git config diff.typhon.textconv ./dump.py
+    $ nix-env -iA typhonDumpMAST -f default.nix
+    $ git config diff.typhon.textconv mt-dump-mast
 
 This configuration option, along with the ``.gitattributes`` in the
-repository, will let git display textual diffs of the binary ASTs::
-
-    $ nix-shell -A typhonVm --run 'git diff'
+repository, will let git display textual diffs of the binary ASTs.
 
 RPython Quirks
 --------------
