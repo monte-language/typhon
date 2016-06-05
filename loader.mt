@@ -138,7 +138,7 @@ def main():
                 def excludes := ["typhonEval", "_findTyphonFile", "bench"]
                 # Leave out loader-only objects.
                 def unsafeScopeValues := [for `&&@n` => &&v in (unsafeScope)
-                                          if (!excludes.contains(n))
+                                          ? (!excludes.contains(n))
                                           n => v]
 
                 # We don't care about config or anything that isn't the
