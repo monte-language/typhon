@@ -1,6 +1,6 @@
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseExpression, => parsePattern, => parseModule]
-import "fun/termParser" =~ [=> term__quasiParser]
+import "fun/termParser" =~ [=> ::"term``"]
 import "unittest" =~ [=> unittest]
 exports ()
 
@@ -21,11 +21,11 @@ def astFromTerm(t):
                 astBuilder, t.getTag().getName(),
                 [for a in (t.getArgs()) astFromTerm(a)] + [null])
 
-object ta__quasiParser:
+object ::"ta``":
     to valueMaker(template):
         return object ta:
             to substitute(vals):
-                def t := term__quasiParser.valueMaker(template).substitute(vals)
+                def t := ::"term``".valueMaker(template).substitute(vals)
                 return astFromTerm(t)
 
 def expr(s):

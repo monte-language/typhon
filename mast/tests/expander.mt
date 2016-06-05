@@ -542,11 +542,13 @@ def specimens := [
 
      })"],
      ["`hello $x world`",
-      `simple__quasiParser.valueMaker(_makeList.run("hello ", simple__quasiParser.valueHole(0), " world")).substitute(_makeList.run(x))`],
+      `::"````".valueMaker(_makeList.run("hello ", ::"````".valueHole(0), " world")).substitute(_makeList.run(x))`],
      ["def foo`(@x)` := 1",
-      `def via (_quasiMatcher.run(foo__quasiParser.matchMaker(_makeList.run("(", foo__quasiParser.patternHole(0), ")")), _makeList.run())) [x] := 1`],
+      `def via (_quasiMatcher.run(::"foo````".matchMaker(_makeList.run("(",
+      ::"foo````".patternHole(0), ")")), _makeList.run())) [x] := 1`],
      ["def foo`(@x:$y)` := 1",
-      `def via (_quasiMatcher.run(foo__quasiParser.matchMaker(_makeList.run("(", foo__quasiParser.patternHole(0), ":", foo__quasiParser.valueHole(0), ")")), _makeList.run(y))) [x] := 1`],
+      `def via (_quasiMatcher.run(::"foo````".matchMaker(_makeList.run("(",
+      ::"foo````".patternHole(0), ":", ::"foo````".valueHole(0), ")")), _makeList.run(y))) [x] := 1`],
     ["exports (foo); def foo := 1",
      `object _ as DeepFrozen {
           method run(package_1) :(Map.get(Str, DeepFrozen)) {

@@ -2258,8 +2258,7 @@ def QuasiPiece :DeepFrozen := Ast["QuasiText", "QuasiExprHole",
 def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {
         if (name == null) {emptyScope} else {
-            makeStaticScope([name + "__quasiParser"], [],
-                            [], [], false)
+            makeStaticScope([name + "``"], [], [], [], false)
         } + sumScopes(quasis)
     })
     object quasiParserExpr:
@@ -2275,8 +2274,7 @@ def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as De
 def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {
         if (name == null) {emptyScope} else {
-            makeStaticScope([name + "__quasiParser"], [],
-                            [], [], false)
+            makeStaticScope([name + "``"], [], [], [], false)
         } + sumScopes(quasis)
     })
     object quasiParserPattern:

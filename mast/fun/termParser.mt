@@ -1,4 +1,4 @@
-exports (term__quasiParser, Tag, Term)
+exports (::"term``", Tag, Term)
 # For future Corbin: SubrangeGuard requires that we use Same[] to get the
 # value of DF into a guard context. ~ C.
 def DF :Same[DeepFrozen] := DeepFrozen
@@ -1201,7 +1201,7 @@ def makeQuasiTokenChain(makeLexer, template) as DeepFrozen:
                 return chainer.next(ej)
 
 
-object term__quasiParser as DeepFrozen:
+object ::"term``" as DeepFrozen:
     to valueHole(n):
         return VALUE_HOLE
     to patternHole(n):

@@ -1,5 +1,5 @@
 import "unittest" =~ [=> unittest]
-exports (JSON, json__quasiParser)
+exports (JSON, ::"json``")
 
 object valueHoleMarker as DeepFrozen:
     pass
@@ -322,7 +322,7 @@ def makeJSON(value) as DeepFrozen:
             return value
 
 
-object json__quasiParser as DeepFrozen:
+object ::"json``" as DeepFrozen:
     to valueMaker(pieces):
         def lexer := makeLexer()
 
@@ -340,7 +340,7 @@ object json__quasiParser as DeepFrozen:
         return makeJSON(parsed)
 
     to matchMaker(pieces):
-        return json__quasiParser.valueMaker(pieces)
+        return ::"json``".valueMaker(pieces)
 
     to valueHole(index):
         return [valueHoleMarker, index]
