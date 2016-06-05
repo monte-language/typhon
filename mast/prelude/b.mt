@@ -11,7 +11,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-exports (::"b``", b__quasiParser)
+exports (::"b``")
 
 object bytePattern as DeepFrozen:
     pass
@@ -126,5 +126,3 @@ object ::"b``" as DeepFrozen:
                         match bs :Bytes:
                             rv += bs
                 return rv
-
-def b__quasiParser :DeepFrozen := ::"b``"

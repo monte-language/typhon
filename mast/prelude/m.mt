@@ -4,7 +4,7 @@ import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
 import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
 import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
 import "boot" =~ [=> TransparentStamp :DeepFrozen]
-exports (::"m``", m__quasiParser, eval)
+exports (::"m``", eval)
 
 
 def [VALUE_HOLE :DeepFrozen,
@@ -201,8 +201,6 @@ object ::"m``" as DeepFrozen:
         def tree := parseExpression(makeMonteLexer(source, "m``.fromStr/1"),
                                     astBuilder, throw, throw)
         return makeM(tree, false)
-
-def m__quasiParser :DeepFrozen := ::"m``"
 
 
 object eval as DeepFrozen:

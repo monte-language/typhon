@@ -13,7 +13,7 @@
 # under the License.
 import "boot" =~ [=> DeepFrozenStamp]
 import "unittest" =~ [=> unittest]
-exports (::"``", simple__quasiParser)
+exports (::"``")
 
 object LITERAL {}
 object PATTERN_HOLE {}
@@ -121,8 +121,6 @@ object ::"``" as DeepFrozenStamp:
 
     to valueMaker(pieces):
         return makeString(pieces)
-
-def simple__quasiParser :DeepFrozen := ::"``"
 
 
 def testQuasiValues(assert):

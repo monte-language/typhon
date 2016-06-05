@@ -1,6 +1,6 @@
 exports (findUndefinedNames)
 
-def Ast :DeepFrozen := m__quasiParser.getAstBuilder().getAstGuard()
+def Ast :DeepFrozen := ::"m``".getAstBuilder().getAstGuard()
 
 def findUndefinedNames(expr, outers) as DeepFrozen:
     def outerNames := [for `&&@name` in (outers.getKeys()) name].asSet()
