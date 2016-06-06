@@ -2,7 +2,7 @@
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
-from typhon.errors import Refused
+from typhon.errors import Refused, UserException
 from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
 from typhon.objects.collections.helpers import asSet
@@ -38,13 +38,19 @@ class Guard(Object):
         specimen = resolution(specimen)
         val = self.subCoerce(specimen)
         if val is None:
-            newspec = specimen.call(u"_conformTo", [self])
-            val = self.subCoerce(newspec)
-            if val is None:
-                throw(ej, StrObject(u"%s does not conform to %s" % (
-                    specimen.toQuote(), self.toQuote())))
+            try:
+                newspec = specimen.call(u"_conformTo", [self])
+            except UserException:
+                msg = u"%s threw exception while conforming to %s" % (
+                        specimen.toQuote(), self.toQuote())
+                throw(ej, StrObject(msg))
             else:
-                return val
+                val = self.subCoerce(newspec)
+                if val is None:
+                    throw(ej, StrObject(u"%s does not conform to %s" % (
+                        specimen.toQuote(), self.toQuote())))
+                else:
+                    return val
         else:
             return val
 
