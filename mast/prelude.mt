@@ -64,17 +64,13 @@ def makePredicateGuard(predicate :DeepFrozenStamp, label :Str) as DeepFrozenStam
             out.print(label)
 
         to coerce(specimen, ej):
-            if (predicate(specimen)):
-                return specimen
-
-            def conformed := specimen._conformTo(predicateGuard)
-
-            if (predicate(conformed)):
-                return conformed
-
-            def error := "Failed guard (" + label + "):"
+            def error := try {
+                if (predicate(specimen)) { return specimen }
+                def conformed := specimen._conformTo(predicateGuard)
+                if (predicate(conformed)) { return conformed }
+                "Failed guard (" + label + "):"
+            } catch ex { "Caught exception while conforming (" + label + "):" }
             throw.eject(ej, [error, specimen])
-
 
 
 def Empty := makePredicateGuard(def pred(specimen) as DeepFrozenStamp {return specimen.size() == 0}, "Empty")
