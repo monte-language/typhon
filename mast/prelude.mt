@@ -368,6 +368,73 @@ object Pair as DeepFrozenStamp:
         else:
             throw.eject(ej, "Not a Pair guard")
 
+object _VowStamp:
+    to audit(audition):
+        return true
+
+object Vow as DeepFrozenStamp:
+    "A guard which admits promises and their entailments.
+
+     Vows admit the union of unfulfilled promises, fulfilled promises, broken
+     promises, and `Near` values. The unifying concept is that of a partial
+     future value to which messages will be sent but that is not `Far`.
+
+     When specialized, this guard returns a guard which ensures that promised
+     prizes either conform to its subguard or are broken."
+
+    to _printOn(out):
+        out.print("Vow")
+
+    to coerce(specimen, ej):
+        if (Ref.isNear(specimen) || Ref.isBroken(specimen) ||
+            (Ref.isEventual(specimen) &! Ref.isFar(specimen))):
+            return specimen
+
+        def conformed := specimen._conformTo(Vow)
+
+        if (Ref.isNear(conformed) || Ref.isBroken(conformed) ||
+            (Ref.isEventual(conformed) &! Ref.isFar(conformed))):
+            return conformed
+
+        throw.eject(ej, ["Not avowable:", specimen])
+
+    to get(subGuard):
+        return object SubVow implements _VowStamp, Selfless, TransparentStamp:
+            to _printOn(out):
+                out.print("Vow[")
+                out.print(subGuard)
+                out.print("]")
+
+            to _uncall():
+                return [Vow, "get", [subGuard], [].asMap()]
+
+            to coerce(specimen, ej):
+                return if (Ref.isNear(specimen)) {
+                    subGuard.coerce(specimen, ej)
+                } else if (Ref.isBroken(specimen)) {
+                    specimen
+                } else if (Ref.isEventual(specimen) &! Ref.isFar(specimen)) {
+                    # XXX I don't know why FAIL isn't always passed in here.
+                    # Something about our ref stack is off, maybe. ~ C.
+                    def cb(x, => FAIL := null) {
+                        return subGuard.coerce(x, FAIL)
+                    }
+                    Ref.whenResolved(specimen, cb)
+                } else {
+                    throw.eject(ej, ["Not avowable:", specimen])
+                }
+
+            to getGuard():
+                return subGuard
+
+    to extractGuard(specimen, ej):
+        if (specimen == Vow):
+            return Any
+        else if (_auditedBy(_VowStamp, specimen)):
+            return specimen.getGuard()
+        else:
+            throw.eject(ej, "Not a Vow guard")
+
 object _iterForever as DeepFrozenStamp:
     "Implementation of while-expression syntax."
 
@@ -561,7 +628,7 @@ def promiseAllFulfilled(vows) as DeepFrozenStamp:
 def scopeNames := [
     => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
     => Int, => List, => Map, => NullOk, => Near, => Pair, => Same, => Set,
-    => Selfless, => Str, => SubrangeGuard, => Void,
+    => Selfless, => Str, => SubrangeGuard, => Void, => Vow,
     => null, => Infinity, => NaN, => false, => true,
     => _auditedBy, => _equalizer, => _loop,
     => _makeList, => _makeMap, => _makeInt, => _makeDouble,
