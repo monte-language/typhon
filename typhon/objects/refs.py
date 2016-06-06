@@ -17,11 +17,12 @@ import weakref
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
 from typhon.enum import makeEnum
-from typhon.errors import Refused, UserException, userError
+from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.log import log
 from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.data import StrObject
+from typhon.objects.ejectors import Ejector
 from typhon.objects.root import Object, audited
 from typhon.vats import currentVat
 
@@ -56,11 +57,11 @@ _WHENBROKEN_1 = getAtom(u"_whenBroken", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 
-def makePromise():
+def makePromise(guard=None):
     vat = currentVat.get()
     buf = MessageBuffer(vat)
     sref = SwitchableRef(BufferingRef(buf))
-    return sref, LocalResolver(sref, buf, vat)
+    return sref, LocalResolver(sref, buf, vat, guard)
 
 
 def _toRef(o, vat):
@@ -98,6 +99,13 @@ class RefOps(Object):
 
     def toString(self):
         return u"<Ref>"
+
+    def recvNamed(self, atom, args, namedArgs):
+        if atom is PROMISE_0:
+            guard = namedArgs.extractStringKey(u"guard", None)
+            return self.promise(guard)
+
+        return self.recv(atom, args)
 
     def recv(self, atom, args):
         if atom is BROKEN_1:
@@ -143,9 +151,6 @@ class RefOps(Object):
                 return ref.optProblem()
             return NullObject
 
-        if atom is PROMISE_0:
-            return self.promise()
-
         # Inlined for name clash reasons.
         if atom is STATE_1:
             o = args[0]
@@ -166,9 +171,9 @@ class RefOps(Object):
 
         raise Refused(self, atom, args)
 
-    def promise(self):
+    def promise(self, guard):
         from typhon.objects.collections.lists import wrapList
-        p, r = makePromise()
+        p, r = makePromise(guard=guard)
         return wrapList([p, r])
 
     def broken(self, problem):
@@ -320,12 +325,16 @@ class WhenResolvedReactor(Object):
 
 @autohelp
 class LocalResolver(Object):
+    """
+    A resolver for a promise.
+    """
 
-    def __init__(self, ref, buf, vat):
+    def __init__(self, ref, buf, vat, guard):
         assert vat is not None, "Vat cannot be None"
         self._ref = ref
         self._buf = buf
         self.vat = vat
+        self.guard = guard
 
     def toString(self):
         if self._ref is None:
@@ -351,6 +360,16 @@ class LocalResolver(Object):
                 raise userError(u"Already resolved")
             return False
         else:
+            if self.guard is not None and not isinstance(target,
+                    UnconnectedRef):
+                # Coerce. If there's a problem, then smash the promise.
+                with Ejector() as ej:
+                    try:
+                        target = self.guard.call(u"coerce", [target, ej])
+                    except Ejecting as e:
+                        if e.ejector is not ej:
+                            raise
+                        target = UnconnectedRef(e.value)
             self._ref.setTarget(_toRef(target, self.vat))
             self._ref.commit()
             self._buf.deliverAll(target)
