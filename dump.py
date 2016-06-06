@@ -2,8 +2,8 @@
 
 import sys
 from typhon.load.nano import InvalidMAST, loadMAST
-from typhon.nano.mast import PrettyMAST
-from typhon.nano.smallcaps import PrettySmallCaps, doNanoSmallCaps
+from typhon.nano.mast import SaveScripts
+from typhon.nano.scopes import LayOutScopes, PrettyLayout
 from typhon.nodes import InvalidAST
 
 
@@ -22,12 +22,10 @@ def entryPoint(argv):
     except InvalidMAST:
         print "Invalid MAST"
         return 1
-    pretty = PrettyMAST()
-    pretty.visitExpr(expr)
-    dumpLines(pretty.asUnicode())
-    expr = doNanoSmallCaps(expr)
-    pretty = PrettySmallCaps()
-    pretty.visitExpr(expr)
+    ss = SaveScripts().visitExpr(expr)
+    ll = LayOutScopes().visitExpr(ss)
+    pretty = PrettyLayout()
+    pretty.visitExpr(ll)
     dumpLines(pretty.asUnicode())
     return 0
 
