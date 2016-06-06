@@ -129,7 +129,7 @@ class PrettyMAST(MastIR.makePassTo(None)):
                 self.write(u", ")
                 self.visitExpr(arg)
         if namedArgs:
-            self.visitNamedArg(args[0])
+            self.visitNamedArg(namedArgs[0])
             for namedArg in namedArgs[1:]:
                 self.write(u", ")
                 self.visitNamedArg(namedArg)
