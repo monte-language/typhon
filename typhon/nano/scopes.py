@@ -24,6 +24,7 @@ LayoutIR = SaveScriptIR.extend(
                            ("auditors", "Expr*"), ("methods", "Method*"),
                            ("matchers", "Matcher*"), ("mast", None),
                            ("layout", None)],
+            "-HideExpr": None,
         },
         "Patt": {
             "BindingPatt": [("name", "Noun"), ("layout", None)],
@@ -44,56 +45,59 @@ LayoutIR = SaveScriptIR.extend(
 )
 
 
-class ScopeFrame(object):
-    "Scope info associated with an object closure."
+class ScopeBase(object):
     def __init__(self, next):
         self.next = next
         self.children = []
         self.node = None
+
+    def addChild(self, child):
+        if child is self:
+            assert False, "BZZT WRONG"
+        self.children.append(child)
+
+
+class ScopeFrame(ScopeBase):
+    "Scope info associated with an object closure."
+
+    def __init__(self, next):
+        self.frameNames = []
+        return ScopeBase.__init__(self, next)
 
     def requireShadowable(self, name):
         return self.next.requireShadowable(name)
 
-    def addChild(self, child):
-        if child is self:
-            assert False, "BZZT WRONG"
-        self.children.append(child)
+    def frameClosesOver(self, name):
+        if name not in self.frameNames:
+            self.frameNames.append(name)
+        return True
 
 
-class ScopeBox(object):
+class ScopeBox(ScopeBase):
     "Scope info associated with a scope-introducing node."
-    def __init__(self, next):
-        self.next = next
-        self.children = []
-        self.node = None
 
     def requireShadowable(self, name):
         return True
 
-    def addChild(self, child):
-        if child is self:
-            assert False, "BZZT WRONG"
-        self.children.append(child)
+    def frameClosesOver(self, name):
+        return self.next.frameClosesOver(name)
 
 
-class ScopeItem(object):
+class ScopeItem(ScopeBase):
     "A single name binding."
     def __init__(self, next, name):
-        self.next = next
         self.name = name
-        self.children = []
-        self.node = None
+        return ScopeBase.__init__(self, next)
 
     def requireShadowable(self, name):
         if self.name == name:
             return False
         return self.next.requireShadowable(name)
 
-    def addChild(self, child):
-        print "Adding", child, "to", self
-        if child is self:
-            assert False, "BZZT WRONG"
-        self.children.append(child)
+    def frameClosesOver(self, name):
+        if self.name == name:
+            return False
+        return self.next.frameClosesOver(name)
 
 
 class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
@@ -468,16 +472,10 @@ class PrettyLayout(LayoutIR.makePassTo(None)):
 
     def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body,
                         layout):
-        def excavateLocals(lo):
-            if isinstance(lo, ScopeItem):
-                self.write(u" ")
-                self.write(lo.name)
-            for x in lo.children:
-                excavateLocals(x)
         self.write(u"method ")
         self.write(verb)
         self.write(u" ⎣")
-        excavateLocals(layout)
+        excavateLocals(layout, self)
         self.write(u"⎤ ")
         self.write(u"(")
         if patts:
@@ -499,6 +497,13 @@ class PrettyLayout(LayoutIR.makePassTo(None)):
         self.write(u" {")
         self.visitExpr(body)
         self.write(u"}")
+
+def excavateLocals(lo, self):
+    if isinstance(lo, ScopeItem):
+        self.write(u" ")
+        self.write(lo.name)
+    for x in lo.children:
+        excavateLocals(x, self)
 
 ## We'll come back to this in a bit once we have some more scope info.
 # DeBruijnIR = SaveScriptIR.extend("De Bruijn", ["Index", "-Noun"],
