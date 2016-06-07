@@ -70,6 +70,7 @@ class ScopeFrame(ScopeBase):
     def frameClosesOver(self, name):
         if name not in self.frameNames:
             self.frameNames.append(name)
+        self.next.frameClosesOver(name)
         return True
 
 
@@ -80,6 +81,8 @@ class ScopeBox(ScopeBase):
         return True
 
     def frameClosesOver(self, name):
+        if self.next is None:
+            return False
         return self.next.frameClosesOver(name)
 
 
@@ -266,7 +269,34 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         return result
 
 
-class PrettyLayout(LayoutIR.makePassTo(None)):
+BoundNounsIR = LayoutIR.extend(
+    "BoundNouns", [], {
+        "Expr": {
+            "-NounExpr": None,
+            "-BindingExpr": None,
+            "LocalNounExpr": [("name", "Noun"), ("layout", None)],
+            "FrameNounExpr": [("name", "Noun"), ("layout", None)],
+            "LocalBindingExpr": [("name", "Noun"), ("layout", None)],
+            "FrameBindingExpr": [("name", "Noun"), ("layout", None)],
+
+        }
+    }
+)
+
+
+class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
+    def visitNounExpr(self, name, layout):
+        if layout.frameClosesOver(name):
+            return self.dest.FrameNounExpr(name, layout)
+        return self.dest.LocalNounExpr(name, layout)
+
+    def visitBindingExpr(self, name, layout):
+        if layout.frameClosesOver(name):
+            return self.dest.FrameBindingExpr(name, layout)
+        return self.dest.LocalBindingExpr(name, layout)
+
+
+class PrettySpecialNouns(BoundNounsIR.makePassTo(None)):
 
     def __init__(self):
         self.buf = []
@@ -297,9 +327,15 @@ class PrettyLayout(LayoutIR.makePassTo(None)):
         self.write(u" := ")
         self.visitExpr(rvalue)
 
-    def visitBindingExpr(self, name, layout):
+    def visitLocalBindingExpr(self, name, layout):
         self.write(u"&&")
         self.write(name)
+        self.write(u"⒧")
+
+    def visitFrameBindingExpr(self, name, layout):
+        self.write(u"&&")
+        self.write(name)
+        self.write(u"⒡")
 
     def visitCallExpr(self, obj, verb, args, namedArgs):
         self.visitExpr(obj)
@@ -373,8 +409,13 @@ class PrettyLayout(LayoutIR.makePassTo(None)):
     def visitMetaStateExpr(self, layout):
         self.write(u"meta.state()")
 
-    def visitNounExpr(self, name, layout):
+    def visitLocalNounExpr(self, name, layout):
         self.write(name)
+        self.write(u"⒧")
+
+    def visitFrameNounExpr(self, name, layout):
+        self.write(name)
+        self.write(u"⒡")
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
                         layout):
@@ -390,6 +431,9 @@ class PrettyLayout(LayoutIR.makePassTo(None)):
                 for auditor in auditors[1:]:
                     self.write(u", ")
                     self.visitExpr(auditor)
+        self.write(u" ⎣")
+        self.write(u" ".join(layout.frameNames))
+        self.write(u"⎤ ")
         self.write(u" {")
         for method in methods:
             self.visitMethod(method)
@@ -474,9 +518,6 @@ class PrettyLayout(LayoutIR.makePassTo(None)):
                         layout):
         self.write(u"method ")
         self.write(verb)
-        self.write(u" ⎣")
-        excavateLocals(layout, self)
-        self.write(u"⎤ ")
         self.write(u"(")
         if patts:
             self.visitPatt(patts[0])
