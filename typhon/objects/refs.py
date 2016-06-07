@@ -308,18 +308,23 @@ class WhenResolvedReactor(Object):
                 return NullObject
 
             if self._ref.isResolved():
-                # XXX should reflect to user if exception?
-                outcome = self._cb.call(u"run", [self._ref])
-
-                if self._resolver is not None:
-                    self._resolver.resolve(outcome)
+                try:
+                    outcome = self._cb.call(u"run", [self._ref])
+                    if self._resolver is not None:
+                        self._resolver.resolve(outcome)
+                except UserException as ue:
+                    if self._resolver is None:
+                        raise
+                    else:
+                        from typhon.objects.exceptions import sealException
+                        self._resolver.smash(sealException(ue))
 
                 self.done = True
             else:
                 self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
                                   EMPTY_MAP)
-
             return NullObject
+
         raise Refused(self, atom, args)
 
 
@@ -370,6 +375,9 @@ class LocalResolver(Object):
                         if e.ejector is not ej:
                             raise
                         target = UnconnectedRef(e.value)
+                    except UserException as ue:
+                        from typhon.objects.exceptions import sealException
+                        target = UnconnectedRef(sealException(ue))
             self._ref.setTarget(_toRef(target, self.vat))
             self._ref.commit()
             self._buf.deliverAll(target)
