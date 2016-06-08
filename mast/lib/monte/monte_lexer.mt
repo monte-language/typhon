@@ -795,6 +795,9 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         to getInput():
             return input
 
+        match [=="next", [ej], _]:
+            monteLexer.next(ej, ej)
+
 object makeMonteLexer as DeepFrozen:
     to run(input, inputName):
         # State for paired delimiters like "", {}, (), []

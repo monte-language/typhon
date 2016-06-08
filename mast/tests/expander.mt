@@ -307,7 +307,7 @@ def specimens := [
      finally:
          validFlag_1 := false
      null"],
-    ["[for x in (y) if (a) z]",
+    ["[for x in (y) ? (a) z]",
      "
      var validFlag_1 := true
      try:
@@ -326,7 +326,7 @@ def specimens := [
      finally:
          validFlag_1 := false"],
 
-    ["[for x in (y) if (a) k => v]",
+    ["[for x in (y) ? (a) k => v]",
      "
      var validFlag_1 := true
      try:

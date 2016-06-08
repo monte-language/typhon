@@ -74,11 +74,11 @@ def test_Map(assert):
                        MapExprAssoc(NounExpr("k"), NounExpr("v"))])`)
 
 def test_ListComprehensionExpr(assert):
-    assert.equal(expr("[for k => v in (a) if (b) c]"), ta`ListComprehensionExpr(NounExpr("a"), NounExpr("b"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), NounExpr("c"))`)
+    assert.equal(expr("[for k => v in (a) ? (b) c]"), ta`ListComprehensionExpr(NounExpr("a"), NounExpr("b"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), NounExpr("c"))`)
     assert.equal(expr("[for v in (a) c]"), ta`ListComprehensionExpr(NounExpr("a"), null, null, FinalPattern(NounExpr("v"), null), NounExpr("c"))`)
 
 def test_MapComprehensionExpr(assert):
-    assert.equal(expr("[for k => v in (a) if (b) k1 => v1]"), ta`MapComprehensionExpr(NounExpr("a"), NounExpr("b"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), NounExpr("k1"), NounExpr("v1"))`)
+    assert.equal(expr("[for k => v in (a) ? (b) k1 => v1]"), ta`MapComprehensionExpr(NounExpr("a"), NounExpr("b"), FinalPattern(NounExpr("k"), null), FinalPattern(NounExpr("v"), null), NounExpr("k1"), NounExpr("v1"))`)
     assert.equal(expr("[for v in (a) k1 => v1]"), ta`MapComprehensionExpr(NounExpr("a"), null, null, FinalPattern(NounExpr("v"), null), NounExpr("k1"), NounExpr("v1"))`)
 
 def test_IfExpr(assert):

@@ -151,7 +151,7 @@ def makeQuasiTokenChain(template) as DeepFrozen:
         to getSyntaxError():
             return current.getSyntaxError()
 
-        to next(ej):
+        to next(ej, ejPartial):
             if (i >= template.size()):
                 throw.eject(ej, null)
             j += 1
@@ -164,12 +164,12 @@ def makeQuasiTokenChain(template) as DeepFrozen:
                     current := lex.lexerForNextChunk(template[i])._makeIterator()
                     lex := current
             escape e:
-                def t := current.next(e)[1]
+                def t := current.next(e, ejPartial)[1]
                 return [j, t]
             catch z:
                 i += 1
                 current := null
-                return chainer.next(ej)
+                return chainer.next(ej, ejPartial)
 
 object ::"m``" as DeepFrozen:
     "A quasiparser for the Monte programming language.
