@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from rpython.rlib.rbigint import BASE10
+from typhon.errors import userError
 from typhon.nano.mast import SaveScriptIR
 from typhon.quoting import quoteChar, quoteStr
 
@@ -46,6 +47,8 @@ LayoutIR = SaveScriptIR.extend(
 
 
 class ScopeBase(object):
+    position = 0
+
     def __init__(self, next):
         self.next = next
         self.children = []
@@ -63,12 +66,12 @@ class ScopeOuter(ScopeBase):
         self.children = []
 
     def requireShadowable(self, name):
-        return False
+        raise userError(u"Cannot redefine " + name)
 
     def find(self, name):
         if name in self.outers:
-            return ("outer", self)
-        return (None, None)
+            return ("outer", self.outers.index(name))
+        return (None, 0)
 
 
 class ScopeFrame(ScopeBase):
@@ -82,19 +85,19 @@ class ScopeFrame(ScopeBase):
         return self.next.requireShadowable(name)
 
     def find(self, name):
-        scope, link = self.next.find(name)
+        scope, idx = self.next.find(name)
         if scope == "local":
             if name not in self.frameNames:
                 self.frameNames.append(name)
-            return ("frame", link)
-        return scope, link
+            return ("frame", self.frameNames.index(name))
+        return scope, idx
 
 
 class ScopeBox(ScopeBase):
     "Scope info associated with a scope-introducing node."
 
     def requireShadowable(self, name):
-        scope, link = self.find(name)
+        scope, idx = self.find(name)
         return scope is None or scope == "local"
 
     def find(self, name):
@@ -105,18 +108,18 @@ class ScopeItem(ScopeBase):
     "A single name binding."
     def __init__(self, next, name):
         self.name = name
+        self.position = next.position + 1
         return ScopeBase.__init__(self, next)
 
     def requireShadowable(self, name):
         if self.name == name:
-            return False
+            raise userError(u"Cannot redefine " + name)
         return self.next.requireShadowable(name)
 
     def find(self, name):
         if self.name == name:
-            return ("local", self)
+            return ("local", self.position)
         return self.next.find(name)
-
 
 class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     """
@@ -289,34 +292,77 @@ BoundNounsIR = LayoutIR.extend(
         "Expr": {
             "-NounExpr": None,
             "-BindingExpr": None,
-            "LocalNounExpr": [("name", "Noun"), ("layout", None)],
-            "FrameNounExpr": [("name", "Noun"), ("layout", None)],
-            "OuterNounExpr": [("name", "Noun"), ("layout", None)],
-            "LocalBindingExpr": [("name", "Noun"), ("layout", None)],
-            "FrameBindingExpr": [("name", "Noun"), ("layout", None)],
-            "OuterBindingExpr": [("name", "Noun"), ("layout", None)],
-
-        }
+            "LocalNounExpr": [("name", "Noun"), ("index", None)],
+            "FrameNounExpr": [("name", "Noun"), ("index", None)],
+            "OuterNounExpr": [("name", "Noun"), ("index", None)],
+            "LocalBindingExpr": [("name", "Noun"), ("index", None)],
+            "FrameBindingExpr": [("name", "Noun"), ("index", None)],
+            "OuterBindingExpr": [("name", "Noun"), ("index", None)],
+        },
+        "Patt": {
+            "BindingPatt": [("name", "Noun"), ("index", None)],
+            "FinalPatt": [("name", "Noun"), ("guard", "Expr"),
+                          ("index", None)],
+            "VarPatt": [("name", "Noun"), ("guard", "Expr"), ("index", None)],
+        },
+        "Method": {
+            "MethodExpr": [("doc", None), ("verb", None), ("patts", "Patt*"),
+                           ("namedPatts", "NamedPatt*"), ("guard", "Expr"),
+                           ("body", "Expr"), ("localSize", None)],
+        },
     }
 )
 
 
 class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
+    def visitBindingPatt(self, name, layout):
+        return self.dest.BindingPatt(name, layout.position)
+
+    def visitFinalPatt(self, name, guard, layout):
+        return self.dest.FinalPatt(name, self.visitExpr(guard), layout.position)
+
+    def visitVarPatt(self, name, guard, layout):
+        return self.dest.VarPatt(name, self.visitExpr(guard), layout.position)
+
     def visitNounExpr(self, name, layout):
-        scope, link = layout.find(name)
+        scope, idx = layout.find(name)
+        if scope is None:
+            raise userError(name + u" is not defined")
         if scope == "frame":
-            return self.dest.FrameNounExpr(name, layout)
+            return self.dest.FrameNounExpr(name, idx)
         if scope == "outer":
-            return self.dest.OuterNounExpr(name, layout)
-        return self.dest.LocalNounExpr(name, layout)
+            return self.dest.OuterNounExpr(name, idx)
+        return self.dest.LocalNounExpr(name, idx)
 
     def visitBindingExpr(self, name, layout):
-        scope, link = layout.find(name)
+        scope, idx = layout.find(name)
+        if scope is None:
+            raise userError(name + u" is not defined")
         if scope == "frame":
-            return self.dest.FrameBindingExpr(name, layout)
+            return self.dest.FrameBindingExpr(name, idx)
         if scope == "outer":
-            return self.dest.OuterBindingExpr(name, layout)
-        return self.dest.LocalBindingExpr(name, layout)
+            return self.dest.OuterBindingExpr(name, idx)
+        return self.dest.LocalBindingExpr(name, idx)
+
+    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body, layout):
+        return self.dest.MethodExpr(
+            doc, verb,
+            [self.visitPatt(p) for p in patts],
+            [self.visitNamedPatt(np) for np in namedPatts],
+            self.visitExpr(guard),
+            self.visitExpr(body),
+            countLocalSize(layout, 0))
+
+
+def countLocalSize(lo, sizeSeen):
+    sizeSeen = max(sizeSeen, lo.position)
+    for x in lo.children:
+        sizeSeen = max(countLocalSize(x, sizeSeen), sizeSeen)
+    return sizeSeen
+
+
+def asIndex(i):
+    return u"".join([unichr(0x2050 + ord(c)) for c in str(i)])
 
 
 class PrettySpecialNouns(BoundNounsIR.makePassTo(None)):
@@ -350,19 +396,22 @@ class PrettySpecialNouns(BoundNounsIR.makePassTo(None)):
         self.write(u" := ")
         self.visitExpr(rvalue)
 
-    def visitLocalBindingExpr(self, name, layout):
+    def visitLocalBindingExpr(self, name, index):
         self.write(u"&&")
         self.write(name)
+        self.write(asIndex(index))
         self.write(u"⒧")
 
-    def visitFrameBindingExpr(self, name, layout):
+    def visitFrameBindingExpr(self, name, index):
         self.write(u"&&")
         self.write(name)
+        self.write(asIndex(index))
         self.write(u"⒡")
 
-    def visitOuterBindingExpr(self, name, layout):
+    def visitOuterBindingExpr(self, name, index):
         self.write(u"&&")
         self.write(name)
+        self.write(asIndex(index))
 
     def visitCallExpr(self, obj, verb, args, namedArgs):
         self.visitExpr(obj)
@@ -436,16 +485,19 @@ class PrettySpecialNouns(BoundNounsIR.makePassTo(None)):
     def visitMetaStateExpr(self, layout):
         self.write(u"meta.state()")
 
-    def visitLocalNounExpr(self, name, layout):
+    def visitLocalNounExpr(self, name, index):
         self.write(name)
         self.write(u"⒧")
+        self.write(asIndex(index))
 
-    def visitFrameNounExpr(self, name, layout):
+    def visitFrameNounExpr(self, name, index):
         self.write(name)
         self.write(u"⒡")
+        self.write(asIndex(index))
 
-    def visitOuterNounExpr(self, name, layout):
+    def visitOuterNounExpr(self, name, index):
         self.write(name)
+        self.write(asIndex(index))
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
                         layout):
@@ -497,15 +549,17 @@ class PrettySpecialNouns(BoundNounsIR.makePassTo(None)):
         self.write(u"&&")
         self.write(name)
 
-    def visitFinalPatt(self, name, guard, layout):
+    def visitFinalPatt(self, name, guard, idx):
         self.write(name)
+        self.write(asIndex(idx))
         if not isinstance(guard, LayoutIR.NullExpr):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitVarPatt(self, name, guard, layout):
+    def visitVarPatt(self, name, guard, idx):
         self.write(u"var ")
         self.write(name)
+        self.write(asIndex(idx))
         if not isinstance(guard, LayoutIR.NullExpr):
             self.write(u" :")
             self.visitExpr(guard)
@@ -569,12 +623,6 @@ class PrettySpecialNouns(BoundNounsIR.makePassTo(None)):
         self.visitExpr(body)
         self.write(u"}")
 
-def excavateLocals(lo, self):
-    if isinstance(lo, ScopeItem):
-        self.write(u" ")
-        self.write(lo.name)
-    for x in lo.children:
-        excavateLocals(x, self)
 
 ## We'll come back to this in a bit once we have some more scope info.
 # DeBruijnIR = SaveScriptIR.extend("De Bruijn", ["Index", "-Noun"],
