@@ -57,6 +57,20 @@ class ScopeBase(object):
         self.children.append(child)
 
 
+class ScopeOuter(ScopeBase):
+    def __init__(self, outers):
+        self.outers = outers
+        self.children = []
+
+    def requireShadowable(self, name):
+        return False
+
+    def find(self, name):
+        if name in self.outers:
+            return ("outer", self)
+        return (None, None)
+
+
 class ScopeFrame(ScopeBase):
     "Scope info associated with an object closure."
 
@@ -67,23 +81,24 @@ class ScopeFrame(ScopeBase):
     def requireShadowable(self, name):
         return self.next.requireShadowable(name)
 
-    def frameClosesOver(self, name):
-        if name not in self.frameNames:
-            self.frameNames.append(name)
-        self.next.frameClosesOver(name)
-        return True
+    def find(self, name):
+        scope, link = self.next.find(name)
+        if scope == "local":
+            if name not in self.frameNames:
+                self.frameNames.append(name)
+            return ("frame", link)
+        return scope, link
 
 
 class ScopeBox(ScopeBase):
     "Scope info associated with a scope-introducing node."
 
     def requireShadowable(self, name):
-        return True
+        scope, link = self.find(name)
+        return scope is None or scope == "local"
 
-    def frameClosesOver(self, name):
-        if self.next is None:
-            return False
-        return self.next.frameClosesOver(name)
+    def find(self, name):
+        return self.next.find(name)
 
 
 class ScopeItem(ScopeBase):
@@ -97,18 +112,18 @@ class ScopeItem(ScopeBase):
             return False
         return self.next.requireShadowable(name)
 
-    def frameClosesOver(self, name):
+    def find(self, name):
         if self.name == name:
-            return False
-        return self.next.frameClosesOver(name)
+            return ("local", self)
+        return self.next.find(name)
 
 
 class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     """
     Set up scope boxes and collect variable definition sites.
     """
-    def __init__(self):
-        self.layout = ScopeBox(None)
+    def __init__(self, outers):
+        self.layout = ScopeOuter(outers)
 
     def visitExprWithLayout(self, node, layout):
         origLayout = self.layout
@@ -286,12 +301,14 @@ BoundNounsIR = LayoutIR.extend(
 
 class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
     def visitNounExpr(self, name, layout):
-        if layout.frameClosesOver(name):
+        scope, link = layout.find(name)
+        if scope == "frame":
             return self.dest.FrameNounExpr(name, layout)
         return self.dest.LocalNounExpr(name, layout)
 
     def visitBindingExpr(self, name, layout):
-        if layout.frameClosesOver(name):
+        scope, link = layout.find(name)
+        if scope == "frame":
             return self.dest.FrameBindingExpr(name, layout)
         return self.dest.LocalBindingExpr(name, layout)
 
