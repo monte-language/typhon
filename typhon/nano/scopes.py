@@ -291,8 +291,10 @@ BoundNounsIR = LayoutIR.extend(
             "-BindingExpr": None,
             "LocalNounExpr": [("name", "Noun"), ("layout", None)],
             "FrameNounExpr": [("name", "Noun"), ("layout", None)],
+            "OuterNounExpr": [("name", "Noun"), ("layout", None)],
             "LocalBindingExpr": [("name", "Noun"), ("layout", None)],
             "FrameBindingExpr": [("name", "Noun"), ("layout", None)],
+            "OuterBindingExpr": [("name", "Noun"), ("layout", None)],
 
         }
     }
@@ -304,12 +306,16 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
         scope, link = layout.find(name)
         if scope == "frame":
             return self.dest.FrameNounExpr(name, layout)
+        if scope == "outer":
+            return self.dest.OuterNounExpr(name, layout)
         return self.dest.LocalNounExpr(name, layout)
 
     def visitBindingExpr(self, name, layout):
         scope, link = layout.find(name)
         if scope == "frame":
             return self.dest.FrameBindingExpr(name, layout)
+        if scope == "outer":
+            return self.dest.OuterBindingExpr(name, layout)
         return self.dest.LocalBindingExpr(name, layout)
 
 
@@ -353,6 +359,10 @@ class PrettySpecialNouns(BoundNounsIR.makePassTo(None)):
         self.write(u"&&")
         self.write(name)
         self.write(u"⒡")
+
+    def visitOuterBindingExpr(self, name, layout):
+        self.write(u"&&")
+        self.write(name)
 
     def visitCallExpr(self, obj, verb, args, namedArgs):
         self.visitExpr(obj)
@@ -433,6 +443,9 @@ class PrettySpecialNouns(BoundNounsIR.makePassTo(None)):
     def visitFrameNounExpr(self, name, layout):
         self.write(name)
         self.write(u"⒡")
+
+    def visitOuterNounExpr(self, name, layout):
+        self.write(name)
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
                         layout):
