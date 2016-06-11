@@ -14,7 +14,7 @@
 from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, Refused, userError
 # Can't use audited, even thought it's importable; calling it causes a circle.
 from typhon.objects.collections.helpers import asSet
@@ -26,7 +26,6 @@ AUDIT_1 = getAtom(u"audit", 1)
 COERCE_2 = getAtom(u"coerce", 2)
 PASSES_1 = getAtom(u"passes", 1)
 RUN_2 = getAtom(u"run", 2)
-SUPERSETOF_1 = getAtom(u"supersetOf", 1)
 
 
 @autohelp
@@ -317,36 +316,32 @@ class DeepFrozen(Object):
     def auditorStamps(self):
         return asSet([deepFrozenStamp])
 
+    @method("Bool", "Any")
     @profileTyphon("DeepFrozen.audit/1")
     def audit(self, audition):
+        from typhon.objects.user import Audition
+        if not isinstance(audition, Audition):
+            raise userError(u"not an Audition")
+
         from typhon.metrics import globalRecorder
         with globalRecorder().context("Audition (DF)"):
             auditDeepFrozen(audition)
             audition.ask(deepFrozenStamp)
             return False
 
-    def recv(self, atom, args):
-        from typhon.objects.constants import wrapBool
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
         from typhon.objects.collections.helpers import monteMap
-        from typhon.objects.user import Audition
-        if atom is AUDIT_1:
-            audition = args[0]
-            if not isinstance(audition, Audition):
-                raise userError(u"not an Audition")
-            return wrapBool(self.audit(audition))
+        from typhon.objects.constants import NullObject
+        from typhon.objects.ejectors import theThrower
+        if ej is NullObject:
+            ej = theThrower
+        checkDeepFrozen(specimen, monteMap(), ej, specimen)
+        return specimen
 
-        if atom is COERCE_2:
-            from typhon.objects.constants import NullObject
-            from typhon.objects.ejectors import theThrower
-            ej = args[1]
-            if ej is NullObject:
-                ej = theThrower
-            checkDeepFrozen(args[0], monteMap(), ej, args[0])
-            return args[0]
-
-        if atom is SUPERSETOF_1:
-            return wrapBool(deepFrozenSupersetOf(args[0]))
-        raise Refused(self, atom, args)
+    @method("Bool", "Any")
+    def supersetOf(self, guard):
+        return deepFrozenSupersetOf(guard)
 
     def printOn(self, out):
         from typhon.objects.data import StrObject

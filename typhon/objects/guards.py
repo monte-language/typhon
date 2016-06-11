@@ -1,7 +1,7 @@
 # encoding: utf-8
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import Refused, UserException
 from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
@@ -24,7 +24,6 @@ EXTRACTGUARDS_2 = getAtom(u"extractGuards", 2)
 EXTRACTGUARD_2 = getAtom(u"extractGuard", 2)
 EXTRACTVALUE_2 = getAtom(u"extractValue", 2)
 GETGUARD_0 = getAtom(u"getGuard", 0)
-GETVALUE_0 = getAtom(u"getValue", 0)
 GETMETHODS_0 = getAtom(u"getMethods", 0)
 GET_1 = getAtom(u"get", 1)
 PASSES_1 = getAtom(u"passes", 1)
@@ -34,6 +33,8 @@ _UNCALL_0 = getAtom(u"_uncall", 0)
 
 @autohelp
 class Guard(Object):
+
+    @method("Any", "Any", "Any")
     def coerce(self, specimen, ej):
         specimen = resolution(specimen)
         val = self.subCoerce(specimen)
@@ -54,17 +55,9 @@ class Guard(Object):
         else:
             return val
 
+    @method("Bool", "Any")
     def supersetOf(self, other):
-        return wrapBool(False)
-
-    def recv(self, atom, args):
-        if atom is COERCE_2:
-            return self.coerce(args[0], args[1])
-
-        if atom is SUPERSETOF_1:
-            return self.supersetOf(args[0])
-
-        raise Refused(self, atom, args)
+        return False
 
 
 @autohelp
@@ -436,21 +429,24 @@ class SameGuard(Guard):
         else:
             return asSet([selfless, transparentStamp])
 
-    def recv(self, atom, args):
-        if atom is _UNCALL_0:
-            from typhon.objects.collections.maps import EMPTY_MAP
-            return wrapList([sameGuardMaker, StrObject(u"get"),
-                              wrapList([self.value]), EMPTY_MAP])
-        if atom is COERCE_2:
-            from typhon.objects.equality import optSame, EQUAL
-            specimen, ej = args[0], args[1]
-            if optSame(specimen, self.value) is EQUAL:
-                return specimen
-            ej.call(u"run", [wrapList([specimen, StrObject(u"is not"),
-                                        self.value])])
-        if atom is GETVALUE_0:
-            return self.value
-        raise Refused(self, atom, args)
+    @method("Any")
+    def _uncall(self):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        return wrapList([sameGuardMaker, StrObject(u"get"),
+                          wrapList([self.value]), EMPTY_MAP])
+
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
+        from typhon.objects.equality import optSame, EQUAL
+        if optSame(specimen, self.value) is EQUAL:
+            return specimen
+        # XXX throw properly
+        ej.call(u"run", [wrapList([specimen, StrObject(u"is not"),
+                                    self.value])])
+
+    @method("Any")
+    def getValue(self):
+        return self.value
 
 
 @autohelp

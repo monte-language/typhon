@@ -107,7 +107,7 @@ def makeHeapStats():
 
 
 @autohelp
-def LoopHandle(Object):
+class LoopHandle(Object):
     """
     A handle.
     """

@@ -15,7 +15,7 @@
 from rpython.rlib.debug import debug_print
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import (auditedBy, deepFrozenGuard,
                                      deepFrozenStamp, selfless)
@@ -48,7 +48,6 @@ CALL_3 = getAtom(u"call", 3)
 CALLWITHMESSAGE_2 = getAtom(u"callWithMessage", 2)
 CALL_4 = getAtom(u"call", 4)
 COERCE_2 = getAtom(u"coerce", 2)
-EXCEPTION_1 = getAtom(u"exception", 1)
 FAILURELIST_1 = getAtom(u"failureList", 1)
 MAKEFINALSLOT_2 = getAtom(u"makeFinalSlot", 2)
 MAKEVARSLOT_2 = getAtom(u"makeVarSlot", 2)
@@ -85,23 +84,19 @@ class TraceLn(Object):
     def writeTraceLine(self, line):
         debug_print("TRACE: [%s]" % line.encode("utf-8"))
 
-    def recv(self, atom, args):
-        if atom.verb == u"run":
-            guts = u", ".join([obj.toQuote() for obj in args])
-            self.writeTraceLine(guts)
-            return NullObject
+    @method("Void", "Any")
+    def exception(self, problem):
+        if isinstance(problem, SealedException):
+            self.writeLine(u"Problem: %s" % problem.value.toString())
+            for crumb in problem.trail:
+                self.writeLine(crumb)
+        else:
+            self.writeLine(u"Problem: %s" % problem.toString())
 
-        if atom is EXCEPTION_1:
-            problem = args[0]
-            if isinstance(problem, SealedException):
-                self.writeLine(u"Problem: %s" % problem.value.toString())
-                for crumb in problem.trail:
-                    self.writeLine(crumb)
-            else:
-                self.writeLine(u"Problem: %s" % problem.toString())
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method("Void", "*Any")
+    def run(self, args):
+        guts = u", ".join([obj.toQuote() for obj in args])
+        self.writeTraceLine(guts)
 
 
 @autohelp
