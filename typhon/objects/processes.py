@@ -6,13 +6,12 @@ from rpython.rtyper.lltypesystem.lltype import nullptr
 
 from typhon import ruv
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import Refused, userError
-from typhon.objects.collections.lists import wrapList, unwrapList
-from typhon.objects.collections.maps import (EMPTY_MAP, ConstMap, monteMap,
+from typhon.objects.collections.lists import unwrapList
+from typhon.objects.collections.maps import (EMPTY_MAP, monteMap,
                                              unwrapMap)
-from typhon.objects.constants import NullObject
-from typhon.objects.data import BytesObject, IntObject, StrObject, unwrapBytes
+from typhon.objects.data import BytesObject, StrObject, unwrapBytes
 from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.root import Object, audited
 from typhon.objects.refs import makePromise
@@ -20,15 +19,7 @@ from typhon.vats import currentVat, scopedVat
 
 
 FLOWTO_1 = getAtom(u"flowTo", 1)
-GETARGUMENTS_0 = getAtom(u"getArguments", 0)
-GETENVIRONMENT_0 = getAtom(u"getEnvironment", 0)
-GETPID_0 = getAtom(u"getPID", 0)
-INTERRUPT_0 = getAtom(u"interrupt", 0)
 RUN_3 = getAtom(u"run", 3)
-WAIT_0 = getAtom(u"wait", 0)
-
-EXITSTATUS_0 = getAtom(u"exitStatus", 0)
-TERMINATIONSIGNAL_0 = getAtom(u"terminationSignal", 0)
 
 
 @autohelp
@@ -43,28 +34,27 @@ class CurrentProcess(Object):
     def toString(self):
         return u"<current process (PID %d)>" % os.getpid()
 
-    def recv(self, atom, args):
-        if atom is GETARGUMENTS_0:
-            return wrapList([StrObject(arg.decode("utf-8"))
-                              for arg in self.config.argv])
+    @method("List")
+    def getArguments(self):
+        return [StrObject(arg.decode("utf-8")) for arg in self.config.argv]
 
-        if atom is GETENVIRONMENT_0:
-            # XXX monteMap()
-            d = monteMap()
-            for key, value in os.environ.items():
-                k = BytesObject(key)
-                v = BytesObject(value)
-                d[k] = v
-            return ConstMap(d)
+    @method("Map")
+    def getEnvironment(self):
+        # XXX monteMap()
+        d = monteMap()
+        for key, value in os.environ.items():
+            k = BytesObject(key)
+            v = BytesObject(value)
+            d[k] = v
+        return d
 
-        if atom is GETPID_0:
-            return IntObject(os.getpid())
+    @method("Int")
+    def getPID(self):
+        return os.getpid()
 
-        if atom is INTERRUPT_0:
-            os.kill(os.getpid(), signal.SIGINT)
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method("Void")
+    def interrupt(self):
+        os.kill(os.getpid(), signal.SIGINT)
 
 
 @autohelp
@@ -74,22 +64,21 @@ class ProcessExitInformation(Object):
     """
 
     def __init__(self, exitStatus, terminationSignal):
-        self.exitStatus = exitStatus
-        self.terminationSignal = terminationSignal
+        self._exitStatus = exitStatus
+        self._terminationSignal = terminationSignal
 
     def toString(self):
         return (u'<ProcessExitInformation exitStatus=%d,'
-                u' terminationSignal=%d>' % (self.exitStatus,
-                                             self.terminationSignal))
+                u' terminationSignal=%d>' % (self._exitStatus,
+                                             self._terminationSignal))
 
-    def recv(self, atom, args):
-        if atom is EXITSTATUS_0:
-            return IntObject(self.exitStatus)
+    @method("Int")
+    def exitStatus(self):
+        return self._exitStatus
 
-        if atom is TERMINATIONSIGNAL_0:
-            return IntObject(self.terminationSignal)
-
-        raise Refused(self, atom, args)
+    @method("Int")
+    def terminationSignal(self):
+        return self._terminationSignal
 
 
 @autohelp
@@ -127,43 +116,41 @@ class SubProcess(Object):
     def resolveWaiter(self, resolver):
         resolver.resolve(ProcessExitInformation(*self.exit_and_signal))
 
-    def makeWaiter(self):
+    def toString(self):
+        if self.pid == self.EMPTY_PID:
+            return u"<child process (unspawned)>"
+        return u"<child process (PID %d)>" % self.pid
+
+    @method("List")
+    def getArguments(self):
+        return [BytesObject(arg) for arg in self.argv]
+
+    @method("Map")
+    def getEnvironment(self):
+        # XXX monteMap()
+        d = monteMap()
+        for key, value in self.env.items():
+            k = BytesObject(key)
+            v = BytesObject(value)
+            d[k] = v
+        return d
+
+    @method("Int")
+    def getPID(self):
+        return self.pid
+
+    @method("Void")
+    def interrupt(self):
+        os.kill(self.pid, signal.SIGINT)
+
+    @method("Any")
+    def wait(self):
         p, r = makePromise()
         if self.exit_and_signal != self.EMPTY_EXIT_AND_SIGNAL:
             self.resolveWaiter(r)
         else:
             self.resolvers.append(r)
         return p
-
-    def toString(self):
-        if self.pid == self.EMPTY_PID:
-            return u"<child process (unspawned)>"
-        return u"<child process (PID %d)>" % self.pid
-
-    def recv(self, atom, args):
-        if atom is GETARGUMENTS_0:
-            return wrapList([BytesObject(arg) for arg in self.argv])
-
-        if atom is GETENVIRONMENT_0:
-            # XXX monteMap()
-            d = monteMap()
-            for key, value in self.env.items():
-                k = BytesObject(key)
-                v = BytesObject(value)
-                d[k] = v
-            return ConstMap(d)
-
-        if atom is GETPID_0:
-            return IntObject(self.pid)
-
-        if atom is INTERRUPT_0:
-            os.kill(self.pid, signal.SIGINT)
-            return NullObject
-
-        if atom is WAIT_0:
-            return self.makeWaiter()
-
-        raise Refused(self, atom, args)
 
 
 @autohelp

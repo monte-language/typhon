@@ -23,10 +23,16 @@ def method(rv, *args, **kwargs):
 
 unwrappers = {
     "Bool": "typhon.objects.constants",
+    "Int": "typhon.objects.data",
+    "List": "typhon.objects.collections.lists",
+    "Map": "typhon.objects.collections.maps",
 }
 
 wrappers = {
     "Bool": "typhon.objects.constants",
+    "Int": "typhon.objects.data",
+    "List": "typhon.objects.collections.lists",
+    "Map": "typhon.objects.collections.maps",
 }
 
 

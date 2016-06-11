@@ -569,3 +569,7 @@ def unwrapMap(o):
     if isinstance(m, FlexMap):
         return m.objectMap
     raise WrongType(u"Not a map!")
+
+
+def wrapMap(d):
+    return ConstMap(d)

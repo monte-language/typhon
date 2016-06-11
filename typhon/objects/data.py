@@ -622,6 +622,10 @@ def unwrapInt(o):
     raise WrongType(u"Not an integer!")
 
 
+def wrapInt(i):
+    return IntObject(i)
+
+
 @autohelp
 @audited.DFSelfless
 class BigInt(Object):
