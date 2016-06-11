@@ -118,6 +118,9 @@ theSlotBinder = SlotBinder()
 
 @autohelp
 class SpecializedSlotBinder(Object):
+
+    _immutable_fields_ = "guard",
+
     def __init__(self, guard):
         self.guard = guard
 
@@ -127,10 +130,9 @@ class SpecializedSlotBinder(Object):
         else:
             return emptySet
 
-    def recv(self, atom, args):
-        if atom is RUN_2:
-            return Binding(args[0], self.guard)
-        raise Refused(self, atom, args)
+    @method("Any", "Any", "Any")
+    def run(self, specimen, ej):
+        return Binding(specimen, self.guard)
 
 
 @autohelp
@@ -271,19 +273,19 @@ class FinalSlotMaker(Object):
     A maker of final slots.
     """
 
-    def recv(self, atom, args):
-        if atom is RUN_3:
-            guard, specimen, ej = args[0], args[1], args[2]
-            if guard != NullObject:
-                val = guard.coerce(specimen, ej)
-                g = guard
-            else:
-                val = specimen
-                g = anyGuard
-            return FinalSlot(val, g)
-        if atom is ASTYPE_0:
-            return theFinalSlotGuardMaker
-        raise Refused(self, atom, args)
+    @method("Any")
+    def asType(self):
+        return theFinalSlotGuardMaker
+
+    @method("Any", "Any", "Any", "Any")
+    def run(self, guard, specimen, ej):
+        if guard != NullObject:
+            val = guard.call(u"coerce", [specimen, ej])
+            g = guard
+        else:
+            val = specimen
+            g = anyGuard
+        return FinalSlot(val, g)
 
 theFinalSlotMaker = FinalSlotMaker()
 
@@ -295,19 +297,19 @@ class VarSlotMaker(Object):
     A maker of var slots.
     """
 
-    def recv(self, atom, args):
-        if atom is RUN_3:
-            guard, specimen, ej = args[0], args[1], args[2]
-            if guard != NullObject:
-                val = guard.coerce(specimen, ej)
-                g = guard
-            else:
-                val = specimen
-                g = anyGuard
-            return VarSlot(val, g)
-        if atom is ASTYPE_0:
-            return theVarSlotGuardMaker
-        raise Refused(self, atom, args)
+    @method("Any")
+    def asType(self):
+        return theVarSlotGuardMaker
+
+    @method("Any", "Any", "Any", "Any")
+    def run(self, guard, specimen, ej):
+        if guard != NullObject:
+            val = guard.call(u"coerce", [specimen, ej])
+            g = guard
+        else:
+            val = specimen
+            g = anyGuard
+        return VarSlot(val, g)
 
 
 @autohelp
@@ -325,15 +327,13 @@ class NearGuard(Object):
     def toString(self):
         return u"Near"
 
-    def recv(self, atom, args):
-        if atom is COERCE_2:
-            specimen = resolution(args[0])
-            if isinstance(specimen, Promise):
-                msg = u"Specimen is in non-near state %s" % specimen.state().repr
-                throw(args[1], StrObject(msg))
-            return specimen
-
-        raise Refused(self, atom, args)
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
+        specimen = resolution(specimen)
+        if isinstance(specimen, Promise):
+            msg = u"Specimen is in non-near state %s" % specimen.state().repr
+            throw(ej, StrObject(msg))
+        return specimen
 
 
 def safeScope():
