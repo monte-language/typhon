@@ -15,16 +15,13 @@ from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Ejecting, Refused, userError
+from typhon.errors import Ejecting, userError
 # Can't use audited, even thought it's importable; calling it causes a circle.
 from typhon.objects.collections.helpers import asSet
 from typhon.objects.root import Object, runnable
 from typhon.profile import profileTyphon
 
 
-AUDIT_1 = getAtom(u"audit", 1)
-COERCE_2 = getAtom(u"coerce", 2)
-PASSES_1 = getAtom(u"passes", 1)
 RUN_2 = getAtom(u"run", 2)
 
 
@@ -42,16 +39,17 @@ class DeepFrozenStamp(Object):
         # looking at this line? ~ C.
         return asSet([self])
 
-    def recv(self, atom, args):
+    @method("Bool", "Any")
+    def audit(self, audition):
+        return True
+
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
+        if specimen.auditedBy(self):
+            return specimen
         from typhon.objects.data import StrObject
-        if atom is AUDIT_1:
-            from typhon.objects.constants import wrapBool
-            return wrapBool(True)
-        if atom is COERCE_2:
-            if args[0].auditedBy(self):
-                return args[0]
-            args[1].call(u"run", [StrObject(u"Not DeepFrozen")])
-        raise Refused(self, atom, args)
+        # XXX properly eject
+        ej.call(u"run", [StrObject(u"Not DeepFrozen")])
 
 deepFrozenStamp = DeepFrozenStamp()
 
@@ -77,11 +75,9 @@ class TransparentStamp(Object):
     def auditorStamps(self):
         return asSet([deepFrozenStamp])
 
-    def recv(self, atom, args):
-        from typhon.objects.constants import wrapBool
-        if atom is AUDIT_1:
-            return wrapBool(True)
-        raise Refused(self, atom, args)
+    @method("Bool", "Any")
+    def audit(self, audition):
+        return True
 
 transparentStamp = TransparentStamp()
 
@@ -97,19 +93,18 @@ class TransparentGuard(Object):
     def auditorStamps(self):
         return asSet([deepFrozenStamp])
 
-    def recv(self, atom, args):
-        from typhon.objects.constants import wrapBool, NullObject
-        if atom is PASSES_1:
-            return wrapBool(args[0].auditedBy(transparentStamp))
+    @method("Bool", "Any")
+    def passes(self, specimen):
+        return specimen.auditedBy(transparentStamp)
 
-        if atom is COERCE_2:
-            if args[0].auditedBy(transparentStamp):
-                return args[0]
-            from typhon.objects.ejectors import throw
-            throw(args[1], NullObject)
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
+        if specimen.auditedBy(transparentStamp):
+            return specimen
+        from typhon.objects.constants import NullObject
+        from typhon.objects.ejectors import throw
+        throw(ej, NullObject)
+        return NullObject
 
 
 @autohelp
@@ -128,23 +123,22 @@ class Selfless(Object):
     def auditorStamps(self):
         return asSet([deepFrozenStamp])
 
-    def recv(self, atom, args):
-        from typhon.objects.constants import wrapBool
+    @method("Bool", "Any")
+    def audit(self, audition):
+        return True
+
+    @method("Bool", "Any")
+    def passes(self, specimen):
+        return specimen.auditedBy(self)
+
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
+        if specimen.auditedBy(self):
+            return specimen
         from typhon.objects.constants import NullObject
-        if atom is AUDIT_1:
-            return wrapBool(True)
-
-        if atom is PASSES_1:
-            return wrapBool(args[0].auditedBy(selfless))
-
-        if atom is COERCE_2:
-            if args[0].auditedBy(selfless):
-                return args[0]
-            from typhon.objects.ejectors import throw
-            throw(args[1], NullObject)
-            return NullObject
-
-        raise Refused(self, atom, args)
+        from typhon.objects.ejectors import throw
+        throw(ej, NullObject)
+        return NullObject
 
 selfless = Selfless()
 
