@@ -1239,6 +1239,9 @@ def unwrapStr(o):
         return s.getString()
     raise WrongType(u"Not a string!")
 
+def wrapStr(s):
+    return StrObject(s)
+
 
 @autohelp
 class bytesIterator(Object):

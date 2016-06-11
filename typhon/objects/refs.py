@@ -15,13 +15,12 @@
 import weakref
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.enum import makeEnum
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.log import log
 from typhon.objects.auditors import deepFrozenStamp, selfless
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
-from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.root import Object, audited
 from typhon.vats import currentVat
@@ -30,28 +29,12 @@ from typhon.vats import currentVat
 BROKEN, EVENTUAL, NEAR = makeEnum(u"RefState",
                                   u"broken eventual near".split())
 
-BROKEN_1 = getAtom(u"broken", 1)
-FULFILLMENT_1 = getAtom(u"fulfillment", 1)
-ISBROKEN_1 = getAtom(u"isBroken", 1)
-ISDEEPFROZEN_1 = getAtom(u"isDeepFrozen", 1)
-ISEVENTUAL_1 = getAtom(u"isEventual", 1)
-ISFAR_1 = getAtom(u"isFar", 1)
-ISNEAR_1 = getAtom(u"isNear", 1)
-ISRESOLVED_1 = getAtom(u"isResolved", 1)
-ISSELFISH_1 = getAtom(u"isSelfish", 1)
-ISSELFLESS_1 = getAtom(u"isSelfless", 1)
-ISSETTLED_1 = getAtom(u"isSettled", 1)
-MAKEPROXY_3 = getAtom(u"makeProxy", 3)
-OPTPROBLEM_1 = getAtom(u"optProblem", 1)
 PROMISE_0 = getAtom(u"promise", 0)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RESOLVE_2 = getAtom(u"resolve", 2)
 RUN_1 = getAtom(u"run", 1)
 SMASH_1 = getAtom(u"smash", 1)
 STATE_1 = getAtom(u"state", 1)
-WHENBROKEN_2 = getAtom(u"whenBroken", 2)
-WHENRESOLVED_2 = getAtom(u"whenResolved", 2)
-WHENRESOLVEDONLY_2 = getAtom(u"whenResolvedOnly", 2)
 _PRINTON_1 = getAtom(u"_printOn", 1)
 _WHENBROKEN_1 = getAtom(u"_whenBroken", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
@@ -107,75 +90,31 @@ class RefOps(Object):
 
         return self.recv(atom, args)
 
-    def recv(self, atom, args):
-        if atom is BROKEN_1:
-            return self.broken(args[0])
+    @method("Any", "Any", "Any", "Any")
+    def makeProxy(self, x, y, z):
+        from typhon.objects.proxy import makeProxy
+        return makeProxy(x, y, z)
 
-        if atom is FULFILLMENT_1:
-            return self.fulfillment(args[0])
+    @method("Any", "Any")
+    def optProblem(self, ref):
+        if isinstance(ref, Promise):
+            return ref.optProblem()
+        return NullObject
 
-        if atom is ISBROKEN_1:
-            return wrapBool(self.isBroken(args[0]))
-
-        if atom is ISDEEPFROZEN_1:
-            return wrapBool(self.isDeepFrozen(args[0]))
-
-        if atom is ISEVENTUAL_1:
-            return wrapBool(self.isEventual(args[0]))
-
-        if atom is ISNEAR_1:
-            return wrapBool(self.isNear(args[0]))
-
-        if atom is ISFAR_1:
-            return wrapBool(self.isFar(args[0]))
-
-        if atom is ISRESOLVED_1:
-            return wrapBool(isResolved(args[0]))
-
-        if atom is ISSELFISH_1:
-            return wrapBool(self.isSelfish(args[0]))
-
-        if atom is ISSELFLESS_1:
-            return wrapBool(self.isSelfless(args[0]))
-
-        if atom is ISSETTLED_1:
-            return wrapBool(args[0].isSettled())
-
-        if atom is MAKEPROXY_3:
-            from typhon.objects.proxy import makeProxy
-            return makeProxy(args[0], args[1], args[2])
-
-        if atom is OPTPROBLEM_1:
-            ref = args[0]
-            if isinstance(ref, Promise):
-                return ref.optProblem()
-            return NullObject
-
-        # Inlined for name clash reasons.
-        if atom is STATE_1:
-            o = args[0]
-            if isinstance(o, Promise):
-                s = o.state()
-            else:
-                s = NEAR
-            return StrObject(s.repr)
-
-        if atom is WHENBROKEN_2:
-            return self.whenBroken(args[0], args[1])
-
-        if atom is WHENRESOLVED_2:
-            return self.whenResolved(args[0], args[1])
-
-        if atom is WHENRESOLVEDONLY_2:
-            return self.whenResolvedOnly(args[0], args[1])
-
-        raise Refused(self, atom, args)
+    @method("Str", "Any")
+    def state(self, o):
+        if isinstance(o, Promise):
+            s = o.state()
+        else:
+            s = NEAR
+        return s.repr
 
     def promise(self, guard):
         from typhon.objects.collections.lists import wrapList
         p, r = makePromise(guard=guard)
         return wrapList([p, r])
 
+    @method("Any", "Any")
     def broken(self, problem):
         return UnconnectedRef(problem)
 
@@ -185,21 +124,25 @@ class RefOps(Object):
         else:
             return self.broken(optProblem)
 
+    @method("Bool", "Any")
     def isNear(self, ref):
         if isinstance(ref, Promise):
             return ref.state() is NEAR
         else:
             return True
 
+    @method("Bool", "Any")
     def isEventual(self, ref):
         if isinstance(ref, Promise):
             return ref.state() is EVENTUAL
         else:
             return False
 
+    @method("Bool", "Any")
     def isBroken(self, ref):
         return isBroken(ref)
 
+    @method("Any", "Any")
     def fulfillment(self, ref):
         ref = resolution(ref)
         if isResolved(ref):
@@ -209,9 +152,11 @@ class RefOps(Object):
         else:
             raise userError(u"Not resolved: %s" % (ref.toString(),))
 
+    @method("Bool", "Any")
     def isFar(self, ref):
         return self.isEventual(ref) and isResolved(ref)
 
+    @method("Any", "Any", "Any")
     def whenResolved(self, o, callback):
         from typhon.objects.collections.maps import EMPTY_MAP
         p, r = makePromise()
@@ -221,6 +166,7 @@ class RefOps(Object):
                      EMPTY_MAP)
         return p
 
+    @method("Any", "Any", "Any")
     def whenResolvedOnly(self, o, callback):
         from typhon.objects.collections.maps import EMPTY_MAP
         vat = currentVat.get()
@@ -229,6 +175,7 @@ class RefOps(Object):
                      EMPTY_MAP)
         return NullObject
 
+    @method("Any", "Any", "Any")
     def whenBroken(self, o, callback):
         from typhon.objects.collections.maps import EMPTY_MAP
         p, r = makePromise()
@@ -238,6 +185,7 @@ class RefOps(Object):
                      EMPTY_MAP)
         return p
 
+    @method("Any", "Any", "Any")
     def whenBrokenOnly(self, o, callback):
         from typhon.objects.collections.maps import EMPTY_MAP
         vat = currentVat.get()
@@ -245,12 +193,15 @@ class RefOps(Object):
                             [WhenBrokenReactor(callback, o, None, vat)],
                             EMPTY_MAP)
 
+    @method("Bool", "Any")
     def isDeepFrozen(self, o):
         return o.auditedBy(deepFrozenStamp)
 
+    @method("Bool", "Any")
     def isSelfless(self, o):
         return o.auditedBy(selfless)
 
+    @method("Bool", "Any")
     def isSelfish(self, o):
         return self.isNear(o) and not self.isSelfless(o)
 
@@ -267,24 +218,21 @@ class WhenBrokenReactor(Object):
     def toString(self):
         return u"<whenBrokenReactor>"
 
-    def recv(self, atom, args):
+    @method("Void", "Any")
+    def run(self, unused):
         from typhon.objects.collections.maps import EMPTY_MAP
-        if atom is RUN_1:
-            if not isinstance(self._ref, Promise):
-                return NullObject
+        if not isinstance(self._ref, Promise):
+            return
 
-            if self._ref.state() is EVENTUAL:
-                self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
-                                  EMPTY_MAP)
-            elif self._ref.state() is BROKEN:
-                # XXX this could raise; we might need to reflect to user
-                outcome = self._cb.call(u"run", [self._ref])
+        if self._ref.state() is EVENTUAL:
+            self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
+                              EMPTY_MAP)
+        elif self._ref.state() is BROKEN:
+            # XXX this could raise; we might need to reflect to user
+            outcome = self._cb.call(u"run", [self._ref])
 
-                if self._resolver is not None:
-                    self._resolver.resolve(outcome)
-
-            return NullObject
-        raise Refused(self, atom, args)
+            if self._resolver is not None:
+                self._resolver.resolve(outcome)
 
 
 @autohelp
@@ -301,31 +249,28 @@ class WhenResolvedReactor(Object):
     def toString(self):
         return u"<whenResolvedReactor>"
 
-    def recv(self, atom, args):
+    @method("Void", "Any")
+    def run(self, unused):
         from typhon.objects.collections.maps import EMPTY_MAP
-        if atom is RUN_1:
-            if self.done:
-                return NullObject
+        if self.done:
+            return
 
-            if self._ref.isResolved():
-                try:
-                    outcome = self._cb.call(u"run", [self._ref])
-                    if self._resolver is not None:
-                        self._resolver.resolve(outcome)
-                except UserException as ue:
-                    if self._resolver is None:
-                        raise
-                    else:
-                        from typhon.objects.exceptions import sealException
-                        self._resolver.smash(sealException(ue))
+        if self._ref.isResolved():
+            try:
+                outcome = self._cb.call(u"run", [self._ref])
+                if self._resolver is not None:
+                    self._resolver.resolve(outcome)
+            except UserException as ue:
+                if self._resolver is None:
+                    raise
+                else:
+                    from typhon.objects.exceptions import sealException
+                    self._resolver.smash(sealException(ue))
 
-                self.done = True
-            else:
-                self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
-                                  EMPTY_MAP)
-            return NullObject
-
-        raise Refused(self, atom, args)
+            self.done = True
+        else:
+            self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
+                              EMPTY_MAP)
 
 
 @autohelp
@@ -353,9 +298,6 @@ class LocalResolver(Object):
 
         if atom is RESOLVE_2:
             return wrapBool(self.resolve(args[0], unwrapBool(args[1])))
-
-        if atom is SMASH_1:
-            return wrapBool(self.smash(args[0]))
 
         raise Refused(self, atom, args)
 
@@ -389,11 +331,13 @@ class LocalResolver(Object):
     def resolveRace(self, target):
         return self.resolve(target, False)
 
+    @method("Bool", "Any")
     def smash(self, problem):
         return self.resolve(UnconnectedRef(problem), False)
 
+    @method("Bool")
     def isDone(self):
-        return wrapBool(self._ref is None)
+        return self._ref is None
 
 
 class MessageBuffer(object):
@@ -804,7 +748,6 @@ class Smash(Object):
     def __init__(self, resolver):
         self.resolver = resolver
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            return wrapBool(self.resolver.smash(args[0]))
-        raise Refused(self, atom, args)
+    @method("Bool", "Any")
+    def run(self, problem):
+        return self.resolver.smash(problem)

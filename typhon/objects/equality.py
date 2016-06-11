@@ -16,9 +16,8 @@ import math
 
 from rpython.rlib.objectmodel import compute_identity_hash
 
-from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
+from typhon.autohelp import autohelp, method
+from typhon.errors import userError
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.collections.lists import ConstList, unwrapList
 from typhon.objects.collections.maps import ConstMap
@@ -28,13 +27,6 @@ from typhon.objects.data import (BigInt, BytesObject, CharObject,
 from typhon.objects.refs import resolution, isResolved
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
-
-
-ISSETTLED_1 = getAtom(u"isSettled", 1)
-MAKETRAVERSALKEY_1 = getAtom(u"makeTraversalKey", 1)
-OPTSAME_2 = getAtom(u"optSame", 2)
-SAMEEVER_2 = getAtom(u"sameEver", 2)
-SAMEYET_2 = getAtom(u"sameYet", 2)
 
 
 class Equality(object):
@@ -462,26 +454,26 @@ class Equalizer(Object):
     other.
     """
 
-    def recv(self, atom, args):
-        if atom is ISSETTLED_1:
-            return wrapBool(args[0].isSettled())
+    @method("Bool", "Any")
+    def isSettled(self, specimen):
+        return specimen.isSettled()
 
-        if atom is OPTSAME_2:
-            first, second = args
-            result = optSame(first, second)
-            if result is NOTYET:
-                return NullObject
-            return wrapBool(result is EQUAL)
+    @method("Any", "Any", "Any")
+    def optSame(self, first, second):
+        result = optSame(first, second)
+        if result is NOTYET:
+            return NullObject
+        return wrapBool(result is EQUAL)
 
-        if atom is SAMEEVER_2:
-            return wrapBool(isSameEver(args[0], args[1]))
+    @method("Bool", "Any", "Any")
+    def sameEver(self, first, second):
+        return isSameEver(first, second)
 
-        if atom is SAMEYET_2:
-            first, second = args
-            result = optSame(first, second)
-            return wrapBool(result is EQUAL)
+    @method("Bool", "Any", "Any")
+    def sameYet(self, first, second):
+        result = optSame(first, second)
+        return result is EQUAL
 
-        if atom is MAKETRAVERSALKEY_1:
-            return TraversalKey(args[0])
-
-        raise Refused(self, atom, args)
+    @method("Any", "Any")
+    def makeTraversalKey(self, key):
+        return TraversalKey(key)

@@ -26,6 +26,7 @@ unwrappers = {
     "Int": "typhon.objects.data",
     "List": "typhon.objects.collections.lists",
     "Map": "typhon.objects.collections.maps",
+    "Str": "typhon.objects.data",
 }
 
 wrappers = {
@@ -33,6 +34,7 @@ wrappers = {
     "Int": "typhon.objects.data",
     "List": "typhon.objects.collections.lists",
     "Map": "typhon.objects.collections.maps",
+    "Str": "typhon.objects.data",
 }
 
 
