@@ -21,34 +21,21 @@ from rpython.rtyper.lltypesystem.rffi import charpsize2str
 
 from typhon import log, rsodium, ruv
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.enum import makeEnum
-from typhon.errors import Refused, userError
+from typhon.errors import userError
 from typhon.objects.constants import NullObject
-from typhon.objects.data import BytesObject, StrObject, unwrapBytes, unwrapStr
+from typhon.objects.data import BytesObject, StrObject, unwrapStr
 from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object, runnable
 from typhon.vats import currentVat, scopedVat
 
 
 ABORTFLOW_0 = getAtom(u"abortFlow", 0)
-FLOWINGFROM_1 = getAtom(u"flowingFrom", 1)
 FLOWABORTED_1 = getAtom(u"flowAborted", 1)
 FLOWSTOPPED_1 = getAtom(u"flowStopped", 1)
-FLOWTO_1 = getAtom(u"flowTo", 1)
-GETCONTENTS_0 = getAtom(u"getContents", 0)
-OPENDRAIN_0 = getAtom(u"openDrain", 0)
-OPENFOUNT_0 = getAtom(u"openFount", 0)
-PAUSEFLOW_0 = getAtom(u"pauseFlow", 0)
 RECEIVE_1 = getAtom(u"receive", 1)
-SETCONTENTS_1 = getAtom(u"setContents", 1)
-SIBLING_1 = getAtom(u"sibling", 1)
-RENAME_1 = getAtom(u"rename", 1)
 RUN_1 = getAtom(u"run", 1)
-RUN_2 = getAtom(u"run", 2)
-STOPFLOW_0 = getAtom(u"stopFlow", 0)
-TEMPORARYSIBLING_0 = getAtom(u"temporarySibling", 0)
-UNPAUSE_0 = getAtom(u"unpause", 0)
 
 
 @autohelp
@@ -60,15 +47,12 @@ class FileUnpauser(Object):
     def __init__(self, fount):
         self.fount = fount
 
-    def recv(self, atom, args):
-        if atom is UNPAUSE_0:
-            if self.fount is not None:
-                self.fount.unpause()
-                # Let go so that the fount can be GC'd if necessary.
-                self.fount = None
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method("Void")
+    def unpause(self):
+        if self.fount is not None:
+            self.fount.unpause()
+            # Let go so that the fount can be GC'd if necessary.
+            self.fount = None
 
 
 def readCB(fs):
@@ -110,25 +94,24 @@ class FileFount(Object):
         # Set this up only once.
         ruv.stashFS(self.fs, (self.vat, self))
 
-    def recv(self, atom, args):
-        if atom is FLOWTO_1:
-            self.drain = drain = args[0]
-            rv = drain.call(u"flowingFrom", [self])
-            self.queueRead()
-            return rv
+    @method("Any", "Any")
+    def flowTo(self, drain):
+        self.drain = drain
+        rv = drain.call(u"flowingFrom", [self])
+        self.queueRead()
+        return rv
 
-        if atom is PAUSEFLOW_0:
-            return self.pause()
+    @method("Any")
+    def pauseFlow(self):
+        return self.pause()
 
-        if atom is STOPFLOW_0:
-            self.stop(u"stopFlow() called")
-            return NullObject
+    @method("Void")
+    def stopFlow(self):
+        self.stop(u"stopFlow() called")
 
-        if atom is ABORTFLOW_0:
-            self.abort(u"abortFlow() called")
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method("Void")
+    def abortFlow(self):
+        self.abort(u"abortFlow() called")
 
     def stop(self, reason):
         from typhon.objects.collections.maps import EMPTY_MAP
@@ -217,31 +200,25 @@ class FileDrain(Object):
         # Set this up only once.
         ruv.stashFS(self.fs, (self.vat, self))
 
-    def recv(self, atom, args):
-        if atom is FLOWINGFROM_1:
-            self.fount = args[0]
-            return self
+    @method("Any", "Any")
+    def flowingFrom(self, fount):
+        self.fount = fount
+        return self
 
-        if atom is RECEIVE_1:
-            data = unwrapBytes(args[0])
-            self.receive(data)
-            return NullObject
+    @method("Void", "Any")
+    def flowStopped(self, unused):
+        # Prepare to shut down. Switch to CLOSING to stop future data from
+        # being queued.
+        self.closing()
 
-        if atom is FLOWSTOPPED_1:
-            # Prepare to shut down. Switch to CLOSING to stop future data from
-            # being queued.
-            self.closing()
-            return NullObject
+    @method("Void", "Any")
+    def flowAborted(self, unused):
+        # We'll shut down cleanly, but we're going to discard all the work
+        # that we haven't yet written.
+        self.bufs = []
+        self.closing()
 
-        if atom is FLOWABORTED_1:
-            # We'll shut down cleanly, but we're going to discard all the work
-            # that we haven't yet written.
-            self.bufs = []
-            self.closing()
-            return NullObject
-
-        raise Refused(self, atom, args)
-
+    @method("Void", "Bytes")
     def receive(self, data):
         if self._state in (self.READY, self.WRITING, self.BUSY):
             self.bufs.append(data)
@@ -599,55 +576,56 @@ class FileResource(Object):
         fileName = rsodium.randomHex() + suffix
         return self.sibling(fileName)
 
-    def recv(self, atom, args):
-        if atom is GETCONTENTS_0:
-            return self.open(openGetContentsCB, flags=os.O_RDONLY, mode=0000)
+    @method("Any")
+    def getContents(self):
+        return self.open(openGetContentsCB, flags=os.O_RDONLY, mode=0000)
 
-        if atom is SETCONTENTS_1:
-            data = unwrapBytes(args[0])
-            sibling = self.temporarySibling(".setContents")
+    @method("Any", "Bytes")
+    def setContents(self, data):
+        sibling = self.temporarySibling(".setContents")
 
-            p, r = makePromise()
-            vat = currentVat.get()
-            uv_loop = vat.uv_loop
-            fs = ruv.alloc_fs()
+        p, r = makePromise()
+        vat = currentVat.get()
+        uv_loop = vat.uv_loop
+        fs = ruv.alloc_fs()
 
-            path = sibling.asBytes()
-            # Use CREAT | EXCL to cause a failure if the temporary file
-            # already exists.
-            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-            sc = SetContents(vat, data, r, sibling, self)
-            ruv.stashFS(fs, (vat, sc))
-            ruv.fsOpen(uv_loop, fs, path, flags, 0777, openSetContentsCB)
-            return p
+        path = sibling.asBytes()
+        # Use CREAT | EXCL to cause a failure if the temporary file
+        # already exists.
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        sc = SetContents(vat, data, r, sibling, self)
+        ruv.stashFS(fs, (vat, sc))
+        ruv.fsOpen(uv_loop, fs, path, flags, 0777, openSetContentsCB)
+        return p
 
-        if atom is OPENFOUNT_0:
-            return self.open(openFountCB, flags=os.O_RDONLY, mode=0000)
+    @method("Any")
+    def openFount(self):
+        return self.open(openFountCB, flags=os.O_RDONLY, mode=0000)
 
-        if atom is OPENDRAIN_0:
-            # Create the file if it doesn't yet exist, and truncate it if it
-            # does. Trust the umask to be reasonable for now.
-            flags = os.O_CREAT | os.O_WRONLY
-            # XXX this behavior should be configurable via namedarg?
-            flags |= os.O_TRUNC
-            return self.open(openDrainCB, flags=flags, mode=0777)
+    @method("Any")
+    def openDrain(self):
+        # Create the file if it doesn't yet exist, and truncate it if it
+        # does. Trust the umask to be reasonable for now.
+        flags = os.O_CREAT | os.O_WRONLY
+        # XXX this behavior should be configurable via namedarg?
+        flags |= os.O_TRUNC
+        return self.open(openDrainCB, flags=flags, mode=0777)
 
-        if atom is RENAME_1:
-            fr = args[0]
-            if not isinstance(fr, FileResource):
-                raise userError(u"rename/1: Must be file resource")
-            return self.rename(fr.asBytes())
+    @method("Any", "Any", _verb="rename")
+    def _rename(self, fr):
+        if not isinstance(fr, FileResource):
+            raise userError(u"rename/1: Must be file resource")
+        return self.rename(fr.asBytes())
 
-        if atom is SIBLING_1:
-            name = unwrapStr(args[0])
-            if u'/' in name:
-                raise userError(u"sibling/1: Illegal file name '%s'" % name)
-            return self.sibling(name.encode("utf-8"))
+    @method("Any", "Str", _verb="sibling")
+    def _sibling(self, name):
+        if u'/' in name:
+            raise userError(u"sibling/1: Illegal file name '%s'" % name)
+        return self.sibling(name.encode("utf-8"))
 
-        if atom is TEMPORARYSIBLING_0:
-            return self.temporarySibling(".new")
-
-        raise Refused(self, atom, args)
+    @method("Any", _verb="temporarySibling")
+    def _temporarySibling(self):
+        return self.temporarySibling(".new")
 
 
 @runnable(RUN_1)

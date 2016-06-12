@@ -1505,3 +1505,6 @@ def unwrapBytes(o):
     #             raise WrongType(u"Not a byte!")
     #     return buf
     raise WrongType(u"Not a bytestring!")
+
+def wrapBytes(bs):
+    return BytesObject(bs)

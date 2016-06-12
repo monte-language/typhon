@@ -62,16 +62,9 @@ def repackMonteMethods(cls):
     cls._monteMethods_ = methods
 
 
-unwrappers = {
-    "Bool": "typhon.objects.constants",
-    "Int": "typhon.objects.data",
-    "List": "typhon.objects.collections.lists",
-    "Map": "typhon.objects.collections.maps",
-    "Str": "typhon.objects.data",
-}
-
 wrappers = {
     "Bool": "typhon.objects.constants",
+    "Bytes": "typhon.objects.data",
     "Int": "typhon.objects.data",
     "List": "typhon.objects.collections.lists",
     "Map": "typhon.objects.collections.maps",
@@ -123,7 +116,7 @@ def alterMethods(cls):
                     # No unwrapping.
                     assignments.append("%s = args[%d]" % (argName, i))
                 else:
-                    unwrapperModule = unwrappers[arg]
+                    unwrapperModule = wrappers[arg]
                     unwrapper = "unwrap" + arg
                     assignments.append("from %s import %s" % (unwrapperModule,
                         unwrapper))
