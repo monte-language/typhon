@@ -55,7 +55,7 @@ class Guard(Object):
         else:
             return val
 
-    @method("Bool", "Any")
+    @method.py("Bool", "Any")
     def supersetOf(self, other):
         return False
 

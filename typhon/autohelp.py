@@ -16,9 +16,46 @@ def method(rv, *args, **kwargs):
     # tuple of (args, namedArgs, returnGuard).
 
     def deco(f):
-        f._monteMethod_ = (args, kwargs, rv)
+        # This method shall be isolated, repacked, wrapped, and helped.
+        f._monteMethod_ = args, kwargs, rv, False
         return f
     return deco
+
+def method_py(rv, *args, **kwargs):
+    "NOT_RPYTHON"
+
+    def deco(f):
+        # This method shall be spared.
+        f._monteMethod_ = args, kwargs, rv, True
+        return f
+    return deco
+
+# AutoHelp is working around a technical limitation of nomenclature.
+method.py = method_py
+
+def repackMonteMethods(cls):
+    """
+    Adjust the internal locations of Monte methods.
+
+    AutoHelp requires Monte methods to be in a particular location.
+    """
+
+    methods = {}
+    # vars() returns a view which is corrupted by mutation during iteration.
+    # AutoHelp introduces an inefficient workaround. Please add @autohelp to
+    # the definition site of vars() so that AutoHelp may make vars() more
+    # efficient.
+    for k, v in vars(cls).copy().iteritems():
+        if hasattr(v, "_monteMethod_"):
+            args, kwargs, rv, spare = v._monteMethod_
+            methods[k] = v, args, kwargs, rv
+            if spare:
+                # Remove the mark of AutoHelp from the method and permit it to
+                # play in the valley with its brethren.
+                del v._monteMethod_
+            else:
+                delattr(cls, k)
+    cls._monteMethods_ = methods
 
 
 unwrappers = {
@@ -54,15 +91,13 @@ def alterMethods(cls):
 
     execNames = {"Refused": Refused}
     dispatchClauses = []
-    # vars() returns a view that is corrupted if accessed during iteration.
     d = {}
+    # Walk the MRO and harvest Monte methods. The repacker has already placed
+    # them in the correct location.
     for c in reversed(cls.__mro__):
-        d.update(vars(c))
-    for attr, f in d.iteritems():
-        try:
-            args, kwargs, rv = f._monteMethod_
-        except (AttributeError, ValueError):
-            continue
+        if hasattr(c, "_monteMethods_"):
+            d.update(c._monteMethods_)
+    for attr, (f, args, kwargs, rv) in d.iteritems():
         verb = attr.decode("utf-8")
         assignments = []
         if len(args) == 1 and args[0][0] == '*':
@@ -132,6 +167,9 @@ def autohelp(cls):
     Do not mock AutoHelp. AutoHelp should not be engaged manually. AutoHelp is
     here to help.
     """
+
+    # Must only be done once.
+    repackMonteMethods(cls)
 
     atomList = alterMethods(cls)
     atomDict = {k: None for k in atomList}

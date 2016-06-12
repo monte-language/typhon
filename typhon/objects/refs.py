@@ -124,14 +124,14 @@ class RefOps(Object):
         else:
             return self.broken(optProblem)
 
-    @method("Bool", "Any")
+    @method.py("Bool", "Any")
     def isNear(self, ref):
         if isinstance(ref, Promise):
             return ref.state() is NEAR
         else:
             return True
 
-    @method("Bool", "Any")
+    @method.py("Bool", "Any")
     def isEventual(self, ref):
         if isinstance(ref, Promise):
             return ref.state() is EVENTUAL
@@ -197,7 +197,7 @@ class RefOps(Object):
     def isDeepFrozen(self, o):
         return o.auditedBy(deepFrozenStamp)
 
-    @method("Bool", "Any")
+    @method.py("Bool", "Any")
     def isSelfless(self, o):
         return o.auditedBy(selfless)
 
@@ -331,11 +331,9 @@ class LocalResolver(Object):
     def resolveRace(self, target):
         return self.resolve(target, False)
 
-    @method("Bool", "Any")
     def smash(self, problem):
         return self.resolve(UnconnectedRef(problem), False)
 
-    @method("Bool")
     def isDone(self):
         return self._ref is None
 
