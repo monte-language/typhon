@@ -9,19 +9,14 @@ from rpython.rtyper.lltypesystem.rffi import getintfield
 
 from typhon import ruv
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused
+from typhon.autohelp import autohelp, method
 from typhon.objects.collections.lists import wrapList
-from typhon.objects.data import (bytesToString, unwrapBytes, BytesObject,
-                                 StrObject)
+from typhon.objects.data import bytesToString, unwrapBytes, StrObject
 from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object, runnable
 from typhon.vats import currentVat, scopedVat
 
 
-GETADDRESS_0 = getAtom(u"getAddress", 0)
-GETFAMILY_0 = getAtom(u"getFamily", 0)
-GETSOCKETTYPE_0 = getAtom(u"getSocketType", 0)
 RUN_2 = getAtom(u"run", 2)
 
 
@@ -38,17 +33,17 @@ class AddrInfo(Object):
 
     _immutable_fields_ = "family", "socktype", "addr"
 
-    def recv(self, atom, args):
-        if atom is GETADDRESS_0:
-            return BytesObject(self.addr)
+    @method("Bytes")
+    def getAddress(self):
+        return self.addr
 
-        if atom is GETFAMILY_0:
-            return StrObject(self.family)
+    @method("Str")
+    def getFamily(self):
+        return self.family
 
-        if atom is GETSOCKETTYPE_0:
-            return StrObject(self.socktype)
-
-        raise Refused(self, atom, args)
+    @method("Str")
+    def getSocketType(self):
+        return self.socktype
 
 
 @autohelp

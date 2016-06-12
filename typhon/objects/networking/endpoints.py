@@ -18,10 +18,9 @@ from rpython.rlib.rarithmetic import intmask
 
 from typhon import ruv
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
+from typhon.autohelp import autohelp, method
+from typhon.errors import userError
 from typhon.objects.collections.lists import wrapList, unwrapList
-from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject, unwrapBytes, unwrapInt
 from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.refs import LocalResolver, makePromise
@@ -29,11 +28,8 @@ from typhon.objects.root import Object, runnable
 from typhon.vats import currentVat, scopedVat
 
 
-CONNECT_0 = getAtom(u"connect", 0)
-LISTEN_1 = getAtom(u"listen", 1)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
-SHUTDOWN_0 = getAtom(u"shutdown", 0)
 
 
 def connectCB(connect, status):
@@ -77,12 +73,7 @@ class TCP4ClientEndpoint(Object):
         return u"<endpoint (IPv4, TCP): %s:%d>" % (self.host.decode("utf-8"),
                                                    self.port)
 
-    def recv(self, atom, args):
-        if atom is CONNECT_0:
-            return self.connect()
-
-        raise Refused(self, atom, args)
-
+    @method("List")
     def connect(self):
         vat = currentVat.get()
         stream = ruv.alloc_tcp(vat.uv_loop)
@@ -99,7 +90,7 @@ class TCP4ClientEndpoint(Object):
         ruv.tcpConnect(stream, self.host, self.port, connectCB)
 
         # Return the promises.
-        return wrapList([fount, drain])
+        return [fount, drain]
 
 
 @runnable(RUN_2)
@@ -136,17 +127,14 @@ class TCP4Server(Object):
     def toString(self):
         return u"<server (IPv4, TCP)>"
 
-    def recv(self, atom, args):
-        if atom is SHUTDOWN_0:
-            if self.listening:
-                shutdown = ruv.alloc_shutdown()
-                ruv.shutdown(shutdown, ruv.rffi.cast(ruv.stream_tp,
-                                                     self.uv_server),
-                             shutdownCB)
-                self.listening = False
-                return NullObject
-
-        raise Refused(self, atom, args)
+    @method("Void")
+    def shutdown(self):
+        if self.listening:
+            shutdown = ruv.alloc_shutdown()
+            ruv.shutdown(shutdown, ruv.rffi.cast(ruv.stream_tp,
+                                                 self.uv_server),
+                         shutdownCB)
+            self.listening = False
 
 
 def connectionCB(uv_server, status):
@@ -186,12 +174,7 @@ class TCP4ServerEndpoint(Object):
     def toString(self):
         return u"<endpoint (IPv4, TCP): %d>" % (self.port,)
 
-    def recv(self, atom, args):
-        if atom is LISTEN_1:
-            return self.listen(args[0])
-
-        raise Refused(self, atom, args)
-
+    @method("Any", "Any")
     def listen(self, handler):
         vat = currentVat.get()
         uv_server = ruv.alloc_tcp(vat.uv_loop)

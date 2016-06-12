@@ -17,25 +17,18 @@ from rpython.rtyper.lltypesystem.rffi import charpsize2str
 
 from typhon import ruv
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
+from typhon.autohelp import autohelp, method
+from typhon.errors import userError
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapBytes
 from typhon.objects.root import Object
 from typhon.vats import scopedVat
 
 
-ABORTFLOW_0 = getAtom(u"abortFlow", 0)
 FLOWABORTED_1 = getAtom(u"flowAborted", 1)
 FLOWINGFROM_1 = getAtom(u"flowingFrom", 1)
 FLOWSTOPPED_1 = getAtom(u"flowStopped", 1)
-FLOWTO_1 = getAtom(u"flowTo", 1)
 FLUSH_0 = getAtom(u"flush", 0)
-PAUSEFLOW_0 = getAtom(u"pauseFlow", 0)
-RECEIVE_1 = getAtom(u"receive", 1)
-RUN_2 = getAtom(u"run", 2)
-STOPFLOW_0 = getAtom(u"stopFlow", 0)
-UNPAUSE_0 = getAtom(u"unpause", 0)
 
 
 @autohelp
@@ -47,13 +40,11 @@ class StreamUnpauser(Object):
     def __init__(self, fount):
         self.fount = fount
 
-    def recv(self, atom, args):
-        if atom is UNPAUSE_0:
-            if self.fount is not None:
-                self.fount.unpause()
-                self.fount = None
-            return NullObject
-        raise Refused(self, atom, args)
+    @method("Void")
+    def unpause(self):
+        if self.fount is not None:
+            self.fount.unpause()
+            self.fount = None
 
 
 def readCB(stream, status, buf):
@@ -107,34 +98,29 @@ class StreamFount(Object):
     def toString(self):
         return u"<StreamFount>"
 
-    def recv(self, atom, args):
-        if atom is FLOWTO_1:
-            self._drain = args[0]
-            # We can't actually call receive/1 on the drain until
-            # flowingFrom/1 has been called, *but* flush/0 will be queued in a
-            # subsequent send to the the one queued here, so we're fine as far
-            # as ordering. ~ C.
-            from typhon.objects.collections.maps import EMPTY_MAP
-            rv = self.vat.send(self._drain, FLOWINGFROM_1, [self], EMPTY_MAP)
-            self.considerFlush()
-            return rv
+    @method("Any", "Any")
+    def flowTo(self, drain):
+        self._drain = drain
+        # We can't actually call receive/1 on the drain until
+        # flowingFrom/1 has been called, *but* flush/0 will be queued in a
+        # subsequent send to the the one queued here, so we're fine as far
+        # as ordering. ~ C.
+        from typhon.objects.collections.maps import EMPTY_MAP
+        rv = self.vat.send(self._drain, FLOWINGFROM_1, [self], EMPTY_MAP)
+        self.considerFlush()
+        return rv
 
-        if atom is PAUSEFLOW_0:
-            return self.pause()
+    @method("Any")
+    def pauseFlow(self):
+        return self.pause()
 
-        if atom is ABORTFLOW_0:
-            self.abort(u"Flow aborted")
-            return NullObject
+    @method("Void")
+    def abortFlow(self):
+        self.abort(u"Flow aborted")
 
-        if atom is STOPFLOW_0:
-            self.stop(u"Flow stopped")
-            return NullObject
-
-        if atom is FLUSH_0:
-            self.flush()
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method("Void")
+    def stopFlow(self):
+        self.stop(u"Flow stopped")
 
     def abort(self, reason):
         if self._drain is not None:
@@ -192,6 +178,7 @@ class StreamFount(Object):
             from typhon.objects.collections.maps import EMPTY_MAP
             self.vat.sendOnly(self, FLUSH_0, [], EMPTY_MAP)
 
+    @method.py("Void")
     def flush(self):
         # We are running in vat scope.
         for i, buf in enumerate(self.bufs):
@@ -228,48 +215,41 @@ class StreamDrain(Object):
     def toString(self):
         return u"<StreamDrain>"
 
-    def recv(self, atom, args):
-        if atom is FLOWINGFROM_1:
-            return self
+    @method("Any", "Any")
+    def flowingFrom(self, fount):
+        return self
 
-        if atom is RECEIVE_1:
-            if self._closed:
-                raise userError(u"Can't send data to a closed stream!")
+    @method("Void", "Any")
+    def receive(self, data):
+        if self._closed:
+            raise userError(u"Can't send data to a closed stream!")
 
-            if args[0] is NullObject:
-                # Pump-style notification that we're supposed to close.
-                self.flush()
-                self.cleanup()
-                return NullObject
-
-            # XXX we are punting completely on any notion of backpressure for
-            # now. How to fix:
-            # * Figure out how to get libuv to signal that a write is likely
-            #   to complete
-
-            data = unwrapBytes(args[0])
-            uv_write = ruv.alloc_write()
-            with ruv.scopedBufs([data]) as bufs:
-                ruv.write(uv_write, self.stream, bufs, 1, writeCB)
-
-            return NullObject
-
-        if atom is FLOWABORTED_1:
-            self.cleanup()
-            return NullObject
-
-        if atom is FLOWSTOPPED_1:
-            # XXX flush() is currently a no-op, but that's not right for the
-            # case where there's pending data.
+        if data is NullObject:
+            # Pump-style notification that we're supposed to close.
             self.flush()
             self.cleanup()
-            return NullObject
+            return
 
-        if atom is FLUSH_0:
-            self.flush()
-            return NullObject
+        # XXX we are punting completely on any notion of backpressure for
+        # now. How to fix:
+        # * Figure out how to get libuv to signal that a write is likely
+        #   to complete
 
-        raise Refused(self, atom, args)
+        data = unwrapBytes(data)
+        uv_write = ruv.alloc_write()
+        with ruv.scopedBufs([data]) as bufs:
+            ruv.write(uv_write, self.stream, bufs, 1, writeCB)
+
+    @method("Void", "Any")
+    def flowAborted(self, unused):
+        self.cleanup()
+
+    @method("Void", "Any")
+    def flowStopped(self, unused):
+        # XXX flush() is currently a no-op, but that's not right for the
+        # case where there's pending data.
+        self.flush()
+        self.cleanup()
 
     def cleanup(self):
         if not self._closed:
@@ -280,5 +260,6 @@ class StreamDrain(Object):
             if not ruv.isClosing(self.stream):
                 ruv.closeAndFree(self.stream)
 
+    @method.py("Void")
     def flush(self):
         pass
