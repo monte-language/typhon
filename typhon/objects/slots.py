@@ -12,18 +12,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import userError
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object, audited
-
-_UNCALL_0 = getAtom(u"_uncall", 0)
-GET_0 = getAtom(u"get", 0)
-GETGUARD_0 = getAtom(u"getGuard", 0)
-PUT_1 = getAtom(u"put", 1)
 
 
 @autohelp
@@ -91,20 +84,8 @@ def finalize(scope):
 
 
 @autohelp
-class Slot(Object):
-    """
-    A storage space.
-    """
-
-    _immutable_fields_ = '_guard',
-
-    @method("Any")
-    def getGuard(self):
-        return self._guard
-
-
 @audited.Transparent
-class FinalSlot(Slot):
+class FinalSlot(Object):
 
     _immutable_fields_ = "_obj", "_guard"
 
@@ -118,12 +99,12 @@ class FinalSlot(Slot):
         out.call(u"print", [StrObject(u")>")])
 
     @method("Any")
+    def getGuard(self):
+        return self._guard
+
+    @method("Any")
     def get(self):
         return self._obj
-
-    @method("Void", "Any")
-    def put(self, value):
-        raise userError(u"Can't put into a FinalSlot!")
 
     @method("List")
     def _uncall(self):
@@ -134,7 +115,9 @@ class FinalSlot(Slot):
                 EMPTY_MAP]
 
 
-class VarSlot(Slot):
+@autohelp
+class VarSlot(Object):
+
     _immutable_fields_ = "_guard",
 
     def __init__(self, obj, guard):
@@ -149,10 +132,14 @@ class VarSlot(Slot):
         out.call(u"print", [StrObject(u")>")])
 
     @method("Any")
+    def getGuard(self):
+        return self._guard
+
+    @method("Any")
     def get(self):
         return self._obj
 
-    @method("Void", "Any")
+    @method.py("Void", "Any")
     def put(self, value):
         from typhon.objects.ejectors import theThrower
         if self._guard is NullObject:
