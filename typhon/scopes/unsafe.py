@@ -13,10 +13,9 @@
 # under the License.
 import os
 
-from typhon.atoms import getAtom
+from typhon.autohelp import autohelp, method
 from typhon.objects.constants import NullObject
-from typhon.objects.data import StrObject, unwrapStr
-from typhon.errors import Refused
+from typhon.objects.data import StrObject
 from typhon.objects.exceptions import unsealException
 from typhon.objects.files import makeFileResource
 from typhon.objects.networking.dns import getAddrInfo
@@ -32,25 +31,21 @@ from typhon.objects.timers import Timer
 from typhon.vats import CurrentVatProxy
 
 
-RUN_1 = getAtom("run", 1)
-
-
+@autohelp
 @audited.DF
 class FindTyphonFile(Object):
     def __init__(self, paths):
         self.paths = paths
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            pname = unwrapStr(args[0])
-            for extension in [".ty", ".mast"]:
-                path = pname.encode("utf-8") + extension
-                for base in self.paths:
-                    fullpath = os.path.join(base, path)
-                    if os.path.exists(fullpath):
-                        return StrObject(fullpath.decode("utf-8"))
-            return NullObject
-        raise Refused(self, atom, args)
+    @method("Any", "Str")
+    def run(self, pname):
+        for extension in [".ty", ".mast"]:
+            path = pname.encode("utf-8") + extension
+            for base in self.paths:
+                fullpath = os.path.join(base, path)
+                if os.path.exists(fullpath):
+                    return StrObject(fullpath.decode("utf-8"))
+        return NullObject
 
 
 def unsafeScope(config):

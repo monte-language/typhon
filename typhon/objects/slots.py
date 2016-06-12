@@ -13,8 +13,8 @@
 # under the License.
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
+from typhon.autohelp import autohelp, method
+from typhon.errors import userError
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
@@ -46,30 +46,26 @@ class Binding(Object):
         printer.call(u"print", [self.guard])
         printer.call(u"print", [StrObject(u">")])
 
+    @method.py("Any")
     def get(self):
         return self.slot
+
+    @method("Any")
+    def getGuard(self):
+        return self.guard
 
     def getValue(self):
         return self.slot.get()
 
-    def recv(self, atom, args):
-        if atom is GET_0:
-            return self.get()
-
-        if atom is GETGUARD_0:
-            return self.guard
-
-        if atom is _UNCALL_0:
-            from typhon.objects.collections.maps import EMPTY_MAP
-            from typhon.scopes.safe import theSlotBinder
-            return wrapList([
-                wrapList([theSlotBinder, StrObject(u"run"),
-                           wrapList([self.guard])]),
+    @method("List")
+    def _uncall(self):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        from typhon.scopes.safe import theSlotBinder
+        return [wrapList([theSlotBinder, StrObject(u"run"),
+                         wrapList([self.guard])]),
                 StrObject(u"run"),
                 wrapList([self.slot, NullObject]),
-                EMPTY_MAP])
-
-        raise Refused(self, atom, args)
+                EMPTY_MAP]
 
 
 def finalBinding(value, guard):
@@ -102,17 +98,9 @@ class Slot(Object):
 
     _immutable_fields_ = '_guard',
 
-    def recv(self, atom, args):
-        if atom is GET_0:
-            return self.get()
-
-        if atom is GETGUARD_0:
-            return self._guard
-
-        if atom is PUT_1:
-            return self.put(args[0])
-
-        raise Refused(self, atom, args)
+    @method("Any")
+    def getGuard(self):
+        return self._guard
 
 
 @audited.Transparent
@@ -129,20 +117,21 @@ class FinalSlot(Slot):
         out.call(u"print", [self._obj])
         out.call(u"print", [StrObject(u")>")])
 
+    @method("Any")
     def get(self):
         return self._obj
 
+    @method("Void", "Any")
     def put(self, value):
         raise userError(u"Can't put into a FinalSlot!")
 
-    def recv(self, atom, args):
-        if atom is _UNCALL_0:
-            from typhon.scopes.safe import theFinalSlotMaker
-            from typhon.objects.collections.maps import EMPTY_MAP
-            return wrapList([theFinalSlotMaker, StrObject(u"run"),
-                              wrapList([self._obj, self._guard, NullObject]),
-                              EMPTY_MAP])
-        return Slot.recv(self, atom, args)
+    @method("List")
+    def _uncall(self):
+        from typhon.scopes.safe import theFinalSlotMaker
+        from typhon.objects.collections.maps import EMPTY_MAP
+        return [theFinalSlotMaker, StrObject(u"run"),
+                wrapList([self._obj, self._guard, NullObject]),
+                EMPTY_MAP]
 
 
 class VarSlot(Slot):
@@ -159,13 +148,14 @@ class VarSlot(Slot):
         out.call(u"print", [self._guard])
         out.call(u"print", [StrObject(u")>")])
 
+    @method("Any")
     def get(self):
         return self._obj
 
+    @method("Void", "Any")
     def put(self, value):
         from typhon.objects.ejectors import theThrower
         if self._guard is NullObject:
             self._obj = value
         else:
             self._obj = self._guard.call(u"coerce", [value, theThrower])
-        return NullObject

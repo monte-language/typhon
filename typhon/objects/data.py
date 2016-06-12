@@ -335,6 +335,9 @@ def unwrapDouble(o):
         return d.getDouble()
     raise WrongType(u"Not a double!")
 
+def wrapDouble(d):
+    return DoubleObject(d)
+
 
 def promoteToDouble(o):
     from typhon.objects.refs import resolution

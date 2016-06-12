@@ -14,14 +14,14 @@
 import os
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import LoadFailed, Refused, userError
 from typhon.importing import (codeFromAst, evaluateRaise, obtainModule,
                               obtainModuleFromSource)
 from typhon.load.mast import loadMASTBytes
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
-from typhon.objects.collections.lists import ConstList, wrapList
+from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import StrObject, unwrapBytes, wrapBool, unwrapStr
@@ -31,8 +31,6 @@ from typhon.objects.slots import Binding, finalize
 from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
 
-EVALTOPAIR_2 = getAtom(u"evalToPair", 2)
-FROMAST_3 = getAtom(u"fromAST", 3)
 RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 
@@ -94,33 +92,24 @@ class TyphonEval(Object):
     def __init__(self, recorder):
         self.recorder = recorder
 
+    @method("Any", "Any", "Any", "Str")
     @profileTyphon("typhonEval.fromAST/3")
     def fromAST(self, ast, scope, name):
         code, topLocals = codeFromAst(ast, self.recorder, name)
         return evalToPair(code, topLocals, scope)[0]
 
+    @method("Any", "Any", "Any")
     @profileTyphon("typhonEval.run/2")
     def run(self, bs, scope):
         code, topLocals = moduleFromString(bs, self.recorder)
         return evalToPair(code, topLocals, scope)[0]
 
+    @method("List", "Any", "Any")
     @profileTyphon("typhonEval.evalToPair/2")
     def evalToPair(self, bs, scope):
         code, topLocals = moduleFromString(bs, self.recorder)
         result, envMap = evalToPair(code, topLocals, scope)
-        return wrapList([result, envMap])
-
-    def recv(self, atom, args):
-        if atom is FROMAST_3:
-            return self.fromAST(args[0], args[1], unwrapStr(args[2]))
-
-        if atom is RUN_2:
-            return self.run(args[0], args[1])
-
-        if atom is EVALTOPAIR_2:
-            return self.evalToPair(args[0], args[1])
-
-        raise Refused(self, atom, args)
+        return [result, envMap]
 
 
 @autohelp

@@ -18,11 +18,11 @@ from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 
 from typhon import log
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Ejecting, Refused, UserException, userError
+from typhon.autohelp import autohelp, method
+from typhon.errors import Ejecting, UserException, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object
-from typhon.objects.data import StrObject, unwrapInt, unwrapStr
+from typhon.objects.data import StrObject
 
 
 RUN_0 = getAtom(u"run", 0)
@@ -73,26 +73,22 @@ class Vat(Object):
         return u"<vat(%s, %s, %d turns pending)>" % (self.name, checkpoints,
                                                      len(self._pending))
 
-    def recv(self, atom, args):
+    @method("Any", "Any")
+    def seed(self, f):
         from typhon.objects.collections.maps import EMPTY_MAP
-        if atom is SEED_1:
-            f = args[0]
-            if not f.auditedBy(deepFrozenStamp):
-                self.log(u"seed/1: Warning: Seeded receiver is not DeepFrozen")
-                self.log(u"seed/1: Warning: This is gonna be an error soon!")
-            from typhon.objects.refs import packLocalRef
-            return packLocalRef(self.send(f, RUN_0, [], EMPTY_MAP), self,
-                                currentVat.get())
+        if not f.auditedBy(deepFrozenStamp):
+            self.log(u"seed/1: Warning: Seeded receiver is not DeepFrozen")
+            self.log(u"seed/1: Warning: This is gonna be an error soon!")
+        from typhon.objects.refs import packLocalRef
+        return packLocalRef(self.send(f, RUN_0, [], EMPTY_MAP), self,
+                            currentVat.get())
 
-        if atom is SPROUT_2:
-            name = unwrapStr(args[0])
-            checkpoints = unwrapInt(args[1])
-            vat = Vat(self._manager, self.uv_loop, name,
-                      checkpoints=checkpoints)
-            self._manager.vats.append(vat)
-            return vat
-
-        raise Refused(self, atom, args)
+    @method("Any", "Str", "Int")
+    def sprout(self, name, checkpoints):
+        vat = Vat(self._manager, self.uv_loop, name,
+                  checkpoints=checkpoints)
+        self._manager.vats.append(vat)
+        return vat
 
     def checkpoint(self, points=1):
         # If we're immortal, then pass. Otherwise, if we can perform the

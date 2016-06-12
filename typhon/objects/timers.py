@@ -18,10 +18,8 @@ from rpython.rlib.rarithmetic import intmask
 
 from typhon import ruv
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused
-from typhon.objects.constants import NullObject
-from typhon.objects.data import DoubleObject, promoteToDouble
+from typhon.autohelp import autohelp, method
+from typhon.objects.data import DoubleObject
 from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object
 from typhon.vats import currentVat
@@ -62,26 +60,25 @@ class Timer(Object):
     Use with caution.
     """
 
-    def recv(self, atom, args):
+    @method("Double")
+    def unsafeNow(self):
+        return time.time()
+
+    @method("Any", "Double")
+    def fromNow(self, duration):
+        p, r = makePromise()
+        vat = currentVat.get()
+        uv_timer = ruv.alloc_timer(vat.uv_loop)
+        now = ruv.now(vat.uv_loop)
+        # Stash the resolver.
+        ruv.stashTimer(uv_timer, (vat, (r, now)))
+        # repeat of 0 means "don't repeat"
+        ruv.timerStart(uv_timer, resolveTimer, int(duration * 1000), 0)
+        return p
+
+    @method("Any", "Any")
+    def sendTimestamp(self, obj):
         from typhon.objects.collections.maps import EMPTY_MAP
-        if atom is UNSAFENOW_0:
-            return DoubleObject(time.time())
-
-        if atom is FROMNOW_1:
-            duration = promoteToDouble(args[0])
-            p, r = makePromise()
-            vat = currentVat.get()
-            uv_timer = ruv.alloc_timer(vat.uv_loop)
-            now = ruv.now(vat.uv_loop)
-            # Stash the resolver.
-            ruv.stashTimer(uv_timer, (vat, (r, now)))
-            # repeat of 0 means "don't repeat"
-            ruv.timerStart(uv_timer, resolveTimer, int(duration * 1000), 0)
-            return p
-
-        if atom is SENDTIMESTAMP_1:
-            vat = currentVat.get()
-            now = intmask(ruv.now(vat.uv_loop)) / 1000.0
-            return vat.send(args[0], RUN_1, [DoubleObject(now)], EMPTY_MAP)
-
-        raise Refused(self, atom, args)
+        vat = currentVat.get()
+        now = intmask(ruv.now(vat.uv_loop)) / 1000.0
+        return vat.send(obj, RUN_1, [DoubleObject(now)], EMPTY_MAP)
