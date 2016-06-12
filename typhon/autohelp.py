@@ -12,21 +12,25 @@ from typhon.errors import Refused
 def method(rv, *args, **kwargs):
     "NOT_RPYTHON"
 
+    verb = kwargs.pop("_verb", "run")
+
     # Mark methods that must be automatically helped. Record an unprocessed
     # tuple of (args, namedArgs, returnGuard).
 
     def deco(f):
         # This method shall be isolated, repacked, wrapped, and helped.
-        f._monteMethod_ = args, kwargs, rv, False
+        f._monteMethod_ = verb, args, kwargs, rv, False
         return f
     return deco
 
 def method_py(rv, *args, **kwargs):
     "NOT_RPYTHON"
 
+    verb = kwargs.pop("_verb", "run")
+
     def deco(f):
         # This method shall be spared.
-        f._monteMethod_ = args, kwargs, rv, True
+        f._monteMethod_ = verb, args, kwargs, rv, True
         return f
     return deco
 
@@ -47,7 +51,7 @@ def repackMonteMethods(cls):
     # efficient.
     for k, v in vars(cls).copy().iteritems():
         if hasattr(v, "_monteMethod_"):
-            args, kwargs, rv, spare = v._monteMethod_
+            verb, args, kwargs, rv, spare = v._monteMethod_
             methods[k] = v, args, kwargs, rv
             if spare:
                 # Remove the mark of AutoHelp from the method and permit it to
@@ -121,7 +125,7 @@ def alterMethods(cls):
                 else:
                     unwrapperModule = unwrappers[arg]
                     unwrapper = "unwrap" + arg
-                    assignments.append("from %s import %s" (unwrapperModule,
+                    assignments.append("from %s import %s" % (unwrapperModule,
                         unwrapper))
                     assignments.append("%s = %s(args[%d])" % (argName,
                         unwrapper, i))
