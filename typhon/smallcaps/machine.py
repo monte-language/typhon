@@ -13,6 +13,7 @@
 # under the License.
 
 from rpython.rlib import rvmprof
+from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import jit_debug, promote, unroll_safe
 from rpython.rlib.objectmodel import always_inline, specialize
 
@@ -648,3 +649,29 @@ class Returner(Handler):
 
     def drop(self, machine, pc, index):
         return index
+
+
+def evaluateTerms(codes, scope):
+    result = NullObject
+    for code in codes:
+        try:
+            machine = SmallCaps.withDictScope(code, scope)
+            machine.run()
+            result = machine.pop()
+        except UserException as ue:
+            debug_print("Caught exception:", ue.formatError())
+    return result
+
+
+def evaluateRaise(codes, scope):
+    """
+    Like evaluateTerms, but does not catch exceptions.
+    """
+
+    machine = None
+    result = NullObject
+    for code in codes:
+        machine = SmallCaps.withDictScope(code, scope)
+        machine.run()
+        result = machine.pop()
+    return result, machine

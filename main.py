@@ -24,7 +24,7 @@ from typhon import rsodium, ruv
 from typhon.arguments import Configuration
 from typhon.debug import enableDebugPrint, TyphonJitHooks
 from typhon.errors import LoadFailed, UserException
-from typhon.importing import evaluateTerms, obtainModule
+from typhon.importing import obtainModule
 from typhon.log import log
 from typhon.metrics import globalRecorder
 from typhon.objects.auditors import deepFrozenGuard
@@ -40,6 +40,7 @@ from typhon.profile import registerProfileTyphon
 from typhon.scopes.boot import bootScope
 from typhon.scopes.safe import safeScope
 from typhon.scopes.unsafe import unsafeScope
+from typhon.smallcaps.machine import evaluateTerms
 from typhon.vats import Vat, VatManager, scopedVat
 
 

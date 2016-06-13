@@ -15,10 +15,12 @@ import os
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import LoadFailed, userError
-from typhon.importing import (codeFromAst, evaluateRaise, obtainModule,
+from typhon.errors import LoadFailed, Refused, userError
+from typhon.importing import (smallcapsFromAst, obtainModule,
                               obtainModuleFromSource)
 from typhon.load.mast import loadMASTBytes
+from typhon.load.nano import loadMASTBytes as realLoad
+from typhon.nano.interp import evalMonte
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
@@ -30,6 +32,7 @@ from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
 from typhon.objects.slots import Binding, finalize
 from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
+from typhon.smallcaps.machine import evaluateRaise
 
 RUN_1 = getAtom(u"run", 1)
 
@@ -86,25 +89,25 @@ def evalToPair(code, topLocals, envMap):
 
 @autohelp
 @audited.DF
-class TyphonEval(Object):
+class SmallCapsEval(Object):
 
     def __init__(self, recorder):
         self.recorder = recorder
 
     @method("Any", "Any", "Any", "Str")
-    @profileTyphon("typhonEval.fromAST/3")
+    @profileTyphon("smallcapsEval.fromAST/3")
     def fromAST(self, ast, scope, name):
-        code, topLocals = codeFromAst(ast, self.recorder, name)
+        code, topLocals = smallcapsFromAst(ast, self.recorder, name)
         return evalToPair(code, topLocals, scope)[0]
 
     @method("Any", "Any", "Any")
-    @profileTyphon("typhonEval.run/2")
+    @profileTyphon("smallcapsEval.run/2")
     def run(self, bs, scope):
         code, topLocals = moduleFromString(bs, self.recorder)
         return evalToPair(code, topLocals, scope)[0]
 
     @method("List", "Any", "Any")
-    @profileTyphon("typhonEval.evalToPair/2")
+    @profileTyphon("smallcapsEval.evalToPair/2")
     def evalToPair(self, bs, scope):
         code, topLocals = moduleFromString(bs, self.recorder)
         result, envMap = evalToPair(code, topLocals, scope)
@@ -146,11 +149,32 @@ class GetMonteFile(Object):
         return evaluateRaise([code], d)[0]
 
 
+@autohelp
+@audited.DF
+class AstEval(Object):
+
+    def __init__(self, recorder):
+        self.recorder = recorder
+
+    @method("Any", "Any", "Any")
+    @profileTyphon("astEval.run/2")
+    def run(self, bs, scope):
+        code, topLocals = moduleFromString(bs, self.recorder)
+        return evalMonte(code, topLocals, scope)[0]
+
+    @method("List", "Any", "Any")
+    def evalToPair(self, bs, scope):
+        ast = realLoad(unwrapBytes(bs))
+        result, envMap = evalMonte(ast, scope)
+        return [result, envMap]
+
+
 def bootScope(paths, recorder):
     """
     "A beginning is the time for taking the most delicate care that the
      balances are correct."
     """
+    sce = SmallCapsEval(recorder)
     return finalize({
         u"isList": isList(),
         u"isMap": isMap(),
@@ -169,5 +193,7 @@ def bootScope(paths, recorder):
         u"TransparentStamp": transparentStamp,
 
         u"getMonteFile": GetMonteFile(paths, recorder),
-        u"typhonEval": TyphonEval(recorder),
+        u"smallcapsEval": sce,
+        u"typhonEval": sce,
+        u"astEval": AstEval(recorder)
     })

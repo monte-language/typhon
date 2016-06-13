@@ -13,7 +13,7 @@
 # under the License.
 
 from rpython.rlib.jit import promote, unroll_safe
-from rpython.rlib.objectmodel import specialize
+from rpython.rlib.objectmodel import import_from_mixin, specialize
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp
@@ -269,7 +269,7 @@ class AuditClipboard(object):
         return report
 
 
-class UserObject(Object):
+class UserObjectHelper(object):
     """
     Abstract superclass for objects created by ObjectExpr.
     """
@@ -350,11 +350,11 @@ class UserObject(Object):
         raise Refused(self, atom, args)
 
 
-class ScriptObject(UserObject):
+class ScriptObject(Object):
     """
     An object whose behavior depends on a SmallCaps script.
     """
-
+    import_from_mixin(UserObjectHelper)
     _immutable_fields_ = "codeScript", "globals[*]", "report"
 
     def docString(self):
