@@ -81,7 +81,10 @@ class ScopeFrame(ScopeBase):
     "Scope info associated with an object closure."
 
     def __init__(self, next):
-        self.frameNames = []
+        # Names closed over.
+        self.frameNames = {}
+        # Names from outer scope used (not included in closure at runtime)
+        self.outerNames = {}
         return ScopeBase.__init__(self, next)
 
     def requireShadowable(self, name):
@@ -89,11 +92,13 @@ class ScopeFrame(ScopeBase):
 
     def find(self, name):
         scope, idx, severity = self.next.find(name)
-        if scope == "local":
-            if name not in self.frameNames:
-                self.frameNames.append(name)
-            return ("frame", self.frameNames.index(name), severity)
-        return scope, idx, severity
+        if scope == "outer":
+            self.outerNames[name] = (idx, severity)
+            return scope, idx, severity
+        if name not in self.frameNames:
+            self.frameNames[name] = (len(self.frameNames), scope, idx,
+                                     severity)
+        return ("frame", self.frameNames[name][0], severity)
 
 
 class ScopeBox(ScopeBase):

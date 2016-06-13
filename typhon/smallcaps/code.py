@@ -15,7 +15,7 @@
 from rpython.rlib import rvmprof
 from rpython.rlib.jit import elidable, elidable_promote
 
-from typhon.objects.user import Audition, BusyObject, QuietObject
+from typhon.objects.user import Audition, AuditClipboard, BusyObject, QuietObject
 from typhon.smallcaps.abstract import AbstractInterpreter
 from typhon.smallcaps.ops import (ASSIGN_GLOBAL, ASSIGN_FRAME, ASSIGN_LOCAL,
                                   BIND, BINDOBJECT, BINDFINALSLOT,
@@ -34,6 +34,7 @@ class MethodStrategy(object):
 
     _immutable_ = True
 
+
 class _EmptyStrategy(MethodStrategy):
     """
     A Strategy for an object with neither methods nor matchers.
@@ -51,6 +52,7 @@ class _EmptyStrategy(MethodStrategy):
         return []
 
 EmptyStrategy = _EmptyStrategy()
+
 
 class FunctionStrategy(MethodStrategy):
     """
@@ -73,6 +75,7 @@ class FunctionStrategy(MethodStrategy):
 
     def getMatchers(self):
         return []
+
 
 class FnordStrategy(MethodStrategy):
     """
@@ -100,6 +103,7 @@ class FnordStrategy(MethodStrategy):
     def getMatchers(self):
         return []
 
+
 class JumboStrategy(MethodStrategy):
     """
     A Strategy for an object with many methods and no matchers.
@@ -120,6 +124,7 @@ class JumboStrategy(MethodStrategy):
 
     def getMatchers(self):
         return []
+
 
 class GenericStrategy(MethodStrategy):
     """
@@ -143,6 +148,7 @@ class GenericStrategy(MethodStrategy):
     def getMatchers(self):
         return self.matchers
 
+
 def chooseStrategy(methods, matchers):
     if matchers:
         return GenericStrategy(methods, matchers)
@@ -157,36 +163,7 @@ def chooseStrategy(methods, matchers):
         return JumboStrategy(methods)
 
 
-class AuditorReport(object):
-    """
-    Artifact of an audition.
-    """
-
-    _immutable_ = True
-
-    def __init__(self, stamps):
-        self.stamps = stamps
-
-    def getStamps(self):
-        return self.stamps
-
-
-def compareAuditorLists(this, that):
-    from typhon.objects.equality import isSameEver
-    for i, x in enumerate(this):
-        if not isSameEver(x, that[i]):
-            return False
-    return True
-
-def compareGuardMaps(this, that):
-    from typhon.objects.equality import isSameEver
-    for i, x in enumerate(this):
-        if not isSameEver(x[1], that[i][1]):
-            return False
-    return True
-
-
-class CodeScript(object):
+class CodeScript(AuditClipboard):
     """
     A single compiled script object.
     """
@@ -198,6 +175,7 @@ class CodeScript(object):
 
     def __init__(self, displayName, objectAst, numAuditors, doc, fqn, methods,
                  methodDocs, matchers, closureNames, globalNames):
+        AuditClipboard.__init__(self)
         self.strategy = chooseStrategy(methods, matchers)
 
         self.displayName = displayName
@@ -211,51 +189,12 @@ class CodeScript(object):
         self.globalNames = globalNames
         self.globalSize = len(globalNames)
 
-        self.reportCabinet = []
-
     def makeObject(self, closure, globals, auditors):
         if self.closureSize:
             obj = BusyObject(self, globals, closure, auditors)
         else:
             obj = QuietObject(self, globals, auditors)
         return obj
-
-    def getReport(self, auditors, guards):
-        for auditorList, guardFile in self.reportCabinet:
-            if compareAuditorLists(auditors, auditorList):
-                guardItems = guards.items()
-                for guardMap, report in guardFile:
-                    if compareGuardMaps(guardItems, guardMap):
-                        return report
-        return None
-
-    def putReport(self, auditors, guards, report):
-        guardItems = guards.items()
-        for auditorList, guardFile in self.reportCabinet:
-            if compareAuditorLists(auditors, auditorList):
-                guardFile.append((guardItems, report))
-                break
-        else:
-            self.reportCabinet.append((auditors, [(guardItems, report)]))
-
-    def createReport(self, auditors, guards):
-        with Audition(self.fqn, self.objectAst, guards) as audition:
-            for a in auditors:
-                audition.ask(a)
-        return audition.prepareReport(auditors)
-
-    def audit(self, auditors, guards):
-        """
-        Hold an audition and return a report of the results.
-
-        Auditions are cached for quality assurance and training purposes.
-        """
-
-        report = self.getReport(auditors, guards)
-        if report is None:
-            report = self.createReport(auditors, guards)
-            self.putReport(auditors, guards, report)
-        return report
 
     @elidable
     def selfIndex(self):
