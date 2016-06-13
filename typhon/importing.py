@@ -17,16 +17,11 @@ from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rpath import rjoin
 
 from typhon import log
-from typhon.autohelp import autohelp, method
 from typhon.debug import debugPrint
 from typhon.errors import UserException, userError
 from typhon.load.mast import loadMASTBytes
 from typhon.nodes import Expr, interactiveCompile
-from typhon.objects.collections.maps import ConstMap
-from typhon.objects.collections.helpers import monteMap
 from typhon.objects.constants import NullObject
-from typhon.objects.data import StrObject
-from typhon.objects.root import Object
 from typhon.smallcaps.machine import SmallCaps
 from typhon.smallcaps.peephole import peephole
 
@@ -40,27 +35,6 @@ class ModuleCache(object):
         self.cache = {}
 
 moduleCache = ModuleCache()
-
-
-@autohelp
-class PackageEnv(Object):
-    """
-    A transitional object that provides something like the package-environment
-    interface we want.
-    """
-    def __init__(self, importer, importList):
-        self.importer = importer
-        self.importList = importList
-
-    @method("Any", "Str", _verb="import")
-    def _import(self, path):
-        # this is a hack, but the whole class is a hack :)
-        if path == u"unittest":
-            d = monteMap()
-            d[StrObject(path)] = self.importList.call(u"get",
-                    [StrObject(path)])
-            return ConstMap(d)
-        return self.importer.performModule(path, self.importList)
 
 
 @dont_look_inside
@@ -150,11 +124,3 @@ def evaluateRaise(codes, scope):
         machine.run()
         result = machine.pop()
     return result, machine
-
-
-def instantiateModule(importer, module, importList=None):
-    """
-    Instantiate a top-level module.
-    """
-    return module.call(u"run", [PackageEnv(importer, importList)],
-                       namedArgs=importList)
