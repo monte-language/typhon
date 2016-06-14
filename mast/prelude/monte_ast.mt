@@ -473,7 +473,7 @@ def makeMethodCallExpr(rcvr :Expr, verb :Str, arglist :List[Expr],
             return arglist
         to getNamedArgs():
             return namedArgs
-        to subPrintOn(out, priority):
+        to subPrintOn(out, priority :Int):
             if (priorities["call"] < priority):
                 out.print("(")
             rcvr.subPrintOn(out, priorities["call"])
@@ -2046,7 +2046,7 @@ def makeMapPatternAssoc(key :Expr, value :Pattern, default :NullOk[Expr], span) 
             value.subPrintOn(out, priority)
             if (default != null):
                 out.print(" := (")
-                default.subPrintOn(out, "braceExpr")
+                default.subPrintOn(out, priorities["braceExpr"])
                 out.print(")")
     return astWrapper(mapPatternAssoc, makeMapPatternAssoc, [key, value, default], span,
         &scope, "MapPatternAssoc", fn f {[key.transform(f), value.transform(f), maybeTransform(default, f)]})
