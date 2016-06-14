@@ -41,11 +41,11 @@ moduleCache = ModuleCache()
 def obtainModuleFromSource(source, recorder, origin):
     with recorder.context("Deserialization"):
         term = loadMASTBytes(source)
-    return codeFromAst(term, recorder, origin)
+    return smallcapsFromAst(term, recorder, origin)
 
 
 @dont_look_inside
-def codeFromAst(term, recorder, origin):
+def smallcapsFromAst(term, recorder, origin):
     if not isinstance(term, Expr):
         raise userError(u"A kernel-AST expression node is required")
     with recorder.context("Compilation"):

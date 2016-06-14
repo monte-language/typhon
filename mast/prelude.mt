@@ -711,6 +711,7 @@ dependencies["lib/monte/mast"] := loadit("lib/monte/mast")
 # that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
 # hook, and that'll do for now. ~ C.
 importIntoScope("prelude/m")
+importIntoScope("prelude/n")
 
 
 # Transparent auditor and guard.

@@ -67,6 +67,23 @@ class ScopeOuter(ScopeBase):
         self.outers = outers
         self.children = []
 
+    def collectTopLocals(self):
+        # In an interactive context, we may want to keep locals defined at the
+        # top level for future use.
+        topLocals = [None] * 5
+        scopeitems = self.children[:]
+        numLocals = 0
+        for sub in scopeitems:
+            if isinstance(sub, ScopeItem):
+                i = sub.position
+                numLocals = max(numLocals, i + 1)
+                while (i + 1) > len(topLocals):
+                    topLocals.extend([None] * len(topLocals))
+                topLocals[i] = sub.name
+                scopeitems.extend(sub.children)
+
+        return topLocals[:numLocals]
+
     def requireShadowable(self, name):
         if name in self.outers:
             raise userError(u"Cannot redefine " + name)
@@ -134,6 +151,7 @@ class ScopeItem(ScopeBase):
         if self.name == name:
             return ("local", self.position, self.severity)
         return self.next.find(name)
+
 
 class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     """
@@ -222,9 +240,9 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
             [self.visitMethod(m) for m in methods],
             [self.visitMatcher(m) for m in matchers],
             mast,
-            # Everything else captures the layout previous to its node, but here
-            # we store the ScopeFrame itself (since there's no other good place
-            # to put it).
+            # Everything else captures the layout previous to its node, but
+            # here we store the ScopeFrame itself (since there's no other
+            # good place to put it).
             self.layout)
         self.layout.node = result
         self.layout = origLayout
@@ -304,6 +322,7 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         self.layout = origLayout
         return result
 
+
 BoundNounsIR = LayoutIR.extend(
     "BoundNouns", [], {
         "Expr": {
@@ -316,9 +335,12 @@ BoundNounsIR = LayoutIR.extend(
             "LocalBindingExpr": [("name", "Noun"), ("index", None)],
             "FrameBindingExpr": [("name", "Noun"), ("index", None)],
             "OuterBindingExpr": [("name", "Noun"), ("index", None)],
-            "LocalAssignExpr": [("name", "Noun"), ("index", None), ("value", "Expr")],
-            "FrameAssignExpr": [("name", "Noun"), ("index", None), ("value", "Expr")],
-            "OuterAssignExpr": [("name", "Noun"), ("index", None), ("value", "Expr")],
+            "LocalAssignExpr": [("name", "Noun"), ("index", None),
+                                ("value", "Expr")],
+            "FrameAssignExpr": [("name", "Noun"), ("index", None),
+                                ("value", "Expr")],
+            "OuterAssignExpr": [("name", "Noun"), ("index", None),
+                                ("value", "Expr")],
         },
         "Patt": {
             "BindingPatt": [("name", "Noun"), ("index", None)],
@@ -344,16 +366,17 @@ ReifyMetaIR = BoundNounsIR.extend(
 )
 
 
-
 class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
     def visitBindingPatt(self, name, layout):
         return self.dest.BindingPatt(name, layout.position + 1)
 
     def visitFinalPatt(self, name, guard, layout):
-        return self.dest.FinalPatt(name, self.visitExpr(guard), layout.position + 1)
+        return self.dest.FinalPatt(name, self.visitExpr(guard),
+                                   layout.position + 1)
 
     def visitVarPatt(self, name, guard, layout):
-        return self.dest.VarPatt(name, self.visitExpr(guard), layout.position + 1)
+        return self.dest.VarPatt(name, self.visitExpr(guard),
+                                 layout.position + 1)
 
     def visitAssignExpr(self, name, rvalue, layout):
         scope, idx, severity = layout.find(name)
@@ -377,7 +400,7 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
         return self.dest.LocalNounExpr(name, idx)
 
     def visitBindingExpr(self, name, layout):
-        scope, idx , _ = layout.find(name)
+        scope, idx, _ = layout.find(name)
         if scope is None:
             raise userError(name + u" is not defined")
         if scope == "frame":
@@ -386,7 +409,8 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
             return self.dest.OuterBindingExpr(name, idx)
         return self.dest.LocalBindingExpr(name, idx)
 
-    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body, layout):
+    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body,
+                        layout):
         return self.dest.MethodExpr(
             doc, verb,
             [self.visitPatt(p) for p in patts],
@@ -416,7 +440,7 @@ class ReifyMeta(BoundNounsIR.makePassTo(ReifyMetaIR)):
         s = layout
         while not isinstance(s, ScopeFrame):
             if isinstance(s, ScopeOuter):
-                frame = []
+                frame = {}
                 break
             s = s.next
         else:
@@ -429,9 +453,9 @@ class ReifyMeta(BoundNounsIR.makePassTo(ReifyMetaIR)):
                     u"run", [self.dest.CallExpr(
                         self.mkNoun(u"_makeList", layout),
                         u"run", [self.dest.StrExpr(u"&&" + name),
-                                 self.dest.FrameBindingExpr(name, frame.index(name))],
+                                 self.dest.FrameBindingExpr(name, frame[name][0])],
                         [])], [])
-                for name in frame], [])
+                for name in frame.keys()], [])
 
     def visitMetaContextExpr(self, layout):
         fqnPrefix = u"<LOL>"
@@ -607,7 +631,7 @@ class PrettySpecialNouns(ReifyMetaIR.makePassTo(None)):
                     self.write(u", ")
                     self.visitExpr(auditor)
         self.write(u" ⎣")
-        self.write(u" ".join(layout.frameNames))
+        self.write(u" ".join(layout.frameNames.keys()))
         self.write(u"⎤ ")
         self.write(u" {")
         for method in methods:
