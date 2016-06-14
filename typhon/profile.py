@@ -3,6 +3,7 @@ Hack to let us easily profile any portion of the VM which intersperses its
 frames with frames of Monte user-level code.
 """
 
+from functools import wraps
 import inspect
 import os.path
 
@@ -54,6 +55,7 @@ def profileTyphon(name):
             rvmprof.register_code(codeObj, lambda obj: obj.fullName)
         profiledLocations.append(switch)
 
+        @wraps(f)
         @rvmprof.vmprof_execute_code(name, get_code_fn)
         def fakeExecuteCode(*args):
             return f(*args)

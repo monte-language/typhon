@@ -435,14 +435,10 @@ class SameGuard(Guard):
         return wrapList([sameGuardMaker, StrObject(u"get"),
                           wrapList([self.value]), EMPTY_MAP])
 
-    @method("Any", "Any", "Any")
-    def coerce(self, specimen, ej):
+    def subCoerce(self, specimen):
         from typhon.objects.equality import optSame, EQUAL
         if optSame(specimen, self.value) is EQUAL:
             return specimen
-        # XXX throw properly
-        ej.call(u"run", [wrapList([specimen, StrObject(u"is not"),
-                                    self.value])])
 
     @method("Any")
     def getValue(self):

@@ -102,7 +102,7 @@ class FinalSlot(Object):
     def getGuard(self):
         return self._guard
 
-    @method("Any")
+    @method.py("Any")
     def get(self):
         return self._obj
 
@@ -135,7 +135,7 @@ class VarSlot(Object):
     def getGuard(self):
         return self._guard
 
-    @method("Any")
+    @method.py("Any")
     def get(self):
         return self._obj
 

@@ -10,25 +10,34 @@ from typhon.errors import Refused
 
 
 def method(rv, *args, **kwargs):
-    "NOT_RPYTHON"
+    """
+    Mark a method as being exposed to Monte with a given type layout.
 
-    verb = kwargs.pop("_verb", "run")
+    The first type must be the return value.
+
+    NOT_RPYTHON
+    """
 
     # Mark methods that must be automatically helped. Record an unprocessed
     # tuple of (args, namedArgs, returnGuard).
 
     def deco(f):
+        verb = kwargs.pop("_verb", f.__name__)
         # This method shall be isolated, repacked, wrapped, and helped.
         f._monteMethod_ = verb, args, kwargs, rv, False
         return f
     return deco
 
 def method_py(rv, *args, **kwargs):
-    "NOT_RPYTHON"
+    """
+    Like @method, but with the resulting method also being accessible via
+    RPython.
 
-    verb = kwargs.pop("_verb", "run")
+    NOT_RPYTHON
+    """
 
     def deco(f):
+        verb = kwargs.pop("_verb", f.__name__)
         # This method shall be spared.
         f._monteMethod_ = verb, args, kwargs, rv, True
         return f
@@ -37,11 +46,16 @@ def method_py(rv, *args, **kwargs):
 # AutoHelp is working around a technical limitation of nomenclature.
 method.py = method_py
 
+def isStarArgs(args):
+    return len(args) == 1 and args[0][0] == '*'
+
 def repackMonteMethods(cls):
     """
     Adjust the internal locations of Monte methods.
 
     AutoHelp requires Monte methods to be in a particular location.
+
+    NOT_RPYTHON
     """
 
     methods = {}
@@ -52,13 +66,17 @@ def repackMonteMethods(cls):
     for k, v in vars(cls).copy().iteritems():
         if hasattr(v, "_monteMethod_"):
             verb, args, kwargs, rv, spare = v._monteMethod_
-            methods[k] = v, args, kwargs, rv
             if spare:
                 # Remove the mark of AutoHelp from the method and permit it to
                 # play in the valley with its brethren.
                 del v._monteMethod_
             else:
                 delattr(cls, k)
+            if isStarArgs(args):
+                k = "_%s_%s_star_args_" % (cls.__name__, k)
+            else:
+                k = "_%s_%s_%d_" % (cls.__name__, k, len(args))
+            methods[k] = v, verb, args, kwargs, rv
     cls._monteMethods_ = methods
 
 
@@ -78,6 +96,8 @@ def alterMethods(cls):
     Alter Monte methods on behalf of AutoHelp.
 
     Return the signatures of the altered methods.
+
+    NOT_RPYTHON
     """
 
     atoms = []
@@ -95,16 +115,14 @@ def alterMethods(cls):
     for c in reversed(cls.__mro__):
         if hasattr(c, "_monteMethods_"):
             d.update(c._monteMethods_)
-    for attr, (f, args, kwargs, rv) in d.iteritems():
-        verb = attr.decode("utf-8")
+    for attr, (f, verb, args, kwargs, rv) in d.iteritems():
+        # The verb is now Unicode.
+        verb = verb.decode("utf-8")
         assignments = []
-        if len(args) == 1 and args[0][0] == '*':
-            # *args
-            attr = "_%s_%s_star_args_" % (cls.__name__, attr)
+        if isStarArgs(args):
             atomTest = "atom.verb == %r" % verb
             call = "self.%s(args)" % attr
         else:
-            attr = "_%s_%s_%d_" % (cls.__name__, attr, len(args))
             atomName = nextName()
             execNames[atomName] = atom = getAtom(verb, len(args))
             atoms.append(atom)
@@ -164,6 +182,8 @@ def autohelp(cls):
 
     Do not mock AutoHelp. AutoHelp should not be engaged manually. AutoHelp is
     here to help.
+
+    NOT_RPYTHON
     """
 
     # Must only be done once.
