@@ -163,10 +163,9 @@ class AstEval(Object):
         return evalMonte(code, topLocals, scope)[0]
 
     @method("List", "Any", "Any")
-    @profileTyphon("astEval.evalToPair/2")
     def evalToPair(self, bs, scope):
-        code, topLocals = moduleFromString(bs, self.recorder)
-        result, envMap = evalMonte(code, topLocals, scope)
+        ast = realLoad(unwrapBytes(bs))
+        result, envMap = evalMonte(ast, scope)
         return [result, envMap]
 
 

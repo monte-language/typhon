@@ -15,10 +15,13 @@ from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
 from typhon.objects.ejectors import Ejector, theThrower, throw
 from typhon.objects.exceptions import sealException
 from typhon.objects.guards import anyGuard
-from typhon.objects.slots import Binding, Slot, finalBinding, varBinding
-from typhon.objects.user import AuditClipboard, UserObject
+from typhon.objects.root import Object
+from typhon.objects.slots import Binding, finalBinding, varBinding
+from typhon.objects.user import AuditClipboard, UserObjectHelper
 
 RUN_2 = getAtom(u"run", 2)
+
+NULL_BINDING = finalBinding(NullObject, anyGuard)
 
 
 def mkMirandaArgs():
@@ -30,33 +33,36 @@ MIRANDA_ARGS = mkMirandaArgs()
 
 
 class InterpMethod(object):
-    def __init__(self, doc, patts, namedPatts, guard, body):
+    def __init__(self, doc, verb, patts, namedPatts, guard, body, localSize):
         self.doc = doc
+        self.verb = verb
         self.params = patts
         self.namedParams = namedPatts
         self.guard = guard
         self.body = body
+        self.localSize = localSize
 
 
 class InterpMatcher(object):
-    def __init__(self, patt, body):
+    def __init__(self, patt, body, localSize):
         self.pattern = patt
         self.body = body
+        self.localSize = localSize
 
 
-class InterpObject(UserObject):
+class InterpObject(Object):
     """
     An object whose script is executed by the AST evaluator.
     """
     import_from_mixin(AuditClipboard)
-
+    import_from_mixin(UserObjectHelper)
     _immutable_fields_ = ("doc", "displayName", "methods[*]", "matchers[*]",
                           "outers", "report")
 
     def __init__(self, doc, name, methods, matchers, frame, outers,
                  guards, auditors, ast):
         self.reportCabinet = []
-        self.fqn = "LOL"
+        self.fqn = u"LOL"
         self.objectAst = ast
         self.doc = doc
         self.displayName = name
@@ -75,7 +81,7 @@ class InterpObject(UserObject):
         return self.displayName
 
     def getMethod(self, atom):
-        return self.methods.get(atom.verb, None)
+        return self.methods.get(atom, None)
 
     def getMatchers(self):
         return self.matchers
@@ -83,22 +89,37 @@ class InterpObject(UserObject):
     def respondingAtoms(self):
         d = {}
         for a, m in self.methods.iteritems():
-            d[a] = m.getDoc()
+            d[a] = m.doc
         return d
 
     def runMethod(self, method, args, namedArgs):
         e = Evaluator(self.frame, self.outers, method.localSize)
         if len(args) != len(method.params):
             raise userError(u"Method '%s.%s' expected %d args, got %d" % (
-                self.getDisplayName(), method.name, len(method.params),
+                self.getDisplayName(), method.verb, len(method.params),
                 len(args)))
-        for (p, a) in zip(method.params, args):
-            e.matchBind(p, a, theThrower)
-        e.matchBind(method.namedParams, namedArgs)
+        for i in range(len(args)):
+            e.matchBind(method.params[i], args[i], None)
+        namedArgDict = unwrapMap(namedArgs)
+        for np in method.namedParams:
+            k = e.visitExpr(np.key)
+            if k not in namedArgDict:
+                raise userError(u"Named arg %s missing in call" % (
+                    k.toString(),))
+            if isinstance(np.default, ReifyMetaIR.NullExpr):
+                e.matchBind(np.patt, namedArgDict[k], None)
+            else:
+                ej = Ejector()
+                try:
+                    e.matchBind(np.patt, namedArgDict[k], ej)
+                except Ejecting, ee:
+                    if ee.ejector is not ej:
+                        raise
+                    e.matchBind(np.patt, e.visitExpr(np.default), None)
         v = e.visitExpr(method.body)
         if method.guard is None:
             return v
-        return self.runGuard(v, method.guard, theThrower)
+        return e.runGuard(v, method.guard, None)
 
     def runMatcher(self, matcher, message, ej):
         e = Evaluator(self.frame, self.outers, matcher.localSize)
@@ -107,7 +128,7 @@ class InterpObject(UserObject):
 
 class Evaluator(ReifyMetaIR.makePassTo(None)):
     def __init__(self, frame, outers, localSize):
-        self.locals = [None] * localSize
+        self.locals = [NULL_BINDING] * localSize
         self.frame = frame
         self.outers = outers
         self.specimen = None
@@ -231,25 +252,25 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             objName = u"_"
         else:
             objName = patt.name
-        frameItems = [None] * len(layout.frameNames)
-        for n, f in layout.frameNames.items():
-            frameItems[f[1]] = (n,) + f
+        frameItems = [(u"", "", 0, "")] * len(layout.frameNames)
+        for n, (i, scope, idx, severity) in layout.frameNames.items():
+            frameItems[i] = (n, scope, idx, severity)
         frame = []
         guards = {}
-        for (name, i, scope, idx, severity) in frameItems:
+        for (name, scope, idx, severity) in frameItems:
             if name == objName:
                 # deal with this later
-                frame.append(None)
+                frame.append(NULL_BINDING)
             if scope == "local":
                 frame.append(self.locals[idx])
-                guards[name] = self.locals[idx].getGuard()
+                guards[name] = self.locals[idx].guard
             elif scope == "frame":
                 frame.append(self.frame[idx])
-                guards[name] = self.frame[idx].getGuard()
+                guards[name] = self.frame[idx].guard
         for (name, (idx, severity)) in layout.outerNames.items():
             # OuterNounExpr doesn't get rewritten to FrameNounExpr so no
             # need to put the binding in frame.
-            guards[name] = self.outers[idx].getGuard()
+            guards[name] = self.outers[idx].guard
         ast = NullObject
         guardAuditor = anyGuard
         auds = []
@@ -257,7 +278,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             guardAuditor = self.visitExpr(auditors[0])
             auds = [guardAuditor] + [self.visitExpr(auditor)
                                      for auditor in auditors[1:]]
-            ast = BuildKernelNodes().visit(mast)
+            ast = BuildKernelNodes().visitExpr(mast)
         meths = {}
         for method in methods:
             name, m = self.visitMethod(method)
@@ -271,7 +292,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         elif isinstance(patt, ReifyMetaIR.VarPatt):
             b = varBinding(val, guardAuditor)
         else:
-            raise userError(u"Unsupported object pattern %s" % (patt,))
+            raise userError(u"Unsupported object pattern")
         selfLayout = layout.frameNames.get(objName, (0, None, 0, ""))
         if selfLayout[1] is not None:
             frame[selfLayout[2]] = b
@@ -295,7 +316,9 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         return NullObject
 
     def visitBindingPatt(self, name, index):
-        self.locals[index] = self.specimen
+        b = self.specimen
+        assert isinstance(b, Binding)
+        self.locals[index] = b
 
     def visitFinalPatt(self, name, guard, idx):
         if isinstance(guard, ReifyMetaIR.NullExpr):
@@ -319,9 +342,8 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         if len(patts) != len(listSpecimen):
             throw(ej, StrObject(u"Failed list pattern (needed %d, got %d)" %
                                 (len(patts), len(listSpecimen))))
-
-        for (patt, item) in zip(patts, listSpecimen):
-            self.matchBind(patt, item, ej)
+        for i in range(len(patts)):
+            self.matchBind(patts[i], listSpecimen[i], ej)
 
     def visitViaPatt(self, trans, patt):
         ej = self.patternFailure
@@ -345,12 +367,15 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
                   StrObject(u"Named arg %s missing in call" % (k.toString(),)))
         self.matchBind(patt, v, self.patternFailure)
 
-    def visitMatcherExpr(self, patt, body, layout):
-        return InterpMatcher(patt, body)
+    def visitMatcherExpr(self, patt, body, localSize):
+        return InterpMatcher(patt, body, localSize)
 
     def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body,
-                        layout):
-        return verb, InterpMethod(doc, patts, namedPatts, guard, body)
+                        localSize):
+        return (getAtom(verb, len(patts)),
+                InterpMethod(doc, verb, patts, namedPatts,
+                             self.visitExpr(guard),
+                             body, localSize))
 
 
 def evalMonte(expr, scopeMap):

@@ -353,6 +353,10 @@ BoundNounsIR = LayoutIR.extend(
                            ("namedPatts", "NamedPatt*"), ("guard", "Expr"),
                            ("body", "Expr"), ("localSize", None)],
         },
+        "Matcher": {
+            "MatcherExpr": [("patt", "Patt"), ("body", "Expr"),
+                            ("localSize", None)],
+        },
     }
 )
 
@@ -416,6 +420,12 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
             [self.visitPatt(p) for p in patts],
             [self.visitNamedPatt(np) for np in namedPatts],
             self.visitExpr(guard),
+            self.visitExpr(body),
+            countLocalSize(layout, 0))
+
+    def visitMatcherExpr(self, patt, body, layout):
+        return self.dest.MatcherExpr(
+            self.visitPatt(patt),
             self.visitExpr(body),
             countLocalSize(layout, 0))
 
