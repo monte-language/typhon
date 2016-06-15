@@ -25,6 +25,7 @@ from typhon.arguments import Configuration
 from typhon.debug import enableDebugPrint, TyphonJitHooks
 from typhon.errors import LoadFailed, UserException
 from typhon.importing import evaluateTerms, obtainModule
+from typhon.log import log
 from typhon.metrics import globalRecorder
 from typhon.objects.auditors import deepFrozenGuard
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
@@ -68,28 +69,16 @@ def loadPrelude(config, recorder, vat):
     with recorder.context("Time spent in prelude"):
         result = evaluateTerms([code], scope)
 
-    if result is None:
-        print "Prelude returned None!?"
-        return {}
+    assert result is not None, "Prelude returned None"
+    assert isinstance(result, ConstMap), "Prelude returned non-Map"
 
-
-    # debug_print("Prelude result:", result.toQuote())
-
-    if isinstance(result, ConstMap):
-        prelude = {}
-        for key, value in unwrapMap(result).items():
-            if isinstance(key, StrObject):
-                s = unwrapStr(key)
-                if not s.startswith(u"&&"):
-                    print "Prelude map key", s, "doesn't start with '&&'"
-                else:
-                    prelude[s[2:]] = value
-            else:
-                print "Prelude map key", key, "isn't a string"
-        return prelude
-
-    print "Prelude didn't return map!?"
-    return {}
+    prelude = {}
+    for key, value in unwrapMap(result).items():
+        s = unwrapStr(key)
+        assert s.startswith(u"&&"), "Prelude key doesn't start with &&"
+        prelude[s[2:]] = value
+    log(["info", "prelude"], u"Loaded the prelude")
+    return prelude
 
 
 def runUntilDone(vatManager, uv_loop, recorder):
