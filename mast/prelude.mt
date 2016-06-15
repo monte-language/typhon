@@ -640,7 +640,7 @@ def scopeNames := [
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
-    => M, => Ref,  => throw, => typhonEval, => promiseAllFulfilled,
+    => M, => Ref,  => throw, => typhonEval, => astEval, => promiseAllFulfilled,
     => makeLazySlot]
 
 def scopeAsDF(scope):
@@ -711,7 +711,6 @@ dependencies["lib/monte/mast"] := loadit("lib/monte/mast")
 # that. Instead, we're feeding dumped AST to Typhon via this magic boot scope
 # hook, and that'll do for now. ~ C.
 importIntoScope("prelude/m")
-importIntoScope("prelude/n")
 
 
 # Transparent auditor and guard.
