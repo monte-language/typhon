@@ -12,17 +12,11 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Ejecting, Refused, UserException, userError
+from typhon.autohelp import autohelp, method
+from typhon.errors import Ejecting, UserException, userError
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object, audited
-
-DISABLE_0 = getAtom(u"disable", 0)
-EJECT_2 = getAtom(u"eject", 2)
-RUN_0 = getAtom(u"run", 0)
-RUN_1 = getAtom(u"run", 1)
 
 
 @autohelp
@@ -44,18 +38,13 @@ class Ejector(Object):
     def toString(self):
         return u"<ejector>" if self.active else u"<ejector (inert)>"
 
-    def recv(self, atom, args):
-        if atom is RUN_0:
-            self.fire()
+    @method("Void")
+    def run(self):
+        self.fire()
 
-        if atom is RUN_1:
-            self.fire(args[0])
-
-        if atom is DISABLE_0:
-            self.disable()
-            return NullObject
-
-        raise Refused(self, atom, args)
+    @method("Void", "Any", _verb="run")
+    def _run(self, payload):
+        self.fire(payload)
 
     def fire(self, payload=NullObject):
         if self.active:
@@ -67,6 +56,7 @@ class Ejector(Object):
     def fireString(self, message):
         return self.fire(StrObject(message))
 
+    @method.py("Void")
     def disable(self):
         self.active = False
 
@@ -93,14 +83,12 @@ class Throw(Object):
     def toString(self):
         return u"throw"
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            raise UserException(args[0])
+    @method("Void", "Any")
+    def run(self, payload):
+        raise UserException(payload)
 
-        if atom is EJECT_2:
-            return throw(args[0], args[1])
-
-        raise Refused(self, atom, args)
-
+    @method("Void", "Any", "Any")
+    def eject(self, ej, payload):
+        throw(ej, payload)
 
 theThrower = Throw()
