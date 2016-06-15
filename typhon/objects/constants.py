@@ -12,20 +12,10 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused, userError
+from typhon.autohelp import autohelp, method
+from typhon.errors import userError
 from typhon.objects.root import Object, audited
 from typhon.prelude import getGlobalValue
-
-
-AND_1 = getAtom(u"and", 1)
-BUTNOT_1 = getAtom(u"butNot", 1)
-NOT_0 = getAtom(u"not", 0)
-OP__CMP_1 = getAtom(u"op__cmp", 1)
-OR_1 = getAtom(u"or", 1)
-PICK_2 = getAtom(u"pick", 2)
-XOR_1 = getAtom(u"xor", 1)
 
 
 @autohelp
@@ -41,66 +31,101 @@ class _NullObject(Object):
     def optInterface(self):
         return getGlobalValue(u"Void")
 
-
 NullObject = _NullObject()
 
 
 @autohelp
 @audited.DF
-class BoolObject(Object):
+class _TrueObject(Object):
     """
-    A Boolean value.
+    The positive Boolean value.
     """
-
-    _immutable_fields_ = "_b",
-
-    def __init__(self, b):
-        self._b = b
 
     def toString(self):
-        return u"true" if self._b else u"false"
+        return u"true"
 
     def optInterface(self):
         return getGlobalValue(u"Bool")
 
-    def recv(self, atom, args):
-        # and/1
-        if atom is AND_1:
-            return wrapBool(self._b and unwrapBool(args[0]))
+    @method("Bool", "Bool", _verb="and")
+    def _and(self, other):
+        return other
 
-        # butNot/1
-        if atom is BUTNOT_1:
-            return wrapBool(self._b and not unwrapBool(args[0]))
+    @method("Bool", "Bool")
+    def butNot(self, other):
+        return not other
 
-        # not/0
-        if atom is NOT_0:
-            return wrapBool(not self._b)
+    @method("Bool", _verb="not")
+    def _not(self):
+        return False
 
-        # op__cmp/1
-        if atom is OP__CMP_1:
-            from typhon.objects.data import IntObject
-            return IntObject(self._b - unwrapBool(args[0]))
+    @method("Int", "Bool")
+    def op__cmp(self, other):
+        return True - other
 
-        # or/1
-        if atom is OR_1:
-            return wrapBool(self._b or unwrapBool(args[0]))
+    @method("Bool", "Bool", _verb="or")
+    def _or(self, _):
+        return True
 
-        # pick/2
-        if atom is PICK_2:
-            return args[0] if self._b else args[1]
+    @method("Any", "Any", "Any")
+    def pick(self, left, _):
+        return left
 
-        # xor/1
-        if atom is XOR_1:
-            return wrapBool(self._b ^ unwrapBool(args[0]))
-
-        raise Refused(self, atom, args)
+    @method("Bool", "Bool")
+    def xor(self, other):
+        return not other
 
     def isTrue(self):
-        return self._b
+        return True
+
+TrueObject = _TrueObject()
 
 
-TrueObject = BoolObject(True)
-FalseObject = BoolObject(False)
+@autohelp
+@audited.DF
+class _FalseObject(Object):
+    """
+    The negative Boolean value.
+    """
+
+    def toString(self):
+        return u"false"
+
+    def optInterface(self):
+        return getGlobalValue(u"Bool")
+
+    @method("Bool", "Bool", _verb="and")
+    def _and(self, _):
+        return False
+
+    @method("Bool", "Bool")
+    def butNot(self, _):
+        return False
+
+    @method("Bool", _verb="not")
+    def _not(self):
+        return True
+
+    @method("Int", "Bool")
+    def op__cmp(self, other):
+        return False - other
+
+    @method("Bool", "Bool", _verb="or")
+    def _or(self, other):
+        return other
+
+    @method("Any", "Any", "Any")
+    def pick(self, _, right):
+        return right
+
+    @method("Bool", "Bool")
+    def xor(self, other):
+        return other
+
+    def isTrue(self):
+        return False
+
+FalseObject = _FalseObject()
 
 
 def wrapBool(b):
@@ -110,6 +135,8 @@ def wrapBool(b):
 def unwrapBool(o):
     from typhon.objects.refs import resolution
     b = resolution(o)
-    if isinstance(b, BoolObject):
-        return b.isTrue()
+    if b is TrueObject:
+        return True
+    if b is FalseObject:
+        return False
     raise userError(u"Not a boolean!")

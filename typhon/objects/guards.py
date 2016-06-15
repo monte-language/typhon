@@ -8,8 +8,8 @@ from typhon.objects.auditors import (deepFrozenStamp, selfless,
 from typhon.objects.collections.helpers import asSet
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.collections.sets import ConstSet, monteSet
-from typhon.objects.constants import (BoolObject, NullObject, unwrapBool,
-                                      wrapBool)
+from typhon.objects.constants import (TrueObject, FalseObject, NullObject,
+                                      unwrapBool, wrapBool)
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
 from typhon.objects.ejectors import Ejector, throw
@@ -70,7 +70,7 @@ class BoolGuard(Guard):
     """
 
     def subCoerce(self, specimen):
-        if isinstance(specimen, BoolObject):
+        if specimen is TrueObject or specimen is FalseObject:
             return specimen
 
 

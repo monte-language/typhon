@@ -21,7 +21,7 @@ from typhon.errors import userError
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.collections.lists import ConstList, unwrapList
 from typhon.objects.collections.maps import ConstMap
-from typhon.objects.constants import BoolObject, NullObject, wrapBool
+from typhon.objects.constants import TrueObject, FalseObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
 from typhon.objects.refs import resolution, isResolved
@@ -110,15 +110,10 @@ def optSame(first, second, cache=None):
     if cache is not None and (second, first) in cache:
         return cache[second, first]
 
-    # Null.
-    if first is NullObject:
-        return eq(second is NullObject)
-
-    # Bools. This should probably be covered by the identity case already,
-    # but it's included for completeness.
-    if isinstance(first, BoolObject):
-        return eq(isinstance(second, BoolObject)
-                and first.isTrue() == second.isTrue())
+    # NB: null, true, and false are all singletons, prebuilt before
+    # translation, and as such, their identities cannot possibly vary. Code
+    # checking for their cases used to live here, but it has been removed for
+    # speed. ~ C.
 
     # Chars.
     if isinstance(first, CharObject):
@@ -255,15 +250,19 @@ def samenessHash(obj, depth, fringe, path=None):
             return -1
 
     o = resolution(obj)
+    # The constants have their own special hash values.
     if o is NullObject:
         return 0
+    if o is TrueObject:
+        return 1
+    if o is FalseObject:
+        return 2
 
     # Objects that do their own hashing.
-    if (isinstance(o, BoolObject) or isinstance(o, CharObject)
-            or isinstance(o, DoubleObject) or isinstance(o, IntObject)
-            or isinstance(o, BigInt) or isinstance(o, StrObject)
-            or isinstance(o, BytesObject)
-            or isinstance(o, TraversalKey)):
+    if (isinstance(o, CharObject) or isinstance(o, DoubleObject) or
+        isinstance(o, IntObject) or isinstance(o, BigInt) or
+        isinstance(o, StrObject) or isinstance(o, BytesObject) or
+        isinstance(o, TraversalKey)):
         return o.computeHash(depth)
 
     # Lists.
@@ -327,13 +326,13 @@ def samenessFringe(original, path, fringe, sofar=None):
     # Resolve the object.
     o = resolution(original)
     # Handle primitive cases first.
-    if o is NullObject:
+    if o in (NullObject, TrueObject, FalseObject):
         return True
 
-    if (isinstance(o, BoolObject) or isinstance(o, CharObject)
-            or isinstance(o, DoubleObject) or isinstance(o, IntObject)
-            or isinstance(o, BigInt) or isinstance(o, StrObject)
-            or isinstance(o, TraversalKey)):
+    if (isinstance(o, CharObject) or isinstance(o, DoubleObject) or
+        isinstance(o, IntObject) or isinstance(o, BigInt) or
+        isinstance(o, StrObject) or isinstance(o, BytesObject) or
+        isinstance(o, TraversalKey)):
         return True
 
     if isinstance(o, ConstMap) and len(o.objectMap) == 0:

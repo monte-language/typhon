@@ -2,8 +2,7 @@
 
 from rpython.rlib.objectmodel import import_from_mixin
 
-from typhon.objects.constants import (BoolObject, FalseObject, NullObject,
-                                      unwrapBool, wrapBool)
+from typhon.objects.constants import NullObject
 from typhon.objects.data import (BytesObject, CharObject, IntObject,
                                  StrObject, unwrapBytes, unwrapChar,
                                  unwrapInt, unwrapStr)
@@ -94,8 +93,6 @@ def unboxUnconnectedRef(value):
 
 unboxedStrategies = [makeUnboxedListStrategy(cls, box, unbox, exemplar)
 for (cls, box, unbox, exemplar) in [
-    # Bools.
-    (BoolObject, wrapBool, unwrapBool, FalseObject),
     # Chars.
     (CharObject, CharObject, unwrapChar, CharObject(u'▲')),
     # Small ints.
