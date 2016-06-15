@@ -5,28 +5,10 @@ Some cryptographic services.
 from rpython.rlib.rarithmetic import intmask
 
 from typhon import log, rsodium
-from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused, WrongType, userError
-from typhon.objects.collections.lists import wrapList
-from typhon.objects.data import (BytesObject, IntObject, StrObject,
-                                 unwrapBytes)
+from typhon.autohelp import autohelp, method
+from typhon.errors import WrongType, userError
+from typhon.objects.data import BytesObject, IntObject
 from typhon.objects.root import Object
-
-
-ASBYTES_0 = getAtom(u"asBytes", 0)
-FROMBYTES_1 = getAtom(u"fromBytes", 1)
-FROMPUBLICBYTES_1 = getAtom(u"fromPublicBytes", 1)
-FROMSECRETBYTES_1 = getAtom(u"fromSecretBytes", 1)
-GETALGORITHM_0 = getAtom(u"getAlgorithm", 0)
-GETENTROPY_0 = getAtom(u"getEntropy", 0)
-KEYMAKER_0 = getAtom(u"keyMaker", 0)
-MAKESECUREENTROPY_0 = getAtom(u"makeSecureEntropy", 0)
-PAIRWITH_1 = getAtom(u"pairWith", 1)
-PUBLICKEY_0 = getAtom(u"publicKey", 0)
-RUN_0 = getAtom(u"run", 0)
-SEAL_1 = getAtom(u"seal", 1)
-UNSEAL_2 = getAtom(u"unseal", 2)
 
 
 @autohelp
@@ -35,16 +17,15 @@ class SecureEntropy(Object):
     Entropy via libsodium's randombytes_random() API.
     """
 
-    def recv(self, atom, args):
-        if atom is GETALGORITHM_0:
-            return StrObject(u"CSPRNG (libsodium)")
+    @method("Str")
+    def getAlgorithm(self):
+        return u"CSPRNG (libsodium)"
 
-        if atom is GETENTROPY_0:
-            # uint32_t in the FFI, so exactly 32 bits every time.
-            return wrapList([IntObject(32),
-                              IntObject(intmask(rsodium.randombytesRandom()))])
-
-        raise Refused(self, atom, args)
+    @method("List")
+    def getEntropy(self):
+        # uint32_t in the FFI, so exactly 32 bits every time.
+        return [IntObject(32),
+                IntObject(intmask(rsodium.randombytesRandom()))]
 
 
 @autohelp
@@ -60,17 +41,15 @@ class PublicKey(Object):
     def __init__(self, publicKey):
         self.publicKey = publicKey
 
-    def recv(self, atom, args):
-        if atom is ASBYTES_0:
-            return BytesObject(self.publicKey)
+    @method("Bytes")
+    def asBytes(self):
+        return self.publicKey
 
-        if atom is PAIRWITH_1:
-            secret = args[0]
-            if not isinstance(secret, SecretKey):
-                raise WrongType(u"Not a secret key!")
-            return KeyPair(self.publicKey, secret.secretKey)
-
-        raise Refused(self, atom, args)
+    @method("Any", "Any")
+    def pairWith(self, secret):
+        if not isinstance(secret, SecretKey):
+            raise WrongType(u"Not a secret key!")
+        return KeyPair(self.publicKey, secret.secretKey)
 
 
 @autohelp
@@ -86,23 +65,22 @@ class SecretKey(Object):
     def __init__(self, secretKey):
         self.secretKey = secretKey
 
-    def recv(self, atom, args):
-        if atom is ASBYTES_0:
-            # XXX should figure this out
-            log.log(["sodium"], u"asBytes/0: Revealing secret key")
-            return BytesObject(self.secretKey)
+    @method("Bytes")
+    def asBytes(self):
+        # XXX should figure this out
+        log.log(["sodium"], u"asBytes/0: Revealing secret key")
+        return self.secretKey
 
-        if atom is PAIRWITH_1:
-            public = args[0]
-            if not isinstance(public, PublicKey):
-                raise WrongType(u"Not a public key!")
-            return KeyPair(public.publicKey, self.secretKey)
+    @method("Any", "Any")
+    def pairWith(self, public):
+        if not isinstance(public, PublicKey):
+            raise WrongType(u"Not a public key!")
+        return KeyPair(public.publicKey, self.secretKey)
 
-        if atom is PUBLICKEY_0:
-            publicKey = rsodium.regenerateKey(self.secretKey)
-            return PublicKey(publicKey)
-
-        raise Refused(self, atom, args)
+    @method("Any")
+    def publicKey(self):
+        publicKey = rsodium.regenerateKey(self.secretKey)
+        return PublicKey(publicKey)
 
 
 @autohelp
@@ -120,25 +98,21 @@ class KeyPair(Object):
         self.publicKey = publicKey
         self.secretKey = secretKey
 
-    def recv(self, atom, args):
-        if atom is SEAL_1:
-            message = unwrapBytes(args[0])
-            nonce = rsodium.freshNonce()
-            cipher = rsodium.boxSeal(message, nonce, self.publicKey,
-                                     self.secretKey)
-            return wrapList([BytesObject(cipher), BytesObject(nonce)])
+    @method("List", "Bytes")
+    def seal(self, message):
+        nonce = rsodium.freshNonce()
+        cipher = rsodium.boxSeal(message, nonce, self.publicKey,
+                                 self.secretKey)
+        return [BytesObject(cipher), BytesObject(nonce)]
 
-        if atom is UNSEAL_2:
-            cipher = unwrapBytes(args[0])
-            nonce = unwrapBytes(args[1])
-            try:
-                message = rsodium.boxUnseal(cipher, nonce, self.publicKey,
-                                            self.secretKey)
-            except rsodium.SodiumError:
-                raise userError(u"unseal/2: Couldn't open this box")
-            return BytesObject(message)
-
-        raise Refused(self, atom, args)
+    @method("Bytes", "Bytes", "Bytes")
+    def unseal(self, cipher, nonce):
+        try:
+            message = rsodium.boxUnseal(cipher, nonce, self.publicKey,
+                                        self.secretKey)
+        except rsodium.SodiumError:
+            raise userError(u"unseal/2: Couldn't open this box")
+        return message
 
 
 @autohelp
@@ -147,30 +121,28 @@ class KeyMaker(Object):
     Public-key cryptography via libsodium.
     """
 
-    def recv(self, atom, args):
-        if atom is FROMPUBLICBYTES_1:
-            publicKey = unwrapBytes(args[0])
-            expectedSize = intmask(rsodium.cryptoBoxPublickeybytes())
-            if len(publicKey) != expectedSize:
-                message = u"Expected key length of %d bytes, not %d" % (
-                    expectedSize, len(publicKey))
-                raise userError(message)
-            return PublicKey(publicKey)
+    @method("Any", "Bytes")
+    def fromPublicBytes(self, publicKey):
+        expectedSize = intmask(rsodium.cryptoBoxPublickeybytes())
+        if len(publicKey) != expectedSize:
+            message = u"Expected key length of %d bytes, not %d" % (
+                expectedSize, len(publicKey))
+            raise userError(message)
+        return PublicKey(publicKey)
 
-        if atom is FROMSECRETBYTES_1:
-            secretKey = unwrapBytes(args[0])
-            expectedSize = intmask(rsodium.cryptoBoxSecretkeybytes())
-            if len(secretKey) != expectedSize:
-                message = u"Expected key length of %d bytes, not %d" % (
-                    expectedSize, len(secretKey))
-                raise userError(message)
-            return SecretKey(secretKey)
+    @method("Any", "Bytes")
+    def fromSecretBytes(self, secretKey):
+        expectedSize = intmask(rsodium.cryptoBoxSecretkeybytes())
+        if len(secretKey) != expectedSize:
+            message = u"Expected key length of %d bytes, not %d" % (
+                expectedSize, len(secretKey))
+            raise userError(message)
+        return SecretKey(secretKey)
 
-        if atom is RUN_0:
-            public, secret = rsodium.freshKeypair()
-            return wrapList([PublicKey(public), SecretKey(secret)])
-
-        raise Refused(self, atom, args)
+    @method("List")
+    def run(self):
+        public, secret = rsodium.freshKeypair()
+        return [PublicKey(public), SecretKey(secret)]
 
 theKeyMaker = KeyMaker()
 
@@ -181,11 +153,10 @@ class Crypt(Object):
     A libsodium-backed cryptographic service provider.
     """
 
-    def recv(self, atom, args):
-        if atom is MAKESECUREENTROPY_0:
-            return SecureEntropy()
+    @method("Any")
+    def makeSecureEntropy(self):
+        return SecureEntropy()
 
-        if atom is KEYMAKER_0:
-            return theKeyMaker
-
-        raise Refused(self, atom, args)
+    @method("Any")
+    def keyMaker(self):
+        return theKeyMaker
