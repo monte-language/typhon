@@ -27,7 +27,7 @@ from rpython.rlib.rstruct.ieee import pack_float
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.comparison import Incomparable
@@ -147,48 +147,52 @@ class CharObject(Object):
     def optInterface(self):
         return getGlobalValue(u"Char")
 
-    def recv(self, atom, args):
-        if atom is ADD_1:
-            other = unwrapInt(args[0])
-            return self.withOffset(other)
+    @method("Char", "Int")
+    def add(self, other):
+        return self.withOffset(other)
 
-        if atom is ASINTEGER_0:
-            return IntObject(ord(self._c))
+    @method("Int")
+    def asInteger(self):
+        return ord(self._c)
 
-        if atom is ASSTRING_0:
-            return StrObject(unicode(self._c))
+    @method("Str")
+    def asString(self):
+        return unicode(self._c)
 
-        if atom is GETCATEGORY_0:
-            return StrObject(unicode(unicodedb.category(ord(self._c))))
+    @method("Str")
+    def getCategory(self):
+        return unicode(unicodedb.category(ord(self._c)))
 
-        if atom is MAX_1:
-            other = unwrapChar(args[0])
-            return self if self._c > other else args[0]
+    @method("Char", "Char")
+    def max(self, other):
+        return max(self._c, other)
 
-        if atom is MIN_1:
-            other = unwrapChar(args[0])
-            return self if self._c < other else args[0]
+    @method("Char", "Char")
+    def min(self, other):
+        return min(self._c, other)
 
-        if atom is NEXT_0:
-            return self.withOffset(1)
+    @method("Char")
+    def next(self):
+        return self.withOffset(1)
 
-        if atom is OP__CMP_1:
-            return polyCmp(self._c, unwrapChar(args[0]))
+    @method("Char")
+    def previous(self):
+        return self.withOffset(-1)
 
-        if atom is PREVIOUS_0:
-            return self.withOffset(-1)
+    @method("Int", "Char")
+    def op__cmp(self, other):
+        return cmp(self._c, other)
 
-        if atom is QUOTE_0:
-            return StrObject(quoteChar(self._c))
+    @method("Str")
+    def quote(self):
+        return quoteChar(self._c)
 
-        if atom is SUBTRACT_1:
-            other = unwrapInt(args[0])
-            return self.withOffset(-other)
-
-        raise Refused(self, atom, args)
+    @method("Char", "Int")
+    def subtract(self, other):
+        return self.withOffset(-other)
 
     def withOffset(self, offset):
-        return CharObject(unichr(ord(self._c) + offset))
+        return unichr(ord(self._c) + offset)
 
     def getChar(self):
         return self._c
@@ -200,6 +204,9 @@ def unwrapChar(o):
     if isinstance(c, CharObject):
         return c.getChar()
     raise WrongType(u"Not a char!")
+
+def wrapChar(c):
+    return CharObject(c)
 
 
 @autohelp

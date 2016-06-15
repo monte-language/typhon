@@ -52,7 +52,7 @@ class TestCharObject(TestCase):
         c = CharObject(u'c')
         d = CharObject(u'd')
         result = c.call(u"max", [d])
-        self.assertTrue(result is d)
+        self.assertEqual(result.getChar(), d.getChar())
 
     def testNext(self):
         c = CharObject(u'c')
