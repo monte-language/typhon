@@ -109,6 +109,8 @@ class ScopeFrame(ScopeBase):
 
     def find(self, name):
         scope, idx, severity = self.next.find(name)
+        if scope is None:
+            return scope, idx, severity
         if scope == "outer":
             self.outerNames[name] = (idx, severity)
             return scope, idx, severity
@@ -158,7 +160,7 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     Set up scope boxes and collect variable definition sites.
     """
     def __init__(self, outers):
-        self.layout = ScopeOuter(outers)
+        self.top = self.layout = ScopeOuter(outers)
 
     def visitExprWithLayout(self, node, layout):
         origLayout = self.layout
@@ -431,7 +433,7 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
 
 
 def countLocalSize(lo, sizeSeen):
-    sizeSeen = max(sizeSeen, lo.position)
+    sizeSeen = max(sizeSeen, lo.position + 1)
     for x in lo.children:
         sizeSeen = max(countLocalSize(x, sizeSeen), sizeSeen)
     return sizeSeen
@@ -459,22 +461,24 @@ class ReifyMeta(BoundNounsIR.makePassTo(ReifyMetaIR)):
             self.mkNoun(u"_makeMap", layout),
             u"fromPairs", [
                 self.dest.CallExpr(
-                self.mkNoun(u"_makeList", layout),
+                    self.mkNoun(u"_makeList", layout),
                     u"run", [self.dest.CallExpr(
                         self.mkNoun(u"_makeList", layout),
                         u"run", [self.dest.StrExpr(u"&&" + name),
-                                 self.dest.FrameBindingExpr(name, frame[name][0])],
+                                 self.dest.FrameBindingExpr(
+                                     name, frame[name][0])],
                         [])], [])
                 for name in frame.keys()], [])
 
     def visitMetaContextExpr(self, layout):
         fqnPrefix = u"<LOL>"
         frame = ScopeFrame(layout)
-        return self.dest.ObjectExpr(u"",
+        return self.dest.ObjectExpr(
+            u"",
             self.dest.IgnorePatt(self.dest.NullExpr()),
-             [], [self.dest.MethodExpr(
+            [], [self.dest.MethodExpr(
                 u"", u"getFQNPrefix", [], [], self.dest.NullExpr(),
-                 self.dest.StrExpr(fqnPrefix), 0)],
+                self.dest.StrExpr(fqnPrefix), 0)],
             [], None, frame)
 
 

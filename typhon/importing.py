@@ -88,7 +88,6 @@ def obtainModule(libraryPaths, filePath, recorder):
         code = tryExtensions(path, recorder)
         if code is None:
             continue
-
         # Cache.
         moduleCache.cache[path] = code
         return code

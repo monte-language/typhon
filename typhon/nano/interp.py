@@ -119,7 +119,7 @@ class InterpObject(Object):
         v = e.visitExpr(method.body)
         if method.guard is None:
             return v
-        return e.runGuard(v, method.guard, None)
+        return e.runGuard(method.guard, v, None)
 
     def runMatcher(self, matcher, message, ej):
         e = Evaluator(self.frame, self.outers, matcher.localSize)
@@ -146,6 +146,8 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         self.patternFailure = oldPatternFailure
 
     def runGuard(self, guard, specimen, ej):
+        if ej is None:
+            ej = theThrower
         return guard.call(u"coerce", [specimen, ej])
 
     def visitNullExpr(self):
@@ -252,6 +254,17 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             objName = u"_"
         else:
             objName = patt.name
+        ast = NullObject
+        auds = []
+        guardAuditor = anyGuard
+        if auditors:
+            guardAuditor = self.visitExpr(auditors[0])
+            auds = [self.visitExpr(auditor) for auditor in auditors[1:]]
+            if guardAuditor is not None:
+                auds = [guardAuditor] + auds
+            else:
+                guardAuditor = anyGuard
+            ast = BuildKernelNodes().visitExpr(mast)
         frameItems = [(u"", "", 0, "")] * len(layout.frameNames)
         for n, (i, scope, idx, severity) in layout.frameNames.items():
             frameItems[i] = (n, scope, idx, severity)
@@ -261,6 +274,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             if name == objName:
                 # deal with this later
                 frame.append(NULL_BINDING)
+                guards[name] = guardAuditor
             if scope == "local":
                 frame.append(self.locals[idx])
                 guards[name] = self.locals[idx].guard
@@ -271,14 +285,6 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             # OuterNounExpr doesn't get rewritten to FrameNounExpr so no
             # need to put the binding in frame.
             guards[name] = self.outers[idx].guard
-        ast = NullObject
-        guardAuditor = anyGuard
-        auds = []
-        if auditors:
-            guardAuditor = self.visitExpr(auditors[0])
-            auds = [guardAuditor] + [self.visitExpr(auditor)
-                                     for auditor in auditors[1:]]
-            ast = BuildKernelNodes().visitExpr(mast)
         meths = {}
         for method in methods:
             name, m = self.visitMethod(method)
@@ -286,11 +292,15 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         matchs = [self.visitMatcher(matcher) for matcher in matchers]
         o = InterpObject(doc, objName, meths, matchs, frame, self.outers,
                          guards, auds, ast)
-        val = self.runGuard(o, guardAuditor, theThrower)
-        if isinstance(patt, ReifyMetaIR.FinalPatt):
+        val = self.runGuard(guardAuditor, o, theThrower)
+        if isinstance(patt, ReifyMetaIR.IgnorePatt):
+            b = NULL_BINDING
+        elif isinstance(patt, ReifyMetaIR.FinalPatt):
             b = finalBinding(val, guardAuditor)
+            self.locals[patt.index] = b
         elif isinstance(patt, ReifyMetaIR.VarPatt):
             b = varBinding(val, guardAuditor)
+            self.locals[patt.index] = b
         else:
             raise userError(u"Unsupported object pattern")
         selfLayout = layout.frameNames.get(objName, (0, None, 0, ""))
@@ -299,8 +309,10 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         return val
 
     def visitSeqExpr(self, exprs):
+        result = NullObject
         for expr in exprs:
-            self.visitExpr(expr)
+            result = self.visitExpr(expr)
+        return result
 
     def visitTryExpr(self, body, catchPatt, catchBody):
         try:
@@ -325,7 +337,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             guard = anyGuard
         else:
             guard = self.visitExpr(guard)
-        val = self.runGuard(self.specimen, guard, self.patternFailure)
+        val = self.runGuard(guard, self.specimen, self.patternFailure)
         self.locals[idx] = finalBinding(val, guard)
 
     def visitVarPatt(self, name, guard, idx):
@@ -333,7 +345,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             guard = anyGuard
         else:
             guard = self.visitExpr(guard)
-        val = self.runGuard(self.specimen, guard, self.patternFailure)
+        val = self.runGuard(guard, self.specimen, self.patternFailure)
         self.locals[idx] = varBinding(val, guard)
 
     def visitListPatt(self, patts):
@@ -389,8 +401,9 @@ def evalMonte(expr, scopeMap):
         environment[s[2:]] = v
     result = NullObject
     ss = SaveScripts().visitExpr(expr)
-    ll = LayOutScopes(environment.keys()).visitExpr(ss)
-    topLocalNames = ll.layout.collectTopLocals()
+    lo = LayOutScopes(environment.keys())
+    ll = lo.visitExpr(ss)
+    topLocalNames = lo.top.collectTopLocals()
     sl = SpecializeNouns().visitExpr(ll)
     ml = ReifyMeta().visitExpr(sl)
     e = Evaluator([], environment.values(), len(topLocalNames))
