@@ -455,3 +455,6 @@ def unwrapSet(o):
     if isinstance(m, FlexSet):
         return m.objectSet
     raise WrongType(u"Not a set!")
+
+def wrapSet(d):
+    return ConstSet(d)

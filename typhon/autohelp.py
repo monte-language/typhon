@@ -88,6 +88,7 @@ wrappers = {
     "Int": "typhon.objects.data",
     "List": "typhon.objects.collections.lists",
     "Map": "typhon.objects.collections.maps",
+    "Set": "typhon.objects.collections.sets",
     "Str": "typhon.objects.data",
 }
 

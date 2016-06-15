@@ -111,6 +111,15 @@ _UNCALL_0 = getAtom(u"_uncall", 0)
 
 
 @specialize.argtype(0, 1)
+def cmp(l, r):
+    if l < r:
+        return -1
+    elif l > r:
+        return 1
+    else:
+        return 0
+
+@specialize.argtype(0, 1)
 def polyCmp(l, r):
     if l < r:
         return IntObject(-1)
@@ -235,95 +244,110 @@ class DoubleObject(Object):
     def optInterface(self):
         return getGlobalValue(u"Double")
 
-    def recv(self, atom, args):
+    @method("Any", "Any")
+    def op__cmp(self, other):
         # Doubles can be compared.
-        if atom is OP__CMP_1:
-            other = promoteToDouble(args[0])
-            # NaN cannot compare equal to any float.
-            if math.isnan(self._d) or math.isnan(other):
-                return Incomparable
-            return polyCmp(self._d, other)
+        other = promoteToDouble(other)
+        # NaN cannot compare equal to any float.
+        if math.isnan(self._d) or math.isnan(other):
+            return Incomparable
+        return polyCmp(self._d, other)
 
-        # Doubles are related to zero.
-        if atom is ABOVEZERO_0:
-            return wrapBool(self._d > 0.0)
-        if atom is ATLEASTZERO_0:
-            return wrapBool(self._d >= 0.0)
-        if atom is ATMOSTZERO_0:
-            return wrapBool(self._d <= 0.0)
-        if atom is BELOWZERO_0:
-            return wrapBool(self._d < 0.0)
-        if atom is ISZERO_0:
-            return wrapBool(self._d == 0.0)
+    # Doubles are related to zero.
 
-        if atom is ABS_0:
-            return DoubleObject(abs(self._d))
+    @method("Bool")
+    def aboveZero(self):
+        return self._d > 0.0
 
-        if atom is ADD_1:
-            return self.add(args[0])
+    @method("Bool")
+    def atLeastZero(self):
+        return self._d >= 0.0
 
-        if atom is FLOOR_0:
-            return IntObject(int(self._d))
+    @method("Bool")
+    def atMostZero(self):
+        return self._d <= 0.0
 
-        if atom is MULTIPLY_1:
-            return self.mul(args[0])
+    @method("Bool")
+    def belowZero(self):
+        return self._d < 0.0
 
-        if atom is NEGATE_0:
-            return DoubleObject(-self._d)
+    @method("Bool")
+    def isZero(self):
+        return self._d == 0.0
 
-        if atom is SQRT_0:
-            return DoubleObject(math.sqrt(self._d))
+    @method("Double")
+    def abs(self):
+        return abs(self._d)
 
-        if atom is SUBTRACT_1:
-            return self.subtract(args[0])
+    @method("Int")
+    def floor(self):
+        return int(self._d)
 
-        if atom is APPROXDIVIDE_1:
-            divisor = promoteToDouble(args[0])
-            return DoubleObject(self._d / divisor)
+    @method("Double")
+    def negate(self):
+        return -self._d
 
-        if atom is FLOORDIVIDE_1:
-            divisor = promoteToDouble(args[0])
-            return IntObject(int(math.floor(self._d / divisor)))
+    @method("Double")
+    def sqrt(self):
+        return math.sqrt(self._d)
 
-        if atom is POW_1:
-            exponent = promoteToDouble(args[0])
-            return DoubleObject(math.pow(self._d, exponent))
+    @method("Double", "Any")
+    def approxDivide(self, other):
+        divisor = promoteToDouble(other)
+        return self._d / divisor
 
-        # Logarithms.
+    @method("Int", "Any")
+    def floorDivide(self, other):
+        divisor = promoteToDouble(other)
+        return int(math.floor(self._d / divisor))
 
-        if atom is LOG_0:
-            return DoubleObject(math.log(self._d))
+    @method("Double", "Any")
+    def pow(self, other):
+        exponent = promoteToDouble(other)
+        return math.pow(self._d, exponent)
 
-        if atom is LOG_1:
-            base = promoteToDouble(args[0])
-            return DoubleObject(math.log(self._d) / math.log(base))
+    # Logarithms.
 
-        # Trigonometry.
+    @method("Double")
+    def log(self):
+        return math.log(self._d)
 
-        if atom is SIN_0:
-            return DoubleObject(math.sin(self._d))
+    @method("Double", "Any", _verb="log")
+    def _log(self, other):
+        base = promoteToDouble(other)
+        return math.log(self._d) / math.log(base)
 
-        if atom is COS_0:
-            return DoubleObject(math.cos(self._d))
+    # Trigonometry.
 
-        if atom is TAN_0:
-            return DoubleObject(math.tan(self._d))
+    @method("Double")
+    def sin(self):
+        return math.sin(self._d)
 
-        if atom is TOBYTES_0:
-            result = []
-            pack_float(result, self._d, 8, True)
-            return BytesObject(result[0])
+    @method("Double")
+    def cos(self):
+        return math.cos(self._d)
 
-        raise Refused(self, atom, args)
+    @method("Double")
+    def tan(self):
+        return math.tan(self._d)
 
+    @method("Bytes")
+    def toBytes(self):
+        result = []
+        pack_float(result, self._d, 8, True)
+        return result[0]
+
+    @method("Double", "Any")
     def add(self, other):
-        return DoubleObject(self._d + promoteToDouble(other))
+        return self._d + promoteToDouble(other)
 
+    @method("Double", "Any")
     def mul(self, other):
-        return DoubleObject(self._d * promoteToDouble(other))
+        return self._d * promoteToDouble(other)
 
+    @method("Double", "Any")
     def subtract(self, other):
-        return DoubleObject(self._d - promoteToDouble(other))
+        return self._d - promoteToDouble(other)
 
     def getDouble(self):
         return self._d
@@ -886,6 +910,7 @@ class SourceSpan(Object):
         self.endLine = endLine
         self.endCol = endCol
 
+    @method("Any")
     def notOneToOne(self):
         """
         Return a new SourceSpan for the same text that doesn't claim
@@ -895,20 +920,25 @@ class SourceSpan(Object):
                           self.startLine, self.startCol,
                           self.endLine, self.endCol)
 
+    @method("Bool")
     def isOneToOne(self):
-        return wrapBool(self._isOneToOne)
+        return self._isOneToOne
 
+    @method("Int")
     def getStartLine(self):
-        return IntObject(self.startLine)
+        return self.startLine
 
+    @method("Int")
     def getStartCol(self):
-        return IntObject(self.startCol)
+        return self.startCol
 
+    @method("Int")
     def getEndLine(self):
-        return IntObject(self.endLine)
+        return self.endLine
 
+    @method("Int")
     def getEndCol(self):
-        return IntObject(self.endCol)
+        return self.endCol
 
     def toString(self):
         return u"<%s#:%s::%s>" % (
@@ -919,35 +949,21 @@ class SourceSpan(Object):
                        str(self.endLine).decode('ascii'),
                        str(self.endCol).decode('ascii')]))
 
+    @method("Any", "Any")
     def combine(self, other):
         if not isinstance(other, SourceSpan):
             raise userError(u"Not a SourceSpan")
         return spanCover(self, other)
 
-    def recv(self, atom, args):
-        if atom is COMBINE_1:
-            return self.combine(args[0])
-        if atom is GETSTARTCOL_0:
-            return self.getStartCol()
-        if atom is GETSTARTLINE_0:
-            return self.getStartLine()
-        if atom is GETENDCOL_0:
-            return self.getEndCol()
-        if atom is GETENDLINE_0:
-            return self.getEndLine()
-        if atom is ISONETOONE_0:
-            return self.isOneToOne()
-        if atom is NOTONETOONE_0:
-            return self.notOneToOne()
-        if atom is _UNCALL_0:
-            from typhon.objects.collections.lists import wrapList
-            from typhon.objects.collections.maps import EMPTY_MAP
-            return wrapList([
-                makeSourceSpan, StrObject(u"run"),
-                wrapList([wrapBool(self._isOneToOne), IntObject(self.startLine),
-                           IntObject(self.startCol), IntObject(self.endLine),
-                           IntObject(self.endCol)]), EMPTY_MAP])
-        raise Refused(self, atom, args)
+    @method("List")
+    def _uncall(self):
+        from typhon.objects.collections.lists import wrapList
+        from typhon.objects.collections.maps import EMPTY_MAP
+        return [
+            makeSourceSpan, StrObject(u"run"),
+            wrapList([wrapBool(self._isOneToOne), IntObject(self.startLine),
+                       IntObject(self.startCol), IntObject(self.endLine),
+                       IntObject(self.endCol)]), EMPTY_MAP]
 
 
 def spanCover(a, b):
@@ -1004,18 +1020,15 @@ class strIterator(Object):
     def __init__(self, s):
         self.s = s
 
-    def recv(self, atom, args):
-        if atom is NEXT_1:
-            if self._index < len(self.s):
-                from typhon.objects.collections.lists import wrapList
-                rv = [IntObject(self._index), CharObject(self.s[self._index])]
-                self._index += 1
-                return wrapList(rv)
-            else:
-                ej = args[0]
-                ej.call(u"run", [StrObject(u"Iterator exhausted")])
-
-        raise Refused(self, atom, args)
+    @method("List", "Any")
+    def next(self, ej):
+        if self._index < len(self.s):
+            rv = [IntObject(self._index), CharObject(self.s[self._index])]
+            self._index += 1
+            return rv
+        else:
+            # XXX incorrect throw
+            ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
 
 @autohelp
@@ -1056,130 +1069,105 @@ class StrObject(Object):
     def optInterface(self):
         return getGlobalValue(u"Str")
 
-    def recv(self, atom, args):
-        if atom is ADD_1:
-            other = args[0]
-            if isinstance(other, StrObject):
-                return StrObject(self._s + other._s)
-            if isinstance(other, CharObject):
-                return StrObject(self._s + unicode(other._c))
+    @method("Str", "Any")
+    def add(self, other):
+        if isinstance(other, StrObject):
+            return self._s + other._s
+        if isinstance(other, CharObject):
+            return self._s + unicode(other._c)
+        raise WrongType(u"Not a string or char!")
 
-        if atom is ASLIST_0:
-            from typhon.objects.collections.lists import wrapList
-            return wrapList(self.asList())
+    @method("Bool", "Any")
+    def contains(self, needle):
+        if isinstance(needle, CharObject):
+            return needle._c in self._s
+        if isinstance(needle, StrObject):
+            return needle._s in self._s
+        raise WrongType(u"Not a string or char!")
 
-        if atom is ASSET_0:
-            from typhon.objects.collections.sets import ConstSet
-            return ConstSet(self.asSet())
+    @method("Bool", "Str")
+    def startsWith(self, s):
+        return self._s.startswith(s)
 
-        if atom is CONTAINS_1:
-            needle = args[0]
-            if isinstance(needle, CharObject):
-                return wrapBool(needle._c in self._s)
-            if isinstance(needle, StrObject):
-                return wrapBool(needle._s in self._s)
+    @method("Bool", "Str")
+    def endsWith(self, s):
+        return self._s.endswith(s)
 
-        if atom is ENDSWITH_1:
-            return wrapBool(self._s.endswith(unwrapStr(args[0])))
+    @method("Char", "Int")
+    def get(self, index):
+        if not 0 <= index < len(self._s):
+            raise userError(u"string.get/1: Index out of bounds: %d" % index)
+        return self._s[index]
 
-        if atom is GET_1:
-            index = unwrapInt(args[0])
-            if not 0 <= index < len(self._s):
-                raise userError(u"string.get/1: Index out of bounds: %d" %
-                                index)
-            return CharObject(self._s[index])
+    @method("Void")
+    def getSpan(self):
+        pass
 
-        if atom is GETSPAN_0:
-            return NullObject
+    @method("Int", "Str")
+    def indexOf(self, needle):
+        return self._s.find(needle)
 
-        if atom is INDEXOF_1:
-            needle = unwrapStr(args[0])
-            return IntObject(self._s.find(needle))
+    @method("Int", "Str", "Int", _verb="indexOf")
+    def _indexOf(self, needle, offset):
+        if offset < 0:
+            raise userError(u"indexOf/2: Negative offset %d not supported"
+                            % offset)
+        return self._s.find(needle, offset)
 
-        if atom is INDEXOF_2:
-            needle = unwrapStr(args[0])
-            offset = unwrapInt(args[1])
-            if offset < 0:
-                raise userError(u"indexOf/2: Negative offset %d not supported"
-                                % offset)
-            return IntObject(self._s.find(needle, offset))
+    @method("Int", "Str")
+    def lastIndexOf(self, needle):
+        return self._s.rfind(needle)
 
-        if atom is JOIN_1:
-            from typhon.objects.collections.lists import unwrapList
-            return StrObject(self.join(unwrapList(args[0])))
+    @method("Str", "Int")
+    def multiply(self, amount):
+        return self._s * amount
 
-        if atom is LASTINDEXOF_1:
-            needle = unwrapStr(args[0])
-            return IntObject(self._s.rfind(needle))
+    @method("Int", "Str")
+    def op__cmp(self, other):
+        return cmp(self._s, other)
 
-        if atom is MULTIPLY_1:
-            amount = unwrapInt(args[0])
-            return StrObject(self._s * amount)
+    @method("Str", "Str", "Str")
+    def replace(self, src, dest):
+        return replace(self._s, src, dest)
 
-        if atom is OP__CMP_1:
-            return polyCmp(self._s, unwrapStr(args[0]))
+    @method("Str")
+    def quote(self):
+        return quoteStr(self._s)
 
-        if atom is REPLACE_2:
-            return StrObject(replace(self._s,
-                                     unwrapStr(args[0]),
-                                     unwrapStr(args[1])))
+    @method("Int")
+    def size(self):
+        return len(self._s)
 
-        if atom is QUOTE_0:
-            return StrObject(quoteStr(self._s))
+    @method("Str", "Int")
+    def slice(self, start):
+        if start < 0:
+            raise userError(u"Slice start cannot be negative")
+        return self._s[start:]
 
-        if atom is SIZE_0:
-            return IntObject(len(self._s))
+    @method("Str", "Int", "Int", _verb="slice")
+    def _slice(self, start, stop):
+        if start < 0:
+            raise userError(u"Slice start cannot be negative")
+        if stop < 0:
+            raise userError(u"Slice stop cannot be negative")
+        return self._s[start:stop]
 
-        if atom is SLICE_1:
-            start = unwrapInt(args[0])
-            if start < 0:
-                raise userError(u"Slice start cannot be negative")
-            return StrObject(self._s[start:])
+    @method("Str", "Char", _verb="with")
+    def _with(self, c):
+        return self._s + c
 
-        if atom is SLICE_2:
-            start = unwrapInt(args[0])
-            stop = unwrapInt(args[1])
-            if start < 0:
-                raise userError(u"Slice start cannot be negative")
-            if stop < 0:
-                raise userError(u"Slice stop cannot be negative")
-            return StrObject(self._s[start:stop])
-
-        if atom is SPLIT_1:
-            from typhon.objects.collections.lists import wrapList
-            return wrapList(self.split(unwrapStr(args[0])))
-
-        if atom is SPLIT_2:
-            from typhon.objects.collections.lists import wrapList
-            return wrapList(self.split(unwrapStr(args[0]),
-                                        unwrapInt(args[1])))
-
-        if atom is STARTSWITH_1:
-            return wrapBool(self._s.startswith(unwrapStr(args[0])))
-
-        if atom is TOLOWERCASE_0:
-            return StrObject(self.toLowerCase())
-
-        if atom is TOUPPERCASE_0:
-            return StrObject(self.toUpperCase())
-
-        if atom is TRIM_0:
-            return StrObject(self.trim())
-
-        if atom is WITH_1:
-            return StrObject(self._s + unwrapChar(args[0]))
-
-        if atom is _MAKEITERATOR_0:
-            return strIterator(self._s)
-
-        raise Refused(self, atom, args)
+    @method("Any")
+    def _makeIterator(self):
+        return strIterator(self._s)
 
     def getString(self):
         return self._s
 
+    @method("List")
     def asList(self):
         return [CharObject(c) for c in self._s]
 
+    @method("Set")
     def asSet(self):
         from typhon.objects.collections.sets import monteSet
         d = monteSet()
@@ -1187,6 +1175,7 @@ class StrObject(Object):
             d[CharObject(c)] = None
         return d
 
+    @method("Str", "List")
     def join(self, pieces):
         ub = UnicodeBuilder()
         first = True
@@ -1203,12 +1192,15 @@ class StrObject(Object):
             ub.append(string)
         return ub.build()
 
-    def split(self, splitter, splits=-1):
-        if splits == -1:
-            return [StrObject(s) for s in split(self._s, splitter)]
-        else:
-            return [StrObject(s) for s in split(self._s, splitter, splits)]
+    @method("List", "Str")
+    def split(self, splitter):
+        return [StrObject(s) for s in split(self._s, splitter)]
 
+    @method("List", "Str", "Int", _verb="split")
+    def _split(self, splitter, splits=-1):
+        return [StrObject(s) for s in split(self._s, splitter, splits)]
+
+    @method("Str")
     def toLowerCase(self):
         # Use current size as a size hint. In the best case, characters
         # are one-to-one; in the next-best case, we overestimate and end
@@ -1218,6 +1210,7 @@ class StrObject(Object):
             ub.append(unichr(unicodedb.tolower(ord(char))))
         return ub.build()
 
+    @method("Str")
     def toUpperCase(self):
         # Same as toLowerCase().
         ub = UnicodeBuilder(len(self._s))
@@ -1225,6 +1218,7 @@ class StrObject(Object):
             ub.append(unichr(unicodedb.toupper(ord(char))))
         return ub.build()
 
+    @method("Str")
     def trim(self):
         if len(self._s) == 0:
             return u""
@@ -1266,19 +1260,14 @@ class bytesIterator(Object):
     def __init__(self, s):
         self.s = s
 
-    def recv(self, atom, args):
-        if atom is NEXT_1:
-            if self._index < len(self.s):
-                from typhon.objects.collections.lists import wrapList
-                rv = [IntObject(self._index),
-                      IntObject(ord(self.s[self._index]))]
-                self._index += 1
-                return wrapList(rv)
-            else:
-                ej = args[0]
-                ej.call(u"run", [StrObject(u"Iterator exhausted")])
-
-        raise Refused(self, atom, args)
+    @method("List", "Any")
+    def next(self, ej):
+        if self._index < len(self.s):
+            rv = [IntObject(self._index), IntObject(ord(self.s[self._index]))]
+            self._index += 1
+            return rv
+        else:
+            ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
 
 def bytesToString(bs):
@@ -1334,118 +1323,90 @@ class BytesObject(Object):
     def optInterface(self):
         return getGlobalValue(u"Bytes")
 
-    def recv(self, atom, args):
-        if atom is ADD_1:
-            other = args[0]
-            if isinstance(other, BytesObject):
-                return BytesObject(self._bs + other._bs)
-            if isinstance(other, IntObject):
-                return BytesObject(self._bs + str(chr(other._i)))
+    @method("Bytes", "Any")
+    def add(self, other):
+        if isinstance(other, BytesObject):
+            return self._bs + other._bs
+        if isinstance(other, IntObject):
+            return self._bs + str(chr(other._i))
+        raise WrongType(u"Not an int or bytestring!")
 
-        if atom is ASLIST_0:
-            from typhon.objects.collections.lists import wrapList
-            return wrapList(self.asList())
+    @method("Bool", "Any")
+    def contains(self, needle):
+        if isinstance(needle, IntObject):
+            return chr(needle._i) in self._bs
+        if isinstance(needle, BytesObject):
+            return needle._bs in self._bs
+        raise WrongType(u"Not an int or bytestring!")
 
-        if atom is ASSET_0:
-            from typhon.objects.collections.sets import ConstSet
-            return ConstSet(self.asSet())
+    @method("Int", "Int")
+    def get(self, index):
+        if not 0 <= index < len(self._bs):
+            raise userError(u"string.get/1: Index out of bounds: %d" %
+                            index)
+        return ord(self._bs[index])
 
-        if atom is CONTAINS_1:
-            needle = args[0]
-            if isinstance(needle, IntObject):
-                return wrapBool(chr(needle._i) in self._bs)
-            if isinstance(needle, BytesObject):
-                return wrapBool(needle._bs in self._bs)
+    @method("Int", "Bytes")
+    def indexOf(self, needle):
+        return self._bs.find(needle)
 
-        if atom is GET_1:
-            index = unwrapInt(args[0])
-            if not 0 <= index < len(self._bs):
-                raise userError(u"string.get/1: Index out of bounds: %d" %
-                                index)
-            return IntObject(ord(self._bs[index]))
+    @method("Int", "Bytes", "Int", _verb="indexOf")
+    def _indexOf(self, needle, offset):
+        if offset < 0:
+            raise userError(u"indexOf/2: Negative offset %d not supported"
+                            % offset)
+        return self._bs.find(needle, offset)
 
-        if atom is INDEXOF_1:
-            needle = unwrapBytes(args[0])
-            return IntObject(self._bs.find(needle))
+    @method("Int", "Bytes")
+    def lastIndexOf(self, needle):
+        return self._bs.rfind(needle)
 
-        if atom is INDEXOF_2:
-            needle = unwrapBytes(args[0])
-            offset = unwrapInt(args[1])
-            if offset < 0:
-                raise userError(u"indexOf/2: Negative offset %d not supported"
-                                % offset)
-            return IntObject(self._bs.find(needle, offset))
+    @method("Bytes", "Int")
+    def multiply(self, amount):
+        return self._bs * amount
 
-        if atom is JOIN_1:
-            from typhon.objects.collections.lists import unwrapList
-            return BytesObject(self.join(unwrapList(args[0])))
+    @method("Int", "Bytes")
+    def op__cmp(self, other):
+        return cmp(self._bs, other)
 
-        if atom is LASTINDEXOF_1:
-            needle = unwrapBytes(args[0])
-            return IntObject(self._bs.rfind(needle))
+    @method("Bytes", "Bytes", "Bytes")
+    def replace(self, src, dest):
+        return replace(self._bs, src, dest)
 
-        if atom is MULTIPLY_1:
-            amount = unwrapInt(args[0])
-            return BytesObject(self._bs * amount)
+    @method("Int")
+    def size(self):
+        return len(self._bs)
 
-        if atom is OP__CMP_1:
-            return polyCmp(self._bs, unwrapBytes(args[0]))
+    @method("Bytes", "Int")
+    def slice(self, start):
+        if start < 0:
+            raise userError(u"Slice start cannot be negative")
+        return self._bs[start:]
 
-        if atom is REPLACE_2:
-            return BytesObject(replace(self._bs,
-                                       unwrapBytes(args[0]),
-                                       unwrapBytes(args[1])))
+    @method("Bytes", "Int", "Int", _verb="slice")
+    def _slice(self, start, stop):
+        if start < 0:
+            raise userError(u"Slice start cannot be negative")
+        if stop < 0:
+            raise userError(u"Slice stop cannot be negative")
+        return self._bs[start:stop]
 
-        if atom is SIZE_0:
-            return IntObject(len(self._bs))
+    @method("Bytes", "Int", _verb="with")
+    def _with(self, i):
+        return self._bs + chr(i)
 
-        if atom is SLICE_1:
-            start = unwrapInt(args[0])
-            if start < 0:
-                raise userError(u"Slice start cannot be negative")
-            return BytesObject(self._bs[start:])
-
-        if atom is SLICE_2:
-            start = unwrapInt(args[0])
-            stop = unwrapInt(args[1])
-            if start < 0:
-                raise userError(u"Slice start cannot be negative")
-            if stop < 0:
-                raise userError(u"Slice stop cannot be negative")
-            return BytesObject(self._bs[start:stop])
-
-        if atom is SPLIT_1:
-            from typhon.objects.collections.lists import wrapList
-            return wrapList(self.split(unwrapBytes(args[0])))
-
-        if atom is SPLIT_2:
-            from typhon.objects.collections.lists import wrapList
-            return wrapList(self.split(unwrapBytes(args[0]),
-                                        unwrapInt(args[1])))
-
-        if atom is TOLOWERCASE_0:
-            return BytesObject(self.toLowerCase())
-
-        if atom is TOUPPERCASE_0:
-            return BytesObject(self.toUpperCase())
-
-        if atom is TRIM_0:
-            return BytesObject(self.trim())
-
-        if atom is WITH_1:
-            return BytesObject(self._bs + chr(unwrapInt(args[0])))
-
-        if atom is _MAKEITERATOR_0:
-            return bytesIterator(self._bs)
-
-        raise Refused(self, atom, args)
+    @method("Any")
+    def _makeIterator(self):
+        return bytesIterator(self._bs)
 
     def getBytes(self):
         return self._bs
 
+    @method("List")
     def asList(self):
         return [IntObject(ord(c)) for c in self._bs]
 
+    @method("Set")
     def asSet(self):
         from typhon.objects.collections.sets import monteSet
         d = monteSet()
@@ -1453,6 +1414,7 @@ class BytesObject(Object):
             d[IntObject(ord(c))] = None
         return d
 
+    @method("Bytes", "List")
     def join(self, pieces):
         sb = StringBuilder()
         first = True
@@ -1469,18 +1431,23 @@ class BytesObject(Object):
             sb.append(string)
         return sb.build()
 
-    def split(self, splitter, splits=-1):
-        if splits == -1:
-            return [BytesObject(s) for s in split(self._bs, splitter)]
-        else:
-            return [BytesObject(s) for s in split(self._bs, splitter, splits)]
+    @method("List", "Bytes")
+    def split(self, splitter):
+        return [BytesObject(s) for s in split(self._bs, splitter)]
 
+    @method("List", "Bytes", "Int", _verb="split")
+    def _split(self, splitter, splits):
+        return [BytesObject(s) for s in split(self._bs, splitter, splits)]
+
+    @method("Bytes")
     def toLowerCase(self):
         return self._bs.lower()
 
+    @method("Bytes")
     def toUpperCase(self):
         return self._bs.upper()
 
+    @method("Bytes")
     def trim(self):
         if len(self._bs) == 0:
             return ""
@@ -1503,17 +1470,6 @@ def unwrapBytes(o):
     s = resolution(o)
     if isinstance(s, BytesObject):
         return s.getBytes()
-    # XXX temporary only: Permit lists of ints.
-    # from typhon.objects.collections.lists import wrapList, unwrapList
-    # if isinstance(s, wrapList):
-    #     buf = ""
-    #     l = unwrapList(s)
-    #     for obj in l:
-    #         if isinstance(obj, IntObject):
-    #             buf += chr(obj._i)
-    #         else:
-    #             raise WrongType(u"Not a byte!")
-    #     return buf
     raise WrongType(u"Not a bytestring!")
 
 def wrapBytes(bs):
