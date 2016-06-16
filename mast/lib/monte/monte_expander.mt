@@ -1030,10 +1030,15 @@ def expand(node, builder, fail) as DeepFrozen:
                  if (catcher !=null) {catcher.getBody()}, span)
         else if (nodeName == "WhenExpr"):
             def [promiseExprs, block, catchers, finallyblock] := args
-            def expr := if (promiseExprs.size() > 1) {
-                builder.MethodCallExpr(builder.NounExpr("promiseAllFulfilled", span), "run",
-                    [emitList(promiseExprs, span)], [], span)
-            } else {promiseExprs[0]}
+            def expr := switch (promiseExprs) {
+                match [] { builder.NounExpr("null", span) }
+                match [ex] { ex }
+                match _ {
+                    builder.MethodCallExpr(
+                        builder.NounExpr("promiseAllFulfilled", span), "run",
+                        [emitList(promiseExprs, span)], [], span)
+                }
+            }
             def resolution := builder.TempNounExpr("resolution", span)
             def whenblock := builder.IfExpr(
                 builder.MethodCallExpr(builder.NounExpr("Ref", span), "isBroken",
