@@ -1,16 +1,8 @@
-from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused
+from typhon.autohelp import autohelp, method
 from typhon.objects.constants import NullObject
-from typhon.objects.collections.sets import ConstSet, monteSet
-from typhon.objects.data import IntObject, StrObject
+from typhon.objects.collections.sets import monteSet
+from typhon.objects.data import StrObject
 from typhon.objects.root import Object
-
-
-GETARITY_0 = getAtom(u"getArity", 0)
-GETDOCSTRING_0 = getAtom(u"getDocstring", 0)
-GETMETHODS_0 = getAtom(u"getMethods", 0)
-GETVERB_0 = getAtom(u"getVerb", 0)
 
 
 @autohelp
@@ -29,19 +21,19 @@ class ComputedMethod(Object):
     def toString(self):
         return u"<computed message %s/%d>" % (self.verb, self.arity)
 
-    def recv(self, atom, args):
-        if atom is GETARITY_0:
-            return IntObject(self.arity)
+    @method("Int")
+    def getArity(self):
+        return self.arity
 
-        if atom is GETDOCSTRING_0:
-            if self.docstring is not None:
-                return StrObject(self.docstring)
-            return NullObject
+    @method("Any")
+    def getDocstring(self):
+        if self.docstring is not None:
+            return StrObject(self.docstring)
+        return NullObject
 
-        if atom is GETVERB_0:
-            return StrObject(self.verb)
-
-        raise Refused(self, atom, args)
+    @method("Str")
+    def getVerb(self):
+        return self.verb
 
 
 @autohelp
@@ -59,16 +51,15 @@ class ComputedInterface(Object):
     def toString(self):
         return u"<computed interface>"
 
-    def recv(self, atom, args):
-        if atom is GETDOCSTRING_0:
-            if self.docstring is not None:
-                return StrObject(self.docstring)
-            return NullObject
+    @method("Any")
+    def getDocstring(self):
+        if self.docstring is not None:
+            return StrObject(self.docstring)
+        return NullObject
 
-        if atom is GETMETHODS_0:
-            d = monteSet()
-            for atom in self.atoms:
-                d[ComputedMethod(atom.arity, None, atom.verb)] = None
-            return ConstSet(d)
-
-        raise Refused(self, atom, args)
+    @method("Set")
+    def getMethods(self):
+        d = monteSet()
+        for atom in self.atoms:
+            d[ComputedMethod(atom.arity, None, atom.verb)] = None
+        return d
