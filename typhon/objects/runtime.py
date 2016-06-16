@@ -2,24 +2,12 @@ from rpython.rlib import rgc
 from rpython.rlib.rerased import new_erasing_pair
 
 # from typhon import ruv
-from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused
+from typhon.autohelp import autohelp, method
 from typhon.objects.collections.lists import wrapList
-from typhon.objects.collections.maps import ConstMap, monteMap
+from typhon.objects.collections.maps import monteMap
 from typhon.objects.data import IntObject, StrObject
 from typhon.objects.root import Object, runnable
 from typhon.objects.user import ScriptObject
-
-
-GETBUCKETS_0 = getAtom(u"getBuckets", 0)
-GETCRYPT_0 = getAtom(u"getCrypt", 0)
-GETDISASSEMBLER_0 = getAtom(u"getDisassembler", 0)
-GETHANDLES_0 = getAtom(u"getHandles", 0)
-GETHEAPSTATISTICS_0 = getAtom(u"getHeapStatistics", 0)
-GETMEMORYUSAGE_0 = getAtom(u"getMemoryUsage", 0)
-GETOBJECTCOUNT_0 = getAtom(u"getObjectCount", 0)
-GETREACTORSTATISTICS_0 = getAtom(u"getReactorStatistics", 0)
 
 
 # The fun of GC management. This is all very subject to change and only works
@@ -77,22 +65,21 @@ class Heap(Object):
         self.objectCount += 1
         self.memoryUsage += sizeOf
 
-    def recv(self, atom, args):
-        if atom is GETBUCKETS_0:
-            d = monteMap()
-            for name, count in self.buckets.items():
-                size = self.sizes.get(name, -1)
-                d[StrObject(name)] = wrapList([IntObject(size),
-                                                IntObject(count)])
-            return ConstMap(d)
+    @method("Map")
+    def getBuckets(self):
+        d = monteMap()
+        for name, count in self.buckets.items():
+            size = self.sizes.get(name, -1)
+            d[StrObject(name)] = wrapList([IntObject(size), IntObject(count)])
+        return d
 
-        if atom is GETMEMORYUSAGE_0:
-            return IntObject(self.memoryUsage)
+    @method("Int")
+    def getMemoryUsage(self):
+        return self.memoryUsage
 
-        if atom is GETOBJECTCOUNT_0:
-            return IntObject(self.objectCount)
-
-        raise Refused(self, atom, args)
+    @method("Int")
+    def getObjectCount(self):
+        return self.objectCount
 
 
 def makeHeapStats():
@@ -133,13 +120,11 @@ class LoopStats(Object):
     def __init__(self, loop):
         self.loop = loop
 
-    def recv(self, atom, args):
-        if atom is GETHANDLES_0:
-            l = []
-            # ruv.walk(self.loop, walkCB, eraseList(l))
-            return wrapList([LoopHandle(h) for h in l])
-
-        raise Refused(self, atom, args)
+    @method("List")
+    def getHandles(self):
+        l = []
+        # ruv.walk(self.loop, walkCB, eraseList(l))
+        return [LoopHandle(h) for h in l]
 
 
 def makeReactorStats():
@@ -203,18 +188,19 @@ class CurrentRuntime(Object):
     This object is necessarily unsafe and nondeterministic.
     """
 
-    def recv(self, atom, args):
-        if atom is GETCRYPT_0:
-            from typhon.objects.crypt import Crypt
-            return Crypt()
+    @method("Any")
+    def getCrypt(self):
+        from typhon.objects.crypt import Crypt
+        return Crypt()
 
-        if atom is GETDISASSEMBLER_0:
-            return disassemble()
+    @method("Any")
+    def getDisassembler(self):
+        return disassemble()
 
-        if atom is GETHEAPSTATISTICS_0:
-            return makeHeapStats()
+    @method("Any")
+    def getHeapStatistics(self):
+        return makeHeapStats()
 
-        if atom is GETREACTORSTATISTICS_0:
-            return makeReactorStats()
-
-        raise Refused(self, atom, args)
+    @method("Any")
+    def getReactorStatistics(self):
+        return makeReactorStats()
