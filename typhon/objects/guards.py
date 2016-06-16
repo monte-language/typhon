@@ -7,7 +7,7 @@ from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
 from typhon.objects.collections.helpers import asSet
 from typhon.objects.collections.lists import wrapList
-from typhon.objects.collections.sets import ConstSet, monteSet
+from typhon.objects.collections.sets import monteSet
 from typhon.objects.constants import (TrueObject, FalseObject, NullObject,
                                       unwrapBool, wrapBool)
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
@@ -177,28 +177,28 @@ class AnyGuard(Object):
     def printOn(self, out):
         out.call(u"print", [StrObject(u"Any")])
 
-    def recv(self, atom, args):
-        if atom is COERCE_2:
-            return args[0]
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
+        return specimen
 
-        if atom is SUPERSETOF_1:
-            return wrapBool(True)
+    @method("Bool", "Any")
+    def supersetOf(self, guard):
+        return True
 
-        if atom is EXTRACTGUARDS_2:
-            g = args[0]
-            ej = args[1]
-            if isinstance(g, AnyOfGuard):
-                return wrapList(g.subguards)
-            else:
-                ej.call(u"run", [StrObject(u"Not an AnyOf guard")])
+    @method("List", "Any", "Any")
+    def extractGuards(self, guard, ej):
+        if isinstance(guard, AnyOfGuard):
+            return guard.subguards
+        else:
+            throw(ej, StrObject(u"Not an AnyOf guard"))
 
-        if atom is GETMETHODS_0:
-            return ConstSet(monteSet())
+    @method("Set")
+    def getMethods(self):
+        return monteSet()
 
-        if atom.verb == u"get":
-            return AnyOfGuard(args)
-
-        raise Refused(self, atom, args)
+    @method("Any", "*Any")
+    def get(self, args):
+        return AnyOfGuard(args)
 
 anyGuard = AnyGuard()
 
@@ -227,27 +227,29 @@ class AnyOfGuard(Object):
                 out.call(u"print", [StrObject(u", ")])
         out.call(u"print", [StrObject(u"]")])
 
-    def recv(self, atom, args):
-        if atom is COERCE_2:
-            for g in self.subguards:
-                with Ejector() as ej:
-                    try:
-                        return g.call(u"coerce", [args[0], ej])
-                    except Ejecting as e:
-                        if e.ejector is ej:
-                            continue
-            throw(args[1], StrObject(u"No subguards matched"))
-        if atom is SUPERSETOF_1:
-            for g in self.subguards:
-                if not unwrapBool(g.call(u"supersetOf", [args[0]])):
-                    return wrapBool(False)
-            return wrapBool(True)
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
+        for g in self.subguards:
+            with Ejector() as cont:
+                try:
+                    return g.call(u"coerce", [specimen, cont])
+                except Ejecting as e:
+                    if e.ejector is cont:
+                        continue
+        throw(ej, StrObject(u"No subguards matched"))
 
-        if atom is _UNCALL_0:
-            from typhon.objects.collections.maps import EMPTY_MAP
-            return wrapList([anyGuard, StrObject(u"get"),
-                              wrapList(self.subguards), EMPTY_MAP])
-        raise Refused(self, atom, args)
+    @method("Bool", "Any")
+    def supersetOf(self, guard):
+        for g in self.subguards:
+            if not unwrapBool(g.call(u"supersetOf", [guard])):
+                return False
+        return True
+
+    @method("List")
+    def _uncall(self):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        return [anyGuard, StrObject(u"get"), wrapList(self.subguards),
+                EMPTY_MAP]
 
 
 @autohelp
