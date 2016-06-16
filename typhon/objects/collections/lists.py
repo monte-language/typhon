@@ -218,7 +218,7 @@ class FlexList(Object):
             try:
                 data = unwrapList(args[0])
             except:
-                data = listFromIterable(args[0])[:]
+                data = listFromIterable(args[0])
             # Required to avoid passing an empty list to .append(), which
             # apparently cannot deal. Also a quick win. ~ C.
             if len(data) != 0:
@@ -370,7 +370,7 @@ def listFromIterable(obj):
         except Ejecting as ex:
             if ex.ejector is ej:
                 ej.disable()
-                return rv
+                return rv[:]
             raise
 
 

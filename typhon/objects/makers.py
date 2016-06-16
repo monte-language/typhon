@@ -7,16 +7,14 @@ from rpython.rlib.rstring import ParseStringError
 from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import Refused
 from typhon.log import deprecated
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.collections.lists import (listFromIterable, unwrapList,
-                                              wrapList)
+from typhon.objects.collections.lists import listFromIterable, unwrapList
 from typhon.objects.collections.maps import ConstMap
-from typhon.objects.data import (BigInt, BytesObject, DoubleObject, StrObject,
-                                 bytesToString, unwrapBytes, unwrapInt,
-                                 unwrapStr, unwrapChar)
+from typhon.objects.data import (BigInt, StrObject, bytesToString,
+        unwrapBytes, unwrapInt, unwrapStr, unwrapChar)
 from typhon.objects.ejectors import throw
 from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
@@ -25,7 +23,6 @@ FROMBYTES_1 = getAtom(u"fromBytes", 1)
 FROMBYTES_2 = getAtom(u"fromBytes", 2)
 FROMCHARS_1 = getAtom(u"fromChars", 1)
 FROMINTS_1 = getAtom(u"fromInts", 1)
-FROMITERABLE_1 = getAtom(u"fromIterable", 1)
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
 FROMSTRING_1 = getAtom(u"fromString", 1)
 FROMSTRING_2 = getAtom(u"fromString", 2)
@@ -46,25 +43,14 @@ class MakeBytes(Object):
     def toString(self):
         return u"<makeBytes>"
 
-    @deprecated(u"_makeBytes.fromString/1: Use .fromStr/1 instead")
-    def fromString(self, s):
-        return self.fromStr(s)
-
+    @method("Bytes", "Str")
     def fromStr(self, s):
-        return BytesObject("".join([chr(ord(c)) for c in s]))
+        return "".join([chr(ord(c)) for c in s])
 
-    def recv(self, atom, args):
-        if atom is FROMSTRING_1:
-            return self.fromString(unwrapStr(args[0]))
+    @method("Bytes", "List")
+    def fromInts(self, data):
+        return "".join([chr(unwrapInt(i)) for i in data])
 
-        if atom is FROMSTR_1:
-            return self.fromStr(unwrapStr(args[0]))
-
-        if atom is FROMINTS_1:
-            data = unwrapList(args[0])
-            return BytesObject("".join([chr(unwrapInt(i)) for i in data]))
-
-        raise Refused(self, atom, args)
 theMakeBytes = MakeBytes()
 
 
@@ -78,32 +64,28 @@ class MakeDouble(Object):
     def toString(self):
         return u"<makeDouble>"
 
-    def run(self, bs, ej):
+    @method.py("Double", "Str", "Any")
+    def run(self, s, ej):
         try:
-            return DoubleObject(float(bs))
+            return float(s.encode("utf-8"))
         except ValueError:
             throw(ej, StrObject(u"Couldn't parse floating-point number"))
 
+    @method("Double", "Str", _verb="run")
+    def _run(self, s):
+        return self.run(s, None)
+
+    @method.py("Double", "Bytes", "Any")
     def fromBytes(self, bs, ej):
         try:
-            return DoubleObject(unpack_float(bs, True))
+            return unpack_float(bs, True)
         except ValueError:
             throw(ej, StrObject(u"Couldn't unpack invalid IEEE 754 double"))
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            return self.run(unwrapStr(args[0]).encode("utf-8"), None)
+    @method("Double", "Bytes", _verb="fromBytes")
+    def _fromBytes(self, bs):
+        return self.fromBytes(bs, None)
 
-        if atom is RUN_2:
-            return self.run(unwrapStr(args[0]).encode("utf-8"), args[1])
-
-        if atom is FROMBYTES_1:
-            return self.fromBytes(unwrapBytes(args[0]), None)
-
-        if atom is FROMBYTES_2:
-            return self.fromBytes(unwrapBytes(args[0]), args[1])
-
-        raise Refused(self, atom, args)
 theMakeDouble = MakeDouble()
 
 
@@ -171,14 +153,14 @@ class MakeList(Object):
     def toString(self):
         return u"<makeList>"
 
-    def recv(self, atom, args):
-        if atom.verb == u"run":
-            return wrapList(args)
+    @method("List", "*Any")
+    def run(self, args):
+        return args
 
-        if atom is FROMITERABLE_1:
-            return wrapList(listFromIterable(args[0])[:])
+    @method("List", "Any")
+    def fromIterable(self, iterable):
+        return listFromIterable(iterable)
 
-        raise Refused(self, atom, args)
 theMakeList = MakeList()
 
 
