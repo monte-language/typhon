@@ -23,15 +23,14 @@ from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.enum import makeEnum
-from typhon.errors import LoadFailed, Refused, userError
+from typhon.errors import LoadFailed, WrongType, userError
 from typhon.objects.auditors import selfless, transparentStamp
-from typhon.objects.constants import NullObject, wrapBool
+from typhon.objects.constants import NullObject
 from typhon.objects.collections.helpers import asSet
 from typhon.objects.collections.lists import unwrapList, wrapList
 from typhon.objects.collections.maps import EMPTY_MAP, monteMap
-from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, promoteToBigInt, unwrapStr)
 from typhon.objects.ejectors import throw
@@ -44,54 +43,6 @@ from typhon.smallcaps.ops import ops
 from typhon.smallcaps.peephole import peephole
 from typhon.smallcaps.slots import SlotType, binding, finalAny, varAny
 
-
-ADD_1 = getAtom(u"add", 1)
-AUDIT_1 = getAtom(u"audit", 1)
-CANONICAL_0 = getAtom(u"canonical", 0)
-COERCE_2 = getAtom(u"coerce", 2)
-GETARGS_0 = getAtom(u"getArgs", 0)
-GETASEXPR_0 = getAtom(u"getAsExpr", 0)
-GETAUDITORS_0 = getAtom(u"getAuditors", 0)
-GETBODY_0 = getAtom(u"getBody", 0)
-GETCOMPLETEMATCHER_1 = getAtom(u"getCompleteMatcher", 1)
-GETDEFAULT_1 = getAtom(u"getDefault", 1)
-GETDEFNAMES_0 = getAtom(u"getDefNames", 0)
-GETDOCSTRING_0 = getAtom(u"getDocstring", 0)
-GETEXPRS_0 = getAtom(u"getExprs", 0)
-GETGUARD_0 = getAtom(u"getGuard", 0)
-GETKEY_0 = getAtom(u"getKey", 0)
-GETMETASTATEEXPRFLAG_0 = getAtom(u"getMetaStateExprFlag", 0)
-GETMETHODNAMED_2 = getAtom(u"getMethodNamed", 2)
-GETMETHODS_0 = getAtom(u"getMethods", 0)
-GETNAMEDARGS_0 = getAtom(u"getNamedArgs", 0)
-GETNAMEDPATTERNS_0 = getAtom(u"getNamedPatterns", 0)
-GETNAMESREAD_0 = getAtom(u"getNamesRead", 0)
-GETNAMESSET_0 = getAtom(u"getNamesSet", 0)
-GETNAME_0 = getAtom(u"getName", 0)
-GETNODENAME_0 = getAtom(u"getNodeName", 0)
-GETNOUN_0 = getAtom(u"getNoun", 0)
-GETPATTERNS_0 = getAtom(u"getPatterns", 0)
-GETPATTERN_0 = getAtom(u"getPattern", 0)
-GETRECEIVER_0 = getAtom(u"getReceiver", 0)
-GETRESULTGUARD_0 = getAtom(u"getResultGuard", 0)
-GETSCRIPT_0 = getAtom(u"getScript", 0)
-GETSPAN_0 = getAtom(u"getSpan", 0)
-GETSTATICSCOPE_0 = getAtom(u"getStaticScope", 0)
-GETVALUE_0 = getAtom(u"getValue", 0)
-GETVARNAMES_0 = getAtom(u"getVarNames", 0)
-GETVERB_0 = getAtom(u"getVerb", 0)
-HIDE_0 = getAtom(u"hide", 0)
-NAMESUSED_0 = getAtom(u"namesUsed", 0)
-OUTNAMES_0 = getAtom(u"outNames", 0)
-REFUTABLE_0 = getAtom(u"refutable", 0)
-RUN_0 = getAtom(u"run", 0)
-RUN_1 = getAtom(u"run", 1)
-RUN_2 = getAtom(u"run", 2)
-RUN_3 = getAtom(u"run", 3)
-RUN_4 = getAtom(u"run", 4)
-RUN_5 = getAtom(u"run", 5)
-RUN_6 = getAtom(u"run", 6)
-UNCALL_0 = getAtom(u"_uncall", 0)
 
 def lt0(a, b):
     return a[0] < b[0]
@@ -379,15 +330,16 @@ class InvalidAST(LoadFailed):
 @audited.DF
 class KernelAstStamp(Object):
 
-    def recv(self, atom, args):
-        if atom is AUDIT_1:
-            from typhon.objects.constants import wrapBool
-            return wrapBool(True)
-        if atom is COERCE_2:
-            if args[0].auditedBy(self):
-                return args[0]
-            args[1].call(u"run", [StrObject(u"Not a KernelAst node")])
-        raise Refused(self, atom, args)
+    @method("Bool", "Any")
+    def audit(self, audition):
+        return True
+
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
+        if specimen.auditedBy(self):
+            return specimen
+        # XXX bad eject
+        ej.call(u"run", [StrObject(u"Not a KernelAst node")])
 
 kernelAstStamp = KernelAstStamp()
 
@@ -401,27 +353,29 @@ def withMaker(cls):
         names = ()
     else:
         names = inspect.getargspec(cls.__init__).args[1:]
+    signature = ", ".join(['"Any"'] * (len(names) + 1))
     verb = nodeName
     if getattr(cls, "fromMonte", None) is not None:
         verb += ".fromMonte"
-    arglist = u", ".join([u"args[%s]" % i for i in range(len(names))])
-    runverb = 'RUN_%s' % len(names)
+    arglist = ", ".join(names)
     src = """\
+    @autohelp
     @audited.DF
     class %sMaker(Object):
         def printOn(self, out):
             out.call(u"print", [StrObject(u"<kernel make%s>")])
-        def recv(self, atom, args):
-            if atom is %s:
-                return %s(%s)
-            raise Refused(self, atom, args)
-    """ % (nodeName, nodeName, runverb, verb, arglist)
+
+        @method(%s)
+        def run(self, %s):
+            return %s(%s)
+    """ % (nodeName, nodeName, signature, arglist, verb, arglist)
     d = globals()
     exec textwrap.dedent(src) in d
     cls.nodeMaker = d[nodeName + "Maker"]()
     return cls
 
 
+@autohelp
 class Node(Object):
     """
     An AST node, either an expression or a pattern.
@@ -442,16 +396,19 @@ class Node(Object):
     def repr(self):
         return self.__repr__()
 
-    def recv(self, atom, args):
-        if atom is CANONICAL_0:
-            return self
-        if atom is GETSPAN_0:
-            return NullObject
-        if atom is UNCALL_0:
-            span = wrapList([NullObject])
-            return wrapList([self.nodeMaker, StrObject(u"run"),
-                              self.uncall().call(u"add", [span]), EMPTY_MAP])
-        raise Refused(self, atom, args)
+    @method("Any")
+    def canonical(self):
+        return self
+
+    @method("Void")
+    def getSpan(self):
+        pass
+
+    @method("List")
+    def _uncall(self):
+        span = wrapList([NullObject])
+        return [self.nodeMaker, StrObject(u"run"),
+                self.uncall().call(u"add", [span]), EMPTY_MAP]
 
 
 @unroll_safe
@@ -461,7 +418,7 @@ def wrapNameList(names):
     d = monteMap()
     for name in names:
         d[StrObject(name)] = None
-    return ConstSet(d)
+    return d
 
 
 def orList(left, right):
@@ -498,6 +455,7 @@ class StaticScope(Object):
             printList(self.set), printList(self.read), printList(self.defs),
             printList(self.vars), u" (meta)" if self.meta else u"")
 
+    @method.py("Any", "Any")
     def add(self, right):
         if right is NullObject:
             return self
@@ -514,6 +472,10 @@ class StaticScope(Object):
                                orList(self.defs, right.defs),
                                orList(self.vars, right.vars),
                                self.meta or right.meta)
+        else:
+            raise WrongType(u"Not a static scope")
+
+    @method.py("Any")
     def hide(self):
         return StaticScope(self.read, self.set, [], [], self.meta)
 
@@ -523,35 +485,33 @@ class StaticScope(Object):
     def outNames(self):
         return self.defs + self.vars
 
-    def recv(self, atom, args):
-        if atom is GETNAMESREAD_0:
-            return wrapNameList(self.read)
+    @method("Set")
+    def getNamesRead(self):
+        return wrapNameList(self.read)
 
-        if atom is GETNAMESSET_0:
-            return wrapNameList(self.set)
+    @method("Set")
+    def getNamesSet(self):
+        return wrapNameList(self.set)
 
-        if atom is GETDEFNAMES_0:
-            return wrapNameList(self.defs)
+    @method("Set")
+    def getDefNames(self):
+        return wrapNameList(self.defs)
 
-        if atom is GETVARNAMES_0:
-            return wrapNameList(self.vars)
+    @method("Set")
+    def getVarNames(self):
+        return wrapNameList(self.vars)
 
-        if atom is GETMETASTATEEXPRFLAG_0:
-            return wrapBool(self.meta)
+    @method("Bool")
+    def getMetaStateExprFlag(self):
+        return self.meta
 
-        if atom is HIDE_0:
-            return self.hide()
+    @method("Set", _verb="namesUsed")
+    def _namesUsed(self):
+        return wrapNameList(self.namesUsed())
 
-        if atom is ADD_1:
-            return self.add(args[0])
-
-        if atom is NAMESUSED_0:
-            return wrapNameList(self.namesUsed())
-
-        if atom is OUTNAMES_0:
-            return wrapNameList(self.outNames())
-
-        raise Refused(self, atom, args)
+    @method("Set", _verb="outNames")
+    def _outNames(self):
+        return wrapNameList(self.outNames())
 
 emptyScope = StaticScope([], [], [], [], False)
 
@@ -568,25 +528,24 @@ class LiteralMaker(Object):
     def printOn(self, out):
         out.call(u"print", [StrObject(u"<makeLiteral>")])
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            o = args[0]
-            if o is NullObject:
-                return Null
-            if isinstance(o, IntObject):
-                return Int(promoteToBigInt(o))
-            if isinstance(o, BigInt):
-                try:
-                    return Int(o.bi)
-                except OverflowError:
-                    pass
-            if isinstance(o, StrObject):
-                return Str(o.getString())
-            if isinstance(o, DoubleObject):
-                return Double(o.getDouble())
-            if isinstance(o, CharObject):
-                return Char(o.getChar())
-        raise Refused(self, atom, args)
+    @method("Any", "Any")
+    def run(self, o):
+        if o is NullObject:
+            return Null
+        if isinstance(o, IntObject):
+            return Int(promoteToBigInt(o))
+        if isinstance(o, BigInt):
+            try:
+                return Int(o.bi)
+            except OverflowError:
+                pass
+        if isinstance(o, StrObject):
+            return Str(o.getString())
+        if isinstance(o, DoubleObject):
+            return Double(o.getDouble())
+        if isinstance(o, CharObject):
+            return Char(o.getChar())
+        raise WrongType(u"Not a literal")
 
 makeLiteral = LiteralMaker()
 
@@ -604,17 +563,13 @@ class _Null(Expr):
     def compile(self, compiler):
         compiler.literal(NullObject)
 
+    @method.py("Any")
     def getStaticScope(self):
         return emptyScope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"LiteralExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"LiteralExpr"
 
 Null = _Null()
 
@@ -646,24 +601,20 @@ class Int(Expr):
         except OverflowError:
             compiler.literal(BigInt(self.bi))
 
+    @method.py("Any")
     def getStaticScope(self):
         return emptyScope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"LiteralExpr")
+    @method("Str")
+    def getNodeName(self):
+        return u"LiteralExpr"
 
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-
-        if atom is GETVALUE_0:
-            try:
-                return IntObject(self.bi.toint())
-            except OverflowError:
-                return BigInt(self.bi)
-
-        return Expr.recv(self, atom, args)
+    @method("Any")
+    def getValue(self):
+        try:
+            return IntObject(self.bi.toint())
+        except OverflowError:
+            return BigInt(self.bi)
 
 
 @autohelp
@@ -683,20 +634,17 @@ class Str(Expr):
     def compile(self, compiler):
         compiler.literal(StrObject(self._s))
 
+    @method.py("Any")
     def getStaticScope(self):
         return emptyScope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"LiteralExpr")
+    @method("Str")
+    def getNodeName(self):
+        return u"LiteralExpr"
 
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        if atom is GETVALUE_0:
-            return StrObject(self._s)
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getValue(self):
+        return self._s
 
 
 def strToString(s):
@@ -705,6 +653,7 @@ def strToString(s):
     return s._s
 
 
+@autohelp
 class Double(Expr):
 
     def __init__(self, d):
@@ -721,20 +670,17 @@ class Double(Expr):
     def compile(self, compiler):
         compiler.literal(DoubleObject(self._d))
 
+    @method.py("Any")
     def getStaticScope(self):
         return emptyScope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"LiteralExpr")
+    @method("Str")
+    def getNodeName(self):
+        return u"LiteralExpr"
 
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        if atom is GETVALUE_0:
-            return DoubleObject(self._d)
-
-        return Expr.recv(self, atom, args)
+    @method("Double")
+    def getValue(self):
+        return self._d
 
 
 @autohelp
@@ -754,20 +700,17 @@ class Char(Expr):
     def compile(self, compiler):
         compiler.literal(CharObject(self._c))
 
+    @method.py("Any")
     def getStaticScope(self):
         return emptyScope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"LiteralExpr")
+    @method("Str")
+    def getNodeName(self):
+        return u"LiteralExpr"
 
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        if atom is GETVALUE_0:
-            return CharObject(self._c)
-
-        return Expr.recv(self, atom, args)
+    @method("Char")
+    def getValue(self):
+        return self._c
 
 
 @autohelp
@@ -798,19 +741,15 @@ class Assign(Expr):
         compiler.accessFrame(self.target, "ASSIGN")
         # [rvalue]
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = StaticScope([], [self.target], [], [], False)
         scope = scope.add(self.rvalue.getStaticScope())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"AssignExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"change"
 
 
 @autohelp
@@ -835,17 +774,13 @@ class Binding(Expr):
         compiler.accessFrame(self.name, "BINDING")
         # [binding]
 
+    @method.py("Any")
     def getStaticScope(self):
         return StaticScope([self.name], [], [], [], False)
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"BindingExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"BindingExpr"
 
 
 @autohelp
@@ -864,22 +799,21 @@ class NamedArg(Expr):
         out.write(" => ")
         self.value.pretty(out)
 
+    @method.py("Any")
     def getStaticScope(self):
         return self.key.getStaticScope().add(self.value.getStaticScope())
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"NamedArg")
+    @method("Str")
+    def getNodeName(self):
+        return u"NamedArg"
 
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
+    @method("Any")
+    def getKey(self):
+        return self.key
 
-        if atom is GETKEY_0:
-            return self.key
-
-        if atom is GETVALUE_0:
-            return self.value
-        return Expr.recv(self, atom, args)
+    @method("Any")
+    def getValue(self):
+        return self.value
 
 
 @autohelp
@@ -952,6 +886,7 @@ class Call(Expr):
             compiler.callMap(self._verb, arity, namedArity)
         # [retval]
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = self._target.getStaticScope()
         for expr in self._args:
@@ -960,26 +895,25 @@ class Call(Expr):
             scope = scope.add(na.getStaticScope())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"MethodCallExpr")
+    @method("Str")
+    def getNodeName(self):
+        return u"MethodCallExpr"
 
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
+    @method("Any")
+    def getReceiver(self):
+        return self._target
 
-        if atom is GETRECEIVER_0:
-            return self._target
+    @method("Str")
+    def getVerb(self):
+        return self._verb
 
-        if atom is GETVERB_0:
-            return StrObject(self._verb)
+    @method("List")
+    def getArgs(self):
+        return self._args
 
-        if atom is GETARGS_0:
-            return wrapList(self._args)
-
-        if atom is GETNAMEDARGS_0:
-            return wrapList(self._namedArgs)
-
-        return Expr.recv(self, atom, args)
+    @method("List")
+    def getNamedArgs(self):
+        return self._namedArgs
 
 
 @autohelp
@@ -1028,6 +962,7 @@ class Def(Expr):
         self._p.compile(compiler)
         # [value]
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = self._p.getStaticScope()
         if self._e is not None:
@@ -1035,14 +970,9 @@ class Def(Expr):
         scope = scope.add(self._v.getStaticScope())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"DefExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"DefExpr"
 
 
 @autohelp
@@ -1103,6 +1033,7 @@ class Escape(Expr):
         else:
             compiler.patch(ejector)
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = self._pattern.getStaticScope()
         scope = scope.add(self._node.getStaticScope())
@@ -1113,14 +1044,9 @@ class Escape(Expr):
             scope = scope.add(catchScope.hide())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"EscapeExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"EscapeExpr"
 
 
 @autohelp
@@ -1155,19 +1081,15 @@ class Finally(Expr):
         compiler.patch(handler)
         compiler.patch(dropper)
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = self._block.getStaticScope().hide()
         scope = scope.add(self._atLast.getStaticScope().hide())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"FinallyExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"FinallyExpr"
 
 
 @autohelp
@@ -1188,17 +1110,13 @@ class Hide(Expr):
     def compile(self, compiler):
         self._inner.compile(compiler.pushScope())
 
+    @method.py("Any")
     def getStaticScope(self):
         return self._inner.getStaticScope().hide()
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"HideExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"HideExpr"
 
 
 @autohelp
@@ -1240,20 +1158,16 @@ class If(Expr):
         self._otherwise.compile(subc.pushScope())
         compiler.patch(jump)
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = self._test.getStaticScope()
         scope = scope.add(self._then.getStaticScope().hide())
         scope = scope.add(self._otherwise.getStaticScope().hide())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"IfExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"IfExpr"
 
 
 @autohelp
@@ -1277,19 +1191,15 @@ class Matcher(Expr):
         self._block.pretty(out.indent())
         out.writeLine("}")
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = self._pattern.getStaticScope()
         scope = scope.add(self._block.getStaticScope())
         return scope.hide()
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"Matcher")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"Matcher"
 
 
 @autohelp
@@ -1305,17 +1215,13 @@ class MetaContextExpr(Expr):
     def compile(self, compiler):
         compiler.literal(MetaContext())
 
+    @method.py("Any")
     def getStaticScope(self):
         return emptyScope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"MetaContextExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"MetaContextExpr"
 
 
 @autohelp
@@ -1335,17 +1241,13 @@ class MetaStateExpr(Expr):
             compiler.addInstruction("BINDING_FRAME", v)
         compiler.addInstruction("BUILD_MAP", len(compiler.frame))
 
+    @method.py("Any")
     def getStaticScope(self):
         return StaticScope([], [], [], [], True)
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"MetaStateExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"MetaStateExpr"
 
 
 @autohelp
@@ -1411,6 +1313,7 @@ class Method(Expr):
         out.writeLine("")
         out.writeLine("}")
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = emptyScope
         for patt in self._ps:
@@ -1422,32 +1325,32 @@ class Method(Expr):
         scope = scope.add(self._b.getStaticScope())
         return scope.hide()
 
+    @method("Str")
+    def getNodeName(self):
+        return u"MethodExpr"
+
     def getAtom(self):
         return getAtom(self._verb, len(self._ps))
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"MethodExpr")
+    @method("List")
+    def getPatterns(self):
+        return self._ps
 
-        if atom is GETPATTERNS_0:
-            return wrapList(self._ps)
+    @method("List")
+    def getNamedPatterns(self):
+        return self._namedParams
 
-        if atom is GETNAMEDPATTERNS_0:
-            return wrapList(self._namedParams)
+    @method("Any")
+    def getResultGuard(self):
+        return NullObject if self._g is None else self._g
 
-        if atom is GETRESULTGUARD_0:
-            return NullObject if self._g is None else self._g
+    @method("Str")
+    def getVerb(self):
+        return self._verb
 
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        if atom is GETVERB_0:
-            return StrObject(self._verb)
-
-        if atom is GETBODY_0:
-            return self._b
-
-        return Expr.recv(self, atom, args)
+    @method("Any")
+    def getBody(self):
+        return self._b
 
 
 @autohelp
@@ -1472,21 +1375,17 @@ class Noun(Expr):
     def compile(self, compiler):
         compiler.accessFrame(self.name, "NOUN")
 
+    @method.py("Any")
     def getStaticScope(self):
         return StaticScope([self.name], [], [], [], False)
 
-    def recv(self, atom, args):
-        if atom is GETNAME_0:
-            return StrObject(self.name)
+    @method("Str")
+    def getNodeName(self):
+        return u"NounExpr"
 
-        if atom is GETNODENAME_0:
-            return StrObject(u"NounExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
-
+    @method("Str")
+    def getName(self):
+        return self.name
 
 
 def nounToString(n):
@@ -1595,6 +1494,7 @@ class Obj(Expr):
             # Bail!?
             assert False, "Shouldn't happen"
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = self._n.getStaticScope()
         auditorScope = emptyScope
@@ -1606,29 +1506,29 @@ class Obj(Expr):
         scope = scope.add(self._script.getStaticScope())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETDOCSTRING_0:
-            return StrObject(self._d if self._d else u"")
+    @method("Str")
+    def getNodeName(self):
+        return u"ObjectExpr"
 
-        if atom is GETNAME_0:
-            return self._n
+    @method("Str")
+    def getDocstring(self):
+        return self._d if self._d else u""
 
-        if atom is GETASEXPR_0:
-            return self._as if self._as is not None else NullObject
+    @method("Any")
+    def getName(self):
+        return self._n
 
-        if atom is GETAUDITORS_0:
-             return wrapList(self._implements)
+    @method("Any")
+    def getAsExpr(self):
+        return self._as if self._as is not None else NullObject
 
-        if atom is GETSCRIPT_0:
-            return self._script
+    @method("List")
+    def getAuditors(self):
+         return self._implements
 
-        if atom is GETNODENAME_0:
-            return StrObject(u"ObjectExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Any")
+    def getScript(self):
+        return self._script
 
 
 class CompilingScript(object):
@@ -1663,9 +1563,9 @@ class CompilingScript(object):
 
     def addScript(self, script, fqn):
         assert isinstance(script, Script)
-        for method in script._methods:
-            assert isinstance(method, Method)
-            self.addMethod(method, fqn)
+        for meth in script._methods:
+            assert isinstance(meth, Method)
+            self.addMethod(meth, fqn)
         for matcher in script._matchers:
             assert isinstance(matcher, Matcher)
             self.addMatcher(matcher, fqn)
@@ -1737,8 +1637,8 @@ class Script(Expr):
     def fromMonte(extends, methods, matchers):
         extends = nullToNone(extends)
         methods = unwrapList(methods)
-        for method in methods:
-            if not isinstance(method, Method):
+        for meth in methods:
+            if not isinstance(meth, Method):
                 raise InvalidAST("Script method isn't a Method")
         matchers = unwrapList(matchers)
         for matcher in matchers:
@@ -1752,11 +1652,12 @@ class Script(Expr):
                           wrapList(self._matchers)])
 
     def pretty(self, out):
-        for method in self._methods:
-            method.pretty(out)
+        for meth in self._methods:
+            meth.pretty(out)
         for matcher in self._matchers:
             matcher.pretty(out)
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = emptyScope
         for expr in self._methods:
@@ -1765,37 +1666,32 @@ class Script(Expr):
             scope = scope.add(expr.getStaticScope())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETCOMPLETEMATCHER_1:
-            ej = args[0]
-            if self._matchers:
-                matcher = self._matchers[-1]
-                if isinstance(matcher, Matcher):
-                    pattern = matcher._pattern
-                    if pattern.refutable():
-                        throw(ej, StrObject(u"getCompleteMatcher/1: Ultimate matcher pattern is refutable"))
-                    return wrapList([pattern, matcher._block])
-            throw(ej, StrObject(u"getCompleteMatcher/1: No matchers"))
+    @method("Str")
+    def getNodeName(self):
+        return u"ScriptExpr"
 
-        if atom is GETMETHODNAMED_2:
-            name = unwrapStr(args[0])
-            for method in self._methods:
-                assert isinstance(method, Method), "Method wasn't a method!?"
-                if method._verb == name:
-                    return method
-            ej = args[1]
-            throw(ej, StrObject(u"getMethodNamed/2: No method named %s" % name))
+    @method("List")
+    def getMethods(self):
+        return self._methods
 
-        if atom is GETNODENAME_0:
-            return StrObject(u"ScriptExpr")
+    @method("List", "Any")
+    def getCompleteMatcher(self, ej):
+        if self._matchers:
+            matcher = self._matchers[-1]
+            if isinstance(matcher, Matcher):
+                pattern = matcher._pattern
+                if pattern.refutable():
+                    throw(ej, StrObject(u"getCompleteMatcher/1: Ultimate matcher pattern is refutable"))
+                return [pattern, matcher._block]
+        throw(ej, StrObject(u"getCompleteMatcher/1: No matchers"))
 
-        if atom is GETMETHODS_0:
-            return wrapList(self._methods)
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Any", "Str", "Any")
+    def getMethodNamed(self, name, ej):
+        for meth in self._methods:
+            assert isinstance(meth, Method), "Method wasn't a method!?"
+            if meth._verb == name:
+                return meth
+        throw(ej, StrObject(u"getMethodNamed/2: No method named %s" % name))
 
 
 @autohelp
@@ -1841,23 +1737,20 @@ class Sequence(Expr):
             # If the sequence is empty, then it evaluates to null.
             compiler.literal(NullObject)
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = emptyScope
         for expr in self._l:
             scope = scope.add(expr.getStaticScope())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"SeqExpr")
+    @method("Str")
+    def getNodeName(self):
+        return u"SeqExpr"
 
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        if atom is GETEXPRS_0:
-            return wrapList(self._l)
-
-        return Expr.recv(self, atom, args)
+    @method("List")
+    def getExprs(self):
+        return self._l
 
 
 @autohelp
@@ -1895,20 +1788,16 @@ class Try(Expr):
         self._then.compile(subc)
         compiler.patch(end)
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = self._first.getStaticScope()
         catchScope = self._pattern.getStaticScope()
         catchScope = catchScope.add(self._then.getStaticScope())
         return scope.add(catchScope.hide())
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"CatchExpr")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Expr.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"CatchExpr"
 
 
 @autohelp
@@ -1924,12 +1813,6 @@ class Pattern(Expr):
 
     def repr(self):
         return self.__repr__()
-
-    def recv(self, atom, args):
-        if atom is REFUTABLE_0:
-            return wrapBool(self.refutable())
-
-        return Expr.recv(self, atom, args)
 
 
 @autohelp
@@ -1951,20 +1834,17 @@ class BindingPattern(Pattern):
         compiler.addInstruction("POP", 0)
         compiler.addInstruction("BIND", index)
 
+    @method.py("Any")
     def getStaticScope(self):
         return StaticScope([], [], [], [self._noun], False)
 
+    @method.py("Bool")
     def refutable(self):
         return False
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"BindingPattern")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Pattern.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"BindingPattern"
 
 
 @autohelp
@@ -2005,28 +1885,30 @@ class FinalPattern(Pattern):
             # []
         # []
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = StaticScope([], [], [self._n], [], False)
         if self._g is not None:
             scope = scope.add(self._g.getStaticScope())
         return scope
 
+    @method.py("Bool")
     def refutable(self):
         return self._g is not None
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"FinalPattern")
-        if atom is GETNOUN_0:
-            return self._actualNoun
-        if atom is GETGUARD_0:
-            if self._g is None:
-                return NullObject
-            return self._g
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
+    @method("Str")
+    def getNodeName(self):
+        return u"FinalPattern"
 
-        return Pattern.recv(self, atom, args)
+    @method("Any")
+    def getNoun(self):
+        return self._actualNoun
+
+    @method("Any")
+    def getGuard(self):
+        if self._g is None:
+            return NullObject
+        return self._g
 
 
 @autohelp
@@ -2063,23 +1945,20 @@ class IgnorePattern(Pattern):
             compiler.addInstruction("POP", 0)
             # []
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = emptyScope
         if self._g is not None:
             scope = scope.add(self._g.getStaticScope())
         return scope
 
+    @method.py("Bool")
     def refutable(self):
         return self._g is not None
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"IgnorePattern")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Pattern.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"IgnorePattern"
 
 
 @autohelp
@@ -2124,23 +2003,21 @@ class ListPattern(Pattern):
             # [specimen ej]
             patt.compile(compiler)
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = emptyScope
         for patt in self._ps:
             scope = scope.add(patt.getStaticScope())
         return scope
 
+    @method.py("Bool")
     def refutable(self):
         return True
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"ListPattern")
+    @method("Str")
+    def getNodeName(self):
+        return u"ListPattern"
 
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Pattern.recv(self, atom, args)
 
 @autohelp
 @withMaker
@@ -2168,28 +2045,26 @@ class NamedParam(Pattern):
             [self._k, self._p,
              self._default if self._default is not None else NullObject])
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = self._k.getStaticScope().add(self._p.getStaticScope())
         if self._default is not None:
             scope = scope.add(self._default.getStaticScope())
         return scope
 
-    def recv(self, atom, args):
-        if atom is GETKEY_0:
-            return self._k
+    @method("Any")
+    def getKey(self):
+        return self._k
 
-        if atom is GETPATTERN_0:
-            return self._p
+    @method("Any")
+    def getPattern(self):
+        return self._p
 
-        if atom is GETDEFAULT_1:
-            if self._default is None:
-                throw(args[0], StrObject(u"Parameter has no default"))
-            return self._default
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Pattern.recv(self, atom, args)
+    @method("Any", "Any")
+    def getDefault(self, ej):
+        if self._default is None:
+            throw(ej, StrObject(u"Parameter has no default"))
+        return self._default
 
     def compile(self, compiler):
         # [argmap]
@@ -2253,23 +2128,20 @@ class VarPattern(Pattern):
             # []
         # []
 
+    @method.py("Any")
     def getStaticScope(self):
         scope = StaticScope([], [], [], [self._n], False)
         if self._g is not None:
             scope = scope.add(self._g.getStaticScope())
         return scope
 
+    @method.py("Bool")
     def refutable(self):
         return self._g is not None
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"VarPattern")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Pattern.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"VarPattern"
 
 
 @autohelp
@@ -2310,20 +2182,17 @@ class ViaPattern(Pattern):
         # [specimen ej]
         self._pattern.compile(compiler)
 
+    @method.py("Any")
     def getStaticScope(self):
         return self._expr.getStaticScope().add(self._pattern.getStaticScope())
 
+    @method.py("Bool")
     def refutable(self):
         return True
 
-    def recv(self, atom, args):
-        if atom is GETNODENAME_0:
-            return StrObject(u"ViaPattern")
-
-        if atom is GETSTATICSCOPE_0:
-            return self.getStaticScope()
-
-        return Pattern.recv(self, atom, args)
+    @method("Str")
+    def getNodeName(self):
+        return u"ViaPattern"
 
 
 def formatName(p):
