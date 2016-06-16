@@ -132,8 +132,10 @@ def main():
         throw(usage)
     return switch (args):
         match [=="run", modname] + subargs:
+            traceln(`Loading $modname`)
             def exps := makeModuleAndConfiguration(modname)
             when (exps) ->
+                traceln(`Loaded $modname as $exps`)
                 def [module, _] := exps
                 def excludes := ["typhonEval", "_findTyphonFile", "bench"]
                 # Leave out loader-only objects.
@@ -223,4 +225,4 @@ def main():
 
 traceln(`Calling main`)
 
-main()
+Ref.whenBroken(main(), fn x {traceln.exception(Ref.optProblem(x))})
