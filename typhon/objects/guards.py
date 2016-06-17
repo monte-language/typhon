@@ -1,8 +1,7 @@
 # encoding: utf-8
 
-from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Refused, UserException
+from typhon.errors import UserException
 from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
 from typhon.objects.collections.helpers import asSet
@@ -17,18 +16,6 @@ from typhon.errors import Ejecting, userError
 from typhon.objects.refs import resolution
 from typhon.objects.root import Object, audited
 from typhon.objects.slots import FinalSlot, VarSlot
-
-AUDIT_1 = getAtom(u"audit", 1)
-COERCE_2 = getAtom(u"coerce", 2)
-EXTRACTGUARDS_2 = getAtom(u"extractGuards", 2)
-EXTRACTGUARD_2 = getAtom(u"extractGuard", 2)
-EXTRACTVALUE_2 = getAtom(u"extractValue", 2)
-GETGUARD_0 = getAtom(u"getGuard", 0)
-GETMETHODS_0 = getAtom(u"getMethods", 0)
-GET_1 = getAtom(u"get", 1)
-PASSES_1 = getAtom(u"passes", 1)
-SUPERSETOF_1 = getAtom(u"supersetOf", 1)
-_UNCALL_0 = getAtom(u"_uncall", 0)
 
 
 @autohelp
@@ -273,23 +260,22 @@ class FinalSlotGuard(Guard):
            self.valueGuard.supersetOf(specimen.call(u"getGuard", []))):
             return specimen
 
-    def recv(self, atom, args):
-        if atom is _UNCALL_0:
-            from typhon.objects.collections.maps import EMPTY_MAP
-            from typhon.scopes.safe import theFinalSlotGuardMaker
-            return wrapList([theFinalSlotGuardMaker, StrObject(u"get"),
-                              wrapList([self.valueGuard]), EMPTY_MAP])
+    @method("List")
+    def _uncall(self):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        from typhon.scopes.safe import theFinalSlotGuardMaker
+        return [theFinalSlotGuardMaker, StrObject(u"get"),
+                wrapList([self.valueGuard]), EMPTY_MAP]
 
-        if atom is GETGUARD_0:
-            return self.valueGuard
-        if atom is COERCE_2:
-            return self.coerce(args[0], args[1])
-        if atom is SUPERSETOF_1:
-            s = args[0]
-            if isinstance(s, FinalSlot):
-                return self.valueGuard.call(u"supersetOf", [s._guard])
-            return wrapBool(False)
-        raise Refused(self, atom, args)
+    @method("Any")
+    def getGuard(self):
+        return self.valueGuard
+
+    @method("Bool", "Any")
+    def supersetOf(self, s):
+        if isinstance(s, FinalSlot):
+            return unwrapBool(self.valueGuard.call(u"supersetOf", [s._guard]))
+        return False
 
     def printOn(self, out):
         out.call(u"print", [StrObject(u"FinalSlot[")])
@@ -318,13 +304,12 @@ class VarSlotGuard(Guard):
             self.valueGuard.supersetOf(specimen.call(u"getGuard", []))):
             return specimen
 
-    def recv(self, atom, args):
-        if atom is _UNCALL_0:
-            from typhon.objects.collections.maps import EMPTY_MAP
-            from typhon.scopes.safe import theVarSlotGuardMaker
-            return wrapList([theVarSlotGuardMaker, StrObject(u"get"),
-                              wrapList([self.valueGuard]), EMPTY_MAP])
-        raise Refused(self, atom, args)
+    @method("List")
+    def _uncall(self):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        from typhon.scopes.safe import theVarSlotGuardMaker
+        return [theVarSlotGuardMaker, StrObject(u"get"),
+                wrapList([self.valueGuard]), EMPTY_MAP]
 
 
 @autohelp
@@ -334,26 +319,28 @@ class FinalSlotGuardMaker(Guard):
     A guard which emits makers of FinalSlots.
     """
 
-    def recv(self, atom, args):
-        if atom is EXTRACTGUARD_2:
-            specimen, ej = args[0], args[1]
-            if specimen is self:
-                return anyGuard
-            elif isinstance(specimen, FinalSlotGuard):
-                return specimen.valueGuard
-            else:
-                ej.call(u"run", [StrObject(u"Not a FinalSlot guard")])
-        if atom is GETGUARD_0:
-            return NullObject
-        if atom is COERCE_2:
-            return self.coerce(args[0], args[1])
-        if atom is GET_1:
-            # XXX Coerce arg to Guard?
-            return FinalSlotGuard(args[0])
-        if atom is SUPERSETOF_1:
-            return wrapBool(isinstance(args[0], FinalSlotGuard) or
-                            isinstance(args[0], FinalSlotGuardMaker))
-        raise Refused(self, atom, args)
+    @method("Any", "Any", "Any")
+    def extractGuard(self, specimen, ej):
+        if specimen is self:
+            return anyGuard
+        elif isinstance(specimen, FinalSlotGuard):
+            return specimen.valueGuard
+        else:
+            ej.call(u"run", [StrObject(u"Not a FinalSlot guard")])
+
+    @method("Void")
+    def getGuard(self):
+        pass
+
+    @method("Any", "Any")
+    def get(self, guard):
+        # XXX Coerce arg to Guard?
+        return FinalSlotGuard(guard)
+
+    @method("Bool", "Any")
+    def supersetOf(self, guard):
+        return isinstance(guard, FinalSlotGuard) or isinstance(guard,
+                FinalSlotGuardMaker)
 
     def subCoerce(self, specimen):
         if isinstance(specimen, FinalSlot):
@@ -367,26 +354,28 @@ class VarSlotGuardMaker(Guard):
     A guard which admits makers of VarSlots.
     """
 
-    def recv(self, atom, args):
-        if atom is EXTRACTGUARD_2:
-            specimen, ej = args[0], args[1]
-            if specimen is self:
-                return anyGuard
-            elif isinstance(specimen, VarSlotGuard):
-                return specimen.valueGuard
-            else:
-                ej.call(u"run", [StrObject(u"Not a VarSlot guard")])
-        if atom is GETGUARD_0:
-            return NullObject
-        if atom is COERCE_2:
-            return self.coerce(args[0], args[1])
-        if atom is GET_1:
-            # XXX Coerce arg to Guard?
-            return VarSlotGuard(args[0])
-        if atom is SUPERSETOF_1:
-            return wrapBool(isinstance(args[0], VarSlotGuard) or
-                            isinstance(args[0], VarSlotGuardMaker))
-        raise Refused(self, atom, args)
+    @method("Any", "Any", "Any")
+    def extractGuard(self, specimen, ej):
+        if specimen is self:
+            return anyGuard
+        elif isinstance(specimen, VarSlotGuard):
+            return specimen.valueGuard
+        else:
+            ej.call(u"run", [StrObject(u"Not a VarSlot guard")])
+
+    @method("Void")
+    def getGuard(self):
+        pass
+
+    @method("Any", "Any")
+    def get(self, guard):
+        # XXX Coerce arg to Guard?
+        return VarSlotGuard(guard)
+
+    @method("Bool", "Any")
+    def supersetOf(self, guard):
+        return isinstance(guard, VarSlotGuard) or isinstance(guard,
+                VarSlotGuardMaker)
 
     def subCoerce(self, specimen):
         if isinstance(specimen, VarSlot):
@@ -461,18 +450,16 @@ class SameGuardMaker(Object):
     def printOn(self, out):
         out.call(u"print", [StrObject(u"Same")])
 
-    def recv(self, atom, args):
-        if atom is GET_1:
-            return SameGuard(args[0])
+    @method("Any", "Any")
+    def get(self, guard):
+        return SameGuard(guard)
 
-        if atom is EXTRACTVALUE_2:
-            specimen, ej = args[0], args[1]
-            if isinstance(specimen, SameGuard):
-                return specimen.value
-            else:
-                ej.call(u"run", [StrObject(u"Not a Same guard")])
-        raise Refused(self, atom, args)
-
+    @method("Any", "Any", "Any")
+    def extractValue(self, specimen, ej):
+        if isinstance(specimen, SameGuard):
+            return specimen.value
+        else:
+            ej.call(u"run", [StrObject(u"Not a Same guard")])
 
 sameGuardMaker = SameGuardMaker()
 
@@ -491,11 +478,9 @@ class SubrangeGuardMaker(Object):
         from typhon.objects.data import StrObject
         out.call(u"print", [StrObject(u"SubrangeGuard")])
 
-    def recv(self, atom, args):
-        if atom is GET_1:
-            return SubrangeGuard(args[0])
-        raise Refused(self, atom, args)
-
+    @method("Any", "Any")
+    def get(self, guard):
+        return SubrangeGuard(guard)
 
 subrangeGuardMaker = SubrangeGuardMaker()
 
@@ -520,62 +505,61 @@ class SubrangeGuard(Object):
         out.call(u"print", [self.superGuard])
         out.call(u"print", [StrObject(u"]")])
 
-    def recv(self, atom, args):
+    @method("List")
+    def _uncall(self):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        return [subrangeGuardMaker, StrObject(u"get"),
+                wrapList([self.superGuard]), EMPTY_MAP]
+
+    @method("Bool", "Any")
+    def audit(self, audition):
         from typhon.nodes import Noun, Method, Obj
         from typhon.objects.equality import optSame, EQUAL
         from typhon.objects.user import Audition
-        if atom is _UNCALL_0:
-            from typhon.objects.collections.maps import EMPTY_MAP
-            return wrapList([subrangeGuardMaker, StrObject(u"get"),
-                              wrapList([self.superGuard]), EMPTY_MAP])
+        if not isinstance(audition, Audition):
+            raise userError(u"not invoked with an Audition")
+        ast = audition.ast
+        if not isinstance(ast, Obj):
+            raise userError(u"audition not created with an object expr")
+        methods = ast._script._methods
+        for m in methods:
+            if isinstance(m, Method) and m._verb == u"coerce":
+                mguard = m._g
+                if isinstance(mguard, Noun):
+                    rGSG = audition.getGuard(mguard.name)
+                    if isinstance(rGSG, FinalSlotGuard):
+                        rGSG0 = rGSG.valueGuard
+                        if isinstance(rGSG0, SameGuard):
+                            resultGuard = rGSG0.value
 
-        if atom is AUDIT_1:
-            audition = args[0]
-            if not isinstance(audition, Audition):
-                raise userError(u"not invoked with an Audition")
-            ast = audition.ast
-            if not isinstance(ast, Obj):
-                raise userError(u"audition not created with an object expr")
-            methods = ast._script._methods
-            for m in methods:
-                if isinstance(m, Method) and m._verb == u"coerce":
-                    mguard = m._g
-                    if isinstance(mguard, Noun):
-                        rGSG = audition.getGuard(mguard.name)
-                        if isinstance(rGSG, FinalSlotGuard):
-                            rGSG0 = rGSG.valueGuard
-                            if isinstance(rGSG0, SameGuard):
-                                resultGuard = rGSG0.value
+                            if (optSame(resultGuard, self.superGuard)
+                                is EQUAL or
+                                (self.superGuard.call(u"supersetOf",
+                                    [resultGuard])
+                                 is wrapBool(True))):
+                                return True
+                            raise userError(
+                                u"%s does not have a result guard implying "
+                                u"%s, but %s" % (audition.fqn,
+                                                 self.superGuard.toQuote(),
+                                                 resultGuard.toQuote()))
+                        raise userError(u"%s does not have a determinable "
+                                        u"result guard, but <& %s> :%s" % (
+                                            audition.fqn, mguard.name,
+                                            rGSG.toQuote()))
+                break
+        return False
 
-                                if (optSame(resultGuard, self.superGuard)
-                                    is EQUAL or
-                                    (SUPERSETOF_1
-                                     in self.superGuard.respondingAtoms()
-                                     and self.superGuard.call(u"supersetOf",
-                                                              [resultGuard])
-                                     is wrapBool(True))):
-                                    return wrapBool(True)
-                                raise userError(
-                                    u"%s does not have a result guard implying "
-                                    u"%s, but %s" % (audition.fqn,
-                                                     self.superGuard.toQuote(),
-                                                     resultGuard.toQuote()))
-                            raise userError(u"%s does not have a determinable "
-                                            u"result guard, but <& %s> :%s" % (
-                                                audition.fqn, mguard.name,
-                                                rGSG.toQuote()))
-                    break
-            return self
-        if atom is PASSES_1:
-            return wrapBool(args[0].auditedBy(self))
-        if atom is COERCE_2:
-            specimen, ej = args[0], args[1]
-            if specimen.auditedBy(self):
-                return specimen
-            c = specimen.call(u"_conformTo", [self])
-            if c.auditedBy(self):
-                return c
-            throw(ej, StrObject(u"%s does not conform to %s" % (
-                specimen.toQuote(), self.toQuote())))
+    @method("Bool", "Any")
+    def passes(self, specimen):
+        return specimen.auditedBy(self)
 
-        raise Refused(self, atom, args)
+    @method("Any", "Any", "Any")
+    def coerce(self, specimen, ej):
+        if specimen.auditedBy(self):
+            return specimen
+        c = specimen.call(u"_conformTo", [self])
+        if c.auditedBy(self):
+            return c
+        throw(ej, StrObject(u"%s does not conform to %s" % (
+            specimen.toQuote(), self.toQuote())))
