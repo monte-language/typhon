@@ -15,7 +15,7 @@ import os
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import LoadFailed, Refused, userError
+from typhon.errors import LoadFailed, userError
 from typhon.importing import (codeFromAst, evaluateRaise, obtainModule,
                               obtainModuleFromSource)
 from typhon.load.mast import loadMASTBytes
@@ -32,7 +32,6 @@ from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
 
 RUN_1 = getAtom(u"run", 1)
-RUN_2 = getAtom(u"run", 2)
 
 
 @runnable(RUN_1, [deepFrozenStamp])
@@ -119,35 +118,32 @@ class GetMonteFile(Object):
         self.paths = paths
         self.recorder = recorder
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            pname = unwrapStr(args[0])
-            for extension in [".ty", ".mast"]:
-                path = pname.encode("utf-8") + extension
-                for base in self.paths:
-                    try:
-                        with open(os.path.join(base, path), "rb") as handle:
-                            source = handle.read()
-                            with self.recorder.context("Deserialization"):
-                                return loadMASTBytes(source)
-                    except IOError:
-                        continue
-            raise userError(u"Could not locate " + pname)
+    @method("Any", "Str")
+    def run(self, pname):
+        for extension in [".ty", ".mast"]:
+            path = pname.encode("utf-8") + extension
+            for base in self.paths:
+                try:
+                    with open(os.path.join(base, path), "rb") as handle:
+                        source = handle.read()
+                        with self.recorder.context("Deserialization"):
+                            return loadMASTBytes(source)
+                except IOError:
+                    continue
+        raise userError(u"Could not locate " + pname)
 
-        if atom is RUN_2:
-            scope = unwrapMap(args[1])
-            d = {}
-            for k, v in scope.items():
-                s = unwrapStr(k)
-                if not s.startswith("&&"):
-                    raise userError(u"evalMonteFile scope map must be of the "
-                                    "form '[\"&&name\" => binding]'")
-                d[s[2:]] = scope[k]
+    @method("Any", "Str", "Map", _verb="run")
+    def _run(self, pname, scope):
+        d = {}
+        for k, v in scope.items():
+            s = unwrapStr(k)
+            if not s.startswith("&&"):
+                raise userError(u"evalMonteFile scope map must be of the "
+                                "form '[\"&&name\" => binding]'")
+            d[s[2:]] = scope[k]
 
-            code = obtainModule(self.paths, unwrapStr(args[0]).encode("utf-8"),
-                                self.recorder)
-            return evaluateRaise([code], d)[0]
-        raise Refused(self, atom, args)
+        code = obtainModule(self.paths, pname.encode("utf-8"), self.recorder)
+        return evaluateRaise([code], d)[0]
 
 
 def bootScope(paths, recorder):

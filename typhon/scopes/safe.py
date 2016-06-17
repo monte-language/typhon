@@ -106,12 +106,13 @@ class SlotBinder(Object):
     Implementation of bind-pattern syntax for forward declarations.
     """
 
-    def recv(self, atom, args):
-        if atom is RUN_1:
-            return SpecializedSlotBinder(args[0])
-        if atom is RUN_2:
-            return Binding(args[0], anyGuard)
-        raise Refused(self, atom, args)
+    @method("Any", "Any")
+    def run(self, thing):
+        return SpecializedSlotBinder(thing)
+
+    @method("Any", "Any", "Any", _verb="run")
+    def _run(self, specimen, ej):
+        return Binding(specimen, anyGuard)
 
 theSlotBinder = SlotBinder()
 
