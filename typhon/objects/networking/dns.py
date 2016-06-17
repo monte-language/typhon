@@ -29,6 +29,7 @@ socktypes = {
 }
 
 
+@autohelp
 class AddrInfo(Object):
 
     _immutable_fields_ = "family", "socktype", "addr"
