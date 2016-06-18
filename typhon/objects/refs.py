@@ -29,13 +29,9 @@ from typhon.vats import currentVat
 BROKEN, EVENTUAL, NEAR = makeEnum(u"RefState",
                                   u"broken eventual near".split())
 
-PROMISE_0 = getAtom(u"promise", 0)
 RESOLVE_1 = getAtom(u"resolve", 1)
 RESOLVE_2 = getAtom(u"resolve", 2)
 RUN_1 = getAtom(u"run", 1)
-SMASH_1 = getAtom(u"smash", 1)
-STATE_1 = getAtom(u"state", 1)
-_PRINTON_1 = getAtom(u"_printOn", 1)
 _WHENBROKEN_1 = getAtom(u"_whenBroken", 1)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
@@ -134,6 +130,10 @@ class RefOps(Object):
     @method("Bool", "Any")
     def isBroken(self, ref):
         return isBroken(ref)
+
+    @method("Bool", "Any")
+    def isResolved(self, ref):
+        return isResolved(ref)
 
     @method("Any", "Any")
     def fulfillment(self, ref):
