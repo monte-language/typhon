@@ -116,10 +116,11 @@ class InterpObject(Object):
                     if ee.ejector is not ej:
                         raise
                     e.matchBind(np.patt, e.visitExpr(np.default), None)
+        resultGuard = e.visitExpr(method.guard)
         v = e.visitExpr(method.body)
-        if method.guard is None:
+        if resultGuard is None:
             return v
-        return e.runGuard(method.guard, v, None)
+        return e.runGuard(resultGuard, v, None)
 
     def runMatcher(self, matcher, message, ej):
         e = Evaluator(self.frame, self.outers, matcher.localSize)
@@ -170,15 +171,21 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
 
     def visitLocalAssignExpr(self, name, idx, rvalue):
         s = self.locals[idx].slot
-        s.call(u"put", [self.visitExpr(rvalue)])
+        v = self.visitExpr(rvalue)
+        s.call(u"put", [v])
+        return v
 
     def visitFrameAssignExpr(self, name, idx, rvalue):
         s = self.frame[idx].slot
-        s.call(u"put", [self.visitExpr(rvalue)])
+        v = self.visitExpr(rvalue)
+        s.call(u"put", [v])
+        return v
 
     def visitOuterAssignExpr(self, name, idx, rvalue):
         s = self.outers[idx].slot
-        s.call(u"put", [self.visitExpr(rvalue)])
+        v = self.visitExpr(rvalue)
+        s.call(u"put", [v])
+        return v
 
     def visitLocalBindingExpr(self, name, index):
         return self.locals[index]
@@ -212,9 +219,11 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         ej = Ejector()
         self.matchBind(patt, ej, None)
         try:
-            self.visitExpr(body)
-        except Ejecting:
-            return NullObject
+            return self.visitExpr(body)
+        except Ejecting as e:
+            if e.ejector is not ej:
+                raise
+            return e.value
 
     def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
         ej = Ejector()
@@ -229,9 +238,10 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
 
     def visitFinallyExpr(self, body, atLast):
         try:
-            self.visitExpr(body)
+            return self.visitExpr(body)
         finally:
             self.visitExpr(atLast)
+        
 
     def visitIfExpr(self, test, cons, alt):
         if unwrapBool(self.visitExpr(test)):
@@ -286,6 +296,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             # need to put the binding in frame.
             guards[name] = self.outers[idx].guard
         meths = {}
+        origFrame = self.frame
         for method in methods:
             name, m = self.visitMethod(method)
             meths[name] = m
@@ -305,7 +316,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             raise userError(u"Unsupported object pattern")
         selfLayout = layout.frameNames.get(objName, (0, None, 0, ""))
         if selfLayout[1] is not None:
-            frame[selfLayout[2]] = b
+            frame[selfLayout[0]] = b
         return val
 
     def visitSeqExpr(self, exprs):
@@ -349,7 +360,8 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         self.locals[idx] = varBinding(val, guard)
 
     def visitListPatt(self, patts):
-        listSpecimen = unwrapList(self.specimen)
+        from typhon.objects.collections.lists import ConstList
+        listSpecimen = unwrapList(self.specimen, ej=self.patternFailure)
         ej = self.patternFailure
         if len(patts) != len(listSpecimen):
             throw(ej, StrObject(u"Failed list pattern (needed %d, got %d)" %
@@ -386,8 +398,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
                         localSize):
         return (getAtom(verb, len(patts)),
                 InterpMethod(doc, verb, patts, namedPatts,
-                             self.visitExpr(guard),
-                             body, localSize))
+                             guard, body, localSize))
 
 
 def evalMonte(expr, scopeMap):

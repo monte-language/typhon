@@ -24,6 +24,7 @@ from typhon import rsodium, ruv
 from typhon.arguments import Configuration
 from typhon.debug import enableDebugPrint, TyphonJitHooks
 from typhon.errors import LoadFailed, UserException
+from typhon.importing import obtainModule
 from typhon.log import log
 from typhon.metrics import globalRecorder
 from typhon.objects.auditors import deepFrozenGuard
