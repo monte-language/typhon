@@ -83,13 +83,6 @@ class RefOps(Object):
     def toString(self):
         return u"<Ref>"
 
-    def recvNamed(self, atom, args, namedArgs):
-        if atom is PROMISE_0:
-            guard = namedArgs.extractStringKey(u"guard", None)
-            return self.promise(guard)
-
-        return self.recv(atom, args)
-
     @method("Any", "Any", "Any", "Any")
     def makeProxy(self, x, y, z):
         from typhon.objects.proxy import makeProxy
@@ -109,10 +102,10 @@ class RefOps(Object):
             s = NEAR
         return s.repr
 
-    def promise(self, guard):
-        from typhon.objects.collections.lists import wrapList
+    @method("List", guard="Any")
+    def promise(self, guard=None):
         p, r = makePromise(guard=guard)
-        return wrapList([p, r])
+        return [p, r]
 
     @method("Any", "Any")
     def broken(self, problem):

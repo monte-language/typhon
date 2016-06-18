@@ -143,6 +143,21 @@ def alterMethods(cls):
                         unwrapper))
                     assignments.append("%s = %s(args[%d])" % (argName,
                         unwrapper, i))
+            for k, v in kwargs.iteritems():
+                kwargName = nextName()
+                argNames.append("%s=%s" % (k, kwargName))
+                assignments.append("%s = namedArgs.extractStringKey(%r, None)"
+                        % (kwargName, k.decode("utf-8")))
+                if v == "Any":
+                    # No unwrapping.
+                    pass
+                else:
+                    unwrapperModule = wrappers[v]
+                    unwrapper = "unwrap" + v
+                    assignments.append("from %s import %s" % (unwrapperModule,
+                        unwrapper))
+                    assignments.append("%s = %s(%s) if %s is None else None" %
+                            (kwargName, unwrapper, kwargName, kwargName))
             call = "self.%s(%s)" % (attr, ",".join(argNames))
         retvals = []
         if rv == "Any":
@@ -169,11 +184,15 @@ def alterMethods(cls):
     # have a handwritten recv().
     if dispatchClauses:
         exec py.code.Source("""
-def recv(self, atom, args):
+def recvNamed(self, atom, args, namedArgs):
  %s
- raise Refused(self, atom, args)
+ rv = self.mirandaMethods(atom, args, namedArgs)
+ if rv is None:
+  raise Refused(self, atom, args)
+ else:
+  return rv
 """ % "\n".join(dispatchClauses)).compile() in execNames
-        cls.recv = execNames["recv"]
+        cls.recvNamed = execNames["recvNamed"]
 
     return atoms
 
