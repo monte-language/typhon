@@ -38,9 +38,6 @@ class ConstSet(Object):
     def toString(self):
         return toString(self)
 
-    def asDict(self):
-        return self.objectSet
-
     def computeHash(self, depth):
         # We're in too deep.
         if depth <= 0:
@@ -207,9 +204,6 @@ class FlexSet(Object):
 
     def toString(self):
         return toString(self)
-
-    def asDict(self):
-        return self.objectSet
 
     @method("Void", "Any")
     def _printOn(self, printer):

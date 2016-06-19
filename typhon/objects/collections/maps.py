@@ -324,9 +324,6 @@ class FlexMap(Object):
     def __init__(self, objectMap):
         self.objectMap = objectMap
 
-    def asDict(self):
-        return self.objectMap
-
     def printOn(self, printer):
         printer.call(u"print", [StrObject(u"[")])
         i = 0
