@@ -285,7 +285,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
                 # deal with this later
                 frame.append(NULL_BINDING)
                 guards[name] = guardAuditor
-            if scope == "local":
+            elif scope == "local":
                 frame.append(self.locals[idx])
                 guards[name] = self.locals[idx].guard
             elif scope == "frame":
@@ -296,7 +296,6 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             # need to put the binding in frame.
             guards[name] = self.outers[idx].guard
         meths = {}
-        origFrame = self.frame
         for method in methods:
             name, m = self.visitMethod(method)
             meths[name] = m
