@@ -14,44 +14,13 @@
 
 from rpython.rlib.rarithmetic import intmask
 
-from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Refused, WrongType, userError
+from typhon.errors import WrongType, userError
 from typhon.objects.collections.helpers import monteSet
-from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import IntObject, StrObject, unwrapInt
+from typhon.objects.data import StrObject
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
-from typhon.prelude import getGlobal
 from typhon.profile import profileTyphon
-
-
-AND_1 = getAtom(u"and", 1)
-ASLIST_0 = getAtom(u"asList", 0)
-ASMAP_0 = getAtom(u"asMap", 0)
-ASSET_0 = getAtom(u"asSet", 0)
-BUTNOT_1 = getAtom(u"butNot", 1)
-CONTAINS_1 = getAtom(u"contains", 1)
-DIVERGE_0 = getAtom(u"diverge", 0)
-GET_1 = getAtom(u"get", 1)
-INCLUDE_1 = getAtom(u"include", 1)
-INDEXOF_1 = getAtom(u"indexOf", 1)
-INDEXOF_2 = getAtom(u"indexOf", 2)
-INSERT_2 = getAtom(u"insert", 2)
-OP__CMP_1 = getAtom(u"op__cmp", 1)
-OR_1 = getAtom(u"or", 1)
-POP_0 = getAtom(u"pop", 0)
-REMOVE_1 = getAtom(u"remove", 1)
-SIZE_0 = getAtom(u"size", 0)
-SLICE_1 = getAtom(u"slice", 1)
-SLICE_2 = getAtom(u"slice", 2)
-SNAPSHOT_0 = getAtom(u"snapshot", 0)
-SUBTRACT_1 = getAtom(u"subtract", 1)
-WITHOUT_1 = getAtom(u"without", 1)
-WITH_1 = getAtom(u"with", 1)
-_MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
-_PRINTON_1 = getAtom(u"_printOn", 1)
-_UNCALL_0 = getAtom(u"_uncall", 0)
 
 
 @autohelp
@@ -242,7 +211,8 @@ class FlexSet(Object):
     def asDict(self):
         return self.objectSet
 
-    def printOn(self, printer):
+    @method("Void", "Any")
+    def _printOn(self, printer):
         printer.call(u"print", [StrObject(u"[")])
         for i, obj in enumerate(self.objectSet.keys()):
             printer.call(u"quote", [obj])
@@ -250,15 +220,17 @@ class FlexSet(Object):
                 printer.call(u"print", [StrObject(u", ")])
         printer.call(u"print", [StrObject(u"].asSet().diverge()")])
 
+    @method("Any")
     def _makeIterator(self):
         from typhon.objects.collections.lists import listIterator
         return listIterator(self.objectSet.keys())
 
+    @method("Bool", "Any")
     def contains(self, needle):
         return needle in self.objectSet
 
-    def _and(self, otherSet):
-        other = unwrapSet(otherSet)
+    @method("Set", "Set", _verb="and")
+    def _and(self, other):
         if (len(self.objectSet) > len(other)):
             bigger = self.objectSet
             smaller = other
@@ -270,51 +242,72 @@ class FlexSet(Object):
         for k in smaller:
             if k in bigger:
                 rv[k] = None
-        return ConstSet(rv)
+        return rv
 
+    @method("Set", "Set", _verb="or")
     def _or(self, other):
         # XXX This is currently linear time. Can it be better? If not, prove
         # it, please.
         rv = self.objectSet.copy()
-        for ok in unwrapSet(other).keys():
+        for ok in other.keys():
             if ok not in rv:
                 rv[ok] = None
-        return ConstSet(rv)
+        return rv
 
-    def subtract(self, otherSet):
-        other = unwrapSet(otherSet)
+    @method.py("Set", "Set")
+    def subtract(self, other):
         rv = self.objectSet.copy()
         for ok in other.keys():
             if ok in rv:
                 del rv[ok]
-        return ConstSet(rv)
+        return rv
 
-    def slice(self, start, stop=-1):
-        assert start >= 0
-        if stop < 0:
-            keys = self.objectSet.keys()[start:]
-        else:
-            keys = self.objectSet.keys()[start:stop]
+    @method("Set", "Set")
+    def butNot(self, other):
+        return self.subtract(other)
+
+    @method("Set", "Int")
+    def slice(self, start):
+        if start < 0:
+            raise userError(u"slice/1: Negative start")
+        keys = self.objectSet.keys()[start:]
         rv = monteSet()
         for k in keys:
             rv[k] = None
-        return ConstSet(rv)
+        return rv
 
+    @method("Set", "Int", "Int", _verb="slice")
+    def _slice(self, start, stop):
+        if start < 0:
+            raise userError(u"slice/2: Negative start")
+        if stop < 0:
+            raise userError(u"slice/2: Negative stop")
+        keys = self.objectSet.keys()[start:stop]
+        rv = monteSet()
+        for k in keys:
+            rv[k] = None
+        return rv
+
+    @method("Int")
     def size(self):
         return len(self.objectSet)
 
+    @method.py("Set")
     def snapshot(self):
-        return ConstSet(self.objectSet.copy())
+        return self.objectSet.copy()
 
+    @method("Void", "Any")
     def include(self, key):
         self.objectSet[key] = None
 
+    @method("Void", "Any")
     def remove(self, key):
         try:
             del self.objectSet[key]
         except KeyError:
             raise userError(u"remove/1: Key not in set")
 
+    @method("Any")
     def pop(self):
         if self.objectSet:
             key, _ = self.objectSet.popitem()
@@ -322,107 +315,40 @@ class FlexSet(Object):
         else:
             raise userError(u"pop/0: Pop from empty set")
 
-    def recv(self, atom, args):
+    @method("List")
+    def _uncall(self):
         from typhon.objects.collections.lists import wrapList
+        from typhon.objects.collections.maps import EMPTY_MAP
+        # [1,2,3].asSet().diverge() -> [[[1,2,3], "asSet"], "diverge"]
+        rv = wrapList(self.objectSet.keys())
+        return [wrapList([rv, StrObject(u"asSet"), wrapList([]), EMPTY_MAP]),
+                StrObject(u"diverge"), wrapList([]), EMPTY_MAP]
 
-        # _makeIterator/0: Create an iterator for this collection's contents.
-        if atom is _MAKEITERATOR_0:
-            return self._makeIterator()
+    @method("Set")
+    def asSet(self):
+        return self.snapshot()
 
-        if atom is _PRINTON_1:
-            printer = args[0]
-            self.printOn(printer)
-            return NullObject
+    @method("Any")
+    def diverge(self):
+        return FlexSet(self.objectSet.copy())
 
-        if atom is _UNCALL_0:
-            from typhon.objects.collections.maps import EMPTY_MAP
-            # [1,2,3].asSet() -> [[1,2,3], "asSet"]
-            rv = wrapList(self.objectSet.keys())
-            return wrapList([rv, StrObject(u"asSet"), wrapList([]),
-                              EMPTY_MAP])
+    @method("List")
+    def asList(self):
+        return self.objectSet.keys()
 
-        # contains/1: Determine whether an element is in this collection.
-        if atom is CONTAINS_1:
-            return wrapBool(self.contains(args[0]))
+    @method("Set", "Any", _verb="with")
+    def _with(self, key):
+        d = self.objectSet.copy()
+        d[key] = None
+        return d
 
-        # size/0: Get the number of elements in the collection.
-        if atom is SIZE_0:
-            return IntObject(self.size())
-
-        # slice/1 and slice/2: Select a subrange of this collection.
-        if atom is SLICE_1:
-            start = unwrapInt(args[0])
-            try:
-                return self.slice(start)
-            except IndexError:
-                raise userError(u"slice/1: Index out of bounds")
-
-        # slice/1 and slice/2: Select a subrange of this collection.
-        if atom is SLICE_2:
-            start = unwrapInt(args[0])
-            stop = unwrapInt(args[1])
-            try:
-                return self.slice(start, stop)
-            except IndexError:
-                raise userError(u"slice/1: Index out of bounds")
-
-        # snapshot/0: Create a new constant collection with a copy of the
-        # current collection's contents.
-        if atom is SNAPSHOT_0:
-            return self.snapshot()
-
-        if atom is ASSET_0:
-            return self
-
-        if atom is DIVERGE_0:
-            _flexSet = getGlobal(u"_flexSet").getValue()
-            return _flexSet.call(u"run", [self])
-
-        if atom is AND_1:
-            return self._and(args[0])
-
-        # or/1: Unify the elements of this collection with another.
-        if atom is OR_1:
-            return self._or(args[0])
-
-        # XXX Decide if we follow python-style '-' or E-style '&!' here.
-        if atom is SUBTRACT_1:
-            return self.subtract(args[0])
-
-        if atom is ASLIST_0:
-            return wrapList(self.objectSet.keys())
-
-        if atom is BUTNOT_1:
-            return self.subtract(args[0])
-
-        if atom is WITH_1:
-            key = args[0]
-            d = self.objectSet.copy()
-            d[key] = None
-            return ConstSet(d)
-
-        if atom is WITHOUT_1:
-            key = args[0]
-            d = self.objectSet.copy()
-            # Ignore the case where the key wasn't in the map.
-            if key in d:
-                del d[key]
-            return ConstSet(d)
-
-        if atom is INCLUDE_1:
-            key = args[0]
-            self.include(key)
-            return NullObject
-
-        if atom is REMOVE_1:
-            key = args[0]
-            self.remove(key)
-            return NullObject
-
-        if atom is POP_0:
-            return self.pop()
-
-        raise Refused(self, atom, args)
+    @method("Set", "Any")
+    def without(self, key):
+        d = self.objectSet.copy()
+        # Ignore the case where the key wasn't in the map.
+        if key in d:
+            del d[key]
+        return d
 
 
 def unwrapSet(o):
