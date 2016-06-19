@@ -16,12 +16,12 @@ from rpython.rlib.debug import debug_print
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Refused, WrongType, userError
+from typhon.errors import WrongType, userError
 from typhon.objects.auditors import (auditedBy, deepFrozenGuard,
                                      deepFrozenStamp, selfless)
 from typhon.objects.collections.helpers import asSet, emptySet
 from typhon.objects.collections.lists import unwrapList
-from typhon.objects.collections.maps import EMPTY_MAP, ConstMap
+from typhon.objects.collections.maps import ConstMap
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import (StrObject, Infinity, NaN, makeSourceSpan,
                                  unwrapStr)
@@ -146,122 +146,84 @@ class MObject(Object):
     def toString(self):
         return u"M"
 
-    def recv(self, atom, args):
-        if atom is CALLWITHPAIR_2 or atom is CALLWITHPAIR_3:
-            target = args[0]
-            pair = unwrapList(args[1])
-            if len(pair) not in (2, 3):
-                raise userError(u"callWithPair/2 requires a pair!")
-            if len(pair) == 3:
-                namedArgs = pair[2]
-            else:
-                namedArgs = EMPTY_MAP
-            sendVerb = unwrapStr(pair[0])
-            sendArgs = unwrapList(pair[1])
-            rv = target.call(sendVerb, sendArgs, namedArgs)
-            if rv is None:
-                print "callWithPair/2: Returned None:", \
-                      target.__class__.__name__, sendVerb.encode("utf-8")
-                raise RuntimeError("Implementation error")
-            return rv
+    @method("Any", "Any", "List")
+    def callWithMessage(self, target, message):
+        """
+        Pass a message of `[verb :Str, args :List, namedArgs :Map]` to an
+        object.
+        """
 
-        if atom is CALL_3 or atom is CALL_4:
-            target = args[0]
-            sendVerb = unwrapStr(args[1])
-            sendArgs = unwrapList(args[2])
-            if len(args) == 3:
-                namedArgs = EMPTY_MAP
-            else:
-                namedArgs = args[3]
-            rv = target.call(sendVerb, sendArgs, namedArgs)
-            if rv is None:
-                print "call/3: Returned None:", target.__class__.__name__, \
-                      sendVerb.encode("utf-8")
-                raise RuntimeError("Implementation error")
-            return rv
+        if len(message) != 3:
+            raise userError(
+                u"callWithPair/2 requires a [verb, args, namedArgs] triple")
+        verb = unwrapStr(message[0])
+        args = unwrapList(message[1])
+        namedArgs = resolution(message[2])
+        if not isinstance(namedArgs, ConstMap):
+            raise WrongType(u"namedArgs must be a ConstMap")
+        return target.call(verb, args, namedArgs)
 
-        if atom is SENDONLY_3:
-            target = args[0]
-            sendVerb = unwrapStr(args[1])
-            sendArgs = unwrapList(args[2])
-            # Signed, sealed, delivered, I'm yours.
-            sendAtom = getAtom(sendVerb, len(sendArgs))
-            vat = currentVat.get()
-            vat.sendOnly(target, sendAtom, sendArgs, EMPTY_MAP)
-            return NullObject
+    @method("Any", "Any", "Str", "List", "Any")
+    def call(self, target, verb, args, namedArgs):
+        """
+        Pass a message to an object.
+        """
 
-        if atom is SEND_3:
-            target = args[0]
-            sendVerb = unwrapStr(args[1])
-            sendArgs = unwrapList(args[2])
-            # Signed, sealed, delivered, I'm yours.
-            sendAtom = getAtom(sendVerb, len(sendArgs))
-            vat = currentVat.get()
-            return vat.send(target, sendAtom, sendArgs, EMPTY_MAP)
+        if not isinstance(namedArgs, ConstMap):
+            raise WrongType(u"namedArgs must be a ConstMap")
+        return target.call(verb, args, namedArgs)
 
-        if atom is CALLWITHMESSAGE_2:
-            target = args[0]
-            msg = unwrapList(args[1])
-            if len(msg) != 3:
-                raise userError(
-                    u"callWithPair/2 requires a [verb, args, namedArgs] triple")
-            sendVerb = unwrapStr(msg[0])
-            sendArgs = unwrapList(msg[1])
-            sendNamedArgs = resolution(msg[2])
-            if not isinstance(sendNamedArgs, ConstMap):
-                raise WrongType(u"namedArgs must be a ConstMap")
-            rv = target.call(sendVerb, sendArgs, sendNamedArgs)
-            if rv is None:
-                print "callWithPair/2: Returned None:", \
-                      target.__class__.__name__, sendVerb.encode("utf-8")
-                raise RuntimeError("Implementation error")
-            return rv
+    @method("Any", "Any", "Str", "List", "Any")
+    def sendOnly(self, target, verb, args, namedArgs):
+        """
+        Send a message to an object.
 
-        if atom is CALL_4:
-            target = args[0]
-            sendVerb = unwrapStr(args[1])
-            sendArgs = unwrapList(args[2])
-            sendNamedArgs = resolution(args[3])
-            if not isinstance(sendNamedArgs, ConstMap):
-                raise WrongType(u"namedArgs must be a ConstMap")
-            rv = target.call(sendVerb, sendArgs, sendNamedArgs)
-            if rv is None:
-                print "call/3: Returned None:", target.__class__.__name__, \
-                      sendVerb.encode("utf-8")
-                raise RuntimeError("Implementation error")
-            return rv
+        The message will be delivered on some subsequent turn.
+        """
 
-        if atom is SENDONLY_4:
-            target = args[0]
-            sendVerb = unwrapStr(args[1])
-            sendArgs = unwrapList(args[2])
-            sendNamedArgs = resolution(args[3])
-            if not isinstance(sendNamedArgs, ConstMap):
-                raise WrongType(u"namedArgs must be a ConstMap")
-            # Signed, sealed, delivered, I'm yours.
-            sendAtom = getAtom(sendVerb, len(sendArgs))
-            vat = currentVat.get()
-            return vat.sendOnly(target, sendAtom, sendArgs, sendNamedArgs)
+        namedArgs = resolution(namedArgs)
+        if not isinstance(namedArgs, ConstMap):
+            raise WrongType(u"namedArgs must be a ConstMap")
+        # Signed, sealed, delivered, I'm yours.
+        sendAtom = getAtom(verb, len(args))
+        vat = currentVat.get()
+        return vat.sendOnly(target, sendAtom, args, namedArgs)
 
-        if atom is SEND_4:
-            target = args[0]
-            sendVerb = unwrapStr(args[1])
-            sendArgs = unwrapList(args[2])
-            sendNamedArgs = resolution(args[3])
-            if not isinstance(sendNamedArgs, ConstMap):
-                raise WrongType(u"namedArgs must be a ConstMap")
-            # Signed, sealed, delivered, I'm yours.
-            sendAtom = getAtom(sendVerb, len(sendArgs))
-            vat = currentVat.get()
-            return vat.send(target, sendAtom, sendArgs, sendNamedArgs)
+    @method("Any", "Any", "Str", "List", "Any")
+    def send(self, target, verb, args, namedArgs):
+        """
+        Send a message to an object, returning a promise for the message
+        delivery.
 
-        if atom is TOQUOTE_1:
-            return StrObject(args[0].toQuote())
+        The promise will be fulfilled after successful delivery, or smashed
+        upon error.
 
-        if atom is TOSTRING_1:
-            return StrObject(toString(args[0]))
+        The message will be delivered on some subsequent turn.
+        """
 
-        raise Refused(self, atom, args)
+        namedArgs = resolution(namedArgs)
+        if not isinstance(namedArgs, ConstMap):
+            raise WrongType(u"namedArgs must be a ConstMap")
+        # Signed, sealed, delivered, I'm yours.
+        sendAtom = getAtom(verb, len(args))
+        vat = currentVat.get()
+        return vat.send(target, sendAtom, args, namedArgs)
+
+    @method("Str", "Any")
+    def toQuote(self, obj):
+        """
+        Convert an object to a quoted string representation.
+        """
+
+        return obj.toQuote()
+
+    @method("Str", "Any", _verb="toString")
+    def _toString(self, obj):
+        """
+        Convert an object to an unquoted string representation.
+        """
+
+        return toString(obj)
 
 theFinalSlotGuardMaker = FinalSlotGuardMaker()
 theVarSlotGuardMaker = VarSlotGuardMaker()
