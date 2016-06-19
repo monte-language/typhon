@@ -194,7 +194,7 @@ def optSame(first, second, cache=None):
     if isinstance(first, ConstMap):
         if not isinstance(second, ConstMap):
             return INEQUAL
-        if len(first.objectMap) == 0 and len(second.objectMap) == 0:
+        if first.empty() and second.empty():
             return EQUAL
         # Fall through to uncall-based comparison.
 
@@ -279,7 +279,7 @@ def samenessHash(obj, depth, fringe, path=None):
         return result
 
     # The empty map. (Uncalls contain maps, thus this base case.)
-    if isinstance(o, ConstMap) and len(o.objectMap) == 0:
+    if isinstance(o, ConstMap) and o.empty():
         return 127
     from typhon.objects.proxy import FarRef, DisconnectedRef
     if isinstance(o, FarRef) or isinstance(o, DisconnectedRef):
@@ -335,7 +335,7 @@ def samenessFringe(original, path, fringe, sofar=None):
         isinstance(o, TraversalKey)):
         return True
 
-    if isinstance(o, ConstMap) and len(o.objectMap) == 0:
+    if isinstance(o, ConstMap) and o.empty():
         return True
 
     if sofar is None:

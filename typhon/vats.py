@@ -166,11 +166,11 @@ class Vat(Object):
             from typhon.objects.collections.maps import ConstMap, monteMap
             from typhon.objects.exceptions import sealException
             from typhon.objects.refs import Smash
+
             # XXX monteMap()
-            _d = monteMap()
-            _d[StrObject(u"FAIL")] = Smash(resolver)
-            MIRANDA_ARGS = ConstMap(_d)
-            namedArgs = namedArgs._or(MIRANDA_ARGS)
+            mirandaArgs = monteMap()
+            mirandaArgs[StrObject(u"FAIL")] = Smash(resolver)
+            namedArgs = ConstMap(namedArgs._or(mirandaArgs))
             try:
                 # call/send.
                 if isinstance(target, Promise):

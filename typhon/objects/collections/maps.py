@@ -15,7 +15,7 @@
 from rpython.rlib.rarithmetic import intmask
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import Refused, WrongType, userError
 from typhon.objects.collections.helpers import (KeySorter, ValueSorter,
                                                 monteMap)
@@ -69,19 +69,16 @@ class mapIterator(Object):
     def toString(self):
         return u"<mapIterator>"
 
-    def recv(self, atom, args):
-        if atom is NEXT_1:
-            from typhon.objects.collections.lists import wrapList
-            if self._index < len(self.objects):
-                k, v = self.objects[self._index]
-                rv = [k, v]
-                self._index += 1
-                return wrapList(rv)
-            else:
-                ej = args[0]
-                ej.call(u"run", [StrObject(u"Iterator exhausted")])
-
-        raise Refused(self, atom, args)
+    @method("List", "Any")
+    def next(self, ej):
+        if self._index < len(self.objects):
+            k, v = self.objects[self._index]
+            rv = [k, v]
+            self._index += 1
+            return rv
+        else:
+            # XXX bad throw
+            ej.call(u"run", [StrObject(u"Iterator exhausted")])
 
 
 @autohelp
@@ -96,10 +93,8 @@ class ConstMap(Object):
     def __init__(self, objectMap):
         self.objectMap = objectMap
 
-    def asDict(self):
-        return self.objectMap
-
-    def printOn(self, printer):
+    @method("Void", "Any")
+    def _printOn(self, printer):
         printer.call(u"print", [StrObject(u"[")])
         i = 0
         for k, v in self.objectMap.iteritems():
@@ -158,167 +153,148 @@ class ConstMap(Object):
                 return False
         return True
 
-    def recv(self, atom, args):
-        # _makeIterator/0: Create an iterator for this collection's contents.
-        if atom is _MAKEITERATOR_0:
-            return self._makeIterator()
+    @method("Set")
+    def asSet(self):
+        # COW optimization.
+        return self.objectMap
 
-        if atom is _PRINTON_1:
-            printer = args[0]
-            self.printOn(printer)
-            return NullObject
+    @method("Any")
+    def diverge(self):
+        # Split off a copy so that we are not mutated.
+        return FlexMap(self.objectMap.copy())
 
-        # contains/1: Determine whether an element is in this collection.
-        if atom is CONTAINS_1:
-            return wrapBool(self.contains(args[0]))
+    @method("Any", "Any", "Any")
+    def fetch(self, key, thunk):
+        rv = self.objectMap.get(key, None)
+        if rv is None:
+            rv = thunk.call(u"run", [])
+        return rv
 
-        # size/0: Get the number of elements in the collection.
-        if atom is SIZE_0:
-            return IntObject(self.size())
+    @method("List")
+    def getKeys(self):
+        return self.objectMap.keys()
 
-        # slice/1 and slice/2: Select a subrange of this collection.
-        if atom is SLICE_1:
-            start = unwrapInt(args[0])
-            try:
-                return self.slice(start)
-            except IndexError:
-                raise userError(u"slice/1: Index out of bounds")
+    @method("List")
+    def getValues(self):
+        return self.objectMap.values()
 
-        # slice/1 and slice/2: Select a subrange of this collection.
-        if atom is SLICE_2:
-            start = unwrapInt(args[0])
-            stop = unwrapInt(args[1])
-            try:
-                return self.slice(start, stop)
-            except IndexError:
-                raise userError(u"slice/1: Index out of bounds")
+    @method("Any", "Any")
+    def get(self, key):
+        try:
+            return self.objectMap[key]
+        except KeyError:
+            raise userError(u"Key not found: %s" % (key.toString(),))
 
-        # snapshot/0: Create a new constant collection with a copy of the
-        # current collection's contents.
-        if atom is SNAPSHOT_0:
-            return self.snapshot()
+    @method("Map")
+    def reverse(self):
+        d = monteMap()
+        l = [(k, v) for k, v in self.objectMap.iteritems()]
+        # Reverse it!
+        l.reverse()
+        for k, v in l:
+            d[k] = v
+        return d
 
-        from typhon.objects.collections.lists import wrapList
+    @method("Map")
+    def sortKeys(self):
+        # Extract a list, sort it, pack it back into a dict.
+        d = monteMap()
+        l = [(k, v) for k, v in self.objectMap.iteritems()]
+        KeySorter(l).sort()
+        for k, v in l:
+            d[k] = v
+        return d
 
-        if atom is _UNCALL_0:
-            return wrapList(self._uncall())
+    @method("Map")
+    def sortValues(self):
+        # Same as sortKeys/0.
+        d = monteMap()
+        l = [(k, v) for k, v in self.objectMap.iteritems()]
+        ValueSorter(l).sort()
+        for k, v in l:
+            d[k] = v
+        return d
 
-        if atom is ASSET_0:
-            from typhon.objects.collections.sets import ConstSet
-            return ConstSet(self.objectMap)
+    @method("Map", "Any", "Any", _verb="with")
+    def _with(self, key, value):
+        # Replace by key.
+        d = self.objectMap.copy()
+        d[key] = value
+        return d
 
-        if atom is DIVERGE_0:
-            # Split off a copy so that we are not mutated.
-            return FlexMap(self.objectMap.copy())
-
-        if atom is FETCH_2:
-            key = args[0]
-            thunk = args[1]
-            rv = self.objectMap.get(key, None)
-            if rv is None:
-                rv = thunk.call(u"run", [])
-            return rv
-
-        if atom is GETKEYS_0:
-            return wrapList(self.objectMap.keys())
-
-        if atom is GETVALUES_0:
-            return wrapList(self.objectMap.values())
-
-        if atom is GET_1:
-            key = args[0]
-            try:
-                return self.objectMap[key]
-            except KeyError:
-                raise userError(u"Key not found: %s" % (key.toString(),))
-
-        # or/1: Unify the elements of this collection with another.
-        if atom is OR_1:
-            return self._or(args[0])
-
-        if atom is REVERSE_0:
-            d = monteMap()
-            l = [(k, v) for k, v in self.objectMap.iteritems()]
-            # Reverse it!
-            l.reverse()
-            for k, v in l:
-                d[k] = v
-            return ConstMap(d)
-
-        if atom is SORTKEYS_0:
-            # Extract a list, sort it, pack it back into a dict.
-            d = monteMap()
-            l = [(k, v) for k, v in self.objectMap.iteritems()]
-            KeySorter(l).sort()
-            for k, v in l:
-                d[k] = v
-            return ConstMap(d)
-
-        if atom is SORTVALUES_0:
-            # Same as sortKeys/0.
-            d = monteMap()
-            l = [(k, v) for k, v in self.objectMap.iteritems()]
-            ValueSorter(l).sort()
-            for k, v in l:
-                d[k] = v
-            return ConstMap(d)
-
-        if atom is WITH_2:
-            # Replace by key.
-            key = args[0]
-            value = args[1]
+    @method("Map", "Any")
+    def without(self, key):
+        # Ignore the case where the key wasn't in the map.
+        if key in self.objectMap:
             d = self.objectMap.copy()
-            d[key] = value
-            return ConstMap(d)
+            del d[key]
+            return d
+        return self.objectMap
 
-        if atom is WITHOUT_1:
-            key = args[0]
-            d = self.objectMap.copy()
-            # Ignore the case where the key wasn't in the map.
-            if key in d:
-                del d[key]
-            return ConstMap(d)
-
-        raise Refused(self, atom, args)
-
+    @method("Any")
     def _makeIterator(self):
         return mapIterator(self.objectMap.items())
 
+    @method("List")
     def _uncall(self):
         from typhon.objects.collections.lists import wrapList
         from typhon.scopes.safe import theMakeMap
         rv = wrapList([wrapList([k, v]) for k, v in self.objectMap.items()])
         return [theMakeMap, StrObject(u"fromPairs"), rv, EMPTY_MAP]
 
+    @method.py("Bool", "Any")
     def contains(self, needle):
         return needle in self.objectMap
 
+    @method.py("Map", "Map", _verb="or")
     @profileTyphon("Map.or/1")
     def _or(self, other):
         # XXX This is currently linear time. Can it be better? If not, prove
         # it, please.
         rv = self.objectMap.copy()
-        for ok, ov in unwrapMap(other).items():
+        for ok, ov in other.items():
             if ok not in rv:
                 rv[ok] = ov
-        return ConstMap(rv)
+        return rv
 
-    def slice(self, start, stop=-1):
-        assert start >= 0
-        if stop < 0:
-            items = self.objectMap.items()[start:]
-        else:
-            items = self.objectMap.items()[start:stop]
+    @method("Map", "Int")
+    def slice(self, start):
+        if start < 0:
+            raise userError(u"slice/1: Negative start")
+        items = self.objectMap.items()[start:]
         rv = monteMap()
         for k, v in items:
             rv[k] = v
-        return ConstMap(rv)
+        return rv
 
+    @method("Map", "Int", "Int", _verb="slice")
+    def _slice(self, start, stop):
+        if start < 0:
+            raise userError(u"slice/1: Negative start")
+        if stop < 0:
+            raise userError(u"slice/1: Negative stop")
+        items = self.objectMap.items()[start:stop]
+        rv = monteMap()
+        for k, v in items:
+            rv[k] = v
+        return rv
+
+    @method("Int")
     def size(self):
         return len(self.objectMap)
 
+    @method("Map")
     def snapshot(self):
-        return ConstMap(self.objectMap.copy())
+        # This is a copy-on-write optimization; we are trusting the rest of
+        # the functions on this map to not alter the map.
+        return self.objectMap
+
+    def empty(self):
+        """
+        Whether this is the empty map.
+        """
+
+        return len(self.objectMap) == 0
 
     def extractStringKey(self, k, default):
         """
@@ -326,6 +302,15 @@ class ConstMap(Object):
         """
 
         return self.objectMap.get(StrObject(k), default)
+
+    def iteritems(self):
+        """
+        Iterate over (key, value) tuples.
+
+        The normal caveats apply.
+        """
+
+        return self.objectMap.iteritems()
 
 EMPTY_MAP = ConstMap(monteMap())
 

@@ -22,7 +22,7 @@ from typhon.load.mast import loadMASTBytes
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
-from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
+from typhon.objects.collections.maps import ConstMap, monteMap
 from typhon.objects.collections.sets import ConstSet
 from typhon.objects.data import StrObject, unwrapBytes, wrapBool, unwrapStr
 from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
@@ -63,8 +63,9 @@ def moduleFromString(source, recorder):
 
 
 def evalToPair(code, topLocals, envMap):
+    assert isinstance(envMap, ConstMap), "Implementation error"
     environment = {}
-    for k, v in unwrapMap(envMap).items():
+    for k, v in envMap.iteritems():
         s = unwrapStr(k)
         if not s.startswith("&&") or not isinstance(v, Binding):
             raise userError(u"scope map must be of the "
@@ -79,8 +80,7 @@ def evalToPair(code, topLocals, envMap):
         d = monteMap()
         for k, vi in topLocals.items():
             d[StrObject(u"&&" + k)] = machine.local[vi]
-        addendum = ConstMap(d)
-        envMap = addendum._or(envMap)
+        envMap = ConstMap(d).call(u"or", [envMap])
     return result, envMap
 
 

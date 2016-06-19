@@ -620,7 +620,7 @@ def packLocalNamedRefs(namedArgs, targetVat, originVat):
     from typhon.objects.collections.maps import ConstMap, monteMap
     # XXX monteMap()
     namedRefs = monteMap()
-    for k, v in namedArgs.objectMap.items():
+    for k, v in namedArgs.iteritems():
         namedRefs[packLocalRef(k, targetVat, originVat)] = packLocalRef(v, targetVat, originVat)
     return ConstMap(namedRefs)
 

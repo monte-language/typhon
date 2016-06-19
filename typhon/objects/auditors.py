@@ -178,7 +178,7 @@ def checkDeepFrozen(specimen, seen, ej, root):
         if not isinstance(namedArgs, ConstMap):
             throw(ej, StrObject(u"Transparent object gave bad portrayal"))
             return
-        for k, v in namedArgs.objectMap.iteritems():
+        for k, v in namedArgs.iteritems():
             checkDeepFrozen(k, seen, ej, root)
             checkDeepFrozen(v, seen, ej, root)
     else:

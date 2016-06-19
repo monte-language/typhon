@@ -33,13 +33,12 @@ GET_0 = getAtom(u"get", 0)
 PUT_1 = getAtom(u"put", 1)
 
 
-def mkMirandaArgs():
-    # XXX monteMap()
-    _d = monteMap()
-    _d[StrObject(u"FAIL")] = theThrower
-    return ConstMap(_d)
+def makeMirandaArgs():
+    d = monteMap()
+    d[StrObject(u"FAIL")] = theThrower
+    return d
 
-MIRANDA_ARGS = mkMirandaArgs()
+theMirandaArgs = makeMirandaArgs()
 
 
 @always_inline
@@ -309,11 +308,15 @@ class SmallCaps(object):
         if withMap:
             # Grab the named args.
             namedArgs = self.pop()
-            assert isinstance(namedArgs, ConstMap), "No polymorphism in namedArgs"
-            # Avoid _or() if possible; it is slow and JIT-opaque. ~ C.
-            namedArgs = namedArgs._or(MIRANDA_ARGS)
+            assert isinstance(namedArgs, ConstMap), "ribosome"
+            # Mix in the Miranda args.
+            namedArgs = namedArgs._or(theMirandaArgs)
         else:
-            namedArgs = MIRANDA_ARGS
+            # Avoid ConstMap._or() when possible.
+            namedArgs = theMirandaArgs
+
+        # Wrap because .callAtom() expects a ConstMap rather than a dict.
+        namedArgs = ConstMap(namedArgs)
 
         args = self.popSlice(atom.arity)
         target = self.pop()
