@@ -14,20 +14,12 @@
 
 from rpython.rlib.rstring import UnicodeBuilder
 
-from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
-from typhon.errors import Refused, UserException
-from typhon.objects.constants import NullObject
+from typhon.autohelp import autohelp, method
+from typhon.errors import UserException
 from typhon.objects.data import CharObject, StrObject, unwrapStr
 from typhon.objects.refs import Promise, resolution
 from typhon.objects.root import Object
 from typhon.profile import profileTyphon
-
-INDENT_1 = getAtom(u"indent", 1)
-LNPRINT_1 = getAtom(u"lnPrint", 1)
-PRINT_1 = getAtom(u"print", 1)
-PRINTLN_1 = getAtom(u"println", 1)
-QUOTE_1 = getAtom(u"quote", 1)
 
 
 @autohelp
@@ -47,18 +39,22 @@ class Printer(Object):
     def toString(self):
         return u"<printer>"
 
+    @method("Any", "Any")
     def indent(self, morePrefix):
         return Printer(self.ub, self.newline.call(u"add", [morePrefix]),
                        self.context)
 
+    @method("Void", "Any")
     def println(self, obj):
         self._print(obj)
         self._print(self.newline)
 
+    @method("Void", "Any")
     def lnPrint(self, obj):
         self._print(self.newline)
         self._print(obj)
 
+    @method.py("Void", "Any", _verb="print")
     @profileTyphon("Printer.print/1")
     def _print(self, item):
         item = resolution(item)
@@ -67,31 +63,13 @@ class Printer(Object):
         else:
             self.objPrint(item)
 
-    def recv(self, atom, args):
-        if atom is PRINT_1:
-            self._print(args[0])
-            return NullObject
-
-        if atom is PRINTLN_1:
-            self.println(args[0])
-            return NullObject
-
-        if atom is LNPRINT_1:
-            self.lnPrint(args[0])
-            return NullObject
-
-        if atom is QUOTE_1:
-            item = resolution(args[0])
-            if isinstance(item, CharObject) or isinstance(item, StrObject):
-                self.ub.append(item.toQuote())
-            else:
-                self.objPrint(item)
-            return NullObject
-
-        if atom is INDENT_1:
-            return self.indent(args[0])
-
-        raise Refused(self, atom, args)
+    @method("Void", "Any")
+    def quote(self, item):
+        item = resolution(item)
+        if isinstance(item, CharObject) or isinstance(item, StrObject):
+            self.ub.append(item.toQuote())
+        else:
+            self.objPrint(item)
 
     @profileTyphon("Printer.quote/1")
     def objPrint(self, item):
