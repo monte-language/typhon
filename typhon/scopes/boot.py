@@ -20,7 +20,8 @@ from typhon.importing import (smallcapsFromAst, obtainModule,
                               obtainModuleFromSource)
 from typhon.load.mast import loadMASTBytes
 from typhon.load.nano import loadMASTBytes as realLoad
-from typhon.nano.interp import evalMonte
+from typhon.nano.interp import (evalMonte, evalToPair as astEvalToPair,
+                                scope2env)
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
@@ -100,18 +101,18 @@ class SmallCapsEval(Object):
         code, topLocals = smallcapsFromAst(ast, self.recorder, name)
         return evalToPair(code, topLocals, scope)[0]
 
-    @method("Any", "Any", "Any")
-    @profileTyphon("smallcapsEval.run/2")
-    def run(self, bs, scope):
-        code, topLocals = moduleFromString(bs, self.recorder)
-        return evalToPair(code, topLocals, scope)[0]
+    # @method("Any", "Any", "Any")
+    # @profileTyphon("smallcapsEval.run/2")
+    # def run(self, bs, scope):
+    #     code, topLocals = moduleFromString(bs, self.recorder)
+    #     return evalToPair(code, topLocals, scope)[0]
 
-    @method("List", "Any", "Any")
-    @profileTyphon("smallcapsEval.evalToPair/2")
-    def evalToPair(self, bs, scope):
-        code, topLocals = moduleFromString(bs, self.recorder)
-        result, envMap = evalToPair(code, topLocals, scope)
-        return [result, envMap]
+    # @method("List", "Any", "Any")
+    # @profileTyphon("smallcapsEval.evalToPair/2")
+    # def evalToPair(self, bs, scope):
+    #     code, topLocals = moduleFromString(bs, self.recorder)
+    #     result, envMap = evalToPair(code, topLocals, scope)
+    #     return [result, envMap]
 
 
 @autohelp
@@ -137,16 +138,8 @@ class GetMonteFile(Object):
 
     @method("Any", "Str", "Map", _verb="run")
     def _run(self, pname, scope):
-        d = {}
-        for k, v in scope.items():
-            s = unwrapStr(k)
-            if not s.startswith("&&"):
-                raise userError(u"evalMonteFile scope map must be of the "
-                                "form '[\"&&name\" => binding]'")
-            d[s[2:]] = scope[k]
-
         code = obtainModule(self.paths, pname.encode("utf-8"), self.recorder)
-        return evaluateRaise([code], d)[0]
+        return evalMonte(code, scope2env(scope))[0]
 
 
 @autohelp
@@ -160,12 +153,12 @@ class AstEval(Object):
     @profileTyphon("astEval.run/2")
     def run(self, bs, scope):
         ast = realLoad(unwrapBytes(bs))
-        return evalMonte(ast, scope)[0]
+        return astEvalToPair(ast, scope)[0]
 
     @method("List", "Any", "Any")
     def evalToPair(self, bs, scope):
         ast = realLoad(unwrapBytes(bs))
-        result, envMap = evalMonte(ast, scope)
+        result, envMap = astEvalToPair(ast, scope)
         return [result, envMap]
 
 
@@ -175,6 +168,7 @@ def bootScope(paths, recorder):
      balances are correct."
     """
     sce = SmallCapsEval(recorder)
+    ae = AstEval(recorder)
     return finalize({
         u"isList": isList(),
         u"isMap": isMap(),
@@ -194,6 +188,5 @@ def bootScope(paths, recorder):
 
         u"getMonteFile": GetMonteFile(paths, recorder),
         u"smallcapsEval": sce,
-        u"typhonEval": sce,
-        u"astEval": AstEval(recorder)
+        u"astEval": ae
     })

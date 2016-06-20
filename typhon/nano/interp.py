@@ -104,19 +104,15 @@ class InterpObject(Object):
         namedArgDict = unwrapMap(namedArgs)
         for np in method.namedParams:
             k = e.visitExpr(np.key)
-            if k not in namedArgDict:
-                raise userError(u"Named arg %s missing in call" % (
-                    k.toString(),))
             if isinstance(np.default, ReifyMetaIR.NullExpr):
+                if k not in namedArgDict:
+                    raise userError(u"Named arg %s missing in call" % (
+                        k.toString(),))
                 e.matchBind(np.patt, namedArgDict[k], None)
+            elif k not in namedArgDict:
+                e.matchBind(np.patt, e.visitExpr(np.default), None)
             else:
-                ej = Ejector()
-                try:
-                    e.matchBind(np.patt, namedArgDict[k], ej)
-                except Ejecting, ee:
-                    if ee.ejector is not ej:
-                        raise
-                    e.matchBind(np.patt, e.visitExpr(np.default), None)
+                e.matchBind(np.patt, namedArgDict[k], None)
         resultGuard = e.visitExpr(method.guard)
         v = e.visitExpr(method.body)
         if resultGuard is NullObject:
@@ -126,6 +122,7 @@ class InterpObject(Object):
     def runMatcher(self, matcher, message, ej):
         e = Evaluator(self.frame, self.outers, matcher.localSize)
         e.matchBind(matcher.pattern, message, ej)
+        return e.visitExpr(matcher.body)
 
 
 class Evaluator(ReifyMetaIR.makePassTo(None)):
@@ -171,21 +168,24 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         return StrObject(s)
 
     def visitLocalAssignExpr(self, name, idx, rvalue):
-        s = self.locals[idx].slot
+        b = self.locals[idx]
+        assert isinstance(b, Binding)
         v = self.visitExpr(rvalue)
-        s.call(u"put", [v])
+        b.slot.call(u"put", [v])
         return v
 
     def visitFrameAssignExpr(self, name, idx, rvalue):
-        s = self.frame[idx].slot
+        b = self.frame[idx]
+        assert isinstance(b, Binding)
         v = self.visitExpr(rvalue)
-        s.call(u"put", [v])
+        b.slot.call(u"put", [v])
         return v
 
     def visitOuterAssignExpr(self, name, idx, rvalue):
-        s = self.outers[idx].slot
+        b = self.outers[idx]
+        assert isinstance(b, Binding)
         v = self.visitExpr(rvalue)
-        s.call(u"put", [v])
+        b.call(u"put", [v])
         return v
 
     def visitLocalBindingExpr(self, name, index):
@@ -242,7 +242,6 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             return self.visitExpr(body)
         finally:
             self.visitExpr(atLast)
-        
 
     def visitIfExpr(self, test, cons, alt):
         if unwrapBool(self.visitExpr(test)):
@@ -251,13 +250,19 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             return self.visitExpr(alt)
 
     def visitLocalNounExpr(self, name, index):
-        return self.locals[index].slot.call(u"get", [])
+        b = self.locals[index]
+        assert isinstance(b, Binding)
+        return b.slot.call(u"get", [])
 
     def visitFrameNounExpr(self, name, index):
-        return self.frame[index].slot.call(u"get", [])
+        b = self.frame[index]
+        assert isinstance(b, Binding)
+        return b.slot.call(u"get", [])
 
     def visitOuterNounExpr(self, name, index):
-        return self.outers[index].slot.call(u"get", [])
+        b = self.outers[index]
+        assert isinstance(b, Binding)
+        return b.slot.call(u"get", [])
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
                         layout):
@@ -288,15 +293,21 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
                 frame.append(NULL_BINDING)
                 guards[name] = guardAuditor
             elif scope == "local":
-                frame.append(self.locals[idx])
-                guards[name] = self.locals[idx].guard
+                b = self.locals[idx]
+                assert isinstance(b, Binding)
+                frame.append(b)
+                guards[name] = b.guard
             elif scope == "frame":
-                frame.append(self.frame[idx])
-                guards[name] = self.frame[idx].guard
+                b = self.frame[idx]
+                assert isinstance(b, Binding)
+                frame.append(b)
+                guards[name] = b.guard
         for (name, (idx, severity)) in layout.outerNames.items():
             # OuterNounExpr doesn't get rewritten to FrameNounExpr so no
             # need to put the binding in frame.
-            guards[name] = self.outers[idx].guard
+            b = self.outers[idx]
+            assert isinstance(b, Binding)
+            guards[name] = b.guard
         meths = {}
         for method in methods:
             name, m = self.visitMethod(method)
@@ -402,26 +413,38 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
                              guard, body, localSize))
 
 
-def evalMonte(expr, scopeMap):
+def scope2env(scope):
     environment = {}
-    scope = unwrapMap(scopeMap)
     for k, v in scope.items():
         s = unwrapStr(k)
         if not s.startswith("&&") or not isinstance(v, Binding):
             raise userError(u"scope map must be of the "
                             "form '[\"&&name\" => binding]'")
         environment[s[2:]] = v
-    result = NullObject
+    return environment
+
+
+def evalMonte(expr, environment):
     ss = SaveScripts().visitExpr(expr)
     lo = LayOutScopes(environment.keys())
     ll = lo.visitExpr(ss)
     topLocalNames = lo.top.collectTopLocals()
     sl = SpecializeNouns().visitExpr(ll)
     ml = ReifyMeta().visitExpr(sl)
+    result = NullObject
     e = Evaluator([], environment.values(), len(topLocalNames))
     result = e.visitExpr(ml)
-    d = monteMap()
+    topLocals = []
     for i in range(len(topLocalNames)):
-        d[StrObject(u"&&" + topLocalNames[i])] = e.locals[i]
+        topLocals.append((topLocalNames[i], e.locals[i]))
+    return result, topLocals
+
+
+def evalToPair(expr, scopeMap):
+    scope = unwrapMap(scopeMap)
+    result, topLocals = evalMonte(expr, scope2env(scope))
+    d = monteMap()
+    for name, val in topLocals:
+        d[StrObject(u"&&" + name)] = val
     d.update(scope)
     return result, ConstMap(d)

@@ -640,7 +640,7 @@ def scopeNames := [
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
-    => M, => Ref,  => throw, => typhonEval, => astEval, => promiseAllFulfilled,
+    => M, => Ref,  => throw, => astEval, => promiseAllFulfilled,
     => makeLazySlot]
 
 def scopeAsDF(scope):
@@ -665,8 +665,7 @@ object stubLoader:
 
 
 def loadit(name):
-    def ast := getMonteFile(name)
-    def m := typhonEval.fromAST(ast, preludeScope, name)
+    def m := getMonteFile(name, preludeScope)
     return m(stubLoader)
 
 def importIntoScope(name):

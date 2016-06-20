@@ -20,6 +20,7 @@ from typhon import log
 from typhon.debug import debugPrint
 from typhon.errors import UserException, userError
 from typhon.load.mast import loadMASTBytes
+from typhon.load.nano import loadMASTBytes as nanoLoad
 from typhon.nodes import Expr, interactiveCompile
 from typhon.objects.constants import NullObject
 from typhon.smallcaps.machine import SmallCaps
@@ -38,10 +39,18 @@ moduleCache = ModuleCache()
 
 
 @dont_look_inside
-def obtainModuleFromSource(source, recorder, origin):
+def astObtainModuleFromSource(source, recorder, origin):
+    with recorder.context("Deserialization"):
+        return nanoLoad(source), {}
+
+
+@dont_look_inside
+def smallcapsObtainModuleFromSource(source, recorder, origin):
     with recorder.context("Deserialization"):
         term = loadMASTBytes(source)
     return smallcapsFromAst(term, recorder, origin)
+
+obtainModuleFromSource = astObtainModuleFromSource
 
 
 @dont_look_inside
@@ -68,8 +77,8 @@ def tryExtensions(filePath, recorder):
             with open(path, "rb") as handle:
                 debugPrint("Reading:", path)
                 source = handle.read()
-                return obtainModuleFromSource(source, recorder,
-                                              path.decode('utf-8'))[0]
+                return astObtainModuleFromSource(source, recorder,
+                                                 path.decode('utf-8'))[0]
         except IOError:
             continue
     return None
@@ -97,29 +106,3 @@ def obtainModule(libraryPaths, filePath, recorder):
         debugPrint("Failed to import:", filePath)
         raise userError(u"Module '%s' couldn't be found" %
                         filePath.decode("utf-8"))
-
-
-def evaluateTerms(codes, scope):
-    result = NullObject
-    for code in codes:
-        try:
-            machine = SmallCaps.withDictScope(code, scope)
-            machine.run()
-            result = machine.pop()
-        except UserException as ue:
-            debug_print("Caught exception:", ue.formatError())
-    return result
-
-
-def evaluateRaise(codes, scope):
-    """
-    Like evaluateTerms, but does not catch exceptions.
-    """
-
-    machine = None
-    result = NullObject
-    for code in codes:
-        machine = SmallCaps.withDictScope(code, scope)
-        machine.run()
-        result = machine.pop()
-    return result, machine

@@ -209,7 +209,7 @@ object eval as DeepFrozen:
      This object respects POLA and grants no privileges whatsoever to
      evaluated code. To grant a safe scope, pass `safeScope`."
 
-    to run(expr, environment, => evaluator := typhonEval):
+    to run(expr, environment, => evaluator := astEval):
         "Evaluate a Monte expression, from source or from m``.
 
          The expression will be provided only the given environment. No other
@@ -218,7 +218,7 @@ object eval as DeepFrozen:
         return eval.evalToPair(expr, environment, => evaluator)[0]
 
     to evalToPair(expr, environment, => ejPartial := throw,
-                  => evaluator := typhonEval):
+                  => evaluator := astEval):
         def ast :Expr := if (expr =~ source :Str) {
             parseExpression(makeMonteLexer(source, "<eval>"), astBuilder,
                             throw, ejPartial)
