@@ -71,7 +71,8 @@ class InterpObject(Object):
         self.frame = frame
         self.outers = outers
         self.auditors = auditors
-        if auditors:
+        self.report = None
+        if auditors and auditors != [NullObject]:
             self.report = self.audit(auditors, guards)
 
     def docString(self):
@@ -118,7 +119,7 @@ class InterpObject(Object):
                     e.matchBind(np.patt, e.visitExpr(np.default), None)
         resultGuard = e.visitExpr(method.guard)
         v = e.visitExpr(method.body)
-        if resultGuard is None:
+        if resultGuard is NullObject:
             return v
         return e.runGuard(resultGuard, v, None)
 
@@ -270,11 +271,12 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         if auditors:
             guardAuditor = self.visitExpr(auditors[0])
             auds = [self.visitExpr(auditor) for auditor in auditors[1:]]
-            if guardAuditor is not None:
+            if guardAuditor is not NullObject:
                 auds = [guardAuditor] + auds
             else:
                 guardAuditor = anyGuard
-            ast = BuildKernelNodes().visitExpr(mast)
+            if auds:
+                ast = BuildKernelNodes().visitExpr(mast)
         frameItems = [(u"", "", 0, "")] * len(layout.frameNames)
         for n, (i, scope, idx, severity) in layout.frameNames.items():
             frameItems[i] = (n, scope, idx, severity)
