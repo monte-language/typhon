@@ -152,7 +152,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         return guard.call(u"coerce", [specimen, ej])
 
     def visitNullExpr(self):
-        return None
+        return NullObject
 
     def visitCharExpr(self, c):
         return CharObject(c)

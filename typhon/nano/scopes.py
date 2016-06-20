@@ -423,13 +423,13 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
             [self.visitNamedPatt(np) for np in namedPatts],
             self.visitExpr(guard),
             self.visitExpr(body),
-            countLocalSize(layout, 0))
+            countLocalSize(layout, 0) + 2)
 
     def visitMatcherExpr(self, patt, body, layout):
         return self.dest.MatcherExpr(
             self.visitPatt(patt),
             self.visitExpr(body),
-            countLocalSize(layout, 0))
+            countLocalSize(layout, 0) + 2)
 
 
 def countLocalSize(lo, sizeSeen):
