@@ -552,6 +552,10 @@ def unwrapMap(o):
         return m.objectMap
     raise WrongType(u"Not a map!")
 
-
 def wrapMap(d):
     return ConstMap(d)
+
+def isMap(obj):
+    from typhon.objects.refs import resolution
+    o = resolution(obj)
+    return isinstance(o, ConstMap) or isinstance(o, FlexMap)

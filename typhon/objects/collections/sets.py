@@ -356,3 +356,8 @@ def unwrapSet(o):
 
 def wrapSet(d):
     return ConstSet(d)
+
+def isSet(obj):
+    from typhon.objects.refs import resolution
+    o = resolution(obj)
+    return isinstance(o, ConstSet) or isinstance(o, FlexSet)
