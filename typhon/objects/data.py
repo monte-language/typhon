@@ -217,6 +217,10 @@ def unwrapChar(o):
 def wrapChar(c):
     return CharObject(c)
 
+def isChar(obj):
+    from typhon.objects.refs import resolution
+    return isinstance(resolution(obj), CharObject)
+
 
 @autohelp
 @audited.DFSelfless
@@ -368,6 +372,10 @@ def unwrapDouble(o):
 
 def wrapDouble(d):
     return DoubleObject(d)
+
+def isDouble(obj):
+    from typhon.objects.refs import resolution
+    return isinstance(resolution(obj), DoubleObject)
 
 
 def promoteToDouble(o):
@@ -655,9 +663,12 @@ def unwrapInt(o):
             pass
     raise WrongType(u"Not an integer!")
 
-
 def wrapInt(i):
     return IntObject(i)
+
+def isInt(obj):
+    from typhon.objects.refs import resolution
+    return isinstance(resolution(obj), IntObject)
 
 
 @autohelp
@@ -1246,6 +1257,10 @@ def unwrapStr(o):
 def wrapStr(s):
     return StrObject(s)
 
+def isStr(obj):
+    from typhon.objects.refs import resolution
+    return isinstance(resolution(obj), StrObject)
+
 
 @autohelp
 class bytesIterator(Object):
@@ -1474,3 +1489,7 @@ def unwrapBytes(o):
 
 def wrapBytes(bs):
     return BytesObject(bs)
+
+def isBytes(obj):
+    from typhon.objects.refs import resolution
+    return isinstance(resolution(obj), BytesObject)

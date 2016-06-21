@@ -75,7 +75,7 @@ def repackMonteMethods(cls):
             if isStarArgs(args):
                 k = "_%s_%s_star_args_" % (cls.__name__, k)
             else:
-                k = "_%s_%s_%d_" % (cls.__name__, k, len(args))
+                k = "_%s_%s_%s_" % (cls.__name__, k, "_".join(args))
             methods[k] = v, verb, args, kwargs, rv
     cls._monteMethods_ = methods
 
@@ -103,6 +103,7 @@ def alterMethods(cls):
     """
 
     atoms = []
+    imports = set()
 
     def nextName(nameIndex=[0]):
         name = "_%d" % nameIndex[0]
@@ -133,28 +134,26 @@ def alterMethods(cls):
             for i, arg in enumerate(args):
                 argName = nextName()
                 argNames.append(argName)
-                if arg == "Any":
-                    # No unwrapping.
-                    assignments.append("%s = args[%d]" % (argName, i))
-                else:
+                assignments.append("%s = args[%d]" % (argName, i))
+                if arg != "Any":
                     unwrapperModule = wrappers[arg]
+                    pred = "is" + arg
+                    imports.add("from %s import %s" % (unwrapperModule, pred))
+                    atomTest += " and %s(args[%d])" % (pred, i)
                     unwrapper = "unwrap" + arg
-                    assignments.append("from %s import %s" % (unwrapperModule,
+                    imports.add("from %s import %s" % (unwrapperModule,
                         unwrapper))
-                    assignments.append("%s = %s(args[%d])" % (argName,
-                        unwrapper, i))
+                    assignments.append("%s = %s(%s)" % (argName, unwrapper,
+                        argName))
             for k, v in kwargs.iteritems():
                 kwargName = nextName()
                 argNames.append("%s=%s" % (k, kwargName))
                 assignments.append("%s = namedArgs.extractStringKey(%r, None)"
                         % (kwargName, k.decode("utf-8")))
-                if v == "Any":
-                    # No unwrapping.
-                    pass
-                else:
+                if v != "Any":
                     unwrapperModule = wrappers[v]
                     unwrapper = "unwrap" + v
-                    assignments.append("from %s import %s" % (unwrapperModule,
+                    imports.add("from %s import %s" % (unwrapperModule,
                         unwrapper))
                     assignments.append("%s = %s(%s) if %s is None else None" %
                             (kwargName, unwrapper, kwargName, kwargName))
@@ -171,7 +170,7 @@ def alterMethods(cls):
         else:
             wrapperModule = wrappers[rv]
             wrapper = "wrap" + rv
-            retvals.append("from %s import %s" % (wrapperModule, wrapper))
+            imports.add("from %s import %s" % (wrapperModule, wrapper))
             retvals.append("return %s(rv)" % wrapper)
         dispatchClauses.append("""
  if %s:
@@ -186,12 +185,13 @@ def alterMethods(cls):
         exec py.code.Source("""
 def recvNamed(self, atom, args, namedArgs):
  %s
+ %s
  rv = self.mirandaMethods(atom, args, namedArgs)
  if rv is None:
   raise Refused(self, atom, args)
  else:
   return rv
-""" % "\n".join(dispatchClauses)).compile() in execNames
+""" % (";".join(imports), "\n".join(dispatchClauses))).compile() in execNames
         cls.recvNamed = execNames["recvNamed"]
 
     return atoms

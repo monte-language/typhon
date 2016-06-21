@@ -131,7 +131,6 @@ FalseObject = _FalseObject()
 def wrapBool(b):
     return TrueObject if b else FalseObject
 
-
 def unwrapBool(o):
     from typhon.objects.refs import resolution
     b = resolution(o)
@@ -140,3 +139,8 @@ def unwrapBool(o):
     if b is FalseObject:
         return False
     raise userError(u"Not a boolean!")
+
+def isBool(obj):
+    from typhon.objects.refs import resolution
+    o = resolution(obj)
+    return o is TrueObject or o is FalseObject
