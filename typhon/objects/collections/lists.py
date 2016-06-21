@@ -356,6 +356,11 @@ def unwrapList(o, ej=None):
         return l.strategy.fetch_all(l)
     throw(ej, StrObject(u"Not a list!"))
 
+def isList(obj):
+    from typhon.objects.refs import resolution
+    o = resolution(obj)
+    return isinstance(o, ConstList) or isinstance(o, FlexList)
+
 
 def listFromIterable(obj):
     rv = []
