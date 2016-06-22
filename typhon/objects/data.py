@@ -692,7 +692,8 @@ def wrapInt(i):
 
 def isInt(obj):
     from typhon.objects.refs import resolution
-    return isinstance(resolution(obj), IntObject)
+    obj = resolution(obj)
+    return isinstance(obj, IntObject) or isinstance(obj, BigInt)
 
 
 @autohelp
