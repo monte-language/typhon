@@ -295,19 +295,28 @@ class DoubleObject(Object):
     def sqrt(self):
         return math.sqrt(self._d)
 
-    @method("Double", "Any")
-    def approxDivide(self, other):
-        divisor = promoteToDouble(other)
+    @method("Double", "Double")
+    def approxDivide(self, divisor):
         return self._d / divisor
 
-    @method("Int", "Any")
-    def floorDivide(self, other):
-        divisor = promoteToDouble(other)
+    @method("Double", "Int", _verb="approxDivide")
+    def approxDivideInt(self, divisor):
+        return self._d / divisor
+
+    @method("Int", "Double")
+    def floorDivide(self, divisor):
         return int(math.floor(self._d / divisor))
 
-    @method("Double", "Any")
-    def pow(self, other):
-        exponent = promoteToDouble(other)
+    @method("Int", "Int", _verb="floorDivide")
+    def floorDivideInt(self, divisor):
+        return int(math.floor(self._d / divisor))
+
+    @method("Double", "Double")
+    def pow(self, exponent):
+        return math.pow(self._d, exponent)
+
+    @method("Double", "Int", _verb="pow")
+    def powInt(self, exponent):
         return math.pow(self._d, exponent)
 
     # Logarithms.
@@ -316,9 +325,12 @@ class DoubleObject(Object):
     def log(self):
         return math.log(self._d)
 
-    @method("Double", "Any", _verb="log")
-    def _log(self, other):
-        base = promoteToDouble(other)
+    @method("Double", "Double", _verb="log")
+    def logBase(self, base):
+        return math.log(self._d) / math.log(base)
+
+    @method("Double", "Int", _verb="log")
+    def logBaseInt(self, base):
         return math.log(self._d) / math.log(base)
 
     # Trigonometry.
@@ -341,17 +353,29 @@ class DoubleObject(Object):
         pack_float(result, self._d, 8, True)
         return result[0]
 
-    @method("Double", "Any")
+    @method("Double", "Double")
     def add(self, other):
-        return self._d + promoteToDouble(other)
+        return self._d + other
 
-    @method("Double", "Any")
+    @method("Double", "Int", _verb="add")
+    def addInt(self, other):
+        return self._d + other
+
+    @method("Double", "Double")
     def mul(self, other):
-        return self._d * promoteToDouble(other)
+        return self._d * other
 
-    @method("Double", "Any")
+    @method("Double", "Int", _verb="mul")
+    def mulInt(self, other):
+        return self._d * other
+
+    @method("Double", "Double")
     def subtract(self, other):
-        return self._d - promoteToDouble(other)
+        return self._d - other
+
+    @method("Double", "Int", _verb="subtract")
+    def subtractInt(self, other):
+        return self._d - other
 
     def getDouble(self):
         return self._d
