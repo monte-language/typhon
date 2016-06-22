@@ -139,7 +139,7 @@ class GetMonteFile(Object):
     @method("Any", "Str", "Map", _verb="run")
     def _run(self, pname, scope):
         code = obtainModule(self.paths, pname.encode("utf-8"), self.recorder)
-        return evalMonte(code, scope2env(scope))[0]
+        return evalMonte(code, scope2env(scope), pname)[0]
 
 
 @autohelp

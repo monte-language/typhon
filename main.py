@@ -68,7 +68,7 @@ def loadPrelude(config, recorder, vat):
 
     code = obtainModule(config.libraryPaths, "prelude", recorder)
     with recorder.context("Time spent in prelude"):
-        result = evalMonte(code, scope)[0]
+        result = evalMonte(code, scope, u"<prelude>")[0]
 
     assert result is not None, "Prelude returned None"
     assert isinstance(result, ConstMap), "Prelude returned non-Map"
@@ -237,7 +237,7 @@ def runTyphon(argv):
         result = NullObject
         with recorder.context("Time spent in vats"):
             with scopedVat(vat):
-                result = evalMonte(code, unsafeScopeDict)[0]
+                result = evalMonte(code, unsafeScopeDict, u"<main>")[0]
         if result is None:
             return 1
 

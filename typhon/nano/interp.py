@@ -60,10 +60,10 @@ class InterpObject(Object):
                           "outers", "report")
 
     def __init__(self, doc, name, methods, matchers, frame, outers,
-                 guards, auditors, ast):
+                 guards, auditors, ast, fqn):
         self.reportCabinet = []
-        self.fqn = u"LOL"
         self.objectAst = ast
+        self.fqn = fqn
         self.doc = doc
         self.displayName = name
         self.methods = methods
@@ -314,7 +314,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             meths[name] = m
         matchs = [self.visitMatcher(matcher) for matcher in matchers]
         o = InterpObject(doc, objName, meths, matchs, frame, self.outers,
-                         guards, auds, ast)
+                         guards, auds, ast, layout.fqn)
         val = self.runGuard(guardAuditor, o, theThrower)
         if isinstance(patt, ReifyMetaIR.IgnorePatt):
             b = NULL_BINDING
@@ -424,9 +424,9 @@ def scope2env(scope):
     return environment
 
 
-def evalMonte(expr, environment):
+def evalMonte(expr, environment, fqnPrefix):
     ss = SaveScripts().visitExpr(expr)
-    lo = LayOutScopes(environment.keys())
+    lo = LayOutScopes(environment.keys(), fqnPrefix)
     ll = lo.visitExpr(ss)
     topLocalNames = lo.top.collectTopLocals()
     sl = SpecializeNouns().visitExpr(ll)
@@ -442,7 +442,7 @@ def evalMonte(expr, environment):
 
 def evalToPair(expr, scopeMap):
     scope = unwrapMap(scopeMap)
-    result, topLocals = evalMonte(expr, scope2env(scope))
+    result, topLocals = evalMonte(expr, scope2env(scope), u"<eval>")
     d = monteMap()
     for name, val in topLocals:
         d[StrObject(u"&&" + name)] = val

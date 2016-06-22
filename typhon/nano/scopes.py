@@ -51,10 +51,11 @@ LayoutIR = SaveScriptIR.extend(
 class ScopeBase(object):
     position = -1
 
-    def __init__(self, next):
+    def __init__(self, next, fqn):
         self.next = next
         self.children = []
         self.node = None
+        self.fqn = fqn
 
     def addChild(self, child):
         if child is self:
@@ -63,9 +64,10 @@ class ScopeBase(object):
 
 
 class ScopeOuter(ScopeBase):
-    def __init__(self, outers):
+    def __init__(self, outers, fqn):
         self.outers = outers
         self.children = []
+        self.fqn = fqn
 
     def collectTopLocals(self):
         # In an interactive context, we may want to keep locals defined at the
@@ -97,12 +99,12 @@ class ScopeOuter(ScopeBase):
 class ScopeFrame(ScopeBase):
     "Scope info associated with an object closure."
 
-    def __init__(self, next):
+    def __init__(self, next, fqn):
         # Names closed over.
         self.frameNames = {}
         # Names from outer scope used (not included in closure at runtime)
         self.outerNames = {}
-        return ScopeBase.__init__(self, next)
+        return ScopeBase.__init__(self, next, fqn)
 
     def requireShadowable(self, name):
         return self.next.requireShadowable(name)
@@ -124,7 +126,7 @@ class ScopeBox(ScopeBase):
     "Scope info associated with a scope-introducing node."
 
     def __init__(self, next):
-        ScopeBase.__init__(self, next)
+        ScopeBase.__init__(self, next, next.fqn)
         self.position = next.position
 
     def requireShadowable(self, name):
@@ -142,7 +144,7 @@ class ScopeItem(ScopeBase):
         self.name = name
         self.position = next.position + 1
         self.severity = severity
-        return ScopeBase.__init__(self, next)
+        return ScopeBase.__init__(self, next, next.fqn)
 
     def requireShadowable(self, name):
         if self.name == name:
@@ -159,8 +161,8 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     """
     Set up scope boxes and collect variable definition sites.
     """
-    def __init__(self, outers):
-        self.top = self.layout = ScopeOuter(outers)
+    def __init__(self, outers, fqn):
+        self.top = self.layout = ScopeOuter(outers, fqn)
 
     def visitExprWithLayout(self, node, layout):
         origLayout = self.layout
@@ -228,6 +230,13 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         return result
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast):
+        if isinstance(patt, SaveScriptIR.IgnorePatt):
+            objName = u'_'
+        elif isinstance(patt, SaveScriptIR.FinalPatt) or isinstance(
+                patt, SaveScriptIR.VarPatt):
+            objName = patt.name
+        else:
+            objName = u'???'
         p = self.visitPatt(patt)
         origLayout = self.layout
         # Names defined in auditors exprs are visible inside the object but not
@@ -235,7 +244,7 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         outerBox = ScopeBox(origLayout)
         origLayout.addChild(outerBox)
         auds = [self.visitExpr(a) for a in auditors]
-        self.layout = ScopeFrame(outerBox)
+        self.layout = ScopeFrame(outerBox, origLayout.fqn + u'$' + objName)
         outerBox.addChild(self.layout)
         result = self.dest.ObjectExpr(
             doc, p, auds,
@@ -471,14 +480,14 @@ class ReifyMeta(BoundNounsIR.makePassTo(ReifyMetaIR)):
                 for name in frame.keys()], [])
 
     def visitMetaContextExpr(self, layout):
-        fqnPrefix = u"<LOL>"
-        frame = ScopeFrame(layout)
+        fqn = layout.fqn
+        frame = ScopeFrame(layout, u'META')
         return self.dest.ObjectExpr(
             u"",
             self.dest.IgnorePatt(self.dest.NullExpr()),
             [], [self.dest.MethodExpr(
                 u"", u"getFQNPrefix", [], [], self.dest.NullExpr(),
-                self.dest.StrExpr(fqnPrefix), 0)],
+                self.dest.StrExpr(fqn + u'$'), 0)],
             [], None, frame)
 
 
