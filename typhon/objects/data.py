@@ -28,7 +28,7 @@ from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Refused, WrongType, userError
+from typhon.errors import WrongType, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.comparison import Incomparable
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
@@ -37,77 +37,7 @@ from typhon.prelude import getGlobalValue
 from typhon.quoting import quoteChar, quoteStr
 
 
-ABOVEZERO_0 = getAtom(u"aboveZero", 0)
-ABS_0 = getAtom(u"abs", 0)
-ADD_1 = getAtom(u"add", 1)
-AND_1 = getAtom(u"and", 1)
-APPROXDIVIDE_1 = getAtom(u"approxDivide", 1)
-ASINTEGER_0 = getAtom(u"asInteger", 0)
-ASLIST_0 = getAtom(u"asList", 0)
-ASSET_0 = getAtom(u"asSet", 0)
-ASSTRING_0 = getAtom(u"asString", 0)
-ATLEASTZERO_0 = getAtom(u"atLeastZero", 0)
-ATMOSTZERO_0 = getAtom(u"atMostZero", 0)
-BELOWZERO_0 = getAtom(u"belowZero", 0)
-BITLENGTH_0 = getAtom(u"bitLength", 0)
-COMBINE_1 = getAtom(u"combine", 1)
-COMPLEMENT_0 = getAtom(u"complement", 0)
-CONTAINS_1 = getAtom(u"contains", 1)
-COS_0 = getAtom(u"cos", 0)
-ENDSWITH_1 = getAtom(u"endsWith", 1)
-FLOORDIVIDE_1 = getAtom(u"floorDivide", 1)
-FLOOR_0 = getAtom(u"floor", 0)
-GETCATEGORY_0 = getAtom(u"getCategory", 0)
-GET_1 = getAtom(u"get", 1)
-GETSPAN_0 = getAtom(u"getSpan", 0)
-GETSTARTCOL_0 = getAtom(u"getStartCol", 0)
-GETENDCOL_0 = getAtom(u"getEndCol", 0)
-GETSTARTLINE_0 = getAtom(u"getStartLine", 0)
-GETENDLINE_0 = getAtom(u"getEndLine", 0)
-INDEXOF_1 = getAtom(u"indexOf", 1)
-INDEXOF_2 = getAtom(u"indexOf", 2)
-ISONETOONE_0 = getAtom(u"isOneToOne", 0)
-ISZERO_0 = getAtom(u"isZero", 0)
-JOIN_1 = getAtom(u"join", 1)
-LASTINDEXOF_1 = getAtom(u"lastIndexOf", 1)
-LOG_0 = getAtom(u"log", 0)
-LOG_1 = getAtom(u"log", 1)
-MAX_1 = getAtom(u"max", 1)
-MIN_1 = getAtom(u"min", 1)
-MODPOW_2 = getAtom(u"modPow", 2)
-MOD_1 = getAtom(u"mod", 1)
-MULTIPLY_1 = getAtom(u"multiply", 1)
-NEGATE_0 = getAtom(u"negate", 0)
-NEXT_0 = getAtom(u"next", 0)
-NEXT_1 = getAtom(u"next", 1)
-NOTONETOONE_0 = getAtom(u"notOneToOne", 0)
-OP__CMP_1 = getAtom(u"op__cmp", 1)
-OR_1 = getAtom(u"or", 1)
-POW_1 = getAtom(u"pow", 1)
-PREVIOUS_0 = getAtom(u"previous", 0)
-REPLACE_2 = getAtom(u"replace", 2)
 RUN_6 = getAtom(u"run", 6)
-QUOTE_0 = getAtom(u"quote", 0)
-SHIFTLEFT_1 = getAtom(u"shiftLeft", 1)
-SHIFTRIGHT_1 = getAtom(u"shiftRight", 1)
-SIN_0 = getAtom(u"sin", 0)
-SIZE_0 = getAtom(u"size", 0)
-SLICE_1 = getAtom(u"slice", 1)
-SLICE_2 = getAtom(u"slice", 2)
-SPLIT_1 = getAtom(u"split", 1)
-SPLIT_2 = getAtom(u"split", 2)
-SQRT_0 = getAtom(u"sqrt", 0)
-STARTSWITH_1 = getAtom(u"startsWith", 1)
-SUBTRACT_1 = getAtom(u"subtract", 1)
-TAN_0 = getAtom(u"tan", 0)
-TOLOWERCASE_0 = getAtom(u"toLowerCase", 0)
-TOUPPERCASE_0 = getAtom(u"toUpperCase", 0)
-TOBYTES_0 = getAtom(u"toBytes", 0)
-TRIM_0 = getAtom(u"trim", 0)
-WITH_1 = getAtom(u"with", 1)
-XOR_1 = getAtom(u"xor", 1)
-_MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
-_UNCALL_0 = getAtom(u"_uncall", 0)
 
 
 @specialize.argtype(0, 1)
@@ -692,7 +622,7 @@ def unwrapInt(o):
         try:
             return i.bi.toint()
         except OverflowError:
-            pass
+            raise WrongType(u"Integer was too large")
     raise WrongType(u"Not an integer!")
 
 def wrapInt(i):
@@ -728,158 +658,198 @@ class BigInt(Object):
         return (rgc.get_rpy_memory_usage(self) +
                 rgc.get_rpy_memory_usage(self.bi))
 
-    def recv(self, atom, args):
-        # Bigints can be compared with bigints and ints.
-        if atom is OP__CMP_1:
-            other = args[0]
-            try:
-                return IntObject(self.cmp(unwrapBigInt(other)))
-            except WrongType:
-                return IntObject(self.cmpInt(unwrapInt(other)))
+    @method("Bool")
+    def aboveZero(self):
+        return self.bi.int_gt(0)
 
-        # Nothing prevents bigints from being returned from comparisons, but
-        # I'd like to avoid generating this code for now. ~ C.
-        # if atom is ABOVEZERO_0:
-        #     return wrapBool(self._i > 0)
-        # if atom is ATLEASTZERO_0:
-        #     return wrapBool(self._i >= 0)
-        # if atom is ATMOSTZERO_0:
-        #     return wrapBool(self._i <= 0)
-        # if atom is BELOWZERO_0:
-        #     return wrapBool(self._i < 0)
-        # if atom is ISZERO_0:
-        #     return wrapBool(self._i == 0)
+    @method("Bool")
+    def atLeastZero(self):
+        return self.bi.int_ge(0)
 
-        if atom is ABS_0:
-            return BigInt(self.bi.abs())
+    @method("Bool")
+    def atMostZero(self):
+        return self.bi.int_le(0)
 
-        if atom is ADD_1:
-            other = args[0]
-            try:
-                return BigInt(self.bi.add(unwrapBigInt(other)))
-            except WrongType:
-                try:
-                    return BigInt(self.bi.int_add(unwrapInt(other)))
-                except WrongType:
-                    return DoubleObject(self.bi.tofloat() +
-                                        unwrapDouble(other))
+    @method("Bool")
+    def belowZero(self):
+        return self.bi.int_lt(0)
 
-        if atom is AND_1:
-            other = args[0]
-            try:
-                return BigInt(self.bi.and_(unwrapBigInt(other)))
-            except WrongType:
-                return BigInt(self.bi.int_and_(unwrapInt(other)))
+    @method("Bool")
+    def isZero(self):
+        return self.bi.int_eq(0)
 
-        if atom is APPROXDIVIDE_1:
-            # approxDivide/1: Promote both this int and its argument to
-            # double, then perform division.
-            # The actual division is performed within the bigint.
-            try:
-                other = promoteToBigInt(args[0])
-                d = self.bi.truediv(other)
-                return DoubleObject(d)
-            except WrongType:
-                # Other object is a double, maybe?
-                other = unwrapDouble(args[0])
-                return DoubleObject(self.bi.tofloat() / other)
-            except ZeroDivisionError:
-                # Tried to divide by zero.
-                return NaN
+    @method("BigInt")
+    def abs(self):
+        return self.bi.abs()
 
-        if atom is BITLENGTH_0:
-            return IntObject(self.bi.bit_length())
+    @method("Double", "Double", _verb="add")
+    def addDouble(self, other):
+        return self.bi.tofloat() + other
 
-        if atom is COMPLEMENT_0:
-            return BigInt(self.bi.invert())
+    @method("BigInt", "BigInt")
+    def add(self, other):
+        return self.bi.add(other)
 
-        if atom is FLOORDIVIDE_1:
-            other = promoteToBigInt(args[0])
-            try:
-                return BigInt(self.bi.floordiv(other))
-            except ZeroDivisionError:
-                raise userError(u"Integer division by zero")
+    @method("BigInt", "Int", _verb="add")
+    def addInt(self, other):
+        return self.bi.int_add(other)
 
-        if atom is MAX_1:
-            # XXX could specialize for ints
-            other = promoteToBigInt(args[0])
-            return self if self.bi.gt(other) else args[0]
+    @method("BigInt", "BigInt", _verb="and")
+    def _and(self, other):
+        return self.bi.and_(other)
 
-        if atom is MIN_1:
-            # XXX could specialize for ints
-            other = promoteToBigInt(args[0])
-            return self if self.bi.lt(other) else args[0]
+    @method("BigInt", "Int", _verb="and")
+    def _andInt(self, other):
+        return self.bi.int_and_(other)
 
-        if atom is MODPOW_2:
-            exponent = unwrapInt(args[0])
-            modulus = unwrapInt(args[1])
-            return BigInt(self.bi.pow(rbigint.fromint(exponent),
-                                      rbigint.fromint(modulus)))
+    @method("Double", "Double", _verb="approxDivide")
+    def approxDivideDouble(self, other):
+        return self.bi.tofloat() / other
 
-        if atom is MOD_1:
-            other = args[0]
-            try:
-                return BigInt(self.bi.mod(unwrapBigInt(other)))
-            except WrongType:
-                return BigInt(self.bi.int_mod(unwrapInt(other)))
+    @method("Any", "BigInt")
+    def approxDivide(self, other):
+        try:
+            return DoubleObject(self.bi.truediv(other))
+        except ZeroDivisionError:
+            return NaN
 
-        if atom is MULTIPLY_1:
-            # XXX doubles
-            other = args[0]
-            try:
-                return BigInt(self.bi.mul(unwrapBigInt(other)))
-            except WrongType:
-                return BigInt(self.bi.int_mul(unwrapInt(other)))
+    @method("Any", "Int", _verb="approxDivide")
+    def approxDivideInt(self, other):
+        try:
+            return DoubleObject(self.bi.truediv(rbigint.fromint(other)))
+        except ZeroDivisionError:
+            return NaN
 
-        if atom is NEGATE_0:
-            return BigInt(self.bi.neg())
+    @method("Int", "Double", _verb="floorDivide")
+    def floorDivideDouble(self, other):
+        # Of the two ways to lose precision, we had to choose one. ~ C.
+        return int(self.bi.tofloat() / other)
 
-        if atom is NEXT_0:
-            return BigInt(self.bi.int_add(1))
+    @method("BigInt", "BigInt")
+    def floorDivide(self, other):
+        try:
+            return self.bi.floordiv(other)
+        except ZeroDivisionError:
+            raise userError(u"floorDivide/1: Integer division by zero")
 
-        if atom is OR_1:
-            other = args[0]
-            try:
-                return BigInt(self.bi.or_(unwrapBigInt(other)))
-            except WrongType:
-                return BigInt(self.bi.int_or_(unwrapInt(other)))
+    @method("BigInt", "Int", _verb="floorDivide")
+    def floorDivideInt(self, other):
+        try:
+            return self.bi.floordiv(rbigint.fromint(other))
+        except ZeroDivisionError:
+            raise userError(u"floorDivide/1: Integer division by zero")
 
-        if atom is POW_1:
-            other = promoteToBigInt(args[0])
-            return BigInt(self.bi.pow(other))
+    @method("Int")
+    def bitLength(self):
+        return self.bi.bit_length()
 
-        if atom is PREVIOUS_0:
-            return BigInt(self.bi.int_sub(1))
+    @method("BigInt")
+    def complement(self):
+        return self.bi.invert()
 
-        if atom is SHIFTLEFT_1:
-            other = unwrapInt(args[0])
-            return BigInt(self.bi.lshift(other))
+    @method("BigInt", "BigInt")
+    def max(self, other):
+        return self.bi if self.bi.gt(other) else other
 
-        if atom is SHIFTRIGHT_1:
-            other = unwrapInt(args[0])
-            return BigInt(self.bi.rshift(other))
+    @method("BigInt", "Int", _verb="max")
+    def maxInt(self, other):
+        return self.bi if self.bi.int_gt(other) else rbigint.fromint(other)
 
-        if atom is SUBTRACT_1:
-            other = args[0]
-            try:
-                return BigInt(self.bi.sub(unwrapBigInt(other)))
-            except WrongType:
-                try:
-                    return BigInt(self.bi.int_sub(unwrapInt(other)))
-                except WrongType:
-                    return DoubleObject(self.bi.tofloat() -
-                                        unwrapDouble(other))
+    @method("BigInt", "BigInt")
+    def min(self, other):
+        return self.bi if self.bi.lt(other) else other
 
-        if atom is XOR_1:
-            other = args[0]
-            try:
-                return BigInt(self.bi.xor(unwrapBigInt(other)))
-            except WrongType:
-                return BigInt(self.bi.int_xor(unwrapInt(other)))
+    @method("BigInt", "Int", _verb="min")
+    def minInt(self, other):
+        return self.bi if self.bi.int_lt(other) else rbigint.fromint(other)
 
-        raise Refused(self, atom, args)
+    # We do not bother with supporting bigint exponents. If an exponent cannot
+    # be coerced into an int, then it is too big for the machine that we're
+    # currently running on. ~ C.
 
-    def cmp(self, other):
+    @method("BigInt", "Int", "BigInt")
+    def modPow(self, exponent, modulus):
+        return self.bi.pow(rbigint.fromint(exponent), modulus)
+
+    @method("BigInt", "Int", "Int", _verb="modPow")
+    def modPowInt(self, exponent, modulus):
+        return self.bi.pow(rbigint.fromint(exponent),
+                rbigint.fromint(modulus))
+
+    @method("BigInt", "Int")
+    def pow(self, exponent):
+        return self.bi.pow(rbigint.fromint(exponent))
+
+    @method("BigInt", "BigInt")
+    def mod(self, modulus):
+        return self.bi.mod(modulus)
+
+    @method("BigInt", "Int", _verb="mod")
+    def modInt(self, modulus):
+        return self.bi.int_mod(modulus)
+
+    @method("Double", "Double", _verb="multiply")
+    def multiplyDouble(self, other):
+        return self.bi.tofloat() * other
+
+    @method("BigInt", "BigInt")
+    def multiply(self, other):
+        return self.bi.mul(other)
+
+    @method("BigInt", "Int", _verb="multiply")
+    def multiplyInt(self, other):
+        return self.bi.int_mul(other)
+
+    @method("BigInt")
+    def negate(self):
+        return self.bi.neg()
+
+    @method("BigInt")
+    def next(self):
+        return self.bi.int_add(1)
+
+    @method("BigInt", "BigInt", _verb="or")
+    def _or(self, other):
+        return self.bi.or_(other)
+
+    @method("BigInt", "Int", _verb="or")
+    def orInt(self, other):
+        return self.bi.int_or_(other)
+
+    @method("BigInt")
+    def previous(self):
+        return self.bi.int_sub(1)
+
+    @method("BigInt", "Int")
+    def shiftLeft(self, other):
+        return self.bi.lshift(other)
+
+    @method("BigInt", "Int")
+    def shiftRight(self, other):
+        return self.bi.rshift(other)
+
+    @method("Double", "Double", _verb="subtract")
+    def subtractDouble(self, other):
+        return self.bi.tofloat() - other
+
+    @method("BigInt", "BigInt")
+    def subtract(self, other):
+        return self.bi.sub(other)
+
+    @method("BigInt", "Int", _verb="subtract")
+    def subtractInt(self, other):
+        return self.bi.int_sub(other)
+
+    @method("BigInt", "BigInt")
+    def xor(self, other):
+        return self.bi.xor(other)
+
+    @method("BigInt", "Int", _verb="xor")
+    def xorInt(self, other):
+        return self.bi.int_xor(other)
+
+    @method("Int", "BigInt")
+    def op__cmp(self, other):
         if self.bi.lt(other):
             return -1
         elif self.bi.gt(other):
@@ -888,7 +858,8 @@ class BigInt(Object):
             # Using a property of integers here.
             return 0
 
-    def cmpInt(self, other):
+    @method("Int", "Int", _verb="op__cmp")
+    def op__cmpInt(self, other):
         if self.bi.int_lt(other):
             return -1
         elif self.bi.int_gt(other):
@@ -906,7 +877,10 @@ def unwrapBigInt(o):
     raise WrongType(u"Not a big integer!")
 
 def wrapBigInt(bi):
-    return BigInt(bi)
+    try:
+        return IntObject(bi.toint())
+    except OverflowError:
+        return BigInt(bi)
 
 def isBigInt(o):
     from typhon.objects.refs import resolution
