@@ -292,11 +292,11 @@ class DoubleObject(Object):
         return self._d + other
 
     @method("Double", "Double")
-    def mul(self, other):
+    def multiply(self, other):
         return self._d * other
 
-    @method("Double", "Int", _verb="mul")
-    def mulInt(self, other):
+    @method("Double", "Int", _verb="multiply")
+    def multiplyInt(self, other):
         return self._d * other
 
     @method("Double", "Double")
