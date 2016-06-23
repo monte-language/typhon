@@ -460,3 +460,8 @@ class TestBigInt(TestCase):
     def testFloorDivideNaN(self):
         i = BigInt(rbigint.fromint(0))
         self.assertRaises(UserException, i.call, u"floorDivide", [i])
+
+    def testFloorDivideDouble(self):
+        bi = BigInt(rbigint.fromint(2).pow(rbigint.fromint(65)))
+        result = bi.call(u"floorDivide", [DoubleObject(2.0)])
+        self.assertTrue(result.bi.eq(rbigint.fromint(2).pow(rbigint.fromint(64))))
