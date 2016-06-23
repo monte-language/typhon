@@ -720,10 +720,10 @@ class BigInt(Object):
         except ZeroDivisionError:
             return NaN
 
-    @method("Int", "Double", _verb="floorDivide")
+    @method("BigInt", "Double", _verb="floorDivide")
     def floorDivideDouble(self, other):
         # Of the two ways to lose precision, we had to choose one. ~ C.
-        return int(self.bi.tofloat() / other)
+        return rbigint.fromfloat(self.bi.tofloat() / other)
 
     @method("BigInt", "BigInt")
     def floorDivide(self, other):
