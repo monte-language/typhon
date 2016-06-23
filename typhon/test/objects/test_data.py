@@ -407,17 +407,17 @@ class TestBigInt(TestCase):
     def testShiftLeft(self):
         bi = BigInt(rbigint.fromint(42))
         result = bi.call(u"shiftLeft", [IntObject(2)])
-        self.assertTrue(result.bi.int_eq(168))
+        self.assertEqual(result.getInt(), 168)
 
     def testShiftRight(self):
         bi = BigInt(rbigint.fromint(42))
         result = bi.call(u"shiftRight", [IntObject(2)])
-        self.assertTrue(result.bi.int_eq(10))
+        self.assertEqual(result.getInt(), 10)
 
     def testXorInt(self):
         bi = BigInt(rbigint.fromint(0xcccc))
         result = bi.call(u"xor", [IntObject(0xaaaa)])
-        self.assertTrue(result.bi.int_eq(0x6666))
+        self.assertEqual(result.getInt(), 0x6666)
 
     def testBitLength(self):
         bi = BigInt(rbigint.fromint(42))
@@ -427,12 +427,12 @@ class TestBigInt(TestCase):
     def testAndInt(self):
         bi = BigInt(rbigint.fromint(0x3fffffffffffffff).int_mul(3))
         result = bi.call(u"and", [IntObject(0xffff)])
-        self.assertTrue(result.bi.int_eq(0xfffd))
+        self.assertEqual(result.getInt(), 0xfffd)
 
     def testComplement(self):
         bi = BigInt(rbigint.fromint(6))
         result = bi.call(u"complement", [])
-        self.assertTrue(result.bi.int_eq(-7))
+        self.assertEqual(result.getInt(), -7)
 
     def testOpCmpInt(self):
         bi = BigInt(rbigint.fromint(6))
