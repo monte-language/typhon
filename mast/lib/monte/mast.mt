@@ -24,26 +24,28 @@ def packStr(s :NullOk[Str]) :Bytes as DeepFrozen:
 def makeMASTContext() as DeepFrozen:
     "Make a MAST context."
 
-    def exprs := [].diverge()
-    def patts := [].diverge()
+    def exprs := [].asMap().diverge()
+    def patts := [].asMap().diverge()
     def streams := [b`Mont$\xe0MAST$\x00`].diverge()
 
     return object MASTContext:
         "A MAST context."
 
         to run(expr) :Void:
-            MASTContext.addExpr(expr)
+            "Add an expression to this context.
+
+             The expression will be canonicalized, to remove span
+             information."
+            MASTContext.addExpr(expr.canonical())
 
         to bytes() :Bytes:
             return b``.join(streams)
 
         to appendExpr(bs :Bytes) :Int:
-            var index := exprs.indexOf(bs)
-            if (index == -1):
-                index := exprs.size()
-                exprs.push(bs)
+            return exprs.fetch(bs, fn {
                 streams.push(bs)
-            return index
+                exprs[bs] := exprs.size()
+            })
 
         to packExpr(expr) :Bytes:
             return packInt(MASTContext.addExpr(expr))
@@ -58,12 +60,10 @@ def makeMASTContext() as DeepFrozen:
             return packInt(namedArgs.size()) + b``.join(namedArgs)
 
         to appendPatt(bs :Bytes) :Int:
-            var index := patts.indexOf(bs)
-            if (index == -1):
-                index := patts.size()
-                patts.push(bs)
+            return patts.fetch(bs, fn {
                 streams.push(bs)
-            return index
+                patts[bs] := patts.size()
+            })
 
         to packPatt(patt) :Bytes:
             return packInt(MASTContext.addPatt(patt))
