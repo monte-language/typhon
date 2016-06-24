@@ -17,7 +17,7 @@ from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, Refused, userError
 from typhon.errors import UserException
 from typhon.objects.collections.helpers import MonteSorter
@@ -82,17 +82,14 @@ class listIterator(Object):
     def toString(self):
         return u"<listIterator>"
 
-    def recv(self, atom, args):
-        if atom is NEXT_1:
-            if self._index < self.size:
-                rv = [IntObject(self._index), self.objects[self._index]]
-                self._index += 1
-                return wrapList(rv)
-            else:
-                ej = args[0]
-                throw(ej, StrObject(u"Iterator exhausted"))
-
-        raise Refused(self, atom, args)
+    @method("List", "Any")
+    def next(self, ej):
+        if self._index < self.size:
+            rv = [IntObject(self._index), self.objects[self._index]]
+            self._index += 1
+            return rv
+        else:
+            throw(ej, StrObject(u"Iterator exhausted"))
 
 
 class List(object):
@@ -668,18 +665,15 @@ class CLIterator(Object):
     def toString(self):
         return u"<listIterator>"
 
-    def recv(self, atom, args):
-        if atom is NEXT_1:
-            try:
-                index = self._index
-                rv = [IntObject(index), self.strategy.get(index)]
-                self._index += 1
-                return wrapList(rv)
-            except IndexError:
-                ej = args[0]
-                throw(ej, StrObject(u"Iterator exhausted"))
-
-        raise Refused(self, atom, args)
+    @method("List", "Any")
+    def next(self, ej):
+        try:
+            index = self._index
+            rv = [IntObject(index), self.strategy.get(index)]
+            self._index += 1
+            return rv
+        except IndexError:
+            throw(ej, StrObject(u"Iterator exhausted"))
 
 
 @autohelp
