@@ -617,7 +617,7 @@ def promiseAllFulfilled(vows) as DeepFrozenStamp:
     for v in (vows):
         Ref.whenResolvedOnly(v, def done(_) {
             if (Ref.isBroken(v)) {
-                r.resolve(v, false)
+                r.resolveRace(v)
             } else if ((counter -= 1) <= 0) {
                 r.resolve(vows)
             }
