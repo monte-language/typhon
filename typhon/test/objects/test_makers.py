@@ -23,15 +23,14 @@ class TestMakeInt(TestCase):
 
     def test_fromBytes(self):
         result = theMakeInt.call(u"fromBytes", [BytesObject("42")])
-        self.assertEqual(result.bi, rbigint.fromint(42))
+        self.assertEqual(result.getInt(), 42)
 
     def test_fromBytesRadix(self):
         withRadix = theMakeInt.call(u"withRadix", [IntObject(16)])
         result = withRadix.call(u"fromBytes", [BytesObject("42")])
-        self.assertEqual(result.bi, rbigint.fromint(66))
+        self.assertEqual(result.getInt(), 66)
 
     def testWithUnderscores(self):
         s = StrObject(u"100_000")
         result = theMakeInt.call(u"run", [s])
-        bi = rbigint.fromint(100000)
-        self.assertEqual(result.bi, bi)
+        self.assertEqual(result.getInt(), 100000)

@@ -177,9 +177,9 @@ class Vat(Object):
                     result = target.send(atom, args, namedArgs)
                 else:
                     result = target.callAtom(atom, args, namedArgs)
-                # Resolver may be invoked from the code in this turn, so
-                # strict=False to skip this if already resolved.
-                resolver.resolve(result, strict=False)
+                # The resolver may have already been invoked, so we'll use
+                # .resolveRace/1 instead of .resolve/1. ~ C.
+                resolver.resolveRace(result)
             except UserException as ue:
                 resolver.smash(sealException(ue))
             except VatCheckpointed:

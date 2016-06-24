@@ -17,10 +17,10 @@ import weakref
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.enum import makeEnum
-from typhon.errors import Ejecting, Refused, UserException, userError
+from typhon.errors import Ejecting, UserException, userError
 from typhon.log import log
 from typhon.objects.auditors import deepFrozenStamp, selfless
-from typhon.objects.constants import NullObject, unwrapBool, wrapBool
+from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.root import Object, audited
 from typhon.vats import currentVat
@@ -285,16 +285,7 @@ class LocalResolver(Object):
         else:
             return u"<resolver>"
 
-    def recv(self, atom, args):
-        if atom is RESOLVE_1:
-            return wrapBool(self.resolve(args[0]))
-
-        if atom is RESOLVE_2:
-            return wrapBool(self.resolve(args[0], unwrapBool(args[1])))
-
-        raise Refused(self, atom, args)
-
-    def resolve(self, target, strict=True):
+    def _resolve(self, target, strict=True):
         if self._ref is None:
             if strict:
                 raise userError(u"Already resolved")
@@ -321,12 +312,19 @@ class LocalResolver(Object):
             self._buf = None
             return True
 
+    @method.py("Bool", "Any")
+    def resolve(self, target):
+        return self._resolve(target, True)
+
+    @method.py("Bool", "Any")
     def resolveRace(self, target):
-        return self.resolve(target, False)
+        return self._resolve(target, False)
 
+    @method.py("Bool", "Any")
     def smash(self, problem):
-        return self.resolve(UnconnectedRef(problem), False)
+        return self._resolve(UnconnectedRef(problem), False)
 
+    @method("Bool")
     def isDone(self):
         return self._ref is None
 
