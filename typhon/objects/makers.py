@@ -8,29 +8,17 @@ from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Refused
-from typhon.log import deprecated
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.collections.lists import listFromIterable, unwrapList
+from typhon.objects.collections.lists import listFromIterable
 from typhon.objects.collections.maps import ConstMap
-from typhon.objects.data import (BigInt, StrObject, bytesToString,
-        unwrapBytes, unwrapInt, unwrapStr, unwrapChar)
+from typhon.objects.data import (StrObject, bytesToString, unwrapInt,
+        unwrapChar)
 from typhon.objects.ejectors import throw
 from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
 
-FROMBYTES_1 = getAtom(u"fromBytes", 1)
-FROMBYTES_2 = getAtom(u"fromBytes", 2)
-FROMCHARS_1 = getAtom(u"fromChars", 1)
-FROMINTS_1 = getAtom(u"fromInts", 1)
+
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
-FROMSTRING_1 = getAtom(u"fromString", 1)
-FROMSTRING_2 = getAtom(u"fromString", 2)
-FROMSTR_1 = getAtom(u"fromStr", 1)
-FROMSTR_2 = getAtom(u"fromStr", 2)
-RUN_1 = getAtom(u"run", 1)
-RUN_2 = getAtom(u"run", 2)
-WITHRADIX_1 = getAtom(u"withRadix", 1)
 
 
 @autohelp
@@ -104,9 +92,6 @@ class MakeInt(Object):
     def toString(self):
         return u"<makeInt(radix %d)>" % (self.radix,)
 
-    def withRadix(self, radix):
-        return MakeInt(radix)
-
     @profileTyphon("_makeInt.fromBytes/2")
     def fromBytes(self, bs, ej):
         # Ruby-style underscores are legal here but can't be handled by
@@ -118,28 +103,28 @@ class MakeInt(Object):
             throw(ej, StrObject(u"_makeInt: Couldn't make int in radix %d from %s" %
                 (self.radix, bytesToString(bs))))
 
-    def recv(self, atom, args):
-        if atom is WITHRADIX_1:
-            radix = unwrapInt(args[0])
-            return self.withRadix(radix)
+    @method("Any", "Int")
+    def withRadix(self, radix):
+        return MakeInt(radix)
 
-        if atom is RUN_1:
-            bs = unwrapStr(args[0]).encode("utf-8")
-            return BigInt(self.fromBytes(bs, None))
+    @method("BigInt", "Str", _verb="run")
+    def runThrow(self, s):
+        bs = s.encode("utf-8")
+        return self.fromBytes(bs, None)
 
-        if atom is RUN_2:
-            bs = unwrapStr(args[0]).encode("utf-8")
-            return BigInt(self.fromBytes(bs, args[1]))
+    @method("BigInt", "Str", "Any")
+    def run(self, s, ej):
+        bs = s.encode("utf-8")
+        return self.fromBytes(bs, ej)
 
-        if atom is FROMBYTES_1:
-            bs = unwrapBytes(args[0])
-            return BigInt(self.fromBytes(bs, None))
+    @method("BigInt", "Bytes", _verb="fromBytes")
+    def fromBytesThrow(self, bs):
+        return self.fromBytes(bs, None)
 
-        if atom is FROMBYTES_2:
-            bs = unwrapBytes(args[0])
-            return BigInt(self.fromBytes(bs, args[1]))
+    @method("BigInt", "Bytes", "Any", _verb="fromBytes")
+    def fromBytesEj(self, bs, ej):
+        return self.fromBytes(bs, ej)
 
-        raise Refused(self, atom, args)
 theMakeInt = MakeInt(10)
 
 
@@ -184,31 +169,17 @@ class MakeStr(Object):
     def toString(self):
         return u"<makeStr>"
 
-    @deprecated(u"_makeStr.fromString/1: Use .fromStr/1 instead")
-    def fromString(self, s):
-        return self.fromStr(s)
-
+    @method("Str", "Str")
     def fromStr(self, s):
-        return StrObject(s)
+        return s
 
-    def recv(self, atom, args):
-        if atom is FROMSTRING_1:
-            return self.fromString(unwrapStr(args[0]))
+    @method("Str", "Str", "Any", _verb="fromStr")
+    def fromStrSpan(self, s, span):
+        # XXX handle twineishness
+        return s
 
-        if atom is FROMSTR_1:
-            return self.fromStr(unwrapStr(args[0]))
+    @method("Str", "List")
+    def fromChars(self, data):
+        return u"".join([unwrapChar(c) for c in data])
 
-        if atom is FROMSTRING_2:
-            # XXX handle twineishness
-            return self.fromString(unwrapStr(args[0]))
-
-        if atom is FROMSTR_2:
-            # XXX handle twineishness
-            return self.fromStr(unwrapStr(args[0]))
-
-        if atom is FROMCHARS_1:
-            data = unwrapList(args[0])
-            return StrObject(u"".join([unwrapChar(c) for c in data]))
-
-        raise Refused(self, atom, args)
 theMakeStr = MakeStr()
