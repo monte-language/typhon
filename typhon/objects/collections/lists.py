@@ -23,7 +23,7 @@ from typhon.errors import UserException
 from typhon.objects.collections.helpers import MonteSorter
 from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
-from typhon.objects.ejectors import Ejector, throw
+from typhon.objects.ejectors import Ejector, throwStr
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
@@ -89,7 +89,7 @@ class listIterator(Object):
             self._index += 1
             return rv
         else:
-            throw(ej, StrObject(u"Iterator exhausted"))
+            throwStr(ej, u"Iterator exhausted")
 
 
 class List(object):
@@ -351,7 +351,7 @@ def unwrapList(o, ej=None):
         return l.strategy.asList()
     if isinstance(l, FlexList):
         return l.strategy.fetch_all(l)
-    throw(ej, StrObject(u"Not a list!"))
+    throwStr(ej, u"Not a list!")
 
 def isList(obj):
     from typhon.objects.refs import resolution
@@ -646,7 +646,7 @@ def unwrapCL(obj, ej):
     if isinstance(l, FlexList):
         # If it's a FlexList, take a snapshot.
         return LongCL(l.strategy.fetch_all(l))
-    throw(ej, StrObject(u"Not a list!"))
+    throwStr(ej, u"Not a list!")
 
 
 @autohelp
@@ -673,7 +673,7 @@ class CLIterator(Object):
             self._index += 1
             return rv
         except IndexError:
-            throw(ej, StrObject(u"Iterator exhausted"))
+            throwStr(ej, u"Iterator exhausted")
 
 
 @autohelp

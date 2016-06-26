@@ -18,7 +18,6 @@ from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, userError
 # Can't use audited, even thought it's importable; calling it causes a circle.
 from typhon.objects.collections.helpers import asSet
-from typhon.objects.ejectors import throwStr
 from typhon.objects.root import Object, runnable
 from typhon.profile import profileTyphon
 
@@ -48,6 +47,7 @@ class DeepFrozenStamp(Object):
     def coerce(self, specimen, ej):
         if specimen.auditedBy(self):
             return specimen
+        from typhon.objects.ejectors import throwStr
         throwStr(ej, u"coerce/2: Not DeepFrozen")
 
 deepFrozenStamp = DeepFrozenStamp()
@@ -145,8 +145,7 @@ selfless = Selfless()
 def checkDeepFrozen(specimen, seen, ej, root):
     from typhon.objects.collections.lists import unwrapList
     from typhon.objects.collections.maps import ConstMap
-    from typhon.objects.data import StrObject
-    from typhon.objects.ejectors import throw
+    from typhon.objects.ejectors import throwStr
     from typhon.objects.equality import TraversalKey
     from typhon.objects.refs import Promise, isBroken
     key = TraversalKey(specimen)
@@ -165,7 +164,7 @@ def checkDeepFrozen(specimen, seen, ej, root):
         portrayal = specimen.call(u"_uncall", [])
         portrayalList = unwrapList(portrayal, ej)
         if len(portrayalList) != 4:
-            throw(ej, StrObject(u"Transparent object gave bad portrayal"))
+            throwStr(ej, u"Transparent object gave bad portrayal")
             return
         checkDeepFrozen(portrayalList[0], seen, ej, root)
         checkDeepFrozen(portrayalList[1], seen, ej, root)
@@ -173,9 +172,8 @@ def checkDeepFrozen(specimen, seen, ej, root):
         for item in args:
             checkDeepFrozen(item, seen, ej, root)
         namedArgs = portrayalList[3]
-        # XXX unwrapMap
         if not isinstance(namedArgs, ConstMap):
-            throw(ej, StrObject(u"Transparent object gave bad portrayal"))
+            throwStr(ej, u"Transparent object gave bad portrayal")
             return
         for k, v in namedArgs.iteritems():
             checkDeepFrozen(k, seen, ej, root)

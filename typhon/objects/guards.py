@@ -11,7 +11,7 @@ from typhon.objects.constants import (TrueObject, FalseObject, NullObject,
                                       unwrapBool, wrapBool)
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
-from typhon.objects.ejectors import Ejector, throw, throwStr
+from typhon.objects.ejectors import Ejector, throwStr
 from typhon.errors import Ejecting, userError
 from typhon.objects.refs import resolution
 from typhon.objects.root import Object, audited
@@ -31,12 +31,12 @@ class Guard(Object):
             except UserException:
                 msg = u"%s threw exception while conforming to %s" % (
                         specimen.toQuote(), self.toQuote())
-                throw(ej, StrObject(msg))
+                throwStr(ej, msg)
             else:
                 val = self.subCoerce(newspec)
                 if val is None:
-                    throw(ej, StrObject(u"%s does not conform to %s" % (
-                        specimen.toQuote(), self.toQuote())))
+                    throwStr(ej, u"%s does not conform to %s" % (
+                        specimen.toQuote(), self.toQuote()))
                 else:
                     return val
         else:
@@ -177,7 +177,7 @@ class AnyGuard(Object):
         if isinstance(guard, AnyOfGuard):
             return guard.subguards
         else:
-            throw(ej, StrObject(u"Not an AnyOf guard"))
+            throwStr(ej, u"Not an AnyOf guard")
 
     @method("Set")
     def getMethods(self):
@@ -223,7 +223,7 @@ class AnyOfGuard(Object):
                 except Ejecting as e:
                     if e.ejector is cont:
                         continue
-        throw(ej, StrObject(u"No subguards matched"))
+        throwStr(ej, u"No subguards matched")
 
     @method("Bool", "Any")
     def supersetOf(self, guard):
@@ -561,5 +561,5 @@ class SubrangeGuard(Object):
         c = specimen.call(u"_conformTo", [self])
         if c.auditedBy(self):
             return c
-        throw(ej, StrObject(u"%s does not conform to %s" % (
-            specimen.toQuote(), self.toQuote())))
+        throwStr(ej, u"%s does not conform to %s" % (
+            specimen.toQuote(), self.toQuote()))

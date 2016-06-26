@@ -22,7 +22,7 @@ from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.data import StrObject
-from typhon.objects.ejectors import Ejector, theThrower, throw
+from typhon.objects.ejectors import Ejector, theThrower, throwStr
 from typhon.objects.exceptions import sealException
 from typhon.objects.guards import anyGuard
 from typhon.objects.slots import Binding, VarSlot, finalBinding, varBinding
@@ -293,8 +293,8 @@ class SmallCaps(object):
         ej = self.pop()
         xs = unwrapList(self.pop(), ej)
         if len(xs) != size:
-            throw(ej, StrObject(u"Failed list pattern (needed %d, got %d)" %
-                                (size, len(xs))))
+            throwStr(ej, u"Failed list pattern (needed %d, got %d)" %
+                     (size, len(xs)))
         while size:
             size -= 1
             self.push(xs[size])

@@ -11,9 +11,9 @@ from typhon.autohelp import autohelp, method
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections.lists import listFromIterable
 from typhon.objects.collections.maps import ConstMap
-from typhon.objects.data import (StrObject, bytesToString, unwrapInt,
+from typhon.objects.data import (bytesToString, unwrapInt,
         unwrapChar)
-from typhon.objects.ejectors import throw
+from typhon.objects.ejectors import throwStr
 from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
 
@@ -57,7 +57,7 @@ class MakeDouble(Object):
         try:
             return float(s.encode("utf-8"))
         except ValueError:
-            throw(ej, StrObject(u"Couldn't parse floating-point number"))
+            throwStr(ej, u"Couldn't parse floating-point number")
 
     @method("Double", "Str", _verb="run")
     def _run(self, s):
@@ -68,7 +68,7 @@ class MakeDouble(Object):
         try:
             return unpack_float(bs, True)
         except ValueError:
-            throw(ej, StrObject(u"Couldn't unpack invalid IEEE 754 double"))
+            throwStr(ej, u"Couldn't unpack invalid IEEE 754 double")
 
     @method("Double", "Bytes", _verb="fromBytes")
     def _fromBytes(self, bs):
@@ -100,8 +100,8 @@ class MakeInt(Object):
         try:
             return rbigint.fromstr(bs, self.radix)
         except ParseStringError:
-            throw(ej, StrObject(u"_makeInt: Couldn't make int in radix %d from %s" %
-                (self.radix, bytesToString(bs))))
+            throwStr(ej, u"_makeInt: Couldn't make int in radix %d from %s" %
+                (self.radix, bytesToString(bs)))
 
     @method("Any", "Int")
     def withRadix(self, radix):

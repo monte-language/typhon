@@ -23,9 +23,8 @@ from typhon.objects.collections.helpers import asSet, emptySet
 from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import ConstMap
 from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import (StrObject, Infinity, NaN, makeSourceSpan,
-                                 unwrapStr)
-from typhon.objects.ejectors import throw, theThrower
+from typhon.objects.data import Infinity, NaN, makeSourceSpan, unwrapStr
+from typhon.objects.ejectors import throwStr, theThrower
 from typhon.objects.equality import Equalizer
 from typhon.objects.exceptions import SealedException
 from typhon.objects.iteration import loop
@@ -295,7 +294,7 @@ class NearGuard(Object):
         specimen = resolution(specimen)
         if isinstance(specimen, Promise):
             msg = u"Specimen is in non-near state %s" % specimen.state().repr
-            throw(ej, StrObject(msg))
+            throwStr(ej, msg)
         return specimen
 
 
