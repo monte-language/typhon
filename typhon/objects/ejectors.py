@@ -76,6 +76,14 @@ def throw(ej, payload):
         ej.call(u"run", [payload])
     raise userError(u"Ejector did not exit")
 
+def throwStr(ej, s):
+    """
+    The correct way to throw to an ejector with a string.
+    """
+
+    from typhon.objects.data import wrapStr
+    throw(ej, wrapStr(s))
+
 @autohelp
 @audited.DF
 class Throw(Object):

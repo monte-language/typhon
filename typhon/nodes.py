@@ -33,7 +33,7 @@ from typhon.objects.collections.lists import unwrapList, wrapList
 from typhon.objects.collections.maps import EMPTY_MAP, monteMap
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, promoteToBigInt, unwrapStr)
-from typhon.objects.ejectors import throw
+from typhon.objects.ejectors import throwStr
 from typhon.objects.meta import MetaContext
 from typhon.objects.root import Object, audited
 from typhon.pretty import Buffer, LineWriter
@@ -338,8 +338,7 @@ class KernelAstStamp(Object):
     def coerce(self, specimen, ej):
         if specimen.auditedBy(self):
             return specimen
-        # XXX bad eject
-        ej.call(u"run", [StrObject(u"Not a KernelAst node")])
+        throwStr(ej, u"coerce/2: Not a KernelAST node")
 
 kernelAstStamp = KernelAstStamp()
 
@@ -1681,9 +1680,9 @@ class Script(Expr):
             if isinstance(matcher, Matcher):
                 pattern = matcher._pattern
                 if pattern.refutable():
-                    throw(ej, StrObject(u"getCompleteMatcher/1: Ultimate matcher pattern is refutable"))
+                    throwStr(ej, u"getCompleteMatcher/1: Ultimate matcher pattern is refutable")
                 return [pattern, matcher._block]
-        throw(ej, StrObject(u"getCompleteMatcher/1: No matchers"))
+        throwStr(ej, u"getCompleteMatcher/1: No matchers")
 
     @method("Any", "Str", "Any")
     def getMethodNamed(self, name, ej):
@@ -1691,7 +1690,7 @@ class Script(Expr):
             assert isinstance(meth, Method), "Method wasn't a method!?"
             if meth._verb == name:
                 return meth
-        throw(ej, StrObject(u"getMethodNamed/2: No method named %s" % name))
+        throwStr(ej, u"getMethodNamed/2: No method named %s" % name)
 
 
 @autohelp
@@ -2063,7 +2062,7 @@ class NamedParam(Pattern):
     @method("Any", "Any")
     def getDefault(self, ej):
         if self._default is None:
-            throw(ej, StrObject(u"Parameter has no default"))
+            throwStr(ej, u"getDefault/1: Parameter has no default")
         return self._default
 
     def compile(self, compiler):
