@@ -14,43 +14,14 @@
 
 from rpython.rlib.rarithmetic import intmask
 
-from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Refused, WrongType, userError
+from typhon.errors import WrongType, userError
 from typhon.objects.collections.helpers import (KeySorter, ValueSorter,
                                                 monteMap)
-from typhon.objects.constants import NullObject, wrapBool
-from typhon.objects.data import IntObject, StrObject, unwrapInt
+from typhon.objects.data import StrObject
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
-
-
-ASSET_0 = getAtom(u"asSet", 0)
-CONTAINS_1 = getAtom(u"contains", 1)
-DIVERGE_0 = getAtom(u"diverge", 0)
-FETCH_2 = getAtom(u"fetch", 2)
-GETKEYS_0 = getAtom(u"getKeys", 0)
-GETVALUES_0 = getAtom(u"getValues", 0)
-GET_1 = getAtom(u"get", 1)
-NEXT_1 = getAtom(u"next", 1)
-OP__CMP_1 = getAtom(u"op__cmp", 1)
-OR_1 = getAtom(u"or", 1)
-POP_0 = getAtom(u"pop", 0)
-PUT_2 = getAtom(u"put", 2)
-REMOVEKEY_1 = getAtom(u"removeKey", 1)
-REVERSE_0 = getAtom(u"reverse", 0)
-SIZE_0 = getAtom(u"size", 0)
-SLICE_1 = getAtom(u"slice", 1)
-SLICE_2 = getAtom(u"slice", 2)
-SNAPSHOT_0 = getAtom(u"snapshot", 0)
-SORTKEYS_0 = getAtom(u"sortKeys", 0)
-SORTVALUES_0 = getAtom(u"sortValues", 0)
-WITHOUT_1 = getAtom(u"without", 1)
-WITH_2 = getAtom(u"with", 2)
-_MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
-_PRINTON_1 = getAtom(u"_printOn", 1)
-_UNCALL_0 = getAtom(u"_uncall", 0)
 
 
 @autohelp
@@ -324,7 +295,8 @@ class FlexMap(Object):
     def __init__(self, objectMap):
         self.objectMap = objectMap
 
-    def printOn(self, printer):
+    @method("Void", "Any")
+    def _printOn(self, printer):
         printer.call(u"print", [StrObject(u"[")])
         i = 0
         for k, v in self.objectMap.iteritems():
@@ -352,195 +324,155 @@ class FlexMap(Object):
     def toString(self):
         return toString(self)
 
+    @method("Void", "Any", "Any")
     def put(self, key, value):
         self.objectMap[key] = value
 
+    @method("Void", "Any")
     def removeKey(self, key):
         try:
             del self.objectMap[key]
         except KeyError:
             raise userError(u"removeKey/1: Key not in map")
 
+    @method("List")
     def pop(self):
-        from typhon.objects.collections.lists import wrapList
         if self.objectMap:
             key, value = self.objectMap.popitem()
-            return wrapList([key, value])
+            return [key, value]
         else:
             raise userError(u"pop/0: Pop from empty map")
 
-    def recv(self, atom, args):
-        # _makeIterator/0: Create an iterator for this collection's contents.
-        if atom is _MAKEITERATOR_0:
-            return self._makeIterator()
+    @method("Set")
+    def asSet(self):
+        return self.objectMap.copy()
 
-        if atom is _PRINTON_1:
-            printer = args[0]
-            self.printOn(printer)
-            return NullObject
+    @method("Any")
+    def diverge(self):
+        return FlexMap(self.objectMap.copy())
 
-        # contains/1: Determine whether an element is in this collection.
-        if atom is CONTAINS_1:
-            return wrapBool(self.contains(args[0]))
+    @method("Any", "Any", "Any")
+    def fetch(self, key, thunk):
+        rv = self.objectMap.get(key, None)
+        if rv is None:
+            rv = thunk.call(u"run", [])
+        return rv
 
-        # size/0: Get the number of elements in the collection.
-        if atom is SIZE_0:
-            return IntObject(self.size())
+    @method("List")
+    def getKeys(self):
+        return self.objectMap.keys()
 
-        # slice/1 and slice/2: Select a subrange of this collection.
-        if atom is SLICE_1:
-            start = unwrapInt(args[0])
-            try:
-                return self.slice(start)
-            except IndexError:
-                raise userError(u"slice/1: Index out of bounds")
+    @method("List")
+    def getValues(self):
+        return self.objectMap.values()
 
-        # slice/1 and slice/2: Select a subrange of this collection.
-        if atom is SLICE_2:
-            start = unwrapInt(args[0])
-            stop = unwrapInt(args[1])
-            try:
-                return self.slice(start, stop)
-            except IndexError:
-                raise userError(u"slice/1: Index out of bounds")
+    @method("Any", "Any")
+    def get(self, key):
+        try:
+            return self.objectMap[key]
+        except KeyError:
+            raise userError(u"get/1: Key not found: %s" % (key.toString(),))
 
-        # snapshot/0: Create a new constant collection with a copy of the
-        # current collection's contents.
-        if atom is SNAPSHOT_0:
-            return self.snapshot()
+    @method("Map")
+    def reverse(self):
+        d = monteMap()
+        l = [(k, v) for k, v in self.objectMap.iteritems()]
+        # Reverse it!
+        l.reverse()
+        for k, v in l:
+            d[k] = v
+        return d
 
-        from typhon.objects.collections.lists import wrapList
+    @method("Map")
+    def sortKeys(self):
+        # Extract a list, sort it, pack it back into a dict.
+        d = monteMap()
+        l = [(k, v) for k, v in self.objectMap.iteritems()]
+        KeySorter(l).sort()
+        for k, v in l:
+            d[k] = v
+        return d
 
-        if atom is _UNCALL_0:
-            return wrapList(self._uncall())
+    @method("Map")
+    def sortValues(self):
+        # Same as sortKeys/0.
+        d = monteMap()
+        l = [(k, v) for k, v in self.objectMap.iteritems()]
+        ValueSorter(l).sort()
+        for k, v in l:
+            d[k] = v
+        return d
 
-        if atom is ASSET_0:
-            from typhon.objects.collections.sets import ConstSet
-            return ConstSet(self.objectMap)
+    @method("Map", "Any", "Any", _verb="with")
+    def _with(self, key, value):
+        # Replace by key.
+        d = self.objectMap.copy()
+        d[key] = value
+        return d
 
-        if atom is DIVERGE_0:
-            return FlexMap(self.objectMap)
+    @method("Map", "Any")
+    def without(self, key):
+        # Even if we don't have the key, we need to copy since we're returning
+        # a ConstMap.
+        d = self.objectMap.copy()
+        # Ignore the case where the key wasn't in the map.
+        if key in d:
+            del d[key]
+        return d
 
-        if atom is FETCH_2:
-            key = args[0]
-            thunk = args[1]
-            rv = self.objectMap.get(key, None)
-            if rv is None:
-                rv = thunk.call(u"run", [])
-            return rv
-
-        if atom is GETKEYS_0:
-            return wrapList(self.objectMap.keys())
-
-        if atom is GETVALUES_0:
-            return wrapList(self.objectMap.values())
-
-        if atom is GET_1:
-            key = args[0]
-            try:
-                return self.objectMap[key]
-            except KeyError:
-                raise userError(u"Key not found: %s" % (key.toString(),))
-
-        # or/1: Unify the elements of this collection with another.
-        if atom is OR_1:
-            return self._or(args[0])
-
-        if atom is REVERSE_0:
-            d = monteMap()
-            l = [(k, v) for k, v in self.objectMap.iteritems()]
-            # Reverse it!
-            l.reverse()
-            for k, v in l:
-                d[k] = v
-            return ConstMap(d)
-
-        if atom is SORTKEYS_0:
-            # Extract a list, sort it, pack it back into a dict.
-            d = monteMap()
-            l = [(k, v) for k, v in self.objectMap.iteritems()]
-            KeySorter(l).sort()
-            for k, v in l:
-                d[k] = v
-            return ConstMap(d)
-
-        if atom is SORTVALUES_0:
-            # Same as sortKeys/0.
-            d = monteMap()
-            l = [(k, v) for k, v in self.objectMap.iteritems()]
-            ValueSorter(l).sort()
-            for k, v in l:
-                d[k] = v
-            return ConstMap(d)
-
-        if atom is WITH_2:
-            # Replace by key.
-            key = args[0]
-            value = args[1]
-            d = self.objectMap.copy()
-            d[key] = value
-            return ConstMap(d)
-
-        if atom is WITHOUT_1:
-            key = args[0]
-            d = self.objectMap.copy()
-            # Ignore the case where the key wasn't in the map.
-            if key in d:
-                del d[key]
-            return ConstMap(d)
-
-        if atom is PUT_2:
-            key = args[0]
-            value = args[1]
-            self.put(key, value)
-            return NullObject
-
-        if atom is REMOVEKEY_1:
-            key = args[0]
-            self.removeKey(key)
-            return NullObject
-
-        if atom is POP_0:
-            return self.pop()
-
-        raise Refused(self, atom, args)
-
+    @method("Any")
     def _makeIterator(self):
         return mapIterator(self.objectMap.items())
 
+    @method("List")
     def _uncall(self):
         from typhon.objects.collections.lists import wrapList
         return [ConstMap(self.objectMap.copy()), StrObject(u"diverge"),
                 wrapList([]), EMPTY_MAP]
 
+    @method("Bool", "Any")
     def contains(self, needle):
         return needle in self.objectMap
 
+    @method("Map", "Map", _verb="or")
     def _or(self, other):
         # XXX This is currently linear time. Can it be better? If not, prove
         # it, please.
         rv = self.objectMap.copy()
-        for ok, ov in unwrapMap(other).items():
+        for ok, ov in other.items():
             if ok not in rv:
                 rv[ok] = ov
-        return ConstMap(rv)
+        return rv
 
-    def slice(self, start, stop=-1):
-        assert start >= 0
-        if stop < 0:
-            items = self.objectMap.items()[start:]
-        else:
-            items = self.objectMap.items()[start:stop]
+    @method("Map", "Int")
+    def slice(self, start):
+        if start < 0:
+            raise userError(u"slice/1: Negative start")
+        items = self.objectMap.items()[start:]
         rv = monteMap()
         for k, v in items:
             rv[k] = v
-        return ConstMap(rv)
+        return rv
 
+    @method("Map", "Int", "Int", _verb="slice")
+    def _slice(self, start, stop):
+        if start < 0:
+            raise userError(u"slice/1: Negative start")
+        if stop < 0:
+            raise userError(u"slice/1: Negative stop")
+        items = self.objectMap.items()[start:stop]
+        rv = monteMap()
+        for k, v in items:
+            rv[k] = v
+        return rv
+
+    @method("Int")
     def size(self):
         return len(self.objectMap)
 
+    @method("Map")
     def snapshot(self):
-        return ConstMap(self.objectMap.copy())
+        return self.objectMap.copy()
 
 
 def unwrapMap(o):
