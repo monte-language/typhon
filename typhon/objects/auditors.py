@@ -18,6 +18,7 @@ from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, userError
 # Can't use audited, even thought it's importable; calling it causes a circle.
 from typhon.objects.collections.helpers import asSet
+from typhon.objects.ejectors import throwStr
 from typhon.objects.root import Object, runnable
 from typhon.profile import profileTyphon
 
@@ -47,9 +48,7 @@ class DeepFrozenStamp(Object):
     def coerce(self, specimen, ej):
         if specimen.auditedBy(self):
             return specimen
-        from typhon.objects.data import StrObject
-        # XXX properly eject
-        ej.call(u"run", [StrObject(u"Not DeepFrozen")])
+        throwStr(ej, u"coerce/2: Not DeepFrozen")
 
 deepFrozenStamp = DeepFrozenStamp()
 
@@ -183,12 +182,11 @@ def checkDeepFrozen(specimen, seen, ej, root):
             checkDeepFrozen(v, seen, ej, root)
     else:
         if specimen is root:
-            ej.call(u"run", [StrObject(root.toQuote() +
-                                       u" is not DeepFrozen")])
+            message = root.toQuote() + u" is not DeepFrozen"
         else:
-            ej.call(u"run", [StrObject(root.toQuote() +
-                                       u" is not DeepFrozen because " +
-                                       specimen.toQuote() + u"is not")])
+            message = (root.toQuote() + u" is not DeepFrozen because " +
+                    specimen.toQuote() + u"is not")
+        throwStr(ej, u"audit/1: " + message)
 
 
 def deepFrozenSupersetOf(guard):

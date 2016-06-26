@@ -19,6 +19,7 @@ from typhon.errors import WrongType, userError
 from typhon.objects.collections.helpers import (KeySorter, ValueSorter,
                                                 monteMap)
 from typhon.objects.data import StrObject
+from typhon.objects.ejectors import throwStr
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
@@ -48,8 +49,7 @@ class mapIterator(Object):
             self._index += 1
             return rv
         else:
-            # XXX bad throw
-            ej.call(u"run", [StrObject(u"Iterator exhausted")])
+            throwStr(ej, u"next/1: Iterator exhausted")
 
 
 @autohelp

@@ -32,6 +32,7 @@ from typhon.errors import WrongType, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.comparison import Incomparable
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
+from typhon.objects.ejectors import throwStr
 from typhon.objects.root import Object, audited, runnable
 from typhon.prelude import getGlobalValue
 from typhon.quoting import quoteChar, quoteStr
@@ -1053,8 +1054,7 @@ class strIterator(Object):
             self._index += 1
             return rv
         else:
-            # XXX incorrect throw
-            ej.call(u"run", [StrObject(u"Iterator exhausted")])
+            throwStr(ej, u"next/1: Iterator exhausted")
 
 
 @autohelp
@@ -1297,7 +1297,7 @@ class bytesIterator(Object):
             self._index += 1
             return rv
         else:
-            ej.call(u"run", [StrObject(u"Iterator exhausted")])
+            throwStr(ej, u"next/1: Iterator exhausted")
 
 
 def bytesToString(bs):

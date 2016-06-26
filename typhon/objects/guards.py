@@ -11,7 +11,7 @@ from typhon.objects.constants import (TrueObject, FalseObject, NullObject,
                                       unwrapBool, wrapBool)
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
-from typhon.objects.ejectors import Ejector, throw
+from typhon.objects.ejectors import Ejector, throw, throwStr
 from typhon.errors import Ejecting, userError
 from typhon.objects.refs import resolution
 from typhon.objects.root import Object, audited
@@ -326,7 +326,7 @@ class FinalSlotGuardMaker(Guard):
         elif isinstance(specimen, FinalSlotGuard):
             return specimen.valueGuard
         else:
-            ej.call(u"run", [StrObject(u"Not a FinalSlot guard")])
+            throwStr(ej, u"extractGuard/2: Not a FinalSlot guard")
 
     @method("Void")
     def getGuard(self):
@@ -361,7 +361,7 @@ class VarSlotGuardMaker(Guard):
         elif isinstance(specimen, VarSlotGuard):
             return specimen.valueGuard
         else:
-            ej.call(u"run", [StrObject(u"Not a VarSlot guard")])
+            throwStr(ej, u"extractGuard/2: Not a VarSlot guard")
 
     @method("Void")
     def getGuard(self):
@@ -459,7 +459,7 @@ class SameGuardMaker(Object):
         if isinstance(specimen, SameGuard):
             return specimen.value
         else:
-            ej.call(u"run", [StrObject(u"Not a Same guard")])
+            throwStr(ej, u"extractValue/2: Not a Same guard")
 
 sameGuardMaker = SameGuardMaker()
 
