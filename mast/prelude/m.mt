@@ -209,20 +209,20 @@ object eval as DeepFrozen:
      This object respects POLA and grants no privileges whatsoever to
      evaluated code. To grant a safe scope, pass `safeScope`."
 
-    to run(expr, environment, => evaluator := astEval):
+    to run(expr, environment, => evaluator := astEval, => inRepl := false):
         "Evaluate a Monte expression, from source or from m``.
 
          The expression will be provided only the given environment. No other
          values will be passed in."
 
-        return eval.evalToPair(expr, environment, => evaluator)[0]
+        return eval.evalToPair(expr, environment, => evaluator, => inRepl)[0]
 
     to evalToPair(expr, environment, => ejPartial := throw,
-                  => evaluator := astEval):
+                  => evaluator := astEval, => inRepl := false):
         def ast :Expr := if (expr =~ source :Str) {
             parseExpression(makeMonteLexer(source, "<eval>"), astBuilder,
                             throw, ejPartial)
         } else {expr}
         def context := makeMASTContext()
         context(optimize(expand(ast, astBuilder, throw)))
-        return evaluator.evalToPair(context.bytes(), environment)
+        return evaluator.evalToPair(context.bytes(), environment, => inRepl)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from rpython.rlib.rbigint import BASE10
 from typhon.errors import userError
-from typhon.nano.mast import MastIR, SaveScriptIR
+from typhon.nano.mast import SaveScriptIR
 from typhon.quoting import quoteChar, quoteStr
 
 """
@@ -64,10 +64,11 @@ class ScopeBase(object):
 
 
 class ScopeOuter(ScopeBase):
-    def __init__(self, outers, fqn):
+    def __init__(self, outers, fqn, inRepl):
         self.outers = outers
         self.children = []
         self.fqn = fqn
+        self.inRepl = inRepl
 
     def collectTopLocals(self):
         # In an interactive context, we may want to keep locals defined at the
@@ -86,8 +87,8 @@ class ScopeOuter(ScopeBase):
 
         return topLocals[:numLocals]
 
-    def requireShadowable(self, name):
-        if name in self.outers:
+    def requireShadowable(self, name, toplevel=True):
+        if name in self.outers and not (toplevel and self.inRepl):
             raise userError(u"Cannot redefine " + name)
 
     def find(self, name):
@@ -106,8 +107,8 @@ class ScopeFrame(ScopeBase):
         self.outerNames = {}
         return ScopeBase.__init__(self, next, fqn)
 
-    def requireShadowable(self, name):
-        return self.next.requireShadowable(name)
+    def requireShadowable(self, name, toplevel=True):
+        return self.next.requireShadowable(name, toplevel=False)
 
     def find(self, name):
         scope, idx, severity = self.next.find(name)
@@ -129,10 +130,10 @@ class ScopeBox(ScopeBase):
         ScopeBase.__init__(self, next, next.fqn)
         self.position = next.position
 
-    def requireShadowable(self, name):
+    def requireShadowable(self, name, toplevel=False):
         scope, idx, _ = self.find(name)
         if scope is "outer":
-            self.next.requireShadowable(name)
+            self.next.requireShadowable(name, toplevel=False)
 
     def find(self, name):
         return self.next.find(name)
@@ -146,10 +147,10 @@ class ScopeItem(ScopeBase):
         self.severity = severity
         return ScopeBase.__init__(self, next, next.fqn)
 
-    def requireShadowable(self, name):
+    def requireShadowable(self, name, toplevel=False):
         if self.name == name:
             raise userError(u"Cannot redefine " + name)
-        self.next.requireShadowable(name)
+        self.next.requireShadowable(name, toplevel=False)
 
     def find(self, name):
         if self.name == name:
@@ -161,16 +162,16 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     """
     Set up scope boxes and collect variable definition sites.
     """
-    def __init__(self, outers, fqn):
-        self.top = self.layout = ScopeOuter(outers, fqn)
+    def __init__(self, outers, fqn, inRepl=False):
+        self.top = self.layout = ScopeOuter(outers, fqn, inRepl)
 
     def visitExprWithLayout(self, node, layout):
         origLayout = self.layout
+        origLayout.addChild(layout)
         self.layout = layout
         result = self.visitExpr(node)
         layout.node = result
         self.layout = origLayout
-        origLayout.addChild(layout)
         return result
 
     def visitExprNested(self, node):
@@ -181,8 +182,8 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         self.layout.requireShadowable(name)
         result = self.dest.FinalPatt(name, self.visitExpr(guard), origLayout)
         self.layout = ScopeItem(self.layout, name, "final")
-        self.layout.node = result
         origLayout.addChild(self.layout)
+        self.layout.node = result
         return result
 
     def visitVarPatt(self, name, guard):
@@ -209,23 +210,23 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body):
         origLayout = self.layout
         self.layout = ScopeBox(self.layout)
+        origLayout.addChild(self.layout)
         result = self.dest.MethodExpr(
             doc, verb,
             [self.visitPatt(p) for p in patts],
             [self.visitNamedPatt(np) for np in namedPatts],
             self.visitExpr(guard), self.visitExpr(body), origLayout)
         self.layout.node = result
-        origLayout.addChild(self.layout)
         self.layout = origLayout
         return result
 
     def visitMatcherExpr(self, patt, body):
         origLayout = self.layout
         self.layout = ScopeBox(self.layout)
+        origLayout.addChild(self.layout)
         result = self.dest.MatcherExpr(self.visitPatt(patt),
                                        self.visitExpr(body), origLayout)
         self.layout.node = result
-        origLayout.addChild(self.layout)
         self.layout = origLayout
         return result
 
@@ -277,11 +278,11 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     def visitEscapeOnlyExpr(self, patt, body):
         origLayout = self.layout
         self.layout = ScopeBox(origLayout)
+        origLayout.addChild(self.layout)
         p = self.visitPatt(patt)
         b = self.visitExpr(body)
         result = self.dest.EscapeOnlyExpr(p, b)
         self.layout.node = result
-        origLayout.addChild(self.layout)
         self.layout = origLayout
         return result
 
@@ -291,13 +292,13 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         p = self.visitPatt(ejPatt)
         b = self.visitExpr(ejBody)
         self.layout = layout2 = ScopeBox(origLayout)
+        origLayout.addChild(layout1)
+        origLayout.addChild(layout2)
         cp = self.visitPatt(catchPatt)
         cb = self.visitExpr(catchBody)
         result = self.dest.EscapeExpr(p, b, cp, cb)
         layout1.node = result
         layout2.node = result
-        origLayout.addChild(layout1)
-        origLayout.addChild(layout2)
         self.layout = origLayout
         return result
 
@@ -309,15 +310,15 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     def visitIfExpr(self, test, consq, alt):
         origLayout = self.layout
         self.layout = layout1 = ScopeBox(origLayout)
+        origLayout.addChild(layout1)
         t = self.visitExpr(test)
         c = self.visitExpr(consq)
         self.layout = layout2 = ScopeBox(origLayout)
+        origLayout.addChild(layout2)
         e = self.visitExpr(alt)
         result = self.dest.IfExpr(t, c, e)
         layout1.node = result
         layout2.node = result
-        origLayout.addChild(layout1)
-        origLayout.addChild(layout2)
         self.layout = origLayout
         return result
 
@@ -325,11 +326,11 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         b = self.visitExprNested(body)
         origLayout = self.layout
         self.layout = ScopeBox(origLayout)
+        origLayout.addChild(self.layout)
         cp = self.visitPatt(catchPatt)
         cb = self.visitExpr(catchBody)
         result = self.dest.TryExpr(b, cp, cb)
         self.layout.node = result
-        origLayout.addChild(self.layout)
         self.layout = origLayout
         return result
 
@@ -685,9 +686,10 @@ class PrettySpecialNouns(ReifyMetaIR.makePassTo(None)):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitBindingPatt(self, name, layout):
+    def visitBindingPatt(self, name, idx):
         self.write(u"&&")
         self.write(name)
+        self.write(asIndex(idx))
 
     def visitFinalPatt(self, name, guard, idx):
         self.write(name)
