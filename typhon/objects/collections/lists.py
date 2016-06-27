@@ -358,6 +358,11 @@ def isList(obj):
     o = resolution(obj)
     return isinstance(o, ConstList) or isinstance(o, FlexList)
 
+def isList(obj):
+    from typhon.objects.refs import resolution
+    o = resolution(obj)
+    return isinstance(o, ConstList) or isinstance(o, FlexList)
+
 
 def listFromIterable(obj):
     rv = []

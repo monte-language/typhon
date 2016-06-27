@@ -12,22 +12,18 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rpath import rjoin
 
 from typhon import log
-from typhon.autohelp import autohelp, method
 from typhon.debug import debugPrint
-from typhon.errors import UserException, userError
+from typhon.errors import LoadFailed, userError
 from typhon.load.mast import loadMASTBytes
+from typhon.load.nano import loadMASTBytes as nanoLoad
+from typhon.nano.interp import evalMonte
 from typhon.nodes import Expr, interactiveCompile
-from typhon.objects.collections.maps import ConstMap
-from typhon.objects.collections.helpers import monteMap
-from typhon.objects.constants import NullObject
-from typhon.objects.data import StrObject
+from typhon.objects.collections.lists import ConstList
 from typhon.objects.root import Object
-from typhon.smallcaps.machine import SmallCaps
 from typhon.smallcaps.peephole import peephole
 
 
@@ -42,50 +38,6 @@ class ModuleCache(object):
 moduleCache = ModuleCache()
 
 
-@autohelp
-class PackageEnv(Object):
-    """
-    A transitional object that provides something like the package-environment
-    interface we want.
-    """
-    def __init__(self, importer, importList):
-        self.importer = importer
-        self.importList = importList
-
-    @method("Any", "Str", _verb="import")
-    def _import(self, path):
-        # this is a hack, but the whole class is a hack :)
-        if path == u"unittest":
-            d = monteMap()
-            d[StrObject(path)] = self.importList.call(u"get",
-                    [StrObject(path)])
-            return ConstMap(d)
-        return self.importer.performModule(path, self.importList)
-
-
-@dont_look_inside
-def obtainModuleFromSource(source, recorder, origin):
-    with recorder.context("Deserialization"):
-        term = loadMASTBytes(source)
-    return codeFromAst(term, recorder, origin)
-
-
-@dont_look_inside
-def codeFromAst(term, recorder, origin):
-    if not isinstance(term, Expr):
-        raise userError(u"A kernel-AST expression node is required")
-    with recorder.context("Compilation"):
-        code, topLocals = interactiveCompile(term, origin)
-    # debug_print("Compiled code:", code.disassemble())
-
-    with recorder.context("Optimization"):
-        peephole(code)
-    # if origin == u"<eval>":
-    #     debug_print("Optimized code:", code.disassemble())
-
-    return code, topLocals
-
-
 def tryExtensions(filePath, recorder):
     # Leaving this in loop form in case we change formats again.
     for extension in [".mast"]:
@@ -94,14 +46,15 @@ def tryExtensions(filePath, recorder):
             with open(path, "rb") as handle:
                 debugPrint("Reading:", path)
                 source = handle.read()
-                return obtainModuleFromSource(source, recorder,
-                                              path.decode('utf-8'))[0]
+                mod = AstModule(recorder, path.decode('utf-8'))
+                mod.load(source)
+                return mod
         except IOError:
             continue
     return None
 
 
-def obtainModule(libraryPaths, filePath, recorder):
+def obtainModule(libraryPaths, recorder, filePath):
     for libraryPath in libraryPaths:
         path = rjoin(libraryPath, filePath)
 
@@ -114,7 +67,6 @@ def obtainModule(libraryPaths, filePath, recorder):
         code = tryExtensions(path, recorder)
         if code is None:
             continue
-
         # Cache.
         moduleCache.cache[path] = code
         return code
@@ -126,35 +78,45 @@ def obtainModule(libraryPaths, filePath, recorder):
                         filePath.decode("utf-8"))
 
 
-def evaluateTerms(codes, scope):
-    result = NullObject
-    for code in codes:
+class Module(Object):
+    def __init__(self, recorder, origin):
+        self.recorder = recorder
+        self.origin = origin
+        self.astSource = None
+        self.smallcapsSource = None
+        self.locals = {}
+
+
+class AstModule(Module):
+    def load(self, source):
+        with self.recorder.context("Deserialization"):
+            self.astSource = nanoLoad(source)
+
+    @dont_look_inside
+    def eval(self, env):
+            return evalMonte(self.astSource, env, self.origin)
+
+
+class SmallcapsModule(Module):
+    def load(self, source):
         try:
-            machine = SmallCaps.withDictScope(code, scope)
-            machine.run()
-            result = machine.pop()
-        except UserException as ue:
-            debug_print("Caught exception:", ue.formatError())
-    return result
+            with self.recorder.context("Deserialization"):
+                term = loadMASTBytes(source)
+            if not isinstance(term, Expr):
+                raise userError(u"A kernel-AST expression node is required")
+        except LoadFailed:
+            raise userError(u"Couldn't load invalid AST")
+        return self.crunch(term)
 
+    def crunch(self, term):
+        with self.recorder.context("Compilation"):
+            code, topLocals = interactiveCompile(term, self.origin)
+        with self.recorder.context("Optimization"):
+            peephole(code)
+        self.smallcapsSource = code
+        self.local = topLocals
 
-def evaluateRaise(codes, scope):
-    """
-    Like evaluateTerms, but does not catch exceptions.
-    """
-
-    machine = None
-    result = NullObject
-    for code in codes:
-        machine = SmallCaps.withDictScope(code, scope)
-        machine.run()
-        result = machine.pop()
-    return result, machine
-
-
-def instantiateModule(importer, module, importList=None):
-    """
-    Instantiate a top-level module.
-    """
-    return module.call(u"run", [PackageEnv(importer, importList)],
-                       namedArgs=importList)
+    @dont_look_inside
+    def eval(self, env):
+        from typhon.scopes.boot import evalToPair
+        return evalToPair(self.smallcapsSource, self.locals, env)

@@ -86,7 +86,7 @@ def main():
                 def code := makeFileResource(fname).getContents()
                 return when (code) ->
                     try:
-                        def modObj := typhonEval(code, safeScope)
+                        def modObj := astEval(code, safeScope)
                         depMap[modname] := makeModuleConfiguration(modObj, [].asMap())
                     catch problem:
                         traceln(`Unable to eval file ${M.toQuote(fname)}`)

@@ -49,7 +49,7 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
                  # received, go ahead and parse.
             try:
                 escape ejPartial:
-                    def [val, newEnv] := eval.evalToPair("\n".join(buf) + "\n", environment, => ejPartial)
+                    def [val, newEnv] := eval.evalToPair("\n".join(buf) + "\n", environment, => ejPartial, "inRepl" => true)
                     result := val
                     # Preserve side-effected new stuff from e.g. playWith.
                     environment := newEnv | environment
@@ -59,10 +59,7 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
                 # by ignoring things that aren't sealed exceptions.
                 if (p =~ via (unsealException) [problem, trail]):
                     failure := `$problem`
-                    # Discard the first line from the trail since it's always the
-                    # eval() frame, which is noisy and useless. Also the second
-                    # line. And maybe more lines in the future?
-                    for line in (trail.reverse().slice(2)):
+                    for line in (trail.reverse()):
                         traceln(line)
                     buf := []
 
