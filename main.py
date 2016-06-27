@@ -40,7 +40,6 @@ from typhon.profile import registerProfileTyphon
 from typhon.scopes.boot import bootScope
 from typhon.scopes.safe import safeScope
 from typhon.scopes.unsafe import unsafeScope
-from typhon.smallcaps.machine import evaluateTerms
 from typhon.vats import Vat, VatManager, scopedVat
 
 
@@ -66,9 +65,9 @@ def loadPrelude(config, recorder, vat):
                      u"Str": scope[u"Str"],
                      u"Void": scope[u"Void"]})
 
-    code = obtainModule(config.libraryPaths, "prelude", recorder)
+    module = obtainModule(config.libraryPaths, recorder, "prelude")
     with recorder.context("Time spent in prelude"):
-        result = evaluateTerms([code], scope)
+        result = module.eval(scope)[0]
 
     assert result is not None, "Prelude returned None"
     assert isinstance(result, ConstMap), "Prelude returned non-Map"
@@ -218,7 +217,7 @@ def runTyphon(argv):
     reflectedUnsafeScope[StrObject(u"&&unsafeScope")] = rus
     unsafeScopeDict[u"unsafeScope"] = rus
     try:
-        code = obtainModule([""], config.argv[1], recorder)
+        module = obtainModule([""], recorder, config.argv[1])
     except LoadFailed as lf:
         print lf
         return 1
@@ -237,7 +236,7 @@ def runTyphon(argv):
         result = NullObject
         with recorder.context("Time spent in vats"):
             with scopedVat(vat):
-                result = evaluateTerms([code], unsafeScopeDict)
+                result = module.eval(unsafeScopeDict)[0]
         if result is None:
             return 1
 

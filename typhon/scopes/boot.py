@@ -15,18 +15,18 @@ import os
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import LoadFailed, Refused, userError
-from typhon.importing import (smallcapsFromAst, obtainModule,
-                              obtainModuleFromSource)
-from typhon.load.mast import loadMASTBytes
+from typhon.errors import userError
+from typhon.importing import AstModule, SmallcapsModule, obtainModule
 from typhon.load.nano import loadMASTBytes as realLoad
-from typhon.nano.interp import evalMonte
+from typhon.nano.interp import (evalToPair as astEvalToPair,
+                                scope2env)
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.maps import ConstMap, monteMap
 from typhon.objects.collections.sets import ConstSet
-from typhon.objects.data import StrObject, unwrapBytes, wrapBool, unwrapStr
+from typhon.objects.data import (StrObject, unwrapBytes, unwrapBool, wrapBool,
+                                 unwrapStr)
 from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
                                    DoubleGuard, IntGuard, StrGuard, VoidGuard)
 from typhon.objects.slots import Binding, finalize
@@ -58,12 +58,10 @@ def moduleFromString(source, recorder):
     # *Do* catch this particular exception, as it is not a
     # UserException and thus will kill the process (!!!) if allowed to
     # propagate. ~ C.
-    try:
-        code, topLocals = obtainModuleFromSource(source, recorder, u"<eval>")
-    except LoadFailed:
-        raise userError(u"Couldn't load invalid AST")
-    return code, topLocals
-
+    assert isinstance(source, bytes)
+    mod = AstModule(recorder, u"<eval>")
+    mod.load(source)
+    return mod
 
 def evalToPair(code, topLocals, envMap):
     assert isinstance(envMap, ConstMap), "Implementation error"
@@ -97,21 +95,24 @@ class SmallCapsEval(Object):
     @method("Any", "Any", "Any", "Str")
     @profileTyphon("smallcapsEval.fromAST/3")
     def fromAST(self, ast, scope, name):
-        code, topLocals = smallcapsFromAst(ast, self.recorder, name)
-        return evalToPair(code, topLocals, scope)[0]
+        mod = SmallcapsModule(self.recorder, name)
+        mod.crunch(ast)
+        return mod.eval(scope)[0]
 
     @method("Any", "Any", "Any")
     @profileTyphon("smallcapsEval.run/2")
     def run(self, bs, scope):
-        code, topLocals = moduleFromString(bs, self.recorder)
-        return evalToPair(code, topLocals, scope)[0]
+        mod = SmallcapsModule(self.recorder, u"<eval>")
+        mod.load(unwrapBytes(bs))
+        return mod.eval(scope)[0]
 
-    @method("List", "Any", "Any")
-    @profileTyphon("smallcapsEval.evalToPair/2")
-    def evalToPair(self, bs, scope):
-        code, topLocals = moduleFromString(bs, self.recorder)
-        result, envMap = evalToPair(code, topLocals, scope)
-        return [result, envMap]
+    @method("List", "Any", "Any", inRepl="Any")
+    #@profileTyphon("smallcapsEval.evalToPair/2")
+    def evalToPair(self, bs, scope, inRepl=False):
+        mod = SmallcapsModule(self.recorder, u"<eval>")
+        mod.load(unwrapBytes(bs))
+        result, newEnv = mod.eval(scope)
+        return [result, newEnv]
 
 
 @autohelp
@@ -129,24 +130,17 @@ class GetMonteFile(Object):
                 try:
                     with open(os.path.join(base, path), "rb") as handle:
                         source = handle.read()
-                        with self.recorder.context("Deserialization"):
-                            return loadMASTBytes(source)
+                        mod = AstModule(self.recorder, pname)
+                        mod.load(source)
+                        return mod
                 except IOError:
                     continue
         raise userError(u"Could not locate " + pname)
 
     @method("Any", "Str", "Map", _verb="run")
     def _run(self, pname, scope):
-        d = {}
-        for k, v in scope.items():
-            s = unwrapStr(k)
-            if not s.startswith("&&"):
-                raise userError(u"evalMonteFile scope map must be of the "
-                                "form '[\"&&name\" => binding]'")
-            d[s[2:]] = scope[k]
-
-        code = obtainModule(self.paths, pname.encode("utf-8"), self.recorder)
-        return evaluateRaise([code], d)[0]
+        module = obtainModule(self.paths, self.recorder, pname.encode("utf-8"))
+        return module.eval(scope2env(scope))[0]
 
 
 @autohelp
@@ -159,13 +153,17 @@ class AstEval(Object):
     @method("Any", "Any", "Any")
     @profileTyphon("astEval.run/2")
     def run(self, bs, scope):
-        code, topLocals = moduleFromString(bs, self.recorder)
-        return evalMonte(code, topLocals, scope)[0]
-
-    @method("List", "Any", "Any")
-    def evalToPair(self, bs, scope):
         ast = realLoad(unwrapBytes(bs))
-        result, envMap = evalMonte(ast, scope)
+        return astEvalToPair(ast, scope)[0]
+
+    @method("List", "Any", "Any", inRepl="Any")
+    def evalToPair(self, bs, scope, inRepl=False):
+        ast = realLoad(unwrapBytes(bs))
+        if inRepl is None:
+            inRepl = False
+        else:
+            inRepl = unwrapBool(inRepl)
+        result, envMap = astEvalToPair(ast, scope, inRepl)
         return [result, envMap]
 
 
@@ -175,6 +173,7 @@ def bootScope(paths, recorder):
      balances are correct."
     """
     sce = SmallCapsEval(recorder)
+    ae = AstEval(recorder)
     return finalize({
         u"isList": isList(),
         u"isMap": isMap(),
@@ -194,6 +193,5 @@ def bootScope(paths, recorder):
 
         u"getMonteFile": GetMonteFile(paths, recorder),
         u"smallcapsEval": sce,
-        u"typhonEval": sce,
-        u"astEval": AstEval(recorder)
+        u"astEval": ae,
     })
