@@ -161,7 +161,7 @@ class Audition(Object):
         return answer
 
     def prepareReport(self, auditors):
-        from typhon.smallcaps.code import AuditorReport
+        from typhon.objects.user import AuditorReport
         s = monteSet()
         for (k, (result, _, _)) in self.cache.items():
             if result:
@@ -184,13 +184,96 @@ class Audition(Object):
         raise Refused(self, atom, args)
 
 
-class ScriptObject(Object):
+class AuditorReport(object):
     """
-    An object whose behavior depends on a Monte script.
+    Artifact of an audition.
     """
 
-    _immutable_fields_ = "codeScript", "globals[*]", "report"
+    _immutable_ = True
 
+    def __init__(self, stamps):
+        self.stamps = stamps
+
+    def getStamps(self):
+        return self.stamps
+
+
+def compareAuditorLists(this, that):
+    from typhon.objects.equality import isSameEver
+    for i, x in enumerate(this):
+        if not isSameEver(x, that[i]):
+            return False
+    return True
+
+
+def compareGuardMaps(this, that):
+    from typhon.objects.equality import isSameEver
+    for i, x in enumerate(this):
+        if not isSameEver(x[1], that[i][1]):
+            return False
+    return True
+
+
+class AuditClipboard(object):
+    """
+    She is fast and thorough / And sharp as a tack
+    She's touring the facility / And picking up slack
+    """
+    def __init__(self):
+        self.reportCabinet = []
+
+    def getReport(self, auditors, guards):
+        """
+        Fetch an existing audit report if one for this auditor/guard
+        combination is on file.
+        """
+        for auditorList, guardFile in self.reportCabinet:
+            if compareAuditorLists(auditors, auditorList):
+                guardItems = guards.items()
+                for guardMap, report in guardFile:
+                    if compareGuardMaps(guardItems, guardMap):
+                        return report
+        return None
+
+    def putReport(self, auditors, guards, report):
+        """
+        Keep an audit report on file for these guards and this auditor.
+        """
+        guardItems = guards.items()
+        for auditorList, guardFile in self.reportCabinet:
+            if compareAuditorLists(auditors, auditorList):
+                guardFile.append((guardItems, report))
+                break
+        else:
+            self.reportCabinet.append((auditors, [(guardItems, report)]))
+
+    def createReport(self, auditors, guards):
+        """
+        Do an audit, make a report from the results.
+        """
+        with Audition(self.fqn, self.objectAst, guards) as audition:
+            for a in auditors:
+                audition.ask(a)
+        return audition.prepareReport(auditors)
+
+    def audit(self, auditors, guards):
+        """
+        Hold an audition and return a report of the results.
+
+        Auditions are cached for quality assurance and training purposes.
+        """
+        report = self.getReport(auditors, guards)
+        if report is None:
+            report = self.createReport(auditors, guards)
+            self.putReport(auditors, guards, report)
+        return report
+
+
+class UserObject(Object):
+    """
+    Abstract superclass for objects created by ObjectExpr.
+    """
+    _immutable_fields_ = "report",
     report = None
 
     def toString(self):
@@ -201,17 +284,17 @@ class ScriptObject(Object):
             self.call(u"_printOn", [printer])
             return printer.value()
         except Refused:
-            return u"<%s>" % self.codeScript.displayName
+            return u"<%s>" % self.getDisplayName()
         except UserException, e:
             return (u"<%s (threw exception %s when printed)>" %
-                    (self.codeScript.displayName, e.error()))
+                    (self.getDisplayName(), e.error()))
 
     def printOn(self, printer):
         # Note that the printer is a Monte-level object. Also note that, at
         # this point, we have had a bad day; we did not respond to _printOn/1.
         from typhon.objects.data import StrObject
         printer.call(u"print",
-                     [StrObject(u"<%s>" % self.codeScript.displayName)])
+                     [StrObject(u"<%s>" % self.getDisplayName())])
 
     def auditorStamps(self):
         if self.report is None:
@@ -233,19 +316,8 @@ class ScriptObject(Object):
         # Well, we're resolved, so I guess that we're good!
         return True
 
-    def docString(self):
-        return self.codeScript.doc
-
-    def respondingAtoms(self):
-        # Only do methods for now. Matchers will be dealt with in other ways.
-        d = {}
-        for atom in self.codeScript.strategy.getAtoms():
-            d[atom] = self.codeScript.methodDocs.get(atom, None)
-
-        return d
-
     def recvNamed(self, atom, args, namedArgs):
-        method = self.codeScript.strategy.lookupMethod(atom)
+        method = self.getMethod(atom)
         if method:
             return self.runMethod(method, args, namedArgs)
         else:
@@ -261,8 +333,8 @@ class ScriptObject(Object):
     @unroll_safe
     def runMatchers(self, atom, args, namedArgs):
         message = wrapList([StrObject(atom.verb), wrapList(args),
-                             namedArgs])
-        for matcher in self.codeScript.strategy.getMatchers():
+                            namedArgs])
+        for matcher in self.getMatchers():
             with Ejector() as ej:
                 try:
                     return self.runMatcher(matcher, message, ej)
@@ -276,6 +348,34 @@ class ScriptObject(Object):
                         raise
 
         raise Refused(self, atom, args)
+
+
+class ScriptObject(UserObject):
+    """
+    An object whose behavior depends on a SmallCaps script.
+    """
+
+    _immutable_fields_ = "codeScript", "globals[*]", "report"
+
+    def docString(self):
+        return self.codeScript.doc
+
+    def getDisplayName(self):
+        return self.codeScript.displayName
+
+    def respondingAtoms(self):
+        # Only do methods for now. Matchers will be dealt with in other ways.
+        d = {}
+        for atom in self.codeScript.strategy.getAtoms():
+            d[atom] = self.codeScript.methodDocs.get(atom, None)
+
+        return d
+
+    def getMethod(self, atom):
+        return self.codeScript.strategy.lookupMethod(atom)
+
+    def getMatchers(self):
+        return self.codeScript.strategy.getMatchers()
 
 
 class QuietObject(ScriptObject):
