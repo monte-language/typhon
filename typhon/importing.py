@@ -12,18 +12,18 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.debug import debug_print
 from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.rpath import rjoin
 
 from typhon import log
 from typhon.debug import debugPrint
-from typhon.errors import UserException, userError
+from typhon.errors import LoadFailed, userError
 from typhon.load.mast import loadMASTBytes
 from typhon.load.nano import loadMASTBytes as nanoLoad
+from typhon.nano.interp import evalMonte
 from typhon.nodes import Expr, interactiveCompile
-from typhon.objects.constants import NullObject
-from typhon.smallcaps.machine import SmallCaps
+from typhon.objects.collections.lists import ConstList
+from typhon.objects.root import Object
 from typhon.smallcaps.peephole import peephole
 
 
@@ -38,37 +38,6 @@ class ModuleCache(object):
 moduleCache = ModuleCache()
 
 
-@dont_look_inside
-def astObtainModuleFromSource(source, recorder, origin):
-    with recorder.context("Deserialization"):
-        return nanoLoad(source), {}
-
-
-@dont_look_inside
-def smallcapsObtainModuleFromSource(source, recorder, origin):
-    with recorder.context("Deserialization"):
-        term = loadMASTBytes(source)
-    return smallcapsFromAst(term, recorder, origin)
-
-obtainModuleFromSource = astObtainModuleFromSource
-
-
-@dont_look_inside
-def smallcapsFromAst(term, recorder, origin):
-    if not isinstance(term, Expr):
-        raise userError(u"A kernel-AST expression node is required")
-    with recorder.context("Compilation"):
-        code, topLocals = interactiveCompile(term, origin)
-    # debug_print("Compiled code:", code.disassemble())
-
-    with recorder.context("Optimization"):
-        peephole(code)
-    # if origin == u"<eval>":
-    #     debug_print("Optimized code:", code.disassemble())
-
-    return code, topLocals
-
-
 def tryExtensions(filePath, recorder):
     # Leaving this in loop form in case we change formats again.
     for extension in [".mast"]:
@@ -77,14 +46,15 @@ def tryExtensions(filePath, recorder):
             with open(path, "rb") as handle:
                 debugPrint("Reading:", path)
                 source = handle.read()
-                return astObtainModuleFromSource(source, recorder,
-                                                 path.decode('utf-8'))[0]
+                mod = AstModule(recorder, path.decode('utf-8'))
+                mod.load(source)
+                return mod
         except IOError:
             continue
     return None
 
 
-def obtainModule(libraryPaths, filePath, recorder):
+def obtainModule(libraryPaths, recorder, filePath):
     for libraryPath in libraryPaths:
         path = rjoin(libraryPath, filePath)
 
@@ -106,3 +76,47 @@ def obtainModule(libraryPaths, filePath, recorder):
         debugPrint("Failed to import:", filePath)
         raise userError(u"Module '%s' couldn't be found" %
                         filePath.decode("utf-8"))
+
+
+class Module(Object):
+    def __init__(self, recorder, origin):
+        self.recorder = recorder
+        self.origin = origin
+        self.astSource = None
+        self.smallcapsSource = None
+        self.locals = {}
+
+
+class AstModule(Module):
+    def load(self, source):
+        with self.recorder.context("Deserialization"):
+            self.astSource = nanoLoad(source)
+
+    @dont_look_inside
+    def eval(self, env):
+            return evalMonte(self.astSource, env, self.origin)
+
+
+class SmallcapsModule(Module):
+    def load(self, source):
+        try:
+            with self.recorder.context("Deserialization"):
+                term = loadMASTBytes(source)
+            if not isinstance(term, Expr):
+                raise userError(u"A kernel-AST expression node is required")
+        except LoadFailed:
+            raise userError(u"Couldn't load invalid AST")
+        return self.crunch(term)
+
+    def crunch(self, term):
+        with self.recorder.context("Compilation"):
+            code, topLocals = interactiveCompile(term, self.origin)
+        with self.recorder.context("Optimization"):
+            peephole(code)
+        self.smallcapsSource = code
+        self.local = topLocals
+
+    @dont_look_inside
+    def eval(self, env):
+        from typhon.scopes.boot import evalToPair
+        return evalToPair(self.smallcapsSource, self.locals, env)

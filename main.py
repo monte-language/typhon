@@ -27,7 +27,6 @@ from typhon.errors import LoadFailed, UserException
 from typhon.importing import obtainModule
 from typhon.log import log
 from typhon.metrics import globalRecorder
-from typhon.nano.interp import evalMonte
 from typhon.objects.auditors import deepFrozenGuard
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
@@ -66,9 +65,9 @@ def loadPrelude(config, recorder, vat):
                      u"Str": scope[u"Str"],
                      u"Void": scope[u"Void"]})
 
-    code = obtainModule(config.libraryPaths, "prelude", recorder)
+    module = obtainModule(config.libraryPaths, recorder, "prelude")
     with recorder.context("Time spent in prelude"):
-        result = evalMonte(code, scope, u"<prelude>")[0]
+        result = module.eval(scope)[0]
 
     assert result is not None, "Prelude returned None"
     assert isinstance(result, ConstMap), "Prelude returned non-Map"
@@ -218,7 +217,7 @@ def runTyphon(argv):
     reflectedUnsafeScope[StrObject(u"&&unsafeScope")] = rus
     unsafeScopeDict[u"unsafeScope"] = rus
     try:
-        code = obtainModule([""], config.argv[1], recorder)
+        module = obtainModule([""], recorder, config.argv[1])
     except LoadFailed as lf:
         print lf
         return 1
@@ -237,7 +236,7 @@ def runTyphon(argv):
         result = NullObject
         with recorder.context("Time spent in vats"):
             with scopedVat(vat):
-                result = evalMonte(code, unsafeScopeDict, u"<main>")[0]
+                result = module.eval(unsafeScopeDict)[0]
         if result is None:
             return 1
 
