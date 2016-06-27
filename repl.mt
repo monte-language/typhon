@@ -49,7 +49,7 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
                  # received, go ahead and parse.
             try:
                 escape ejPartial:
-                    def [val, newEnv] := eval.evalToPair("\n".join(buf) + "\n", environment, => ejPartial)
+                    def [val, newEnv] := eval.evalToPair("\n".join(buf) + "\n", environment, => ejPartial, "inRepl" => true)
                     result := val
                     # Preserve side-effected new stuff from e.g. playWith.
                     environment := newEnv | environment

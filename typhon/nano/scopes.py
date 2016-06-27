@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from rpython.rlib.rbigint import BASE10
 from typhon.errors import userError
-from typhon.nano.mast import MastIR, SaveScriptIR
+from typhon.nano.mast import SaveScriptIR
 from typhon.quoting import quoteChar, quoteStr
 
 """
@@ -64,10 +64,11 @@ class ScopeBase(object):
 
 
 class ScopeOuter(ScopeBase):
-    def __init__(self, outers, fqn):
+    def __init__(self, outers, fqn, inRepl):
         self.outers = outers
         self.children = []
         self.fqn = fqn
+        self.inRepl = inRepl
 
     def collectTopLocals(self):
         # In an interactive context, we may want to keep locals defined at the
@@ -86,8 +87,8 @@ class ScopeOuter(ScopeBase):
 
         return topLocals[:numLocals]
 
-    def requireShadowable(self, name):
-        if name in self.outers:
+    def requireShadowable(self, name, toplevel):
+        if name in self.outers and not (toplevel and self.inRepl):
             raise userError(u"Cannot redefine " + name)
 
     def find(self, name):
@@ -106,8 +107,8 @@ class ScopeFrame(ScopeBase):
         self.outerNames = {}
         return ScopeBase.__init__(self, next, fqn)
 
-    def requireShadowable(self, name):
-        return self.next.requireShadowable(name)
+    def requireShadowable(self, name, toplevel):
+        return self.next.requireShadowable(name, False)
 
     def find(self, name):
         scope, idx, severity = self.next.find(name)
@@ -129,10 +130,10 @@ class ScopeBox(ScopeBase):
         ScopeBase.__init__(self, next, next.fqn)
         self.position = next.position
 
-    def requireShadowable(self, name):
+    def requireShadowable(self, name, toplevel):
         scope, idx, _ = self.find(name)
         if scope is "outer":
-            self.next.requireShadowable(name)
+            self.next.requireShadowable(name, False)
 
     def find(self, name):
         return self.next.find(name)
@@ -146,10 +147,10 @@ class ScopeItem(ScopeBase):
         self.severity = severity
         return ScopeBase.__init__(self, next, next.fqn)
 
-    def requireShadowable(self, name):
+    def requireShadowable(self, name, toplevel):
         if self.name == name:
             raise userError(u"Cannot redefine " + name)
-        self.next.requireShadowable(name)
+        self.next.requireShadowable(name, False)
 
     def find(self, name):
         if self.name == name:
@@ -161,16 +162,16 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     """
     Set up scope boxes and collect variable definition sites.
     """
-    def __init__(self, outers, fqn):
-        self.top = self.layout = ScopeOuter(outers, fqn)
+    def __init__(self, outers, fqn, inRepl=False):
+        self.top = self.layout = ScopeOuter(outers, fqn, inRepl)
 
     def visitExprWithLayout(self, node, layout):
         origLayout = self.layout
+        origLayout.addChild(layout)
         self.layout = layout
         result = self.visitExpr(node)
         layout.node = result
         self.layout = origLayout
-        origLayout.addChild(layout)
         return result
 
     def visitExprNested(self, node):
@@ -178,16 +179,16 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
 
     def visitFinalPatt(self, name, guard):
         origLayout = self.layout
-        self.layout.requireShadowable(name)
+        self.layout.requireShadowable(name, True)
         result = self.dest.FinalPatt(name, self.visitExpr(guard), origLayout)
         self.layout = ScopeItem(self.layout, name, "final")
-        self.layout.node = result
         origLayout.addChild(self.layout)
+        self.layout.node = result
         return result
 
     def visitVarPatt(self, name, guard):
         origLayout = self.layout
-        self.layout.requireShadowable(name)
+        self.layout.requireShadowable(name, True)
         result = self.dest.VarPatt(name, self.visitExpr(guard), origLayout)
         self.layout = ScopeItem(self.layout, name, "var")
         self.layout.node = result
@@ -196,7 +197,7 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
 
     def visitBindingPatt(self, name):
         origLayout = self.layout
-        self.layout.requireShadowable(name)
+        self.layout.requireShadowable(name, True)
         result = self.dest.BindingPatt(name, origLayout)
         self.layout = ScopeItem(self.layout, name, "binding")
         self.layout.node = result

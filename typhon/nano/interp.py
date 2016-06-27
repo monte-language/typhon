@@ -425,9 +425,9 @@ def scope2env(scope):
     return environment
 
 
-def evalMonte(expr, environment, fqnPrefix):
+def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     ss = SaveScripts().visitExpr(expr)
-    lo = LayOutScopes(environment.keys(), fqnPrefix)
+    lo = LayOutScopes(environment.keys(), fqnPrefix, inRepl)
     ll = lo.visitExpr(ss)
     topLocalNames = lo.top.collectTopLocals()
     sl = SpecializeNouns().visitExpr(ll)
@@ -441,11 +441,12 @@ def evalMonte(expr, environment, fqnPrefix):
     return result, topLocals
 
 
-def evalToPair(expr, scopeMap):
+def evalToPair(expr, scopeMap, inRepl=False):
     scope = unwrapMap(scopeMap)
-    result, topLocals = evalMonte(expr, scope2env(scope), u"<eval>")
-    d = monteMap()
+    result, topLocals = evalMonte(expr, scope2env(scope), u"<eval>", inRepl)
+    d = scope.copy()
+    # XXX Future versions may choose to keep old env structures so that
+    # debuggers can rewind and inspect bindings in old REPL lines.
     for name, val in topLocals:
         d[StrObject(u"&&" + name)] = val
-    d.update(scope)
     return result, ConstMap(d)
