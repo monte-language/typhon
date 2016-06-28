@@ -16,15 +16,15 @@ from rpython.rlib.jit import promote, unroll_safe
 from rpython.rlib.objectmodel import import_from_mixin, specialize
 
 from typhon.atoms import getAtom
-from typhon.autohelp import autohelp
+from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.log import log
 from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
-from typhon.objects.constants import NullObject, unwrapBool, wrapBool
+from typhon.objects.constants import NullObject, unwrapBool
 from typhon.objects.collections.helpers import emptySet, monteSet
 from typhon.objects.collections.lists import wrapList
-from typhon.objects.data import StrObject, unwrapStr
+from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.guards import anyGuard
 from typhon.objects.printers import Printer
@@ -35,10 +35,6 @@ from typhon.smallcaps.machine import SmallCaps
 
 # XXX AuditionStamp, Audition guard
 
-ASK_1 = getAtom(u"ask", 1)
-GETFQN_0 = getAtom(u"getFQN", 0)
-GETGUARD_1 = getAtom(u"getGuard", 1)
-GETOBJECTEXPR_0 = getAtom(u"getObjectExpr", 0)
 _UNCALL_0 = getAtom(u"_uncall", 0)
 
 
@@ -89,6 +85,7 @@ class Audition(Object):
     def log(self, message, tags=[]):
         log(["audit"] + tags, u"Auditor for %s: %s" % (self.fqn, message))
 
+    @method.py("Bool", "Any")
     @profileTyphon("Auditor.ask/1")
     def ask(self, auditor):
         if not self.active:
@@ -145,6 +142,7 @@ class Audition(Object):
         self.log(u"ask/1: %s: failure" % auditor.toString())
         return False
 
+    @method.py("Any", "Str")
     def getGuard(self, name):
         if name not in self.guards:
             self.guardLog = None
@@ -168,20 +166,13 @@ class Audition(Object):
                 s[k] = None
         return AuditorReport(s)
 
-    def recv(self, atom, args):
-        if atom is ASK_1:
-            return wrapBool(self.ask(args[0]))
+    @method("Any")
+    def getObjectExpr(self):
+        return self.ast
 
-        if atom is GETGUARD_1:
-            return self.getGuard(unwrapStr(args[0]))
-
-        if atom is GETOBJECTEXPR_0:
-            return self.ast
-
-        if atom is GETFQN_0:
-            return StrObject(self.fqn)
-
-        raise Refused(self, atom, args)
+    @method("Str")
+    def getFQN(self):
+        return self.fqn
 
 
 class AuditorReport(object):
