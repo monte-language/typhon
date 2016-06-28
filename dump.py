@@ -44,7 +44,7 @@ def entryPoint(argv):
         print "Invalid MAST"
         return 1
     ss = SaveScripts().visitExpr(expr)
-    ll = LayOutScopes(safeScopeNames).visitExpr(ss)
+    ll = LayOutScopes(safeScopeNames, path.decode("utf-8")).visitExpr(ss)
     sl = SpecializeNouns().visitExpr(ll)
     ml = ReifyMeta().visitExpr(sl)
     pretty = PrettySpecialNouns()
