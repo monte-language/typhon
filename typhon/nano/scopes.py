@@ -85,7 +85,7 @@ class ScopeOuter(ScopeBase):
                 topLocals[i] = sub.name
                 scopeitems.extend(sub.children)
 
-        return topLocals[:numLocals]
+        return topLocals[:numLocals], countLocalSize(self, 0)
 
     def requireShadowable(self, name, toplevel):
         if name in self.outers and not (toplevel and self.inRepl):

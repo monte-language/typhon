@@ -429,11 +429,11 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     ss = SaveScripts().visitExpr(expr)
     lo = LayOutScopes(environment.keys(), fqnPrefix, inRepl)
     ll = lo.visitExpr(ss)
-    topLocalNames = lo.top.collectTopLocals()
+    topLocalNames, localSize = lo.top.collectTopLocals()
     sl = SpecializeNouns().visitExpr(ll)
     ml = ReifyMeta().visitExpr(sl)
     result = NullObject
-    e = Evaluator([], environment.values(), len(topLocalNames))
+    e = Evaluator([], environment.values(), localSize)
     result = e.visitExpr(ml)
     topLocals = []
     for i in range(len(topLocalNames)):
