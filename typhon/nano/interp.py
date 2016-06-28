@@ -226,6 +226,8 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             if e.ejector is not ej:
                 raise
             return e.value
+        finally:
+            ej.disable()
 
     def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
         ej = Ejector()
@@ -237,6 +239,8 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
                 raise
             self.matchBind(catchPatt, e.value, None)
             return self.visitExpr(catchBody)
+        finally:
+            ej.disable()
 
     def visitFinallyExpr(self, body, atLast):
         try:
@@ -349,7 +353,6 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         if not isinstance(guard, ReifyMetaIR.NullExpr):
             g = self.visitExpr(guard)
             self.runGuard(g, self.specimen, self.patternFailure)
-        return NullObject
 
     def visitBindingPatt(self, name, index):
         b = self.specimen
@@ -373,7 +376,6 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         self.locals[idx] = varBinding(val, guard)
 
     def visitListPatt(self, patts):
-        from typhon.objects.collections.lists import ConstList
         listSpecimen = unwrapList(self.specimen, ej=self.patternFailure)
         ej = self.patternFailure
         if len(patts) != len(listSpecimen):
