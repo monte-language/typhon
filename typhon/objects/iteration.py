@@ -12,29 +12,26 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import JitDriver, promote
+from rpython.rlib.jit import JitDriver
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting
+from typhon.nano.interp import InterpObject
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections.lists import unwrapList
-from typhon.objects.collections.maps import EMPTY_MAP
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.root import runnable
-from typhon.objects.user import BusyObject, ScriptObject
-from typhon.smallcaps.machine import SmallCaps
 
 
 RUN_2 = getAtom(u"run", 2)
-RUN_3 = getAtom(u"run", 3)
 
 
-def getLocation(code):
-    return code.profileName
+def getLocation(method):
+    return "unknown"
 
 
-loopDriver = JitDriver(greens=["code"],
+loopDriver = JitDriver(greens=["method"],
                        reds=["consumer", "ejector", "iterator"],
                        get_printable_location=getLocation)
 
@@ -62,19 +59,19 @@ def loop(iterable, consumer):
     Perform an iterative loop.
     """
 
-    # If the consumer is *not* a ScriptObject, then damn them to the slow
-    # path. In order for the consumer to not be ScriptObject, though, the
+    # If the consumer is *not* an InterpObject, then damn them to the slow
+    # path. In order for the consumer to not be InterpObject, though, the
     # compiler and optimizer must have decided that an object could be
     # directly passed to _loop(), which is currently impossible to do without
     # manual effort. It's really not a common pathway at all.
-    if not isinstance(consumer, ScriptObject):
+    if not isinstance(consumer, InterpObject):
         return slowLoop(iterable, consumer)
 
     # Rarer path: If the consumer doesn't actually have RUN_2, then they're
     # not going to be JIT'd. Again, the compiler and optimizer won't ever do
     # this to us; it has to be intentional.
-    code = consumer.codeScript.strategy.lookupMethod(RUN_2)
-    if code is None:
+    method = consumer.getMethod(RUN_2)
+    if method is None:
         return slowLoop(iterable, consumer)
 
     iterator = iterable.call(u"_makeIterator", [])
@@ -83,21 +80,10 @@ def loop(iterable, consumer):
     try:
         while True:
             # JIT merge point.
-            loopDriver.jit_merge_point(code=code, consumer=consumer,
+            loopDriver.jit_merge_point(method=method, consumer=consumer,
                                        ejector=ej, iterator=iterator)
-            globals = promote(consumer.globals)
-            if isinstance(consumer, BusyObject):
-                machine = SmallCaps(code, consumer.closure, globals)
-            else:
-                machine = SmallCaps(code, None, globals)
             values = unwrapList(iterator.call(u"next", [ej]))
-            # Push the arguments onto the stack, backwards.
-            values.reverse()
-            for arg in values:
-                machine.push(arg)
-                machine.push(NullObject)
-            machine.push(EMPTY_MAP)
-            machine.run()
+            consumer.call(u"run", values)
     except Ejecting as e:
         if e.ejector is not ej:
             raise
