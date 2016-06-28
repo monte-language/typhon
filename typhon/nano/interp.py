@@ -221,26 +221,29 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         ej = Ejector()
         self.matchBind(patt, ej, None)
         try:
-            return self.visitExpr(body)
+            val = self.visitExpr(body)
+            ej.disable()
+            return val
         except Ejecting as e:
             if e.ejector is not ej:
                 raise
-            return e.value
-        finally:
             ej.disable()
+            return e.value
 
     def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
         ej = Ejector()
         self.matchBind(patt, ej, None)
         try:
-            return self.visitExpr(body)
+            val = self.visitExpr(body)
+            ej.disable()
+            return val
         except Ejecting as e:
             if e.ejector is not ej:
                 raise
+            ej.disable()
             self.matchBind(catchPatt, e.value, None)
             return self.visitExpr(catchBody)
-        finally:
-            ej.disable()
+
 
     def visitFinallyExpr(self, body, atLast):
         try:
