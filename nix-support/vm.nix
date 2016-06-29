@@ -1,4 +1,4 @@
-{stdenv, fetchzip, lib, libsodium, libuv, libffi, pkgconfig, python27, python27Packages, vmSrc, buildJIT}:
+{stdenv, fetchzip, lib, libsodium, libuv, libffi, pkgconfig, pypy, python27, python27Packages, vmSrc, buildJIT}:
 
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let pypySrc = fetchzip {
@@ -9,7 +9,7 @@ let pypySrc = fetchzip {
 in
 stdenv.mkDerivation {
   name = "typhon-vm";
-  buildInputs = [ python27
+  buildInputs = [ pypy python27
                   python27Packages.py python27Packages.pytest python27Packages.twisted
                   pypySrc
                   pkgconfig libffi libuv libsodium ];
@@ -41,7 +41,7 @@ stdenv.mkDerivation {
     # Run the tests.
     trial typhon.test
     # Do the actual translation.
-    python -mrpython ${optLevel} main.py
+    pypy -mrpython ${optLevel} main.py
     '';
   installPhase = ''
     mkdir $out

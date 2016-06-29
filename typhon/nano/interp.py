@@ -1,3 +1,4 @@
+from rpython.rlib.jit import promote, unroll_safe
 from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
@@ -33,6 +34,10 @@ MIRANDA_ARGS = mkMirandaArgs()
 
 
 class InterpMethod(object):
+
+    _immutable_fields_ = ("doc", "verb", "params[*]", "guard", "body",
+            "localSize")
+
     def __init__(self, doc, verb, patts, namedPatts, guard, body, localSize):
         self.doc = doc
         self.verb = verb
@@ -44,6 +49,9 @@ class InterpMethod(object):
 
 
 class InterpMatcher(object):
+
+    _immutable_ = True
+
     def __init__(self, patt, body, localSize):
         self.pattern = patt
         self.body = body
@@ -56,6 +64,7 @@ class InterpObject(Object):
     """
     import_from_mixin(AuditClipboard)
     import_from_mixin(UserObjectHelper)
+
     _immutable_fields_ = ("doc", "displayName", "methods[*]", "matchers[*]",
                           "outers", "report")
 
@@ -82,7 +91,8 @@ class InterpObject(Object):
         return self.displayName
 
     def getMethod(self, atom):
-        return self.methods.get(atom, None)
+        # Promote only the atom; we do not want to promote this instance. ~ C.
+        return promote(self.methods.get(promote(atom), None))
 
     def getMatchers(self):
         return self.matchers
@@ -93,13 +103,15 @@ class InterpObject(Object):
             d[a] = m.doc
         return d
 
+    # Two loops, both of which loop over greens. ~ C.
+    @unroll_safe
     def runMethod(self, method, args, namedArgs):
         e = Evaluator(self.frame, self.outers, method.localSize)
         if len(args) != len(method.params):
             raise userError(u"Method '%s.%s' expected %d args, got %d" % (
                 self.getDisplayName(), method.verb, len(method.params),
                 len(args)))
-        for i in range(len(args)):
+        for i in range(len(method.params)):
             e.matchBind(method.params[i], args[i], None)
         namedArgDict = unwrapMap(namedArgs)
         for np in method.namedParams:
@@ -120,6 +132,9 @@ class InterpObject(Object):
         return e.runGuard(resultGuard, v, None)
 
     def runMatcher(self, matcher, message, ej):
+        # The matcher needs to be green so that its structure will be inlined
+        # away. ~ C.
+        matcher = promote(matcher)
         e = Evaluator(self.frame, self.outers, matcher.localSize)
         e.matchBind(matcher.pattern, message, ej)
         return e.visitExpr(matcher.body)
@@ -197,6 +212,8 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
     def visitOuterBindingExpr(self, name, index):
         return self.outers[index]
 
+    # Length of args and namedArgs are fixed. ~ C.
+    @unroll_safe
     def visitCallExpr(self, obj, verb, args, namedArgs):
         rcvr = self.visitExpr(obj)
         argVals = [self.visitExpr(a) for a in args]
@@ -339,6 +356,9 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             frame[selfLayout[0]] = b
         return val
 
+    # Risky; we expect that the list of exprs is from a SeqExpr and that it's
+    # immutable. ~ C.
+    @unroll_safe
     def visitSeqExpr(self, exprs):
         result = NullObject
         for expr in exprs:

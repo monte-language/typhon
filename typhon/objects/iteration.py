@@ -19,6 +19,7 @@ from typhon.errors import Ejecting
 from typhon.nano.interp import InterpObject
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections.lists import unwrapList
+from typhon.objects.collections.maps import EMPTY_MAP
 from typhon.objects.constants import NullObject
 from typhon.objects.ejectors import Ejector
 from typhon.objects.root import runnable
@@ -27,11 +28,11 @@ from typhon.objects.root import runnable
 RUN_2 = getAtom(u"run", 2)
 
 
-def getLocation(method):
-    return "unknown"
+def getLocation(method, displayName):
+    return displayName
 
 
-loopDriver = JitDriver(greens=["method"],
+loopDriver = JitDriver(greens=["method", "displayName"],
                        reds=["consumer", "ejector", "iterator"],
                        get_printable_location=getLocation)
 
@@ -66,10 +67,11 @@ def loop(iterable, consumer):
     # manual effort. It's really not a common pathway at all.
     if not isinstance(consumer, InterpObject):
         return slowLoop(iterable, consumer)
+    displayName = consumer.getDisplayName().encode("utf-8")
 
-    # Rarer path: If the consumer doesn't actually have RUN_2, then they're
-    # not going to be JIT'd. Again, the compiler and optimizer won't ever do
-    # this to us; it has to be intentional.
+    # Rarer path: If the consumer doesn't actually have a method for run/2,
+    # then they're not going to be JIT'd. Again, the compiler and optimizer
+    # won't ever do this to us; it has to be intentional.
     method = consumer.getMethod(RUN_2)
     if method is None:
         return slowLoop(iterable, consumer)
@@ -80,10 +82,10 @@ def loop(iterable, consumer):
     try:
         while True:
             # JIT merge point.
-            loopDriver.jit_merge_point(method=method, consumer=consumer,
-                                       ejector=ej, iterator=iterator)
+            loopDriver.jit_merge_point(method=method, displayName=displayName,
+                    consumer=consumer, ejector=ej, iterator=iterator)
             values = unwrapList(iterator.call(u"next", [ej]))
-            consumer.call(u"run", values)
+            consumer.runMethod(method, values, EMPTY_MAP)
     except Ejecting as e:
         if e.ejector is not ej:
             raise
