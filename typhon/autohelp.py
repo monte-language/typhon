@@ -84,6 +84,7 @@ wrappers = {
     "BigInt": "typhon.objects.data",
     "Bool": "typhon.objects.constants",
     "Bytes": "typhon.objects.data",
+    "CL": "typhon.objects.collections.lists",
     "Char": "typhon.objects.data",
     "Double": "typhon.objects.data",
     "Int": "typhon.objects.data",

@@ -15,12 +15,10 @@
 from rpython.rlib.jit import elidable
 from rpython.rlib.rarithmetic import intmask
 
-from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Ejecting, Refused, userError
+from typhon.errors import Ejecting, userError
 from typhon.errors import UserException
 from typhon.objects.collections.helpers import MonteSorter
-from typhon.objects.constants import NullObject, wrapBool
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import Ejector, throwStr
 from typhon.objects.printers import toString
@@ -28,40 +26,6 @@ from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
 from typhon.rstrategies import rstrategies
 from typhon.strategies.lists import strategyFactory
-
-
-ADD_1 = getAtom(u"add", 1)
-ASMAP_0 = getAtom(u"asMap", 0)
-ASSET_0 = getAtom(u"asSet", 0)
-CONTAINS_1 = getAtom(u"contains", 1)
-DIVERGE_0 = getAtom(u"diverge", 0)
-EXTEND_1 = getAtom(u"extend", 1)
-GET_1 = getAtom(u"get", 1)
-INDEXOF_1 = getAtom(u"indexOf", 1)
-INDEXOF_2 = getAtom(u"indexOf", 2)
-INSERT_2 = getAtom(u"insert", 2)
-JOIN_1 = getAtom(u"join", 1)
-LAST_0 = getAtom(u"last", 0)
-MULTIPLY_1 = getAtom(u"multiply", 1)
-NEXT_1 = getAtom(u"next", 1)
-OP__CMP_1 = getAtom(u"op__cmp", 1)
-POP_0 = getAtom(u"pop", 0)
-PUSH_1 = getAtom(u"push", 1)
-PUT_2 = getAtom(u"put", 2)
-REVERSEINPLACE_0 = getAtom(u"reverseInPlace", 0)
-REVERSE_0 = getAtom(u"reverse", 0)
-SIZE_0 = getAtom(u"size", 0)
-SLICE_1 = getAtom(u"slice", 1)
-SLICE_2 = getAtom(u"slice", 2)
-SNAPSHOT_0 = getAtom(u"snapshot", 0)
-SORT_0 = getAtom(u"sort", 0)
-STARTOF_1 = getAtom(u"startOf", 1)
-STARTOF_2 = getAtom(u"startOf", 2)
-WITH_1 = getAtom(u"with", 1)
-WITH_2 = getAtom(u"with", 2)
-_MAKEITERATOR_0 = getAtom(u"_makeIterator", 0)
-_PRINTON_1 = getAtom(u"_printOn", 1)
-_UNCALL_0 = getAtom(u"_uncall", 0)
 
 
 @autohelp
@@ -583,7 +547,7 @@ class ReverseCL(CL):
         return ReverseCL(self.base.replace(self.base.size() - index, value))
 
 
-def unwrapCL(obj, ej):
+def unwrapCL(obj, ej=None):
     """
     Get some constant strategy from a ConstList or FlexList.
     """
@@ -597,6 +561,14 @@ def unwrapCL(obj, ej):
         # If it's a FlexList, take a snapshot.
         return LongCL(l.strategy.fetch_all(l))
     throwStr(ej, u"Not a list!")
+
+def wrapCL(cl):
+    return ConstList(cl)
+
+def isCL(obj):
+    from typhon.objects.refs import resolution
+    obj = resolution(obj)
+    return isinstance(obj, ConstList)
 
 
 @autohelp
@@ -648,7 +620,8 @@ class ConstList(Object):
     def toString(self):
         return toString(self)
 
-    def printOn(self, printer):
+    @method("Void", "Any")
+    def _printOn(self, printer):
         printer.call(u"print", [StrObject(u"[")])
         items = self.strategy.asList()
         for i, obj in enumerate(items):
@@ -691,19 +664,21 @@ class ConstList(Object):
         self._isSettled = True
         return True
 
+    @method("CL", "CL")
     @profileTyphon("List.add/1")
     def add(self, cl):
         if cl.size():
-            return ConstList(NestedCL(self.strategy, cl))
+            return NestedCL(self.strategy, cl)
         else:
-            return self
+            return self.strategy
 
+    @method("List", "List")
     @profileTyphon("List.join/1")
     def join(self, pieces):
         l = []
         filler = self.strategy.asList()
         first = True
-        for piece in pieces.asList():
+        for piece in pieces:
             # For all iterations except the first, append a copy of
             # ourselves.
             if first:
@@ -712,134 +687,59 @@ class ConstList(Object):
                 l.extend(filler)
 
             l.append(piece)
-        return ConstList(LongCL(l[:]))
+        return l[:]
 
-    def recv(self, atom, args):
-        if atom is ADD_1:
-            return self.add(unwrapCL(args[0], None))
+    @method("Any")
+    def diverge(self):
+        from typhon.objects.collections.lists import FlexList
+        return FlexList(self.strategy.asList())
 
-        if atom is ASMAP_0:
-            from typhon.objects.collections.maps import ConstMap
-            return ConstMap(self.asMap())
+    @method("Any", "Int")
+    def get(self, index):
+        # Lookup by index.
+        if index < 0:
+            raise userError(u"get/1: Index %d cannot be negative" % index)
+        if index >= self.strategy.size():
+            raise userError(u"get/1: Index %d is out of bounds" % index)
+        return self.strategy.get(index)
 
-        if atom is ASSET_0:
-            from typhon.objects.collections.sets import ConstSet
-            return ConstSet(self.asSet())
+    @method("Any")
+    def last(self):
+        size = self.strategy.size()
+        if size:
+            return self.strategy.get(size - 1)
+        raise userError(u"last/0: Empty list has no last element")
 
-        if atom is DIVERGE_0:
-            from typhon.objects.collections.lists import FlexList
-            return FlexList(self.strategy.asList())
+    @method("CL", "Int")
+    def multiply(self, count):
+        # multiply/1: Create a new list by repeating this list's contents.
+        if count < 0:
+            raise userError(u"multiply/1: Can't multiply list %d times" % count)
+        elif count == 0:
+            return emptyCL
+        return RepeatCL(self.strategy, count)
 
-        if atom is GET_1:
-            # Lookup by index.
-            index = unwrapInt(args[0])
-            if index < 0:
-                raise userError(u"Index %d cannot be negative" % index)
-            if index >= self.strategy.size():
-                raise userError(u"Index %d is out of bounds" % index)
-            return self.strategy.get(index)
+    @method("CL")
+    def reverse(self):
+        return self.strategy.reverse()
 
-        if atom is INDEXOF_1:
-            return IntObject(self.indexOf(args[0]))
+    @method("CL", "Int", "Any", _verb="with")
+    def _with(self, index, value):
+        # Replace by index.
+        return self.put(index, value)
 
-        if atom is LAST_0:
-            size = self.strategy.size()
-            if size:
-                return self.strategy.get(size - 1)
-            raise userError(u"Empty list has no last element")
+    @method("List")
+    def _uncall(self):
+        from typhon.scopes.safe import theMakeList
+        from typhon.objects.collections.maps import EMPTY_MAP
+        return [theMakeList, StrObject(u"run"), self, EMPTY_MAP]
 
-        if atom is MULTIPLY_1:
-            # multiply/1: Create a new list by repeating this list's contents.
-            count = unwrapInt(args[0])
-            if count < 0:
-                raise userError(u"Can't multiply list %d times" % count)
-            elif count == 0:
-                return ConstList(emptyCL)
-            return ConstList(RepeatCL(self.strategy, count))
-
-        if atom is OP__CMP_1:
-            other = unwrapCL(args[0], None)
-            return IntObject(self.cmp(other))
-
-        if atom is REVERSE_0:
-            return ConstList(self.strategy.reverse())
-
-        if atom is SORT_0:
-            return self.sort()
-
-        if atom is STARTOF_1:
-            return IntObject(self.startOf(unwrapCL(args[0], None)))
-
-        if atom is STARTOF_2:
-            start = unwrapInt(args[1])
-            if start < 0:
-                raise userError(u"startOf/2: Negative start %d not permitted"
-                                % start)
-            return IntObject(self.startOf(unwrapCL(args[0], None), start))
-
-        if atom is WITH_1:
-            # with/1: Create a new list with an appended object.
-            return self.with_(args[0])
-
-        if atom is WITH_2:
-            # Replace by index.
-            index = unwrapInt(args[0])
-            return self.put(index, args[1])
-
-        if atom is _UNCALL_0:
-            from typhon.scopes.safe import theMakeList
-            from typhon.objects.collections.maps import EMPTY_MAP
-            return wrapList([theMakeList, StrObject(u"run"), self, EMPTY_MAP])
-
-        # _makeIterator/0: Create an iterator for this collection's contents.
-        if atom is _MAKEITERATOR_0:
-            return self._makeIterator()
-
-        if atom is _PRINTON_1:
-            printer = args[0]
-            self.printOn(printer)
-            return NullObject
-
-        # contains/1: Determine whether an element is in this collection.
-        if atom is CONTAINS_1:
-            return wrapBool(self.contains(args[0]))
-
-        # size/0: Get the number of elements in the collection.
-        if atom is SIZE_0:
-            return IntObject(self.size())
-
-        # slice/1 and slice/2: Select a subrange of this collection.
-        if atom is SLICE_1:
-            start = unwrapInt(args[0])
-            try:
-                return self.slice(start)
-            except IndexError:
-                raise userError(u"slice/1: Index out of bounds")
-
-        # slice/1 and slice/2: Select a subrange of this collection.
-        if atom is SLICE_2:
-            start = unwrapInt(args[0])
-            stop = unwrapInt(args[1])
-            try:
-                return self.slice(start, stop)
-            except IndexError:
-                raise userError(u"slice/1: Index out of bounds")
-
-        # snapshot/0: Create a new constant collection with a copy of the
-        # current collection's contents.
-        if atom is SNAPSHOT_0:
-            return self.snapshot()
-
-        if atom is JOIN_1:
-            l = unwrapCL(args[0], None)
-            return self.join(l)
-
-        raise Refused(self, atom, args)
-
+    @method("Any")
     def _makeIterator(self):
         # XXX could be more efficient with case analysis
         return CLIterator(self.strategy)
 
+    @method("Map")
     def asMap(self):
         from typhon.objects.collections.maps import monteMap
         d = monteMap()
@@ -847,6 +747,7 @@ class ConstList(Object):
             d[IntObject(i)] = o
         return d
 
+    @method("Set")
     def asSet(self):
         from typhon.objects.collections.sets import monteSet
         d = monteSet()
@@ -854,8 +755,9 @@ class ConstList(Object):
             d[o] = None
         return d
 
+    @method("Int", "CL")
     @profileTyphon("List.op__cmp/1")
-    def cmp(self, other):
+    def op__cmp(self, other):
         for i, left in enumerate(self.strategy.asList()):
             try:
                 right = other.get(i)
@@ -874,6 +776,7 @@ class ConstList(Object):
         # Do a final length check.
         return 0 if self.size() == other.size() else -1
 
+    @method("Bool", "Any")
     @profileTyphon("List.contains/1")
     def contains(self, needle):
         from typhon.objects.equality import EQUAL, optSame
@@ -882,6 +785,7 @@ class ConstList(Object):
                 return True
         return False
 
+    @method("Int", "Any")
     @profileTyphon("List.indexOf/1")
     def indexOf(self, needle):
         from typhon.objects.equality import EQUAL, optSame
@@ -890,47 +794,66 @@ class ConstList(Object):
                 return index
         return -1
 
+    @method.py("CL", "Any", _verb="with")
     @profileTyphon("List.with/1")
     def with_(self, obj):
         if self.strategy is emptyCL:
-            cl = SingletonCL(obj)
+            return SingletonCL(obj)
         elif isinstance(self.strategy, SingletonCL):
-            cl = PairCL(self.strategy.obj, obj)
+            return PairCL(self.strategy.obj, obj)
         else:
-            cl = NestedCL(self.strategy, SingletonCL(obj))
-        return ConstList(cl)
+            return NestedCL(self.strategy, SingletonCL(obj))
 
+    @method.py("CL", "Int", "Any")
     def put(self, index, value):
-        # print index, value, self.strategy, self.strategy.size()
         top = self.strategy.size()
         if 0 <= index < top:
-            return ConstList(self.strategy.replace(index, value))
+            return self.strategy.replace(index, value)
         elif index == top:
             return self.with_(value)
-        raise userError(u"Index %d out of bounds for list of length %d" %
+        raise userError(u"put/2: Index %d out of bounds for list of length %d" %
                         (index, self.strategy.size()))
 
+    @method.py("Int")
     @elidable
     def size(self):
         return self.strategy.size()
 
-    def slice(self, start, stop=-1):
-        assert start >= 0
+    @method("CL", "Int")
+    def slice(self, start):
+        if start < 0:
+            raise userError(u"slice/1: Negative start")
+        stop = self.strategy.size()
+        return self.strategy.slice(start, stop)
+
+    @method("CL", "Int", "Int", _verb="slice")
+    def _slice(self, start, stop):
+        if start < 0:
+            raise userError(u"slice/1: Negative start")
         if stop < 0:
-            stop = self.strategy.size()
+            raise userError(u"slice/2: Negative stop")
+        return self.strategy.slice(start, stop)
 
-        return ConstList(self.strategy.slice(start, stop))
-
+    @method("Any")
     def snapshot(self):
         return self
 
+    @method("CL")
     @profileTyphon("List.sort/0")
     def sort(self):
         l = self.strategy.asList()
         MonteSorter(l).sort()
-        return ConstList(LongCL(l))
+        return LongCL(l)
 
+    @method("Int", "CL")
     def startOf(self, needleCL, start=0):
+        return self._startOf(needleCL, 0)
+
+    @method.py("Int", "CL", "Int", _verb="startOf")
+    def _startOf(self, needleCL, start):
+        if start < 0:
+            raise userError(u"startOf/2: Negative start %d not permitted" %
+                    start)
         # This is quadratic. It could be better.
         from typhon.objects.equality import EQUAL, optSame
         for index in range(start, self.strategy.size()):
