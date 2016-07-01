@@ -45,7 +45,7 @@ object proptest:
         for i in (0..!iterations):
             def args := [for arb in (arbs) arb.arbitrary()]
             # traceln(`Trying $args`)
-            M.call(test, "run", args)
+            M.call(test, "run", args, [].asMap())
 
 def IntFormsARing(assert):
     def ringAxiomAbelianAssociative(a, b, c):

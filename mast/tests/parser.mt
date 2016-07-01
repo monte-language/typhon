@@ -19,7 +19,7 @@ def astFromTerm(t):
         match _:
             return M.call(
                 astBuilder, t.getTag().getName(),
-                [for a in (t.getArgs()) astFromTerm(a)] + [null])
+                [for a in (t.getArgs()) astFromTerm(a)] + [null], [].asMap())
 
 object ::"ta``":
     to valueMaker(template):
