@@ -32,7 +32,7 @@ def BUFSIZE :Int := 4
 
 # Work tracing.
 var traces := ""
-def trace(c :Char):
+def traceChar(c :Char):
     traces += c
     if (traces.size() >= 50):
         # traceln(traces)
@@ -253,7 +253,7 @@ def runDeviceTask(task, var packet, r):
             return task.qpkt(packet)
     else:
         r["pending"] := packet
-        trace(`${packet.getDatum()}`[0])
+        traceChar(`${packet.getDatum()}`[0])
         return task.hold()
 
 def makeDeviceTask := makeTaskMaker(runDeviceTask)
@@ -335,7 +335,7 @@ def schedule():
             # traceln(`holding or waiting $t`)
             t := t.getLink()
         else:
-            trace('0' + t.getIdent().asInteger())
+            traceChar('0' + t.getIdent().asInteger())
             t := t.runTask()
 
 
