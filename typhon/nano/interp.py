@@ -1,11 +1,11 @@
-from rpython.rlib.jit import promote, unroll_safe
+from rpython.rlib.jit import elidable, unroll_safe
 from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
 from typhon.nano.mast import BuildKernelNodes, SaveScripts
-from typhon.nano.scopes import (ReifyMetaIR, ReifyMeta, LayOutScopes,
-                                SpecializeNouns)
+from typhon.nano.scopes import ReifyMeta, LayOutScopes, SpecializeNouns
+from typhon.nano.structure import AtomIR, refactorStructure
 from typhon.objects.constants import NullObject
 from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import (ConstMap, EMPTY_MAP, monteMap,
@@ -33,31 +33,6 @@ def mkMirandaArgs():
 MIRANDA_ARGS = mkMirandaArgs()
 
 
-class InterpMethod(object):
-
-    _immutable_fields_ = ("doc", "verb", "params[*]", "guard", "body",
-            "localSize")
-
-    def __init__(self, doc, verb, patts, namedPatts, guard, body, localSize):
-        self.doc = doc
-        self.verb = verb
-        self.params = patts
-        self.namedParams = namedPatts
-        self.guard = guard
-        self.body = body
-        self.localSize = localSize
-
-
-class InterpMatcher(object):
-
-    _immutable_ = True
-
-    def __init__(self, patt, body, localSize):
-        self.pattern = patt
-        self.body = body
-        self.localSize = localSize
-
-
 class InterpObject(Object):
     """
     An object whose script is executed by the AST evaluator.
@@ -65,18 +40,16 @@ class InterpObject(Object):
     import_from_mixin(AuditClipboard)
     import_from_mixin(UserObjectHelper)
 
-    _immutable_fields_ = ("doc", "displayName", "methods[*]", "matchers[*]",
-                          "outers", "report")
+    _immutable_fields_ = "doc", "displayName", "script", "outers", "report"
 
-    def __init__(self, doc, name, methods, matchers, frame, outers,
+    def __init__(self, doc, name, script, frame, outers,
                  guards, auditors, ast, fqn):
         self.reportCabinet = []
         self.objectAst = ast
         self.fqn = fqn
         self.doc = doc
         self.displayName = name
-        self.methods = methods
-        self.matchers = matchers
+        self.script = script
         self.frame = frame
         self.outers = outers
         self.auditors = auditors
@@ -84,39 +57,47 @@ class InterpObject(Object):
         if auditors and auditors != [NullObject]:
             self.report = self.audit(auditors, guards)
 
+        # Inline single-entry method cache.
+        self.cachedMethod = None, None
+
     def docString(self):
         return self.doc
 
     def getDisplayName(self):
         return self.displayName
 
+    @elidable
     def getMethod(self, atom):
-        # Promote only the atom; we do not want to promote this instance. ~ C.
-        return promote(self.methods.get(promote(atom), None))
+        if self.cachedMethod[0] is atom:
+            return self.cachedMethod[1]
+        for method in self.script.methods:
+            if method.atom is atom:
+                self.cachedMethod = atom, method
+                return method
 
     def getMatchers(self):
-        return self.matchers
+        return self.script.matchers
 
     def respondingAtoms(self):
         d = {}
-        for a, m in self.methods.iteritems():
-            d[a] = m.doc
+        for method in self.script.methods:
+            d[method.atom] = method.doc
         return d
 
     # Two loops, both of which loop over greens. ~ C.
     @unroll_safe
     def runMethod(self, method, args, namedArgs):
         e = Evaluator(self.frame, self.outers, method.localSize)
-        if len(args) != len(method.params):
+        if len(args) != len(method.patts):
             raise userError(u"Method '%s.%s' expected %d args, got %d" % (
-                self.getDisplayName(), method.verb, len(method.params),
+                self.getDisplayName(), method.atom.verb, len(method.patts),
                 len(args)))
-        for i in range(len(method.params)):
-            e.matchBind(method.params[i], args[i], None)
+        for i in range(len(method.patts)):
+            e.matchBind(method.patts[i], args[i], None)
         namedArgDict = unwrapMap(namedArgs)
-        for np in method.namedParams:
+        for np in method.namedPatts:
             k = e.visitExpr(np.key)
-            if isinstance(np.default, ReifyMetaIR.NullExpr):
+            if isinstance(np.default, AtomIR.NullExpr):
                 if k not in namedArgDict:
                     raise userError(u"Named arg %s missing in call" % (
                         k.toString(),))
@@ -132,15 +113,12 @@ class InterpObject(Object):
         return e.runGuard(resultGuard, v, None)
 
     def runMatcher(self, matcher, message, ej):
-        # The matcher needs to be green so that its structure will be inlined
-        # away. ~ C.
-        matcher = promote(matcher)
         e = Evaluator(self.frame, self.outers, matcher.localSize)
-        e.matchBind(matcher.pattern, message, ej)
+        e.matchBind(matcher.patt, message, ej)
         return e.visitExpr(matcher.body)
 
 
-class Evaluator(ReifyMetaIR.makePassTo(None)):
+class Evaluator(AtomIR.makePassTo(None)):
     def __init__(self, frame, outers, localSize):
         self.locals = [NULL_BINDING] * localSize
         self.frame = frame
@@ -214,7 +192,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
 
     # Length of args and namedArgs are fixed. ~ C.
     @unroll_safe
-    def visitCallExpr(self, obj, verb, args, namedArgs):
+    def visitCallExpr(self, obj, atom, args, namedArgs):
         rcvr = self.visitExpr(obj)
         argVals = [self.visitExpr(a) for a in args]
         if namedArgs:
@@ -225,7 +203,6 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             namedArgMap = ConstMap(d)
         else:
             namedArgMap = EMPTY_MAP
-        atom = getAtom(verb, len(argVals))
         return rcvr.recvNamed(atom, argVals, namedArgMap)
 
     def visitDefExpr(self, patt, ex, rvalue):
@@ -289,9 +266,8 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         assert isinstance(b, Binding)
         return b.slot.call(u"get", [])
 
-    def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
-                        layout):
-        if isinstance(patt, ReifyMetaIR.IgnorePatt):
+    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
+        if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
         else:
             objName = patt.name
@@ -333,20 +309,15 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             b = self.outers[idx]
             assert isinstance(b, Binding)
             guards[name] = b.guard
-        meths = {}
-        for method in methods:
-            name, m = self.visitMethod(method)
-            meths[name] = m
-        matchs = [self.visitMatcher(matcher) for matcher in matchers]
-        o = InterpObject(doc, objName, meths, matchs, frame, self.outers,
+        o = InterpObject(doc, objName, script, frame, self.outers,
                          guards, auds, ast, layout.fqn)
         val = self.runGuard(guardAuditor, o, theThrower)
-        if isinstance(patt, ReifyMetaIR.IgnorePatt):
+        if isinstance(patt, self.src.IgnorePatt):
             b = NULL_BINDING
-        elif isinstance(patt, ReifyMetaIR.FinalPatt):
+        elif isinstance(patt, self.src.FinalPatt):
             b = finalBinding(val, guardAuditor)
             self.locals[patt.index] = b
-        elif isinstance(patt, ReifyMetaIR.VarPatt):
+        elif isinstance(patt, self.src.VarPatt):
             b = varBinding(val, guardAuditor)
             self.locals[patt.index] = b
         else:
@@ -373,7 +344,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
             return self.visitExpr(catchBody)
 
     def visitIgnorePatt(self, guard):
-        if not isinstance(guard, ReifyMetaIR.NullExpr):
+        if not isinstance(guard, self.src.NullExpr):
             g = self.visitExpr(guard)
             self.runGuard(g, self.specimen, self.patternFailure)
 
@@ -383,7 +354,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         self.locals[index] = b
 
     def visitFinalPatt(self, name, guard, idx):
-        if isinstance(guard, ReifyMetaIR.NullExpr):
+        if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
         else:
             guard = self.visitExpr(guard)
@@ -391,7 +362,7 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         self.locals[idx] = finalBinding(val, guard)
 
     def visitVarPatt(self, name, guard, idx):
-        if isinstance(guard, ReifyMetaIR.NullExpr):
+        if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
         else:
             guard = self.visitExpr(guard)
@@ -422,21 +393,12 @@ class Evaluator(ReifyMetaIR.makePassTo(None)):
         k = self.visitExpr(key)
         if k in namedArgs:
             v = namedArgs.objectMap[k]
-        elif not isinstance(default, ReifyMetaIR.NullExpr):
+        elif not isinstance(default, self.src.NullExpr):
             v = self.visitExpr(default)
         else:
             throw(self.patternFailure,
                   StrObject(u"Named arg %s missing in call" % (k.toString(),)))
         self.matchBind(patt, v, self.patternFailure)
-
-    def visitMatcherExpr(self, patt, body, localSize):
-        return InterpMatcher(patt, body, localSize)
-
-    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body,
-                        localSize):
-        return (getAtom(verb, len(patts)),
-                InterpMethod(doc, verb, patts, namedPatts,
-                             guard, body, localSize))
 
 
 def scope2env(scope):
@@ -457,9 +419,10 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     topLocalNames, localSize = lo.top.collectTopLocals()
     sl = SpecializeNouns().visitExpr(ll)
     ml = ReifyMeta().visitExpr(sl)
+    finalAST = refactorStructure(ml)
     result = NullObject
     e = Evaluator([], environment.values(), localSize)
-    result = e.visitExpr(ml)
+    result = e.visitExpr(finalAST)
     topLocals = []
     for i in range(len(topLocalNames)):
         topLocals.append((topLocalNames[i], e.locals[i]))
