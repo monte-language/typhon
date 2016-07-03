@@ -110,19 +110,22 @@ class MakeProfileNames(_MakeProfileNames):
             objName = u"_"
         else:
             objName = patt.name
-        self.objectNames.append(objName.encode("utf-8"))
+        self.objectNames.append((objName.encode("utf-8"),
+            layout.fqn.encode("utf-8").split("$")[0]))
         rv = _MakeProfileNames.visitObjectExpr(self, doc, patt, auditors,
                 script, mast, layout)
         self.objectNames.pop()
         return rv
 
+    def makeProfileName(self, inner):
+        name, fqn = self.objectNames[-1]
+        return "mt:%s.%s:1:%s" % (name, inner, fqn)
+
     def visitMethodExpr(self, doc, atom, patts, namedPatts, guard, body,
             localSize):
-        # XXX figure out how to retrieve this
-        filename = "<unknown>"
         # NB: `atom.repr` is tempting but wrong. ~ C.
-        profileName = "mt:%s.%s/%d:1:%s" % (self.objectNames[-1],
-                atom.verb.encode("utf-8"), atom.arity, filename)
+        description = "%s/%d" % (atom.verb.encode("utf-8"), atom.arity)
+        profileName = self.makeProfileName(description)
         patts = [self.visitPatt(patt) for patt in patts]
         namedPatts = [self.visitNamedPatt(namedPatt) for namedPatt in
                 namedPatts]
@@ -134,9 +137,7 @@ class MakeProfileNames(_MakeProfileNames):
         return rv
 
     def visitMatcherExpr(self, patt, body, localSize):
-        # XXX figure out how to retrieve this
-        filename = "<unknown>"
-        profileName = "mt:%s.matcher:1:%s" % (self.objectNames[-1], filename)
+        profileName = self.makeProfileName("matcher")
         patt = self.visitPatt(patt)
         body = self.visitExpr(body)
         rv = self.dest.MatcherExpr(profileName, patt, body, localSize)
