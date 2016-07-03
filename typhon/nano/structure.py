@@ -2,6 +2,8 @@
 Structural refactoring to improve the efficiency of the AST interpreter.
 """
 
+from rpython.rlib import rvmprof
+
 from typhon.atoms import getAtom
 from typhon.nano.scopes import ReifyMetaIR
 
@@ -92,6 +94,9 @@ _MakeProfileNames = AtomIR.makePassTo(ProfileNameIR)
 class MakeProfileNames(_MakeProfileNames):
     """
     Prebuild the strings which identify code objects to the profiler.
+
+    This must be the last pass before evaluation, or else profiling will not
+    work because the wrong objects will have been registered.
     """
 
     def __init__(self):
@@ -115,15 +120,18 @@ class MakeProfileNames(_MakeProfileNames):
             localSize):
         # XXX figure out how to retrieve this
         filename = "<unknown>"
-        profileName = "mt:%s.%s:1:%s" % (self.objectNames[-1], atom.repr,
-                filename)
+        # NB: `atom.repr` is tempting but wrong. ~ C.
+        profileName = "mt:%s.%s/%d:1:%s" % (self.objectNames[-1],
+                atom.verb.encode("utf-8"), atom.arity, filename)
         patts = [self.visitPatt(patt) for patt in patts]
         namedPatts = [self.visitNamedPatt(namedPatt) for namedPatt in
                 namedPatts]
         guard = self.visitExpr(guard)
         body = self.visitExpr(body)
-        return self.dest.MethodExpr(profileName, doc, atom, patts, namedPatts,
+        rv = self.dest.MethodExpr(profileName, doc, atom, patts, namedPatts,
                 guard, body, localSize)
+        rvmprof.register_code(rv, lambda method: method.profileName)
+        return rv
 
     def visitMatcherExpr(self, patt, body, localSize):
         # XXX figure out how to retrieve this
@@ -131,4 +139,12 @@ class MakeProfileNames(_MakeProfileNames):
         profileName = "mt:%s.matcher:1:%s" % (self.objectNames[-1], filename)
         patt = self.visitPatt(patt)
         body = self.visitExpr(body)
-        return self.dest.MatcherExpr(profileName, patt, body, localSize)
+        rv = self.dest.MatcherExpr(profileName, patt, body, localSize)
+        rvmprof.register_code(rv, lambda matcher: matcher.profileName)
+        return rv
+
+# Register the interpreted code classes with vmprof.
+rvmprof.register_code_object_class(ProfileNameIR.MethodExpr,
+        lambda method: method.profileName)
+rvmprof.register_code_object_class(ProfileNameIR.MatcherExpr,
+        lambda matcher: matcher.profileName)

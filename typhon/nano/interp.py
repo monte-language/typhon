@@ -125,13 +125,6 @@ class InterpObject(Object):
         return e.visitExpr(matcher.body)
 
 
-# Register the interpreted code classes with vmprof.
-rvmprof.register_code_object_class(ProfileNameIR.MethodExpr,
-        lambda method: method.profileName)
-rvmprof.register_code_object_class(ProfileNameIR.MatcherExpr,
-        lambda matcher: matcher.profileName)
-
-
 class Evaluator(ProfileNameIR.makePassTo(None)):
     def __init__(self, frame, outers, localSize):
         self.locals = [NULL_BINDING] * localSize
