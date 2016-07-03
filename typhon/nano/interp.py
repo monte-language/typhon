@@ -1,5 +1,9 @@
+"""
+A simple AST interpreter.
+"""
+
 from rpython.rlib import rvmprof
-from rpython.rlib.jit import elidable, unroll_safe
+from rpython.rlib.jit import promote, unroll_safe, we_are_jitted
 from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
@@ -43,6 +47,9 @@ class InterpObject(Object):
 
     _immutable_fields_ = "doc", "displayName", "script", "outers", "report"
 
+    # Inline single-entry method cache.
+    cachedMethod = None, None
+
     def __init__(self, doc, name, script, frame, outers,
                  guards, auditors, ast, fqn):
         self.reportCabinet = []
@@ -58,26 +65,31 @@ class InterpObject(Object):
         if auditors and auditors != [NullObject]:
             self.report = self.audit(auditors, guards)
 
-        # Inline single-entry method cache.
-        self.cachedMethod = None, None
-
     def docString(self):
         return self.doc
 
     def getDisplayName(self):
         return self.displayName
 
-    @elidable
+    @unroll_safe
     def getMethod(self, atom):
-        if self.cachedMethod[0] is atom:
-            return self.cachedMethod[1]
-        for method in self.script.methods:
-            if method.atom is atom:
-                self.cachedMethod = atom, method
-                return method
+        # If we are JIT'd, then don't bother with the method cache. It will
+        # only slow things down. Instead, head directly to the script and find
+        # the right method.
+        if we_are_jitted():
+            for method in promote(self.script).methods:
+                if method.atom is atom:
+                    return promote(method)
+        else:
+            if self.cachedMethod[0] is atom:
+                return self.cachedMethod[1]
+            for method in self.script.methods:
+                if method.atom is atom:
+                    self.cachedMethod = atom, method
+                    return method
 
     def getMatchers(self):
-        return self.script.matchers
+        return promote(self.script).matchers
 
     def respondingAtoms(self):
         d = {}
