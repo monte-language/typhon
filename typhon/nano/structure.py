@@ -8,6 +8,7 @@ from typhon.nano.scopes import ReifyMetaIR
 def refactorStructure(ast):
     ast = SplitScript().visitExpr(ast)
     ast = MakeAtoms().visitExpr(ast)
+    ast = MakeProfileNames().visitExpr(ast)
     return ast
 
 SplitScriptIR = ReifyMetaIR.extend("SplitScript", [],
@@ -68,3 +69,66 @@ class MakeAtoms(SplitScriptIR.makePassTo(AtomIR)):
         body = self.visitExpr(body)
         return self.dest.MethodExpr(doc, atom, patts, namedPatts, guard, body,
                                     localSize)
+
+ProfileNameIR = AtomIR.extend("ProfileName",
+    ["ProfileName"],
+    {
+        "Method": {
+            "MethodExpr": [("profileName", "ProfileName"), ("doc", None),
+                           ("atom", None), ("patts", "Patt*"),
+                           ("namedPatts", "NamedPatt*"), ("guard", "Expr"),
+                           ("body", "Expr"), ("localSize", None)],
+        },
+        "Matcher": {
+            "MatcherExpr": [("profileName", "ProfileName"), ("patt", "Patt"),
+                            ("body", "Expr"), ("localSize", None)],
+        },
+    }
+)
+
+# super() doesn't work in RPython, so this is a way to get at the default
+# implementations of the pass methods. ~ C.
+_MakeProfileNames = AtomIR.makePassTo(ProfileNameIR)
+class MakeProfileNames(_MakeProfileNames):
+    """
+    Prebuild the strings which identify code objects to the profiler.
+    """
+
+    def __init__(self):
+        # NB: self.objectNames cannot be empty unless we somehow obtain a
+        # method/matcher without a body. ~ C.
+        self.objectNames = []
+
+    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
+        # Push, do the recursion, pop.
+        if isinstance(patt, self.src.IgnorePatt):
+            objName = u"_"
+        else:
+            objName = patt.name
+        self.objectNames.append(objName.encode("utf-8"))
+        rv = _MakeProfileNames.visitObjectExpr(self, doc, patt, auditors,
+                script, mast, layout)
+        self.objectNames.pop()
+        return rv
+
+    def visitMethodExpr(self, doc, atom, patts, namedPatts, guard, body,
+            localSize):
+        # XXX figure out how to retrieve this
+        filename = "<unknown>"
+        profileName = "mt:%s.%s:1:%s" % (self.objectNames[-1], atom.repr,
+                filename)
+        patts = [self.visitPatt(patt) for patt in patts]
+        namedPatts = [self.visitNamedPatt(namedPatt) for namedPatt in
+                namedPatts]
+        guard = self.visitExpr(guard)
+        body = self.visitExpr(body)
+        return self.dest.MethodExpr(profileName, doc, atom, patts, namedPatts,
+                guard, body, localSize)
+
+    def visitMatcherExpr(self, patt, body, localSize):
+        # XXX figure out how to retrieve this
+        filename = "<unknown>"
+        profileName = "mt:%s.matcher:1:%s" % (self.objectNames[-1], filename)
+        patt = self.visitPatt(patt)
+        body = self.visitExpr(body)
+        return self.dest.MatcherExpr(profileName, patt, body, localSize)

@@ -33,7 +33,7 @@ def makeIR(name, terminals, nonterms):
         # from.
         class NT(NonTerminal):
             _immutable_ = True
-        NT.__name__ = nonterm
+        NT.__name__ = nonterm + str(increment())
 
         def build(constructor, pieces):
             ipieces = unrolling_iterable(enumerate(pieces))

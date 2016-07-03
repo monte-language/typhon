@@ -1,3 +1,4 @@
+from rpython.rlib import rvmprof
 from rpython.rlib.jit import elidable, unroll_safe
 from rpython.rlib.objectmodel import import_from_mixin
 
@@ -5,7 +6,7 @@ from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
 from typhon.nano.mast import BuildKernelNodes, SaveScripts
 from typhon.nano.scopes import ReifyMeta, LayOutScopes, SpecializeNouns
-from typhon.nano.structure import AtomIR, refactorStructure
+from typhon.nano.structure import ProfileNameIR, refactorStructure
 from typhon.objects.constants import NullObject
 from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import (ConstMap, EMPTY_MAP, monteMap,
@@ -85,6 +86,9 @@ class InterpObject(Object):
         return d
 
     # Two loops, both of which loop over greens. ~ C.
+    @rvmprof.vmprof_execute_code("method",
+            lambda self, method, args, namedArgs: method,
+            result_class=Object)
     @unroll_safe
     def runMethod(self, method, args, namedArgs):
         e = Evaluator(self.frame, self.outers, method.localSize)
@@ -97,7 +101,7 @@ class InterpObject(Object):
         namedArgDict = unwrapMap(namedArgs)
         for np in method.namedPatts:
             k = e.visitExpr(np.key)
-            if isinstance(np.default, AtomIR.NullExpr):
+            if isinstance(np.default, ProfileNameIR.NullExpr):
                 if k not in namedArgDict:
                     raise userError(u"Named arg %s missing in call" % (
                         k.toString(),))
@@ -112,13 +116,23 @@ class InterpObject(Object):
             return v
         return e.runGuard(resultGuard, v, None)
 
+    @rvmprof.vmprof_execute_code("matcher",
+            lambda self, matcher, message, ej: matcher,
+            result_class=Object)
     def runMatcher(self, matcher, message, ej):
         e = Evaluator(self.frame, self.outers, matcher.localSize)
         e.matchBind(matcher.patt, message, ej)
         return e.visitExpr(matcher.body)
 
 
-class Evaluator(AtomIR.makePassTo(None)):
+# Register the interpreted code classes with vmprof.
+rvmprof.register_code_object_class(ProfileNameIR.MethodExpr,
+        lambda method: method.profileName)
+rvmprof.register_code_object_class(ProfileNameIR.MatcherExpr,
+        lambda matcher: matcher.profileName)
+
+
+class Evaluator(ProfileNameIR.makePassTo(None)):
     def __init__(self, frame, outers, localSize):
         self.locals = [NULL_BINDING] * localSize
         self.frame = frame
