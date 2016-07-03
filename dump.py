@@ -3,8 +3,7 @@
 import sys
 from typhon.load.nano import InvalidMAST, loadMAST
 from typhon.nano.mast import SaveScripts
-from typhon.nano.scopes import (LayOutScopes, PrettySpecialNouns,
-                                ReifyMeta, SpecializeNouns)
+from typhon.nano.scopes import LayOutScopes, PrettySpecialNouns, bindNouns
 from typhon.nodes import InvalidAST
 
 
@@ -45,10 +44,9 @@ def entryPoint(argv):
         return 1
     ss = SaveScripts().visitExpr(expr)
     ll = LayOutScopes(safeScopeNames, path.decode("utf-8")).visitExpr(ss)
-    sl = SpecializeNouns().visitExpr(ll)
-    ml = ReifyMeta().visitExpr(sl)
+    bound = bindNouns(ll)
     pretty = PrettySpecialNouns()
-    pretty.visitExpr(ml)
+    pretty.visitExpr(bound)
     dumpLines(pretty.asUnicode())
     return 0
 

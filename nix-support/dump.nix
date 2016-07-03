@@ -3,8 +3,8 @@
 
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let pypySrc = fetchzip {
-    url = "https://bitbucket.org/pypy/pypy/downloads/pypy-5.0.0-src.tar.bz2";
-    sha256 = "1hxjhm66081hnhdkf0fifswc9js9qi88zyy7pfpcwlxl029sddj0";
+    url = "https://bitbucket.org/pypy/pypy/downloads/pypy-5.1.1-src.tar.bz2";
+    sha256 = "1hrvwq8s74k0fljvajy5brg7y4pxnnfwm9f9spb3vnw05yfam5kp";
   };
 in
 stdenv.mkDerivation {

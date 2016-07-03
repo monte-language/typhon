@@ -9,7 +9,7 @@ from rpython.rlib.objectmodel import import_from_mixin
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
 from typhon.nano.mast import BuildKernelNodes, SaveScripts
-from typhon.nano.scopes import ReifyMeta, LayOutScopes, SpecializeNouns
+from typhon.nano.scopes import LayOutScopes, bindNouns
 from typhon.nano.structure import ProfileNameIR, refactorStructure
 from typhon.objects.constants import NullObject
 from typhon.objects.collections.lists import unwrapList
@@ -436,9 +436,8 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     lo = LayOutScopes(environment.keys(), fqnPrefix, inRepl)
     ll = lo.visitExpr(ss)
     topLocalNames, localSize = lo.top.collectTopLocals()
-    sl = SpecializeNouns().visitExpr(ll)
-    ml = ReifyMeta().visitExpr(sl)
-    finalAST = refactorStructure(ml)
+    bound = bindNouns(ll)
+    finalAST = refactorStructure(bound)
     result = NullObject
     e = Evaluator([], environment.values(), localSize)
     result = e.visitExpr(finalAST)

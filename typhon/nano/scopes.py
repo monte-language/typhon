@@ -48,6 +48,13 @@ LayoutIR = SaveScriptIR.extend(
 )
 
 
+def countLocalSize(lo, sizeSeen):
+    sizeSeen = max(sizeSeen, lo.position + 1)
+    for x in lo.children:
+        sizeSeen = max(countLocalSize(x, sizeSeen), sizeSeen)
+    return sizeSeen
+
+
 class ScopeBase(object):
     position = -1
 
@@ -335,6 +342,12 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         return result
 
 
+def bindNouns(ast):
+    ast = SpecializeNouns().visitExpr(ast)
+    ast = ReifyMeta().visitExpr(ast)
+    return ast
+
+
 BoundNounsIR = LayoutIR.extend(
     "BoundNouns", [], {
         "Expr": {
@@ -371,16 +384,6 @@ BoundNounsIR = LayoutIR.extend(
         },
     }
 )
-
-ReifyMetaIR = BoundNounsIR.extend(
-    "ReifyMeta", [], {
-        "Expr": {
-            "-MetaContextExpr": None,
-            "-MetaStateExpr": None,
-        }
-    }
-)
-
 
 class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
     def visitBindingPatt(self, name, layout):
@@ -442,14 +445,17 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
             countLocalSize(layout, 0) + 2)
 
 
-def countLocalSize(lo, sizeSeen):
-    sizeSeen = max(sizeSeen, lo.position + 1)
-    for x in lo.children:
-        sizeSeen = max(countLocalSize(x, sizeSeen), sizeSeen)
-    return sizeSeen
-
+ReifyMetaIR = BoundNounsIR.extend(
+    "ReifyMeta", [], {
+        "Expr": {
+            "-MetaContextExpr": None,
+            "-MetaStateExpr": None,
+        }
+    }
+)
 
 class ReifyMeta(BoundNounsIR.makePassTo(ReifyMetaIR)):
+
     def mkNoun(self, name, layout):
         scope, idx, _ = layout.find(name)
         if scope == "outer":
@@ -493,8 +499,10 @@ class ReifyMeta(BoundNounsIR.makePassTo(ReifyMetaIR)):
 
 
 def asIndex(i):
+    """
+    Convert numbers to base-10 pretty subscript indices.
+    """
     return u"".join([unichr(0x2050 + ord(c)) for c in str(i)])
-
 
 class PrettySpecialNouns(ReifyMetaIR.makePassTo(None)):
 
@@ -764,43 +772,3 @@ class PrettySpecialNouns(ReifyMetaIR.makePassTo(None)):
         self.write(u" {")
         self.visitExpr(body)
         self.write(u"}")
-
-
-## We'll come back to this in a bit once we have some more scope info.
-# DeBruijnIR = SaveScriptIR.extend("De Bruijn", ["Index", "-Noun"],
-#     {
-#         "Expr": {
-#             "AssignExpr": [("index", "Index"), ("rvalue", "Expr")],
-#             "BindingExpr": [("index", "Index")],
-#             "NounExpr": [("index", "Index")],
-#         },
-#         "Patt": {
-#             "BindingPatt": [("index", "Index")],
-#             "FinalPatt": [("index", "Index"), ("guard", "Expr")],
-#             "VarPatt": [("index", "Index"), ("guard", "Expr")],
-#         },
-#     }
-# )
-
-# class AssignDeBruijn(SaveScriptIR.makePassTo(DeBruijnIR)):
-
-#     def __init__(self):
-#         self.scopeStack = [[]]
-
-#     def boundNames(self):
-#         return self.scopeStack[-1]
-
-#     def push(self):
-#         self.scopeStack.append([])
-
-#     def pop(self):
-#         return self.scopeStack.pop()
-
-#     def visitNoun(self, name):
-#         boundNames = self.boundNames()
-#         try:
-#             return boundNames.index(name)
-#         except ValueError:
-#             rv = len(boundNames)
-#             boundNames.append(name)
-#             return rv
