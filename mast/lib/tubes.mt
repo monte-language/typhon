@@ -2,11 +2,13 @@ import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 import "unittest" =~ [=> unittest]
 exports (Pump, Unpauser, Fount, Drain, Tube,
          nullPump,
+         makePump, chainPumps,
          makeMapPump, makeSplitPump, makeStatefulPump,
          makeUTF8DecodePump, makeUTF8EncodePump,
          makeIterFount,
          makePureDrain,
          makePumpTube,
+         chainTubes,
          chain)
 
 interface Pump :DeepFrozen:
@@ -15,17 +17,28 @@ interface Pump :DeepFrozen:
      Pumps transform incoming items each into zero or more outgoing
      elements."
 
-    to started() :Void:
+    to started() :Vow[Void]:
         "Flow has started; items will be received soon.
 
          Pumps should use this method to initialize any required mutable
-         state."
+         state.
+         
+         The pump may not be considered started until this method's return
+         value resolves."
 
-    # XXX :Promise[List]
-    to received(item):
+    to stopped(reason :Str) :Vow[Void]:
+        "Flow has stopped.
+
+         Pumps should use this method to tear down any allocated resources
+         that they may be holding.
+         
+         The pump may not be considered stopped until this method's return
+         value resolves."
+
+    to received(item) :Vow[List]:
         "Process an item and send zero or more items downstream.
 
-         The return value must be a list of items, but it can be a promise."
+         The return value vows to be a list of items."
 
     # XXX :(Double >= 0.0)
     to progressed(amount :Double) :Void:
@@ -35,17 +48,11 @@ interface Pump :DeepFrozen:
          might use this method to adjust their processing parameters to trade
          speed for memory or quality."
 
-    to stopped(reason :Str) :Void:
-        "Flow has stopped.
-
-         Pumps should use this method to tear down any allocated resources
-         that they may be holding."
-
 
 interface Unpauser :DeepFrozen:
     "An unpauser."
 
-    to unpause():
+    to unpause() :Void:
         "Remove the pause corresponding to this unpauser.
 
          Flow will resume when all extant pauses are removed, so unpausing
@@ -134,23 +141,125 @@ interface Drain :DeepFrozen:
 interface Tube :DeepFrozen extends Drain, Fount:
     "A pressure-sensitive segment in a stream processing workflow."
 
+
+def chainPumps(first :Pump, second :Pump) :Pump as DeepFrozen:
+    "Chain two pumps together in sequence."
+
+    return object chainedPump as Pump:
+        "A chained pump."
+
+        to started() :Vow[Void]:
+            return when (first.started()) -> { second.started() }
+
+        to stopped() :Vow[Void]:
+            return when (first.stopped()) -> { second.stopped() }
+
+        to received(item) :Vow[List]:
+            return when (def xs := first.received(item)) ->
+                def promises := [for x in (xs) second.received(x)]
+                when (promiseAllFulfilled(promises)) ->
+                    var rv := []
+                    for p in (promises):
+                        rv += p
+                    rv
+
+        to progressed(amount):
+            first.progressed(amount)
+            second.progressed(amount)
+
+
 object nullPump as DeepFrozen implements Pump:
     "The do-nothing pump."
 
     to started():
         null
 
-    to received(item) :List:
-        return []
-
     to stopped(_):
         null
 
+    to received(item) :List:
+        return []
+
+    to progressed(_):
+        null
+
+
+object makePump as DeepFrozen:
+    "The maker of many useful types of pumps.
+
+     In general, to allow for segmentation, all of the pumps have 'flattened'
+     versions which expect their callable arguments to return lists. The
+     precise semantics vary by method."
+
+    to map(f) :Pump:
+        return object mapPump extends nullPump as Pump:
+            to received(item):
+                return [f(item)]
+
+    to mapFlat(f) :Pump:
+        "A pump which maps each incoming item to zero or more outgoing items."
+        return object mapPump extends nullPump as Pump:
+            to received(item) :List:
+                return f(item)
+
+    to filter(pred) :Pump:
+        return object filterPump extends nullPump as Pump:
+            to received(item):
+                return if (pred(item)) { [item] } else { [] }
+
+    to filterFlat(pred) :Pump:
+        "A pump which can replicate an item zero or more times.
+
+         Yes, this one is kind of strange and useless."
+        return object filterPump extends nullPump as Pump:
+            to received(item):
+                return [for b in (pred(item)) ? (b) item]
+
+    to scan(f, var z) :Pump:
+        "A pump which can 'scan', performing an incremental fold."
+        return object scanPump extends nullPump as Pump:
+            to received(item):
+                def rv := [z]
+                z := f(z, item)
+                return rv
+
+    to scanFlat(f, var z) :Pump:
+        "A pump which can scan, like `.scan/2`, but which can scan zero or
+         more times per incoming item, returning a list of outgoing
+         incremental folds."
+        return object scanPump extends nullPump as Pump:
+            to received(item):
+                return switch (f(z, item)) {
+                    # Feed me. Feeed me.
+                    match [] { [] }
+                    match zs {
+                        def rv := [z] + zs.slice(0, zs.size() - 1)
+                        z := zs.last()
+                        rv
+                    }
+                }
+
+    to accum(f, var acc) :Pump:
+        "A pump which accumulates a value over repeated iterations."
+        return object accumPump extends nullPump as Pump:
+            to received(item):
+                def [a, x] := f(acc, item)
+                acc := a
+                return [x]
+
+    to accumFlat(f, var acc) :Pump:
+        "A pump which accumulates, like `.accum/2`, but which can accumulate
+         zero or more times per incoming item, returning a final accumulator
+         and a list of accumlated outgoing items."
+        return object accumPump extends nullPump as Pump:
+            to received(item) :List:
+                def [a, xs] := f(acc, item)
+                acc := a
+                return xs
+
 
 def makeMapPump(f) :Pump as DeepFrozen:
-    return object mapPump extends nullPump as Pump:
-        to received(item):
-            return [f(item)]
+    return makePump.map(f)
 
 
 def splitAt(needle, var haystack) as DeepFrozen:
@@ -188,44 +297,37 @@ unittest([
 
 
 def makeSplitPump(separator :Bytes) :Pump as DeepFrozen:
-    var buf :Bytes := b``
+    def splitAccum(buf, item):
+        def [pieces, leftovers] := splitAt(separator, buf + item)
+        return [leftovers, pieces]
+    return makePump.accumFlat(splitAccum, b``)
 
-    return object splitPump extends nullPump as Pump:
-        to received(item):
-            buf += item
-            def [pieces, leftovers] := splitAt(separator, buf)
-            buf := leftovers
-            return pieces
 
 def makeStatefulPump(machine) :Pump as DeepFrozen:
     def State := machine.getStateGuard()
     def [var state :State, var size :Int] := machine.getInitialState()
-    var buf := []
 
-    return object statefulPump extends nullPump as Pump:
-        to received(item) :List:
-            buf += _makeList.fromIterable(item)
-            while (buf.size() >= size):
-                def data := buf.slice(0, size)
-                buf := buf.slice(size, buf.size())
-                def [newState, newSize] := machine.advance(state, data)
-                state := newState
-                size := newSize
+    def stateAccum(var buf, item):
+        buf += _makeList.fromIterable(item)
+        while (buf.size() >= size):
+            def data := buf.slice(0, size)
+            buf := buf.slice(size, buf.size())
+            def [newState, newSize] := machine.advance(state, data)
+            state := newState
+            size := newSize
 
-            return machine.results()
+        return [buf, machine.results()]
+    return makePump.accumFlat(stateAccum, [])
 
 def makeUTF8DecodePump() :Pump as DeepFrozen:
     var buf :Bytes := b``
-
-    return object UTF8DecodePump extends nullPump as Pump:
-        to received(bs :Bytes) :List[Str]:
-            buf += bs
-            def [s, leftovers] := UTF8.decodeExtras(buf, null)
-            buf := leftovers
-            return if (s.size() != 0) {[s]} else {[]}
+    def decodeAccum(buf :Bytes, item :Bytes):
+        def [s, leftovers] := UTF8.decodeExtras(buf + item, null)
+        return [leftovers, if (s.size() != 0) { [s] } else { [] }]
+    return makePump.accum(decodeAccum, b``)
 
 def makeUTF8EncodePump() :Pump as DeepFrozen:
-    return makeMapPump(fn s {UTF8.encode(s, null)})
+    return makePump.map(fn s {UTF8.encode(s, null)})
 
 def makeIterFount(iterable) :Fount as DeepFrozen:
     def iterator := iterable._makeIterator()
@@ -400,7 +502,9 @@ def makePumpTube(pump) :Pump as DeepFrozen:
                 stash := newStash
                 downstream.receive(piece)
 
-def chain([var fount] + drains) as DeepFrozen:
+def chainTubes([var fount] + drains) as DeepFrozen:
     for drain in (drains):
         fount := fount<-flowTo(drain)
     return fount
+
+def &&chain := &&chainTubes
