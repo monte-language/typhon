@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import sys
+from typhon.errors import UserException
 from typhon.load.nano import InvalidMAST, loadMAST
 from typhon.nano.mast import SaveScripts
 from typhon.nano.scopes import LayOutScopes, PrettySpecialNouns, bindNouns
@@ -21,15 +22,16 @@ safeScopeNames = [
     u"_makeSourceSpan", u"_makeString", u"_makeVarSlot", u"_slotToBinding",
     u"throw", u"trace", u"traceln", u"Comparison", u"Comparable", u"WellOrdered",
     u"Void", u"Bool", u"Bytes", u"Char", u"Double", u"Int", u"Str",
-    u"_makeOrderedSpace", u"Empty", u"List", u"Map", u"NullOk", u"Set", u"_mapEmpty",
-    u"_mapExtract", u"_accumulateList", u"_accumulateMap", u"_booleanFlow",
-    u"_iterForever", u"_validateFor", u"_switchFailed", u"_makeVerbFacet",
-    u"_comparer", u"_suchThat", u"_matchSame", u"_bind", u"_quasiMatcher",
-    u"_splitList", u"import", u"typhonEval", u"makeLazySlot", u"astBuilder",
-    u"simple__quasiParser", u"makeBrandPair", u"_makeMessageDesc",
-    u"_makeParamDesc", u"_makeProtocolDesc", u"__makeMessageDesc",
-    u"__makeParamDesc", u"__makeProtocolDesc", u"b__quasiParser",
-    u"m__quasiParser", u"b``", u"m``", u"``", u"eval", u"Transparent", u"safeScope"]
+    u"_makeOrderedSpace", u"Empty", u"List", u"Map", u"NullOk", u"Pair",
+    u"Set", u"_mapEmpty", u"_mapExtract", u"_accumulateList",
+    u"_accumulateMap", u"_booleanFlow", u"_iterForever", u"_validateFor",
+    u"_switchFailed", u"_makeVerbFacet", u"_comparer", u"_suchThat",
+    u"_matchSame", u"_bind", u"_quasiMatcher", u"_splitList", u"import",
+    u"typhonEval", u"makeLazySlot", u"astBuilder", u"simple__quasiParser",
+    u"makeBrandPair", u"_makeMessageDesc", u"_makeParamDesc",
+    u"_makeProtocolDesc", u"__makeMessageDesc", u"__makeParamDesc",
+    u"__makeProtocolDesc", u"b__quasiParser", u"m__quasiParser", u"b``",
+    u"m``", u"``", u"eval", u"Transparent", u"safeScope"]
 
 
 def entryPoint(argv):
@@ -42,12 +44,22 @@ def entryPoint(argv):
     except InvalidMAST:
         print "Invalid MAST"
         return 1
-    ss = SaveScripts().visitExpr(expr)
-    ll = LayOutScopes(safeScopeNames, path.decode("utf-8")).visitExpr(ss)
-    bound = bindNouns(ll)
-    pretty = PrettySpecialNouns()
-    pretty.visitExpr(bound)
-    dumpLines(pretty.asUnicode())
+    try:
+        ss = SaveScripts().visitExpr(expr)
+        ll = LayOutScopes(safeScopeNames, path.decode("utf-8")).visitExpr(ss)
+        bound = bindNouns(ll)
+    except UserException as ue:
+        print "Monte-level exception while compiling:"
+        print ue.formatError()
+        return 1
+    try:
+        pretty = PrettySpecialNouns()
+        pretty.visitExpr(bound)
+        dumpLines(pretty.asUnicode())
+    except UserException as ue:
+        print "Monte-level exception while pretty-printing:"
+        print ue.formatError()
+        return 1
     return 0
 
 
