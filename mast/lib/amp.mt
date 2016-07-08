@@ -17,7 +17,6 @@ import "lib/enum" =~ [=> makeEnum]
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/tubes" =~ [
     => nullPump :DeepFrozen,
-     => makeMapPump :DeepFrozen,
      => makeStatefulPump :DeepFrozen,
      => makePumpTube :DeepFrozen,
      => chain :DeepFrozen,

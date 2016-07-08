@@ -1,7 +1,7 @@
 import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 import "unittest" =~ [=> unittest]
 exports (Pump, Unpauser, Fount, Drain, Tube,
-         nullPump,
+         nullPump, makePump, chainPumps,
          makeMapPump, makeSplitPump, makeStatefulPump,
          makeUTF8DecodePump, makeUTF8EncodePump,
          makeIterFount,
@@ -126,23 +126,62 @@ interface Drain :DeepFrozen:
 interface Tube :DeepFrozen extends Drain, Fount:
     "A pressure-sensitive segment in a stream processing workflow."
 
+# Pumps.
+
+def chainPumps(first :Pump, second :Pump) :Pump as DeepFrozen:
+    return object chainedPump as Pump:
+        to started() :Vow[Void]:
+            return when (first.started()) -> { second.started() }
+
+        to stopped(reason :Str) :Vow[Void]:
+            return when (first.stopped(reason)) -> { second.stopped(reason) }
+
+        to received(item) :Vow[List]:
+            return when (def items := first.received(item)) ->
+                var l := []
+                for i in (items):
+                    l += second.received(i)
+                l
+
 object nullPump as DeepFrozen implements Pump:
     "The do-nothing pump."
 
-    to started():
+    to started() :Void:
+        null
+
+    to stopped(_) :Void:
         null
 
     to received(item) :List:
         return []
 
-    to stopped(_):
-        null
+def testChainPumps(assert):
+    object double extends nullPump as Pump:
+        to received(item):
+            return [item - 1, item + 1]
+    def pump := chainPumps(double, double)
+    return when (def p := pump.received(3)) ->
+        assert.equal(p, [1, 3, 3, 5])
 
+object makePump as DeepFrozen:
+
+    to map(f) :Pump:
+        return object mapPump extends nullPump as Pump:
+            to received(item) :List:
+                return [f(item)]
 
 def makeMapPump(f) :Pump as DeepFrozen:
-    return object mapPump extends nullPump as Pump:
-        to received(item):
-            return [f(item)]
+    traceln(`makeMapPump/1: Use makePump.map/1 instead`)
+    return makePump.map(f)
+
+def testPumpMap(assert):
+    def pump := makePump.map(fn x { x + 1 })
+    assert.equal(pump.received(4), [5])
+
+unittest([
+    testChainPumps,
+    testPumpMap,
+])
 
 
 def splitAt(needle, var haystack) as DeepFrozen:
@@ -217,7 +256,7 @@ def makeUTF8DecodePump() :Pump as DeepFrozen:
             return if (s.size() != 0) {[s]} else {[]}
 
 def makeUTF8EncodePump() :Pump as DeepFrozen:
-    return makeMapPump(fn s {UTF8.encode(s, null)})
+    return makePump.map(fn s {UTF8.encode(s, null)})
 
 def makeIterFount(iterable) :Fount as DeepFrozen:
     def iterator := iterable._makeIterator()
