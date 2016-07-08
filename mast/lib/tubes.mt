@@ -27,14 +27,6 @@ interface Pump :DeepFrozen:
 
          The return value must be a list of items, but it can be a promise."
 
-    # XXX :(Double >= 0.0)
-    to progressed(amount :Double) :Void:
-        "The current flow control around the pump has updated its load.
-
-         `amount` is 1.0 for every task queued further up the pipeline. Pumps
-         might use this method to adjust their processing parameters to trade
-         speed for memory or quality."
-
     to stopped(reason :Str) :Void:
         "Flow has stopped.
 
