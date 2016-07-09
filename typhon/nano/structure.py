@@ -167,16 +167,43 @@ def asIndex(i):
     """
     return u"".join([unichr(0x2050 + ord(c)) for c in str(i)])
 
+class BraceContext(object):
+
+    def __init__(self, printer):
+        self.printer = printer
+
+    def __enter__(self):
+        self.printer.indentLevel += 1
+        self.printer.writeLine(u" {")
+
+    def __exit__(self, *args):
+        self.printer.indentLevel -= 1
+        self.printer.line()
+        self.printer.write(u"}")
+
 class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
+
+    indentLevel = 0
 
     def __init__(self):
         self.buf = []
 
     def asUnicode(self):
-        return u"".join(self.buf)
+        return u"".join(self.buf).strip()
 
     def write(self, s):
         self.buf.append(s)
+
+    def line(self):
+        self.buf.append(u"\n")
+        self.buf.append(u"    " * self.indentLevel)
+
+    def writeLine(self, s):
+        self.write(s)
+        self.line()
+
+    def braces(self):
+        return BraceContext(self)
 
     def visitNullExpr(self):
         self.write(u"null")
@@ -260,36 +287,36 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
     def visitEscapeOnlyExpr(self, patt, body):
         self.write(u"escape ")
         self.visitPatt(patt)
-        self.write(u" {")
-        self.visitExpr(body)
-        self.write(u"}")
+        with self.braces():
+            self.visitExpr(body)
 
     def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
         self.write(u"escape ")
         self.visitPatt(patt)
-        self.write(u" {")
-        self.visitExpr(body)
-        self.write(u"} catch ")
+        with self.braces():
+            self.visitExpr(body)
+        self.write(u" catch ")
         self.visitPatt(catchPatt)
-        self.write(u" {")
-        self.visitExpr(catchBody)
-        self.write(u"}")
+        with self.braces():
+            self.visitExpr(catchBody)
 
     def visitFinallyExpr(self, body, atLast):
-        self.write(u"try {")
-        self.visitExpr(body)
-        self.write(u"} finally {")
-        self.visitExpr(atLast)
-        self.write(u"}")
+        self.write(u"try")
+        with self.braces():
+            self.visitExpr(body)
+        self.write(u" finally")
+        with self.braces():
+            self.visitExpr(atLast)
 
     def visitIfExpr(self, test, cons, alt):
         self.write(u"if (")
         self.visitExpr(test)
-        self.write(u") {")
-        self.visitExpr(cons)
-        self.write(u"} else {")
-        self.visitExpr(alt)
-        self.write(u"}")
+        self.write(u")")
+        with self.braces():
+            self.visitExpr(cons)
+        self.write(u" else")
+        with self.braces():
+            self.visitExpr(alt)
 
     def visitMetaContextExpr(self, layout):
         self.write(u"meta.context()")
@@ -328,9 +355,8 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         self.write(u" ⎣")
         self.write(u" ".join(layout.frameNames.keys()))
         self.write(u"⎤ ")
-        self.write(u" {")
-        self.visitScript(script)
-        self.write(u"}")
+        with self.braces():
+            self.visitScript(script)
 
     def visitSeqExpr(self, exprs):
         if exprs:
@@ -340,13 +366,13 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
                 self.visitExpr(expr)
 
     def visitTryExpr(self, body, catchPatt, catchBody):
-        self.write(u"try {")
-        self.visitExpr(body)
-        self.write(u"} catch ")
+        self.write(u"try")
+        with self.braces():
+            self.visitExpr(body)
+        self.write(u" catch ")
         self.visitPatt(catchPatt)
-        self.write(u" {")
-        self.visitExpr(catchBody)
-        self.write(u"}")
+        with self.braces():
+            self.visitExpr(catchBody)
 
     def visitIgnorePatt(self, guard):
         self.write(u"_")
@@ -404,9 +430,8 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
     def visitMatcherExpr(self, profileName, patt, body, layout):
         self.write(u"match ")
         self.visitPatt(patt)
-        self.write(u" {")
-        self.visitExpr(body)
-        self.write(u"}")
+        with self.braces():
+            self.visitExpr(body)
 
     def visitMethodExpr(self, profileName, doc, atom, patts, namedPatts,
                         guard, body, layout):
@@ -429,12 +454,23 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         if not isinstance(guard, self.src.NullExpr):
             self.write(u" :")
             self.visitExpr(guard)
-        self.write(u" {")
-        self.visitExpr(body)
-        self.write(u"}")
+        with self.braces():
+            self.visitExpr(body)
 
     def visitScriptExpr(self, methods, matchers):
-        for method in methods:
-            self.visitMethod(method)
-        for matcher in matchers:
-            self.visitMatcher(matcher)
+        # Newlines after every method/matcher, except for the final one in the
+        # script. Tricky.
+        if methods:
+            lastMethod = methods[-1]
+            for method in methods[:-1]:
+                self.visitMethod(method)
+                self.line()
+            self.visitMethod(lastMethod)
+            if matchers:
+                self.line()
+        if matchers:
+            lastMatcher = matchers[-1]
+            for matcher in matchers[:-1]:
+                self.visitMatcher(matcher)
+                self.line()
+            self.visitMatcher(lastMatcher)
