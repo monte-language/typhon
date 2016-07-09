@@ -362,7 +362,7 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         if exprs:
             self.visitExpr(exprs[0])
             for expr in exprs[1:]:
-                self.write(u"; ")
+                self.writeLine(u";")
                 self.visitExpr(expr)
 
     def visitTryExpr(self, body, catchPatt, catchBody):
