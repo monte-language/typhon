@@ -189,7 +189,7 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         self.buf = []
 
     def asUnicode(self):
-        return u"".join(self.buf).strip()
+        return u"".join(self.buf).strip(u' ')
 
     def write(self, s):
         self.buf.append(s)
