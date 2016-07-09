@@ -1,11 +1,15 @@
+# -*- coding: utf-8 -*-
+
 """
 Structural refactoring to improve the efficiency of the AST interpreter.
 """
 
 from rpython.rlib import rvmprof
+from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
 from typhon.nano.scopes import ReifyMetaIR
+from typhon.quoting import quoteChar, quoteStr
 
 def refactorStructure(ast):
     ast = SplitScript().visitExpr(ast)
@@ -149,3 +153,288 @@ rvmprof.register_code_object_class(ProfileNameIR.MethodExpr,
         lambda method: method.profileName)
 rvmprof.register_code_object_class(ProfileNameIR.MatcherExpr,
         lambda matcher: matcher.profileName)
+
+# Pretty-printer for the final pass.
+
+def prettifyStructure(ast):
+    p = PrettySpecialNouns()
+    p.visitExpr(ast)
+    return p.asUnicode()
+
+def asIndex(i):
+    """
+    Convert numbers to base-10 pretty subscript indices.
+    """
+    return u"".join([unichr(0x2050 + ord(c)) for c in str(i)])
+
+class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
+
+    def __init__(self):
+        self.buf = []
+
+    def asUnicode(self):
+        return u"".join(self.buf)
+
+    def write(self, s):
+        self.buf.append(s)
+
+    def visitNullExpr(self):
+        self.write(u"null")
+
+    def visitCharExpr(self, c):
+        self.write(quoteChar(c[0]))
+
+    def visitDoubleExpr(self, d):
+        self.write(u"%f" % d)
+
+    def visitIntExpr(self, i):
+        self.write(i.format(BASE10).decode("utf-8"))
+
+    def visitStrExpr(self, s):
+        self.write(quoteStr(s))
+
+    def visitFrameAssignExpr(self, name, idx, rvalue):
+        self.write(name)
+        self.write(u"⒡")
+        self.write(asIndex(idx))
+        self.write(u" := ")
+        self.visitExpr(rvalue)
+
+    def visitLocalAssignExpr(self, name, idx, rvalue):
+        self.write(name)
+        self.write(u"⒧")
+        self.write(asIndex(idx))
+        self.write(u" := ")
+        self.visitExpr(rvalue)
+
+    def visitOuterAssignExpr(self, name, idx, rvalue):
+        self.write(name)
+        self.write(asIndex(idx))
+        self.write(u" := ")
+        self.visitExpr(rvalue)
+
+    def visitLocalBindingExpr(self, name, index):
+        self.write(u"&&")
+        self.write(name)
+        self.write(u"⒧")
+        self.write(asIndex(index))
+
+    def visitFrameBindingExpr(self, name, index):
+        self.write(u"&&")
+        self.write(name)
+        self.write(u"⒡")
+        self.write(asIndex(index))
+
+    def visitOuterBindingExpr(self, name, index):
+        self.write(u"&&")
+        self.write(name)
+        self.write(asIndex(index))
+
+    def visitCallExpr(self, obj, atom, args, namedArgs):
+        self.visitExpr(obj)
+        self.write(u".")
+        self.write(atom.verb)
+        self.write(u"(")
+        if args:
+            self.visitExpr(args[0])
+            for arg in args[1:]:
+                self.write(u", ")
+                self.visitExpr(arg)
+        if namedArgs:
+            self.visitNamedArg(namedArgs[0])
+            for namedArg in namedArgs[1:]:
+                self.write(u", ")
+                self.visitNamedArg(namedArg)
+        self.write(u")")
+
+    def visitDefExpr(self, patt, ex, rvalue):
+        if not isinstance(patt, self.src.VarPatt):
+            self.write(u"def ")
+        self.visitPatt(patt)
+        if not isinstance(ex, self.src.NullExpr):
+            self.write(u" exit ")
+            self.visitExpr(ex)
+        self.write(u" := ")
+        self.visitExpr(rvalue)
+
+    def visitEscapeOnlyExpr(self, patt, body):
+        self.write(u"escape ")
+        self.visitPatt(patt)
+        self.write(u" {")
+        self.visitExpr(body)
+        self.write(u"}")
+
+    def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
+        self.write(u"escape ")
+        self.visitPatt(patt)
+        self.write(u" {")
+        self.visitExpr(body)
+        self.write(u"} catch ")
+        self.visitPatt(catchPatt)
+        self.write(u" {")
+        self.visitExpr(catchBody)
+        self.write(u"}")
+
+    def visitFinallyExpr(self, body, atLast):
+        self.write(u"try {")
+        self.visitExpr(body)
+        self.write(u"} finally {")
+        self.visitExpr(atLast)
+        self.write(u"}")
+
+    def visitIfExpr(self, test, cons, alt):
+        self.write(u"if (")
+        self.visitExpr(test)
+        self.write(u") {")
+        self.visitExpr(cons)
+        self.write(u"} else {")
+        self.visitExpr(alt)
+        self.write(u"}")
+
+    def visitMetaContextExpr(self, layout):
+        self.write(u"meta.context()")
+
+    def visitMetaStateExpr(self, layout):
+        self.write(u"meta.state()")
+
+    def visitLocalNounExpr(self, name, index):
+        self.write(name)
+        self.write(u"⒧")
+        self.write(asIndex(index))
+
+    def visitFrameNounExpr(self, name, index):
+        self.write(name)
+        self.write(u"⒡")
+        self.write(asIndex(index))
+
+    def visitOuterNounExpr(self, name, index):
+        self.write(name)
+        self.write(asIndex(index))
+
+    def visitObjectExpr(self, doc, patt, auditors, script, mast,
+                        layout):
+        self.write(u"object ")
+        self.visitPatt(patt)
+        if auditors:
+            self.write(u" as ")
+            self.visitExpr(auditors[0])
+            auditors = auditors[1:]
+            if auditors:
+                self.write(u" implements ")
+                self.visitExpr(auditors[0])
+                for auditor in auditors[1:]:
+                    self.write(u", ")
+                    self.visitExpr(auditor)
+        self.write(u" ⎣")
+        self.write(u" ".join(layout.frameNames.keys()))
+        self.write(u"⎤ ")
+        self.write(u" {")
+        self.visitScript(script)
+        self.write(u"}")
+
+    def visitSeqExpr(self, exprs):
+        if exprs:
+            self.visitExpr(exprs[0])
+            for expr in exprs[1:]:
+                self.write(u"; ")
+                self.visitExpr(expr)
+
+    def visitTryExpr(self, body, catchPatt, catchBody):
+        self.write(u"try {")
+        self.visitExpr(body)
+        self.write(u"} catch ")
+        self.visitPatt(catchPatt)
+        self.write(u" {")
+        self.visitExpr(catchBody)
+        self.write(u"}")
+
+    def visitIgnorePatt(self, guard):
+        self.write(u"_")
+        if not isinstance(guard, self.src.NullExpr):
+            self.write(u" :")
+            self.visitExpr(guard)
+
+    def visitBindingPatt(self, name, idx):
+        self.write(u"&&")
+        self.write(name)
+        self.write(asIndex(idx))
+
+    def visitFinalPatt(self, name, guard, idx):
+        self.write(name)
+        self.write(asIndex(idx))
+        if not isinstance(guard, self.src.NullExpr):
+            self.write(u" :")
+            self.visitExpr(guard)
+
+    def visitVarPatt(self, name, guard, idx):
+        self.write(u"var ")
+        self.write(name)
+        self.write(asIndex(idx))
+        if not isinstance(guard, self.src.NullExpr):
+            self.write(u" :")
+            self.visitExpr(guard)
+
+    def visitListPatt(self, patts):
+        self.write(u"[")
+        if patts:
+            self.visitPatt(patts[0])
+            for patt in patts[1:]:
+                self.write(u", ")
+                self.visitPatt(patt)
+        self.write(u"]")
+
+    def visitViaPatt(self, trans, patt):
+        self.write(u"via (")
+        self.visitExpr(trans)
+        self.write(u") ")
+        self.visitPatt(patt)
+
+    def visitNamedArgExpr(self, key, value):
+        self.visitExpr(key)
+        self.write(u" => ")
+        self.visitExpr(value)
+
+    def visitNamedPattern(self, key, patt, default):
+        self.visitExpr(key)
+        self.write(u" => ")
+        self.visitPatt(patt)
+        self.write(u" := ")
+        self.visitExpr(default)
+
+    def visitMatcherExpr(self, profileName, patt, body, layout):
+        self.write(u"match ")
+        self.visitPatt(patt)
+        self.write(u" {")
+        self.visitExpr(body)
+        self.write(u"}")
+
+    def visitMethodExpr(self, profileName, doc, atom, patts, namedPatts,
+                        guard, body, layout):
+        self.write(u"method ")
+        self.write(atom.verb)
+        self.write(u"(")
+        if patts:
+            self.visitPatt(patts[0])
+            for patt in patts[1:]:
+                self.write(u", ")
+                self.visitPatt(patt)
+        if patts and namedPatts:
+            self.write(u", ")
+        if namedPatts:
+            self.visitNamedPatt(namedPatts[0])
+            for namedPatt in namedPatts[1:]:
+                self.write(u", ")
+                self.visitNamedPatt(namedPatt)
+        self.write(u")")
+        if not isinstance(guard, self.src.NullExpr):
+            self.write(u" :")
+            self.visitExpr(guard)
+        self.write(u" {")
+        self.visitExpr(body)
+        self.write(u"}")
+
+    def visitScriptExpr(self, methods, matchers):
+        for method in methods:
+            self.visitMethod(method)
+        for matcher in matchers:
+            self.visitMatcher(matcher)
