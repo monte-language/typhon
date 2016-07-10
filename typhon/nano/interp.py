@@ -9,7 +9,8 @@ from rpython.rlib.objectmodel import import_from_mixin
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
 from typhon.nano.mast import BuildKernelNodes, SaveScripts
-from typhon.nano.scopes import LayOutScopes, bindNouns
+from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL, LayOutScopes,
+        bindNouns)
 from typhon.nano.structure import ProfileNameIR, refactorStructure
 from typhon.objects.constants import NullObject
 from typhon.objects.collections.lists import unwrapList
@@ -302,22 +303,19 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 guardAuditor = anyGuard
             if auds:
                 ast = BuildKernelNodes().visitExpr(mast)
-        frameItems = [(u"", "", 0, "")] * len(layout.frameNames)
-        for n, (i, scope, idx, severity) in layout.frameNames.items():
-            frameItems[i] = (n, scope, idx, severity)
         frame = []
         guards = {}
-        for (name, scope, idx, severity) in frameItems:
+        for (name, scope, idx, severity) in layout.swizzleFrame():
             if name == objName:
                 # deal with this later
                 frame.append(NULL_BINDING)
                 guards[name] = guardAuditor
-            elif scope == "local":
+            elif scope is SCOPE_LOCAL:
                 b = self.locals[idx]
                 assert isinstance(b, Binding)
                 frame.append(b)
                 guards[name] = b.guard
-            elif scope == "frame":
+            elif scope is SCOPE_FRAME:
                 b = self.frame[idx]
                 assert isinstance(b, Binding)
                 frame.append(b)
@@ -331,6 +329,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         o = InterpObject(doc, objName, script, frame, self.outers,
                          guards, auds, ast, layout.fqn)
         val = self.runGuard(guardAuditor, o, theThrower)
+        # Set up the self-binding.
         if isinstance(patt, self.src.IgnorePatt):
             b = NULL_BINDING
         elif isinstance(patt, self.src.FinalPatt):
@@ -341,9 +340,10 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             self.locals[patt.index] = b
         else:
             raise userError(u"Unsupported object pattern")
-        selfLayout = layout.frameNames.get(objName, (0, None, 0, ""))
-        if selfLayout[1] is not None:
-            frame[selfLayout[0]] = b
+        # Check whether we have a spot in the frame.
+        position = layout.positionOf(objName)
+        if position != -1:
+            frame[position] = b
         return val
 
     # Risky; we expect that the list of exprs is from a SeqExpr and that it's

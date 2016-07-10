@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+
+from typhon.enum import makeEnum
 from typhon.errors import userError
 from typhon.nano.mast import SaveScriptIR
 
@@ -10,6 +12,15 @@ Static scope analysis, in several passes:
  * Slot specialization
  * Deslotification
 """
+
+# The scope of a name; where the name is defined relative to each name use.
+SCOPE_OUTER, SCOPE_FRAME, SCOPE_LOCAL = makeEnum(u"scope",
+    [u"outer", u"frame", u"local"])
+
+# The severity of a name; how deeply-reified the binding and slot of a name
+# are in the actual backing storage of a frame.
+SEV_FINAL, SEV_FINALSLOT, SEV_VAR, SEV_VARSLOT, SEV_BINDING = makeEnum(
+    u"severity", [u"final", u"final+slot", u"var", u"var+slot", u"binding"])
 
 LayoutIR = SaveScriptIR.extend(
     "Layout", [],
@@ -98,8 +109,8 @@ class ScopeOuter(ScopeBase):
 
     def find(self, name):
         if name in self.outers:
-            return ("outer", self.outers.index(name), "final")
-        return (None, 0, "")
+            return SCOPE_OUTER, self.outers.index(name), SEV_FINALSLOT
+        return None, 0, None
 
 
 class ScopeFrame(ScopeBase):
@@ -119,13 +130,32 @@ class ScopeFrame(ScopeBase):
         scope, idx, severity = self.next.find(name)
         if scope is None:
             return scope, idx, severity
-        if scope == "outer":
+        if scope is SCOPE_OUTER:
             self.outerNames[name] = (idx, severity)
             return scope, idx, severity
         if name not in self.frameNames:
             self.frameNames[name] = (len(self.frameNames), scope, idx,
                                      severity)
-        return ("frame", self.frameNames[name][0], severity)
+        return SCOPE_FRAME, self.frameNames[name][0], severity
+
+    def swizzleFrame(self):
+        """
+        Rearrange the frame into an ordered form, swizzling from the
+        dict of names into the list of positions in the frame.
+        """
+
+        frameItems = [(None, None, 0, None)] * len(self.frameNames)
+        for n, (i, scope, idx, severity) in self.frameNames.items():
+            frameItems[i] = (n, scope, idx, severity)
+        return frameItems
+
+    def positionOf(self, name):
+        """
+        The index of the position in the frame where the name would be placed,
+        or -1 if no position is reserved.
+        """
+
+        return self.frameNames[name][0] if name in self.frameNames else -1
 
 
 class ScopeBox(ScopeBase):
@@ -137,7 +167,7 @@ class ScopeBox(ScopeBase):
 
     def requireShadowable(self, name, toplevel):
         scope, idx, _ = self.find(name)
-        if scope is "outer":
+        if scope is SCOPE_OUTER:
             self.next.requireShadowable(name, False)
 
     def find(self, name):
@@ -159,7 +189,7 @@ class ScopeItem(ScopeBase):
 
     def find(self, name):
         if self.name == name:
-            return ("local", self.position, self.severity)
+            return SCOPE_LOCAL, self.position, self.severity
         return self.next.find(name)
 
 
@@ -186,7 +216,11 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
         result = self.dest.FinalPatt(name, self.visitExpr(guard), origLayout)
-        self.layout = ScopeItem(self.layout, name, "final")
+        if isinstance(result.guard, self.dest.NullExpr):
+            severity = SEV_FINAL
+        else:
+            severity = SEV_FINALSLOT
+        self.layout = ScopeItem(self.layout, name, severity)
         origLayout.addChild(self.layout)
         self.layout.node = result
         return result
@@ -195,7 +229,11 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
         result = self.dest.VarPatt(name, self.visitExpr(guard), origLayout)
-        self.layout = ScopeItem(self.layout, name, "var")
+        if isinstance(result.guard, self.dest.NullExpr):
+            severity = SEV_VAR
+        else:
+            severity = SEV_VARSLOT
+        self.layout = ScopeItem(self.layout, name, severity)
         self.layout.node = result
         origLayout.addChild(self.layout)
         return result
@@ -204,7 +242,7 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
         result = self.dest.BindingPatt(name, origLayout)
-        self.layout = ScopeItem(self.layout, name, "binding")
+        self.layout = ScopeItem(self.layout, name, SEV_BINDING)
         self.layout.node = result
         origLayout.addChild(self.layout)
         return result
@@ -236,10 +274,10 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         return result
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast):
-        if isinstance(patt, SaveScriptIR.IgnorePatt):
+        if isinstance(patt, self.src.IgnorePatt):
             objName = u'_'
-        elif isinstance(patt, SaveScriptIR.FinalPatt) or isinstance(
-                patt, SaveScriptIR.VarPatt):
+        elif isinstance(patt, self.src.FinalPatt) or isinstance(
+                patt, self.src.VarPatt):
             objName = patt.name
         else:
             objName = u'???'
@@ -397,12 +435,12 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
 
     def visitAssignExpr(self, name, rvalue, layout):
         scope, idx, severity = layout.find(name)
-        if severity == "final":
+        if severity in (SEV_FINAL, SEV_FINALSLOT):
             raise userError(u"Cannot assign to final variable " + name)
         value = self.visitExpr(rvalue)
-        if scope == "frame":
+        if scope is SCOPE_FRAME:
             return self.dest.FrameAssignExpr(name, idx, value)
-        if scope == "outer":
+        if scope is SCOPE_OUTER:
             return self.dest.OuterAssignExpr(name, idx, value)
         return self.dest.LocalAssignExpr(name, idx, value)
 
@@ -410,9 +448,9 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
         scope, idx, _ = layout.find(name)
         if scope is None:
             raise userError(name + u" is not defined")
-        if scope == "frame":
+        if scope is SCOPE_FRAME:
             return self.dest.FrameNounExpr(name, idx)
-        if scope == "outer":
+        if scope is SCOPE_OUTER:
             return self.dest.OuterNounExpr(name, idx)
         return self.dest.LocalNounExpr(name, idx)
 
@@ -420,9 +458,9 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
         scope, idx, _ = layout.find(name)
         if scope is None:
             raise userError(name + u" is not defined")
-        if scope == "frame":
+        if scope is SCOPE_FRAME:
             return self.dest.FrameBindingExpr(name, idx)
-        if scope == "outer":
+        if scope is SCOPE_OUTER:
             return self.dest.OuterBindingExpr(name, idx)
         return self.dest.LocalBindingExpr(name, idx)
 
@@ -456,9 +494,9 @@ class ReifyMeta(BoundNounsIR.makePassTo(ReifyMetaIR)):
 
     def mkNoun(self, name, layout):
         scope, idx, _ = layout.find(name)
-        if scope == "outer":
+        if scope is SCOPE_OUTER:
             return self.dest.OuterNounExpr(name, idx)
-        if scope == "frame":
+        if scope is SCOPE_FRAME:
             return self.dest.FrameNounExpr(name, idx)
         return self.dest.LocalNounExpr(name, idx)
 
