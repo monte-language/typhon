@@ -21,8 +21,8 @@ SCOPE_OUTER, SCOPE_FRAME, SCOPE_LOCAL = makeEnum(u"scope",
 
 # The severity of a name; how deeply-reified the binding and slot of a name
 # are in the actual backing storage of a frame.
-SEV_FINAL, SEV_FINALSLOT, SEV_VAR, SEV_VARSLOT, SEV_BINDING = makeEnum(
-    u"severity", [u"final", u"final+slot", u"var", u"var+slot", u"binding"])
+SEV_NOUN, SEV_SLOT, SEV_BINDING = makeEnum(u"severity",
+    [u"noun", u"slot", u"binding"])
 
 LayoutIR = SaveScriptIR.extend(
     "Layout", [],
@@ -111,7 +111,7 @@ class ScopeOuter(ScopeBase):
 
     def find(self, name):
         if name in self.outers:
-            return SCOPE_OUTER, self.outers.index(name), SEV_FINALSLOT
+            return SCOPE_OUTER, self.outers.index(name), SEV_NOUN
         return None, 0, None
 
 
@@ -221,10 +221,9 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
         result = self.dest.FinalPatt(name, self.visitExpr(guard), origLayout)
-        if isinstance(result.guard, self.dest.NullExpr):
-            severity = SEV_FINAL
-        else:
-            severity = SEV_FINALSLOT
+        # NB: Even if there's a guard, the guard will only be run once and
+        # then the name will be accessed as if it were a noun. ~ C.
+        severity = SEV_NOUN
         self.layout = ScopeItem(self.layout, name, severity)
         origLayout.addChild(self.layout)
         self.layout.node = result
@@ -234,10 +233,9 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
         result = self.dest.VarPatt(name, self.visitExpr(guard), origLayout)
-        if isinstance(result.guard, self.dest.NullExpr):
-            severity = SEV_VAR
-        else:
-            severity = SEV_VARSLOT
+        # Perhaps in the future we could do some sort of absorbing, but not
+        # today. Nope.
+        severity = SEV_SLOT
         self.layout = ScopeItem(self.layout, name, severity)
         self.layout.node = result
         origLayout.addChild(self.layout)
@@ -440,7 +438,7 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
 
     def visitAssignExpr(self, name, rvalue, layout):
         scope, idx, severity = layout.find(name)
-        if severity in (SEV_FINAL, SEV_FINALSLOT):
+        if severity is SEV_NOUN:
             raise userError(u"Cannot assign to final variable " + name)
         value = self.visitExpr(rvalue)
         if scope is SCOPE_FRAME:
