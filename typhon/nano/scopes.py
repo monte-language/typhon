@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from collections import OrderedDict
+
 from typhon.enum import makeEnum
 from typhon.errors import userError
 from typhon.nano.mast import SaveScriptIR
@@ -117,8 +119,11 @@ class ScopeFrame(ScopeBase):
     "Scope info associated with an object closure."
 
     def __init__(self, next, fqn):
-        # Names closed over.
-        self.frameNames = {}
+        # Names closed over. The use of OrderedDict here forces this
+        # dictionary to stay ordered according to insertion. Since we only
+        # append to frameNames, iteration over this dict will be in the
+        # correct order later. ~ C.
+        self.frameNames = OrderedDict()
         # Names from outer scope used (not included in closure at runtime)
         self.outerNames = {}
         return ScopeBase.__init__(self, next, fqn)
@@ -144,10 +149,10 @@ class ScopeFrame(ScopeBase):
         dict of names into the list of positions in the frame.
         """
 
-        frameItems = [(None, None, 0, None)] * len(self.frameNames)
-        for n, (i, scope, idx, severity) in self.frameNames.items():
-            frameItems[i] = (n, scope, idx, severity)
-        return frameItems
+        # Cheat; the frameNames dict is already correctly ordered by
+        # construction, so we can just iterate over it. ~ C.
+        return [(n, scope, idx, severity) for (n, (i, scope, idx, severity))
+                in self.frameNames.iteritems()]
 
     def positionOf(self, name):
         """
