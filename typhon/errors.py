@@ -43,6 +43,9 @@ class UserException(Exception):
             self.payload = payload
             self.trail = []
 
+    def __str__(self):
+        return self.formatError().encode("utf-8")
+
     def formatError(self):
         pieces = [self.error()] + self.trail
         pieces.append(u"Exception in user code:")

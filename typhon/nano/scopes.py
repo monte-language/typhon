@@ -15,6 +15,9 @@ Static scope analysis, in several passes:
  * Deslotification
 """
 
+def scopeError(layout, message):
+    return userError(u"Error in scope of %s: %s" % (layout.fqn, message))
+
 # The scope of a name; where the name is defined relative to each name use.
 SCOPE_OUTER, SCOPE_FRAME, SCOPE_LOCAL = makeEnum(u"scope",
     [u"outer", u"frame", u"local"])
@@ -107,7 +110,7 @@ class ScopeOuter(ScopeBase):
 
     def requireShadowable(self, name, toplevel):
         if name in self.outers and not (toplevel and self.inRepl):
-            raise userError(u"Cannot redefine " + name)
+            raise scopeError(self, u"Cannot redefine " + name)
 
     def find(self, name):
         if name in self.outers:
@@ -189,7 +192,7 @@ class ScopeItem(ScopeBase):
 
     def requireShadowable(self, name, toplevel):
         if self.name == name:
-            raise userError(u"Cannot redefine " + name)
+            raise scopeError(self, u"Cannot redefine " + name)
         self.next.requireShadowable(name, False)
 
     def find(self, name):
@@ -439,7 +442,7 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
     def visitAssignExpr(self, name, rvalue, layout):
         scope, idx, severity = layout.find(name)
         if severity is SEV_NOUN:
-            raise userError(u"Cannot assign to final variable " + name)
+            raise scopeError(layout, u"Cannot assign to final variable " + name)
         value = self.visitExpr(rvalue)
         if scope is SCOPE_FRAME:
             return self.dest.FrameAssignExpr(name, idx, value)
@@ -450,7 +453,7 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
     def visitNounExpr(self, name, layout):
         scope, idx, _ = layout.find(name)
         if scope is None:
-            raise userError(name + u" is not defined")
+            raise scopeError(layout, name + u" is not defined")
         if scope is SCOPE_FRAME:
             return self.dest.FrameNounExpr(name, idx)
         if scope is SCOPE_OUTER:
@@ -460,7 +463,7 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
     def visitBindingExpr(self, name, layout):
         scope, idx, _ = layout.find(name)
         if scope is None:
-            raise userError(name + u" is not defined")
+            raise scopeError(layout, name + u" is not defined")
         if scope is SCOPE_FRAME:
             return self.dest.FrameBindingExpr(name, idx)
         if scope is SCOPE_OUTER:
