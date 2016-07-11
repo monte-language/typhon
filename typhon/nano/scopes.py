@@ -122,6 +122,10 @@ class ScopeOuter(ScopeBase):
         if name in self.outers and not (toplevel and self.inRepl):
             raise scopeError(self, u"Cannot redefine " + name)
 
+    def deepen(self, name, severity):
+        if name in self.outers and not self.inRepl:
+            raise scopeError(self, u"Cannot deepen " + name)
+
     def find(self, name):
         if name in self.outers:
             return SCOPE_OUTER, self.outers.index(name), SEV_NOUN
@@ -143,6 +147,9 @@ class ScopeFrame(ScopeBase):
 
     def requireShadowable(self, name, toplevel):
         return self.next.requireShadowable(name, False)
+
+    def deepen(self, name, severity):
+        self.next.deepen(name, severity)
 
     def find(self, name):
         scope, idx, severity = self.next.find(name)
@@ -188,6 +195,11 @@ class ScopeBox(ScopeBase):
         if scope is SCOPE_OUTER:
             self.next.requireShadowable(name, False)
 
+    def deepen(self, name, severity):
+        scope, idx, _ = self.find(name)
+        if scope is SCOPE_OUTER:
+            self.next.deepen(name, severity)
+
     def find(self, name):
         return self.next.find(name)
 
@@ -204,6 +216,11 @@ class ScopeItem(ScopeBase):
         if self.name == name:
             raise scopeError(self, u"Cannot redefine " + name)
         self.next.requireShadowable(name, False)
+
+    def deepen(self, name, severity):
+        if self.name == name:
+            assert self.severity.asInt <= severity.asInt, "shallow"
+            self.severity = severity
 
     def find(self, name):
         if self.name == name:
@@ -236,8 +253,7 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         result = self.dest.FinalPatt(name, self.visitExpr(guard), origLayout)
         # NB: Even if there's a guard, the guard will only be run once and
         # then the name will be accessed as if it were a noun. ~ C.
-        severity = SEV_NOUN
-        self.layout = ScopeItem(self.layout, name, severity)
+        self.layout = ScopeItem(self.layout, name, SEV_NOUN)
         origLayout.addChild(self.layout)
         self.layout.node = result
         return result
@@ -248,8 +264,7 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         result = self.dest.VarPatt(name, self.visitExpr(guard), origLayout)
         # Perhaps in the future we could do some sort of absorbing, but not
         # today. Nope.
-        severity = SEV_SLOT
-        self.layout = ScopeItem(self.layout, name, severity)
+        self.layout = ScopeItem(self.layout, name, SEV_SLOT)
         self.layout.node = result
         origLayout.addChild(self.layout)
         return result
@@ -329,6 +344,8 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         return self.dest.NounExpr(name, self.layout)
 
     def visitBindingExpr(self, name):
+        # Deepen to binding. This will always succeed; no need to check first.
+        self.layout.deepen(name, SEV_BINDING)
         return self.dest.BindingExpr(name, self.layout)
 
     def visitAssignExpr(self, name, value):
