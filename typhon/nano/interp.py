@@ -9,7 +9,7 @@ from rpython.rlib.objectmodel import import_from_mixin
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
 from typhon.nano.mast import BuildKernelNodes, SaveScripts
-from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL, LayOutScopes,
+from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL, layoutScopes,
         bindNouns)
 from typhon.nano.structure import ProfileNameIR, refactorStructure
 from typhon.objects.constants import NullObject
@@ -433,9 +433,8 @@ def scope2env(scope):
 
 def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     ss = SaveScripts().visitExpr(expr)
-    lo = LayOutScopes(environment.keys(), fqnPrefix, inRepl)
-    ll = lo.visitExpr(ss)
-    topLocalNames, localSize = lo.top.collectTopLocals()
+    ll, topLocalNames, localSize = layoutScopes(ss, environment.keys(),
+                                                fqnPrefix, inRepl)
     bound = bindNouns(ll)
     finalAST = refactorStructure(bound)
     result = NullObject

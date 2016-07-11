@@ -4,7 +4,7 @@ import sys
 from typhon.errors import UserException
 from typhon.load.nano import InvalidMAST, loadMAST
 from typhon.nano.mast import SaveScripts
-from typhon.nano.scopes import LayOutScopes, bindNouns
+from typhon.nano.scopes import layoutScopes, bindNouns
 from typhon.nano.structure import refactorStructure, prettifyStructure
 from typhon.nodes import InvalidAST
 
@@ -47,7 +47,8 @@ def entryPoint(argv):
         return 1
     try:
         ss = SaveScripts().visitExpr(expr)
-        ll = LayOutScopes(safeScopeNames, path.decode("utf-8")).visitExpr(ss)
+        ll, _, _ = layoutScopes(ss, safeScopeNames, path.decode("utf-8"),
+                                False)
         bound = bindNouns(ll)
         ast = refactorStructure(bound)
     except UserException as ue:

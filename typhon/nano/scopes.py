@@ -27,6 +27,16 @@ SCOPE_OUTER, SCOPE_FRAME, SCOPE_LOCAL = makeEnum(u"scope",
 SEV_NOUN, SEV_SLOT, SEV_BINDING = makeEnum(u"severity",
     [u"noun", u"slot", u"binding"])
 
+def layoutScopes(ast, outers, fqn, inRepl):
+    """
+    Perform scope analysis.
+    """
+
+    layoutPass = LayOutScopes(outers, fqn, inRepl)
+    ast = layoutPass.visitExpr(ast)
+    topLocalNames, localSize = layoutPass.top.collectTopLocals()
+    return ast, topLocalNames, localSize
+
 LayoutIR = SaveScriptIR.extend(
     "Layout", [],
     {
