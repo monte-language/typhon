@@ -11,6 +11,7 @@ from typhon.errors import Ejecting, UserException, userError
 from typhon.nano.mast import BuildKernelNodes, SaveScripts
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL, layoutScopes,
         bindNouns)
+from typhon.nano.slots import recoverSlots
 from typhon.nano.structure import ProfileNameIR, refactorStructure
 from typhon.objects.constants import NullObject
 from typhon.objects.collections.lists import unwrapList
@@ -355,6 +356,21 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             result = self.visitExpr(expr)
         return result
 
+    def visitLocalSlotExpr(self, name, index):
+        b = self.locals[index]
+        assert isinstance(b, Binding)
+        return b.slot
+
+    def visitFrameSlotExpr(self, name, index):
+        b = self.frame[index]
+        assert isinstance(b, Binding)
+        return b.slot
+
+    def visitOuterSlotExpr(self, name, index):
+        b = self.outers[index]
+        assert isinstance(b, Binding)
+        return b.slot
+
     def visitTryExpr(self, body, catchPatt, catchBody):
         try:
             return self.visitExpr(body)
@@ -433,7 +449,8 @@ def scope2env(scope):
 
 def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     ss = SaveScripts().visitExpr(expr)
-    ll, topLocalNames, localSize = layoutScopes(ss, environment.keys(),
+    slotted = recoverSlots(ss)
+    ll, topLocalNames, localSize = layoutScopes(slotted, environment.keys(),
                                                 fqnPrefix, inRepl)
     bound = bindNouns(ll)
     finalAST = refactorStructure(bound)

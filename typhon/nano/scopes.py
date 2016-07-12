@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 from typhon.enum import makeEnum
 from typhon.errors import userError
-from typhon.nano.mast import SaveScriptIR
+from typhon.nano.slots import NoAssignIR
 
 """
 Static scope analysis, in several passes:
@@ -37,14 +37,14 @@ def layoutScopes(ast, outers, fqn, inRepl):
     topLocalNames, localSize = layoutPass.top.collectTopLocals()
     return ast, topLocalNames, localSize
 
-LayoutIR = SaveScriptIR.extend(
+LayoutIR = NoAssignIR.extend(
     "Layout", [],
     {
         "Expr": {
             "BindingExpr": [("name", "Noun"), ("layout", None)],
+            "SlotExpr": [("name", "Noun"), ("layout", None)],
             "NounExpr": [("name", "Noun"), ("layout", None)],
-            "AssignExpr": [("name", "Noun"), ("value", "Expr"),
-                           ("layout", None)],
+            "TempNounExpr": [("name", "Noun"), ("layout", None)],
             "MetaContextExpr": [("layout", None)],
             "MetaStateExpr": [("layout", None)],
             "ObjectExpr": [("doc", None), ("patt", "Patt"),
@@ -57,6 +57,7 @@ LayoutIR = SaveScriptIR.extend(
             "BindingPatt": [("name", "Noun"), ("layout", None)],
             "FinalPatt": [("name", "Noun"), ("guard", "Expr"),
                           ("layout", None)],
+            "TempPatt": [("name", "Noun"), ("layout", None)],
             "VarPatt": [("name", "Noun"), ("guard", "Expr"), ("layout", None)],
         },
         "Matcher": {
@@ -228,7 +229,7 @@ class ScopeItem(ScopeBase):
         return self.next.find(name)
 
 
-class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
+class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
     """
     Set up scope boxes and collect variable definition sites.
     """
@@ -253,6 +254,15 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
         result = self.dest.FinalPatt(name, self.visitExpr(guard), origLayout)
         # NB: Even if there's a guard, the guard will only be run once and
         # then the name will be accessed as if it were a noun. ~ C.
+        self.layout = ScopeItem(self.layout, name, SEV_NOUN)
+        origLayout.addChild(self.layout)
+        self.layout.node = result
+        return result
+
+    def visitTempPatt(self, name):
+        origLayout = self.layout
+        self.layout.requireShadowable(name, True)
+        result = self.dest.TempPatt(name, origLayout)
         self.layout = ScopeItem(self.layout, name, SEV_NOUN)
         origLayout.addChild(self.layout)
         self.layout.node = result
@@ -343,13 +353,16 @@ class LayOutScopes(SaveScriptIR.makePassTo(LayoutIR)):
     def visitNounExpr(self, name):
         return self.dest.NounExpr(name, self.layout)
 
+    def visitTempNounExpr(self, name):
+        return self.dest.TempNounExpr(name, self.layout)
+
+    def visitSlotExpr(self, name):
+        return self.dest.SlotExpr(name, self.layout)
+
     def visitBindingExpr(self, name):
         # Deepen to binding. This will always succeed; no need to check first.
         self.layout.deepen(name, SEV_BINDING)
         return self.dest.BindingExpr(name, self.layout)
-
-    def visitAssignExpr(self, name, value):
-        return self.dest.AssignExpr(name, self.visitExpr(value), self.layout)
 
     def visitEscapeOnlyExpr(self, patt, body):
         origLayout = self.layout
@@ -421,22 +434,21 @@ BoundNounsIR = LayoutIR.extend(
     "BoundNouns", [], {
         "Expr": {
             "-NounExpr": None,
+            "-TempNounExpr": None,
+            "-SlotExpr": None,
             "-BindingExpr": None,
-            "-AssignExpr": None,
             "LocalNounExpr": [("name", "Noun"), ("index", None)],
             "FrameNounExpr": [("name", "Noun"), ("index", None)],
             "OuterNounExpr": [("name", "Noun"), ("index", None)],
+            "LocalSlotExpr": [("name", "Noun"), ("index", None)],
+            "FrameSlotExpr": [("name", "Noun"), ("index", None)],
+            "OuterSlotExpr": [("name", "Noun"), ("index", None)],
             "LocalBindingExpr": [("name", "Noun"), ("index", None)],
             "FrameBindingExpr": [("name", "Noun"), ("index", None)],
             "OuterBindingExpr": [("name", "Noun"), ("index", None)],
-            "LocalAssignExpr": [("name", "Noun"), ("index", None),
-                                ("value", "Expr")],
-            "FrameAssignExpr": [("name", "Noun"), ("index", None),
-                                ("value", "Expr")],
-            "OuterAssignExpr": [("name", "Noun"), ("index", None),
-                                ("value", "Expr")],
         },
         "Patt": {
+            "-TempPatt": None,
             "BindingPatt": [("name", "Noun"), ("index", None)],
             "FinalPatt": [("name", "Noun"), ("guard", "Expr"),
                           ("index", None)],
@@ -462,20 +474,13 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
         return self.dest.FinalPatt(name, self.visitExpr(guard),
                                    layout.position + 1)
 
+    def visitTempPatt(self, name, layout):
+        return self.dest.FinalPatt(name, self.dest.NullExpr(),
+                                   layout.position + 1)
+
     def visitVarPatt(self, name, guard, layout):
         return self.dest.VarPatt(name, self.visitExpr(guard),
                                  layout.position + 1)
-
-    def visitAssignExpr(self, name, rvalue, layout):
-        scope, idx, severity = layout.find(name)
-        if severity is SEV_NOUN:
-            raise scopeError(layout, u"Cannot assign to final variable " + name)
-        value = self.visitExpr(rvalue)
-        if scope is SCOPE_FRAME:
-            return self.dest.FrameAssignExpr(name, idx, value)
-        if scope is SCOPE_OUTER:
-            return self.dest.OuterAssignExpr(name, idx, value)
-        return self.dest.LocalAssignExpr(name, idx, value)
 
     def visitNounExpr(self, name, layout):
         scope, idx, _ = layout.find(name)
@@ -486,6 +491,26 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
         if scope is SCOPE_OUTER:
             return self.dest.OuterNounExpr(name, idx)
         return self.dest.LocalNounExpr(name, idx)
+
+    def visitTempNounExpr(self, name, layout):
+        scope, idx, _ = layout.find(name)
+        if scope is None:
+            raise scopeError(layout, name + u" is not defined")
+        if scope is SCOPE_FRAME:
+            return self.dest.FrameNounExpr(name, idx)
+        if scope is SCOPE_OUTER:
+            return self.dest.OuterNounExpr(name, idx)
+        return self.dest.LocalNounExpr(name, idx)
+
+    def visitSlotExpr(self, name, layout):
+        scope, idx, _ = layout.find(name)
+        if scope is None:
+            raise scopeError(layout, name + u" is not defined")
+        if scope is SCOPE_FRAME:
+            return self.dest.FrameSlotExpr(name, idx)
+        if scope is SCOPE_OUTER:
+            return self.dest.OuterSlotExpr(name, idx)
+        return self.dest.LocalSlotExpr(name, idx)
 
     def visitBindingExpr(self, name, layout):
         scope, idx, _ = layout.find(name)

@@ -240,6 +240,23 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         self.write(u" := ")
         self.visitExpr(rvalue)
 
+    def visitLocalSlotExpr(self, name, index):
+        self.write(u"&")
+        self.write(name)
+        self.write(u"⒧")
+        self.write(asIndex(index))
+
+    def visitFrameSlotExpr(self, name, index):
+        self.write(u"&")
+        self.write(name)
+        self.write(u"⒡")
+        self.write(asIndex(index))
+
+    def visitOuterSlotExpr(self, name, index):
+        self.write(u"&")
+        self.write(name)
+        self.write(asIndex(index))
+
     def visitLocalBindingExpr(self, name, index):
         self.write(u"&&")
         self.write(name)
