@@ -221,6 +221,7 @@ class ScopeItem(ScopeBase):
     def deepen(self, name, severity):
         if self.name == name and self.severity.asInt < severity.asInt:
             self.severity = severity
+        self.next.deepen(name, severity)
 
     def find(self, name):
         if self.name == name:
