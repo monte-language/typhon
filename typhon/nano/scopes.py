@@ -219,8 +219,7 @@ class ScopeItem(ScopeBase):
         self.next.requireShadowable(name, False)
 
     def deepen(self, name, severity):
-        if self.name == name:
-            assert self.severity.asInt <= severity.asInt, "shallow"
+        if self.name == name and self.severity.asInt < severity.asInt:
             self.severity = severity
 
     def find(self, name):
@@ -357,10 +356,10 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
         return self.dest.TempNounExpr(name, self.layout)
 
     def visitSlotExpr(self, name):
+        self.layout.deepen(name, SEV_SLOT)
         return self.dest.SlotExpr(name, self.layout)
 
     def visitBindingExpr(self, name):
-        # Deepen to binding. This will always succeed; no need to check first.
         self.layout.deepen(name, SEV_BINDING)
         return self.dest.BindingExpr(name, self.layout)
 
