@@ -14,4 +14,7 @@ def makeEnum(group, labels):
             self.asInt = i
             self.repr = u"<%s(%s)>" % (group, label)
 
+        def __repr__(self):
+            return self.repr.encode("utf-8")
+
     return [Enum(i, label) for (i, label) in enumerate(labels)]
