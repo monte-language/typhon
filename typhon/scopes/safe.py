@@ -39,27 +39,6 @@ from typhon.objects.root import Object, audited
 from typhon.objects.slots import Binding, FinalSlot, VarSlot, finalize
 from typhon.vats import currentVat
 
-ASTYPE_0 = getAtom(u"asType", 0)
-BROKEN_0 = getAtom(u"broken", 0)
-CALLWITHPAIR_2 = getAtom(u"callWithPair", 2)
-CALLWITHPAIR_3 = getAtom(u"callWithPair", 3)
-CALL_3 = getAtom(u"call", 3)
-CALLWITHMESSAGE_2 = getAtom(u"callWithMessage", 2)
-CALL_4 = getAtom(u"call", 4)
-COERCE_2 = getAtom(u"coerce", 2)
-FAILURELIST_1 = getAtom(u"failureList", 1)
-MAKEFINALSLOT_2 = getAtom(u"makeFinalSlot", 2)
-MAKEVARSLOT_2 = getAtom(u"makeVarSlot", 2)
-RUN_1 = getAtom(u"run", 1)
-RUN_2 = getAtom(u"run", 2)
-RUN_3 = getAtom(u"run", 3)
-SENDONLY_3 = getAtom(u"sendOnly", 3)
-SEND_3 = getAtom(u"send", 3)
-SENDONLY_4 = getAtom(u"sendOnly", 4)
-SEND_4 = getAtom(u"send", 4)
-TOQUOTE_1 = getAtom(u"toQuote", 1)
-TOSTRING_1 = getAtom(u"toString", 1)
-
 
 @autohelp
 @audited.DF
@@ -273,6 +252,8 @@ class VarSlotMaker(Object):
             g = anyGuard
         return VarSlot(val, g)
 
+theVarSlotMaker = VarSlotMaker()
+
 
 @autohelp
 @audited.DF
@@ -328,7 +309,7 @@ def safeScope():
         u"_makeSourceSpan": makeSourceSpan,
         u"_makeStr": theMakeStr,
         u"_makeString": theMakeStr,
-        u"_makeVarSlot": VarSlotMaker(),
+        u"_makeVarSlot": theVarSlotMaker,
         u"_slotToBinding": theSlotBinder,
         u"throw": theThrower,
 
