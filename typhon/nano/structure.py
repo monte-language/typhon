@@ -8,7 +8,7 @@ from rpython.rlib import rvmprof
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
-from typhon.nano.scopes import ReifyMetaIR
+from typhon.nano.scopes import BoundNounsIR
 from typhon.quoting import quoteChar, quoteStr
 
 def refactorStructure(ast):
@@ -17,7 +17,7 @@ def refactorStructure(ast):
     ast = MakeProfileNames().visitExpr(ast)
     return ast
 
-SplitScriptIR = ReifyMetaIR.extend("SplitScript", [],
+SplitScriptIR = BoundNounsIR.extend("SplitScript", [],
     {
         "Expr": {
             "ObjectExpr": [("doc", None), ("patt", "Patt"),
@@ -31,7 +31,7 @@ SplitScriptIR = ReifyMetaIR.extend("SplitScript", [],
     }
 )
 
-class SplitScript(ReifyMetaIR.makePassTo(SplitScriptIR)):
+class SplitScript(BoundNounsIR.makePassTo(SplitScriptIR)):
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
             layout):

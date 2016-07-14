@@ -8,10 +8,10 @@ from typhon.nano.slots import NoAssignIR
 
 """
 Static scope analysis, in several passes:
- * Noun specialization
- * De Bruijn indices
- * Escape analysis
- * Slot specialization
+ * Discovering the static scope layout
+ * Removing meta.context()
+ * Removing meta.state()
+ * Laying out specialized frames
  * Deslotification
 """
 
@@ -425,12 +425,67 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
 
 
 def bindNouns(ast):
+    ast = ReifyMetaState().visitExpr(ast)
+    ast = ReifyMetaContext().visitExpr(ast)
     ast = SpecializeNouns().visitExpr(ast)
-    ast = ReifyMeta().visitExpr(ast)
     return ast
 
 
-BoundNounsIR = LayoutIR.extend(
+ReifyMetaStateIR = LayoutIR.extend(
+    "ReifyMetaState", [], {
+        "Expr": {
+            "-MetaStateExpr": None,
+        }
+    }
+)
+
+class ReifyMetaState(LayoutIR.makePassTo(ReifyMetaStateIR)):
+
+    def visitMetaStateExpr(self, layout):
+        s = layout
+        while not isinstance(s, ScopeFrame):
+            if isinstance(s, ScopeOuter):
+                frame = {}
+                break
+            s = s.next
+        else:
+            frame = s.frameNames
+        return self.dest.CallExpr(
+            self.dest.NounExpr(u"_makeMap", layout),
+            u"fromPairs", [
+                self.dest.CallExpr(
+                    self.dest.NounExpr(u"_makeList", layout),
+                    u"run", [self.dest.CallExpr(
+                        self.dest.NounExpr(u"_makeList", layout),
+                        u"run", [self.dest.StrExpr(u"&&" + name),
+                                 self.dest.BindingExpr(name, layout)],
+                        [])], [])
+                for name in frame.keys()], [])
+
+
+ReifyMetaContextIR = ReifyMetaStateIR.extend(
+    "ReifyMetaContext", [], {
+        "Expr": {
+            "-MetaContextExpr": None,
+        }
+    }
+)
+
+class ReifyMetaContext(ReifyMetaStateIR.makePassTo(ReifyMetaContextIR)):
+
+    def visitMetaContextExpr(self, layout):
+        fqn = layout.fqn
+        frame = ScopeFrame(layout, u'META')
+        return self.dest.ObjectExpr(
+            u"",
+            self.dest.IgnorePatt(self.dest.NullExpr()),
+            [], [self.dest.MethodExpr(
+                u"", u"getFQNPrefix", [], [], self.dest.NullExpr(),
+                self.dest.StrExpr(fqn + u'$'), layout)],
+            [], None, frame)
+
+
+BoundNounsIR = ReifyMetaContextIR.extend(
     "BoundNouns", [], {
         "Expr": {
             "-NounExpr": None,
@@ -466,7 +521,8 @@ BoundNounsIR = LayoutIR.extend(
     }
 )
 
-class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
+class SpecializeNouns(ReifyMetaContextIR.makePassTo(BoundNounsIR)):
+
     def visitBindingPatt(self, name, layout):
         return self.dest.BindingPatt(name, layout.position + 1)
 
@@ -537,56 +593,3 @@ class SpecializeNouns(LayoutIR.makePassTo(BoundNounsIR)):
             self.visitPatt(patt),
             self.visitExpr(body),
             countLocalSize(layout, 0) + 2)
-
-
-ReifyMetaIR = BoundNounsIR.extend(
-    "ReifyMeta", [], {
-        "Expr": {
-            "-MetaContextExpr": None,
-            "-MetaStateExpr": None,
-        }
-    }
-)
-
-class ReifyMeta(BoundNounsIR.makePassTo(ReifyMetaIR)):
-
-    def mkNoun(self, name, layout):
-        scope, idx, _ = layout.find(name)
-        if scope is SCOPE_OUTER:
-            return self.dest.OuterNounExpr(name, idx)
-        if scope is SCOPE_FRAME:
-            return self.dest.FrameNounExpr(name, idx)
-        return self.dest.LocalNounExpr(name, idx)
-
-    def visitMetaStateExpr(self, layout):
-        s = layout
-        while not isinstance(s, ScopeFrame):
-            if isinstance(s, ScopeOuter):
-                frame = {}
-                break
-            s = s.next
-        else:
-            frame = s.frameNames
-        return self.dest.CallExpr(
-            self.mkNoun(u"_makeMap", layout),
-            u"fromPairs", [
-                self.dest.CallExpr(
-                    self.mkNoun(u"_makeList", layout),
-                    u"run", [self.dest.CallExpr(
-                        self.mkNoun(u"_makeList", layout),
-                        u"run", [self.dest.StrExpr(u"&&" + name),
-                                 self.dest.FrameBindingExpr(
-                                     name, frame[name][0])],
-                        [])], [])
-                for name in frame.keys()], [])
-
-    def visitMetaContextExpr(self, layout):
-        fqn = layout.fqn
-        frame = ScopeFrame(layout, u'META')
-        return self.dest.ObjectExpr(
-            u"",
-            self.dest.IgnorePatt(self.dest.NullExpr()),
-            [], [self.dest.MethodExpr(
-                u"", u"getFQNPrefix", [], [], self.dest.NullExpr(),
-                self.dest.StrExpr(fqn + u'$'), 0)],
-            [], None, frame)
