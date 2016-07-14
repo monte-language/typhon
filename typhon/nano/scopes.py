@@ -94,6 +94,17 @@ class ScopeBase(object):
             assert False, "BZZT WRONG"
         self.children.append(child)
 
+    def findChild(self, name):
+        """
+        Search through children and find the given name.
+        """
+
+        for child in self.children:
+            scope, idx, severity = child.find(name)
+            if scope is not None:
+                return scope, idx, severity
+        raise scopeError(self, u"Impossibility in findChild")
+
 
 class ScopeOuter(ScopeBase):
     def __init__(self, outers, fqn, inRepl):
@@ -129,7 +140,10 @@ class ScopeOuter(ScopeBase):
 
     def find(self, name):
         if name in self.outers:
-            return SCOPE_OUTER, self.outers.index(name), SEV_NOUN
+            # NB: The interpreter will always pass outer names as bindings. We
+            # could, in the future, deslotify those, but it could be tricky,
+            # so outers are always bindings for now. ~ C.
+            return SCOPE_OUTER, self.outers.index(name), SEV_BINDING
         return None, 0, None
 
 
@@ -143,7 +157,7 @@ class ScopeFrame(ScopeBase):
         # correct order later. ~ C.
         self.frameNames = OrderedDict()
         # Names from outer scope used (not included in closure at runtime)
-        self.outerNames = {}
+        self.outerNames = OrderedDict()
         return ScopeBase.__init__(self, next, fqn)
 
     def requireShadowable(self, name, toplevel):
@@ -197,9 +211,7 @@ class ScopeBox(ScopeBase):
             self.next.requireShadowable(name, False)
 
     def deepen(self, name, severity):
-        scope, idx, _ = self.find(name)
-        if scope is SCOPE_OUTER:
-            self.next.deepen(name, severity)
+        self.next.deepen(name, severity)
 
     def find(self, name):
         return self.next.find(name)
@@ -252,9 +264,13 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
         result = self.dest.FinalPatt(name, self.visitExpr(guard), origLayout)
-        # NB: Even if there's a guard, the guard will only be run once and
-        # then the name will be accessed as if it were a noun. ~ C.
-        self.layout = ScopeItem(self.layout, name, SEV_NOUN)
+        # NB: If there's a guard, then we'll promote this to slot severity so
+        # that auditors can recover the guard. ~ C.
+        if isinstance(result.guard, self.dest.NullExpr):
+            severity = SEV_NOUN
+        else:
+            severity = SEV_SLOT
+        self.layout = ScopeItem(self.layout, name, severity)
         origLayout.addChild(self.layout)
         self.layout.node = result
         return result
@@ -330,6 +346,11 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
         origLayout.addChild(outerBox)
         auds = [self.visitExpr(a) for a in auditors]
         self.layout = ScopeFrame(outerBox, origLayout.fqn + u'$' + objName)
+        # If we have auditors, then we need to make sure that the as-auditor
+        # is added to the slot information, so we need to reify the slot.
+        if auds and (isinstance(p, self.dest.FinalPatt) or
+                     isinstance(p, self.dest.VarPatt)):
+            self.layout.deepen(p.name, SEV_SLOT)
         outerBox.addChild(self.layout)
         result = self.dest.ObjectExpr(
             doc, p, auds,
@@ -492,22 +513,25 @@ BoundNounsIR = ReifyMetaContextIR.extend(
             "-TempNounExpr": None,
             "-SlotExpr": None,
             "-BindingExpr": None,
-            "LocalNounExpr": [("name", "Noun"), ("index", None)],
-            "FrameNounExpr": [("name", "Noun"), ("index", None)],
-            "OuterNounExpr": [("name", "Noun"), ("index", None)],
-            "LocalSlotExpr": [("name", "Noun"), ("index", None)],
-            "FrameSlotExpr": [("name", "Noun"), ("index", None)],
-            "OuterSlotExpr": [("name", "Noun"), ("index", None)],
-            "LocalBindingExpr": [("name", "Noun"), ("index", None)],
-            "FrameBindingExpr": [("name", "Noun"), ("index", None)],
-            "OuterBindingExpr": [("name", "Noun"), ("index", None)],
+            "LocalExpr": [("name", "Noun"), ("index", None)],
+            "FrameExpr": [("name", "Noun"), ("index", None)],
+            "OuterExpr": [("name", "Noun"), ("index", None)],
         },
         "Patt": {
             "-TempPatt": None,
-            "BindingPatt": [("name", "Noun"), ("index", None)],
-            "FinalPatt": [("name", "Noun"), ("guard", "Expr"),
+            "-FinalPatt": None,
+            "-VarPatt": None,
+            "NounPatt": [("name", "Noun"), ("guard", "Expr"),
                           ("index", None)],
-            "VarPatt": [("name", "Noun"), ("guard", "Expr"), ("index", None)],
+            "FinalSlotPatt": [("name", "Noun"), ("guard", "Expr"),
+                              ("index", None)],
+            "VarSlotPatt": [("name", "Noun"), ("guard", "Expr"),
+                            ("index", None)],
+            "FinalBindingPatt": [("name", "Noun"), ("guard", "Expr"),
+                                 ("index", None)],
+            "VarBindingPatt": [("name", "Noun"), ("guard", "Expr"),
+                               ("index", None)],
+            "BindingPatt": [("name", "Noun"), ("index", None)],
         },
         "Method": {
             "MethodExpr": [("doc", None), ("verb", None), ("patts", "Patt*"),
@@ -527,56 +551,95 @@ class SpecializeNouns(ReifyMetaContextIR.makePassTo(BoundNounsIR)):
         return self.dest.BindingPatt(name, layout.position + 1)
 
     def visitFinalPatt(self, name, guard, layout):
-        return self.dest.FinalPatt(name, self.visitExpr(guard),
-                                   layout.position + 1)
+        _, _, severity = layout.findChild(name)
+        guard = self.visitExpr(guard)
+        if severity is SEV_NOUN:
+            return self.dest.NounPatt(name, guard, layout.position + 1)
+        elif severity is SEV_SLOT:
+            return self.dest.FinalSlotPatt(name, guard, layout.position + 1)
+        elif severity is SEV_BINDING:
+            return self.dest.FinalBindingPatt(name, guard, layout.position + 1)
+        else:
+            assert False, "snape"
 
     def visitTempPatt(self, name, layout):
-        return self.dest.FinalPatt(name, self.dest.NullExpr(),
-                                   layout.position + 1)
+        _, _, severity = layout.findChild(name)
+        guard = self.dest.NullExpr()
+        if severity is SEV_NOUN:
+            return self.dest.NounPatt(name, guard, layout.position + 1)
+        elif severity is SEV_SLOT:
+            return self.dest.FinalSlotPatt(name, guard, layout.position + 1)
+        elif severity is SEV_BINDING:
+            return self.dest.FinalBindingPatt(name, guard, layout.position + 1)
+        else:
+            assert False, "snape"
 
     def visitVarPatt(self, name, guard, layout):
-        return self.dest.VarPatt(name, self.visitExpr(guard),
-                                 layout.position + 1)
+        _, _, severity = layout.findChild(name)
+        guard = self.visitExpr(guard)
+        # NB: Not prepared to handle SEV_NOUN vars yet.
+        if severity is SEV_SLOT:
+            return self.dest.VarSlotPatt(name, guard, layout.position + 1)
+        elif severity is SEV_BINDING:
+            return self.dest.VarBindingPatt(name, guard, layout.position + 1)
+        else:
+            assert False, "snape"
+
+    def makeStorage(self, name, index, scope):
+        if scope is SCOPE_LOCAL:
+            return self.dest.LocalExpr(name, index, scope)
+        elif scope is SCOPE_FRAME:
+            return self.dest.FrameExpr(name, index, scope)
+        elif scope is SCOPE_OUTER:
+            return self.dest.OuterExpr(name, index, scope)
+        else:
+            assert False, "thesaurus"
+
+    def bindingToSlot(self, noun):
+        return self.dest.CallExpr(noun, u"get", [], [])
+
+    def slotToNoun(self, noun):
+        return self.dest.CallExpr(noun, u"get", [], [])
 
     def visitNounExpr(self, name, layout):
-        scope, idx, _ = layout.find(name)
+        scope, idx, severity = layout.find(name)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
-        if scope is SCOPE_FRAME:
-            return self.dest.FrameNounExpr(name, idx)
-        if scope is SCOPE_OUTER:
-            return self.dest.OuterNounExpr(name, idx)
-        return self.dest.LocalNounExpr(name, idx)
+        storage = self.makeStorage(name, idx, scope)
+        if severity is SEV_BINDING:
+            return self.slotToNoun(self.bindingToSlot(storage))
+        elif severity is SEV_SLOT:
+            return self.slotToNoun(storage)
+        else:
+            return storage
 
     def visitTempNounExpr(self, name, layout):
-        scope, idx, _ = layout.find(name)
+        scope, idx, severity = layout.find(name)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
-        if scope is SCOPE_FRAME:
-            return self.dest.FrameNounExpr(name, idx)
-        if scope is SCOPE_OUTER:
-            return self.dest.OuterNounExpr(name, idx)
-        return self.dest.LocalNounExpr(name, idx)
+        storage = self.makeStorage(name, idx, scope)
+        if severity is SEV_BINDING:
+            return self.slotToNoun(self.bindingToSlot(storage))
+        elif severity is SEV_SLOT:
+            return self.slotToNoun(storage)
+        else:
+            return storage
 
     def visitSlotExpr(self, name, layout):
-        scope, idx, _ = layout.find(name)
+        scope, idx, severity = layout.find(name)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
-        if scope is SCOPE_FRAME:
-            return self.dest.FrameSlotExpr(name, idx)
-        if scope is SCOPE_OUTER:
-            return self.dest.OuterSlotExpr(name, idx)
-        return self.dest.LocalSlotExpr(name, idx)
+        storage = self.makeStorage(name, idx, scope)
+        if severity is SEV_BINDING:
+            return self.bindingToSlot(storage)
+        else:
+            return storage
 
     def visitBindingExpr(self, name, layout):
         scope, idx, _ = layout.find(name)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
-        if scope is SCOPE_FRAME:
-            return self.dest.FrameBindingExpr(name, idx)
-        if scope is SCOPE_OUTER:
-            return self.dest.OuterBindingExpr(name, idx)
-        return self.dest.LocalBindingExpr(name, idx)
+        return self.makeStorage(name, idx, scope)
 
     def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body,
                         layout):

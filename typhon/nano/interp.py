@@ -9,8 +9,9 @@ from rpython.rlib.objectmodel import import_from_mixin
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
 from typhon.nano.mast import BuildKernelNodes, SaveScripts
-from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL, layoutScopes,
-        bindNouns)
+from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
+                                SEV_BINDING, SEV_NOUN, SEV_SLOT, layoutScopes,
+                                bindNouns)
 from typhon.nano.slots import recoverSlots
 from typhon.nano.structure import ProfileNameIR, refactorStructure
 from typhon.objects.constants import NullObject
@@ -22,9 +23,10 @@ from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, unwrapStr)
 from typhon.objects.ejectors import Ejector, theThrower, throw
 from typhon.objects.exceptions import sealException
-from typhon.objects.guards import anyGuard
+from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.root import Object
-from typhon.objects.slots import Binding, finalBinding, varBinding
+from typhon.objects.slots import (Binding, FinalSlot, VarSlot, finalBinding,
+                                  varBinding)
 from typhon.objects.user import AuditClipboard, UserObjectHelper
 
 RUN_2 = getAtom(u"run", 2)
@@ -181,35 +183,14 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     def visitStrExpr(self, s):
         return StrObject(s)
 
-    def visitLocalAssignExpr(self, name, idx, rvalue):
-        b = self.locals[idx]
-        assert isinstance(b, Binding)
-        v = self.visitExpr(rvalue)
-        b.slot.call(u"put", [v])
-        return v
+    def visitLocalExpr(self, name, idx):
+        return self.locals[idx]
 
-    def visitFrameAssignExpr(self, name, idx, rvalue):
-        b = self.frame[idx]
-        assert isinstance(b, Binding)
-        v = self.visitExpr(rvalue)
-        b.slot.call(u"put", [v])
-        return v
+    def visitFrameExpr(self, name, idx):
+        return self.frame[idx]
 
-    def visitOuterAssignExpr(self, name, idx, rvalue):
-        b = self.outers[idx]
-        assert isinstance(b, Binding)
-        v = self.visitExpr(rvalue)
-        b.call(u"put", [v])
-        return v
-
-    def visitLocalBindingExpr(self, name, index):
-        return self.locals[index]
-
-    def visitFrameBindingExpr(self, name, index):
-        return self.frame[index]
-
-    def visitOuterBindingExpr(self, name, index):
-        return self.outers[index]
+    def visitOuterExpr(self, name, idx):
+        return self.outers[idx]
 
     # Length of args and namedArgs are fixed. ~ C.
     @unroll_safe
@@ -259,7 +240,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             self.matchBind(catchPatt, e.value, None)
             return self.visitExpr(catchBody)
 
-
     def visitFinallyExpr(self, body, atLast):
         try:
             return self.visitExpr(body)
@@ -271,21 +251,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             return self.visitExpr(cons)
         else:
             return self.visitExpr(alt)
-
-    def visitLocalNounExpr(self, name, index):
-        b = self.locals[index]
-        assert isinstance(b, Binding)
-        return b.slot.call(u"get", [])
-
-    def visitFrameNounExpr(self, name, index):
-        b = self.frame[index]
-        assert isinstance(b, Binding)
-        return b.slot.call(u"get", [])
-
-    def visitOuterNounExpr(self, name, index):
-        b = self.outers[index]
-        assert isinstance(b, Binding)
-        return b.slot.call(u"get", [])
 
     def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
         if isinstance(patt, self.src.IgnorePatt):
@@ -311,38 +276,70 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 # deal with this later
                 frame.append(NULL_BINDING)
                 guards[name] = guardAuditor
-            elif scope is SCOPE_LOCAL:
+                continue
+
+            if scope is SCOPE_LOCAL:
                 b = self.locals[idx]
-                assert isinstance(b, Binding)
-                frame.append(b)
-                guards[name] = b.guard
             elif scope is SCOPE_FRAME:
                 b = self.frame[idx]
-                assert isinstance(b, Binding)
-                frame.append(b)
-                guards[name] = b.guard
+            else:
+                assert False, "teacher"
+
+            if severity is SEV_BINDING:
+                slot = b.call(u"get", [], [])
+                guards[name] = slot.call(u"getGuard", [], [])
+            elif severity is SEV_SLOT:
+                if isinstance(b, FinalSlot):
+                    valueGuard = b.call(u"getGuard", [], [])
+                    guards[name] = FinalSlotGuard(valueGuard)
+                elif isinstance(b, VarSlot):
+                    valueGuard = b.call(u"getGuard", [], [])
+                    guards[name] = VarSlotGuard(valueGuard)
+                else:
+                    guards[name] = anyGuard
+            elif severity is SEV_NOUN:
+                guards[name] = anyGuard
+            else:
+                assert False, "landlord"
+
+            frame.append(b)
+        assert len(layout.frameNames) == len(frame), "shortcoming"
         for (name, (idx, severity)) in layout.outerNames.items():
             # OuterNounExpr doesn't get rewritten to FrameNounExpr so no
             # need to put the binding in frame.
             b = self.outers[idx]
+            assert severity is SEV_BINDING
             assert isinstance(b, Binding)
             guards[name] = b.guard
         o = InterpObject(doc, objName, script, frame, self.outers,
                          guards, auds, ast, layout.fqn)
         val = self.runGuard(guardAuditor, o, theThrower)
+
+        # Check whether we have a spot in the frame.
+        position = layout.positionOf(objName)
+
         # Set up the self-binding.
         if isinstance(patt, self.src.IgnorePatt):
             b = NULL_BINDING
-        elif isinstance(patt, self.src.FinalPatt):
+        elif isinstance(patt, self.src.FinalBindingPatt):
             b = finalBinding(val, guardAuditor)
             self.locals[patt.index] = b
-        elif isinstance(patt, self.src.VarPatt):
+        elif isinstance(patt, self.src.VarBindingPatt):
             b = varBinding(val, guardAuditor)
+            self.locals[patt.index] = b
+        elif isinstance(patt, self.src.FinalSlotPatt):
+            b = FinalSlot(val, guardAuditor)
+            self.locals[patt.index] = b
+        elif isinstance(patt, self.src.VarSlotPatt):
+            b = VarSlot(val, guardAuditor)
+            self.locals[patt.index] = b
+        elif isinstance(patt, self.src.NounPatt):
+            b = val
             self.locals[patt.index] = b
         else:
             raise userError(u"Unsupported object pattern")
-        # Check whether we have a spot in the frame.
-        position = layout.positionOf(objName)
+
+        # Assign to the frame.
         if position != -1:
             frame[position] = b
         return val
@@ -356,21 +353,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             result = self.visitExpr(expr)
         return result
 
-    def visitLocalSlotExpr(self, name, index):
-        b = self.locals[index]
-        assert isinstance(b, Binding)
-        return b.slot
-
-    def visitFrameSlotExpr(self, name, index):
-        b = self.frame[index]
-        assert isinstance(b, Binding)
-        return b.slot
-
-    def visitOuterSlotExpr(self, name, index):
-        b = self.outers[index]
-        assert isinstance(b, Binding)
-        return b.slot
-
     def visitTryExpr(self, body, catchPatt, catchBody):
         try:
             return self.visitExpr(body)
@@ -383,10 +365,18 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             g = self.visitExpr(guard)
             self.runGuard(g, self.specimen, self.patternFailure)
 
+    def visitNounPatt(self, name, guard, index):
+        if isinstance(guard, self.src.NullExpr):
+            val = self.specimen
+        else:
+            g = self.visitExpr(guard)
+            val = self.runGuard(g, self.specimen, self.patternFailure)
+        self.locals[index] = val
+
     def visitBindingPatt(self, name, index):
         self.locals[index] = self.specimen
 
-    def visitFinalPatt(self, name, guard, idx):
+    def visitFinalBindingPatt(self, name, guard, idx):
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
         else:
@@ -394,13 +384,29 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         val = self.runGuard(guard, self.specimen, self.patternFailure)
         self.locals[idx] = finalBinding(val, guard)
 
-    def visitVarPatt(self, name, guard, idx):
+    def visitFinalSlotPatt(self, name, guard, idx):
+        if isinstance(guard, self.src.NullExpr):
+            guard = anyGuard
+        else:
+            guard = self.visitExpr(guard)
+        val = self.runGuard(guard, self.specimen, self.patternFailure)
+        self.locals[idx] = FinalSlot(val, guard)
+
+    def visitVarBindingPatt(self, name, guard, idx):
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
         else:
             guard = self.visitExpr(guard)
         val = self.runGuard(guard, self.specimen, self.patternFailure)
         self.locals[idx] = varBinding(val, guard)
+
+    def visitVarSlotPatt(self, name, guard, idx):
+        if isinstance(guard, self.src.NullExpr):
+            guard = anyGuard
+        else:
+            guard = self.visitExpr(guard)
+        val = self.runGuard(guard, self.specimen, self.patternFailure)
+        self.locals[idx] = VarSlot(val, guard)
 
     def visitListPatt(self, patts):
         listSpecimen = unwrapList(self.specimen, ej=self.patternFailure)

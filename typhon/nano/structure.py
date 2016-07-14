@@ -220,60 +220,6 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
     def visitStrExpr(self, s):
         self.write(quoteStr(s))
 
-    def visitFrameAssignExpr(self, name, idx, rvalue):
-        self.write(name)
-        self.write(u"⒡")
-        self.write(asIndex(idx))
-        self.write(u" := ")
-        self.visitExpr(rvalue)
-
-    def visitLocalAssignExpr(self, name, idx, rvalue):
-        self.write(name)
-        self.write(u"⒧")
-        self.write(asIndex(idx))
-        self.write(u" := ")
-        self.visitExpr(rvalue)
-
-    def visitOuterAssignExpr(self, name, idx, rvalue):
-        self.write(name)
-        self.write(asIndex(idx))
-        self.write(u" := ")
-        self.visitExpr(rvalue)
-
-    def visitLocalSlotExpr(self, name, index):
-        self.write(u"&")
-        self.write(name)
-        self.write(u"⒧")
-        self.write(asIndex(index))
-
-    def visitFrameSlotExpr(self, name, index):
-        self.write(u"&")
-        self.write(name)
-        self.write(u"⒡")
-        self.write(asIndex(index))
-
-    def visitOuterSlotExpr(self, name, index):
-        self.write(u"&")
-        self.write(name)
-        self.write(asIndex(index))
-
-    def visitLocalBindingExpr(self, name, index):
-        self.write(u"&&")
-        self.write(name)
-        self.write(u"⒧")
-        self.write(asIndex(index))
-
-    def visitFrameBindingExpr(self, name, index):
-        self.write(u"&&")
-        self.write(name)
-        self.write(u"⒡")
-        self.write(asIndex(index))
-
-    def visitOuterBindingExpr(self, name, index):
-        self.write(u"&&")
-        self.write(name)
-        self.write(asIndex(index))
-
     def visitCallExpr(self, obj, atom, args, namedArgs):
         self.visitExpr(obj)
         self.write(u".")
@@ -292,7 +238,8 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         self.write(u")")
 
     def visitDefExpr(self, patt, ex, rvalue):
-        if not isinstance(patt, self.src.VarPatt):
+        if not (isinstance(patt, self.src.VarSlotPatt) or
+                isinstance(patt, self.src.VarBindingPatt)):
             self.write(u"def ")
         self.visitPatt(patt)
         if not isinstance(ex, self.src.NullExpr):
@@ -335,23 +282,17 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(alt)
 
-    def visitMetaContextExpr(self, layout):
-        self.write(u"meta.context()")
-
-    def visitMetaStateExpr(self, layout):
-        self.write(u"meta.state()")
-
-    def visitLocalNounExpr(self, name, index):
+    def visitLocalExpr(self, name, index):
         self.write(name)
         self.write(u"⒧")
         self.write(asIndex(index))
 
-    def visitFrameNounExpr(self, name, index):
+    def visitFrameExpr(self, name, index):
         self.write(name)
         self.write(u"⒡")
         self.write(asIndex(index))
 
-    def visitOuterNounExpr(self, name, index):
+    def visitOuterExpr(self, name, index):
         self.write(name)
         self.write(asIndex(index))
 
@@ -402,15 +343,39 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         self.write(name)
         self.write(asIndex(idx))
 
-    def visitFinalPatt(self, name, guard, idx):
+    def visitNounPatt(self, name, guard, idx):
         self.write(name)
         self.write(asIndex(idx))
         if not isinstance(guard, self.src.NullExpr):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitVarPatt(self, name, guard, idx):
-        self.write(u"var ")
+    def visitFinalSlotPatt(self, name, guard, idx):
+        self.write(u"(&)")
+        self.write(name)
+        self.write(asIndex(idx))
+        if not isinstance(guard, self.src.NullExpr):
+            self.write(u" :")
+            self.visitExpr(guard)
+
+    def visitVarSlotPatt(self, name, guard, idx):
+        self.write(u"var (&)")
+        self.write(name)
+        self.write(asIndex(idx))
+        if not isinstance(guard, self.src.NullExpr):
+            self.write(u" :")
+            self.visitExpr(guard)
+
+    def visitFinalBindingPatt(self, name, guard, idx):
+        self.write(u"(&&)")
+        self.write(name)
+        self.write(asIndex(idx))
+        if not isinstance(guard, self.src.NullExpr):
+            self.write(u" :")
+            self.visitExpr(guard)
+
+    def visitVarBindingPatt(self, name, guard, idx):
+        self.write(u"var (&&)")
         self.write(name)
         self.write(asIndex(idx))
         if not isinstance(guard, self.src.NullExpr):
