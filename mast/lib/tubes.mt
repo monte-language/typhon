@@ -269,7 +269,7 @@ def makeUnpauser(var once) as DeepFrozen:
 # Founts.
 
 def _makeBasicFount(controller) as DeepFrozen:
-    "Produce a fount that is controlled by a single callable."
+    "Make a fount that is controlled by a single callable."
 
     var drain := null
     var pauses :Int := 0
@@ -312,6 +312,7 @@ def _makeBasicFount(controller) as DeepFrozen:
 
              The promise will be smashed if the drain encounters a problem."
 
+            traceln(`basicFount.completion/0: Deprecated`)
             def [p, r] := Ref.promise()
             completions with= (r)
             return p
@@ -371,22 +372,49 @@ def makeIterFount(iterable) :Fount as DeepFrozen:
 
 # Drains.
 
+def _makeBasicDrain(controller) :Drain as DeepFrozen:
+    "Make a drain that is controlled by a single callable."
+
+    var buf :List := []
+    var fount := null
+
+    # XXX this is where backpressure would go, signalling the fount that there
+    # is too much stuff coming in. Perhaps a named argument with a default
+    # buffer size would be nice. Five?
+    def flush():
+        controller<-(buf[0])
+        buf := []
+
+    return object basicDrain as Drain:
+        "A basic drain."
+
+        to flowingFrom(newFount) :Drain:
+            fount := newFount
+            return basicDrain
+
+        to receive(item):
+            buf with= (item)
+            flush()
+
+        to progress(amount :Double):
+            null
+
+        to flowStopped(reason :Str):
+            null
+
+        to flowAborted(reason :Str):
+            null
+
 def makePureDrain() :Drain as DeepFrozen:
     def buf := [].diverge()
     var itemsPromise := null
     var itemsResolver := null
 
-    return object pureDrain as Drain:
+    def controller(item):
+        buf.push(item)
+
+    return object pureDrain extends _makeBasicDrain(controller) as Drain:
         "A drain that has no external effects."
-
-        to flowingFrom(fount):
-            return pureDrain
-
-        to receive(item):
-            buf.push(item)
-
-        to progress(amount :Double):
-            null
 
         to flowStopped(reason :Str):
             if (itemsResolver != null):
@@ -405,6 +433,26 @@ def makePureDrain() :Drain as DeepFrozen:
                 itemsPromise := p
                 itemsResolver := r
             return itemsPromise
+
+def testPureDrainSingle(assert):
+    def drain := makePureDrain()
+    drain.receive(1)
+    drain.flowStopped("test")
+    when (def items := drain.promisedItems()) ->
+        assert.equal(items, [1])
+
+def testPureDrainDouble(assert):
+    def drain := makePureDrain()
+    drain.receive(1)
+    drain.receive(2)
+    drain.flowStopped("test")
+    when (def items := drain.promisedItems()) ->
+        assert.equal(items, [1])
+
+unittest([
+    testPureDrainSingle,
+    testPureDrainDouble,
+])
 
 # Tubes.
 
