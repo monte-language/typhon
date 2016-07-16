@@ -359,7 +359,7 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
                         layout):
         self.write(u"object ")
         self.visitPatt(patt)
-        if auditors:
+        if auditors and not isinstance(auditors[0], self.src.NullExpr):
             self.write(u" as ")
             self.visitExpr(auditors[0])
             auditors = auditors[1:]
