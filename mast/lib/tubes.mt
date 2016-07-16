@@ -4,6 +4,7 @@ exports (Pump, Unpauser, Fount, Drain, Tube,
          nullPump, makePump, chainPumps,
          makeMapPump, makeSplitPump, makeStatefulPump,
          makeUTF8DecodePump, makeUTF8EncodePump,
+         makeFount,
          makeIterFount,
          makePureDrain,
          makePumpTube,
@@ -21,8 +22,7 @@ interface Pump :DeepFrozen:
          Pumps should use this method to initialize any required mutable
          state."
 
-    # XXX :Promise[List]
-    to received(item):
+    to received(item) :Vow[List]:
         "Process an item and send zero or more items downstream.
 
          The return value must be a list of items, but it can be a promise."
@@ -51,7 +51,6 @@ interface Unpauser :DeepFrozen:
          The spice must flow."
 
 
-# XXX Fount[X]
 interface Fount :DeepFrozen:
     "A source of streaming data."
 
@@ -85,7 +84,6 @@ interface Fount :DeepFrozen:
          uncleanly release its resources and abort any further upstream flow."
 
 
-# XXX Drain[X]
 interface Drain :DeepFrozen:
     "A sink of streaming data."
 
@@ -183,6 +181,7 @@ unittest([
     testPumpMap,
 ])
 
+# Misc. pumps which haven't been factored.
 
 def splitAt(needle, var haystack) as DeepFrozen:
     def pieces := [].diverge()
@@ -258,34 +257,55 @@ def makeUTF8DecodePump() :Pump as DeepFrozen:
 def makeUTF8EncodePump() :Pump as DeepFrozen:
     return makePump.map(fn s {UTF8.encode(s, null)})
 
-def makeIterFount(iterable) :Fount as DeepFrozen:
-    def iterator := iterable._makeIterator()
+# Unpausers.
+
+def makeUnpauser(var once) as DeepFrozen:
+    return object unpauser:
+        to unpause() :Void:
+            if (once != null):
+                once()
+                once := null
+
+# Founts.
+
+def _makeBasicFount(controller) as DeepFrozen:
+    "Produce a fount that is controlled by a single callable."
+
     var drain := null
     var pauses :Int := 0
-    var completions := []
+    var completions :List := []
+    var queue :List := []
 
-    def next():
-        if (pauses == 0 && drain != null):
+    def canDeliver() :Bool:
+        return pauses == 0 && drain != null
+
+    def flush() :Void:
+        for i => item in (queue):
+            if (canDeliver()):
+                drain.receive(item)
+            else:
+                queue slice= (i, queue.size())
+                break
+        queue := []
+
+    def enqueue(item) :Void:
+        queue with= (item)
+        flush()
+
+    def basicFount
+
+    def next() :Void:
+        if (canDeliver()):
             # Okay, we're good to go.
-            escape exhausted:
-                # XXX capturing iterator key/index could be interesting for stats
-                def [_, item] := iterator.next(exhausted)
-                when (item) ->
-                    drain.receive(item)
-                    # And queue the next one.
-                    next()
-                catch problem:
-                    drain.flowAborted(problem)
-                    for completion in (completions):
-                        completion.smash(problem)
+            when (def item := controller()) ->
+                enqueue(item)
+                # And queue the next one.
+                next()
             catch problem:
-                # No more items.
-                drain.flowStopped(problem)
-                for completion in (completions):
-                    completion.resolve(problem)
+                basicFount.stopFlow()
 
-    return object iterFount as Fount:
-        "A fount which feeds an iterator to its drain."
+    return bind basicFount as Fount:
+        "A fount controlled by a single callable."
 
         to completion():
             "A promise which will be fulfilled when the drain is finished.
@@ -298,27 +318,58 @@ def makeIterFount(iterable) :Fount as DeepFrozen:
 
         to flowTo(newDrain):
             drain := newDrain
-            drain.flowingFrom(iterFount)
+            drain.flowingFrom(basicFount)
             next()
             return drain
 
         to pauseFlow():
             pauses += 1
-            var once :Bool := true
-            return object iterFountUnpauser:
-                to unpause():
-                    if (once):
-                        once := false
-                        pauses -= 1
-                        next()
+            return makeUnpauser(fn { pauses -= 1; next() })
 
         to stopFlow():
-            drain.flowStopped("stopFlow/0")
-            drain := null
+            for completion in (completions):
+                completion.resolve(null)
+            if (drain != null):
+                drain.flowStopped("stopFlow/0")
+                drain := null
 
         to abortFlow():
-            drain.flowAborted("abortFlow/0")
-            drain := null
+            for completion in (completions):
+                completion.resolve(null)
+            if (drain != null):
+                drain.flowAborted("abortFlow/0")
+                drain := null
+
+object makeFount as DeepFrozen:
+    "A maker of founts."
+
+    to fromIterable(iterable) :Fount:
+        def iterator := iterable._makeIterator()
+
+        def controller():
+            return escape ej:
+                iterator.next(ej)
+            catch problem:
+                Ref.broken(problem)
+
+        return _makeBasicFount(controller)
+
+def makeIterFount(iterable) :Fount as DeepFrozen:
+    "Old behavior."
+
+    traceln(`makeIterFount/1: Use makeFount.fromIterable/1 instead`)
+
+    def iterator := iterable._makeIterator()
+
+    def controller():
+        return escape ej:
+            iterator.next(ej)[1]
+        catch problem:
+            Ref.broken(problem)
+
+    return _makeBasicFount(controller)
+
+# Drains.
 
 def makePureDrain() :Drain as DeepFrozen:
     def buf := [].diverge()
@@ -354,6 +405,8 @@ def makePureDrain() :Drain as DeepFrozen:
                 itemsPromise := p
                 itemsResolver := r
             return itemsPromise
+
+# Tubes.
 
 def makePumpTube(pump) :Pump as DeepFrozen:
     var upstream := var downstream := null
