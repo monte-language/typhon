@@ -268,6 +268,9 @@ def makeUnpauser(var once) as DeepFrozen:
 
 # Founts.
 
+object _fountSentinel as DeepFrozen:
+    "The object which indicates end of iteration in basic fount controllers."
+
 def _makeBasicFount(controller) as DeepFrozen:
     "Make a fount that is controlled by a single callable."
 
@@ -298,11 +301,18 @@ def _makeBasicFount(controller) as DeepFrozen:
         if (canDeliver()):
             # Okay, we're good to go.
             when (def item := controller()) ->
-                enqueue(item)
-                # And queue the next one.
-                next()
+                if (item == _fountSentinel):
+                    # We're done.
+                    basicFount.stopFlow()
+                else:
+                    # Put this item in the downstream queue, and ask for
+                    # another item.
+                    enqueue(item)
+                    next()
             catch problem:
-                basicFount.stopFlow()
+                traceln(`_makeBasicFount$$next/0: Problem:`)
+                traceln.exception(problem)
+                basicFount.abortFlow()
 
     return bind basicFount as Fount:
         "A fount controlled by a single callable."
@@ -312,6 +322,10 @@ def _makeBasicFount(controller) as DeepFrozen:
 
              The promise will be smashed if the drain encounters a problem."
 
+            # Why is this deprecated? Well, the big reason is that this
+            # functionality is too powerful for a mere holder of this fount;
+            # presumably only the fount's creator should have this power. So
+            # it should come in a separate capability. ~ C.
             traceln(`basicFount.completion/0: Deprecated`)
             def [p, r] := Ref.promise()
             completions with= (r)
@@ -344,15 +358,32 @@ def _makeBasicFount(controller) as DeepFrozen:
 object makeFount as DeepFrozen:
     "A maker of founts."
 
+    to sentinel() :DeepFrozen:
+        "A value which will stop iteration from a controlled fount."
+        return _fountSentinel
+
     to fromIterable(iterable) :Fount:
         def iterator := iterable._makeIterator()
 
         def controller():
-            return escape ej:
-                iterator.next(ej)
+            return try:
+                escape ej:
+                    iterator.next(ej)
+                catch _:
+                    _fountSentinel
             catch problem:
                 Ref.broken(problem)
 
+        return _makeBasicFount(controller)
+
+    to fromController(controller) :Fount:
+        "Make a fount which is controlled by a single callable.
+        
+         Specifically, the controller should respond to `run/0` with a vow
+         which can resolve to one of:
+          * A broken ref, if an error has occurred
+          * `makeFount.sentinel()`, if the controller is exhausted
+          * Any other value, which will be sent downstream once resolved"
         return _makeBasicFount(controller)
 
 def makeIterFount(iterable) :Fount as DeepFrozen:
@@ -363,8 +394,11 @@ def makeIterFount(iterable) :Fount as DeepFrozen:
     def iterator := iterable._makeIterator()
 
     def controller():
-        return escape ej:
-            iterator.next(ej)[1]
+        return try:
+            escape ej:
+                iterator.next(ej)[1]
+            catch _:
+                _fountSentinel
         catch problem:
             Ref.broken(problem)
 
@@ -452,6 +486,36 @@ def testPureDrainDouble(assert):
 unittest([
     testPureDrainSingle,
     testPureDrainDouble,
+])
+
+# We can't test founts without the pure drains for use as test doubles. I
+# suppose that this means that founts should eventually move down here and be
+# defined after drains? ~ C.
+
+def testBasicFountEmpty(assert):
+    def fount := makeFount.fromController(fn { _fountSentinel })
+    def drain := makePureDrain()
+    fount.flowTo(drain)
+    when (fount.completion(), def items := drain.promisedItems()) ->
+        assert.equal(items, [])
+
+def testBasicFountMany(assert):
+    var i := 0
+    def controller():
+        if (i >= 10):
+            return _fountSentinel
+        else:
+            i += 1
+            return i
+    def fount := makeFount.fromController(controller)
+    def drain := makePureDrain()
+    fount.flowTo(drain)
+    when (fount.completion(), def items := drain.promisedItems()) ->
+        assert.equal(items, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+unittest([
+    testBasicFountEmpty,
+    testBasicFountMany,
 ])
 
 # Tubes.
