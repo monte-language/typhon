@@ -33,7 +33,8 @@ safeScopeNames = [
     u"makeBrandPair", u"_makeMessageDesc", u"_makeParamDesc",
     u"_makeProtocolDesc", u"__makeMessageDesc", u"__makeParamDesc",
     u"__makeProtocolDesc", u"b__quasiParser", u"m__quasiParser", u"b``",
-    u"m``", u"``", u"eval", u"Transparent", u"safeScope"]
+    u"m``", u"``", u"eval", u"Transparent", u"safeScope",
+    u"promiseAllFulfilled"]
 
 
 def entryPoint(argv):
