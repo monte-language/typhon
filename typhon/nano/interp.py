@@ -384,9 +384,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             self.runGuard(g, self.specimen, self.patternFailure)
 
     def visitBindingPatt(self, name, index):
-        b = self.specimen
-        assert isinstance(b, Binding)
-        self.locals[index] = b
+        self.locals[index] = self.specimen
 
     def visitFinalPatt(self, name, guard, idx):
         if isinstance(guard, self.src.NullExpr):
