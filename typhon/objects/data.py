@@ -369,6 +369,10 @@ class IntObject(Object):
     def optInterface(self):
         return getGlobalValue(u"Int")
 
+    @method("Double")
+    def asDouble(self):
+        return float(self._i)
+
     @method("Any", "Double", _verb="op__cmp")
     def op__cmpDouble(self, other):
         if math.isnan(other):
@@ -657,6 +661,10 @@ class BigInt(Object):
     def sizeOf(self):
         return (rgc.get_rpy_memory_usage(self) +
                 rgc.get_rpy_memory_usage(self.bi))
+
+    @method("Double")
+    def asDouble(self):
+        return self.bi.tofloat()
 
     @method("Bool")
     def aboveZero(self):
