@@ -42,7 +42,7 @@ def ModuleStructure :DeepFrozen := Pair[Map[Str, Map[Str, Any]], NullOk[Config]]
 
 traceln(`Defining main`)
 
-def main():
+def loaderMain():
     def collectedTests := [].diverge()
     def collectedBenches := [].diverge()
     object testCollector:
@@ -225,4 +225,4 @@ def main():
 
 traceln(`Calling main`)
 
-Ref.whenBroken(main(), fn x {traceln.exception(Ref.optProblem(x))})
+Ref.whenBroken(loaderMain(), fn x {traceln.exception(Ref.optProblem(x))})
