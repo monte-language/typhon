@@ -286,14 +286,14 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 assert False, "teacher"
 
             if severity is SEV_BINDING:
-                slot = b.call(u"get", [], [])
-                guards[name] = slot.call(u"getGuard", [], [])
+                slot = b.call(u"get", [])
+                guards[name] = slot.call(u"getGuard", [])
             elif severity is SEV_SLOT:
                 if isinstance(b, FinalSlot):
-                    valueGuard = b.call(u"getGuard", [], [])
+                    valueGuard = b.call(u"getGuard", [])
                     guards[name] = FinalSlotGuard(valueGuard)
                 elif isinstance(b, VarSlot):
-                    valueGuard = b.call(u"getGuard", [], [])
+                    valueGuard = b.call(u"getGuard", [])
                     guards[name] = VarSlotGuard(valueGuard)
                 else:
                     guards[name] = anyGuard
