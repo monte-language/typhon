@@ -23,13 +23,12 @@ from typhon.nano.interp import (evalToPair as astEvalToPair,
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
-from typhon.objects.collections.maps import ConstMap, monteMap
+from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.collections.sets import ConstSet
-from typhon.objects.data import (StrObject, unwrapBytes, unwrapBool, wrapBool,
-                                 unwrapStr)
+from typhon.objects.data import StrObject, unwrapBytes, unwrapBool, wrapBool
 from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
                                    DoubleGuard, IntGuard, StrGuard, VoidGuard)
-from typhon.objects.slots import Binding, finalize
+from typhon.objects.slots import finalize
 from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
 from typhon.smallcaps.machine import evaluateRaise
@@ -64,14 +63,7 @@ def moduleFromString(source, recorder):
     return mod
 
 def evalToPair(code, topLocals, envMap):
-    assert isinstance(envMap, ConstMap), "Implementation error"
-    environment = {}
-    for k, v in envMap.iteritems():
-        s = unwrapStr(k)
-        if not s.startswith("&&") or not isinstance(v, Binding):
-            raise userError(u"scope map must be of the "
-                            "form '[\"&&name\" => binding]'")
-        environment[s[2:]] = v
+    environment = scope2env(unwrapMap(envMap))
     # Don't catch user exceptions; on traceback, we'll have a trail
     # auto-added that indicates that the exception came through
     # eval() or whatnot.
