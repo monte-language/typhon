@@ -608,6 +608,9 @@ def makeLazySlot(var thunk, => guard := Any) as DeepFrozenStamp:
                 thunk := thunk()
             return thunk
 
+        to getGuard():
+            return guard
+
 
 def promiseAllFulfilled(vows) as DeepFrozenStamp:
     var counter := vows.size()
