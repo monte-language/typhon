@@ -252,6 +252,8 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         else:
             return self.visitExpr(alt)
 
+    # Everything passed to this method, except self, is immutable. ~ C.
+    @unroll_safe
     def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
@@ -408,6 +410,8 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         val = self.runGuard(guard, self.specimen, self.patternFailure)
         self.locals[idx] = VarSlot(val, guard)
 
+    # The list of patts is immutable. ~ C.
+    @unroll_safe
     def visitListPatt(self, patts):
         listSpecimen = unwrapList(self.specimen, ej=self.patternFailure)
         ej = self.patternFailure
