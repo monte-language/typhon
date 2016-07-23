@@ -116,7 +116,7 @@ class ScopeOuter(ScopeBase):
     def collectTopLocals(self):
         # In an interactive context, we may want to keep locals defined at the
         # top level for future use.
-        topLocals = [None] * 5
+        topLocals = [(u"", SEV_BINDING)] * 5
         scopeitems = self.children[:]
         numLocals = 0
         for sub in scopeitems:
@@ -124,8 +124,8 @@ class ScopeOuter(ScopeBase):
                 i = sub.position
                 numLocals = max(numLocals, i + 1)
                 while (i + 1) > len(topLocals):
-                    topLocals.extend([None] * len(topLocals))
-                topLocals[i] = sub.name
+                    topLocals.extend([(u"", SEV_BINDING)] * len(topLocals))
+                topLocals[i] = sub.name, sub.severity
                 scopeitems.extend(sub.children)
 
         return topLocals[:numLocals], countLocalSize(self, 0)

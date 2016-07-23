@@ -462,8 +462,13 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     e = Evaluator([], environment.values(), localSize)
     result = e.visitExpr(finalAST)
     topLocals = []
-    for i in range(len(topLocalNames)):
-        topLocals.append((topLocalNames[i], e.locals[i]))
+    for i, (name, severity) in enumerate(topLocalNames):
+        local = e.locals[i]
+        if severity is SEV_NOUN:
+            local = finalBinding(local, anyGuard)
+        elif severity is SEV_SLOT:
+            local = Binding(local, anyGuard)
+        topLocals.append((name, local))
     return result, topLocals
 
 
