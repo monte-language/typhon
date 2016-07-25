@@ -49,7 +49,7 @@ class InterpObject(Object):
     import_from_mixin(AuditClipboard)
     import_from_mixin(UserObjectHelper)
 
-    _immutable_fields_ = "doc", "displayName", "script", "outers", "report"
+    _immutable_fields_ = "doc", "displayName", "script", "outers[*]", "report"
 
     # Inline single-entry method cache.
     cachedMethod = None, None
@@ -142,6 +142,9 @@ class InterpObject(Object):
 
 
 class Evaluator(ProfileNameIR.makePassTo(None)):
+
+    _immutable_fields_ = "outers[*]",
+
     def __init__(self, frame, outers, localSize):
         self.locals = [NULL_BINDING] * localSize
         self.frame = frame
