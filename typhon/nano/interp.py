@@ -141,6 +141,29 @@ class InterpObject(Object):
         return e.visitExpr(matcher.body)
 
 
+def retrieveGuard(severity, storage):
+    """
+    Get a guard from some storage.
+    """
+
+    if severity is SEV_BINDING:
+        slot = storage.call(u"get", [])
+        return slot.call(u"getGuard", [])
+    elif severity is SEV_SLOT:
+        if isinstance(storage, FinalSlot):
+            valueGuard = storage.call(u"getGuard", [])
+            return FinalSlotGuard(valueGuard)
+        elif isinstance(storage, VarSlot):
+            valueGuard = storage.call(u"getGuard", [])
+            return VarSlotGuard(valueGuard)
+        else:
+            return anyGuard
+    elif severity is SEV_NOUN:
+        return anyGuard
+    else:
+        assert False, "landlord"
+
+
 class Evaluator(ProfileNameIR.makePassTo(None)):
 
     _immutable_fields_ = "outers[*]",
@@ -290,44 +313,15 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             else:
                 assert False, "teacher"
 
-            if severity is SEV_BINDING:
-                slot = b.call(u"get", [])
-                guards[name] = slot.call(u"getGuard", [])
-            elif severity is SEV_SLOT:
-                if isinstance(b, FinalSlot):
-                    valueGuard = b.call(u"getGuard", [])
-                    guards[name] = FinalSlotGuard(valueGuard)
-                elif isinstance(b, VarSlot):
-                    valueGuard = b.call(u"getGuard", [])
-                    guards[name] = VarSlotGuard(valueGuard)
-                else:
-                    guards[name] = anyGuard
-            elif severity is SEV_NOUN:
-                guards[name] = anyGuard
-            else:
-                assert False, "landlord"
-
+            guards[name] = retrieveGuard(severity, b)
             frame.append(b)
+
         assert len(layout.frameNames) == len(frame), "shortcoming"
         for (name, (idx, severity)) in layout.outerNames.items():
             # OuterExpr doesn't get rewritten to FrameExpr; so no need to put
             # the binding in frame.
             b = self.outers[idx]
-
-            if severity is SEV_BINDING:
-                slot = b.call(u"get", [])
-                guards[name] = slot.call(u"getGuard", [])
-            elif severity is SEV_SLOT:
-                if isinstance(b, FinalSlot):
-                    valueGuard = b.call(u"getGuard", [])
-                    guards[name] = FinalSlotGuard(valueGuard)
-                elif isinstance(b, VarSlot):
-                    valueGuard = b.call(u"getGuard", [])
-                    guards[name] = VarSlotGuard(valueGuard)
-                else:
-                    guards[name] = anyGuard
-            elif severity is SEV_NOUN:
-                guards[name] = anyGuard
+            guards[name] = retrieveGuard(severity, b)
 
         o = InterpObject(doc, objName, script, frame, self.outers,
                          guards, auds, ast, layout.fqn)
