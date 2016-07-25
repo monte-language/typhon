@@ -35,7 +35,7 @@ def layoutScopes(ast, outers, fqn, inRepl):
     layoutPass = LayOutScopes(outers, fqn, inRepl)
     ast = layoutPass.visitExpr(ast)
     topLocalNames, localSize = layoutPass.top.collectTopLocals()
-    return ast, topLocalNames, localSize
+    return ast, layoutPass.top.outers, topLocalNames, localSize
 
 LayoutIR = NoAssignIR.extend(
     "Layout", [],
@@ -108,7 +108,9 @@ class ScopeBase(object):
 
 class ScopeOuter(ScopeBase):
     def __init__(self, outers, fqn, inRepl):
-        self.outers = outers
+        self.outers = OrderedDict()
+        for i, outer in enumerate(outers):
+            self.outers[outer] = i, SEV_SLOT
         self.children = []
         self.fqn = fqn
         self.inRepl = inRepl
@@ -135,15 +137,15 @@ class ScopeOuter(ScopeBase):
             raise scopeError(self, u"Cannot redefine " + name)
 
     def deepen(self, name, severity):
-        if name in self.outers and not self.inRepl:
-            raise scopeError(self, u"Cannot deepen " + name)
+        if name in self.outers:
+            index, sev = self.outers[name]
+            if sev.asInt < severity.asInt:
+                self.outers[name] = index, severity
 
     def find(self, name):
         if name in self.outers:
-            # NB: The interpreter will always pass outer names as bindings. We
-            # could, in the future, deslotify those, but it could be tricky,
-            # so outers are always bindings for now. ~ C.
-            return SCOPE_OUTER, self.outers.index(name), SEV_BINDING
+            index, severity = self.outers[name]
+            return SCOPE_OUTER, index, severity
         return None, 0, None
 
 

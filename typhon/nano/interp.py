@@ -307,12 +307,25 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             frame.append(b)
         assert len(layout.frameNames) == len(frame), "shortcoming"
         for (name, (idx, severity)) in layout.outerNames.items():
-            # OuterNounExpr doesn't get rewritten to FrameNounExpr so no
-            # need to put the binding in frame.
+            # OuterExpr doesn't get rewritten to FrameExpr; so no need to put
+            # the binding in frame.
             b = self.outers[idx]
-            assert severity is SEV_BINDING
-            assert isinstance(b, Binding)
-            guards[name] = b.guard
+
+            if severity is SEV_BINDING:
+                slot = b.call(u"get", [])
+                guards[name] = slot.call(u"getGuard", [])
+            elif severity is SEV_SLOT:
+                if isinstance(b, FinalSlot):
+                    valueGuard = b.call(u"getGuard", [])
+                    guards[name] = FinalSlotGuard(valueGuard)
+                elif isinstance(b, VarSlot):
+                    valueGuard = b.call(u"getGuard", [])
+                    guards[name] = VarSlotGuard(valueGuard)
+                else:
+                    guards[name] = anyGuard
+            elif severity is SEV_NOUN:
+                guards[name] = anyGuard
+
         o = InterpObject(doc, objName, script, frame, self.outers,
                          guards, auds, ast, layout.fqn)
         val = self.runGuard(guardAuditor, o, theThrower)
@@ -455,15 +468,28 @@ def scope2env(scope):
     return environment
 
 
+def env2scope(outerNames, env):
+    scope = []
+    for name, (_, severity) in outerNames.iteritems():
+        val = env[name]
+        if severity is SEV_NOUN:
+            val = val.call(u"get", []).call(u"get", [])
+        elif severity is SEV_SLOT:
+            val = val.call(u"get", [])
+        scope.append(val)
+    return scope
+
+
 def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     ss = SaveScripts().visitExpr(expr)
     slotted = recoverSlots(ss)
-    ll, topLocalNames, localSize = layoutScopes(slotted, environment.keys(),
-                                                fqnPrefix, inRepl)
+    ll, outerNames, topLocalNames, localSize = layoutScopes(slotted,
+            environment.keys(), fqnPrefix, inRepl)
     bound = bindNouns(ll)
     finalAST = refactorStructure(bound)
     result = NullObject
-    e = Evaluator([], environment.values(), localSize)
+    outers = env2scope(outerNames, environment)
+    e = Evaluator([], outers, localSize)
     result = e.visitExpr(finalAST)
     topLocals = []
     for i, (name, severity) in enumerate(topLocalNames):

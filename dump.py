@@ -50,8 +50,8 @@ def entryPoint(argv):
     try:
         ss = SaveScripts().visitExpr(expr)
         slotted = recoverSlots(ss)
-        ll, _, _ = layoutScopes(slotted, safeScopeNames, path.decode("utf-8"),
-                                False)
+        ll, _, _, _ = layoutScopes(slotted, safeScopeNames,
+                                   path.decode("utf-8"), False)
         bound = bindNouns(ll)
         ast = refactorStructure(bound)
     except UserException as ue:
