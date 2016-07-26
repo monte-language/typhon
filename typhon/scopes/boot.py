@@ -164,7 +164,7 @@ def bootScope(paths, recorder):
     "A beginning is the time for taking the most delicate care that the
      balances are correct."
     """
-    sce = SmallCapsEval(recorder)
+
     ae = AstEval(recorder)
     return finalize({
         u"isList": isList(),
@@ -184,6 +184,5 @@ def bootScope(paths, recorder):
         u"TransparentStamp": transparentStamp,
 
         u"getMonteFile": GetMonteFile(paths, recorder),
-        u"smallcapsEval": sce,
         u"astEval": ae,
     })
