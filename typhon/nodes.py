@@ -1625,7 +1625,12 @@ class CompilingScript(object):
 @withMaker
 class Script(Expr):
 
-    _immutable_fields_ = "_methods[*]", "_matchers[*]"
+    _immutable_fields_ = "_methods[*]", "_matchers[*]", "_ss?"
+
+    # Since scripts are typically the points at which static scope analysis is
+    # done, it's useful to cache the static scope objects so that they don't
+    # have to be constantly rebuilt. We use a quasi-immutable. ~ C.
+    _ss = None
 
     def __init__(self, extends, methods, matchers):
         # XXX Expansion removes 'extends' so it will always be null here.
@@ -1660,12 +1665,14 @@ class Script(Expr):
     @method.py("Any")
     @profileTyphon("Script.getStaticScope/0")
     def getStaticScope(self):
-        scope = emptyScope
-        for expr in self._methods:
-            scope = scope.add(expr.getStaticScope())
-        for expr in self._matchers:
-            scope = scope.add(expr.getStaticScope())
-        return scope
+        if self._ss is None:
+            scope = emptyScope
+            for expr in self._methods:
+                scope = scope.add(expr.getStaticScope())
+            for expr in self._matchers:
+                scope = scope.add(expr.getStaticScope())
+            self._ss = scope
+        return self._ss
 
     @method("Str")
     def getNodeName(self):
