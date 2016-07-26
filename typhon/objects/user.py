@@ -159,7 +159,6 @@ class Audition(Object):
         return answer
 
     def prepareReport(self, auditors):
-        from typhon.objects.user import AuditorReport
         s = monteSet()
         for (k, (result, _, _)) in self.cache.items():
             if result:
@@ -200,7 +199,7 @@ def compareAuditorLists(this, that):
 def compareGuardMaps(this, that):
     from typhon.objects.equality import isSameEver
     for i, x in enumerate(this):
-        if not isSameEver(x[1], that[i][1]):
+        if not isSameEver(x, that[i]):
             return False
     return True
 
@@ -210,6 +209,7 @@ class AuditClipboard(object):
     She is fast and thorough / And sharp as a tack
     She's touring the facility / And picking up slack
     """
+
     def __init__(self):
         self.reportCabinet = []
 
@@ -218,11 +218,12 @@ class AuditClipboard(object):
         Fetch an existing audit report if one for this auditor/guard
         combination is on file.
         """
+
         for auditorList, guardFile in self.reportCabinet:
             if compareAuditorLists(auditors, auditorList):
-                guardItems = guards.items()
-                for guardMap, report in guardFile:
-                    if compareGuardMaps(guardItems, guardMap):
+                gs = guards.values()
+                for guardValues, report in guardFile:
+                    if compareGuardMaps(guardValues, gs):
                         return report
         return None
 
@@ -230,18 +231,20 @@ class AuditClipboard(object):
         """
         Keep an audit report on file for these guards and this auditor.
         """
-        guardItems = guards.items()
+
+        gs = guards.values()
         for auditorList, guardFile in self.reportCabinet:
             if compareAuditorLists(auditors, auditorList):
-                guardFile.append((guardItems, report))
+                guardFile.append((gs, report))
                 break
         else:
-            self.reportCabinet.append((auditors, [(guardItems, report)]))
+            self.reportCabinet.append((auditors, [(gs, report)]))
 
     def createReport(self, auditors, guards):
         """
         Do an audit, make a report from the results.
         """
+
         with Audition(self.fqn, self.objectAst, guards) as audition:
             for a in auditors:
                 audition.ask(a)
@@ -253,6 +256,7 @@ class AuditClipboard(object):
 
         Auditions are cached for quality assurance and training purposes.
         """
+
         report = self.getReport(auditors, guards)
         if report is None:
             report = self.createReport(auditors, guards)

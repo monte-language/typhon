@@ -2,6 +2,8 @@
 A simple AST interpreter.
 """
 
+from collections import OrderedDict
+
 from rpython.rlib import rvmprof
 from rpython.rlib.jit import promote, unroll_safe, we_are_jitted
 from rpython.rlib.objectmodel import import_from_mixin
@@ -358,7 +360,9 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             else:
                 guardAuditor = anyGuard
         frame = []
-        guards = {}
+        # We rely on this ordering to be consistent so that we can strip the
+        # names when doing auditor cache comparisons. ~ C.
+        guards = OrderedDict()
         for (name, scope, idx, severity) in layout.swizzleFrame():
             if name == objName:
                 # deal with this later
