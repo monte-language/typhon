@@ -8,12 +8,14 @@ from rpython.rlib import rvmprof
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
+from typhon.nano.mast import BuildKernelNodes
 from typhon.nano.scopes import BoundNounsIR
 from typhon.quoting import quoteChar, quoteStr
 
 def refactorStructure(ast):
     ast = SplitScript().visitExpr(ast)
     ast = MakeAtoms().visitExpr(ast)
+    ast = SplitAuditors().visitExpr(ast)
     ast = MakeProfileNames().visitExpr(ast)
     return ast
 
@@ -76,7 +78,38 @@ class MakeAtoms(SplitScriptIR.makePassTo(AtomIR)):
         return self.dest.MethodExpr(doc, atom, patts, namedPatts, guard, body,
                                     localSize)
 
-ProfileNameIR = AtomIR.extend("ProfileName",
+SplitAuditorsIR = AtomIR.extend("SplitAuditors",
+    ["AST"],
+    {
+        "Expr": {
+            "ClearObjectExpr": [("doc", None), ("patt", "Patt"),
+                                ("script", "Script"), ("layout", None)],
+            "ObjectExpr": [("doc", None), ("patt", "Patt"),
+                           ("auditors", "Expr*"), ("script", "Script"),
+                           ("mast", "AST"), ("layout", None)],
+        },
+    }
+)
+
+
+class SplitAuditors(AtomIR.makePassTo(SplitAuditorsIR)):
+
+    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
+        patt = self.visitPatt(patt)
+        auditors = [self.visitExpr(auditor) for auditor in auditors]
+        script = self.visitScript(script)
+        if not auditors or (len(auditors) == 1 and
+                            isinstance(auditors[0], self.dest.NullExpr)):
+            # No more auditing.
+            return self.dest.ClearObjectExpr(doc, patt, script, layout)
+        else:
+            # Runtime auditing.
+            ast = BuildKernelNodes().visitExpr(mast)
+            return self.dest.ObjectExpr(doc, patt, auditors, script, ast,
+                                        layout)
+
+
+ProfileNameIR = SplitAuditorsIR.extend("ProfileName",
     ["ProfileName"],
     {
         "Method": {
@@ -94,7 +127,7 @@ ProfileNameIR = AtomIR.extend("ProfileName",
 
 # super() doesn't work in RPython, so this is a way to get at the default
 # implementations of the pass methods. ~ C.
-_MakeProfileNames = AtomIR.makePassTo(ProfileNameIR)
+_MakeProfileNames = SplitAuditorsIR.makePassTo(ProfileNameIR)
 class MakeProfileNames(_MakeProfileNames):
     """
     Prebuild the strings which identify code objects to the profiler.
@@ -107,6 +140,19 @@ class MakeProfileNames(_MakeProfileNames):
         # NB: self.objectNames cannot be empty unless we somehow obtain a
         # method/matcher without a body. ~ C.
         self.objectNames = []
+
+    def visitClearObjectExpr(self, doc, patt, script, layout):
+        # Push, do the recursion, pop.
+        if isinstance(patt, self.src.IgnorePatt):
+            objName = u"_"
+        else:
+            objName = patt.name
+        self.objectNames.append((objName.encode("utf-8"),
+            layout.fqn.encode("utf-8").split("$")[0]))
+        rv = _MakeProfileNames.visitClearObjectExpr(self, doc, patt, script,
+                layout)
+        self.objectNames.pop()
+        return rv
 
     def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
         # Push, do the recursion, pop.
@@ -295,6 +341,15 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
     def visitOuterExpr(self, name, index):
         self.write(name)
         self.write(asIndex(index))
+
+    def visitClearObjectExpr(self, doc, patt, script, layout):
+        self.write(u"object ")
+        self.visitPatt(patt)
+        self.write(u" ⎣")
+        self.write(u" ".join(layout.frameNames.keys()))
+        self.write(u"⎤ ")
+        with self.braces():
+            self.visitScript(script)
 
     def visitObjectExpr(self, doc, patt, auditors, script, mast,
                         layout):

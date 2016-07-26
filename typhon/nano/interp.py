@@ -8,7 +8,7 @@ from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
-from typhon.nano.mast import BuildKernelNodes, SaveScripts
+from typhon.nano.mast import SaveScripts
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
                                 SEV_BINDING, SEV_NOUN, SEV_SLOT, layoutScopes,
                                 bindNouns)
@@ -55,7 +55,7 @@ class InterpObject(Object):
     cachedMethod = None, None
 
     def __init__(self, doc, name, script, frame, outers,
-                 guards, auditors, ast, fqn):
+                 auditors, ast, fqn):
         self.reportCabinet = []
         self.objectAst = ast
         self.fqn = fqn
@@ -66,8 +66,6 @@ class InterpObject(Object):
         self.outers = outers
         self.auditors = auditors
         self.report = None
-        if auditors and auditors != [NullObject]:
-            self.report = self.audit(auditors, guards)
 
     def docString(self):
         return self.doc
@@ -280,12 +278,76 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
     # Everything passed to this method, except self, is immutable. ~ C.
     @unroll_safe
-    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
+    def visitClearObjectExpr(self, doc, patt, script, layout):
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
         else:
             objName = patt.name
         ast = NullObject
+        auds = []
+        guardAuditor = anyGuard
+        frame = []
+        for (name, scope, idx, severity) in layout.swizzleFrame():
+            if name == objName:
+                # deal with this later
+                frame.append(NULL_BINDING)
+                continue
+
+            if scope is SCOPE_LOCAL:
+                b = self.locals[idx]
+            elif scope is SCOPE_FRAME:
+                b = self.frame[idx]
+            else:
+                assert False, "teacher"
+
+            frame.append(b)
+
+        assert len(layout.frameNames) == len(frame), "shortcoming"
+        for (name, (idx, severity)) in layout.outerNames.items():
+            # OuterExpr doesn't get rewritten to FrameExpr; so no need to put
+            # the binding in frame.
+            b = self.outers[idx]
+
+        o = InterpObject(doc, objName, script, frame, self.outers,
+                         auds, ast, layout.fqn)
+        val = self.runGuard(guardAuditor, o, theThrower)
+
+        # Check whether we have a spot in the frame.
+        position = layout.positionOf(objName)
+
+        # Set up the self-binding.
+        if isinstance(patt, self.src.IgnorePatt):
+            b = NULL_BINDING
+        elif isinstance(patt, self.src.FinalBindingPatt):
+            b = finalBinding(val, guardAuditor)
+            self.locals[patt.index] = b
+        elif isinstance(patt, self.src.VarBindingPatt):
+            b = varBinding(val, guardAuditor)
+            self.locals[patt.index] = b
+        elif isinstance(patt, self.src.FinalSlotPatt):
+            b = FinalSlot(val, guardAuditor)
+            self.locals[patt.index] = b
+        elif isinstance(patt, self.src.VarSlotPatt):
+            b = VarSlot(val, guardAuditor)
+            self.locals[patt.index] = b
+        elif isinstance(patt, self.src.NounPatt):
+            b = val
+            self.locals[patt.index] = b
+        else:
+            raise userError(u"Unsupported object pattern")
+
+        # Assign to the frame.
+        if position != -1:
+            frame[position] = b
+        return val
+
+    # Everything passed to this method, except self, is immutable. ~ C.
+    @unroll_safe
+    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
+        if isinstance(patt, self.src.IgnorePatt):
+            objName = u"_"
+        else:
+            objName = patt.name
         auds = []
         guardAuditor = anyGuard
         if auditors:
@@ -295,8 +357,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 auds = [guardAuditor] + auds
             else:
                 guardAuditor = anyGuard
-            if auds:
-                ast = BuildKernelNodes().visitExpr(mast)
         frame = []
         guards = {}
         for (name, scope, idx, severity) in layout.swizzleFrame():
@@ -324,7 +384,9 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             guards[name] = retrieveGuard(severity, b)
 
         o = InterpObject(doc, objName, script, frame, self.outers,
-                         guards, auds, ast, layout.fqn)
+                         auds, mast, layout.fqn)
+        if auds and auds != [NullObject]:
+            o.report = o.audit(auds, guards)
         val = self.runGuard(guardAuditor, o, theThrower)
 
         # Check whether we have a spot in the frame.
