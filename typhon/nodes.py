@@ -37,6 +37,7 @@ from typhon.objects.ejectors import throwStr
 from typhon.objects.meta import MetaContext
 from typhon.objects.root import Object, audited
 from typhon.pretty import Buffer, LineWriter
+from typhon.profile import profileTyphon
 from typhon.quoting import quoteChar, quoteStr
 from typhon.smallcaps.code import Code, CodeScript
 from typhon.smallcaps.ops import ops
@@ -1657,6 +1658,7 @@ class Script(Expr):
             matcher.pretty(out)
 
     @method.py("Any")
+    @profileTyphon("Script.getStaticScope/0")
     def getStaticScope(self):
         scope = emptyScope
         for expr in self._methods:
