@@ -14,17 +14,13 @@
 
 import inspect
 import textwrap
-from collections import OrderedDict
 
-from rpython.rlib import rvmprof
 from rpython.rlib.jit import elidable, unroll_safe
 from rpython.rlib.listsort import make_timsort_class
-from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.enum import makeEnum
 from typhon.errors import LoadFailed, WrongType, userError
 from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject
@@ -34,291 +30,16 @@ from typhon.objects.collections.maps import EMPTY_MAP, monteMap
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject, promoteToBigInt, unwrapStr)
 from typhon.objects.ejectors import throwStr
-from typhon.objects.meta import MetaContext
 from typhon.objects.root import Object, audited
 from typhon.pretty import Buffer, LineWriter
 from typhon.profile import profileTyphon
 from typhon.quoting import quoteChar, quoteStr
-from typhon.smallcaps.code import Code, CodeScript
-from typhon.smallcaps.ops import ops
-from typhon.smallcaps.peephole import peephole
-from typhon.smallcaps.slots import SlotType, binding, finalAny, varAny
 
 
 def lt0(a, b):
     return a[0] < b[0]
 
 TimSort0 = make_timsort_class(lt=lt0)
-
-
-DEPTH_NOUN, DEPTH_SLOT, DEPTH_BINDING = makeEnum(u"extent",
-    u"noun slot binding".split())
-
-def deepen(old, new):
-    if old is DEPTH_BINDING or new is DEPTH_BINDING:
-        return DEPTH_BINDING
-    if old is DEPTH_SLOT or new is DEPTH_SLOT:
-        return DEPTH_SLOT
-    return DEPTH_NOUN
-
-depthMap = {
-    "ASSIGN": DEPTH_NOUN,
-    "BINDING": DEPTH_BINDING,
-    "NOUN": DEPTH_NOUN,
-}
-
-class LocalScope(object):
-    def __init__(self, parent):
-        self.map = OrderedDict()
-        self.children = []
-        self.parent = parent
-        if parent is not None:
-            self.offset = parent.getOffset()
-            parent.addChildScope(self)
-        else:
-            self.offset = 0
-
-    def size(self):
-        siz = len(self.map)
-        for ch in self.children:
-            siz += ch.size()
-        return siz
-
-    def getOffset(self):
-        return self.offset + self.size()
-
-    def addChildScope(self, child):
-        self.children.append(child)
-
-    def add(self, name, slotType):
-        i = self.getOffset()
-        if name in self.map:
-            raise InvalidAST(name.encode("utf-8") +
-                             " is already defined in this scope")
-        # print "Adding", name, "at slot", i, "and depth", depth.repr
-        self.map[name] = i, slotType
-        return i
-
-    def find(self, name, newDepth):
-        i, slotType = self.map.get(name, (-1, None))
-        if i == -1:
-            if self.parent is not None:
-                return self.parent.find(name, newDepth)
-            # Not found.
-            return -1
-        if newDepth is DEPTH_BINDING:
-            # print "Reifying binding for", name, "at slot", i
-            slotType = slotType.withReifiedBinding()
-            self.map[name] = i, slotType
-        elif newDepth is DEPTH_SLOT:
-            # print "Reifying slot for", name, "at slot", i
-            slotType = slotType.withReifiedSlot()
-            self.map[name] = i, slotType
-        return i
-
-    def escaping(self, name):
-        i, slotType = self.map.get(name, (-1, None))
-        if i == -1:
-            # And what if the parent is None? Then it implies that the slot
-            # type is some sort of global binding, which is already as
-            # reified/deoptimized as it can get. ~ C.
-            if self.parent is not None:
-                self.parent.escaping(name)
-        else:
-            slotType = slotType.escaping()
-            self.map[name] = i, slotType
-
-    def _nameList(self):
-        names = [(i, k, d) for k, (i, d) in self.map.items()]
-        for ch in self.children:
-            names.extend(ch._nameList())
-        return names
-
-    def nameList(self):
-        names = self._nameList()
-        TimSort0(names).sort()
-        l = []
-        for index, (i, k, d) in enumerate(names):
-            # This invariant was established by the sort routine above.
-            assert index == i
-            l.append((k, d))
-        return l
-
-    def nameMap(self):
-        d = {}
-        for k, (v, _) in self.map.iteritems():
-            d[k] = v
-        return d
-
-
-class Compiler(object):
-
-    # The number of checkpoints that we've incurred in this frame.
-    checkpoints = 0
-
-    def __init__(self, initialFrame=None, initialGlobals=None,
-                 availableClosure=None, fqn=u"", methodName=u"<noMethod>"):
-        self.fqn = fqn
-        self.methodName = methodName
-
-        self.instructions = []
-
-        if initialFrame is None:
-            self.frame = OrderedDict()
-        else:
-            self.frame = initialFrame
-
-        if initialGlobals is None:
-            self.globals = OrderedDict()
-        else:
-            self.globals = initialGlobals
-        # print "Initial frame:", self.frame.keys()
-        # print "Initial globals:", self.globals.keys()
-
-        if availableClosure is None:
-            self.availableClosure = OrderedDict()
-        else:
-            self.availableClosure = availableClosure
-            # print "Available closure:", self.availableClosure.keys()
-
-        self.atoms = OrderedDict()
-        self.literals = OrderedDict()
-        self.locals = LocalScope(None)
-        self.scripts = []
-
-    def pushScope(self):
-        c = Compiler(initialFrame=self.frame, initialGlobals=self.globals,
-                     availableClosure=self.availableClosure, fqn=self.fqn,
-                     methodName=self.methodName)
-        c.instructions = self.instructions
-        c.atoms = self.atoms
-        c.literals = self.literals
-        c.locals = LocalScope(self.locals)
-        c.scripts = self.scripts
-
-        return c
-
-    def makeCode(self, startingDepth=0):
-        atoms = self.atoms.keys()
-        frame = self.frame.keys()
-        literals = self.literals.keys()
-        globals = self.globals.keys()
-        locals = self.locals.nameList()
-        scripts = [(script.freeze(), cs, gs)
-                   for (script, cs, gs) in self.scripts]
-
-        code = Code(self.fqn, self.methodName, self.instructions, atoms,
-                    literals, globals, frame, locals, scripts, startingDepth)
-        code.checkpoints = self.checkpoints
-
-        # Register the code for profiling.
-        rvmprof.register_code(code, lambda code: code.profileName)
-
-        # Run optimizations on code, including inner code.
-        peephole(code)
-        return code
-
-    def canCloseOver(self, name):
-        return name in self.frame or name in self.availableClosure
-
-    @specialize.call_location()
-    def addInstruction(self, name, index):
-        self.instructions.append((ops[name], index))
-
-    def addAtom(self, verb, arity):
-        atom = getAtom(verb, arity)
-        if atom not in self.atoms:
-            self.atoms[atom] = len(self.atoms)
-        return self.atoms[atom]
-
-    def addGlobal(self, name):
-        if name not in self.globals:
-            self.globals[name] = len(self.globals)
-        return self.globals[name]
-
-    def addFrame(self, name):
-        if name not in self.frame:
-            self.frame[name] = len(self.frame)
-        return self.frame[name]
-
-    def addLiteral(self, literal):
-        if literal not in self.literals:
-            self.literals[literal] = len(self.literals)
-        return self.literals[literal]
-
-    def addScript(self, script, closureLabels, globalLabels):
-        index = len(self.scripts)
-        self.scripts.append((script, closureLabels, globalLabels))
-        return index
-
-    def chooseFrame(self, name, accessType):
-        """
-        Choose which frame type and index a name should have.
-
-        If this is the first use of this name in the current frame, then a new
-        frame location will be chosen for the name.
-        """
-
-        # It's unknown yet whether the assignment is to a local slot or an
-        # (outer) frame slot, or even to a global frame slot. Check to see
-        # whether the name is already known to be local; if not, then it must
-        # be in the outer frame. Unless it's not in there, in which case it
-        # must be global.
-        localIndex = self.locals.find(name, depthMap[accessType])
-        if localIndex >= 0:
-            return "LOCAL", localIndex
-        elif self.canCloseOver(name):
-            index = self.addFrame(name)
-            return "FRAME", index
-        else:
-            index = self.addGlobal(name)
-            return "GLOBAL", index
-
-    @specialize.arg(2)
-    def accessFrame(self, name, accessType):
-        """
-        Interact with the frame.
-        """
-
-        frameType, frameIndex = self.chooseFrame(name, accessType)
-        self.addInstruction("%s_%s" % (accessType, frameType), frameIndex)
-
-    def literal(self, literal):
-        index = self.addLiteral(literal)
-        self.addInstruction("LITERAL", index)
-
-    def call(self, verb, arity):
-        # Checkpoint before the call.
-        self.checkpoints += 1
-        atom = self.addAtom(verb, arity)
-        self.addInstruction("CALL", atom)
-
-    def callMap(self, verb, arity, lenNamedArgs):
-        atom = self.addAtom(verb, arity)
-        self.addInstruction("BUILD_MAP", lenNamedArgs)
-        self.addInstruction("CALL_MAP", atom)
-
-    @specialize.arg(1)
-    def markInstruction(self, name):
-        index = len(self.instructions)
-        self.addInstruction(name, 0)
-        return index
-
-    def patch(self, index):
-        inst, _ = self.instructions[index]
-        self.instructions[index] = inst, len(self.instructions)
-
-
-def compile(node, origin):
-    compiler = Compiler(fqn=origin)
-    node.compile(compiler)
-    return compiler.makeCode()
-
-
-def interactiveCompile(node, origin):
-    compiler = Compiler(fqn=origin)
-    node.compile(compiler)
-    return compiler.makeCode(), compiler.locals.nameMap()
 
 
 class InvalidAST(LoadFailed):
@@ -560,9 +281,6 @@ class _Null(Expr):
     def pretty(self, out):
         out.write("null")
 
-    def compile(self, compiler):
-        compiler.literal(NullObject)
-
     @method.py("Any")
     def getStaticScope(self):
         return emptyScope
@@ -595,12 +313,6 @@ class Int(Expr):
     def pretty(self, out):
         out.write(self.bi.format(BASE10))
 
-    def compile(self, compiler):
-        try:
-            compiler.literal(IntObject(self.bi.toint()))
-        except OverflowError:
-            compiler.literal(BigInt(self.bi))
-
     @method.py("Any")
     def getStaticScope(self):
         return emptyScope
@@ -630,9 +342,6 @@ class Str(Expr):
 
     def pretty(self, out):
         out.write(quoteStr(self._s).encode("utf-8"))
-
-    def compile(self, compiler):
-        compiler.literal(StrObject(self._s))
 
     @method.py("Any")
     def getStaticScope(self):
@@ -667,9 +376,6 @@ class Double(Expr):
     def pretty(self, out):
         out.write("%f" % self._d)
 
-    def compile(self, compiler):
-        compiler.literal(DoubleObject(self._d))
-
     @method.py("Any")
     def getStaticScope(self):
         return emptyScope
@@ -696,9 +402,6 @@ class Char(Expr):
 
     def pretty(self, out):
         out.write(quoteChar(self._c[0]).encode("utf-8"))
-
-    def compile(self, compiler):
-        compiler.literal(CharObject(self._c))
 
     @method.py("Any")
     def getStaticScope(self):
@@ -733,14 +436,6 @@ class Assign(Expr):
         out.write(" := ")
         self.rvalue.pretty(out)
 
-    def compile(self, compiler):
-        self.rvalue.compile(compiler)
-        # [rvalue]
-        compiler.addInstruction("DUP", 0)
-        # [rvalue rvalue]
-        compiler.accessFrame(self.target, "ASSIGN")
-        # [rvalue]
-
     @method.py("Any")
     def getStaticScope(self):
         scope = StaticScope([], [self.target], [], [], False)
@@ -769,10 +464,6 @@ class Binding(Expr):
     def pretty(self, out):
         out.write("&&")
         out.write(self.name.encode("utf-8"))
-
-    def compile(self, compiler):
-        compiler.accessFrame(self.name, "BINDING")
-        # [binding]
 
     @method.py("Any")
     def getStaticScope(self):
@@ -863,29 +554,6 @@ class Call(Expr):
                 na.pretty(out)
         out.write(")")
 
-    def compile(self, compiler):
-        self._target.compile(compiler)
-        # [target]
-        args = self._args
-        arity = len(args)
-        for node in args:
-            node.compile(compiler)
-            # [target x0 x1 ...]
-        namedArgs = self._namedArgs
-        namedArity = len(namedArgs)
-        if namedArity == 0:
-            compiler.call(self._verb, arity)
-        else:
-            for na in namedArgs:
-                if not isinstance(na, NamedArg):
-                    raise InvalidAST("named arg not a NamedArg node")
-                # Compile the key...
-                na.key.compile(compiler)
-                # ...and the value.
-                na.value.compile(compiler)
-            compiler.callMap(self._verb, arity, namedArity)
-        # [retval]
-
     @method.py("Any")
     def getStaticScope(self):
         scope = self._target.getStaticScope()
@@ -948,20 +616,6 @@ class Def(Expr):
         out.write(" := ")
         self._v.pretty(out)
 
-    def compile(self, compiler):
-        self._v.compile(compiler)
-        # [value]
-        compiler.addInstruction("DUP", 0)
-        # [value value]
-        if self._e is None:
-            compiler.literal(NullObject)
-            # [value value null]
-        else:
-            self._e.compile(compiler)
-            # [value value ej]
-        self._p.compile(compiler)
-        # [value]
-
     @method.py("Any")
     def getStaticScope(self):
         scope = self._p.getStaticScope()
@@ -1005,34 +659,6 @@ class Escape(Expr):
         out.writeLine("")
         out.writeLine("}")
 
-    def compile(self, compiler):
-        ejector = compiler.markInstruction("EJECTOR")
-        # [ej]
-        compiler.literal(NullObject)
-        # [ej null]
-        subc = compiler.pushScope()
-        self._pattern.compile(subc)
-        # []
-        self._node.compile(subc)
-        # [retval]
-
-        if self._catchNode is not None:
-            jump = compiler.markInstruction("JUMP")
-
-            # Control is resumed here by the ejector in case of ejection.
-            compiler.patch(ejector)
-            # [retval]
-            compiler.literal(NullObject)
-            # [retval null]
-            subc2 = compiler.pushScope()
-            self._catchPattern.compile(subc2)
-            # []
-            self._catchNode.compile(subc2)
-            # [retval]
-            compiler.patch(jump)
-        else:
-            compiler.patch(ejector)
-
     @method.py("Any")
     def getStaticScope(self):
         scope = self._pattern.getStaticScope()
@@ -1069,18 +695,6 @@ class Finally(Expr):
         out.writeLine("")
         out.writeLine("}")
 
-    def compile(self, compiler):
-        unwind = compiler.markInstruction("UNWIND")
-        subc = compiler.pushScope()
-        self._block.compile(subc)
-        handler = compiler.markInstruction("END_HANDLER")
-        compiler.patch(unwind)
-        self._atLast.compile(subc)
-        compiler.addInstruction("POP", 0)
-        dropper = compiler.markInstruction("END_HANDLER")
-        compiler.patch(handler)
-        compiler.patch(dropper)
-
     @method.py("Any")
     def getStaticScope(self):
         scope = self._block.getStaticScope().hide()
@@ -1106,9 +720,6 @@ class Hide(Expr):
         out.writeLine("hide {")
         self._inner.pretty(out.indent())
         out.writeLine("}")
-
-    def compile(self, compiler):
-        self._inner.compile(compiler.pushScope())
 
     @method.py("Any")
     def getStaticScope(self):
@@ -1141,22 +752,6 @@ class If(Expr):
         self._otherwise.pretty(out.indent())
         out.writeLine("")
         out.writeLine("}")
-
-    def compile(self, compiler):
-        # BRANCH otherwise
-        # ...
-        # JUMP end
-        # otherwise: ...
-        # end: ...
-        subc = compiler.pushScope()
-        self._test.compile(subc)
-        # [condition]
-        branch = compiler.markInstruction("BRANCH")
-        self._then.compile(subc.pushScope())
-        jump = compiler.markInstruction("JUMP")
-        compiler.patch(branch)
-        self._otherwise.compile(subc.pushScope())
-        compiler.patch(jump)
 
     @method.py("Any")
     def getStaticScope(self):
@@ -1212,9 +807,6 @@ class MetaContextExpr(Expr):
     def pretty(self, out):
         out.write("meta.context()")
 
-    def compile(self, compiler):
-        compiler.literal(MetaContext())
-
     @method.py("Any")
     def getStaticScope(self):
         return emptyScope
@@ -1233,13 +825,6 @@ class MetaStateExpr(Expr):
 
     def uncall(self):
         return wrapList([])
-
-    def compile(self, compiler):
-        # XXX should this produce outers + locals when outside an object expr?
-        for k, v in compiler.frame.iteritems():
-            compiler.literal(StrObject(k))
-            compiler.addInstruction("BINDING_FRAME", v)
-        compiler.addInstruction("BUILD_MAP", len(compiler.frame))
 
     @method.py("Any")
     def getStaticScope(self):
@@ -1372,9 +957,6 @@ class Noun(Expr):
     def pretty(self, out):
         out.write(self.name.encode("utf-8"))
 
-    def compile(self, compiler):
-        compiler.accessFrame(self.name, "NOUN")
-
     @method.py("Any")
     def getStaticScope(self):
         return StaticScope([self.name], [], [], [], False)
@@ -1446,54 +1028,6 @@ class Obj(Expr):
         self._script.pretty(out.indent())
         out.writeLine("}")
 
-    def compile(self, compiler):
-        # Create a code object for this object.
-        availableClosure = compiler.frame.copy()
-        availableClosure.update(compiler.locals.nameMap())
-        numAuditors = len(self._implements) + 1
-        oname = formatName(self._n)
-        fqn = compiler.fqn + u"$" + oname
-        codeScript = CompilingScript(oname, self, numAuditors,
-                                     availableClosure, self._d, fqn)
-        # Compile all of our script pieces.
-        codeScript.addScript(self._script, fqn)
-        # And now tally up and prepare our closure and globals.
-        closureLabels = []
-        for name in codeScript.closureNames:
-            if name == codeScript.displayName:
-                closureLabels.append((None, -1))
-            else:
-                closureLabels.append(compiler.chooseFrame(name, "BINDING"))
-                compiler.locals.escaping(name)
-
-        globalLabels = []
-        for name in codeScript.globalNames:
-            globalLabels.append(compiler.chooseFrame(name, "BINDING"))
-            compiler.locals.escaping(name)
-
-        subc = compiler.pushScope()
-        if self._as is None:
-            index = compiler.addGlobal(u"null")
-            compiler.addInstruction("NOUN_GLOBAL", index)
-        else:
-            self._as.compile(subc)
-        for stamp in self._implements:
-            stamp.compile(subc)
-        index = compiler.addScript(codeScript, closureLabels, globalLabels)
-        compiler.addInstruction("BINDOBJECT", index)
-        # [obj obj ej auditor]
-        if isinstance(self._n, IgnorePattern):
-            compiler.addInstruction("POP", 0)
-            compiler.addInstruction("POP", 0)
-            compiler.addInstruction("POP", 0)
-        elif isinstance(self._n, FinalPattern):
-            # XXX we could support more general guarding here.
-            slotIndex = compiler.locals.add(self._n._n, SlotType(binding, False))
-            compiler.addInstruction("BINDFINALSLOT", slotIndex)
-        else:
-            # Bail!?
-            assert False, "Shouldn't happen"
-
     @method.py("Any")
     def getStaticScope(self):
         scope = self._n.getStaticScope()
@@ -1530,96 +1064,6 @@ class Obj(Expr):
     def getScript(self):
         return self._script
 
-
-class CompilingScript(object):
-
-    def __init__(self, displayName, objectAst, numAuditors, availableClosure,
-                 doc, fqn):
-        self.displayName = displayName
-        self.objectAst = objectAst
-        self.availableClosure = availableClosure
-        self.numAuditors = numAuditors
-        self.doc = doc
-        self.fqn = fqn
-        # Objects can close over themselves. Here we merely make sure that the
-        # display name is in the available closure, but we don't close over
-        # ourselves unless requested during compilation. (If we don't make the
-        # display name available, then the compiler will think that it's not
-        # in scope!)
-        self.availableClosure[displayName] = 42
-
-        self.methods = {}
-        self.methodDocs = {}
-        self.matchers = []
-
-        self.closureNames = OrderedDict()
-        self.globalNames = OrderedDict()
-
-    def freeze(self):
-        return CodeScript(self.displayName, self.objectAst, self.numAuditors,
-                          self.doc, self.fqn, self.methods, self.methodDocs,
-                          self.matchers[:], self.closureNames,
-                          self.globalNames)
-
-    def addScript(self, script, fqn):
-        assert isinstance(script, Script)
-        for meth in script._methods:
-            assert isinstance(meth, Method)
-            self.addMethod(meth, fqn)
-        for matcher in script._matchers:
-            assert isinstance(matcher, Matcher)
-            self.addMatcher(matcher, fqn)
-
-    def addMethod(self, method, fqn):
-        verb = method._verb
-        arity = len(method._ps)
-        compiler = Compiler(self.closureNames, self.globalNames,
-                            self.availableClosure, fqn=fqn, methodName=verb)
-        # [... specimen1 ej1 specimen0 ej0 namedArgs]
-        for np in method._namedParams:
-            # Zero stack effect; they all extract from the map and assign to
-            # the environment.
-            np.compile(compiler)
-        # [... specimen1 ej1 specimen0 ej0 namedArgs]
-        compiler.addInstruction("POP", 0)
-        # [... specimen1 ej1 specimen0 ej0]
-        for param in method._ps:
-            # [... specimen1 ej1]
-            param.compile(compiler)
-            # []
-        method._b.compile(compiler)
-        # [retval]
-        if method._g is not None:
-            # [retval]
-            method._g.compile(compiler)
-            # [retval guard]
-            compiler.addInstruction("SWAP", 0)
-            # [guard retval]
-            compiler.literal(NullObject)
-            # [guard retval null]
-            compiler.call(u"coerce", 2)
-            # [coerced]
-
-        # The starting depth is two (specimen and ejector) for each param, as
-        # well as one for the named map, which is unconditionally passed.
-        code = compiler.makeCode(startingDepth=arity * 2 + 1)
-        atom = method.getAtom()
-        self.methods[atom] = code
-        if method._d is not None:
-            self.methodDocs[atom] = method._d
-
-    def addMatcher(self, matcher, fqn):
-        compiler = Compiler(self.closureNames, self.globalNames,
-                            self.availableClosure, fqn=fqn,
-                            methodName=u"<matcher>")
-        # [message ej]
-        matcher._pattern.compile(compiler)
-        # []
-        matcher._block.compile(compiler)
-        # [retval]
-
-        code = compiler.makeCode(startingDepth=2)
-        self.matchers.append(code)
 
 @autohelp
 @withMaker
@@ -1735,16 +1179,6 @@ class Sequence(Expr):
             out.writeLine("")
         last.pretty(out)
 
-    def compile(self, compiler):
-        if self._l:
-            for node in self._l[:-1]:
-                node.compile(compiler)
-                compiler.addInstruction("POP", 0)
-            self._l[-1].compile(compiler)
-        else:
-            # If the sequence is empty, then it evaluates to null.
-            compiler.literal(NullObject)
-
     @method.py("Any")
     def getStaticScope(self):
         scope = emptyScope
@@ -1783,18 +1217,6 @@ class Try(Expr):
         self._then.pretty(out.indent())
         out.writeLine("")
         out.writeLine("}")
-
-    def compile(self, compiler):
-        index = compiler.markInstruction("TRY")
-        self._first.compile(compiler.pushScope())
-        end = compiler.markInstruction("END_HANDLER")
-        compiler.patch(index)
-        subc = compiler.pushScope()
-        # [problem ej]
-        self._pattern.compile(subc)
-        # []
-        self._then.compile(subc)
-        compiler.patch(end)
 
     @method.py("Any")
     def getStaticScope(self):
@@ -1837,11 +1259,6 @@ class BindingPattern(Pattern):
         out.write("&&")
         out.write(self._noun.encode("utf-8"))
 
-    def compile(self, compiler):
-        index = compiler.locals.add(self._noun, SlotType(binding, False))
-        compiler.addInstruction("POP", 0)
-        compiler.addInstruction("BIND", index)
-
     @method.py("Any")
     def getStaticScope(self):
         return StaticScope([], [], [], [self._noun], False)
@@ -1874,24 +1291,6 @@ class FinalPattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
-
-    def compile(self, compiler):
-        slotType = SlotType(finalAny, False)
-        # [specimen ej]
-        if self._g is None:
-            compiler.addInstruction("POP", 0)
-            # [specimen]
-            index = compiler.locals.add(self._n, slotType)
-            compiler.addInstruction("BINDANYFINAL", index)
-            # []
-        else:
-            slotType = slotType.guarded()
-            self._g.compile(compiler)
-            # [specimen ej guard]
-            index = compiler.locals.add(self._n, slotType)
-            compiler.addInstruction("BINDFINALSLOT", index)
-            # []
-        # []
 
     @method.py("Any")
     def getStaticScope(self):
@@ -1934,24 +1333,6 @@ class IgnorePattern(Pattern):
 
     def uncall(self):
         return wrapList([self._g if self._g is not None else NullObject])
-
-    def compile(self, compiler):
-        # [specimen ej]
-        if self._g is None:
-            compiler.addInstruction("POP", 0)
-            # [specimen]
-            compiler.addInstruction("POP", 0)
-            # []
-        else:
-            self._g.compile(compiler)
-            # [specimen ej guard]
-            compiler.addInstruction("ROT", 0)
-            compiler.addInstruction("ROT", 0)
-            # [guard specimen ej]
-            compiler.call(u"coerce", 2)
-            # [result]
-            compiler.addInstruction("POP", 0)
-            # []
 
     @method.py("Any")
     def getStaticScope(self):
@@ -2003,13 +1384,6 @@ class ListPattern(Pattern):
                 out.write(", ")
                 item.pretty(out)
         out.write("]")
-
-    def compile(self, compiler):
-        # [specimen ej]
-        compiler.addInstruction("LIST_PATT", len(self._ps))
-        for patt in self._ps:
-            # [specimen ej]
-            patt.compile(compiler)
 
     @method.py("Any")
     def getStaticScope(self):
@@ -2074,29 +1448,6 @@ class NamedParam(Pattern):
             throwStr(ej, u"getDefault/1: Parameter has no default")
         return self._default
 
-    def compile(self, compiler):
-        # [argmap]
-        compiler.addInstruction("DUP", 0)
-        # [argmap argmap]
-        self._k.compile(compiler)
-        # [argmap argmap key]
-        if self._default is Null:
-            compiler.addInstruction("NAMEDARG_EXTRACT", 0)
-            # [argmap value]
-        else:
-            useDefault = compiler.markInstruction("NAMEDARG_EXTRACT_OPTIONAL")
-            # [argmap null]
-            compiler.addInstruction("POP", 0)
-            # [argmap]
-            self._default.compile(compiler)
-            # [argmap default]
-            compiler.patch(useDefault)
-        # [argmap specimen]
-        compiler.literal(NullObject)
-        # [argmap specimen ej]
-        self._p.compile(compiler)
-        # [argmap]
-
 
 @autohelp
 @withMaker
@@ -2117,24 +1468,6 @@ class VarPattern(Pattern):
         if self._g is not None:
             out.write(" :")
             self._g.pretty(out)
-
-    def compile(self, compiler):
-        slotType = SlotType(varAny, False)
-        # [specimen ej]
-        if self._g is None:
-            compiler.addInstruction("POP", 0)
-            # [specimen]
-            index = compiler.locals.add(self._n, slotType)
-            compiler.addInstruction("BINDANYVAR", index)
-            # []
-        else:
-            slotType = slotType.guarded()
-            self._g.compile(compiler)
-            # [specimen ej guard]
-            index = compiler.locals.add(self._n, slotType)
-            compiler.addInstruction("BINDVARSLOT", index)
-            # []
-        # []
 
     @method.py("Any")
     def getStaticScope(self):
@@ -2170,25 +1503,6 @@ class ViaPattern(Pattern):
         self._expr.pretty(out)
         out.write(") ")
         self._pattern.pretty(out)
-
-    def compile(self, compiler):
-        # [specimen ej]
-        compiler.addInstruction("DUP", 0)
-        # [specimen ej ej]
-        compiler.addInstruction("ROT", 0)
-        # [ej ej specimen]
-        compiler.addInstruction("SWAP", 0)
-        # [ej specimen ej]
-        self._expr.compile(compiler)
-        # [ej specimen ej examiner]
-        compiler.addInstruction("ROT", 0)
-        compiler.addInstruction("ROT", 0)
-        # [ej examiner specimen ej]
-        compiler.call(u"run", 2)
-        # [ej specimen]
-        compiler.addInstruction("SWAP", 0)
-        # [specimen ej]
-        self._pattern.compile(compiler)
 
     @method.py("Any")
     def getStaticScope(self):

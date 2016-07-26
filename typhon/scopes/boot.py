@@ -16,22 +16,21 @@ import os
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
-from typhon.importing import AstModule, SmallcapsModule, obtainModule
+from typhon.importing import AstModule, obtainModule
 from typhon.load.nano import loadMASTBytes as realLoad
 from typhon.nano.interp import (evalToPair as astEvalToPair,
                                 scope2env)
 from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
-from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
+from typhon.objects.collections.maps import ConstMap
 from typhon.objects.collections.sets import ConstSet
-from typhon.objects.data import StrObject, unwrapBytes, unwrapBool, wrapBool
+from typhon.objects.data import unwrapBytes, unwrapBool, wrapBool
 from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
                                    DoubleGuard, IntGuard, StrGuard, VoidGuard)
 from typhon.objects.slots import finalize
 from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
-from typhon.smallcaps.machine import evaluateRaise
 
 RUN_1 = getAtom(u"run", 1)
 
@@ -61,50 +60,6 @@ def moduleFromString(source, recorder):
     mod = AstModule(recorder, u"<eval>")
     mod.load(source)
     return mod
-
-def evalToPair(code, topLocals, envMap):
-    environment = scope2env(unwrapMap(envMap))
-    # Don't catch user exceptions; on traceback, we'll have a trail
-    # auto-added that indicates that the exception came through
-    # eval() or whatnot.
-    result, machine = evaluateRaise([code], environment)
-    if machine is not None:
-        # XXX monteMap()
-        d = monteMap()
-        for k, vi in topLocals.items():
-            d[StrObject(u"&&" + k)] = machine.local[vi]
-        envMap = ConstMap(d).call(u"or", [envMap])
-    return result, envMap
-
-
-@autohelp
-@audited.DF
-class SmallCapsEval(Object):
-
-    def __init__(self, recorder):
-        self.recorder = recorder
-
-    @method("Any", "Any", "Any", "Str")
-    @profileTyphon("smallcapsEval.fromAST/3")
-    def fromAST(self, ast, scope, name):
-        mod = SmallcapsModule(self.recorder, name)
-        mod.crunch(ast)
-        return mod.eval(scope)[0]
-
-    @method("Any", "Any", "Any")
-    @profileTyphon("smallcapsEval.run/2")
-    def run(self, bs, scope):
-        mod = SmallcapsModule(self.recorder, u"<eval>")
-        mod.load(unwrapBytes(bs))
-        return mod.eval(scope)[0]
-
-    @method("List", "Any", "Any", inRepl="Any")
-    #@profileTyphon("smallcapsEval.evalToPair/2")
-    def evalToPair(self, bs, scope, inRepl=False):
-        mod = SmallcapsModule(self.recorder, u"<eval>")
-        mod.load(unwrapBytes(bs))
-        result, newEnv = mod.eval(scope)
-        return [result, newEnv]
 
 
 @autohelp

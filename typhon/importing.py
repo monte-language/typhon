@@ -17,14 +17,10 @@ from rpython.rlib.rpath import rjoin
 
 from typhon import log
 from typhon.debug import debugPrint
-from typhon.errors import LoadFailed, userError
-from typhon.load.mast import loadMASTBytes
+from typhon.errors import userError
 from typhon.load.nano import loadMASTBytes as nanoLoad
 from typhon.nano.interp import evalMonte
-from typhon.nodes import Expr, interactiveCompile
-from typhon.objects.collections.lists import ConstList
 from typhon.objects.root import Object
-from typhon.smallcaps.peephole import peephole
 
 
 class ModuleCache(object):
@@ -95,28 +91,3 @@ class AstModule(Module):
     @dont_look_inside
     def eval(self, env):
             return evalMonte(self.astSource, env, self.origin)
-
-
-class SmallcapsModule(Module):
-    def load(self, source):
-        try:
-            with self.recorder.context("Deserialization"):
-                term = loadMASTBytes(source)
-            if not isinstance(term, Expr):
-                raise userError(u"A kernel-AST expression node is required")
-        except LoadFailed:
-            raise userError(u"Couldn't load invalid AST")
-        return self.crunch(term)
-
-    def crunch(self, term):
-        with self.recorder.context("Compilation"):
-            code, topLocals = interactiveCompile(term, self.origin)
-        with self.recorder.context("Optimization"):
-            peephole(code)
-        self.smallcapsSource = code
-        self.local = topLocals
-
-    @dont_look_inside
-    def eval(self, env):
-        from typhon.scopes.boot import evalToPair
-        return evalToPair(self.smallcapsSource, self.locals, env)

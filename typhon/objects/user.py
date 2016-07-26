@@ -12,8 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import promote, unroll_safe
-from rpython.rlib.objectmodel import import_from_mixin, specialize
+from rpython.rlib.jit import unroll_safe
+from rpython.rlib.objectmodel import specialize
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
@@ -21,17 +21,14 @@ from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.log import log
 from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
-from typhon.objects.constants import NullObject, unwrapBool
+from typhon.objects.constants import unwrapBool
 from typhon.objects.collections.helpers import emptySet, monteSet
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import Ejector
-from typhon.objects.guards import anyGuard
 from typhon.objects.printers import Printer
 from typhon.objects.root import Object
-from typhon.objects.slots import finalBinding
 from typhon.profile import profileTyphon
-from typhon.smallcaps.machine import SmallCaps
 
 # XXX AuditionStamp, Audition guard
 
@@ -343,137 +340,3 @@ class UserObjectHelper(object):
                         raise
 
         raise Refused(self, atom, args)
-
-
-class ScriptObject(Object):
-    """
-    An object whose behavior depends on a SmallCaps script.
-    """
-    import_from_mixin(UserObjectHelper)
-    _immutable_fields_ = "codeScript", "globals[*]", "report"
-
-    def docString(self):
-        return self.codeScript.doc
-
-    def getDisplayName(self):
-        return self.codeScript.displayName
-
-    def respondingAtoms(self):
-        # Only do methods for now. Matchers will be dealt with in other ways.
-        d = {}
-        for atom in self.codeScript.strategy.getAtoms():
-            d[atom] = self.codeScript.methodDocs.get(atom, None)
-
-        return d
-
-    def getMethod(self, atom):
-        return self.codeScript.strategy.lookupMethod(atom)
-
-    def getMatchers(self):
-        return self.codeScript.strategy.getMatchers()
-
-
-class QuietObject(ScriptObject):
-    """
-    An object without a closure.
-    """
-
-    def __init__(self, codeScript, globals, auditors):
-        self.codeScript = codeScript
-        self.globals = globals
-
-        # The first auditor is our as-auditor, and it can be null.
-        if auditors[0] is NullObject:
-            auditors = auditors[1:]
-        self.auditors = auditors
-
-        # Grab the guards of our globals and send them off for processing.
-        if auditors:
-            guards = self.getGuards()
-            self.report = self.codeScript.audit(auditors, guards)
-
-    def getGuards(self):
-        guards = {}
-        for name, i in self.codeScript.globalNames.items():
-            guards[name] = self.globals[i].call(u"getGuard", [])
-        return guards
-
-    @unroll_safe
-    def runMethod(self, method, args, namedArgs):
-        machine = SmallCaps(method, None, promote(self.globals))
-        # print "--- Running", self.displayName, atom, args
-        # Push the arguments onto the stack, backwards.
-        machine.push(namedArgs)
-        for arg in reversed(args):
-            machine.push(arg)
-            machine.push(NullObject)
-        machine.push(namedArgs)
-        machine.run()
-        return machine.pop()
-
-    def runMatcher(self, code, message, ej):
-        machine = SmallCaps(code, None, promote(self.globals))
-        machine.push(message)
-        machine.push(ej)
-        machine.run()
-        return machine.pop()
-
-
-class BusyObject(ScriptObject):
-    """
-    An object with a closure.
-    """
-
-    _immutable_fields_ = "closure[*]",
-
-    def __init__(self, codeScript, globals, closure, auditors):
-        self.codeScript = codeScript
-        self.globals = globals
-        self.closure = closure
-
-        # The first auditor is our as-auditor, so it'll also be the guard. If
-        # it's null, then we'll use Any as our guard.
-        if auditors[0] is NullObject:
-            self.patchSelf(anyGuard)
-            auditors = auditors[1:]
-        else:
-            self.patchSelf(auditors[0])
-        self.auditors = auditors
-
-        # Grab the guards of our globals and send them off for processing.
-        if auditors:
-            guards = self.getGuards()
-            self.report = self.codeScript.audit(auditors, guards)
-
-    def getGuards(self):
-        guards = {}
-        for name, i in self.codeScript.globalNames.items():
-            guards[name] = self.globals[i].call(u"getGuard", [])
-        for name, i in self.codeScript.closureNames.items():
-            guards[name] = self.closure[i].call(u"getGuard", [])
-        return guards
-
-    def patchSelf(self, guard):
-        selfIndex = self.codeScript.selfIndex()
-        if selfIndex != -1:
-            self.closure[selfIndex] = finalBinding(self, guard)
-
-    @unroll_safe
-    def runMethod(self, method, args, namedArgs):
-        machine = SmallCaps(method, self.closure, promote(self.globals))
-        # print "--- Running", self.displayName, atom, args
-        # Push the arguments onto the stack, backwards.
-        machine.push(namedArgs)
-        for arg in reversed(args):
-            machine.push(arg)
-            machine.push(NullObject)
-        machine.push(namedArgs)
-        machine.run()
-        return machine.pop()
-
-    def runMatcher(self, code, message, ej):
-        machine = SmallCaps(code, self.closure, promote(self.globals))
-        machine.push(message)
-        machine.push(ej)
-        machine.run()
-        return machine.pop()

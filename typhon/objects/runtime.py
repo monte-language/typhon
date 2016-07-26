@@ -3,11 +3,11 @@ from rpython.rlib.rerased import new_erasing_pair
 
 # from typhon import ruv
 from typhon.autohelp import autohelp, method
+from typhon.nano.interp import InterpObject
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.collections.maps import monteMap
 from typhon.objects.data import IntObject, StrObject
-from typhon.objects.root import Object, runnable
-from typhon.objects.user import ScriptObject
+from typhon.objects.root import Object
 
 
 # The fun of GC management. This is all very subject to change and only works
@@ -52,8 +52,8 @@ class Heap(Object):
         self.sizes = {}
 
     def accountObject(self, obj):
-        if isinstance(obj, ScriptObject):
-            name = obj.codeScript.displayName
+        if isinstance(obj, InterpObject):
+            name = obj.displayName
         else:
             name = obj.__class__.__name__.decode("utf-8")
         if name not in self.buckets:
@@ -139,45 +139,6 @@ def makeReactorStats():
 
 
 @autohelp
-class Disassembly(Object):
-    """
-    A structure of Typhon bytecode.
-
-    The precise structure offered by this object is subject to change at any
-    time.
-
-    e'o ko na lacri mi lo ka mi stodi
-    """
-
-    codeScript = None
-
-    def __init__(self, obj):
-        if isinstance(obj, ScriptObject):
-            self.codeScript = obj.codeScript
-            self.description = self.describeCodeScript()
-        else:
-            self.description = u"Ah-ah-ah! You didn't say the magic word!"
-
-    def describeCodeScript(self):
-        cs = self.codeScript
-        buf = []
-        buf.append(u"Disassembly of %s" % cs.fqn)
-        for atom in self.codeScript.strategy.getAtoms():
-            code = self.codeScript.strategy.lookupMethod(atom)
-            atomRepr = atom.repr.decode("utf-8")
-            text = code.disassemble()
-            buf.append(u"Method %s: %s" % (atomRepr, text))
-        return u"\n".join(buf)
-
-    def toString(self):
-        return self.description
-
-@runnable()
-def disassemble(obj):
-    return Disassembly(obj)
-
-
-@autohelp
 class CurrentRuntime(Object):
     """
     The Typhon runtime.
@@ -192,10 +153,6 @@ class CurrentRuntime(Object):
     def getCrypt(self):
         from typhon.objects.crypt import Crypt
         return Crypt()
-
-    @method("Any")
-    def getDisassembler(self):
-        return disassemble()
 
     @method("Any")
     def getHeapStatistics(self):
