@@ -29,7 +29,7 @@ from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.root import Object
 from typhon.objects.slots import (Binding, FinalSlot, VarSlot, finalBinding,
                                   varBinding)
-from typhon.objects.user import AuditClipboard, UserObjectHelper
+from typhon.objects.user import UserObjectHelper
 
 RUN_2 = getAtom(u"run", 2)
 
@@ -48,7 +48,7 @@ class InterpObject(Object):
     """
     An object whose script is executed by the AST evaluator.
     """
-    import_from_mixin(AuditClipboard)
+
     import_from_mixin(UserObjectHelper)
 
     _immutable_fields_ = "doc", "displayName", "script", "outers[*]", "report"
@@ -58,7 +58,6 @@ class InterpObject(Object):
 
     def __init__(self, doc, name, script, frame, outers,
                  auditors, ast, fqn):
-        self.reportCabinet = []
         self.objectAst = ast
         self.fqn = fqn
         self.doc = doc
@@ -343,22 +342,23 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             frame[position] = b
         return val
 
-    # Everything passed to this method, except self, is immutable. ~ C.
+    # Everything passed to this method, except self and clipboard, are
+    # immutable. Clipboards are not a problem since their loops are
+    # internalized in methods. ~ C.
     @unroll_safe
-    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
+    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout,
+                        clipboard):
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
         else:
             objName = patt.name
-        auds = []
-        guardAuditor = anyGuard
-        if auditors:
-            guardAuditor = self.visitExpr(auditors[0])
-            auds = [self.visitExpr(auditor) for auditor in auditors[1:]]
-            if guardAuditor is not NullObject:
-                auds = [guardAuditor] + auds
-            else:
-                guardAuditor = anyGuard
+        assert auditors, "hyacinth"
+        guardAuditor = self.visitExpr(auditors[0])
+        auds = [self.visitExpr(auditor) for auditor in auditors[1:]]
+        if guardAuditor is NullObject:
+            guardAuditor = anyGuard
+        else:
+            auds = [guardAuditor] + auds
         frame = []
         # We rely on this ordering to be consistent so that we can strip the
         # names when doing auditor cache comparisons. ~ C.
@@ -389,8 +389,9 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
         o = InterpObject(doc, objName, script, frame, self.outers,
                          auds, mast, layout.fqn)
-        if auds and auds != [NullObject]:
-            o.report = o.audit(auds, guards)
+        if auds and (len(auds) != 1 or auds[0] is not NullObject):
+            # Actually perform the audit.
+            o.report = clipboard.audit(auds, guards)
         val = self.runGuard(guardAuditor, o, theThrower)
 
         # Check whether we have a spot in the frame.

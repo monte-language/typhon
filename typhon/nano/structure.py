@@ -10,6 +10,7 @@ from rpython.rlib.rbigint import BASE10
 from typhon.atoms import getAtom
 from typhon.nano.mast import BuildKernelNodes
 from typhon.nano.scopes import BoundNounsIR
+from typhon.objects.user import AuditClipboard
 from typhon.quoting import quoteChar, quoteStr
 
 def refactorStructure(ast):
@@ -86,7 +87,8 @@ SplitAuditorsIR = AtomIR.extend("SplitAuditors",
                                 ("script", "Script"), ("layout", None)],
             "ObjectExpr": [("doc", None), ("patt", "Patt"),
                            ("auditors", "Expr*"), ("script", "Script"),
-                           ("mast", "AST"), ("layout", None)],
+                           ("mast", "AST"), ("layout", None),
+                           ("clipboard", None)],
         },
     }
 )
@@ -105,8 +107,9 @@ class SplitAuditors(AtomIR.makePassTo(SplitAuditorsIR)):
         else:
             # Runtime auditing.
             ast = BuildKernelNodes().visitExpr(mast)
+            clipboard = AuditClipboard(layout.fqn, ast)
             return self.dest.ObjectExpr(doc, patt, auditors, script, ast,
-                                        layout)
+                                        layout, clipboard)
 
 
 ProfileNameIR = SplitAuditorsIR.extend("ProfileName",
@@ -154,7 +157,8 @@ class MakeProfileNames(_MakeProfileNames):
         self.objectNames.pop()
         return rv
 
-    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout):
+    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout,
+                        clipboard):
         # Push, do the recursion, pop.
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
@@ -163,7 +167,7 @@ class MakeProfileNames(_MakeProfileNames):
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
         rv = _MakeProfileNames.visitObjectExpr(self, doc, patt, auditors,
-                script, mast, layout)
+                script, mast, layout, clipboard)
         self.objectNames.pop()
         return rv
 

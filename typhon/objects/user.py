@@ -207,8 +207,10 @@ class AuditClipboard(object):
     She's touring the facility / And picking up slack
     """
 
-    def __init__(self):
+    def __init__(self, fqn, ast):
         self.reportCabinet = []
+        self.fqn = fqn
+        self.ast = ast
 
     def getReport(self, auditors, guards):
         """
@@ -242,7 +244,7 @@ class AuditClipboard(object):
         Do an audit, make a report from the results.
         """
 
-        with Audition(self.fqn, self.objectAst, guards) as audition:
+        with Audition(self.fqn, self.ast, guards) as audition:
             for a in auditors:
                 audition.ask(a)
         return audition.prepareReport(auditors)
