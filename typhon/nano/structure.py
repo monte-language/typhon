@@ -356,7 +356,7 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
             self.visitScript(script)
 
     def visitObjectExpr(self, doc, patt, auditors, script, mast,
-                        layout):
+                        layout, clipboard):
         self.write(u"object ")
         self.visitPatt(patt)
         if auditors and not isinstance(auditors[0], self.src.NullExpr):
