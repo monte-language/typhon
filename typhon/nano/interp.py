@@ -57,7 +57,7 @@ class InterpObject(Object):
     cachedMethod = None, None
 
     def __init__(self, doc, name, script, frame, outers,
-                 auditors, ast, fqn):
+                 ast, fqn):
         self.objectAst = ast
         self.fqn = fqn
         self.doc = doc
@@ -65,7 +65,6 @@ class InterpObject(Object):
         self.script = script
         self.frame = frame
         self.outers = outers
-        self.auditors = auditors
         self.report = None
 
     def docString(self):
@@ -285,8 +284,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         else:
             objName = patt.name
         ast = NullObject
-        auds = []
-        guardAuditor = anyGuard
         frame = []
         for (name, scope, idx, severity) in layout.swizzleFrame():
             if name == objName:
@@ -309,9 +306,9 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             # the binding in frame.
             b = self.outers[idx]
 
-        o = InterpObject(doc, objName, script, frame, self.outers,
-                         auds, ast, layout.fqn)
-        val = self.runGuard(guardAuditor, o, theThrower)
+        # Build the object.
+        val = InterpObject(doc, objName, script, frame, self.outers, ast,
+                           layout.fqn)
 
         # Check whether we have a spot in the frame.
         position = layout.positionOf(objName)
@@ -320,16 +317,16 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         if isinstance(patt, self.src.IgnorePatt):
             b = NULL_BINDING
         elif isinstance(patt, self.src.FinalBindingPatt):
-            b = finalBinding(val, guardAuditor)
+            b = finalBinding(val, anyGuard)
             self.locals[patt.index] = b
         elif isinstance(patt, self.src.VarBindingPatt):
-            b = varBinding(val, guardAuditor)
+            b = varBinding(val, anyGuard)
             self.locals[patt.index] = b
         elif isinstance(patt, self.src.FinalSlotPatt):
-            b = FinalSlot(val, guardAuditor)
+            b = FinalSlot(val, anyGuard)
             self.locals[patt.index] = b
         elif isinstance(patt, self.src.VarSlotPatt):
-            b = VarSlot(val, guardAuditor)
+            b = VarSlot(val, anyGuard)
             self.locals[patt.index] = b
         elif isinstance(patt, self.src.NounPatt):
             b = val
@@ -387,8 +384,8 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             b = self.outers[idx]
             guards[name] = retrieveGuard(severity, b)
 
-        o = InterpObject(doc, objName, script, frame, self.outers,
-                         auds, mast, layout.fqn)
+        o = InterpObject(doc, objName, script, frame, self.outers, mast,
+                         layout.fqn)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
             o.report = clipboard.audit(auds, guards)
