@@ -13,12 +13,13 @@ This version uses erased storage to fix the recursive type problem.
 
 from rpython.rlib.rerased import new_erasing_pair
 
-def makeFingerTreeClass(zero, add):
+def makeFingerTreeClass(zero, add, measure):
     """
     Produce a finger tree class.
 
     `zero` is the monoidal zero of the monoid for this class, and `add` is the
-    monoidal binary operation.
+    monoidal binary operation; `measure` is a function which turns values into
+    monoidal values.
     """
 
     class Node(object):
@@ -31,8 +32,17 @@ def makeFingerTreeClass(zero, add):
             self.y = y
             self.depth = depth
 
+            if depth:
+                x = uneraseNode(x)
+                y = uneraseNode(y)
+                self.measure = add(x.measure, y.measure)
+            else:
+                x = uneraseValue(x)
+                y = uneraseValue(y)
+                self.measure = add(measure(x), measure(y))
+
         def __repr__(self):
-            return "N2(%r, %r)" % (self.x, self.y)
+            return "N2(measure=%d, %r, %r)" % (self.measure, self.x, self.y)
 
         def asDigits(self):
             return Two(self.x, self.y, self.depth)
@@ -45,8 +55,20 @@ def makeFingerTreeClass(zero, add):
             self.z = z
             self.depth = depth
 
+            if depth:
+                x = uneraseNode(x)
+                y = uneraseNode(y)
+                z = uneraseNode(z)
+                self.measure = add(add(x.measure, y.measure), z.measure)
+            else:
+                x = uneraseValue(x)
+                y = uneraseValue(y)
+                z = uneraseValue(z)
+                self.measure = add(add(measure(x), measure(y)), measure(z))
+
         def __repr__(self):
-            return "N3(%r, %r, %r)" % (self.x, self.y, self.z)
+            return "N3(measure=%d, %r, %r, %r)" % (self.measure, self.x,
+                    self.y, self.z)
 
         def asDigits(self):
             return Three(self.x, self.y, self.z, self.depth)
@@ -81,6 +103,13 @@ def makeFingerTreeClass(zero, add):
             self.a = a
             self.depth = depth
 
+            if depth:
+                a = uneraseNode(a)
+                self.measure = a.measure
+            else:
+                a = uneraseValue(a)
+                self.measure = measure(a)
+
         def __repr__(self):
             return "1(%r)" % self.a
 
@@ -106,6 +135,15 @@ def makeFingerTreeClass(zero, add):
             self.a = a
             self.b = b
             self.depth = depth
+
+            if depth:
+                a = uneraseNode(a)
+                b = uneraseNode(b)
+                self.measure = add(a.measure, b.measure)
+            else:
+                a = uneraseValue(a)
+                b = uneraseValue(b)
+                self.measure = add(measure(a), measure(b))
 
         def __repr__(self):
             return "2(%r, %r)" % (self.a, self.b)
@@ -135,6 +173,17 @@ def makeFingerTreeClass(zero, add):
             self.b = b
             self.c = c
             self.depth = depth
+
+            if depth:
+                a = uneraseNode(a)
+                b = uneraseNode(b)
+                c = uneraseNode(c)
+                self.measure = add(add(a.measure, b.measure), c.measure)
+            else:
+                a = uneraseValue(a)
+                b = uneraseValue(b)
+                c = uneraseValue(c)
+                self.measure = add(add(measure(a), measure(b)), measure(c))
 
         def __repr__(self):
             return "3(%r, %r, %r)" % (self.a, self.b, self.c)
@@ -169,6 +218,21 @@ def makeFingerTreeClass(zero, add):
             self.c = c
             self.d = d
             self.depth = depth
+
+            if depth:
+                a = uneraseNode(a)
+                b = uneraseNode(b)
+                c = uneraseNode(c)
+                d = uneraseNode(d)
+                self.measure = add(add(a.measure, b.measure),
+                                   add(c.measure, d.measure))
+            else:
+                a = uneraseValue(a)
+                b = uneraseValue(b)
+                c = uneraseValue(c)
+                d = uneraseValue(d)
+                self.measure = add(add(measure(a), measure(b)),
+                                   add(measure(c), measure(d)))
 
         def __repr__(self):
             return "4(%r, %r, %r, %r)" % (self.a, self.b, self.c, self.d)
@@ -213,6 +277,8 @@ def makeFingerTreeClass(zero, add):
 
     class Empty(FingerTree):
 
+        measure = zero
+
         def __init__(self, depth=0):
             self.depth = depth
 
@@ -243,6 +309,11 @@ def makeFingerTreeClass(zero, add):
         def __init__(self, value, depth):
             self.value = value
             self.depth = depth
+
+            if depth:
+                self.measure = uneraseNode(value).measure
+            else:
+                self.measure = measure(uneraseValue(value))
 
         def __repr__(self):
             return "Single(%r)" % self.value
@@ -280,6 +351,8 @@ def makeFingerTreeClass(zero, add):
             self.tree = tree
             self.right = right
             self.depth = depth
+
+            self.measure = add(add(left.measure, tree.measure), right.measure)
 
         def __repr__(self):
             return "Deep%d(%r, %r, %r)" % (self.depth, self.left, self.tree,
@@ -356,7 +429,7 @@ def makeFingerTreeClass(zero, add):
     return Empty
 
 import random
-cls = makeFingerTreeClass(0, 1)
+cls = makeFingerTreeClass(0, lambda x, y: x + y, lambda _: 1)
 ft = cls()
 for x in range(100):
     ft = ft.pushRight(x)
