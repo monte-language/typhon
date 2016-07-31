@@ -54,6 +54,25 @@ def makeFingerTreeClass(zero, add):
     eraseNode, uneraseNode = new_erasing_pair("Node")
     eraseValue, uneraseValue = new_erasing_pair("Value")
 
+    def gatherNodes(l, depth):
+        nodes = []
+        while l:
+            if len(l) == 2:
+                node = eraseNode(Node2(l[0], l[1], depth))
+                nodes.append(node)
+                l = l[2:]
+            elif len(l) == 4:
+                node = eraseNode(Node2(l[0], l[1], depth))
+                nodes.append(node)
+                node = eraseNode(Node2(l[2], l[3], depth))
+                nodes.append(node)
+                l = l[4:]
+            else:
+                node = eraseNode(Node3(l[0], l[1], l[2], depth))
+                nodes.append(node)
+                l = l[3:]
+        return nodes
+
     class Digit(object):
         _immutable_ = True
 
@@ -79,6 +98,9 @@ def makeFingerTreeClass(zero, add):
         def asTree(self):
             return Single(self.a, self.depth)
 
+        def asList(self):
+            return [self.a]
+
     class Two(Digit):
         def __init__(self, a, b, depth):
             self.a = a
@@ -103,6 +125,9 @@ def makeFingerTreeClass(zero, add):
         def asTree(self):
             return Deep(One(self.a, self.depth), Empty(self.depth + 1),
                         One(self.b, self.depth), self.depth)
+
+        def asList(self):
+            return [self.a, self.b]
 
     class Three(Digit):
         def __init__(self, a, b, c, depth):
@@ -134,6 +159,9 @@ def makeFingerTreeClass(zero, add):
                         Empty(self.depth + 1), One(self.c, self.depth),
                         self.depth)
 
+        def asList(self):
+            return [self.a, self.b, self.c]
+
     class Four(Digit):
         def __init__(self, a, b, c, d, depth):
             self.a = a
@@ -160,6 +188,9 @@ def makeFingerTreeClass(zero, add):
             return Deep(Two(self.a, self.b, self.depth), Empty(self.depth + 1),
                         Two(self.c, self.d, self.depth), self.depth)
 
+        def asList(self):
+            return [self.a, self.b, self.c, self.d]
+
     class FingerTree(object):
         _immutable_ = True
 
@@ -176,6 +207,9 @@ def makeFingerTreeClass(zero, add):
         def popRight(self):
             value, ft = self._viewRight()
             return uneraseValue(value), ft
+
+        def add(self, other):
+            return self._concat([], other)
 
     class Empty(FingerTree):
 
@@ -197,6 +231,11 @@ def makeFingerTreeClass(zero, add):
 
         def isEmpty(self):
             return True
+
+        def _concat(self, middle, other):
+            for item in middle:
+                other = other._pushLeft(item)
+            return other
 
     class Single(FingerTree):
         _immutable_ = True
@@ -223,6 +262,11 @@ def makeFingerTreeClass(zero, add):
 
         def isEmpty(self):
             return False
+
+        def _concat(self, middle, other):
+            for item in middle:
+                other = other._pushLeft(item)
+            return other._pushLeft(self.value)
 
     class Deep(FingerTree):
         _immutable_ = True
@@ -290,23 +334,55 @@ def makeFingerTreeClass(zero, add):
         def isEmpty(self):
             return False
 
+        def _concat(self, middle, other):
+            if isinstance(other, Empty):
+                for item in middle:
+                    self = self._pushRight(item)
+                return self
+            elif isinstance(other, Single):
+                for item in middle:
+                    self = self._pushRight(item)
+                return self._pushRight(other.value)
+            elif isinstance(other, Deep):
+                newLeft = self.left
+                newRight = self.right
+                l = gatherNodes(self.right.asList() + other.left.asList(),
+                                self.depth)
+                newTree = self.tree._concat(l, other.tree)
+                return Deep(newLeft, newTree, newRight, self.depth)
+            else:
+                assert False, "willow"
+
     return Empty
 
+import random
 cls = makeFingerTreeClass(0, 1)
 ft = cls()
-for x in range(10):
+for x in range(100):
     ft = ft.pushRight(x)
-    print "Push", x
-    print ft
+    print "+",
+    if random.random() > 0.80:
+        _, ft = ft.popLeft()
+        print "-",
+    if random.random() > 0.95:
+        ft = ft.add(ft)
+        print "*",
+print
 while not ft.isEmpty():
     x, ft = ft.popLeft()
-    print "Pop", x
-    print ft
-for x in range(10):
+    print "-",
+print
+for x in range(100):
     ft = ft.pushLeft(x)
-    print "Push", x
-    print ft
+    print "+",
+    if random.random() > 0.80:
+        _, ft = ft.popRight()
+        print "-",
+    if random.random() > 0.95:
+        ft = ft.add(ft)
+        print "*",
+print
 while not ft.isEmpty():
     x, ft = ft.popRight()
-    print "Pop", x
-    print ft
+    print "-",
+print
