@@ -8,6 +8,7 @@ Import as `from typhon import ruv` and then use namespaced. Please.
 """
 
 import os
+import sys
 
 from functools import wraps
 
@@ -66,10 +67,14 @@ def envPaths(name):
         return val.split(':')
 
 
+libs = ["rt", "uv"]
+# Issue 96: Darwin: Don't add nsl. ~ C.
+if not sys.platform.startswith("darwin"):
+    libs.append("nsl")
 eci = ExternalCompilationInfo(includes=["uv.h"],
                               include_dirs=envPaths("TYPHON_INCLUDE_PATH"),
                               library_dirs=envPaths("TYPHON_LIBRARY_PATH"),
-                              libraries=["nsl", "rt", "uv"])
+                              libraries=libs)
 
 
 class CConfig:
