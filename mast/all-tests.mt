@@ -7,6 +7,7 @@ import "lib/json" =~ _
 import "lib/parsers/html" =~ _
 import "lib/record" =~ _
 import "lib/tubes" =~ _
+import "lib/streams" =~ _
 import "lib/words" =~ _
 import "tests/auditors" =~ _
 import "tests/b" =~ _
