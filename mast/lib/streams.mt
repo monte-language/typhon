@@ -128,6 +128,13 @@ object alterSink as DeepFrozen:
             to run(packet) :Vow[Void]:
                 return sink(f(packet))
 
+    to filter(predicate, sink :Sink) :Sink:
+        "Filter packets coming into `sink` with the `predicate`."
+
+        return object filterSink extends sink as Sink:
+            to run(packet) :Vow[Void]:
+                return if (predicate(packet)) { sink(packet) } else { null }
+
 def testAlterSinkMap(assert):
     def [l, sink] := makeSink.asList()
     def mapSink := alterSink.map(fn x { x + 1 }, sink)
@@ -137,7 +144,16 @@ def testAlterSinkMap(assert):
     return when (l) ->
         assert.equal(l, [2, 3])
 
-unittest([testAlterSinkMap])
+def testAlterSinkFilter(assert):
+    def [l, sink] := makeSink.asList()
+    def filterSink := alterSink.filter(fn x { x % 2 == 0 }, sink)
+    for i in (0..4):
+        filterSink(i)
+    filterSink.complete()
+    return when (l) ->
+        assert.equal(l, [0, 2, 4])
+
+unittest([testAlterSinkMap, testAlterSinkFilter])
 
 object alterSource as DeepFrozen:
     "A collection of decorative attachments for sources."
@@ -148,6 +164,12 @@ object alterSource as DeepFrozen:
         return def mapSource(sink :Sink) :Vow[Void] as Source:
             return source(alterSink.map(f, sink))
 
+    to filter(predicate, source :Source) :Source:
+        "Filter packets coming out of `source` with `predicate`."
+
+        return def filterSource(sink :Sink) :Vow[Void] as Source:
+            return source(alterSink.filter(predicate, sink))
+
 def testAlterSourceMap(assert):
     def [l, sink] := makeSink.asList()
     def source := makeSource.fromIterable([1, 2, 3])
@@ -155,4 +177,11 @@ def testAlterSourceMap(assert):
     return when (l, flow(mapSource, sink)) ->
         assert.equal(l, [1, 2, 3])
 
-unittest([testAlterSourceMap])
+def testAlterSourceFilter(assert):
+    def [l, sink] := makeSink.asList()
+    def source := makeSource.fromIterable([0, 1, 2, 3, 4])
+    def filterSource := alterSource.filter(fn [_, x] { x % 2 == 0 }, source)
+    return when (l, flow(filterSource, sink)) ->
+        assert.equal(l, [0, 2, 4])
+
+unittest([testAlterSourceMap, testAlterSourceFilter])
