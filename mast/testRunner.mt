@@ -14,7 +14,7 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
 
     def formatError(err):
         def line := `Error in source $lastSource from test $lastTest:$\n`
-        def l := [line] + err[1].reverse() + "" + err[0] + ""
+        def l := [line] + err[1].reverse() + ["", err[0], ""]
         stdout.receive("\n".join(l))
 
     def updateScreen():
