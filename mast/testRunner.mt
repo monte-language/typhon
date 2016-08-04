@@ -1,30 +1,54 @@
 exports (makeAsserter, makeTestDrain, runTests)
 
+# This magic sequence clears the current line of stdout and moves the cursor
+# to the beginning of the line. ~ C.
+def clearLine :Str := "\x1b[2K\r"
+
 def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
     var lastSource := null
+    var lastTest := null
+    var total :Int := 0
+    var running :Int := 0
+    var completed :Int := 0
+    var errors :Int := 0
 
     def formatError(err):
-        return "\n".join(err[1].reverse()) + "\n\n" + err[0] + "\n"
+        def line := `Error in source $lastSource from test $lastTest:$\n`
+        def l := [line] + err[1].reverse() + "" + err[0] + ""
+        stdout.receive("\n".join(l))
+
+    def updateScreen():
+        def counts := `completed/running/errors/total: $completed/$running/$errors/$total`
+        def info := ` Last source: $lastSource Last test: $lastTest`
+        stdout.receive(clearLine + counts + info)
 
     return object testDrain:
         to flowingFrom(fount):
             return testDrain
 
         to receive([k, test]):
+            total += 1
+            running += 1
+            updateScreen()
             def st :Str := M.toString(test)
-            return when (test <- (asserter(st))) ->
-                if (lastSource != k):
-                    stdout.receive(`$k$\n`)
-                    lastSource := k
-                stdout.receive(`    $st    OK$\n`)
+            return when (test<-(asserter(st))) ->
+                lastSource := k
+                lastTest := test
+                running -= 1
+                completed += 1
+                updateScreen()
             catch p:
                 asserter.addFail()
-                if (lastSource != k):
-                    stdout.receive(`$k$\n`)
-                    lastSource := k
-                stdout.receive(`    $st    FAIL$\n`)
-                def msg := formatError(unsealException(p, throw))
-                stdout.receive(msg + "\n")
+                formatError(unsealException(p, throw))
+
+                # Update the screen after formatting and printing the error;
+                # this way, we aren't left without a status update for a
+                # period of time. ~ C.
+                lastSource := k
+                lastTest := test
+                running -= 1
+                errors += 1
+                updateScreen()
 
         to flowStopped(reason):
             traceln(`flow stopped $reason`)
