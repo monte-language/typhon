@@ -135,6 +135,24 @@ object alterSink as DeepFrozen:
             to run(packet) :Vow[Void]:
                 return if (predicate(packet)) { sink(packet) } else { null }
 
+    to scan(f, var z, sink :Sink) :Sink:
+        "Accumulate a partial fold of `f` with `z` as the starting value."
+
+        var finished :Bool := false
+
+        return object scanSink extends sink as Sink:
+            to run(packet) :Vow[Void]:
+                def rv := sink(z)
+                z := f(z, packet)
+                return rv
+
+            to complete():
+                if (finished):
+                    throw("scanSink.complete/0: Already finished")
+                finished := true
+                return when (sink(z)) ->
+                    sink.complete()
+
 def testAlterSinkMap(assert):
     def [l, sink] := makeSink.asList()
     def mapSink := alterSink.map(fn x { x + 1 }, sink)
@@ -153,7 +171,20 @@ def testAlterSinkFilter(assert):
     return when (l) ->
         assert.equal(l, [0, 2, 4])
 
-unittest([testAlterSinkMap, testAlterSinkFilter])
+def testAlterSinkScan(assert):
+    def [l, sink] := makeSink.asList()
+    def scanSink := alterSink.scan(fn z, x { z + x }, 0, sink)
+    for i in ([1] * 10):
+        scanSink(i)
+    scanSink.complete()
+    return when (l) ->
+        assert.equal(l, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+unittest([
+    testAlterSinkMap,
+    testAlterSinkFilter,
+    testAlterSinkScan,
+])
 
 object alterSource as DeepFrozen:
     "A collection of decorative attachments for sources."
