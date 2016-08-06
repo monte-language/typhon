@@ -98,6 +98,23 @@ def makeFingerTreeClass(zero, add, measure):
     class Digit(object):
         _immutable_ = True
 
+        def split(self, predicate, i):
+            right = self.asList()
+            left = []
+            while right:
+                if len(right) == 1:
+                    return left, right[0], []
+                item = right.pop(0)
+                if self.depth:
+                    m = uneraseNode(item).measure
+                else:
+                    m = measure(uneraseValue(item))
+                i = add(i, m)
+                if predicate(i):
+                    return left, item, right
+                else:
+                    left.append(item)
+
     class One(Digit):
         def __init__(self, a, depth):
             self.a = a
@@ -255,6 +272,18 @@ def makeFingerTreeClass(zero, add, measure):
         def asList(self):
             return [self.a, self.b, self.c, self.d]
 
+    def listToDigit(l, depth):
+        size = len(l)
+        if size == 1:
+            return One(l[0], depth)
+        elif size == 2:
+            return Two(l[0], l[1], depth)
+        elif size == 3:
+            return Three(l[0], l[1], l[2], depth)
+        else:
+            assert size == 4, "divot"
+            return Four(l[0], l[1], l[2], l[3], depth)
+
     class FingerTree(object):
         _immutable_ = True
 
@@ -274,6 +303,15 @@ def makeFingerTreeClass(zero, add, measure):
 
         def add(self, other):
             return self._concat([], other)
+
+        def split(self, predicate):
+            if isinstance(self, Empty):
+                return self, self
+            elif predicate(self.measure):
+                left, item, right = self._split(predicate, zero)
+                return left, right._pushRight(item)
+            else:
+                return self, Empty(self.depth)
 
     class Empty(FingerTree):
 
@@ -302,6 +340,9 @@ def makeFingerTreeClass(zero, add, measure):
             for item in middle:
                 other = other._pushLeft(item)
             return other
+
+        def _split(self, predicate, i):
+            assert False, "egghead"
 
     class Single(FingerTree):
         _immutable_ = True
@@ -339,6 +380,9 @@ def makeFingerTreeClass(zero, add, measure):
                 other = other._pushLeft(item)
             return other._pushLeft(self.value)
 
+        def _split(self, predicate, i):
+            return Empty(self.depth), self.value, Empty(self.depth)
+
     class Deep(FingerTree):
         _immutable_ = True
 
@@ -346,6 +390,9 @@ def makeFingerTreeClass(zero, add, measure):
             assert tree.depth == depth + 1, "birch"
             assert left.depth == depth, "pine"
             assert right.depth == depth, "redwood"
+
+            assert isinstance(left, Digit), "sinister"
+            assert isinstance(right, Digit), "dexter"
 
             self.left = left
             self.tree = tree
@@ -426,6 +473,70 @@ def makeFingerTreeClass(zero, add, measure):
             else:
                 assert False, "willow"
 
+        def _split(self, predicate, i):
+            j = add(i, self.left.measure)
+            if predicate(j):
+                left, item, right = self.left.split(predicate, i)
+                if left:
+                    leftSplit = listToDigit(left, self.depth).asTree()
+                else:
+                    leftSplit = Empty(self.depth)
+                if right:
+                    rightSplit = Deep(listToDigit(right, self.depth),
+                                      self.tree, self.right, self.depth)
+                elif self.tree.isEmpty():
+                    rightSplit = self.right.asTree()
+                else:
+                    value, tree = self.tree._viewLeft()
+                    rightSplit = Deep(uneraseNode(value).asDigits(), tree,
+                                      self.right, self.depth)
+                return leftSplit, item, rightSplit
+            k = add(j, self.tree.measure)
+            if predicate(k):
+                leftTree, itemTree, rightTree = self.tree._split(predicate, j)
+                digits = uneraseNode(itemTree).asDigits()
+                leftList, item, rightList = digits.split(predicate,
+                        add(j, leftTree.measure))
+                if leftList:
+                    leftSplit = Deep(self.left, leftTree,
+                                     listToDigit(leftList, self.depth),
+                                     self.depth)
+                elif leftTree.isEmpty():
+                    leftSplit = self.left.asTree()
+                else:
+                    value, leftTree = leftTree._viewRight()
+                    leftSplit = Deep(self.left, leftTree,
+                                     uneraseNode(value).asDigits(),
+                                     self.depth)
+                if rightList:
+                    rightSplit = Deep(listToDigit(rightList, self.depth),
+                                      rightTree, self.right, self.depth)
+                elif rightTree.isEmpty():
+                    rightSplit = self.right.asTree()
+                else:
+                    value, rightTree = rightTree._viewLeft()
+                    rightSplit = Deep(uneraseNode(value).asDigits(),
+                                      rightTree, self.right, self.depth)
+                return leftSplit, item, rightSplit
+            else:
+                left, item, right = self.right.split(predicate, k)
+                if left:
+                    leftSplit = Deep(self.left, self.tree,
+                                     listToDigit(left, self.depth),
+                                     self.depth)
+                elif self.tree.isEmpty():
+                    leftSplit = self.left.asTree()
+                else:
+                    value, tree = self.tree._viewRight()
+                    leftSplit = Deep(self.left, tree,
+                                     uneraseNode(value).asDigits(),
+                                     self.depth)
+                if right:
+                    rightSplit = listToDigit(right, self.depth).asTree()
+                else:
+                    rightSplit = Empty(self.depth)
+                return leftSplit, item, rightSplit
+
     return Empty
 
 import random
@@ -455,6 +566,17 @@ for x in range(100):
         ft = ft.add(ft)
         print "*",
 print
+while not ft.isEmpty():
+    x, ft = ft.popRight()
+    print "-",
+print
+
+for x in range(100):
+    ft = ft.pushLeft(x)
+    print "+",
+for x in range(100):
+    left, right = ft.split(lambda i: i > x)
+    print "/",
 while not ft.isEmpty():
     x, ft = ft.popRight()
     print "-",
