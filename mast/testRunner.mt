@@ -22,6 +22,14 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
         def info := ` Last source: $lastSource Last test: $lastTest`
         stdout.receive(clearLine + counts + info)
 
+    def [p, r] := Ref.promise()
+
+    var complete :Bool := false
+    def maybeComplete():
+        if (complete && running == 0):
+            traceln(`complete!`)
+            r.resolve(null)
+
     return object testDrain:
         to flowingFrom(fount):
             return testDrain
@@ -37,6 +45,7 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
                 running -= 1
                 completed += 1
                 updateScreen()
+                maybeComplete()
             catch p:
                 formatError(unsealException(p, throw))
 
@@ -48,17 +57,21 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
                 running -= 1
                 errors += 1
                 updateScreen()
+                maybeComplete()
 
         to flowStopped(reason):
-            traceln(`flow stopped $reason`)
+            complete := true
 
         to flowAborted(reason):
-            traceln(`flow aborted $reason`)
+            complete := true
+
+        to completion():
+            return p
 
 def runTests(testInfo, testDrain, makeIterFount) as DeepFrozen:
     def fount := makeIterFount(testInfo)
     fount<-flowTo(testDrain)
-    return fount.completion()
+    return testDrain.completion()
 
 def makeAsserter() as DeepFrozen:
     var successes :Int := 0
