@@ -38,7 +38,6 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
                 completed += 1
                 updateScreen()
             catch p:
-                asserter.addFail()
                 formatError(unsealException(p, throw))
 
                 # Update the screen after formatting and printing the error;
@@ -84,9 +83,6 @@ def makeAsserter() as DeepFrozen:
         to fails() :Int:
             return fails
 
-        to addFail():
-            fails += 1
-
         to errors() :Map[Str, List[Str]]:
             return errors.snapshot()
 
@@ -105,6 +101,7 @@ def makeAsserter() as DeepFrozen:
                     if (todo):
                         logIt(label, `SILENCED (todo): $message`)
                     else:
+                        fails += 1
                         throw(logIt(label, message))
 
                 to todo(reason :Str):
