@@ -114,6 +114,7 @@ def makeFingerTreeClass(zero, add, measure):
                     return left, item, right
                 else:
                     left.append(item)
+            assert False, "spumoni"
 
     class One(Digit):
         def __init__(self, a, depth):
@@ -309,9 +310,16 @@ def makeFingerTreeClass(zero, add, measure):
                 return self, self
             elif predicate(self.measure):
                 left, item, right = self._split(predicate, zero)
-                return left, right._pushRight(item)
+                return left, right._pushLeft(item)
             else:
                 return self, Empty(self.depth)
+
+        def asList(self):
+            l = []
+            while not self.isEmpty():
+                value, self = self._viewLeft()
+                l.append(uneraseValue(value))
+            return l
 
     class Empty(FingerTree):
 
@@ -329,7 +337,7 @@ def makeFingerTreeClass(zero, add, measure):
         _pushRight = _pushLeft
 
         def _viewLeft(self):
-            return None, None
+            raise ValueError("rosewood")
 
         _viewRight = _viewLeft
 
@@ -342,7 +350,7 @@ def makeFingerTreeClass(zero, add, measure):
             return other
 
         def _split(self, predicate, i):
-            assert False, "egghead"
+            raise ValueError("egghead")
 
     class Single(FingerTree):
         _immutable_ = True
@@ -539,45 +547,45 @@ def makeFingerTreeClass(zero, add, measure):
 
     return Empty
 
-import random
-cls = makeFingerTreeClass(0, lambda x, y: x + y, lambda _: 1)
-ft = cls()
-for x in range(100):
-    ft = ft.pushRight(x)
-    print "+",
-    if random.random() > 0.80:
-        _, ft = ft.popLeft()
-        print "-",
-    if random.random() > 0.95:
-        ft = ft.add(ft)
-        print "*",
-print
-while not ft.isEmpty():
-    x, ft = ft.popLeft()
-    print "-",
-print
-for x in range(100):
-    ft = ft.pushLeft(x)
-    print "+",
-    if random.random() > 0.80:
-        _, ft = ft.popRight()
-        print "-",
-    if random.random() > 0.95:
-        ft = ft.add(ft)
-        print "*",
-print
-while not ft.isEmpty():
-    x, ft = ft.popRight()
-    print "-",
-print
-
-for x in range(100):
-    ft = ft.pushLeft(x)
-    print "+",
-for x in range(100):
-    left, right = ft.split(lambda i: i > x)
-    print "/",
-while not ft.isEmpty():
-    x, ft = ft.popRight()
-    print "-",
-print
+# import random
+# cls = makeFingerTreeClass(0, lambda x, y: x + y, lambda _: 1)
+# ft = cls()
+# for x in range(100):
+#     ft = ft.pushRight(x)
+#     print "+",
+#     if random.random() > 0.80:
+#         _, ft = ft.popLeft()
+#         print "-",
+#     if random.random() > 0.95:
+#         ft = ft.add(ft)
+#         print "*",
+# print
+# while not ft.isEmpty():
+#     x, ft = ft.popLeft()
+#     print "-",
+# print
+# for x in range(100):
+#     ft = ft.pushLeft(x)
+#     print "+",
+#     if random.random() > 0.80:
+#         _, ft = ft.popRight()
+#         print "-",
+#     if random.random() > 0.95:
+#         ft = ft.add(ft)
+#         print "*",
+# print
+# while not ft.isEmpty():
+#     x, ft = ft.popRight()
+#     print "-",
+# print
+# 
+# for x in range(100):
+#     ft = ft.pushLeft(x)
+#     print "+",
+# for x in range(100):
+#     left, right = ft.split(lambda i: i > x)
+#     print "/",
+# while not ft.isEmpty():
+#     x, ft = ft.popRight()
+#     print "-",
+# print

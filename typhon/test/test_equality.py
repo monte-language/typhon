@@ -17,7 +17,6 @@ from unittest import TestCase
 from rpython.rlib.rbigint import rbigint
 
 from typhon.objects.collections.lists import wrapList
-from typhon.objects.constants import NullObject
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.equality import EQUAL, INEQUAL, NOTYET, optSame
@@ -90,18 +89,18 @@ class TestOptSame(TestCase):
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListEqualityRecursionReflexive(self):
-        first = wrapList([IntObject(42), NullObject])
+        first = wrapList([IntObject(42)])
         # Hax.
-        first.strategy.second = first
+        first.fl = first.fl.pushRight(first)
         self.assertEqual(optSame(first, first), EQUAL)
 
     def testListEqualityRecursion(self):
-        first = wrapList([IntObject(42), NullObject])
+        first = wrapList([IntObject(42)])
         # Hax.
-        first.strategy.second = first
-        second = wrapList([IntObject(42), NullObject])
+        first.fl = first.fl.pushRight(first)
+        second = wrapList([IntObject(42)])
         # Hax.
-        second.strategy.second = first
+        second.fl = second.fl.pushRight(first)
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListInequality(self):
