@@ -104,9 +104,8 @@ def flow(source, sink) :Vow[Void] as DeepFrozen:
 
     object flowSink as Sink:
         to run(packet) :Vow[Void]:
-            return when (def rv := sink(packet)) ->
-                source<-(flowSink)
-                rv
+            return when (sink(packet)) ->
+                source(flowSink)
 
         to complete() :Void:
             r.resolve(null)
@@ -116,7 +115,7 @@ def flow(source, sink) :Vow[Void] as DeepFrozen:
             r.smash(problem)
             sink.abort(problem)
 
-    source<-(flowSink)
+    source(flowSink)
     return p
 
 def testFlow(assert):
