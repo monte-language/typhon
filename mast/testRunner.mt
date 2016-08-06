@@ -149,3 +149,17 @@ def makeAsserter() as DeepFrozen:
                         assert.fail("No exception was thrown")
                     catch _:
                         successes += 1
+
+                # These variants wait for their arguments to resolve before
+                # performing their work.
+
+                to willEqual(l, r):
+                    return when (l, r) ->
+                        assert.equal(l, r)
+                    catch problem:
+                        if (Ref.isBroken(l)):
+                            assert.fail(`Cannot be equal: Ref.isBroken($l)`)
+                        else if (Ref.isBroken(r)):
+                            assert.fail(`Cannot be equal: Ref.isBroken($r)`)
+                        else:
+                            assert.fail(`Problem: $problem`)
