@@ -151,7 +151,15 @@ def makeAsserter() as DeepFrozen:
                         successes += 1
 
                 # These variants wait for their arguments to resolve before
-                # performing their work.
+                # performing their work. As a result, they share the common
+                # theme that they will not run unless included in the
+                # dependency chains of promises returned from tests. ~ C.
+
+                to willBreak(x):
+                    return when (x) ->
+                        assert.fail(`Unbroken: !Ref.isBroken($x)`)
+                    catch _:
+                        successes += 1
 
                 to willEqual(l, r):
                     return when (l, r) ->

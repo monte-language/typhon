@@ -57,10 +57,18 @@ def testMakeSinkAsList(assert):
     def [l, sink] := makeSink.asList()
     return when (sink(1), sink(2), sink(3)) ->
         sink.complete()
-        when (l) ->
-            assert.equal(l, [1, 2, 3])
+        assert.willEqual(l, [1, 2, 3])
 
-unittest([testMakeSinkAsList])
+def testMakeSinkAsListAbort(assert):
+    def [l, sink] := makeSink.asList()
+    return when (sink(1), sink(2), sink(3)) ->
+        sink.abort("Testing")
+        assert.willBreak(l)
+
+unittest([
+    testMakeSinkAsList,
+    testMakeSinkAsListAbort,
+])
 
 object makeSource as DeepFrozen:
     "A maker of several types of sources."
@@ -82,8 +90,9 @@ def testMakeSourceFromIterable(assert):
     def [l, sink] := makeSink.asList()
     def source := makeSource.fromIterable([1, 2, 3])
     # One extra turn is required for completion to be delivered.
-    return when (l, promiseAllFulfilled([for _ in (0..3) source(sink)])) ->
-        assert.equal(l, [[0, 1], [1, 2], [2, 3]])
+    for _ in (0..3):
+        source(sink)
+    return assert.willEqual(l, [[0, 1], [1, 2], [2, 3]])
 
 unittest([testMakeSourceFromIterable])
 
@@ -113,8 +122,8 @@ def flow(source, sink) :Vow[Void] as DeepFrozen:
 def testFlow(assert):
     def [l, sink] := makeSink.asList()
     def source := makeSource.fromIterable([1, 2, 3])
-    return when (l, flow(source, sink)) ->
-        assert.equal(l, [[0, 1], [1, 2], [2, 3]])
+    return when (flow(source, sink)) ->
+        assert.willEqual(l, [[0, 1], [1, 2], [2, 3]])
 
 unittest([testFlow])
 
@@ -159,8 +168,7 @@ def testAlterSinkMap(assert):
     mapSink(1)
     mapSink(2)
     mapSink.complete()
-    return when (l) ->
-        assert.equal(l, [2, 3])
+    return assert.willEqual(l, [2, 3])
 
 def testAlterSinkFilter(assert):
     def [l, sink] := makeSink.asList()
@@ -168,8 +176,7 @@ def testAlterSinkFilter(assert):
     for i in (0..4):
         filterSink(i)
     filterSink.complete()
-    return when (l) ->
-        assert.equal(l, [0, 2, 4])
+    return assert.willEqual(l, [0, 2, 4])
 
 def testAlterSinkScan(assert):
     def [l, sink] := makeSink.asList()
@@ -177,8 +184,7 @@ def testAlterSinkScan(assert):
     for i in ([1] * 10):
         scanSink(i)
     scanSink.complete()
-    return when (l) ->
-        assert.equal(l, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    return assert.willEqual(l, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
 unittest([
     testAlterSinkMap,
@@ -205,14 +211,14 @@ def testAlterSourceMap(assert):
     def [l, sink] := makeSink.asList()
     def source := makeSource.fromIterable([1, 2, 3])
     def mapSource := alterSource.map(fn [_, snd] { snd }, source)
-    return when (l, flow(mapSource, sink)) ->
-        assert.equal(l, [1, 2, 3])
+    return when (flow(mapSource, sink)) ->
+        assert.willEqual(l, [1, 2, 3])
 
 def testAlterSourceFilter(assert):
     def [l, sink] := makeSink.asList()
     def source := makeSource.fromIterable([0, 1, 2, 3, 4])
     def filterSource := alterSource.filter(fn [_, x] { x % 2 == 0 }, source)
-    return when (l, flow(filterSource, sink)) ->
-        assert.equal(l, [0, 2, 4])
+    return when (flow(filterSource, sink)) ->
+        assert.willEqual(l, [0, 2, 4])
 
 unittest([testAlterSourceMap, testAlterSourceFilter])
