@@ -1,7 +1,8 @@
+import "lib/enum" =~ [=> makeEnum :DeepFrozen]
 import "unittest" =~ [=> unittest]
 exports (
-    Sink, Source,
-    makeSink, makeSource,
+    Sink, Source, Pump,
+    makeSink, makeSource, makePump,
     flow,
     alterSink, alterSource,
 )
@@ -126,6 +127,87 @@ def testFlow(assert):
 
 unittest([testFlow])
 
+interface Pump :DeepFrozen:
+    "A machine which emits zero or more packets for every incoming packet."
+
+    to run(packet) :Vow[List]:
+        "Consume `packet` and return a `Vow` which should resolve to a list of
+         zero or more packets."
+
+object _complete as DeepFrozen {}
+
+def pumpPair(pump :Pump) :Pair[Sink, Source] as DeepFrozen:
+    "Given `pump`, produce a sink which feeds packets into the pump and a
+     source which produces the pump's results."
+
+    # Packets that haven't been delivered, and sinks awaiting delivery. It is
+    # an invariant that, at the end of any given turn, at least one of these
+    # buffers is empty.
+    var packetBuffer :List := []
+    var sinkBuffer :List := []
+
+    # XXX implement a proper tristate variable somewhere
+    # XXX until then, null for not complete, _complete for complete, anything
+    # else for abort
+    var completion := null
+
+    def deliver() :Void:
+        traceln(`packetBuffer $packetBuffer sinkBuffer $sinkBuffer`)
+        def edge := packetBuffer.size().min(sinkBuffer.size())
+        for i in (0..!edge):
+            def packet := packetBuffer[i]
+            def [sink, r] := sinkBuffer[i]
+            when (sink<-(packet)) ->
+                r.resolve(null)
+        packetBuffer slice= (edge)
+        sinkBuffer slice= (edge)
+        traceln(`packetBuffer $packetBuffer sinkBuffer $sinkBuffer`)
+
+    def pumpSource(sink :Sink) :Vow[Void] as Source:
+        return switch (completion):
+            match ==null:
+                def [p, r] := Ref.promise()
+                sinkBuffer with= ([sink, r])
+                deliver()
+                p
+            match ==_complete:
+                sink<-complete()
+            match problem:
+                sink<-abort(problem)
+
+    object pumpSink as Sink:
+        to run(packet) :Vow[Void]:
+            return when (def packets := pump(packet)) ->
+                packetBuffer += packets
+                deliver()
+
+        to complete() :Void:
+            completion := true
+
+        to abort(problem) :Void:
+            completion := problem
+
+    return [pumpSink, pumpSource]
+
+object makePump as DeepFrozen:
+    "A maker of several types of pumps."
+
+    to filter(predicate) :Pump:
+        return def filterPump(packet) :List as Pump:
+            return if (predicate(packet)) { [packet] } else { [] }
+
+    to scan(f, var z) :Pump:
+        var first :Bool := true
+        return def scanPump(packet) :List as Pump:
+            return if (first):
+                first := false
+                # Sorry! ~ C.
+                [z, z := f(z)]
+            else:
+                def rv := z
+                z := f(z)
+                [rv]
+
 object alterSink as DeepFrozen:
     "A collection of decorative attachments for sinks."
 
@@ -139,27 +221,16 @@ object alterSink as DeepFrozen:
     to filter(predicate, sink :Sink) :Sink:
         "Filter packets coming into `sink` with the `predicate`."
 
-        return object filterSink extends sink as Sink:
-            to run(packet) :Vow[Void]:
-                return if (predicate(packet)) { sink(packet) } else { null }
+        def [filterSink, source] := pumpPair(makePump.filter(predicate))
+        flow(source, sink)
+        return filterSink
 
-    to scan(f, var z, sink :Sink) :Sink:
+    to scan(f, z, sink :Sink) :Sink:
         "Accumulate a partial fold of `f` with `z` as the starting value."
 
-        var finished :Bool := false
-
-        return object scanSink extends sink as Sink:
-            to run(packet) :Vow[Void]:
-                def rv := sink(z)
-                z := f(z, packet)
-                return rv
-
-            to complete():
-                if (finished):
-                    throw("scanSink.complete/0: Already finished")
-                finished := true
-                return when (sink(z)) ->
-                    sink.complete()
+        def [scanSink, source] := pumpPair(makePump.scan(f, z))
+        flow(source, sink)
+        return scanSink
 
 def testAlterSinkMap(assert):
     def [l, sink] := makeSink.asList()
@@ -203,8 +274,17 @@ object alterSource as DeepFrozen:
     to filter(predicate, source :Source) :Source:
         "Filter packets coming out of `source` with `predicate`."
 
-        return def filterSource(sink :Sink) :Vow[Void] as Source:
-            return source(alterSink.filter(predicate, sink))
+        def [filterSink, filterSource] := pumpPair(makePump.filter(predicate))
+        return def filteringSource(sink :Sink) :Vow[Void] as Source:
+            return when (source(filterSink), filterSource(sink)) -> { null }
+
+    to scan(f, z, source) :Source:
+        "Produce partial folds of `source` with function `f` and initial value
+         `z`."
+
+        def [scanSink, scanSource] := pumpPair(makePump.scan(f, z))
+        return def scanningSource(sink :Sink) :Vow[Void] as Source:
+            return when (source(scanSink), scanSource(sink)) -> { null }
 
 def testAlterSourceMap(assert):
     def [l, sink] := makeSink.asList()
