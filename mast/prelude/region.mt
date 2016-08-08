@@ -476,6 +476,10 @@ def region(loader):
                     return region([_makeTopSet(myType, left, leftClosed, right,
                                                rightClosed)])
 
+                to makeEmptyRegion():
+                    "Make the empty region."
+                    return region([])
+
 
     # The space cache. Hopefully this is not often-touched.
     def spaces := [].asMap().diverge()
@@ -515,18 +519,34 @@ def region(loader):
              ordered space containing `start` and `bound`."
 
             def space := _makeOrderedSpace.spaceOfValue(start)
-            # Closed on bottom but not on top.
-            return space.makeRegion(start, true, bound, false)
+            # If the start is not strictly less than the bound, then we take
+            # the m`LHS..!RHS` syntax to mean that the RHS should *definitely*
+            # be excluded, even if that means that there's next to nothing
+            # left on the LHS. Assume that some member M of the space
+            # satisfies m`LHS <= M && M < RHS`; but, if m`LHS >= RHS`, then at
+            # least one of those conditions is false. Therefore, M doesn't
+            # exist and the region is empty.
+            # Discussion: https://github.com/monte-language/typhon/issues/121
+            # ~ C.
+            return if (start >= bound):
+                space.makeEmptyRegion()
+            else:
+                # Closed on bottom but not on top.
+                space.makeRegion(start, true, bound, false)
 
-        to op__thru(start, stop):
+        to op__thru(start, bound):
             "The operator `start`..`bound`.
 
              This is equivalent to (space ≥ `start`) ∪ (space ≤ `bound`) for the
              ordered space containing `start` and `bound`."
 
             def space := _makeOrderedSpace.spaceOfValue(start)
-            # Closed on both ends.
-            return space.makeRegion(start, true, stop, true)
+            # By a similar logic as with op__till. ~ C.
+            return if (start > bound):
+                space.makeEmptyRegion()
+            else:
+                # Closed on both ends.
+                return space.makeRegion(start, true, bound, true)
 
 
     return [
