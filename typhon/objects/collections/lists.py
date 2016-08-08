@@ -320,7 +320,7 @@ class _EmptyCL(CL):
         raise IndexError
 
     def slice(self, start, stop):
-        raise IndexError
+        return self
 
     def replace(self, index, value):
         raise IndexError
