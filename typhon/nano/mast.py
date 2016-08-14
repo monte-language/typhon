@@ -1,8 +1,14 @@
 from rpython.rlib.rbigint import BASE10
 
 from typhon import nodes
+from typhon.errors import LoadFailed
 from typhon.nanopass import makeIR
 from typhon.quoting import quoteChar, quoteStr
+
+def saveScripts(ast):
+    ast = SanityCheck().visitExpr(ast)
+    ast = SaveScripts().visitExpr(ast)
+    return ast
 
 MastIR = makeIR("Mast",
     ["Noun"],
@@ -60,6 +66,16 @@ MastIR = makeIR("Mast",
     }
 )
 
+_SanityCheck = MastIR.makePassTo(MastIR)
+class SanityCheck(_SanityCheck):
+
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
+        if isinstance(patt, self.src.ViaPatt):
+            raise LoadFailed("via-patts not yet permitted in object-exprs")
+        return _SanityCheck.visitObjectExpr(self, doc, patt, auditors,
+                methods, matchers)
+
+
 SaveScriptIR = MastIR.extend("SaveScript", [],
     {
         "Expr": {
@@ -69,7 +85,6 @@ SaveScriptIR = MastIR.extend("SaveScript", [],
         },
     }
 )
-
 
 class SaveScripts(MastIR.makePassTo(SaveScriptIR)):
 

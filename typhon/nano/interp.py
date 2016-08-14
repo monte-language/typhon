@@ -10,7 +10,7 @@ from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
-from typhon.nano.mast import SaveScripts
+from typhon.nano.mast import saveScripts
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
                                 SEV_BINDING, SEV_NOUN, SEV_SLOT, layoutScopes,
                                 bindNouns)
@@ -542,7 +542,7 @@ def env2scope(outerNames, env):
 
 
 def evalMonte(expr, environment, fqnPrefix, inRepl=False):
-    ss = SaveScripts().visitExpr(expr)
+    ss = saveScripts(expr)
     slotted = recoverSlots(ss)
     ll, outerNames, topLocalNames, localSize = layoutScopes(slotted,
             environment.keys(), fqnPrefix, inRepl)

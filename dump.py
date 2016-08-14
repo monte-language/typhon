@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 import sys
-from typhon.errors import UserException
+from typhon.errors import LoadFailed, UserException
 from typhon.load.nano import InvalidMAST, loadMAST
-from typhon.nano.mast import SaveScripts
+from typhon.nano.mast import saveScripts
 from typhon.nano.scopes import layoutScopes, bindNouns
 from typhon.nano.slots import recoverSlots
 from typhon.nano.structure import refactorStructure, prettifyStructure
@@ -48,12 +48,16 @@ def entryPoint(argv):
         print "Invalid MAST"
         return 1
     try:
-        ss = SaveScripts().visitExpr(expr)
+        ss = saveScripts(expr)
         slotted = recoverSlots(ss)
         ll, _, _, _ = layoutScopes(slotted, safeScopeNames,
                                    path.decode("utf-8"), False)
         bound = bindNouns(ll)
         ast = refactorStructure(bound)
+    except LoadFailed as lf:
+        print "RPython-level exception; invalid AST"
+        print lf
+        return 1
     except UserException as ue:
         print "Monte-level exception while compiling:"
         print ue.formatError()
