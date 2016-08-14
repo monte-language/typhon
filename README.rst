@@ -11,14 +11,15 @@ How To Monte
 You will need Nix, either by dint of being on NixOS or by installing
 single-user Nix.
 
-Once you have Nix, you can build a complete toolchain by building the ``mt``
+Once you have Nix, you can build a complete toolchain by building the ``monte``
 target::
 
-    $ nix-build -A mt
+    $ nix-build -A monte
 
 Note: Translation is not cheap. It will require approximately 0.5GiB memory
 and 5min CPU time on a 64-bit x86 system to translate a non-JIT Typhon
-executable, or 1GiB memory and 15min CPU time with the JIT enabled.
+executable, or 1GiB memory and 15min CPU time with the JIT enabled. It will
+take another few minutes to build all of the Monte support libraries.
 
 For development, it can be useful to build only the VM::
 
