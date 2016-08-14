@@ -67,10 +67,11 @@ def envPaths(name):
         return val.split(':')
 
 
-libs = ["rt", "uv"]
+libs = ["uv"]
 # Issue 96: Darwin: Don't add nsl. ~ C.
+# ...or rt. ~ cdunklau
 if not sys.platform.startswith("darwin"):
-    libs.append("nsl")
+    libs.extend(["nsl", "rt"])
 eci = ExternalCompilationInfo(includes=["uv.h"],
                               include_dirs=envPaths("TYPHON_INCLUDE_PATH"),
                               library_dirs=envPaths("TYPHON_LIBRARY_PATH"),
