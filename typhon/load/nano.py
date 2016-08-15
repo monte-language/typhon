@@ -113,7 +113,27 @@ class MASTContext(object):
 
     def nextExprs(self, stream):
         size = stream.nextInt()
-        return [self.nextExpr(stream) for _ in range(size)]
+        rv = [self.nextExpr(stream) for _ in range(size)]
+        for expr in rv:
+            if not isinstance(expr, MastIR.Expr):
+                raise InvalidMAST("Expected expr")
+        return rv
+
+    def nextMethods(self, stream):
+        size = stream.nextInt()
+        rv = [self.nextExpr(stream) for _ in range(size)]
+        for method in rv:
+            if not isinstance(method, MastIR.MethodExpr):
+                raise InvalidMAST("Expected method")
+        return rv
+
+    def nextMatchers(self, stream):
+        size = stream.nextInt()
+        rv = [self.nextExpr(stream) for _ in range(size)]
+        for matcher in rv:
+            if not isinstance(matcher, MastIR.MatcherExpr):
+                raise InvalidMAST("Expected matcher")
+        return rv
 
     def nextPatt(self, stream):
         return self.pattAt(stream.nextInt())
@@ -255,14 +275,8 @@ class MASTContext(object):
             patt = self.nextPatt(stream)
             asExpr = self.nextExpr(stream)
             implements = self.nextExprs(stream)
-            methods = self.nextExprs(stream)
-            for method in methods:
-                if not isinstance(method, MastIR.MethodExpr):
-                    raise InvalidMAST("Expected method")
-            matchers = self.nextExprs(stream)
-            for matcher in matchers:
-                if not isinstance(matcher, MastIR.MatcherExpr):
-                    raise InvalidMAST("Expected matcher")
+            methods = self.nextMethods(stream)
+            matchers = self.nextMatchers(stream)
             self.exprs.append(MastIR.ObjectExpr(doc, patt,
                                                 [asExpr] + implements,
                                                 methods, matchers))
