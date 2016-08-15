@@ -109,7 +109,10 @@ class MASTContext(object):
             raise InvalidMAST("Pattern index %d is out of bounds" % index)
 
     def nextExpr(self, stream):
-        return self.exprAt(stream.nextInt())
+        expr = self.exprAt(stream.nextInt())
+        if not isinstance(expr, MastIR.Expr):
+            raise InvalidMAST("Expected expr")
+        return expr
 
     def nextExprs(self, stream):
         size = stream.nextInt()
