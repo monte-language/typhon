@@ -256,7 +256,13 @@ class MASTContext(object):
             asExpr = self.nextExpr(stream)
             implements = self.nextExprs(stream)
             methods = self.nextExprs(stream)
+            for method in methods:
+                if not isinstance(method, MastIR.MethodExpr):
+                    raise InvalidMAST("Expected method")
             matchers = self.nextExprs(stream)
+            for matcher in matchers:
+                if not isinstance(matcher, MastIR.MatcherExpr):
+                    raise InvalidMAST("Expected matcher")
             self.exprs.append(MastIR.ObjectExpr(doc, patt,
                                                 [asExpr] + implements,
                                                 methods, matchers))
