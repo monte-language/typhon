@@ -201,6 +201,9 @@ class RefOps(Object):
 
 @autohelp
 class WhenBrokenReactor(Object):
+    """
+    A reactor which delivers information about broken promises.
+    """
 
     def __init__(self, callback, ref, resolver, vat):
         self._cb = callback
@@ -215,21 +218,30 @@ class WhenBrokenReactor(Object):
     def run(self, unused):
         from typhon.objects.collections.maps import EMPTY_MAP
         if not isinstance(self._ref, Promise):
+            # Near refs can't possibly be broken.
             return
 
         if self._ref.state() is EVENTUAL:
             self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
                               EMPTY_MAP)
         elif self._ref.state() is BROKEN:
-            # XXX this could raise; we might need to reflect to user
-            outcome = self._cb.call(u"run", [self._ref])
-
-            if self._resolver is not None:
-                self._resolver.resolve(outcome)
+            try:
+                # Deliver the brokenness notification.
+                outcome = self._cb.call(u"run", [self._ref])
+                if self._resolver is not None:
+                    # Success.
+                    self._resolver.resolve(outcome)
+            except UserException as ue:
+                # Failure. Continue delivering failures.
+                from typhon.objects.exceptions import sealException
+                self._resolver.smash(sealException(ue))
 
 
 @autohelp
 class WhenResolvedReactor(Object):
+    """
+    A reactor which delivers information about resolved promises.
+    """
 
     done = False
 
