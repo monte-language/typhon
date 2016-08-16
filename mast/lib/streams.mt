@@ -43,7 +43,6 @@ object makeSink as DeepFrozen:
         object listSink as Sink:
             to run(packet) :Void:
                 l.push(packet)
-                return null
 
             to complete() :Void:
                 r.resolve(l.snapshot())
@@ -56,14 +55,14 @@ object makeSink as DeepFrozen:
 def testMakeSinkAsList(assert):
     def [l, sink] := makeSink.asList()
     return when (sink(1), sink(2), sink(3)) ->
-        sink.complete()
-        assert.willEqual(l, [1, 2, 3])
+        when (sink.complete()) ->
+            assert.willEqual(l, [1, 2, 3])
 
 def testMakeSinkAsListAbort(assert):
     def [l, sink] := makeSink.asList()
     return when (sink(1), sink(2), sink(3)) ->
-        sink.abort("Testing")
-        assert.willBreak(l)
+        when (sink.abort("Testing")) ->
+            assert.willBreak(l)
 
 unittest([
     testMakeSinkAsList,
@@ -104,18 +103,24 @@ def flow(source, sink) :Vow[Void] as DeepFrozen:
 
     object flowSink as Sink:
         to run(packet) :Vow[Void]:
+            # We must pass the packet to the sink, and not request another
+            # packet until we have completed delivery. However, we will cause
+            # a deep recursion on the promises if we return `source(flowSink)`
+            # directly. Instead, we return `null` as soon as delivery of
+            # *this* packet has finished. ~ C.
             return when (sink(packet)) ->
-                source(flowSink)
+                source<-(flowSink)
+                null
 
-        to complete() :Void:
+        to complete() :Vow[Void]:
             r.resolve(null)
-            sink.complete()
+            return sink.complete()
 
-        to abort(problem) :Void:
+        to abort(problem) :Vow[Void]:
             r.smash(problem)
-            sink.abort(problem)
+            return sink.abort(problem)
 
-    source(flowSink)
+    source<-(flowSink)
     return p
 
 def testFlow(assert):
@@ -156,7 +161,10 @@ def pumpPair(pump :Pump) :Pair[Sink, Source] as DeepFrozen:
         for i in (0..!edge):
             def packet := packetBuffer[i]
             def [sink, r] := sinkBuffer[i]
-            when (sink<-(packet)) -> { r.resolve(null) }
+            when (sink<-(packet)) ->
+                r.resolve(null)
+            catch problem:
+                r.smash(problem)
         packetBuffer slice= (edge)
         sinkBuffer slice= (edge)
 
@@ -171,12 +179,11 @@ def pumpPair(pump :Pump) :Pair[Sink, Source] as DeepFrozen:
             match ==_complete { sink<-complete() }
             match problem { sink<-abort(problem) }
         }
-        # Void.
-        return when (rv) -> { null }
+        return rv
 
     object pumpSink as Sink:
         to run(packet) :Vow[Void]:
-            return when (def packets := pump(packet)) ->
+            return when (def packets :Vow[List] := pump(packet)) ->
                 packetBuffer += packets
                 deliver()
 
