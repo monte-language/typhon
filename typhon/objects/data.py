@@ -635,7 +635,15 @@ def wrapInt(i):
 def isInt(obj):
     from typhon.objects.refs import resolution
     obj = resolution(obj)
-    return isinstance(obj, IntObject) or isinstance(obj, BigInt)
+    if isinstance(obj, IntObject):
+        return True
+    if isinstance(obj, BigInt):
+        try:
+            obj.bi.toint()
+            return True
+        except OverflowError:
+            return False
+    return False
 
 
 @autohelp
