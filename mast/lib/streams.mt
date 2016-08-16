@@ -167,6 +167,22 @@ def pumpPair(pump :Pump) :Pair[Sink, Source] as DeepFrozen:
                 r.smash(problem)
         packetBuffer slice= (edge)
         sinkBuffer slice= (edge)
+        # If we are complete and have no more packets, then we should let our
+        # sinks know. This should only cover sinks which were added to the
+        # sink buffer prior to our state change; sinks which arrive after the
+        # state change will be dispatched in `pumpSource`. ~ C.
+        if (packetBuffer.size() == 0):
+            switch (completion):
+                match ==_running:
+                    null
+                match ==_complete:
+                    for [sink, r] in (sinkBuffer):
+                        sink<-complete()
+                    sinkBuffer := []
+                match problem:
+                    for [sink, r] in (sinkBuffer):
+                        sink<-abort(problem)
+                    sinkBuffer := []
 
     def pumpSource(sink :Sink) :Vow[Void] as Source:
         def rv := switch (completion) {
@@ -198,6 +214,12 @@ def pumpPair(pump :Pump) :Pair[Sink, Source] as DeepFrozen:
 object makePump as DeepFrozen:
     "A maker of several types of pumps."
 
+    to id() :Pump:
+        "The identity pump."
+
+        return def idPump(packet) :List as Pump:
+            return [packet]
+
     to filter(predicate) :Pump:
         return def filterPump(packet) :List as Pump:
             return if (predicate(packet)) { [packet] } else { [] }
@@ -210,9 +232,66 @@ object makePump as DeepFrozen:
                 # Sorry! ~ C.
                 [z, z := f(z, packet)]
             else:
-                def rv := z
-                z := f(z, packet)
-                [rv]
+                # Okay, clearly not so sorry. ~ C.
+                [z := f(z, packet)]
+
+def testMakePumpId(assert):
+    def pump := makePump.id()
+    var l := []
+    for x in (0..4):
+        l += pump(x)
+    assert.equal(l, [0, 1, 2, 3, 4])
+
+def testMakePumpFilter(assert):
+    def pump := makePump.filter(fn x { x % 2 == 1 })
+    var l := []
+    for x in (0..5):
+        l += pump(x)
+    assert.equal(l, [1, 3, 5])
+
+def testMakePumpScan(assert):
+    def pump := makePump.scan(fn z, x { z + x }, 0)
+    var l := []
+    for x in (1..4):
+        l += pump(x)
+    assert.equal(l, [0, 1, 3, 6, 10])
+
+def testPumpPairSingle(assert):
+    def [sink, source] := pumpPair(makePump.id())
+    def [p, r] := Ref.promise()
+    object testSink as Sink:
+        to run(packet):
+            assert.equal(packet, 42)
+        to complete():
+            r.resolve(null)
+        to abort(problem):
+            r.smash(problem)
+    flow(source, testSink)
+    sink(42)
+    sink.complete()
+    return p
+
+def testPumpPairPostHoc(assert):
+    def [sink, source] := pumpPair(makePump.id())
+    def [p, r] := Ref.promise()
+    object testSink as Sink:
+        to run(packet):
+            assert.fail(`Didn't expect packet $packet`)
+        to complete():
+            r.resolve(null)
+        to abort(problem):
+            r.smash(problem)
+    flow(source, testSink)
+    sink.complete()
+    return p
+
+unittest([
+    testMakePumpId,
+    testMakePumpFilter,
+    testMakePumpScan,
+    testPumpPairSingle,
+    testPumpPairPostHoc,
+])
 
 object alterSink as DeepFrozen:
     "A collection of decorative attachments for sinks."
