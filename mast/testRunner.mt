@@ -12,8 +12,8 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
     var completed :Int := 0
     var errors :Int := 0
 
-    def formatError(err):
-        def line := `Error in source $lastSource from test $lastTest:$\n`
+    def formatError(err, source, test):
+        def line := `Error in source $source from test $test:$\n`
         def l := [line] + err[1].reverse() + ["", err[0], ""]
         stdout.receive("\n".join(l))
 
@@ -47,7 +47,7 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
                 updateScreen()
                 maybeComplete()
             catch p:
-                formatError(unsealException(p, throw))
+                formatError(unsealException(p, throw), k, test)
 
                 # Update the screen after formatting and printing the error;
                 # this way, we aren't left without a status update for a
