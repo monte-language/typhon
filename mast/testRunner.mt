@@ -183,4 +183,4 @@ def makeAsserter() as DeepFrozen:
                         else if (Ref.isBroken(r)):
                             assert.fail(`Cannot be equal: Ref.isBroken($r)`)
                         else:
-                            assert.fail(`Problem: $problem`)
+                            throw(problem)
