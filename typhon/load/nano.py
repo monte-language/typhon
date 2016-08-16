@@ -116,15 +116,11 @@ class MASTContext(object):
 
     def nextExprs(self, stream):
         size = stream.nextInt()
-        rv = [self.nextExpr(stream) for _ in range(size)]
-        for expr in rv:
-            if not isinstance(expr, MastIR.Expr):
-                raise InvalidMAST("Expected expr")
-        return rv
+        return [self.nextExpr(stream) for _ in range(size)]
 
     def nextMethods(self, stream):
         size = stream.nextInt()
-        rv = [self.nextExpr(stream) for _ in range(size)]
+        rv = [self.exprAt(stream.nextInt()) for _ in range(size)]
         for method in rv:
             if not isinstance(method, MastIR.MethodExpr):
                 raise InvalidMAST("Expected method")
@@ -132,7 +128,7 @@ class MASTContext(object):
 
     def nextMatchers(self, stream):
         size = stream.nextInt()
-        rv = [self.nextExpr(stream) for _ in range(size)]
+        rv = [self.exprAt(stream.nextInt()) for _ in range(size)]
         for matcher in rv:
             if not isinstance(matcher, MastIR.MatcherExpr):
                 raise InvalidMAST("Expected matcher")
