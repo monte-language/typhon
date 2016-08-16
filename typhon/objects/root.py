@@ -59,9 +59,8 @@ def addTrail(ue, target, atom, args):
             s = s[:39] + u"…"
         argStringList.append(s)
     argString = u", ".join(argStringList)
-    atomRepr = atom.repr.decode("utf-8")
-    ue.trail.append(u"In %s.%s [%s]:" % (target.toQuote(), atomRepr,
-                                         argString))
+    ue.trail.append(u"In %s.%s(%s):" % (target.toQuote(), atom.verb,
+                                        argString))
 
 class Object(object):
     """
