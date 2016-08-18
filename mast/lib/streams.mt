@@ -1,4 +1,5 @@
 import "unittest" =~ [=> unittest]
+import "lib/enum" =~ [=> makeEnum :DeepFrozen]
 exports (
     Sink, Source, Pump,
     makeSink, makeSource, makePump,
@@ -134,80 +135,100 @@ unittest([testFlow])
 interface Pump :DeepFrozen:
     "A machine which emits zero or more packets for every incoming packet."
 
-    to run(packet) :Vow[List]:
-        "Consume `packet` and return a `Vow` which should resolve to a list of
-         zero or more packets."
+    to run(packet) :List:
+        "Consume `packet` and return zero or more packets."
 
-object _complete as DeepFrozen {}
-object _running as DeepFrozen {}
+def [PumpState :DeepFrozen,
+     QUIET :DeepFrozen,
+     PACKETS :DeepFrozen,
+     SINKS :DeepFrozen,
+     CLOSING :DeepFrozen,
+     FINISHED :DeepFrozen,
+     ABORTED :DeepFrozen,
+] := makeEnum(["quiet", "packets", "sinks", "closing", "finished", "aborted"])
 
 def pumpPair(pump :Pump) :Pair[Sink, Source] as DeepFrozen:
     "Given `pump`, produce a sink which feeds packets into the pump and a
      source which produces the pump's results."
 
-    # Packets that haven't been delivered, and sinks awaiting delivery. It is
-    # an invariant that, at the end of any given turn, at least one of these
-    # buffers is empty.
-    var packetBuffer :List := []
-    var sinkBuffer :List := []
-
-    # XXX implement a proper tristate variable somewhere
-    # XXX until then, _running for not complete, _complete for complete, anything
-    # else for abort
-    var completion := _running
-
-    def deliver() :Void:
-        def edge := packetBuffer.size().min(sinkBuffer.size())
-        for i in (0..!edge):
-            def packet := packetBuffer[i]
-            def [sink, r] := sinkBuffer[i]
-            when (sink<-(packet)) ->
-                r.resolve(null)
-            catch problem:
-                r.smash(problem)
-        packetBuffer slice= (edge)
-        sinkBuffer slice= (edge)
-        # If we are complete and have no more packets, then we should let our
-        # sinks know. This should only cover sinks which were added to the
-        # sink buffer prior to our state change; sinks which arrive after the
-        # state change will be dispatched in `pumpSource`. ~ C.
-        if (packetBuffer.size() == 0):
-            switch (completion):
-                match ==_running:
-                    null
-                match ==_complete:
-                    for [sink, r] in (sinkBuffer):
-                        sink<-complete()
-                    sinkBuffer := []
-                match problem:
-                    for [sink, r] in (sinkBuffer):
-                        sink<-abort(problem)
-                    sinkBuffer := []
+    # The current state enum and the actual state variable.
+    var ps :PumpState := QUIET
+    # QUIET, FINISHED: null; PACKETS, CLOSING: list of packets; SINKS: list of
+    # sinks; ABORTED: problem
+    var state := null
 
     def pumpSource(sink :Sink) :Vow[Void] as Source:
-        def rv := switch (completion) {
-            match ==_running {
+        return switch (ps):
+            match ==QUIET:
                 def [p, r] := Ref.promise()
-                sinkBuffer with= ([sink, r])
-                deliver()
+                ps := SINKS
+                state := [[sink, r]]
                 p
-            }
-            match ==_complete { sink<-complete() }
-            match problem { sink<-abort(problem) }
-        }
-        return rv
+            match ==PACKETS:
+                def [packet] + packets := state
+                if (packets.size() == 0):
+                    ps := QUIET
+                    state := null
+                else:
+                    state := packets
+                sink<-(packet)
+            match ==SINKS:
+                def [p, r] := Ref.promise()
+                state with= ([sink, r])
+                p
+            match ==CLOSING:
+                def [packet] + packets := state
+                if (packets.size() == 0):
+                    ps := FINISHED
+                    state := null
+                else:
+                    state := packets
+                sink<-(packet)
+            match ==FINISHED:
+                sink<-complete()
+            match ==ABORTED:
+                sink<-abort(state)
 
     object pumpSink as Sink:
         to run(packet) :Vow[Void]:
-            return when (def packets :Vow[List] := pump(packet)) ->
-                packetBuffer += packets
-                deliver()
+            return switch (ps):
+                match ==QUIET:
+                    ps := PACKETS
+                    state := pump(packet)
+                    null
+                match ==PACKETS:
+                    state add= (pump(packet))
+                    null
+                match ==SINKS:
+                    def [[sink, r]] + sinks := state
+                    r.resolve(null)
+                    if (sinks.size() == 0):
+                        ps := QUIET
+                        state := null
+                    else:
+                        state := sinks
+                    sink<-(packet)
 
         to complete() :Void:
-            completion := _complete
+            switch (ps):
+                match ==QUIET:
+                    ps := FINISHED
+                match ==PACKETS:
+                    ps := CLOSING
+                match ==SINKS:
+                    ps := FINISHED
+                    for [sink, r] in (state):
+                        sink<-complete()
+                        r.resolve(null)
+                    state := null
 
         to abort(problem) :Void:
-            completion := problem
+            if (ps == SINKS):
+                for [sink, r] in (state):
+                    sink<-abort(problem)
+                    r.smash(problem)
+            ps := ABORTED
+            state := problem
 
     return [pumpSink, pumpSource]
 
