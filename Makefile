@@ -68,7 +68,8 @@ testVM: default
 testMast: default mast mast/tests/lexer.mast mast/tests/parser.mast \
 	mast/tests/auditors.mast mast/tests/fail-arg.mast mast/tests/expander.mast \
 	mast/tests/optimizer.mast mast/tests/flexMap.mast mast/tests/proptests.mast \
-        mast/tests/b.mast mast/tests/region.mast mast/tests/regressions.mast
+	mast/tests/b.mast mast/tests/region.mast mast/tests/regressions.mast \
+	mast/tests/promises.mast
 	$(MT_TYPHON) -l mast loader test all-tests
 
 test: testVM testMast

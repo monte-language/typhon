@@ -17,6 +17,7 @@ import "tests/flexMap" =~ _
 import "tests/lexer" =~ _
 import "tests/optimizer" =~ _
 import "tests/parser" =~ _
+import "tests/promises" =~ _
 import "tests/proptests" =~ _
 import "tests/region" =~ _
 import "tests/regressions" =~ _
