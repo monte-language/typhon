@@ -1,29 +1,7 @@
-{ system ? builtins.currentSystem, bakedVmSrc ? null, bakedMastSrc ? null }:
+{ system ? builtins.currentSystem, vmSrc, mastSrc }:
 let
   nixpkgs = import <nixpkgs> { inherit system; };
-  lib = nixpkgs.lib;
   libsodium0 = nixpkgs.libsodium.overrideDerivation (oldAttrs: {stripAllList = "lib";});
-  vmSrc = if (bakedVmSrc != null) then bakedVmSrc else
-    let loc = part: (toString ./..) + part;
-     in builtins.filterSource (path: type:
-      let p = toString path;
-       in (lib.hasPrefix (loc "/typhon/") p &&
-           (type == "directory" || lib.hasSuffix ".py" p)) ||
-        p == loc "/typhon" ||
-        p == loc "/main.py") ./..;
-  mastSrc = if (bakedMastSrc != null) then bakedMastSrc else
-    let loc = part: (toString ./..) + part;
-       in builtins.filterSource (path: type:
-        let p = toString path;
-         in ((lib.hasPrefix (loc "/mast/") p &&
-              (type == "directory" || lib.hasSuffix ".mt" p)) ||
-             (lib.hasPrefix (loc "/boot/") p &&
-              (type == "directory" || lib.hasSuffix ".ty" p || lib.hasSuffix ".mast" p)) ||
-          p == loc "/mast" ||
-          p == loc "/boot" ||
-          p == loc "/Makefile" ||
-          p == loc "/loader.mast" ||
-          p == loc "/repl.mast")) ./..;
   typhon = with nixpkgs; rec {
     typhonVm = callPackage ./vm.nix { vmSrc = vmSrc;
                                       buildJIT = false;

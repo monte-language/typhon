@@ -16,14 +16,14 @@ let
         ${python27}/bin/python ${mt-bake-py} &&
         ${nix.out}/bin/nix-build -E 'let lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
           typhon = import @out@/nix-support/typhon.nix {
-              bakedVmSrc = "${vmSrc}"; bakedMastSrc = "${mastSrc}"; };
+              vmSrc = "${vmSrc}"; mastSrc = "${mastSrc}"; };
             in typhon.montePackage lockSet'
     }
     doDockerBuild() {
         ${python27}/bin/python ${mt-bake-py} &&
         ${nix.out}/bin/nix-build -E 'let lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
           typhon = import @out@/nix-support/typhon.nix {
-              bakedVmSrc = "${vmSrc}"; bakedMastSrc = "${mastSrc}"; };
+              vmSrc = "${vmSrc}"; mastSrc = "${mastSrc}"; };
           in typhon.monteDockerPackage lockSet'
     }
   '' else "";
