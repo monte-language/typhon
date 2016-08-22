@@ -190,6 +190,10 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             ej = theThrower
         return guard.call(u"coerce", [specimen, ej])
 
+    def visitLiveExpr(self, obj):
+        # Ta-dah~
+        return obj
+
     def visitNullExpr(self):
         return NullObject
 
