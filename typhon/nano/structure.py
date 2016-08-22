@@ -9,7 +9,7 @@ from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
 from typhon.nano.mast import BuildKernelNodes
-from typhon.nano.scopes import BoundNounsIR
+from typhon.nano.auditors import DeepFrozenIR
 from typhon.objects.user import AuditClipboard
 from typhon.quoting import quoteChar, quoteStr
 
@@ -20,7 +20,7 @@ def refactorStructure(ast):
     ast = MakeProfileNames().visitExpr(ast)
     return ast
 
-SplitScriptIR = BoundNounsIR.extend("SplitScript", [],
+SplitScriptIR = DeepFrozenIR.extend("SplitScript", [],
     {
         "Expr": {
             "ObjectExpr": [("doc", None), ("patt", "Patt"),
@@ -34,7 +34,7 @@ SplitScriptIR = BoundNounsIR.extend("SplitScript", [],
     }
 )
 
-class SplitScript(BoundNounsIR.makePassTo(SplitScriptIR)):
+class SplitScript(DeepFrozenIR.makePassTo(SplitScriptIR)):
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
             layout):

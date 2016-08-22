@@ -10,6 +10,7 @@ from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
+from typhon.nano.auditors import dischargeAuditors
 from typhon.nano.mast import saveScripts
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
                                 SEV_BINDING, SEV_NOUN, SEV_SLOT, layoutScopes,
@@ -547,7 +548,8 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     ll, outerNames, topLocalNames, localSize = layoutScopes(slotted,
             environment.keys(), fqnPrefix, inRepl)
     bound = bindNouns(ll)
-    finalAST = refactorStructure(bound)
+    ast = dischargeAuditors(bound)
+    finalAST = refactorStructure(ast)
     result = NullObject
     outers = env2scope(outerNames, environment)
     e = Evaluator([], outers, localSize)
