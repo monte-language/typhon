@@ -166,8 +166,6 @@ class DischargeDF(_DischargeDF):
                         layout):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
-        methods = [self.visitMethod(method) for method in methods]
-        matchers = [self.visitMatcher(matcher) for matcher in matchers]
 
         # Search for DeepFrozen. Only outer names can refer to the true
         # DeepFrozen.
@@ -183,7 +181,12 @@ class DischargeDF(_DischargeDF):
                     if self.auditDeepFrozen(patt, layout):
                         # Success!
                         auditors[i] = self.dest.LiveExpr(deepFrozenStamp)
+                        # Also let all of our descendants know that we passed.
+                        for name in self.selfNames(patt):
+                            self.frameStack[-1][name] = True
 
+        methods = [self.visitMethod(method) for method in methods]
+        matchers = [self.visitMatcher(matcher) for matcher in matchers]
         return self.dest.ObjectExpr(doc, patt, auditors, methods, matchers,
                                     mast, layout)
         deepFrozenStamp
