@@ -255,7 +255,7 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
     def braces(self):
         return BraceContext(self)
 
-    def visitObjExpr(self, obj):
+    def visitLiveExpr(self, obj):
         s = obj.toString()
         self.write(u"meta.compiler().liveObject(%s)" % s)
 

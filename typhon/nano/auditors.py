@@ -69,7 +69,8 @@ deepFrozenSubsetGuards = {
 # NB: The only live exprs possible here are already DF, so we don't need to
 # audit them. Revisit this if/when necessary. ~ C.
 
-class DischargeDF(BoundNounsIR.makePassTo(DeepFrozenIR)):
+_DischargeDF = BoundNounsIR.makePassTo(DeepFrozenIR)
+class DischargeDF(_DischargeDF):
 
     def __init__(self):
         self.frameStack = [{}]
@@ -88,13 +89,13 @@ class DischargeDF(BoundNounsIR.makePassTo(DeepFrozenIR)):
 
     def visitMethod(self, method):
         self.pushFrame()
-        rv = super(DischargeDF, self).visitMethod(method)
+        rv = _DischargeDF.visitMethod(self, method)
         self.popFrame()
         return rv
 
     def visitMatcher(self, matcher):
         self.pushFrame()
-        rv = super(DischargeDF, self).visitMatcher(matcher)
+        rv = _DischargeDF.visitMatcher(self, matcher)
         self.popFrame()
         return rv
 
@@ -117,9 +118,8 @@ class DischargeDF(BoundNounsIR.makePassTo(DeepFrozenIR)):
             # Certain outer names are known to be unretractable guards for
             # subsets of DeepFrozen.
             return expr.name in deepFrozenSubsetGuards
-        elif not isinstance(expr, self.dest.NullExpr):
-            import pdb; pdb.set_trace()
-        return False
+        else:
+            return False
 
     def visitNounPatt(self, name, guard, index):
         guard = self.visitExpr(guard)
@@ -136,15 +136,30 @@ class DischargeDF(BoundNounsIR.makePassTo(DeepFrozenIR)):
         self.frameStack[-1][name] = self.isDeepFrozenGuard(guard)
         return self.dest.FinalBindingPatt(name, guard, index)
 
-    def auditDeepFrozen(self, layout):
+    def selfNames(self, patt):
+        """
+        Retrieve the names from this patt which can be used self-referentially
+        without invalidating DeepFrozen.
+        """
+
+        if (isinstance(patt, self.dest.NounPatt) or
+            isinstance(patt, self.dest.FinalSlotPatt) or
+            isinstance(patt, self.dest.FinalBindingPatt)):
+            return [patt.name]
+        else:
+            return []
+
+    def auditDeepFrozen(self, patt, layout):
+        selfNames = self.selfNames(patt)
         for outerName in layout.outerNames.keys():
             if outerName not in deepFrozenOuterNames:
                 return False
         for frameName in layout.frameNames.keys():
-            print frameName
-            if not self.searchFrames(frameName):
-                import pdb; pdb.set_trace()
-                return False
+            # Check the relatively short list of self-names first.
+            if frameName not in selfNames:
+                # Now search the rest of the frame.
+                if not self.searchFrames(frameName):
+                    return False
         return True
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
@@ -165,8 +180,7 @@ class DischargeDF(BoundNounsIR.makePassTo(DeepFrozenIR)):
 
             if isinstance(auditor, self.dest.OuterExpr):
                 if auditor.name == u"DeepFrozen":
-                    import pdb; pdb.set_trace()
-                    if self.auditDeepFrozen(layout):
+                    if self.auditDeepFrozen(patt, layout):
                         # Success!
                         auditors[i] = self.dest.LiveExpr(deepFrozenStamp)
 
