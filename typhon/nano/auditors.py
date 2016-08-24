@@ -11,16 +11,14 @@ def dischargeAuditors(ast):
     ast = DischargeDF().visitExpr(ast)
     return ast
 
-# NB: LiveExpr is only introduced here, and not in an earlier pass, out of a
-# desire to keep it scoped to where it is necessary. In particular, I would
-# like LiveExpr, which is the only expr that can carry a live user-defined
-# Monte object, to stay as far away from the initial code loading as possible.
-# Please move it to earlier passes as necessary. ~ C.
-
-DeepFrozenIR = BoundNounsIR.extend("DeepFrozen", [],
+DeepFrozenIR = BoundNounsIR.extend("DeepFrozen",
+    ["Object"],
     {
         "Expr": {
-            "LiveExpr": [("obj", None)],
+            "ObjectExpr": [("doc", None), ("patt", "Patt"),
+                           ("stamps", "Object*"), ("auditors", "Expr*"),
+                           ("methods", "Method*"), ("matchers", "Matcher*"),
+                           ("mast", None), ("layout", None)],
         },
     }
 )
@@ -169,6 +167,8 @@ class DischargeDF(_DischargeDF):
 
         # Search for DeepFrozen. Only outer names can refer to the true
         # DeepFrozen.
+        stamps = []
+        index = -1
         for i, auditor in enumerate(auditors):
             # DeepFrozen.get().get() -> DeepFrozen.get()
             auditor = self.unwrappingGet(auditor)
@@ -180,13 +180,28 @@ class DischargeDF(_DischargeDF):
                 if auditor.name == u"DeepFrozen":
                     if self.auditDeepFrozen(patt, layout):
                         # Success!
-                        auditors[i] = self.dest.LiveExpr(deepFrozenStamp)
+                        index = i
                         # Also let all of our descendants know that we passed.
                         for name in self.selfNames(patt):
                             self.frameStack[-1][name] = True
 
+        if index == -1:
+            stamps = []
+        else:
+            if index == 0:
+                # If it's the as-auditor, then we need to *not* just discard
+                # the auditor, but copy it into the pattern as the guard.
+                patt.guard = auditors[0]
+
+            stamps = [deepFrozenStamp]
+            # Ah, the joys of RPython.
+            start = index
+            stop = start + 1
+            assert start >= 0
+            assert stop >= 0
+            auditors = auditors[:start] + auditors[stop:]
+
         methods = [self.visitMethod(method) for method in methods]
         matchers = [self.visitMatcher(matcher) for matcher in matchers]
-        return self.dest.ObjectExpr(doc, patt, auditors, methods, matchers,
-                                    mast, layout)
-        deepFrozenStamp
+        return self.dest.ObjectExpr(doc, patt, stamps, auditors, methods,
+                                    matchers, mast, layout)

@@ -31,6 +31,7 @@ from typhon.objects.root import Object
 from typhon.objects.slots import (Binding, FinalSlot, VarSlot, finalBinding,
                                   varBinding)
 from typhon.objects.user import UserObjectHelper
+from typhon.profile import profileTyphon
 
 RUN_2 = getAtom(u"run", 2)
 
@@ -66,6 +67,7 @@ class InterpObject(Object):
         self.script = script
         self.frame = frame
         self.outers = outers
+
         self.report = None
 
     def docString(self):
@@ -73,6 +75,28 @@ class InterpObject(Object):
 
     def getDisplayName(self):
         return self.displayName
+
+    # Justified by the immutability of stamps on the script. ~ C.
+    @unroll_safe
+    @profileTyphon("_auditedBy.run/2")
+    def auditedBy(self, prospect):
+        """
+        Whether the prospect has stamped or audited this object.
+        """
+
+        # Same reasoning as in t.o.root.
+        prospect = promote(prospect)
+
+        # Note that the identity check used here by default will only work for
+        # stamps which are process-global. Presumably, this functionality will
+        # only cover DeepFrozenStamp, Selfless, and TransparentStamp at first,
+        # but it could eventually justify promotion to a proper set built in
+        # t.n.structure. ~ C.
+        if prospect in self.script.stamps:
+            return True
+
+        # super().
+        return Object.auditedBy(self, prospect)
 
     @unroll_safe
     def getMethod(self, atom):
@@ -281,6 +305,15 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         else:
             return self.visitExpr(alt)
 
+    def selfGuard(self, patt):
+        if (isinstance(patt, self.src.FinalBindingPatt) or
+            isinstance(patt, self.src.VarBindingPatt) or
+            isinstance(patt, self.src.FinalSlotPatt) or
+            isinstance(patt, self.src.VarSlotPatt)):
+            if not isinstance(patt.guard, self.src.NullExpr):
+                return self.visitExpr(patt.guard)
+        return anyGuard
+
     # Everything passed to this method, except self, is immutable. ~ C.
     @unroll_safe
     def visitClearObjectExpr(self, doc, patt, script, layout):
@@ -319,19 +352,20 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         position = layout.positionOf(objName)
 
         # Set up the self-binding.
+        selfGuard = self.selfGuard(patt)
         if isinstance(patt, self.src.IgnorePatt):
             b = NULL_BINDING
         elif isinstance(patt, self.src.FinalBindingPatt):
-            b = finalBinding(val, anyGuard)
+            b = finalBinding(val, selfGuard)
             self.locals[patt.index] = b
         elif isinstance(patt, self.src.VarBindingPatt):
-            b = varBinding(val, anyGuard)
+            b = varBinding(val, selfGuard)
             self.locals[patt.index] = b
         elif isinstance(patt, self.src.FinalSlotPatt):
-            b = FinalSlot(val, anyGuard)
+            b = FinalSlot(val, selfGuard)
             self.locals[patt.index] = b
         elif isinstance(patt, self.src.VarSlotPatt):
-            b = VarSlot(val, anyGuard)
+            b = VarSlot(val, selfGuard)
             self.locals[patt.index] = b
         elif isinstance(patt, self.src.NounPatt):
             b = val
@@ -348,8 +382,8 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     # immutable. Clipboards are not a problem since their loops are
     # internalized in methods. ~ C.
     @unroll_safe
-    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout,
-                        clipboard):
+    def visitObjectExpr(self, doc, patt, auditors, script, mast,
+                        layout, clipboard):
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
         else:
