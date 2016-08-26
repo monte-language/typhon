@@ -83,6 +83,10 @@ class FlexList(Object):
                 printer.call(u"print", [StrObject(u", ")])
         printer.call(u"print", [StrObject(u"].diverge()")])
 
+    @method("Bool")
+    def empty(self):
+        return self.strategy.size(self) == 0
+
     @method("List", "List")
     def join(self, pieces):
         l = []
@@ -663,6 +667,10 @@ class ConstList(Object):
         # Cache this success; we can't become unsettled.
         self._isSettled = True
         return True
+
+    @method("Bool")
+    def empty(self):
+        return self.strategy.size() == 0
 
     @method("CL", "CL")
     @profileTyphon("List.add/1")

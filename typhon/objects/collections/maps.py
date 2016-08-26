@@ -124,6 +124,10 @@ class ConstMap(Object):
                 return False
         return True
 
+    @method.py("Bool")
+    def empty(self):
+        return not self.objectMap
+
     @method("Set")
     def asSet(self):
         # COW optimization.
@@ -260,13 +264,6 @@ class ConstMap(Object):
         # the functions on this map to not alter the map.
         return self.objectMap
 
-    def empty(self):
-        """
-        Whether this is the empty map.
-        """
-
-        return len(self.objectMap) == 0
-
     def extractStringKey(self, k, default):
         """
         Extract a string key from this map. On failure, return `default`.
@@ -323,6 +320,10 @@ class FlexMap(Object):
 
     def toString(self):
         return toString(self)
+
+    @method("Bool")
+    def empty(self):
+        return not self.objectMap
 
     @method("Void", "Any", "Any")
     def put(self, key, value):

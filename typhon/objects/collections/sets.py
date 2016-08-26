@@ -76,6 +76,10 @@ class ConstSet(Object):
         from typhon.objects.collections.lists import listIterator
         return listIterator(self.objectSet.keys())
 
+    @method("Bool")
+    def empty(self):
+        return not self.objectSet
+
     @method("Bool", "Any")
     def contains(self, needle):
         """
@@ -218,6 +222,10 @@ class FlexSet(Object):
     def _makeIterator(self):
         from typhon.objects.collections.lists import listIterator
         return listIterator(self.objectSet.keys())
+
+    @method("Bool")
+    def empty(self):
+        return not self.objectSet
 
     @method("Bool", "Any")
     def contains(self, needle):
