@@ -17,7 +17,8 @@ from rpython.rlib.rarithmetic import intmask
 from typhon.autohelp import autohelp, method
 from typhon.errors import WrongType, userError
 from typhon.objects.collections.helpers import monteSet
-from typhon.objects.data import StrObject
+from typhon.objects.comparison import Incomparable
+from typhon.objects.data import IntObject, StrObject
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
@@ -194,6 +195,31 @@ class ConstSet(Object):
             return d
         else:
             return self.objectSet
+
+    @method("Any", "Set")
+    def op__cmp(self, other):
+        """
+        Perform a subset comparison.
+        """
+
+        if len(self.objectSet) < len(other):
+            smaller = self.objectSet
+            larger = other
+        else:
+            smaller = other
+            larger = self.objectSet
+
+        for item in smaller.keys():
+            if item not in larger:
+                return Incomparable
+
+        # smaller is a subset of larger.
+        if len(self.objectSet) == len(other):
+            return IntObject(0)
+        elif len(self.objectSet) < len(other):
+            return IntObject(-1)
+        else:
+            return IntObject(1)
 
 
 @autohelp
