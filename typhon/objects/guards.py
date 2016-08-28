@@ -56,6 +56,9 @@ class BoolGuard(Guard):
     This guard is unretractable.
     """
 
+    def toString(self):
+        return u"Bool"
+
     def subCoerce(self, specimen):
         if specimen is TrueObject or specimen is FalseObject:
             return specimen
@@ -69,6 +72,9 @@ class StrGuard(Guard):
 
     This guard is unretractable.
     """
+
+    def toString(self):
+        return u"Str"
 
     def subCoerce(self, specimen):
         if isinstance(specimen, StrObject):
@@ -84,6 +90,9 @@ class DoubleGuard(Guard):
     This guard is unretractable.
     """
 
+    def toString(self):
+        return u"Double"
+
     def subCoerce(self, specimen):
         if isinstance(specimen, DoubleObject):
             return specimen
@@ -97,6 +106,9 @@ class CharGuard(Guard):
 
     This guard is unretractable.
     """
+
+    def toString(self):
+        return u"Char"
 
     def subCoerce(self, specimen):
         if isinstance(specimen, CharObject):
@@ -112,6 +124,9 @@ class BytesGuard(Guard):
     This guard is unretractable.
     """
 
+    def toString(self):
+        return u"Bytes"
+
     def subCoerce(self, specimen):
         if isinstance(specimen, BytesObject):
             return specimen
@@ -125,6 +140,9 @@ class IntGuard(Guard):
 
     This guard is unretractable.
     """
+
+    def toString(self):
+        return u"Int"
 
     def subCoerce(self, specimen):
         if (isinstance(specimen, IntObject) or
@@ -161,8 +179,8 @@ class AnyGuard(Object):
     This guard is unretractable.
     """
 
-    def printOn(self, out):
-        out.call(u"print", [StrObject(u"Any")])
+    def toString(self):
+        return u"Any"
 
     @method("Any", "Any", "Any")
     def coerce(self, specimen, ej):
@@ -248,6 +266,9 @@ class FinalSlotGuard(Guard):
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
 
+    def toString(self):
+        return u"FinalSlot[%s]" % (self.valueGuard.toString(),)
+
     def auditorStamps(self):
         if self.valueGuard.auditedBy(deepFrozenStamp):
             return asSet([deepFrozenStamp, selfless, transparentStamp])
@@ -291,6 +312,9 @@ class VarSlotGuard(Guard):
 
     def __init__(self, valueGuard):
         self.valueGuard = valueGuard
+
+    def toString(self):
+        return u"VarSlot[%s]" % (self.valueGuard.toString(),)
 
     def auditorStamps(self):
         if self.valueGuard.auditedBy(deepFrozenStamp):
@@ -389,6 +413,9 @@ class BindingGuard(Guard):
     A guard which admits bindings.
     """
 
+    def toString(self):
+        return u"Binding"
+
     def subCoerce(self, specimen):
         from typhon.objects.slots import Binding
         if isinstance(specimen, Binding):
@@ -447,8 +474,8 @@ class SameGuardMaker(Object):
     == x`.
     """
 
-    def printOn(self, out):
-        out.call(u"print", [StrObject(u"Same")])
+    def toString(self):
+        return u"Same"
 
     @method("Any", "Any")
     def get(self, guard):
