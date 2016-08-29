@@ -11,16 +11,15 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-import "boot" =~ [=> DeepFrozenStamp]
 import "unittest" =~ [=> unittest]
 exports (::"``")
 
-object LITERAL {}
-object PATTERN_HOLE {}
-object VALUE_HOLE {}
+object LITERAL as DeepFrozen {}
+object PATTERN_HOLE as DeepFrozen {}
+object VALUE_HOLE as DeepFrozen {}
 
-def makeString(chunks):
-    return object stringMaker as DeepFrozenStamp:
+def makeString(chunks :DeepFrozen) as DeepFrozen:
+    return object stringMaker as DeepFrozen:
         to substitute(values) :Str:
             def rv := [].diverge()
             for chunk in (chunks):
@@ -34,7 +33,7 @@ def makeString(chunks):
             return "".join(rv.snapshot())
 
 
-object ::"``" as DeepFrozenStamp:
+object ::"``" as DeepFrozen:
     "A quasiparser of Unicode strings.
 
      This object is the default quasiparser. It can interpolate any object
