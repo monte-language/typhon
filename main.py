@@ -195,6 +195,10 @@ def runTyphon(argv):
     except LoadFailed as lf:
         print lf
         return 1
+    except UserException as ue:
+        debug_print("Caught exception while importing prelude:",
+                ue.formatError())
+        return 1
 
     registerGlobals(prelude)
 
