@@ -290,10 +290,12 @@ def safeScope():
         u"Any": anyGuard,
         u"Binding": BindingGuard(),
         u"DeepFrozen": deepFrozenGuard,
+        u"FinalSlot": theFinalSlotGuardMaker,
         u"Near": NearGuard(),
         u"Same": sameGuardMaker,
         u"Selfless": selfless,
         u"SubrangeGuard": subrangeGuardMaker,
+        u"VarSlot": theVarSlotGuardMaker,
 
         u"M": MObject(),
         u"Ref": RefOps(),

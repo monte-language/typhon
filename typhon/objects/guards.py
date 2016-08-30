@@ -343,6 +343,9 @@ class FinalSlotGuardMaker(Guard):
     A guard which emits makers of FinalSlots.
     """
 
+    def toString(self):
+        return u"FinalSlot"
+
     @method("Any", "Any", "Any")
     def extractGuard(self, specimen, ej):
         if specimen is self:
@@ -377,6 +380,9 @@ class VarSlotGuardMaker(Guard):
     """
     A guard which admits makers of VarSlots.
     """
+
+    def toString(self):
+        return u"VarSlot"
 
     @method("Any", "Any", "Any")
     def extractGuard(self, specimen, ej):
