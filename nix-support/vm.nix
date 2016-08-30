@@ -32,14 +32,14 @@ stdenv.mkDerivation {
   # We do still have the check phase, but we do the untranslated test before
   # we attempt translation.
   doCheck = true;
-  checkPhase = "trial typhon.test";
+  checkPhase = "trial typhon";
   buildPhase = ''
     source $stdenv/setup
     mkdir -p ./rpython/_cache
     cp -r ${pypySrc}/rpython .
     cp -r $src/main.py .
     # Run the tests.
-    trial typhon.test
+    trial typhon
     # Do the actual translation.
     ${python27}/bin/python -mrpython ${optLevel} main.py
     '';
