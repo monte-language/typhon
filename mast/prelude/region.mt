@@ -1,8 +1,9 @@
 # Module sugar cannot be used here since we are replacing names we received from preludeScope.
 def region(loader):
-    def DeepFrozenStamp := loader."import"("boot")["DeepFrozenStamp"]
-    def TransparentStamp := loader."import"("boot")["TransparentStamp"]
-    def cmpInf(left, right) as DeepFrozenStamp:
+    def DeepFrozenStamp :DeepFrozen := loader."import"("boot")["DeepFrozenStamp"]
+    def TransparentStamp :DeepFrozen := loader."import"("boot")["TransparentStamp"]
+
+    def cmpInf(left, right) as DeepFrozen:
         "Compare, but treat `null` as -∞ on the left and ∞ on the right."
 
         # -∞ is smaller than anything else.
@@ -118,7 +119,7 @@ def region(loader):
     # edgelist, these regions use a closed-open endpoint representation, with a
     # simpler composition.
     def _makeOrderedRegion(guard :DeepFrozen, myName :Str,
-                           topSets :List[DeepFrozen]) as DeepFrozenStamp:
+                           topSets :List[DeepFrozen]) as DeepFrozen:
         "Make regions for sets of objects with total ordering."
 
         def region(newTopSets) as DeepFrozenStamp:
