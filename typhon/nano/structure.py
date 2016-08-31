@@ -9,7 +9,7 @@ from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
 from typhon.nano.mast import BuildKernelNodes
-from typhon.nano.scopes import BoundNounsIR
+from typhon.nano.auditors import DeepFrozenIR
 from typhon.objects.user import AuditClipboard
 from typhon.quoting import quoteChar, quoteStr
 
@@ -20,7 +20,7 @@ def refactorStructure(ast):
     ast = MakeProfileNames().visitExpr(ast)
     return ast
 
-SplitScriptIR = BoundNounsIR.extend("SplitScript", [],
+SplitScriptIR = DeepFrozenIR.extend("SplitScript", [],
     {
         "Expr": {
             "ObjectExpr": [("doc", None), ("patt", "Patt"),
@@ -28,21 +28,21 @@ SplitScriptIR = BoundNounsIR.extend("SplitScript", [],
                            ("mast", None), ("layout", None)],
         },
         "Script": {
-            "ScriptExpr": [("methods", "Method*"),
+            "ScriptExpr": [("stamps", "Object*"), ("methods", "Method*"),
                            ("matchers", "Matcher*")],
         },
     }
 )
 
-class SplitScript(BoundNounsIR.makePassTo(SplitScriptIR)):
+class SplitScript(DeepFrozenIR.makePassTo(SplitScriptIR)):
 
-    def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
-            layout):
+    def visitObjectExpr(self, doc, patt, stamps, auditors, methods, matchers,
+                        mast, layout):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         methods = [self.visitMethod(method) for method in methods]
         matchers = [self.visitMatcher(matcher) for matcher in matchers]
-        script = self.dest.ScriptExpr(methods, matchers)
+        script = self.dest.ScriptExpr(stamps, methods, matchers)
         return self.dest.ObjectExpr(doc, patt, auditors, script, mast, layout)
 
 AtomIR = SplitScriptIR.extend("Atom", [],
@@ -153,7 +153,7 @@ class MakeProfileNames(_MakeProfileNames):
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
         rv = _MakeProfileNames.visitClearObjectExpr(self, doc, patt, script,
-                layout)
+                                                    layout)
         self.objectNames.pop()
         return rv
 
@@ -167,7 +167,8 @@ class MakeProfileNames(_MakeProfileNames):
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
         rv = _MakeProfileNames.visitObjectExpr(self, doc, patt, auditors,
-                script, mast, layout, clipboard)
+                                               script, mast, layout,
+                                               clipboard)
         self.objectNames.pop()
         return rv
 
@@ -355,10 +356,11 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         with self.braces():
             self.visitScript(script)
 
-    def visitObjectExpr(self, doc, patt, auditors, script, mast,
-                        layout, clipboard):
+    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout,
+                        clipboard):
         self.write(u"object ")
         self.visitPatt(patt)
+        assert auditors, "pacify"
         if auditors and not isinstance(auditors[0], self.src.NullExpr):
             self.write(u" as ")
             self.visitExpr(auditors[0])
@@ -498,7 +500,11 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(body)
 
-    def visitScriptExpr(self, methods, matchers):
+    def visitScriptExpr(self, stamps, methods, matchers):
+        if stamps:
+            self.write(u"stamps ⌠")
+            self.write(u" ".join([stamp.toString() for stamp in stamps]))
+            self.writeLine(u"⌡;")
         # Newlines after every method/matcher, except for the final one in the
         # script. Tricky.
         if methods:

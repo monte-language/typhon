@@ -3,6 +3,7 @@
 import sys
 from typhon.errors import LoadFailed, UserException
 from typhon.load.nano import InvalidMAST, loadMAST
+from typhon.nano.auditors import dischargeAuditors
 from typhon.nano.mast import saveScripts
 from typhon.nano.scopes import layoutScopes, bindNouns
 from typhon.nano.slots import recoverSlots
@@ -53,7 +54,8 @@ def entryPoint(argv):
         ll, _, _, _ = layoutScopes(slotted, safeScopeNames,
                                    path.decode("utf-8"), False)
         bound = bindNouns(ll)
-        ast = refactorStructure(bound)
+        ast = dischargeAuditors(bound)
+        ast = refactorStructure(ast)
     except LoadFailed as lf:
         print "RPython-level exception; invalid AST"
         print lf

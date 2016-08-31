@@ -100,7 +100,7 @@ class ScopeBase(object):
         """
 
         for child in self.children:
-            scope, idx, severity = child.find(name)
+            scope, idx, severity = child.find(name, False)
             if scope is not None:
                 return scope, idx, severity
         raise scopeError(self, u"Impossibility in findChild")
@@ -142,7 +142,7 @@ class ScopeOuter(ScopeBase):
             if sev.asInt < severity.asInt:
                 self.outers[name] = index, severity
 
-    def find(self, name):
+    def find(self, name, autoClose):
         if name in self.outers:
             index, severity = self.outers[name]
             return SCOPE_OUTER, index, severity
@@ -168,17 +168,19 @@ class ScopeFrame(ScopeBase):
     def deepen(self, name, severity):
         self.next.deepen(name, severity)
 
-    def find(self, name):
-        scope, idx, severity = self.next.find(name)
-        if scope is None:
-            return scope, idx, severity
+    def find(self, name, autoClose):
+        scope, idx, severity = self.next.find(name, autoClose)
         if scope is SCOPE_OUTER:
             self.outerNames[name] = (idx, severity)
             return scope, idx, severity
-        if name not in self.frameNames:
+        elif autoClose and name not in self.frameNames:
             self.frameNames[name] = (len(self.frameNames), scope, idx,
                                      severity)
-        return SCOPE_FRAME, self.frameNames[name][0], severity
+            return SCOPE_FRAME, self.frameNames[name][0], severity
+        elif name in self.frameNames:
+            return SCOPE_FRAME, self.frameNames[name][0], severity
+        else:
+            return scope, idx, severity
 
     def swizzleFrame(self):
         """
@@ -208,15 +210,15 @@ class ScopeBox(ScopeBase):
         self.position = next.position
 
     def requireShadowable(self, name, toplevel):
-        scope, idx, _ = self.find(name)
+        scope, idx, _ = self.find(name, False)
         if scope is SCOPE_OUTER:
             self.next.requireShadowable(name, False)
 
     def deepen(self, name, severity):
         self.next.deepen(name, severity)
 
-    def find(self, name):
-        return self.next.find(name)
+    def find(self, name, autoClose):
+        return self.next.find(name, autoClose)
 
 
 class ScopeItem(ScopeBase):
@@ -237,10 +239,10 @@ class ScopeItem(ScopeBase):
             self.severity = severity
         self.next.deepen(name, severity)
 
-    def find(self, name):
+    def find(self, name, autoClose):
         if self.name == name:
             return SCOPE_LOCAL, self.position, self.severity
-        return self.next.find(name)
+        return self.next.find(name, autoClose)
 
 
 class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
@@ -604,7 +606,8 @@ class SpecializeNouns(ReifyMetaContextIR.makePassTo(BoundNounsIR)):
         return self.dest.CallExpr(noun, u"get", [], [])
 
     def visitNounExpr(self, name, layout):
-        scope, idx, severity = layout.find(name)
+        # Automatically add to closures of frames.
+        scope, idx, severity = layout.find(name, True)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
         storage = self.makeStorage(name, idx, scope)
@@ -616,7 +619,7 @@ class SpecializeNouns(ReifyMetaContextIR.makePassTo(BoundNounsIR)):
             return storage
 
     def visitTempNounExpr(self, name, layout):
-        scope, idx, severity = layout.find(name)
+        scope, idx, severity = layout.find(name, True)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
         storage = self.makeStorage(name, idx, scope)
@@ -628,7 +631,7 @@ class SpecializeNouns(ReifyMetaContextIR.makePassTo(BoundNounsIR)):
             return storage
 
     def visitSlotExpr(self, name, layout):
-        scope, idx, severity = layout.find(name)
+        scope, idx, severity = layout.find(name, True)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
         storage = self.makeStorage(name, idx, scope)
@@ -638,7 +641,7 @@ class SpecializeNouns(ReifyMetaContextIR.makePassTo(BoundNounsIR)):
             return storage
 
     def visitBindingExpr(self, name, layout):
-        scope, idx, _ = layout.find(name)
+        scope, idx, _ = layout.find(name, True)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
         return self.makeStorage(name, idx, scope)
