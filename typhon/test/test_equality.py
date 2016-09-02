@@ -92,16 +92,16 @@ class TestOptSame(TestCase):
     def testListEqualityRecursionReflexive(self):
         first = wrapList([IntObject(42), NullObject])
         # Hax.
-        first.strategy.second = first
+        first.objs.append(first)
         self.assertEqual(optSame(first, first), EQUAL)
 
     def testListEqualityRecursion(self):
         first = wrapList([IntObject(42), NullObject])
         # Hax.
-        first.strategy.second = first
+        first.objs.append(first)
         second = wrapList([IntObject(42), NullObject])
         # Hax.
-        second.strategy.second = first
+        second.objs.append(second)
         self.assertEqual(optSame(first, second), EQUAL)
 
     def testListInequality(self):
