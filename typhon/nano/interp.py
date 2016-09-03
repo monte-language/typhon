@@ -5,7 +5,7 @@ A simple AST interpreter.
 from collections import OrderedDict
 
 from rpython.rlib import rvmprof
-from rpython.rlib.jit import promote, unroll_safe, we_are_jitted
+from rpython.rlib.jit import jit_debug, promote, unroll_safe, we_are_jitted
 from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
@@ -215,39 +215,49 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         return guard.call(u"coerce", [specimen, ej])
 
     def visitLiveExpr(self, obj):
+        jit_debug("LiveExpr")
         # Ta-dah~
         return obj
 
     def visitNullExpr(self):
+        jit_debug("NullExpr")
         return NullObject
 
     def visitCharExpr(self, c):
+        jit_debug("CharExpr")
         return CharObject(c)
 
     def visitDoubleExpr(self, d):
+        jit_debug("DoubleExpr")
         return DoubleObject(d)
 
     def visitIntExpr(self, i):
+        jit_debug("IntExpr")
         try:
             return IntObject(i.toint())
         except OverflowError:
             return BigInt(i)
 
     def visitStrExpr(self, s):
+        jit_debug("StrExpr")
         return StrObject(s)
 
     def visitLocalExpr(self, name, idx):
+        jit_debug("LocalExpr %s" % name.encode("utf-8"))
         return self.locals[idx]
 
     def visitFrameExpr(self, name, idx):
+        jit_debug("FrameExpr %s" % name.encode("utf-8"))
         return self.frame[idx]
 
     def visitOuterExpr(self, name, idx):
+        jit_debug("OuterExpr %s" % name.encode("utf-8"))
         return self.outers[idx]
 
     # Length of args and namedArgs are fixed. ~ C.
     @unroll_safe
     def visitCallExpr(self, obj, atom, args, namedArgs):
+        jit_debug("CallExpr")
         rcvr = self.visitExpr(obj)
         argVals = [self.visitExpr(a) for a in args]
         if namedArgs:
@@ -261,12 +271,14 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         return rcvr.recvNamed(atom, argVals, namedArgMap)
 
     def visitDefExpr(self, patt, ex, rvalue):
+        jit_debug("DefExpr")
         ex = self.visitExpr(ex)
         val = self.visitExpr(rvalue)
         self.matchBind(patt, val, ex)
         return val
 
     def visitEscapeOnlyExpr(self, patt, body):
+        jit_debug("EscapeOnlyExpr")
         ej = Ejector()
         self.matchBind(patt, ej, None)
         try:
@@ -280,6 +292,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             return e.value
 
     def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
+        jit_debug("EscapeExpr")
         ej = Ejector()
         self.matchBind(patt, ej, None)
         try:
@@ -294,12 +307,14 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             return self.visitExpr(catchBody)
 
     def visitFinallyExpr(self, body, atLast):
+        jit_debug("FinallyExpr")
         try:
             return self.visitExpr(body)
         finally:
             self.visitExpr(atLast)
 
     def visitIfExpr(self, test, cons, alt):
+        jit_debug("IfExpr")
         if unwrapBool(self.visitExpr(test)):
             return self.visitExpr(cons)
         else:
@@ -317,6 +332,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     # Everything passed to this method, except self, is immutable. ~ C.
     @unroll_safe
     def visitClearObjectExpr(self, doc, patt, script, layout):
+        jit_debug("ClearObjectExpr")
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
         else:
@@ -384,6 +400,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     @unroll_safe
     def visitObjectExpr(self, doc, patt, auditors, script, mast,
                         layout, clipboard):
+        jit_debug("ObjectExpr")
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
         else:
@@ -463,12 +480,14 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     # immutable. ~ C.
     @unroll_safe
     def visitSeqExpr(self, exprs):
+        jit_debug("SeqExpr")
         result = NullObject
         for expr in exprs:
             result = self.visitExpr(expr)
         return result
 
     def visitTryExpr(self, body, catchPatt, catchBody):
+        jit_debug("TryExpr")
         try:
             return self.visitExpr(body)
         except UserException, ex:
@@ -476,11 +495,13 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             return self.visitExpr(catchBody)
 
     def visitIgnorePatt(self, guard):
+        jit_debug("IgnorePatt")
         if not isinstance(guard, self.src.NullExpr):
             g = self.visitExpr(guard)
             self.runGuard(g, self.specimen, self.patternFailure)
 
     def visitNounPatt(self, name, guard, index):
+        jit_debug("NounPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             val = self.specimen
         else:
@@ -489,9 +510,11 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         self.locals[index] = val
 
     def visitBindingPatt(self, name, index):
+        jit_debug("BindingPatt %s" % name.encode("utf-8"))
         self.locals[index] = self.specimen
 
     def visitFinalBindingPatt(self, name, guard, idx):
+        jit_debug("FinalBindingPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
         else:
@@ -500,6 +523,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         self.locals[idx] = finalBinding(val, guard)
 
     def visitFinalSlotPatt(self, name, guard, idx):
+        jit_debug("FinalSlotPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
         else:
@@ -508,6 +532,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         self.locals[idx] = FinalSlot(val, guard)
 
     def visitVarBindingPatt(self, name, guard, idx):
+        jit_debug("VarBindingPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
         else:
@@ -516,6 +541,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         self.locals[idx] = varBinding(val, guard)
 
     def visitVarSlotPatt(self, name, guard, idx):
+        jit_debug("VarSlotPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
         else:
@@ -526,6 +552,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     # The list of patts is immutable. ~ C.
     @unroll_safe
     def visitListPatt(self, patts):
+        jit_debug("ListPatt")
         listSpecimen = unwrapList(self.specimen, ej=self.patternFailure)
         ej = self.patternFailure
         if len(patts) != len(listSpecimen):
@@ -535,6 +562,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             self.matchBind(patts[i], listSpecimen[i], ej)
 
     def visitViaPatt(self, trans, patt):
+        jit_debug("ViaPatt")
         ej = self.patternFailure
         v = self.visitExpr(trans)
         newSpec = v.callAtom(RUN_2, [self.specimen, ej], MIRANDA_ARGS)
