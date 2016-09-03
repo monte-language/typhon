@@ -461,16 +461,16 @@ def _accumulateList(iterable, mapper) as DeepFrozenStamp:
     "Implementation of list comprehension syntax."
 
     def iterator := iterable._makeIterator()
-    var rv := []
+    # Flex for speed. ~ C.
+    def rv := [].diverge()
 
     escape ej:
         while (true):
             escape skip:
                 def [key, value] := iterator.next(ej)
-                def result := mapper(key, value, skip)
-                rv := rv.with(result)
+                rv.push(mapper(key, value, skip))
 
-    return rv
+    return rv.snapshot()
 
 
 object _matchSame as DeepFrozenStamp:
