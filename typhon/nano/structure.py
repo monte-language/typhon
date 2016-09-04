@@ -4,7 +4,6 @@
 Structural refactoring to improve the efficiency of the AST interpreter.
 """
 
-from rpython.rlib import rvmprof
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
@@ -17,7 +16,6 @@ def refactorStructure(ast):
     ast = SplitScript().visitExpr(ast)
     ast = MakeAtoms().visitExpr(ast)
     ast = SplitAuditors().visitExpr(ast)
-    ast = MakeProfileNames().visitExpr(ast)
     return ast
 
 SplitScriptIR = DeepFrozenIR.extend("SplitScript", [],
@@ -111,100 +109,6 @@ class SplitAuditors(AtomIR.makePassTo(SplitAuditorsIR)):
             return self.dest.ObjectExpr(doc, patt, auditors, script, ast,
                                         layout, clipboard)
 
-
-ProfileNameIR = SplitAuditorsIR.extend("ProfileName",
-    ["ProfileName"],
-    {
-        "Method": {
-            "MethodExpr": [("profileName", "ProfileName"), ("doc", None),
-                           ("atom", None), ("patts", "Patt*"),
-                           ("namedPatts", "NamedPatt*"), ("guard", "Expr"),
-                           ("body", "Expr"), ("localSize", None)],
-        },
-        "Matcher": {
-            "MatcherExpr": [("profileName", "ProfileName"), ("patt", "Patt"),
-                            ("body", "Expr"), ("localSize", None)],
-        },
-    }
-)
-
-# super() doesn't work in RPython, so this is a way to get at the default
-# implementations of the pass methods. ~ C.
-_MakeProfileNames = SplitAuditorsIR.makePassTo(ProfileNameIR)
-class MakeProfileNames(_MakeProfileNames):
-    """
-    Prebuild the strings which identify code objects to the profiler.
-
-    This must be the last pass before evaluation, or else profiling will not
-    work because the wrong objects will have been registered.
-    """
-
-    def __init__(self):
-        # NB: self.objectNames cannot be empty unless we somehow obtain a
-        # method/matcher without a body. ~ C.
-        self.objectNames = []
-
-    def visitClearObjectExpr(self, doc, patt, script, layout):
-        # Push, do the recursion, pop.
-        if isinstance(patt, self.src.IgnorePatt):
-            objName = u"_"
-        else:
-            objName = patt.name
-        self.objectNames.append((objName.encode("utf-8"),
-            layout.fqn.encode("utf-8").split("$")[0]))
-        rv = _MakeProfileNames.visitClearObjectExpr(self, doc, patt, script,
-                                                    layout)
-        self.objectNames.pop()
-        return rv
-
-    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout,
-                        clipboard):
-        # Push, do the recursion, pop.
-        if isinstance(patt, self.src.IgnorePatt):
-            objName = u"_"
-        else:
-            objName = patt.name
-        self.objectNames.append((objName.encode("utf-8"),
-            layout.fqn.encode("utf-8").split("$")[0]))
-        rv = _MakeProfileNames.visitObjectExpr(self, doc, patt, auditors,
-                                               script, mast, layout,
-                                               clipboard)
-        self.objectNames.pop()
-        return rv
-
-    def makeProfileName(self, inner):
-        name, fqn = self.objectNames[-1]
-        return "mt:%s.%s:1:%s" % (name, inner, fqn)
-
-    def visitMethodExpr(self, doc, atom, patts, namedPatts, guard, body,
-            localSize):
-        # NB: `atom.repr` is tempting but wrong. ~ C.
-        description = "%s/%d" % (atom.verb.encode("utf-8"), atom.arity)
-        profileName = self.makeProfileName(description)
-        patts = [self.visitPatt(patt) for patt in patts]
-        namedPatts = [self.visitNamedPatt(namedPatt) for namedPatt in
-                namedPatts]
-        guard = self.visitExpr(guard)
-        body = self.visitExpr(body)
-        rv = self.dest.MethodExpr(profileName, doc, atom, patts, namedPatts,
-                guard, body, localSize)
-        rvmprof.register_code(rv, lambda method: method.profileName)
-        return rv
-
-    def visitMatcherExpr(self, patt, body, localSize):
-        profileName = self.makeProfileName("matcher")
-        patt = self.visitPatt(patt)
-        body = self.visitExpr(body)
-        rv = self.dest.MatcherExpr(profileName, patt, body, localSize)
-        rvmprof.register_code(rv, lambda matcher: matcher.profileName)
-        return rv
-
-# Register the interpreted code classes with vmprof.
-rvmprof.register_code_object_class(ProfileNameIR.MethodExpr,
-        lambda method: method.profileName)
-rvmprof.register_code_object_class(ProfileNameIR.MatcherExpr,
-        lambda matcher: matcher.profileName)
-
 # Pretty-printer for the final pass.
 
 def prettifyStructure(ast):
@@ -232,7 +136,7 @@ class BraceContext(object):
         self.printer.line()
         self.printer.write(u"}")
 
-class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
+class PrettySpecialNouns(SplitAuditorsIR.makePassTo(None)):
 
     indentLevel = 0
 
@@ -470,14 +374,14 @@ class PrettySpecialNouns(ProfileNameIR.makePassTo(None)):
         self.write(u" := ")
         self.visitExpr(default)
 
-    def visitMatcherExpr(self, profileName, patt, body, layout):
+    def visitMatcherExpr(self, patt, body, layout):
         self.write(u"match ")
         self.visitPatt(patt)
         with self.braces():
             self.visitExpr(body)
 
-    def visitMethodExpr(self, profileName, doc, atom, patts, namedPatts,
-                        guard, body, layout):
+    def visitMethodExpr(self, doc, atom, patts, namedPatts, guard, body,
+                        layout):
         self.write(u"method ")
         self.write(atom.verb)
         self.write(u"(")

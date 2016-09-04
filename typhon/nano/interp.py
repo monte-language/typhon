@@ -12,11 +12,12 @@ from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
 from typhon.nano.auditors import dischargeAuditors
 from typhon.nano.mast import saveScripts
+from typhon.nano.mix import MixIR, mix
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
                                 SEV_BINDING, SEV_NOUN, SEV_SLOT, layoutScopes,
                                 bindNouns)
 from typhon.nano.slots import recoverSlots
-from typhon.nano.structure import ProfileNameIR, refactorStructure
+from typhon.nano.structure import refactorStructure
 from typhon.objects.constants import NullObject
 from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import (ConstMap, EMPTY_MAP, monteMap,
@@ -44,6 +45,100 @@ def mkMirandaArgs():
     return ConstMap(_d)
 
 MIRANDA_ARGS = mkMirandaArgs()
+
+
+ProfileNameIR = MixIR.extend("ProfileName",
+    ["ProfileName"],
+    {
+        "Method": {
+            "MethodExpr": [("profileName", "ProfileName"), ("doc", None),
+                           ("atom", None), ("patts", "Patt*"),
+                           ("namedPatts", "NamedPatt*"), ("guard", "Expr"),
+                           ("body", "Expr"), ("localSize", None)],
+        },
+        "Matcher": {
+            "MatcherExpr": [("profileName", "ProfileName"), ("patt", "Patt"),
+                            ("body", "Expr"), ("localSize", None)],
+        },
+    }
+)
+
+# super() doesn't work in RPython, so this is a way to get at the default
+# implementations of the pass methods. ~ C.
+_MakeProfileNames = MixIR.makePassTo(ProfileNameIR)
+class MakeProfileNames(_MakeProfileNames):
+    """
+    Prebuild the strings which identify code objects to the profiler.
+
+    This must be the last pass before evaluation, or else profiling will not
+    work because the wrong objects will have been registered.
+    """
+
+    def __init__(self):
+        # NB: self.objectNames cannot be empty unless we somehow obtain a
+        # method/matcher without a body. ~ C.
+        self.objectNames = []
+
+    def visitClearObjectExpr(self, doc, patt, script, layout):
+        # Push, do the recursion, pop.
+        if isinstance(patt, self.src.IgnorePatt):
+            objName = u"_"
+        else:
+            objName = patt.name
+        self.objectNames.append((objName.encode("utf-8"),
+            layout.fqn.encode("utf-8").split("$")[0]))
+        rv = _MakeProfileNames.visitClearObjectExpr(self, doc, patt, script,
+                                                    layout)
+        self.objectNames.pop()
+        return rv
+
+    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout,
+                        clipboard):
+        # Push, do the recursion, pop.
+        if isinstance(patt, self.src.IgnorePatt):
+            objName = u"_"
+        else:
+            objName = patt.name
+        self.objectNames.append((objName.encode("utf-8"),
+            layout.fqn.encode("utf-8").split("$")[0]))
+        rv = _MakeProfileNames.visitObjectExpr(self, doc, patt, auditors,
+                                               script, mast, layout,
+                                               clipboard)
+        self.objectNames.pop()
+        return rv
+
+    def makeProfileName(self, inner):
+        name, fqn = self.objectNames[-1]
+        return "mt:%s.%s:1:%s" % (name, inner, fqn)
+
+    def visitMethodExpr(self, doc, atom, patts, namedPatts, guard, body,
+            localSize):
+        # NB: `atom.repr` is tempting but wrong. ~ C.
+        description = "%s/%d" % (atom.verb.encode("utf-8"), atom.arity)
+        profileName = self.makeProfileName(description)
+        patts = [self.visitPatt(patt) for patt in patts]
+        namedPatts = [self.visitNamedPatt(namedPatt) for namedPatt in
+                namedPatts]
+        guard = self.visitExpr(guard)
+        body = self.visitExpr(body)
+        rv = self.dest.MethodExpr(profileName, doc, atom, patts, namedPatts,
+                guard, body, localSize)
+        rvmprof.register_code(rv, lambda method: method.profileName)
+        return rv
+
+    def visitMatcherExpr(self, patt, body, localSize):
+        profileName = self.makeProfileName("matcher")
+        patt = self.visitPatt(patt)
+        body = self.visitExpr(body)
+        rv = self.dest.MatcherExpr(profileName, patt, body, localSize)
+        rvmprof.register_code(rv, lambda matcher: matcher.profileName)
+        return rv
+
+# Register the interpreted code classes with vmprof.
+rvmprof.register_code_object_class(ProfileNameIR.MethodExpr,
+        lambda method: method.profileName)
+rvmprof.register_code_object_class(ProfileNameIR.MatcherExpr,
+        lambda matcher: matcher.profileName)
 
 
 class InterpObject(Object):
@@ -250,10 +345,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         jit_debug("FrameExpr %s" % name.encode("utf-8"))
         return self.frame[idx]
 
-    def visitOuterExpr(self, name, idx):
-        jit_debug("OuterExpr %s" % name.encode("utf-8"))
-        return self.outers[idx]
-
     # Length of args and namedArgs are fixed. ~ C.
     @unroll_safe
     def visitCallExpr(self, obj, atom, args, namedArgs):
@@ -355,10 +446,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             frame.append(b)
 
         assert len(layout.frameNames) == len(frame), "shortcoming"
-        for (name, (idx, severity)) in layout.outerNames.items():
-            # OuterExpr doesn't get rewritten to FrameExpr; so no need to put
-            # the binding in frame.
-            b = self.outers[idx]
 
         # Build the object.
         val = InterpObject(doc, objName, script, frame, self.outers, ast,
@@ -615,11 +702,13 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
             environment.keys(), fqnPrefix, inRepl)
     bound = bindNouns(ll)
     ast = dischargeAuditors(bound)
-    finalAST = refactorStructure(ast)
-    result = NullObject
+    ast = refactorStructure(ast)
     outers = env2scope(outerNames, environment)
+    ast = mix(ast, outers)
+    ast = MakeProfileNames().visitExpr(ast)
+    result = NullObject
     e = Evaluator([], outers, localSize)
-    result = e.visitExpr(finalAST)
+    result = e.visitExpr(ast)
     topLocals = []
     for i, (name, severity) in enumerate(topLocalNames):
         local = e.locals[i]
