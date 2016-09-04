@@ -2,8 +2,6 @@
 A simple AST interpreter.
 """
 
-from collections import OrderedDict
-
 from rpython.rlib import rvmprof
 from rpython.rlib.jit import jit_debug, promote, unroll_safe, we_are_jitted
 from rpython.rlib.objectmodel import import_from_mixin
@@ -92,8 +90,8 @@ class MakeProfileNames(_MakeProfileNames):
         self.objectNames.pop()
         return rv
 
-    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout,
-                        clipboard):
+    def visitObjectExpr(self, doc, patt, guards, auditors, script, mast,
+                        layout, clipboard):
         # Push, do the recursion, pop.
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
@@ -101,8 +99,8 @@ class MakeProfileNames(_MakeProfileNames):
             objName = patt.name
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
-        rv = _MakeProfileNames.visitObjectExpr(self, doc, patt, auditors,
-                                               script, mast, layout,
+        rv = _MakeProfileNames.visitObjectExpr(self, doc, patt, guards,
+                                               auditors, script, mast, layout,
                                                clipboard)
         self.objectNames.pop()
         return rv
@@ -148,20 +146,18 @@ class InterpObject(Object):
 
     import_from_mixin(UserObjectHelper)
 
-    _immutable_fields_ = "doc", "displayName", "script", "outers[*]", "report"
+    _immutable_fields_ = "doc", "displayName", "script", "report"
 
     # Inline single-entry method cache.
     cachedMethod = None, None
 
-    def __init__(self, doc, name, script, frame, outers,
-                 ast, fqn):
+    def __init__(self, doc, name, script, frame, ast, fqn):
         self.objectAst = ast
         self.fqn = fqn
         self.doc = doc
         self.displayName = name
         self.script = script
         self.frame = frame
-        self.outers = outers
 
         self.report = None
 
@@ -225,7 +221,7 @@ class InterpObject(Object):
             result_class=Object)
     @unroll_safe
     def runMethod(self, method, args, namedArgs):
-        e = Evaluator(self.frame, self.outers, method.localSize)
+        e = Evaluator(self.frame, method.localSize)
         if len(args) != len(method.patts):
             raise userError(u"Method '%s.%s' expected %d args, got %d" % (
                 self.getDisplayName(), method.atom.verb, len(method.patts),
@@ -254,7 +250,7 @@ class InterpObject(Object):
             lambda self, matcher, message, ej: matcher,
             result_class=Object)
     def runMatcher(self, matcher, message, ej):
-        e = Evaluator(self.frame, self.outers, matcher.localSize)
+        e = Evaluator(self.frame, matcher.localSize)
         e.matchBind(matcher.patt, message, ej)
         return e.visitExpr(matcher.body)
 
@@ -284,12 +280,9 @@ def retrieveGuard(severity, storage):
 
 class Evaluator(ProfileNameIR.makePassTo(None)):
 
-    _immutable_fields_ = "outers[*]",
-
-    def __init__(self, frame, outers, localSize):
+    def __init__(self, frame, localSize):
         self.locals = [NULL_BINDING] * localSize
         self.frame = frame
-        self.outers = outers
         self.specimen = None
         self.patternFailure = None
 
@@ -448,8 +441,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         assert len(layout.frameNames) == len(frame), "shortcoming"
 
         # Build the object.
-        val = InterpObject(doc, objName, script, frame, self.outers, ast,
-                           layout.fqn)
+        val = InterpObject(doc, objName, script, frame, ast, layout.fqn)
 
         # Check whether we have a spot in the frame.
         position = layout.positionOf(objName)
@@ -485,7 +477,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     # immutable. Clipboards are not a problem since their loops are
     # internalized in methods. ~ C.
     @unroll_safe
-    def visitObjectExpr(self, doc, patt, auditors, script, mast,
+    def visitObjectExpr(self, doc, patt, guards, auditors, script, mast,
                         layout, clipboard):
         jit_debug("ObjectExpr")
         if isinstance(patt, self.src.IgnorePatt):
@@ -500,9 +492,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         else:
             auds = [guardAuditor] + auds
         frame = []
-        # We rely on this ordering to be consistent so that we can strip the
-        # names when doing auditor cache comparisons. ~ C.
-        guards = OrderedDict()
+        guards = guards.copy()
         for (name, scope, idx, severity) in layout.swizzleFrame():
             if name == objName:
                 # deal with this later
@@ -521,14 +511,8 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             frame.append(b)
 
         assert len(layout.frameNames) == len(frame), "shortcoming"
-        for (name, (idx, severity)) in layout.outerNames.items():
-            # OuterExpr doesn't get rewritten to FrameExpr; so no need to put
-            # the binding in frame.
-            b = self.outers[idx]
-            guards[name] = retrieveGuard(severity, b)
 
-        o = InterpObject(doc, objName, script, frame, self.outers, mast,
-                         layout.fqn)
+        o = InterpObject(doc, objName, script, frame,  mast, layout.fqn)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
             o.report = clipboard.audit(auds, guards)
@@ -707,7 +691,7 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     ast = mix(ast, outers)
     ast = MakeProfileNames().visitExpr(ast)
     result = NullObject
-    e = Evaluator([], outers, localSize)
+    e = Evaluator([], localSize)
     result = e.visitExpr(ast)
     topLocals = []
     for i, (name, severity) in enumerate(topLocalNames):
