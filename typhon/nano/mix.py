@@ -14,6 +14,8 @@ from typhon.errors import UserException
 from typhon.nano.scopes import SEV_BINDING, SEV_NOUN, SEV_SLOT
 from typhon.nano.structure import SplitAuditorsIR
 from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.constants import NullObject
+from typhon.objects.data import CharObject, DoubleObject, StrObject
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 
@@ -97,7 +99,14 @@ class SpecializeCalls(MixIR.makePassTo(MixIR)):
                 return obj
             elif obj.auditedBy(deepFrozenStamp):
                 return obj
-        # XXX elif isinstance(expr, self.dest.BytesExpr):
+        elif isinstance(expr, self.dest.NullExpr):
+            return NullObject
+        elif isinstance(expr, self.dest.CharExpr):
+            return CharObject(expr.c)
+        elif isinstance(expr, self.dest.DoubleExpr):
+            return DoubleObject(expr.d)
+        elif isinstance(expr, self.dest.StrExpr):
+            return StrObject(expr.s)
 
     def visitCallExpr(self, obj, atom, args, namedArgs):
         obj = self.visitExpr(obj)
@@ -110,12 +119,9 @@ class SpecializeCalls(MixIR.makePassTo(MixIR)):
                 # XXX named args
                 if not namedArgs:
                     try:
-                        print liveObj.toString(), "call", atom.repr, liveArgs
                         result = liveObj.call(atom.verb, liveArgs)
-                        print "result", result.toString()
                         if result.auditedBy(deepFrozenStamp):
                             return self.dest.LiveExpr(result)
                     except UserException as ue:
-                        print "user exception", ue.formatError()
                         return self.dest.ExceptionExpr(ue)
         return self.dest.CallExpr(obj, atom, args, namedArgs)
