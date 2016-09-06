@@ -10,19 +10,23 @@ The separation allows us to make the first part short and sweet.
 
 from collections import OrderedDict
 
+from typhon.errors import UserException
 from typhon.nano.scopes import SEV_BINDING, SEV_NOUN, SEV_SLOT
 from typhon.nano.structure import SplitAuditorsIR
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
-from typhon.objects.slots import FinalSlot, VarSlot
+from typhon.objects.slots import Binding, FinalSlot, VarSlot
 
 def mix(ast, outers):
     ast = FillOuters(outers).visitExpr(ast)
+    ast = SpecializeCalls().visitExpr(ast)
     return ast
 
 MixIR = SplitAuditorsIR.extend("Mix",
-    ["Object"],
+    ["Object", "Exception"],
     {
         "Expr": {
+            "ExceptionExpr": [("exception", "Exception")],
             "LiveExpr": [("obj", "Object")],
             "ObjectExpr": [("doc", None), ("patt", "Patt"),
                            ("guards", None), ("auditors", "Expr*"),
@@ -77,3 +81,41 @@ class FillOuters(SplitAuditorsIR.makePassTo(MixIR)):
 
     def visitOuterExpr(self, name, index):
         return self.dest.LiveExpr(self.outers[index])
+
+class SpecializeCalls(MixIR.makePassTo(MixIR)):
+
+    def enliven(self, expr):
+        """
+        If `expr` is live and DeepFrozen or thawable, return the live object.
+
+        Otherwise, return None.
+        """
+
+        if isinstance(expr, self.dest.LiveExpr):
+            obj = expr.obj
+            if isinstance(obj, Binding) or isinstance(obj, FinalSlot):
+                return obj
+            elif obj.auditedBy(deepFrozenStamp):
+                return obj
+        # XXX elif isinstance(expr, self.dest.BytesExpr):
+
+    def visitCallExpr(self, obj, atom, args, namedArgs):
+        obj = self.visitExpr(obj)
+        args = [self.visitExpr(arg) for arg in args]
+        namedArgs = [self.visitNamedArg(namedArg) for namedArg in namedArgs]
+        liveObj = self.enliven(obj)
+        if liveObj is not None:
+            liveArgs = [self.enliven(arg) for arg in args]
+            if None not in liveArgs:
+                # XXX named args
+                if not namedArgs:
+                    try:
+                        print liveObj.toString(), "call", atom.repr, liveArgs
+                        result = liveObj.call(atom.verb, liveArgs)
+                        print "result", result.toString()
+                        if result.auditedBy(deepFrozenStamp):
+                            return self.dest.LiveExpr(result)
+                    except UserException as ue:
+                        print "user exception", ue.formatError()
+                        return self.dest.ExceptionExpr(ue)
+        return self.dest.CallExpr(obj, atom, args, namedArgs)

@@ -307,6 +307,10 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         # Ta-dah~
         return obj
 
+    def visitExceptionExpr(self, exception):
+        jit_debug("ExceptionExpr")
+        raise exception
+
     def visitNullExpr(self):
         jit_debug("NullExpr")
         return NullObject
