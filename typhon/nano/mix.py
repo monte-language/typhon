@@ -15,7 +15,8 @@ from typhon.nano.scopes import SEV_BINDING, SEV_NOUN, SEV_SLOT
 from typhon.nano.structure import SplitAuditorsIR
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.constants import NullObject
-from typhon.objects.data import CharObject, DoubleObject, StrObject
+from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
+                                 StrObject)
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 
@@ -105,6 +106,11 @@ class SpecializeCalls(MixIR.makePassTo(MixIR)):
             return CharObject(expr.c)
         elif isinstance(expr, self.dest.DoubleExpr):
             return DoubleObject(expr.d)
+        elif isinstance(expr, self.dest.IntExpr):
+            try:
+                return IntObject(expr.i.toint())
+            except OverflowError:
+                return BigInt(expr.i)
         elif isinstance(expr, self.dest.StrExpr):
             return StrObject(expr.s)
 
