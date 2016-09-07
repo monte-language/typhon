@@ -21,8 +21,7 @@ from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import (ConstMap, EMPTY_MAP, monteMap,
                                              unwrapMap)
 from typhon.objects.constants import unwrapBool
-from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
-                                 StrObject, unwrapStr)
+from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector, theThrower, throw
 from typhon.objects.exceptions import sealException
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
@@ -314,25 +313,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     def visitNullExpr(self):
         jit_debug("NullExpr")
         return NullObject
-
-    def visitCharExpr(self, c):
-        jit_debug("CharExpr")
-        return CharObject(c)
-
-    def visitDoubleExpr(self, d):
-        jit_debug("DoubleExpr")
-        return DoubleObject(d)
-
-    def visitIntExpr(self, i):
-        jit_debug("IntExpr")
-        try:
-            return IntObject(i.toint())
-        except OverflowError:
-            return BigInt(i)
-
-    def visitStrExpr(self, s):
-        jit_debug("StrExpr")
-        return StrObject(s)
 
     def visitLocalExpr(self, name, idx):
         jit_debug("LocalExpr %s" % name.encode("utf-8"))

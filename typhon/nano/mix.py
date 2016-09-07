@@ -22,14 +22,14 @@ from typhon.objects.slots import Binding, FinalSlot, VarSlot
 
 def mix(ast, outers):
     ast = FillOuters(outers).visitExpr(ast)
+    ast = ThawLiterals().visitExpr(ast)
     ast = SpecializeCalls().visitExpr(ast)
     return ast
 
-MixIR = SplitAuditorsIR.extend("Mix",
-    ["Object", "Exception"],
+NoOutersIR = SplitAuditorsIR.extend("NoOuters",
+    ["Object"],
     {
         "Expr": {
-            "ExceptionExpr": [("exception", "Exception")],
             "LiveExpr": [("obj", "Object")],
             "ObjectExpr": [("doc", None), ("patt", "Patt"),
                            ("guards", None), ("auditors", "Expr*"),
@@ -62,7 +62,7 @@ def retrieveGuard(severity, storage):
     else:
         assert False, "landlord"
 
-class FillOuters(SplitAuditorsIR.makePassTo(MixIR)):
+class FillOuters(SplitAuditorsIR.makePassTo(NoOutersIR)):
 
     def __init__(self, outers):
         self.outers = outers
@@ -85,7 +85,45 @@ class FillOuters(SplitAuditorsIR.makePassTo(MixIR)):
     def visitOuterExpr(self, name, index):
         return self.dest.LiveExpr(self.outers[index])
 
-class SpecializeCalls(MixIR.makePassTo(MixIR)):
+NoLiteralsIR = NoOutersIR.extend("NoLiterals",
+    [],
+    {
+        "Expr": {
+            "-CharExpr": None,
+            "-DoubleExpr": None,
+            "-IntExpr": None,
+            "-StrExpr": None,
+        }
+    }
+)
+
+class ThawLiterals(NoOutersIR.makePassTo(NoLiteralsIR)):
+
+    def visitCharExpr(self, c):
+        return self.dest.LiveExpr(CharObject(c))
+
+    def visitDoubleExpr(self, d):
+        return self.dest.LiveExpr(DoubleObject(d))
+
+    def visitIntExpr(self, bi):
+        try:
+            return self.dest.LiveExpr(IntObject(bi.toint()))
+        except OverflowError:
+            return self.dest.LiveExpr(BigInt(bi))
+
+    def visitStrExpr(self, s):
+        return self.dest.LiveExpr(StrObject(s))
+
+MixIR = NoLiteralsIR.extend("Mix",
+    ["Exception"],
+    {
+        "Expr": {
+            "ExceptionExpr": [("exception", "Exception")],
+        }
+    }
+)
+
+class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
 
     def enliven(self, expr):
         """
@@ -102,17 +140,7 @@ class SpecializeCalls(MixIR.makePassTo(MixIR)):
                 return obj
         elif isinstance(expr, self.dest.NullExpr):
             return NullObject
-        elif isinstance(expr, self.dest.CharExpr):
-            return CharObject(expr.c)
-        elif isinstance(expr, self.dest.DoubleExpr):
-            return DoubleObject(expr.d)
-        elif isinstance(expr, self.dest.IntExpr):
-            try:
-                return IntObject(expr.i.toint())
-            except OverflowError:
-                return BigInt(expr.i)
-        elif isinstance(expr, self.dest.StrExpr):
-            return StrObject(expr.s)
+        return None
 
     def visitCallExpr(self, obj, atom, args, namedArgs):
         obj = self.visitExpr(obj)
@@ -125,7 +153,14 @@ class SpecializeCalls(MixIR.makePassTo(MixIR)):
                 # XXX named args
                 if not namedArgs:
                     try:
+                        # Side-effect: The live object might have observable
+                        # side effects even though it is DeepFrozen; in
+                        # particular, traceln() comes to mind. We generally
+                        # don't care about those side effects, and invite them
+                        # for debugging purposes, but it's good to be aware of
+                        # this. ~ C.
                         result = liveObj.call(atom.verb, liveArgs)
+                        assert result is not None, "livewire"
                         if result.auditedBy(deepFrozenStamp):
                             return self.dest.LiveExpr(result)
                     except UserException as ue:
