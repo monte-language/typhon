@@ -14,7 +14,6 @@ from typhon.errors import UserException
 from typhon.nano.scopes import SEV_BINDING, SEV_NOUN, SEV_SLOT
 from typhon.nano.structure import SplitAuditorsIR
 from typhon.objects.auditors import deepFrozenStamp
-from typhon.objects.constants import NullObject
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
@@ -138,8 +137,6 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
                 return obj
             elif obj.auditedBy(deepFrozenStamp):
                 return obj
-        elif isinstance(expr, self.dest.NullExpr):
-            return NullObject
         return None
 
     def visitCallExpr(self, obj, atom, args, namedArgs):
