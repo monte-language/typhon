@@ -9,6 +9,7 @@ from rpython.rlib.objectmodel import import_from_mixin
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
 from typhon.nano.auditors import dischargeAuditors
+from typhon.nano.escapes import elideEscapes
 from typhon.nano.mast import saveScripts
 from typhon.nano.mix import MixIR, mix
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
@@ -669,7 +670,8 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     ll, outerNames, topLocalNames, localSize = layoutScopes(slotted,
             environment.keys(), fqnPrefix, inRepl)
     bound = bindNouns(ll)
-    ast = dischargeAuditors(bound)
+    ast = elideEscapes(bound)
+    ast = dischargeAuditors(ast)
     ast = refactorStructure(ast)
     outers = env2scope(outerNames, environment)
     ast = mix(ast, outers)
