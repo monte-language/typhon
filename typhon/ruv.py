@@ -12,7 +12,7 @@ import sys
 
 from functools import wraps
 
-from rpython.rlib import _rsocket_rffi as s
+from rpython.rlib import _rsocket_rffi as s, rgc
 from rpython.rlib.objectmodel import current_object_addr_as_int, specialize
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.rawstorage import alloc_raw_storage, free_raw_storage
@@ -408,6 +408,41 @@ def alloc_idle(loop):
     return idle
 
 
+class UVStream(object):
+    """
+    Wrapper for libuv stream_t structs.
+
+    The primary purpose of this wrapper is to provide finalization services.
+    """
+
+    def __init__(self, stream):
+        self._stream = stream
+        streamQueue.register_finalizer(self)
+
+class StreamQueue(rgc.FinalizerQueue):
+
+    Class = UVStream
+
+    def finalizer_trigger(self):
+        uvstream = self.next_dead()
+        while uvstream is not None:
+            streamJanitor.streams.append(uvstream._stream)
+            uvstream = self.next_dead()
+
+class StreamJanitor(object):
+
+    def __init__(self):
+        self.streams = []
+
+    def cleanup(self):
+        for stream in self.streams:
+            closeAndFree(stream)
+        self.streams = []
+
+streamQueue = StreamQueue()
+streamJanitor = StreamJanitor()
+
+
 _PROCESS_C = '''
 #include <uv.h>
 
@@ -686,3 +721,13 @@ def IP6Name(sockaddr):
     with rffi.scoped_alloc_buffer(size) as buf:
         check("ip6_name", ip6_name(sockaddr, buf.raw, size))
         return buf.str(size).split('\x00', 1)[0]
+
+
+def cleanup():
+    """
+    Clean up any libuv resources that have been finalized.
+
+    Must be called outside of evaluation, ideally during other I/O work.
+    """
+
+    streamJanitor.cleanup()

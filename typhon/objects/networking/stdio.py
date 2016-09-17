@@ -64,7 +64,8 @@ class stdio(Object):
         kind = ruv.guess_handle(0)
         if kind == ruv.HANDLE_TTY:
             stdin = ruv.alloc_tty(uv_loop, 0, True)
-            return StreamSource(ruv.rffi.cast(ruv.stream_tp, stdin), vat)
+            stream = ruv.UVStream(ruv.rffi.cast(ruv.stream_tp, stdin))
+            return StreamSource(stream, vat)
         else:
             assert False, "not implemented yet"
 
@@ -75,7 +76,8 @@ class stdio(Object):
         kind = ruv.guess_handle(1)
         if kind == ruv.HANDLE_TTY:
             stdout = ruv.alloc_tty(uv_loop, 1, False)
-            return StreamSink(ruv.rffi.cast(ruv.stream_tp, stdout), vat)
+            stream = ruv.UVStream(ruv.rffi.cast(ruv.stream_tp, stdout))
+            return StreamSink(stream, vat)
         else:
             assert False, "not implemented yet"
 
@@ -86,6 +88,7 @@ class stdio(Object):
         kind = ruv.guess_handle(2)
         if kind == ruv.HANDLE_TTY:
             stderr = ruv.alloc_tty(uv_loop, 2, False)
-            return StreamSink(ruv.rffi.cast(ruv.stream_tp, stderr), vat)
+            stream = ruv.UVStream(ruv.rffi.cast(ruv.stream_tp, stderr))
+            return StreamSink(stream, vat)
         else:
             assert False, "not implemented yet"

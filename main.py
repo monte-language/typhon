@@ -93,6 +93,7 @@ def runUntilDone(vatManager, uv_loop, recorder):
 
         if ruv.loopAlive(uv_loop):
             with recorder.context("Time spent in I/O"):
+                ruv.cleanup()
                 try:
                     if anyVatHasTurns:
                         # More work to be done, so don't block.

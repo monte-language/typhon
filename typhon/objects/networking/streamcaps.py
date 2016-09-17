@@ -66,6 +66,9 @@ def readCB(stream, status, buf):
     # We only restash in the success case, not the error cases.
     vat, source = ruv.unstashStream(stream)
     assert isinstance(source, StreamSource), "Implementation error"
+    # Don't read any more. We'll call .readStart() when we're interested in
+    # reading again.
+    ruv.readStop(stream)
     with scopedVat(vat):
         if status > 0:
             # Restash required.
@@ -91,7 +94,7 @@ class StreamSource(Object):
 
         self._queue = []
 
-        ruv.stashStream(stream, (vat, self))
+        ruv.stashStream(stream._stream, (vat, self))
 
     def _nextSink(self):
         assert self._queue, "pepperocini"
@@ -122,7 +125,7 @@ class StreamSource(Object):
     def run(self, sink):
         p, r = makePromise()
         self._queue.append((r, sink))
-        ruv.readStart(self._stream, ruv.allocCB, readCB)
+        ruv.readStart(self._stream._stream, ruv.allocCB, readCB)
         return p
 
 
@@ -141,10 +144,6 @@ class StreamSink(Object):
         self._stream = stream
         self._vat = vat
 
-    def __del__(self):
-        if not ruv.isClosing(self._stream):
-            ruv.closeAndFree(self._stream)
-
     @method("Void", "Bytes")
     def run(self, data):
         if self.closed:
@@ -153,7 +152,7 @@ class StreamSink(Object):
         # XXX backpressure?
         uv_write = ruv.alloc_write()
         with ruv.scopedBufs([data]) as bufs:
-            ruv.write(uv_write, self._stream, bufs, 1, writeCB)
+            ruv.write(uv_write, self._stream._stream, bufs, 1, writeCB)
 
     @method("Void")
     def complete(self):
