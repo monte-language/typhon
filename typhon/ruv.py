@@ -320,19 +320,19 @@ class scopedBufs(object):
             # get_nonmovingbuffer tries its hardest to avoid copies. Don't
             # forget that we have to deallocate each one later.
             assert datum is not None
-            charp, pinned, copied = rffi.get_nonmovingbuffer(datum)
+            charp, flag = rffi.get_nonmovingbuffer(datum)
             bufs[i].c_base = charp
             rffi.setintfield(bufs[i], "c_len", len(datum))
             # Store the original strs to keep them alive and make iteration
             # easier later.
-            self.metabufs.append((datum, charp, pinned, copied))
+            self.metabufs.append((datum, charp, flag))
         return bufs
 
     def __exit__(self, *args):
         # Deallocate. Can't forget to do this, or else we could fill the
         # GC with pinned crap.
-        for datum, charp, pinned, copied in self.metabufs:
-            rffi.free_nonmovingbuffer(datum, charp, pinned, copied)
+        for datum, charp, flag in self.metabufs:
+            rffi.free_nonmovingbuffer(datum, charp, flag)
         self.scoping.__exit__(*args)
 
 
