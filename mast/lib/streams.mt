@@ -74,7 +74,7 @@ object makeSource as DeepFrozen:
     "A maker of several types of sources."
 
     to fromIterator(iter) :Source:
-        return def iterSource(sink :Sink) :Vow[Void] as Source:
+        return def iterSource(sink) :Vow[Void] as Source:
             return try:
                 escape ej:
                     sink(iter.next(ej))
@@ -147,7 +147,7 @@ def [PumpState :DeepFrozen,
      ABORTED :DeepFrozen,
 ] := makeEnum(["quiet", "packets", "sinks", "closing", "finished", "aborted"])
 
-def pumpPair(pump :Pump) :Pair[Sink, Source] as DeepFrozen:
+def pumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
     "Given `pump`, produce a sink which feeds packets into the pump and a
      source which produces the pump's results."
 
@@ -157,7 +157,7 @@ def pumpPair(pump :Pump) :Pair[Sink, Source] as DeepFrozen:
     # sinks; ABORTED: problem
     var state := null
 
-    def pumpSource(sink :Sink) :Vow[Void] as Source:
+    def pumpSource(sink) :Vow[Void] as Source:
         return switch (ps):
             match ==QUIET:
                 def [p, r] := Ref.promise()
@@ -317,21 +317,21 @@ unittest([
 object alterSink as DeepFrozen:
     "A collection of decorative attachments for sinks."
 
-    to map(f, sink :Sink) :Sink:
+    to map(f, sink) :Sink:
         "Map over packets coming into `sink` with the function `f`."
 
         return object mapSink extends sink as Sink:
             to run(packet) :Vow[Void]:
                 return sink(f(packet))
 
-    to filter(predicate, sink :Sink) :Sink:
+    to filter(predicate, sink) :Sink:
         "Filter packets coming into `sink` with the `predicate`."
 
         def [filterSink, source] := pumpPair(makePump.filter(predicate))
         flow(source, sink)
         return filterSink
 
-    to scan(f, z, sink :Sink) :Sink:
+    to scan(f, z, sink) :Sink:
         "Accumulate a partial fold of `f` with `z` as the starting value."
 
         def [scanSink, source] := pumpPair(makePump.scan(f, z))
@@ -371,17 +371,17 @@ unittest([
 object alterSource as DeepFrozen:
     "A collection of decorative attachments for sources."
 
-    to map(f, source :Source) :Source:
+    to map(f, source) :Source:
         "Map over packets coming out of `source` with the function `f`."
 
-        return def mapSource(sink :Sink) :Vow[Void] as Source:
+        return def mapSource(sink) :Vow[Void] as Source:
             return source(alterSink.map(f, sink))
 
-    to filter(predicate, source :Source) :Source:
+    to filter(predicate, source) :Source:
         "Filter packets coming out of `source` with `predicate`."
 
         def [filterSink, filterSource] := pumpPair(makePump.filter(predicate))
-        return def filteringSource(sink :Sink) :Vow[Void] as Source:
+        return def filteringSource(sink) :Vow[Void] as Source:
             return when (source(filterSink), filterSource(sink)) -> { null }
 
     to scan(f, z, source) :Source:
@@ -389,7 +389,7 @@ object alterSource as DeepFrozen:
          `z`."
 
         def [scanSink, scanSource] := pumpPair(makePump.scan(f, z))
-        return def scanningSource(sink :Sink) :Vow[Void] as Source:
+        return def scanningSource(sink) :Vow[Void] as Source:
             return when (source(scanSink), scanSource(sink)) -> { null }
 
 def testAlterSourceMap(assert):
