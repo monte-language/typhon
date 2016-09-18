@@ -1,5 +1,6 @@
 import "fun/elements" =~ _
 import "lib/codec/percent" =~ _
+import "lib/codec/utf8" =~ _
 import "lib/continued" =~ _
 import "lib/entropy/pool" =~ _
 import "lib/enum" =~ _

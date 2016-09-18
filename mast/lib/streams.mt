@@ -1,5 +1,7 @@
 import "unittest" =~ [=> unittest]
 import "lib/enum" =~ [=> makeEnum :DeepFrozen]
+# For testing only; not to be re-exported. ~ C.
+import "lib/codec/utf8" =~ [=> UTF8]
 exports (
     Sink, Source, Pump,
     makeSink, makeSource, makePump,
@@ -256,6 +258,29 @@ object makePump as DeepFrozen:
                 # Okay, clearly not so sorry. ~ C.
                 [z := f(z, packet)]
 
+    to encode(codec) :Pump:
+        "A pump for encoding with `codec`."
+
+        return def encodePump(packet) :List as Pump:
+            return [codec.encode(packet, null)]
+
+    to decode(codec, => withExtras :Bool := false) :Pump:
+        "A pump for decoding with `codec`."
+
+        return if (withExtras):
+            # XXX the protocol doesn't give us good initial leftovers. My
+            # kingdom for a monoid~
+            var leftovers := null
+            def decodeWithExtrasPump(var packet) :List as Pump:
+                if (leftovers != null):
+                    packet := leftovers + packet
+                def [rv, remainder] := codec.decodeExtras(packet, null)
+                leftovers := remainder
+                return [rv]
+        else:
+            def decodePump(packet) :List as Pump:
+                return [codec.decode(packet, null)]
+
 def testMakePumpId(assert):
     def pump := makePump.id()
     var l := []
@@ -276,6 +301,10 @@ def testMakePumpScan(assert):
     for x in (1..4):
         l += pump(x)
     assert.equal(l, [0, 1, 3, 6, 10])
+
+def testMakePumpEncodeUTF8(assert):
+    def pump := makePump.encode(UTF8)
+    assert.equal(pump("⌵"), [b`$\xe2$\x8c$\xb5`])
 
 def testPumpPairSingle(assert):
     def [sink, source] := pumpPair(makePump.id())
@@ -310,6 +339,7 @@ unittest([
     testMakePumpId,
     testMakePumpFilter,
     testMakePumpScan,
+    testMakePumpEncodeUTF8,
     testPumpPairSingle,
     testPumpPairPostHoc,
 ])
@@ -338,6 +368,21 @@ object alterSink as DeepFrozen:
         flow(source, sink)
         return scanSink
 
+    to encodeWith(codec, sink) :Sink:
+        "Encode packets coming into `sink` with the `codec`."
+
+        def [encodeSink, source] := pumpPair(makePump.encode(codec))
+        flow(source, sink)
+        return encodeSink
+
+    to decodeWith(codec, sink, => withExtras :Bool := false) :Sink:
+        "Decode packets coming into `sink` with the `codec`."
+
+        def pump := makePump.decode(codec, => withExtras)
+        def [decodeSink, source] := pumpPair(pump)
+        flow(source, sink)
+        return decodeSink
+
 def testAlterSinkMap(assert):
     def [l, sink] := makeSink.asList()
     def mapSink := alterSink.map(fn x { x + 1 }, sink)
@@ -362,10 +407,36 @@ def testAlterSinkScan(assert):
     scanSink.complete()
     return assert.willEqual(l, [0, 1, 3, 6, 10, 15])
 
+def testAlterSinkEncodeWithUTF8(assert):
+    def [l, sink] := makeSink.asList()
+    def encodeSink := alterSink.encodeWith(UTF8, sink)
+    encodeSink("⌵")
+    encodeSink.complete()
+    return assert.willEqual(l, [b`$\xe2$\x8c$\xb5`])
+
+def testAlterSinkDecodeWithUTF8(assert):
+    def [l, sink] := makeSink.asList()
+    def decodeSink := alterSink.decodeWith(UTF8, sink)
+    decodeSink(b`$\xe2$\x8c$\xb5`)
+    decodeSink.complete()
+    return assert.willEqual(l, ["⌵"])
+
+def testAlterSinkDecodeWithExtrasUTF8(assert):
+    def [l, sink] := makeSink.asList()
+    def decodeSink := alterSink.decodeWith(UTF8, sink, "withExtras" => true)
+    decodeSink(b`$\xe2`)
+    decodeSink(b`$\x8c`)
+    decodeSink(b`$\xb5`)
+    decodeSink.complete()
+    return when (l) -> { assert.willEqual("".join(l), "⌵") }
+
 unittest([
     testAlterSinkMap,
     testAlterSinkFilter,
     testAlterSinkScan,
+    testAlterSinkEncodeWithUTF8,
+    testAlterSinkDecodeWithUTF8,
+    testAlterSinkDecodeWithExtrasUTF8,
 ])
 
 object alterSource as DeepFrozen:
@@ -391,6 +462,21 @@ object alterSource as DeepFrozen:
         def [scanSink, scanSource] := pumpPair(makePump.scan(f, z))
         return def scanningSource(sink) :Vow[Void] as Source:
             return when (source(scanSink), scanSource(sink)) -> { null }
+
+    to encodeWith(codec, source) :Source:
+        "Encode packets coming out of `source` with `codec`."
+
+        def [encodeSink, encodeSource] := pumpPair(makePump.encode(codec))
+        return def encodingSource(sink) :Vow[Void] as Source:
+            return when (source(encodeSink), encodeSource(sink)) -> { null }
+
+    to decodeWith(codec, source, => withExtras :Bool := false) :Source:
+        "Decode packets coming out of `source` with `codec`."
+
+        def pump := makePump.decode(codec, => withExtras)
+        def [decodeSink, decodeSource] := pumpPair(pump)
+        return def decodingSource(sink) :Vow[Void] as Source:
+            return when (source(decodeSink), decodeSource(sink)) -> { null }
 
 def testAlterSourceMap(assert):
     def [l, sink] := makeSink.asList()

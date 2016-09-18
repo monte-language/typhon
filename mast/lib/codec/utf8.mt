@@ -13,6 +13,7 @@
 # under the License.
 
 import "bench" =~ [=> bench]
+import "unittest" =~ [=> unittest]
 exports (UTF8)
 
 def chr(i :Int) :Char as DeepFrozen:
@@ -68,6 +69,13 @@ def decodeCore(var bs :Bytes, ej) as DeepFrozen:
             rv with= ('\ufffd')
             offset += 1
     return [rv, bs.slice(offset)]
+
+def testDecodeCoreThreeBytes(assert):
+    assert.equal(decodeCore(b`$\xe2`, null), ["", b`$\xe2`])
+    assert.equal(decodeCore(b`$\xe2$\x8c`, null), ["", b`$\xe2$\x8c`])
+    assert.equal(decodeCore(b`$\xe2$\x8c$\xb5`, null), ["⌵", b``])
+
+unittest([testDecodeCoreThreeBytes])
 
 
 def encodeCore(c :Char) :Bytes as DeepFrozen:
