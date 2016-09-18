@@ -415,9 +415,10 @@ class UVStream(object):
     The primary purpose of this wrapper is to provide finalization services.
     """
 
+    _immutable_ = True
+
     def __init__(self, stream):
         self._stream = stream
-        streamQueue.register_finalizer(self)
 
 class StreamQueue(rgc.FinalizerQueue):
 
@@ -441,6 +442,11 @@ class StreamJanitor(object):
 
 streamQueue = StreamQueue()
 streamJanitor = StreamJanitor()
+
+def wrapStream(stream):
+    wrapper = UVStream(stream)
+    # streamQueue.register_finalizer(wrapper)
+    return wrapper
 
 
 _PROCESS_C = '''
