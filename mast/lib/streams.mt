@@ -111,9 +111,15 @@ def flow(source, sink) :Vow[Void] as DeepFrozen:
             # a deep recursion on the promises if we return `source(flowSink)`
             # directly. Instead, we return `null` as soon as delivery of
             # *this* packet has finished. ~ C.
-            return when (sink(packet)) ->
-                source<-(flowSink)
-                null
+            try:
+                return when (sink(packet)) ->
+                    source<-(flowSink)
+                    null
+                catch problem:
+                    r.smash(problem)
+                    sink.abort(problem)
+            catch problem:
+                r.smash(problem)
 
         to complete() :Vow[Void]:
             r.resolve(null)
