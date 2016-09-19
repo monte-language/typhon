@@ -199,23 +199,30 @@ def pumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
 
     object pumpSink as Sink:
         to run(packet) :Vow[Void]:
-            return switch (ps):
+            switch (ps):
                 match ==QUIET:
                     ps := PACKETS
                     state := pump(packet)
-                    null
                 match ==PACKETS:
                     state add= (pump(packet))
-                    null
                 match ==SINKS:
-                    def [[sink, r]] + sinks := state
-                    r.resolve(null)
-                    if (sinks.size() == 0):
+                    def packets := pump(packet)
+                    def packetsSize := packets.size()
+                    def sinkSize := state.size()
+                    for i => p in (packets):
+                        if (i >= sinkSize):
+                            break
+                        def [sink, r] := state[i]
+                        r.resolve(null)
+                        sink<-(p)
+                    if (packetsSize > sinkSize):
+                        ps := PACKETS
+                        state := packets.slice(sinkSize)
+                    else if (packetsSize < sinkSize):
+                        state slice= (packetsSize)
+                    else:
                         ps := QUIET
                         state := null
-                    else:
-                        state := sinks
-                    sink<-(packet)
 
         to complete() :Void:
             switch (ps):
