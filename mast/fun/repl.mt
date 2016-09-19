@@ -1,50 +1,58 @@
 import "lib/enum" =~ [=> makeEnum]
-exports (makeREPLTube)
+import "lib/streams" =~ [
+    => flow :DeepFrozen,
+    => Sink :DeepFrozen,
+]
+exports (runREPL)
 
 # XXX these names are pretty lame
 def [REPLState :DeepFrozen, PS1 :DeepFrozen, PS2 :DeepFrozen] := makeEnum(["PS1", "PS2"])
 
-def makeREPLTube(makeParser, reducer, ps1 :Str, ps2 :Str, drain) as DeepFrozen:
-    var replState : REPLState := PS1
-    var parser := null
+# XXX wheel reinvention
+object comp as DeepFrozen {}
+object abort as DeepFrozen {}
 
-    return object REPLTube:
-        to flowingFrom(upstream):
-            REPLTube.reset()
-            REPLTube.prompt()
+def runREPL(makeParser, reducer, ps1 :Str, ps2 :Str, source, sink) as DeepFrozen:
+    sink(ps1)
 
-        to receive(s):
+    var replState :REPLState := PS1
+    var parser := makeParser()
+
+    def reset():
+        replState := PS1
+        parser := makeParser()
+
+    def prompt():
+        return switch (replState):
+            match ==PS1:
+                sink(ps1)
+            match ==PS2:
+                sink(ps2)
+
+    object REPLSink extends sink as Sink:
+        to run(s :Str):
             def `@chars$\n` := s
             # If they just thoughtlessly hit Enter, then don't bother.
             if (replState == PS1 && chars.size() == 0):
-                REPLTube.prompt()
-                return
+                return prompt()
+
             parser.feedMany(chars)
             if (parser.failed()):
                 # The parser cannot continue.
-                drain.receive(`Parse error: ${parser.getFailure()}$\n`)
-                REPLTube.reset()
+                sink(`Parse error: ${parser.getFailure()}$\n`)
+                reset()
             else if (parser.finished()):
                 # The parser can stop cleanly.
                 switch (parser.results()):
                     match [result] + _:
                         def reduced := reducer(result)
-                        drain.receive(`Result: $reduced$\n`)
+                        sink(`Result: $reduced$\n`)
                     match _:
-                        drain.receive(`No result?$\n`)
-                REPLTube.reset()
+                        sink(`No result?$\n`)
+                reset()
             else:
                 # Partial parse.
                 replState := PS2
-            REPLTube.prompt()
+            return prompt()
 
-        to reset():
-            replState := PS1
-            parser := makeParser()
-
-        to prompt():
-            switch (replState):
-                match ==PS1:
-                    drain.receive(ps1)
-                match ==PS2:
-                    drain.receive(ps2)
+    return flow(source, REPLSink)

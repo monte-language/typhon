@@ -1,14 +1,13 @@
+import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/json" =~ [=> JSON :DeepFrozen]
-import "lib/tubes" =~ [
-    => makeUTF8DecodePump :DeepFrozen,
-    => makeUTF8EncodePump :DeepFrozen,
-    => makePumpTube :DeepFrozen,
+import "lib/streams" =~ [
+    => alterSink :DeepFrozen,
+    => alterSource :DeepFrozen,
+    => flow :DeepFrozen,
 ]
-import "fun/repl" =~ [=> makeREPLTube :DeepFrozen]
+import "fun/repl" =~ [=> runREPL :DeepFrozen]
 import "lib/help" =~ [=> help :DeepFrozen]
 exports (main)
-
-
 
 def makeMonteParser(&environment, unsealException) as DeepFrozen:
     var failure :NullOk[Str] := null
@@ -63,13 +62,10 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
                         traceln(line)
                     buf := []
 
-def reduce(result) as DeepFrozen:
-    return result
-
 def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
          => getAddrInfo, # => packageLoader,
          => makeFileResource, => makeProcess,
-         => makeStdErr, => makeStdIn, => makeStdOut,
+         => stdio,
          => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
          => unsealException, => unsafeScope) as DeepFrozen:
 
@@ -83,19 +79,16 @@ def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
         # Typhon unsafe scope.
         => &&Timer, => &&currentProcess, => &&currentRuntime, => &&currentVat,
         => &&getAddrInfo,
-        => &&makeFileResource, => &&makeProcess, => &&makeStdErr, => &&makeStdIn,
-        => &&makeStdOut, => &&makeTCP4ClientEndpoint, => &&makeTCP4ServerEndpoint,
+        => &&makeFileResource, => &&makeProcess, => &&stdio,
+        => &&makeTCP4ClientEndpoint, => &&makeTCP4ServerEndpoint,
         => &&unsealException,
         # REPL-only fun.
-        => &&JSON, => &&help, # => &&playWith,
+        => &&JSON, => &&UTF8, => &&help, # => &&playWith,
     ]
 
-    def stdin := makeStdIn() <- flowTo(makePumpTube(makeUTF8DecodePump()))
-    def stdout := makePumpTube(makeUTF8EncodePump())
-    stdout <- flowTo(makeStdOut())
+    def stdin := alterSource.decodeWith(UTF8, stdio.stdin(),
+                                        "withExtras" => true)
+    def stdout := alterSink.encodeWith(UTF8, stdio.stdout())
     def parser := makeMonteParser(&environment, unsealException)
-    def replTube := makeREPLTube(fn {parser.reset()}, reduce,
-                                 "▲> ", "…> ", stdout)
-    stdin <- flowTo(replTube)
-
-    return 0
+    def p := runREPL(parser.reset, fn x {x}, "▲> ", "…> ", stdin, stdout)
+    return when (p) -> { 0 }
