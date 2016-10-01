@@ -3,7 +3,8 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.objects.files import FileFount, FileDrain
 from typhon.objects.networking.streams import StreamDrain, StreamFount
-from typhon.objects.networking.streamcaps import StreamSink, StreamSource
+from typhon.objects.networking.streamcaps import (FileSink, FileSource,
+                                                  StreamSink, StreamSource)
 from typhon.objects.root import Object, runnable
 from typhon.vats import currentVat
 
@@ -67,7 +68,7 @@ class stdio(Object):
             stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdin))
             return StreamSource(stream, vat)
         else:
-            assert False, "not implemented yet"
+            return FileSource(ruv.alloc_fs(), 0, vat)
 
     @method("Any")
     def stdout(self):
@@ -79,7 +80,7 @@ class stdio(Object):
             stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdout))
             return StreamSink(stream, vat)
         else:
-            assert False, "not implemented yet"
+            return FileSink(ruv.alloc_fs(), 1, vat)
 
     @method("Any")
     def stderr(self):
@@ -91,4 +92,4 @@ class stdio(Object):
             stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stderr))
             return StreamSink(stream, vat)
         else:
-            assert False, "not implemented yet"
+            return FileSink(ruv.alloc_fs(), 2, vat)

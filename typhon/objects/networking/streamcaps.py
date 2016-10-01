@@ -44,6 +44,7 @@ And to act only after enqueueing:
 """
 
 from rpython.rlib.rarithmetic import intmask
+from rpython.rtyper.lltypesystem.lltype import scoped_alloc
 from rpython.rtyper.lltypesystem.rffi import charpsize2str
 
 from typhon import ruv
@@ -61,7 +62,7 @@ COMPLETE_0 = getAtom(u"complete", 0)
 RUN_1 = getAtom(u"run", 1)
 
 
-def readCB(stream, status, buf):
+def readStreamCB(stream, status, buf):
     status = intmask(status)
     # We only restash in the success case, not the error cases.
     vat, source = ruv.unstashStream(stream)
@@ -125,11 +126,11 @@ class StreamSource(Object):
     def run(self, sink):
         p, r = makePromise()
         self._queue.append((r, sink))
-        ruv.readStart(self._stream._stream, ruv.allocCB, readCB)
+        ruv.readStart(self._stream._stream, ruv.allocCB, readStreamCB)
         return p
 
 
-def writeCB(uv_write, status):
+def writeStreamCB(uv_write, status):
     pass
 
 @autohelp
@@ -152,7 +153,7 @@ class StreamSink(Object):
         # XXX backpressure?
         uv_write = ruv.alloc_write()
         with ruv.scopedBufs([data]) as bufs:
-            ruv.write(uv_write, self._stream._stream, bufs, 1, writeCB)
+            ruv.write(uv_write, self._stream._stream, bufs, 1, writeStreamCB)
 
     @method("Void")
     def complete(self):
@@ -161,3 +162,133 @@ class StreamSink(Object):
     @method("Void", "Any")
     def abort(self, problem):
         self.closed = True
+
+
+def readFileCB(fs):
+    size = intmask(fs.c_result)
+    with ruv.unstashingFS(fs) as (vat, source):
+        assert isinstance(source, FileSource)
+        with scopedVat(vat):
+            if size > 0:
+                data = charpsize2str(source._buf.c_base, size)
+                source.deliver(data)
+            elif size < 0:
+                msg = ruv.formatError(size).decode("utf-8")
+                source.abort(u"libuv error: %s" % msg)
+            else:
+                # EOF.
+                source.complete()
+
+@autohelp
+class FileSource(Object):
+    """
+    A source which reads bytestrings from a file.
+    """
+
+    def __init__(self, fs, fd, vat):
+        self._fs = fs
+        self._fd = fd
+        self._vat = vat
+
+        self._queue = []
+
+        # XXX read size should be tunable
+        self._buf = ruv.allocBuf(16384)
+
+        # Set this up only once.
+        ruv.stashFS(fs, (vat, self))
+
+    def _nextSink(self):
+        assert self._queue, "pepperocini"
+        return self._queue.pop(0)
+
+    def _cleanup(self):
+        uv_loop = self._vat.uv_loop
+        ruv.fsClose(uv_loop, self._fs, self._fd, ruv.fsDiscard)
+        ruv.freeBuf(self._buf)
+
+    def deliver(self, data):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        r, sink = self._nextSink()
+        # XXX we really should chain the promise from the vat send to the
+        # resolver choosing to resolve or smash. Better yet, this should be in
+        # t.o.refs as a standard helper. ~ C.
+        r.resolve(NullObject)
+        self._vat.sendOnly(sink, RUN_1, [BytesObject(data)], EMPTY_MAP)
+
+    def complete(self):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        r, sink = self._nextSink()
+        r.resolve(NullObject)
+        self._vat.sendOnly(sink, COMPLETE_0, [], EMPTY_MAP)
+        self._cleanup()
+
+    def abort(self, reason):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        r, sink = self._nextSink()
+        r.resolve(NullObject)
+        self._vat.sendOnly(sink, ABORT_1, [StrObject(reason)], EMPTY_MAP)
+        self._cleanup()
+
+    @method("Any", "Any")
+    def run(self, sink):
+        p, r = makePromise()
+        self._queue.append((r, sink))
+        with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
+            bufs[0].c_base = self._buf.c_base
+            bufs[0].c_len = self._buf.c_len
+            ruv.fsRead(self._vat.uv_loop, self._fs, self._fd, bufs, 1, -1,
+                       readFileCB)
+        return p
+
+
+def writeFileCB(fs):
+    try:
+        with ruv.unstashingFS(fs) as (vat, sink):
+            assert isinstance(sink, FileSink)
+            size = intmask(fs.c_result)
+            if size > 0:
+                # XXX backpressure drain.written(size)
+                pass
+            elif size < 0:
+                msg = ruv.formatError(size).decode("utf-8")
+                sink.abort(StrObject(u"libuv error: %s" % msg))
+    except:
+        print "Exception in writeFileCB"
+
+@autohelp
+class FileSink(Object):
+    """
+    A sink which writes bytestrings to a file.
+    """
+
+    closed = False
+
+    def __init__(self, fs, fd, vat):
+        self._fs = fs
+        self._fd = fd
+        self._vat = vat
+
+        # Set this up only once.
+        ruv.stashFS(fs, (vat, self))
+
+    def _cleanup(self):
+        ruv.fsClose(self._vat.uv_loop, self._fs, self._fd, ruv.fsDiscard)
+        self.closed = True
+
+    @method("Void", "Bytes")
+    def run(self, data):
+        if self.closed:
+            raise userError(u"run/1: Couldn't write to closed file")
+
+        with ruv.scopedBufs([data]) as bufs:
+            ruv.fsWrite(self._vat.uv_loop, self._fs, self._fd, bufs, 1, -1,
+                        writeFileCB)
+
+    @method("Void")
+    def complete(self):
+        self._cleanup()
+
+    @method.py("Void", "Any")
+    def abort(self, problem):
+        self._cleanup()
