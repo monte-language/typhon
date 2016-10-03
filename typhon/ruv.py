@@ -608,6 +608,7 @@ def tcpBind(stream, address, port):
     rv = check("tcp_bind", tcp_bind(stream, sin, 0))
     return rv
 
+@specialize.ll()
 def tcpConnect(stream, address, port, callback):
     connect = alloc_connect()
     rffi.setintfield(sin, "c_sin_family", s.AF_INET)

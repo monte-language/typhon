@@ -22,6 +22,7 @@ from typhon.autohelp import autohelp, method
 from typhon.errors import userError
 from typhon.objects.collections.lists import wrapList, unwrapList
 from typhon.objects.data import StrObject, unwrapBytes, unwrapInt
+from typhon.objects.networking.streamcaps import StreamSink, StreamSource
 from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object, runnable
@@ -52,6 +53,33 @@ def connectCB(connect, status):
                 debug_print(error)
                 fountResolver.smash(StrObject(error.decode("utf-8")))
                 drainResolver.smash(StrObject(error.decode("utf-8")))
+                # Done with stream.
+                ruv.closeAndFree(stream)
+    except:
+        if not we_are_translated():
+            raise
+
+def connectStreamCB(connect, status):
+    status = intmask(status)
+    stream = connect.c_handle
+
+    try:
+        vat, resolvers = ruv.unstashStream(stream)
+        sourceResolver, sinkResolver = unwrapList(resolvers)
+        assert isinstance(sourceResolver, LocalResolver)
+        assert isinstance(sinkResolver, LocalResolver)
+
+        with scopedVat(vat):
+            if status >= 0:
+                debug_print("Made connection!")
+                wrappedStream = ruv.wrapStream(stream)
+                sourceResolver.resolve(StreamSource(wrappedStream, vat))
+                sinkResolver.resolve(StreamSink(wrappedStream, vat))
+            else:
+                error = "Connection failed: " + ruv.formatError(status)
+                debug_print(error)
+                sourceResolver.smash(StrObject(error.decode("utf-8")))
+                sinkResolver.smash(StrObject(error.decode("utf-8")))
                 # Done with stream.
                 ruv.closeAndFree(stream)
     except:
@@ -91,6 +119,25 @@ class TCP4ClientEndpoint(Object):
 
         # Return the promises.
         return [fount, drain]
+
+    @method("List")
+    def connectStream(self):
+        vat = currentVat.get()
+        stream = ruv.alloc_tcp(vat.uv_loop)
+
+        source, sourceResolver = makePromise()
+        sink, sinkResolver = makePromise()
+
+        # Ugh, the hax.
+        resolvers = wrapList([sourceResolver, sinkResolver])
+        ruv.stashStream(ruv.rffi.cast(ruv.stream_tp, stream),
+                        (vat, resolvers))
+
+        # Make the actual connection.
+        ruv.tcpConnect(stream, self.host, self.port, connectStreamCB)
+
+        # Return the promises.
+        return [source, sink]
 
 
 @runnable(RUN_2)
@@ -161,6 +208,31 @@ def connectionCB(uv_server, status):
         if not we_are_translated():
             raise
 
+def connectionStreamCB(uv_server, status):
+    status = intmask(status)
+
+    # If the connection failed to complete, then whatever; we're a server, not
+    # a client, and this is a pretty boring do-nothing failure mode.
+    # XXX we *really* should have some way to report failures, though; right?
+    if status < 0:
+        return
+
+    try:
+        with ruv.unstashingStream(uv_server) as (vat, handler):
+            uv_client = ruv.rffi.cast(ruv.stream_tp,
+                                      ruv.alloc_tcp(vat.uv_loop))
+            # Actually accept the connection.
+            ruv.accept(uv_server, uv_client)
+            # Incant the handler.
+            from typhon.objects.collections.maps import EMPTY_MAP
+            wrappedStream = ruv.wrapStream(uv_client)
+            vat.sendOnly(handler, RUN_2, [StreamSource(wrappedStream, vat),
+                                          StreamSink(wrappedStream, vat)],
+                         EMPTY_MAP)
+    except:
+        if not we_are_translated():
+            raise
+
 
 @autohelp
 class TCP4ServerEndpoint(Object):
@@ -181,13 +253,30 @@ class TCP4ServerEndpoint(Object):
         try:
             ruv.tcpBind(uv_server, "0.0.0.0", self.port)
         except ruv.UVError as uve:
-            raise userError(u"makeTCP4ServerEndpoint: Couldn't listen: %s" %
+            raise userError(u"listen/1: Couldn't listen: %s" %
                             uve.repr().decode("utf-8"))
 
         uv_stream = ruv.rffi.cast(ruv.stream_tp, uv_server)
         ruv.stashStream(uv_stream, (vat, handler))
         # XXX hardcoded backlog of 42
         ruv.listen(uv_stream, 42, connectionCB)
+
+        return TCP4Server(uv_server)
+
+    @method("Any", "Any")
+    def listenStream(self, handler):
+        vat = currentVat.get()
+        uv_server = ruv.alloc_tcp(vat.uv_loop)
+        try:
+            ruv.tcpBind(uv_server, "0.0.0.0", self.port)
+        except ruv.UVError as uve:
+            raise userError(u"listenStream/1: Couldn't listen: %s" %
+                            uve.repr().decode("utf-8"))
+
+        uv_stream = ruv.rffi.cast(ruv.stream_tp, uv_server)
+        ruv.stashStream(uv_stream, (vat, handler))
+        # XXX hardcoded backlog of 42
+        ruv.listen(uv_stream, 42, connectionStreamCB)
 
         return TCP4Server(uv_server)
 
