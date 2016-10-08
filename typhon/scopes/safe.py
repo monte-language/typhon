@@ -151,7 +151,7 @@ class MObject(Object):
             raise WrongType(u"namedArgs must be a ConstMap")
         return target.call(verb, args, namedArgs)
 
-    @method("Any", "Any", "Str", "List", "Any")
+    @method("Void", "Any", "Str", "List", "Any")
     def sendOnly(self, target, verb, args, namedArgs):
         """
         Send a message to an object.
@@ -165,7 +165,7 @@ class MObject(Object):
         # Signed, sealed, delivered, I'm yours.
         sendAtom = getAtom(verb, len(args))
         vat = currentVat.get()
-        return vat.sendOnly(target, sendAtom, args, namedArgs)
+        vat.sendOnly(target, sendAtom, args, namedArgs)
 
     @method("Any", "Any", "Str", "List", "Any")
     def send(self, target, verb, args, namedArgs):
