@@ -104,11 +104,8 @@ class StreamSource(Object):
     def deliver(self, data):
         from typhon.objects.collections.maps import EMPTY_MAP
         r, sink = self._nextSink()
-        # XXX we really should chain the promise from the vat send to the
-        # resolver choosing to resolve or smash. Better yet, this should be in
-        # t.o.refs as a standard helper. ~ C.
-        r.resolve(NullObject)
-        self._vat.sendOnly(sink, RUN_1, [BytesObject(data)], EMPTY_MAP)
+        p = self._vat.send(sink, RUN_1, [BytesObject(data)], EMPTY_MAP)
+        r.resolve(p)
 
     def complete(self):
         from typhon.objects.collections.maps import EMPTY_MAP
@@ -210,11 +207,8 @@ class FileSource(Object):
     def deliver(self, data):
         from typhon.objects.collections.maps import EMPTY_MAP
         r, sink = self._nextSink()
-        # XXX we really should chain the promise from the vat send to the
-        # resolver choosing to resolve or smash. Better yet, this should be in
-        # t.o.refs as a standard helper. ~ C.
-        r.resolve(NullObject)
-        self._vat.sendOnly(sink, RUN_1, [BytesObject(data)], EMPTY_MAP)
+        p = self._vat.send(sink, RUN_1, [BytesObject(data)], EMPTY_MAP)
+        r.resolve(p)
 
     def complete(self):
         from typhon.objects.collections.maps import EMPTY_MAP
