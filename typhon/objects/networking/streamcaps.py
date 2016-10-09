@@ -89,6 +89,9 @@ class StreamSource(Object):
     A source which reads bytestrings from a libuv stream.
     """
 
+    _failure = None
+    _closed = False
+
     def __init__(self, stream, vat):
         self._stream = stream
         self._vat = vat
@@ -101,6 +104,11 @@ class StreamSource(Object):
         assert self._queue, "pepperocini"
         return self._queue.pop(0)
 
+    def _cleanup(self):
+        self._closed = True
+        self._stream.release()
+        self._stream = None
+
     def deliver(self, data):
         from typhon.objects.collections.maps import EMPTY_MAP
         r, sink = self._nextSink()
@@ -108,19 +116,31 @@ class StreamSource(Object):
         r.resolve(p)
 
     def complete(self):
+        self._cleanup()
         from typhon.objects.collections.maps import EMPTY_MAP
-        r, sink = self._nextSink()
-        r.resolve(NullObject)
-        self._vat.sendOnly(sink, COMPLETE_0, [], EMPTY_MAP)
+        for r, sink in self._queue:
+            r.resolve(NullObject)
+            self._vat.sendOnly(sink, COMPLETE_0, [], EMPTY_MAP)
 
     def abort(self, reason):
+        self._cleanup()
         from typhon.objects.collections.maps import EMPTY_MAP
-        r, sink = self._nextSink()
-        r.resolve(NullObject)
-        self._vat.sendOnly(sink, ABORT_1, [StrObject(reason)], EMPTY_MAP)
+        for r, sink in self._queue:
+            r.resolve(NullObject)
+            self._vat.sendOnly(sink, ABORT_1, [StrObject(reason)], EMPTY_MAP)
 
     @method("Any", "Any")
     def run(self, sink):
+        if self._closed:
+            # Surprisingly, we do *not* need to throw here; we can simply
+            # indicate that we're already done.
+            from typhon.objects.collections.maps import EMPTY_MAP
+            if self._failure is None:
+                return self._vat.send(sink, COMPLETE_0, [], EMPTY_MAP)
+            else:
+                return self._vat.send(sink, ABORT_1, [self._failure],
+                                      EMPTY_MAP)
+
         p, r = makePromise()
         self._queue.append((r, sink))
         ruv.readStart(self._stream._stream, ruv.allocCB, readStreamCB)
@@ -142,6 +162,11 @@ class StreamSink(Object):
         self._stream = stream
         self._vat = vat
 
+    def _cleanup(self):
+        self.closed = True
+        self._stream.release()
+        self._stream = None
+
     @method("Void", "Bytes")
     def run(self, data):
         if self.closed:
@@ -154,11 +179,11 @@ class StreamSink(Object):
 
     @method("Void")
     def complete(self):
-        self.closed = True
+        self._cleanup()
 
     @method("Void", "Any")
     def abort(self, problem):
-        self.closed = True
+        self._cleanup()
 
 
 def readFileCB(fs):

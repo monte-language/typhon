@@ -72,7 +72,7 @@ def connectStreamCB(connect, status):
         with scopedVat(vat):
             if status >= 0:
                 debug_print("Made connection!")
-                wrappedStream = ruv.wrapStream(stream)
+                wrappedStream = ruv.wrapStream(stream, 2)
                 sourceResolver.resolve(StreamSource(wrappedStream, vat))
                 sinkResolver.resolve(StreamSink(wrappedStream, vat))
             else:
@@ -225,7 +225,7 @@ def connectionStreamCB(uv_server, status):
             ruv.accept(uv_server, uv_client)
             # Incant the handler.
             from typhon.objects.collections.maps import EMPTY_MAP
-            wrappedStream = ruv.wrapStream(uv_client)
+            wrappedStream = ruv.wrapStream(uv_client, 2)
             vat.sendOnly(handler, RUN_2, [StreamSource(wrappedStream, vat),
                                           StreamSink(wrappedStream, vat)],
                          EMPTY_MAP)

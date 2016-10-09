@@ -65,7 +65,7 @@ class stdio(Object):
         kind = ruv.guess_handle(0)
         if kind == ruv.HANDLE_TTY:
             stdin = ruv.alloc_tty(uv_loop, 0, True)
-            stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdin))
+            stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdin), 1)
             return StreamSource(stream, vat)
         else:
             return FileSource(ruv.alloc_fs(), 0, vat)
@@ -77,7 +77,7 @@ class stdio(Object):
         kind = ruv.guess_handle(1)
         if kind == ruv.HANDLE_TTY:
             stdout = ruv.alloc_tty(uv_loop, 1, False)
-            stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdout))
+            stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdout), 1)
             return StreamSink(stream, vat)
         else:
             return FileSink(ruv.alloc_fs(), 1, vat)
@@ -89,7 +89,7 @@ class stdio(Object):
         kind = ruv.guess_handle(2)
         if kind == ruv.HANDLE_TTY:
             stderr = ruv.alloc_tty(uv_loop, 2, False)
-            stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stderr))
+            stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stderr), 1)
             return StreamSink(stream, vat)
         else:
             return FileSink(ruv.alloc_fs(), 2, vat)

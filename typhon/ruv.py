@@ -12,7 +12,7 @@ import sys
 
 from functools import wraps
 
-from rpython.rlib import _rsocket_rffi as s, rgc
+from rpython.rlib import _rsocket_rffi as s
 from rpython.rlib.objectmodel import current_object_addr_as_int, specialize
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.rawstorage import alloc_raw_storage, free_raw_storage
@@ -415,20 +415,16 @@ class UVStream(object):
     The primary purpose of this wrapper is to provide finalization services.
     """
 
-    _immutable_ = True
+    def __init__(self, stream, refCount):
+        assert refCount > 0, "vampire"
 
-    def __init__(self, stream):
         self._stream = stream
+        self._refCount = refCount
 
-class StreamQueue(rgc.FinalizerQueue):
-
-    Class = UVStream
-
-    def finalizer_trigger(self):
-        uvstream = self.next_dead()
-        while uvstream is not None:
-            streamJanitor.streams.append(uvstream._stream)
-            uvstream = self.next_dead()
+    def release(self):
+        self._refCount -= 1
+        if not self._refCount:
+            streamJanitor.streams.append(self._stream)
 
 class StreamJanitor(object):
 
@@ -436,16 +432,18 @@ class StreamJanitor(object):
         self.streams = []
 
     def cleanup(self):
+        if not self.streams:
+            return
+
+        log(["uv"], u"Janitor closing %d streams" % len(self.streams))
         for stream in self.streams:
             closeAndFree(stream)
         self.streams = []
 
-streamQueue = StreamQueue()
 streamJanitor = StreamJanitor()
 
-def wrapStream(stream):
-    wrapper = UVStream(stream)
-    # streamQueue.register_finalizer(wrapper)
+def wrapStream(stream, refCount):
+    wrapper = UVStream(stream, refCount)
     return wrapper
 
 
