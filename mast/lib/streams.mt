@@ -5,7 +5,7 @@ import "lib/codec/utf8" =~ [=> UTF8]
 exports (
     Sink, Source, Pump,
     makeSink, makeSource, makePump,
-    flow,
+    flow, fuse,
     alterSink, alterSource,
 )
 
@@ -294,6 +294,25 @@ object makePump as DeepFrozen:
             def decodePump(packet) :List as Pump:
                 return [codec.decode(packet, null)]
 
+    to splitAt(fragment, var buf) :Pump:
+        "
+        A pump which splits and buffers strings of some sort.
+
+        The final split piece is only delivered when terminated by the
+        splitting fragment; this behavior is meant for splitting trailing
+        newlines.
+
+        To split strings: makePump.splitAt(\":\", \"\")
+
+        To split bytestrings: makePump.splitAt(b`:`, b``)
+        "
+
+        return def splitAtPump(packet) :List as Pump:
+            buf += packet
+            def pieces := buf.split(fragment)
+            buf := pieces.last()
+            return pieces.slice(0, pieces.size() - 1)
+
 def testMakePumpId(assert):
     def pump := makePump.id()
     var l := []
@@ -318,6 +337,16 @@ def testMakePumpScan(assert):
 def testMakePumpEncodeUTF8(assert):
     def pump := makePump.encode(UTF8)
     assert.equal(pump("⌵"), [b`$\xe2$\x8c$\xb5`])
+
+def testMakePumpSplitAtStr(assert):
+    def pump := makePump.splitAt(":", "")
+    assert.equal(pump("a:b:c"), ["a", "b"])
+    assert.equal(pump(":"), ["c"])
+
+def testMakePumpSplitAtBytes(assert):
+    def pump := makePump.splitAt(b`:`, b``)
+    assert.equal(pump(b`a:b:c`), [b`a`, b`b`])
+    assert.equal(pump(b`:`), [b`c`])
 
 def testPumpPairSingle(assert):
     def [sink, source] := pumpPair(makePump.id())
@@ -353,8 +382,34 @@ unittest([
     testMakePumpFilter,
     testMakePumpScan,
     testMakePumpEncodeUTF8,
+    testMakePumpSplitAtStr,
+    testMakePumpSplitAtBytes,
     testPumpPairSingle,
     testPumpPairPostHoc,
+])
+
+def fuse(first, second) :Pump as DeepFrozen:
+    "Fuse two pumps into a single pump."
+
+    # Note that we take advantage of pumps being defined synchronously; this
+    # should be async in the future. ~ C.
+
+    return def fusedPump(packet) as Pump:
+        var rv := []
+        for p in (first(packet)):
+            rv += second(p)
+        return rv
+
+def testFuseSieve(assert):
+    def pump := fuse(makePump.filter(fn x { x % 2 == 0 }),
+                     makePump.filter(fn x { x % 3 == 0 }))
+    var l := []
+    for x in (0..10):
+        l += pump(x)
+    assert.equal(l, [0, 6])
+
+unittest([
+    testFuseSieve,
 ])
 
 object alterSink as DeepFrozen:
