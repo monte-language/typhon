@@ -415,6 +415,13 @@ unittest([
 object alterSink as DeepFrozen:
     "A collection of decorative attachments for sinks."
 
+    to fusePump(pump, sink) :Sink:
+        "Attach `pump` to `sink`."
+
+        def [fuseSink, source] := pumpPair(pump)
+        flow(source, sink)
+        return fuseSink
+
     to map(f, sink) :Sink:
         "Map over packets coming into `sink` with the function `f`."
 
@@ -425,31 +432,23 @@ object alterSink as DeepFrozen:
     to filter(predicate, sink) :Sink:
         "Filter packets coming into `sink` with the `predicate`."
 
-        def [filterSink, source] := pumpPair(makePump.filter(predicate))
-        flow(source, sink)
-        return filterSink
+        return alterSink.fusePump(makePump.filter(predicate), sink)
 
     to scan(f, z, sink) :Sink:
         "Accumulate a partial fold of `f` with `z` as the starting value."
 
-        def [scanSink, source] := pumpPair(makePump.scan(f, z))
-        flow(source, sink)
-        return scanSink
+        return alterSink.fusePump(makePump.scan(f, z), sink)
 
     to encodeWith(codec, sink) :Sink:
         "Encode packets coming into `sink` with the `codec`."
 
-        def [encodeSink, source] := pumpPair(makePump.encode(codec))
-        flow(source, sink)
-        return encodeSink
+        return alterSink.fusePump(makePump.encode(codec), sink)
 
     to decodeWith(codec, sink, => withExtras :Bool := false) :Sink:
         "Decode packets coming into `sink` with the `codec`."
 
         def pump := makePump.decode(codec, => withExtras)
-        def [decodeSink, source] := pumpPair(pump)
-        flow(source, sink)
-        return decodeSink
+        return alterSink.fusePump(pump, sink)
 
 def testAlterSinkMap(assert):
     def [l, sink] := makeSink.asList()
@@ -510,6 +509,13 @@ unittest([
 object alterSource as DeepFrozen:
     "A collection of decorative attachments for sources."
 
+    to fusePump(pump, source):
+        "Fuse `pump` to `source`."
+
+        def [fuseSink, fuseSource] := pumpPair(pump)
+        return def fusingSource(sink) :Vow[Void] as Source:
+            return when (source(fuseSink), fuseSource(sink)) -> { null }
+
     to map(f, source) :Source:
         "Map over packets coming out of `source` with the function `f`."
 
@@ -519,32 +525,24 @@ object alterSource as DeepFrozen:
     to filter(predicate, source) :Source:
         "Filter packets coming out of `source` with `predicate`."
 
-        def [filterSink, filterSource] := pumpPair(makePump.filter(predicate))
-        return def filteringSource(sink) :Vow[Void] as Source:
-            return when (source(filterSink), filterSource(sink)) -> { null }
+        return alterSource.fusePump(makePump.filter(predicate), source)
 
     to scan(f, z, source) :Source:
         "Produce partial folds of `source` with function `f` and initial value
          `z`."
 
-        def [scanSink, scanSource] := pumpPair(makePump.scan(f, z))
-        return def scanningSource(sink) :Vow[Void] as Source:
-            return when (source(scanSink), scanSource(sink)) -> { null }
+        return alterSource.fusePump(makePump.scan(f, z), source)
 
     to encodeWith(codec, source) :Source:
         "Encode packets coming out of `source` with `codec`."
 
-        def [encodeSink, encodeSource] := pumpPair(makePump.encode(codec))
-        return def encodingSource(sink) :Vow[Void] as Source:
-            return when (source(encodeSink), encodeSource(sink)) -> { null }
+        return alterSource.fusePump(makePump.encode(codec), source)
 
     to decodeWith(codec, source, => withExtras :Bool := false) :Source:
         "Decode packets coming out of `source` with `codec`."
 
         def pump := makePump.decode(codec, => withExtras)
-        def [decodeSink, decodeSource] := pumpPair(pump)
-        return def decodingSource(sink) :Vow[Void] as Source:
-            return when (source(decodeSink), decodeSource(sink)) -> { null }
+        return alterSource.fusePump(pump, source)
 
 def testAlterSourceMap(assert):
     def [l, sink] := makeSink.asList()
