@@ -1,5 +1,5 @@
 {stdenv, pkgs, lib, python27, typhonVm, mast, nix, nix-prefetch-scripts,
- rlwrap, vmSrc, mastSrc, withBuild ? true, shellForMt ? pkgs.stdenv.shell }:
+ rlwrap, withBuild ? true, shellForMt ? pkgs.stdenv.shell }:
 let
   mt-bake-py = pkgs.writeText "mt-bake.py" (
     (if withBuild then
@@ -14,17 +14,35 @@ let
   buildFuncs = if withBuild then ''
       doBuild() {
         ${python27}/bin/python ${mt-bake-py} &&
-        ${nix.out}/bin/nix-build -E 'let lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
-          typhon = import @out@/nix-support/typhon.nix {
-              bakedVmSrc = "${vmSrc}"; bakedMastSrc = "${mastSrc}"; };
-            in typhon.montePackage lockSet'
+        ${nix.out}/bin/nix-build -E '
+          let
+            nixpkgs = import <nixpkgs> { };
+            lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
+            montePackage = nixpkgs.callPackage @out@/nix-support/montePackage.nix {
+              typhonVm = ${typhonVm};
+              mast = ${mast};
+            };
+          in montePackage lockSet'
     }
     doDockerBuild() {
         ${python27}/bin/python ${mt-bake-py} &&
-        ${nix.out}/bin/nix-build -E 'let lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
-          typhon = import @out@/nix-support/typhon.nix {
-              bakedVmSrc = "${vmSrc}"; bakedMastSrc = "${mastSrc}"; };
-          in typhon.monteDockerPackage lockSet'
+        ${nix.out}/bin/nix-build -E '
+          let
+            nixpkgs = import <nixpkgs> { };
+            lockSet = builtins.fromJSON (builtins.readFile ./mt-lock.json);
+            montePackage = nixpkgs.callPackage @out@/nix-support/montePackage.nix {
+              typhonVm = ${typhonVm};
+              mast = ${mast};
+            };
+          in nixpkgs.dockerTools.buildImage {
+            name = lockSet.mainPackage;
+            tag = "latest";
+            contents = montePackage lockSet;
+            config = {
+              Cmd = [ ("/bin/" + lockSet.packages.''${lockSet.mainPackage}.entrypoint) ];
+              WorkingDir = "";
+            };
+          }'
     }
   '' else "";
   buildCmds = if withBuild then ''
