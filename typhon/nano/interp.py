@@ -627,19 +627,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     def visitNamedArgExpr(self, key, value):
         return (self.visitExpr(key), self.visitExpr(value))
 
-    def visitNamedPattern(self, key, patt, default):
-        namedArgs = self.specimen
-        assert isinstance(namedArgs, ConstMap)
-        k = self.visitExpr(key)
-        if k in namedArgs:
-            v = namedArgs.objectMap[k]
-        elif not isinstance(default, self.src.NullExpr):
-            v = self.visitExpr(default)
-        else:
-            throw(self.patternFailure,
-                  StrObject(u"Named arg %s missing in call" % (k.toString(),)))
-        self.matchBind(patt, v, self.patternFailure)
-
 
 def scope2env(scope):
     environment = {}
