@@ -130,7 +130,11 @@ def visit%(name)s(self, specimen):
             """ % params).compile() in d
             attrs.update(d)
 
-        return type("Pass", (object,), attrs)
+        Pass = type("Pass", (object,), attrs)
+        # This isn't really a knot so much as a quick and easy way to access
+        # the original implementations of the pass's methods. ~ C.
+        Pass.super = Pass
+        return Pass
     irAttrs["makePassTo"] = makePassTo
 
     def extend(self, name, terminals, nonterms):

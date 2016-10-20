@@ -13,10 +13,29 @@ from typhon.objects.user import AuditClipboard
 from typhon.quoting import quoteChar, quoteStr
 
 def refactorStructure(ast):
+    ast = RemoveDefIgnore().visitExpr(ast)
     ast = SplitScript().visitExpr(ast)
     ast = MakeAtoms().visitExpr(ast)
     ast = SplitAuditors().visitExpr(ast)
     return ast
+
+class RemoveDefIgnore(DeepFrozenIR.selfPass()):
+    """
+    match m`def _ :@guard exit @ex := @rvalue`:
+        if (guard == NullExpr):
+            rvalue
+        else:
+            m`$guard.coerce($rvalue, $ex)`
+    """
+
+    def visitDefExpr(self, patt, ex, rvalue):
+        if isinstance(patt, self.src.IgnorePatt):
+            guard = patt.guard
+            if isinstance(guard, self.src.NullExpr):
+                return rvalue
+            else:
+                return self.dest.CallExpr(guard, u"coerce", [rvalue, ex], [])
+        return self.super.visitDefExpr(self, patt, ex, rvalue)
 
 SplitScriptIR = DeepFrozenIR.extend("SplitScript", [],
     {
