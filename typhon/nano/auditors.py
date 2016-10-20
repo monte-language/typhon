@@ -67,8 +67,7 @@ deepFrozenSubsetGuards = {
 # NB: The only live exprs possible here are already DF, so we don't need to
 # audit them. Revisit this if/when necessary. ~ C.
 
-_DischargeDF = BoundNounsIR.makePassTo(DeepFrozenIR)
-class DischargeDF(_DischargeDF):
+class DischargeDF(BoundNounsIR.makePassTo(DeepFrozenIR)):
 
     def __init__(self):
         self.frameStack = [{}]
@@ -87,13 +86,13 @@ class DischargeDF(_DischargeDF):
 
     def visitMethod(self, method):
         self.pushFrame()
-        rv = _DischargeDF.visitMethod(self, method)
+        rv = self.super.visitMethod(self, method)
         self.popFrame()
         return rv
 
     def visitMatcher(self, matcher):
         self.pushFrame()
-        rv = _DischargeDF.visitMatcher(self, matcher)
+        rv = self.super.visitMatcher(self, matcher)
         self.popFrame()
         return rv
 

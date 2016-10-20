@@ -66,13 +66,12 @@ MastIR = makeIR("Mast",
     }
 )
 
-_SanityCheck = MastIR.makePassTo(MastIR)
-class SanityCheck(_SanityCheck):
+class SanityCheck(MastIR.selfPass()):
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
         if isinstance(patt, self.src.ViaPatt):
             raise LoadFailed("via-patts not yet permitted in object-exprs")
-        return _SanityCheck.visitObjectExpr(self, doc, patt, auditors,
+        return self.super.visitObjectExpr(self, doc, patt, auditors,
                 methods, matchers)
 
 

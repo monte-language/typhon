@@ -8,7 +8,7 @@ def elideEscapes(ast):
     ast = ElideMethodReturn().visitExpr(ast)
     return ast
 
-class FindUsage(BoundNounsIR.makePassTo(BoundNounsIR)):
+class FindUsage(BoundNounsIR.selfPass()):
 
     found = False
 
@@ -30,7 +30,7 @@ class FindUsage(BoundNounsIR.makePassTo(BoundNounsIR)):
         return self.dest.ObjectExpr(doc, patt, auditors, methods, matchers,
                                     mast, layout)
 
-class ElideMethodReturn(BoundNounsIR.makePassTo(BoundNounsIR)):
+class ElideMethodReturn(BoundNounsIR.selfPass()):
 
     def pattIndex(self, patt):
         if isinstance(patt, self.dest.NounPatt):
