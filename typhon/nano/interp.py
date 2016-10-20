@@ -227,7 +227,7 @@ class InterpObject(Object):
                 self.getDisplayName(), method.atom.verb, len(method.patts),
                 len(args)))
         for i in range(len(method.patts)):
-            e.matchBind(method.patts[i], args[i], None)
+            e.matchBind(method.patts[i], args[i])
         namedArgDict = unwrapMap(namedArgs)
         for np in method.namedPatts:
             k = e.visitExpr(np.key)
@@ -235,11 +235,11 @@ class InterpObject(Object):
                 if k not in namedArgDict:
                     raise userError(u"Named arg %s missing in call" % (
                         k.toString(),))
-                e.matchBind(np.patt, namedArgDict[k], None)
+                e.matchBind(np.patt, namedArgDict[k])
             elif k not in namedArgDict:
-                e.matchBind(np.patt, e.visitExpr(np.default), None)
+                e.matchBind(np.patt, e.visitExpr(np.default))
             else:
-                e.matchBind(np.patt, namedArgDict[k], None)
+                e.matchBind(np.patt, namedArgDict[k])
         resultGuard = e.visitExpr(method.guard)
         v = e.visitExpr(method.body)
         if resultGuard is NullObject:
@@ -286,11 +286,9 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         self.specimen = None
         self.patternFailure = None
 
-    def matchBind(self, patt, val, ej):
+    def matchBind(self, patt, val, ej=theThrower):
         oldSpecimen = self.specimen
         oldPatternFailure = self.patternFailure
-        if ej is None:
-            ej = theThrower
         self.specimen = val
         self.patternFailure = ej
         self.visitPatt(patt)
@@ -349,7 +347,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     def visitEscapeOnlyExpr(self, patt, body):
         jit_debug("EscapeOnlyExpr")
         ej = Ejector()
-        self.matchBind(patt, ej, None)
+        self.matchBind(patt, ej)
         try:
             val = self.visitExpr(body)
             ej.disable()
@@ -363,7 +361,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
         jit_debug("EscapeExpr")
         ej = Ejector()
-        self.matchBind(patt, ej, None)
+        self.matchBind(patt, ej)
         try:
             val = self.visitExpr(body)
             ej.disable()
@@ -372,7 +370,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             if e.ejector is not ej:
                 raise
             ej.disable()
-            self.matchBind(catchPatt, e.value, None)
+            self.matchBind(catchPatt, e.value)
             return self.visitExpr(catchBody)
 
     def visitFinallyExpr(self, body, atLast):
@@ -547,7 +545,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         try:
             return self.visitExpr(body)
         except UserException, ex:
-            self.matchBind(catchPatt, sealException(ex), None)
+            self.matchBind(catchPatt, sealException(ex))
             return self.visitExpr(catchBody)
 
     def visitIgnorePatt(self, guard):
