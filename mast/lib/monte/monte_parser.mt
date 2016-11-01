@@ -100,12 +100,18 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             return false
 
     def acceptVerb(ej):
-        return if (peekTag() == ".String.") {
-            advance(ej)[1]
-        } else {
-            def t := acceptTag("IDENTIFIER", ej)
-            _makeString.fromStr(t[1], t[2])
-        }
+        return switch (peekTag()):
+            match ==".String.":
+                advance(ej)[1]
+            match =="IDENTIFIER":
+                def t := advance(ej)
+                _makeString.fromStr(t[1], t[2])
+            match ==VALUE_HOLE:
+                builder.ValueHoleExpr(advance(ej)[1], spanHere())
+            match ==PATTERN_HOLE:
+                builder.PatternHoleExpr(advance(ej)[1], spanHere())
+            match tag:
+                formatError(["Expected verb", tokens[position][2]], ej)
 
     def acceptList(rule):
         acceptEOLs()
