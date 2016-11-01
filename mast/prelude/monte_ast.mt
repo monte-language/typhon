@@ -460,8 +460,13 @@ def makeNamedArgExport(v :Expr, span) as DeepFrozenStamp:
     return astWrapper(namedArgExport, makeNamedArgExport, [v], span, &scope, "NamedArgExport",
                       fn f {[v.transform(f)]})
 
-def makeMethodCallExpr(rcvr :Expr, verb :Str, arglist :List[Expr],
-                       namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozenStamp:
+def makeMethodCallExpr(rcvr :Expr,
+                       verb :Any[Str, Ast["ValueHoleExpr", "PatternHoleExpr"]],
+                       arglist :List[Expr],
+                       namedArgs :List[Ast["NamedArg", "NamedArgExport"]],
+                       span) as DeepFrozenStamp:
+    # NB: We don't bother mixing in the verb scope, since quasi-holes always
+    # have empty scopes. ~ C.
     def &scope := makeLazySlot(fn {sumScopes([rcvr] + arglist + namedArgs)})
 
     object methodCallExpr:
@@ -485,10 +490,20 @@ def makeMethodCallExpr(rcvr :Expr, verb :Str, arglist :List[Expr],
             printListOn("(", arglist + namedArgs, ", ", ")", out, priorities["braceExpr"])
             if (priorities["call"] < priority):
                 out.print(")")
+    def transformer := if (verb =~ _ :Str) {
+        fn f {
+            [rcvr.transform(f), verb, transformAll(arglist, f),
+             transformAll(namedArgs, f)]
+        }
+    } else {
+        fn f {
+            [rcvr.transform(f), verb.transform(f), transformAll(arglist, f),
+             transformAll(namedArgs, f)]
+        }
+    }
     return astWrapper(methodCallExpr, makeMethodCallExpr,
         [rcvr, verb, arglist, namedArgs], span, &scope, "MethodCallExpr",
-        fn f {[rcvr.transform(f), verb, transformAll(arglist, f),
-               transformAll(namedArgs, f)]})
+        transformer)
 
 def makeFunCallExpr(receiver :Expr, args :List[Expr],
                     namedArgs :List[Ast["NamedArg", "NamedArgExport"]], span) as DeepFrozenStamp:
