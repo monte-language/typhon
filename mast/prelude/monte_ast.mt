@@ -232,7 +232,8 @@ object Expr as DeepFrozenStamp:
 
 def NamePattern :DeepFrozen := Ast["FinalPattern", "VarPattern",
                                    "BindPattern", "SlotPattern",
-                                   "BindingPattern", "IgnorePattern"]
+                                   "BindingPattern", "IgnorePattern",
+                                   "ValueHolePattern", "PatternHolePattern"]
 
 # LiteralExpr included here because the optimizer uses it.
 def Noun :DeepFrozen := Ast["NounExpr", "TempNounExpr", "LiteralExpr"]
