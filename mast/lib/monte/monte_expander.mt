@@ -114,6 +114,61 @@ def makeIfOrPass(builder) as DeepFrozen:
     return ifOrPass
 
 
+def makeCurryPass(builder) as DeepFrozen:
+    "Expand curry-expressions into calls to `_makeVerbFacet`."
+
+    def [p, r] := Ref.promise()
+    object curryPass extends makePass(builder, p):
+        to visitCurryExpr(receiver, verb, isSend, span):
+            return builder.MethodCallExpr(
+                builder.NounExpr("_makeVerbFacet", span),
+                isSend.pick("currySend", "curryCall"),
+                [receiver, builder.LiteralExpr(verb, span)], [],
+                span)
+    r.resolve(curryPass)
+    return curryPass
+
+
+def emitList(builder, items, span) as DeepFrozen:
+    return builder.MethodCallExpr(
+        builder.NounExpr("_makeList", span),
+        "run", items, [], span)
+
+def emitMap(builder, items, span) as DeepFrozen:
+    return builder.MethodCallExpr(
+        builder.NounExpr("_makeMap", span),
+        "fromPairs", [emitList(builder, items, span)], [], span)
+
+def makeSendPass(builder) as DeepFrozen:
+    "Expand send-expressions into calls to `M.send/4`."
+
+    def buildNamedArgs(namedArgs, span):
+        def na := [for na in (namedArgs)
+             emitList(builder, [na.getKey(), na.getValue()], span)]
+        return emitMap(builder, na, span)
+
+    def [p, r] := Ref.promise()
+    object sendPass extends makePass(builder, p):
+        to visitFunSendExpr(receiver, args, namedArgs, span):
+            return builder.MethodCallExpr(builder.NounExpr("M", span),
+                "send", [receiver, builder.LiteralExpr("run", span),
+                         emitList(builder, args, span),
+                         buildNamedArgs(namedArgs, span)], [],
+                span)
+
+        to visitSendExpr(receiver, verb, args, namedArgs, span):
+            def nargs := emitMap(builder,
+                [for na in (namedArgs)
+                 emitList(builder, [na.getKey(), na.getValue()], span)], span)
+            return builder.MethodCallExpr(builder.NounExpr("M", span),
+                "send", [receiver, builder.LiteralExpr(verb, span),
+                         emitList(builder, args, span),
+                         buildNamedArgs(namedArgs, span)], [],
+                 span)
+    r.resolve(sendPass)
+    return sendPass
+
+
 def makeModPowPass(builder) as DeepFrozen:
     "Expand modular exponentation method calls."
 
@@ -700,12 +755,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 #flattening be done here or in the parser?
                 seqExpr(exprs, span)
             match =="CurryExpr":
-                def [receiver, verb, isSend] := args
-                callExpr(
-                    nounExpr("_makeVerbFacet", span),
-                    isSend.pick("currySend", "curryCall"),
-                    [receiver, litExpr(verb, span)], [],
-                    span)
+                throw("Already expanded curries")
             match =="GetExpr":
                 def [receiver, index] := args
                 callExpr(receiver, "get", index, [], span)
@@ -713,17 +763,9 @@ def expand(node, builder, fail) as DeepFrozen:
                 def [receiver, fargs, namedArgs] := args
                 callExpr(receiver, "run", fargs, namedArgs, span)
             match =="FunSendExpr":
-                def [receiver, fargs, namedArgs] := args
-                callExpr(nounExpr("M", span),
-                    "send", [receiver, litExpr("run", span),
-                             emitList(fargs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
-                    span)
+                throw("Already expanded sends")
             match =="SendExpr":
-                def [receiver, verb, margs, namedArgs] := args
-                callExpr(nounExpr("M", span),
-                    "send", [receiver, litExpr(verb, span),
-                             emitList(margs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
-                     span)
+                throw("Already expanded sends")
             match =="PrefixExpr":
                 callExpr(args[1], node.getOpName(), [], [], span)
             match =="BinaryExpr":
@@ -1178,6 +1220,10 @@ def expand(node, builder, fail) as DeepFrozen:
 
     # Do sends within sequences.
     ast transform= (seqSendOnly)
+
+    # Remove the easy-to-expand sugar.
+    ast := makeCurryPass(builder).visit(ast)
+    ast := makeSendPass(builder).visit(ast)
 
     # The main course. Expand everything not yet expanded.
     ast := reifyTemporaries(ast.transform(expandTransformer))
