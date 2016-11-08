@@ -55,42 +55,63 @@ def renameCycles(node, renamings) as DeepFrozen:
     return node.transform(renamer)
 
 
-def ifAnd(ast, maker, args, span) as DeepFrozen:
+def makeIfAndPass(builder) as DeepFrozen:
     "Expand and-expressions inside if-expressions."
 
-    if (ast.getNodeName() == "IfExpr"):
-        def [test, consequent, alternative] := args
+    # XXX
+    def [p, r] := Ref.promise()
+    object ifAndPass extends makePass(builder, p):
+        to visitIfExpr(via (super.visiting) test,
+                       via (super.visiting) cons,
+                       via (super.visiting) alt, span):
+            return if (test.getNodeName() == "AndExpr"):
+                def left := test.getLeft()
+                def right := test.getRight()
 
-        if (test.getNodeName() == "AndExpr"):
-            def left := test.getLeft()
-            def right := test.getRight()
+                # The name occurrence check is not required. Recurse in case
+                # we have nested AndExprs.
+                def newCons := ifAndPass.visitIfExpr(right, cons, alt, span)
+                ifAndPass.visitIfExpr(left, newCons, alt, span)
+            else:
+                builder.IfExpr(test, cons, alt, span)
+    r.resolve(ifAndPass)
+    return ifAndPass
 
-            # The name occurrence check is not required.
-            return maker(left, maker(right, consequent, alternative, span),
-                         alternative, span)
 
-    return M.call(maker, "run", args + [span], [].asMap())
+def makeIfOrPass(builder) as DeepFrozen:
+    "
+    Expand some or-expressions inside if-expressions.
 
+    Only or-expressions which do not use names defined in the LHS as values
+    in the RHS will be expanded.
+    "
 
-def ifOr(ast, maker, args, span) as DeepFrozen:
-    "Expand or-expressions inside if-expressions."
+    # XXX
+    def [p, r] := Ref.promise()
+    object ifOrPass extends makePass(builder, p):
+        to visitIfExpr(via (super.visiting) test,
+                       via (super.visiting) cons,
+                       via (super.visiting) alt, span):
+            return if (test.getNodeName() == "OrExpr"):
+                def left := test.getLeft()
+                def right := test.getRight()
 
-    if (ast.getNodeName() == "IfExpr"):
-        def [test, consequent, alternative] := args
+                # The name occurrence check is not required. Recurse in case
+                # we have nested OrExprs.
 
-        if (test.getNodeName() == "OrExpr"):
-            def left := test.getLeft()
-            def right := test.getRight()
-
-            # left must not define any name used by right; otherwise, if
-            # left's test fails, right's test will try to access undefined
-            # names.
-            if ((left.getStaticScope().outNames() &
-                 right.getStaticScope().namesUsed()).size() == 0):
-                return maker(left, consequent, maker(right, consequent,
-                                                     alternative, span), span)
-
-    return M.call(maker, "run", args + [span], [].asMap())
+                # left must not define any name used by right; otherwise, if
+                # left's test fails, right's test will try to access undefined
+                # names. Recurse in case we have nested OrExprs.
+                if ((left.getStaticScope().outNames() &
+                     right.getStaticScope().namesUsed()).size() == 0):
+                    def newAlt := ifOrPass.visitIfExpr(right, cons, alt, span)
+                    ifOrPass.visitIfExpr(left, cons, newAlt, span)
+                else:
+                    builder.IfExpr(test, cons, alt, span)
+            else:
+                builder.IfExpr(test, cons, alt, span)
+    r.resolve(ifOrPass)
+    return ifOrPass
 
 
 def makeModPowPass(builder) as DeepFrozen:
@@ -1152,8 +1173,8 @@ def expand(node, builder, fail) as DeepFrozen:
 
     # Pre-expand certain simple if-expressions. The transformation isn't total
     # but covers many easy cases and doesn't require temporaries.
-    ast transform= (ifAnd)
-    ast transform= (ifOr)
+    ast := makeIfAndPass(builder).visit(ast)
+    ast := makeIfOrPass(builder).visit(ast)
 
     # Do sends within sequences.
     ast transform= (seqSendOnly)
