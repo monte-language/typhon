@@ -1,6 +1,34 @@
 import "lib/iterators" =~ [=> zip :DeepFrozen]
 exports (expand)
 
+def makePass(builder, sub) as DeepFrozen:
+    "
+    Produce a transformation pass with overrideable subobject behavior. Based
+    on the Typhon nanopass, but with more of a Monte flavor.
+    "
+
+    def Ast := builder.getAstGuard()
+
+    return object superPass:
+        to visit(value):
+            return if (value =~ ast :Ast) {
+                def argConstructor := value.getNodeName()
+                def subArgs := [for subArg in (value._uncall()[2])
+                    sub.visit(subArg)]
+                M.call(sub, `visit$argConstructor`, subArgs, [].asMap())
+            } else { value }
+
+        to visiting(value, _):
+            return value
+
+        to visitingList(value, ej):
+            def l :List exit ej := value
+            return [for item in (l) sub.visit(item)]
+
+        match [`visit@constructor`, args, _]:
+            def newArgs := [for arg in (args) sub.visit(arg)]
+            M.call(builder, constructor, newArgs, [].asMap())
+
 def reversed(it) as DeepFrozen:
     def items := _makeList.fromIterable(it)
     return items.reverse()
@@ -65,19 +93,24 @@ def ifOr(ast, maker, args, span) as DeepFrozen:
     return M.call(maker, "run", args + [span], [].asMap())
 
 
-def modPow(ast, maker, args, span) as DeepFrozen:
+def makeModPowPass(builder) as DeepFrozen:
     "Expand modular exponentation method calls."
 
-    if (ast.getNodeName() == "MethodCallExpr"):
-        escape ej:
-            def [receiver, verb ? (verb :Str == "mod"), [m], []] exit ej := args
-            if (receiver.getNodeName() == "MethodCallExpr"):
-                def x := receiver.getReceiver()
-                def verb ? (verb :Str == "pow") exit ej := receiver.getVerb()
-                def [e] exit ej := receiver.getArgs()
-                return maker(x, "modPow", [e, m], [], span)
-
-    return M.call(maker, "run", args + [span], [].asMap())
+    # XXX return object modPowPass extends makePass(builder, modPowPass):
+    def [p, r] := Ref.promise()
+    object modPowPass extends makePass(builder, p):
+        to visitMethodCallExpr(via (super.visiting) receiver, verb,
+                               via (super.visitingList) args,
+                               via (super.visitingList) namedArgs,
+                               span):
+            return if (verb == "mod" && args =~ [m] && namedArgs == [] &&
+                       receiver.getNodeName() == "MethodCallExpr" &&
+                       receiver._uncall()[2] =~ [x, =="pow", [e], [], _]):
+                builder.MethodCallExpr(x, "modPow", [e, m], [], span)
+            else:
+                builder.MethodCallExpr(receiver, verb, args, namedArgs, span)
+    r.resolve(modPowPass)
+    return modPowPass
 
 
 def expand(node, builder, fail) as DeepFrozen:
@@ -1133,6 +1166,6 @@ def expand(node, builder, fail) as DeepFrozen:
     # "Expand" modular exponentation. There is extant Monte code which only
     # runs to completion in reasonable time when this transformation is
     # applied.
-    ast transform= (modPow)
+    ast := makeModPowPass(builder).visit(ast)
 
     return ast
