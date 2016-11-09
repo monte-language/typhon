@@ -119,7 +119,7 @@ def makeCurryPass(builder) as DeepFrozen:
 
     def [p, r] := Ref.promise()
     object curryPass extends makePass(builder, p):
-        to visitCurryExpr(receiver, verb, isSend, span):
+        to visitCurryExpr(via (super.visiting) receiver, verb, isSend, span):
             return builder.MethodCallExpr(
                 builder.NounExpr("_makeVerbFacet", span),
                 isSend.pick("currySend", "curryCall"),
@@ -149,14 +149,18 @@ def makeSendPass(builder) as DeepFrozen:
 
     def [p, r] := Ref.promise()
     object sendPass extends makePass(builder, p):
-        to visitFunSendExpr(receiver, args, namedArgs, span):
+        to visitFunSendExpr(via (super.visiting) receiver,
+                            via (super.visitingList) args,
+                            via (super.visitingList) namedArgs, span):
             return builder.MethodCallExpr(builder.NounExpr("M", span),
                 "send", [receiver, builder.LiteralExpr("run", span),
                          emitList(builder, args, span),
                          buildNamedArgs(namedArgs, span)], [],
                 span)
 
-        to visitSendExpr(receiver, verb, args, namedArgs, span):
+        to visitSendExpr(via (super.visiting) receiver, verb,
+                         via (super.visitingList) args,
+                         via (super.visitingList) namedArgs, span):
             def nargs := emitMap(builder,
                 [for na in (namedArgs)
                  emitList(builder, [na.getKey(), na.getValue()], span)], span)
@@ -167,6 +171,51 @@ def makeSendPass(builder) as DeepFrozen:
                  span)
     r.resolve(sendPass)
     return sendPass
+
+
+def makeSuchThatPass(builder) as DeepFrozen:
+    "Expand such-that patterns."
+
+    def [p, r] := Ref.promise()
+    object suchThatPass extends makePass(builder, p):
+        to visitSuchThatPattern(via (super.visiting) pattern,
+                                via (super.visiting) expr, span):
+            def suchThat := builder.NounExpr("_suchThat", span)
+            return builder.ViaPattern(suchThat,
+                builder.ListPattern([pattern, builder.ViaPattern(
+                    builder.MethodCallExpr(suchThat, "run", [expr], [], span),
+                    builder.IgnorePattern(null, span), span)], null, span), span)
+    r.resolve(suchThatPass)
+    return suchThatPass
+
+
+def binaryOpVerbs :DeepFrozen := [
+    "+" => "add",
+    "-" => "subtract",
+    "*" => "multiply",
+    "//" => "floorDivide",
+    "/" => "approxDivide",
+    "%" => "mod",
+    "**" => "pow",
+    "&" => "and",
+    "|" => "or",
+    "^" => "xor",
+    "&!" => "butNot",
+    "<<" => "shiftLeft",
+    ">>" => "shiftRight",
+]
+
+def makeBinaryOpPass(builder) as DeepFrozen:
+    "Expand binary ops into call-exprs."
+
+    def [p, r] := Ref.promise()
+    object binaryOpPass extends makePass(builder, p):
+        to visitBinaryExpr(via (super.visiting) left, op,
+                           via (super.visiting) right, span):
+            return builder.MethodCallExpr(left, binaryOpVerbs[op], [right],
+                                          [], span)
+    r.resolve(binaryOpPass)
+    return binaryOpPass
 
 
 def makeModPowPass(builder) as DeepFrozen:
@@ -769,7 +818,7 @@ def expand(node, builder, fail) as DeepFrozen:
             match =="PrefixExpr":
                 callExpr(args[1], node.getOpName(), [], [], span)
             match =="BinaryExpr":
-                callExpr(args[0], node.getOpName(), [args[2]], [], span)
+                throw("Already expanded binary ops")
             match =="RangeExpr":
                 callExpr(nounExpr("_makeOrderedSpace", span),
                     "op__" + node.getOpName(), [args[0], args[2]], [], span)
@@ -961,12 +1010,7 @@ def expand(node, builder, fail) as DeepFrozen:
                             [litExpr(patterns.size(), span)], [], span),
                         builder.ListPattern(patterns + [tail], null, span), span)
             match =="SuchThatPattern":
-                def [pattern, expr] := args
-                def suchThat := nounExpr("_suchThat", span)
-                viaPatt(suchThat,
-                    builder.ListPattern([pattern, viaPatt(
-                        callExpr(suchThat, "run", [expr], [], span),
-                        ignorePatt(null, span), span)], null, span), span)
+                throw("Already expanded such-thats")
             match =="QuasiParserPattern":
                 def [name, quasis] := args
                 def qprefix := if (name == null) {""} else {name}
@@ -1211,28 +1255,27 @@ def expand(node, builder, fail) as DeepFrozen:
 
     var ast := node
 
-    # Appetizers.
-
-    # Pre-expand certain simple if-expressions. The transformation isn't total
-    # but covers many easy cases and doesn't require temporaries.
-    ast := makeIfAndPass(builder).visit(ast)
-    ast := makeIfOrPass(builder).visit(ast)
-
-    # Do sends within sequences.
-    ast transform= (seqSendOnly)
-
-    # Remove the easy-to-expand sugar.
-    ast := makeCurryPass(builder).visit(ast)
-    ast := makeSendPass(builder).visit(ast)
+    # Nanopasses.
+    for p in ([
+        # Pre-expand certain simple if-expressions. The transformation isn't total
+        # but covers many easy cases and doesn't require temporaries.
+        makeIfAndPass,
+        makeIfOrPass,
+        makeCurryPass,
+        # Do sends within sequences before other sends.
+        seqSendOnly,
+        # Remove the easy-to-expand sugar.
+        makeSendPass,
+        makeSuchThatPass,
+        makeBinaryOpPass,
+        # "Expand" modular exponentation. There is extant Monte code which only
+        # runs to completion in reasonable time when this transformation is
+        # applied. Must run after binary ops.
+        makeModPowPass,
+    ]):
+        ast := p(builder).visit(ast)
 
     # The main course. Expand everything not yet expanded.
     ast := reifyTemporaries(ast.transform(expandTransformer))
-
-    # Dessert.
-
-    # "Expand" modular exponentation. There is extant Monte code which only
-    # runs to completion in reasonable time when this transformation is
-    # applied.
-    ast := makeModPowPass(builder).visit(ast)
 
     return ast
