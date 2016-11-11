@@ -26,7 +26,11 @@ def makePass(builder, sub) as DeepFrozen:
             return [for item in (l) sub.visit(item)]
 
         match [`visit@constructor`, args, _]:
-            def newArgs := [for arg in (args) sub.visit(arg)]
+            def newArgs := [for arg in (args) {
+                if (arg =~ l :List) {
+                    [for item in (l) sub.visit(item)]
+                } else { sub.visit(arg) }
+            }]
             M.call(builder, constructor, newArgs, [].asMap())
 
 def reversed(it) as DeepFrozen:
