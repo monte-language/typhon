@@ -149,6 +149,27 @@ class ScopeOuter(ScopeBase):
         return None, 0, None
 
 
+class FrameTable(object):
+    "Static frame layout information."
+
+    __immutable_fields_ = 'dynamicGuards', 'frameInfo[*]', 'names'
+
+    def __init__(self, frameInfo):
+        self.frameInfo = frameInfo
+        self.names = {}
+        self.dynamicGuards = {}
+        for i, (name, _, _, severity) in enumerate(frameInfo):
+            self.names[name] = i
+            self.dynamicGuards[name] = i
+
+    def positionOf(self, name):
+        """
+        The index of the position in the frame where the name would be placed,
+        or -1 if no position is reserved.
+        """
+
+        return self.names.get(name, -1)
+
 class ScopeFrame(ScopeBase):
     "Scope info associated with an object closure."
 
@@ -182,24 +203,11 @@ class ScopeFrame(ScopeBase):
         else:
             return scope, idx, severity
 
-    def swizzleFrame(self):
-        """
-        Rearrange the frame into an ordered form, swizzling from the
-        dict of names into the list of positions in the frame.
-        """
-
-        # Cheat; the frameNames dict is already correctly ordered by
-        # construction, so we can just iterate over it. ~ C.
-        return [(n, scope, idx, severity) for (n, (i, scope, idx, severity))
-                in self.frameNames.iteritems()]
-
-    def positionOf(self, name):
-        """
-        The index of the position in the frame where the name would be placed,
-        or -1 if no position is reserved.
-        """
-
-        return self.frameNames[name][0] if name in self.frameNames else -1
+    def computeFrameTable(self):
+        frameInfo = [(n, scope, idx, severity)
+                     for (n, (i, scope, idx, severity))
+                     in self.frameNames.iteritems()]
+        self.frameTable = FrameTable(frameInfo)
 
 
 class ScopeBox(ScopeBase):
@@ -453,6 +461,7 @@ def bindNouns(ast):
     ast = ReifyMetaState().visitExpr(ast)
     ast = ReifyMetaContext().visitExpr(ast)
     ast = SpecializeNouns().visitExpr(ast)
+    ast = ComputeFrameTables().visitExpr(ast)
     return ast
 
 
@@ -661,3 +670,14 @@ class SpecializeNouns(ReifyMetaContextIR.makePassTo(BoundNounsIR)):
             self.visitPatt(patt),
             self.visitExpr(body),
             countLocalSize(layout, 0) + 2)
+
+class ComputeFrameTables(BoundNounsIR.selfPass()):
+    """
+    Visit every object's layout and compute their frame tables.
+    """
+
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
+                        layout):
+        layout.computeFrameTable()
+        return self.super.visitObjectExpr(self, doc, patt, auditors, methods,
+                                          matchers, mast, layout)

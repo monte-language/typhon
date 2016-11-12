@@ -78,6 +78,9 @@ class FillOuters(SplitAuditorsIR.makePassTo(NoOutersIR)):
         for (name, (idx, severity)) in layout.outerNames.items():
             b = self.outers[idx]
             guards[name] = retrieveGuard(severity, b)
+            # Mark the guard as static by destroying the relevant dynamic
+            # guard key. Use .pop() to avoid KeyErrors from unused bindings.
+            layout.frameTable.dynamicGuards.pop(name, 0)
         return self.dest.ObjectExpr(doc, patt, guards, auditors, script, mast,
                 layout, clipboard)
 

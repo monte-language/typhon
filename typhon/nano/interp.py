@@ -396,6 +396,14 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 return self.visitExpr(patt.guard)
         return anyGuard
 
+    def lookupBinding(self, scope, idx):
+        if scope is SCOPE_LOCAL:
+            return self.locals[idx]
+        elif scope is SCOPE_FRAME:
+            return self.frame[idx]
+        else:
+            assert False, "teacher"
+
     # Everything passed to this method, except self, is immutable. ~ C.
     @unroll_safe
     def visitClearObjectExpr(self, doc, patt, script, layout):
@@ -405,29 +413,15 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         else:
             objName = patt.name
         ast = NullObject
-        frame = []
-        for (name, scope, idx, severity) in layout.swizzleFrame():
-            if name == objName:
-                # deal with this later
-                frame.append(NULL_BINDING)
-                continue
-
-            if scope is SCOPE_LOCAL:
-                b = self.locals[idx]
-            elif scope is SCOPE_FRAME:
-                b = self.frame[idx]
-            else:
-                assert False, "teacher"
-
-            frame.append(b)
-
-        assert len(layout.frameNames) == len(frame), "shortcoming"
+        frameTable = layout.frameTable
+        frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
+                 in frameTable.frameInfo]
 
         # Build the object.
         val = InterpObject(doc, objName, script, frame, ast, layout.fqn)
 
         # Check whether we have a spot in the frame.
-        position = layout.positionOf(objName)
+        position = frameTable.positionOf(objName)
 
         # Set up the self-binding.
         selfGuard = self.selfGuard(patt)
@@ -474,24 +468,19 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             guardAuditor = anyGuard
         else:
             auds = [guardAuditor] + auds
-        frame = []
+        frameTable = layout.frameTable
+        frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
+                 in frameTable.frameInfo]
+        # Grab any remaining dynamic guards. We use a copy here in order to
+        # preserve the original dict for reuse.
         guards = guards.copy()
-        for (name, scope, idx, severity) in layout.swizzleFrame():
+        for name, index in frameTable.dynamicGuards.items():
             if name == objName:
-                # deal with this later
-                frame.append(NULL_BINDING)
                 guards[name] = guardAuditor
-                continue
-
-            if scope is SCOPE_LOCAL:
-                b = self.locals[idx]
-            elif scope is SCOPE_FRAME:
-                b = self.frame[idx]
             else:
-                assert False, "teacher"
-
-            guards[name] = retrieveGuard(severity, b)
-            frame.append(b)
+                _, scope, idx, severity = frameTable.frameInfo[index]
+                guards[name] = retrieveGuard(severity,
+                        self.lookupBinding(scope, idx))
 
         assert len(layout.frameNames) == len(frame), "shortcoming"
 
@@ -502,7 +491,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         val = self.runGuard(guardAuditor, o, theThrower)
 
         # Check whether we have a spot in the frame.
-        position = layout.positionOf(objName)
+        position = frameTable.positionOf(objName)
 
         # Set up the self-binding.
         if isinstance(patt, self.src.IgnorePatt):
