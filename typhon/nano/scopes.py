@@ -156,8 +156,8 @@ class FrameTable(object):
 
     def __init__(self, frameInfo):
         self.frameInfo = frameInfo
-        self.names = {}
-        self.dynamicGuards = {}
+        self.names = OrderedDict()
+        self.dynamicGuards = OrderedDict()
         for i, (name, _, _, severity) in enumerate(frameInfo):
             self.names[name] = i
             self.dynamicGuards[name] = i

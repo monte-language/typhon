@@ -140,6 +140,7 @@ class Audition(Object):
         return False
 
     @method.py("Any", "Str")
+    @profileTyphon("Auditor.getGuard/1")
     def getGuard(self, name):
         if name not in self.guards:
             self.guardLog = None
