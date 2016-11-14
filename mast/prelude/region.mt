@@ -329,6 +329,8 @@ def region(loader):
 
                 if (size == 0):
                     return []._makeIterator()
+                else if (size == 1):
+                    return topSets[0]._makeIterator()
 
                 # Our locals. The strategy is to iterate over each iterator from
                 # each topset in order.
