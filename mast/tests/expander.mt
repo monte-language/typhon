@@ -298,7 +298,11 @@ def specimens := [
          _loop.run(y, object _ {
              \"For-loop body\"
              method run(_, x) {
-                 _validateFor.run(validFlag_1)
+                 if (validFlag_1.not()) {
+                     throw.run(null, \"Failed to validate loop!\")
+                 } else {
+                     null
+                 }
                  z
                  null
              }
@@ -314,7 +318,11 @@ def specimens := [
          _accumulateList.run(y, object _ {
              \"For-loop body\"
              method run(_, x, skip_2) {
-                 _validateFor.run(validFlag_1)
+                 if (validFlag_1.not()) {
+                     throw.run(null, \"Failed to validate loop!\")
+                 } else {
+                     null
+                 }
                  if (a) {
                      z
                  } else {
@@ -333,7 +341,11 @@ def specimens := [
          _accumulateMap.run(y, object _ {
              \"For-loop body\"
              method run(_, x, skip_2) {
-                 _validateFor.run(validFlag_1)
+                 if (validFlag_1.not()) {
+                     throw.run(null, \"Failed to validate loop!\")
+                 } else {
+                     null
+                 }
                  if (a) {
                      _makeList.run(k, v)
                  } else {

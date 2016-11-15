@@ -385,6 +385,15 @@ def expand(node, builder, fail) as DeepFrozen:
         if ((right.outNames() & left.namesUsed()).size() > 0):
             fail(["Use on left would get captured by definition on right", span])
 
+    def produceValidateFor(flag, span):
+        def test := builder.MethodCallExpr(flag, "not", [], [], span)
+        def _null := builder.NounExpr("null", span)
+        def cons := builder.MethodCallExpr(builder.NounExpr("throw", span),
+            "run", [_null, builder.LiteralExpr("Failed to validate loop!",
+                                               span)],
+            [], span)
+        return builder.IfExpr(test, cons, _null, span)
+
     def expandFor(optKey, value, coll, block, catchPatt, catchBlock, span):
         def key := if (optKey == null) {builder.IgnorePattern(null, span)} else {optKey}
         validateFor(key.getStaticScope() + value.getStaticScope(),
@@ -427,9 +436,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 null,
                 [builder."Method"(null, "run", patts, [], null,
                 builder.SeqExpr([
-                    builder.MethodCallExpr(
-                        builder.NounExpr("_validateFor", span),
-                        "run", [fTemp], [], span),
+                    produceValidateFor(fTemp, span),
                     makeEscapeExpr(
                         builder.FinalPattern(builder.NounExpr("__continue", span), null, span),
                         builder.SeqExpr(defs + [
@@ -499,10 +506,7 @@ def expand(node, builder, fail) as DeepFrozen:
             builder.IgnorePattern(null, span), null, [], builder.Script(
                 null,
                 [builder."Method"(null, "run", patts.with(skipPatt), [], null,
-                builder.SeqExpr([
-                    builder.MethodCallExpr(
-                        builder.NounExpr("_validateFor", span),
-                        "run", [fTemp], [], span)] +
+                builder.SeqExpr([produceValidateFor(fTemp, span)] +
                         defs.with(maybeFilterExpr), span),
                     span)],
             [], span), span)
