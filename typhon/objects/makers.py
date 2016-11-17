@@ -8,6 +8,7 @@ from rpython.rlib.rstruct.ieee import unpack_float
 
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
+from typhon.errors import userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.collections.lists import listFromIterable
 from typhon.objects.collections.maps import ConstMap
@@ -16,10 +17,26 @@ from typhon.objects.data import (bytesToString, unwrapInt,
 from typhon.objects.ejectors import throwStr
 from typhon.objects.root import Object, audited, runnable
 from typhon.profile import profileTyphon
+from typhon.quoting import quoteChar
 
 
 FROMPAIRS_1 = getAtom(u"fromPairs", 1)
 
+
+def ensureByte(char):
+    """
+    Like chr(ord(char)), but throws on failure.
+    """
+
+    if not u'\x00' <= char <= u'\xff':
+        raise userError(u"Unacceptable bytestring character: " +
+                quoteChar(char))
+    return chr(ord(char))
+
+def ensureByteInt(i):
+    if not 0 <= i <= 255:
+        raise userError(u"Unacceptable bytestring integer: %d" % i)
+    return chr(i)
 
 @autohelp
 @audited.DF
@@ -33,11 +50,11 @@ class MakeBytes(Object):
 
     @method("Bytes", "Str")
     def fromStr(self, s):
-        return "".join([chr(ord(c)) for c in s])
+        return "".join([ensureByte(c) for c in s])
 
     @method("Bytes", "List")
     def fromInts(self, data):
-        return "".join([chr(unwrapInt(i)) for i in data])
+        return "".join([ensureByteInt(unwrapInt(i)) for i in data])
 
 theMakeBytes = MakeBytes()
 
