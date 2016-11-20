@@ -475,6 +475,16 @@ ReifyMetaStateIR = LayoutIR.extend(
 
 class ReifyMetaState(LayoutIR.makePassTo(ReifyMetaStateIR)):
 
+    def makeList(self, exprs, layout):
+        _makeList = self.dest.NounExpr(u"_makeList", layout)
+        return self.dest.CallExpr(_makeList, u"run", exprs, [])
+
+    def makeNamePair(self, name, layout):
+        k = self.dest.StrExpr(u"&&" + name)
+        v = self.dest.BindingExpr(name, layout)
+        pair = self.makeList([k, v], layout)
+        return self.makeList([pair], layout)
+
     def visitMetaStateExpr(self, layout):
         s = layout
         while not isinstance(s, ScopeFrame):
@@ -484,17 +494,10 @@ class ReifyMetaState(LayoutIR.makePassTo(ReifyMetaStateIR)):
             s = s.next
         else:
             frame = s.frameNames
+        pairs = self.makeList([self.makeNamePair(name, layout)
+                               for name in frame.keys()], layout)
         return self.dest.CallExpr(
-            self.dest.NounExpr(u"_makeMap", layout),
-            u"fromPairs", [
-                self.dest.CallExpr(
-                    self.dest.NounExpr(u"_makeList", layout),
-                    u"run", [self.dest.CallExpr(
-                        self.dest.NounExpr(u"_makeList", layout),
-                        u"run", [self.dest.StrExpr(u"&&" + name),
-                                 self.dest.BindingExpr(name, layout)],
-                        [])], [])
-                for name in frame.keys()], [])
+            self.dest.NounExpr(u"_makeMap", layout), u"fromPairs", [pairs], [])
 
 
 ReifyMetaContextIR = ReifyMetaStateIR.extend(
