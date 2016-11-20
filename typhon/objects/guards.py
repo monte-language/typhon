@@ -12,6 +12,7 @@ from typhon.objects.constants import (TrueObject, FalseObject, NullObject,
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
 from typhon.objects.ejectors import Ejector, throwStr
+from typhon.objects.interfaces import ComputedMethod
 from typhon.errors import Ejecting, userError
 from typhon.objects.refs import resolution
 from typhon.objects.root import Object, audited
@@ -45,6 +46,16 @@ class Guard(Object):
     @method.py("Bool", "Any")
     def supersetOf(self, other):
         return False
+
+    @method("Str")
+    def getDocstring(self):
+        return u"A primitive type of some sort."
+
+    @method("Set")
+    def getMethods(self):
+        d = monteSet()
+        d[ComputedMethod(2, None, u"coerce")] = None
+        return d
 
 
 @autohelp
