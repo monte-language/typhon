@@ -143,8 +143,11 @@ unittest([testFlow])
 interface Pump :DeepFrozen:
     "A machine which emits zero or more packets for every incoming packet."
 
-    to run(packet) :List:
-        "Consume `packet` and return zero or more packets."
+    to run(packet) :NullOk[List]:
+        "
+        Consume `packet` and return zero or more packets, or `null` to
+        indicate an end-of-stream condition.
+        "
 
 def [PumpState :DeepFrozen,
      QUIET :DeepFrozen,
@@ -201,12 +204,26 @@ def pumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
         to run(packet) :Vow[Void]:
             switch (ps):
                 match ==QUIET:
-                    ps := PACKETS
-                    state := pump(packet)
+                    switch (pump(packet)):
+                        match ==null:
+                            ps := FINISHED
+                        match packets:
+                            ps := PACKETS
+                            state := packets
                 match ==PACKETS:
-                    state add= (pump(packet))
+                    switch (pump(packet)):
+                        match ==null:
+                            ps := CLOSING
+                        match packets:
+                            state add= (packets)
                 match ==SINKS:
                     def packets := pump(packet)
+                    if (packets == null):
+                        ps := FINISHED
+                        for [sink, r] in (state):
+                            sink<-complete()
+                            r.resolve(null)
+                        return
                     def packetsSize := packets.size()
                     def sinkSize := state.size()
                     for i => p in (packets):
@@ -247,14 +264,44 @@ def pumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
 
     return [pumpSink, pumpSource]
 
+def nullPump(_) :Void as DeepFrozen implements Pump:
+    return null
+
+def idPump(packet) :List as DeepFrozen implements Pump:
+    return [packet]
+
 object makePump as DeepFrozen:
     "A maker of several types of pumps."
+
+    to null() :Pump:
+        "
+        The null pump.
+        
+        Of the two possible pumps that might be called the 'null' pump, this
+        is the pump which always returns `null`. (The other option, the
+        'unproductive' pump which always returns `[]`, is not currently
+        available.)
+        "
+
+        return nullPump
 
     to id() :Pump:
         "The identity pump."
 
-        return def idPump(packet) :List as Pump:
-            return [packet]
+        return idPump
+
+    to takeWhile(pred) :Pump:
+        "
+        A pump which is the identity pump while `pred(packet) :Bool`
+        returns `true`, then the null pump after that.
+
+        The packet on the edge for which `pred(packet) == false` will
+        *not* be transmitted downstream. 
+        "
+
+        var on :Bool := true
+        return def takeWhilePump(packet) :NullOk[List] as Pump:
+            return if (on && (on := pred(packet))) { [packet] } else { null }
 
     to filter(predicate) :Pump:
         return def filterPump(packet) :List as Pump:
@@ -313,12 +360,27 @@ object makePump as DeepFrozen:
             buf := pieces.last()
             return pieces.slice(0, pieces.size() - 1)
 
+def testMakePumpNull(assert):
+    def pump := makePump.null()
+    assert.equal(pump(42), null)
+
 def testMakePumpId(assert):
     def pump := makePump.id()
     var l := []
     for x in (0..4):
         l += pump(x)
     assert.equal(l, [0, 1, 2, 3, 4])
+
+def testMakePumpTakeWhile(assert):
+    def pump := makePump.takeWhile(fn x { x % 3 != 2 })
+    var l := []
+    for x in (0..5):
+        switch (pump(x)):
+            match ==null:
+                null
+            match ls:
+                l += ls
+    assert.equal(l, [0, 1])
 
 def testMakePumpFilter(assert):
     def pump := makePump.filter(fn x { x % 2 == 1 })
@@ -378,7 +440,9 @@ def testPumpPairPostHoc(assert):
     return p
 
 unittest([
+    testMakePumpNull,
     testMakePumpId,
+    testMakePumpTakeWhile,
     testMakePumpFilter,
     testMakePumpScan,
     testMakePumpEncodeUTF8,
@@ -394,10 +458,20 @@ def fuse(first, second) :Pump as DeepFrozen:
     # Note that we take advantage of pumps being defined synchronously; this
     # should be async in the future. ~ C.
 
+    # XXX I am sorry for the layout of this function. It has a certain
+    # recursive nature to it that I find appealing, though... ~ C.
     return def fusedPump(packet) as Pump:
         var rv := []
-        for p in (first(packet)):
-            rv += second(p)
+        switch (first(packet)):
+            match ==null:
+                return null
+            match l:
+                for p in (l):
+                    switch (second(p)):
+                        match ==null:
+                            return null
+                        match ls:
+                            rv += ls
         return rv
 
 def testFuseSieve(assert):
@@ -408,8 +482,26 @@ def testFuseSieve(assert):
         l += pump(x)
     assert.equal(l, [0, 6])
 
+def testFuseNull(assert):
+    def pump := fuse(makePump.null(), makePump.filter(fn x { x % 3 == 0 }))
+    for x in (0..10):
+        assert.equal(pump(x), null)
+
+def testFuseTakeWhile(assert):
+    def pump := fuse(makePump.id(), makePump.takeWhile(fn x { traceln(x); traceln(x < 5); x < 5 }))
+    var l := []
+    for x in (0..10):
+        switch (pump(x)):
+            match ==null:
+                null
+            match ls:
+                l += ls
+    assert.equal(l, [0, 1, 2, 3, 4])
+
 unittest([
     testFuseSieve,
+    testFuseNull,
+    testFuseTakeWhile,
 ])
 
 object alterSink as DeepFrozen:
