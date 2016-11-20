@@ -83,9 +83,8 @@ class Refused(UserException):
             else:
                 l.append(arg.toQuote())
         args = u", ".join(l)
-        return (u"Message refused: (%s, %s, [%s])" %
-                (self.target.toString(), self.atom.repr.decode("utf-8"),
-                    args))
+        return (u"Message refused: (%s).%s(%s)" %
+                (self.target.toString(), self.atom.verb, args))
 
     def getPayload(self):
         from typhon.objects.data import StrObject
