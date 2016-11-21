@@ -5,6 +5,7 @@ import "lib/codec/utf8" =~ [=> UTF8]
 exports (
     Sink, Source, Pump,
     makeSink, makeSource, makePump,
+    makePumpPair,
     flow, fuse,
     alterSink, alterSource,
 )
@@ -158,7 +159,7 @@ def [PumpState :DeepFrozen,
      ABORTED :DeepFrozen,
 ] := makeEnum(["quiet", "packets", "sinks", "closing", "finished", "aborted"])
 
-def pumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
+def makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
     "Given `pump`, produce a sink which feeds packets into the pump and a
      source which produces the pump's results."
 
@@ -411,7 +412,7 @@ def testMakePumpSplitAtBytes(assert):
     assert.equal(pump(b`:`), [b`c`])
 
 def testPumpPairSingle(assert):
-    def [sink, source] := pumpPair(makePump.id())
+    def [sink, source] := makePumpPair(makePump.id())
     def [p, r] := Ref.promise()
     object testSink as Sink:
         to run(packet):
@@ -426,7 +427,7 @@ def testPumpPairSingle(assert):
     return p
 
 def testPumpPairPostHoc(assert):
-    def [sink, source] := pumpPair(makePump.id())
+    def [sink, source] := makePumpPair(makePump.id())
     def [p, r] := Ref.promise()
     object testSink as Sink:
         to run(packet):
@@ -488,7 +489,7 @@ def testFuseNull(assert):
         assert.equal(pump(x), null)
 
 def testFuseTakeWhile(assert):
-    def pump := fuse(makePump.id(), makePump.takeWhile(fn x { traceln(x); traceln(x < 5); x < 5 }))
+    def pump := fuse(makePump.id(), makePump.takeWhile(fn x { x < 5 }))
     var l := []
     for x in (0..10):
         switch (pump(x)):
@@ -510,7 +511,7 @@ object alterSink as DeepFrozen:
     to fusePump(pump, sink) :Sink:
         "Attach `pump` to `sink`."
 
-        def [fuseSink, source] := pumpPair(pump)
+        def [fuseSink, source] := makePumpPair(pump)
         flow(source, sink)
         return fuseSink
 
@@ -604,7 +605,7 @@ object alterSource as DeepFrozen:
     to fusePump(pump, source):
         "Fuse `pump` to `source`."
 
-        def [fuseSink, fuseSource] := pumpPair(pump)
+        def [fuseSink, fuseSource] := makePumpPair(pump)
         return def fusingSource(sink) :Vow[Void] as Source:
             return when (source(fuseSink), fuseSource(sink)) -> { null }
 
