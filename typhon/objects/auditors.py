@@ -319,7 +319,7 @@ class DeepFrozen(Object):
             audition.ask(deepFrozenStamp)
             return False
 
-    @method("Any", "Any", "Any")
+    @method.py("Any", "Any", "Any")
     def coerce(self, specimen, ej):
         from typhon.objects.collections.helpers import monteMap
         from typhon.objects.constants import NullObject

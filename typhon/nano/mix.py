@@ -10,12 +10,13 @@ The separation allows us to make the first part short and sweet.
 
 from collections import OrderedDict
 
-from typhon.errors import UserException
+from typhon.errors import Ejecting, UserException
 from typhon.nano.scopes import SEV_BINDING, SEV_NOUN, SEV_SLOT
 from typhon.nano.structure import SplitAuditorsIR
-from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.auditors import deepFrozenGuard
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
+from typhon.objects.ejectors import Ejector
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 
@@ -125,6 +126,18 @@ MixIR = NoLiteralsIR.extend("Mix",
     }
 )
 
+# XXX I don't know why this isn't defined anywhere else. The version in
+# t.o.refs is suspect. ~ C.
+def isDeepFrozen(obj):
+    with Ejector() as ej:
+        try:
+            deepFrozenGuard.coerce(obj, ej)
+            return True
+        except Ejecting as ex:
+            if ex.ejector is not ej:
+                raise
+    return False
+
 class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
 
     def enliven(self, expr):
@@ -138,7 +151,7 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
             obj = expr.obj
             if isinstance(obj, Binding) or isinstance(obj, FinalSlot):
                 return obj
-            elif obj.auditedBy(deepFrozenStamp):
+            elif isDeepFrozen(obj):
                 return obj
         return None
 
@@ -161,8 +174,9 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
                         # this. ~ C.
                         result = liveObj.call(atom.verb, liveArgs)
                         assert result is not None, "livewire"
-                        if result.auditedBy(deepFrozenStamp):
+                        if isDeepFrozen(result):
                             return self.dest.LiveExpr(result)
+                        # print "Not DF:", str(result)[:50]
                     except UserException as ue:
                         return self.dest.ExceptionExpr(ue)
         return self.dest.CallExpr(obj, atom, args, namedArgs)
