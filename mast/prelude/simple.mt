@@ -53,16 +53,18 @@ object ::"``" as DeepFrozen:
         return [VALUE_HOLE, index]
 
     to matchMaker(segments):
-        def pieces := [].diverge()
-        for p in (segments):
-            escape e:
-                def s :Str exit e := p
-                if (s.size() > 0):
-                    pieces.push([LITERAL, s])
-            catch _:
-                pieces.push(p)
+        def pieces :DeepFrozen := {
+            def l := [].diverge()
+            for p in (segments) {
+                escape ej {
+                    def s :Str exit ej := p
+                    if (s.size() > 0) { l.push([LITERAL, s]) }
+                } catch _ { l.push(p) }
+            }
+            l.snapshot()
+        }
 
-        return object simpleMatcher:
+        return object simpleMatcher as DeepFrozen:
             to matchBind(values, rawSpecimen, ej):
                 def specimen :Str exit ej := rawSpecimen
                 var i := 0

@@ -450,7 +450,8 @@ def _splitList(position :Int) as DeepFrozenStamp:
      m`def [x] + xs := l`.expand() ==
      m`def via (_splitList.run(1)) [x, xs] := l`"
 
-    return def listSplitter(specimen, ej):
+    # DF is justified by only `position` and `throw` being free. ~ C.
+    return def listSplitter(specimen, ej) as DeepFrozenStamp:
         def l :List exit ej := specimen
         if (l.size() < position):
             throw.eject(ej, ["List is too short:", l])
