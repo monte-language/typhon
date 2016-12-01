@@ -143,10 +143,11 @@ class ScopeOuter(ScopeBase):
                 self.outers[name] = index, severity
 
     def find(self, name, autoClose):
-        if name in self.outers:
+        try:
             index, severity = self.outers[name]
             return SCOPE_OUTER, index, severity
-        return None, 0, None
+        except KeyError:
+            return None, 0, None
 
 
 class FrameTable(object):
@@ -158,7 +159,9 @@ class FrameTable(object):
         self.frameInfo = frameInfo
         self.names = OrderedDict()
         self.dynamicGuards = OrderedDict()
-        for i, (name, _, _, severity) in enumerate(frameInfo):
+        for i, (name, scope, _, severity) in enumerate(frameInfo):
+            assert scope is not None, "aimless"
+            assert severity is not None, "lenient"
             self.names[name] = i
             self.dynamicGuards[name] = i
 
