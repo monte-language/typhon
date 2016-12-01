@@ -474,19 +474,35 @@ def _accumulateList(iterable, mapper) as DeepFrozenStamp:
     return rv.snapshot()
 
 
+object nullAuditor as DeepFrozenStamp:
+    "The do-nothing auditor."
+
+    to audit(audition):
+        return true
+
 object _matchSame as DeepFrozenStamp:
     to run(expected):
         "The pattern ==`expected`."
 
-        return def sameMatcher(specimen, ej):
+        def auditor := escape ej {
+            DeepFrozen.coerce(expected, ej)
+            DeepFrozenStamp
+        } catch _ { nullAuditor }
+
+        return def sameMatcher(specimen, ej) as auditor:
             if (expected != specimen):
                 throw.eject(ej, ["Not same:", expected, specimen])
             return specimen
 
     to different(expected):
-        "The pattern ==`expected`."
+        "The pattern !=`expected`."
 
-        return def differentMatcher(specimen, ej):
+        def auditor := escape ej {
+            DeepFrozen.coerce(expected, ej)
+            DeepFrozenStamp
+        } catch _ { nullAuditor }
+
+        return def differentMatcher(specimen, ej) as auditor:
             if (expected == specimen):
                 throw.eject(ej, ["Same:", expected, specimen])
             return specimen
@@ -496,14 +512,29 @@ object _mapExtract as DeepFrozenStamp:
     "Implementation of key pattern-matching syntax in map patterns."
 
     to run(key):
-        return def mapExtractor(specimen, ej):
+        "The pattern [=> `key`]."
+
+        def auditor := escape ej {
+            DeepFrozen.coerce(key, ej)
+            DeepFrozenStamp
+        } catch _ { nullAuditor }
+
+        return def mapExtractor(specimen, ej) as auditor:
             def map :Map exit ej := specimen
             if (map.contains(key)):
                 return [map[key], map.without(key)]
             throw.eject(ej, "Key " + M.toQuote(key) + " not in map")
 
     to withDefault(key, default):
-        return def mapDefaultExtractor(specimen, ej):
+        "The pattern [=> `key` := `default`]."
+
+        def auditor := escape ej {
+            DeepFrozen.coerce(key, ej)
+            DeepFrozen.coerce(default, ej)
+            DeepFrozenStamp
+        } catch _ { nullAuditor }
+
+        return def mapDefaultExtractor(specimen, ej) as auditor:
             def map :Map exit ej := specimen
             if (map.contains(key)):
                 return [map[key], map.without(key)]
