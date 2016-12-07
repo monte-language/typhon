@@ -147,8 +147,19 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
         Otherwise, return None.
         """
 
+        # Side-effect: The live object might have observable side effects even
+        # though it is DeepFrozen; in particular, traceln() comes to mind. If
+        # it *is* traceln(), then we make an effort to not write misleading
+        # things into the debug log. ~ C.
+
         if isinstance(expr, self.dest.LiveExpr):
             obj = expr.obj
+
+            # Special case for traceln().
+            from typhon.scopes.safe import TraceLn
+            if isinstance(obj, TraceLn):
+                return None
+
             if isinstance(obj, Binding) or isinstance(obj, FinalSlot):
                 return obj
             elif isDeepFrozen(obj):
@@ -166,12 +177,6 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
                 # XXX named args
                 if not namedArgs:
                     try:
-                        # Side-effect: The live object might have observable
-                        # side effects even though it is DeepFrozen; in
-                        # particular, traceln() comes to mind. We generally
-                        # don't care about those side effects, and invite them
-                        # for debugging purposes, but it's good to be aware of
-                        # this. ~ C.
                         result = liveObj.call(atom.verb, liveArgs)
                         assert result is not None, "livewire"
                         if isDeepFrozen(result):
