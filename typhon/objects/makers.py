@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 """
 Miscellaneous makers in the safe scope.
 """
@@ -99,6 +101,11 @@ theMakeDouble = MakeDouble()
 class MakeInt(Object):
     """
     A maker of `Int`s.
+
+    This maker can handle radices from 2 to 36:
+
+        ▲> _makeInt.withRadix(36)("zxcvasdfqwer1234")
+        7942433573816828193485776
     """
 
     _immutable_fields_ = "radix",
