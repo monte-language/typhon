@@ -61,10 +61,7 @@ ProfileNameIR = MixIR.extend("ProfileName",
     }
 )
 
-# super() doesn't work in RPython, so this is a way to get at the default
-# implementations of the pass methods. ~ C.
-_MakeProfileNames = MixIR.makePassTo(ProfileNameIR)
-class MakeProfileNames(_MakeProfileNames):
+class MakeProfileNames(MixIR.makePassTo(ProfileNameIR)):
     """
     Prebuild the strings which identify code objects to the profiler.
 
@@ -85,8 +82,7 @@ class MakeProfileNames(_MakeProfileNames):
             objName = patt.name
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
-        rv = _MakeProfileNames.visitClearObjectExpr(self, doc, patt, script,
-                                                    layout)
+        rv = self.super.visitClearObjectExpr(self, doc, patt, script, layout)
         self.objectNames.pop()
         return rv
 
@@ -99,9 +95,8 @@ class MakeProfileNames(_MakeProfileNames):
             objName = patt.name
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
-        rv = _MakeProfileNames.visitObjectExpr(self, doc, patt, guards,
-                                               auditors, script, mast, layout,
-                                               clipboard)
+        rv = self.super.visitObjectExpr(self, doc, patt, guards, auditors,
+                                        script, mast, layout, clipboard)
         self.objectNames.pop()
         return rv
 
