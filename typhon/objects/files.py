@@ -493,7 +493,7 @@ def writeSetContentsCB(fs):
         with ruv.unstashingFS(fs) as (vat, sc):
             assert isinstance(sc, SetContents)
             size = intmask(fs.c_result)
-            if size > 0:
+            if size >= 0:
                 sc.written(size)
             elif size < 0:
                 msg = ruv.formatError(size).decode("utf-8")
