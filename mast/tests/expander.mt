@@ -607,7 +607,13 @@ def specimens := [
               "The dependencies of this module."
               _makeList.run("blee")
           }
-      }`]
+      }`],
+    [`f<-(); g`, 
+     `M.sendOnly(f, "run", [], [].asMap())
+      g`],
+    [`f<-verb(); g`, 
+     `M.sendOnly(f, "verb", [], [].asMap())
+      g`],
 ]
 
 def trim(var s):

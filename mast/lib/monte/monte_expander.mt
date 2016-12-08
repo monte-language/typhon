@@ -110,6 +110,51 @@ def ifOr(ast, maker, args, span) as DeepFrozen:
     return M.call(maker, "run", args + [span], [].asMap())
 
 
+def makeSeqSendOnly(builder) as DeepFrozen:
+    # XXX so much duplication...
+
+    def emitList(items, span):
+        return builder.MethodCallExpr(
+            builder.NounExpr("_makeList", span),
+            "run", items, [], span)
+
+    def emitMap(items, span):
+        return builder.MethodCallExpr(
+            builder.NounExpr("_makeMap", span),
+            "fromPairs", [emitList(items, span)], [], span)
+
+    return def seqSendOnly(ast, maker, args, span):
+        "Expand send-expressions inside seq-expressions to use M.sendOnly()."
+
+        if (ast.getNodeName() == "SeqExpr"):
+            def exprs := args[0].diverge()
+            def last := exprs.size() - 1
+            for i => var expr in (exprs):
+                expr transform= (seqSendOnly)
+                if (i != last):
+                    if (expr.getNodeName() == "SendExpr"):
+                        def receiver := expr.getReceiver()
+                        def verb := expr.getVerb()
+                        def margs := expr.getArgs()
+                        def namedArgs := expr.getNamedArgs()
+                        expr := builder.MethodCallExpr(builder.NounExpr("M", span),
+                            "sendOnly", [receiver, builder.LiteralExpr(verb, span),
+                                     emitList(margs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
+                             span)
+                    else if (expr.getNodeName() == "FunSendExpr"):
+                        def receiver := expr.getReceiver()
+                        def margs := expr.getArgs()
+                        def namedArgs := expr.getNamedArgs()
+                        expr := builder.MethodCallExpr(builder.NounExpr("M", span),
+                            "sendOnly", [receiver, builder.LiteralExpr("run", span),
+                                     emitList(margs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
+                            span)
+                exprs[i] := expr
+            return maker(exprs.snapshot(), span)
+
+        return M.call(maker, "run", args + [span], [].asMap())
+
+
 def modPow(ast, maker, args, span) as DeepFrozen:
     "Expand modular exponentation method calls."
 
@@ -1132,6 +1177,9 @@ def expand(node, builder, fail) as DeepFrozen:
     # but covers many easy cases and doesn't require temporaries.
     ast transform= (ifAnd)
     ast transform= (ifOr)
+
+    # Do sends within sequences.
+    ast transform= (makeSeqSendOnly(builder))
 
     # The main course. Expand everything not yet expanded.
     ast := reifyTemporaries(ast.transform(expandTransformer))
