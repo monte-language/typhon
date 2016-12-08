@@ -495,7 +495,7 @@ def writeSetContentsCB(fs):
             size = intmask(fs.c_result)
             if size >= 0:
                 sc.written(size)
-            elif size < 0:
+            else:
                 msg = ruv.formatError(size).decode("utf-8")
                 sc.fail(u"libuv error: %s" % msg)
     except:
