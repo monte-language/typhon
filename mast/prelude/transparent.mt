@@ -51,10 +51,16 @@ object Transparent as DeepFrozenStamp:
                 var serializerNoun := null
                 for n in (closureNames):
                     def g := audition.getGuard(n)
-                    if (g =~ via (FinalSlot.extractGuard) via (Same.extractValue) ==_valueAuditor):
-                        valueAuditorNoun := n
-                    else if (g =~ via (FinalSlot.extractGuard) via (Same.extractValue) ==_serializer):
-                        serializerNoun := astBuilder.NounExpr(n, null)
+                    if (g =~ via (Same.extractValue) v):
+                        if (v == _valueAuditor):
+                            valueAuditorNoun := n
+                        else if (v == _serializer):
+                            serializerNoun := astBuilder.NounExpr(n, null)
+                    else if (g =~ via (FinalSlot.extractGuard) via (Same.extractValue) v):
+                        if (v == _valueAuditor):
+                            valueAuditorNoun := n
+                        else if (v == _serializer):
+                            serializerNoun := astBuilder.NounExpr(n, null)
                     else if (!DeepFrozen.supersetOf(g)):
                         throw("non-DeepFrozen binding &&" + n + " :" + M.toString(g) + " not allowed in Transparent maker")
 
