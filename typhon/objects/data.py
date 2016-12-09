@@ -1129,6 +1129,7 @@ class StrObject(Object):
 
     @method("Bool", "Str")
     def startsWith(self, s):
+        "Whether this string has `s` as a prefix."
         return self._s.startswith(s)
 
     @method("Bool", "Str")

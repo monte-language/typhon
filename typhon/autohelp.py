@@ -5,8 +5,10 @@
 
 import py
 
+from rpython.rlib.unroll import unrolling_iterable
+
 from typhon.atoms import getAtom
-from typhon.errors import Refused
+from typhon.errors import Refused, UserException
 
 
 def method(rv, *args, **kwargs):
@@ -76,6 +78,8 @@ def repackMonteMethods(cls):
                 k = "_%s_%s_star_args_" % (cls.__name__, k)
             else:
                 k = "_%s_%s_%s_" % (cls.__name__, k, "_".join(args))
+            # The verb is now Unicode.
+            verb = verb.decode("utf-8")
             methods[k] = v, verb, args, kwargs, rv
     cls._monteMethods_ = methods
 
@@ -92,6 +96,24 @@ wrappers = {
     "Set": "typhon.objects.collections.sets",
     "Str": "typhon.objects.data",
 }
+
+
+def harvestMethods(cls):
+    """
+    Obtain the Monte methods of a class.
+
+    The class must have already been harvested.
+
+    NOT_RPYTHON
+    """
+
+    d = {}
+    # Walk the MRO and harvest Monte methods. The repacker has already placed
+    # them in the correct location.
+    for c in reversed(cls.__mro__):
+        if hasattr(c, "_monteMethods_"):
+            d.update(c._monteMethods_)
+    return d
 
 
 def alterMethods(cls):
@@ -113,15 +135,8 @@ def alterMethods(cls):
 
     execNames = {"Refused": Refused}
     dispatchClauses = []
-    d = {}
-    # Walk the MRO and harvest Monte methods. The repacker has already placed
-    # them in the correct location.
-    for c in reversed(cls.__mro__):
-        if hasattr(c, "_monteMethods_"):
-            d.update(c._monteMethods_)
-    for attr, (f, verb, args, kwargs, rv) in d.iteritems():
-        # The verb is now Unicode.
-        verb = verb.decode("utf-8")
+    methods = harvestMethods(cls)
+    for attr, (f, verb, args, kwargs, rv) in methods.iteritems():
         assignments = []
         if isStarArgs(args):
             atomTest = "atom.verb == %r" % verb
@@ -220,3 +235,88 @@ def autohelp(cls):
     cls.respondingAtoms = respondingAtoms
 
     return cls
+
+
+def autoguard(*tys, **kwargs):
+    """
+    AutoGuard automatically generates a guard class for a given list of types.
+
+    All types must be helped by AutoHelp first.
+
+    The `subCoerce` kwarg allows for customizing the coercion test. Return
+    None to signal failure.
+
+    NOT_RPYTHON
+    """
+
+    from typhon.objects.collections.sets import monteSet
+    from typhon.objects.ejectors import throwStr
+    from typhon.objects.interfaces import ComputedMethod
+    from typhon.objects.refs import resolution
+    from typhon.objects.root import Object
+
+    # Set up subCoerce.
+    subCoerce = kwargs.pop("subCoerce", None)
+    name = kwargs.pop("name", u"<autoguard>")
+    # We can't iterate over tuples, so we have to iterate over a list instead.
+    tys = list(tys)
+
+    if subCoerce is None:
+        def subCoerce(specimen):
+            for ty in unrolling_iterable(tys):
+                if isinstance(specimen, ty):
+                    return specimen
+
+    doc = tys[0].__doc__.decode("utf-8")
+    methods = monteSet()
+    for ty in tys:
+        for _, (f, verb, args, _, _) in harvestMethods(ty).iteritems():
+            ds = f.__doc__
+            if ds is not None:
+                ds = ds.decode("utf-8")
+            cm = ComputedMethod(len(args), ds, verb)
+            methods[cm] = None
+
+    @autohelp
+    class Guard(Object):
+        """
+        A guard.
+        """
+
+        def toString(self):
+            return name
+
+        @method("Any", "Any", "Any")
+        def coerce(self, specimen, ej):
+            specimen = resolution(specimen)
+            val = subCoerce(specimen)
+            if val is None:
+                try:
+                    newspec = specimen.call(u"_conformTo", [self])
+                except UserException:
+                    msg = u"%s threw exception while conforming to %s" % (
+                            specimen.toQuote(), self.toQuote())
+                    throwStr(ej, msg)
+                else:
+                    val = subCoerce(newspec)
+                    if val is None:
+                        throwStr(ej, u"%s does not conform to %s" % (
+                            specimen.toQuote(), self.toQuote()))
+                    else:
+                        return val
+            else:
+                return val
+
+        @method.py("Bool", "Any")
+        def supersetOf(self, other):
+            return False
+
+        @method("Str")
+        def getDocstring(self):
+            return doc
+
+        @method("Set")
+        def getMethods(self):
+            return methods
+
+    return Guard

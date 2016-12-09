@@ -1,6 +1,6 @@
 # encoding: utf-8
 
-from typhon.autohelp import autohelp, method
+from typhon.autohelp import autoguard, autohelp, method
 from typhon.errors import UserException
 from typhon.objects.auditors import (deepFrozenStamp, selfless,
                                      transparentStamp)
@@ -12,7 +12,6 @@ from typhon.objects.constants import (TrueObject, FalseObject, NullObject,
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
 from typhon.objects.ejectors import Ejector, throwStr
-from typhon.objects.interfaces import ComputedMethod
 from typhon.errors import Ejecting, userError
 from typhon.objects.refs import resolution
 from typhon.objects.root import Object, audited
@@ -53,9 +52,14 @@ class Guard(Object):
 
     @method("Set")
     def getMethods(self):
-        d = monteSet()
-        d[ComputedMethod(2, None, u"coerce")] = None
-        return d
+        return monteSet()
+
+
+BytesGuard = audited.DF(autoguard(BytesObject, name=u"Bytes"))
+CharGuard = audited.DF(autoguard(CharObject, name=u"Char"))
+DoubleGuard = audited.DF(autoguard(DoubleObject, name=u"Double"))
+IntGuard = audited.DF(autoguard(IntObject, BigInt, name=u"Bytes"))
+StrGuard = audited.DF(autoguard(StrObject, name=u"Str"))
 
 
 @autohelp
@@ -72,92 +76,6 @@ class BoolGuard(Guard):
 
     def subCoerce(self, specimen):
         if specimen is TrueObject or specimen is FalseObject:
-            return specimen
-
-
-@autohelp
-@audited.DF
-class StrGuard(Guard):
-    """
-    The set of string literals.
-
-    This guard is unretractable.
-    """
-
-    def toString(self):
-        return u"Str"
-
-    def subCoerce(self, specimen):
-        if isinstance(specimen, StrObject):
-            return specimen
-
-
-@autohelp
-@audited.DF
-class DoubleGuard(Guard):
-    """
-    The set of double literals.
-
-    This guard is unretractable.
-    """
-
-    def toString(self):
-        return u"Double"
-
-    def subCoerce(self, specimen):
-        if isinstance(specimen, DoubleObject):
-            return specimen
-
-
-@autohelp
-@audited.DF
-class CharGuard(Guard):
-    """
-    The set of character literals.
-
-    This guard is unretractable.
-    """
-
-    def toString(self):
-        return u"Char"
-
-    def subCoerce(self, specimen):
-        if isinstance(specimen, CharObject):
-            return specimen
-
-
-@autohelp
-@audited.DF
-class BytesGuard(Guard):
-    """
-    The set of bytestrings produced by `b__quasiParser` and `_makeBytes`.
-
-    This guard is unretractable.
-    """
-
-    def toString(self):
-        return u"Bytes"
-
-    def subCoerce(self, specimen):
-        if isinstance(specimen, BytesObject):
-            return specimen
-
-
-@autohelp
-@audited.DF
-class IntGuard(Guard):
-    """
-    The set of integer literals.
-
-    This guard is unretractable.
-    """
-
-    def toString(self):
-        return u"Int"
-
-    def subCoerce(self, specimen):
-        if (isinstance(specimen, IntObject) or
-                isinstance(specimen, BigInt)):
             return specimen
 
 
