@@ -7,10 +7,8 @@ from rpython.rtyper.lltypesystem.lltype import nullptr
 from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Refused, userError
-from typhon.objects.collections.lists import unwrapList
-from typhon.objects.collections.maps import (EMPTY_MAP, monteMap,
-                                             unwrapMap)
+from typhon.errors import userError
+from typhon.objects.collections.maps import EMPTY_MAP, monteMap
 from typhon.objects.data import BytesObject, StrObject, unwrapBytes
 from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.root import Object, audited
@@ -166,64 +164,64 @@ class makeProcess(Object):
     flowed to them.
     """
 
-    def recvNamed(self, atom, args, namedArgs):
-        if atom is RUN_3:
-            # Fourth incarnation: Now with stdio hookups.
-            executable = unwrapBytes(args[0])
-            # This could be an LC, but doing it this way fixes the RPython annotation
-            # for the list to be non-None.
-            argv = []
-            for arg in unwrapList(args[1]):
-                s = unwrapBytes(arg)
-                assert s is not None, "proven impossible by hand"
-                argv.append(s)
-            env = {}
-            for (k, v) in unwrapMap(args[2]).items():
-                env[unwrapBytes(k)] = unwrapBytes(v)
-            packedEnv = [k + '=' + v for (k, v) in env.items()]
+    @method("Any", "Bytes", "List", "Map", stdinFount="Any",
+            stdoutDrain="Any", stderrDrain="Any")
+    def run(self, executable, argv, env, stdinFount=None, stdoutDrain=None,
+            stderrDrain=None):
+        # Fifth incarnation: Use @method.
 
-            vat = currentVat.get()
+        # Unwrap argv.
+        l = []
+        for arg in argv:
+            bs = unwrapBytes(arg)
+            assert bs is not None, "proven impossible"
+            l.append(bs)
+        argv = l
 
-            # Set up the list of streams. Note that, due to (not incorrect)
-            # libuv behavior, we must wait for the subprocess to be spawned
-            # before we can interact with the pipes that we are creating; to
-            # do this, we'll have a list of the (f, d) pairs that we need to
-            # start, and we'll ensure that that doesn't happen until after the
-            # process has spawned.
-            streams = []
-            fount = namedArgs.extractStringKey(u"stdinFount", None)
-            if fount is None:
-                streams.append(nullptr(ruv.stream_t))
-            else:
-                stream = ruv.rffi.cast(ruv.stream_tp,
-                                       ruv.alloc_pipe(vat.uv_loop))
-                streams.append(stream)
-                drain = StreamDrain(stream, vat)
-                vat.sendOnly(fount, FLOWTO_1, [drain], EMPTY_MAP)
-            for name in [u"stdoutDrain", u"stderrDrain"]:
-                drain = namedArgs.extractStringKey(name, None)
-                if drain is None:
-                    streams.append(nullptr(ruv.stream_t))
-                else:
-                    stream = ruv.rffi.cast(ruv.stream_tp,
-                                           ruv.alloc_pipe(vat.uv_loop))
-                    streams.append(stream)
-                    fount = StreamFount(stream, vat)
-                    vat.sendOnly(fount, FLOWTO_1, [drain], EMPTY_MAP)
+        # Unwrap and prep environment.
+        d = {}
+        for (k, v) in env.items():
+            d[unwrapBytes(k)] = unwrapBytes(v)
+        packedEnv = [k + '=' + v for (k, v) in d.items()]
+        env = d
 
-            try:
-                process = ruv.allocProcess()
-                sub = SubProcess(vat, process, argv, env)
-                ruv.spawn(vat.uv_loop, process,
-                          file=executable, args=argv, env=packedEnv,
-                          streams=streams)
-                sub.retrievePID()
-                return sub
-            except ruv.UVError as uve:
-                raise userError(u"makeProcess: Couldn't spawn process: %s" %
-                                uve.repr().decode("utf-8"))
-        val = self.mirandaMethods(atom, args, namedArgs)
-        if val is None:
-            raise Refused(self, atom, args)
+        vat = currentVat.get()
+
+        # Set up the list of streams and attach streamcaps.
+        streams = []
+        if stdinFount is None:
+            streams.append(nullptr(ruv.stream_t))
         else:
-            return val
+            stream = ruv.rffi.cast(ruv.stream_tp,
+                                   ruv.alloc_pipe(vat.uv_loop))
+            streams.append(stream)
+            drain = StreamDrain(stream, vat)
+            vat.sendOnly(stdinFount, FLOWTO_1, [drain], EMPTY_MAP)
+        if stdoutDrain is None:
+            streams.append(nullptr(ruv.stream_t))
+        else:
+            stream = ruv.rffi.cast(ruv.stream_tp,
+                                   ruv.alloc_pipe(vat.uv_loop))
+            streams.append(stream)
+            fount = StreamFount(stream, vat)
+            vat.sendOnly(fount, FLOWTO_1, [stdoutDrain], EMPTY_MAP)
+        if stderrDrain is None:
+            streams.append(nullptr(ruv.stream_t))
+        else:
+            stream = ruv.rffi.cast(ruv.stream_tp,
+                                   ruv.alloc_pipe(vat.uv_loop))
+            streams.append(stream)
+            fount = StreamFount(stream, vat)
+            vat.sendOnly(fount, FLOWTO_1, [stderrDrain], EMPTY_MAP)
+
+        try:
+            process = ruv.allocProcess()
+            sub = SubProcess(vat, process, argv, env)
+            ruv.spawn(vat.uv_loop, process,
+                      file=executable, args=argv, env=packedEnv,
+                      streams=streams)
+            sub.retrievePID()
+            return sub
+        except ruv.UVError as uve:
+            raise userError(u"makeProcess: Couldn't spawn process: %s" %
+                            uve.repr().decode("utf-8"))
