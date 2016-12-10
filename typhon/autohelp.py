@@ -3,6 +3,8 @@
 # Auto, and additionally to the latest version of Help. Nothing can escape
 # upgraded AutoHelp.
 
+import inspect
+
 import py
 
 from rpython.rlib.unroll import unrolling_iterable
@@ -116,6 +118,17 @@ def harvestMethods(cls):
     return d
 
 
+def getKwargDefault(f, key):
+    """
+    Retrieve the default value for a kwarg on a function.
+
+    NOT_RPYTHON
+    """
+
+    args, _, _, defaults = inspect.getargspec(f)
+    return defaults[args.index(key) - (len(args) - len(defaults))]
+
+
 def alterMethods(cls):
     """
     Alter Monte methods on behalf of AutoHelp.
@@ -127,13 +140,18 @@ def alterMethods(cls):
 
     atoms = []
     imports = set()
+    execNames = {"Refused": Refused}
 
     def nextName(nameIndex=[0]):
         name = "_%d" % nameIndex[0]
         nameIndex[0] += 1
         return name
 
-    execNames = {"Refused": Refused}
+    def namedLiteral(lit):
+        name = nextName()
+        execNames[name] = lit
+        return name
+
     dispatchClauses = []
     methods = harvestMethods(cls)
     for attr, (f, verb, args, kwargs, rv) in methods.iteritems():
@@ -142,8 +160,8 @@ def alterMethods(cls):
             atomTest = "atom.verb == %r" % verb
             call = "self.%s(args)" % attr
         else:
-            atomName = nextName()
-            execNames[atomName] = atom = getAtom(verb, len(args))
+            atom = getAtom(verb, len(args))
+            atomName = namedLiteral(atom)
             atoms.append(atom)
             atomTest = "atom is %s" % atomName
             argNames = []
@@ -162,17 +180,25 @@ def alterMethods(cls):
                     assignments.append("%s = %s(%s)" % (argName, unwrapper,
                         argName))
             for k, v in kwargs.iteritems():
+                # Look up the default value. We're going to pop this in and
+                # use None as a sentinel value in .extractStringKey(). ~ C.
+                default = getKwargDefault(f, k)
+                defaultName = namedLiteral(default)
                 kwargName = nextName()
                 argNames.append("%s=%s" % (k, kwargName))
                 assignments.append("%s = namedArgs.extractStringKey(%r, None)"
                         % (kwargName, k.decode("utf-8")))
+                # If the kwarg is None, then it wasn't passed in; use the
+                # default. Otherwise, invoke the unwrapper if one exists.
+                assignments.append("if %s is None: %s = %s"
+                        % (kwargName, kwargName, defaultName))
                 if v != "Any":
                     unwrapperModule = wrappers[v]
                     unwrapper = "unwrap" + v
-                    imports.add("from %s import %s" % (unwrapperModule,
-                        unwrapper))
-                    assignments.append("%s = %s(%s) if %s is None else None" %
-                            (kwargName, unwrapper, kwargName, kwargName))
+                    imports.add("from %s import %s"
+                            % (unwrapperModule, unwrapper))
+                    assignments.append("else: %s = %s(%s)"
+                            % (kwargName, unwrapper, kwargName))
             call = "self.%s(%s)" % (attr, ",".join(argNames))
         retvals = []
         if rv == "Any":
@@ -188,12 +214,14 @@ def alterMethods(cls):
             wrapper = "wrap" + rv
             imports.add("from %s import %s" % (wrapperModule, wrapper))
             retvals.append("return %s(rv)" % wrapper)
+        # We need to use newlines for the assignments since kwarg assignments
+        # are conditional.
         dispatchClauses.append("""
  if %s:
   %s
   rv = %s
   %s
-""" % (atomTest, ";".join(assignments), call, ";".join(retvals)))
+""" % (atomTest, "\n  ".join(assignments), call, ";".join(retvals)))
         setattr(cls, attr, f)
     # Temporary. Soon, all classes shall receive AutoHelp, and no class will
     # have a handwritten recv().

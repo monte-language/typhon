@@ -25,7 +25,7 @@ from typhon.objects.auditors import deepFrozenStamp, transparentStamp
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.maps import ConstMap
 from typhon.objects.collections.sets import ConstSet
-from typhon.objects.data import unwrapBytes, unwrapBool, wrapBool
+from typhon.objects.data import unwrapBytes, wrapBool
 from typhon.objects.guards import (BoolGuard, BytesGuard, CharGuard,
                                    DoubleGuard, IntGuard, StrGuard, VoidGuard)
 from typhon.objects.slots import finalize
@@ -103,13 +103,9 @@ class AstEval(Object):
         ast = realLoad(unwrapBytes(bs))
         return astEvalToPair(ast, scope)[0]
 
-    @method("List", "Any", "Any", inRepl="Any")
+    @method("List", "Any", "Any", inRepl="Bool")
     def evalToPair(self, bs, scope, inRepl=False):
         ast = realLoad(unwrapBytes(bs))
-        if inRepl is None:
-            inRepl = False
-        else:
-            inRepl = unwrapBool(inRepl)
         result, envMap = astEvalToPair(ast, scope, inRepl)
         return [result, envMap]
 
