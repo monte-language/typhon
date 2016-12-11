@@ -62,6 +62,40 @@ COMPLETE_0 = getAtom(u"complete", 0)
 RUN_1 = getAtom(u"run", 1)
 
 
+@autohelp
+class _NullSink(Object):
+    """
+    A sink which does nothing.
+    """
+
+    @method("Void", "Any")
+    def run(self, _):
+        pass
+
+    @method("Void")
+    def complete(self):
+        pass
+
+    @method("Void", "Any")
+    def abort(self, _):
+        pass
+
+nullSink = _NullSink()
+
+
+@autohelp
+class _EmptySource(Object):
+    """
+    A source which has nothing.
+    """
+
+    @method("Void", "Any")
+    def run(self, sink):
+        sink.call(u"complete", [])
+
+emptySource = _EmptySource()
+
+
 def readStreamCB(stream, status, buf):
     status = intmask(status)
     # We only restash in the success case, not the error cases.

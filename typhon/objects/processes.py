@@ -11,6 +11,8 @@ from typhon.errors import userError
 from typhon.objects.collections.maps import EMPTY_MAP, monteMap
 from typhon.objects.data import BytesObject, StrObject, unwrapBytes
 from typhon.objects.networking.streams import StreamDrain, StreamFount
+from typhon.objects.networking.streamcaps import (StreamSink, StreamSource,
+                                                  emptySource, nullSink)
 from typhon.objects.root import Object, audited
 from typhon.objects.refs import makePromise
 from typhon.vats import currentVat, scopedVat
@@ -87,7 +89,7 @@ class SubProcess(Object):
     EMPTY_PID = -1
     EMPTY_EXIT_AND_SIGNAL = (-1, -1)
 
-    def __init__(self, vat, process, argv, env):
+    def __init__(self, vat, process, argv, env, stdin, stdout, stderr):
         self.pid = self.EMPTY_PID
         self.process = process
         self.argv = argv
@@ -95,6 +97,11 @@ class SubProcess(Object):
         self.exit_and_signal = self.EMPTY_EXIT_AND_SIGNAL
         self.resolvers = []
         self.vat = vat
+
+        self.stdin = stdin
+        self.stdout = stdout
+        self.stderr = stderr
+
         ruv.stashProcess(process, (self.vat, self))
 
     def retrievePID(self):
@@ -150,6 +157,18 @@ class SubProcess(Object):
             self.resolvers.append(r)
         return p
 
+    @method("Any")
+    def stdin(self):
+        return self.stdin
+
+    @method("Any")
+    def stdout(self):
+        return self.stdout
+
+    @method("Any")
+    def stderr(self):
+        return self.stderr
+
 
 @autohelp
 @audited.DF
@@ -158,6 +177,13 @@ class makeProcess(Object):
     Create a subordinate process on the current node from the given
     executable, arguments, and environment.
 
+    `=> stdin`, `=> stdout`, and `=> stderr` control the same-named methods on
+    the resulting process object, which will return a sink, source, and source
+    respectively. If any of these named arguments are `true`, then the
+    corresponding method on the process will return a live streamcap which
+    is connected to the process; otherwise, the returned streamcap will be a
+    no-op.
+
     `=> stdinFount`, if not null, will be treated as a fount and it will be
     flowed to a drain representing stdin. `=> stdoutDrain` and
     `=> stderrDrain` are similar but should be drains which will have founts
@@ -165,10 +191,11 @@ class makeProcess(Object):
     """
 
     @method("Any", "Bytes", "List", "Map", stdinFount="Any",
-            stdoutDrain="Any", stderrDrain="Any")
+            stdoutDrain="Any", stderrDrain="Any", stdin="Bool", stdout="Bool",
+            stderr="Bool")
     def run(self, executable, argv, env, stdinFount=None, stdoutDrain=None,
-            stderrDrain=None):
-        # Fifth incarnation: Use @method.
+            stderrDrain=None, stdin=False, stdout=False, stderr=False):
+        # Sixth incarnation: Now with streamcaps!
 
         # Unwrap argv.
         l = []
@@ -188,35 +215,56 @@ class makeProcess(Object):
         vat = currentVat.get()
 
         # Set up the list of streams and attach streamcaps.
+        stdinSink = nullSink
+        stdoutSource = stderrSource = emptySource
         streams = []
-        if stdinFount is None:
-            streams.append(nullptr(ruv.stream_t))
-        else:
+        if stdin:
+            stream = ruv.rffi.cast(ruv.stream_tp,
+                                   ruv.alloc_pipe(vat.uv_loop))
+            streams.append(stream)
+            wrapped = ruv.wrapStream(stream, 1)
+            stdinSink = StreamSink(wrapped, vat)
+        elif stdinFount is not None:
             stream = ruv.rffi.cast(ruv.stream_tp,
                                    ruv.alloc_pipe(vat.uv_loop))
             streams.append(stream)
             drain = StreamDrain(stream, vat)
             vat.sendOnly(stdinFount, FLOWTO_1, [drain], EMPTY_MAP)
-        if stdoutDrain is None:
-            streams.append(nullptr(ruv.stream_t))
         else:
+            streams.append(nullptr(ruv.stream_t))
+        if stdout:
+            stream = ruv.rffi.cast(ruv.stream_tp,
+                                   ruv.alloc_pipe(vat.uv_loop))
+            streams.append(stream)
+            wrapped = ruv.wrapStream(stream, 1)
+            stdoutSource = StreamSource(wrapped, vat)
+        elif stdoutDrain is not None:
             stream = ruv.rffi.cast(ruv.stream_tp,
                                    ruv.alloc_pipe(vat.uv_loop))
             streams.append(stream)
             fount = StreamFount(stream, vat)
             vat.sendOnly(fount, FLOWTO_1, [stdoutDrain], EMPTY_MAP)
-        if stderrDrain is None:
-            streams.append(nullptr(ruv.stream_t))
         else:
+            streams.append(nullptr(ruv.stream_t))
+        if stderr:
+            stream = ruv.rffi.cast(ruv.stream_tp,
+                                   ruv.alloc_pipe(vat.uv_loop))
+            streams.append(stream)
+            wrapped = ruv.wrapStream(stream, 1)
+            stderrSource = StreamSource(wrapped, vat)
+        elif stderrDrain is not None:
             stream = ruv.rffi.cast(ruv.stream_tp,
                                    ruv.alloc_pipe(vat.uv_loop))
             streams.append(stream)
             fount = StreamFount(stream, vat)
             vat.sendOnly(fount, FLOWTO_1, [stderrDrain], EMPTY_MAP)
+        else:
+            streams.append(nullptr(ruv.stream_t))
 
         try:
             process = ruv.allocProcess()
-            sub = SubProcess(vat, process, argv, env)
+            sub = SubProcess(vat, process, argv, env, stdin=stdinSink,
+                             stdout=stdoutSource, stderr=stderrSource)
             ruv.spawn(vat.uv_loop, process,
                       file=executable, args=argv, env=packedEnv,
                       streams=streams)
