@@ -484,28 +484,34 @@ object _matchSame as DeepFrozenStamp:
     to run(expected):
         "The pattern ==`expected`."
 
-        def auditor := escape ej {
-            DeepFrozen.coerce(expected, ej)
-            DeepFrozenStamp
-        } catch _ { nullAuditor }
-
-        return def sameMatcher(specimen, ej) as auditor:
+        def _sameMatcher(specimen, ej):
             if (expected != specimen):
                 throw.eject(ej, ["Not same:", expected, specimen])
             return specimen
 
+        return object sameMatcher extends _sameMatcher:
+            to _conformTo(guard):
+                return if (guard == DeepFrozen):
+                    escape ej:
+                        DeepFrozen.coerce(expected, ej)
+                        def sameMatcher(specimen, ej) as DeepFrozenStamp:
+                            return _sameMatcher(specimen, ej)
+
     to different(expected):
         "The pattern !=`expected`."
 
-        def auditor := escape ej {
-            DeepFrozen.coerce(expected, ej)
-            DeepFrozenStamp
-        } catch _ { nullAuditor }
-
-        return def differentMatcher(specimen, ej) as auditor:
+        def _differentMatcher(specimen, ej):
             if (expected == specimen):
                 throw.eject(ej, ["Same:", expected, specimen])
             return specimen
+
+        return object differentMatcher extends _differentMatcher:
+            to _conformTo(guard):
+                return if (guard == DeepFrozen):
+                    escape ej:
+                        DeepFrozen.coerce(expected, ej)
+                        def differentMatcher(specimen, ej) as DeepFrozenStamp:
+                            return _differentMatcher(specimen, ej)
 
 
 object _mapExtract as DeepFrozenStamp:
@@ -514,32 +520,38 @@ object _mapExtract as DeepFrozenStamp:
     to run(key):
         "The pattern [=> `key`]."
 
-        def auditor := escape ej {
-            DeepFrozen.coerce(key, ej)
-            DeepFrozenStamp
-        } catch _ { nullAuditor }
-
-        return def mapExtractor(specimen, ej) as auditor:
+        def _mapExtractor(specimen, ej):
             def map :Map exit ej := specimen
             if (map.contains(key)):
                 return [map[key], map.without(key)]
             throw.eject(ej, "Key " + M.toQuote(key) + " not in map")
 
+        return object mapExtractor extends _mapExtractor:
+            to _conformTo(guard):
+                return if (guard == DeepFrozen):
+                    escape ej:
+                        DeepFrozen.coerce(key, ej)
+                        def mapExtractor(specimen, ej) as DeepFrozenStamp:
+                            return _mapExtractor(specimen, ej)
+
     to withDefault(key, default):
         "The pattern [=> `key` := `default`]."
 
-        def auditor := escape ej {
-            DeepFrozen.coerce(key, ej)
-            DeepFrozen.coerce(default, ej)
-            DeepFrozenStamp
-        } catch _ { nullAuditor }
-
-        return def mapDefaultExtractor(specimen, ej) as auditor:
+        def _mapDefaultExtractor(specimen, ej):
             def map :Map exit ej := specimen
             if (map.contains(key)):
                 return [map[key], map.without(key)]
             else:
                 return [default, map]
+
+        return object mapDefaultExtractor extends _mapDefaultExtractor:
+            to _conformTo(guard):
+                return if (guard == DeepFrozen):
+                    escape ej:
+                        DeepFrozen.coerce(key, ej)
+                        DeepFrozen.coerce(default, ej)
+                        def mapDefaultExtractor(specimen, ej) as DeepFrozenStamp:
+                            return _mapDefaultExtractor(specimen, ej)
 
 
 def _quasiMatcher(matchMaker, values) as DeepFrozenStamp:
