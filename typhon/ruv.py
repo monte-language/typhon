@@ -42,6 +42,7 @@ def formatError(code):
     return "%s (%s)" % (rffi.charp2str(uv_strerror(code)),
                         rffi.charp2str(uv_err_name(code)))
 
+
 def check(message, rv):
     rv = intmask(rv)
     if rv < 0:
@@ -50,6 +51,7 @@ def check(message, rv):
             u"libuv API error: %s" % uve.repr().decode("utf-8"))
         raise uve
     return rv
+
 
 @specialize.arg(0)
 def checking(message, f):
@@ -86,15 +88,15 @@ class CConfig:
     timer_t = rffi_platform.Struct("uv_timer_t", [("data", rffi.VOIDP)])
     prepare_t = rffi_platform.Struct("uv_prepare_t", [("data", rffi.VOIDP)])
     idle_t = rffi_platform.Struct("uv_idle_t", [("data", rffi.VOIDP)])
-    process_options_t = rffi_platform.Struct("uv_process_options_t",
-                                     [("file", rffi.CCHARP),
-                                      ("args", rffi.CCHARPP),
-                                      ("env", rffi.CCHARPP),
-                                      ("cwd", rffi.CCHARP),
-                                      ("flags", rffi.UINT),
-                                      ("stdio_count", rffi.INT),
-                                      ("stdio",
-                                          lltype.Ptr(lltype.ForwardReference()))])
+    process_options_t = rffi_platform.Struct(
+        "uv_process_options_t", [
+            ("file", rffi.CCHARP),
+            ("args", rffi.CCHARPP),
+            ("env", rffi.CCHARPP),
+            ("cwd", rffi.CCHARP),
+            ("flags", rffi.UINT),
+            ("stdio_count", rffi.INT),
+            ("stdio", lltype.Ptr(lltype.ForwardReference()))])
     stdio_container_t = rffi_platform.Struct("uv_stdio_container_t",
                                              [("flags", rffi.INT)])
     process_t = rffi_platform.Struct("uv_process_t",
@@ -150,8 +152,8 @@ array_buf_t = lltype.Ptr(lltype.Array(buf_t, hints={"nolength": True}))
 
 # Forward references.
 cConfig["connect_t"].c_handle.TO.become(cConfig["stream_t"])
-cConfig["process_options_t"].c_stdio.TO.become(lltype.Array(cConfig["stdio_container_t"],
-    hints={"nolength": True}))
+cConfig["process_options_t"].c_stdio.TO.become(lltype.Array(
+    cConfig["stdio_container_t"], hints={"nolength": True}))
 
 
 def stashFor(name, struct, initial=None):
@@ -159,12 +161,12 @@ def stashFor(name, struct, initial=None):
         """
         Like a weaklist, but keeps a strong reference to its elements.
 
-        Beware: get and put aren't idempotent. A get will remove the object from
-        the stash!
+        Beware: get and put aren't idempotent. A get will remove the object
+        from the stash!
 
-        Asynchronous code is weird, man. If you don't keep strong references, then
-        the only references left might be in FFI or libc, which is not good. So we
-        can't use weakrefs here.
+        Asynchronous code is weird, man. If you don't keep strong references,
+        then the only references left might be in FFI or libc, which is not
+        good. So we can't use weakrefs here.
         """
 
         def __init__(self, initialSize=4):
@@ -235,8 +237,8 @@ def stashFor(name, struct, initial=None):
 
     return stash, unstash, unstashing
 
-stashTimer, unstashTimer, unstashingTimer = stashFor("timer", timer_tp,
-        initial=(None, 0))
+stashTimer, unstashTimer, unstashingTimer = stashFor(
+    "timer", timer_tp, initial=(None, 0))
 stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
 stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
 stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
@@ -265,8 +267,11 @@ loop_close = rffi.llexternal("uv_loop_close", [loop_tp], rffi.INT,
 loopClose = checking("loop_close", loop_close)
 loop_alive = rffi.llexternal("uv_loop_alive", [loop_tp], rffi.INT,
                              compilation_info=eci)
+
+
 def loopAlive(loop):
     return bool(intmask(loop_alive(loop)))
+
 loop_size = rffi.llexternal("uv_loop_size", [], rffi.SIZE_T,
                             compilation_info=eci)
 default_loop = rffi.llexternal("uv_default_loop", [], loop_tp,
@@ -281,6 +286,7 @@ update_time = rffi.llexternal("uv_update_time", [loop_tp], lltype.Void,
 walk = rffi.llexternal("uv_walk", [loop_tp, walk_cb, rffi.VOIDP], lltype.Void,
                        compilation_info=eci)
 
+
 def alloc_loop():
     loop = lltype.malloc(cConfig["loop_t"], flavor="raw", zero=True)
     check("loop_init", loop_init(loop))
@@ -292,20 +298,24 @@ RUN_DEFAULT, RUN_ONCE, RUN_NOWAIT = range(3)
 alloc_cb = rffi.CCallback([handle_tp, rffi.SIZE_T, buf_tp], lltype.Void)
 close_cb = rffi.CCallback([handle_tp], lltype.Void)
 
+
 def allocBuf(size):
     buf = lltype.malloc(cConfig["buf_t"], flavor="raw", zero=True)
     buf.c_base = alloc_raw_storage(size)
     rffi.setintfield(buf, "c_len", size)
     return buf
 
+
 def freeBuf(buf):
     free_raw_storage(buf.c_base)
     free(buf)
 
-# This is almost certainly the right thing to pass to alloc_cb.
+
 def allocCB(handle, size, buf):
+    """This is almost certainly the right thing to pass to alloc_cb."""
     buf.c_base = alloc_raw_storage(size)
     rffi.setintfield(buf, "c_len", size)
+
 
 class scopedBufs(object):
 
@@ -343,21 +353,31 @@ class scopedBufs(object):
 
 is_active = rffi.llexternal("uv_is_active", [handle_tp], rffi.INT,
                             compilation_info=eci)
+
+
 @specialize.ll()
 def isActive(handleish):
     rv = intmask(is_active(rffi.cast(handle_tp, handleish)))
     return bool(rv)
 is_closing = rffi.llexternal("uv_is_closing", [handle_tp], rffi.INT,
                              compilation_info=eci)
+
+
 def isClosing(handleish):
     rv = intmask(is_closing(rffi.cast(handle_tp, handleish)))
     return bool(rv)
-uv_close = rffi.llexternal("uv_close", [handle_tp, close_cb], lltype.Void,
-                           compilation_info=eci)
+uv_close = rffi.llexternal(
+    "uv_close", [handle_tp, close_cb], lltype.Void, compilation_info=eci)
+
+
 def close(handleish, cb):
     uv_close(rffi.cast(handle_tp, handleish), cb)
+
+
 def closeAndFree(handleish):
     uv_close(rffi.cast(handle_tp, handleish), closeAndFreeCB)
+
+
 def closeAndFreeCB(handleish):
     free(handleish)
 
@@ -371,6 +391,7 @@ timer_start = rffi.llexternal("uv_timer_start", [timer_tp, timer_cb,
                                                  rffi.ULONGLONG],
                               rffi.INT, compilation_info=eci)
 timerStart = checking("timer_start", timer_start)
+
 
 def alloc_timer(loop):
     timer = lltype.malloc(cConfig["timer_t"], flavor="raw", zero=True)
@@ -387,6 +408,7 @@ prepare_start = rffi.llexternal("uv_prepare_start", [prepare_tp, prepare_cb],
 prepare_stop = rffi.llexternal("uv_prepare_stop", [prepare_tp],
                                rffi.INT, compilation_info=eci)
 
+
 def alloc_prepare():
     return lltype.malloc(cConfig["prepare_t"], flavor="raw", zero=True)
 
@@ -396,11 +418,12 @@ idle_cb = rffi.CCallback([idle_tp], lltype.Void)
 idle_init = rffi.llexternal("uv_idle_init", [loop_tp, idle_tp], rffi.INT,
                             compilation_info=eci)
 idle_start = rffi.llexternal("uv_idle_start", [loop_tp, idle_tp], rffi.INT,
-                            compilation_info=eci)
+                             compilation_info=eci)
 idleStart = checking("idle_start", idle_start)
 idle_stop = rffi.llexternal("uv_idle_stop", [loop_tp], rffi.INT,
                             compilation_info=eci)
 idleStop = checking("idle_stop", idle_stop)
+
 
 def alloc_idle(loop):
     idle = lltype.malloc(cConfig["idle_t"], flavor="raw", zero=True)
@@ -426,6 +449,7 @@ class UVStream(object):
         if not self._refCount:
             streamJanitor.streams.append(self._stream)
 
+
 class StreamJanitor(object):
 
     def __init__(self):
@@ -441,6 +465,7 @@ class StreamJanitor(object):
         self.streams = []
 
 streamJanitor = StreamJanitor()
+
 
 def wrapStream(stream, refCount):
     wrapper = UVStream(stream, refCount)
@@ -504,6 +529,8 @@ UV_WRITABLE_PIPE = 0x20
 uv_spawn = rffi.llexternal("uv_spawn", [loop_tp, process_tp,
                                         process_options_tp], rffi.INT,
                            compilation_info=eci)
+
+
 def spawn(loop, process, file, args, env, streams):
     """
     The file descriptor list should be a list of streams to wire up to FDs in
@@ -516,7 +543,8 @@ def spawn(loop, process, file, args, env, streams):
         with rffi.scoped_str2charp(".") as rawCWD:
             options = rffi.make(cConfig["process_options_t"], c_file=rawFile,
                                 c_args=rawArgs, c_env=rawEnv, c_cwd=rawCWD)
-            with lltype.scoped_alloc(rffi.CArray(stdio_container_t), len(streams)) as rawStreams:
+            with lltype.scoped_alloc(rffi.CArray(stdio_container_t),
+                                     len(streams)) as rawStreams:
                 for i, stream in enumerate(streams):
                     if stream == lltype.nullptr(stream_t):
                         flags = UV_IGNORE
@@ -568,11 +596,14 @@ try_write = rffi.llexternal("uv_try_write", [stream_tp, array_buf_t,
                             rffi.INT, compilation_info=eci)
 tryWrite = checking("try_write", try_write)
 
+
 def alloc_write():
     return lltype.malloc(cConfig["write_t"], flavor="raw", zero=True)
 
+
 def alloc_connect():
     return lltype.malloc(cConfig["connect_t"], flavor="raw", zero=True)
+
 
 def alloc_shutdown():
     return lltype.malloc(cConfig["shutdown_t"], flavor="raw", zero=True)
@@ -588,12 +619,14 @@ tcp_connect = rffi.llexternal("uv_tcp_connect", [connect_tp, tcp_tp,
                                                  rffi.VOIDP, connect_cb],
                               rffi.INT, compilation_info=eci)
 
+
 def alloc_tcp(loop):
     tcp = lltype.malloc(cConfig["tcp_t"], flavor="raw", zero=True)
     check("tcp_init", tcp_init(loop, tcp))
     return tcp
 
 sin = lltype.malloc(s.sockaddr_in, flavor="raw", zero=True)
+
 
 def tcpBind(stream, address, port):
     rffi.setintfield(sin, "c_sin_family", s.AF_INET)
@@ -605,6 +638,7 @@ def tcpBind(stream, address, port):
     # No flags.
     rv = check("tcp_bind", tcp_bind(stream, sin, 0))
     return rv
+
 
 @specialize.ll()
 def tcpConnect(stream, address, port, callback):
@@ -621,6 +655,7 @@ def tcpConnect(stream, address, port, callback):
 
 pipe_init = rffi.llexternal("uv_pipe_init", [loop_tp, pipe_tp, rffi.INT],
                             rffi.INT, compilation_info=eci)
+
 
 def alloc_pipe(loop):
     pipe = lltype.malloc(cConfig["pipe_t"], flavor="raw", zero=True)
@@ -674,15 +709,17 @@ fsRead = checking("fs_read", fs_read)
 fs_write = rffi.llexternal("uv_fs_write", [loop_tp, fs_tp, rffi.INT,
                                            array_buf_t, rffi.UINT,
                                            rffi.LONGLONG, fs_cb],
-                            rffi.INT, compilation_info=eci)
+                           rffi.INT, compilation_info=eci)
 fsWrite = checking("fs_write", fs_write)
 fs_rename = rffi.llexternal("uv_fs_rename", [loop_tp, fs_tp, rffi.CCHARP,
                                              rffi.CCHARP, fs_cb],
                             rffi.INT, compilation_info=eci)
 fsRename = checking("fs_rename", fs_rename)
 
+
 def alloc_fs():
     return lltype.malloc(cConfig["fs_t"], flavor="raw", zero=True)
+
 
 def fsDiscard(fs):
     fs_req_cleanup(fs)
@@ -697,6 +734,7 @@ gai = rffi.llexternal("uv_getaddrinfo", [loop_tp, gai_tp, gai_cb, rffi.CCHARP,
 getAddrInfo = checking("getaddrinfo", gai)
 freeAddrInfo = rffi.llexternal("uv_freeaddrinfo", [s.addrinfo_ptr],
                                lltype.Void, compilation_info=eci)
+
 
 def alloc_gai():
     return lltype.malloc(cConfig["getaddrinfo_t"], flavor="raw", zero=True)
@@ -715,11 +753,13 @@ inet_pton = rffi.llexternal("uv_inet_pton", [rffi.INT, rffi.CCHARP,
                                              rffi.VOIDP],
                             rffi.INT, compilation_info=eci)
 
+
 def IP4Name(sockaddr):
     size = 16
     with rffi.scoped_alloc_buffer(size) as buf:
         check("ip4_name", ip4_name(sockaddr, buf.raw, size))
         return buf.str(size).split('\x00', 1)[0]
+
 
 def IP6Name(sockaddr):
     size = 46

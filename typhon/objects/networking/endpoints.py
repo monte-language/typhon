@@ -59,6 +59,7 @@ def connectCB(connect, status):
         if not we_are_translated():
             raise
 
+
 def connectStreamCB(connect, status):
     status = intmask(status)
     stream = connect.c_handle
