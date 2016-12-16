@@ -94,10 +94,10 @@ class TCPClientEndpoint(Object):
     Generic TCP client endpoint.
     """
 
-    def __init__(self, host, port, af_type):
+    def __init__(self, host, port, inet_type):
         self.host = host
         self.port = port
-        self.af_type = af_type
+        self.inet_type = inet_type
 
     def toString(self, v):
         return u"<endpoint (IPv%s, TCP): %s:%s>" % (
@@ -117,7 +117,7 @@ class TCPClientEndpoint(Object):
                         (vat, resolvers))
 
         # Make the actual connection.
-        ruv.tcpConnect(stream, self.host, self.port, connectCB, self.af_type)
+        ruv.tcpConnect(stream, self.host, self.port, connectCB, self.inet_type)
 
         # Return the promises.
         return [fount, drain]
@@ -137,7 +137,7 @@ class TCPClientEndpoint(Object):
 
         # Make the actual connection.
         ruv.tcpConnect(
-            stream, self.host, self.port, connectStreamCB, self.af_type)
+            stream, self.host, self.port, connectStreamCB, self.inet_type)
 
         # Return the promises.
         return [source, sink]
@@ -193,9 +193,9 @@ def shutdownCB(shutdown, status):
 
 
 @autohelp
-class TCP4Server(Object):
+class TCPServer(Object):
     """
-    A TCPv4 listening server.
+    A TCP listening server.
     """
 
     listening = True
@@ -210,9 +210,9 @@ class TCP4Server(Object):
     def shutdown(self):
         if self.listening:
             shutdown = ruv.alloc_shutdown()
-            ruv.shutdown(shutdown, ruv.rffi.cast(ruv.stream_tp,
-                                                 self.uv_server),
-                         shutdownCB)
+            ruv.shutdown(
+                shutdown, ruv.rffi.cast(ruv.stream_tp, self.uv_server),
+                shutdownCB)
             self.listening = False
 
 
@@ -268,23 +268,27 @@ def connectionStreamCB(uv_server, status):
 
 
 @autohelp
-class TCP4ServerEndpoint(Object):
+class TCPServerEndpoint(Object):
     """
-    A TCPv4 server endpoint.
+    TCP Server Endpoint.
     """
 
-    def __init__(self, port):
+    def __init__(self, port, inet_type):
         self.port = port
+        self.inet_type = inet_type
 
     def toString(self):
-        return u"<endpoint (IPv4, TCP): %d>" % (self.port,)
+        return u"<endpoint (IPv%s, TCP): %d>" % (self.inet_type, self.port)
 
     @method("Any", "Any")
     def listen(self, handler):
         vat = currentVat.get()
         uv_server = ruv.alloc_tcp(vat.uv_loop)
         try:
-            ruv.tcpBind(uv_server, "0.0.0.0", self.port)
+            if self.inet_type == 4:
+                ruv.tcpBind(uv_server, "0.0.0.0", self.port)
+            elif self.inet_type == 6:
+                ruv.tcpBind(uv_server, "::", self.port)
         except ruv.UVError as uve:
             raise userError(u"listen/1: Couldn't listen: %s" %
                             uve.repr().decode("utf-8"))
@@ -294,14 +298,17 @@ class TCP4ServerEndpoint(Object):
         # XXX hardcoded backlog of 42
         ruv.listen(uv_stream, 42, connectionCB)
 
-        return TCP4Server(uv_server)
+        return TCPServer(uv_server)
 
     @method("Any", "Any")
     def listenStream(self, handler):
         vat = currentVat.get()
         uv_server = ruv.alloc_tcp(vat.uv_loop)
         try:
-            ruv.tcpBind(uv_server, "0.0.0.0", self.port)
+            if self.inet_type == 4:
+                ruv.tcpBind(uv_server, "0.0.0.0", self.port)
+            elif self.inet_type == 6:
+                ruv.tcpBind(uv_server, "::", self.port)
         except ruv.UVError as uve:
             raise userError(u"listenStream/1: Couldn't listen: %s" %
                             uve.repr().decode("utf-8"))
@@ -311,7 +318,25 @@ class TCP4ServerEndpoint(Object):
         # XXX hardcoded backlog of 42
         ruv.listen(uv_stream, 42, connectionStreamCB)
 
-        return TCP4Server(uv_server)
+        return TCPServer(uv_server)
+
+
+@autohelp
+class TCP4ServerEndpoint(TCPServerEndpoint):
+    """
+    A TCPv4 server endpoint.
+    """
+    def __init__(self, port):
+        super(TCP4ServerEndpoint, self).__init__(port, 4)
+
+
+@autohelp
+class TCP6ServerEndpoint(TCPServerEndpoint):
+    """
+    A TCPv6 server endpoint.
+    """
+    def __init__(self, port):
+        super(TCP4ServerEndpoint, self).__init__(port, 6)
 
 
 @runnable(RUN_1)
@@ -321,3 +346,12 @@ def makeTCP4ServerEndpoint(port):
     """
 
     return TCP4ServerEndpoint(unwrapInt(port))
+
+
+@runnable(RUN_1)
+def makeTCP6ServerEndpoint(port):
+    """
+    Make a TCPv4 server endpoint.
+    """
+
+    return TCP6ServerEndpoint(unwrapInt(port))
