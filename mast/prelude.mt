@@ -585,7 +585,7 @@ object _switchFailed as DeepFrozenStamp:
 object _makeVerbFacet as DeepFrozenStamp:
     "The operator `obj`.`method`."
 
-    to curryCall(target, verb):
+    to curryCall(target, verb :Str):
         "Curry a call to `target` using `verb`."
 
         return object curried:
@@ -593,11 +593,21 @@ object _makeVerbFacet as DeepFrozenStamp:
 
              This object responds to messages with the verb \"run\" by passing
              them to another object with a different verb."
-            to _uncall():
-                return [_makeVerbFacet, "curryCall", [target, verb], [].asMap()]
 
             match [=="run", args, namedArgs]:
                 M.call(target, verb, args, namedArgs)
+
+    to currySend(target, verb :Str):
+        "Curry a send to `target` using `verb`."
+
+        return object curried:
+            "A curried send.
+
+             This object responds to messages with the verb \"run\" by passing
+             them to another object with a different verb."
+
+            match [=="run", args, namedArgs]:
+                M.send(target, verb, args, namedArgs)
 
 
 def _accumulateMap(iterable, mapper) as DeepFrozenStamp:
@@ -611,13 +621,13 @@ def _bind(resolver, guard) as DeepFrozenStamp:
     "Resolve a forward declaration."
 
     def viaBinder(specimen, ej):
-        if (guard == null):
+        return if (guard == null):
             resolver.resolve(specimen)
-            return specimen
+            specimen
         else:
             def coerced := guard.coerce(specimen, ej)
             resolver.resolve(coerced)
-            return coerced
+            coerced
     return viaBinder
 
 
