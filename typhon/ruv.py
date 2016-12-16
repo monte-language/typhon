@@ -626,12 +626,27 @@ def alloc_tcp(loop):
     return tcp
 
 sin = lltype.malloc(s.sockaddr_in, flavor="raw", zero=True)
+sin6 = lltype.malloc(s.sockaddr_in6, flavor="raw", zero=True)
 
 
-def tcpBind(stream, address, port):
-    rffi.setintfield(sin, "c_sin_family", s.AF_INET)
-    rffi.setintfield(sin, "c_sin_port", s.htons(port))
-    if inet_pton(s.AF_INET, address, sin.c_sin_addr):
+def unknownAFType(x):
+    print "%s is an unknkwn TCP version!"
+    assert False
+
+af_types = dict({
+    4: (s.AF_INET, sin, "c_sin_addr", "c_sin_family", "c_sin_port"),
+    6: (s.AF_INET6, sin6, "c_sin6_addr", "c_sin6_family", "c_sin6_port"),
+    None: lambda x: unknownAFType(x)
+})
+
+
+def tcpBind(stream, address, port, af_type):
+    inet, sin, s_addr, fam, s_port = af_types.get(
+        af_type, af_types[None](af_type)
+    )
+    rffi.setintfield(sin, fam, inet)
+    rffi.setintfield(sin, s_port, s.htons(port))
+    if inet_pton(inet, address, getattr(sin, s_addr)):
         print "tcpBind: inet_pton failed!?"
         assert False
 
@@ -641,9 +656,12 @@ def tcpBind(stream, address, port):
 
 
 @specialize.ll()
-def tcpConnect(stream, address, port, callback):
+def tcpConnect(stream, address, port, callback, af_type):
+    inet, sin, s_addr, fam, s_port = af_types.get(
+        af_type, af_types[None](af_type)
+    )
     connect = alloc_connect()
-    rffi.setintfield(sin, "c_sin_family", s.AF_INET)
+    rffi.setintfield(sin, "c_sin_family", af_types[af_type])
     rffi.setintfield(sin, "c_sin_port", s.htons(port))
     if inet_pton(s.AF_INET, address, sin.c_sin_addr):
         print "tcpConnect: inet_pton failed!?"

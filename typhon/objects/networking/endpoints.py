@@ -89,18 +89,19 @@ def connectStreamCB(connect, status):
 
 
 @autohelp
-class TCP4ClientEndpoint(Object):
+class TCPClientEndpoint(Object):
     """
-    A TCPv4 client endpoint.
+    Generic TCP client endpoint.
     """
 
-    def __init__(self, host, port):
+    def __init__(self, host, port, af_type):
         self.host = host
         self.port = port
+        self.af_type = af_type
 
-    def toString(self):
-        return u"<endpoint (IPv4, TCP): %s:%d>" % (self.host.decode("utf-8"),
-                                                   self.port)
+    def toString(self, v):
+        return u"<endpoint (IPv%s, TCP): %s:%s>" % (
+            v, self.host.decode("utf-8"), self.port)
 
     @method("List")
     def connect(self):
@@ -116,7 +117,7 @@ class TCP4ClientEndpoint(Object):
                         (vat, resolvers))
 
         # Make the actual connection.
-        ruv.tcpConnect(stream, self.host, self.port, connectCB)
+        ruv.tcpConnect(stream, self.host, self.port, connectCB, self.af_type)
 
         # Return the promises.
         return [fount, drain]
@@ -135,10 +136,29 @@ class TCP4ClientEndpoint(Object):
                         (vat, resolvers))
 
         # Make the actual connection.
-        ruv.tcpConnect(stream, self.host, self.port, connectStreamCB)
+        ruv.tcpConnect(
+            stream, self.host, self.port, connectStreamCB, self.af_type)
 
         # Return the promises.
         return [source, sink]
+
+
+@autohelp
+class TCP4ClientEndpoint(TCPClientEndpoint):
+    """
+    A TCPv4 client endpoint.
+    """
+    def __init__(self, host, port):
+        super(TCP4ClientEndpoint, self).__init__(host, port, 4)
+
+
+@autohelp
+class TCP6ClientEndpoint(TCPClientEndpoint):
+    """
+    A TCPv6 client endpoint.
+    """
+    def __init__(self, host, port):
+        super(TCP6ClientEndpoint, self).__init__(host, port, 6)
 
 
 @runnable(RUN_2)
@@ -150,6 +170,17 @@ def makeTCP4ClientEndpoint(host, port):
     host = unwrapBytes(host)
     port = unwrapInt(port)
     return TCP4ClientEndpoint(host, port)
+
+
+@runnable(RUN_2)
+def makeTCP6ClientEndpoint(host, port):
+    """
+    Make a TCPv4 client endpoint.
+    """
+
+    host = unwrapBytes(host)
+    port = unwrapInt(port)
+    return TCP6ClientEndpoint(host, port)
 
 
 def shutdownCB(shutdown, status):
@@ -208,6 +239,7 @@ def connectionCB(uv_server, status):
     except:
         if not we_are_translated():
             raise
+
 
 def connectionStreamCB(uv_server, status):
     status = intmask(status)
