@@ -99,9 +99,9 @@ class TCPClientEndpoint(Object):
         self.port = port
         self.inet_type = inet_type
 
-    def toString(self, v):
+    def toString(self):
         return u"<endpoint (IPv%s, TCP): %s:%s>" % (
-            v, self.host.decode("utf-8"), self.port)
+            self.inet_type, self.host.decode("utf-8"), self.port)
 
     @method("List")
     def connect(self):
@@ -149,7 +149,7 @@ class TCP4ClientEndpoint(TCPClientEndpoint):
     A TCPv4 client endpoint.
     """
     def __init__(self, host, port):
-        super(TCP4ClientEndpoint, self).__init__(host, port, 4)
+        TCPClientEndpoint.__init__(self, host, port, 4)
 
 
 @autohelp
@@ -158,7 +158,7 @@ class TCP6ClientEndpoint(TCPClientEndpoint):
     A TCPv6 client endpoint.
     """
     def __init__(self, host, port):
-        super(TCP6ClientEndpoint, self).__init__(host, port, 6)
+        TCPClientEndpoint.__init__(self, host, port, 6)
 
 
 @runnable(RUN_2)
@@ -286,9 +286,9 @@ class TCPServerEndpoint(Object):
         uv_server = ruv.alloc_tcp(vat.uv_loop)
         try:
             if self.inet_type == 4:
-                ruv.tcpBind(uv_server, "0.0.0.0", self.port)
+                ruv.tcpBind(uv_server, "0.0.0.0", self.port, self.inet_type)
             elif self.inet_type == 6:
-                ruv.tcpBind(uv_server, "::", self.port)
+                ruv.tcpBind(uv_server, "::", self.port, self.inet_type)
         except ruv.UVError as uve:
             raise userError(u"listen/1: Couldn't listen: %s" %
                             uve.repr().decode("utf-8"))
@@ -306,9 +306,9 @@ class TCPServerEndpoint(Object):
         uv_server = ruv.alloc_tcp(vat.uv_loop)
         try:
             if self.inet_type == 4:
-                ruv.tcpBind(uv_server, "0.0.0.0", self.port)
+                ruv.tcpBind(uv_server, "0.0.0.0", self.port, self.inet_type)
             elif self.inet_type == 6:
-                ruv.tcpBind(uv_server, "::", self.port)
+                ruv.tcpBind(uv_server, "::", self.port, self.inet_type)
         except ruv.UVError as uve:
             raise userError(u"listenStream/1: Couldn't listen: %s" %
                             uve.repr().decode("utf-8"))
@@ -327,7 +327,7 @@ class TCP4ServerEndpoint(TCPServerEndpoint):
     A TCPv4 server endpoint.
     """
     def __init__(self, port):
-        super(TCP4ServerEndpoint, self).__init__(port, 4)
+        TCPServerEndpoint.__init__(self, port, 4)
 
 
 @autohelp
@@ -336,7 +336,7 @@ class TCP6ServerEndpoint(TCPServerEndpoint):
     A TCPv6 server endpoint.
     """
     def __init__(self, port):
-        super(TCP4ServerEndpoint, self).__init__(port, 6)
+        TCPServerEndpoint.__init__(self, port, 6)
 
 
 @runnable(RUN_1)
