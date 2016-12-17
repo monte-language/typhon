@@ -312,7 +312,7 @@ def freeBuf(buf):
 
 
 def allocCB(handle, size, buf):
-    """This is almost certainly the right thing to pass to alloc_cb."""
+    # This is almost certainly the right thing to pass to alloc_cb
     buf.c_base = alloc_raw_storage(size)
     rffi.setintfield(buf, "c_len", size)
 
@@ -625,29 +625,36 @@ def alloc_tcp(loop):
     check("tcp_init", tcp_init(loop, tcp))
     return tcp
 
+
 sin = lltype.malloc(s.sockaddr_in, flavor="raw", zero=True)
-sin6 = lltype.malloc(s.sockaddr_in6, flavor="raw", zero=True)
+af4 = (s.AF_INET, sin, "c_sin_addr", "c_sin_family", "c_sin_port")
 
 
-def unknownAFType(x):
-    print "%s is an unknkwn TCP version!"
-    assert False
+def tcp4Bind(stream, address, port):
+    inet, sin, s_addr, s_fam, s_port = af4
 
-af_types = dict({
-    4: (s.AF_INET, sin, "c_sin_addr", "c_sin_family", "c_sin_port"),
-    6: (s.AF_INET6, sin6, "c_sin6_addr", "c_sin6_family", "c_sin6_port"),
-    None: lambda x: unknownAFType(x)
-})
-
-
-def tcpBind(stream, address, port, af_type):
-    inet, sin, s_addr, fam, s_port = af_types.get(
-        af_type, af_types[None](af_type)
-    )
-    rffi.setintfield(sin, fam, inet)
+    rffi.setintfield(sin, s_fam, inet)
     rffi.setintfield(sin, s_port, s.htons(port))
     if inet_pton(inet, address, getattr(sin, s_addr)):
-        print "tcpBind: inet_pton failed!?"
+        print "tcp4Bind: inet_pton failed!?"
+        assert False
+
+    # No flags.
+    rv = check("tcp_bind", tcp_bind(stream, sin, 0))
+    return rv
+
+
+sin6 = lltype.malloc(s.sockaddr_in6, flavor="raw", zero=True)
+af6 = (s.AF_INET6, sin6, "c_sin6_addr", "c_sin6_family", "c_sin6_port")
+
+
+def tcp6Bind(stream, address, port):
+    inet, sin, s_addr, s_fam, s_port = af6
+
+    rffi.setintfield(sin, s_fam, inet)
+    rffi.setintfield(sin, s_port, s.htons(port))
+    if inet_pton(inet, address, getattr(sin, s_addr)):
+        print "tcp6Bind: inet_pton failed!?"
         assert False
 
     # No flags.
@@ -656,15 +663,29 @@ def tcpBind(stream, address, port, af_type):
 
 
 @specialize.ll()
-def tcpConnect(stream, address, port, callback, af_type):
-    inet, sin, s_addr, fam, s_port = af_types.get(
-        af_type, af_types[None](af_type)
-    )
+def tcp4Connect(stream, address, port, callback):
+    inet, sin, s_addr, s_fam, s_port = af4
+
     connect = alloc_connect()
-    rffi.setintfield(sin, "c_sin_family", af_types[af_type])
-    rffi.setintfield(sin, "c_sin_port", s.htons(port))
-    if inet_pton(s.AF_INET, address, sin.c_sin_addr):
-        print "tcpConnect: inet_pton failed!?"
+    rffi.setintfield(sin, s_fam, inet)
+    rffi.setintfield(sin, s_port, s.htons(port))
+    if inet_pton(inet, address, getattr(sin, s_addr)):
+        print "tcp4Connect: inet_pton failed!?"
+        assert False
+
+    rv = check("tcp_connect", tcp_connect(connect, stream, sin, callback))
+    return rv
+
+
+@specialize.ll()
+def tcp6Connect(stream, address, port, callback):
+    inet, sin, s_addr, s_fam, s_port = af6
+
+    connect = alloc_connect()
+    rffi.setintfield(sin, s_fam, inet)
+    rffi.setintfield(sin, s_port, s.htons(port))
+    if inet_pton(inet, address, getattr(sin, s_addr)):
+        print "tcp6Connect: inet_pton failed!?"
         assert False
 
     rv = check("tcp_connect", tcp_connect(connect, stream, sin, callback))

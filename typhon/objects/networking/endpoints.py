@@ -100,7 +100,7 @@ class TCPClientEndpoint(Object):
         self.inet_type = inet_type
 
     def toString(self):
-        return u"<endpoint (IPv%s, TCP): %s:%s>" % (
+        return u"<endpoint (IPv%d, TCP): %s:%d>" % (
             self.inet_type, self.host.decode("utf-8"), self.port)
 
     @method("List")
@@ -117,7 +117,10 @@ class TCPClientEndpoint(Object):
                         (vat, resolvers))
 
         # Make the actual connection.
-        ruv.tcpConnect(stream, self.host, self.port, connectCB, self.inet_type)
+        if self.inet_type == 4:
+            ruv.tcp4Connect(stream, self.host, self.port, connectCB)
+        elif self.inet_type == 6:
+            ruv.tcp6Connect(stream, self.host, self.port, connectCB)
 
         # Return the promises.
         return [fount, drain]
@@ -136,8 +139,10 @@ class TCPClientEndpoint(Object):
                         (vat, resolvers))
 
         # Make the actual connection.
-        ruv.tcpConnect(
-            stream, self.host, self.port, connectStreamCB, self.inet_type)
+        if self.inet_type == 4:
+            ruv.tcp4Connect(stream, self.host, self.port, connectCB)
+        elif self.inet_type == 6:
+            ruv.tcp6Connect(stream, self.host, self.port, connectCB)
 
         # Return the promises.
         return [source, sink]
@@ -175,7 +180,7 @@ def makeTCP4ClientEndpoint(host, port):
 @runnable(RUN_2)
 def makeTCP6ClientEndpoint(host, port):
     """
-    Make a TCPv4 client endpoint.
+    Make a TCPv6 client endpoint.
     """
 
     host = unwrapBytes(host)
@@ -278,7 +283,7 @@ class TCPServerEndpoint(Object):
         self.inet_type = inet_type
 
     def toString(self):
-        return u"<endpoint (IPv%s, TCP): %d>" % (self.inet_type, self.port)
+        return u"<endpoint (IPv%d, TCP): %d>" % (self.inet_type, self.port)
 
     @method("Any", "Any")
     def listen(self, handler):
@@ -286,9 +291,9 @@ class TCPServerEndpoint(Object):
         uv_server = ruv.alloc_tcp(vat.uv_loop)
         try:
             if self.inet_type == 4:
-                ruv.tcpBind(uv_server, "0.0.0.0", self.port, self.inet_type)
+                ruv.tcp4Bind(uv_server, "0.0.0.0", self.port)
             elif self.inet_type == 6:
-                ruv.tcpBind(uv_server, "::", self.port, self.inet_type)
+                ruv.tcp6Bind(uv_server, "::", self.port)
         except ruv.UVError as uve:
             raise userError(u"listen/1: Couldn't listen: %s" %
                             uve.repr().decode("utf-8"))
@@ -306,9 +311,9 @@ class TCPServerEndpoint(Object):
         uv_server = ruv.alloc_tcp(vat.uv_loop)
         try:
             if self.inet_type == 4:
-                ruv.tcpBind(uv_server, "0.0.0.0", self.port, self.inet_type)
+                ruv.tcp4Bind(uv_server, "0.0.0.0", self.port)
             elif self.inet_type == 6:
-                ruv.tcpBind(uv_server, "::", self.port, self.inet_type)
+                ruv.tcp6Bind(uv_server, "::", self.port)
         except ruv.UVError as uve:
             raise userError(u"listenStream/1: Couldn't listen: %s" %
                             uve.repr().decode("utf-8"))
