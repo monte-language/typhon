@@ -1147,12 +1147,17 @@ def expand(node, builder, fail) as DeepFrozen:
         def nameList := [].diverge()
         def seen := [].asMap().diverge()
         var i := 0
-        def nameFinder(node, maker, args, span):
-            if (node.getNodeName() == "NounExpr"):
-                nameList.push(args[0])
-            return node
 
-        tree.transform(nameFinder)
+        def Ast := builder.getAstGuard()
+
+        def nameFinder(node):
+            if (node =~ _ :Ast && node.getNodeName() == "NounExpr"):
+                nameList.push(node.getName())
+            else if (node._uncall() =~ [_, _, args, _]):
+                for arg in (args):
+                    nameFinder(arg)
+
+        nameFinder(tree)
         def names := nameList.asSet()
 
         def renameTransformer(node, maker, args, span):
@@ -1164,7 +1169,7 @@ def expand(node, builder, fail) as DeepFrozen:
                         i += 1
                         def name := `${args[0]}_$i`
                         if (!names.contains(name)) {
-                             noun := builder.NounExpr(name, span)
+                            noun := builder.NounExpr(name, span)
                             break
                         }
                     }
