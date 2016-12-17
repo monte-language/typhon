@@ -28,14 +28,16 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         formatError(e, err)
 
     def spanHere():
-        if (position + 1 >= tokens.size()):
-            return null
-        return tokens[position.max(0)][2]
+        return if (position + 1 >= tokens.size()):
+            null
+        else:
+            tokens[position.max(0)][2]
 
     def spanNext():
-        if (position + 2 >= tokens.size()):
-            return null
-        return tokens[position + 1][2]
+        return if (position + 2 >= tokens.size()):
+            null
+        else:
+            tokens[position + 1][2]
 
     def spanFrom(start):
         return spanCover(start, spanHere())
@@ -69,15 +71,13 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             position += 1
 
     def peek():
-        if (position + 1 >= tokens.size()):
-            return null
-        return tokens[position + 1]
+        return if (position + 1 >= tokens.size()):
+            null
+        else:
+            tokens[position + 1]
 
     def opt(rule, ej):
-        escape e:
-            return rule(e)
-        catch _:
-            return null
+        return escape e { rule(e) } catch _ { null }
 
     def peekTag():
         if (position + 1 >= tokens.size()):
@@ -102,15 +102,15 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         def origPosition := position
         if (indent):
             acceptEOLs()
-        if (position + 1 >= tokens.size()):
+        return if (position + 1 >= tokens.size()):
             position := origPosition
-            return false
-        if (tokens[position + 1][0] == tagname):
+            false
+        else if (tokens[position + 1][0] == tagname):
             position += 1
-            return true
+            true
         else:
             position := origPosition
-            return false
+            false
 
     def acceptVerb(ej):
         return if (peekTag() == ".String.") {
@@ -198,40 +198,41 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             else if (tname == "@{"):
                 def subpatt := pattern(ej)
                 parts.push(builder.QuasiPatternHole(subpatt, subpatt.getSpan()))
-        if (isPattern):
-            return builder.QuasiParserPattern(name, parts.snapshot(), spanFrom(spanStart))
+        return if (isPattern):
+            builder.QuasiParserPattern(name, parts.snapshot(), spanFrom(spanStart))
         else:
-            return builder.QuasiParserExpr(name, parts.snapshot(), spanFrom(spanStart))
+            builder.QuasiParserExpr(name, parts.snapshot(), spanFrom(spanStart))
 
     def guard(ej):
        def spanStart := spanHere()
-       if (peekTag() == "IDENTIFIER"):
-            def t := advance(ej)
-            def n := builder.NounExpr(t[1], t[2])
-            return if (considerTag("[", ej)):
-                def g := acceptList(expr)
-                acceptTag("]", ej)
-                builder.GetExpr(n, g, spanFrom(spanStart))
-            else:
-                n
-       acceptTag("(", ej)
-       def e := expr(ej)
-       acceptTag(")", ej)
-       return e
+       return if (peekTag() == "IDENTIFIER"):
+           def t := advance(ej)
+           def n := builder.NounExpr(t[1], t[2])
+           if (considerTag("[", ej)):
+               def g := acceptList(expr)
+               acceptTag("]", ej)
+               builder.GetExpr(n, g, spanFrom(spanStart))
+           else:
+               n
+       else:
+           acceptTag("(", ej)
+           def e := expr(ej)
+           acceptTag(")", ej)
+           e
 
     def nounAndName(ej):
-        if (peekTag() == VALUE_HOLE):
-            return [null, builder.ValueHoleExpr(advance(ej)[1], spanHere())]
-        if (peekTag() == PATTERN_HOLE):
-            return [null, builder.PatternHoleExpr(advance(ej)[1], spanHere())]
-        if (peekTag() == "IDENTIFIER"):
+        return if (peekTag() == VALUE_HOLE):
+            [null, builder.ValueHoleExpr(advance(ej)[1], spanHere())]
+        else if (peekTag() == PATTERN_HOLE):
+            [null, builder.PatternHoleExpr(advance(ej)[1], spanHere())]
+        else if (peekTag() == "IDENTIFIER"):
             def t := advance(ej)
-            return [t[1], builder.NounExpr(t[1], t[2])]
+            [t[1], builder.NounExpr(t[1], t[2])]
         else:
             def spanStart := spanHere()
             acceptTag("::", ej)
             def t := acceptTag(".String.", ej)
-            return [t[1], builder.NounExpr(t[1], spanFrom(spanStart))]
+            [t[1], builder.NounExpr(t[1], spanFrom(spanStart))]
 
     def noun(ej):
         return nounAndName(ej)[1]
@@ -249,30 +250,30 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def strictNamePattern(ej):
         def spanStart := spanHere()
         def nex := peekTag()
-        if (nex == "IDENTIFIER"):
+        return if (nex == "IDENTIFIER"):
             def t := advance(ej)
             def g := maybeGuard()
-            return [t[1], builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))]
+            [t[1], builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))]
         else if (nex == "::"):
             advance(ej)
             def spanStart := spanHere()
             def t := acceptTag(".String.", ej)
             def g := maybeGuard()
-            return [t[1], builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))]
+            [t[1], builder.FinalPattern(builder.NounExpr(t[1], t[2]), g, spanFrom(spanStart))]
         else if (nex == "var"):
             advance(ej)
             def [name, n] := nounAndName(ej)
             def g := maybeGuard()
-            return [name, builder.VarPattern(n, g, spanFrom(spanStart))]
+            [name, builder.VarPattern(n, g, spanFrom(spanStart))]
         else if (nex == "&"):
             advance(ej)
             def [name, n] := nounAndName(ej)
             def g := maybeGuard()
-            return ["&" + name, builder.SlotPattern(n, g, spanFrom(spanStart))]
+            ["&" + name, builder.SlotPattern(n, g, spanFrom(spanStart))]
         else if (nex == "&&"):
             advance(ej)
             def [name, n] := nounAndName(ej)
-            return ["&&" + name, builder.BindingPattern(n, spanFrom(spanStart))]
+            ["&&" + name, builder.BindingPattern(n, spanFrom(spanStart))]
         else:
             throw.eject(ej, [`Unrecognized name pattern $nex`, spanNext()])
 
@@ -301,31 +302,32 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     def _mapPatternItem(pairBuilder, importBuilder, ej):
         def spanStart := spanHere()
-        if (considerTag("=>", ej)):
+        return if (considerTag("=>", ej)):
             def p := namePattern(ej, false)
             def default := if (considerTag(":=", ej)) {
                 order(ej)
             } else {null}
-            return importBuilder(p, default, spanFrom(spanStart))
-        def k := if (considerTag("(", ej)) {
-            def e := expr(ej)
-            acceptEOLs()
-            acceptTag(")", ej)
-            e
-        } else {
-            if ([".String.", ".int.", ".float64.", ".char."].contains(peekTag())) {
-                def t := advance(ej)
-                builder.LiteralExpr(t[1], t[2])
+            importBuilder(p, default, spanFrom(spanStart))
+        else:
+            def k := if (considerTag("(", ej)) {
+                def e := expr(ej)
+                acceptEOLs()
+                acceptTag(")", ej)
+                e
             } else {
-                throw.eject(ej, ["Map pattern keys must be literals or expressions in parens", spanNext()])
+                if ([".String.", ".int.", ".float64.", ".char."].contains(peekTag())) {
+                    def t := advance(ej)
+                    builder.LiteralExpr(t[1], t[2])
+                } else {
+                    throw.eject(ej, ["Map pattern keys must be literals or expressions in parens", spanNext()])
+                }
             }
-        }
-        acceptTag("=>", ej)
-        def p := pattern(ej)
-        def default := if (considerTag(":=", ej)) {
-            order(ej)
-        } else {null}
-        return pairBuilder(k, p, default, spanFrom(spanStart))
+            acceptTag("=>", ej)
+            def p := pattern(ej)
+            def default := if (considerTag(":=", ej)) {
+                order(ej)
+            } else {null}
+            pairBuilder(k, p, default, spanFrom(spanStart))
 
     def mapPatternItem(ej):
         return _mapPatternItem(builder.MapPatternAssoc, builder.MapPatternImport, ej)
@@ -341,16 +343,16 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         # ... if namePattern fails, keep going
         def spanStart := spanHere()
         def nex := peekTag()
-        if (nex == "QUASI_OPEN" || nex == "QUASI_CLOSE"):
-            return quasiliteral(null, true, ej)
+        return if (nex == "QUASI_OPEN" || nex == "QUASI_CLOSE"):
+            quasiliteral(null, true, ej)
         else if (nex == "=="):
             def spanStart := spanHere()
             advance(ej)
-            return builder.SamePattern(prim(ej), true, spanFrom(spanStart))
+            builder.SamePattern(prim(ej), true, spanFrom(spanStart))
         else if (nex == "!="):
             def spanStart := spanHere()
             advance(ej)
-            return builder.SamePattern(prim(ej), false, spanFrom(spanStart))
+            builder.SamePattern(prim(ej), false, spanFrom(spanStart))
         else if (nex == "_"):
             advance(ej)
             def spanStart := spanHere()
@@ -359,56 +361,58 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             } else {
                 null
             }
-            return builder.IgnorePattern(g, spanFrom(spanStart))
+            builder.IgnorePattern(g, spanFrom(spanStart))
         else if (nex == "via"):
             advance(ej)
             def spanStart := spanHere()
             acceptTag("(", ej)
             def e := expr(ej)
             acceptTag(")", ej)
-            return builder.ViaPattern(e, pattern(ej), spanFrom(spanStart))
+            builder.ViaPattern(e, pattern(ej), spanFrom(spanStart))
         else if (nex == "["):
             def spanStart := spanHere()
             advance(ej)
             def [items, isMap] := acceptListOrMap(pattern, mapPatternItem)
             acceptEOLs()
             acceptTag("]", ej)
-            return if (isMap):
+            if (isMap):
                 def tail := if (considerTag("|", ej)) {_pattern(ej)}
                 builder.MapPattern(items, tail, spanFrom(spanStart))
             else:
                 def tail := if (considerTag("+", ej)) {_pattern(ej)}
                 builder.ListPattern(items, tail, spanFrom(spanStart))
         else if (nex == VALUE_HOLE):
-            return builder.ValueHolePattern(advance(ej)[1], spanHere())
+            builder.ValueHolePattern(advance(ej)[1], spanHere())
         else if (nex == PATTERN_HOLE):
-            return builder.PatternHolePattern(advance(ej)[1], spanHere())
-        throw.eject(ej, [`Invalid pattern $nex`, spanNext()])
+            builder.PatternHolePattern(advance(ej)[1], spanHere())
+        else:
+            throw.eject(ej, [`Invalid pattern $nex`, spanNext()])
 
     bind pattern(ej):
         def spanStart := spanHere()
         def p := _pattern(ej)
-        if (considerTag("?", ej)):
+        return if (considerTag("?", ej)):
             acceptTag("(", ej)
             def e := expr(ej)
             acceptTag(")", ej)
-            return builder.SuchThatPattern(p, e, spanFrom(spanStart))
+            builder.SuchThatPattern(p, e, spanFrom(spanStart))
         else:
-            return p
+            p
 
     def _pairItem(mkExport, mkPair, ej):
         def spanStart := spanHere()
-        if (considerTag("=>", ej)):
-            return if (considerTag("&", ej)):
+        return if (considerTag("=>", ej)):
+            if (considerTag("&", ej)):
                 mkExport(builder.SlotExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
             else if (considerTag("&&", ej)):
                 mkExport(builder.BindingExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
             else:
                 mkExport(noun(ej), spanFrom(spanStart))
-        def k := expr(ej)
-        acceptTag("=>", ej)
-        def v := expr(ej)
-        return mkPair(k, v, spanFrom(spanStart))
+        else:
+            def k := expr(ej)
+            acceptTag("=>", ej)
+            def v := expr(ej)
+            mkPair(k, v, spanFrom(spanStart))
 
     def mapItem(ej):
         return _pairItem(builder.MapExprExport, builder.MapExprAssoc, ej)
@@ -437,9 +441,10 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         catch msg:
             lastError := msg
         opt(seqSep, ej)
-        if (exprs.size() == 1):
-            return exprs[0]
-        return builder.SeqExpr(exprs.snapshot(), spanFrom(start))
+        return if (exprs.size() == 1):
+            exprs[0]
+        else:
+            builder.SeqExpr(exprs.snapshot(), spanFrom(start))
 
     def block(indent, ej):
         if (indent):
@@ -522,16 +527,17 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             [null, null, null]
         }
         acceptEOLs()
-        if (!indent && peekTag() == "}"):
-            return [doco, builder.SeqExpr(
+        return if (!indent && peekTag() == "}"):
+            [doco, builder.SeqExpr(
                 if (doco == null) {[]
                 } else {[builder.LiteralExpr(doco, docoSpan)]}, null)]
-        var contents := seq(indent, ej)
-        if (doco != null &&
-            contents.getNodeName() == "SeqExpr" &&
-            contents.getExprs().size() == 0):
-            contents := builder.LiteralExpr(doco, docoSpan)
-        return [doco, contents]
+        else:
+            var contents := seq(indent, ej)
+            if (doco != null &&
+                contents.getNodeName() == "SeqExpr" &&
+                contents.getExprs().size() == 0):
+                contents := builder.LiteralExpr(doco, docoSpan)
+            [doco, contents]
 
     def positionalParam(ej):
         def pattStart := position
@@ -730,7 +736,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def basic(indent, tryAgain, ej):
         def origPosition := position
         def tag := peekTag()
-        if (tag == "if"):
+        return if (tag == "if"):
             def spanStart := spanHere()
             advance(ej)
             acceptTag("(", giveUp)
@@ -751,8 +757,8 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                     position := maybeElseStart
                     null
                 }
-            return builder.IfExpr(test, consq, alt, spanFrom(spanStart))
-        if (tag == "escape"):
+            builder.IfExpr(test, consq, alt, spanFrom(spanStart))
+        else if (tag == "escape"):
             def spanStart := spanHere()
             advance(ej)
             def p1 := pattern(ej)
@@ -762,9 +768,10 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             if (matchEOLsThenTag(indent, "catch")):
                 def p2 := pattern(ej)
                 def e2 := block(indent, ej)
-                return builder.EscapeExpr(p1, e1, p2, e2, spanFrom(spanStart))
-            return builder.EscapeExpr(p1, e1, null, null, spanFrom(spanStart))
-        if (tag == "for"):
+                builder.EscapeExpr(p1, e1, p2, e2, spanFrom(spanStart))
+            else:
+                builder.EscapeExpr(p1, e1, null, null, spanFrom(spanStart))
+        else if (tag == "for"):
             def spanStart := spanHere()
             advance(ej)
             def [k, v, it] := forExprHead(ej)
@@ -776,14 +783,14 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             } else {
                 [null, null]
             }
-            return builder.ForExpr(it, k, v, body, catchPattern, catchBody, spanFrom(spanStart))
-        if (tag == "fn"):
+            builder.ForExpr(it, k, v, body, catchPattern, catchBody, spanFrom(spanStart))
+        else if (tag == "fn"):
             def spanStart := spanHere()
             advance(ej)
             def patt := acceptList(pattern)
             def body := block(false, ej)
-            return builder.FunctionExpr(patt, body, spanFrom(spanStart))
-        if (tag == "switch"):
+            builder.FunctionExpr(patt, body, spanFrom(spanStart))
+        else if (tag == "switch"):
             def spanStart := spanHere()
             advance(ej)
             acceptTag("(", ej)
@@ -791,11 +798,11 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             acceptTag(")", ej)
             if (indent):
                 blockLookahead(tryAgain)
-            return builder.SwitchExpr(
+            builder.SwitchExpr(
                 spec,
                 suite(fn i, j {repeat(matchers, i, j)}, indent, ej),
                 spanFrom(spanStart))
-        if (tag == "try"):
+        else if (tag == "try"):
             def spanStart := spanHere()
             advance(ej)
             if (indent):
@@ -816,9 +823,9 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 n := builder.CatchExpr(n, cp, cb, spanFrom(spanStart))
             if (finallyblock != null):
                 n := builder.FinallyExpr(n, finallyblock, spanFrom(spanStart))
-            return n
+            n
 
-        if (tag == "while"):
+        else if (tag == "while"):
             def spanStart := spanHere()
             advance(ej)
             acceptTag("(", ej)
@@ -834,8 +841,8 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             } else {
                 null
             }
-            return builder.WhileExpr(test, whileblock, catchblock, spanFrom(spanStart))
-        if (tag == "when"):
+            builder.WhileExpr(test, whileblock, catchblock, spanFrom(spanStart))
+        else if (tag == "when"):
             def spanStart := spanHere()
             advance(ej)
             acceptTag("(", ej)
@@ -867,23 +874,23 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             } else {
                 null
             }
-            return builder.WhenExpr(exprs, whenblock, catchers.snapshot(),
+            builder.WhenExpr(exprs, whenblock, catchers.snapshot(),
                                     finallyblock, spanFrom(spanStart))
-        if (tag == "bind"):
+        else if (tag == "bind"):
             def spanStart := spanHere()
             advance(ej)
             def n := noun(ej)
             def g := maybeGuard()
             def name := builder.BindPattern(n, g, spanFrom(spanStart))
             if (peekTag() == "("):
-                return objectFunction(name, indent, tryAgain, ej, spanStart)
+                objectFunction(name, indent, tryAgain, ej, spanStart)
             else if (peekTag() == ":="):
                 position := origPosition
-                return assign(ej)
+                assign(ej)
             else:
-                return objectExpr(name, indent, tryAgain, ej, spanStart)
+                objectExpr(name, indent, tryAgain, ej, spanStart)
 
-        if (tag == "object"):
+        else if (tag == "object"):
             def spanStart := spanHere()
             advance(ej)
             def name := if (considerTag("bind", ej)) {
@@ -894,9 +901,9 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             } else {
                 builder.FinalPattern(noun(ej), null, spanFrom(spanStart))
             }
-            return objectExpr(name, indent, tryAgain, ej, spanStart)
+            objectExpr(name, indent, tryAgain, ej, spanStart)
 
-        if (tag == "def"):
+        else if (tag == "def"):
             def spanStart := spanHere()
             advance(ej)
             var isBind := false
@@ -916,16 +923,16 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 builder.FinalPattern(noun(ej), null, spanFrom(spanStart))
             }
             if (peekTag() == "("):
-                return objectFunction(name, indent, tryAgain, ej, spanStart)
+                objectFunction(name, indent, tryAgain, ej, spanStart)
             else if (["exit", ":=", "QUASI_OPEN", "?", ":"].contains(peekTag())):
                 position := origPosition
-                return assign(ej)
+                assign(ej)
             else if (isBind):
                 throw.eject(ej, ["expected :=", spanNext()])
             else:
-                return builder.ForwardExpr(name, spanFrom(spanStart))
+                builder.ForwardExpr(name, spanFrom(spanStart))
 
-        if (tag == "interface"):
+        else if (tag == "interface"):
             def spanStart := spanHere()
             advance(ej)
             def name := namePattern(ej, false)
@@ -946,15 +953,16 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             }
             if (peekTag() == "("):
                 def [doco, params, resultguard] := messageDescInner(indent, tryAgain, ej)
-                return builder.FunctionInterfaceExpr(doco, name, guards_, extends_, implements_,
+                builder.FunctionInterfaceExpr(doco, name, guards_, extends_, implements_,
                      builder.MessageDesc(doco, "run", params, resultguard, spanFrom(spanStart)),
                      spanFrom(spanStart))
-            if (indent):
-                blockLookahead(tryAgain)
-            def [doco, msgs] := suite(interfaceBody, indent, ej)
-            return builder.InterfaceExpr(doco, name, guards_, extends_, implements_, msgs,
-                spanFrom(spanStart))
-        if (tag == "meta"):
+            else:
+                if (indent):
+                    blockLookahead(tryAgain)
+                def [doco, msgs] := suite(interfaceBody, indent, ej)
+                builder.InterfaceExpr(doco, name, guards_, extends_, implements_, msgs,
+                    spanFrom(spanStart))
+        else if (tag == "meta"):
             def spanStart := spanHere()
             acceptTag("meta", ej)
             acceptTag(".", ej)
@@ -962,16 +970,18 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             if (verb[1] == "context"):
                 acceptTag("(", ej)
                 acceptTag(")", ej)
-                return builder.MetaContextExpr(spanFrom(spanStart))
-            if (verb[1] == "getState"):
+                builder.MetaContextExpr(spanFrom(spanStart))
+            else if (verb[1] == "getState"):
                 acceptTag("(", ej)
                 acceptTag(")", ej)
-                return builder.MetaStateExpr(spanFrom(spanStart))
-            throw.eject(ej, [`Meta verbs are "context" or "getState"`, spanHere()])
+                builder.MetaStateExpr(spanFrom(spanStart))
+            else:
+                throw.eject(ej, [`Meta verbs are "context" or "getState"`, spanHere()])
 
-        if (indent && considerTag("pass", ej)):
-            return builder.SeqExpr([], advance(ej)[2])
-        throw.eject(tryAgain, [`don't recognize $tag`, spanNext()])
+        else if (indent && considerTag("pass", ej)):
+            builder.SeqExpr([], advance(ej)[2])
+        else:
+            throw.eject(tryAgain, [`don't recognize $tag`, spanNext()])
 
     bind blockExpr(ej):
         def origPosition := position
@@ -982,45 +992,45 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     bind prim(ej):
         def tag := peekTag()
-        if ([".String.", ".int.", ".float64.", ".char."].contains(tag)):
+        return if ([".String.", ".int.", ".float64.", ".char."].contains(tag)):
             def t := advance(ej)
-            return builder.LiteralExpr(t[1], t[2])
-        if (tag == "IDENTIFIER"):
+            builder.LiteralExpr(t[1], t[2])
+        else if (tag == "IDENTIFIER"):
             def t := advance(ej)
             def nex := peekTag()
             if (nex == "QUASI_OPEN" || nex == "QUASI_CLOSE"):
-                return quasiliteral(t, false, ej)
+                quasiliteral(t, false, ej)
             else:
-                return builder.NounExpr(t[1], t[2])
-        if (tag == "&"):
+                builder.NounExpr(t[1], t[2])
+        else if (tag == "&"):
             advance(ej)
             def spanStart := spanHere()
-            return builder.SlotExpr(noun(ej), spanFrom(spanStart))
-        if (tag == "&&"):
+            builder.SlotExpr(noun(ej), spanFrom(spanStart))
+        else if (tag == "&&"):
             advance(ej)
             def spanStart := spanHere()
-            return builder.BindingExpr(noun(ej), spanFrom(spanStart))
-        if (tag == "::"):
+            builder.BindingExpr(noun(ej), spanFrom(spanStart))
+        else if (tag == "::"):
             def spanStart := spanHere()
             advance(ej)
             def t := acceptTag(".String.", ej)
-            return builder.NounExpr(t[1], t[2])
-        if (tag == "QUASI_OPEN" || tag == "QUASI_CLOSE"):
-            return quasiliteral(null, false, ej)
-        if (tag == VALUE_HOLE):
-            return builder.ValueHoleExpr(advance(ej)[1], spanHere())
-        if (tag == PATTERN_HOLE):
-            return builder.PatternHoleExpr(advance(ej)[1], spanHere())
+            builder.NounExpr(t[1], t[2])
+        else if (tag == "QUASI_OPEN" || tag == "QUASI_CLOSE"):
+            quasiliteral(null, false, ej)
+        else if (tag == VALUE_HOLE):
+            builder.ValueHoleExpr(advance(ej)[1], spanHere())
+        else if (tag == PATTERN_HOLE):
+            builder.PatternHoleExpr(advance(ej)[1], spanHere())
         # paren expr
-        if (tag == "("):
+        else if (tag == "("):
             advance(ej)
             acceptEOLs()
             def e := seq(false, ej)
             acceptEOLs()
             acceptTag(")", ej)
-            return e
+            e
         # hideexpr
-        if (tag == "{"):
+        else if (tag == "{"):
             def spanStart := spanHere()
             advance(ej)
             acceptEOLs()
@@ -1029,9 +1039,9 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def e := seq(false, ej)
             acceptEOLs()
             acceptTag("}", ej)
-            return builder.HideExpr(e, spanFrom(spanStart))
+            builder.HideExpr(e, spanFrom(spanStart))
         # list/map
-        if (tag == "["):
+        else if (tag == "["):
             def spanStart := spanHere()
             advance(ej)
             acceptEOLs()
@@ -1053,19 +1063,22 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                     acceptEOLs()
                     def vbody := expr(ej)
                     acceptTag("]", ej)
-                    return builder.MapComprehensionExpr(it, filt, k, v, body, vbody,
+                    builder.MapComprehensionExpr(it, filt, k, v, body, vbody,
                         spanFrom(spanStart))
-                acceptTag("]", ej)
-                return builder.ListComprehensionExpr(it, filt, k, v, body,
-                    spanFrom(spanStart))
-            def [items, isMap] := acceptListOrMap(expr, mapItem)
-            acceptEOLs()
-            acceptTag("]", ej)
-            if (isMap):
-                return builder.MapExpr(items, spanFrom(spanStart))
+                else:
+                    acceptTag("]", ej)
+                    builder.ListComprehensionExpr(it, filt, k, v, body,
+                        spanFrom(spanStart))
             else:
-                return builder.ListExpr(items, spanFrom(spanStart))
-        return basic(false, ej, ej)
+                def [items, isMap] := acceptListOrMap(expr, mapItem)
+                acceptEOLs()
+                acceptTag("]", ej)
+                if (isMap):
+                    builder.MapExpr(items, spanFrom(spanStart))
+                else:
+                    builder.ListExpr(items, spanFrom(spanStart))
+        else:
+            basic(false, ej, ej)
 
     def call(ej):
         def spanStart := spanHere()
@@ -1102,17 +1115,17 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
         def callish(methodish, curryish):
             def verb := acceptVerb(ej)
-            if (considerTag("(", ej)):
+            return if (considerTag("(", ej)):
                 def arglist := acceptList(positionalArg)
                 def namedArglist := acceptList(namedArg)
                 acceptEOLs()
                 acceptTag(")", ej)
                 trailers.push([methodish, [verb, arglist, namedArglist,
                                            spanFrom(spanStart)]])
-                return false
+                false
             else:
                 trailers.push(["CurryExpr", [verb, curryish, spanFrom(spanStart)]])
-                return true
+                true
 
         def funcallish(name):
             acceptTag("(", ej)
@@ -1150,20 +1163,23 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def prefix(ej):
         def spanStart := spanHere()
         def op := peekTag()
-        if (op == "-"):
+        return if (op == "-"):
             advance(ej)
-            return builder.PrefixExpr("-", prim(ej), spanFrom(spanStart))
-        if (["~", "!"].contains(op)):
+            builder.PrefixExpr("-", prim(ej), spanFrom(spanStart))
+        else if (["~", "!"].contains(op)):
             advance(ej)
-            return builder.PrefixExpr(op, call(ej), spanFrom(spanStart))
-        def base := call(ej)
-        if (considerTag(":", ej)):
-            if (peekTag() == "EOL"):
-                # oops, a token too far
-                position -= 1
-                return base
-            return builder.CoerceExpr(base, guard(ej), spanFrom(spanHere()))
-        return base
+            builder.PrefixExpr(op, call(ej), spanFrom(spanStart))
+        else:
+            def base := call(ej)
+            if (considerTag(":", ej)):
+                if (peekTag() == "EOL"):
+                    # oops, a token too far
+                    position -= 1
+                    base
+                else:
+                    builder.CoerceExpr(base, guard(ej), spanFrom(spanHere()))
+            else:
+                base
     def operators  := [
         "**" => 1,
         "*" => 2,
@@ -1259,7 +1275,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def _assign(ej):
         def spanStart := spanHere()
         def defStart := position
-        if (considerTag("def", ej)):
+        return if (considerTag("def", ej)):
             def patt := pattern(ej)
             def ex := if (considerTag("exit", ej)) {
                 order(ej)
@@ -1272,63 +1288,70 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                     ex == null):
                 # YEP we should go do that instead
                 position := defStart
-                return basic(false, ej, ej)
+                basic(false, ej, ej)
             else:
                 # Nah it's just a regular def
                 acceptTag(":=", ej)
-                return builder.DefExpr(patt, ex, assign(ej), spanFrom(spanStart))
+                builder.DefExpr(patt, ex, assign(ej), spanFrom(spanStart))
 
         # this might be "bind foo(..):" or even "bind foo:"
-        if (["var", "bind"].contains(peekTag())):
+        else if (["var", "bind"].contains(peekTag())):
             def patt := pattern(ej)
             if (["(", "implements", "as", "extends", "(", "{"].contains(peekTag()) ||
-                ((position + 2 >= tokens.size()) && peekTag() == ":" &&
-                 tokens[position + 2][0] == "EOL")):
+                       ((position + 2 >= tokens.size()) && peekTag() == ":" &&
+                        tokens[position + 2][0] == "EOL")):
                 position := defStart
-                return basic(false, ej, ej)
+                basic(false, ej, ej)
             else:
                 acceptTag(":=", ej)
-                return builder.DefExpr(patt, null, assign(ej), spanFrom(spanStart))
+                builder.DefExpr(patt, null, assign(ej), spanFrom(spanStart))
 
-        def lval := infix(ej)
-        if (considerTag(":=", ej)):
-            def lt := lval.getNodeName()
-            if (["NounExpr", "GetExpr"].contains(lt)):
-                return builder.AssignExpr(lval, assign(ej), spanFrom(spanStart))
-            throw.eject(ej, [`Invalid assignment target`, lt.getSpan()])
-        if (peekTag() =~ `@op=`):
-            advance(ej)
-            def lt := lval.getNodeName()
-            if (["NounExpr", "GetExpr"].contains(lt)):
-                return builder.AugAssignExpr(op, lval, assign(ej), spanFrom(spanStart))
-            throw.eject(ej, [`Invalid assignment target`, lt.getSpan()])
-        if (peekTag() == "VERB_ASSIGN"):
-            def verb := advance(ej)[1]
-            def lt := lval.getNodeName()
-            if (["NounExpr", "GetExpr"].contains(lt)):
-                acceptTag("(", ej)
-                acceptEOLs()
-                def node := builder.VerbAssignExpr(verb, lval, acceptList(expr),
-                     spanFrom(spanStart))
-                acceptEOLs()
-                acceptTag(")", ej)
-                return node
-            throw.eject(ej, [`Invalid assignment target`, lt.getSpan()])
-        return lval
+        else:
+            def lval := infix(ej)
+            if (considerTag(":=", ej)):
+                def lt := lval.getNodeName()
+                if (["NounExpr", "GetExpr"].contains(lt)):
+                    builder.AssignExpr(lval, assign(ej), spanFrom(spanStart))
+                else:
+                    throw.eject(ej, [`Invalid assignment target $lt`, lt.getSpan()])
+            else if (peekTag() =~ `@op=`):
+                advance(ej)
+                def lt := lval.getNodeName()
+                if (["NounExpr", "GetExpr"].contains(lt)):
+                    builder.AugAssignExpr(op, lval, assign(ej), spanFrom(spanStart))
+                else:
+                    throw.eject(ej, [`Invalid assignment target $lt`, lt.getSpan()])
+            else if (peekTag() == "VERB_ASSIGN"):
+                def verb := advance(ej)[1]
+                def lt := lval.getNodeName()
+                if (["NounExpr", "GetExpr"].contains(lt)):
+                    acceptTag("(", ej)
+                    acceptEOLs()
+                    def node := builder.VerbAssignExpr(verb, lval, acceptList(expr),
+                         spanFrom(spanStart))
+                    acceptEOLs()
+                    acceptTag(")", ej)
+                    node
+                else:
+                    throw.eject(ej, [`Invalid assignment target $lt`, lt.getSpan()])
+            else:
+                lval
     bind assign := _assign
 
     def _expr(ej):
-        if (["continue", "break", "return"].contains(peekTag())):
+        return if (["continue", "break", "return"].contains(peekTag())):
             def spanStart := spanHere()
             def ex := advanceTag(ej)
             if (peekTag() == "(" && tokens[position + 2][0] == ")"):
                 position += 2
-                return builder.ExitExpr(ex, null, spanFrom(spanStart))
-            if (["EOL", "#", ";", "DEDENT", null].contains(peekTag())):
-                return builder.ExitExpr(ex, null, spanFrom(spanStart))
-            def val := blockExpr(ej)
-            return builder.ExitExpr(ex, val, spanFrom(spanStart))
-        return assign(ej)
+                builder.ExitExpr(ex, null, spanFrom(spanStart))
+            else if (["EOL", "#", ";", "DEDENT", null].contains(peekTag())):
+                builder.ExitExpr(ex, null, spanFrom(spanStart))
+            else:
+                def val := blockExpr(ej)
+                builder.ExitExpr(ex, val, spanFrom(spanStart))
+        else:
+            assign(ej)
 
     bind expr := _expr
 
@@ -1368,10 +1391,10 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     def start(ej):
         acceptEOLs()
-        if (["import", "exports"].contains(peekTag())):
-            return module_(ej)
+        return if (["import", "exports"].contains(peekTag())):
+            module_(ej)
         else:
-            return seq(true, ej)
+            seq(true, ej)
 
     escape e:
         def val := switch (mode) {
