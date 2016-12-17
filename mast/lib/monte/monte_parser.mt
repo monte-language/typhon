@@ -85,6 +85,19 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         def t := tokens[position + 1]
         return t[0]
 
+    def considerTag(tagName, ej) :Bool:
+        "
+        Advances if the next tag matches `tagName`.
+
+        Returns whether we advanced.
+        "
+
+        return if (peekTag() == tagName):
+            advance(ej)
+            true
+        else:
+            false
+
     def matchEOLsThenTag(indent, tagname):
         def origPosition := position
         if (indent):
@@ -195,13 +208,12 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
        if (peekTag() == "IDENTIFIER"):
             def t := advance(ej)
             def n := builder.NounExpr(t[1], t[2])
-            if (peekTag() == "["):
-                advance(ej)
+            return if (considerTag("[", ej)):
                 def g := acceptList(expr)
                 acceptTag("]", ej)
-                return builder.GetExpr(n, g, spanFrom(spanStart))
+                builder.GetExpr(n, g, spanFrom(spanStart))
             else:
-                return n
+                n
        acceptTag("(", ej)
        def e := expr(ej)
        acceptTag(")", ej)
@@ -226,14 +238,13 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     def maybeGuard():
         def origPosition := position
-        if (peekTag() == ":"):
-            advance(null)
-            escape e:
-                return guard(e)
+        if (considerTag(":", null)):
+            return escape e:
+                guard(e)
             catch _:
                 # might be suite-starting colon
                 position := origPosition
-                return null
+                null
 
     def strictNamePattern(ej):
         def spanStart := spanHere()
@@ -290,15 +301,13 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     def _mapPatternItem(pairBuilder, importBuilder, ej):
         def spanStart := spanHere()
-        if (peekTag() == "=>"):
-            advance(ej)
+        if (considerTag("=>", ej)):
             def p := namePattern(ej, false)
-            def default := if (peekTag() == ":=") {
-                advance(ej); order(ej)
+            def default := if (considerTag(":=", ej)) {
+                order(ej)
             } else {null}
             return importBuilder(p, default, spanFrom(spanStart))
-        def k := if (peekTag() == "(") {
-            advance(ej)
+        def k := if (considerTag("(", ej)) {
             def e := expr(ej)
             acceptEOLs()
             acceptTag(")", ej)
@@ -313,8 +322,8 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         }
         acceptTag("=>", ej)
         def p := pattern(ej)
-        def default := if (peekTag() == ":=") {
-            advance(ej); order(ej)
+        def default := if (considerTag(":=", ej)) {
+            order(ej)
         } else {null}
         return pairBuilder(k, p, default, spanFrom(spanStart))
 
@@ -364,12 +373,12 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def [items, isMap] := acceptListOrMap(pattern, mapPatternItem)
             acceptEOLs()
             acceptTag("]", ej)
-            if (isMap):
-                def tail := if (peekTag() == "|") {advance(ej); _pattern(ej)}
-                return builder.MapPattern(items, tail, spanFrom(spanStart))
+            return if (isMap):
+                def tail := if (considerTag("|", ej)) {_pattern(ej)}
+                builder.MapPattern(items, tail, spanFrom(spanStart))
             else:
-                def tail := if (peekTag() == "+") {advance(ej); _pattern(ej)}
-                return builder.ListPattern(items, tail, spanFrom(spanStart))
+                def tail := if (considerTag("+", ej)) {_pattern(ej)}
+                builder.ListPattern(items, tail, spanFrom(spanStart))
         else if (nex == VALUE_HOLE):
             return builder.ValueHolePattern(advance(ej)[1], spanHere())
         else if (nex == PATTERN_HOLE):
@@ -379,8 +388,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     bind pattern(ej):
         def spanStart := spanHere()
         def p := _pattern(ej)
-        if (peekTag() == "?"):
-            advance(ej)
+        if (considerTag("?", ej)):
             acceptTag("(", ej)
             def e := expr(ej)
             acceptTag(")", ej)
@@ -390,16 +398,13 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     def _pairItem(mkExport, mkPair, ej):
         def spanStart := spanHere()
-        if (peekTag() == "=>"):
-            advance(ej)
-            if (peekTag() == "&"):
-                advance(ej)
-                return mkExport(builder.SlotExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
-            else if (peekTag() == "&&"):
-                advance(ej)
-                return mkExport(builder.BindingExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
+        if (considerTag("=>", ej)):
+            return if (considerTag("&", ej)):
+                mkExport(builder.SlotExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
+            else if (considerTag("&&", ej)):
+                mkExport(builder.BindingExpr(noun(ej), spanFrom(spanStart)), spanFrom(spanStart))
             else:
-                return mkExport(noun(ej), spanFrom(spanStart))
+                mkExport(noun(ej), spanFrom(spanStart))
         def k := expr(ej)
         acceptTag("=>", ej)
         def v := expr(ej)
@@ -444,8 +449,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         else:
             acceptTag("{", ej)
         acceptEOLs()
-        def contents := if (peekTag() == "pass") {
-            advance(ej)
+        def contents := if (considerTag("pass", ej)) {
             acceptEOLs()
             builder.SeqExpr([], null)
         } else {
@@ -487,8 +491,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     def forExprHead(ej):
         def p1 := pattern(ej)
-        def p2 := if (peekTag() == "=>") {advance(ej); pattern(ej)
-                  } else {null}
+        def p2 := if (considerTag("=>", ej)) {pattern(ej)} else {null}
         acceptEOLs()
         acceptTag("in", ej)
         acceptEOLs()
@@ -544,8 +547,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def meth(indent, ej):
         acceptEOLs()
         def spanStart := spanHere()
-        def mknode := if (peekTag() == "to") {
-            advance(ej)
+        def mknode := if (considerTag("to", ej)) {
             builder."To"
         } else {
             acceptTag("method", ej)
@@ -556,8 +558,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         def patts := acceptList(positionalParam)
         def namedPatts := acceptList(namedParam)
         acceptTag(")", ej)
-        def resultguard := if (peekTag() == ":") {
-            advance(ej)
+        def resultguard := if (considerTag(":", ej)) {
             if (peekTag() == "EOL") {
                 # Oops, end of indenty block.
                 position -= 1
@@ -582,14 +583,12 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             acceptEOLs()
             if (["DEDENT", "}", "match"].contains(peekTag())):
                 break
-            if (peekTag() == "pass"):
-                advance(ej)
+            if (considerTag("pass", ej)):
                 continue
             meths.push(meth(indent, ej))
         def matchs := [].diverge()
         while (true):
-            if (peekTag() == "pass"):
-                advance(ej)
+            if (considerTag("pass", ej)):
                 continue
             matchs.push(matchers(indent, __break))
         catch msg:
@@ -600,14 +599,12 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     def oAuditors(ej):
         return [
-            if (peekTag() == "as") {
-                advance(ej)
+            if (considerTag("as", ej)) {
                 order(ej)
             } else {
                 null
             },
-            if (peekTag() == "implements") {
-                advance(ej)
+            if (considerTag("implements", ej)) {
                 acceptList(order)
             } else {
                 []
@@ -627,8 +624,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             position := origPosition
 
     def objectExpr(name, indent, tryAgain, ej, spanStart):
-        def oExtends := if (peekTag() == "extends") {
-            advance(ej)
+        def oExtends := if (considerTag("extends", ej)) {
             order(ej)
         } else {
             null
@@ -646,8 +642,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         def patts := acceptList(positionalParam)
         def namedPatts := acceptList(namedParam)
         acceptTag(")", ej)
-        def resultguard := if (peekTag() == ":") {
-            advance(ej)
+        def resultguard := if (considerTag(":", ej)) {
             if (peekTag() == "EOL") {
                 # Oops, end of indenty block.
                 position -= 1
@@ -668,8 +663,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
     def paramDesc(ej):
         def spanStart := spanHere()
-        def name := if (peekTag() == "_") {
-            advance(ej)
+        def name := if (considerTag("_", ej)) {
             null
         } else if (peekTag() == "IDENTIFIER") {
             def t := advance(ej)
@@ -678,8 +672,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             acceptTag("::", ej)
             acceptTag(".String.", ej)
         }
-        def g := if (peekTag() == ":") {
-            advance(ej)
+        def g := if (considerTag(":", ej)) {
             guard(ej)
         } else {
             null
@@ -690,8 +683,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         acceptTag("(", ej)
         def params := acceptList(paramDesc)
         acceptTag(")", ej)
-        def resultguard := if (peekTag() == ":") {
-            advance(ej)
+        def resultguard := if (considerTag(":", ej)) {
             if (peekTag() == "EOL") {
                 # Oops, end of indenty block.
                 position -= 1
@@ -728,8 +720,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         def msgs := [].diverge()
         while (true):
             acceptEOLs()
-            if (peekTag() == "pass"):
-                advance(ej)
+            if (considerTag("pass", ej)):
                 continue
             msgs.push(messageDesc(indent, __break))
         catch msg:
@@ -895,12 +886,10 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         if (tag == "object"):
             def spanStart := spanHere()
             advance(ej)
-            def name := if (peekTag() == "bind") {
-                advance(ej)
+            def name := if (considerTag("bind", ej)) {
                 def n := noun(ej)
                 builder.BindPattern(n, null, spanFrom(spanStart))
-            } else if (peekTag() == "_") {
-                advance(ej)
+            } else if (considerTag("_", ej)) {
                 builder.IgnorePattern(null, spanHere())
             } else {
                 builder.FinalPattern(noun(ej), null, spanFrom(spanStart))
@@ -914,12 +903,10 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             if (!["IDENTIFIER", "::", "bind", PATTERN_HOLE, VALUE_HOLE].contains(peekTag())):
                 position := origPosition
                 return assign(ej)
-            def name := if (peekTag() == "bind") {
-                advance(ej)
+            def name := if (considerTag("bind", ej)) {
                 isBind := true
                 def n := noun(ej)
-                def g := if (peekTag() == ":") {
-                    advance(ej)
+                def g := if (considerTag(":", ej)) {
                     guard(ej)
                 } else {
                     null
@@ -942,20 +929,17 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def spanStart := spanHere()
             advance(ej)
             def name := namePattern(ej, false)
-            def guards_ := if (peekTag() == "guards") {
-                advance(ej)
+            def guards_ := if (considerTag("guards", ej)) {
                 pattern(ej)
             } else {
                 null
             }
-            def extends_ := if (peekTag() == "extends") {
-                advance(ej)
+            def extends_ := if (considerTag("extends", ej)) {
                 acceptList(order)
             } else {
                 []
             }
-            def implements_ := if (peekTag() == "implements") {
-                advance(ej)
+            def implements_ := if (considerTag("implements", ej)) {
                 acceptList(order)
             } else {
                 []
@@ -985,8 +969,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 return builder.MetaStateExpr(spanFrom(spanStart))
             throw.eject(ej, [`Meta verbs are "context" or "getState"`, spanHere()])
 
-        if (indent && peekTag() == "pass"):
-            advance(ej)
+        if (indent && considerTag("pass", ej)):
             return builder.SeqExpr([], advance(ej)[2])
         throw.eject(tryAgain, [`don't recognize $tag`, spanNext()])
 
@@ -1041,8 +1024,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def spanStart := spanHere()
             advance(ej)
             acceptEOLs()
-            if (peekTag() == "}"):
-                advance(ej)
+            if (considerTag("}", ej)):
                 return builder.HideExpr(builder.SeqExpr([], null), spanFrom(spanStart))
             def e := seq(false, ej)
             acceptEOLs()
@@ -1053,11 +1035,9 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def spanStart := spanHere()
             advance(ej)
             acceptEOLs()
-            if (peekTag() == "for"):
-                advance(ej)
+            if (considerTag("for", ej)):
                 def [k, v, it] := forExprHead(ej)
-                def filt := if (peekTag() == "?") {
-                    advance(ej)
+                def filt := if (considerTag("?", ej)) {
                     acceptTag("(", ej)
                     acceptEOLs()
                     def e := expr(ej)
@@ -1069,8 +1049,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 }
                 acceptEOLs()
                 def body := expr(ej)
-                if (peekTag() == "=>"):
-                    advance(ej)
+                if (considerTag("=>", ej)):
                     acceptEOLs()
                     def vbody := expr(ej)
                     acceptTag("]", ej)
@@ -1123,8 +1102,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
         def callish(methodish, curryish):
             def verb := acceptVerb(ej)
-            if (peekTag() == "("):
-                advance(ej)
+            if (considerTag("(", ej)):
                 def arglist := acceptList(positionalArg)
                 def namedArglist := acceptList(namedArg)
                 acceptEOLs()
@@ -1146,21 +1124,18 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                                   spanFrom(spanStart)]])
 
         while (true):
-            if (peekTag() == "."):
-                advance(ej)
+            if (considerTag(".", ej)):
                 if (callish("MethodCallExpr", false)):
                     break
             else if (peekTag() == "("):
                 funcallish("FunCallExpr")
-            else if (peekTag() == "<-"):
-                advance(ej)
+            else if (considerTag("<-", ej)):
                 if (peekTag() == "("):
                     funcallish("FunSendExpr")
                 else:
                     if(callish("SendExpr", true)):
                         break
-            else if (peekTag() == "["):
-                advance(ej)
+            else if (considerTag("[", ej)):
                 def arglist := acceptList(expr)
                 acceptEOLs()
                 acceptTag("]", ej)
@@ -1182,8 +1157,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             advance(ej)
             return builder.PrefixExpr(op, call(ej), spanFrom(spanStart))
         def base := call(ej)
-        if (peekTag() == ":"):
-            advance(ej)
+        if (considerTag(":", ej)):
             if (peekTag() == "EOL"):
                 # oops, a token too far
                 position -= 1
@@ -1285,11 +1259,9 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def _assign(ej):
         def spanStart := spanHere()
         def defStart := position
-        if (peekTag() == "def"):
-            advance(ej)
+        if (considerTag("def", ej)):
             def patt := pattern(ej)
-            def ex := if (peekTag() == "exit") {
-                advance(ej)
+            def ex := if (considerTag("exit", ej)) {
                 order(ej)
             } else {
                 null
@@ -1319,8 +1291,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 return builder.DefExpr(patt, null, assign(ej), spanFrom(spanStart))
 
         def lval := infix(ej)
-        if (peekTag() == ":="):
-            advance(ej)
+        if (considerTag(":=", ej)):
             def lt := lval.getNodeName()
             if (["NounExpr", "GetExpr"].contains(lt)):
                 return builder.AssignExpr(lval, assign(ej), spanFrom(spanStart))
@@ -1381,8 +1352,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
             importsList.push([importName, importPattern])
             seqSep(ej)
-        def exportsList := if (peekTag() == "exports") {
-            advance(ej)
+        def exportsList := if (considerTag("exports", ej)) {
             acceptTag("(", ej)
             def nouns := acceptList(noun)
             acceptTag(")", ej)
