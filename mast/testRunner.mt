@@ -163,6 +163,37 @@ def makeAsserter() as DeepFrozen:
                     catch _:
                         successes += 1
 
+                to contains(o, k):
+                    if (o._respondsTo("contains", 1)):
+                        if (o.contains(k)):
+                            successes += 1
+                        else:
+                            assert.fail(`$o does not contain $k`)
+                    else:
+                        assert.fail(`$o does not respond to contains`)
+
+                to doesNotContain(o, k):
+                    if (o._respondsTo("contains", 1)):
+                        if (o.contains(k)):
+                            assert.fail(`$o contains $k`)
+                        else:
+                            successes += 1
+                    else:
+                        assert.fail(`$o does not respond to contains`)
+
+                to true(f):
+                    if (f()):
+                        successes += 1
+                    else:
+                        assert.fail(`$f did not return true`)
+
+                to false(f):
+                    if (!f()):
+                        successes += 1
+                    else:
+                        assert.fail(`$f did not return false`)
+
+
                 # These variants wait for their arguments to resolve before
                 # performing their work. As a result, they share the common
                 # theme that they will not run unless included in the
