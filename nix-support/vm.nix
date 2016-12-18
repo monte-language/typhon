@@ -1,7 +1,8 @@
 {stdenv, fetchzip, lib, libsodium, libuv, libffi, pkgconfig, python27, python27Packages, vmSrc, buildJIT}:
 
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
-let pypySrc = fetchzip {
+let
+  pypySrc = fetchzip {
     url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.4.1-src.tar.bz2";
     sha256 = "0ch7whwy2b7dva1fasvq0h914ky56y3aam6ky3nb9qxnd5gxji6h";
   };
