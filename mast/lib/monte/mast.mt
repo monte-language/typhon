@@ -21,32 +21,41 @@ def packStr(s :NullOk[Str]) :Bytes as DeepFrozen:
     def bs := UTF8.encode(s, null)
     return packInt(bs.size()) + bs
 
+def nullSpanBytes :Bytes := b`B$\x00$\x00$\x00$\x00`
+
+def packSpan(s) :Bytes as DeepFrozen:
+    if (s == null) { return nullSpanBytes }
+    def type := if (s.isOneToOne()) { b`S` } else { b`B` }
+    def startLine := packInt(s.getStartLine())
+    def startCol := packInt(s.getStartCol())
+    def endLine := packInt(s.getEndLine())
+    def endCol := packInt(s.getEndCol())
+    return type + startLine + startCol + endLine + endCol
+
 def makeMASTContext() as DeepFrozen:
     "Make a MAST context."
 
-    def exprIndices := [].asMap().diverge()
-    def pattIndices := [].asMap().diverge()
-    def streams := [b`Mont$\xe0MAST$\x00`].diverge()
+    var exprIndex :Int := 0
+    var pattIndex :Int := 0
+    def streams := [b`Mont$\xe0MAST$\x01`].diverge()
 
     return object MASTContext:
         "A MAST context."
 
         to run(expr) :Void:
-            "Add an expression to this context.
-
-             The expression will be canonicalized, to remove span
-             information."
-            MASTContext.appendExpr(expr.canonical())
+            "Add an expression to this context."
+            MASTContext.appendExpr(expr)
 
         to bytes() :Bytes:
             return b``.join(streams)
 
         to appendExpr(expr) :Int:
-            return exprIndices.fetch(expr, fn {
-                def bs :Bytes := MASTContext.addExpr(expr)
-                streams.push(bs)
-                exprIndices[expr] := exprIndices.size()
-            })
+            def bs :Bytes := MASTContext.addExpr(expr)
+            def span := if (expr == null) { nullSpanBytes } else { packSpan(expr.getSpan()) }
+            streams.push(bs + span)
+            def rv := exprIndex
+            exprIndex += 1
+            return rv
 
         to packExpr(expr) :Bytes:
             return packInt(MASTContext.appendExpr(expr))
@@ -61,11 +70,12 @@ def makeMASTContext() as DeepFrozen:
             return packInt(namedArgs.size()) + b``.join(namedArgs)
 
         to appendPatt(patt) :Int:
-            return pattIndices.fetch(patt, fn {
-                def bs :Bytes := MASTContext.addPatt(patt)
-                streams.push(bs)
-                pattIndices[patt] := pattIndices.size()
-            })
+            def bs :Bytes := MASTContext.addPatt(patt)
+            def span := packSpan(patt.getSpan())
+            streams.push(bs + span)
+            def rv := pattIndex
+            pattIndex += 1
+            return rv
 
         to packPatt(patt) :Bytes:
             return packInt(MASTContext.appendPatt(patt))
