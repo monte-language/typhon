@@ -297,13 +297,28 @@ def autoguard(*tys, **kwargs):
 
     doc = tys[0].__doc__.decode("utf-8")
     methods = monteSet()
-    for ty in tys:
+    # Since this is NOT_RPYTHON, we can use a relatively direct method to
+    # double-check that we do not have overlapping or renegade atoms.
+    seenAtoms = {}
+    for notFirst, ty in enumerate(tys):
+        neededAtoms = seenAtoms.copy()
         for _, (f, verb, args, _, _) in harvestMethods(ty).iteritems():
             ds = f.__doc__
             if ds is not None:
                 ds = ds.decode("utf-8")
-            cm = ComputedMethod(len(args), ds, verb)
-            methods[cm] = None
+            key = len(args), verb
+            assert not notFirst or key in seenAtoms, (
+                    "Type %r has new method %s/%d not in previous types" %
+                    (ty, verb, len(args)))
+            if key in seenAtoms:
+                neededAtoms.pop(key, None)
+            else:
+                seenAtoms[key] = ty
+                cm = ComputedMethod(len(args), ds, verb)
+                methods[cm] = None
+        assert not neededAtoms, (
+                "Type %r was missing methods: %s" %
+                ",".join("%s/%d" % key for key in neededAtoms))
 
     @autohelp
     class Guard(Object):

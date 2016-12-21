@@ -369,6 +369,10 @@ class IntObject(Object):
     def optInterface(self):
         return getGlobalValue(u"Int")
 
+    @method("Int")
+    def abs(self):
+        return abs(self._i)
+
     @method("Double")
     def asDouble(self):
         return float(self._i)
