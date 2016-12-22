@@ -796,6 +796,14 @@ class Matcher(Expr):
     def getNodeName(self):
         return u"Matcher"
 
+    @method("Any")
+    def getPattern(self):
+        return self._pattern
+
+    @method("Any")
+    def getBody(self):
+        return self._block
+
 
 @autohelp
 @withMaker
@@ -1125,6 +1133,10 @@ class Script(Expr):
     @method("List")
     def getMethods(self):
         return self._methods
+
+    @method("List")
+    def getMatchers(self):
+        return self._matchers
 
     @method("List", "Any")
     def getCompleteMatcher(self, ej):
