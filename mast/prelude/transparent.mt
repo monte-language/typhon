@@ -216,7 +216,7 @@ object Transparent as DeepFrozenStamp:
             to run(maker, args :List, namedArgs :Map):
                 return [maker, "run", args, namedArgs]
             match [=="run", [maker, args], _]:
-                [maker, args, [].asMap()]
+                [maker, "run", args, [].asMap()]
 
         def valueAuditor :Same[_valueAuditor] := _valueAuditor
         def serializer :Same[_serializer] := _serializer
