@@ -774,6 +774,11 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         if (idStart.contains(cur)):
             return identifier(fail)
 
+        if (cur =~ [hole ? ([VALUE_HOLE, PATTERN_HOLE].contains(hole)),
+                    index :Int, _]):
+            advance()
+            return [hole, index, spanAtPoint()]
+
         throw.eject(fail, [`Unrecognized character ${quote(cur)}`, spanAtPoint()])
 
     bind checkParenBalance(fail):
