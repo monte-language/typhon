@@ -28,6 +28,7 @@ def MONTE_KEYWORDS :DeepFrozen := [
 def composite(name, data, span) as DeepFrozen:
     return [name, data, span]
 
+# `input` is a list of characters and holes. It might not be a string.
 def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     # The character under the cursor.
     var currentChar := null
@@ -50,12 +51,37 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     def queuedTokens := [].diverge()
     def indentPositionStack := [0].diverge()
 
+    def quote(token) :Str:
+        return switch (token):
+            match c :Char:
+                c.quote()
+            match [==VALUE_HOLE, i, _]:
+                `$${${i}}`
+            match [==PATTERN_HOLE, i, _]:
+                `@@{${i}}`
+
+    def &allLines := makeLazySlot(fn {
+        if (input =~ s :Str) {
+            # Easy case: If the input is a string, we can use .split/1.
+            s.split("\n")
+        } else {
+            # Hard case: We don't have .split/1 yet, but we do have
+            # .startOf/2 and a loop.
+            def l := [].diverge()
+            var start := 0
+            while ((def newline := input.startOf(['\n'], start)) != -1) {
+                l.push(input.slice(start, newline))
+                start := newline + 1
+            }
+            l.snapshot()
+        }
+    })
+
     def makeParseError(error):
         return object parseError:
             to formatCompact():
                 if (error =~ [errMsg, span]):
                     if (span == null):
-                        def allLines := input.split("\n")
                         return `${allLines.size()}.${allLines.last().size() - 1}: $errMsg`
                     def [sl, el, sc, ec] := [span.getStartLine(), span.getEndLine(),
                                              span.getStartCol() + 1, span.getEndCol() + 1]
@@ -72,7 +98,6 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
                     def front := (span.getStartLine() - 3).max(0)
                     def back := span.getEndLine() + 3
-                    def allLines := input.split("\n")
                     def lines := allLines.slice(front,
                                                 back.min(allLines.size()))
                     def msg := [].diverge()
@@ -180,7 +205,11 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
     def endToken():
         def pos := position
-        def tok := input.slice(startPos, pos)
+        def tok := if (input =~ s :Str) {
+            input.slice(startPos, pos)
+        } else {
+            _makeStr.fromChars(input.slice(startPos, pos))
+        }
         def span := _makeSourceSpan(inputName, tokenStartLine == lineNumber,
                     tokenStartLine, tokenStartCol, lineNumber, colNumber)
         startPos := -1
@@ -284,7 +313,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                 '\n' => null,
                 ].fetch(nex, fn{-1})
             if (c == -1):
-                throw.eject(fail, [`Unrecognized escape character ${nex.quote()}`, spanAtPoint()])
+                throw.eject(fail, [`Unrecognized escape character ${quote(nex)}`, spanAtPoint()])
             else:
                 advance()
                 return c
@@ -745,7 +774,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         if (idStart.contains(cur)):
             return identifier(fail)
 
-        throw.eject(fail, [`Unrecognized character ${cur.quote()}`, spanAtPoint()])
+        throw.eject(fail, [`Unrecognized character ${quote(cur)}`, spanAtPoint()])
 
     bind checkParenBalance(fail):
         while (true):

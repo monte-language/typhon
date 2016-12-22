@@ -129,47 +129,19 @@ def makeM(ast :Ast, isKernel :Bool) as DeepFrozen:
 
             return makeM(optimize(ast), true)
 
-def makeQuasiTokenChain(template) as DeepFrozen:
-    var i := -1
-    var current := makeMonteLexer("", "m``")
-    var lex := current
-    var j := 0
-    def counters := [VALUE_HOLE => -1, PATTERN_HOLE => -1].diverge()
-    return object chainer:
-        to makeParseError(m):
-            return lex.makeParseError(m)
-
-        to _makeIterator():
-            return chainer
-
-        to valueHole():
-           return VALUE_HOLE
-
-        to patternHole():
-           return PATTERN_HOLE
-
-        to getSyntaxError():
-            return current.getSyntaxError()
-
-        to next(ej, ejPartial):
-            if (i >= template.size()):
-                throw.eject(ej, null)
-            j += 1
-            if (current == null):
-                if (template[i] == VALUE_HOLE || template[i] == PATTERN_HOLE):
-                    def hol := template[i]
-                    i += 1
-                    return [j, [hol, counters[hol] += 1, null]]
-                else:
-                    current := lex.lexerForNextChunk(template[i])._makeIterator()
-                    lex := current
-            escape e:
-                def t := current.next(e, ejPartial)[1]
-                return [j, t]
-            catch z:
-                i += 1
-                current := null
-                return chainer.next(ej, ejPartial)
+def makeQuasiTokenLexer(template) as DeepFrozen:
+    def source := [].diverge()
+    var val := -1
+    var patt := -1
+    for piece in (template):
+        switch (piece):
+            match s :Str:
+                for c in (s) { source.push(c) }
+            match ==VALUE_HOLE:
+                source.push([VALUE_HOLE, val += 1, null])
+            match ==PATTERN_HOLE:
+                source.push([PATTERN_HOLE, patt += 1, null])
+    return makeMonteLexer(source.snapshot(), "m``")
 
 object ::"m``" as DeepFrozen:
     "A quasiparser for the Monte programming language.
@@ -188,13 +160,13 @@ object ::"m``" as DeepFrozen:
        return PATTERN_HOLE
 
     to valueMaker(template):
-        def chain := makeQuasiTokenChain(template)
-        def qast := parseExpression(chain, astBuilder, throw, throw)
+        def lexer := makeQuasiTokenLexer(template)
+        def qast := parseExpression(lexer, astBuilder, throw, throw)
         return makeM(qast, false)
 
     to matchMaker(template):
-        def chain := makeQuasiTokenChain(template)
-        def qast := parseExpression(chain, astBuilder, throw, throw)
+        def lexer := makeQuasiTokenLexer(template)
+        def qast := parseExpression(lexer, astBuilder, throw, throw)
         return makeM(qast, false)
 
     to fromStr(source :Str):
