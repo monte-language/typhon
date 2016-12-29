@@ -685,11 +685,10 @@ def expand(node, builder, fail) as DeepFrozen:
                 #flattening be done here or in the parser?
                 builder.SeqExpr(exprs, span)
             match =="CurryExpr":
-                # XXX needs to be fixed to use isSend
                 def [receiver, verb, isSend] := args
                 builder.MethodCallExpr(
                     builder.NounExpr("_makeVerbFacet", span),
-                    "curryCall",
+                    isSend.pick("currySend", "curryCall"),
                     [receiver, builder.LiteralExpr(verb, span)], [],
                     span)
             match =="GetExpr":
@@ -710,13 +709,6 @@ def expand(node, builder, fail) as DeepFrozen:
                     "send", [receiver, builder.LiteralExpr(verb, span),
                              emitList(margs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
                      span)
-            match =="SendCurryExpr":
-                # XXX see CurryExpr
-                def [receiver, verb] := args
-                builder.MethodCallExpr(
-                    builder.NounExpr("_makeVerbFacet", span),
-                        "currySend", [receiver, builder.LiteralExpr(verb, span)], [],
-                        span)
             match =="PrefixExpr":
                 builder.MethodCallExpr(args[1], node.getOpName(), [], [], span)
             match =="BinaryExpr":
