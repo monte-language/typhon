@@ -26,9 +26,6 @@ from typhon.objects.data import StrObject
 
 
 RUN_0 = getAtom(u"run", 0)
-RUN_1 = getAtom(u"run", 1)
-SEED_1 = getAtom(u"seed", 1)
-SPROUT_2 = getAtom(u"sprout", 2)
 
 
 class VatCheckpointed(Exception):
@@ -75,16 +72,28 @@ class Vat(Object):
 
     @method("Any", "Any")
     def seed(self, f):
-        from typhon.objects.collections.maps import EMPTY_MAP
+        """
+        Run the DeepFrozen function `f` within this vat, returning a far
+        reference to the return value.
+        """
+
         if not f.auditedBy(deepFrozenStamp):
-            self.log(u"seed/1: Warning: Seeded receiver is not DeepFrozen")
-            self.log(u"seed/1: Warning: This is gonna be an error soon!")
+            raise userError(u"seed/1: Seeded receiver was not DeepFrozen")
+
+        from typhon.objects.collections.maps import EMPTY_MAP
         from typhon.objects.refs import packLocalRef
         return packLocalRef(self.send(f, RUN_0, [], EMPTY_MAP), self,
                             currentVat.get())
 
-    @method("Any", "Str", "Int")
-    def sprout(self, name, checkpoints):
+    @method("Any", "Str", checkpoints="Int")
+    def sprout(self, name, checkpoints=-1):
+        """
+        Create a new vat labeled `name`.
+
+        Optionally, pass `=> checkpoints :Int` to limit the number of calls
+        that this new vat may make.
+        """
+
         vat = Vat(self._manager, self.uv_loop, name,
                   checkpoints=checkpoints)
         self._manager.vats.append(vat)
@@ -225,24 +234,6 @@ class scopedVat(object):
         if oldVat is not self.vat:
             raise RuntimeError("Implementation error: Who touched my vat!?")
         currentVat.set(None)
-
-
-class CurrentVatProxy(Object):
-
-    # Copy documentation from Vat.
-    __doc__ = Vat.__doc__
-
-    def toString(self):
-        vat = currentVat.get()
-        return vat.toString()
-
-    def callAtom(self, atom, args, namedArgsMap):
-        vat = currentVat.get()
-        return vat.callAtom(atom, args, namedArgsMap)
-
-    def respondingAtoms(self):
-        vat = currentVat.get()
-        return vat.respondingAtoms()
 
 
 class VatManager(object):

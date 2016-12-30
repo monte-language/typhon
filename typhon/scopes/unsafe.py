@@ -30,7 +30,6 @@ from typhon.objects.runtime import CurrentRuntime
 from typhon.objects.slots import finalize
 from typhon.objects.timeit import bench
 from typhon.objects.timers import Timer
-from typhon.vats import CurrentVatProxy
 
 
 @autohelp
@@ -56,7 +55,6 @@ def unsafeScope(config):
         u"bench": bench(),
         u"currentProcess": CurrentProcess(config),
         u"currentRuntime": CurrentRuntime(),
-        u"currentVat": CurrentVatProxy(),
         u"_findTyphonFile": FindTyphonFile(config.libraryPaths),
         u"getAddrInfo": getAddrInfo(),
         u"makeFileResource": makeFileResource(),

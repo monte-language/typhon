@@ -213,6 +213,9 @@ def runTyphon(argv):
     reflectedSS[StrObject(u"&&safeScope")] = ss[u"safeScope"]
     scope[u"safeScope"] = ss[u"safeScope"]
     scope.update(unsafeScope(config))
+    # The initial vat is included as `currentVat` to the first level of
+    # loading and such.
+    scope[u"currentVat"] = finalBinding(vat, anyGuard)
     reflectedUnsafeScope = monteMap()
     unsafeScopeDict = {}
     for k, b in scope.iteritems():
