@@ -59,20 +59,32 @@ class TraceLn(Object):
     def writeLine(self, line):
         debug_print(line.encode("utf-8"))
 
+    def writeTracePreamble(self):
+        vat = currentVat.get()
+        self.writeLine(u"TRACE: From vat " + vat.name)
+
     def writeTraceLine(self, line):
-        debug_print("TRACE: [%s]" % line.encode("utf-8"))
+        self.writeLine(u" ~ " + line)
 
     @method("Void", "Any")
     def exception(self, problem):
+        """
+        Print an exception to the debug log.
+        """
+
+        self.writeTracePreamble()
+
         if isinstance(problem, SealedException):
-            self.writeLine(u"Problem: %s" % problem.value.toString())
+            self.writeTraceLine(u"Problem: " + problem.value.toString())
             for crumb in problem.trail:
-                self.writeLine(crumb)
+                self.writeTraceLine(crumb)
         else:
-            self.writeLine(u"Problem: %s" % problem.toString())
+            self.writeTraceLine(u"Problem (unsealed): " + problem.toString())
 
     @method("Void", "*Any")
     def run(self, args):
+        self.writeTracePreamble()
+
         guts = u", ".join([obj.toQuote() for obj in args])
         self.writeTraceLine(guts)
 
