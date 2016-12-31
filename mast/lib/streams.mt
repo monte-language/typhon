@@ -159,7 +159,7 @@ def [PumpState :DeepFrozen,
      ABORTED :DeepFrozen,
 ] := makeEnum(["quiet", "packets", "sinks", "closing", "finished", "aborted"])
 
-def makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
+def _makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
     "Given `pump`, produce a sink which feeds packets into the pump and a
      source which produces the pump's results."
 
@@ -270,6 +270,33 @@ def nullPump(_) :Void as DeepFrozen implements Pump:
 
 def idPump(packet) :List as DeepFrozen implements Pump:
     return [packet]
+
+object makePumpPair extends _makePumpPair as DeepFrozen:
+    "A maker of sources and sinks from pumps."
+
+    to withIdentityPump() :Pair[Sink, Source]:
+        "
+        Produce a `[sink, source]` pair where the source's data comes from the
+        sink.
+
+        This is the correct way to return a source without having to manage an
+        interface more complex than `Sink`.
+        "
+
+        return _makePumpPair(idPump)
+
+def testMakePumpPair(assert):
+    def [sink, source] := makePumpPair.withIdentityPump()
+    def [l, listSink] := makeSink.asList()
+    for i in (0..3):
+        sink<-(i)
+    sink<-complete()
+    return when (flow(source, listSink), l) ->
+        assert.equal(l, [0, 1, 2, 3])
+
+unittest([
+    testMakePumpPair,
+])
 
 object makePump as DeepFrozen:
     "A maker of several types of pumps."
