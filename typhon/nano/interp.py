@@ -452,13 +452,24 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     def visitObjectExpr(self, doc, patt, guards, auditors, script, mast,
                         layout, clipboard):
         jit_debug("ObjectExpr")
+
+        # Discover the object's common name and also find the
+        # as-guard/auditor.
+        # XXX In the future, we could erase the as-guard semantics earlier.
+        guardAuditor = None
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
         else:
             objName = patt.name
+            # If there's a guard, use that as the as-guard.
+            if not isinstance(patt.guard, self.src.NullExpr):
+                guardAuditor = self.visitExpr(patt.guard)
         assert auditors, "hyacinth"
-        guardAuditor = self.visitExpr(auditors[0])
-        auds = [self.visitExpr(auditor) for auditor in auditors[1:]]
+        if guardAuditor is None:
+            guardAuditor = self.visitExpr(auditors[0])
+            auds = [self.visitExpr(auditor) for auditor in auditors[1:]]
+        else:
+            auds = [self.visitExpr(auditor) for auditor in auditors]
         if guardAuditor is NullObject:
             guardAuditor = anyGuard
         else:
