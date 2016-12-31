@@ -40,8 +40,6 @@ def makeModuleConfiguration(module :DeepFrozen,
 
 def ModuleStructure :DeepFrozen := Pair[Map[Str, Map[Str, Any]], NullOk[Config]]
 
-traceln(`Defining main`)
-
 def loaderMain():
     def collectedTests := [].diverge()
     def collectedBenches := [].diverge()
@@ -69,7 +67,6 @@ def loaderMain():
         def subload(modname :Str):
             if (modname == "unittest"):
                 if (collectTests):
-                    trace(`test collector invoked`)
                     return [["unittest" => ["unittest" => testCollector[modname]]], null]
                 else:
                     return [["unittest" => ["unittest" => fn _ {null}]], null]
@@ -117,8 +114,6 @@ def loaderMain():
                     for [importable, _] in (deps :List[ModuleStructure]):
                         imports |= importable
                     def module := config(makeLoader(imports))
-                    if (collectTests):
-                        traceln(`collected ${collectedTests.size() - pre} tests`)
                     [[modname => module], config]
         def moduleAndConfig := subload(modname)
         return when (moduleAndConfig) ->
@@ -135,7 +130,6 @@ def loaderMain():
             traceln(`Loading $modname`)
             def exps := makeModuleAndConfiguration(modname)
             when (exps) ->
-                traceln(`Loaded $modname as $exps`)
                 def [module, _] := exps
                 def excludes := ["typhonEval", "_findTyphonFile", "bench"]
                 # Leave out loader-only objects.
@@ -222,7 +216,5 @@ def loaderMain():
 
         match _:
             throw(usage)
-
-traceln(`Calling main`)
 
 Ref.whenBroken(loaderMain(), fn x {traceln.exception(Ref.optProblem(x))})
