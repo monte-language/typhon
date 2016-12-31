@@ -57,9 +57,9 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
                 # Typhon's exception handling is kinda broken so we try to cope
                 # by ignoring things that aren't sealed exceptions.
                 if (p =~ via (unsealException) [problem, trail]):
-                    failure := `$problem`
+                    failure := `Exception: $problem`
                     for line in (trail.reverse()):
-                        traceln(line)
+                        failure += "\n" + line
                     buf := []
 
 def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
