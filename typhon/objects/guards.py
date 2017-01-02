@@ -58,7 +58,7 @@ class Guard(Object):
 BytesGuard = audited.DF(autoguard(BytesObject, name=u"Bytes"))
 CharGuard = audited.DF(autoguard(CharObject, name=u"Char"))
 DoubleGuard = audited.DF(autoguard(DoubleObject, name=u"Double"))
-IntGuard = audited.DF(autoguard(IntObject, BigInt, name=u"Bytes"))
+IntGuard = audited.DF(autoguard(IntObject, BigInt, name=u"Int"))
 StrGuard = audited.DF(autoguard(StrObject, name=u"Str"))
 
 
