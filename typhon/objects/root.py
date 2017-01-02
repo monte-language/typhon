@@ -59,15 +59,16 @@ def addTrail(ue, target, atom, args):
             s = s[:39] + u"…"
         argStringList.append(s)
     argString = u", ".join(argStringList)
-    ue.trail.append(u"In %s.%s(%s):" % (target.toQuote(), atom.verb,
-                                        argString))
+    ue.trail.append(u"  %s.%s(%s)" % (target.toQuote(), atom.verb, argString))
+    path, name = target.fqn.split(u"$", 1)
+    ue.trail.append(u"File '%s', in object %s:" % (path, name))
 
 class Object(object):
     """
     A Monte object.
     """
 
-    _immutable_fields_ = "_samenessHash?",
+    _immutable_fields_ = "fqn", "_samenessHash?"
 
     _samenessHash = False, 0
 
