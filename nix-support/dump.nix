@@ -17,7 +17,8 @@ stdenv.mkDerivation {
     mkdir -p ./rpython/_cache
     cp -r ${pypySrc}/rpython .
     cp -r $src/dump.py .
-    CC=afl-gcc python -mrpython -O2 dump.py
+    # CC=afl-gcc python -mrpython -O2 dump.py
+    python -mrpython -O2 dump.py
     '';
   doCheck = false;
   installPhase = ''
