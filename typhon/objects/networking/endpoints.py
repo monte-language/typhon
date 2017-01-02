@@ -129,6 +129,10 @@ class TCPClientEndpoint(Object):
 
     @method("List")
     def connectStream(self):
+        """
+        Connect this endpoint, returning a `[source, sink]` pair.of vows.
+        """
+
         vat = currentVat.get()
         stream = ruv.alloc_tcp(vat.uv_loop)
 
@@ -142,9 +146,9 @@ class TCPClientEndpoint(Object):
 
         # Make the actual connection.
         if self.inet_type == 4:
-            ruv.tcp4Connect(stream, self.host, self.port, connectCB)
+            ruv.tcp4Connect(stream, self.host, self.port, connectStreamCB)
         elif self.inet_type == 6:
-            ruv.tcp6Connect(stream, self.host, self.port, connectCB)
+            ruv.tcp6Connect(stream, self.host, self.port, connectStreamCB)
 
         # Return the promises.
         return [source, sink]
