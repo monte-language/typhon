@@ -18,12 +18,14 @@ from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
 from typhon.objects.ejectors import Ejector
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
+from typhon.objects.user import Audition
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 
 def mix(ast, outers):
     ast = FillOuters(outers).visitExpr(ast)
     ast = ThawLiterals().visitExpr(ast)
     ast = SpecializeCalls().visitExpr(ast)
+    ast = DischargeAuditors().visitExpr(ast)
     return ast
 
 NoOutersIR = SplitAuditorsIR.extend("NoOuters",
@@ -185,3 +187,44 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
                     except UserException as ue:
                         return self.dest.ExceptionExpr(ue)
         return self.dest.CallExpr(obj, atom, args, namedArgs)
+
+class DischargeAuditors(MixIR.selfPass()):
+
+    def visitObjectExpr(self, doc, patt, guards, auditors, script, mast,
+                        layout, clipboard):
+        script = self.visitScript(script)
+        clear = False
+        if auditors and not layout.frameTable.dynamicGuards:
+            asAuditor = auditors[0]
+            if isinstance(asAuditor, self.src.LiveExpr):
+                patt.guard = asAuditor
+                with Audition(layout.fqn, mast, guards) as audition:
+                    for i, auditor in enumerate(auditors):
+                        if not isinstance(auditor, self.src.LiveExpr):
+                            # Slice to save progress and take the non-clear
+                            # path.
+                            auditors = auditors[i:]
+                            break
+                        auditor = auditor.obj
+                        # We don't care about the return value here. Instead,
+                        # we determine which stamps to issue from the audition
+                        # report. This is required to pick up
+                        # subordinate/private stamps which the auditor knows
+                        # about but which we don't have. The canonical example
+                        # of such an auditor is DeepFrozen, which anoints
+                        # DeepFrozenStamp but returns false from .ask/1. ~ C.
+                        try:
+                            audition.ask(auditor)
+                        except UserException as ue:
+                            return self.dest.ExceptionExpr(ue)
+                    else:
+                        # We made it through all of the auditors; we can go clear.
+                        clear = True
+                stamps = audition.prepareReport().stamps.keys()
+                script = self.dest.ScriptExpr(script.stamps + stamps,
+                        script.methods, script.matchers)
+        if clear:
+            return self.dest.ClearObjectExpr(doc, patt, script, layout)
+        else:
+            return self.dest.ObjectExpr(doc, patt, guards, auditors, script,
+                    mast, layout, clipboard)

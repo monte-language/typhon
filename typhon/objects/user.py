@@ -156,7 +156,7 @@ class Audition(Object):
                 self.guardLog = None
         return answer
 
-    def prepareReport(self, auditors):
+    def prepareReport(self):
         s = monteSet()
         for (k, (result, _, _)) in self.cache.items():
             if result:
@@ -248,7 +248,7 @@ class AuditClipboard(object):
         with Audition(self.fqn, self.ast, guards) as audition:
             for a in auditors:
                 audition.ask(a)
-        return audition.prepareReport(auditors)
+        return audition.prepareReport()
 
     def audit(self, auditors, guards):
         """
