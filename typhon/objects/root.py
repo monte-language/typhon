@@ -71,6 +71,8 @@ class Object(object):
 
     _samenessHash = False, 0
 
+    fqn = u"anonymous$typhon$object"
+
     def __repr__(self):
         return self.toQuote().encode("utf-8")
 

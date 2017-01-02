@@ -13,6 +13,28 @@ from typhon.atoms import getAtom
 from typhon.errors import Refused, UserException
 
 
+def attachFQN(cls):
+    """
+    Create an FQN for `cls` and attach it as a class attribute.
+
+    NOT_RPYTHON
+    """
+
+    # Can raise TypeError but only for things that are not autohelpable
+    # anyway.
+    path = inspect.getfile(cls)
+
+    # Can raise ValueError but only for paths which don't include a typhon
+    # tree.
+    i = path.rindex("typhon")
+    path = path[i:]
+
+    name = cls.__name__
+
+    fqn = u"%s$%s" % (path, name)
+    cls.fqn = fqn
+
+
 def method(rv, *args, **kwargs):
     """
     Mark a method as being exposed to Monte with a given type layout.
@@ -250,6 +272,8 @@ def autohelp(cls):
 
     NOT_RPYTHON
     """
+
+    attachFQN(cls)
 
     # Must only be done once.
     repackMonteMethods(cls)
