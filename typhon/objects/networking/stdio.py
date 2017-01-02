@@ -1,6 +1,7 @@
 from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
+from typhon.log import deprecated
 from typhon.objects.files import FileFount, FileDrain
 from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.networking.streamcaps import (FileSink, FileSource,
@@ -13,6 +14,7 @@ RUN_0 = getAtom(u"run", 0)
 
 
 @runnable(RUN_0)
+@deprecated(u"makeStdIn.run/0: Founts are deprecated")
 def makeStdIn():
     vat = currentVat.get()
     uv_loop = vat.uv_loop
@@ -25,6 +27,7 @@ def makeStdIn():
 
 
 @runnable(RUN_0)
+@deprecated(u"makeStdOut.run/0: Founts are deprecated")
 def makeStdOut():
     vat = currentVat.get()
     uv_loop = vat.uv_loop
@@ -40,6 +43,7 @@ def makeStdOut():
 
 
 @runnable(RUN_0)
+@deprecated(u"makeStdErr.run/0: Founts are deprecated")
 def makeStdErr():
     vat = currentVat.get()
     uv_loop = vat.uv_loop

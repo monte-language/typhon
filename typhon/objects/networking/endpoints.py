@@ -20,6 +20,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
+from typhon.log import deprecated
 from typhon.objects.collections.lists import wrapList, unwrapList
 from typhon.objects.data import StrObject, unwrapBytes, unwrapInt
 from typhon.objects.networking.streamcaps import StreamSink, StreamSource
@@ -104,6 +105,7 @@ class TCPClientEndpoint(Object):
             self.inet_type, self.host.decode("utf-8"), self.port)
 
     @method("List")
+    @deprecated(u"TCPClientEndpoint.connect/0: Founts are deprecated")
     def connect(self):
         vat = currentVat.get()
         stream = ruv.alloc_tcp(vat.uv_loop)
@@ -286,6 +288,7 @@ class TCPServerEndpoint(Object):
         return u"<endpoint (IPv%d, TCP): %d>" % (self.inet_type, self.port)
 
     @method("Any", "Any")
+    @deprecated(u"TCPServerEndpoint.listen/1: Founts are deprecated")
     def listen(self, handler):
         vat = currentVat.get()
         uv_server = ruv.alloc_tcp(vat.uv_loop)
