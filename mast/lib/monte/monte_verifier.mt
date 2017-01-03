@@ -65,7 +65,6 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
     "
 
     def unusedNameFinder(node, maker, args, span) :List[Noun]:
-        traceln(`nodeName ${node.getNodeName()}`)
         def rv := switch (node.getNodeName()) {
             # Modules
             match =="Module" {
@@ -84,11 +83,9 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 var rv := []
                 def exprs := node.getExprs()
                 for i => expr in (args[0]) {
-                    traceln(`iteration $i $expr ${exprs[i]}`)
                     rv += expr
                     def namesRead := usedSet(exprs[i])
                     rv := filterNouns(rv, namesRead)
-                    traceln(`rv $rv`)
                 }
                 rv
             }
@@ -131,6 +128,7 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 }
             }
             match =="ExitExpr" { optional(args[1]) }
+            match =="FinallyExpr" { flattenList(args) }
             match =="ForExpr" {
                 def [iterable, key, value, body, catchPatt, catchBody] := args
                 def l := filterNouns(iterable + optional(key) + value + body,
@@ -187,10 +185,15 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
             match n ? (["MatchBindExpr", "MismatchExpr"].contains(n)) {
                 flattenList(args)
             }
+            match =="MessageDesc" {
+                def [_, _, params, guard] := args
+                flattenList(params) + optional(guard)
+            }
             match n ? (["MethodCallExpr", "SendExpr"].contains(n)) {
                 def [receiver, _, arguments, namedArgs] := args
                 receiver + flattenList(arguments) + flattenList(namedArgs)
             }
+            match =="ParamDesc" { optional(args[1]) }
             match =="SwitchExpr" {
                 def [specimen, matchers] := args
                 def s := {
@@ -267,7 +270,9 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
             match n ? (["FinalPattern", "SlotPattern",
                         "VarPattern"].contains(n)) {
                 def noun := node.getNoun()
-                [noun] + optional(args[1])
+                if (noun.getName().startsWith("_")) {
+                    optional(args[1])
+                } else { [noun] + optional(args[1]) }
             }
             match n ? (["ListPattern", "MapPattern"].contains(n)) {
                 def [patts, tail] := args
@@ -294,7 +299,6 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
             match leaf ? (leaves.contains(leaf)) { [] }
             match nodeName { throw(`Unsupported node $nodeName $node`) }
         }
-        traceln(`rv $rv`)
         return rv
     return expr.transform(unusedNameFinder)
 
