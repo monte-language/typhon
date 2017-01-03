@@ -141,7 +141,8 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 } else { [] }
                 l + c
             }
-            match =="FunCallExpr" {
+            match =="ForwardExpr" { args[0] }
+            match n ? (["FunCallExpr", "FunSendExpr"].contains(n)) {
                 def [receiver, arguments, namedArgs] := args
                 receiver + flattenList(arguments) + flattenList(namedArgs)
             }
@@ -154,6 +155,7 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 def [receiver, indices] := args
                 receiver + flattenList(indices)
             }
+            match =="HideExpr" { args[0] }
             match =="IfExpr" {
                 def [test, consq, alt] := args
                 def l := test + consq + optional(alt)
@@ -182,7 +184,9 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 key + value
             }
             match =="MapExprExport" { args[0] }
-            match =="MatchBindExpr" { flattenList(args) }
+            match n ? (["MatchBindExpr", "MismatchExpr"].contains(n)) {
+                flattenList(args)
+            }
             match n ? (["MethodCallExpr", "SendExpr"].contains(n)) {
                 def [receiver, _, arguments, namedArgs] := args
                 receiver + flattenList(arguments) + flattenList(namedArgs)
@@ -270,6 +274,7 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 def ps := flattenList(patts)
                 ps + optional(tail)
             }
+            match =="BindPattern" { optional(args[1]) }
             match =="BindingPattern" { args[0] }
             match =="MapPatternAssoc" {
                 def [key, value, default] := args
@@ -280,6 +285,10 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 patt + optional(default)
             }
             match =="SamePattern" { args[0] }
+            match =="SuchThatPattern" {
+                def [patt, ex] := args
+                filterNouns(patt + ex, usedSet(node.getExpr()))
+            }
             match =="ViaPattern" { flattenList(args) }
             # Empty leaves which can't contain anything interesting.
             match leaf ? (leaves.contains(leaf)) { [] }
