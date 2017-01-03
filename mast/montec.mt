@@ -7,7 +7,10 @@ import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
 import "lib/tubes" =~ [=> makeUTF8EncodePump :DeepFrozen,
                        => makeUTF8DecodePump :DeepFrozen,
                        => makePumpTube :DeepFrozen]
-import "lib/monte/monte_verifier" =~ [=> findUndefinedNames :DeepFrozen]
+import "lib/monte/monte_verifier" =~ [
+    => findUndefinedNames :DeepFrozen,
+    => findUnusedNames :DeepFrozen,
+]
 
 exports (main)
 
@@ -160,12 +163,21 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
         }
         if (config.verifyNames()):
             def undefineds := findUndefinedNames(tree, safeScope)
-            if (undefineds.size() > 0):
+            def unuseds := findUnusedNames(tree)
+            if (undefineds.size() > 0 || unuseds.size() > 0):
                 def stdout := makePumpTube(makeUTF8EncodePump())
                 stdout.flowTo(makeStdOut())
                 for n in (undefineds):
                     def err := lex.makeParseError(
                         [`Undefined name ${n.getName()}`,
+                         n.getSpan()])
+                    stdout.receive(
+                        if (config.terseErrors()) {
+                            inputFile + ":" + err.formatCompact() + "\n"
+                        } else {err.formatPretty()})
+                for n in (unuseds):
+                    def err := lex.makeParseError(
+                        [`Unused name ${n.getName()}`,
                          n.getSpan()])
                     stdout.receive(
                         if (config.terseErrors()) {
