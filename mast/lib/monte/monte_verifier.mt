@@ -45,14 +45,12 @@ def leaves :Set[Str] := [
 def flattenList(l :List[List]) :List as DeepFrozen:
     var rv := []
     for x in (l) { rv += x }
-    traceln(`flattened $l to $rv`)
     return rv
 
 def optional(l :NullOk[List]) :List as DeepFrozen:
     return if (l == null) { [] } else { l }
 
 def filterNouns(l :List[Noun], s :Set[Str]) :List[Noun] as DeepFrozen:
-    traceln(`filtering $l with $s`)
     return [for noun in (l) ? (!s.contains(noun.getName())) noun]
 
 def usedSet(node) :Set[Str] as DeepFrozen:
@@ -67,6 +65,7 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
     "
 
     def unusedNameFinder(node, maker, args, span) :List[Noun]:
+        traceln(`nodeName ${node.getNodeName()}`)
         def rv := switch (node.getNodeName()) {
             # Modules
             match =="Module" {
@@ -94,18 +93,25 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 rv
             }
             # Full exprs.
+            match n ? (["AndExpr", "OrExpr"].contains(n)) {
+                flattenList(args)
+            }
             match =="AssignExpr" { flattenList(args) }
             match =="AugAssignExpr" {
                 def [_, lvalue, rvalue] := args
                 lvalue + rvalue
             }
-            match =="BinaryExpr" {
+            match n ? (["BinaryExpr", "CompareExpr"].contains(n)) {
                 def [left, _, right] := args
                 left + right
             }
             match =="CatchExpr" {
                 def [body, patt, catcher] := args
                 body + filterNouns(patt + catcher, usedSet(node.getCatcher()))
+            }
+            match =="CoerceExpr" {
+                def [specimen, guard] := args
+                specimen + optional(guard)
             }
             match =="CurryExpr" { args[0] }
             match =="DefExpr" {
@@ -155,20 +161,48 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 if (alt != null) { namesRead |= usedSet(node.getElse()) }
                 filterNouns(l, namesRead)
             }
+            match =="InterfaceExpr" { args[1] }
             match n ? (["ListExpr", "MapExpr"].contains(n)) {
                 flattenList(args[0])
             }
+            match =="ListComprehensionExpr" {
+                def [iterable, filter, key, value, body] := args
+                def l := iterable + optional(filter) + optional(key) + value
+                filterNouns(l + body, usedSet(node.getBody()))
+            }
+            match =="MapComprehensionExpr" {
+                def [iterable, filter, key, value, bodyk, bodyv] := args
+                def l := iterable + optional(filter) + optional(key) + value
+                filterNouns(l + bodyk + bodyv,
+                            usedSet(node.getBodyKey()) |
+                            usedSet(node.getBodyValue()))
+            }
+            match =="MapExprAssoc" {
+                def [key, value] := args
+                key + value
+            }
             match =="MapExprExport" { args[0] }
             match =="MatchBindExpr" { flattenList(args) }
-            match =="MethodCallExpr" {
+            match n ? (["MethodCallExpr", "SendExpr"].contains(n)) {
                 def [receiver, _, arguments, namedArgs] := args
                 receiver + flattenList(arguments) + flattenList(namedArgs)
+            }
+            match =="SwitchExpr" {
+                def [specimen, matchers] := args
+                def s := {
+                    var rv := [].asSet()
+                    for matcher in (node.getMatchers()) {
+                        rv |= usedSet(matcher)
+                    }
+                    rv
+                }
+                filterNouns(specimen + flattenList(matchers), s)
             }
             match =="PrefixExpr" { args[1] }
             match n ? (["QuasiExprHole", "QuasiPatternHole"].contains(n)) {
                 args[0]
             }
-            match =="QuasiParserExpr" {
+            match n ? (["QuasiParserExpr", "QuasiParserPattern"].contains(n)) {
                 def [_, quasis] := args
                 flattenList(quasis)
             }
@@ -191,6 +225,11 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                                      usedSet(node.getBody()))
                 l + flattenList(catchers) + optional(finallyBlock)
             }
+            match =="WhileExpr" {
+                def [test, body, catcher] := args
+                def l := filterNouns(test + body, usedSet(node.getBody()))
+                l + optional(catcher)
+            }
             # Named arguments.
             match =="NamedArg" { flattenList(args) }
             match =="NamedArgExport" { args[0] }
@@ -200,6 +239,10 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 def [patts, namedPatts, guard, body] := args
                 def l := flattenList(patts) + flattenList(namedPatts) + body
                 optional(guard) + filterNouns(l, usedSet(node.getBody()))
+            }
+            match n ? (["Matcher", "Catcher"].contains(n)) {
+                def [patt, body] := args
+                filterNouns(patt + body, usedSet(node.getBody()))
             }
             match =="ObjectExpr" {
                 def [_, name, asExpr, auditors, script] := args
@@ -227,16 +270,22 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 def ps := flattenList(patts)
                 ps + optional(tail)
             }
+            match =="BindingPattern" { args[0] }
+            match =="MapPatternAssoc" {
+                def [key, value, default] := args
+                key + value + optional(default)
+            }
             match =="MapPatternImport" {
                 def [patt, default] := args
                 patt + optional(default)
             }
+            match =="SamePattern" { args[0] }
             match =="ViaPattern" { flattenList(args) }
             # Empty leaves which can't contain anything interesting.
             match leaf ? (leaves.contains(leaf)) { [] }
             match nodeName { throw(`Unsupported node $nodeName $node`) }
         }
-        traceln(`nodeName ${node.getNodeName()} rv $rv`)
+        traceln(`rv $rv`)
         return rv
     return expr.transform(unusedNameFinder)
 

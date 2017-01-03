@@ -183,7 +183,8 @@ def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
                         if (config.terseErrors()) {
                             inputFile + ":" + err.formatCompact() + "\n"
                         } else {err.formatPretty()})
-                throw("Name usage error")
+                if (undefineds.size() > 0):
+                    throw("Name usage error")
         return tree
 
     def expandTree(tree):
