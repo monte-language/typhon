@@ -252,8 +252,9 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 filterNouns(patt + body, usedSet(node.getBody()))
             }
             match =="ObjectExpr" {
-                def [_, name, asExpr, auditors, script] := args
-                name + optional(asExpr) + flattenList(auditors) + script
+                # Ignore object names, for `return object obj ...`
+                def [_, _name, asExpr, auditors, script] := args
+                optional(asExpr) + flattenList(auditors) + script
             }
             match =="Script" {
                 def [extend, methods, matchers] := args
