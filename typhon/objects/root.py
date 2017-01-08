@@ -47,19 +47,22 @@ mirandaAtoms = [
     _WHENMORERESOLVED_1,
 ]
 
+def printObjTerse(obj):
+    try:
+        s = obj.toQuote()
+    except UserException as ue2:
+        s = u"<**object throws %r when printed**>" % ue2
+
+    if len(s) > 40:
+        s = s[:39] + u"…"
+
+    return s
 
 def addTrail(ue, target, atom, args):
-    argStringList = []
-    for arg in args:
-        try:
-            s = arg.toQuote()
-        except UserException as ue2:
-            s = u"<**object throws %r when printed**>" % ue2
-        if len(s) > 40:
-            s = s[:39] + u"…"
-        argStringList.append(s)
+    argStringList = [printObjTerse(arg) for arg in args]
     argString = u", ".join(argStringList)
-    ue.trail.append(u"  %s.%s(%s)" % (target.toQuote(), atom.verb, argString))
+    ue.trail.append(u"  %s.%s(%s)" % (printObjTerse(target), atom.verb,
+                                      argString))
     path, name = target.fqn.split(u"$", 1)
     ue.trail.append(u"File '%s', in object %s:" % (path, name))
 
