@@ -66,11 +66,11 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
     '_'.
     "
 
-    def unusedNameFinder(node, maker, args, span) :List[Noun]:
+    def unusedNameFinder(node, _maker, args, _span) :List[Noun]:
         def rv := switch (node.getNodeName()) {
             # Modules
             match =="Module" {
-                def [importsList, exportsList, body] := args
+                def [importsList, _exportsList, body] := args
                 def incoming := flattenList([for [_, patt] in (importsList) patt])
                 def l := filterNouns(incoming, usedSet(node.getBody()))
                 def s := {
@@ -265,7 +265,7 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 optional(extend) + flattenList(methods) + flattenList(matchers)
             }
             match n ? (["Method", "To"].contains(n)) {
-                def [_, _, patts, namedPatts, guard, body] := args
+                def [_, _, patts, namedPatts, guard, _body] := args
                 def l := (flattenList(patts) + flattenList(namedPatts) +
                           optional(guard))
                 def namesRead := usedSet(node.getBody())
