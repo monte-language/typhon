@@ -11,7 +11,6 @@ def hexDigits :DeepFrozen := decimalDigits | regionToSet('a'..'f' | 'A'..'F')
 
 def idStart :DeepFrozen := regionToSet('a'..'z' | 'A'..'Z' | '_'..'_')
 def idPart :DeepFrozen := idStart | decimalDigits
-def closers :DeepFrozen := ['(' => ')', '[' => ']', '{' => '}']
 
 def isIdentifierPart(c) as DeepFrozen:
     if (c == EOF):
@@ -37,6 +36,8 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     # Start offset of the text for the token being created.
     var startPos := -1
 
+    var count := -1
+
     var lineNumber := 1
     var colNumber := 0
     var tokenStartLine := 1
@@ -44,8 +45,6 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     var atLineStart := true
     # Syntax error produced from most recent tokenization attempt.
     var errorMessage := null
-
-    var count := -1
 
     var canStartIndentedBlock := false
     def queuedTokens := [].diverge()
@@ -206,7 +205,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     def endToken():
         def pos := position
         def tok := if (input =~ s :Str) {
-            input.slice(startPos, pos)
+            s.slice(startPos, pos)
         } else {
             _makeStr.fromChars(input.slice(startPos, pos))
         }
@@ -400,7 +399,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                                  span)
 
 
-    def openBracket(closer, var opener, fail):
+    def openBracket(closer, var opener, _fail):
         var span := null
         if (opener == null):
             advance()
@@ -462,7 +461,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         if (cur == EOF):
             throw.eject(fail, null)
         if (cur == '\n'):
-            def c := advance()
+            advance()
             if (canStartIndentedBlock):
                 def spaces := consumeWhitespaceAndComments()
                 if (strict && !inStatementPosition()):
@@ -740,7 +739,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
         if (cur == '"'):
             def s := stringLiteral(fail)
-            def [closer, span] := endToken()
+            def [_closer, span] := endToken()
             popBrace('"', fail)
 
             return composite(".String.", s, span)

@@ -47,7 +47,7 @@ def testEnum(assert):
     assert.equal(FOO, FOO)
     assert.equal(BAR, BAR)
     assert.notEqual(FOO, BAR)
-    assert.ejects(fn ej {def x :Fubar exit ej := 42})
-    assert.doesNotEject(fn ej {def x :Fubar exit ej := FOO})
+    assert.ejects(fn ej {def _ :Fubar exit ej := 42})
+    assert.doesNotEject(fn ej {def _ :Fubar exit ej := FOO})
 
 unittest([testEnum])

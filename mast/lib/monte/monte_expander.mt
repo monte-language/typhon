@@ -59,7 +59,7 @@ def putVerb(verb, fail, span) as DeepFrozen:
         match _:
             fail(["Unsupported verb for assignment", span])
 
-def renameCycles(node, renamings, builder) as DeepFrozen:
+def renameCycles(node, renamings) as DeepFrozen:
     def renamer(node, maker, args, span):
         return switch (node.getNodeName()) {
             match =="NounExpr" {
@@ -305,7 +305,7 @@ def expand(node, builder, fail) as DeepFrozen:
             def failure := builder.NounExpr("false", span)
             return f(success, failure)
 
-    def expandCallAssign([rcvr, verb, margs, namedArgs], right, fail, span):
+    def expandCallAssign([rcvr, verb, margs, _namedArgs], right, fail, span):
         def ares := builder.TempNounExpr("ares", span)
         return builder.SeqExpr([
             builder.MethodCallExpr(rcvr, putVerb(verb, fail, span),
@@ -320,7 +320,7 @@ def expand(node, builder, fail) as DeepFrozen:
             match =="NounExpr":
                 return builder.AssignExpr(target, builder.MethodCallExpr(target, verb, vargs, [], span), span)
             match =="MethodCallExpr":
-                def [rcvr, methverb, margs, mnamedargs, lspan] := leftargs
+                def [rcvr, methverb, margs, _mnamedargs, lspan] := leftargs
                 def recip := builder.TempNounExpr("recip", lspan)
                 def seq := [builder.DefExpr(builder.FinalPattern(recip,
                                 null, lspan),
@@ -546,7 +546,6 @@ def expand(node, builder, fail) as DeepFrozen:
         } else {
             [builder.IgnorePattern(null, span), exp]
         }
-        def kv := []
         def obj := builder.ObjectExpr("For-loop body",
             builder.IgnorePattern(null, span), null, [], builder.Script(
                 null,
@@ -564,7 +563,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 builder.AssignExpr(fTemp, builder.NounExpr("false", span), span), span),
             ], span)
 
-    def expandTransformer(node, maker, args, span):
+    def expandTransformer(node, _maker, args, span):
         # traceln(`expander: ${node.getNodeName()}: Expanding $node`)
 
         return switch (node.getNodeName()):
@@ -611,7 +610,6 @@ def expand(node, builder, fail) as DeepFrozen:
                 args
             match =="MapExprExport":
                 def [subnode] := args
-                def [submaker, subargs, subspan, _] := subnode._uncall()
                 def n := node.getValue()
                 switch (n.getNodeName()):
                     match =="NounExpr":
@@ -772,7 +770,6 @@ def expand(node, builder, fail) as DeepFrozen:
             match =="DefExpr":
                 def [patt, ej, rval] := args
                 def pattScope := patt.getStaticScope()
-                def defPatts := pattScope.getDefNames()
                 def varPatts := pattScope.getVarNames()
                 def rvalScope := if (ej == null) {
                     rval.getStaticScope()
@@ -805,8 +802,8 @@ def expand(node, builder, fail) as DeepFrozen:
                              [builder.NounExpr(oldname, span)], [], span))
                     def resName := builder.TempNounExpr("value", span)
                     resolvers.push(resName)
-                    def renamedEj := if (ej == null) {null} else {renameCycles(ej, renamings, builder)}
-                    def renamedRval := renameCycles(rval, renamings, builder)
+                    def renamedEj := if (ej == null) {null} else {renameCycles(ej, renamings)}
+                    def renamedRval := renameCycles(rval, renamings)
                     def resPatt := builder.FinalPattern(resName, null, span)
                     def resDef := builder.DefExpr(resPatt, null,
                          builder.DefExpr(patt, renamedEj, renamedRval, span), span)
@@ -837,7 +834,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 def [verb, target, vargs] := args
                 expandVerbAssign(verb, target, vargs, fail, span)
             match =="AugAssignExpr":
-                def [op, left, right] := args
+                def [_op, left, right] := args
                 expandVerbAssign(node.getOpName(), left, [right], fail, span)
             match =="ExitExpr":
                 if (args[1] == null):
@@ -1152,7 +1149,7 @@ def expand(node, builder, fail) as DeepFrozen:
         nameFinder(tree)
         def names := nameList.asSet()
 
-        def renameTransformer(node, maker, args, span):
+        def renameTransformer(node, _maker, args, span):
             def nodeName := node.getNodeName()
             if (nodeName == "TempNounExpr"):
                 return seen.fetch(node, fn {

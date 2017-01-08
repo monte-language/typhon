@@ -14,7 +14,6 @@
 # under the License.
 
 import "lib/entropy/pool" =~  [=> makePool :DeepFrozen]
-import "unittest" =~ [=> unittest]
 exports (makeEntropy)
 
 def makeEntropy(generator) as DeepFrozen:

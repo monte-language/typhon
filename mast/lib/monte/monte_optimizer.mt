@@ -2,7 +2,6 @@ exports (optimize)
 # I don't know what this all is yet.
 
 def a :DeepFrozen := astBuilder
-def Expr :DeepFrozen := a.getExprGuard()
 
 # Maybe Python isn't so bad after all.
 object zip as DeepFrozen:
@@ -410,8 +409,8 @@ def mix(expr,
                     traceln.exception(problem)
                     # Return a default.
                     a.MethodCallExpr(receiver, verb, args, namedArgs, expr.getSpan())
-            catch problem:
-                # traceln(`mix/1: Couldn't constant-fold: $problem`)
+            catch _problem:
+                # traceln(`mix/1: Couldn't constant-fold: $_problem`)
                 a.MethodCallExpr(receiver, verb, args, namedArgs, expr.getSpan())
 
         match =="NounExpr":

@@ -20,8 +20,7 @@ def chr(i :Int) :Char as DeepFrozen:
     return '\x00' + i
 
 
-def decodeCore(var bs :Bytes, ej) as DeepFrozen:
-    def iterator := bs._makeIterator()
+def decodeCore(var bs :Bytes, _ej) as DeepFrozen:
     var offset :Int := 0
     var rv :Str := ""
     while (true):

@@ -14,8 +14,6 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         if (p != null):
             throw.eject(err, p)
     def tokens := _toks.snapshot()
-    var dollarHoleValueIndex := -1
-    var atHoleValueIndex := -1
     var position := -1
     var lastError := null
 
@@ -76,7 +74,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         else:
             tokens[position + 1]
 
-    def opt(rule, ej):
+    def opt(rule, _ej):
         return escape e { rule(e) } catch _ { null }
 
     def peekTag():
@@ -346,16 +344,13 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         return if (nex == "QUASI_OPEN" || nex == "QUASI_CLOSE"):
             quasiliteral(null, true, ej)
         else if (nex == "=="):
-            def spanStart := spanHere()
             advance(ej)
             builder.SamePattern(prim(ej), true, spanFrom(spanStart))
         else if (nex == "!="):
-            def spanStart := spanHere()
             advance(ej)
             builder.SamePattern(prim(ej), false, spanFrom(spanStart))
         else if (nex == "_"):
             advance(ej)
-            def spanStart := spanHere()
             def g := if (peekTag() == ":" && tokens[position + 2][0] != "EOL") {
                 advance(ej); guard(ej)
             } else {
@@ -364,13 +359,11 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             builder.IgnorePattern(g, spanFrom(spanStart))
         else if (nex == "via"):
             advance(ej)
-            def spanStart := spanHere()
             acceptTag("(", ej)
             def e := expr(ej)
             acceptTag(")", ej)
             builder.ViaPattern(e, pattern(ej), spanFrom(spanStart))
         else if (nex == "["):
-            def spanStart := spanHere()
             advance(ej)
             def [items, isMap] := acceptListOrMap(pattern, mapPatternItem)
             acceptEOLs()
@@ -459,7 +452,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             builder.SeqExpr([], null)
         } else {
             escape e {
-                seq(indent, ej)
+                seq(indent, e)
             } catch _ {
                 builder.SeqExpr([], null)
             }
@@ -486,7 +479,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             acceptTag("}", ej)
         return content
 
-    def repeat(rule, indent, ej):
+    def repeat(rule, indent, _ej):
         def contents := [].diverge()
         while (true):
             contents.push(rule(indent, __break))
@@ -704,7 +697,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             if (indent) {
                 blockLookahead(tryAgain)
             }
-            suite(fn i, j {acceptEOLs(); acceptTag(".String.", j)[1]}, indent, ej)
+            suite(fn _, j {acceptEOLs(); acceptTag(".String.", j)[1]}, indent, ej)
         } else {
             null
         }
@@ -1011,7 +1004,6 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def spanStart := spanHere()
             builder.BindingExpr(noun(ej), spanFrom(spanStart))
         else if (tag == "::"):
-            def spanStart := spanHere()
             advance(ej)
             def t := acceptTag(".String.", ej)
             builder.NounExpr(t[1], t[2])

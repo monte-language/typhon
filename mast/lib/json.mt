@@ -70,13 +70,13 @@ def charHex(c :Hex) :(0x0..0xf) as DeepFrozen:
      behavior."
 
     return switch (c):
-        match d :Digits:
+        match _ :Digits:
             # 0x30 == '0'.asInteger()
             c.asInteger() - 0x30
-        match l :('a'..'f'):
+        match _ :('a'..'f'):
             # 0x57 - 0xa == 'a'.asInteger()
             c.asInteger() - 0x57
-        match u :('A'..'F'):
+        match _ :('A'..'F'):
             # 0x37 - 0xa == 'A'.asInteger()
             c.asInteger() - 0x37
 

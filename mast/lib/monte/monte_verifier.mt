@@ -56,7 +56,11 @@ def filterNouns(l :List[Noun], s :Set[Str]) :List[Noun] as DeepFrozen:
     return [for noun in (l) ? (!s.contains(noun.getName())) noun]
 
 def usedSet(node) :Set[Str] as DeepFrozen:
-    return node.getStaticScope().getNamesRead()
+    return if (node == null) {
+        [].asSet()
+    } else {
+        node.getStaticScope().getNamesRead()
+    }
 
 def findUnusedNames(expr) :List[Noun] as DeepFrozen:
     "
@@ -171,14 +175,17 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
             match =="ListComprehensionExpr" {
                 def [iterable, filter, key, value, body] := args
                 def l := iterable + optional(filter) + optional(key) + value
-                filterNouns(l + body, usedSet(node.getBody()))
+                def used := (usedSet(node.getFilter()) |
+                             usedSet(node.getBody()))
+                filterNouns(l + body, used)
             }
             match =="MapComprehensionExpr" {
                 def [iterable, filter, key, value, bodyk, bodyv] := args
                 def l := iterable + optional(filter) + optional(key) + value
-                filterNouns(l + bodyk + bodyv,
-                            usedSet(node.getBodyKey()) |
-                            usedSet(node.getBodyValue()))
+                def used := (usedSet(node.getFilter()) |
+                             usedSet(node.getBodyKey()) |
+                             usedSet(node.getBodyValue()))
+                filterNouns(l + bodyk + bodyv, used)
             }
             match =="MapExprAssoc" {
                 def [key, value] := args

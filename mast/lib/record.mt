@@ -79,15 +79,15 @@ def testRecordMutation(assert):
 
 def testRecordCreationGuard(assert):
     # The guards should kick in during creation.
-    assert.throws(fn {def test := makeTest(42.0, 'm')})
-    assert.throws(fn {def test := makeTest(42, "m")})
+    assert.throws(fn {makeTest(42.0, 'm')})
+    assert.throws(fn {makeTest(42, "m")})
 
 def testRecordMutationGuard(assert):
     # The guard should also kick in when mutated.
     assert.throws(fn {
         def test := makeTest(42, 'm')
         # *This* is what we're testing.
-        def mutated := test.withFirst("invalid")
+        test.withFirst("invalid")
     })
 
 def testRecordAsMap(assert):
