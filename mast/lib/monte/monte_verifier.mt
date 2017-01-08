@@ -36,6 +36,8 @@ def findUndefinedNames(expr, outers) as DeepFrozen:
 def leaves :Set[Str] := [
     "BindingExpr",
     "LiteralExpr",
+    "MetaContextExpr",
+    "MetaStateExpr",
     "NounExpr",
     "SlotExpr",
     "QuasiText",
@@ -149,6 +151,7 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 filterNouns(flattenList(patts) + body,
                             usedSet(node.getBody()))
             }
+            match =="FunctionInterfaceExpr" { args[1] }
             match =="GetExpr" {
                 def [receiver, indices] := args
                 receiver + flattenList(indices)
@@ -240,6 +243,7 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
             # Named arguments.
             match =="NamedArg" { flattenList(args) }
             match =="NamedArgExport" { args[0] }
+            match =="NamedParam" { args[1] }
             match =="NamedParamImport" { args[0] }
             # Script pieces.
             match =="FunctionScript" {
@@ -260,7 +264,7 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 def [extend, methods, matchers] := args
                 optional(extend) + flattenList(methods) + flattenList(matchers)
             }
-            match =="To" {
+            match n ? (["Method", "To"].contains(n)) {
                 def [_, _, patts, namedPatts, guard, body] := args
                 def l := (flattenList(patts) + flattenList(namedPatts) +
                           optional(guard))
@@ -304,8 +308,12 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
     return expr.transform(unusedNameFinder)
 
 def testUnusedDef(assert):
-    assert.equal(m`def x := 42; "asdf"`.transform(findUnusedNames).size(), 1)
+    assert.equal(findUnusedNames(m`def x := 42; "asdf"`).size(), 1)
+
+def testUsedSuchThat(assert):
+    assert.equal(findUnusedNames(m`fn n ? (n) { 42 }`).size(), 0)
 
 unittest([
     testUnusedDef,
+    testUsedSuchThat,
 ])

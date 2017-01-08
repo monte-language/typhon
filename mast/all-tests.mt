@@ -5,6 +5,7 @@ import "lib/continued" =~ _
 import "lib/entropy/pool" =~ _
 import "lib/enum" =~ _
 import "lib/json" =~ _
+import "lib/monte/monte_verifier" =~ _
 import "lib/parsers/html" =~ _
 import "lib/record" =~ _
 import "lib/tubes" =~ _
