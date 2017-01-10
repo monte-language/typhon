@@ -5,7 +5,9 @@ class Span(object):
 
     _immutable_ = True
 
-    def __init__(self, isOneToOne, startLine, startCol, endLine, endCol):
+    def __init__(self, source, isOneToOne, startLine, startCol, endLine,
+                 endCol):
+        self.source = source
         self.isOneToOne = isOneToOne
         self.startLine = startLine
         self.startCol = startCol

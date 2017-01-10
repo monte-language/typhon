@@ -23,9 +23,10 @@ class MASTStream(object):
 
     index = 0
 
-    def __init__(self, bytes, withSpans):
+    def __init__(self, bytes, withSpans, source):
         self.bytes = bytes
         self.withSpans = withSpans
+        self.source = source
 
     def exhausted(self):
         return self.index >= len(self.bytes)
@@ -100,8 +101,8 @@ class MASTStream(object):
             oneToOne = False
         else:
             raise InvalidMAST("Couldn't decode span tag %s" % b)
-        return Span(oneToOne, self.nextInt(), self.nextInt(), self.nextInt(),
-                    self.nextInt())
+        return Span(self.source, oneToOne, self.nextInt(), self.nextInt(),
+                    self.nextInt(), self.nextInt())
 
 
 class MASTContext(object):
@@ -363,6 +364,9 @@ class MASTContext(object):
 
 
 def loadMASTBytes(bs, noisy=False):
+    # XXX removed in the next commit?
+    filename = u"<unknown>"
+
     if not bs.startswith(MAGIC):
         raise InvalidMAST("Wrong magic bytes '%s'" % bs[:len(MAGIC)])
     bs = bs[len(MAGIC):]
@@ -377,7 +381,7 @@ def loadMASTBytes(bs, noisy=False):
         raise InvalidMAST("Unsupported MAST version '%d'" % version)
 
     try:
-        stream = MASTStream(bs, withSpans)
+        stream = MASTStream(bs, withSpans, filename)
         context = MASTContext(noisy)
         while not stream.exhausted():
             context.decodeNextTag(stream)

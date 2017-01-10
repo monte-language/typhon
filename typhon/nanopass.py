@@ -2,6 +2,27 @@ import py
 
 from rpython.rlib.unroll import unrolling_iterable
 
+
+class CompilerFailed(Exception):
+    """
+    An invariant in the compiler failed.
+    """
+
+    def __init__(self, message, span):
+        self.message = message
+        self.span = span
+
+    def __str__(self):
+        return self.formatError().encode("utf-8")
+
+    def formatError(self):
+        return u"\n".join([
+            u"Compiler invariant failed: " + self.message,
+            u"In file '%s'" % self.span.source,
+            u"Line %d, column %d" % (self.span.startLine, self.span.startCol),
+        ])
+
+
 def freezeField(field, ty):
     if ty and ty.endswith("*"):
         # List.
@@ -130,6 +151,14 @@ def visit%(name)s(self, specimen):
             """ % params).compile() in d
             attrs.update(d)
 
+        def errorWithSpan(self, message, span):
+            """
+            Throw a fatal error with span information.
+            """
+
+            raise CompilerFailed(message, span)
+        attrs["errorWithSpan"] = errorWithSpan
+
         Pass = type("Pass", (object,), attrs)
         # This isn't really a knot so much as a quick and easy way to access
         # the original implementations of the pass's methods. ~ C.
@@ -171,7 +200,6 @@ def visit%(name)s(self, specimen):
                 nts[nt] = constructors
         return makeIR(name, ts, nts)
     irAttrs["extend"] = extend
-
 
     def selfPass(self):
         return self.makePassTo(self)
