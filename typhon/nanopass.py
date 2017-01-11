@@ -8,19 +8,24 @@ class CompilerFailed(Exception):
     An invariant in the compiler failed.
     """
 
-    def __init__(self, message, span):
-        self.message = message
+    def __init__(self, problem, span):
+        self.problem = problem
         self.span = span
 
     def __str__(self):
         return self.formatError().encode("utf-8")
 
     def formatError(self):
-        return u"\n".join([
-            u"Compiler invariant failed: " + self.message,
-            u"In file '%s'" % self.span.source,
-            u"Line %d, column %d" % (self.span.startLine, self.span.startCol),
-        ])
+        l = [
+            u"Compiler invariant failed" #: " + self.problem,
+        ]
+        # if self.span is not None:
+        #     l += [
+        #         u"In file '%s'" % self.span.source,
+        #         u"Line %d, column %d" % (self.span.startLine,
+        #                                  self.span.startCol),
+        #     ]
+        return u"\n".join(l)
 
 
 def freezeField(field, ty):
@@ -151,12 +156,12 @@ def visit%(name)s(self, specimen):
             """ % params).compile() in d
             attrs.update(d)
 
-        def errorWithSpan(self, message, span):
+        def errorWithSpan(self, problem, span):
             """
             Throw a fatal error with span information.
             """
 
-            raise CompilerFailed(message, span)
+            raise CompilerFailed(problem, span)
         attrs["errorWithSpan"] = errorWithSpan
 
         Pass = type("Pass", (object,), attrs)

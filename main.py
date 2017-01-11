@@ -27,6 +27,7 @@ from typhon.errors import LoadFailed, UserException
 from typhon.importing import obtainModule
 from typhon.log import log
 from typhon.metrics import globalRecorder
+from typhon.nanopass import CompilerFailed
 from typhon.objects.auditors import deepFrozenGuard
 from typhon.objects.collections.maps import ConstMap, monteMap, unwrapMap
 from typhon.objects.constants import NullObject
@@ -101,6 +102,10 @@ def runUntilDone(vatManager, uv_loop, recorder):
                     else:
                         # No more work to be done, so blocking is fine.
                         ruv.run(uv_loop, ruv.RUN_ONCE)
+                except CompilerFailed as cf:
+                    debug_print("Caught fatal exception while reacting:",
+                            cf.formatError())
+                    raise
                 except UserException as ue:
                     debug_print("Caught exception while reacting:",
                             ue.formatError())
@@ -195,6 +200,10 @@ def runTyphon(argv):
             prelude = loadPrelude(config, recorder, vat)
     except LoadFailed as lf:
         print lf
+        return 1
+    except CompilerFailed as cf:
+        debug_print("Caught exception while importing prelude:",
+                cf.formatError())
         return 1
     except UserException as ue:
         debug_print("Caught exception while importing prelude:",
