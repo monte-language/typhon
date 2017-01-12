@@ -416,8 +416,10 @@ class Promise(Object):
         result = self.resolutionRef()
         if self is result:
             return result
-        else:
+        elif isinstance(result, Promise):
             return result.resolution()
+        else:
+            return result
 
     def state(self):
         if self.optProblem() is not NullObject:
