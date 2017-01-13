@@ -1086,8 +1086,12 @@ def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
 def makeTo(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
            namedPatts :List[Ast["NamedParam", "NamedParamImport"]], resultGuard :NullOk[Expr],
            body :Expr, span) as DeepFrozenStamp:
-    def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatts +
-                                             [resultGuard, body]).hide()})
+    def &scope := makeLazySlot(fn {
+        def ps := sumScopes(patterns + namedPatts)
+        def returnScope := makeStaticScope([], [], ["__return"], [], false)
+        def b := sumScopes([resultGuard, body])
+        (ps + returnScope + b).hide()
+    })
     object ::"to":
         to getDocstring():
             return docstring
@@ -1219,8 +1223,12 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
 def makeFunctionScript(patterns :List[Pattern],
                        namedPatterns :List[Ast["NamedParam", "NamedParamImport"]],
                        resultGuard :NullOk[Expr], body :Expr, span) as DeepFrozenStamp:
-    def &scope := makeLazySlot(fn {sumScopes(patterns + namedPatterns +
-                                             [resultGuard, body]).hide()})
+    def &scope := makeLazySlot(fn {
+        def ps := sumScopes(patterns + namedPatterns)
+        def returnScope := makeStaticScope([], [], ["__return"], [], false)
+        def b := sumScopes([resultGuard, body])
+        (ps + returnScope + b).hide()
+    })
     object functionScript:
         to getPatterns():
             return patterns
