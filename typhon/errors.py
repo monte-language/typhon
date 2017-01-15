@@ -1,3 +1,5 @@
+# encoding: utf-8
+
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -29,6 +31,18 @@ class LoadFailed(Exception):
     """
 
 
+def printObjTerse(obj):
+    try:
+        s = obj.toQuote()
+    except UserException as ue2:
+        s = u"<**object throws %r when printed**>" % ue2
+
+    if len(s) > 40:
+        s = s[:39] + u"…"
+
+    return s
+
+
 class UserException(Exception):
     """
     An error occurred in user code.
@@ -57,6 +71,18 @@ class UserException(Exception):
 
     def getPayload(self):
         return self.payload
+
+    def addTrail(self, target, atom, args):
+        """
+        Add a traceback frame to this exception.
+        """
+
+        argStringList = [printObjTerse(arg) for arg in args]
+        argString = u", ".join(argStringList)
+        self.trail.append(u"  %s.%s(%s)" % (printObjTerse(target), atom.verb,
+                                            argString))
+        path, name = target.fqn.split(u"$", 1)
+        self.trail.append(u"File '%s', in object %s:" % (path, name))
 
 
 def userError(s):
