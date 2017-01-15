@@ -445,16 +445,18 @@ object _iterForever as DeepFrozenStamp:
 
 
 def _splitList(position :Int) as DeepFrozenStamp:
-    "Implementation of tail pattern-matching syntax in list patterns.
+    "
+    Implementation of tail pattern-matching syntax in list patterns.
 
-     m`def [x] + xs := l`.expand() ==
-     m`def via (_splitList.run(1)) [x, xs] := l`"
+    m`def [x] + xs := l`.expand() == m`def via (_splitList.run(1)) [x, xs] := l`
+    "
 
-    # DF is justified by only `position` and `throw` being free. ~ C.
+    # DF is justified by only `position`, `throw`, and `M` being free. ~ C.
     return def listSplitter(specimen, ej) as DeepFrozenStamp:
         def l :List exit ej := specimen
         if (l.size() < position):
-            throw.eject(ej, ["List is too short:", l])
+            throw.eject(ej, "Needed " + M.toString(position) +
+                        " elements, but only got " + M.toString(l.size()))
         return l.slice(0, position).with(l.slice(position))
 
 
