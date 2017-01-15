@@ -102,7 +102,7 @@ class Proxy(Promise):
 
     def callAll(self, atom, args, namedArgs):
         if self.checkSlot():
-            return self.resolutionBox.get().recvNamed(atom, args, namedArgs)
+            return self.resolutionBox.get().callAtom(atom, args, namedArgs)
         else:
             raise userError(u"not synchronously callable (%s)" %
                             atom.repr.decode("utf-8"))

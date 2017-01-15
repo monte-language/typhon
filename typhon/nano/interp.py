@@ -330,7 +330,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             namedArgMap = ConstMap(d)
         else:
             namedArgMap = EMPTY_MAP
-        return rcvr.recvNamed(atom, argVals, namedArgMap)
+        return rcvr.callAtom(atom, argVals, namedArgMap)
 
     def visitDefExpr(self, patt, ex, rvalue):
         jit_debug("DefExpr")
