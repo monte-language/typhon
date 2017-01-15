@@ -210,9 +210,11 @@ def _makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
                     switch (pump(packet)):
                         match ==null:
                             ps := FINISHED
-                        match packets:
+                        match packets ? (packets.size() > 0):
                             ps := PACKETS
                             state := packets
+                        match _:
+                            null
                 match ==PACKETS:
                     switch (pump(packet)):
                         match ==null:
