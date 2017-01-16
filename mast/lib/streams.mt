@@ -134,6 +134,7 @@ def flow(source, sink) :Vow[Void] as DeepFrozen:
         p
     catch problem:
         r.smash(problem)
+        null
 
 def testFlow(assert):
     def [l, sink] := makeSink.asList()
