@@ -553,6 +553,11 @@ object alterSink as DeepFrozen:
             to run(packet) :Vow[Void]:
                 return sink(f(packet))
 
+    to takeWhile(predicate, sink) :Sink:
+        "Accept packets into `sink` as long as `predicate(packet)` holds."
+
+        return alterSink.fusePump(makePump.takeWhile(predicate), sink)
+
     to filter(predicate, sink) :Sink:
         "Filter packets coming into `sink` with the `predicate`."
 
@@ -645,6 +650,11 @@ object alterSource as DeepFrozen:
 
         return def mapSource(sink) :Vow[Void] as Source:
             return source(alterSink.map(f, sink))
+
+    to takeWhile(predicate, source) :Source:
+        "Allow packets out of `source` as long as `predicate(packet)` holds."
+
+        return alterSource.fusePump(makePump.takeWhile(predicate), source)
 
     to filter(predicate, source) :Source:
         "Filter packets coming out of `source` with `predicate`."
