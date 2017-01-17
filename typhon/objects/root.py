@@ -47,6 +47,20 @@ def makeMirandaArgs():
     mirandaArgs[StrObject(u"FAIL")] = FAIL
     return mirandaArgs
 
+MIRANDA_ARGS = MIRANDA_MAP = None
+
+def tieMirandaKnot():
+    """
+    Tie a knot needed for Miranda named arguments.
+    """
+
+    global MIRANDA_ARGS
+    global MIRANDA_MAP
+
+    from typhon.objects.collections.maps import ConstMap
+    MIRANDA_ARGS = makeMirandaArgs()
+    MIRANDA_MAP = ConstMap(MIRANDA_ARGS)
+
 
 mirandaAtoms = [
     _CONFORMTO_1,
@@ -145,11 +159,11 @@ class Object(object):
         # promoted; it'll be slow.
         jit_debug(atom.repr)
 
-        from typhon.objects.collections.maps import ConstMap
         if namedArgsMap is None:
-            namedArgsMap = ConstMap(makeMirandaArgs())
+            namedArgsMap = MIRANDA_MAP
         else:
-            namedArgsMap = ConstMap(namedArgsMap._or(makeMirandaArgs()))
+            from typhon.objects.collections.maps import ConstMap
+            namedArgsMap = ConstMap(namedArgsMap._or(MIRANDA_ARGS))
 
         try:
             return self.recvNamed(atom, arguments, namedArgsMap)

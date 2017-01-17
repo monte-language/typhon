@@ -34,6 +34,7 @@ from typhon.objects.constants import NullObject
 from typhon.objects.data import IntObject, StrObject, unwrapStr
 from typhon.objects.guards import anyGuard
 from typhon.objects.refs import resolution
+from typhon.objects.root import tieMirandaKnot
 from typhon.objects.slots import finalBinding
 from typhon.objects.timeit import benchmarkSettings
 from typhon.prelude import registerGlobals
@@ -42,6 +43,9 @@ from typhon.scopes.boot import bootScope
 from typhon.scopes.safe import safeScope
 from typhon.scopes.unsafe import unsafeScope
 from typhon.vats import Vat, VatManager, scopedVat
+
+# We must do this once and now seems like the best time. ~ C.
+tieMirandaKnot()
 
 
 def dirname(p):
