@@ -37,14 +37,6 @@ RUN_2 = getAtom(u"run", 2)
 NULL_BINDING = finalBinding(NullObject, anyGuard)
 
 
-def mkMirandaArgs():
-    _d = monteMap()
-    _d[StrObject(u"FAIL")] = theThrower
-    return ConstMap(_d)
-
-MIRANDA_ARGS = mkMirandaArgs()
-
-
 ProfileNameIR = MixIR.extend("ProfileName",
     ["ProfileName"],
     {
@@ -614,7 +606,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         jit_debug("ViaPatt")
         ej = self.patternFailure
         v = self.visitExpr(trans)
-        newSpec = v.callAtom(RUN_2, [self.specimen, ej], MIRANDA_ARGS)
+        newSpec = v.callAtom(RUN_2, [self.specimen, ej])
         self.matchBind(patt, newSpec, ej)
 
     def visitNamedArgExpr(self, key, value):

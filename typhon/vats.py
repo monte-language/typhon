@@ -22,7 +22,6 @@ from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, UserException, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.root import Object
-from typhon.objects.data import StrObject
 
 
 RUN_0 = getAtom(u"run", 0)
@@ -43,6 +42,8 @@ class Vat(Object):
     """
 
     name = u"pa"
+
+    turnResolver = None
 
     def __init__(self, manager, uv_loop, name=None, checkpoints=0):
         assert checkpoints != 0, "No, you can't create a zero-checkpoint vat"
@@ -138,10 +139,14 @@ class Vat(Object):
         return len(self._pending) or len(self._callbacks)
 
     def takeTurn(self):
+        from typhon.objects.exceptions import sealException
         from typhon.objects.refs import Promise, resolution
 
         with self._pendingLock:
             resolver, target, atom, args, namedArgs = self._pending.pop(0)
+
+        # Set the resolver for this turn.
+        self.turnResolver = resolver
 
         # If the target is a promise, then we should send to it instead of
         # calling. Try to resolve it as much as possible first, though.
@@ -151,53 +156,37 @@ class Vat(Object):
         #          (target.toQuote(), atom.verb,
         #           u", ".join([arg.toQuote() for arg in args]),
         #           u"yes" if resolver is not None else u"no"))
-        if resolver is None:
-            try:
-                # callOnly/sendOnly.
-                if isinstance(target, Promise):
+        try:
+            if isinstance(target, Promise):
+                if resolver is None:
                     target.sendOnly(atom, args, namedArgs)
                 else:
-                    # Oh, that's right; we don't do callOnly since it's silly.
-                    target.callAtom(atom, args, namedArgs)
-            except UserException as ue:
+                    result = target.send(atom, args, namedArgs)
+                    # The resolver may have already been invoked, so we'll use
+                    # .resolveRace/1 instead of .resolve/1. ~ C.
+                    resolver.resolveRace(result)
+            else:
+                result = target.callAtom(atom, args, namedArgs)
+                if resolver is not None:
+                    # Same logic as above.
+                    resolver.resolveRace(result)
+        except UserException as ue:
+            if resolver is not None:
+                resolver.smash(sealException(ue))
+            else:
                 self.log(u"Uncaught user exception while taking turn"
                          u" (and no resolver): %s" %
                          ue.formatError().decode("utf-8"),
                          tags=["serious"])
-            except VatCheckpointed:
-                self.log(u"Ran out of checkpoints while taking turn",
-                         tags=["serious"])
-            except Ejecting:
-                self.log(u"Ejector tried to escape vat turn boundary",
-                         tags=["serious"])
-
-        else:
-            from typhon.objects.collections.maps import ConstMap, monteMap
-            from typhon.objects.exceptions import sealException
-            from typhon.objects.refs import Smash
-
-            # XXX monteMap()
-            mirandaArgs = monteMap()
-            mirandaArgs[StrObject(u"FAIL")] = Smash(resolver)
-            namedArgs = ConstMap(namedArgs._or(mirandaArgs))
-            try:
-                # call/send.
-                if isinstance(target, Promise):
-                    result = target.send(atom, args, namedArgs)
-                else:
-                    result = target.callAtom(atom, args, namedArgs)
-                # The resolver may have already been invoked, so we'll use
-                # .resolveRace/1 instead of .resolve/1. ~ C.
-                resolver.resolveRace(result)
-            except UserException as ue:
-                resolver.smash(sealException(ue))
-            except VatCheckpointed:
-                self.log(u"Ran out of checkpoints while taking turn; breaking resolver",
-                         tags=["serious"])
+        except VatCheckpointed:
+            self.log(u"Ran out of checkpoints while taking turn",
+                     tags=["serious"])
+            if resolver is not None:
                 resolver.smash(sealException(userError(u"Vat ran out of checkpoints")))
-            except Ejecting:
-                self.log(u"Ejector tried to escape vat turn boundary",
-                         tags=["serious"])
+        except Ejecting:
+            self.log(u"Ejector tried to escape vat turn boundary",
+                     tags=["serious"])
+            if resolver is not None:
                 resolver.smash(sealException(userError(u"Ejector tried to escape from vat")))
 
     def takeSomeTurns(self):

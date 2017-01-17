@@ -745,12 +745,19 @@ class UnconnectedRef(Promise):
 
 
 @autohelp
-class Smash(Object):
-    _immutable_fields_ = "resolver",
-
-    def __init__(self, resolver):
-        self.resolver = resolver
+class _Fail(Object):
+    """
+    A way to notify the next step of the current plan of failure in the
+    current turn.
+    """
 
     @method("Bool", "Any")
     def run(self, problem):
-        return self.resolver.smash(problem)
+        resolver = currentVat.get().turnResolver
+        if resolver is None:
+            # throw(problem)
+            raise UserException(problem)
+        else:
+            return resolver.smash(problem)
+
+FAIL = _Fail()

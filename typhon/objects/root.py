@@ -37,6 +37,17 @@ _UNCALL_0 = getAtom(u"_uncall", 0)
 _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 
 
+def makeMirandaArgs():
+    from typhon.objects.collections.maps import monteMap
+    from typhon.objects.data import StrObject
+    from typhon.objects.refs import FAIL
+
+    # XXX monteMap()
+    mirandaArgs = monteMap()
+    mirandaArgs[StrObject(u"FAIL")] = FAIL
+    return mirandaArgs
+
+
 mirandaAtoms = [
     _CONFORMTO_1,
     _GETALLEGEDINTERFACE_0,
@@ -113,23 +124,32 @@ class Object(object):
     def call(self, verb, arguments, namedArgs=None):
         """
         Pass a message immediately to this object.
+
+        This is the correct method to call if you have a verb.
         """
-        from typhon.objects.collections.maps import EMPTY_MAP
-        if namedArgs is None:
-            namedArgs = EMPTY_MAP
+
         arity = len(arguments)
         atom = getAtom(verb, arity)
         return self.callAtom(atom, arguments, namedArgs)
 
-    def callAtom(self, atom, arguments, namedArgsMap):
+    def callAtom(self, atom, arguments, namedArgsMap=None):
         """
         This method is used to reuse atoms without having to rebuild them.
+
+        This is the correct method to call if you have an atom.
         """
+
         # Promote the atom, on the basis that atoms are generally reused.
         atom = promote(atom)
         # Log the atom to the JIT log. Don't do this if the atom's not
         # promoted; it'll be slow.
         jit_debug(atom.repr)
+
+        from typhon.objects.collections.maps import ConstMap
+        if namedArgsMap is None:
+            namedArgsMap = ConstMap(makeMirandaArgs())
+        else:
+            namedArgsMap = ConstMap(namedArgsMap._or(makeMirandaArgs()))
 
         try:
             return self.recvNamed(atom, arguments, namedArgsMap)
