@@ -279,6 +279,20 @@ class WhenResolvedReactor(Object):
 
 
 @autohelp
+class Smash(Object):
+    """
+    A breaker of promises.
+    """
+
+    def __init__(self, resolver):
+        self.resolver = resolver
+
+    @method("Bool", "Any")
+    def run(self, problem):
+        return self.resolver.smash(problem)
+
+
+@autohelp
 class LocalResolver(Object):
     """
     A resolver for a promise.
@@ -339,6 +353,9 @@ class LocalResolver(Object):
     @method("Bool")
     def isDone(self):
         return self._ref is None
+
+    def makeSmasher(self):
+        return Smash(self)
 
 
 class MessageBuffer(object):
@@ -742,22 +759,3 @@ class UnconnectedRef(Promise):
 
     def commit(self):
         pass
-
-
-@autohelp
-class _Fail(Object):
-    """
-    A way to notify the next step of the current plan of failure in the
-    current turn.
-    """
-
-    @method("Bool", "Any")
-    def run(self, problem):
-        resolver = currentVat.get().turnResolver
-        if resolver is None:
-            # throw(problem)
-            raise UserException(problem)
-        else:
-            return resolver.smash(problem)
-
-FAIL = _Fail()

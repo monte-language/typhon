@@ -40,11 +40,11 @@ _WHENMORERESOLVED_1 = getAtom(u"_whenMoreResolved", 1)
 def makeMirandaArgs():
     from typhon.objects.collections.maps import monteMap
     from typhon.objects.data import StrObject
-    from typhon.objects.refs import FAIL
+    from typhon.objects.ejectors import theThrower
 
     # XXX monteMap()
     mirandaArgs = monteMap()
-    mirandaArgs[StrObject(u"FAIL")] = FAIL
+    mirandaArgs[StrObject(u"FAIL")] = theThrower
     return mirandaArgs
 
 MIRANDA_ARGS = MIRANDA_MAP = None

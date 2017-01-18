@@ -190,7 +190,7 @@ class ConstMap(Object):
             d[k] = v
         return d
 
-    @method("Map", "Any", "Any", _verb="with")
+    @method.py("Map", "Any", "Any", _verb="with")
     def _with(self, key, value):
         # Replace by key.
         d = self.objectMap.copy()
@@ -270,6 +270,15 @@ class ConstMap(Object):
         """
 
         return self.objectMap.get(StrObject(k), default)
+
+    def withStringKey(self, k, v):
+        """
+        Add a key-value pair to this map.
+
+        Like Monte m`self.with(k :Str, v)`.
+        """
+
+        return ConstMap(self._with(StrObject(k), v))
 
     def iteritems(self):
         """

@@ -145,8 +145,14 @@ class Vat(Object):
         with self._pendingLock:
             resolver, target, atom, args, namedArgs = self._pending.pop(0)
 
-        # Set the resolver for this turn.
-        self.turnResolver = resolver
+        # Set up our Miranda FAIL.
+        if namedArgs.extractStringKey(u"FAIL", None) is None:
+            if resolver is not None:
+                FAIL = resolver.makeSmasher()
+            else:
+                from typhon.objects.ejectors import theThrower
+                FAIL = theThrower
+            namedArgs = namedArgs.withStringKey(u"FAIL", FAIL)
 
         # If the target is a promise, then we should send to it instead of
         # calling. Try to resolve it as much as possible first, though.
