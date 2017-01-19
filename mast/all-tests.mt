@@ -4,6 +4,7 @@ import "lib/codec/utf8" =~ _
 import "lib/continued" =~ _
 import "lib/entropy/pool" =~ _
 import "lib/enum" =~ _
+import "lib/iterators" =~ _
 import "lib/json" =~ _
 import "lib/monte/monte_verifier" =~ _
 import "lib/parsers/html" =~ _

@@ -6,6 +6,7 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 	boot/lib/monte/mast.mast \
 	boot/lib/codec/utf8.mast \
 	boot/montec.mast \
+	boot/lib/iterators.mast \
 	boot/lib/tubes.mast \
 	boot/prelude.mast \
 	boot/prelude/monte_ast.mast \
@@ -44,15 +45,16 @@ $(boot_objects): boot/%: mast/%
 	@ cp $< $@
 
 mast: mast/lib/enum.mast mast/lib/record.mast \
-	mast/lib/words.mast \
-	mast/lib/continued.mast \
 	mast/lib/amp.mast \
 	mast/lib/ansiColor.mast \
-	mast/lib/json.mast \
-	mast/lib/help.mast \
 	mast/lib/complex.mast \
+	mast/lib/continued.mast \
 	mast/lib/gai.mast \
+	mast/lib/help.mast \
+	mast/lib/iterators.mast \
+	mast/lib/json.mast \
 	mast/lib/streams.mast \
+	mast/lib/words.mast \
 	prelude \
 	codec \
 	entropy \
