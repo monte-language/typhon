@@ -1,23 +1,5 @@
+import "lib/iterators" =~ [=> zip :DeepFrozen]
 exports (expand)
-
-# Maybe Python isn't so bad after all.
-object zip as DeepFrozen:
-    match [=="run", iterables, _]:
-        def _its := [].diverge()
-        for it in (iterables):
-            _its.push(it._makeIterator())
-        def its := _its.snapshot()
-        object ziperator:
-            to _makeIterator():
-                return ziperator
-            to next(ej):
-                def ks := [].diverge()
-                def vs := [].diverge()
-                for it in (its):
-                    def [k, v] := it.next(ej)
-                    ks.push(k)
-                    vs.push(v)
-                return [ks.snapshot(), vs.snapshot()]
 
 
 def reversed(it) as DeepFrozen:

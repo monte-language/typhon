@@ -754,12 +754,16 @@ preludeScope := scopeAsDF(loadit("prelude/region")) | preludeScope
 importIntoScope("prelude/b")
 
 # Parsing stack. These don't directly contribute to scope but are loaded by m.
-dependencies["lib/monte/monte_lexer"] := loadit("lib/monte/monte_lexer")
-dependencies["lib/monte/monte_parser"] := loadit("lib/monte/monte_parser")
-dependencies["lib/monte/monte_expander"] := loadit("lib/monte/monte_expander")
-dependencies["lib/monte/monte_optimizer"] := loadit("lib/monte/monte_optimizer")
-dependencies["lib/codec/utf8"] := loadit("lib/codec/utf8")
-dependencies["lib/monte/mast"] := loadit("lib/monte/mast")
+for module in ([
+    "lib/iterators",
+    "lib/monte/monte_lexer",
+    "lib/monte/monte_parser",
+    "lib/monte/monte_expander",
+    "lib/monte/monte_optimizer",
+    "lib/codec/utf8",
+    "lib/monte/mast",
+]):
+    dependencies[module] := loadit(module)
 
 # The big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This
