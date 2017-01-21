@@ -233,8 +233,11 @@ class WhenBrokenReactor(Object):
                     self._resolver.resolve(outcome)
             except UserException as ue:
                 # Failure. Continue delivering failures.
-                from typhon.objects.exceptions import sealException
-                self._resolver.smash(sealException(ue))
+                if self._resolver is None:
+                    raise
+                else:
+                    from typhon.objects.exceptions import sealException
+                    self._resolver.smash(sealException(ue))
 
 
 @autohelp
