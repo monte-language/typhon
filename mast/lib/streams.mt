@@ -112,15 +112,13 @@ def flow(source, sink) :Vow[Void] as DeepFrozen:
             # a deep recursion on the promises if we return `source(flowSink)`
             # directly. Instead, we return `null` as soon as delivery of
             # *this* packet has finished. ~ C.
-            try:
-                return when (sink(packet)) ->
-                    source<-(flowSink)
-                    null
-                catch problem:
-                    r.smash(problem)
-                    sink.abort(problem)
+            return when (sink<-(packet)) ->
+                source<-(flowSink)
+                null
             catch problem:
                 r.smash(problem)
+                sink.abort(problem)
+                Ref.broken(problem)
 
         to complete() :Vow[Void]:
             r.resolve(null)
@@ -142,7 +140,30 @@ def testFlow(assert):
     return when (flow(source, sink)) ->
         assert.willEqual(l, [[0, 1], [1, 2], [2, 3]])
 
-unittest([testFlow])
+def testFlowAbort(assert):
+    def source(sink) as Source:
+        sink.abort("test")
+    def [_, sink] := makeSink.asList()
+    # XXX should this pattern be moved up to a common method?
+    return when (flow(source, sink)) ->
+        null
+    catch problem:
+        assert.equal(problem, "test")
+
+def testFlowFail(assert):
+    def source(_sink, => FAIL) as Source:
+        throw.eject(FAIL, "test")
+    def [_, sink] := makeSink.asList()
+    return when (flow(source, sink)) ->
+        null
+    catch problem:
+        assert.equal(problem, "test")
+
+unittest([
+    testFlow,
+    testFlowAbort,
+    testFlowFail,
+])
 
 interface Pump :DeepFrozen:
     "A machine which emits zero or more packets for every incoming packet."
