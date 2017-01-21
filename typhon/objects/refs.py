@@ -753,7 +753,7 @@ class UnconnectedRef(Promise):
 
     def _doBreakage(self, atom, args, namedArgs):
         from typhon.objects.collections.maps import EMPTY_MAP
-        if atom in (_WHENMORERESOLVED_1, _WHENBROKEN_1):
+        if atom is _WHENMORERESOLVED_1:
             vat = currentVat.get()
             return vat.sendOnly(args[0], RUN_1, [self], EMPTY_MAP)
 
