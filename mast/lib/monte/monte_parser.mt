@@ -780,9 +780,10 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         else if (tag == "fn"):
             def spanStart := spanHere()
             advance(ej)
-            def patt := acceptList(pattern)
+            def patts := acceptList(positionalParam)
+            def namedPatts := acceptList(namedParam)
             def body := block(false, ej)
-            builder.FunctionExpr(patt, body, spanFrom(spanStart))
+            builder.FunctionExpr(patts, namedPatts, body, spanFrom(spanStart))
         else if (tag == "switch"):
             def spanStart := spanHere()
             advance(ej)

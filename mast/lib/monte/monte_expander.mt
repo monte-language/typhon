@@ -900,10 +900,10 @@ def expand(node, builder, fail) as DeepFrozen:
                     "run", [litExpr(name, span),
                         if (guard == null) {nounExpr("Any", span)} else {guard}], [], span)
             match =="FunctionExpr":
-                def [patterns, block] := args
+                def [patterns, namedPatts, block] := args
                 builder.ObjectExpr(null, ignorePatt(null, span), null, [],
                     builder.Script(null,
-                         [builder."Method"(null, "run", patterns, [], null, block, span)],
+                         [builder."Method"(null, "run", patterns, namedPatts, null, block, span)],
                          [],
                          span), span)
             match =="ObjectExpr":

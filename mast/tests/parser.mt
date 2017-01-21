@@ -112,8 +112,8 @@ def test_ForExpr(assert):
 
 
 def test_FunctionExpr(assert):
-    assert.equal(expr("fn {1}"), ta`FunctionExpr([], LiteralExpr(1))`)
-    assert.equal(expr("fn a, b {1}"), ta`FunctionExpr([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], LiteralExpr(1))`)
+    assert.equal(expr("fn {1}"), ta`FunctionExpr([], [], LiteralExpr(1))`)
+    assert.equal(expr("fn a, => b {1}"), ta`FunctionExpr([FinalPattern(NounExpr("a"), null)], [NamedParamImport(FinalPattern(NounExpr("b"), null), null)], LiteralExpr(1))`)
 
 def test_SwitchExpr(assert):
     assert.equal(expr("switch (1) {match p {2} match q {3}}"), ta`SwitchExpr(LiteralExpr(1), [Matcher(FinalPattern(NounExpr("p"), null), LiteralExpr(2)), Matcher(FinalPattern(NounExpr("q"), null), LiteralExpr(3))])`)

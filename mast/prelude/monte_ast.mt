@@ -1257,20 +1257,30 @@ def makeFunctionScript(patterns :List[Pattern],
     return astWrapper(functionScript, makeFunctionScript, [patterns, namedPatterns, resultGuard, body], span,
         &scope, "FunctionScript", fn f {[transformAll(patterns, f), transformAll(namedPatterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
-def makeFunctionExpr(patterns :List[Pattern], body :Expr, span) as DeepFrozenStamp:
-    def &scope := makeLazySlot(fn {(sumScopes(patterns) +
+def makeFunctionExpr(patterns :List[Pattern],
+                     namedPatterns :List[Ast["NamedParam", "NamedParamImport"]],
+                     body :Expr, span) as DeepFrozenStamp:
+    def &scope := makeLazySlot(fn {(sumScopes(patterns + namedPatterns) +
                                     body.getStaticScope()).hide()})
     object functionExpr:
         to getPatterns():
             return patterns
+
+        to getNamedPatterns():
+            return namedPatterns
+
         to getBody():
             return body
-        to subPrintOn(out, priority):
+
+        to subPrintOn(out, _priority):
             printExprSuiteOn(fn {
                 printListOn("fn ", patterns, ", ", "", out, priorities["pattern"])
+                printListOn("", namedPatterns, ", ", "", out, priorities["pattern"])
             }, body, false, out, priorities["assign"])
-    return astWrapper(functionExpr, makeFunctionExpr, [patterns, body], span,
-        &scope, "FunctionExpr", fn f {[transformAll(patterns, f), body.transform(f)]})
+    return astWrapper(functionExpr, makeFunctionExpr,
+                      [patterns, namedPatterns, body], span, &scope,
+                      "FunctionExpr", fn f {[transformAll(patterns, f),
+                      transformAll(namedPatterns, f), body.transform(f)]})
 
 def makeListExpr(items :List[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(items)})
@@ -2391,8 +2401,8 @@ object astBuilder as DeepFrozenStamp:
         return makeScript(extend, methods, matchers, span)
     to FunctionScript(patterns, namedPatterns, resultGuard, body, span):
         return makeFunctionScript(patterns, namedPatterns, resultGuard, body, span)
-    to FunctionExpr(patterns, body, span):
-        return makeFunctionExpr(patterns, body, span)
+    to FunctionExpr(patterns, namedPatterns, body, span):
+        return makeFunctionExpr(patterns, namedPatterns, body, span)
     to ListExpr(items, span):
         return makeListExpr(items, span)
     to ListComprehensionExpr(iterable, filter, key, value, body, span):

@@ -151,8 +151,8 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 receiver + flattenList(arguments) + flattenList(namedArgs)
             }
             match =="FunctionExpr" {
-                def [patts, body] := args
-                filterNouns(flattenList(patts) + body,
+                def [patts, namedPatts, body] := args
+                filterNouns(flattenList(patts) + flattenList(namedPatts) + body,
                             usedSet(node.getBody()))
             }
             match =="FunctionInterfaceExpr" { args[1] }
