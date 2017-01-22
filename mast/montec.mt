@@ -10,6 +10,7 @@ import "lib/streams" =~ [=> alterSink :DeepFrozen,
 import "lib/monte/monte_verifier" =~ [
     => findUndefinedNames :DeepFrozen,
     => findUnusedNames :DeepFrozen,
+    => findSingleMethodObjects :DeepFrozen,
 ]
 
 exports (main)
@@ -110,7 +111,10 @@ def parseArguments(var argv, ej) as DeepFrozen:
             return readStdin
 
 
-def main(argv, => Timer, => makeFileResource, => unsealException, => stdio) as DeepFrozen:
+def main(argv, => Timer, => currentProcess, => makeFileResource, => makeStdOut,
+         => makeStdIn, => unsealException,
+         => stdio) as DeepFrozen:
+
     def config := parseArguments(argv, throw)
     def inputFile := config.getInputFile()
     def outputFile := config.getOutputFile()
@@ -147,27 +151,23 @@ def main(argv, => Timer, => makeFileResource, => unsealException, => stdio) as D
             throw("Syntax error")
         }
         if (config.verifyNames()):
-            def undefineds := findUndefinedNames(tree, safeScope)
-            def unuseds := findUnusedNames(tree)
-            if (undefineds.size() > 0 || unuseds.size() > 0):
-                for n in (undefineds):
-                    def err := lex.makeParseError(
-                        [`Undefined name ${n.getName()}`,
-                         n.getSpan()])
-                    stdout(
-                        if (config.terseErrors()) {
-                            inputFile + ":" + err.formatCompact() + "\n"
-                        } else {err.formatPretty()})
-                for n in (unuseds):
-                    def err := lex.makeParseError(
-                        [`Unused name ${n.getName()}`,
-                         n.getSpan()])
-                    stdout(
-                        if (config.terseErrors()) {
-                            inputFile + ":" + err.formatCompact() + "\n"
-                        } else {err.formatPretty()})
-                if (undefineds.size() > 0):
-                    throw("Name usage error")
+            def stdout := stdio.stdout()
+            var anyErrors :Bool := false
+            for [report, isSerious] in ([
+                [findUndefinedNames(tree, safeScope), true],
+                [findUnusedNames(tree), false],
+                [findSingleMethodObjects(tree), false],
+            ]):
+                if (report.size() > 0):
+                    anyErrors |= isSerious
+                    for [message, span] in (report):
+                        def err := lex.makeParseError([message, span])
+                        def s := if (config.terseErrors()) {
+                            `$inputFile:${err.formatCompact()}$\n`
+                        } else { err.formatPretty() }
+                        stdout(UTF8.encode(s, null))
+            if (anyErrors):
+                throw("There were name usage errors!")
         return tree
 
     def expandTree(tree):

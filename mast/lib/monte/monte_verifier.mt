@@ -1,5 +1,5 @@
 import "unittest" =~ [=> unittest]
-exports (findUndefinedNames, findUnusedNames)
+exports (findUndefinedNames, findUnusedNames, findSingleMethodObjects)
 
 def Ast :DeepFrozen := ::"m``".getAstBuilder().getAstGuard()
 def Noun :DeepFrozen := ::"m``".getAstBuilder().getNounGuard()
@@ -31,7 +31,8 @@ def findUndefinedNames(expr, outers) as DeepFrozen:
             if (["NounExpr", "SlotExpr", "BindingExpr"].contains(item.getNodeName())):
                 results.push(item)
             descendInto(item)
-    return results
+    return [for result in (results) [`Undefined name ${result.getName()}`,
+                                     result.getSpan()]]
 
 def leaves :Set[Str] := [
     "BindingExpr",
@@ -62,7 +63,7 @@ def usedSet(node) :Set[Str] as DeepFrozen:
         node.getStaticScope().namesUsed()
     }
 
-def findUnusedNames(expr) :List[Noun] as DeepFrozen:
+def findUnusedNames(expr) :List[Pair] as DeepFrozen:
     "
     Find names in `expr` which are not used.
 
@@ -314,7 +315,9 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
             match nodeName { throw(`Unsupported node $nodeName $node`) }
         }
         return rv
-    return expr.transform(unusedNameFinder)
+    def results := expr.transform(unusedNameFinder)
+    return [for result in (results) [`Unused name ${result.getName()}`,
+                                     result.getSpan()]]
 
 def testUnusedDef(assert):
     assert.equal(findUnusedNames(m`def x := 42; "asdf"`).size(), 1)
@@ -338,3 +341,24 @@ unittest([
     testUsedVarAugAssign,
     testUsedVarAssign,
 ])
+
+def findSingleMethodObjects(expr) as DeepFrozen:
+    "
+    Find objects which only have one method.
+    "
+
+    def results := [].diverge()
+    def SMOFinder(node, _maker, _args, _span):
+        if (node.getNodeName() == "ObjectExpr"):
+            def script := node.getScript()
+            if (script.getNodeName() == "Script" && script.getMethods() =~ [_meth]):
+                def name := node.getName()
+                results.push([`Object $name has only one method`, name.getSpan()])
+    expr.transform(SMOFinder)
+    return results.snapshot()
+
+def testSMO(assert):
+    def l := findSingleMethodObjects(m`object obj { to meth() { null } }`)
+    assert.equal(true, l =~ [[=="Object obj has only one method", _]])
+
+unittest([testSMO])
