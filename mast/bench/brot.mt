@@ -1,9 +1,8 @@
-import "unittest" =~ [=> unittest]
 import "bench" =~ [=> bench]
+import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/complex" =~ [=> makeComplex :DeepFrozen]
-import "lib/tubes" =~ [=> makeUTF8EncodePump :DeepFrozen,
-                       => makePumpTube :DeepFrozen]
 import "lib/ansiColor" =~ [=> ramp :DeepFrozen]
+import "lib/streams" =~ [=> alterSink :DeepFrozen]
 exports (main)
 
 
@@ -28,7 +27,7 @@ def getScaled(l, count :Int) as DeepFrozen:
 
 
 def chars :Str := "@#&%!*+-."
-def colors :List[Str] := ["37", "32", "33", "31", "36", "35", "34"]
+# def colors :List[Str] := ["37", "32", "33", "31", "36", "35", "34"]
 def ramp80 :List[Str] := [for i in (ramp(80)) `38;5;$i`].reverse()
 
 
@@ -45,7 +44,6 @@ def doStep(start :Double, step :Double, iterations :Int) :List[Double] as DeepFr
 
 def fullBrot(write, yStart :Double, yStep :Double, xStart :Double,
              xStep :Double) :Void as DeepFrozen:
-    def pieces := [].diverge()
     for y in (doStep(yStart, yStep, 40)):
         for x in (doStep(xStart, xStep, 80)):
             def count := brotCount(makeComplex(x, y))
@@ -69,12 +67,11 @@ bench(fn {brotAt(voidWrite, -0.25, -0.4, 1 / 32.0, 1 / 20.0)},
 bench(fn {brotAt(voidWrite, -1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)},
       "Burning ship (small)")
 
-def main(argv, => makeStdOut) :Int as DeepFrozen:
-    def stdout := makePumpTube(makeUTF8EncodePump())
-    stdout.flowTo(makeStdOut())
+def main(_argv, => stdio) :Int as DeepFrozen:
+    def stdout := alterSink.encodeWith(UTF8, stdio.stdout())
 
     # And you thought Pokémon Snap was hard. ~ C.
-    brotAt(stdout.receive, -0.25, -0.4, 1 / 32.0, 1 / 20.0)
-    brotAt(stdout.receive, -1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)
+    brotAt(stdout, -0.25, -0.4, 1 / 32.0, 1 / 20.0)
+    brotAt(stdout, -1.7529296875, -0.025, 1 / 1024.0, 1 / 640.0)
 
     return 0
