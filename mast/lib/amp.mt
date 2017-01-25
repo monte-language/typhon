@@ -15,11 +15,11 @@
 
 import "lib/enum" =~ [=> makeEnum]
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
-import "lib/tubes" =~ [
-    => nullPump :DeepFrozen,
-     => makeStatefulPump :DeepFrozen,
-     => makePumpTube :DeepFrozen,
-     => chain :DeepFrozen,
+import "lib/streams" =~ [
+    => Sink :DeepFrozen,
+    => alterSink :DeepFrozen,
+    => flow :DeepFrozen,
+    => makePump :DeepFrozen,
 ]
 
 exports (makeAMPServer, makeAMPClient)
@@ -81,7 +81,7 @@ def makeAMPPacketMachine() as DeepFrozen:
             return results
 
 
-def packAMPPacket(packet) as DeepFrozen:
+def packAMPPacket(packet :Map[Str, Str]) :Bytes as DeepFrozen:
     var buf := []
     for via (UTF8.encode) key => via (UTF8.encode) value in (packet):
         def keySize :(Int <= 0xff) := key.size()
@@ -94,68 +94,51 @@ def packAMPPacket(packet) as DeepFrozen:
     return _makeBytes.fromInts(buf)
 
 
-def makeAMP(drain) as DeepFrozen:
-    var responder := null
-    var buf := []
+def makeAMP(sink, handler) as DeepFrozen:
     var serial :Int := 0
     var pending := [].asMap()
 
+    def process(box):
+        # Either it's a new command, a successful reply, or a failure.
+        switch (box):
+            match [=> _command] | var arguments:
+                # New command.
+                def _answer := if (arguments.contains("_ask")) {
+                    def [=> _ask] | args := arguments
+                    arguments := args
+                    _ask
+                } else {null}
+                def result := handler<-(_command, arguments)
+                if (serial != null):
+                    when (result) ->
+                        def packet := result | [=> _answer]
+                        sink<-(packAMPPacket(packet))
+                    catch _error_description:
+                        def packet := result | [=> _answer,
+                                                => _error_description]
+                        sink<-(packAMPPacket(packet))
+            match [=> _answer] | arguments:
+                # Successful reply.
+                def answer := _makeInt.fromBytes(_answer)
+                if (pending.contains(answer)):
+                    pending[answer].resolve(arguments)
+                    pending without= (answer)
+            match [=> _error] | arguments:
+                # Error reply.
+                def error := _makeInt(_error)
+                if (pending.contains(error)):
+                    def [=> _error_description := "unknown error"] | _ := arguments
+                    pending[error].smash(_error_description)
+                    pending without= (error)
+            match _:
+                pass
+
     return object AMP:
-        to flowingFrom(upstream):
-            null
-
-        to flowAborted(reason):
-            null
-
-        to flowStopped(reason):
-            null
-
-        to sendPacket(packet :Bytes):
-            buf with= (packet)
-            when (drain) ->
-                if (drain != null):
-                    for item in (buf):
-                        drain.receive(item)
-                    buf := []
-
-        to receive(item):
-            # Either it's a new command, a successful reply, or a failure.
-            switch (item):
-                match [=> _command] | var arguments:
-                    # New command.
-                    if (responder == null):
-                        traceln(`AMP: No responder to handle command`)
-                        return
-
-                    def _answer := if (arguments.contains("_ask")) {
-                        def [=> _ask] | args := arguments
-                        arguments := args
-                        _ask
-                    } else {null}
-                    def result := responder<-(_command, arguments)
-                    if (serial != null):
-                        when (result) ->
-                            def packet := result | [=> _answer]
-                            AMP.sendPacket(packAMPPacket(packet))
-                        catch _error_description:
-                            def packet := result | [=> _answer,
-                                                    => _error_description]
-                            AMP.sendPacket(packAMPPacket(packet))
-                match [=> _answer] | arguments:
-                    # Successful reply.
-                    def answer := _makeInt.fromBytes(_answer)
-                    if (pending.contains(answer)):
-                        pending[answer].resolve(arguments)
-                        pending without= (answer)
-                match [=> _error] | arguments:
-                    # Error reply.
-                    def error := _makeInt(_error)
-                    if (pending.contains(error)):
-                        def [=> _error_description := "unknown error"] | _ := arguments
-                        pending[error].smash(_error_description)
-                        pending without= (error)
-                match _:
-                    pass
+        to sink() :Sink:
+            def AMPSink(box) as Sink:
+                return when (process<-(box)) -> { null }
+            def boxPump := makePump.fromStateMachine(makeAMPPacketMachine())
+            return alterSink.withPump(boxPump, AMPSink)
 
         to send(command :Str, var arguments :Map, expectReply :Bool):
             if (expectReply):
@@ -163,37 +146,24 @@ def makeAMP(drain) as DeepFrozen:
                 def [p, r] := Ref.promise()
                 pending |= [serial => r]
                 serial += 1
-                AMP.sendPacket(packAMPPacket(arguments))
+                sink<-(packAMPPacket(arguments))
                 return p
             else:
-                AMP.sendPacket(packAMPPacket(arguments))
-
-        to setResponder(r):
-            responder := r
+                sink<-(packAMPPacket(arguments))
 
 
 def makeAMPServer(endpoint) as DeepFrozen:
     return object AMPServerEndpoint:
-        to listen(callback):
-            def f(fount, drain):
-                def amp := makeAMP(drain)
-                chain([
-                    fount,
-                    makePumpTube(makeStatefulPump(makeAMPPacketMachine())),
-                    amp,
-                ])
-                callback(amp)
-            endpoint.listen(f)
+        to listenStream(handler):
+            def f(source, sink):
+                def amp := makeAMP(sink, handler)
+                flow(source, amp.sink())
+            endpoint.listenStream(f)
 
 
 def makeAMPClient(endpoint) as DeepFrozen:
     return object AMPClientEndpoint:
-        to connect():
-            def [fount, drain] := endpoint.connect()
-            def amp := makeAMP(drain)
-            chain([
-                fount,
-                makePumpTube(makeStatefulPump(makeAMPPacketMachine())),
-                amp,
-            ])
-            return amp
+        to connectStream(handler):
+            return when (def [source, sink] := endpoint.connectStream()) ->
+                def amp := makeAMP(sink, handler)
+                flow(source, amp.sink())
