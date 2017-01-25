@@ -414,6 +414,38 @@ object makePump as DeepFrozen:
             buf := pieces.last()
             return pieces.slice(0, pieces.size() - 1)
 
+    to fromStateMachine(machine) :Pump:
+        "
+        A pump from a state machine. Any state machine which operates on a
+        stream of characters or ints should be acceptable; the resulting pump
+        will map from segments of the stream (strings or bytestrings) to
+        outputs of the state machine.
+
+        The state machine should have the following methods:
+        * .getStateGuard() should return a guard for the machine state
+        * .getInitialState() should return a pair of the initial state and
+          number of characters required 
+        * .advance(state, data :List) passes the current state and the
+          expected number of characters in a list, and should return a pair of
+          the next state and number of characters required
+        * .results() should return the accumulated outputs of the state
+          machine since the last call to .results()
+        "
+
+        def State := machine.getStateGuard()
+        def [var state :State, var size :Int] := machine.getInitialState()
+        var buf := []
+
+        return def statefulPump(packet) :List as Pump:
+            buf += _makeList.fromIterable(packet)
+            while (buf.size() >= size):
+                def data := buf.slice(0, size)
+                buf slice= (size, buf.size())
+                def [newState, newSize] := machine.advance(state, data)
+                state := newState
+                size := newSize
+            return machine.results()
+
 def testMakePumpNull(assert):
     def pump := makePump.null()
     assert.equal(pump(42), null)
