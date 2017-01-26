@@ -1,3 +1,5 @@
+from __future__ import division
+
 from time import time
 
 from rpython.rlib.debug import debug_print
@@ -5,7 +7,23 @@ from rpython.rlib.debug import debug_print
 
 def percent(part, whole):
     f = 100 * part / whole
-    return "(%f%%)" % f
+    return "%f%%" % f
+
+
+class RecorderRate(object):
+
+    total = 0
+    success = 0
+
+    def yes(self):
+        self.total += 1
+        self.success += 1
+
+    def no(self):
+        self.total += 1
+
+    def rate(self):
+        return percent(self.success, self.total)
 
 
 class RecorderContext(object):
@@ -29,6 +47,7 @@ class Recorder(object):
 
     def __init__(self):
         self.timings = {}
+        self.rates = {}
         self.contextStack = []
 
     def start(self):
@@ -61,13 +80,22 @@ class Recorder(object):
         if self.contextStack:
             self.startSegment()
 
+    def getRateFor(self, label):
+        if label not in self.rates:
+            self.rates[label] = RecorderRate()
+        return self.rates[label]
+
     def printResults(self):
         total = self.endTime - self.startTime
         debug_print("Total recorded time:", total)
         debug_print("Recorded times:")
         for label in self.timings:
             t = self.timings[label]
-            debug_print("~", label + ":", t, percent(t, total))
+            debug_print("~", label + ":", t, "(%s)" % percent(t, total))
+
+        debug_print("Recorded rates:")
+        for label, rate in self.rates.iteritems():
+            debug_print("~", label + ":", rate.rate())
 
     def context(self, label):
         return RecorderContext(self, label)
