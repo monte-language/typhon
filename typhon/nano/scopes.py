@@ -160,8 +160,6 @@ class FrameTable(object):
         self.names = OrderedDict()
         self.dynamicGuards = OrderedDict()
         for i, (name, scope, _, severity) in enumerate(frameInfo):
-            assert scope is not None, "aimless"
-            assert severity is not None, "lenient"
             self.names[name] = i
             self.dynamicGuards[name] = i
 
@@ -206,11 +204,15 @@ class ScopeFrame(ScopeBase):
         else:
             return scope, idx, severity
 
-    def computeFrameTable(self):
-        frameInfo = [(n, scope, idx, severity)
-                     for (n, (i, scope, idx, severity))
-                     in self.frameNames.iteritems()]
-        self.frameTable = FrameTable(frameInfo)
+    def computeFrameTable(self, nanopass):
+        frameInfo = []
+        for (n, (i, scope, idx, severity)) in self.frameNames.iteritems():
+            if scope is None:
+                nanopass.errorWithSpan(u"Name %s has no scope" % n, None)
+            if severity is None:
+                nanopass.errorWithSpan(u"Name %s has no severity" % n, None)
+            frameInfo.append((n, scope, idx, severity))
+        self.frameTable = FrameTable(frameInfo[:])
 
 
 class ScopeBox(ScopeBase):
@@ -684,6 +686,6 @@ class ComputeFrameTables(BoundNounsIR.selfPass()):
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
                         layout):
-        layout.computeFrameTable()
+        layout.computeFrameTable(self)
         return self.super.visitObjectExpr(self, doc, patt, auditors, methods,
                                           matchers, mast, layout)

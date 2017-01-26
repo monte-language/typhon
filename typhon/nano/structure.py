@@ -283,7 +283,9 @@ class PrettySpecialNouns(SplitAuditorsIR.makePassTo(None)):
                         clipboard):
         self.write(u"object ")
         self.visitPatt(patt)
-        assert auditors, "pacify"
+        if not auditors:
+            self.errorWithSpan(u"Object is not clear but has no auditors",
+                               None)
         if auditors and not isinstance(auditors[0], self.src.NullExpr):
             self.write(u" as ")
             self.visitExpr(auditors[0])

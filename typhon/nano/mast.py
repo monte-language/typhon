@@ -69,7 +69,7 @@ class SanityCheck(MastIR.selfPass()):
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
         if isinstance(patt, self.src.ViaPatt):
-            self.errorWithSpan("via-patts not yet permitted in object-exprs",
+            self.errorWithSpan(u"via-patts not yet permitted in object-exprs",
                                patt.span)
         return self.super.visitObjectExpr(self, doc, patt, auditors,
                 methods, matchers)
