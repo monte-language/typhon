@@ -71,6 +71,8 @@ class DischargeDF(BoundNounsIR.makePassTo(DeepFrozenIR)):
 
     def __init__(self):
         self.frameStack = [{}]
+        from typhon.metrics import globalRecorder
+        self.clearRate = globalRecorder().getRateFor("DischargeDF clear")
 
     def pushFrame(self):
         self.frameStack.append({})
@@ -185,8 +187,10 @@ class DischargeDF(BoundNounsIR.makePassTo(DeepFrozenIR)):
                             self.frameStack[-1][name] = True
 
         if index == -1:
+            self.clearRate.no()
             stamps = []
         else:
+            self.clearRate.yes()
             if index == 0:
                 # If it's the as-auditor, then we need to *not* just discard
                 # the auditor, but copy it into the pattern as the guard.
