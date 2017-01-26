@@ -190,6 +190,11 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
 
 class DischargeAuditors(MixIR.selfPass()):
 
+    def __init__(self):
+        from typhon.metrics import globalRecorder
+        recorder = globalRecorder()
+        self.clearRate = recorder.getRateFor("DischargeAuditors clear")
+
     def visitObjectExpr(self, doc, patt, guards, auditors, script, mast,
                         layout, clipboard):
         script = self.visitScript(script)
@@ -224,7 +229,9 @@ class DischargeAuditors(MixIR.selfPass()):
                 script = self.dest.ScriptExpr(script.stamps + stamps,
                         script.methods, script.matchers)
         if clear:
+            self.clearRate.yes()
             return self.dest.ClearObjectExpr(doc, patt, script, layout)
         else:
+            self.clearRate.no()
             return self.dest.ObjectExpr(doc, patt, guards, auditors, script,
                     mast, layout, clipboard)
