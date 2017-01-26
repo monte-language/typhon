@@ -602,7 +602,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         for i in range(len(patts)):
             self.matchBind(patts[i], listSpecimen[i], ej)
 
-    def visitViaPatt(self, trans, patt):
+    def visitViaPatt(self, trans, patt, span):
         jit_debug("ViaPatt")
         ej = self.patternFailure
         v = self.visitExpr(trans)

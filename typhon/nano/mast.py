@@ -1,7 +1,6 @@
 from rpython.rlib.rbigint import BASE10
 
 from typhon import nodes
-from typhon.errors import LoadFailed
 from typhon.nanopass import makeIR
 from typhon.quoting import quoteChar, quoteStr
 
@@ -46,7 +45,7 @@ MastIR = makeIR("Mast",
             "FinalPatt": [("name", "Noun"), ("guard", "Expr")],
             "VarPatt": [("name", "Noun"), ("guard", "Expr")],
             "ListPatt": [("patts", "Patt*")],
-            "ViaPatt": [("trans", "Expr"), ("patt", "Patt")],
+            "ViaPatt": [("trans", "Expr"), ("patt", "Patt"), ("span", None)],
         },
         "NamedArg": {
             "NamedArgExpr": [("key", "Expr"), ("value", "Expr")],
@@ -70,7 +69,8 @@ class SanityCheck(MastIR.selfPass()):
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
         if isinstance(patt, self.src.ViaPatt):
-            raise LoadFailed("via-patts not yet permitted in object-exprs")
+            self.errorWithSpan("via-patts not yet permitted in object-exprs",
+                               patt.span)
         return self.super.visitObjectExpr(self, doc, patt, auditors,
                 methods, matchers)
 
@@ -416,7 +416,7 @@ class BuildKernelNodes(MastIR.makePassTo(None)):
     def visitListPatt(self, patts):
         return nodes.ListPattern([self.visitPatt(p) for p in patts], nodes._Null)
 
-    def visitViaPatt(self, trans, patt):
+    def visitViaPatt(self, trans, patt, span):
         return nodes.ViaPattern(self.visitExpr(trans), self.visitPatt(patt))
 
     def visitNamedArgExpr(self, key, value):
