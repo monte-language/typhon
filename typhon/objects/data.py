@@ -1185,6 +1185,10 @@ class StrObject(Object):
     def size(self):
         return len(self._s)
 
+    @method("Bool")
+    def isEmpty(self):
+        return not self._s
+
     @method("Str", "Int")
     def slice(self, start):
         if start < 0:
@@ -1428,6 +1432,10 @@ class BytesObject(Object):
     @method("Int")
     def size(self):
         return len(self._bs)
+
+    @method("Bool")
+    def isEmpty(self):
+        return not self._bs
 
     @method("Bytes", "Int")
     def slice(self, start):

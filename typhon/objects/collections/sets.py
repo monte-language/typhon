@@ -156,6 +156,10 @@ class ConstSet(Object):
     def size(self):
         return len(self.objectSet)
 
+    @method("Bool")
+    def isEmpty(self):
+        return not self.objectSet
+
     @method("Set")
     def snapshot(self):
         return self.objectSet.copy()
@@ -319,6 +323,10 @@ class FlexSet(Object):
     @method("Int")
     def size(self):
         return len(self.objectSet)
+
+    @method("Bool")
+    def isEmpty(self):
+        return not self.objectSet
 
     @method.py("Set")
     def snapshot(self):

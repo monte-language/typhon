@@ -242,6 +242,10 @@ class FlexList(Object):
     def size(self):
         return self.strategy.size(self)
 
+    @method("Bool")
+    def isEmpty(self):
+        return not self.strategy.size(self)
+
     @method("List", "Int")
     def slice(self, start):
         if start < 0:
@@ -524,6 +528,10 @@ class ConstList(Object):
     @elidable
     def size(self):
         return len(self.objs)
+
+    @method("Bool")
+    def isEmpty(self):
+        return not self.objs
 
     @method("List", "Int")
     def slice(self, start):

@@ -258,6 +258,10 @@ class ConstMap(Object):
     def size(self):
         return len(self.objectMap)
 
+    @method("Bool")
+    def isEmpty(self):
+        return not self.objectMap
+
     @method("Map")
     def snapshot(self):
         # This is a copy-on-write optimization; we are trusting the rest of
@@ -479,6 +483,10 @@ class FlexMap(Object):
     @method("Int")
     def size(self):
         return len(self.objectMap)
+
+    @method("Bool")
+    def isEmpty(self):
+        return not self.objectMap
 
     @method("Map")
     def snapshot(self):

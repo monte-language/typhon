@@ -31,7 +31,7 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
             r.resolve(null)
 
     return object testDrain:
-        to flowingFrom(fount):
+        to flowingFrom(_fount):
             return testDrain
 
         to receive([k, test]):
@@ -59,10 +59,10 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
                 updateScreen()
                 maybeComplete()
 
-        to flowStopped(reason):
+        to flowStopped(_reason):
             complete := true
 
-        to flowAborted(reason):
+        to flowAborted(_reason):
             complete := true
 
         to completion():
@@ -125,6 +125,18 @@ def makeAsserter() as DeepFrozen:
 
                     logIt(label, `TODO: $reason`)
                     todo := true
+
+                to implies(p :Bool, q :Bool):
+                    "Assert that p → q."
+
+                    if (p &! q):
+                        assert.fail(`Implication failed: $p ↛ $q`)
+
+                to iff(p :Bool, q :Bool):
+                    "Assert that p ↔ q."
+
+                    if (p ^ q):
+                        assert.fail(`Implication failed: $p ↮ $q`)
 
                 to doesNotEject(f):
                     escape e:
