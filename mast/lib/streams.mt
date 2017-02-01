@@ -6,6 +6,7 @@ exports (
     Sink, Source, Pump,
     makeSink, makeSource, makePump,
     makePumpPair,
+    endOfStream, EOSOk,
     flow, fuse,
     alterSink, alterSource,
 )
@@ -165,14 +166,59 @@ unittest([
     testFlowFail,
 ])
 
+object endOfStream as DeepFrozen:
+    "An in-band signal that a pump has successfully halted."
+
+object EOSOk extends List as DeepFrozen:
+    "A list of packets, any of which might be `==endOfStream`."
+
+    to get(subGuard):
+        object EOSGuard extends subGuard:
+            to coerce(specimen, ej):
+                return if (specimen == endOfStream) { specimen } else {
+                    super.coerce(specimen, ej)
+                }
+        return List[EOSGuard]
+
+def testEOSOk(assert):
+    assert.doesNotEject(fn ej {
+        EOSOk.coerce([], ej)
+        EOSOk.coerce([1, 2], ej)
+        EOSOk.coerce([3, endOfStream], ej)
+    })
+
+def testSubEOSOk(assert):
+    def g := EOSOk[Int]
+    assert.doesNotEject(fn ej {
+        g.coerce([], ej)
+        g.coerce([1, 2], ej)
+        g.coerce([3, endOfStream], ej)
+    })
+    assert.ejects(fn ej { g.coerce(["asdf"], ej) })
+
+unittest([
+    testEOSOk,
+    testSubEOSOk,
+])
+
 interface Pump :DeepFrozen:
     "A machine which emits zero or more packets for every incoming packet."
 
-    to run(packet) :NullOk[List]:
+    to run(packet) :EOSOk:
         "
-        Consume `packet` and return zero or more packets, or `null` to
-        indicate an end-of-stream condition.
+        Consume `packet` and return zero or more packets.
+
+        A packet may be `endOfStream` to signal an end-of-stream condition.
         "
+
+def trimPackets(specimen) as DeepFrozen:
+    "Helper for trimming pump emissions."
+    def index := specimen.indexOf(endOfStream)
+    return if (index == -1) {
+        [false, specimen]
+    } else {
+        [true, specimen.slice(0, index)]
+    }
 
 def [PumpState :DeepFrozen,
      QUIET :DeepFrozen,
@@ -229,28 +275,24 @@ def _makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
         to run(packet) :Vow[Void]:
             switch (ps):
                 match ==QUIET:
-                    switch (pump(packet)):
-                        match ==null:
+                    def [eos, packets] := trimPackets(pump(packet))
+                    if (eos):
+                        if (packets.isEmpty()):
                             ps := FINISHED
-                        match packets ? (packets.size() > 0):
+                        else:
+                            ps := CLOSING
+                            state := packets
+                    else:
+                        if (!packets.isEmpty()):
                             ps := PACKETS
                             state := packets
-                        match _:
-                            null
                 match ==PACKETS:
-                    switch (pump(packet)):
-                        match ==null:
-                            ps := CLOSING
-                        match packets:
-                            state add= (packets)
+                    def [eos, packets] := trimPackets(pump(packet))
+                    if (eos):
+                        ps := CLOSING
+                    state += (packets)
                 match ==SINKS:
-                    def packets := pump(packet)
-                    if (packets == null):
-                        ps := FINISHED
-                        for [sink, r] in (state):
-                            sink<-complete()
-                            r.resolve(null)
-                        return
+                    def [eos, packets] := trimPackets(pump(packet))
                     def packetsSize := packets.size()
                     def sinkSize := state.size()
                     for i => p in (packets):
@@ -260,12 +302,12 @@ def _makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
                         r.resolve(null)
                         sink<-(p)
                     if (packetsSize > sinkSize):
-                        ps := PACKETS
+                        ps := eos.pick(CLOSING, PACKETS)
                         state := packets.slice(sinkSize)
                     else if (packetsSize < sinkSize):
                         state slice= (packetsSize)
                     else:
-                        ps := QUIET
+                        ps := eos.pick(FINISHED, QUIET)
                         state := null
 
         to complete() :Void:
@@ -291,8 +333,8 @@ def _makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
 
     return [pumpSink, pumpSource]
 
-def nullPump(_) :Void as DeepFrozen implements Pump:
-    return null
+def nullPump(_) :EOSOk as DeepFrozen implements Pump:
+    return [endOfStream]
 
 def idPump(packet) :List as DeepFrozen implements Pump:
     return [packet]
@@ -354,8 +396,8 @@ object makePump as DeepFrozen:
         "
 
         var on :Bool := true
-        return def takeWhilePump(packet) :NullOk[List] as Pump:
-            return if (on && (on := pred(packet))) { [packet] } else { null }
+        return def takeWhilePump(packet) :EOSOk as Pump:
+            return if (on && (on := pred(packet))) { [packet] } else { [endOfStream] }
 
     to filter(predicate) :Pump:
         return def filterPump(packet) :List as Pump:
@@ -448,7 +490,7 @@ object makePump as DeepFrozen:
 
 def testMakePumpNull(assert):
     def pump := makePump.null()
-    assert.equal(pump(42), null)
+    assert.equal(pump(42), [endOfStream])
 
 def testMakePumpId(assert):
     def pump := makePump.id()
@@ -461,25 +503,24 @@ def testMakePumpTakeWhile(assert):
     def pump := makePump.takeWhile(fn x { x % 3 != 2 })
     var l := []
     for x in (0..5):
-        switch (pump(x)):
-            match ==null:
-                null
-            match ls:
-                l += ls
+        def [_eos, packets] := trimPackets(pump(x))
+        l += packets
     assert.equal(l, [0, 1])
 
 def testMakePumpFilter(assert):
     def pump := makePump.filter(fn x { x % 2 == 1 })
     var l := []
     for x in (0..5):
-        l += pump(x)
+        def [_eos, packets] := trimPackets(pump(x))
+        l += packets
     assert.equal(l, [1, 3, 5])
 
 def testMakePumpScan(assert):
     def pump := makePump.scan(fn z, x { z + x }, 0)
     var l := []
     for x in (1..4):
-        l += pump(x)
+        def [_eos, packets] := trimPackets(pump(x))
+        l += packets
     assert.equal(l, [0, 1, 3, 6, 10])
 
 def testMakePumpEncodeUTF8(assert):
@@ -547,41 +588,34 @@ def fuse(first, second) :Pump as DeepFrozen:
     # XXX I am sorry for the layout of this function. It has a certain
     # recursive nature to it that I find appealing, though... ~ C.
     return def fusedPump(packet) as Pump:
+        def [var eos, ps] := trimPackets(first(packet))
         var rv := []
-        switch (first(packet)):
-            match ==null:
-                return null
-            match l:
-                for p in (l):
-                    switch (second(p)):
-                        match ==null:
-                            return null
-                        match ls:
-                            rv += ls
-        return rv
+        for p in (ps):
+            def [eosNext, psNext] := trimPackets(second(p))
+            eos |= eosNext
+            rv += psNext
+        return if (eos) { rv.with(endOfStream) } else { rv }
 
 def testFuseSieve(assert):
     def pump := fuse(makePump.filter(fn x { x % 2 == 0 }),
                      makePump.filter(fn x { x % 3 == 0 }))
     var l := []
     for x in (0..10):
-        l += pump(x)
+        def [_eos, packets] := trimPackets(pump(x))
+        l += packets
     assert.equal(l, [0, 6])
 
 def testFuseNull(assert):
     def pump := fuse(makePump.null(), makePump.filter(fn x { x % 3 == 0 }))
     for x in (0..10):
-        assert.equal(pump(x), null)
+        assert.equal(trimPackets(pump(x)), [true, []])
 
 def testFuseTakeWhile(assert):
     def pump := fuse(makePump.id(), makePump.takeWhile(fn x { x < 5 }))
     var l := []
     for x in (0..10):
-        switch (pump(x)):
-            match ==null:
-                null
-            match ls:
-                l += ls
+        def [_eos, packets] := trimPackets(pump(x))
+        l += packets
     assert.equal(l, [0, 1, 2, 3, 4])
 
 unittest([
