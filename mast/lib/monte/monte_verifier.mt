@@ -264,6 +264,8 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
             }
             match =="ObjectExpr" {
                 # Ignore object names, for `return object obj ...`
+                # XXX this logic should be tightened up to only occur in
+                # ExitExprs and FunctionExprs.
                 def [_, _name, asExpr, auditors, script] := args
                 optional(asExpr) + flattenList(auditors) + script
             }
@@ -320,7 +322,11 @@ def testUnusedDef(assert):
 def testUsedSuchThat(assert):
     assert.equal(findUnusedNames(m`fn n ? (n) { 42 }`).size(), 0)
 
+def testUsedExtends(assert):
+    assert.equal(findUnusedNames(m`fn f { object g extends f {} }`).size(), 0)
+
 unittest([
     testUnusedDef,
     testUsedSuchThat,
+    testUsedExtends,
 ])

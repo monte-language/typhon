@@ -1166,7 +1166,7 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
         if (extend == null) {
             ss
         } else {
-            makeStaticScope([], [], ["super"], [], false) + ss
+            extend.getStaticScope() + makeStaticScope([], [], ["super"], [], false) + ss
         }})
     object script:
         to getExtends():
