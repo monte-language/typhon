@@ -3,12 +3,8 @@
 import sys
 from typhon.errors import LoadFailed, UserException
 from typhon.load.nano import InvalidMAST, loadMAST
-from typhon.nano.auditors import dischargeAuditors
-from typhon.nano.escapes import elideEscapes
-from typhon.nano.mast import saveScripts
-from typhon.nano.scopes import layoutScopes, bindNouns
-from typhon.nano.slots import recoverSlots
-from typhon.nano.structure import refactorStructure, prettifyStructure
+from typhon.nano.main import mainPipeline
+from typhon.nano.structure import prettifyStructure
 from typhon.nodes import InvalidAST
 
 
@@ -50,14 +46,8 @@ def entryPoint(argv):
         print "Invalid MAST"
         return 1
     try:
-        ss = saveScripts(expr)
-        slotted = recoverSlots(ss)
-        ll, _, _, _ = layoutScopes(slotted, safeScopeNames,
-                                   path.decode("utf-8"), False)
-        bound = bindNouns(ll)
-        ast = elideEscapes(bound)
-        ast = dischargeAuditors(ast)
-        ast = refactorStructure(ast)
+        ast, _, _, _ = mainPipeline(expr, safeScopeNames,
+                path.decode("utf-8"), False)
     except LoadFailed as lf:
         print "RPython-level exception; invalid AST"
         print lf

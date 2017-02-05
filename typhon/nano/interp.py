@@ -8,15 +8,10 @@ from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, UserException, userError
-from typhon.nano.auditors import dischargeAuditors
-from typhon.nano.escapes import elideEscapes
-from typhon.nano.mast import saveScripts
+from typhon.nano.main import mainPipeline
 from typhon.nano.mix import MixIR, mix
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
-                                SEV_BINDING, SEV_NOUN, SEV_SLOT, layoutScopes,
-                                bindNouns)
-from typhon.nano.slots import recoverSlots
-from typhon.nano.structure import refactorStructure
+                                SEV_BINDING, SEV_NOUN, SEV_SLOT)
 from typhon.objects.constants import NullObject
 from typhon.objects.collections.lists import unwrapList
 from typhon.objects.collections.maps import (ConstMap, EMPTY_MAP, monteMap,
@@ -637,14 +632,10 @@ def env2scope(outerNames, env):
 
 
 def evalMonte(expr, environment, fqnPrefix, inRepl=False):
-    ss = saveScripts(expr)
-    slotted = recoverSlots(ss)
-    ll, outerNames, topLocalNames, localSize = layoutScopes(slotted,
+    # Run the main nanopass pipeline.
+    ast, outerNames, topLocalNames, localSize = mainPipeline(expr,
             environment.keys(), fqnPrefix, inRepl)
-    bound = bindNouns(ll)
-    ast = elideEscapes(bound)
-    ast = dischargeAuditors(ast)
-    ast = refactorStructure(ast)
+
     outers = env2scope(outerNames, environment)
     ast = mix(ast, outers)
     ast = MakeProfileNames().visitExpr(ast)

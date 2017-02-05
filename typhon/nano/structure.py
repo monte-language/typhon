@@ -377,7 +377,7 @@ class PrettySpecialNouns(SplitAuditorsIR.makePassTo(None)):
                 self.visitPatt(patt)
         self.write(u"]")
 
-    def visitViaPatt(self, trans, patt):
+    def visitViaPatt(self, trans, patt, span):
         self.write(u"via (")
         self.visitExpr(trans)
         self.write(u") ")
