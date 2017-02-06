@@ -59,7 +59,7 @@ def makeIR(name, terminals, nonterms):
         # from.
         class NT(NonTerminal):
             _immutable_ = True
-        NT.__name__ = nonterm + str(increment())
+        NT.__name__ = name + "~" + nonterm + str(increment())
         irAttrs[nonterm] = NT
 
         def build(constructor, pieces):
@@ -73,7 +73,7 @@ def makeIR(name, terminals, nonterms):
                     for i, (piece, _) in ipieces:
                         setattr(self, piece, args[i])
 
-            Constructor.__name__ = constructor + str(increment())
+            Constructor.__name__ = name + "~" + constructor + str(increment())
             irAttrs[constructor] = Constructor
 
         for constructor, pieces in constructors.iteritems():
