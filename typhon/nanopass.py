@@ -188,7 +188,11 @@ def visit%(name)s(self, specimen):
         for nt, constructors in nonterms.iteritems():
             # Recurse into every constructor, if we already have the
             # non-terminal. Otherwise, just copy the new thing wholesale.
-            if nt in nts:
+            if nt.startswith("-"):
+                # Remove the entire non-terminal.
+                nt = nt[1:]
+                del nts[nt]
+            elif nt in nts:
                 # Dammit Python!
                 nts[nt] = nts[nt].copy()
                 for constructor, pieces in constructors.iteritems():
