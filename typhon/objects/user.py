@@ -67,6 +67,7 @@ class Audition(Object):
         self.fqn = fqn
         self.ast = ast
         self.guardInfo = guardInfo
+        guardInfo.clean()
 
         self.cache = {}
         self.askedLog = []
@@ -161,7 +162,7 @@ class Audition(Object):
         for (k, (result, _, _)) in self.cache.items():
             if result:
                 s[k] = None
-        return AuditorReport(s)
+        return AuditorReport(s, self.guardInfo.isDynamic())
 
     @method("Any")
     def getObjectExpr(self):
@@ -179,8 +180,9 @@ class AuditorReport(object):
 
     _immutable_ = True
 
-    def __init__(self, stamps):
+    def __init__(self, stamps, isDynamic):
         self.stamps = stamps
+        self.isDynamic = isDynamic
 
     def getStamps(self):
         return self.stamps
@@ -202,6 +204,38 @@ def compareGuardMaps(this, that):
     return True
 
 
+class Drawer(object):
+    """
+    A storage system for reports.
+    """
+
+class DynamicDrawer(Drawer):
+
+    def __init__(self):
+        self.files = []
+
+    def findReport(self, guardInfo):
+        gs = guardInfo.dynamicGuards()
+        for guardValues, report in self.files:
+            if compareGuardMaps(guardValues, gs):
+                return report
+
+    def makeDynamic(self):
+        return self
+
+class StaticDrawer(Drawer):
+
+    def __init__(self, report):
+        self.report = report
+
+    def findReport(self, guardInfo):
+        return self.report
+
+    def makeDynamic(self):
+        drawer = DynamicDrawer()
+        drawer.files.append(([], self.report))
+
+
 class AuditClipboard(object):
     """
     She is fast and thorough / And sharp as a tack
@@ -213,7 +247,11 @@ class AuditClipboard(object):
         self.fqn = fqn
         self.ast = ast
 
-    def getReport(self, auditors, guards):
+        from typhon.metrics import globalRecorder
+        self.newReportRate = globalRecorder().getRateFor(
+                "AuditClipboard new report")
+
+    def getReport(self, auditors, guardInfo):
         """
         Fetch an existing audit report if one for this auditor/guard
         combination is on file.
@@ -221,24 +259,28 @@ class AuditClipboard(object):
 
         for auditorList, guardFile in self.reportCabinet:
             if compareAuditorLists(auditors, auditorList):
-                gs = guards.values()
-                for guardValues, report in guardFile:
-                    if compareGuardMaps(guardValues, gs):
-                        return report
-        return None
+                report = guardFile.findReport(guardInfo)
+                if report is not None:
+                    return report
 
-    def putReport(self, auditors, guards, report):
+    def putReport(self, auditors, guardInfo, report):
         """
         Keep an audit report on file for these guards and this auditor.
         """
 
-        gs = guards.values()
-        for auditorList, guardFile in self.reportCabinet:
+        for i, (auditorList, guardFile) in enumerate(self.reportCabinet):
             if compareAuditorLists(auditors, auditorList):
-                guardFile.append((gs, report))
+                if report.isDynamic:
+                    gs = guardInfo.dynamicGuards()
+                    guardFile = guardFile.makeDynamic()
+                    assert isinstance(guardFile, DynamicDrawer), "protractor"
+                    guardFile.files.append((gs, report))
+                else:
+                    guardFile = StaticDrawer(report)
+                self.reportCabinet[i] = auditorList, guardFile
                 break
         else:
-            self.reportCabinet.append((auditors, [(gs, report)]))
+            self.reportCabinet.append((auditors, StaticDrawer(report)))
 
     def createReport(self, auditors, guardInfo):
         """
@@ -257,10 +299,10 @@ class AuditClipboard(object):
         Auditions are cached for quality assurance and training purposes.
         """
 
-        report = self.getReport(auditors, guardInfo.guards)
-        if report is None:
+        report = self.getReport(auditors, guardInfo)
+        if self.newReportRate.observe(report is None):
             report = self.createReport(auditors, guardInfo)
-            self.putReport(auditors, guardInfo.guards, report)
+            self.putReport(auditors, guardInfo, report)
         return report
 
 

@@ -265,6 +265,8 @@ class GuardInfo(object):
     Some dynamic guard information.
     """
 
+    _dynamic = False
+
     def __init__(self, guards, frameTable, objName, guardAuditor, evaluator):
         self.guards = guards
         self.frameTable = frameTable
@@ -276,6 +278,12 @@ class GuardInfo(object):
         self.fastGuardRate = globalRecorder().getRateFor(
                 "Audition.getGuard/1 fast path")
 
+    def clean(self):
+        self._dynamic = False
+
+    def isDynamic(self):
+        return self._dynamic
+
     def getGuard(self, name):
         if name == self.objName:
             self.fastGuardRate.yes()
@@ -285,11 +293,19 @@ class GuardInfo(object):
             self.fastGuardRate.yes()
             return self.guards[name]
 
+        self._dynamic = True
         self.fastGuardRate.no()
         index = self.frameTable.dynamicGuards[name]
         _, scope, idx, severity = self.frameTable.frameInfo[index]
         return retrieveGuard(severity,
                 self.evaluator.lookupBinding(scope, idx))
+
+    def dynamicGuards(self):
+        indices = self.frameTable.dynamicGuards.values()
+        frameInfos = [self.frameTable.frameInfo[index] for index in indices]
+        return [retrieveGuard(severity,
+                self.evaluator.lookupBinding(scope, idx))
+                for (_, scope, idx, severity) in frameInfos]
 
 
 class Evaluator(ProfileNameIR.makePassTo(None)):
@@ -501,7 +517,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
         assert len(layout.frameNames) == len(frame), "shortcoming"
 
-        o = InterpObject(doc, objName, script, frame,  mast, layout.fqn)
+        o = InterpObject(doc, objName, script, frame, mast, layout.fqn)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
             o.report = clipboard.audit(auds, guardInfo)
