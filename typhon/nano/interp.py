@@ -274,9 +274,11 @@ class GuardInfo(object):
         self.guardAuditor = guardAuditor
         self.guardLookup = guardLookup
 
-        from typhon.metrics import globalRecorder
-        self.fastGuardRate = globalRecorder().getRateFor(
-                "Audition.getGuard/1 fast path")
+        # Empirically this is about 70%. It is on a pretty fast path, so it's
+        # commented out by default. ~ C.
+        # from typhon.metrics import globalRecorder
+        # self.fastGuardRate = globalRecorder().getRateFor(
+        #         "Audition.getGuard/1 fast path")
 
     def clean(self):
         self._dynamic = False
@@ -286,15 +288,15 @@ class GuardInfo(object):
 
     def getGuard(self, name):
         if name == self.objName:
-            self.fastGuardRate.yes()
+            # self.fastGuardRate.yes()
             return self.guardAuditor
 
         if name in self.guards:
-            self.fastGuardRate.yes()
+            # self.fastGuardRate.yes()
             return self.guards[name]
 
         self._dynamic = True
-        self.fastGuardRate.no()
+        # self.fastGuardRate.no()
         return self.guardLookup.lookupGuard(name, self.frameTable)
 
     def dynamicGuards(self):

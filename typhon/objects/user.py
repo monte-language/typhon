@@ -247,9 +247,11 @@ class AuditClipboard(object):
         self.fqn = fqn
         self.ast = ast
 
-        from typhon.metrics import globalRecorder
-        self.newReportRate = globalRecorder().getRateFor(
-                "AuditClipboard new report")
+        # This rate is typically less than 0.3%; our caching is very good
+        # these days. ~ C.
+        # from typhon.metrics import globalRecorder
+        # self.newReportRate = globalRecorder().getRateFor(
+        #         "AuditClipboard new report")
 
     def getReport(self, auditors, guardInfo):
         """
@@ -300,7 +302,8 @@ class AuditClipboard(object):
         """
 
         report = self.getReport(auditors, guardInfo)
-        if self.newReportRate.observe(report is None):
+        # if self.newReportRate.observe(report is None):
+        if report is None:
             report = self.createReport(auditors, guardInfo)
             self.putReport(auditors, guardInfo, report)
         return report
