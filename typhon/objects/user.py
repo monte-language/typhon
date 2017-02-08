@@ -62,18 +62,15 @@ class Audition(Object):
     # Whether the audition is still fresh and usable.
     active = True
 
-    def __init__(self, fqn, ast, guards, dynamicGuards):
+    def __init__(self, fqn, ast, guardInfo):
         assert isinstance(fqn, unicode)
         self.fqn = fqn
         self.ast = ast
-        self.guards = guards
+        self.guardInfo = guardInfo
 
         self.cache = {}
         self.askedLog = []
         self.guardLog = []
-
-        self.dynamicGuards = dynamicGuards
-        self.neededDynamicGuards = False
 
     def __enter__(self):
         return self
@@ -102,7 +99,7 @@ class Audition(Object):
             for name, value in guards:
                 # We remember what the binding guards for the previous
                 # invocation were.
-                if self.guards[name] != value:
+                if self.guardInfo.getGuard(name) != value:
                     # If any of them have changed, we need to re-audit.
                     self.log(u"ask/1: %s: Invalidating" % name)
                     break
@@ -145,10 +142,7 @@ class Audition(Object):
     @method.py("Any", "Str")
     @profileTyphon("Auditor.getGuard/1")
     def getGuard(self, name):
-        answer = self.guards.get(name, None)
-        if answer is None:
-            self.neededDynamicGuards = True
-            answer = self.dynamicGuards.get(name, None)
+        answer = self.guardInfo.getGuard(name)
         if answer is None:
             self.guardLog = None
             raise userError(u'"%s" is not a free variable in %s' %
@@ -219,9 +213,6 @@ class AuditClipboard(object):
         self.fqn = fqn
         self.ast = ast
 
-        from typhon.metrics import globalRecorder
-        self.dynamicRate = globalRecorder().getRateFor("Audition dynamic guards")
-
     def getReport(self, auditors, guards):
         """
         Fetch an existing audit report if one for this auditor/guard
@@ -249,28 +240,27 @@ class AuditClipboard(object):
         else:
             self.reportCabinet.append((auditors, [(gs, report)]))
 
-    def createReport(self, auditors, guards, dynamicGuards):
+    def createReport(self, auditors, guardInfo):
         """
         Do an audit, make a report from the results.
         """
 
-        with Audition(self.fqn, self.ast, guards, dynamicGuards) as audition:
+        with Audition(self.fqn, self.ast, guardInfo) as audition:
             for a in auditors:
                 audition.ask(a)
-            self.dynamicRate.observe(audition.neededDynamicGuards)
         return audition.prepareReport()
 
-    def audit(self, auditors, guards, dynamicGuards):
+    def audit(self, auditors, guardInfo):
         """
         Hold an audition and return a report of the results.
 
         Auditions are cached for quality assurance and training purposes.
         """
 
-        report = self.getReport(auditors, guards)
+        report = self.getReport(auditors, guardInfo.guards)
         if report is None:
-            report = self.createReport(auditors, guards, dynamicGuards)
-            self.putReport(auditors, guards, report)
+            report = self.createReport(auditors, guardInfo)
+            self.putReport(auditors, guardInfo.guards, report)
         return report
 
 

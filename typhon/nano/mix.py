@@ -203,7 +203,12 @@ class DischargeAuditors(MixIR.selfPass()):
             asAuditor = auditors[0]
             if isinstance(asAuditor, self.src.LiveExpr):
                 patt.guard = asAuditor
-                with Audition(layout.fqn, mast, guards, {}) as audition:
+                from typhon.nano.interp import GuardInfo
+                # NB: Since the frame table has no dynamic guards, the pointer
+                # will not be dereferenced inside GuardInfo. ~ C.
+                guardInfo = GuardInfo(guards, layout.frameTable, None, None,
+                        None)
+                with Audition(layout.fqn, mast, guardInfo) as audition:
                     for i, auditor in enumerate(auditors):
                         if not isinstance(auditor, self.src.LiveExpr):
                             # Slice to save progress and take the non-clear

@@ -260,6 +260,38 @@ def retrieveGuard(severity, storage):
         assert False, "landlord"
 
 
+class GuardInfo(object):
+    """
+    Some dynamic guard information.
+    """
+
+    def __init__(self, guards, frameTable, objName, guardAuditor, evaluator):
+        self.guards = guards
+        self.frameTable = frameTable
+        self.objName = objName
+        self.guardAuditor = guardAuditor
+        self.evaluator = evaluator
+
+        from typhon.metrics import globalRecorder
+        self.fastGuardRate = globalRecorder().getRateFor(
+                "Audition.getGuard/1 fast path")
+
+    def getGuard(self, name):
+        if name == self.objName:
+            self.fastGuardRate.yes()
+            return self.guardAuditor
+
+        if name in self.guards:
+            self.fastGuardRate.yes()
+            return self.guards[name]
+
+        self.fastGuardRate.no()
+        index = self.frameTable.dynamicGuards[name]
+        _, scope, idx, severity = self.frameTable.frameInfo[index]
+        return retrieveGuard(severity,
+                self.evaluator.lookupBinding(scope, idx))
+
+
 class Evaluator(ProfileNameIR.makePassTo(None)):
 
     def __init__(self, frame, localSize):
@@ -464,24 +496,15 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         frameTable = layout.frameTable
         frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
                  in frameTable.frameInfo]
-        # Grab any remaining dynamic guards. We use a copy here in order to
-        # preserve the original dict for reuse.
-        # guards = guards.copy()
-        dynamicGuards = {}
-        for name, index in frameTable.dynamicGuards.items():
-            if name == objName:
-                dynamicGuards[name] = guardAuditor
-            else:
-                _, scope, idx, severity = frameTable.frameInfo[index]
-                dynamicGuards[name] = retrieveGuard(severity,
-                        self.lookupBinding(scope, idx))
+        # Set up guard information.
+        guardInfo = GuardInfo(guards, frameTable, objName, guardAuditor, self)
 
         assert len(layout.frameNames) == len(frame), "shortcoming"
 
         o = InterpObject(doc, objName, script, frame,  mast, layout.fqn)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
-            o.report = clipboard.audit(auds, guards, dynamicGuards)
+            o.report = clipboard.audit(auds, guardInfo)
         val = self.runGuard(guardAuditor, o, theThrower)
 
         # Check whether we have a spot in the frame.
