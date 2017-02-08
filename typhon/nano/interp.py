@@ -267,12 +267,12 @@ class GuardInfo(object):
 
     _dynamic = False
 
-    def __init__(self, guards, frameTable, objName, guardAuditor, evaluator):
+    def __init__(self, guards, frameTable, objName, guardAuditor, guardLookup):
         self.guards = guards
         self.frameTable = frameTable
         self.objName = objName
         self.guardAuditor = guardAuditor
-        self.evaluator = evaluator
+        self.guardLookup = guardLookup
 
         from typhon.metrics import globalRecorder
         self.fastGuardRate = globalRecorder().getRateFor(
@@ -295,17 +295,33 @@ class GuardInfo(object):
 
         self._dynamic = True
         self.fastGuardRate.no()
-        index = self.frameTable.dynamicGuards[name]
-        _, scope, idx, severity = self.frameTable.frameInfo[index]
-        return retrieveGuard(severity,
-                self.evaluator.lookupBinding(scope, idx))
+        return self.guardLookup.lookupGuard(name, self.frameTable)
 
     def dynamicGuards(self):
-        indices = self.frameTable.dynamicGuards.values()
-        frameInfos = [self.frameTable.frameInfo[index] for index in indices]
-        return [retrieveGuard(severity,
-                self.evaluator.lookupBinding(scope, idx))
-                for (_, scope, idx, severity) in frameInfos]
+        names = self.frameTable.dynamicGuards.keys()
+        return [self.guardLookup.lookupGuard(name, self.frameTable)
+                for name in names]
+
+class GuardLookup(object):
+    def lookupGuard(self, name, frameTable):
+        pass
+noGuardLookup = GuardLookup()
+
+class _AnyGuardLookup(GuardLookup):
+    def lookupGuard(self, name, frameTable):
+        from typhon.objects.guards import anyGuard
+        return anyGuard
+anyGuardLookup = _AnyGuardLookup()
+
+class EvaluatorGuardLookup(GuardLookup):
+
+    def __init__(self, evaluator):
+        self.evaluator = evaluator
+
+    def lookupGuard(self, name, frameTable):
+        index = frameTable.dynamicGuards[name]
+        _, scope, idx, severity = frameTable.frameInfo[index]
+        return retrieveGuard(severity, self.evaluator.lookupBinding(scope, idx))
 
 
 class Evaluator(ProfileNameIR.makePassTo(None)):
@@ -315,6 +331,8 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         self.frame = frame
         self.specimen = None
         self.patternFailure = None
+
+        self.guardLookup = EvaluatorGuardLookup(self)
 
     def matchBind(self, patt, val, ej=theThrower):
         oldSpecimen = self.specimen
@@ -513,7 +531,8 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
                  in frameTable.frameInfo]
         # Set up guard information.
-        guardInfo = GuardInfo(guards, frameTable, objName, guardAuditor, self)
+        guardInfo = GuardInfo(guards, frameTable, objName, guardAuditor,
+                self.guardLookup)
 
         assert len(layout.frameNames) == len(frame), "shortcoming"
 

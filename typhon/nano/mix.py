@@ -199,15 +199,13 @@ class DischargeAuditors(MixIR.selfPass()):
                         layout, clipboard):
         script = self.visitScript(script)
         clear = False
-        if auditors and not layout.frameTable.dynamicGuards:
+        if auditors:
             asAuditor = auditors[0]
             if isinstance(asAuditor, self.src.LiveExpr):
                 patt.guard = asAuditor
-                from typhon.nano.interp import GuardInfo
-                # NB: Since the frame table has no dynamic guards, the pointer
-                # will not be dereferenced inside GuardInfo. ~ C.
+                from typhon.nano.interp import GuardInfo, anyGuardLookup
                 guardInfo = GuardInfo(guards, layout.frameTable, None, None,
-                        None)
+                        anyGuardLookup)
                 with Audition(layout.fqn, mast, guardInfo) as audition:
                     for i, auditor in enumerate(auditors):
                         if not isinstance(auditor, self.src.LiveExpr):
@@ -225,14 +223,21 @@ class DischargeAuditors(MixIR.selfPass()):
                         # DeepFrozenStamp but returns false from .ask/1. ~ C.
                         try:
                             audition.ask(auditor)
-                        except UserException as ue:
-                            return self.dest.ExceptionExpr(ue)
+                        except UserException:
+                            break
                     else:
                         # We made it through all of the auditors; we can go clear.
                         clear = True
-                stamps = audition.prepareReport().stamps.keys()
+                # Save any stamps that we've collected. Since we've sliced off
+                # asked auditors, we can't lose these stamps.
+                report = audition.prepareReport()
+                stamps = report.stamps.keys()
                 script = self.dest.ScriptExpr(script.stamps + stamps,
                         script.methods, script.matchers)
+                # In order to be truly clear, we must not have depended on any
+                # dynamic guards.
+                clear &= not report.isDynamic
+
         if clear:
             self.clearRate.yes()
             return self.dest.ClearObjectExpr(doc, patt, script, layout)
