@@ -22,6 +22,12 @@ class RecorderRate(object):
     def no(self):
         self.total += 1
 
+    def observe(self, b):
+        self.total += 1
+        if b:
+            self.success += 1
+        return b
+
     def rate(self):
         return percent(self.success, self.total)
 

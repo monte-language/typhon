@@ -203,7 +203,7 @@ class DischargeAuditors(MixIR.selfPass()):
             asAuditor = auditors[0]
             if isinstance(asAuditor, self.src.LiveExpr):
                 patt.guard = asAuditor
-                with Audition(layout.fqn, mast, guards) as audition:
+                with Audition(layout.fqn, mast, guards, {}) as audition:
                     for i, auditor in enumerate(auditors):
                         if not isinstance(auditor, self.src.LiveExpr):
                             # Slice to save progress and take the non-clear

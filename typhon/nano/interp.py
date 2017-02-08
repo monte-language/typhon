@@ -466,13 +466,14 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                  in frameTable.frameInfo]
         # Grab any remaining dynamic guards. We use a copy here in order to
         # preserve the original dict for reuse.
-        guards = guards.copy()
+        # guards = guards.copy()
+        dynamicGuards = {}
         for name, index in frameTable.dynamicGuards.items():
             if name == objName:
-                guards[name] = guardAuditor
+                dynamicGuards[name] = guardAuditor
             else:
                 _, scope, idx, severity = frameTable.frameInfo[index]
-                guards[name] = retrieveGuard(severity,
+                dynamicGuards[name] = retrieveGuard(severity,
                         self.lookupBinding(scope, idx))
 
         assert len(layout.frameNames) == len(frame), "shortcoming"
@@ -480,7 +481,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         o = InterpObject(doc, objName, script, frame,  mast, layout.fqn)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
-            o.report = clipboard.audit(auds, guards)
+            o.report = clipboard.audit(auds, guards, dynamicGuards)
         val = self.runGuard(guardAuditor, o, theThrower)
 
         # Check whether we have a spot in the frame.
