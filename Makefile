@@ -55,6 +55,7 @@ mast: mast/lib/enum.mast mast/lib/record.mast \
 	mast/lib/help.mast \
 	mast/lib/iterators.mast \
 	mast/lib/json.mast \
+	mast/lib/regexp.mast \
 	mast/lib/streams.mast \
 	mast/lib/words.mast \
 	prelude \

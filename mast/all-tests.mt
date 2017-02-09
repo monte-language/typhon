@@ -9,6 +9,7 @@ import "lib/json" =~ _
 import "lib/monte/monte_verifier" =~ _
 import "lib/parsers/html" =~ _
 import "lib/record" =~ _
+import "lib/regexp" =~ _
 import "lib/tubes" =~ _
 import "lib/streams" =~ _
 import "lib/words" =~ _
