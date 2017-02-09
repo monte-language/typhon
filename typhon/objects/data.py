@@ -131,7 +131,11 @@ class CharObject(Object):
         return self.withOffset(-other)
 
     def withOffset(self, offset):
-        return unichr(ord(self._c) + offset)
+        i = ord(self._c) + offset
+        try:
+            return unichr(i)
+        except ValueError:
+            raise userError(u"Couldn't convert %d to Unicode code point" % i)
 
     def getChar(self):
         return self._c
