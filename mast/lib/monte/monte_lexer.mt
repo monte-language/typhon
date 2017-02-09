@@ -107,11 +107,12 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                         def pad := " " * (4 - lnum.size())
                         msg.push(`$pad$lnum $line`)
                         if (i == span.getStartLine()):
-                            def errLine := ("    " + " " *
+                            def errLine := ("     " + " " *
                                             span.getStartCol() + "^")
                             if (span.getStartLine() == span.getEndLine()):
                                 msg.push(errLine + "~" * (span.getEndCol() -
-                                                          span.getStartCol()))
+                                                          span.getStartCol() -
+                                                          1))
                             else:
                                 msg.push(errLine)
                     msg.push(errMsg)
