@@ -12,13 +12,15 @@ def mainPipeline(expr, safeScopeNames, fqnPrefix, inRepl):
     These common operations are desired by everybody.
     """
 
-    ss = saveScripts(expr)
-    slotted = recoverSlots(ss)
-    ll, outerNames, topLocalNames, localSize = layoutScopes(slotted,
-                                                            safeScopeNames,
-                                                            fqnPrefix, inRepl)
-    bound = bindNouns(ll)
-    ast = elideEscapes(bound)
-    ast = dischargeAuditors(ast)
-    ast = refactorStructure(ast)
-    return ast, outerNames, topLocalNames, localSize
+    from typhon.metrics import globalRecorder
+    with globalRecorder().context("Main nanopass pipeline"):
+        ss = saveScripts(expr)
+        slotted = recoverSlots(ss)
+        ll, outerNames, topLocalNames, localSize = layoutScopes(slotted,
+                                                                safeScopeNames,
+                                                                fqnPrefix, inRepl)
+        bound = bindNouns(ll)
+        ast = elideEscapes(bound)
+        ast = dischargeAuditors(ast)
+        ast = refactorStructure(ast)
+        return ast, outerNames, topLocalNames, localSize
