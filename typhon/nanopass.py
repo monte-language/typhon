@@ -73,6 +73,21 @@ def makeIR(name, terminals, nonterms):
                     for i, (piece, _) in ipieces:
                         setattr(self, piece, args[i])
 
+                def asTree(self):
+                    "NOT_RPYTHON"
+                    l = [constructor]
+                    for piece, ty in pieces:
+                        if ty is None:
+                            l.append(getattr(self, piece))
+                        elif ty.endswith("*"):
+                            l.append([x.asTree() for x in getattr(self, piece)])
+                        else:
+                            try:
+                                l.append(getattr(self, piece).asTree())
+                            except:
+                                l.append(getattr(self, piece))
+                    return l
+
             Constructor.__name__ = name + "~" + constructor + str(increment())
             irAttrs[constructor] = Constructor
 
