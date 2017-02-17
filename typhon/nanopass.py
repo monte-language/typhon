@@ -62,12 +62,14 @@ def makeIR(name, terminals, nonterms):
         NT.__name__ = name + "~" + nonterm + str(increment())
         irAttrs[nonterm] = NT
 
-        def build(constructor, pieces):
+        def build(tag, constructor, pieces):
             ipieces = unrolling_iterable(enumerate(pieces))
             class Constructor(NT):
                 _immutable_ = True
-                _immutable_fields_ = [freezeField(field, ty)
-                                      for field, ty in pieces]
+                _immutable_fields_ = (["_constructorTag"] +
+                        [freezeField(field, ty) for field, ty in pieces])
+
+                _constructorTag = tag
 
                 def __init__(self, *args):
                     for i, (piece, _) in ipieces:
@@ -91,8 +93,8 @@ def makeIR(name, terminals, nonterms):
             Constructor.__name__ = name + "~" + constructor + str(increment())
             irAttrs[constructor] = Constructor
 
-        for constructor, pieces in constructors.iteritems():
-            build(constructor, pieces)
+        for tag, (constructor, pieces) in enumerate(constructors.iteritems()):
+            build(tag, constructor, pieces)
 
     def makePassTo(self, ir):
         """
@@ -149,16 +151,18 @@ def makeIR(name, terminals, nonterms):
                     """ % params).compile() in d
                     attrs[visitName] = d[visitName]
                     attrs[visitName].__name__ += str(increment())
+                tag = getattr(self, constructor)._constructorTag
                 specimenPieces = ",".join("specimen.%s" % p[0] for p in pieces)
                 callVisit = "self.%s(%s)" % (visitName, specimenPieces)
-                conClasses.append((constructor, callVisit))
+                conClasses.append((tag, constructor, callVisit))
             # Construct subordinate clauses for the visitor on this
             # non-terminal.
             d = {}
             clauses = []
-            for constructor, callVisit in conClasses:
-                clauses.append("if isinstance(specimen, self.src.%s): return %s" %
-                        (constructor, callVisit))
+            for tag, constructor, callVisit in conClasses:
+                ass = "assert isinstance(specimen, self.src.%s), 'donkey'" % constructor
+                clauses.append("if tag == %d: %s; return %s" %
+                        (tag, ass, callVisit))
             params = {
                 "name": nonterm,
                 "clauses": "\n    ".join(clauses),
@@ -166,6 +170,7 @@ def makeIR(name, terminals, nonterms):
             exec py.code.Source("""
 def visit%(name)s(self, specimen):
     assert isinstance(specimen, self.src._NonTerminal), "cabbage"
+    tag = specimen._constructorTag
     %(clauses)s
     assert False, "radish"
             """ % params).compile() in d
