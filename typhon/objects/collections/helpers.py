@@ -31,8 +31,11 @@ def resolveKey(key):
     from typhon.objects.refs import Promise, isResolved
     if isinstance(key, Promise):
         key = key.resolution()
-    if not isResolved(key):
-        raise userError(u"Unresolved promises cannot be used as map keys")
+        # Do the resolution check again.
+        if not isResolved(key):
+            raise userError(u"Unresolved promises cannot be used as map keys")
+
+    # If the original key wasn't a promise, then no checks are needed.
     return key
 
 def keyEq(first, second):
