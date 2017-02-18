@@ -33,10 +33,10 @@ NoOutersIR = SplitAuditorsIR.extend("NoOuters",
     {
         "Expr": {
             "LiveExpr": [("obj", "Object")],
-            "ObjectExpr": [("doc", None), ("patt", "Patt"),
-                           ("guards", None), ("auditors", "Expr*"),
-                           ("script", "Script"), ("mast", "AST"),
-                           ("layout", None), ("clipboard", None)],
+            "ObjectExpr": [("patt", "Patt"), ("guards", None),
+                           ("auditors", "Expr*"), ("script", "Script"),
+                           ("mast", "AST"), ("layout", None),
+                           ("clipboard", None)],
             "-OuterExpr": None,
         }
     }
@@ -69,7 +69,7 @@ class FillOuters(SplitAuditorsIR.makePassTo(NoOutersIR)):
     def __init__(self, outers):
         self.outers = outers
 
-    def visitObjectExpr(self, doc, patt, auditors, script, mast, layout,
+    def visitObjectExpr(self, patt, auditors, script, mast, layout,
                         clipboard):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
@@ -84,8 +84,8 @@ class FillOuters(SplitAuditorsIR.makePassTo(NoOutersIR)):
             # Mark the guard as static by destroying the relevant dynamic
             # guard key. Use .pop() to avoid KeyErrors from unused bindings.
             layout.frameTable.dynamicGuards.pop(name, 0)
-        return self.dest.ObjectExpr(doc, patt, guards, auditors, script, mast,
-                layout, clipboard)
+        return self.dest.ObjectExpr(patt, guards, auditors, script, mast,
+                                    layout, clipboard)
 
     def visitOuterExpr(self, name, index):
         return self.dest.LiveExpr(self.outers[index])
@@ -195,7 +195,7 @@ class DischargeAuditors(MixIR.selfPass()):
         recorder = globalRecorder()
         self.clearRate = recorder.getRateFor("DischargeAuditors clear")
 
-    def visitObjectExpr(self, doc, patt, guards, auditors, script, mast,
+    def visitObjectExpr(self, patt, guards, auditors, script, mast,
                         layout, clipboard):
         script = self.visitScript(script)
         clear = False
@@ -232,16 +232,17 @@ class DischargeAuditors(MixIR.selfPass()):
                 # asked auditors, we can't lose these stamps.
                 report = audition.prepareReport()
                 stamps = report.stamps.keys()
-                script = self.dest.ScriptExpr(script.stamps + stamps,
-                        script.methods, script.matchers)
+                script = self.dest.ScriptExpr(script.doc,
+                                              script.stamps + stamps,
+                                              script.methods, script.matchers)
                 # In order to be truly clear, we must not have depended on any
                 # dynamic guards.
                 clear &= not report.isDynamic
 
         if clear:
             self.clearRate.yes()
-            return self.dest.ClearObjectExpr(doc, patt, script, layout)
+            return self.dest.ClearObjectExpr(patt, script, layout)
         else:
             self.clearRate.no()
-            return self.dest.ObjectExpr(doc, patt, guards, auditors, script,
-                    mast, layout, clipboard)
+            return self.dest.ObjectExpr(patt, guards, auditors, script, mast,
+                                        layout, clipboard)

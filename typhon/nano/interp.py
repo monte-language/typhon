@@ -61,7 +61,7 @@ class MakeProfileNames(MixIR.makePassTo(ProfileNameIR)):
         # method/matcher without a body. ~ C.
         self.objectNames = []
 
-    def visitClearObjectExpr(self, doc, patt, script, layout):
+    def visitClearObjectExpr(self, patt, script, layout):
         # Push, do the recursion, pop.
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
@@ -69,11 +69,11 @@ class MakeProfileNames(MixIR.makePassTo(ProfileNameIR)):
             objName = patt.name
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
-        rv = self.super.visitClearObjectExpr(self, doc, patt, script, layout)
+        rv = self.super.visitClearObjectExpr(self, patt, script, layout)
         self.objectNames.pop()
         return rv
 
-    def visitObjectExpr(self, doc, patt, guards, auditors, script, mast,
+    def visitObjectExpr(self, patt, guards, auditors, script, mast,
                         layout, clipboard):
         # Push, do the recursion, pop.
         if isinstance(patt, self.src.IgnorePatt):
@@ -82,7 +82,7 @@ class MakeProfileNames(MixIR.makePassTo(ProfileNameIR)):
             objName = patt.name
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
-        rv = self.super.visitObjectExpr(self, doc, patt, guards, auditors,
+        rv = self.super.visitObjectExpr(self, patt, guards, auditors,
                                         script, mast, layout, clipboard)
         self.objectNames.pop()
         return rv
@@ -128,15 +128,14 @@ class InterpObject(Object):
 
     import_from_mixin(UserObjectHelper)
 
-    _immutable_fields_ = "doc", "displayName", "script", "report"
+    _immutable_fields_ = "displayName", "script", "report"
 
     # Inline single-entry method cache.
     cachedMethod = None, None
 
-    def __init__(self, doc, name, script, frame, ast, fqn):
+    def __init__(self, name, script, frame, ast, fqn):
         self.objectAst = ast
         self.fqn = fqn
-        self.doc = doc
         self.displayName = name
         self.script = script
         self.frame = frame
@@ -144,7 +143,7 @@ class InterpObject(Object):
         self.report = None
 
     def docString(self):
-        return self.doc
+        return self.script.doc
 
     def getDisplayName(self):
         return self.displayName
@@ -456,7 +455,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
     # Everything passed to this method, except self, is immutable. ~ C.
     @unroll_safe
-    def visitClearObjectExpr(self, doc, patt, script, layout):
+    def visitClearObjectExpr(self, patt, script, layout):
         # jit_debug("ClearObjectExpr")
         if isinstance(patt, self.src.IgnorePatt):
             objName = u"_"
@@ -468,7 +467,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                  in frameTable.frameInfo]
 
         # Build the object.
-        val = InterpObject(doc, objName, script, frame, ast, layout.fqn)
+        val = InterpObject(objName, script, frame, ast, layout.fqn)
 
         # Check whether we have a spot in the frame.
         position = frameTable.positionOf(objName)
@@ -504,7 +503,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     # immutable. Clipboards are not a problem since their loops are
     # internalized in methods. ~ C.
     @unroll_safe
-    def visitObjectExpr(self, doc, patt, guards, auditors, script, mast,
+    def visitObjectExpr(self, patt, guards, auditors, script, mast,
                         layout, clipboard):
         # jit_debug("ObjectExpr")
 
@@ -538,7 +537,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
         assert len(layout.frameNames) == len(frame), "shortcoming"
 
-        o = InterpObject(doc, objName, script, frame, mast, layout.fqn)
+        o = InterpObject(objName, script, frame, mast, layout.fqn)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
             o.report = clipboard.audit(auds, guardInfo)
