@@ -424,7 +424,7 @@ class PrettySpecialNouns(SplitAuditorsIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(body)
 
-    def visitScriptExpr(self, stamps, methods, matchers):
+    def visitScriptExpr(self, doc, stamps, methods, matchers):
         if stamps:
             self.write(u"stamps ⌠")
             self.write(u" ".join([stamp.toString() for stamp in stamps]))
