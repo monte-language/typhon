@@ -30,15 +30,16 @@ BytecodeIR = makeIR("Bytecode",
             "TryExpr": [("body", "Expr"), ("catchBody", "Expr")],
         },
         "Method": {
-            "MethodExpr": [("doc", None), ("verb", None), ("frame", "Frame"),
+            "MethodExpr": [("doc", None), ("verb", None), ("frame", None),
                            ("expr", "Expr"), ("localSize", None)],
         },
         "Matcher": {
-            "MatcherExpr": [("frame", "Frame"), ("expr", "Expr"),
+            "MatcherExpr": [("frame", None), ("expr", "Expr"),
                             ("localSize", None)],
         },
         "Script": {
-            "ScriptExpr": [("stamps", "Object*"), ("methods", "Method*"),
+            "ScriptExpr": [("name", None), ("doc", None),
+                           ("stamps", "Object*"), ("methods", "Method*"),
                            ("matchers", "Matcher*")],
         },
     }
@@ -51,7 +52,8 @@ BytecodeIR = makeIR("Bytecode",
     CALL, CALLMAP,
     MAKEMAP,
     MATCHLIST,
-) = range(15)
+    MAKEOBJECT,
+) = range(16)
 
 # Patch in a class with richer functionality.
 class BytecodeExpr(BytecodeIR.BytecodeExpr):
@@ -77,18 +79,19 @@ class BytecodeExpr(BytecodeIR.BytecodeExpr):
 
 BytecodeIR.BytecodeExpr = BytecodeExpr
 
-class Frame(object):
+class StaticFrame(object):
     """
     An execution frame's static context.
     """
 
     _immutable_ = True
-    _immutable_fields_ = "lives[*]", "exs[*]", "atoms[*]"
+    _immutable_fields_ = "lives[*]", "exs[*]", "atoms[*]", "scripts[:]"
 
-    def __init__(self, lives, exs, atoms):
+    def __init__(self, lives, exs, atoms, scripts):
         self.lives = lives
         self.exs = exs
         self.atoms = atoms
+        self.scripts = scripts
 
 class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
     """
@@ -110,17 +113,20 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         self.liveStacks = [[]]
         self.exStacks = [[]]
         self.atomStacks = [[]]
+        self.scriptStacks = [[]]
 
     def pushFrame(self):
         self.liveStacks.append([])
         self.exStacks.append([])
         self.atomStacks.append([])
+        self.scriptStacks.append([])
 
     def popFrame(self):
         lives = self.liveStacks.pop()
         exs = self.exStacks.pop()
         atoms = self.atomStacks.pop()
-        return Frame(lives[:], exs[:], atoms[:])
+        scripts = self.scriptStacks.pop()
+        return StaticFrame(lives[:], exs[:], atoms[:], scripts[:])
 
     def addLive(self, obj):
         stack = self.liveStacks[-1]
@@ -132,6 +138,12 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         stack = self.exStacks[-1]
         rv = len(stack)
         stack.append(ex)
+        return rv
+
+    def addScript(self, script):
+        stack = self.scriptStacks[-1]
+        rv = len(stack)
+        stack.append(script)
         return rv
 
     def visitLiveExpr(self, obj):
@@ -311,6 +323,19 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         # (rv)
         frame = self.popFrame()
         return self.dest.MatcherExpr(frame, expr, localSize)
+
+    def visitClearObjectExpr(self, patt, script, layout):
+        scriptIndex = self.addScript(script)
+        rv = BytecodeExpr([
+            (MAKEOBJECT, scriptIndex),
+            # (obj)
+            (LIVE, self.addLive(NullObject)),
+            # (obj null)
+        ])
+        # (specimen ej)
+        rv = rv.addExpr(self.visitPatt(patt))
+        # ()
+        return rv
 
     def makeBind(self, op, guard, idx):
         if isinstance(guard, self.src.NullExpr):
