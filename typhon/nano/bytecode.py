@@ -46,14 +46,14 @@ BytecodeIR = makeIR("Bytecode",
 )
 
 (
-    POP, SWAP, NROT, OVER,
+    POP, DUP, SWAP, NROT, OVER,
     LIVE, EX, LOCAL, FRAME,
-    BINDFS, BINDN, BINDVS,
+    BINDFB, BINDFS, BINDN, BINDVB, BINDVS,
     CALL, CALLMAP,
     MAKEMAP,
     MATCHLIST,
     MAKEOBJECT,
-) = range(16)
+) = range(19)
 
 # Patch in a class with richer functionality.
 class BytecodeExpr(BytecodeIR.BytecodeExpr):
@@ -173,6 +173,21 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         return BytecodeExpr([
             (FRAME, idx),
         ])
+
+    def visitDefExpr(self, patt, ex, rvalue):
+        rv = self.visitExpr(ex)
+        # (ej)
+        rv = rv.addExpr(self.visitExpr(rvalue))
+        # (ej specimen)
+        rv = rv.add([
+            (DUP, 0),
+            # (ej specimen specimen)
+            (NROT, 0),
+            # (specimen specimen ej)
+        ])
+        rv = rv.addExpr(self.visitPatt(patt))
+        # (specimen)
+        return rv
 
     def makeCall(self, op, atom):
         # XXX linear-time search turns to quadratic-time performance:
@@ -355,14 +370,39 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
                 # ()
             ])
 
+    def visitFinalBindingPatt(self, name, guard, idx):
+        return self.makeBind(BINDFB, guard, idx)
+
     def visitFinalSlotPatt(self, name, guard, idx):
         return self.makeBind(BINDFS, guard, idx)
+
+    def visitIgnorePatt(self, guard):
+        # (specimen ej)
+        if isinstance(guard, self.src.NullExpr):
+            return BytecodeExpr([
+                (POP, 0),
+                (POP, 0),
+            ])
+        else:
+            guard = self.visitExpr(guard)
+            return guard.add([
+                # (specimen ej guard)
+                (NROT, 0),
+                # (guard specimen ej)
+                self.makeCall(CALL, COERCE_2),
+                # (prize)
+                (POP, 0),
+                # ()
+            ])
 
     def visitListPatt(self, patts):
         return self.makeMatchList(patts)
 
     def visitNounPatt(self, name, guard, idx):
         return self.makeBind(BINDN, guard, idx)
+
+    def visitVarBindingPatt(self, name, guard, idx):
+        return self.makeBind(BINDVB, guard, idx)
 
     def visitVarSlotPatt(self, name, guard, idx):
         return self.makeBind(BINDVS, guard, idx)
