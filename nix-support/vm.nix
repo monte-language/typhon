@@ -10,11 +10,15 @@ let
 in
 stdenv.mkDerivation {
   name = "typhon-vm";
+
+  src = vmSrc;
+
   buildInputs = [ python27
                   python27Packages.py python27Packages.pytest python27Packages.twisted
                   pypySrc
                   pkgconfig libffi libuv libsodium ];
   propagatedBuildInputs = [ libffi libuv libsodium ];
+
   shellHook = ''
     export TYPHON_LIBRARY_PATH=${libuv.out}/lib:${libsodium.out}/lib
     export PYTHONPATH=$TMP/typhon
@@ -30,10 +34,7 @@ stdenv.mkDerivation {
     }
     trap typhon_cleanup EXIT
   '';
-  # We do still have the check phase, but we do the untranslated test before
-  # we attempt translation.
-  doCheck = true;
-  checkPhase = "trial typhon";
+
   buildPhase = ''
     source $stdenv/setup
     mkdir -p ./rpython/_cache
@@ -44,10 +45,16 @@ stdenv.mkDerivation {
     # Do the actual translation.
     ${python27}/bin/python -mrpython ${optLevel} main.py
     '';
+
+  # We do still have the check phase, but we do the untranslated test before
+  # we attempt translation.
+  doCheck = true;
+  checkPhase = "trial typhon";
+
   installPhase = ''
     mkdir $out
-    strip mt-typhon
     cp mt-typhon $out/
     '';
-  src = vmSrc;
+
+  separateDebugInfo = true;
 }
