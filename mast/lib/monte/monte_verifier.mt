@@ -59,7 +59,7 @@ def usedSet(node) :Set[Str] as DeepFrozen:
     return if (node == null) {
         [].asSet()
     } else {
-        node.getStaticScope().getNamesRead()
+        node.getStaticScope().namesUsed()
     }
 
 def findUnusedNames(expr) :List[Noun] as DeepFrozen:
@@ -325,8 +325,16 @@ def testUsedSuchThat(assert):
 def testUsedExtends(assert):
     assert.equal(findUnusedNames(m`fn f { object g extends f {} }`).size(), 0)
 
+def testUsedVarAugAssign(assert):
+    assert.equal(findUnusedNames(m`var x := 0; fn { x += 1 }`).size(), 0)
+
+def testUsedVarAssign(assert):
+    assert.equal(findUnusedNames(m`var x := 0; fn { x := 1 }`).size(), 0)
+
 unittest([
     testUnusedDef,
     testUsedSuchThat,
     testUsedExtends,
+    testUsedVarAugAssign,
+    testUsedVarAssign,
 ])
