@@ -245,10 +245,10 @@ object termBuilder as DeepFrozen:
     to leafInternal(tag, data, span):
         return makeTerm(tag, data, [], span)
 
-    to leafData(data, span):
+    to leafData(data, _span):
         return optMakeTagFromData(data, mkt)
 
-    to composite(tag, data, span):
+    to composite(tag, _data, span):
         return termBuilder.term(termBuilder.leafInternal(tag, null, span))
 
     to term(functor, args):
@@ -337,7 +337,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
             throw("Token already started")
         startPos := position
 
-    def endToken(fail):
+    def endToken():
         def pos := position
         def tok := input.slice(startPos, pos)
         startPos := -1
@@ -378,7 +378,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
                     advance()
                 if (!collectDigits(decimalDigits)):
                     fail("Missing exponent")
-        def tok := endToken(fail)
+        def tok := endToken()
         def s := tok.replace("_", "")
         if (floating):
             return builder.leafInternal(makeTag(null, ".float64.", Any), _makeDouble(s), tok.getSpan())
@@ -460,10 +460,9 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
         if (currentChar != '\''):
             throw.eject(fail, "Character constant must end in \"'\"")
         advance()
-        return builder.leafInternal(makeTag(null, ".char.", Any), c, endToken(fail).getSpan())
+        return builder.leafInternal(makeTag(null, ".char.", Any), c, endToken().getSpan())
 
     def tag(fail, initial):
-        var done := false
         def segs := [].diverge()
         if (initial != null):
             segs.push(initial)
@@ -485,7 +484,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
                 while (currentChar != EOF && segPart(currentChar)):
                     advance()
                 segs.push(input.slice(segStartPos, position))
-        return leafTag("".join(segs), endToken(fail).getSpan())
+        return leafTag("".join(segs), endToken().getSpan())
 
     def getNextToken(fail):
         skipWhitespace()
@@ -495,7 +494,7 @@ def _makeTermLexer(input, builder, braceStack, var nestLevel) as DeepFrozen:
             throw.eject(fail, null)
         if (cur == '"'):
             def s := stringLike(fail)
-            def closer := endToken(fail)
+            def closer := endToken()
             popBrace('"', fail)
 
             return builder.leafInternal(makeTag(null, ".String.", Any), s, closer.getSpan())
@@ -602,16 +601,16 @@ object qEmptySeq as DeepFrozen:
     to reserve():
         return 0
 
-    to startShape(values, bindings, prefix, shapeSoFar):
+    to startShape(_values, _bindings, _prefix, shapeSoFar):
         return shapeSoFar
 
-    to endShape(bindings, prefix, shape):
+    to endShape(_bindings, _prefix, _shape):
         null
 
-    to substSlice(values, indices):
+    to substSlice(_values, _indices):
         return []
 
-    to matchBindSlice(args, specimens, bindings, indices, max):
+    to matchBindSlice(_args, _specimens, _bindings, _indices, _max):
         return 0
 
 
@@ -767,19 +766,19 @@ def makeQFunctor(tag :Tag, data :TermData, span :DeepFrozen) as DeepFrozen:
         to reserve():
             return 1
 
-        to startShape(args, bindings, prefix, shapeSoFar):
+        to startShape(_args, _bindings, _prefix, shapeSoFar):
             return shapeSoFar
 
-        to endShape(bindings, prefix, shape):
+        to endShape(_bindings, _prefix, _shape):
             null
 
-        to substSlice(values, indices):
+        to substSlice(_values, _indices):
             if (data == null):
                 return [termBuilder.leafInternal(tag, null, span)]
             else:
                 return [termBuilder.leafData(data, span)]
 
-        to matchBindSlice(args, specimens, bindings, indices, max):
+        to matchBindSlice(_args, specimens, _bindings, _indices, max):
             if (specimens.size() <= 0):
                  return -1
             def spec := matchCoerce(specimens[0], true, tag)
@@ -857,7 +856,7 @@ def makeQDollarHole(tag :NullOk[Tag], holeNum :Int, isFunctorHole :Bool) as Deep
             else:
                 return makeQDollarHole(tag, holeNum, true)
 
-        to startShape(values, bindings, prefix, shapeSoFar):
+        to startShape(values, _bindings, prefix, shapeSoFar):
             def t := multiget(values, holeNum, prefix, true)
             if (t =~ vals :List):
                 def result := vals.size()
@@ -866,7 +865,7 @@ def makeQDollarHole(tag :NullOk[Tag], holeNum :Int, isFunctorHole :Bool) as Deep
                 return result
             return shapeSoFar
 
-        to endShape(bindings, prefix, shape):
+        to endShape(_bindings, _prefix, _shape):
             null
 
         to substSlice(values, indices):
@@ -876,7 +875,7 @@ def makeQDollarHole(tag :NullOk[Tag], holeNum :Int, isFunctorHole :Bool) as Deep
                 throw(`Term $termoid doesn't match $qdollarhole`)
             return [term]
 
-        to matchBindSlice(args, specimens, bindings, indices, max):
+        to matchBindSlice(args, specimens, _bindings, indices, max):
             if (specimens.size() <= 0):
                 return -1
             def specimen := specimens[0]
@@ -916,7 +915,7 @@ def makeQAtHole(tag :NullOk[Tag], holeNum :Int, isFunctorHole :Bool) as DeepFroz
             else:
                 return makeQAtHole(tag, holeNum, true)
 
-        to startShape(values, bindings, prefix, shapeSoFar):
+        to startShape(_values, bindings, prefix, shapeSoFar):
             # if (bindings == null):
             #     throw("no at-holes in a value maker")
             multiput(bindings, holeNum, prefix, [].diverge())
@@ -926,10 +925,10 @@ def makeQAtHole(tag :NullOk[Tag], holeNum :Int, isFunctorHole :Bool) as DeepFroz
             def bits := multiget(bindings, holeNum, prefix, false)
             multiput(bindings, holeNum, prefix, bits.slice(0, shape))
 
-        to substSlice(values, indices):
+        to substSlice(_values, _indices):
             throw("A quasiterm with an @-hole may not be used in a value context")
 
-        to matchBindSlice(args, specimens, bindings, indices, max):
+        to matchBindSlice(_args, specimens, bindings, indices, max):
             if (specimens.size() <= 0):
                 return -1
             def spec := matchCoerce(specimens[0], isFunctorHole, tag)
@@ -1202,9 +1201,9 @@ def makeQuasiTokenChain(makeLexer, template) as DeepFrozen:
 
 
 object ::"term``" as DeepFrozen:
-    to valueHole(n):
+    to valueHole(_n):
         return VALUE_HOLE
-    to patternHole(n):
+    to patternHole(_n):
         return PATTERN_HOLE
 
     to valueMaker(template):
