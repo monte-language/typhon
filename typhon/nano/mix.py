@@ -232,7 +232,7 @@ class DischargeAuditors(MixIR.selfPass()):
                 # asked auditors, we can't lose these stamps.
                 report = audition.prepareReport()
                 stamps = report.stamps.keys()
-                script = self.dest.ScriptExpr(script.doc,
+                script = self.dest.ScriptExpr(script.name, script.doc,
                                               script.stamps + stamps,
                                               script.methods, script.matchers)
                 # In order to be truly clear, we must not have depended on any

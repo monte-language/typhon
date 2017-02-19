@@ -53,7 +53,7 @@ class Heap(Object):
 
     def accountObject(self, obj):
         if isinstance(obj, InterpObject):
-            name = obj.displayName
+            name = obj.getDisplayName()
         else:
             name = obj.__class__.__name__.decode("utf-8")
         if name not in self.buckets:

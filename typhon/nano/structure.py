@@ -45,13 +45,20 @@ SplitScriptIR = DeepFrozenIR.extend("SplitScript", [],
                            ("layout", None)],
         },
         "Script": {
-            "ScriptExpr": [("doc", None), ("stamps", "Object*"),
-                           ("methods", "Method*"), ("matchers", "Matcher*")],
+            "ScriptExpr": [("name", None), ("doc", None),
+                           ("stamps", "Object*"), ("methods", "Method*"),
+                           ("matchers", "Matcher*")],
         },
     }
 )
 
 class SplitScript(DeepFrozenIR.makePassTo(SplitScriptIR)):
+
+    def nameForPatt(self, patt):
+        if isinstance(patt, self.dest.IgnorePatt):
+            return u"_"
+        else:
+            return patt.name
 
     def visitObjectExpr(self, doc, patt, stamps, auditors, methods, matchers,
                         mast, layout):
@@ -59,7 +66,8 @@ class SplitScript(DeepFrozenIR.makePassTo(SplitScriptIR)):
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         methods = [self.visitMethod(method) for method in methods]
         matchers = [self.visitMatcher(matcher) for matcher in matchers]
-        script = self.dest.ScriptExpr(doc, stamps, methods, matchers)
+        name = self.nameForPatt(patt)
+        script = self.dest.ScriptExpr(name, doc, stamps, methods, matchers)
         return self.dest.ObjectExpr(patt, auditors, script, mast, layout)
 
 AtomIR = SplitScriptIR.extend("Atom", [],
@@ -424,7 +432,7 @@ class PrettySpecialNouns(SplitAuditorsIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(body)
 
-    def visitScriptExpr(self, doc, stamps, methods, matchers):
+    def visitScriptExpr(self, name, doc, stamps, methods, matchers):
         if stamps:
             self.write(u"stamps ⌠")
             self.write(u" ".join([stamp.toString() for stamp in stamps]))

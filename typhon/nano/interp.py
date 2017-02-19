@@ -63,10 +63,7 @@ class MakeProfileNames(MixIR.makePassTo(ProfileNameIR)):
 
     def visitClearObjectExpr(self, patt, script, layout):
         # Push, do the recursion, pop.
-        if isinstance(patt, self.src.IgnorePatt):
-            objName = u"_"
-        else:
-            objName = patt.name
+        objName = script.name
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
         rv = self.super.visitClearObjectExpr(self, patt, script, layout)
@@ -76,10 +73,7 @@ class MakeProfileNames(MixIR.makePassTo(ProfileNameIR)):
     def visitObjectExpr(self, patt, guards, auditors, script, mast,
                         layout, clipboard):
         # Push, do the recursion, pop.
-        if isinstance(patt, self.src.IgnorePatt):
-            objName = u"_"
-        else:
-            objName = patt.name
+        objName = script.name
         self.objectNames.append((objName.encode("utf-8"),
             layout.fqn.encode("utf-8").split("$")[0]))
         rv = self.super.visitObjectExpr(self, patt, guards, auditors,
@@ -128,7 +122,7 @@ class InterpObject(Object):
 
     import_from_mixin(UserObjectHelper)
 
-    _immutable_fields_ = "displayName", "script", "report"
+    _immutable_fields_ = "script", "report"
 
     # Inline single-entry method cache.
     cachedMethod = None, None
@@ -136,7 +130,6 @@ class InterpObject(Object):
     def __init__(self, name, script, frame, ast, fqn):
         self.objectAst = ast
         self.fqn = fqn
-        self.displayName = name
         self.script = script
         self.frame = frame
 
@@ -146,7 +139,7 @@ class InterpObject(Object):
         return self.script.doc
 
     def getDisplayName(self):
-        return self.displayName
+        return self.script.name
 
     # Justified by the immutability of stamps on the script. ~ C.
     @unroll_safe
@@ -457,10 +450,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     @unroll_safe
     def visitClearObjectExpr(self, patt, script, layout):
         # jit_debug("ClearObjectExpr")
-        if isinstance(patt, self.src.IgnorePatt):
-            objName = u"_"
-        else:
-            objName = patt.name
+        objName = script.name
         ast = NullObject
         frameTable = layout.frameTable
         frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
@@ -511,10 +501,8 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         # as-guard/auditor.
         # XXX In the future, we could erase the as-guard semantics earlier.
         guardAuditor = None
-        if isinstance(patt, self.src.IgnorePatt):
-            objName = u"_"
-        else:
-            objName = patt.name
+        objName = script.name
+        if not isinstance(patt, self.src.IgnorePatt):
             # If there's a guard, use that as the as-guard.
             if not isinstance(patt.guard, self.src.NullExpr):
                 guardAuditor = self.visitExpr(patt.guard)
