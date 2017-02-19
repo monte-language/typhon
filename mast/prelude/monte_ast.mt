@@ -192,7 +192,7 @@ def printObjectSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozenS
             }, false, true, out, priority)
 
 object astStamp as DeepFrozenStamp:
-    to audit(audition):
+    to audit(_audition):
         return true
 
 object Ast as DeepFrozenStamp:
@@ -277,16 +277,16 @@ def makeLiteralExpr(value, span) as DeepFrozenStamp:
     object literalExpr:
         to getValue():
             return value
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.quote(value)
     return astWrapper(literalExpr, makeLiteralExpr, [value], span,
-        &emptyScope, "LiteralExpr", fn f {[value]})
+        &emptyScope, "LiteralExpr", fn _f {[value]})
 
 def makeNounExpr(name :Str, span) as DeepFrozenStamp:
     object nounExpr:
         to getName():
             return name
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             if (isIdentifier(name)):
                 out.print(name)
             else:
@@ -294,7 +294,7 @@ def makeNounExpr(name :Str, span) as DeepFrozenStamp:
                 out.quote(name)
     def scope
     def node := astWrapper(nounExpr, makeNounExpr, [name], span,
-         &scope, "NounExpr", fn f {[name]})
+         &scope, "NounExpr", fn _f {[name]})
     bind scope := makeStaticScope([node.getName()], [], [], [], false)
     return node
 
@@ -321,7 +321,7 @@ def makeTempNounExpr(namePrefix :Str, span) as DeepFrozenStamp:
             return namePrefix
         to _printOn(out):
             tempNounExpr.subPrintOn(out, 0)
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("$<temp ")
             out.print(namePrefix)
             out.print(">")
@@ -333,7 +333,7 @@ def makeSlotExpr(noun :Noun, span) as DeepFrozenStamp:
     object slotExpr:
         to getNoun():
             return noun
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("&")
             out.print(noun)
     return astWrapper(slotExpr, makeSlotExpr, [noun], span,
@@ -342,25 +342,25 @@ def makeSlotExpr(noun :Noun, span) as DeepFrozenStamp:
 def makeMetaContextExpr(span) as DeepFrozenStamp:
     def scope := emptyScope
     object metaContextExpr:
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("meta.context()")
     return astWrapper(metaContextExpr, makeMetaContextExpr, [], span,
-        &scope, "MetaContextExpr", fn f {[]})
+        &scope, "MetaContextExpr", fn _f {[]})
 
 def makeMetaStateExpr(span) as DeepFrozenStamp:
     def scope := makeStaticScope([], [], [], [], true)
     object metaStateExpr:
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("meta.getState()")
     return astWrapper(metaStateExpr, makeMetaStateExpr, [], span,
-        &scope, "MetaStateExpr", fn f {[]})
+        &scope, "MetaStateExpr", fn _f {[]})
 
 def makeBindingExpr(noun :Noun, span) as DeepFrozenStamp:
     def scope := noun.getStaticScope()
     object bindingExpr:
         to getNoun():
             return noun
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("&&")
             out.print(noun)
     return astWrapper(bindingExpr, makeBindingExpr, [noun], span,
@@ -402,7 +402,7 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozenStamp:
 
 def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {
-        def interiorScope := (sumScopes([for [n, p] in (importsList) p]) +
+        def interiorScope := (sumScopes([for [_n, p] in (importsList) p]) +
                               body.getStaticScope())
         def exportListScope := sumScopes(exportsList)
         def exportScope := makeStaticScope(
@@ -418,7 +418,7 @@ def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
             return exportsList
         to getBody():
             return body
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             for [petname, patt] in (importsList):
                 out.print("import ")
                 out.quote(petname)
@@ -443,7 +443,7 @@ def makeNamedArg(k :Expr, v :Expr, span) as DeepFrozenStamp:
             return k
         to getValue():
             return v
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             k.subPrintOn(out, priorities["prim"])
             out.print(" => ")
             v.subPrintOn(out, priorities["braceExpr"])
@@ -455,7 +455,7 @@ def makeNamedArgExport(v :Expr, span) as DeepFrozenStamp:
     object namedArgExport:
         to getValue():
             return v
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print(" => ")
             v.subPrintOn(out, "braceExpr")
     return astWrapper(namedArgExport, makeNamedArgExport, [v], span, &scope, "NamedArgExport",
@@ -568,7 +568,7 @@ def makeGetExpr(receiver :Expr, indices :List[Expr], span) as DeepFrozenStamp:
             return receiver
         to getIndices():
             return indices
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             receiver.subPrintOn(out, priorities["call"])
             printListOn("[", indices, ", ", "]", out, priorities["braceExpr"])
 
@@ -1202,7 +1202,7 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
                     return [pattern, last.getBody()]
             throw.eject(ej, "getCompleteMatcher/1: No matchers")
 
-        to printObjectHeadOn(name, asExpr, auditors, out, priority):
+        to printObjectHeadOn(name, asExpr, auditors, out, _priority):
             out.print("object ")
             name.subPrintOn(out, priorities["pattern"])
             if (asExpr != null):
@@ -1238,7 +1238,7 @@ def makeFunctionScript(patterns :List[Pattern],
             return resultGuard
         to getBody():
             return body
-        to printObjectHeadOn(name, asExpr, auditors, out, priority):
+        to printObjectHeadOn(name, asExpr, auditors, out, _priority):
             out.print("def ")
             name.subPrintOn(out, priorities["pattern"])
             printListOn("(", patterns, ", ", "", out, priorities["pattern"])
@@ -1287,7 +1287,7 @@ def makeListExpr(items :List[Expr], span) as DeepFrozenStamp:
     object listExpr:
         to getItems():
             return items
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             printListOn("[", items, ", ", "]", out, priorities["braceExpr"])
     return astWrapper(listExpr, makeListExpr, [items], span,
         &scope, "ListExpr", fn f {[transformAll(items, f)]})
@@ -1308,7 +1308,7 @@ def makeListComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
             return filter
         to getBody():
             return body
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("[for ")
             if (key != null):
                 key.subPrintOn(out, priorities["pattern"])
@@ -1334,7 +1334,7 @@ def makeMapExprAssoc(key :Expr, value :Expr, span) as DeepFrozenStamp:
             return key
         to getValue():
             return value
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             key.subPrintOn(out, priorities["braceExpr"])
             out.print(" => ")
             value.subPrintOn(out, priorities["braceExpr"])
@@ -1346,7 +1346,7 @@ def makeMapExprExport(value :Ast["NounExpr", "BindingExpr", "SlotExpr", "TempNou
     object mapExprExport:
         to getValue():
             return value
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("=> ")
             value.subPrintOn(out, priorities["prim"])
     return astWrapper(mapExprExport, makeMapExprExport, [value], span,
@@ -1357,7 +1357,7 @@ def makeMapExpr(pairs :List[Ast["MapExprAssoc", "MapExprExport"]] ? (pairs.size(
     object mapExpr:
         to getPairs():
             return pairs
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             printListOn("[", pairs, ", ", "]", out, priorities["braceExpr"])
     return astWrapper(mapExpr, makeMapExpr, [pairs], span,
         &scope, "MapExpr", fn f {[transformAll(pairs, f)]})
@@ -1380,7 +1380,7 @@ def makeMapComprehensionExpr(iterable :Expr, filter :NullOk[Expr],
             return bodyk
         to getBodyValue():
             return bodyv
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("[for ")
             if (key != null):
                 key.subPrintOn(out, priorities["pattern"])
@@ -1483,7 +1483,7 @@ def makeParamDesc(name :Str, guard :NullOk[Expr], span) as DeepFrozenStamp:
             return name
         to getGuard():
             return guard
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             if (name == null):
                 out.print("_")
             else:
@@ -1874,7 +1874,7 @@ def makeHideExpr(body :Expr, span) as DeepFrozenStamp:
     object hideExpr:
         to getBody():
             return body
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             def indentOut := out.indent(INDENT)
             indentOut.println("{")
             body.subPrintOn(indentOut, priorities["braceExpr"])
@@ -1891,12 +1891,12 @@ def makeValueHoleExpr(index :Int, span) as DeepFrozenStamp:
             return index
         to getName():
             return valueHoleExpr
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("${expr-hole ")
             out.print(index)
             out.print("}")
     return astWrapper(valueHoleExpr, makeValueHoleExpr, [index], span,
-        &scope, "ValueHoleExpr", fn f {[index]})
+        &scope, "ValueHoleExpr", fn _f {[index]})
 
 def makePatternHoleExpr(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
@@ -1905,12 +1905,12 @@ def makePatternHoleExpr(index :Int, span) as DeepFrozenStamp:
             return index
         to getName():
             return patternHoleExpr
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("@{expr-hole ")
             out.print(index)
             out.print("}")
     return astWrapper(patternHoleExpr, makePatternHoleExpr, [index], span,
-        &scope, "PatternHoleExpr", fn f {[index]})
+        &scope, "PatternHoleExpr", fn _f {[index]})
 
 def makeValueHolePattern(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
@@ -1919,12 +1919,12 @@ def makeValueHolePattern(index :Int, span) as DeepFrozenStamp:
             return index
         to getName():
             return valueHolePattern
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("${pattern-hole ")
             out.print(index)
             out.print("}")
     return astWrapper(valueHolePattern, makeValueHolePattern, [index], span,
-        &scope, "ValueHolePattern", fn f {[index]})
+        &scope, "ValueHolePattern", fn _f {[index]})
 
 def makePatternHolePattern(index :Int, span) as DeepFrozenStamp:
     def scope := emptyScope
@@ -1933,12 +1933,12 @@ def makePatternHolePattern(index :Int, span) as DeepFrozenStamp:
             return index
         to getName():
             return patternHolePattern
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("@{pattern-hole ")
             out.print(index)
             out.print("}")
     return astWrapper(patternHolePattern, makePatternHolePattern, [index], span,
-        &scope, "PatternHolePattern", fn f {[index]})
+        &scope, "PatternHolePattern", fn _f {[index]})
 
 # Guard  would be 'noun :Noun' but optimizer will fold some constants here.
 def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozenStamp:
@@ -2017,7 +2017,7 @@ def makeIgnorePattern(guard :NullOk[Expr], span) as DeepFrozenStamp:
         to refutable() :Bool:
             return guard != null
 
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print("_")
             if (guard != null):
                 out.print(" :")
@@ -2036,7 +2036,7 @@ def makeListPattern(patterns :List[Pattern], tail :NullOk[Pattern], span) as Dee
         to refutable() :Bool:
             return true
 
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             printListOn("[", patterns, ", ", "]", out, priorities["pattern"])
             if (tail != null):
                 out.print(" + ")
@@ -2098,7 +2098,7 @@ def makeMapPattern(patterns :List[Ast["MapPatternAssoc", "MapPatternImport"]], t
         to refutable() :Bool:
             return true
 
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             printListOn("[", patterns, ", ", "]", out, priorities["pattern"])
             if (tail != null):
                 out.print(" | ")
@@ -2202,7 +2202,7 @@ def makeSamePattern(value :Expr, direction :Bool, span) as DeepFrozenStamp:
         to refutable() :Bool:
             return true
 
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             if (direction):
                 out.print("==")
             else:
@@ -2216,10 +2216,10 @@ def makeQuasiText(text :Str, span) as DeepFrozenStamp:
     object quasiText:
         to getText():
             return text
-        to subPrintOn(out, priority):
+        to subPrintOn(out, _priority):
             out.print(text)
     return astWrapper(quasiText, makeQuasiText, [text], span,
-        &scope, "QuasiText", fn f {[text]})
+        &scope, "QuasiText", fn _f {[text]})
 
 def makeQuasiExprHole(expr :Expr, span) as DeepFrozenStamp:
     def scope := expr.getStaticScope()
@@ -2257,7 +2257,7 @@ def makeQuasiPatternHole(pattern :Pattern, span) as DeepFrozenStamp:
     return astWrapper(quasiPatternHole, makeQuasiPatternHole, [pattern], span,
         &scope, "QuasiPatternHole", fn f {[pattern.transform(f)]})
 
-def quasiPrint(name, quasis, out, priority) as DeepFrozenStamp:
+def quasiPrint(name, quasis, out) as DeepFrozenStamp:
     if (name != null):
         out.print(name)
     out.print("`")
@@ -2285,8 +2285,8 @@ def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as De
             return name
         to getQuasis():
             return quasis
-        to subPrintOn(out, priority):
-            quasiPrint(name, quasis, out, priority)
+        to subPrintOn(out, _priority):
+            quasiPrint(name, quasis, out)
     return astWrapper(quasiParserExpr, makeQuasiParserExpr, [name, quasis], span,
         &scope, "QuasiParserExpr", fn f {[name, transformAll(quasis, f)]})
 
@@ -2305,8 +2305,8 @@ def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as
         to refutable() :Bool:
             return true
 
-        to subPrintOn(out, priority):
-            quasiPrint(name, quasis, out, priority)
+        to subPrintOn(out, _priority):
+            quasiPrint(name, quasis, out)
     return astWrapper(quasiParserPattern, makeQuasiParserPattern, [name, quasis], span,
         &scope, "QuasiParserPattern", fn f {[name, transformAll(quasis, f)]})
 
