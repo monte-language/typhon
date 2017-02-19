@@ -1,31 +1,31 @@
 import "unittest" =~ [=> unittest]
 exports ()
 
-def testHarnessEventualSend(assert):
+def testHarnessEventualSend(_assert):
     return 6<-multiply(7)
 
-def testHarnessWhenNull(assert):
+def testHarnessWhenNull(_assert):
     return when (null) -> { null }
 
-def testHarnessWhenSend(assert):
+def testHarnessWhenSend(_assert):
     return when (6<-multiply(7)) -> { null }
 
-def testHarnessPromise(assert):
+def testHarnessPromise(_assert):
     def [p, r] := Ref.promise()
     r.resolve(42)
     return p
 
-def testHarnessPromiseLater(assert):
+def testHarnessPromiseLater(_assert):
     def [p, r] := Ref.promise()
     r<-resolve(42)
     return p
 
-def testHarnessWhenPromise(assert):
+def testHarnessWhenPromise(_assert):
     def [p, r] := Ref.promise()
     r.resolve(42)
     return when (p) -> { null }
 
-def testHarnessWhenPromiseLater(assert):
+def testHarnessWhenPromiseLater(_assert):
     def [p, r] := Ref.promise()
     r<-resolve(42)
     return when (p) -> { null }
