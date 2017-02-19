@@ -1012,7 +1012,8 @@ def makeVerbAssignExpr(verb :Str, lvalue :Expr, rvalues :List[Expr], span) as De
 def makeAugAssignExpr(op :Str, lvalue :Expr, rvalue :Expr, span) as DeepFrozenStamp:
     def lname := lvalue.getNodeName()
     def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
-        makeStaticScope([], [lvalue.getName()], [], [], false)
+        # We both read and write to the name on the LHS.
+        makeStaticScope([lvalue.getName()], [lvalue.getName()], [], [], false)
     } else {
         lvalue.getStaticScope()
     }
