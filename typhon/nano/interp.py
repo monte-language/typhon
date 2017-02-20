@@ -229,7 +229,6 @@ class InterpObject(Object):
     def isSettled(self, sofar=None):
         if selfless in self.auditorStamps():
             if transparentStamp in self.auditorStamps():
-                from typhon.objects.collections.maps import EMPTY_MAP
                 if sofar is None:
                     sofar = {self: None}
                 # Uncall and recurse.
@@ -393,6 +392,12 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             ej = theThrower
         return guard.call(u"coerce", [specimen, ej])
 
+    def sliceStack(self, count):
+        offset = len(self.stack) - count
+        rv = self.stack[offset:]
+        self.stack = self.stack[:offset]
+        return rv
+
     def makeObject(self, script):
         objName = script.name
         frameTable = script.layout.frameTable
@@ -425,6 +430,25 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 self.stack.append(y)
             elif inst == bc.OVER:
                 self.stack.append(self.stack[-2])
+            elif inst == bc.LIVE:
+                self.stack.append(self.staticFrame.lives[idx])
+            elif inst == bc.EX:
+                raise self.staticFrame.exs[idx]
+            elif inst == bc.LOCAL:
+                self.stack.append(self.locals[idx])
+            elif inst == bc.FRAME:
+                self.stack.append(self.frame[idx])
+            elif inst == bc.CALL:
+                atom = self.staticFrame.atoms[idx]
+                args = self.sliceStack(atom.arity)
+                obj = self.stack.pop()
+                self.stack.append(obj.callAtom(atom, args, EMPTY_MAP))
+            elif inst == bc.CALLMAP:
+                atom = self.staticFrame.atoms[idx]
+                namedArgs = self.stack.pop()
+                args = self.sliceStack(atom.arity)
+                obj = self.stack.pop()
+                self.stack.append(obj.callAtom(atom, args, namedArgs))
             elif inst == bc.MAKEOBJECT:
                 self.makeObject(self.staticFrame.scripts[idx])
             elif inst == bc.TIEKNOT:
