@@ -130,10 +130,10 @@ class InterpObject(Object):
     # Auditor report.
     report = None
 
-    def __init__(self, name, script, frame, fqn):
+    def __init__(self, name, script, closure, fqn):
         self.fqn = fqn
         self.script = script
-        self.frame = frame
+        self.closure = closure
 
     def docString(self):
         return self.script.doc
@@ -186,44 +186,19 @@ class InterpObject(Object):
             d[method.atom] = method.doc
         return d
 
-    # Two loops, both of which loop over greens. ~ C.
     @rvmprof.vmprof_execute_code("method",
             lambda self, method, args, namedArgs: method,
             result_class=Object)
-    @unroll_safe
     def runMethod(self, method, args, namedArgs):
-        e = Evaluator(self.frame, method.localSize)
-        if len(args) != len(method.patts):
-            raise userError(u"Method '%s.%s' expected %d args, got %d" % (
-                self.getDisplayName(), method.atom.verb, len(method.patts),
-                len(args)))
-        for i in range(len(method.patts)):
-            e.matchBind(method.patts[i], args[i])
-        namedArgDict = unwrapMap(namedArgs)
-        for np in method.namedPatts:
-            k = e.visitExpr(np.key)
-            if isinstance(np.default, ProfileNameIR.NullExpr):
-                if k not in namedArgDict:
-                    raise userError(u"Named arg %s missing in call" % (
-                        k.toString(),))
-                e.matchBind(np.patt, namedArgDict[k])
-            elif k not in namedArgDict:
-                e.matchBind(np.patt, e.visitExpr(np.default))
-            else:
-                e.matchBind(np.patt, namedArgDict[k])
-        resultGuard = e.visitExpr(method.guard)
-        v = e.visitExpr(method.body)
-        if resultGuard is NullObject:
-            return v
-        return e.runGuard(resultGuard, v, None)
+        e = Evaluator(method.frame, self.closure, method.localSize)
+        return e.run(method.expr)
 
     @rvmprof.vmprof_execute_code("matcher",
             lambda self, matcher, message, ej: matcher,
             result_class=Object)
     def runMatcher(self, matcher, message, ej):
-        e = Evaluator(self.frame, matcher.localSize)
-        e.matchBind(matcher.patt, message, ej)
-        return e.visitExpr(matcher.body)
+        e = Evaluator(matcher.frame, self.closure, matcher.localSize)
+        return e.run(matcher.expr)
 
     def toString(self):
         # Easily the worst part of the entire stringifying experience. We must
@@ -390,13 +365,19 @@ class EvaluatorGuardLookup(GuardLookup):
 
 class Evaluator(ProfileNameIR.makePassTo(None)):
 
-    def __init__(self, frame, localSize):
+    def __init__(self, staticFrame, frame, localSize):
         self.locals = [NULL_BINDING] * localSize
+        self.stack = []
+        self.staticFrame = staticFrame
         self.frame = frame
         self.specimen = None
         self.patternFailure = None
 
         self.guardLookup = EvaluatorGuardLookup(self)
+
+    def run(self, expr):
+        self.visitExpr(expr)
+        return self.stack[-1]
 
     def matchBind(self, patt, val, ej=theThrower):
         oldSpecimen = self.specimen
@@ -411,6 +392,32 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         if ej is None:
             ej = theThrower
         return guard.call(u"coerce", [specimen, ej])
+
+    # Instructions are immutable.
+    @unroll_safe
+    def visitBytecodeExpr(self, insts):
+        from typhon.nano import bytecode as bc
+        for inst, idx in insts:
+            if inst == bc.POP:
+                self.stack.pop()
+            elif inst == bc.MAKEOBJECT:
+                script = self.staticFrame.scripts[idx]
+                objName = script.name
+                frameTable = script.layout.frameTable
+                closure = [self.lookupBinding(scope, index) for (_, scope, index, _)
+                         in frameTable.frameInfo]
+
+                # Build the object.
+                val = InterpObject(objName, script, closure, script.layout.fqn)
+                self.stack.append(val)
+            elif inst == bc.TIEKNOT:
+                obj = self.stack[-1]
+                assert isinstance(obj, InterpObject), "tonguetied"
+                obj.closure[idx] = obj
+            else:
+                import pdb; pdb.set_trace()
+                assert False, "unprepared"
+        return self.stack[-1]
 
     def visitLiveExpr(self, obj):
         # jit_debug("LiveExpr")
@@ -754,10 +761,10 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
 
     outers = env2scope(outerNames, environment)
     ast = mix(ast, outers)
-    ast = makeBytecode(ast)
+    ast, topFrame = makeBytecode(ast)
     ast = MakeProfileNames().visitExpr(ast)
     result = NullObject
-    e = Evaluator([], localSize)
+    e = Evaluator(topFrame, [], localSize)
     result = e.visitExpr(ast)
     topLocals = []
     for i, (name, severity) in enumerate(topLocalNames):

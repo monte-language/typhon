@@ -14,8 +14,9 @@ GET_1 = getAtom(u"get", 1)
 WITH_2 = getAtom(u"with", 2)
 
 def makeBytecode(expr):
-    expr = MakeBytecode().visitExpr(expr)
-    return expr
+    compiler = MakeBytecode()
+    expr = compiler.visitExpr(expr)
+    return expr, compiler.popFrame()
 
 BytecodeIR = makeIR("Bytecode",
     ["Object", "Exception"],
@@ -52,8 +53,8 @@ BytecodeIR = makeIR("Bytecode",
     CALL, CALLMAP,
     MAKEMAP,
     MATCHLIST,
-    MAKEOBJECT,
-) = range(19)
+    MAKEOBJECT, TIEKNOT,
+) = range(20)
 
 # Patch in a class with richer functionality.
 class BytecodeExpr(BytecodeIR.BytecodeExpr):
@@ -339,17 +340,27 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         frame = self.popFrame()
         return self.dest.MatcherExpr(frame, expr, localSize)
 
-    def visitClearObjectExpr(self, patt, script, layout):
+    def visitClearObjectExpr(self, patt, script):
         scriptIndex = self.addScript(script)
         rv = BytecodeExpr([
             (MAKEOBJECT, scriptIndex),
             # (obj)
+            (DUP, 0),
+            # (obj obj)
             (LIVE, self.addLive(NullObject)),
-            # (obj null)
+            # (obj obj null)
         ])
-        # (specimen ej)
+        # (obj specimen ej)
         rv = rv.addExpr(self.visitPatt(patt))
-        # ()
+        # (obj)
+        # Check whether we have a spot in the closure.
+        position = script.layout.frameTable.positionOf(script.name)
+        if position != -1:
+            # Assign to the closure.
+            rv = rv.add([
+                (TIEKNOT, position),
+            ])
+        # (obj)
         return rv
 
     def makeBind(self, op, guard, idx):
