@@ -41,13 +41,12 @@ SplitScriptIR = DeepFrozenIR.extend("SplitScript", [],
     {
         "Expr": {
             "ObjectExpr": [("patt", "Patt"), ("auditors", "Expr*"),
-                           ("script", "Script"), ("mast", None),
-                           ("layout", None)],
+                           ("script", "Script")],
         },
         "Script": {
-            "ScriptExpr": [("name", None), ("doc", None),
-                           ("stamps", "Object*"), ("methods", "Method*"),
-                           ("matchers", "Matcher*")],
+            "ScriptExpr": [("name", None), ("doc", None), ("mast", None),
+                           ("layout", None), ("stamps", "Object*"),
+                           ("methods", "Method*"), ("matchers", "Matcher*")],
         },
     }
 )
@@ -67,8 +66,8 @@ class SplitScript(DeepFrozenIR.makePassTo(SplitScriptIR)):
         methods = [self.visitMethod(method) for method in methods]
         matchers = [self.visitMatcher(matcher) for matcher in matchers]
         name = self.nameForPatt(patt)
-        script = self.dest.ScriptExpr(name, doc, stamps, methods, matchers)
-        return self.dest.ObjectExpr(patt, auditors, script, mast, layout)
+        script = self.dest.ScriptExpr(name, doc, mast, layout, stamps, methods, matchers)
+        return self.dest.ObjectExpr(patt, auditors, script)
 
 AtomIR = SplitScriptIR.extend("Atom", [],
     {
@@ -108,11 +107,9 @@ SplitAuditorsIR = AtomIR.extend("SplitAuditors",
     ["AST"],
     {
         "Expr": {
-            "ClearObjectExpr": [("patt", "Patt"), ("script", "Script"),
-                                ("layout", None)],
+            "ClearObjectExpr": [("patt", "Patt"), ("script", "Script")],
             "ObjectExpr": [("patt", "Patt"), ("auditors", "Expr*"),
-                           ("script", "Script"), ("mast", "AST"),
-                           ("layout", None), ("clipboard", None)],
+                           ("script", "Script"), ("clipboard", None)],
         },
     }
 )
@@ -120,20 +117,19 @@ SplitAuditorsIR = AtomIR.extend("SplitAuditors",
 
 class SplitAuditors(AtomIR.makePassTo(SplitAuditorsIR)):
 
-    def visitObjectExpr(self, patt, auditors, script, mast, layout):
+    def visitObjectExpr(self, patt, auditors, script):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         script = self.visitScript(script)
         if not auditors or (len(auditors) == 1 and
                             isinstance(auditors[0], self.dest.NullExpr)):
             # No more auditing.
-            return self.dest.ClearObjectExpr(patt, script, layout)
+            return self.dest.ClearObjectExpr(patt, script)
         else:
             # Runtime auditing.
-            ast = BuildKernelNodes().visitExpr(mast)
-            clipboard = AuditClipboard(layout.fqn, ast)
-            return self.dest.ObjectExpr(patt, auditors, script, ast, layout,
-                                        clipboard)
+            ast = BuildKernelNodes().visitExpr(script.mast)
+            clipboard = AuditClipboard(script.layout.fqn, ast)
+            return self.dest.ObjectExpr(patt, auditors, script, clipboard)
 
 # Pretty-printer for the final pass.
 
@@ -277,17 +273,13 @@ class PrettySpecialNouns(SplitAuditorsIR.makePassTo(None)):
         self.write(name)
         self.write(asIndex(index))
 
-    def visitClearObjectExpr(self, patt, script, layout):
+    def visitClearObjectExpr(self, patt, script):
         self.write(u"object ")
         self.visitPatt(patt)
-        self.write(u" ⎣")
-        self.write(u" ".join(layout.frameNames.keys()))
-        self.write(u"⎤ ")
         with self.braces():
             self.visitScript(script)
 
-    def visitObjectExpr(self, patt, auditors, script, mast, layout,
-                        clipboard):
+    def visitObjectExpr(self, patt, auditors, script, clipboard):
         self.write(u"object ")
         self.visitPatt(patt)
         if not auditors:
@@ -303,9 +295,6 @@ class PrettySpecialNouns(SplitAuditorsIR.makePassTo(None)):
                 for auditor in auditors[1:]:
                     self.write(u", ")
                     self.visitExpr(auditor)
-        self.write(u" ⎣")
-        self.write(u" ".join(layout.frameNames.keys()))
-        self.write(u"⎤ ")
         with self.braces():
             self.visitScript(script)
 
@@ -432,7 +421,11 @@ class PrettySpecialNouns(SplitAuditorsIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(body)
 
-    def visitScriptExpr(self, name, doc, stamps, methods, matchers):
+    def visitScriptExpr(self, name, doc, mast, layout, stamps, methods,
+                        matchers):
+        self.write(u"closure ⎣")
+        self.write(u" ".join(layout.frameNames.keys()))
+        self.writeLine(u"⎤;")
         if stamps:
             self.write(u"stamps ⌠")
             self.write(u" ".join([stamp.toString() for stamp in stamps]))

@@ -63,23 +63,22 @@ class MakeProfileNames(MixIR.makePassTo(ProfileNameIR)):
         # method/matcher without a body. ~ C.
         self.objectNames = []
 
-    def visitClearObjectExpr(self, patt, script, layout):
+    def visitClearObjectExpr(self, patt, script):
         # Push, do the recursion, pop.
         objName = script.name
         self.objectNames.append((objName.encode("utf-8"),
-            layout.fqn.encode("utf-8").split("$")[0]))
-        rv = self.super.visitClearObjectExpr(self, patt, script, layout)
+            script.layout.fqn.encode("utf-8").split("$")[0]))
+        rv = self.super.visitClearObjectExpr(self, patt, script)
         self.objectNames.pop()
         return rv
 
-    def visitObjectExpr(self, patt, guards, auditors, script, mast,
-                        layout, clipboard):
+    def visitObjectExpr(self, patt, guards, auditors, script, clipboard):
         # Push, do the recursion, pop.
         objName = script.name
         self.objectNames.append((objName.encode("utf-8"),
-            layout.fqn.encode("utf-8").split("$")[0]))
-        rv = self.super.visitObjectExpr(self, patt, guards, auditors,
-                                        script, mast, layout, clipboard)
+            script.layout.fqn.encode("utf-8").split("$")[0]))
+        rv = self.super.visitObjectExpr(self, patt, guards, auditors, script,
+                                        clipboard)
         self.objectNames.pop()
         return rv
 
@@ -518,15 +517,15 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
     # Everything passed to this method, except self, is immutable. ~ C.
     @unroll_safe
-    def visitClearObjectExpr(self, patt, script, layout):
+    def visitClearObjectExpr(self, patt, script):
         # jit_debug("ClearObjectExpr")
         objName = script.name
-        frameTable = layout.frameTable
+        frameTable = script.layout.frameTable
         frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
                  in frameTable.frameInfo]
 
         # Build the object.
-        val = InterpObject(objName, script, frame, layout.fqn)
+        val = InterpObject(objName, script, frame, script.layout.fqn)
 
         # Check whether we have a spot in the frame.
         position = frameTable.positionOf(objName)
@@ -562,8 +561,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     # immutable. Clipboards are not a problem since their loops are
     # internalized in methods. ~ C.
     @unroll_safe
-    def visitObjectExpr(self, patt, guards, auditors, script, mast,
-                        layout, clipboard):
+    def visitObjectExpr(self, patt, guards, auditors, script, clipboard):
         # jit_debug("ObjectExpr")
 
         # Discover the object's common name and also find the
@@ -585,16 +583,16 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             guardAuditor = anyGuard
         else:
             auds = [guardAuditor] + auds
-        frameTable = layout.frameTable
+        frameTable = script.layout.frameTable
         frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
                  in frameTable.frameInfo]
         # Set up guard information.
         guardInfo = GuardInfo(guards, frameTable, objName, guardAuditor,
                 self.guardLookup)
 
-        assert len(layout.frameNames) == len(frame), "shortcoming"
+        assert len(script.layout.frameNames) == len(frame), "shortcoming"
 
-        o = InterpObject(objName, script, frame, layout.fqn)
+        o = InterpObject(objName, script, frame, script.layout.fqn)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
             o.report = clipboard.audit(auds, guardInfo)

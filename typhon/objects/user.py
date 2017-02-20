@@ -53,8 +53,8 @@ class Audition(Object):
     active = True
 
     def __init__(self, fqn, ast, guardInfo):
-        assert isinstance(fqn, unicode)
         self.fqn = fqn
+        assert isinstance(ast, Object)
         self.ast = ast
         self.guardInfo = guardInfo
         guardInfo.clean()

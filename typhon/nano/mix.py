@@ -35,7 +35,6 @@ NoOutersIR = SplitAuditorsIR.extend("NoOuters",
             "LiveExpr": [("obj", "Object")],
             "ObjectExpr": [("patt", "Patt"), ("guards", None),
                            ("auditors", "Expr*"), ("script", "Script"),
-                           ("mast", "AST"), ("layout", None),
                            ("clipboard", None)],
             "-OuterExpr": None,
         }
@@ -69,8 +68,7 @@ class FillOuters(SplitAuditorsIR.makePassTo(NoOutersIR)):
     def __init__(self, outers):
         self.outers = outers
 
-    def visitObjectExpr(self, patt, auditors, script, mast, layout,
-                        clipboard):
+    def visitObjectExpr(self, patt, auditors, script, clipboard):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         script = self.visitScript(script)
@@ -78,14 +76,13 @@ class FillOuters(SplitAuditorsIR.makePassTo(NoOutersIR)):
         # guards for later. We rely on this ordering to be consistent so that
         # we can strip the names when doing auditor cache comparisons. ~ C.
         guards = OrderedDict()
-        for (name, (idx, severity)) in layout.outerNames.items():
+        for (name, (idx, severity)) in script.layout.outerNames.items():
             b = self.outers[idx]
             guards[name] = retrieveGuard(severity, b)
             # Mark the guard as static by destroying the relevant dynamic
             # guard key. Use .pop() to avoid KeyErrors from unused bindings.
-            layout.frameTable.dynamicGuards.pop(name, 0)
-        return self.dest.ObjectExpr(patt, guards, auditors, script, mast,
-                                    layout, clipboard)
+            script.layout.frameTable.dynamicGuards.pop(name, 0)
+        return self.dest.ObjectExpr(patt, guards, auditors, script, clipboard)
 
     def visitOuterExpr(self, name, index):
         return self.dest.LiveExpr(self.outers[index])
@@ -195,8 +192,7 @@ class DischargeAuditors(MixIR.selfPass()):
         recorder = globalRecorder()
         self.clearRate = recorder.getRateFor("DischargeAuditors clear")
 
-    def visitObjectExpr(self, patt, guards, auditors, script, mast,
-                        layout, clipboard):
+    def visitObjectExpr(self, patt, guards, auditors, script, clipboard):
         script = self.visitScript(script)
         clear = False
         if auditors:
@@ -204,9 +200,9 @@ class DischargeAuditors(MixIR.selfPass()):
             if isinstance(asAuditor, self.src.LiveExpr):
                 patt.guard = asAuditor
                 from typhon.nano.interp import GuardInfo, anyGuardLookup
-                guardInfo = GuardInfo(guards, layout.frameTable, None, None,
+                guardInfo = GuardInfo(guards, script.layout.frameTable, None, None,
                         anyGuardLookup)
-                with Audition(layout.fqn, mast, guardInfo) as audition:
+                with Audition(script.layout.fqn, clipboard.ast, guardInfo) as audition:
                     for i, auditor in enumerate(auditors):
                         if not isinstance(auditor, self.src.LiveExpr):
                             # Slice to save progress and take the non-clear
@@ -233,6 +229,7 @@ class DischargeAuditors(MixIR.selfPass()):
                 report = audition.prepareReport()
                 stamps = report.stamps.keys()
                 script = self.dest.ScriptExpr(script.name, script.doc,
+                                              script.mast, script.layout,
                                               script.stamps + stamps,
                                               script.methods, script.matchers)
                 # In order to be truly clear, we must not have depended on any
@@ -241,8 +238,7 @@ class DischargeAuditors(MixIR.selfPass()):
 
         if clear:
             self.clearRate.yes()
-            return self.dest.ClearObjectExpr(patt, script, layout)
+            return self.dest.ClearObjectExpr(patt, script)
         else:
             self.clearRate.no()
-            return self.dest.ObjectExpr(patt, guards, auditors, script, mast,
-                                        layout, clipboard)
+            return self.dest.ObjectExpr(patt, guards, auditors, script, clipboard)
