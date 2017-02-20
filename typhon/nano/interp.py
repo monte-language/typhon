@@ -130,8 +130,7 @@ class InterpObject(Object):
     # Auditor report.
     report = None
 
-    def __init__(self, name, script, frame, ast, fqn):
-        self.objectAst = ast
+    def __init__(self, name, script, frame, fqn):
         self.fqn = fqn
         self.script = script
         self.frame = frame
@@ -522,13 +521,12 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     def visitClearObjectExpr(self, patt, script, layout):
         # jit_debug("ClearObjectExpr")
         objName = script.name
-        ast = NullObject
         frameTable = layout.frameTable
         frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
                  in frameTable.frameInfo]
 
         # Build the object.
-        val = InterpObject(objName, script, frame, ast, layout.fqn)
+        val = InterpObject(objName, script, frame, layout.fqn)
 
         # Check whether we have a spot in the frame.
         position = frameTable.positionOf(objName)
@@ -596,7 +594,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
         assert len(layout.frameNames) == len(frame), "shortcoming"
 
-        o = InterpObject(objName, script, frame, mast, layout.fqn)
+        o = InterpObject(objName, script, frame, layout.fqn)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
             o.report = clipboard.audit(auds, guardInfo)
