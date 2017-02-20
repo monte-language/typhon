@@ -393,6 +393,15 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             ej = theThrower
         return guard.call(u"coerce", [specimen, ej])
 
+    def makeObject(self, script):
+        objName = script.name
+        frameTable = script.layout.frameTable
+        closure = [self.lookupBinding(scope, index) for (_, scope, index, _)
+                 in frameTable.frameInfo]
+        # Build the object.
+        val = InterpObject(objName, script, closure, script.layout.fqn)
+        self.stack.append(val)
+
     # Instructions are immutable.
     @unroll_safe
     def visitBytecodeExpr(self, insts):
@@ -400,16 +409,24 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         for inst, idx in insts:
             if inst == bc.POP:
                 self.stack.pop()
+            elif inst == bc.DUP:
+                self.stack.append(self.stack[-1])
+            elif inst == bc.SWAP:
+                x = self.stack.pop()
+                y = self.stack.pop()
+                self.stack.append(x)
+                self.stack.append(y)
+            elif inst == bc.NROT:
+                x = self.stack.pop()
+                y = self.stack.pop()
+                z = self.stack.pop()
+                self.stack.append(x)
+                self.stack.append(z)
+                self.stack.append(y)
+            elif inst == bc.OVER:
+                self.stack.append(self.stack[-2])
             elif inst == bc.MAKEOBJECT:
-                script = self.staticFrame.scripts[idx]
-                objName = script.name
-                frameTable = script.layout.frameTable
-                closure = [self.lookupBinding(scope, index) for (_, scope, index, _)
-                         in frameTable.frameInfo]
-
-                # Build the object.
-                val = InterpObject(objName, script, closure, script.layout.fqn)
-                self.stack.append(val)
+                self.makeObject(self.staticFrame.scripts[idx])
             elif inst == bc.TIEKNOT:
                 obj = self.stack[-1]
                 assert isinstance(obj, InterpObject), "tonguetied"
