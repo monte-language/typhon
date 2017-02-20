@@ -12,28 +12,18 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import unroll_safe
 from rpython.rlib.objectmodel import specialize
 
-from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
-from typhon.errors import Ejecting, Refused, UserException, userError
+from typhon.errors import userError
 from typhon.log import log
-from typhon.objects.auditors import (deepFrozenStamp, selfless,
-                                     transparentStamp)
+from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.constants import unwrapBool
-from typhon.objects.collections.helpers import emptySet, monteSet
-from typhon.objects.collections.lists import wrapList
-from typhon.objects.data import StrObject
-from typhon.objects.ejectors import Ejector
-from typhon.objects.printers import Printer
+from typhon.objects.collections.helpers import monteSet
 from typhon.objects.root import Object
 from typhon.profile import profileTyphon
 
 # XXX AuditionStamp, Audition guard
-
-_UNCALL_0 = getAtom(u"_uncall", 0)
-
 
 pemci = u".".join([
     u"lo lebna cu rivbi",
@@ -307,84 +297,3 @@ class AuditClipboard(object):
             report = self.createReport(auditors, guardInfo)
             self.putReport(auditors, guardInfo, report)
         return report
-
-
-class UserObjectHelper(object):
-    """
-    Abstract superclass for objects created by ObjectExpr.
-    """
-    _immutable_fields_ = "report",
-    report = None
-
-    def toString(self):
-        # Easily the worst part of the entire stringifying experience. We must
-        # be careful to not recurse here.
-        try:
-            printer = Printer()
-            self.call(u"_printOn", [printer])
-            return printer.value()
-        except Refused:
-            return u"<%s>" % self.getDisplayName()
-        except UserException, e:
-            return (u"<%s (threw exception %s when printed)>" %
-                    (self.getDisplayName(), e.error()))
-
-    def printOn(self, printer):
-        # Note that the printer is a Monte-level object. Also note that, at
-        # this point, we have had a bad day; we did not respond to _printOn/1.
-        from typhon.objects.data import StrObject
-        printer.call(u"print",
-                     [StrObject(u"<%s>" % self.getDisplayName())])
-
-    def auditorStamps(self):
-        if self.report is None:
-            return emptySet
-        else:
-            return self.report.getStamps()
-
-    def isSettled(self, sofar=None):
-        if selfless in self.auditorStamps():
-            if transparentStamp in self.auditorStamps():
-                from typhon.objects.collections.maps import EMPTY_MAP
-                if sofar is None:
-                    sofar = {self: None}
-                # Uncall and recurse.
-                return self.callAtom(_UNCALL_0, [],
-                                     EMPTY_MAP).isSettled(sofar=sofar)
-            # XXX Semitransparent support goes here
-
-        # Well, we're resolved, so I guess that we're good!
-        return True
-
-    def recvNamed(self, atom, args, namedArgs):
-        method = self.getMethod(atom)
-        if method:
-            return self.runMethod(method, args, namedArgs)
-        else:
-            # Maybe we should invoke a Miranda method.
-            val = self.mirandaMethods(atom, args, namedArgs)
-            if val is None:
-                # No atoms matched, so there's no prebuilt methods. Instead,
-                # we'll use our matchers.
-                return self.runMatchers(atom, args, namedArgs)
-            else:
-                return val
-
-    @unroll_safe
-    def runMatchers(self, atom, args, namedArgs):
-        message = wrapList([StrObject(atom.verb), wrapList(args),
-                            namedArgs])
-        for matcher in self.getMatchers():
-            with Ejector() as ej:
-                try:
-                    return self.runMatcher(matcher, message, ej)
-                except Ejecting as e:
-                    if e.ejector is ej:
-                        # Looks like unification failed. On to the next
-                        # matcher!
-                        continue
-                    else:
-                        # It's not ours, cap'n.
-                        raise
-
-        raise Refused(self, atom, args)

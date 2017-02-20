@@ -4,16 +4,17 @@ A simple AST interpreter.
 
 from rpython.rlib import rvmprof
 from rpython.rlib.jit import promote, unroll_safe, we_are_jitted
-from rpython.rlib.objectmodel import import_from_mixin
 
 from typhon.atoms import getAtom
-from typhon.errors import Ejecting, UserException, userError
+from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.nano.main import mainPipeline
 from typhon.nano.mix import MixIR, mix
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
                                 SEV_BINDING, SEV_NOUN, SEV_SLOT)
+from typhon.objects.auditors import selfless, transparentStamp
 from typhon.objects.constants import NullObject
-from typhon.objects.collections.lists import unwrapList
+from typhon.objects.collections.helpers import emptySet
+from typhon.objects.collections.lists import unwrapList, wrapList
 from typhon.objects.collections.maps import (ConstMap, EMPTY_MAP, monteMap,
                                              unwrapMap)
 from typhon.objects.constants import unwrapBool
@@ -21,13 +22,14 @@ from typhon.objects.data import StrObject, unwrapStr
 from typhon.objects.ejectors import Ejector, theThrower, throw
 from typhon.objects.exceptions import sealException
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
+from typhon.objects.printers import Printer
 from typhon.objects.root import Object
 from typhon.objects.slots import (Binding, FinalSlot, VarSlot, finalBinding,
                                   varBinding)
-from typhon.objects.user import UserObjectHelper
 from typhon.profile import profileTyphon
 
 RUN_2 = getAtom(u"run", 2)
+_UNCALL_0 = getAtom(u"_uncall", 0)
 
 NULL_BINDING = finalBinding(NullObject, anyGuard)
 
@@ -120,20 +122,19 @@ class InterpObject(Object):
     An object whose script is executed by the AST evaluator.
     """
 
-    import_from_mixin(UserObjectHelper)
-
     _immutable_fields_ = "script", "report"
 
     # Inline single-entry method cache.
     cachedMethod = None, None
+
+    # Auditor report.
+    report = None
 
     def __init__(self, name, script, frame, ast, fqn):
         self.objectAst = ast
         self.fqn = fqn
         self.script = script
         self.frame = frame
-
-        self.report = None
 
     def docString(self):
         return self.script.doc
@@ -180,9 +181,6 @@ class InterpObject(Object):
                     self.cachedMethod = atom, method
                     return method
 
-    def getMatchers(self):
-        return promote(self.script).matchers
-
     def respondingAtoms(self):
         d = {}
         for method in self.script.methods:
@@ -227,6 +225,79 @@ class InterpObject(Object):
         e = Evaluator(self.frame, matcher.localSize)
         e.matchBind(matcher.patt, message, ej)
         return e.visitExpr(matcher.body)
+
+    def toString(self):
+        # Easily the worst part of the entire stringifying experience. We must
+        # be careful to not recurse here.
+        try:
+            printer = Printer()
+            self.call(u"_printOn", [printer])
+            return printer.value()
+        except Refused:
+            return u"<%s>" % self.getDisplayName()
+        except UserException, e:
+            return (u"<%s (threw exception %s when printed)>" %
+                    (self.getDisplayName(), e.error()))
+
+    def printOn(self, printer):
+        # Note that the printer is a Monte-level object. Also note that, at
+        # this point, we have had a bad day; we did not respond to _printOn/1.
+        from typhon.objects.data import StrObject
+        printer.call(u"print",
+                     [StrObject(u"<%s>" % self.getDisplayName())])
+
+    def auditorStamps(self):
+        if self.report is None:
+            return emptySet
+        else:
+            return self.report.getStamps()
+
+    def isSettled(self, sofar=None):
+        if selfless in self.auditorStamps():
+            if transparentStamp in self.auditorStamps():
+                from typhon.objects.collections.maps import EMPTY_MAP
+                if sofar is None:
+                    sofar = {self: None}
+                # Uncall and recurse.
+                return self.callAtom(_UNCALL_0, [],
+                                     EMPTY_MAP).isSettled(sofar=sofar)
+            # XXX Semitransparent support goes here
+
+        # Well, we're resolved, so I guess that we're good!
+        return True
+
+    def recvNamed(self, atom, args, namedArgs):
+        method = self.getMethod(atom)
+        if method:
+            return self.runMethod(method, args, namedArgs)
+        else:
+            # Maybe we should invoke a Miranda method.
+            val = self.mirandaMethods(atom, args, namedArgs)
+            if val is None:
+                # No atoms matched, so there's no prebuilt methods. Instead,
+                # we'll use our matchers.
+                return self.runMatchers(atom, args, namedArgs)
+            else:
+                return val
+
+    @unroll_safe
+    def runMatchers(self, atom, args, namedArgs):
+        message = wrapList([StrObject(atom.verb), wrapList(args),
+                            namedArgs])
+        for matcher in promote(self.script).matchers:
+            with Ejector() as ej:
+                try:
+                    return self.runMatcher(matcher, message, ej)
+                except Ejecting as e:
+                    if e.ejector is ej:
+                        # Looks like unification failed. On to the next
+                        # matcher!
+                        continue
+                    else:
+                        # It's not ours, cap'n.
+                        raise
+
+        raise Refused(self, atom, args)
 
 
 def retrieveGuard(severity, storage):
