@@ -62,6 +62,12 @@ def makeIR(name, terminals, nonterms):
         NT.__name__ = name + "~" + nonterm + str(increment())
         irAttrs[nonterm] = NT
 
+        def tryAsTree(piece):
+            try:
+                return piece.asTree()
+            except:
+                return piece
+
         def build(tag, constructor, pieces):
             ipieces = unrolling_iterable(enumerate(pieces))
             class Constructor(NT):
@@ -82,12 +88,9 @@ def makeIR(name, terminals, nonterms):
                         if ty is None:
                             l.append(getattr(self, piece))
                         elif ty.endswith("*"):
-                            l.append([x.asTree() for x in getattr(self, piece)])
+                            l.append([tryAsTree(x) for x in getattr(self, piece)])
                         else:
-                            try:
-                                l.append(getattr(self, piece).asTree())
-                            except:
-                                l.append(getattr(self, piece))
+                            l.append(tryAsTree(getattr(self, piece)))
                     return l
 
             Constructor.__name__ = name + "~" + constructor + str(increment())
