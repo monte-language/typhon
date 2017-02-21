@@ -6,6 +6,7 @@ from typhon.atoms import getAtom
 from typhon.nanopass import makeIR
 from typhon.nano.mix import MixIR
 from typhon.objects.constants import NullObject
+from typhon.objects.guards import anyGuard
 
 COERCE_2 = getAtom(u"coerce", 2)
 CONTAINS_1 = getAtom(u"contains", 1)
@@ -39,9 +40,9 @@ BytecodeIR = makeIR("Bytecode",
                             ("localSize", None)],
         },
         "Script": {
-            "ScriptExpr": [("name", None), ("doc", None),
-                           ("stamps", "Object*"), ("methods", "Method*"),
-                           ("matchers", "Matcher*")],
+            "ScriptExpr": [("name", None), ("doc", None), ("mast", None),
+                           ("layout", None), ("stamps", "Object*"),
+                           ("methods", "Method*"), ("matchers", "Matcher*")],
         },
     }
 )
@@ -56,29 +57,38 @@ BytecodeIR = makeIR("Bytecode",
     MAKEOBJECT, TIEKNOT,
 ) = range(20)
 
+def concatBytecode(left, right):
+    rv = left[:]
+    for t in right:
+        inst, idx = t
+        # LIVE POP ->
+        if inst == POP:
+            top, _ = rv[-1]
+            if top in (LIVE, EX, LOCAL, FRAME):
+                rv.pop()
+            elif top == DUP:
+                rv.pop()
+        else:
+            rv.append(t)
+    return rv
+
 # Patch in a class with richer functionality.
 class BytecodeExpr(BytecodeIR.BytecodeExpr):
 
     def add(self, insts):
-        newInsts = self.insts[:]
-        for t in insts:
-            inst, idx = t
-            # LIVE POP ->
-            if inst == POP:
-                top, _ = newInsts[-1]
-                if top in (LIVE, EX, LOCAL, FRAME):
-                    newInsts.pop()
-            else:
-                newInsts.append(t)
-        return BytecodeExpr(newInsts)
-
-    def addExpr(self, expr):
-        if isinstance(expr, BytecodeExpr):
-            return self.add(expr.insts)
-        else:
-            return BytecodeIR.SeqExpr(self, expr)
-
+        return BytecodeExpr(concatBytecode(self.insts, insts))
 BytecodeIR.BytecodeExpr = BytecodeExpr
+
+def add(self, insts):
+    return BytecodeIR.SeqExpr([self, BytecodeExpr(insts)])
+def addExpr(self, expr):
+    if isinstance(expr, BytecodeExpr):
+        return self.add(expr.insts)
+    else:
+        return BytecodeIR.SeqExpr(self, expr)
+BytecodeIR.Expr.add = add
+BytecodeIR.Expr.addExpr = addExpr
+
 
 class StaticFrame(object):
     """
@@ -341,6 +351,7 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         return self.dest.MatcherExpr(frame, expr, localSize)
 
     def visitClearObjectExpr(self, patt, script):
+        script = self.visitScript(script)
         scriptIndex = self.addScript(script)
         rv = BytecodeExpr([
             (MAKEOBJECT, scriptIndex),
@@ -364,22 +375,31 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         return rv
 
     def makeBind(self, op, guard, idx):
+        # (specimen ej)
         if isinstance(guard, self.src.NullExpr):
-            return BytecodeExpr([
-                (POP, 0),
-                (op, idx),
+            rv = BytecodeExpr([
+                (LIVE, self.addLive(anyGuard))
             ])
         else:
-            guard = self.visitExpr(guard)
-            return guard.add([
-                # (specimen ej guard)
-                (NROT, 0),
-                # (guard specimen ej)
-                self.makeCall(CALL, COERCE_2),
-                # (prize)
-                (op, idx),
-                # ()
-            ])
+            rv = self.visitExpr(guard)
+        return rv.add([
+            # (specimen ej guard)
+            (NROT, 0),
+            # (guard specimen ej)
+            # self.makeCall(CALL, COERCE_2),
+            # (prize)
+            (op, idx),
+            # ()
+        ])
+
+    def visitBindingPatt(self, name, idx):
+        return BytecodeExpr([
+            # (specimen ej)
+            (POP, 0),
+            # (specimen)
+            (BINDN, idx),
+            # ()
+        ])
 
     def visitFinalBindingPatt(self, name, guard, idx):
         return self.makeBind(BINDFB, guard, idx)
@@ -410,7 +430,16 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         return self.makeMatchList(patts)
 
     def visitNounPatt(self, name, guard, idx):
-        return self.makeBind(BINDN, guard, idx)
+        if isinstance(guard, self.src.NullExpr):
+            return BytecodeExpr([
+                # (specimen ej)
+                (POP, 0),
+                # (specimen)
+                (BINDN, idx),
+                # ()
+            ])
+        else:
+            return self.makeBind(BINDN, guard, idx)
 
     def visitVarBindingPatt(self, name, guard, idx):
         return self.makeBind(BINDVB, guard, idx)

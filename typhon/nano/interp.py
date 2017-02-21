@@ -29,6 +29,7 @@ from typhon.objects.slots import (Binding, FinalSlot, VarSlot, finalBinding,
                                   varBinding)
 from typhon.profile import profileTyphon
 
+COERCE_2 = getAtom(u"coerce", 2)
 RUN_2 = getAtom(u"run", 2)
 _UNCALL_0 = getAtom(u"_uncall", 0)
 
@@ -438,6 +439,32 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 self.stack.append(self.locals[idx])
             elif inst == bc.FRAME:
                 self.stack.append(self.frame[idx])
+            elif inst == bc.BINDFB:
+                ej = self.stack.pop()
+                specimen = self.stack.pop()
+                guard = self.stack.pop()
+                val = guard.callAtom(COERCE_2, [specimen, ej], EMPTY_MAP)
+                self.locals[idx] = finalBinding(val, guard)
+            elif inst == bc.BINDFS:
+                ej = self.stack.pop()
+                specimen = self.stack.pop()
+                guard = self.stack.pop()
+                val = guard.callAtom(COERCE_2, [specimen, ej], EMPTY_MAP)
+                self.locals[idx] = FinalSlot(val, guard)
+            elif inst == bc.BINDN:
+                self.locals[idx] = self.stack.pop()
+            elif inst == bc.BINDVB:
+                ej = self.stack.pop()
+                specimen = self.stack.pop()
+                guard = self.stack.pop()
+                val = guard.callAtom(COERCE_2, [specimen, ej], EMPTY_MAP)
+                self.locals[idx] = varBinding(val, guard)
+            elif inst == bc.BINDVS:
+                ej = self.stack.pop()
+                specimen = self.stack.pop()
+                guard = self.stack.pop()
+                val = guard.callAtom(COERCE_2, [specimen, ej], EMPTY_MAP)
+                self.locals[idx] = VarSlot(val, guard)
             elif inst == bc.CALL:
                 atom = self.staticFrame.atoms[idx]
                 args = self.sliceStack(atom.arity)
@@ -449,6 +476,12 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 args = self.sliceStack(atom.arity)
                 obj = self.stack.pop()
                 self.stack.append(obj.callAtom(atom, args, namedArgs))
+            elif inst == bc.MATCHLIST:
+                ej = self.stack.pop()
+                l = unwrapList(self.stack.pop(), ej=ej)
+                for obj in reversed(l):
+                    self.stack.append(obj)
+                    self.stack.append(ej)
             elif inst == bc.MAKEOBJECT:
                 self.makeObject(self.staticFrame.scripts[idx])
             elif inst == bc.TIEKNOT:
