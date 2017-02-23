@@ -41,13 +41,13 @@ ProfileNameIR = BytecodeIR.extend("ProfileName",
     {
         "Method": {
             "MethodExpr": [("profileName", "ProfileName"), ("doc", None),
-                           ("atom", None), ("patts", "Patt*"),
-                           ("namedPatts", "NamedPatt*"), ("guard", "Expr"),
-                           ("body", "Expr"), ("localSize", None)],
+                           ("atom", None), ("frame", "Frame"), ("expr", "Expr"),
+                           ("localSize", None)],
         },
         "Matcher": {
-            "MatcherExpr": [("profileName", "ProfileName"), ("patt", "Patt"),
-                            ("body", "Expr"), ("localSize", None)],
+            "MatcherExpr": [("profileName", "ProfileName"),
+                            ("frame", "Frame"), ("expr", "Expr"),
+                            ("localSize", None)],
         },
     }
 )
@@ -65,22 +65,12 @@ class MakeProfileNames(BytecodeIR.makePassTo(ProfileNameIR)):
         # method/matcher without a body. ~ C.
         self.objectNames = []
 
-    def visitClearObjectExpr(self, patt, script):
-        # Push, do the recursion, pop.
-        objName = script.name
-        self.objectNames.append((objName.encode("utf-8"),
-            script.layout.fqn.encode("utf-8").split("$")[0]))
-        rv = self.super.visitClearObjectExpr(self, patt, script)
-        self.objectNames.pop()
-        return rv
-
-    def visitObjectExpr(self, patt, guards, auditors, script, clipboard):
-        # Push, do the recursion, pop.
-        objName = script.name
-        self.objectNames.append((objName.encode("utf-8"),
-            script.layout.fqn.encode("utf-8").split("$")[0]))
-        rv = self.super.visitObjectExpr(self, patt, guards, auditors, script,
-                                        clipboard)
+    def visitScriptExpr(self, name, doc, mast, layout, stamps, methods,
+            matchers):
+        self.objectNames.append((name.encode("utf-8"),
+            layout.fqn.encode("utf-8").split("$")[0]))
+        rv = self.super.visitScriptExpr(self, name, doc, mast, layout,
+                stamps, methods, matchers)
         self.objectNames.pop()
         return rv
 
@@ -88,26 +78,19 @@ class MakeProfileNames(BytecodeIR.makePassTo(ProfileNameIR)):
         name, fqn = self.objectNames[-1]
         return "mt:%s.%s:1:%s" % (name, inner, fqn)
 
-    def visitMethodExpr(self, doc, atom, patts, namedPatts, guard, body,
-            localSize):
+    def visitMethodExpr(self, doc, atom, frame, expr, localSize):
         # NB: `atom.repr` is tempting but wrong. ~ C.
         description = "%s/%d" % (atom.verb.encode("utf-8"), atom.arity)
         profileName = self.makeProfileName(description)
-        patts = [self.visitPatt(patt) for patt in patts]
-        namedPatts = [self.visitNamedPatt(namedPatt) for namedPatt in
-                namedPatts]
-        guard = self.visitExpr(guard)
-        body = self.visitExpr(body)
-        rv = self.dest.MethodExpr(profileName, doc, atom, patts, namedPatts,
-                guard, body, localSize)
+        expr = self.visitExpr(expr)
+        rv = self.dest.MethodExpr(profileName, doc, atom, frame, expr, localSize)
         rvmprof.register_code(rv, lambda method: method.profileName)
         return rv
 
-    def visitMatcherExpr(self, patt, body, localSize):
+    def visitMatcherExpr(self, frame, expr, localSize):
         profileName = self.makeProfileName("matcher")
-        patt = self.visitPatt(patt)
-        body = self.visitExpr(body)
-        rv = self.dest.MatcherExpr(profileName, patt, body, localSize)
+        expr = self.visitExpr(expr)
+        rv = self.dest.MatcherExpr(profileName, frame, expr, localSize)
         rvmprof.register_code(rv, lambda matcher: matcher.profileName)
         return rv
 
@@ -805,6 +788,7 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     ast = mix(ast, outers)
     ast, topFrame = makeBytecode(ast)
     ast = MakeProfileNames().visitExpr(ast)
+    topFrame = MakeProfileNames().visitFrame(topFrame)
     result = NullObject
     e = Evaluator(topFrame, [], localSize)
     result = e.visitExpr(ast)

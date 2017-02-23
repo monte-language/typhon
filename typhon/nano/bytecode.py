@@ -34,17 +34,22 @@ BytecodeIR = makeIR("Bytecode",
             "TryExpr": [("body", "Expr"), ("catchBody", "Expr")],
         },
         "Method": {
-            "MethodExpr": [("doc", None), ("verb", None), ("frame", None),
-                           ("expr", "Expr"), ("localSize", None)],
+            "MethodExpr": [("doc", None), ("atom", None),
+                           ("frame", "Frame"), ("expr", "Expr"),
+                           ("localSize", None)],
         },
         "Matcher": {
-            "MatcherExpr": [("frame", None), ("expr", "Expr"),
+            "MatcherExpr": [("frame", "Frame"), ("expr", "Expr"),
                             ("localSize", None)],
         },
         "Script": {
             "ScriptExpr": [("name", None), ("doc", None), ("mast", None),
                            ("layout", None), ("stamps", "Object*"),
                            ("methods", "Method*"), ("matchers", "Matcher*")],
+        },
+        "Frame": {
+            "StaticFrame": [("lives", None), ("exs", None), ("atoms", None),
+                            ("scripts", "Script*"), ("clipboards", None)],
         },
     }
 )
@@ -93,22 +98,6 @@ BytecodeIR.Expr.add = add
 BytecodeIR.Expr.addExpr = addExpr
 
 
-class StaticFrame(object):
-    """
-    An execution frame's static context.
-    """
-
-    _immutable_ = True
-    _immutable_fields_ = ("lives[*]", "exs[*]", "atoms[*]", "scripts[:]",
-                          "clipboards[:]")
-
-    def __init__(self, lives, exs, atoms, scripts, clipboards):
-        self.lives = lives
-        self.exs = exs
-        self.atoms = atoms
-        self.scripts = scripts
-        self.clipboards = clipboards
-
 class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
     """
     Turn non-control-flow instructions into bytecode.
@@ -145,8 +134,8 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         atoms = self.atomStacks.pop()
         scripts = self.scriptStacks.pop()
         clipboards = self.clipboardStacks.pop()
-        return StaticFrame(lives[:], exs[:], atoms[:], scripts[:],
-                           clipboards[:])
+        return self.dest.StaticFrame(lives[:], exs[:], atoms[:], scripts[:],
+                                     clipboards[:])
 
     def addLive(self, obj):
         stack = self.liveStacks[-1]
@@ -229,7 +218,7 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
     def visitCallExpr(self, obj, atom, args, namedArgs):
         rv = self.visitExpr(obj)
         for arg in args:
-            rv = rv.add(self.visitExpr(arg).insts)
+            rv = rv.addExpr(self.visitExpr(arg))
         if namedArgs:
             op = CALLMAP
             rv = rv.add([
