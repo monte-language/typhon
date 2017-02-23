@@ -199,9 +199,8 @@ class DischargeAuditors(MixIR.selfPass()):
             asAuditor = auditors[0]
             if isinstance(asAuditor, self.src.LiveExpr):
                 patt.guard = asAuditor
-                from typhon.nano.interp import GuardInfo, anyGuardLookup
-                guardInfo = GuardInfo(guards, script.layout.frameTable, None, None,
-                        anyGuardLookup)
+                from typhon.objects.user import GuardInfo
+                guardInfo = GuardInfo(guards, script.layout.frameTable, None, None)
                 with Audition(script.layout.fqn, clipboard.ast, guardInfo) as audition:
                     for i, auditor in enumerate(auditors):
                         if not isinstance(auditor, self.src.LiveExpr):

@@ -162,6 +162,49 @@ class Audition(Object):
     def getFQN(self):
         return self.fqn
 
+class GuardInfo(object):
+    """
+    Some dynamic guard information.
+    """
+
+    _dynamic = False
+
+    def __init__(self, guards, frameTable, objName, guardAuditor):
+        self.guards = guards
+        self.frameTable = frameTable
+        self.objName = objName
+        self.guardAuditor = guardAuditor
+
+        # Empirically this is about 70%. It is on a pretty fast path, so it's
+        # commented out by default. ~ C.
+        # from typhon.metrics import globalRecorder
+        # self.fastGuardRate = globalRecorder().getRateFor(
+        #         "Audition.getGuard/1 fast path")
+
+    def clean(self):
+        self._dynamic = False
+
+    def isDynamic(self):
+        return self._dynamic
+
+    def getGuard(self, name):
+        if name == self.objName:
+            # self.fastGuardRate.yes()
+            return self.guardAuditor
+
+        if name in self.guards:
+            # self.fastGuardRate.yes()
+            return self.guards[name]
+
+        self._dynamic = True
+        # self.fastGuardRate.no()
+        return self.guardLookup.lookupGuard(name, self.frameTable)
+
+    def dynamicGuards(self):
+        names = self.frameTable.dynamicGuards.keys()
+        return [self.guardLookup.lookupGuard(name, self.frameTable)
+                for name in names]
+
 
 class AuditorReport(object):
     """

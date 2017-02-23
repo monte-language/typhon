@@ -7,6 +7,7 @@ from typhon.nanopass import makeIR
 from typhon.nano.mix import MixIR
 from typhon.objects.constants import NullObject
 from typhon.objects.guards import anyGuard
+from typhon.objects.user import GuardInfo
 
 COERCE_2 = getAtom(u"coerce", 2)
 CONTAINS_1 = getAtom(u"contains", 1)
@@ -54,8 +55,9 @@ BytecodeIR = makeIR("Bytecode",
     CALL, CALLMAP,
     MAKEMAP,
     MATCHLIST,
-    MAKEOBJECT, TIEKNOT,
-) = range(20)
+    AUDIT,
+    MAKEOBJECT, MAKESTAMPEDOBJECT, TIEKNOT,
+) = range(22)
 
 def concatBytecode(left, right):
     rv = left[:]
@@ -96,13 +98,15 @@ class StaticFrame(object):
     """
 
     _immutable_ = True
-    _immutable_fields_ = "lives[*]", "exs[*]", "atoms[*]", "scripts[:]"
+    _immutable_fields_ = ("lives[*]", "exs[*]", "atoms[*]", "scripts[:]",
+                          "clipboards[:]")
 
-    def __init__(self, lives, exs, atoms, scripts):
+    def __init__(self, lives, exs, atoms, scripts, clipboards):
         self.lives = lives
         self.exs = exs
         self.atoms = atoms
         self.scripts = scripts
+        self.clipboards = clipboards
 
 class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
     """
@@ -125,19 +129,23 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         self.exStacks = [[]]
         self.atomStacks = [[]]
         self.scriptStacks = [[]]
+        self.clipboardStacks = [[]]
 
     def pushFrame(self):
         self.liveStacks.append([])
         self.exStacks.append([])
         self.atomStacks.append([])
         self.scriptStacks.append([])
+        self.clipboardStacks.append([])
 
     def popFrame(self):
         lives = self.liveStacks.pop()
         exs = self.exStacks.pop()
         atoms = self.atomStacks.pop()
         scripts = self.scriptStacks.pop()
-        return StaticFrame(lives[:], exs[:], atoms[:], scripts[:])
+        clipboards = self.clipboardStacks.pop()
+        return StaticFrame(lives[:], exs[:], atoms[:], scripts[:],
+                           clipboards[:])
 
     def addLive(self, obj):
         stack = self.liveStacks[-1]
@@ -155,6 +163,12 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         stack = self.scriptStacks[-1]
         rv = len(stack)
         stack.append(script)
+        return rv
+
+    def addClipboard(self, clipboard):
+        stack = self.clipboardStacks[-1]
+        rv = len(stack)
+        stack.append(clipboard)
         return rv
 
     def visitLiveExpr(self, obj):
@@ -298,7 +312,7 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
             (SWAP, 0),
         ])
         # (specimen ej)
-        rv = rv.addExpr(self.visitPatt(namedPatt.value))
+        rv = rv.addExpr(self.visitPatt(namedPatt.patt))
         # ()
         return rv
 
@@ -355,6 +369,43 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         scriptIndex = self.addScript(script)
         rv = BytecodeExpr([
             (MAKEOBJECT, scriptIndex),
+            # (obj)
+            (DUP, 0),
+            # (obj obj)
+            (LIVE, self.addLive(NullObject)),
+            # (obj obj null)
+        ])
+        # (obj specimen ej)
+        rv = rv.addExpr(self.visitPatt(patt))
+        # (obj)
+        # Check whether we have a spot in the closure.
+        position = script.layout.frameTable.positionOf(script.name)
+        if position != -1:
+            # Assign to the closure.
+            rv = rv.add([
+                (TIEKNOT, position),
+            ])
+        # (obj)
+        return rv
+
+    def visitObjectExpr(self, patt, guards, auditors, script, clipboard):
+        script = self.visitScript(script)
+        scriptIndex = self.addScript(script)
+        # Set up guard information.
+        # XXX this needs to be fixed
+        guardAuditor = None
+        guardInfo = GuardInfo(guards, script.layout.frameTable, script.name, guardAuditor)
+        clipboard.guardInfo = guardInfo
+        clipboard.auditorSize = len(auditors)
+        clipboardIndex = self.addClipboard(clipboard)
+        rv = BytecodeExpr([])
+        for auditor in auditors:
+            rv = rv.addExpr(self.visitExpr(auditor))
+        rv = rv.add([
+            # (auditor0 auditor1 ... auditorn)
+            (AUDIT, clipboardIndex),
+            # (stamps)
+            (MAKESTAMPEDOBJECT, scriptIndex),
             # (obj)
             (DUP, 0),
             # (obj obj)

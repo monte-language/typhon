@@ -123,7 +123,7 @@ class InterpObject(Object):
     An object whose script is executed by the AST evaluator.
     """
 
-    _immutable_fields_ = "script", "report"
+    _immutable_fields_ = "script", "report", "stamps[*]"
 
     # Inline single-entry method cache.
     cachedMethod = None, None
@@ -159,6 +159,9 @@ class InterpObject(Object):
         # but it could eventually justify promotion to a proper set built in
         # t.n.structure. ~ C.
         if prospect in self.script.stamps:
+            return True
+
+        if prospect in self.stamps:
             return True
 
         # super().
@@ -296,55 +299,10 @@ def retrieveGuard(severity, storage):
     else:
         assert False, "landlord"
 
-
-class GuardInfo(object):
-    """
-    Some dynamic guard information.
-    """
-
-    _dynamic = False
-
-    def __init__(self, guards, frameTable, objName, guardAuditor, guardLookup):
-        self.guards = guards
-        self.frameTable = frameTable
-        self.objName = objName
-        self.guardAuditor = guardAuditor
-        self.guardLookup = guardLookup
-
-        # Empirically this is about 70%. It is on a pretty fast path, so it's
-        # commented out by default. ~ C.
-        # from typhon.metrics import globalRecorder
-        # self.fastGuardRate = globalRecorder().getRateFor(
-        #         "Audition.getGuard/1 fast path")
-
-    def clean(self):
-        self._dynamic = False
-
-    def isDynamic(self):
-        return self._dynamic
-
-    def getGuard(self, name):
-        if name == self.objName:
-            # self.fastGuardRate.yes()
-            return self.guardAuditor
-
-        if name in self.guards:
-            # self.fastGuardRate.yes()
-            return self.guards[name]
-
-        self._dynamic = True
-        # self.fastGuardRate.no()
-        return self.guardLookup.lookupGuard(name, self.frameTable)
-
-    def dynamicGuards(self):
-        names = self.frameTable.dynamicGuards.keys()
-        return [self.guardLookup.lookupGuard(name, self.frameTable)
-                for name in names]
-
 class GuardLookup(object):
     def lookupGuard(self, name, frameTable):
         pass
-noGuardLookup = GuardLookup()
+# noGuardLookup = GuardLookup()
 
 class _AnyGuardLookup(GuardLookup):
     def lookupGuard(self, name, frameTable):
@@ -399,13 +357,15 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         self.stack = self.stack[:offset]
         return rv
 
-    def makeObject(self, script):
+    def makeObject(self, script, gatherStamps=False):
         objName = script.name
         frameTable = script.layout.frameTable
         closure = [self.lookupBinding(scope, index) for (_, scope, index, _)
                  in frameTable.frameInfo]
         # Build the object.
         val = InterpObject(objName, script, closure, script.layout.fqn)
+        if gatherStamps:
+            val.stamps = self.stack.pop()
         self.stack.append(val)
 
     # Instructions are immutable.
@@ -482,8 +442,16 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 for obj in reversed(l):
                     self.stack.append(obj)
                     self.stack.append(ej)
+            elif inst == bc.AUDIT:
+                clipboard = self.staticFrame.clipboards[idx]
+                auditors = self.sliceStack(clipboard.auditorSize)
+                clipboard.guardInfo.guardLookup = self
+                clipboard.audit(auditors, clipboard.guardInfo)
             elif inst == bc.MAKEOBJECT:
                 self.makeObject(self.staticFrame.scripts[idx])
+            elif inst == bc.MAKESTAMPEDOBJECT:
+                self.makeObject(self.staticFrame.scripts[idx],
+                        gatherStamps=True)
             elif inst == bc.TIEKNOT:
                 obj = self.stack[-1]
                 assert isinstance(obj, InterpObject), "tonguetied"
