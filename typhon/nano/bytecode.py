@@ -13,6 +13,7 @@ COERCE_2 = getAtom(u"coerce", 2)
 CONTAINS_1 = getAtom(u"contains", 1)
 FETCH_2 = getAtom(u"fetch", 2)
 GET_1 = getAtom(u"get", 1)
+RUN_2 = getAtom(u"run", 2)
 WITH_2 = getAtom(u"with", 2)
 
 def makeBytecode(expr):
@@ -497,3 +498,25 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
 
     def visitVarSlotPatt(self, name, guard, idx):
         return self.makeBind(BINDVS, guard, idx)
+
+    def visitViaPatt(self, trans, patt, _):
+        # (specimen ej)
+        rv = BytecodeExpr([
+            (SWAP, 0),
+            # (ej specimen)
+            (OVER, 0),
+        ])
+        # (ej specimen ej)
+        rv = rv.addExpr(self.visitExpr(trans))
+        # (ej specimen ej trans)
+        rv = rv.add([
+            (NROT, 0),
+            # (ej trans specimen ej)
+            self.makeCall(CALL, RUN_2),
+            # (ej prize)
+            (SWAP, 0),
+        ])
+        # (prize ej)
+        rv = rv.addExpr(self.visitPatt(patt))
+        # ()
+        return rv
