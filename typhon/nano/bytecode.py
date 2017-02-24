@@ -65,6 +65,53 @@ BytecodeIR = makeIR("Bytecode",
     MAKEOBJECT, MAKESTAMPEDOBJECT, TIEKNOT,
 ) = range(22)
 
+def dis(insts):
+    for inst, idx in insts:
+        if inst == POP:
+            print "POP"
+        elif inst == DUP:
+            print "DUP"
+        elif inst == SWAP:
+            print "SWAP"
+        elif inst == NROT:
+            print "NROT"
+        elif inst == OVER:
+            print "OVER"
+        elif inst == LIVE:
+            print "LIVE %d" % idx
+        elif inst == EX:
+            print "EX %d" % idx
+        elif inst == LOCAL:
+            print "LOCAL %d" % idx
+        elif inst == FRAME:
+            print "FRAME %d" % idx
+        elif inst == BINDFB:
+            print "BINDFB %d" % idx
+        elif inst == BINDFS:
+            print "BINDFS %d" % idx
+        elif inst == BINDN:
+            print "BINDN %d" % idx
+        elif inst == BINDVB:
+            print "BINDVB %d" % idx
+        elif inst == BINDVS:
+            print "BINDVS %d" % idx
+        elif inst == CALL:
+            print "CALL %d" % idx
+        elif inst == CALLMAP:
+            print "CALLMAP %d" % idx
+        elif inst == MAKEMAP:
+            print "MAKEMAP"
+        elif inst == MATCHLIST:
+            print "MATCHLIST %d" % idx
+        elif inst == AUDIT:
+            print "AUDIT %d" % idx
+        elif inst == MAKEOBJECT:
+            print "MAKEOBJECT %d" % idx
+        elif inst == MAKESTAMPEDOBJECT:
+            print "MAKESTAMPEDOBJECT %d" % idx
+        elif inst == TIEKNOT:
+            print "TIEKNOT %d" % idx
+
 def concatBytecode(left, right):
     rv = left[:]
     for t in right:
@@ -88,12 +135,21 @@ class BytecodeExpr(BytecodeIR.BytecodeExpr):
 BytecodeIR.BytecodeExpr = BytecodeExpr
 
 def add(self, insts):
+    last = self.exprs[-1]
+    if isinstance(last, BytecodeExpr):
+        last = concatBytecode(last.insts, insts)
+        return BytecodeIR.SeqExpr(self.exprs[:-1] + [BytecodeExpr(last)])
+    else:
+        return BytecodeIR.SeqExpr(self.exprs + [BytecodeExpr(insts)])
+BytecodeIR.SeqExpr.add = add
+
+def add(self, insts):
     return BytecodeIR.SeqExpr([self, BytecodeExpr(insts)])
 def addExpr(self, expr):
     if isinstance(expr, BytecodeExpr):
         return self.add(expr.insts)
     else:
-        return BytecodeIR.SeqExpr(self, expr)
+        return BytecodeIR.SeqExpr([self, expr])
 BytecodeIR.Expr.add = add
 BytecodeIR.Expr.addExpr = addExpr
 
@@ -188,6 +244,15 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         return BytecodeExpr([
             (FRAME, idx),
         ])
+
+    def visitSeqExpr(self, exprs):
+        rv = self.visitExpr(exprs[0])
+        for expr in exprs[1:]:
+            rv = rv.add([
+                (POP, 0),
+            ])
+            rv = rv.addExpr(self.visitExpr(expr))
+        return rv
 
     def visitDefExpr(self, patt, ex, rvalue):
         rv = self.visitExpr(ex)
@@ -329,7 +394,9 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         expr = expr.addExpr(self.visitExpr(body))
         # (rv)
         if not isinstance(guard, self.src.NullExpr):
-            expr = expr.addExpr(self.addLive(NullObject))
+            expr = expr.add([
+                (LIVE, self.addLive(NullObject)),
+            ])
             # (rv null)
             expr = expr.addExpr(self.visitExpr(guard))
             # (rv null guard)

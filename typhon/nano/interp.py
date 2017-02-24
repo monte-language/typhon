@@ -178,6 +178,10 @@ class InterpObject(Object):
             result_class=Object)
     def runMethod(self, method, args, namedArgs):
         e = Evaluator(method.frame, self.closure, method.localSize)
+        e.stack.append(namedArgs)
+        e.stack.append(theThrower)
+        e.stack.append(wrapList(args))
+        e.stack.append(theThrower)
         return e.run(method.expr)
 
     @rvmprof.vmprof_execute_code("matcher",
@@ -185,6 +189,8 @@ class InterpObject(Object):
             result_class=Object)
     def runMatcher(self, matcher, message, ej):
         e = Evaluator(matcher.frame, self.closure, matcher.localSize)
+        e.stack.append(message)
+        e.stack.append(ej)
         return e.run(matcher.expr)
 
     def toString(self):
