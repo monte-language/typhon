@@ -8,6 +8,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 env/
+venv/
 bin/
 build/
 develop-eggs/
@@ -60,3 +61,8 @@ mast/**/*.mast
 
 # Nix Bits
 result
+
+# Project bits
+mt-typhon
+rpython/
+pypy-*
