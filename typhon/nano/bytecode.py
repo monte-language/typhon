@@ -269,6 +269,15 @@ class MakeBytecode(MixIR.makePassTo(BytecodeIR)):
         # (specimen)
         return rv
 
+    def visitEscapeOnlyExpr(self, ejPatt, ejBody):
+        ejExpr = self.visitPatt(ejPatt).addExpr(self.visitExpr(ejBody))
+        return self.dest.EscapeOnlyExpr(ejExpr)
+
+    def visitEscapeExpr(self, ejPatt, ejBody, catchPatt, catchBody):
+        ejExpr = self.visitPatt(ejPatt).addExpr(self.visitExpr(ejBody))
+        catchExpr = self.visitPatt(catchPatt).addExpr(self.visitExpr(catchBody))
+        return self.dest.EscapeExpr(ejExpr, catchExpr)
+
     def makeCall(self, op, atom):
         # XXX linear-time search turns to quadratic-time performance:
         # Compiling n distinct atoms in a single frame is O(n**2).
