@@ -7,6 +7,7 @@ import inspect
 
 import py
 
+from rpython.rlib.jit import dont_look_inside
 from rpython.rlib.unroll import unrolling_iterable
 
 from typhon.atoms import getAtom
@@ -258,7 +259,25 @@ def recvNamed(self, atom, args, namedArgs):
  else:
   return rv
 """ % (";".join(imports), "\n".join(dispatchClauses))).compile() in execNames
-        cls.recvNamed = execNames["recvNamed"]
+        recvNamed = execNames["recvNamed"]
+        # This is the place for fixing the "too many constants" JIT
+        # translation error. If there's too many dispatch clauses in
+        # .recvNamed(), then the JIT transformation fails because too many
+        # constant values are being mixed in. This number is determined
+        # empirically; uncomment the next line to take measurements:
+        # print "Made %d dispatch clauses for %r" % (len(dispatchClauses), cls)
+        # Here's a worksheet. Please keep it up-to-date when altering this
+        # section of code. ~ C.
+        # * At last run, the longest working list of clauses had length 40
+        # * And the shortest list which broke translation had length 46
+        # * Assuming that each clause has a constant integral number of
+        #   constants, the number of constants per clause is 6
+        # * The maximum number of allowed constants is 255
+        # * Therefore, the longest working list can have maximum length 42
+        if len(dispatchClauses) >= 42:
+            # Too many constants; forbid the JIT from recursing into us.
+            recvNamed = dont_look_inside(recvNamed)
+        cls.recvNamed = recvNamed
 
     return atoms
 
