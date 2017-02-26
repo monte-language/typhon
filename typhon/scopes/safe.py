@@ -75,8 +75,9 @@ class TraceLn(Object):
         self.writeTracePreamble()
 
         if isinstance(problem, SealedException):
-            self.writeTraceLine(u"Problem: " + problem.value.toString())
-            for crumb in problem.trail:
+            ue = problem.ue
+            self.writeTraceLine(u"Problem: " + ue.getPayload().toString())
+            for crumb in ue.formatTrail():
                 self.writeTraceLine(crumb)
         else:
             self.writeTraceLine(u"Problem (unsealed): " + problem.toString())

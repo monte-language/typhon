@@ -51,8 +51,8 @@ class UserException(Exception):
     def __init__(self, payload):
         from typhon.objects.exceptions import SealedException
         if isinstance(payload, SealedException):
-            self.payload = payload.value
-            self.trail = payload.trail
+            self.payload = payload.ue.getPayload()
+            self.trail = payload.ue.trail
         else:
             self.payload = payload
             self.trail = []
@@ -61,7 +61,7 @@ class UserException(Exception):
         return self.formatError().encode("utf-8")
 
     def formatError(self):
-        pieces = [self.error()] + self.trail
+        pieces = [self.error()] + self.formatTrail()
         pieces.append(u"Exception in user code:")
         pieces.reverse()
         return u"\n".join(pieces).encode("utf-8")
@@ -77,12 +77,18 @@ class UserException(Exception):
         Add a traceback frame to this exception.
         """
 
-        argStringList = [printObjTerse(arg) for arg in args]
-        argString = u", ".join(argStringList)
-        self.trail.append(u"  %s.%s(%s)" % (printObjTerse(target), atom.verb,
-                                            argString))
-        path, name = target.fqn.split(u"$", 1)
-        self.trail.append(u"File '%s', in object %s:" % (path, name))
+        self.trail.append((target, atom, args))
+
+    def formatTrail(self):
+        rv = []
+        for target, atom, args in self.trail:
+            argStringList = [printObjTerse(arg) for arg in args]
+            argString = u", ".join(argStringList)
+            rv.append(u"  %s.%s(%s)" % (printObjTerse(target), atom.verb,
+                                                argString))
+            path, name = target.fqn.split(u"$", 1)
+            rv.append(u"File '%s', in object %s:" % (path, name))
+        return rv
 
 
 def userError(s):

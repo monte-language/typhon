@@ -12,10 +12,10 @@ RUN_2 = getAtom(u"run", 2)
 
 def sealException(ue):
     val = ue.getPayload()
-    trail = ue.trail
     if isinstance(val, SealedException):
         return val
-    return SealedException(val, trail)
+    else:
+        return SealedException(ue)
 
 
 @autohelp
@@ -26,9 +26,8 @@ class SealedException(Object):
     Sealed within this object are the details of an exceptional occurrence.
     """
 
-    def __init__(self, value, trail):
-        self.value = value
-        self.trail = trail
+    def __init__(self, ue):
+        self.ue = ue
 
     def toString(self):
         return u"<sealed exception>"
@@ -41,6 +40,7 @@ def unsealException(specimen, ej):
     """
 
     if isinstance(specimen, SealedException):
-        trail = wrapList([StrObject(s) for s in specimen.trail])
-        return wrapList([specimen.value, trail])
+        ue = specimen.ue
+        trail = wrapList([StrObject(s) for s in ue.formatTrail()])
+        return wrapList([ue.getPayload(), trail])
     throwStr(ej, u"Cannot unseal non-thrown object")
