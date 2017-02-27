@@ -26,6 +26,7 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 
 PYTHON=venv/bin/python
 MT_TYPHON=./mt-typhon
+OPTLEVEL=-O2
 
 ifdef PROFILE
 	PROFILE_FLAGS=-p
@@ -38,7 +39,7 @@ endif
 default: mt-typhon mast fun
 
 mt-typhon:
-	$(PYTHON) -m rpython -O2 main
+	$(PYTHON) -mrpython $(OPTLEVEL) ./main.py
 
 boot: $(boot_objects) | mt-typhon
 
