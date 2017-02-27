@@ -44,12 +44,12 @@ def makeCapn(bs :Bytes) as DeepFrozen:
         def i := getWord(segmentPositions[segment] + offset)
         return switch (i & 0x3):
             match ==0x0:
-                def structOffset :Int := offset + shift(i, 2, 30)
+                def structOffset :Int := 1 + offset + shift(i, 2, 30)
                 def dataSize :Int := shift(i, 32, 16)
                 def pointerCount :Int := shift(i, 48, 16)
                 object structPointer:
                     to _printOn(out):
-                        out.print(`<struct @@$structOffset d$dataSize p$pointerCount>`)
+                        out.print(`<struct @@$segment+$structOffset d$dataSize p$pointerCount>`)
                     to type() :Str:
                         return "struct"
                     to offset() :Int:
@@ -61,31 +61,53 @@ def makeCapn(bs :Bytes) as DeepFrozen:
                         return [for o in (base..!(base + pointerCount))
                                 makePointer(segment, o)]
             match ==0x1:
-                def listOffset :Int := offset + shift(i, 2, 30)
-                def listSize :Int := shift(i, 35, 29)
-                object listPointer:
-                    to _printOn(out):
-                        out.print(`<list @@$listOffset d$listSize>`)
-                    to type() :Str:
-                        return "list"
-                    to offset() :Int:
-                        return listOffset
-                    to elementType() :Int:
-                        return shift(i, 32, 3)
-                    to size() :Int:
-                        return listSize
+                def listOffset :Int := 1 + offset + shift(i, 2, 30)
+                def elementType :Int := shift(i, 32, 3)
+                if (elementType == 7):
+                    # Tag must be shaped like a struct pointer.
+                    # XXX this doesn't work with current example data. Not
+                    # sure why; currently guessing that the capnpc serializer
+                    # just doesn't care whether those bits get trashed.
+                    # def tag :Int ? ((tag & 0x3) == 0x0) := getWord(listOffset)
+                    def tag :Int := getWord(listOffset)
+                    def listSize :Int := shift(tag, 2, 30)
+                    def wordSize :Int := shift(i, 35, 29)
+                    def dataSize :Int := shift(tag, 32, 16)
+                    def pointerCount :Int := shift(tag, 48, 16)
+                    traceln(`size in words $wordSize`)
+                    traceln(`data $dataSize pointers $pointerCount`)
+                    object listStructPointer:
+                        to _printOn(out):
+                            out.print(`<list of structs @@$segment+$listOffset d$listSize>`)
+                        to type() :Str:
+                            return "list"
+                        to offset() :Int:
+                            return listOffset
+                        to elementType() :Int:
+                            return elementType
+                        to size() :Int:
+                            return listSize
+                else:
+                    def listSize :Int := shift(i, 35, 29)
+                    object listPointer:
+                        to _printOn(out):
+                            out.print(`<list @@$segment+$listOffset d$listSize>`)
+                        to type() :Str:
+                            return "list"
+                        to offset() :Int:
+                            return listOffset
+                        to elementType() :Int:
+                            return elementType
+                        to size() :Int:
+                            return listSize
             match ==0x2:
-                object farPointer:
-                    to _printOn(out):
-                        out.print(`<far $i>`)
-                    to type() :Str:
-                        return "far"
-                    to hasWideLandingPad() :Bool:
-                        return 1 == shift(i, 2, 1)
-                    to offset() :Int:
-                        return shift(i, 3, 29)
-                    to segment() :Int:
-                        return shift(i, 32, 32)
+                def targetSegment :Int := shift(i, 32, 32)
+                def targetOffset :Int := shift(i, 3, 29)
+                def wideLanding :Bool := 1 == shift(i, 2, 1)
+                if (wideLanding):
+                    throw("Can't handle wide landings yet!")
+                else:
+                    makePointer(targetSegment, targetOffset)
             match ==0x3 ? (shift(i, 2, 30) == 0x0):
                 object capPointer:
                     to _printOn(out):
