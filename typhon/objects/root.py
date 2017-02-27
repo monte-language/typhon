@@ -159,7 +159,7 @@ class Object(object):
         # promoted; it'll be slow.
         jit_debug(atom.repr)
 
-        if namedArgsMap is None:
+        if namedArgsMap is None or namedArgsMap.isEmpty():
             namedArgsMap = MIRANDA_MAP
         else:
             from typhon.objects.collections.maps import ConstMap

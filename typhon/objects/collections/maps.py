@@ -258,7 +258,7 @@ class ConstMap(Object):
     def size(self):
         return len(self.objectMap)
 
-    @method("Bool")
+    @method.py("Bool")
     def isEmpty(self):
         return not self.objectMap
 
