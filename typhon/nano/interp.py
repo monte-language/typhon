@@ -121,7 +121,7 @@ class InterpObject(Object):
     An object whose script is executed by the AST evaluator.
     """
 
-    _immutable_fields_ = "script", "report"
+    _immutable_fields_ = "frame[*]", "script", "report"
 
     # Inline single-entry method cache.
     cachedMethod = None, None
