@@ -6,11 +6,6 @@ def mask(width :Int) :Int as DeepFrozen:
 def shift(i :Int, offset :Int, width :Int) :Int as DeepFrozen:
     return (i >> offset) & mask(width)
 
-def storages :DeepFrozen := [null] * 7
-
-def makeCompositeStorage() as DeepFrozen:
-    return null
-
 def makeStruct(message :DeepFrozen, segment :Int, offset :Int, dataSize :Int,
                pointerSize :Int) as DeepFrozen:
     return object structPointer:
@@ -28,6 +23,20 @@ def makeStruct(message :DeepFrozen, segment :Int, offset :Int, dataSize :Int,
             return [for o in (base..!(base + pointerSize))
                     message.interpretPointer(segment, o)]
 
+def storages :DeepFrozen := [null] * 7
+
+def makeCompositeStorage(dataSize :Int, pointerSize :Int) as DeepFrozen:
+    def stride :Int := dataSize + pointerSize
+    return object compositeStorage:
+        to _printOn(out):
+            out.print(`structs (d$dataSize p$pointerSize)`)
+
+        to stride() :Int:
+            return stride
+
+        to get(message, segment :Int, offset :Int):
+            return makeStruct(message, segment, offset, dataSize, pointerSize)
+
 def makeList(message :DeepFrozen, segment :Int, offset :Int, size :Int,
              storage) as DeepFrozen:
     def stride := storage.stride()
@@ -43,12 +52,8 @@ def makeList(message :DeepFrozen, segment :Int, offset :Int, size :Int,
                     if (position >= size):
                         throw.eject(ej, "End of iteration")
                     def structOffset :Int := offset + stride * position
-                    # XXX composite-specific
-                    def structPointer := makeStruct(message, segment,
-                                                    structOffset,
-                                                    storage.dataSize(),
-                                                    storage.pointerSize())
-                    def rv := [position, structPointer]
+                    def element := storage.get(message, segment, structOffset)
+                    def rv := [position, element]
                     position += 1
                     return rv
 
@@ -124,7 +129,7 @@ def makeMessage(bs :Bytes) as DeepFrozen:
                         traceln(`size in words $wordSize`)
                         traceln(`struct size $structSize pointers $pointerCount`)
                         makeList(message, segment, listOffset, listSize,
-                                 makeCompositeStorage())
+                                 makeCompositeStorage(structSize, pointerCount))
                     else:
                         def listSize :Int := shift(i, 35, 29)
                         makeList(message, segment, listOffset, listSize,
