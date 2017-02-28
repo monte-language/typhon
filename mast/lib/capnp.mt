@@ -40,26 +40,33 @@ def makeCapn(bs :Bytes) as DeepFrozen:
     traceln(`segment sizes $segmentSizes`)
     traceln(`segment positions $segmentPositions`)
 
-    def makePointer(segment :Int, offset :Int):
+    def makePointer
+
+    def makeStructPointer(segment :Int, structOffset :Int, dataSize :Int,
+                          pointerCount :Int):
+        return object structPointer:
+            to _printOn(out):
+                out.print(`<struct @@$segment+$structOffset d$dataSize p$pointerCount>`)
+            to type() :Str:
+                return "struct"
+            to offset() :Int:
+                return structOffset
+            to data() :Int:
+                return dataSize
+            to getPointers() :List:
+                def base :Int := structOffset + dataSize
+                return [for o in (base..!(base + pointerCount))
+                        makePointer(segment, o)]
+
+    bind makePointer(segment :Int, offset :Int):
         def i := getWord(segmentPositions[segment] + offset)
         return switch (i & 0x3):
             match ==0x0:
                 def structOffset :Int := 1 + offset + shift(i, 2, 30)
                 def dataSize :Int := shift(i, 32, 16)
                 def pointerCount :Int := shift(i, 48, 16)
-                object structPointer:
-                    to _printOn(out):
-                        out.print(`<struct @@$segment+$structOffset d$dataSize p$pointerCount>`)
-                    to type() :Str:
-                        return "struct"
-                    to offset() :Int:
-                        return structOffset
-                    to data() :Int:
-                        return dataSize
-                    to getPointers() :List:
-                        def base :Int := structOffset + dataSize
-                        return [for o in (base..!(base + pointerCount))
-                                makePointer(segment, o)]
+                makeStructPointer(segment, structOffset, dataSize,
+                                  pointerCount)
             match ==0x1:
                 def listOffset :Int := 1 + offset + shift(i, 2, 30)
                 def elementType :Int := shift(i, 32, 3)
@@ -72,13 +79,25 @@ def makeCapn(bs :Bytes) as DeepFrozen:
                     def tag :Int := getWord(listOffset)
                     def listSize :Int := shift(tag, 2, 30)
                     def wordSize :Int := shift(i, 35, 29)
-                    def dataSize :Int := shift(tag, 32, 16)
+                    def structSize :Int := shift(tag, 32, 16)
                     def pointerCount :Int := shift(tag, 48, 16)
                     traceln(`size in words $wordSize`)
-                    traceln(`data $dataSize pointers $pointerCount`)
+                    traceln(`struct size $structSize pointers $pointerCount`)
                     object listStructPointer:
                         to _printOn(out):
                             out.print(`<list of structs @@$segment+$listOffset d$listSize>`)
+                        to _makeIterator():
+                            var position :Int := 0
+                            return object listStructIterator:
+                                to next(ej):
+                                    if (position >= listSize):
+                                        throw.eject(ej, "End of iteration")
+                                    def structOffset :Int := listOffset + structSize * position
+                                    def structPointer := makeStructPointer(segment,
+                                        structOffset, structSize, pointerCount)
+                                    def rv := [position, structPointer]
+                                    position += 1
+                                    return rv
                         to type() :Str:
                             return "list"
                         to offset() :Int:
@@ -130,7 +149,8 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         def capn := makeCapn(bs)
         def root := capn.root()
         traceln(`root $root`)
-        traceln(`pointers ${root.getPointers()}`)
-        def list := root.getPointers()[1]
-        traceln(`list ${list.size()} ${list.elementType()}`)
+        for pointer in (root.getPointers()):
+            traceln(`pointer $pointer`)
+            for s in (pointer):
+                traceln(`substruct $s`)
         0
