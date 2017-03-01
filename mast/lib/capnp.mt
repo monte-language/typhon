@@ -16,29 +16,37 @@ def makeStruct(message :DeepFrozen, segment :Int, offset :Int, dataSize :Int,
             return ["struct", dataSize, pointerSize]
 
         to getWord(i :Int) :Int:
-            return message.getSegmentWord(segment, 1 + offset + i)
+            return message.getSegmentWord(segment, offset + i)
+
+        to getPointer(i :Int):
+            return message.interpretPointer(segment, offset + dataSize + i)
 
         to getPointers() :List:
-            def base :Int := offset + dataSize
-            return [for o in (base..!(base + pointerSize))
-                    message.interpretPointer(segment, o)]
+            return [for i in (0..!pointerSize) structPointer.getPointer(i)]
 
 def storages :DeepFrozen := [null] * 7
 
-def makeCompositeStorage(dataSize :Int, pointerSize :Int) as DeepFrozen:
-    def stride :Int := dataSize + pointerSize
-    return object compositeStorage:
-        to _printOn(out):
-            out.print(`structs (d$dataSize p$pointerSize)`)
+def makeCompositeStorage :DeepFrozen := {
+    def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
+    def makeCompositeStorage(dataSize, pointerSize) as DeepFrozen implements makerAuditor {
+        def stride :Int := dataSize + pointerSize
+        return object compositeStorage implements Selfless, valueAuditor {
+            to _printOn(out) { out.print(`structs (d$dataSize p$pointerSize)`) }
+            to _uncall() {
+                return serializer(makeCompositeStorage, [dataSize, pointerSize])
+            }
 
-        to stride() :Int:
-            return stride
+            to stride() :Int { return stride }
 
-        to get(message, segment :Int, offset :Int):
-            return makeStruct(message, segment, offset, dataSize, pointerSize)
+            to get(message, segment :Int, offset :Int) {
+                return makeStruct(message, segment, offset, dataSize, pointerSize)
+            }
+        }
+    }
+}
 
-def makeList(message :DeepFrozen, segment :Int, offset :Int, size :Int,
-             storage) as DeepFrozen:
+def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
+                    storage) as DeepFrozen:
     def stride := storage.stride()
 
     return object listPointer:
@@ -56,6 +64,10 @@ def makeList(message :DeepFrozen, segment :Int, offset :Int, size :Int,
                     def rv := [position, element]
                     position += 1
                     return rv
+
+        to get(index :Int):
+            def structOffset :Int := offset + stride * index
+            return storage.get(message, segment, structOffset)
 
         to signature():
             return ["list", storage]
@@ -87,6 +99,8 @@ def makeMessage(bs :Bytes) as DeepFrozen:
         l.snapshot()
     }
 
+    traceln(`segments $segmentPositions`)
+
     return object message as DeepFrozen:
         to getSegments() :List[Int]:
             return segmentPositions
@@ -99,7 +113,9 @@ def makeMessage(bs :Bytes) as DeepFrozen:
             return acc
 
         to getSegmentWord(segment :Int, i :Int) :Int:
-            return message.getWord(segmentPositions[segment] + i)
+            def rv := message.getWord(segmentPositions[segment] + i)
+            traceln(`getSegmentWord($segment, $i) -> $rv`)
+            return rv
 
         to getRoot():
             return message.interpretPointer(0, 0)
@@ -127,12 +143,12 @@ def makeMessage(bs :Bytes) as DeepFrozen:
                         def pointerCount :Int := shift(tag, 48, 16)
                         def wordSize :Int := shift(i, 35, 29)
                         traceln(`size in words $wordSize`)
-                        traceln(`struct size $structSize pointers $pointerCount`)
-                        makeList(message, segment, listOffset, listSize,
+                        traceln(`expected size in words ${listSize * (structSize + pointerCount)}`)
+                        makeListPointer(message, segment, listOffset + 1, listSize,
                                  makeCompositeStorage(structSize, pointerCount))
                     else:
                         def listSize :Int := shift(i, 35, 29)
-                        makeList(message, segment, listOffset, listSize,
+                        makeListPointer(message, segment, listOffset, listSize,
                                  storages[elementType])
                 match ==0x2:
                     def targetSegment :Int := shift(i, 32, 32)
@@ -151,15 +167,82 @@ def makeMessage(bs :Bytes) as DeepFrozen:
                         to index() :Bool:
                             return shift(i, 32, 32)
 
+# XXX dataFields.size() isn't always going to be the number of words. I think
+# instead that we need a <= relation based on the extent to which the schema
+# accesses data.
+def makeSchema(dataFields :Map[Str, Any],
+               pointerFields :Map[Str, Pair[Int, Any]]) as DeepFrozen:
+    def signature := ["struct", dataFields.size(), pointerFields.size()]
+    return object schema:
+        to signature():
+            return signature
+
+        to interpret(pointer):
+            traceln(`considering struct $pointer`)
+            def ==signature := pointer.signature()
+            return object interpretedStruct:
+                match [via (pointerFields.fetch) [index, s], [], _]:
+                    def p := pointer.getPointer(index)
+                    s.interpret(p)
+
+def makeListOf(schema) as DeepFrozen:
+    def [=="struct", dataSize, pointerSize] := schema.signature()
+    def storage := makeCompositeStorage(dataSize, pointerSize)
+    def signature := ["list", storage]
+    return object listSchema:
+        to signature():
+            return signature
+
+        to interpret(pointer):
+            traceln(`considering list $pointer`)
+            def ==signature := pointer.signature()
+            return object interpretedList:
+                to _conformTo(guard):
+                    if (guard == List):
+                        return _makeList.fromIterable(interpretedList)
+
+                to _makeIterator():
+                    var position :Int := 0
+                    return object interpretedListIterator:
+                        to next(ej):
+                            if (position >= pointer.size()):
+                                throw.eject(ej, "End of iteration")
+                            def rv := [position, interpretedList[position]]
+                            position += 1
+                            return rv
+
+                # Odd asymmetry here; the storage is also known to the
+                # pointer, so we don't have to invoke it again here.
+                match [=="get", [index :Int], _]:
+                    schema.interpret(pointer[index])
+
 def main(_argv, => makeFileResource) as DeepFrozen:
+    def schema := makeSchema(
+        [].asMap(),
+        [
+            "nodes" => [0, makeListOf(makeSchema(
+                [].asMap(),
+                [].asMap(),
+            ))],
+            "requestedFiles" => [1, makeListOf(makeSchema(
+                [].asMap(),
+                [].asMap(),
+            ))],
+        ],
+    )
     def handle := makeFileResource("meta.capn")
     return when (def bs := handle<-getContents()) ->
         traceln(`Read in ${bs.size()} bytes`)
         def message := makeMessage(bs)
         def root := message.getRoot()
         traceln(`root $root`)
-        for pointer in (root.getPointers()):
-            traceln(`pointer $pointer`)
-            for s in (pointer):
-                traceln(`substruct $s`)
+        traceln(`pointers ${root.getPointers()}`)
+        def request := schema.interpret(root)
+        traceln(`struct $request`)
+        def nodes := request.nodes()
+        traceln(`nodes $nodes`)
+        traceln(`nodes ${nodes :List}`)
+        def requestedFiles := request.requestedFiles()
+        traceln(`requestedFiles $requestedFiles`)
+        traceln(`requestedFiles ${requestedFiles :List}`)
         0
