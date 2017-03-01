@@ -75,6 +75,15 @@ def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
         to size() :Int:
             return size
 
+def formatWord(word :Int) as DeepFrozen:
+    # LSB 0 1 ... 63 64 MSB
+    def bits := [].diverge()
+    for i in (0..!64):
+        if (i % 8 == 0):
+            bits.push("'")
+        bits.push((((word >> i) & 0x1) == 0x1).pick("@", "."))
+    return "b" + "".join(bits)
+
 def makeMessage(bs :Bytes) as DeepFrozen:
     def get32LE(i :Int) :Int:
         var acc := 0
@@ -114,7 +123,7 @@ def makeMessage(bs :Bytes) as DeepFrozen:
 
         to getSegmentWord(segment :Int, i :Int) :Int:
             def rv := message.getWord(segmentPositions[segment] + i)
-            traceln(`getSegmentWord($segment, $i) -> $rv`)
+            # traceln(`getSegmentWord($segment, $i) -> ${formatWord(rv)}`)
             return rv
 
         to getRoot():
@@ -137,13 +146,11 @@ def makeMessage(bs :Bytes) as DeepFrozen:
                         # sure why; currently guessing that the capnpc serializer
                         # just doesn't care whether those bits get trashed.
                         # def tag :Int ? ((tag & 0x3) == 0x0) := getWord(listOffset)
-                        def tag :Int := message.getWord(listOffset)
+                        def tag :Int := message.getSegmentWord(segment, listOffset)
                         def listSize :Int := shift(tag, 2, 30)
                         def structSize :Int := shift(tag, 32, 16)
                         def pointerCount :Int := shift(tag, 48, 16)
                         def wordSize :Int := shift(i, 35, 29)
-                        traceln(`size in words $wordSize`)
-                        traceln(`expected size in words ${listSize * (structSize + pointerCount)}`)
                         makeListPointer(message, segment, listOffset + 1, listSize,
                                  makeCompositeStorage(structSize, pointerCount))
                     else:
