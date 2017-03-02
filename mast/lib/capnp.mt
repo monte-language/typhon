@@ -190,7 +190,13 @@ object text as DeepFrozen:
 
     to interpret(pointer):
         def bs := _makeBytes.fromInts(_makeList.fromIterable(pointer))
-        return UTF8.decode(bs, null)
+        def s := UTF8.decode(bs, null)
+        # XXX This is strange. The spec promises that we shouldn't have to
+        # trim trailing NULs, yet there's a bunch of trailing NULs!
+        var i :Int := s.size() - 1
+        while (s[i] == '\x00'):
+            i -= 1
+        return s.slice(0, i + 1)
 
 def makeSchema(dataFields :Map[Str, Any],
                pointerFields :Map[Str, Pair[Int, Any]]) as DeepFrozen:
@@ -216,7 +222,12 @@ def makeSchema(dataFields :Map[Str, Any],
                     def word := pointer.getWord(i)
                     def offset := start - i
                     def width := stop - start
-                    shift(word, offset, width)
+                    if (width == 1):
+                        # Mercy conversion to Bool.
+                        (word & (1 << offset)) != 0
+                    else:
+                        # Unsigned int.
+                        shift(word, offset, width)
                 match [via (pointerFields.fetch) [index, s], [], _]:
                     def p := pointer.getPointer(index)
                     s.interpret(p)
@@ -264,10 +275,16 @@ def main(_argv, => makeFileResource) as DeepFrozen:
                 ],
                 [
                     "displayName" => [0, text],
-                    "nestedNodes" => [1, null],
+                    "nestedNodes" => [1, makeListOfStructs(makeSchema(
+                        ["id" => [0, 64]],
+                        ["name" => [0, text]],
+                    ))],
                     "annotations" => [2, null],
                     "fields" => [3, null],
                     "superclasses" => [4, null],
+                    # "parameters" => [5, makeListOfStructs(makeSchema(
+                    #     [].asMap(), ["name" => [0, text]],
+                    # ))],
                     "parameters" => [5, null],
                 ],
             ))],
@@ -293,8 +310,11 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         def request := schema.interpret(root)
         traceln(`struct $request`)
         def nodes := request.nodes()
-        traceln(`nodes $nodes`)
-        traceln(`nodes ${nodes :List}`)
+        def node := nodes[0]
+        traceln(`node $node`)
+        traceln(`displayName ${node.displayName()}`)
+        traceln(`isGeneric ${node.isGeneric()}`)
+        traceln(`nestedNodes ${node.nestedNodes() :List}`)
         def [requestedFile] := request.requestedFiles() :List
         traceln(`requestedFile $requestedFile`)
         traceln(`id ${requestedFile.id()}`)
