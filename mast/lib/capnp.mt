@@ -1,3 +1,4 @@
+import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 exports (main)
 
 def mask(width :Int) :Int as DeepFrozen:
@@ -24,7 +25,21 @@ def makeStruct(message :DeepFrozen, segment :Int, offset :Int, dataSize :Int,
         to getPointers() :List:
             return [for i in (0..!pointerSize) structPointer.getPointer(i)]
 
-def storages :DeepFrozen := [null] * 7
+def storages :DeepFrozen := [
+    null,
+    null,
+    object uint8 as DeepFrozen {
+        to _printOn(out) { out.print(`uint8`) }
+        to get(message, segment :Int, offset :Int, index :Int) {
+            def word :Int := message.getSegmentWord(segment, offset)
+            return shift(word, index * 8, 8)
+        }
+    },
+    null,
+    null,
+    null,
+    null,
+]
 
 def makeCompositeStorage :DeepFrozen := {
     def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
@@ -36,10 +51,10 @@ def makeCompositeStorage :DeepFrozen := {
                 return serializer(makeCompositeStorage, [dataSize, pointerSize])
             }
 
-            to stride() :Int { return stride }
-
-            to get(message, segment :Int, offset :Int) {
-                return makeStruct(message, segment, offset, dataSize, pointerSize)
+            to get(message, segment :Int, offset :Int, index :Int) {
+                def structOffset :Int := offset + stride * index
+                return makeStruct(message, segment, structOffset, dataSize,
+                                  pointerSize)
             }
         }
     }
@@ -47,8 +62,6 @@ def makeCompositeStorage :DeepFrozen := {
 
 def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
                     storage) as DeepFrozen:
-    def stride := storage.stride()
-
     return object listPointer:
         to _printOn(out):
             out.print(`<list of $storage @@$segment+$offset x$size>`)
@@ -59,15 +72,14 @@ def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
                 to next(ej):
                     if (position >= size):
                         throw.eject(ej, "End of iteration")
-                    def structOffset :Int := offset + stride * position
-                    def element := storage.get(message, segment, structOffset)
+                    def element := storage.get(message, segment, offset,
+                                               position)
                     def rv := [position, element]
                     position += 1
                     return rv
 
         to get(index :Int):
-            def structOffset :Int := offset + stride * index
-            return storage.get(message, segment, structOffset)
+            return storage.get(message, segment, offset, index)
 
         to signature():
             return ["list", storage]
@@ -107,8 +119,6 @@ def makeMessage(bs :Bytes) as DeepFrozen:
         }
         l.snapshot()
     }
-
-    traceln(`segments $segmentPositions`)
 
     return object message as DeepFrozen:
         to getSegments() :List[Int]:
@@ -174,9 +184,14 @@ def makeMessage(bs :Bytes) as DeepFrozen:
                         to index() :Bool:
                             return shift(i, 32, 32)
 
-# XXX dataFields.size() isn't always going to be the number of words. I think
-# instead that we need a <= relation based on the extent to which the schema
-# accesses data.
+object text as DeepFrozen:
+    to signature():
+        return "text"
+
+    to interpret(pointer):
+        def bs := _makeBytes.fromInts(_makeList.fromIterable(pointer))
+        return UTF8.decode(bs, null)
+
 def makeSchema(dataFields :Map[Str, Any],
                pointerFields :Map[Str, Pair[Int, Any]]) as DeepFrozen:
     def dataSize := {
@@ -206,7 +221,7 @@ def makeSchema(dataFields :Map[Str, Any],
                     def p := pointer.getPointer(index)
                     s.interpret(p)
 
-def makeListOf(schema) as DeepFrozen:
+def makeListOfStructs(schema) as DeepFrozen:
     def [=="struct", dataSize, pointerSize] := schema.signature()
     def storage := makeCompositeStorage(dataSize, pointerSize)
     def signature := ["list", storage]
@@ -241,14 +256,14 @@ def main(_argv, => makeFileResource) as DeepFrozen:
     def schema := makeSchema(
         [].asMap(),
         [
-            "nodes" => [0, makeListOf(makeSchema(
+            "nodes" => [0, makeListOfStructs(makeSchema(
                 [
                     "id" => [0, 64],
                     # XXX ...
                     "isGeneric" => [288, 289],
                 ],
                 [
-                    "displayName" => [0, null],
+                    "displayName" => [0, text],
                     "nestedNodes" => [1, null],
                     "annotations" => [2, null],
                     "fields" => [3, null],
@@ -256,13 +271,13 @@ def main(_argv, => makeFileResource) as DeepFrozen:
                     "parameters" => [5, null],
                 ],
             ))],
-            "requestedFiles" => [1, makeListOf(makeSchema(
+            "requestedFiles" => [1, makeListOfStructs(makeSchema(
                 ["id" => [0, 64]],
                 [
-                    "filename" => [0, null],
-                    "imports" => [1, makeListOf(makeSchema(
+                    "filename" => [0, text],
+                    "imports" => [1, makeListOfStructs(makeSchema(
                         ["id" => [0, 64]],
-                        ["name" => [0, null]],
+                        ["name" => [0, text]],
                     ))],
                 ],
             ))],
@@ -283,5 +298,6 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         def [requestedFile] := request.requestedFiles() :List
         traceln(`requestedFile $requestedFile`)
         traceln(`id ${requestedFile.id()}`)
-        traceln(`ids ${[for i in (requestedFile.imports()) i.id()]}`)
+        traceln(`filename ${requestedFile.filename()}`)
+        traceln(`imports ${[for i in (requestedFile.imports()) [i.id(), i.name()]]}`)
         0
