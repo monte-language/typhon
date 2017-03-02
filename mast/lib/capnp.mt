@@ -179,7 +179,15 @@ def makeMessage(bs :Bytes) as DeepFrozen:
 # accesses data.
 def makeSchema(dataFields :Map[Str, Any],
                pointerFields :Map[Str, Pair[Int, Any]]) as DeepFrozen:
-    def signature := ["struct", dataFields.size(), pointerFields.size()]
+    def dataSize := {
+        var lastByte :Int := 0
+        for [_, stop] in (dataFields) {
+            lastByte max= (((stop - 1) // 8) + 1)
+        }
+        ((lastByte - 1) // 8) + 1
+    }
+    def signature := ["struct", dataSize, pointerFields.size()]
+    traceln(`made schema with signature $signature`)
     return object schema:
         to signature():
             return signature
@@ -188,6 +196,12 @@ def makeSchema(dataFields :Map[Str, Any],
             traceln(`considering struct $pointer`)
             def ==signature := pointer.signature()
             return object interpretedStruct:
+                match [via (dataFields.fetch) [start, stop], [], _]:
+                    def i := start // 8
+                    def word := pointer.getWord(i)
+                    def offset := start - i
+                    def width := stop - start
+                    shift(word, offset, width)
                 match [via (pointerFields.fetch) [index, s], [], _]:
                     def p := pointer.getPointer(index)
                     s.interpret(p)
@@ -228,12 +242,29 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         [].asMap(),
         [
             "nodes" => [0, makeListOf(makeSchema(
-                [].asMap(),
-                [].asMap(),
+                [
+                    "id" => [0, 64],
+                    # XXX ...
+                    "isGeneric" => [288, 289],
+                ],
+                [
+                    "displayName" => [0, null],
+                    "nestedNodes" => [1, null],
+                    "annotations" => [2, null],
+                    "fields" => [3, null],
+                    "superclasses" => [4, null],
+                    "parameters" => [5, null],
+                ],
             ))],
             "requestedFiles" => [1, makeListOf(makeSchema(
-                [].asMap(),
-                [].asMap(),
+                ["id" => [0, 64]],
+                [
+                    "filename" => [0, null],
+                    "imports" => [1, makeListOf(makeSchema(
+                        ["id" => [0, 64]],
+                        ["name" => [0, null]],
+                    ))],
+                ],
             ))],
         ],
     )
@@ -249,7 +280,8 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         def nodes := request.nodes()
         traceln(`nodes $nodes`)
         traceln(`nodes ${nodes :List}`)
-        def requestedFiles := request.requestedFiles()
-        traceln(`requestedFiles $requestedFiles`)
-        traceln(`requestedFiles ${requestedFiles :List}`)
+        def [requestedFile] := request.requestedFiles() :List
+        traceln(`requestedFile $requestedFile`)
+        traceln(`id ${requestedFile.id()}`)
+        traceln(`ids ${[for i in (requestedFile.imports()) i.id()]}`)
         0
