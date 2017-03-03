@@ -207,7 +207,12 @@ def makeSchema(dataFields :Map[Str, Any],
         }
         ((lastByte - 1) // 8) + 1
     }
-    def signature := ["struct", dataSize, pointerFields.size()]
+    def pointerSize := {
+        var lastWord :Int := -1
+        for [index, _] in (pointerFields) { lastWord max= (index) }
+        lastWord + 1
+    }
+    def signature := ["struct", dataSize, pointerSize]
     traceln(`made schema with signature $signature`)
     return object schema:
         to signature():
@@ -263,6 +268,19 @@ def makeListOfStructs(schema) as DeepFrozen:
                 match [=="get", [index :Int], _]:
                     schema.interpret(pointer[index])
 
+def processNode(node) as DeepFrozen:
+    traceln(`considering a new node`)
+    traceln(`displayName ${node.displayName()}`)
+    traceln(`isGeneric ${node.isGeneric()}`)
+    # traceln(`nestedNodes ${node.nestedNodes() :List}`)
+
+def processFile(file) as DeepFrozen:
+    traceln(`considering a new file`)
+    traceln(`requestedFile $file`)
+    traceln(`id ${file.id()}`)
+    traceln(`filename ${file.filename()}`)
+    traceln(`imports ${[for i in (file.imports()) [i.id(), i.name()]]}`)
+
 def main(_argv, => makeFileResource) as DeepFrozen:
     def schema := makeSchema(
         [].asMap(),
@@ -270,6 +288,8 @@ def main(_argv, => makeFileResource) as DeepFrozen:
             "nodes" => [0, makeListOfStructs(makeSchema(
                 [
                     "id" => [0, 64],
+                    "displayNamePrefixLength" => [64, 96],
+                    "scopeId" => [128, 192],
                     # XXX ...
                     "isGeneric" => [288, 289],
                 ],
@@ -305,19 +325,11 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         traceln(`Read in ${bs.size()} bytes`)
         def message := makeMessage(bs)
         def root := message.getRoot()
-        traceln(`root $root`)
-        traceln(`pointers ${root.getPointers()}`)
         def request := schema.interpret(root)
-        traceln(`struct $request`)
-        def nodes := request.nodes()
-        def node := nodes[0]
-        traceln(`node $node`)
-        traceln(`displayName ${node.displayName()}`)
-        traceln(`isGeneric ${node.isGeneric()}`)
-        traceln(`nestedNodes ${node.nestedNodes() :List}`)
-        def [requestedFile] := request.requestedFiles() :List
-        traceln(`requestedFile $requestedFile`)
-        traceln(`id ${requestedFile.id()}`)
-        traceln(`filename ${requestedFile.filename()}`)
-        traceln(`imports ${[for i in (requestedFile.imports()) [i.id(), i.name()]]}`)
+        traceln(`processing requested files`)
+        for file in (request.requestedFiles()):
+            processFile(file)
+        traceln(`processing nodes`)
+        for node in (request.nodes()):
+            processNode(node)
         0
