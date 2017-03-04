@@ -673,7 +673,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         return builder.ObjectExpr(doco, name, oAs, oImplements,
             builder.Script(oExtends, methods, matchers, span), span)
 
-    def objectFunction(name, indent, tryAgain, ej, spanStart):
+    def objectFunction(name, verb, indent, tryAgain, ej, spanStart):
         acceptTag("(", ej)
         def patts := acceptList(positionalParam)
         def namedPatts := acceptList(namedParam)
@@ -695,7 +695,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         def [doco, body] := suite(methBody, indent, ej)
         def span := spanFrom(spanStart)
         return builder.ObjectExpr(doco, name, oAs, oImplements,
-            builder.FunctionScript(patts, namedPatts, resultguard, body, span), span)
+            builder.FunctionScript(verb, patts, namedPatts, resultguard, body, span), span)
 
     def paramDesc(ej):
         def spanStart := spanHere()
@@ -913,7 +913,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def g := maybeGuard()
             def name := builder.BindPattern(n, g, spanFrom(spanStart))
             if (peekTag() == "("):
-                objectFunction(name, indent, tryAgain, ej, spanStart)
+                objectFunction(name, "run", indent, tryAgain, ej, spanStart)
             else if (peekTag() == ":="):
                 position := origPosition
                 assign(ej)
@@ -953,7 +953,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 builder.FinalPattern(noun(ej), null, spanFrom(spanStart))
             }
             if (peekTag() == "("):
-                objectFunction(name, indent, tryAgain, ej, spanStart)
+                objectFunction(name, "run", indent, tryAgain, ej, spanStart)
             else if (["exit", ":=", "QUASI_OPEN", "?", ":"].contains(peekTag())):
                 position := origPosition
                 assign(ej)

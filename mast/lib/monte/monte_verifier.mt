@@ -255,7 +255,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="NamedParamImport" { args[0] }
             # Script pieces.
             match =="FunctionScript" {
-                def [patts, namedPatts, guard, body] := args
+                def [_verb, patts, namedPatts, guard, body] := args
                 def l := flattenList(patts) + flattenList(namedPatts) + body
                 optional(guard) + filterNouns(l, usedSet(node.getBody()))
             }

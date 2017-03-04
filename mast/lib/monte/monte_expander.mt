@@ -922,8 +922,8 @@ def expand(node, builder, fail) as DeepFrozen:
                 #def [xtends, methods, matchers] := args
                 return args
             match =="FunctionScript":
-                def [params, namedParams, guard, block] := args
-                [null, [builder."Method"(null, "run", params, namedParams, guard,
+                def [verb, params, namedParams, guard, block] := args
+                [null, [builder."Method"(null, verb, params, namedParams, guard,
                     makeEscapeExpr(builder.FinalPattern(nounExpr("__return", span), null, span),
                         seqExpr([block, nounExpr("null", span)], span), null, null, span),
                             span)], []]
