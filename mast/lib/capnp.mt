@@ -1,6 +1,10 @@
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 exports (main)
 
+# Where we are currently at:
+# $ capnp compile -o $(which cat) schema.capnp > meta.capn
+# $ ./mt-typhon -l mast -l . loader run lib/capnp
+
 def mask(width :Int) :Int as DeepFrozen:
     return (1 << width) - 1
 
