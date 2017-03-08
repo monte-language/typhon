@@ -188,6 +188,13 @@ def makeMessage(bs :Bytes) as DeepFrozen:
                         to index() :Bool:
                             return shift(i, 32, 32)
 
+object void as DeepFrozen:
+    to signature():
+        return "void"
+
+    to interpret(_pointer):
+        return null
+
 object text as DeepFrozen:
     to signature():
         return "text"
