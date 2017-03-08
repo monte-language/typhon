@@ -213,18 +213,35 @@ def makeSchema(dataFields :Map[Str, Any],
                pointerFields :Map[Str, Pair[Int, Any]]) as DeepFrozen:
     def dataSize := {
         var lastByte :Int := 0
-        for [_, stop] in (dataFields) {
+        for field in (dataFields) {
+            def stop := field[1]
             lastByte max= (((stop - 1) // 8) + 1)
         }
         ((lastByte - 1) // 8) + 1
     }
     def pointerSize := {
         var lastWord :Int := -1
-        for [index, _] in (pointerFields) { lastWord max= (index) }
+        for field in (pointerFields) { lastWord max= (field[0]) }
         lastWord + 1
     }
     def signature := ["struct", dataSize, pointerSize]
     traceln(`made schema with signature $signature`)
+
+    def lookupField(pointer, start :Int, stop :Int):
+        if (start == stop):
+            # Mercy conversion to Void.
+            return null
+        def i := start // 8
+        def word := pointer.getWord(i)
+        def offset := start - i
+        def width := stop - start
+        return if (width == 1):
+            # Mercy conversion to Bool.
+            (word & (1 << offset)) != 0
+        else:
+            # Unsigned int.
+            shift(word, offset, width)
+
     return object schema:
         to signature():
             return signature
@@ -233,20 +250,28 @@ def makeSchema(dataFields :Map[Str, Any],
             traceln(`considering struct $pointer`)
             def ==signature := pointer.signature()
             return object interpretedStruct:
-                match [via (dataFields.fetch) [start, stop], [], _]:
-                    def i := start // 8
-                    def word := pointer.getWord(i)
-                    def offset := start - i
-                    def width := stop - start
-                    if (width == 1):
-                        # Mercy conversion to Bool.
-                        (word & (1 << offset)) != 0
-                    else:
-                        # Unsigned int.
-                        shift(word, offset, width)
-                match [via (pointerFields.fetch) [index, s], [], _]:
-                    def p := pointer.getPointer(index)
-                    s.interpret(p)
+                match [via (dataFields.fetch) field, [], _]:
+                    switch (field):
+                        match [start, stop]:
+                            lookupField(pointer, start, stop)
+                        match [start, stop, unionTag]:
+                            def which := interpretedStruct._which()
+                            if (which == unionTag):
+                                lookupField(pointer, start, stop)
+                            else:
+                                throw(`Incorrect union tag: Needed $unionTag but got $which`)
+                match [via (pointerFields.fetch) field, [], _]:
+                    switch (field):
+                        match [index, s]:
+                            def p := pointer.getPointer(index)
+                            s.interpret(p)
+                        match [index, s, unionTag]:
+                            def which := interpretedStruct._which()
+                            if (which == unionTag):
+                                def p := pointer.getPointer(index)
+                                s.interpret(p)
+                            else:
+                                throw(`Incorrect union tag: Needed $unionTag but got $which`)
 
 def makeListOfStructs(schema) as DeepFrozen:
     def [=="struct", dataSize, pointerSize] := schema.signature()
@@ -283,7 +308,12 @@ def processNode(node) as DeepFrozen:
     traceln(`considering a new node`)
     traceln(`displayName ${node.displayName()}`)
     traceln(`isGeneric ${node.isGeneric()}`)
+    switch (node._which()):
+        match ==0:
+            traceln(`node union is file`)
+            traceln(`file ${node.file()}`)
     # traceln(`nestedNodes ${node.nestedNodes() :List}`)
+    traceln(`annotations ${node.annotations() :List}`)
 
 def processFile(file) as DeepFrozen:
     traceln(`considering a new file`)
@@ -293,13 +323,22 @@ def processFile(file) as DeepFrozen:
     traceln(`imports ${[for i in (file.imports()) [i.id(), i.name()]]}`)
 
 def main(_argv, => makeFileResource) as DeepFrozen:
+    def annotation := makeSchema(
+        ["id" => [0, 64]],
+        [
+            "value" => [0, null],
+            "brand" => [1, null],
+        ],
+    )
     def schema := makeSchema(
         [].asMap(),
         [
             "nodes" => [0, makeListOfStructs(makeSchema(
                 [
+                    "file" => [0, 0, 0],
                     "id" => [0, 64],
                     "displayNamePrefixLength" => [64, 96],
+                    "_which" => [96, 112],
                     "scopeId" => [128, 192],
                     # XXX ...
                     "isGeneric" => [288, 289],
@@ -310,7 +349,7 @@ def main(_argv, => makeFileResource) as DeepFrozen:
                         ["id" => [0, 64]],
                         ["name" => [0, text]],
                     ))],
-                    "annotations" => [2, null],
+                    "annotations" => [2, makeListOfStructs(annotation)],
                     "fields" => [3, null],
                     "superclasses" => [4, null],
                     # "parameters" => [5, makeListOfStructs(makeSchema(
