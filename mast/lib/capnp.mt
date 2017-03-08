@@ -143,8 +143,15 @@ def makeMessage(bs :Bytes) as DeepFrozen:
         to getRoot():
             return message.interpretPointer(0, 0)
 
-        to interpretPointer(segment :Int, offset :Int):
+        to interpretPointer(segment :Int, offset :Int) :NullOk[Any]:
+            "
+            Dereference a word as a pointer.
+
+            Zero pointers are represented as None.
+            "
             def i := message.getSegmentWord(segment, offset)
+            if (i == 0x0):
+                return null
             return switch (i & 0x3):
                 match ==0x0:
                     def structOffset :Int := 1 + offset + shift(i, 2, 30)
@@ -283,6 +290,10 @@ def makeListOfStructs(schema) as DeepFrozen:
 
         to interpret(pointer):
             traceln(`considering list $pointer`)
+            if (pointer == null):
+                # As a courtesy, null list pointers dereference to empty
+                # lists. This gives callers a uniform List-like interface.
+                return []
             def ==signature := pointer.signature()
             return object interpretedList:
                 to _conformTo(guard):
