@@ -35,8 +35,9 @@ def storages :DeepFrozen := [
     object uint8 as DeepFrozen {
         to _printOn(out) { out.print(`uint8`) }
         to get(message, segment :Int, offset :Int, index :Int) {
-            def word :Int := message.getSegmentWord(segment, offset)
-            return shift(word, index * 8, 8)
+            def indexOffset :Int := index // 8
+            def word :Int := message.getSegmentWord(segment, offset + indexOffset)
+            return shift(word, (index % 8) * 8, 8)
         }
     },
     null,
@@ -215,12 +216,8 @@ object text as DeepFrozen:
     to interpret(pointer):
         def bs := _makeBytes.fromInts(_makeList.fromIterable(pointer))
         def s := UTF8.decode(bs, null)
-        # XXX This is strange. The spec promises that we shouldn't have to
-        # trim trailing NULs, yet there's a bunch of trailing NULs!
-        var i :Int := s.size() - 1
-        while (s[i] == '\x00'):
-            i -= 1
-        return s.slice(0, i + 1)
+        # Slice off the trailing NULL byte.
+        return s.slice(0, s.size() - 1)
 
 def makeSchema(dataFields :Map[Str, Any],
                pointerFields :Map[Str, Pair[Int, Any]]) as DeepFrozen:
