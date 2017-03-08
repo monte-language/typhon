@@ -195,6 +195,12 @@ def makeMessage(bs :Bytes) as DeepFrozen:
                         to index() :Bool:
                             return shift(i, 32, 32)
 
+def asData(wrapper) as DeepFrozen:
+    return if (wrapper._respondsTo("_asData", 0)):
+        wrapper._asData()
+    else:
+        wrapper
+
 object void as DeepFrozen:
     to signature():
         return "void"
@@ -232,7 +238,7 @@ def makeSchema(dataFields :Map[Str, Any],
         lastWord + 1
     }
     def signature := ["struct", dataSize, pointerSize]
-    traceln(`made schema with signature $signature`)
+    traceln(`made struct with signature $signature`)
 
     def lookupField(pointer, start :Int, stop :Int):
         if (start == stop):
@@ -257,6 +263,11 @@ def makeSchema(dataFields :Map[Str, Any],
             traceln(`considering struct $pointer`)
             def ==signature := pointer.signature()
             return object interpretedStruct:
+                to _asData():
+                    def keys := dataFields.getKeys() + pointerFields.getKeys()
+                    return [for name in (keys)
+                            name => asData(M.call(interpretedStruct, name, [], [].asMap()))]
+
                 match [via (dataFields.fetch) field, [], _]:
                     switch (field):
                         match [start, stop]:
@@ -290,9 +301,10 @@ def makeListOfStructs(schema) as DeepFrozen:
 
         to interpret(pointer):
             traceln(`considering list $pointer`)
-            if (pointer == null):
+            if (pointer == null || pointer.size() == 0):
                 # As a courtesy, null list pointers dereference to empty
                 # lists. This gives callers a uniform List-like interface.
+                # We also do this as an optimization for empty lists. ~ C.
                 return []
             def ==signature := pointer.signature()
             return object interpretedList:
@@ -310,6 +322,9 @@ def makeListOfStructs(schema) as DeepFrozen:
                             position += 1
                             return rv
 
+                to _asData():
+                    return [for x in (interpretedList) asData(x)]
+
                 # Odd asymmetry here; the storage is also known to the
                 # pointer, so we don't have to invoke it again here.
                 match [=="get", [index :Int], _]:
@@ -317,21 +332,11 @@ def makeListOfStructs(schema) as DeepFrozen:
 
 def processNode(node) as DeepFrozen:
     traceln(`considering a new node`)
-    traceln(`displayName ${node.displayName()}`)
-    traceln(`isGeneric ${node.isGeneric()}`)
-    switch (node._which()):
-        match ==0:
-            traceln(`node union is file`)
-            traceln(`file ${node.file()}`)
-    # traceln(`nestedNodes ${node.nestedNodes() :List}`)
-    traceln(`annotations ${node.annotations() :List}`)
+    traceln(`Nested nodes: ${asData(node.nestedNodes())}`)
 
 def processFile(file) as DeepFrozen:
-    traceln(`considering a new file`)
-    traceln(`requestedFile $file`)
-    traceln(`id ${file.id()}`)
-    traceln(`filename ${file.filename()}`)
-    traceln(`imports ${[for i in (file.imports()) [i.id(), i.name()]]}`)
+    def data := asData(file)
+    traceln(`Processing file $data`)
 
 def main(_argv, => makeFileResource) as DeepFrozen:
     def annotation := makeSchema(
