@@ -199,6 +199,8 @@ def makeMessage(bs :Bytes) as DeepFrozen:
 def asData(wrapper) as DeepFrozen:
     return if (wrapper._respondsTo("_asData", 0)):
         wrapper._asData()
+    else if (wrapper =~ l :List):
+        [for item in (l) asData(item)]
     else:
         wrapper
 
@@ -349,7 +351,9 @@ def makeCompiler() as DeepFrozen:
         to run():
             for id => node in (nodes):
                 traceln(`node $id, name ${node.displayName()}`)
-                traceln(`node data ${asData(node)}`)
+                def annotations :List := node.annotations()
+                if (!annotations.isEmpty()):
+                    traceln(`annotations ${asData(annotations)}`)
 
 def main(_argv, => makeFileResource) as DeepFrozen:
     def value := makeSchema(
