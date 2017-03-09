@@ -220,7 +220,7 @@ object text as DeepFrozen:
         return s.slice(0, s.size() - 1)
 
 def makeSchema(dataFields :Map[Str, Any],
-               pointerFields :Map[Str, Pair[Int, Any]]) as DeepFrozen:
+               pointerFields :Map[Str, Any]) as DeepFrozen:
     def dataSize := {
         var lastByte :Int := 0
         for field in (dataFields) {
@@ -235,7 +235,6 @@ def makeSchema(dataFields :Map[Str, Any],
         lastWord + 1
     }
     def signature := ["struct", dataSize, pointerSize]
-    traceln(`made struct with signature $signature`)
 
     def lookupField(pointer, start :Int, stop :Int):
         if (start == stop):
@@ -257,12 +256,21 @@ def makeSchema(dataFields :Map[Str, Any],
             return signature
 
         to interpret(pointer):
-            traceln(`considering struct $pointer`)
+            # traceln(`considering struct $pointer`)
             def ==signature := pointer.signature()
             return object interpretedStruct:
                 to _asData():
-                    def keys := dataFields.getKeys() + pointerFields.getKeys()
-                    return [for name in (keys)
+                    var dataKeys := dataFields.getKeys()
+                    var pointerKeys := pointerFields.getKeys()
+                    if (dataKeys.contains("_which")):
+                        # Dig out the union tag and ensure that we only copy
+                        # keys which have the right tag.
+                        def which := interpretedStruct._which()
+                        dataKeys := [for k in (dataKeys)
+                                     ? (dataFields[k] !~ [_, _, !=which]) k]
+                        pointerKeys := [for k in (pointerKeys)
+                                        ? (pointerFields[k] !~ [_, _, !=which]) k]
+                    return [for name in (dataKeys + pointerKeys)
                             name => asData(M.call(interpretedStruct, name, [], [].asMap()))]
 
                 match [via (dataFields.fetch) field, [], _]:
@@ -297,7 +305,7 @@ def makeListOfStructs(schema) as DeepFrozen:
             return signature
 
         to interpret(pointer):
-            traceln(`considering list $pointer`)
+            # traceln(`considering list $pointer`)
             if (pointer == null || pointer.size() == 0):
                 # As a courtesy, null list pointers dereference to empty
                 # lists. This gives callers a uniform List-like interface.
@@ -327,22 +335,81 @@ def makeListOfStructs(schema) as DeepFrozen:
                 match [=="get", [index :Int], _]:
                     schema.interpret(pointer[index])
 
-def processNode(node) as DeepFrozen:
-    traceln(`considering a new node`)
-    traceln(`Nested nodes: ${asData(node.nestedNodes())}`)
+def makeCompiler() as DeepFrozen:
+    def nodes := [].asMap().diverge()
 
-def processFile(file) as DeepFrozen:
-    def data := asData(file)
-    traceln(`Processing file $data`)
+    return object compiler:
+        to addNode(node):
+            nodes[node.id()] := node
+
+        to addFile(file):
+            def data := asData(file)
+            traceln(`Processing file $data`)
+
+        to run():
+            for id => node in (nodes):
+                traceln(`node $id, name ${node.displayName()}`)
+                traceln(`node data ${asData(node)}`)
 
 def main(_argv, => makeFileResource) as DeepFrozen:
+    def value := makeSchema(
+        [
+            "_which" => [0, 16],
+            "void" => [0, 0, 0],
+            "bool" => [16, 17, 1],
+            "int8" => [16, 24, 2],
+            "int16" => [16, 32, 3],
+            "int32" => [32, 64, 4],
+            "int64" => [64, 128, 5],
+            "uint8" => [16, 24, 6],
+            "uint16" => [16, 32, 7],
+            "uint32" => [32, 64, 8],
+            "uint64" => [64, 128, 9],
+            "enum" => [16, 32, 15],
+            # XXX ...
+        ],
+        [
+            "text" => [0, text, 12],
+        ]
+    )
+    def type := makeSchema(
+        [
+            "_which" => [0, 16],
+            # XXX ...
+        ],
+        [
+            "elementType" => [0, type, 14],
+        ],
+    )
+    def binding := makeSchema(
+        [
+            "unbound" => [0, 0, 0],
+            "_which" => [0, 16],
+        ],
+        ["type" => [0, type, 1]],
+    )
+    def scope := makeSchema(
+        [
+            "inherit" => [0, 0, 1],
+            "scopeId" => [0, 64],
+            "_which" => [64, 80],
+        ],
+        [
+            "bind" => [0, makeListOfStructs(binding), 0],
+        ],
+    )
+    def brand := makeSchema(
+        [].asMap(),
+        ["scopes" => [0, makeListOfStructs(scope)]],
+    )
     def annotation := makeSchema(
         ["id" => [0, 64]],
         [
-            "value" => [0, null],
-            "brand" => [1, null],
+            "value" => [0, value],
+            "brand" => [1, brand],
         ],
     )
+    def parameter := makeSchema([].asMap(), ["name" => [0, text]])
     def schema := makeSchema(
         [].asMap(),
         [
@@ -363,12 +430,7 @@ def main(_argv, => makeFileResource) as DeepFrozen:
                         ["name" => [0, text]],
                     ))],
                     "annotations" => [2, makeListOfStructs(annotation)],
-                    "fields" => [3, null],
-                    "superclasses" => [4, null],
-                    # "parameters" => [5, makeListOfStructs(makeSchema(
-                    #     [].asMap(), ["name" => [0, text]],
-                    # ))],
-                    "parameters" => [5, null],
+                    "parameters" => [5, makeListOfStructs(parameter)],
                 ],
             ))],
             "requestedFiles" => [1, makeListOfStructs(makeSchema(
@@ -389,10 +451,12 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         def message := makeMessage(bs)
         def root := message.getRoot()
         def request := schema.interpret(root)
+        def compiler := makeCompiler()
         traceln(`processing requested files`)
         for file in (request.requestedFiles()):
-            processFile(file)
+            compiler.addFile(file)
         traceln(`processing nodes`)
         for node in (request.nodes()):
-            processNode(node)
+            compiler.addNode(node)
+        compiler()
         0
