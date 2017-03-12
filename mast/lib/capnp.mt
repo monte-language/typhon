@@ -8,7 +8,7 @@ exports (main)
 def mask(width :Int) :Int as DeepFrozen:
     return (1 << width) - 1
 
-def shift(i :Int, offset :Int, width :Int) :Int as DeepFrozen:
+def shift(i :Int, offset :(0..!64), width :(0..64)) :Int as DeepFrozen:
     return (i >> offset) & mask(width)
 
 def makeStruct(message :DeepFrozen, segment :Int, offset :Int, dataSize :Int,
@@ -240,12 +240,13 @@ def makeSchema(dataFields :Map[Str, Any],
     def signature := ["struct", dataSize, pointerSize]
 
     def lookupField(pointer, start :Int, stop :Int):
+        traceln(`lookupField($pointer, $start, $stop)`)
         if (start == stop):
             # Mercy conversion to Void.
             return null
-        def i := start // 8
+        def i := start // 64
         def word := pointer.getWord(i)
-        def offset := start - i
+        def offset := start % 64
         def width := stop - start
         return if (width == 1):
             # Mercy conversion to Bool.
@@ -352,6 +353,7 @@ def makeCompiler() as DeepFrozen:
         to run():
             for id => node in (nodes):
                 traceln(`node $id, name ${node.displayName()}`)
+                traceln(`which ${node._which()}`)
                 traceln(`dataWordCount ${node.dataWordCount()}`)
                 def annotations :List := node.annotations()
                 if (!annotations.isEmpty()):
