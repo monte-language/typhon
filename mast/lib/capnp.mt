@@ -151,6 +151,7 @@ def makeMessage(bs :Bytes) as DeepFrozen:
             Zero pointers are represented as None.
             "
             def i := message.getSegmentWord(segment, offset)
+            # traceln(`message.interpretPointer($segment, $offset) ${formatWord(i)}`)
             if (i == 0x0):
                 return null
             return switch (i & 0x3):
@@ -351,6 +352,7 @@ def makeCompiler() as DeepFrozen:
         to run():
             for id => node in (nodes):
                 traceln(`node $id, name ${node.displayName()}`)
+                traceln(`dataWordCount ${node.dataWordCount()}`)
                 def annotations :List := node.annotations()
                 if (!annotations.isEmpty()):
                     traceln(`annotations ${asData(annotations)}`)
@@ -423,6 +425,8 @@ def main(_argv, => makeFileResource) as DeepFrozen:
                     "id" => [0, 64],
                     "displayNamePrefixLength" => [64, 96],
                     "_which" => [96, 112],
+                    # XXX missing union tag
+                    "dataWordCount" => [112, 128],
                     "scopeId" => [128, 192],
                     # XXX ...
                     "isGeneric" => [288, 289],
