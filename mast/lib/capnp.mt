@@ -220,10 +220,13 @@ object text as DeepFrozen:
         return "text"
 
     to interpret(pointer):
-        def bs := _makeBytes.fromInts(_makeList.fromIterable(pointer))
-        def s := UTF8.decode(bs, null)
-        # Slice off the trailing NULL byte.
-        return s.slice(0, s.size() - 1)
+        return if (pointer == null):
+            null
+        else:
+            def bs := _makeBytes.fromInts(_makeList.fromIterable(pointer))
+            def s := UTF8.decode(bs, null)
+            # Slice off the trailing NULL byte.
+            s.slice(0, s.size() - 1)
 
 def makeSchema(dataFields :Map[Str, Any],
                pointerFields :Map[Str, Any],
@@ -244,7 +247,6 @@ def makeSchema(dataFields :Map[Str, Any],
     def signature := ["struct", dataSize, pointerSize]
 
     def lookupField(pointer, start :Int, stop :Int):
-        traceln(`lookupField($pointer, $start, $stop)`)
         if (start == stop):
             # Mercy conversion to Void.
             return null
@@ -376,12 +378,7 @@ def makeCompiler() as DeepFrozen:
         to run():
             for id => node in (nodes):
                 traceln(`node $id, name ${node.displayName()}`)
-                def which := node._which()
-                if (which == 1):
-                    traceln(`struct ${asData(node.struct())}`)
-                def annotations :List := node.annotations()
-                if (!annotations.isEmpty()):
-                    traceln(`annotations ${asData(annotations)}`)
+                traceln(`node ${asData(node)}`)
 
 def main(_argv, => makeFileResource) as DeepFrozen:
     def value := makeSchema(
@@ -448,7 +445,44 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         [].asMap(),
     )
     def parameter := makeSchema([].asMap(), ["name" => [0, text]], [].asMap())
-    def field := makeSchema([].asMap(), [].asMap(), [].asMap())
+    def field := makeSchema(
+        [
+            "codeOrder" => [0, 16],
+            "discriminantValue" => [16, 32],
+            "_which" => [64, 80],
+        ],
+        [
+            "name" => [0, text],
+            "annotations" => [1, makeListOfStructs(annotation)],
+        ],
+        [
+            "slot" => [makeSchema(
+                [
+                    "offset" => [32, 64],
+                    "hadExplicitDefault" => [128, 129],
+                ],
+                [
+                    "type" => [2, type],
+                    "defaultValue" => [3, value],
+                ],
+                [].asMap(),
+            ), 0],
+            "group" => [makeSchema(
+                ["typeId" => [128, 192]],
+                [].asMap(),
+                [].asMap(),
+            ), 1],
+            "ordinal" => makeSchema(
+                [
+                    "implicit" => [0, 0, 0],
+                    "explicit" => [96, 112, 1],
+                    "_which" => [80, 96],
+                ],
+                [].asMap(),
+                [].asMap(),
+            ),
+        ],
+    )
     def schema := makeSchema(
         [].asMap(),
         [
