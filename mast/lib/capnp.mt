@@ -34,6 +34,7 @@ def storages :DeepFrozen := [
     null,
     object uint8 as DeepFrozen {
         to _printOn(out) { out.print(`uint8`) }
+        to signature() { return "uint8" }
         to get(message, segment :Int, offset :Int, index :Int) {
             def indexOffset :Int := index // 8
             def word :Int := message.getSegmentWord(segment, offset + indexOffset)
@@ -55,6 +56,8 @@ def makeCompositeStorage :DeepFrozen := {
             to _uncall() {
                 return serializer(makeCompositeStorage, [dataSize, pointerSize])
             }
+
+            to signature() { return ["composite", dataSize, pointerSize] }
 
             to get(message, segment :Int, offset :Int, index :Int) {
                 def structOffset :Int := offset + stride * index
@@ -223,7 +226,8 @@ object text as DeepFrozen:
         return s.slice(0, s.size() - 1)
 
 def makeSchema(dataFields :Map[Str, Any],
-               pointerFields :Map[Str, Any]) as DeepFrozen:
+               pointerFields :Map[Str, Any],
+               groupFields :Map[Str, Any]) as DeepFrozen:
     def dataSize := {
         var lastByte :Int := 0
         for field in (dataFields) {
@@ -260,12 +264,15 @@ def makeSchema(dataFields :Map[Str, Any],
             return signature
 
         to interpret(pointer):
-            # traceln(`considering struct $pointer`)
-            def ==signature := pointer.signature()
+            def [=="struct", ds, ps] := pointer.signature()
+            if (dataSize > ds || pointerSize > ps):
+                throw(`Struct can't be interpreted: [$dataSize, $pointerSize] too big for [$ds, $ps]`)
+
             return object interpretedStruct:
                 to _asData():
                     var dataKeys := dataFields.getKeys()
                     var pointerKeys := pointerFields.getKeys()
+                    var groupKeys := groupFields.getKeys()
                     if (dataKeys.contains("_which")):
                         # Dig out the union tag and ensure that we only copy
                         # keys which have the right tag.
@@ -274,7 +281,9 @@ def makeSchema(dataFields :Map[Str, Any],
                                      ? (dataFields[k] !~ [_, _, !=which]) k]
                         pointerKeys := [for k in (pointerKeys)
                                         ? (pointerFields[k] !~ [_, _, !=which]) k]
-                    return [for name in (dataKeys + pointerKeys)
+                        groupKeys := [for k in (groupKeys)
+                                      ? (groupFields[k] !~ [_, !=which]) k]
+                    return [for name in (dataKeys + pointerKeys + groupKeys)
                             name => asData(M.call(interpretedStruct, name, [], [].asMap()))]
 
                 match [via (dataFields.fetch) field, [], _]:
@@ -299,6 +308,16 @@ def makeSchema(dataFields :Map[Str, Any],
                                 s.interpret(p)
                             else:
                                 throw(`Incorrect union tag: Needed $unionTag but got $which`)
+                match [via (groupFields.fetch) field, [], _]:
+                    switch (field):
+                        match [struct, unionTag]:
+                            def which := interpretedStruct._which()
+                            if (which == unionTag):
+                                struct.interpret(pointer)
+                            else:
+                                throw(`Incorrect union tag: Needed $unionTag but got $which`)
+                        match struct:
+                            struct.interpret(pointer)
 
 def makeListOfStructs(schema) as DeepFrozen:
     def [=="struct", dataSize, pointerSize] := schema.signature()
@@ -315,7 +334,11 @@ def makeListOfStructs(schema) as DeepFrozen:
                 # lists. This gives callers a uniform List-like interface.
                 # We also do this as an optimization for empty lists. ~ C.
                 return []
-            def ==signature := pointer.signature()
+            def [=="list", s] := pointer.signature()
+            def [=="composite", ds, ps] := s.signature()
+            if (dataSize > ds || pointerSize > ps):
+                throw(`Composite list can't be interpreted: [$dataSize, $pointerSize] too big for [$ds, $ps]`)
+
             return object interpretedList:
                 to _conformTo(guard):
                     if (guard == List):
@@ -353,8 +376,9 @@ def makeCompiler() as DeepFrozen:
         to run():
             for id => node in (nodes):
                 traceln(`node $id, name ${node.displayName()}`)
-                traceln(`which ${node._which()}`)
-                traceln(`dataWordCount ${node.dataWordCount()}`)
+                def which := node._which()
+                if (which == 1):
+                    traceln(`struct ${asData(node.struct())}`)
                 def annotations :List := node.annotations()
                 if (!annotations.isEmpty()):
                     traceln(`annotations ${asData(annotations)}`)
@@ -378,7 +402,8 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         ],
         [
             "text" => [0, text, 12],
-        ]
+        ],
+        [].asMap(),
     )
     def type := makeSchema(
         [
@@ -388,6 +413,7 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         [
             "elementType" => [0, type, 14],
         ],
+        [].asMap(),
     )
     def binding := makeSchema(
         [
@@ -395,6 +421,7 @@ def main(_argv, => makeFileResource) as DeepFrozen:
             "_which" => [0, 16],
         ],
         ["type" => [0, type, 1]],
+        [].asMap(),
     )
     def scope := makeSchema(
         [
@@ -405,10 +432,12 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         [
             "bind" => [0, makeListOfStructs(binding), 0],
         ],
+        [].asMap(),
     )
     def brand := makeSchema(
         [].asMap(),
         ["scopes" => [0, makeListOfStructs(scope)]],
+        [].asMap(),
     )
     def annotation := makeSchema(
         ["id" => [0, 64]],
@@ -416,8 +445,10 @@ def main(_argv, => makeFileResource) as DeepFrozen:
             "value" => [0, value],
             "brand" => [1, brand],
         ],
+        [].asMap(),
     )
-    def parameter := makeSchema([].asMap(), ["name" => [0, text]])
+    def parameter := makeSchema([].asMap(), ["name" => [0, text]], [].asMap())
+    def field := makeSchema([].asMap(), [].asMap(), [].asMap())
     def schema := makeSchema(
         [].asMap(),
         [
@@ -427,8 +458,6 @@ def main(_argv, => makeFileResource) as DeepFrozen:
                     "id" => [0, 64],
                     "displayNamePrefixLength" => [64, 96],
                     "_which" => [96, 112],
-                    # XXX missing union tag
-                    "dataWordCount" => [112, 128],
                     "scopeId" => [128, 192],
                     # XXX ...
                     "isGeneric" => [288, 289],
@@ -438,9 +467,21 @@ def main(_argv, => makeFileResource) as DeepFrozen:
                     "nestedNodes" => [1, makeListOfStructs(makeSchema(
                         ["id" => [0, 64]],
                         ["name" => [0, text]],
+                        [].asMap(),
                     ))],
                     "annotations" => [2, makeListOfStructs(annotation)],
                     "parameters" => [5, makeListOfStructs(parameter)],
+                ],
+                [
+                    "struct" => [makeSchema(
+                        [
+                            "dataWordCount" => [112, 128],
+                        ],
+                        [
+                            "fields" => [3, makeListOfStructs(field)],
+                        ],
+                        [].asMap(),
+                    ), 1],
                 ],
             ))],
             "requestedFiles" => [1, makeListOfStructs(makeSchema(
@@ -450,10 +491,13 @@ def main(_argv, => makeFileResource) as DeepFrozen:
                     "imports" => [1, makeListOfStructs(makeSchema(
                         ["id" => [0, 64]],
                         ["name" => [0, text]],
+                        [].asMap(),
                     ))],
                 ],
+                [].asMap(),
             ))],
         ],
+        [].asMap(),
     )
     def handle := makeFileResource("meta.capn")
     return when (def bs := handle<-getContents()) ->
