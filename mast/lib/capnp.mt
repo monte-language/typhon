@@ -381,6 +381,14 @@ def makeCompiler() as DeepFrozen:
                 traceln(`node ${asData(node)}`)
 
 def main(_argv, => makeFileResource) as DeepFrozen:
+
+    # struct Value from schema.capnp @0xa93fc509624c72d9;
+    # For bootstrapping, we use the start/stop info from:
+    #   capnpc -o capnp schema.capnp
+    # for example
+    #     void @0 :Void;  # bits[0, 0), union tag = 0
+    #     bool @1 :Bool;  # bits[16, 17), union tag = 1
+    #     int8 @2 :Int8;  # bits[16, 24), union tag = 2
     def value := makeSchema(
         [
             "_which" => [0, 16],
@@ -483,6 +491,8 @@ def main(_argv, => makeFileResource) as DeepFrozen:
             ),
         ],
     )
+
+    # cf. struct CodeGeneratorRequest
     def schema := makeSchema(
         [].asMap(),
         [
