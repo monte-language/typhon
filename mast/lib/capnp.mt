@@ -380,7 +380,7 @@ def makeCompiler() as DeepFrozen:
                 traceln(`node $id, name ${node.displayName()}`)
                 traceln(`node ${asData(node)}`)
 
-def main(_argv, => makeFileResource) as DeepFrozen:
+def bootstrap() as DeepFrozen:
 
     # struct Value from schema.capnp @0xa93fc509624c72d9;
     # For bootstrapping, we use the start/stop info from:
@@ -543,6 +543,10 @@ def main(_argv, => makeFileResource) as DeepFrozen:
         ],
         [].asMap(),
     )
+    return schema
+
+def main(_argv, => makeFileResource) as DeepFrozen:
+    def schema := bootstrap()
     def handle := makeFileResource("meta.capn")
     return when (def bs := handle<-getContents()) ->
         traceln(`Read in ${bs.size()} bytes`)
