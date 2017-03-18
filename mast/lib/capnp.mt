@@ -11,8 +11,8 @@ def mask(width :Int) :Int as DeepFrozen:
 def shift(i :Int, offset :(0..!64), width :(0..64)) :Int as DeepFrozen:
     return (i >> offset) & mask(width)
 
-def makeStruct(message :DeepFrozen, segment :Int, offset :Int, dataSize :Int,
-               pointerSize :Int) as DeepFrozen:
+def makeStructPointer(message :DeepFrozen, segment :Int, offset :Int,
+                      dataSize :Int, pointerSize :Int) as DeepFrozen:
     return object structPointer:
         to _printOn(out):
             out.print(`<struct @@$segment+$offset d$dataSize p$pointerSize>`)
@@ -61,8 +61,8 @@ def makeCompositeStorage :DeepFrozen := {
 
             to get(message, segment :Int, offset :Int, index :Int) {
                 def structOffset :Int := offset + stride * index
-                return makeStruct(message, segment, structOffset, dataSize,
-                                  pointerSize)
+                return makeStructPointer(message, segment, structOffset,
+                                         dataSize, pointerSize)
             }
         }
     }
@@ -162,7 +162,8 @@ def makeMessage(bs :Bytes) as DeepFrozen:
                     def structOffset :Int := 1 + offset + shift(i, 2, 30)
                     def dataSize :Int := shift(i, 32, 16)
                     def pointerCount :Int := shift(i, 48, 16)
-                    makeStruct(message, segment, structOffset, dataSize, pointerCount)
+                    makeStructPointer(message, segment, structOffset,
+                                      dataSize, pointerCount)
                 match ==0x1:
                     def listOffset :Int := 1 + offset + shift(i, 2, 30)
                     def elementType :Int := shift(i, 32, 3)
@@ -228,7 +229,7 @@ object text as DeepFrozen:
             # Slice off the trailing NULL byte.
             s.slice(0, s.size() - 1)
 
-def makeSchema(dataFields :Map[Str, Any],
+def makeStruct(dataFields :Map[Str, Any],
                pointerFields :Map[Str, Any],
                groupFields :Map[Str, Any]) as DeepFrozen:
     def dataSize := {
@@ -321,8 +322,8 @@ def makeSchema(dataFields :Map[Str, Any],
                         match struct:
                             struct.interpret(pointer)
 
-def makeListOfStructs(schema) as DeepFrozen:
-    def [=="struct", dataSize, pointerSize] := schema.signature()
+def makeStructList(struct) as DeepFrozen:
+    def [=="struct", dataSize, pointerSize] := struct.signature()
     def storage := makeCompositeStorage(dataSize, pointerSize)
     def signature := ["list", storage]
     return object listSchema:
@@ -362,7 +363,7 @@ def makeListOfStructs(schema) as DeepFrozen:
                 # Odd asymmetry here; the storage is also known to the
                 # pointer, so we don't have to invoke it again here.
                 match [=="get", [index :Int], _]:
-                    schema.interpret(pointer[index])
+                    struct.interpret(pointer[index])
 
 def makeCompiler() as DeepFrozen:
     def nodes := [].asMap().diverge()
@@ -376,9 +377,35 @@ def makeCompiler() as DeepFrozen:
             traceln(`Processing file $data`)
 
         to run():
-            for id => node in (nodes):
+            def compiledNodes := [for id => node in (nodes) id => {
                 traceln(`node $id, name ${node.displayName()}`)
-                traceln(`node ${asData(node)}`)
+                # traceln(`node ${asData(node)}`)
+                switch (node._which()) {
+                    # file
+                    match ==0 { traceln(`node is file`) }
+                    # struct
+                    match ==1 {
+                        traceln(`node is struct`)
+                        def dataFields := m`[].asMap()`
+                        def structFields := m`[].asMap()`
+                        def groupFields := m`[].asMap()`
+                        m`makeStruct($dataFields, $structFields, $groupFields)`
+                    }
+                    # enum
+                    match ==2 {
+                        traceln(`node is enum ${asData(node.enum())}`)
+                    }
+                    # const
+                    match ==4 {
+                        traceln(`node is const ${asData(node.const())}`)
+                    }
+                    # annotation
+                    match ==5 {
+                        traceln(`node is annotation ${asData(node.annotation())}`)
+                    }
+                }
+            }]
+            traceln(`compiled nodes $compiledNodes`)
 
 def bootstrap() as DeepFrozen:
 
@@ -389,7 +416,7 @@ def bootstrap() as DeepFrozen:
     #     void @0 :Void;  # bits[0, 0), union tag = 0
     #     bool @1 :Bool;  # bits[16, 17), union tag = 1
     #     int8 @2 :Int8;  # bits[16, 24), union tag = 2
-    def value := makeSchema(
+    def value := makeStruct(
         [
             "_which" => [0, 16],
             "void" => [0, 0, 0],
@@ -410,7 +437,7 @@ def bootstrap() as DeepFrozen:
         ],
         [].asMap(),
     )
-    def type := makeSchema(
+    def type := makeStruct(
         [
             "_which" => [0, 16],
             # XXX ...
@@ -420,7 +447,7 @@ def bootstrap() as DeepFrozen:
         ],
         [].asMap(),
     )
-    def binding := makeSchema(
+    def binding := makeStruct(
         [
             "unbound" => [0, 0, 0],
             "_which" => [0, 16],
@@ -428,23 +455,23 @@ def bootstrap() as DeepFrozen:
         ["type" => [0, type, 1]],
         [].asMap(),
     )
-    def scope := makeSchema(
+    def scope := makeStruct(
         [
             "inherit" => [0, 0, 1],
             "scopeId" => [0, 64],
             "_which" => [64, 80],
         ],
         [
-            "bind" => [0, makeListOfStructs(binding), 0],
+            "bind" => [0, makeStructList(binding), 0],
         ],
         [].asMap(),
     )
-    def brand := makeSchema(
+    def brand := makeStruct(
         [].asMap(),
-        ["scopes" => [0, makeListOfStructs(scope)]],
+        ["scopes" => [0, makeStructList(scope)]],
         [].asMap(),
     )
-    def annotation := makeSchema(
+    def annotation := makeStruct(
         ["id" => [0, 64]],
         [
             "value" => [0, value],
@@ -452,8 +479,8 @@ def bootstrap() as DeepFrozen:
         ],
         [].asMap(),
     )
-    def parameter := makeSchema([].asMap(), ["name" => [0, text]], [].asMap())
-    def field := makeSchema(
+    def parameter := makeStruct([].asMap(), ["name" => [0, text]], [].asMap())
+    def field := makeStruct(
         [
             "codeOrder" => [0, 16],
             "discriminantValue" => [16, 32],
@@ -461,10 +488,10 @@ def bootstrap() as DeepFrozen:
         ],
         [
             "name" => [0, text],
-            "annotations" => [1, makeListOfStructs(annotation)],
+            "annotations" => [1, makeStructList(annotation)],
         ],
         [
-            "slot" => [makeSchema(
+            "slot" => [makeStruct(
                 [
                     "offset" => [32, 64],
                     "hadExplicitDefault" => [128, 129],
@@ -475,12 +502,12 @@ def bootstrap() as DeepFrozen:
                 ],
                 [].asMap(),
             ), 0],
-            "group" => [makeSchema(
+            "group" => [makeStruct(
                 ["typeId" => [128, 192]],
                 [].asMap(),
                 [].asMap(),
             ), 1],
-            "ordinal" => makeSchema(
+            "ordinal" => makeStruct(
                 [
                     "implicit" => [0, 0, 0],
                     "explicit" => [96, 112, 1],
@@ -492,11 +519,20 @@ def bootstrap() as DeepFrozen:
         ],
     )
 
+    def enumerant := makeStruct(
+        ["codeOrder" => [0, 16]],
+        [
+            "name" => [0, text],
+            "annotations" => [1, makeStructList(annotation)],
+        ],
+        [].asMap(),
+    )
+
     # cf. struct CodeGeneratorRequest
-    def schema := makeSchema(
+    def schema := makeStruct(
         [].asMap(),
         [
-            "nodes" => [0, makeListOfStructs(makeSchema(
+            "nodes" => [0, makeStructList(makeStruct(
                 [
                     "file" => [0, 0, 0],
                     "id" => [0, 64],
@@ -508,31 +544,53 @@ def bootstrap() as DeepFrozen:
                 ],
                 [
                     "displayName" => [0, text],
-                    "nestedNodes" => [1, makeListOfStructs(makeSchema(
+                    "nestedNodes" => [1, makeStructList(makeStruct(
                         ["id" => [0, 64]],
                         ["name" => [0, text]],
                         [].asMap(),
                     ))],
-                    "annotations" => [2, makeListOfStructs(annotation)],
-                    "parameters" => [5, makeListOfStructs(parameter)],
+                    "annotations" => [2, makeStructList(annotation)],
+                    "parameters" => [5, makeStructList(parameter)],
                 ],
                 [
-                    "struct" => [makeSchema(
+                    "struct" => [makeStruct(
                         [
                             "dataWordCount" => [112, 128],
                         ],
                         [
-                            "fields" => [3, makeListOfStructs(field)],
+                            "fields" => [3, makeStructList(field)],
                         ],
                         [].asMap(),
                     ), 1],
+                    "enum" => [makeStruct(
+                        [].asMap(),
+                        ["enumerants" => [3, makeStructList(enumerant)]],
+                        [].asMap(),
+                    ), 2],
+                    "const" => [makeStruct(
+                        [].asMap(),
+                        [
+                            "type" => [3, type],
+                            "value" => [3, value],
+                        ],
+                        [].asMap(),
+                    ), 4],
+                    "annotation" => [makeStruct(
+                        [
+                            "targetsFile" => [112, 113],
+                        ],
+                        [
+                            "type" => [3, type],
+                        ],
+                        [].asMap(),
+                    ), 5],
                 ],
             ))],
-            "requestedFiles" => [1, makeListOfStructs(makeSchema(
+            "requestedFiles" => [1, makeStructList(makeStruct(
                 ["id" => [0, 64]],
                 [
                     "filename" => [0, text],
-                    "imports" => [1, makeListOfStructs(makeSchema(
+                    "imports" => [1, makeStructList(makeStruct(
                         ["id" => [0, 64]],
                         ["name" => [0, text]],
                         [].asMap(),
