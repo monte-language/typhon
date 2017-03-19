@@ -267,6 +267,10 @@ def makeStruct(dataFields :Map[Str, Any],
             return signature
 
         to interpret(pointer):
+            # XXX this should probably return defaults instead!
+            if (pointer == null):
+                return null
+
             def [=="struct", ds, ps] := pointer.signature()
             if (dataSize > ds || pointerSize > ps):
                 throw(`Struct can't be interpreted: [$dataSize, $pointerSize] too big for [$ds, $ps]`)
@@ -365,19 +369,98 @@ def makeStructList(struct) as DeepFrozen:
                 match [=="get", [index :Int], _]:
                     struct.interpret(pointer[index])
 
+def buildList(builder, l :List) as DeepFrozen:
+    return builder.ListExpr([for x in (l) builder.LiteralExpr(x, null)], null)
+
+def buildMap(builder, m :Map) as DeepFrozen:
+    return if (m.isEmpty()) { m`[].asMap()` } else {
+        def assocs := [for k => v in (m)
+            builder.MapExprAssoc(builder.LiteralExpr(k, null), v, null)]
+        builder.MapExpr(assocs, null)
+    }
+
+def buildType(builder, names, ty) as DeepFrozen:
+    return switch (ty._which()):
+        match ==0:
+            m`void`
+        match ==12:
+            m`text`
+        match ==13:
+            m`data`
+        match ==14:
+            def elementType := ty.list().elementType()
+            def inner := buildType(builder, names, elementType)
+            if (elementType._which() == 16):
+                m`makeStructList($inner)`
+            else:
+                m`makeListOf($inner)`
+        match ==16:
+            builder.NounExpr(names[ty.struct().typeId()], null)
+        match ==18:
+            # XXX there's a struct we're skipping over
+            m`anyPointer`
+
+def typeWidths :List[Pair[Int, Bool]] := [
+    # void
+    [0, true],
+    # bool
+    [1, true],
+    # int8
+    [8, true],
+    # int16
+    [16, true],
+    # int32
+    [32, true],
+    # int64
+    [64, true],
+    # uint8
+    [8, true],
+    # uint16
+    [16, true],
+    # uint32
+    [32, true],
+    # uint64
+    [64, true],
+    # float32
+    [32, true],
+    # float64
+    [64, true],
+    # text
+    [1, false],
+    # data
+    [1, false],
+    # list
+    [1, false],
+    # XXX enums
+    [16, true],
+    # struct
+    [1, false],
+    # interface
+    [1, false],
+    # anyPointer
+    [1, false],
+]
+
 def makeCompiler() as DeepFrozen:
     def nodes := [].asMap().diverge()
+    def nodeNames := [].asMap().diverge()
 
     return object compiler:
         to addNode(node):
-            nodes[node.id()] := node
+            def id := node.id()
+            def displayName := node.displayName()
+            nodes[id] := node
+            nodeNames[id] := displayName.slice(node.displayNamePrefixLength(),
+                                               displayName.size())
 
         to addFile(file):
             def data := asData(file)
             traceln(`Processing file $data`)
 
         to run():
-            def compiledNodes := [for id => node in (nodes) id => {
+            def builder := ::"m``".getAstBuilder()
+            def structs := [].asMap().diverge()
+            for id => node in (nodes):
                 traceln(`node $id, name ${node.displayName()}`)
                 # traceln(`node ${asData(node)}`)
                 switch (node._which()) {
@@ -386,10 +469,62 @@ def makeCompiler() as DeepFrozen:
                     # struct
                     match ==1 {
                         traceln(`node is struct`)
-                        def dataFields := m`[].asMap()`
-                        def structFields := m`[].asMap()`
-                        def groupFields := m`[].asMap()`
-                        m`makeStruct($dataFields, $structFields, $groupFields)`
+                        def struct := node.struct()
+                        def dataSize := struct.dataWordCount()
+                        def pointerSize := struct.pointerCount()
+                        traceln(`struct signature $dataSize $pointerSize`)
+                        def dataFields := [].asMap().diverge()
+                        def pointerFields := [].asMap().diverge()
+                        def groupFields := [].asMap().diverge()
+                        for field in (struct.fields()) {
+                            def name := field.name()
+                            traceln(`Looking at field $name`)
+                            def unionTag := field.discriminantValue() ^ 0xffff
+                            if (unionTag == 0xffff) {
+                                traceln(`Not part of a union`)
+                            } else {
+                                traceln(`Union tag $unionTag`)
+                            }
+                            switch (field._which()) {
+                                # slot
+                                match ==0 {
+                                    def slot := field.slot()
+                                    traceln(`slot ${asData(slot)}`)
+                                    def type := slot.type()
+                                    def [width, isData] := typeWidths[type._which()]
+                                    if (isData) {
+                                        def start := slot.offset() * width
+                                        def stop := start + width
+                                        dataFields[name] := if (unionTag == 0xffff) {
+                                            buildList(builder, [start, stop])
+                                        } else {
+                                            buildList(builder, [start, stop, unionTag])
+                                        }
+                                    } else {
+                                        def builtType := buildType(builder,
+                                                                   nodeNames,
+                                                                   slot.type())
+                                        def offset := slot.offset()
+                                        pointerFields[name] := if (unionTag == 0xffff) {
+                                            buildList(builder, [offset,
+                                                                builtType])
+                                        } else {
+                                            buildList(builder, [offset,
+                                                                builtType,
+                                                                unionTag])
+                                        }
+                                    }
+                                }
+                                match ==1 {
+                                    traceln(`group with id ${field.group().typeId()}`)
+                                }
+                            }
+                        }
+                        structs[id] := m`makeStruct(
+                            ${buildMap(builder, dataFields.snapshot())},
+                            ${buildMap(builder, pointerFields.snapshot())},
+                            ${buildMap(builder, groupFields.snapshot())},
+                        )`
                     }
                     # enum
                     match ==2 {
@@ -404,8 +539,7 @@ def makeCompiler() as DeepFrozen:
                         traceln(`node is annotation ${asData(node.annotation())}`)
                     }
                 }
-            }]
-            traceln(`compiled nodes $compiledNodes`)
+            traceln(`structs $structs`)
 
 def bootstrap() as DeepFrozen:
 
@@ -437,16 +571,7 @@ def bootstrap() as DeepFrozen:
         ],
         [].asMap(),
     )
-    def type := makeStruct(
-        [
-            "_which" => [0, 16],
-            # XXX ...
-        ],
-        [
-            "elementType" => [0, type, 14],
-        ],
-        [].asMap(),
-    )
+    def type
     def binding := makeStruct(
         [
             "unbound" => [0, 0, 0],
@@ -470,6 +595,36 @@ def bootstrap() as DeepFrozen:
         [].asMap(),
         ["scopes" => [0, makeStructList(scope)]],
         [].asMap(),
+    )
+    bind type := makeStruct(
+        [
+            "_which" => [0, 16],
+            "void" => [0, 0, 0],
+            "uint64" => [0, 0, 9],
+            "text" => [0, 0, 12],
+            # XXX ...
+        ],
+        [
+            "elementType" => [0, type, 14],
+            # XXX ...
+        ],
+        [
+            "list" => [makeStruct(
+                [].asMap(),
+                ["elementType" => [0, type]],
+                [].asMap(),
+            ), 14],
+            "enum" => [makeStruct(
+                ["typeId" => [64, 128]],
+                ["brand" => [0, brand]],
+                [].asMap(),
+            ), 15],
+            "struct" => [makeStruct(
+                ["typeId" => [64, 128]],
+                ["brand" => [0, brand]],
+                [].asMap(),
+            ), 16],
+        ],
     )
     def annotation := makeStruct(
         ["id" => [0, 64]],
@@ -556,6 +711,7 @@ def bootstrap() as DeepFrozen:
                     "struct" => [makeStruct(
                         [
                             "dataWordCount" => [112, 128],
+                            "pointerCount" => [192, 208],
                         ],
                         [
                             "fields" => [3, makeStructList(field)],
