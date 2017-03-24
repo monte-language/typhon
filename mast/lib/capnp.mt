@@ -370,7 +370,11 @@ def makeStructList(struct) as DeepFrozen:
                     struct.interpret(pointer[index])
 
 def buildList(builder, l :List) as DeepFrozen:
-    return builder.ListExpr([for x in (l) builder.LiteralExpr(x, null)], null)
+    def Ast := builder.getAstGuard()
+    def exprs := [for x in (l) if (x =~ expr :Ast) { expr } else {
+        builder.LiteralExpr(x, null)
+    }]
+    return builder.ListExpr(exprs, null)
 
 def buildMap(builder, m :Map) as DeepFrozen:
     return if (m.isEmpty()) { m`[].asMap()` } else {
@@ -479,17 +483,12 @@ def makeCompiler() as DeepFrozen:
                         for field in (struct.fields()) {
                             def name := field.name()
                             traceln(`Looking at field $name`)
+                            # Union tag. 0xffff means no union.
                             def unionTag := field.discriminantValue() ^ 0xffff
-                            if (unionTag == 0xffff) {
-                                traceln(`Not part of a union`)
-                            } else {
-                                traceln(`Union tag $unionTag`)
-                            }
                             switch (field._which()) {
                                 # slot
                                 match ==0 {
                                     def slot := field.slot()
-                                    traceln(`slot ${asData(slot)}`)
                                     def type := slot.type()
                                     def [width, isData] := typeWidths[type._which()]
                                     if (isData) {
@@ -515,8 +514,16 @@ def makeCompiler() as DeepFrozen:
                                         }
                                     }
                                 }
+                                # group
                                 match ==1 {
-                                    traceln(`group with id ${field.group().typeId()}`)
+                                    def typeId := field.group().typeId()
+                                    def noun := builder.NounExpr(nodeNames[typeId],
+                                                                 null)
+                                    groupFields[name] := if (unionTag == 0xffff) {
+                                        noun
+                                    } else {
+                                        buildList(builder, [noun, unionTag])
+                                    }
                                 }
                             }
                         }
@@ -539,7 +546,18 @@ def makeCompiler() as DeepFrozen:
                         traceln(`node is annotation ${asData(node.annotation())}`)
                     }
                 }
-            traceln(`structs $structs`)
+            # N.B. the two node maps should be in the same order since they
+            # were built element-wise at the same time, and thus the struct
+            # map should also be in this order.
+            def lhs := builder.ListPattern(
+                [for n in (nodeNames.getValues())
+                 builder.FinalPattern(builder.NounExpr(n, null), null, null)],
+                null, null)
+            def rhs := builder.ListExpr(structs.getValues(), null)
+            def expr := m`def $lhs := $rhs`
+            def Ast := builder.getAstGuard()
+            traceln("expr", expr :Ast)
+            return expr
 
 def bootstrap() as DeepFrozen:
 
