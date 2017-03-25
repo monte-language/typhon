@@ -108,6 +108,7 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 	mast/lib/monte/monte_parser.mast mast/lib/monte/monte_expander.mast \
 	mast/lib/monte/monte_optimizer.mast \
 	mast/lib/monte/mast.mast mast/lib/monte/monte_verifier.mast \
+	mast/lib/monte/meta.mast \
 	mast/montec.mast mast/testRunner.mast mast/all-tests.mast
 
 mast/prelude.mast: mast/prelude.mt

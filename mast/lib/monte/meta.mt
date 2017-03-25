@@ -1,18 +1,28 @@
-# goal: debugger a la pdb.set_trace() or debug() in js, R
-
 import "unittest" =~ [=> unittest]
 import "lib/monte/monte_parser" =~ [
     => parseModule :DeepFrozen,
 ]
-
-import "doctests" =~ [=> suite]
 exports (main, makeEvaluator)
 
-def Scope :DeepFrozen := Map[Str, Any]  # TODO map to binding
-def emptyScope :DeepFrozen := [].asMap() :Scope
+# The metacircular interpreter.
+# This module's machinery interprets Monte in Monte, absorbing most of the
+# non-trivial semantics but allowing for debugging.
+
+# Absorbed:
+# * Bindings
+# * Ejectors
+
+# Reified:
+# * Scopes
+
+# goal: debugger a la pdb.set_trace() or debug() in js, R
+
+def Scope :DeepFrozen := Map[Str, Binding]
+def emptyScope :DeepFrozen := [].asMap()
 def Expr :DeepFrozen := astBuilder.getExprGuard()
 def Pattern :DeepFrozen := astBuilder.getPatternGuard()
 
+# XXX unclear why necessary
 def makeM :DeepFrozen := m`0`._uncall()[0]
 object noSpecimen as DeepFrozen {}
 
@@ -53,7 +63,7 @@ def makeEvaluator(var scopes: List[Scope]) as DeepFrozen:
     # cribbed from
     # https://github.com/monte-language/typhon/blob/master/typhon/nano/interp.py#L276
 
-    def var locals := emptyScope
+    var locals :Scope := emptyScope
     def var specimen := noSpecimen
     def var patternFailure := throw
     def inFreshScope(thunk):
@@ -239,27 +249,17 @@ def makeEvaluator(var scopes: List[Scope]) as DeepFrozen:
             evaluator.matchBind(patt, newSpec, "ej" => ej)
 
 
-def testFor(case):
-    def [=>section, =>lineno, =>source, =>want] | _ := case
+def makeEvalCase(expr):
+    return def testEvalEquivalence(assert):
+        def evaluator := makeEvaluator([safeScope])
+        assert.equal(evaluator(expr), eval(expr, safeScope))
 
-    def fixAST := want.contains("m`").pick(fn ast { ast.canonical() },
-                                           fn v { v })
-
-    return object test:
-        to _printOn(p):
-            p.print(`<test: $section:$lineno>`)
-
-        to run(assert):
-            def e := makeEvaluator([safeScope])
-
-            def expected := fixAST(eval(want, safeScope))
-            def input := ::"m``".fromStr(source).expand()
-            def actual := e(input)
-
-            return when (actual) ->
-                assert.equal(fixAST(actual), fixAST(expected))
-
-unittest([for case in (suite) testFor(case)])
+unittest([for expr in ([
+    # Literals.
+    m`null`,
+    m`42`,
+    m`"¡Olé for Monte!"`,
+]) makeEvalCase(expr)])
 
 
 def main(argv :List[Str], =>makeFileResource) as DeepFrozen:
