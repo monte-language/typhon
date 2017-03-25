@@ -14,6 +14,10 @@ exports (main, makeEvaluator)
 
 # Reified:
 # * Scopes
+# * Recursive object bindings, using forward declarations (promises)
+
+# We must reify ejectors in order to permit pauses in:
+# m`escape ej { pause(); ej() }`
 
 # goal: debugger a la pdb.set_trace() or debug() in js, R
 
@@ -183,10 +187,12 @@ def makeEvaluator(var scopes: List[Scope]) as DeepFrozen:
             def name := if (namePatt.getNodeName() == "IgnorePattern") { "_" } else {
                 namePatt.getNoun().getName()
             }
-            def [p, r] := Ref.promise()
-            evaluator.matchBind(namePatt, p)
-            def obj := makeInterpObject(_doc, name, script, [locals] + scopes, makeEvaluator)
-            r.resolve(obj)
+            # Forward-declare the object so that we can tie the recursive
+            # knot. As a consequence, the object isn't callable during
+            # match-bind...
+            def obj
+            evaluator.matchBind(namePatt, obj)
+            bind obj := makeInterpObject(_doc, name, script, [locals] + scopes, makeEvaluator)
             return obj
 
         to matchBind(patt :Pattern, val, => ej := throw):
@@ -233,32 +239,38 @@ def makeEvaluator(var scopes: List[Scope]) as DeepFrozen:
 
         to ListPattern(patts :List[Pattern], _tail :Void, _pos):
             # Kernel list patterns have no tail.
-            List.coerce(specimen, patternFailure)
-            if (patts.size() != specimen.size()):
+            def l :List exit patternFailure := specimen
+            if (patts.size() != l.size()):
                 throw.eject(patternFailure,
-                            `Failed list pattern (needed ${patts.size()}, got ${specimen.size()})`)
+                            `Failed list pattern (needed ${patts.size()}, got ${l.size()})`)
             def ej := patternFailure
-            for ix in (0..!patts.size()):
-                evaluator.matchBind(patts[ix], specimen[ix], "ej" => ej)
+            for ix => patt in (patts):
+                evaluator.matchBind(patt, specimen[ix], => ej)
 
         to ViaPattern(trans :Expr, patt :Pattern, _pos):
             def ej := patternFailure
             def v := evaluator(trans)
             def newSpec := v(specimen, ej)
             # semantics could be clearer that we use the same ejector below.
-            evaluator.matchBind(patt, newSpec, "ej" => ej)
+            evaluator.matchBind(patt, newSpec, => ej)
 
 
 def makeEvalCase(expr):
+    def expanded := expr.expand()
     return def testEvalEquivalence(assert):
         def evaluator := makeEvaluator([safeScope])
-        assert.equal(evaluator(expr), eval(expr, safeScope))
+        assert.equal(evaluator(expanded), eval(expanded, safeScope))
 
 unittest([for expr in ([
     # Literals.
     m`null`,
     m`42`,
     m`"¡Olé for Monte!"`,
+    # Collections.
+    m`[1, 2, 3, 4]`,
+    m`["everybody" => "walk", "the" => "dinosaur"]`,
+    # Objects.
+    m`(fn x { x + 1 })(4)`,
 ]) makeEvalCase(expr)])
 
 
