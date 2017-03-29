@@ -116,14 +116,22 @@ def reduce(expr :Expr, annotations, scopeStack) as DeepFrozen:
     Close `expr` over the given scope and constant-fold aggressively.
     "
 
+    traceln("Looking at", m`${expr}`, expr.getNodeName())
+
     def seq(exprs):
         return if (exprs =~ [e]) { e } else { astBuilder.SeqExpr(exprs, null) }
 
     def rere(ex):
-        return reduce(ex, annotations, scopeStack)
+        return if (ex == null) { null } else {
+            reduce(ex, annotations, scopeStack)
+        }
 
     def fresh(ex):
         return reduce(ex, annotations, scopeStack.fresh())
+
+    def movable(ex):
+        return (ex == null || isLiteral(ex) ||
+                ["BindingExpr", "NounExpr"].contains(ex.getNodeName()))
 
     # XXX if the annotations were more reliable, then we would do `if
     # (annotations[expr])` or something.
@@ -150,10 +158,38 @@ def reduce(expr :Expr, annotations, scopeStack) as DeepFrozen:
             } else { astBuilder.AssignExpr(expr.getLvalue(), rhs, null) }
         }
         match =="DefExpr" {
-            def patt := expr.getPattern()
-            def ex := expr.getExit()
-            def rhs := rere(expr.getExpr())
-            astBuilder.DefExpr(patt, ex, rhs, null)
+            var patt := expr.getPattern()
+            var ex := rere(expr.getExit())
+            var rhs := rere(expr.getExpr())
+            # Can we simplify this assignment at all?
+            if (isLiteral(rhs) && movable(ex)) {
+                ex := if (ex == null) { m`null` } else { ex }
+                while (patt.refutable()) {
+                    switch (patt.getNodeName()) {
+                        # XXX cases
+                        match =="FinalPattern" {
+                            # Only refutable because of a guard.
+                            def guard := rere(patt.getGuard())
+                            rhs := m`$guard.coerce($rhs, $ex)`
+                            patt withGuard= (null)
+                        }
+                    }
+                }
+                switch (patt.getNodeName()) {
+                    match =="IgnorePattern" { rhs }
+                    match =="FinalPattern" ? (isLiteral(rhs)) {
+                        # Propagate a new constant.
+                        # XXX guards!
+                        def binding := { def derp := rhs.getValue(); &&derp }
+                        scopeStack.addName(patt.getNoun().getName(), binding)
+                        rhs
+                    }
+                    match _ {
+                        # Irrefutable but not yet usable by us.
+                        astBuilder.DefExpr(patt, ex, rhs, null)
+                    }
+                }
+            } else { astBuilder.DefExpr(patt, ex, rhs, null) }
         }
         match =="HideExpr" {
             fresh(expr.getBody())
@@ -275,6 +311,7 @@ unittest([for expr in ([
     # Collections.
     m`[1, 2, 3, 4]`,
     m`["everybody" => "walk", "the" => "dinosaur"]`,
+    m`def l := [1, 2, 3, 4]; l[2]`,
     # Objects.
     m`(fn x { x + 1 })(4)`,
     # Arithmetic.
@@ -288,13 +325,13 @@ def derp(expr) as DeepFrozen:
     traceln("Mixed", mixed)
 
 def main(_argv :List[Str]) as DeepFrozen:
-    def index := m`def l := [1, 2, 3, 4]; l[2]`.expand()
-    derp(index)
+    def listplay := m`def l := [].diverge(); l.push(0); l.push(1); l`.expand()
+    derp(listplay)
     def factorial := m`def fact(x :Int) {
         return if (x < 2) { x } else { x * fact(x - 1) }
     }; fact(5)`.expand()
     derp(factorial)
-    def _bf := m`def bf(insts) {
+    def bf := m`def bf(insts) {
         var i := 0
         var pointer := 0
         def tape := [0].diverge()
@@ -325,4 +362,4 @@ def main(_argv :List[Str]) as DeepFrozen:
         }
         return output
     }; bf("+++>>[-]<<[->>+<<]")`.expand()
-    # derp(bf)
+    derp(bf)
