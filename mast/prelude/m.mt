@@ -1,10 +1,13 @@
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
-import "lib/monte/monte_parser" =~ [=> parseExpression :DeepFrozen]
+import "lib/monte/monte_parser" =~ [
+    => parseExpression :DeepFrozen,
+    => parsePattern :DeepFrozen,
+]
 import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
 import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
 import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
 import "boot" =~ [=> TransparentStamp :DeepFrozen]
-exports (::"m``", eval)
+exports (::"m``", ::"mpatt``", eval)
 
 
 def [VALUE_HOLE :DeepFrozen,
@@ -49,12 +52,13 @@ def Expr :DeepFrozen := astBuilder.getExprGuard()
 def NamePattern :DeepFrozen := astBuilder.getNamePatternGuard()
 def Noun :DeepFrozen := astBuilder.getNounGuard()
 
-def makeM(ast :Ast, isKernel :Bool) as DeepFrozen:
+def makeM(ast :Ast, label :Str, isKernel :Bool) as DeepFrozen:
     return object m extends ast implements Selfless, TransparentStamp:
         "An abstract syntax tree in the Monte programming language."
 
         to _printOn(out):
-            out.print("m`")
+            out.print(label)
+            out.print("`")
             ast._printOn(out)
             out.print("`")
 
@@ -63,10 +67,11 @@ def makeM(ast :Ast, isKernel :Bool) as DeepFrozen:
                 return ast
 
         to _uncall():
-            return [makeM, "run", [ast, isKernel], [].asMap()]
+            return [makeM, "run", [ast, label, isKernel], [].asMap()]
 
         to substitute(values):
-            return makeM(ast.transform(makeQuasiAstTransformer(values)), false)
+            return makeM(ast.transform(makeQuasiAstTransformer(values)),
+                         label, false)
 
         to matchBind(values, specimen :Ast, ej):
             "Walk over the pattern AST and the specimen comparing each node.
@@ -108,7 +113,8 @@ def makeM(ast :Ast, isKernel :Bool) as DeepFrozen:
                         if (pattArg != specArg):
                             throw.eject(ej, "Expected " + M.toQuote(pattArg) +
                                         ", not " + M.toQuote(specArg))
-            return [for node in (results.sortKeys().getValues()) makeM(node, false)]
+            return [for node in (results.sortKeys().getValues())
+                    makeM(node, label, false)]
 
         to expand():
             "Desugar all non-Kernel-Monte syntax into Kernel-Monte."
@@ -117,7 +123,7 @@ def makeM(ast :Ast, isKernel :Bool) as DeepFrozen:
                 return m
 
             escape ej:
-                return makeM(expand(ast, astBuilder, ej), true)
+                return makeM(expand(ast, astBuilder, ej), label, true)
             catch error:
                 throw(`Couldn't expand to Kernel-Monte: $error`)
 
@@ -127,9 +133,9 @@ def makeM(ast :Ast, isKernel :Bool) as DeepFrozen:
             if (!isKernel):
                 throw(`Can't optimize unexpanded AST`)
 
-            return makeM(optimize(ast), true)
+            return makeM(optimize(ast), label, true)
 
-def makeQuasiTokenLexer(template) as DeepFrozen:
+def makeQuasiTokenLexer(template, sourceLabel :Str) as DeepFrozen:
     def source := [].diverge()
     var val := -1
     var patt := -1
@@ -141,7 +147,7 @@ def makeQuasiTokenLexer(template) as DeepFrozen:
                 source.push([VALUE_HOLE, val += 1, null])
             match ==PATTERN_HOLE:
                 source.push([PATTERN_HOLE, patt += 1, null])
-    return makeMonteLexer(source.snapshot(), "m``")
+    return makeMonteLexer(source.snapshot(), sourceLabel)
 
 object ::"m``" as DeepFrozen:
     "A quasiparser for the Monte programming language.
@@ -160,19 +166,48 @@ object ::"m``" as DeepFrozen:
        return PATTERN_HOLE
 
     to valueMaker(template):
-        def lexer := makeQuasiTokenLexer(template)
+        def lexer := makeQuasiTokenLexer(template, "m``")
         def qast := parseExpression(lexer, astBuilder, throw, throw)
-        return makeM(qast, false)
+        return makeM(qast, "m", false)
 
     to matchMaker(template):
-        def lexer := makeQuasiTokenLexer(template)
+        def lexer := makeQuasiTokenLexer(template, "m``")
         def qast := parseExpression(lexer, astBuilder, throw, throw)
-        return makeM(qast, false)
+        return makeM(qast, "m", false)
 
     to fromStr(source :Str):
         def tree := parseExpression(makeMonteLexer(source, "m``.fromStr/1"),
                                     astBuilder, throw, throw)
-        return makeM(tree, false)
+        return makeM(tree, "m", false)
+
+object ::"mpatt``" as DeepFrozen:
+    "A quasiparser for the Monte programming language's patterns.
+
+     This object is like m``, but for patterns."
+
+    to getAstBuilder():
+        return astBuilder
+
+    to valueHole(_):
+       return VALUE_HOLE
+
+    to patternHole(_):
+       return PATTERN_HOLE
+
+    to valueMaker(template):
+        def lexer := makeQuasiTokenLexer(template, "mpatt``")
+        def qast := parsePattern(lexer, astBuilder, throw)
+        return makeM(qast, "mpatt", false)
+
+    to matchMaker(template):
+        def lexer := makeQuasiTokenLexer(template, "mpatt``")
+        def qast := parsePattern(lexer, astBuilder, throw)
+        return makeM(qast, "mpatt", false)
+
+    to fromStr(source :Str):
+        def tree := parsePattern(makeMonteLexer(source, "mpatt``.fromStr/1"),
+                                 astBuilder, throw)
+        return makeM(tree, "mpatt", false)
 
 
 object eval as DeepFrozen:
