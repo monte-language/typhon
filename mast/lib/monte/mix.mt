@@ -3,53 +3,107 @@ exports (main, mix)
 
 # The partial evaluator.
 
+# Current goal: Refactor to offline
 # Current goal: Unfolding
+# Next goal: Switch -> If
 # Goal: cogen
 
 # def Scope :DeepFrozen := Map[Str, Binding]
 # def emptyScope :DeepFrozen := [].asMap()
 def Ast :DeepFrozen := astBuilder.getAstGuard()
 def Expr :DeepFrozen := astBuilder.getExprGuard()
-def Pattern :DeepFrozen := astBuilder.getPatternGuard()
 
-object noSpecimen as DeepFrozen {}
-object dynamic as DeepFrozen {}
+def and(bools :List[Bool]) :Bool as DeepFrozen:
+    for b in (bools):
+        if (!b):
+            return false
+    return true
 
-interface Ghost :DeepFrozen {}
+def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as DeepFrozen:
+    "
+    Do BTA on an expression by abstract interpretation.
 
-def makeGhostObject(methods, _matchers) as DeepFrozen:
-    def builder := ::"m``".getAstBuilder()
+    The computed annotation is `true` for static or `false` for dynamic, using
+    the standard Boolean lattice with AND.
+    "
 
-    return object ghostObject as Ghost:
-        to unfold(remix, verb, args, _namedArgs):
-            # Look for matching methods.
-            for m in (methods):
-                def patts := m.getPatterns()
-                if (m.getVerb() != verb || patts.size() != args.size()):
-                    continue
-                # If the pattern is refutable, then we don't have to generate
-                # any code; we can just substitute the incoming value
-                # directly. However, .refutable/0 isn't quite right here,
-                # because we have to reify things like VarSlots. So, instead,
-                # we just codegen each pattern and let the mixer sort it out.
-                def margs := [for i => patt in (patts)
-                              m`def $patt := ${args[i]}`]
-                # XXX codegen for named args would go here
-                def g := m.getResultGuard()
-                def mainBody := remix(m`{
-                    ${builder.SeqExpr(margs, null)}
-                    m.getBody()
-                }`)
-                return if (g != null) {
-                    m`{
-                        def _rv := $mainBody
-                        def _resultGuard := $g
-                        _resultGuard.coerce(_rv, null)
-                    }`
-                } else { mainBody }
+    def rv := [].asMap().diverge()
 
-def isLiteral(expr) :Bool as DeepFrozen:
-    return expr =~ _ :Ghost || expr.getNodeName() == "LiteralExpr"
+    def truish(b) :Bool:
+        return if (b == null) { true } else { b }
+
+    def annotate(node, _maker, args :List, _span) :Bool:
+        def annotation := switch (node.getNodeName()) {
+            match =="LiteralExpr" { true }
+            match =="BindingExpr" { staticOuters.contains(args[0]) }
+            match =="NounExpr" { staticOuters.contains(args[0]) }
+            match =="AssignExpr" { false }
+            match =="DefExpr" {
+                args[0] && truish(args[1]) && args[2]
+            }
+            match =="HideExpr" { args[0] }
+            match =="MethodCallExpr" {
+                args[0] && and(args[2]) && and(args[3])
+            }
+            match =="EscapeExpr" {
+                args[0] && args[1] && truish(args[2]) && truish(args[3])
+            }
+            match =="FinallyExpr" { and(args) }
+            match =="IfExpr" {
+                args[0] && args[1] && truish(args[2])
+            }
+            match =="SeqExpr" { and(args[0]) }
+            match =="CatchExpr" { and(args) }
+            match =="ObjectExpr" {
+                args[1] && truish(args[2]) && and(args[3]) && args[4]
+            }
+            match =="Method" {
+                and(args[2]) && and(args[3]) && truish(args[4]) && args[5]
+            }
+            match =="Script" {
+                and(args[1]) && and(args[2])
+            }
+            match =="IgnorePattern" { truish(args[0]) }
+            match =="BindingPattern" { true }
+            match =="FinalPattern" { truish(args[1]) }
+            # XXX someday
+            match =="VarPattern" { false }
+            # Kernel list patterns have no tail.
+            match =="ListPattern" { and(args[0]) }
+            match =="ViaPattern" { and(args) }
+        }
+        return rv[node] := annotation
+
+    topExpr.transform(annotate)
+    return rv.snapshot()
+
+def makeScopeStack(baseScope :Map) as DeepFrozen:
+    def locals := [].asMap().diverge()
+
+    return object scopeStack:
+        to fresh():
+            return makeScopeStack(baseScope | locals)
+
+        to addName(name :Str, value):
+            locals["&&" + name] := value
+
+        to lookup(name :Str, ej):
+            def key := "&&" + name
+            return if (locals.contains(key)):
+                locals[key]
+            else if (baseScope.contains(key)):
+                baseScope[key]
+            else:
+                throw.eject(ej, `Key $key not actually in static scope`)
+
+def isLiteral(expr :Expr) :Bool as DeepFrozen:
+    return switch (expr.getNodeName()) {
+        match =="LiteralExpr" { true }
+        match =="NamedArg" {
+            isLiteral(expr.getKey()) && isLiteral(expr.getValue())
+        }
+        match _ { false }
+    }
 
 def allLiteral(exprs :List[Expr]) :Bool as DeepFrozen:
     for expr in (exprs):
@@ -57,272 +111,155 @@ def allLiteral(exprs :List[Expr]) :Bool as DeepFrozen:
             return false
     return true
 
-def mainMix(expr :NullOk[Ast], baseScope :Map, var locals :Map,
-            => var serial :Int := 0) as DeepFrozen:
-    # cribbed from
-    # https://github.com/monte-language/typhon/blob/master/typhon/nano/interp.py#L276
-
-    if (expr == null):
-        return [expr, locals]
-
-    def builder := ::"m``".getAstBuilder()
-
-    def tempNoun(label :Str) :Expr:
-        return builder.NounExpr(`_mix_${label}_$serial`, null)
-
-    def staticError(problem :Str):
-        def p := builder.LiteralExpr(problem, null)
-        return m`Ref.broken($p)`
+def reduce(expr :Expr, annotations, scopeStack) as DeepFrozen:
+    "
+    Close `expr` over the given scope and constant-fold aggressively.
+    "
 
     def seq(exprs):
-        return if (exprs =~ [e]) { e } else { builder.SeqExpr(exprs, null) }
+        return if (exprs =~ [e]) { e } else { astBuilder.SeqExpr(exprs, null) }
 
-    def remix(subExpr):
-        if (subExpr == null):
-            return null
-        def [rv, newLocals] := mainMix(subExpr, baseScope, locals)
-        locals |= newLocals
-        return rv
+    def rere(ex):
+        return reduce(ex, annotations, scopeStack)
 
-    def fresh(subExpr):
-        if (subExpr == null):
-            return null
-        def [rv, _] := mainMix(subExpr, baseScope | locals, [].asMap())
-        return rv
+    def fresh(ex):
+        return reduce(ex, annotations, scopeStack.fresh())
 
-    def withFresh(block):
-        var ls := [].asMap()
-        def freshScope := baseScope | locals
-        return block(def callFresh(subExpr) {
-            def [rv, newLocals] := mainMix(subExpr, freshScope, ls)
-            ls := newLocals
-            return rv
-        })
-
-    def opt(subExpr):
-        return if (subExpr == null) { null } else { remix(subExpr) }
-
-    # XXX should be used in matchBind?
-    def _staticThrow(problem :Str):
-        def p := builder.LiteralExpr(problem, null)
-        return m`throw($p)`
-
-    def matchBind(patt :Pattern, specimen, => ej := throw):
-        switch (patt.getNodeName()):
-            match =="IgnorePattern":
-                def guard := opt(patt.getGuard())
-                if (guard != null):
-                    guard.coerce(specimen, ej)
-
-            match =="BindingPattern":
-                def key := "&&" + patt.getNoun().getName()
-                locals with= (key, specimen)
-
-            match =="FinalPattern":
-                # TODO: check that name is not already taken
-                def key := "&&" + patt.getNoun().getName()
-                def guard := opt(patt.getGuard())
-                def val := _slotToBinding(_makeFinalSlot(guard, specimen, ej),
-                                          ej)
-                locals with= (key, val)
-
-            match =="VarPattern":
-                # TODO: check that name is not already taken
-                def key := "&&" + patt.getNoun().getName()
-                def guard := opt(patt.getGuard())
-                def val := _slotToBinding(_makeVarSlot(guard, specimen, ej),
-                                          ej)
-                locals with= (key, val)
-
-            match =="ListPattern":
-                # Kernel list patterns have no tail.
-                def patts := patt.getPatterns()
-                def l :List exit ej := specimen
-                if (patts.size() != l.size()):
-                    ej(`Failed list pattern (needed ${patts.size()}, got ${l.size()})`)
-                for ix => patt in (patts):
-                    matchBind(patt, specimen[ix], => ej)
-
-            match =="ViaPattern":
-                def v := remix(patt.getExpr())
-                def newSpec := v(specimen, ej)
-                # semantics could be clearer that we use the same ejector below.
-                matchBind(patt.getPattern(), newSpec, => ej)
-
-    def newExpr := switch (expr.getNodeName()) {
+    # XXX if the annotations were more reliable, then we would do `if
+    # (annotations[expr])` or something.
+    return switch (expr.getNodeName()) {
         match =="LiteralExpr" { expr }
-
         match =="BindingExpr" {
             def name := expr.getNoun().getName()
-            traceln("binding name", name)
-            if (locals.contains(name)) {
-                # Synthesize a binding.
-                def value := locals[name]
-                m`_slotToBinding(_makeFinalSlot(Any, $value, null), null)`
-            } else if (locals.contains("&&" + name)) {
-                locals["&&" + name]
+            if (name =~ via (scopeStack.lookup) binding) {
+                astBuilder.LiteralExpr(binding, null)
             } else { expr }
         }
-
         match =="NounExpr" {
             def name := expr.getName()
-            if (locals.contains(name)) {
-                locals[name]
-            } else if (locals.contains("&&" + name)) {
-                locals["&&" + name].get().get()
+            if (name =~ via (scopeStack.lookup) binding) {
+                astBuilder.LiteralExpr(binding.get().get(), null)
             } else { expr }
         }
-
         match =="AssignExpr" {
-            def m`@lhs := @rhs` := expr
-            m`$lhs := ${remix(rhs)}`
+            def rhs := rere(expr.getRvalue())
+            def target := expr.getLvalue().getNoun().getName()
+            if (isLiteral(rhs) && target =~ via (scopeStack.lookup) binding) {
+                binding.put(rhs.getValue())
+                rhs
+            } else { astBuilder.AssignExpr(expr.getLvalue(), rhs, null) }
         }
-
         match =="DefExpr" {
-            def val := remix(expr.getExpr())
-            def ej :NullOk[Expr] := remix(expr.getExit())
-            def patt := remix(expr.getPattern())
-            # XXX we can eventually generalize the latter
-            if (isLiteral(val) && ej == null) {
-                if (ej == null) { matchBind(patt, val) } else {
-                    matchBind(patt, val, => ej)
-                }
-                val
-            } else { builder.DefExpr(patt, ej, val, null) }
+            def patt := expr.getPattern()
+            def ex := expr.getExit()
+            def rhs := rere(expr.getExpr())
+            astBuilder.DefExpr(patt, ex, rhs, null)
         }
-
-        match =="HideExpr" { fresh(expr.getBody()) }
-
+        match =="HideExpr" {
+            fresh(expr.getBody())
+        }
         match =="MethodCallExpr" {
+            def receiver := rere(expr.getReceiver())
             def verb := expr.getVerb()
-            def rxValue := remix(expr.getReceiver())
-            def argVals := [for arg in (expr.getArgs()) remix(arg)]
-            def nargVals := [for name => arg in (expr.getNamedArgs())
-                             remix(name) => remix(arg)]
-            def packedNamedArgs := [for k => v in (nargVals)
-                                    builder.NamedArg(k, v, null)]
-            if (rxValue =~ ghost :Ghost) {
-                # Note that the remixer we pass in has fresh scope. This is
-                # analogous to hygenic macro expansion.
-                ghost.unfold(fresh, verb, argVals, nargVals)
+            def args := [for arg in (expr.getArgs()) rere(arg)]
+            def namedArgs := [for namedArg in (expr.getNamedArgs())
+                              rere(namedArg)]
+            if (isLiteral(receiver) && allLiteral(args) &&
+                allLiteral(namedArgs)) {
+                def r := receiver.getValue()
+                def a := [for arg in (args) arg.getValue()]
+                def na := [for namedArg in (namedArgs)
+                           namedArg.getKey().getValue() =>
+                           namedArg.getValue().getValue()]
+                astBuilder.LiteralExpr(M.call(r, verb, a, na), null)
             } else {
-                def call := builder.MethodCallExpr(rxValue, verb, argVals,
-                                                   packedNamedArgs, null)
-                if (rxValue.getNodeName() == "LiteralExpr" &&
-                           allLiteral(argVals) &&
-                           allLiteral(nargVals.getValues())) {
-                    try {
-                        builder.LiteralExpr(eval(call, [].asMap()), null)
-                    } catch _ {
-                        staticError(`Evaluated literal m``$call`` failed during mix`)
-                    }
-                } else { call }
+                astBuilder.MethodCallExpr(receiver, verb, args, namedArgs, null)
             }
         }
-
         match =="EscapeExpr" { expr }
-        # to EscapeExpr(patt :Pattern, body :Expr,
-        #               catchPatt :NullOk[Pattern], catchBody :NullOk[Expr], _pos):
-        #     return escape ej:
-        #         # TODO: mustMatch
-        #         inFreshScope(fn { evaluator.matchBind(patt, ej);
-        #                           evaluator(body) })
-        #     catch ejected:
-        #         if (catchPatt == null):
-        #             ejected
-        #         else:
-        #             inFreshScope(fn { evaluator.matchBind(catchPatt, ejected);
-        #                               evaluator(catchBody) })
-
         match =="FinallyExpr" {
             def body := fresh(expr.getBody())
             def unwinder := fresh(expr.getUnwinder())
-            m`try { $body } finally { $unwinder }`
+            astBuilder.FinallyExpr(body, unwinder, null)
         }
-
-        match =="IfExpr" {
-            # semantics.rst seems to say alt :Expr, but IfExpr._uncall() says otherwise.
-            def testVal := remix(expr.getTest())
-            switch (testVal) {
-                match m`true` { fresh(expr.getThen()) }
-                match m`false` { fresh(expr.getElse()) }
-                match _ {
-                    m`if ($testVal) {
-                        ${remix(expr.getThen())}
-                    } else {
-                        ${remix(expr.getElse())}
-                    }`
+        match =="IfExpr" { expr }
+        match =="SeqExpr" {
+            var last := null
+            def rv := [].diverge()
+            for subExpr in (expr.getExprs()) {
+                last := rere(subExpr)
+                def trivialExprs := ["BindingExpr", "LiteralExpr", "NounExpr"]
+                if (!trivialExprs.contains(last.getNodeName())) {
+                    rv.push(last)
                 }
-            # } else {
-            #     staticError("If-expr test did not conform to Bool")
+            }
+            if (rv.isEmpty()) { last } else { seq(rv.snapshot()) }
+        }
+        match =="CatchExpr" { expr }
+        match =="ObjectExpr" { expr }
+    }
+
+
+def uncallLiterals(node, maker, args, span) as DeepFrozen:
+    "Turn any illegal literals into legal literals."
+
+    return if (node.getNodeName() == "LiteralExpr") {
+        switch (args[0]) {
+            match broken ? (Ref.isBroken(broken)) {
+                # Generate the uncall for broken refs by hand.
+                def problem := astBuilder.LiteralExpr(Ref.optProblem(broken),
+                                                      span)
+                m`Ref.broken($problem)`
+            }
+            match ==null { m`null` }
+            match b :Bool { b.pick(m`true`, m`false`) }
+            match _ :Any[Char, Double, Int, Str] { node }
+            match l :List {
+                # Generate the uncall for lists by hand.
+                def newArgs := [for v in (l)
+                                astBuilder.LiteralExpr(v,
+                                span).transform(uncallLiterals)]
+                astBuilder.MethodCallExpr(m`_makeList`, "run", newArgs, [], span)
+            }
+            # match k ? (freezeMap.contains(k)) {
+            #     traceln(`Found $k in freezeMap`)
+            #     return a.NounExpr(freezeMap[k], span)
+            # }
+            match obj {
+                if (obj._uncall() =~ [newMaker, newVerb, newArgs,
+                                      newNamedArgs]) {
+                    def wrappedArgs := [for arg in (newArgs)
+                                        astBuilder.LiteralExpr(arg, span)]
+                    def wrappedNamedArgs := [for k => v in (newNamedArgs)
+                                             astBuilder.NamedArg(astBuilder.LiteralExpr(k,
+                                             null),
+                                                        astBuilder.LiteralExpr(v,
+                                                        null),
+                                                        span)]
+                    def call := astBuilder.MethodCallExpr(astBuilder.LiteralExpr(newMaker,
+                                                               span),
+                                                 newVerb, wrappedArgs,
+                                                 wrappedNamedArgs, span)
+                    call.transform(uncallLiterals)
+                } else {
+                    throw(`Warning: Couldn't freeze $obj: Bad uncall ${obj._uncall()}`)
+                }
             }
         }
-
-        match =="SeqExpr" {
-            seq([for e in (expr.getExprs()) remix(e)])
-        }
-
-        match =="CatchExpr" { expr }
-        # to CatchExpr(body :Expr, catchPatt :Pattern, catchBody :Expr, _pos):
-        #     return try:
-        #         inFreshScope(fn { evaluator(body) })
-        #     catch ex:
-        #         inFreshScope(fn { evaluator.matchBind(catchPatt, ex);
-        #                           evaluator(catchBody) })
-
-        match =="ObjectExpr" {
-            def asExpr := remix(expr.getAsExpr())
-            def auditors := [for a in (expr.getAuditors()) remix(a)]
-            def script := expr.getScript()
-            traceln("Script", script)
-            def methods := [for m in (script.getMethods()) withFresh(fn f {
-                def patts := [for patt in (m.getPatterns()) f(patt)]
-                def namedPatts := [for np in (m.getNamedPatterns()) f(np)]
-                def guard := f(m.getResultGuard())
-                def body := f(m.getBody())
-                traceln("body scope", body.getStaticScope())
-                builder."Method"(m.getDocstring(), m.getVerb(), patts,
-                                 namedPatts, guard, body, null)
-            })]
-            traceln("Methods", methods)
-            def matchers := [for m in (script.getMatchers()) withFresh(fn f {
-                def patt := f(m.getPattern())
-                def body := f(m.getBody())
-                builder.Matcher(patt, body, null)
-            })]
-            # Deal with this last, so that the object's self-reference is
-            # always dynamic. We can try to make it static another time.
-            def name := remix(expr.getName())
-            # Assign a ghost object which can be specialized as required.
-            matchBind(name, makeGhostObject(methods, matchers))
-            def newScript := builder.Script(null, methods, matchers, null)
-            builder.ObjectExpr(expr.getDocstring(), name, asExpr, auditors,
-                               newScript, null)
-        }
-
-        match =="IgnorePattern" { expr.withGuard(remix(expr.getGuard())) }
-
-        match =="FinalPattern" { expr.withGuard(remix(expr.getGuard())) }
-
-        match =="VarPattern" { expr.withGuard(remix(expr.getGuard())) }
-
-        match =="ListPattern" {
-            def l := [for patt in (expr.getPatterns()) remix(patt)]
-            # Kernel list patterns have no tail.
-            builder.ListPattern(l, null, null)
-        }
-
-        match =="ViaPattern" {
-            builder.ViaPattern(remix(expr.getExpr()),
-                               remix(expr.getPattern()))
-        }
-    }
-    return [newExpr, locals]
+    } else { M.call(maker, "run", args + [span], [].asMap()) }
 
 
-def mix(expr, baseScope) as DeepFrozen:
-    def [rv, _] := mainMix(expr, baseScope, [].asMap())
-    return rv
+def mix(expr, _baseScope) as DeepFrozen:
+    def staticOuters := [for `&&@k` => _ in (safeScope) k].asSet() - [
+        # Has side effects.
+        "traceln",
+    ].asSet()
+    def annotations := annotateBindings(expr, staticOuters)
+    traceln("Interesting Annotations", [for k => v in (annotations) ? (v) k])
+    def scopeStack := makeScopeStack(safeScope)
+    def mixed := reduce(expr, annotations, scopeStack)
+    traceln("Mixed", mixed)
+    return mixed.transform(uncallLiterals)
 
 
 def makeEvalCase(expr):
@@ -346,13 +283,18 @@ unittest([for expr in ([
     m`if (true) { 2 } else { 4 }`,
 ]) makeEvalCase(expr)])
 
+def derp(expr) as DeepFrozen:
+    def mixed := mix(expr, safeScope)
+    traceln("Mixed", mixed)
+
 def main(_argv :List[Str]) as DeepFrozen:
+    def index := m`def l := [1, 2, 3, 4]; l[2]`.expand()
+    derp(index)
     def factorial := m`def fact(x :Int) {
         return if (x < 2) { x } else { x * fact(x - 1) }
     }; fact(5)`.expand()
-    def mixed := mix(factorial, safeScope)
-    traceln("Mixed", mixed)
-    def bf := m`def bf(insts) {
+    derp(factorial)
+    def _bf := m`def bf(insts) {
         var i := 0
         var pointer := 0
         def tape := [0].diverge()
@@ -383,5 +325,4 @@ def main(_argv :List[Str]) as DeepFrozen:
         }
         return output
     }; bf("+++>>[-]<<[->>+<<]")`.expand()
-    def mixed2 := mix(bf, safeScope)
-    traceln("Mixed", mixed2)
+    # derp(bf)
