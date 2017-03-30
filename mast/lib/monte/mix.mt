@@ -2,8 +2,15 @@ import "unittest" =~ [=> unittest]
 exports (main, mix)
 
 # The partial evaluator.
+# We specialize Monte source to Monte source using straightforward offline
+# partial evaluation:
+# * Binding-time analysis (BTA)
+# * Expression reduction
+# * Literal serialization
 
-# Current goal: Refactor to offline
+# Current current goal: EscapeExpr optimization
+# Current goal: More accurate BTA
+# Current goal: Polyvariant recording
 # Current goal: Unfolding
 # Next goal: Switch -> If
 # Goal: cogen
@@ -12,12 +19,30 @@ exports (main, mix)
 # def emptyScope :DeepFrozen := [].asMap()
 def Ast :DeepFrozen := astBuilder.getAstGuard()
 def Expr :DeepFrozen := astBuilder.getExprGuard()
+def Patt :DeepFrozen := astBuilder.getPatternGuard()
+
+def seq(exprs) as DeepFrozen:
+    return if (exprs =~ [e]) { e } else { astBuilder.SeqExpr(exprs, null) }
 
 def and(bools :List[Bool]) :Bool as DeepFrozen:
     for b in (bools):
         if (!b):
             return false
     return true
+
+def selfNames(patt :Patt) :Set[Str] as DeepFrozen:
+    return switch (patt.getNodeName()) {
+        match =="IgnorePattern" { [].asSet() }
+        match =="BindingPattern" { [patt.getNoun().getName()].asSet() }
+        match =="FinalPattern" { [patt.getNoun().getName()].asSet() }
+        match =="VarPattern" { [patt.getNoun().getName()].asSet() }
+        match =="ListPattern" {
+            var s := [].asSet()
+            for subPatt in (patt.getPatterns()) { s |= selfNames(subPatt) }
+            s
+        }
+        match =="ViaPattern" { selfNames(patt.getPattern()) }
+    }
 
 def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as DeepFrozen:
     "
@@ -29,75 +54,160 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
 
     def rv := [].asMap().diverge()
 
-    def truish(b) :Bool:
-        return if (b == null) { true } else { b }
+    # Map of simple names to annotations, stacked to keep changes visible to
+    # all levels.
+    def scopeStack := [[].asMap().diverge()].diverge()
 
-    def annotate(node, _maker, args :List, _span) :Bool:
-        def annotation := switch (node.getNodeName()) {
+    def pushScope():
+        scopeStack.push([].asMap().diverge())
+
+    def popScope():
+        return scopeStack.pop().snapshot()
+
+    def addToScope(name, annotation):
+        scopeStack.last()[name] := annotation
+
+    def isStatic(name) :Bool:
+        if (staticOuters.contains(name)):
+            return true
+        for scope in (scopeStack):
+            if (scope.contains(name)):
+                return true
+        return false
+
+    def annotate
+
+    def annotateAll(exprs) :Bool:
+        for expr in (exprs):
+            if (!annotate(expr)):
+                return false
+        return true
+
+    def matchBind(patt, specimen):
+        switch (patt.getNodeName()):
+            match =="IgnorePattern":
+                null
+            match =="BindingPattern":
+                addToScope(patt.getNoun().getName(), specimen)
+            match =="FinalPattern":
+                addToScope(patt.getNoun().getName(), specimen)
+            match =="VarPattern":
+                addToScope(patt.getNoun().getName(), specimen)
+            match =="ListPattern":
+                for subPatt in (patt.getPatterns()):
+                    matchBind(subPatt, specimen)
+            match =="ViaPattern":
+                annotate(patt.getExpr())
+                matchBind(patt.getPattern(), specimen)
+
+    bind annotate(expr) :Bool:
+        def truish(expr):
+            return if (expr == null) { true } else { annotate(expr) }
+
+        def annotation := switch (expr.getNodeName()) {
             match =="LiteralExpr" { true }
-            match =="BindingExpr" { staticOuters.contains(args[0]) }
-            match =="NounExpr" { staticOuters.contains(args[0]) }
-            match =="AssignExpr" { false }
-            match =="DefExpr" {
-                args[0] && truish(args[1]) && args[2]
+            match =="BindingExpr" { isStatic(expr.getName()) }
+            match =="NounExpr" { isStatic(expr.getName()) }
+            match =="AssignExpr" {
+                isStatic(expr.getLvalue().getName()) && annotate(expr.getRvalue())
             }
-            match =="HideExpr" { args[0] }
+            match =="DefExpr" {
+                def anno := annotate(expr.getExpr()) && truish(expr.getExit())
+                matchBind(expr.getPattern(), anno)
+                anno
+            }
+            match =="HideExpr" {
+                pushScope()
+                def anno := annotate(expr.getBody())
+                popScope()
+                anno
+            }
             match =="MethodCallExpr" {
-                args[0] && and(args[2]) && and(args[3])
+                (annotate(expr.getReceiver()) &&
+                 annotateAll(expr.getArgs()) &&
+                 annotateAll(expr.getNamedArgs()))
             }
             match =="EscapeExpr" {
-                args[0] && args[1] && truish(args[2]) && truish(args[3])
+                pushScope()
+                # Whether ejectors can be statically discharged.
+                matchBind(expr.getEjectorPattern(), false)
+                var anno := annotate(expr.getBody())
+                popScope()
+                if (expr.getCatchPattern() != null) {
+                    pushScope()
+                    matchBind(expr.getCatchPattern(), false)
+                    anno &= annotate(expr.getCatchBody())
+                    popScope()
+                }
+                anno
             }
-            match =="FinallyExpr" { and(args) }
+            match =="FinallyExpr" {
+                pushScope()
+                var anno := annotate(expr.getBody())
+                popScope()
+                pushScope()
+                anno &= annotate(expr.getUnwinder())
+                popScope()
+                anno
+            }
             match =="IfExpr" {
-                args[0] && args[1] && truish(args[2])
+                (annotate(expr.getTest()) && annotate(expr.getThen()) &&
+                 truish(expr.getElse()))
             }
-            match =="SeqExpr" { and(args[0]) }
-            match =="CatchExpr" { and(args) }
+            match =="SeqExpr" { annotateAll(expr.getExprs()) }
+            match =="CatchExpr" {
+                pushScope()
+                var anno := annotate(expr.getBody())
+                popScope()
+                pushScope()
+                # Whether exceptions can be static.
+                matchBind(expr.getPattern(), false)
+                anno &= annotate(expr.getCatcher())
+                popScope()
+                anno
+            }
             match =="ObjectExpr" {
-                args[1] && truish(args[2]) && and(args[3]) && args[4]
+                def patt := expr.getName()
+                var anno := (truish(expr.getAsExpr()) &&
+                             annotateAll(expr.getAuditors()))
+                # Annotate the script but do not use its annotation directly.
+                def script := expr.getScript()
+                for m in (script.getMethods()) { annotate(m) }
+                for m in (script.getMatchers()) { annotate(m) }
+                # Instead, consider whether the script's scope will be fully
+                # bound at reduction time. If so, then the object can be
+                # enlivened; its guts will be fully static, so it can be
+                # safely applied to static values to produce new static
+                # values. Additionally, the object will be fully virtualized
+                # away from the residual program, since all of its actions are
+                # taken at reduction time.
+                def namesUsed := script.getStaticScope().namesUsed()
+                def freeNames := namesUsed - selfNames(patt) - staticOuters
+                traceln("namesUsed", namesUsed, "freeNames", freeNames)
+                anno &= freeNames.isEmpty()
+                # Whether this object will be static.
+                matchBind(patt, anno)
+                anno
             }
             match =="Method" {
-                and(args[2]) && and(args[3]) && truish(args[4]) && args[5]
+                pushScope()
+                # Not bothering to match-bind patterns here. Assuming that all
+                # patterns will start off as dynamic.
+                def anno := (truish(expr.getResultGuard()) &&
+                             annotate(expr.getBody()))
+                popScope()
+                anno
             }
             match =="Script" {
-                and(args[1]) && and(args[2])
+                traceln("script scope", expr.getStaticScope())
+                (annotateAll(expr.getMethods()) &&
+                 annotateAll(expr.getMatchers()))
             }
-            match =="IgnorePattern" { truish(args[0]) }
-            match =="BindingPattern" { true }
-            match =="FinalPattern" { truish(args[1]) }
-            # XXX someday
-            match =="VarPattern" { false }
-            # Kernel list patterns have no tail.
-            match =="ListPattern" { and(args[0]) }
-            match =="ViaPattern" { and(args) }
         }
-        return rv[node] := annotation
+        return rv[expr] := annotation
 
-    topExpr.transform(annotate)
+    annotate(topExpr)
     return rv.snapshot()
-
-def makeScopeStack(baseScope :Map) as DeepFrozen:
-    def locals := [].asMap().diverge()
-
-    return object scopeStack:
-        to fresh():
-            return makeScopeStack(baseScope | locals)
-
-        to addName(name :Str, value):
-            locals["&&" + name] := value
-
-        to lookup(name :Str, ej):
-            def key := "&&" + name
-            return if (locals.contains(key)):
-                locals[key]
-            else if (baseScope.contains(key)):
-                baseScope[key]
-            else:
-                throw.eject(ej, `Key $key not actually in static scope`)
-
-        to eval(expr):
-            return eval(expr, baseScope | locals)
 
 def isLiteral(expr :Expr) :Bool as DeepFrozen:
     return switch (expr.getNodeName()) {
@@ -114,15 +224,74 @@ def allLiteral(exprs :List[Expr]) :Bool as DeepFrozen:
             return false
     return true
 
+def makeScopeStack(baseScope :Map) as DeepFrozen:
+    def locals := [].asMap().diverge()
+
+    return object scopeStack:
+        to reanno(expr, reduce):
+            "
+            Recursively re-annotate and re-specialize from the current frame.
+
+            This recursion is performed in a fresh frame, as if a hide-expr
+            were wrapped.
+            "
+
+            def staticOuters := [for `&&@k` in ((baseScope | locals).getKeys()) k].asSet()
+            # traceln("Annotating with static outers", staticOuters)
+            def annos := annotateBindings(expr, staticOuters)
+            # traceln("Interesting Annotations", [for k => v in (annos) ? (v) k])
+            return reduce(expr, annos, scopeStack.fresh())
+
+        to fresh():
+            return makeScopeStack(baseScope | locals)
+
+        to addName(name :Str, value):
+            locals["&&" + name] := value
+
+        to lookup(name :Str, ej):
+            def key := "&&" + name
+            return if (locals.contains(key)):
+                locals[key]
+            else if (baseScope.contains(key)):
+                baseScope[key]
+            else:
+                throw.eject(ej, `Key $key not actually in static scope`)
+
+interface Static :DeepFrozen {}
+
+def makeStaticObject(scopeStack, script, selfName) as DeepFrozen:
+    def methods := [for m in (script.getMethods())
+                    [m.getVerb(), m.getPatterns().size()] => m]
+    object staticObject as Static:
+        to unfold(verb, args, _namedArgs, reduce):
+            "
+            Unfold a call to this object.
+
+            The returned method body will be recursively specialized.
+            "
+
+            def m := methods[[verb, args.size()]]
+            def patts := m.getPatterns()
+            def binds := [for i => arg in (args)
+                          m`def ${patts[i]} := ${astBuilder.LiteralExpr(arg, null)}`]
+            def resultGuard := m.getResultGuard()
+            def body := m`{ ${seq(binds + [m.getBody()])} }`
+            return scopeStack.reanno(if (resultGuard != null) {
+                m`{
+                    def _mix_body_result := $body
+                    def _mix_resultGuard := $resultGuard
+                    _mix_resultGuard.coerce(_mix_body_result, null)
+                }`
+            } else { body }, reduce)
+    # Tie the knot.
+    if (selfName != null):
+        scopeStack.addName(selfName, &&staticObject)
+    return staticObject
+
 def reduce(expr, annotations, scopeStack) as DeepFrozen:
     "
     Close `expr` over the given scope and constant-fold aggressively.
     "
-
-    traceln("Looking at", m`${expr}`, expr.getNodeName())
-
-    def seq(exprs):
-        return if (exprs =~ [e]) { e } else { astBuilder.SeqExpr(exprs, null) }
 
     def rere(ex):
         return if (ex == null) { null } else {
@@ -146,45 +315,63 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
         return (ex == null || isLiteral(ex) ||
                 ["BindingExpr", "NounExpr"].contains(ex.getNodeName()))
 
+    def hasAnnotation(ex):
+        return annotations.contains(ex)
+
+    def isStatic(ex):
+        return hasAnnotation(ex) && annotations[ex]
+
+    def allStatic(exprs):
+        for ex in (exprs):
+            if (!isStatic(ex)):
+                return false
+        return true
+
     # XXX if the annotations were more reliable, then we would do `if
     # (annotations[expr])` or something.
     return switch (expr.getNodeName()) {
         match =="LiteralExpr" { expr }
         match =="BindingExpr" {
             def name := expr.getNoun().getName()
-            if (annotations[expr] && name =~ via (scopeStack.lookup) binding) {
+            if (isStatic(expr) && name =~ via (scopeStack.lookup) binding) {
+                traceln("binding is static", expr)
                 astBuilder.LiteralExpr(binding, null)
             } else { expr }
         }
         match =="NounExpr" {
             def name := expr.getName()
-            if (annotations[expr] && name =~ via (scopeStack.lookup) binding) {
+            if (isStatic(expr) && name =~ via (scopeStack.lookup) binding) {
+                traceln("noun is static", expr)
                 astBuilder.LiteralExpr(binding.get().get(), null)
             } else { expr }
         }
         match =="AssignExpr" {
             def rhs := rere(expr.getRvalue())
             def target := expr.getLvalue().getName()
-            if (annotations[expr] && isLiteral(rhs) &&
+            if (isStatic(expr) && isLiteral(rhs) &&
                 target =~ via (scopeStack.lookup) binding) {
+                traceln("assign is static", expr)
                 binding.put(rhs.getValue())
                 rhs
             } else { astBuilder.AssignExpr(expr.getLvalue(), rhs, null) }
         }
         match =="DefExpr" {
             var patt := expr.getPattern()
-            var ex := rere(expr.getExit())
+            def ex := rere(expr.getExit())
             var rhs := rere(expr.getExpr())
             # Can we simplify this assignment at all?
             if (isLiteral(rhs) && movable(ex)) {
-                ex := if (ex == null) { m`null` } else { ex }
+                traceln("def is static", expr)
+                def realExit := if (ex == null) { m`null` } else { ex }
                 while (patt.refutable()) {
                     switch (patt.getNodeName()) {
                         # XXX cases
                         match =="FinalPattern" {
-                            # Only refutable because of a guard.
-                            def guard := rere(patt.getGuard())
-                            rhs := m`$guard.coerce($rhs, $ex)`
+                            # Only refutable because of a guard, so we must
+                            # handle the guard.
+                            def guard := patt.getGuard()
+                            rhs := scopeStack.reanno(m`$guard.coerce($rhs,
+                                                       $realExit)`, reduce)
                             patt withGuard= (null)
                         }
                     }
@@ -216,14 +403,21 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
                               rere(namedArg)]
             if (isLiteral(receiver) && allLiteral(args) &&
                 allLiteral(namedArgs)) {
+                traceln("call is static", expr)
                 def r := receiver.getValue()
                 def a := [for arg in (args) arg.getValue()]
                 def na := [for namedArg in (namedArgs)
                            namedArg.getKey().getValue() =>
                            namedArg.getValue().getValue()]
-                def rv := M.call(r, verb, a, na)
-                traceln(`M.call($r, $verb, $a, $na) -> $rv`)
-                astBuilder.LiteralExpr(rv, null)
+                if (r =~ static :Static) {
+                    def rv := static.unfold(verb, a, na, reduce)
+                    traceln(`unfold($verb, $a, $na) -> $rv`)
+                    rv
+                } else {
+                    def rv := M.call(r, verb, a, na)
+                    traceln(`M.call($r, $verb, $a, $na) -> $rv`)
+                    astBuilder.LiteralExpr(rv, null)
+                }
             } else {
                 astBuilder.MethodCallExpr(receiver, verb, args, namedArgs, null)
             }
@@ -243,10 +437,12 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
             # It is crucial for pruning that we only recurse into a branch if
             # we need to generate its code; otherwise, we must avoid dead
             # branches.
-            withFresh(fn re, ss {
-                def test := re(expr.getTest())
-                if (annotations[expr]) {
-                    def whether :Bool := ss.eval(test)
+            withFresh(fn re, _ss {
+                def oldTest := expr.getTest()
+                def test := re(oldTest)
+                if (isStatic(oldTest) && isLiteral(test)) {
+                    traceln("if is static", expr)
+                    def whether :Bool := test.getValue()
                     re(whether.pick(expr.getThen(), expr.getElse()))
                 } else {
                     def alt := re(expr.getThen())
@@ -267,7 +463,10 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
             }
             if (rv.isEmpty()) { last } else { seq(rv.snapshot()) }
         }
-        match =="CatchExpr" { expr }
+        match =="CatchExpr" {
+            traceln("not entering catch", expr)
+            expr
+        }
         match =="ObjectExpr" {
             def asExpr := rere(expr.getAsExpr())
             def auditors := [for a in (expr.getAuditors()) rere(a)]
@@ -278,15 +477,17 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
                 astBuilder.Script(null, methods, matchers, null)
             }
             def patt := expr.getName()
-            def obj := astBuilder.ObjectExpr(expr.getDocstring(),
-                                             patt, asExpr, auditors,
-                                             script, null)
-            if (annotations[expr] && patt.getNodeName() == "FinalPattern") {
-                traceln("Binding static object", obj)
-                def live := scopeStack.eval(obj)
-                scopeStack.addName(patt.getNoun().getName(), &&live)
+            if (isStatic(expr) && patt.getNodeName() == "FinalPattern") {
+                traceln("Binding static object", patt)
+                def noun := patt.getNoun()
+                def name := noun.getName()
+                def live := makeStaticObject(scopeStack.fresh(), script, name)
+                scopeStack.addName(name, &&live)
+                noun
+            } else {
+                astBuilder.ObjectExpr(expr.getDocstring(), patt, asExpr,
+                                      auditors, script, null)
             }
-            obj
         }
         match =="Method" {
             def resultGuard := rere(expr.getResultGuard())
@@ -298,9 +499,7 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
         match =="Matcher" { expr }
     }
 
-
 def freezeMap :DeepFrozen := [for `&&@k` => v in (safeScope) v.get().get() => k]
-
 
 def uncallLiterals(node, maker, args, span) as DeepFrozen:
     "Turn any illegal literals into legal literals."
@@ -350,14 +549,12 @@ def uncallLiterals(node, maker, args, span) as DeepFrozen:
         }
     } else { M.call(maker, "run", args + [span], [].asMap()) }
 
-
 def mix(expr, _baseScope) as DeepFrozen:
     def staticOuters := [for `&&@k` => _ in (safeScope) k].asSet() - [
         # Has side effects.
         "traceln",
     ].asSet()
     def annotations := annotateBindings(expr, staticOuters)
-    traceln("Interesting Annotations", [for k => v in (annotations) ? (v) k])
     def scopeStack := makeScopeStack(safeScope)
     def mixed := reduce(expr, annotations, scopeStack)
     traceln("Mixed", mixed)
