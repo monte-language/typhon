@@ -92,7 +92,8 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
             match =="FinalPattern":
                 addToScope(patt.getNoun().getName(), specimen)
             match =="VarPattern":
-                addToScope(patt.getNoun().getName(), specimen)
+                # Whether VarPatts may be static.
+                addToScope(patt.getNoun().getName(), false)
             match =="ListPattern":
                 for subPatt in (patt.getPatterns()):
                     matchBind(subPatt, specimen)
@@ -130,12 +131,12 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
             match =="EscapeExpr" {
                 pushScope()
                 # Whether ejectors can be statically discharged.
-                matchBind(expr.getEjectorPattern(), false)
+                matchBind(expr.getEjectorPattern(), true)
                 var anno := annotate(expr.getBody())
                 popScope()
                 if (expr.getCatchPattern() != null) {
                     pushScope()
-                    matchBind(expr.getCatchPattern(), false)
+                    matchBind(expr.getCatchPattern(), true)
                     anno &= annotate(expr.getCatchBody())
                     popScope()
                 }
@@ -361,7 +362,7 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
             var rhs := rere(expr.getExpr())
             # Can we simplify this assignment at all?
             if (isLiteral(rhs) && movable(ex)) {
-                traceln("def is static", expr)
+                traceln("def is literal", expr)
                 def realExit := if (ex == null) { m`null` } else { ex }
                 while (patt.refutable()) {
                     switch (patt.getNodeName()) {
@@ -380,7 +381,7 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
                     match =="IgnorePattern" { rhs }
                     match =="FinalPattern" ? (isLiteral(rhs)) {
                         # Propagate a new constant.
-                        # XXX guards!
+                        traceln("propagating constant", patt, rhs)
                         def binding := { def derp := rhs.getValue(); &&derp }
                         scopeStack.addName(patt.getNoun().getName(), binding)
                         rhs
@@ -401,32 +402,65 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
             def args := [for arg in (expr.getArgs()) rere(arg)]
             def namedArgs := [for namedArg in (expr.getNamedArgs())
                               rere(namedArg)]
-            if (isLiteral(receiver) && allLiteral(args) &&
-                allLiteral(namedArgs)) {
-                traceln("call is static", expr)
+            if (isLiteral(receiver)) {
                 def r := receiver.getValue()
-                def a := [for arg in (args) arg.getValue()]
-                def na := [for namedArg in (namedArgs)
-                           namedArg.getKey().getValue() =>
-                           namedArg.getValue().getValue()]
-                if (r =~ static :Static) {
-                    def rv := static.unfold(verb, a, na, reduce)
-                    traceln(`unfold($verb, $a, $na) -> $rv`)
-                    rv
+                if (allLiteral(args) && allLiteral(namedArgs)) {
+                    traceln("call is static", expr)
+                    def a := [for arg in (args) arg.getValue()]
+                    def na := [for namedArg in (namedArgs)
+                               namedArg.getKey().getValue() =>
+                               namedArg.getValue().getValue()]
+                    if (r =~ static :Static) {
+                        def rv := static.unfold(verb, a, na, reduce)
+                        traceln(`unfold($verb, $a, $na) -> $rv`)
+                        rv
+                    } else {
+                        def rv := M.call(r, verb, a, na)
+                        traceln(`M.call($r, $verb, $a, $na) -> $rv`)
+                        astBuilder.LiteralExpr(rv, null)
+                    }
+                } else if (r == _loop) {
+                    # Let's unroll the loop!
+                    for arg in (args) {
+                        traceln("unroll arg", arg)
+                        traceln("isStatic isLiteral", isStatic(arg),
+                        isLiteral(arg))
+                    }
+                    astBuilder.MethodCallExpr(receiver, verb, args, namedArgs, null)
                 } else {
-                    def rv := M.call(r, verb, a, na)
-                    traceln(`M.call($r, $verb, $a, $na) -> $rv`)
-                    astBuilder.LiteralExpr(rv, null)
+                    astBuilder.MethodCallExpr(receiver, verb, args, namedArgs, null)
                 }
             } else {
                 astBuilder.MethodCallExpr(receiver, verb, args, namedArgs, null)
             }
         }
         match =="EscapeExpr" {
-            def ejBody := fresh(expr.getBody())
-            def catchBody := fresh(expr.getCatchBody())
-            astBuilder.EscapeExpr(expr.getEjectorPattern(), ejBody,
-                                  expr.getCatchPattern(), catchBody, null)
+            def ejPatt := expr.getEjectorPattern()
+            def catchPatt := expr.getCatchPattern()
+            if (isStatic(expr)) {
+                traceln("starting static ejector", expr)
+                # We create a live ejector here.
+                escape ej {
+                    withFresh(fn re, ss {
+                        ss.addName(ejPatt.getNoun().getName(), &&ej)
+                        re(expr.getBody())
+                    })
+                } catch val {
+                    if (catchPatt == null) {
+                        astBuilder.LiteralExpr(val, null)
+                    } else {
+                        withFresh(fn re, ss {
+                            ss.addName(catchPatt.getNoun().getName(), &&val)
+                            re(expr.getCatchBody())
+                        })
+                    }
+                }
+            } else {
+                def ejBody := fresh(expr.getBody())
+                def catchBody := fresh(expr.getCatchBody())
+                astBuilder.EscapeExpr(ejPatt, ejBody, catchPatt, catchBody,
+                                      null)
+            }
         }
         match =="FinallyExpr" {
             def body := fresh(expr.getBody())
@@ -564,7 +598,8 @@ def mix(expr, _baseScope) as DeepFrozen:
 def makeEvalCase(expr):
     def expanded := expr.expand()
     return def testEvalEquivalence(assert):
-        assert.equal(mix(expanded, safeScope), eval(expanded, safeScope))
+        def mixed := mix(expanded, safeScope)
+        assert.equal(eval(mixed, safeScope), eval(expanded, safeScope))
 
 unittest([for expr in ([
     # Literals.
@@ -575,12 +610,17 @@ unittest([for expr in ([
     m`[1, 2, 3, 4]`,
     m`["everybody" => "walk", "the" => "dinosaur"]`,
     m`def l := [1, 2, 3, 4]; l[2]`,
+    m`def l := [].diverge(); l.push(0); l.push(1); l.snapshot()`,
     # Objects.
     m`(fn x { x + 1 })(4)`,
     # Arithmetic.
     m`def a := 5; def b := 7; a * b`,
     # Conditionals.
     m`if (true) { 2 } else { 4 }`,
+    # Recursive functions.
+    m`def fact(x :Int) {
+        return if (x < 2) { x } else { x * fact(x - 1) }
+    }; fact(5)`,
 ]) makeEvalCase(expr)])
 
 def derp(expr) as DeepFrozen:
@@ -588,12 +628,6 @@ def derp(expr) as DeepFrozen:
     traceln("Mixed", mixed)
 
 def main(_argv :List[Str]) as DeepFrozen:
-    def listplay := m`def l := [].diverge(); l.push(0); l.push(1); l`.expand()
-    derp(listplay)
-    def factorial := m`def fact(x :Int) {
-        return if (x < 2) { x } else { x * fact(x - 1) }
-    }; fact(5)`.expand()
-    derp(factorial)
     def bf := m`def bf(insts) {
         var i := 0
         var pointer := 0
