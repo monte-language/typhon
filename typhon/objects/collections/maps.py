@@ -214,7 +214,9 @@ class ConstMap(Object):
     def _uncall(self):
         from typhon.objects.collections.lists import wrapList
         from typhon.scopes.safe import theMakeMap
-        rv = wrapList([wrapList([k, v]) for k, v in self.objectMap.items()])
+        pairs = wrapList([wrapList([k, v])
+                          for k, v in self.objectMap.items()])
+        rv = wrapList([pairs])
         return [theMakeMap, StrObject(u"fromPairs"), rv, EMPTY_MAP]
 
     @method.py("Bool", "Any")
