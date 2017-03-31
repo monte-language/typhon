@@ -17,18 +17,11 @@ exports (main, mix)
 
 # def Scope :DeepFrozen := Map[Str, Binding]
 # def emptyScope :DeepFrozen := [].asMap()
-def Ast :DeepFrozen := astBuilder.getAstGuard()
 def Expr :DeepFrozen := astBuilder.getExprGuard()
 def Patt :DeepFrozen := astBuilder.getPatternGuard()
 
 def seq(exprs) as DeepFrozen:
     return if (exprs =~ [e]) { e } else { astBuilder.SeqExpr(exprs, null) }
-
-def and(bools :List[Bool]) :Bool as DeepFrozen:
-    for b in (bools):
-        if (!b):
-            return false
-    return true
 
 def selfNames(patt :Patt) :Set[Str] as DeepFrozen:
     return switch (patt.getNodeName()) {
@@ -44,7 +37,31 @@ def selfNames(patt :Patt) :Set[Str] as DeepFrozen:
         match =="ViaPattern" { selfNames(patt.getPattern()) }
     }
 
-def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as DeepFrozen:
+object staticExpr as DeepFrozen:
+    to _printOn(out):
+        out.print(`<annotation on static expr>`)
+
+    to merge(_anno):
+        return staticExpr
+
+def makeAnnotation(name :Str, => var values := []) as DeepFrozen:
+    return object annotation:
+        to _printOn(out):
+            out.print(`<annotation on "$name", values $values>`)
+
+        to observeValue(value):
+            values with= (value)
+
+        to values():
+            return values
+
+        to merge(anno):
+            return try:
+                makeAnnotation("values" => anno.values() + values)
+            catch _:
+                staticExpr
+
+def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
     "
     Do BTA on an expression by abstract interpretation.
 
@@ -65,7 +82,19 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
         return scopeStack.pop().snapshot()
 
     def addToScope(name, annotation):
+        traceln(`addToScope($name, $annotation)`)
         scopeStack.last()[name] := annotation
+
+    def fetchAnnotation(name):
+        for ss in (scopeStack.reverse()):
+            return ss.fetch(name, __continue)
+
+    def observe(name, value):
+        traceln(`observe($name, $value)`)
+        var anno := fetchAnnotation(name)
+        if (anno != null && anno != staticExpr):
+            anno.observeValue(value)
+            traceln("values", anno.values())
 
     def isStatic(name) :Bool:
         if (staticOuters.contains(name)):
@@ -77,44 +106,73 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
 
     def annotate
 
-    def annotateAll(exprs) :Bool:
-        for expr in (exprs):
-            if (!annotate(expr)):
-                return false
-        return true
+    def annotateIfStatic(name):
+        return isStatic(name).pick(makeAnnotation(name), null)
 
-    def matchBind(patt, specimen):
+    def annotateAll(exprs):
+        for expr in (exprs):
+            if (annotate(expr) == null):
+                return null
+        return staticExpr
+
+    object annotationSum:
+        match [=="run", annotations, _]:
+            escape ej:
+                for anno in (annotations):
+                    if (anno == null):
+                        ej()
+                staticExpr
+            catch _:
+                null
+
+    def matchBind(patt, annotation):
+        traceln(`matchBind($patt, $annotation)`)
         switch (patt.getNodeName()):
             match =="IgnorePattern":
                 null
             match =="BindingPattern":
-                addToScope(patt.getNoun().getName(), specimen)
+                addToScope(patt.getNoun().getName(), annotation)
             match =="FinalPattern":
-                addToScope(patt.getNoun().getName(), specimen)
+                addToScope(patt.getNoun().getName(), annotation)
             match =="VarPattern":
                 # Whether VarPatts may be static.
-                addToScope(patt.getNoun().getName(), false)
+                addToScope(patt.getNoun().getName(), null)
             match =="ListPattern":
                 for subPatt in (patt.getPatterns()):
-                    matchBind(subPatt, specimen)
+                    # This could be more specific. It would require doing some
+                    # more aggressive value analysis.
+                    matchBind(subPatt, null)
             match =="ViaPattern":
                 annotate(patt.getExpr())
-                matchBind(patt.getPattern(), specimen)
+                # The transformation wipes out the value, unfortunately.
+                matchBind(patt.getPattern(), null)
 
-    bind annotate(expr) :Bool:
+    bind annotate(expr):
         def truish(expr):
-            return if (expr == null) { true } else { annotate(expr) }
+            return if (expr == null) { staticExpr } else { annotate(expr) }
 
         def annotation := switch (expr.getNodeName()) {
-            match =="LiteralExpr" { true }
-            match =="BindingExpr" { isStatic(expr.getName()) }
-            match =="NounExpr" { isStatic(expr.getName()) }
+            match =="LiteralExpr" { staticExpr }
+            match =="BindingExpr" { annotateIfStatic(expr.getName()) }
+            match =="NounExpr" { annotateIfStatic(expr.getName()) }
             match =="AssignExpr" {
-                isStatic(expr.getLvalue().getName()) && annotate(expr.getRvalue())
+                annotationSum(annotateIfStatic(expr.getLvalue().getName()),
+                              annotate(expr.getRvalue()))
             }
             match =="DefExpr" {
-                def anno := annotate(expr.getExpr()) && truish(expr.getExit())
-                matchBind(expr.getPattern(), anno)
+                def rhs := expr.getExpr()
+                def rhsAnno := annotate(rhs)
+                var anno := annotationSum(rhsAnno, truish(expr.getExit()))
+                # Look for `match ==value`.
+                if (rhs != null &&
+                    expr =~ m`def via (_matchSame.run(@val)) _ exit @_ := @rhs` &&
+                    rhs.getNodeName() == "NounExpr") {
+                    traceln("scopeStack", scopeStack)
+                    def name := rhs.getName()
+                    observe(name, val)
+                }
+                def patt := expr.getPattern()
+                matchBind(patt, rhsAnno)
                 anno
             }
             match =="HideExpr" {
@@ -124,20 +182,20 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
                 anno
             }
             match =="MethodCallExpr" {
-                (annotate(expr.getReceiver()) &&
-                 annotateAll(expr.getArgs()) &&
-                 annotateAll(expr.getNamedArgs()))
+                annotationSum(annotate(expr.getReceiver()),
+                              annotateAll(expr.getArgs()),
+                              annotateAll(expr.getNamedArgs()))
             }
             match =="EscapeExpr" {
                 pushScope()
                 # Whether ejectors can be statically discharged.
-                matchBind(expr.getEjectorPattern(), true)
+                matchBind(expr.getEjectorPattern(), staticExpr)
                 var anno := annotate(expr.getBody())
                 popScope()
                 if (expr.getCatchPattern() != null) {
                     pushScope()
-                    matchBind(expr.getCatchPattern(), true)
-                    anno &= annotate(expr.getCatchBody())
+                    matchBind(expr.getCatchPattern(), staticExpr)
+                    anno := annotationSum(anno, annotate(expr.getCatchBody()))
                     popScope()
                 }
                 anno
@@ -147,13 +205,16 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
                 var anno := annotate(expr.getBody())
                 popScope()
                 pushScope()
-                anno &= annotate(expr.getUnwinder())
+                if (anno != null) {
+                    anno merge= (annotate(expr.getUnwinder()))
+                }
                 popScope()
                 anno
             }
             match =="IfExpr" {
-                (annotate(expr.getTest()) && annotate(expr.getThen()) &&
-                 truish(expr.getElse()))
+                annotationSum(annotate(expr.getTest()),
+                              annotate(expr.getThen()),
+                              truish(expr.getElse()))
             }
             match =="SeqExpr" { annotateAll(expr.getExprs()) }
             match =="CatchExpr" {
@@ -162,15 +223,17 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
                 popScope()
                 pushScope()
                 # Whether exceptions can be static.
-                matchBind(expr.getPattern(), false)
-                anno &= annotate(expr.getCatcher())
+                matchBind(expr.getPattern(), null)
+                if (anno != null) {
+                    anno merge= (annotate(expr.getCatcher()))
+                }
                 popScope()
                 anno
             }
             match =="ObjectExpr" {
                 def patt := expr.getName()
-                var anno := (truish(expr.getAsExpr()) &&
-                             annotateAll(expr.getAuditors()))
+                var anno := annotationSum(truish(expr.getAsExpr()),
+                    annotateAll(expr.getAuditors()))
                 # Annotate the script but do not use its annotation directly.
                 def script := expr.getScript()
                 for m in (script.getMethods()) { annotate(m) }
@@ -185,7 +248,7 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
                 def namesUsed := script.getStaticScope().namesUsed()
                 def freeNames := namesUsed - selfNames(patt) - staticOuters
                 traceln("namesUsed", namesUsed, "freeNames", freeNames)
-                anno &= freeNames.isEmpty()
+                if (!freeNames.isEmpty()) { anno := null }
                 # Whether this object will be static.
                 matchBind(patt, anno)
                 anno
@@ -193,16 +256,16 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) :Map[Ast, Bool] as D
             match =="Method" {
                 pushScope()
                 # Not bothering to match-bind patterns here. Assuming that all
-                # patterns will start off as dynamic.
-                def anno := (truish(expr.getResultGuard()) &&
-                             annotate(expr.getBody()))
+                # patterns will start off as dynamic, and we'll respecialize
+                # them later upon binding.
+                def anno := annotationSum(truish(expr.getResultGuard()),
+                    annotate(expr.getBody()))
                 popScope()
                 anno
             }
             match =="Script" {
-                traceln("script scope", expr.getStaticScope())
-                (annotateAll(expr.getMethods()) &&
-                 annotateAll(expr.getMatchers()))
+                annotationSum(annotateAll(expr.getMethods()),
+                              annotateAll(expr.getMatchers()))
             }
         }
         return rv[expr] := annotation
@@ -240,7 +303,8 @@ def makeScopeStack(baseScope :Map) as DeepFrozen:
             def staticOuters := [for `&&@k` in ((baseScope | locals).getKeys()) k].asSet()
             # traceln("Annotating with static outers", staticOuters)
             def annos := annotateBindings(expr, staticOuters)
-            # traceln("Interesting Annotations", [for k => v in (annos) ? (v) k])
+            traceln("Polyvariants", [for _ => v in (annos)
+                ? (v != null && v != staticExpr && !v.values().isEmpty()) v])
             return reduce(expr, annos, scopeStack.fresh())
 
         to fresh():
@@ -316,11 +380,8 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
         return (ex == null || isLiteral(ex) ||
                 ["BindingExpr", "NounExpr"].contains(ex.getNodeName()))
 
-    def hasAnnotation(ex):
-        return annotations.contains(ex)
-
     def isStatic(ex):
-        return hasAnnotation(ex) && annotations[ex]
+        return annotations.contains(ex) && annotations[ex] != null
 
     def allStatic(exprs):
         for ex in (exprs):
@@ -328,8 +389,6 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
                 return false
         return true
 
-    # XXX if the annotations were more reliable, then we would do `if
-    # (annotations[expr])` or something.
     return switch (expr.getNodeName()) {
         match =="LiteralExpr" { expr }
         match =="BindingExpr" {
@@ -489,6 +548,15 @@ def reduce(expr, annotations, scopeStack) as DeepFrozen:
             var last := null
             def rv := [].diverge()
             for subExpr in (expr.getExprs()) {
+                # If we have a polyvariant annotation on a definition, then
+                # substitute and expand.
+                if (subExpr.getNodeName() == "DefExpr") {
+                    def anno := annotations.fetch(subExpr.getExpr(),
+                                                  fn { null })
+                    if (anno != null && anno != staticExpr) {
+                        traceln("found poly", anno)
+                    }
+                }
                 last := rere(subExpr)
                 def trivialExprs := ["BindingExpr", "LiteralExpr", "NounExpr"]
                 if (!trivialExprs.contains(last.getNodeName())) {
@@ -585,6 +653,8 @@ def uncallLiterals(node, maker, args, span) as DeepFrozen:
 
 def mix(expr, _baseScope) as DeepFrozen:
     def staticOuters := [for `&&@k` => _ in (safeScope) k].asSet() - [
+        # Hard to tame directly.
+        "throw",
         # Has side effects.
         "traceln",
     ].asSet()
@@ -628,6 +698,24 @@ def derp(expr) as DeepFrozen:
     traceln("Mixed", mixed)
 
 def main(_argv :List[Str]) as DeepFrozen:
+    def triangle := m`def triangle(x :Int) {
+        var a := 0
+        for i in (0..x) { a += i }
+        return a
+    }; [triangle(5), triangle(10)]`.expand()
+    derp(triangle)
+    def fb := m`def fb(upper :Int) :List[Str] {
+        return [for i in (0..upper) {
+            if (i % 15 == 0) {
+                "FizzBuzz"
+            } else if (i % 5 == 0) {
+                "Fizz"
+            } else if (i % 3 == 0) {
+                "Buzz"
+            } else {``$$i``}
+        }]
+    }; fb(20)`.expand()
+    derp(fb)
     def bf := m`def bf(insts) {
         var i := 0
         var pointer := 0
