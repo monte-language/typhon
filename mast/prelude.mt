@@ -596,6 +596,10 @@ object _makeVerbFacet as DeepFrozenStamp:
              This object responds to messages with the verb \"run\" by passing
              them to another object with a different verb."
 
+            to _uncall():
+                return [_makeVerbFacet, "curryCall", [target, verb],
+                        [].asMap()]
+
             match [=="run", args, namedArgs]:
                 M.call(target, verb, args, namedArgs)
 
@@ -607,6 +611,10 @@ object _makeVerbFacet as DeepFrozenStamp:
 
              This object responds to messages with the verb \"run\" by passing
              them to another object with a different verb."
+
+            to _uncall():
+                return [_makeVerbFacet, "currySend", [target, verb],
+                        [].asMap()]
 
             match [=="run", args, namedArgs]:
                 M.send(target, verb, args, namedArgs)
