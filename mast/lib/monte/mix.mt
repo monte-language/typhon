@@ -16,6 +16,7 @@ exports (main, mix)
 
 # def Scope :DeepFrozen := Map[Str, Binding]
 # def emptyScope :DeepFrozen := [].asMap()
+def Ast :DeepFrozen := astBuilder.getAstGuard()
 def Expr :DeepFrozen := astBuilder.getExprGuard()
 def Patt :DeepFrozen := astBuilder.getPatternGuard()
 
@@ -36,78 +37,23 @@ def selfNames(patt :Patt) :Set[Str] as DeepFrozen:
         match =="ViaPattern" { selfNames(patt.getPattern()) }
     }
 
-def makeAnnotation(name :Str, => var isStatic :Bool) as DeepFrozen:
-    var canEscape :Bool := false
-    def values := [].asSet().diverge()
-
-    return object annotation:
-        to _printOn(out):
-            out.print("<anno")
-            out.print(isStatic.pick("s", "d"))
-            out.print(` "$name" | canEscape? $canEscape | values $values>`)
-
-        to generalize():
-            isStatic := false
-
-        to escapes():
-            canEscape := true
-
-        to isStatic():
-            return isStatic
-
-        to observeValue(value):
-            values.include(value)
-
-        to snapshot():
-            return if (isStatic):
-                def ce :Bool := canEscape
-                def vs :Set := values.snapshot()
-
-                object staticAnnotation:
-                    to _printOn(out):
-                        out.print(`<static "$name" | canEscape? $ce | values $vs>`)
-
-                    to isStatic() :Bool:
-                        return true
-
-                    to canEscape() :Bool:
-                        return ce
-
-                    to values() :Set:
-                        return vs
-            else:
-                object dynamicAnnotation:
-                    to _printOn(out):
-                        out.print(`<dynamic "$name">`)
-
-                    to isStatic() :Bool:
-                        return false
-
-                    to canEscape() :Bool:
-                        return true
-
-def all(bs :List[Bool]) :Bool as DeepFrozen:
-    for b in (bs):
-        if (!b):
-            return false
-    return true
-
 def any(bs :List[Bool]) :Bool as DeepFrozen:
     for b in (bs):
         if (b):
             return true
     return false
 
-def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
-    "
-    Do BTA on an expression by abstract interpretation.
+object static as DeepFrozen {}
+object polyvariant as DeepFrozen {}
+object dynamic as DeepFrozen {}
 
-    The simple computed per-expression annotation is `true` for static or
-    `false` for dynamic, using the standard Boolean lattice with AND. This
-    process also computes a per-scope map of names to richer lifetime
-    annotations.
-    "
+def annoSum(annos) as DeepFrozen:
+    for anno in (annos):
+        if (anno == dynamic):
+            return dynamic
+    return static
 
+def makeAnnoStack(initialSplit :Map) as DeepFrozen:
     # The per-expression Boolean annotation.
     def exprAnnos := [].asMap().diverge()
     # The per-scope rich annotations.
@@ -115,298 +61,338 @@ def annotateBindings(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
 
     # Map of simple names to annotations, stacked to keep changes visible to
     # all levels.
-    def outerScope := [for k in (staticOuters)
-                       k => makeAnnotation(k, "isStatic" => true)]
-    def scopeStack := [outerScope.diverge()].diverge()
+    def scopeStack := [].diverge()
+    # The local frame.
+    var locals := initialSplit.diverge()
 
-    def pushScope():
-        scopeStack.push([].asMap().diverge())
+    traceln(`makeAnnoStack($initialSplit)`)
 
-    def popScope():
-        # Freeze annotations when the scope is frozen.
-        return [for k => v in (scopeStack.pop()) k => v.snapshot()]
+    return object annoStack:
+        to lift(name :Str, reason :Str) :Bool:
+            "
+            Make a static name dynamic.
+            
+            Returns whether it changed from static to dynamic, or was already
+            dynamic.
+            "
 
-    def annotate
+            # traceln(`annoStack.lift($name, $reason)`)
+            def frame := if (locals.contains(name)) { locals } else {
+                for f in (scopeStack.reverse()) {
+                    if (f.contains(name)) { break f }
+                }
+            }
+            return if (name =~ via (frame.fetch) [dynamic, _]) {
+                false
+            } else {
+                traceln(`Lifted dynamic $name`)
+                frame[name] := [dynamic, reason]
+                true
+            }
 
-    object withScopesOn:
-        match [=="run", [expr] + thunks, _]:
-            def rv := [].diverge()
-            def scopes := [for thunk in (thunks) {
-                pushScope()
-                rv.push(thunk())
-                popScope()
-            }]
-            # Put them in the vault.
-            scopeAnnos[expr] := scopes
-            all(rv.snapshot())
+        to annotateExpr(expr :Expr, anno):
+            exprAnnos[expr] := anno
 
-    def addToScope(name, annotation):
-        scopeStack.last()[name] := annotation
+        to annotateScope(expr :Ast, anno):
+            scopeAnnos[expr] := anno
 
-    def fetchAnnotation(name):
-        for ss in (scopeStack.reverse()):
-            return ss.fetch(name, __continue)
-        # All annotations start out static and must be generalized if found to
-        # be dynamic.
-        def anno := makeAnnotation(name, "isStatic" => true)
-        addToScope(name, anno)
-        return anno
+        to pushScopeFrom(expr :Ast, index :Int):
+            scopeStack.push(locals)
+            locals := escape ej {
+                scopeAnnos.fetch(expr, ej)[index].diverge()
+            } catch _ { [].asMap().diverge() }
+            # traceln(`Pushed locals $locals`)
 
-    def observe(name, value):
-        traceln(`observe($name, $value)`)
-        var anno := fetchAnnotation(name)
-        anno.observeValue(value)
+        to popScope():
+            # traceln(`Popped locals $locals`)
+            def rv := locals.snapshot()
+            locals := scopeStack.pop()
+            return rv
 
-    def generalize(name):
-        # traceln(`generalize($name)`)
-        fetchAnnotation(name).generalize()
+        to popScopeOnto(expr :Ast):
+            annoStack.annotateScope(expr, [annoStack.popScope()])
 
-    def escapes(name):
-        # traceln(`escapes($name)`)
-        fetchAnnotation(name).escapes()
+        to assignName(name :Str, anno):
+            # Only allow assignments to override missing or static
+            # annotations. Dynamic annotations cannot be undone.
+            if (locals.fetch(name, fn { static }) == static):
+                locals[name] := anno
+                traceln(`assignName($name, $anno)`)
 
-    def isStatic(name) :Bool:
-        if (staticOuters.contains(name)):
-            return true
-        for scope in (scopeStack):
-            if (scope.contains(name)):
-                return scope[name].isStatic()
-        # These names are things like `traceln` which are dynamic in all
-        # contexts and must always be residualized.
-        return false
+        to lookupName(name :Str):
+            def rv := if (locals.contains(name)) { locals[name] } else {
+                escape ej {
+                    for f in (scopeStack.reverse()) {
+                        if (f.contains(name)) { ej(f[name]) }
+                    }
+                    var visibleNames := [for m in (scopeStack + [locals])
+                                         m.getKeys()]
+                    throw(`annoStack.lookupName($name): Name not in scopes $visibleNames`)
+                }
+            }
+            traceln(`lookupName($name) -> $rv`)
+            return rv
 
-    def annotateAll(exprs) :Bool:
+        to nameIsStatic(name :Str) :Bool:
+            def anno := annoStack.lookupName(name)
+            return anno == static
+
+        to isNotDynamic(expr :Expr) :Bool:
+            "
+            Whether `expr` is not proven dynamic.
+
+            Like .isStatic/1 but assumes that `expr` is static without
+            contradictory evidence.
+            "
+
+            return escape ej { 
+                exprAnnos.fetch(expr, ej) == static
+            } catch _ { true }
+
+        to snapshot():
+            return [exprAnnos.snapshot(), scopeAnnos.snapshot()]
+
+def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
+    "
+    Compute the least-dynamic fixpoint of `topExpr` relative to its
+    `staticOuters`.
+    "
+
+    # Seed the initial split.
+    var annotations :Map := [for name in (staticOuters) name => static]
+    annotations |= [for name in (topExpr.getStaticScope().namesUsed() -
+                                 staticOuters)
+                    name => [dynamic, "free in top scope"]]
+
+    # Set up the annotation stacks.
+    def annoStack := makeAnnoStack(annotations)
+
+    def chooseAnnotation(isStatic :Bool):
+        return isStatic.pick(static, [dynamic, "matchBind"])
+
+    def refine
+
+    def refineAll(exprs) :Bool:
         var rv :Bool := true
         for expr in (exprs):
-            rv &= annotate(expr)
+            rv &= refine(expr)
         return rv
 
-    def matchBind(patt, annotation):
-        # traceln(`matchBind($patt, $annotation)`)
-        switch (patt.getNodeName()):
-            match =="IgnorePattern":
-                annotate(patt.getGuard())
-            match =="BindingPattern":
-                annotate(patt.getGuard())
-                addToScope(patt.getNoun().getName(), annotation)
-            match =="FinalPattern":
-                annotate(patt.getGuard())
-                addToScope(patt.getNoun().getName(), annotation)
-            match =="VarPattern":
-                annotate(patt.getGuard())
-                # Whether VarPatts may be static.
-                addToScope(patt.getNoun().getName(),
-                           makeAnnotation(`$patt`, "isStatic" => false))
-            match =="ListPattern":
-                for subPatt in (patt.getPatterns()):
-                    # This could be more specific. It would require doing some
-                    # more aggressive value analysis.
-                    matchBind(subPatt,
-                              makeAnnotation(`$patt`, "isStatic" => false))
-            match =="ViaPattern":
-                annotate(patt.getExpr())
-                # The transformation wipes out the value, unfortunately.
-                matchBind(patt.getPattern(),
-                          makeAnnotation(`$patt`, "isStatic" => false))
-
-    def matchBindTop(patt, isStatic):
-        matchBind(patt, makeAnnotation(`$patt`, => isStatic))
-
-    def nullOk(expr):
-        return if (expr == null) { true } else { annotate(expr) }
+    def nullOk(expr) :Bool:
+        return if (expr == null) { true } else { refine(expr) }
 
     def annoMethod(m, pattsAreStatic):
-        return withScopesOn(m, fn {
-            for patt in (m.getPatterns()) {
-                matchBindTop(patt, pattsAreStatic)
-            }
-            def anno := nullOk(m.getResultGuard())
-            anno & annotate(m.getBody())
-        })
+        annoStack.pushScopeFrom(m, 0)
+        var anno := refine(m.getResultGuard())
+        for patt in (m.getPatterns()):
+            refine.matchBind(patt, pattsAreStatic)
+        anno &= refine(m.getBody())
+        annoStack.popScopeOnto(m)
+        return anno
 
     def annoMatcher(m, pattsAreStatic):
-        return withScopesOn(m, fn {
-            # Same rationale as methods.
-            matchBindTop(m.getPattern(), pattsAreStatic)
-            annotate(m.getBody())
-        })
+        annoStack.pushScopeFrom(m, 0)
+        # Same rationale as methods.
+        refine.matchBind(m.getPattern(), pattsAreStatic)
+        def anno := refine(m.getBody())
+        annoStack.popScopeOnto(m)
+        return anno
 
-    def annoEscape(expr, ejIsStatic):
-        return withScopesOn(expr, fn {
-            # Whether ejectors can be statically discharged.
-            matchBindTop(expr.getEjectorPattern(), ejIsStatic)
-            annotate(expr.getBody())
-        }, fn {
-            def catchPatt := expr.getCatchPattern()
-            if (catchPatt != null) {
-                matchBindTop(catchPatt, ejIsStatic)
-                annotate(expr.getCatchBody())
-            } else { true }
-        })
+    # Refine.
+    var changes :Int := 1
+    bind refine:
+        to matchBind(patt, var isStatic :Bool):
+            # traceln(`matchBind($patt, $annotation)`)
+            switch (patt.getNodeName()):
+                match =="IgnorePattern":
+                    refine(patt.getGuard())
+                match =="BindingPattern":
+                    annoStack.assignName(patt.getNoun().getName(),
+                                         [dynamic, "binding-patt"])
+                match =="FinalPattern":
+                    isStatic &= refine(patt.getGuard())
+                    def anno := isStatic.pick(static,
+                        [dynamic, "dynamic final-patt"])
+                    annoStack.assignName(patt.getNoun().getName(), anno)
+                match =="VarPattern":
+                    isStatic &= refine(patt.getGuard())
+                    # Whether VarPatts may be static.
+                    def anno := isStatic.pick(static,
+                        [dynamic, "dynamic var-patt"])
+                    annoStack.assignName(patt.getNoun().getName(), anno)
+                match =="ListPattern":
+                    for subPatt in (patt.getPatterns()):
+                        # This could be more specific. It would require doing some
+                        # more aggressive value analysis.
+                        refine.matchBind(subPatt, false)
+                match =="ViaPattern":
+                    # If the input and transformation are both static, then so is
+                    # the output.
+                    isStatic &= refine(patt.getExpr())
+                    refine.matchBind(patt.getPattern(), isStatic)
 
-    bind annotate(expr) :Bool:
-        if (expr == null):
-            return true
+        to run(expr) :Bool:
+            if (expr == null):
+                return true
 
-        def annotation := switch (expr.getNodeName()) {
-            match =="LiteralExpr" { true }
-            match =="BindingExpr" {
-                # BindingExprs can devirtualize VarSlots, so we consider them
-                # to be escape points. Note that this applies even when the
-                # name is already known to be static, because a reified
-                # VarSlot can be subject to further opaque redirection.
-                def name := expr.getName()
-                escapes(name)
-                isStatic(name)
-            }
-            match =="NounExpr" { isStatic(expr.getName()) }
-            match =="AssignExpr" {
-                def rhs := annotate(expr.getRvalue())
-                # If the RHS isn't static, then we must generalize the entire
-                # VarSlot's name, since we can no longer predict its values.
-                if (!rhs) { generalize(expr.getLvalue().getName()) }
-                rhs
-            }
-            match =="DefExpr" {
-                def rhs := expr.getExpr()
-                def rhsAnno := annotate(rhs)
-                var anno := rhsAnno & nullOk(expr.getExit())
-                # Look for `match ==value`.
-                if (rhs != null && rhs.getNodeName() == "NounExpr" &&
-                    # XXX mpatt`` someday
-                    expr =~ m`def via (_matchSame.run(@val)) _ exit @_ := @_`) {
-                    def name := rhs.getName()
-                    observe(name, val)
+            def annotation := switch (expr.getNodeName()) {
+                match =="LiteralExpr" { true }
+                match =="BindingExpr" {
+                    # BindingExprs can devirtualize VarSlots, so we consider them
+                    # to be escape points. Note that this applies even when the
+                    # name is already known to be static, because a reified
+                    # VarSlot can be subject to further opaque redirection.
+                    def name := expr.getName()
+                    if (annoStack.lift(name, "Binding-expr")) { changes += 1 }
+                    false
                 }
-                def patt := expr.getPattern()
-                matchBindTop(patt, rhsAnno)
-                anno
-            }
-            match =="HideExpr" {
-                withScopesOn(expr, fn { annotate(expr.getBody()) })
-            }
-            match =="MethodCallExpr" {
-                (annotate(expr.getReceiver()) &
-                 annotateAll(expr.getArgs()) &
-                 annotateAll(expr.getNamedArgs()))
-            }
-            match =="EscapeExpr" {
-                # We must double-annotate since we have a circular premise;
-                # for some escapes, they are static iff the ejector is static.
-                # But for all escapes, if they are dynamic then the ejector
-                # must be dynamic as well. Thus, we annotate twice if
-                # necessary, once to discover static escapes and once to
-                # ensure that the ejector is dynamic for dynamic escapes.
-
-                # However! This can lead to obvious combinatorial explosion,
-                # since Monte tends to have nested escapes in expanded code.
-                # Therefore, we guess by examining the scope of the escape
-                # whether it actually closes over any known-dynamic names. If
-                # so, then we don't bother trying a static annotation, since
-                # it's known to be doomed.
-
-                # The specific guess we use is that we guess an escape might
-                # be static if all of its used names are annotated static.
-                def namesUsed := expr.getStaticScope().namesUsed()
-                def guessedStatic := all([for name in (namesUsed)
-                                          isStatic(name)])
-                if (guessedStatic) {
-                    traceln(`Guessed static escape`)
-                    def anno := annoEscape(expr, true)
-                    if (anno) { anno } else {
-                        traceln(`Double-annotating escape`)
-                        annoEscape(expr, false)
+                match =="NounExpr" { annoStack.nameIsStatic(expr.getName()) }
+                match =="AssignExpr" {
+                    def anno := refine(expr.getRvalue())
+                    # If the RHS isn't static, then we must generalize the entire
+                    # VarSlot's name, since we can no longer predict its values.
+                    if (!anno) {
+                        if (annoStack.lift(expr.getLvalue().getName(),
+                            "dynamic assign")) { changes += 1 }
                     }
-                } else {
-                    traceln(`Guessed dynamic escape`)
-                    annoEscape(expr, false)
+                    anno
                 }
-            }
-            match =="FinallyExpr" {
-                withScopesOn(expr, fn {
-                    annotate(expr.getBody())
-                }, fn {
-                    annotate(expr.getUnwinder())
-                })
-            }
-            match =="IfExpr" {
-                # We must hack because a single IfExpr technically has three
-                # scopes, with the two branch scopes being nested within the
-                # test scope.
-                pushScope()
-                def anno := annotate(expr.getTest()) & withScopesOn(expr, fn {
-                    annotate(expr.getThen())
-                }, fn {
-                    nullOk(expr.getElse())
-                })
-                def testScope := popScope()
-                # The hack.
-                scopeAnnos[expr] := [testScope] + scopeAnnos[expr]
-                anno
-            }
-            match =="SeqExpr" { annotateAll(expr.getExprs()) }
-            match =="CatchExpr" {
-                withScopesOn(expr, fn {
-                    annotate(expr.getBody())
-                }, fn {
+                match =="DefExpr" {
+                    def rhs := expr.getExpr()
+                    var anno := refine(rhs)
+                    anno &= refine(expr.getExit())
+                    # Look for `match ==value`.
+                    # if (rhs != null && rhs.getNodeName() == "NounExpr" &&
+                    #     # XXX mpatt`` someday
+                    #     expr =~ m`def via (_matchSame.run(@val)) _ exit @_ := @_`) {
+                    #     def name := rhs.getName()
+                    #     observe(name, val)
+                    # }
+                    def patt := expr.getPattern()
+                    refine.matchBind(patt, anno)
+                    anno
+                }
+                match =="HideExpr" {
+                    annoStack.pushScopeFrom(expr, 0)
+                    var anno := refine(expr.getBody())
+                    annoStack.popScopeOnto(expr)
+                    anno
+                }
+                match =="MethodCallExpr" {
+                    var anno := refine(expr.getReceiver())
+                    anno &= refineAll(expr.getArgs())
+                    anno & refineAll(expr.getNamedArgs())
+                }
+                match =="EscapeExpr" {
+                    # Static ejector bodies imply static ejector names. Dynamic
+                    # ejector names imply dynamic ejector bodies. We try here to
+                    # err on the side of static names.
+                    def shouldBeStatic := annoStack.isNotDynamic(expr)
+                    annoStack.pushScopeFrom(expr, 0)
+                    def ejPatt := expr.getEjectorPattern()
+                    refine.matchBind(ejPatt, shouldBeStatic)
+                    var anno := refine(expr.getBody())
+                    def ejScope := annoStack.popScope()
+                    annoStack.pushScopeFrom(expr, 1)
+                    def catchPatt := expr.getCatchPattern()
+                    if (catchPatt != null) {
+                        refine.matchBind(catchPatt, shouldBeStatic)
+                        anno &= refine(expr.getCatchBody())
+                    }
+                    def catchScope := annoStack.popScope()
+                    annoStack.annotateScope(expr, [ejScope, catchScope])
+                    anno
+                }
+                match =="FinallyExpr" {
+                    annoStack.pushScopeFrom(expr, 0)
+                    var anno := refine(expr.getBody())
+                    def bodyScope := annoStack.popScope()
+                    annoStack.pushScopeFrom(expr, 1)
+                    anno &= refine(expr.getUnwinder())
+                    def unwinderScope := annoStack.popScope()
+                    annoStack.annotateScope(expr, [bodyScope, unwinderScope])
+                    anno
+                }
+                match =="IfExpr" {
+                    # A single IfExpr technically has three scopes, with the two
+                    # branch scopes being nested within the test scope.
+                    annoStack.pushScopeFrom(expr, 0)
+                    var anno := refine(expr.getTest())
+                    annoStack.pushScopeFrom(expr, 1)
+                    anno &= refine(expr.getThen())
+                    def thenScope := annoStack.popScope()
+                    annoStack.pushScopeFrom(expr, 2)
+                    anno &= refine(expr.getElse())
+                    def elseScope := annoStack.popScope()
+                    def testScope := annoStack.popScope()
+                    annoStack.annotateScope(expr,
+                                            [testScope, thenScope, elseScope])
+                    anno
+                }
+                match =="SeqExpr" { refineAll(expr.getExprs()) }
+                match =="CatchExpr" {
+                    annoStack.pushScopeFrom(expr, 0)
+                    def bodyScope := annoStack.popScope()
+                    var anno := refine(expr.getBody())
+                    annoStack.pushScopeFrom(expr, 1)
+                    def catcher := expr.getCatcher()
                     # Whether exceptions can be static in the catcher.
-                    matchBindTop(expr.getPattern(), false)
-                    annotate(expr.getCatcher())
-                })
-            }
-            match =="ObjectExpr" {
-                def patt := expr.getName()
-                var anno := (nullOk(expr.getAsExpr()) &
-                             annotateAll(expr.getAuditors()))
-                # Annotate the script pieces. In order to be unfoldable, we
-                # must have only static scripts.
-                def script := expr.getScript()
-                # From the POV of a method, its patterns are always static,
-                # since they are static on every invocation of the method.
-                # Ditto with matchers.
-                for m in (script.getMethods()) {
-                    anno &= annoMethod(m, true)
+                    refine.matchBind(expr.getPattern(), annoStack.isNotDynamic(catcher))
+                    anno &= refine(expr.getCatcher())
+                    def catcherScope := annoStack.popScope()
+                    annoStack.annotateScope(expr, [bodyScope, catcherScope])
+                    anno
                 }
-                for m in (script.getMatchers()) {
-                    anno &= annoMatcher(m, true)
-                }
-                # Consider whether the script's scope will be fully bound
-                # at reduction time. If so, then the object can be
-                # virtualized; its guts will be fully static, so it can be
-                # safely applied to static values to produce new static
-                # values. Additionally, the object will be fully removed
-                # from the residual program, since all of its actions are
-                # taken at reduction time.
-                def namesUsed := script.getStaticScope().namesUsed()
-                def freeNames := (namesUsed - selfNames(patt) -
-                                  staticOuters).diverge()
-                if (anno) {
-                    # Free names are only a problem if they aren't static.
-                    for name in (freeNames) {
-                        if (isStatic(name)) { freeNames.remove(name) }
+                match =="ObjectExpr" {
+                    def shouldBeStatic := annoStack.isNotDynamic(expr)
+                    def patt := expr.getName()
+                    refine.matchBind(patt, shouldBeStatic)
+                    var anno := (refine(expr.getAsExpr()) &
+                                 refineAll(expr.getAuditors()))
+                    # Annotate the script pieces. In order to be unfoldable, we
+                    # must have only static scripts.
+                    def script := expr.getScript()
+                    # From the POV of a method, its patterns are always static,
+                    # since they are static on every invocation of the method.
+                    # Ditto with matchers.
+                    for m in (script.getMethods()) {
+                        anno &= annoMethod(m, shouldBeStatic)
                     }
-                    if (!freeNames.isEmpty()) {
-                        traceln(`Object '$patt' had free names $freeNames`)
-                        anno := false
+                    for m in (script.getMatchers()) {
+                        anno &= annoMatcher(m, shouldBeStatic)
                     }
+                    if (!anno) {
+                        # Compute the escaping names.
+                        def namesUsed := script.getStaticScope().namesUsed()
+                        def freeNames := (namesUsed - selfNames(patt) -
+                                          staticOuters).diverge()
+                        if (!freeNames.isEmpty()) {
+                            for name in (freeNames) {
+                                if (annoStack.lift(name,
+                                    "in closure of dynamic object")) { changes += 1 }
+                            }
+                        }
+                    }
+                    # Whether this object will be static.
+                    refine.matchBind(patt, anno)
+                    anno
                 }
-                if (!anno) {
-                    traceln(`Devirtualizing object '$patt'`)
-                    # Devirtualize the methods and matchers by reannotating.
-                    for m in (script.getMethods()) { annoMethod(m, false) }
-                    for m in (script.getMatchers()) { annoMatcher(m, false) }
-                    # Mark all of the free names as escaping.
-                    if (!anno) { for name in (freeNames) { escapes(name) } }
-                }
-                # Whether this object will be static.
-                matchBindTop(patt, anno)
-                anno
             }
-        }
-        return exprAnnos[expr] := annotation
+            annoStack.annotateExpr(expr, annotation)
+            return annotation
 
-    annotate(topExpr)
-    return [exprAnnos.snapshot(), scopeAnnos.snapshot(), popScope()]
+    # Compute the initial split.
+    refine(topExpr)
+    changes := 1
+
+    # Refine until there's nothing left.
+    while (changes > 0):
+        changes := 0
+        refine(topExpr)
+        traceln(`Changes: $changes`)
+
+    # And that's it.
+    return annoStack.snapshot()
 
 def isLiteral(expr :Expr) :Bool as DeepFrozen:
     return switch (expr.getNodeName()) {
@@ -863,13 +849,12 @@ def mix(expr, _baseScope) as DeepFrozen:
         # Has side effects.
         "traceln",
     ].asSet()
-    def [exprAnnos, scopeAnnos, topAnnoScope] := annotateBindings(expr,
-        staticOuters)
-    def reducer := makeReducer(exprAnnos, scopeAnnos, topAnnoScope,
-        topValueScope)
-    def mixed := reducer(expr)
-    traceln("Mixed", mixed)
-    return mixed.transform(uncallLiterals)
+    def [_exprAnnos, _scopeAnnos] := staticFixpoint(expr, staticOuters)
+    # def reducer := makeReducer(exprAnnos, scopeAnnos, null, topValueScope)
+    # def mixed := reducer(expr)
+    # traceln("Mixed", mixed)
+    # return mixed.transform(uncallLiterals)
+    traceln("Annotated", expr)
 
 
 def makeEvalCase(expr):
