@@ -91,7 +91,7 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
             }
 
         to annotateExpr(expr :Expr, anno):
-            exprAnnos[expr] := anno
+            return exprAnnos[expr] := anno
 
         to annotateScope(expr :Ast, anno):
             scopeAnnos[expr] := anno
@@ -150,7 +150,7 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
             } catch _ { true }
 
         to snapshot():
-            return [exprAnnos.snapshot(), scopeAnnos.snapshot()]
+            return exprAnnos.snapshot()
 
 def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
     "
@@ -235,7 +235,7 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
             if (expr == null):
                 return true
 
-            def annotation := switch (expr.getNodeName()) {
+            return annoStack.annotateExpr(expr, switch (expr.getNodeName()) {
                 match =="LiteralExpr" { true }
                 match =="BindingExpr" {
                     # BindingExprs can devirtualize VarSlots, so we consider them
@@ -377,9 +377,7 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
                     refine.matchBind(patt, anno)
                     anno
                 }
-            }
-            annoStack.annotateExpr(expr, annotation)
-            return annotation
+            })
 
     # Compute the initial split.
     refine(topExpr)
@@ -411,7 +409,7 @@ def allLiteral(exprs :List[Expr]) :Bool as DeepFrozen:
 
 interface Static :DeepFrozen {}
 
-def makeStaticObject(reducer, scopeAnnos, script) as DeepFrozen:
+def makeStaticObject(reducer, script) as DeepFrozen:
     def methods := [for m in (script.getMethods())
                     [m.getVerb(), m.getPatterns().size()] => m]
     return object staticObject as Static:
@@ -423,8 +421,7 @@ def makeStaticObject(reducer, scopeAnnos, script) as DeepFrozen:
             "
 
             def m := methods[[verb, args.size()]]
-            def annos := scopeAnnos[m][0]
-            return reducer.withScope(annos, fn {
+            return reducer.withScope(fn {
                 for i => patt in (m.getPatterns()) {
                     reducer.matchBind(patt, args[i])
                 }
@@ -435,39 +432,27 @@ def makeStaticObject(reducer, scopeAnnos, script) as DeepFrozen:
                 }
             })
 
-def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFrozen:
-    def annoStack := [topAnnoScope].diverge()
+def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
     def valueStack := [topValueScope].diverge()
     var locals := [].asMap().diverge()
 
-    def pushScope(annos):
-        annoStack.push(annos)
+    def pushScope():
         valueStack.push(locals.snapshot())
         locals := [].asMap().diverge()
 
     def popScope():
-        annoStack.pop()
         locals := valueStack.pop().diverge()
 
     def freezeScope():
-        var annos := [].asMap()
-        for s in (annoStack.reverse()):
-            annos |= s
         var values := locals.snapshot()
         for s in (valueStack.reverse()):
             values |= s
-        return [annos, values]
+        return values
 
     def addName(name, value):
         traceln(`addName($name, $value)`)
         locals[name] := value
         traceln("local keys", locals.getKeys())
-
-    def lookupAnno(name):
-        for scope in (annoStack.reverse()):
-            return scope.fetch(name, __continue)
-        def stackDump := [for frame in (annoStack) frame.getKeys()]
-        throw(`Unannotated name $name, searched $stackDump`)
 
     def lookupValue(name):
         if (locals.contains(name)):
@@ -481,24 +466,12 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
         return (ex == null || isLiteral(ex) ||
                 ["BindingExpr", "NounExpr"].contains(ex.getNodeName()))
 
-    def isStatic(ex):
-        return exprAnnos.fetch(ex, fn {
-            traceln("isStatic failed", ex)
-            false
-        })
-
     def maybeValue(expr):
         return if (expr == null) { null } else { expr.getValue() }
 
-    def allStatic(exprs):
-        for ex in (exprs):
-            if (!isStatic(ex)):
-                return false
-        return true
-
     return object reducer:
-        to withScope(scope, thunk):
-            pushScope(scope)
+        to withScope(thunk):
+            pushScope()
             def rv := thunk()
             popScope()
             return rv
@@ -508,25 +481,6 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
             return if (guard == null) { specimen } else {
                 guard.coerce(specimen, ej)
             }
-
-        to escapes(patt):
-            def rv := switch (patt.getNodeName()) {
-                match =="IgnorePattern" { false }
-                match =="BindingPattern" { false }
-                match =="FinalPattern" { false }
-                match =="VarPattern" {
-                    def name := patt.getNoun().getName()
-                    lookupAnno(name).canEscape()
-                }
-                match =="ListPattern" {
-                    any([for p in (patt.getPatterns()) reducer.escapes(p)])
-                }
-                match =="ViaPattern" {
-                    reducer.escapes(patt.getPattern())
-                }
-            }
-            traceln(`reducer.escapes($patt) -> $rv`)
-            return rv
 
         to matchBind(patt, specimen, => ej := null):
             traceln(`reducer.matchBind($patt, $specimen, $ej)`)
@@ -554,27 +508,28 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                     def prize := transformer(specimen, ej)
                     reducer.matchBind(patt.getPattern(), prize, => ej)
 
-        to run(expr):
+        to run(expr :NullOk[Ast]):
             if (expr == null):
                 return null
 
-            traceln(`reducer(${expr.getNodeName()})`)
+            # Is this expression annotated static?
+            def isStatic :Bool := exprAnnos[expr] == static
+
+            traceln(`reducer(${expr.getNodeName()}) isStatic => $isStatic`)
 
             return switch (expr.getNodeName()) {
                 match =="LiteralExpr" { expr }
                 match =="BindingExpr" {
-                    def name := expr.getNoun().getName()
-                    def anno := lookupAnno(name)
-                    if (anno.isStatic() &! anno.canEscape()) {
+                    if (isStatic) {
+                        def name := expr.getNoun().getName()
                         def binding := lookupValue(name)
                         traceln(`Static binding: &&$name := $binding`)
                         astBuilder.LiteralExpr(binding, null)
                     } else { expr }
                 }
                 match =="NounExpr" {
-                    def name := expr.getName()
-                    def anno := lookupAnno(name)
-                    if (anno.isStatic() &! anno.canEscape()) {
+                    if (isStatic) {
+                        def name := expr.getName()
                         def noun := lookupValue(name).get().get()
                         traceln(`Static noun: &&$name := $noun`)
                         astBuilder.LiteralExpr(noun, null)
@@ -583,9 +538,8 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                 match =="AssignExpr" {
                     def rhs := reducer(expr.getRvalue())
                     def lhs := expr.getLvalue()
-                    def target := lhs.getName()
-                    def anno := lookupAnno(target)
-                    if (anno.isStatic() &! anno.canEscape()) {
+                    if (isStatic) {
+                        def target := lhs.getName()
                         def binding := lookupValue(target)
                         def value := rhs.getValue()
                         traceln(`Static assign: $target := $value`)
@@ -597,7 +551,7 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                     var patt := expr.getPattern()
                     def ex := reducer(expr.getExit())
                     var rhs := reducer(expr.getExpr())
-                    if (isStatic(expr) && !reducer.escapes(patt)) {
+                    if (isStatic) {
                         traceln(`Static def: def $patt exit $ex := $rhs`)
                         reducer.matchBind(patt, rhs.getValue(),
                                           "ej" => maybeValue(ex))
@@ -606,8 +560,7 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                     } else { astBuilder.DefExpr(patt, ex, rhs, null) }
                 }
                 match =="HideExpr" {
-                    def [scope] := scopeAnnos[expr]
-                    reducer.withScope(scope, fn { reducer(expr.getBody()) })
+                    reducer.withScope(fn { reducer(expr.getBody()) })
                 }
                 match =="MethodCallExpr" {
                     def receiver := reducer(expr.getReceiver())
@@ -615,7 +568,7 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                     def args := [for arg in (expr.getArgs()) reducer(arg)]
                     def namedArgs := [for namedArg in (expr.getNamedArgs())
                                       reducer(namedArg)]
-                    if (isStatic(expr)) {
+                    if (isStatic) {
                         def r := receiver.getValue()
                         def a := [for arg in (args) arg.getValue()]
                         def na := [for namedArg in (namedArgs)
@@ -637,13 +590,12 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                 match =="EscapeExpr" {
                     def ejPatt := expr.getEjectorPattern()
                     def catchPatt := expr.getCatchPattern()
-                    def [ejScope, catchScope] := scopeAnnos[expr]
-                    if (isStatic(expr)) {
+                    if (isStatic) {
                         traceln("starting static ejector", expr)
                         # We create a live ejector here.
                         escape ej {
                             def body := expr.getBody()
-                            reducer.withScope(ejScope, fn {
+                            reducer.withScope(fn {
                                 addName(ejPatt.getNoun().getName(), &&ej)
                                 reducer(body)
                             })
@@ -652,17 +604,17 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                                 astBuilder.LiteralExpr(val, null)
                             } else {
                                 def catchBody := expr.getCatchBody()
-                                reducer.withScope(catchScope, fn {
+                                reducer.withScope(fn {
                                     addName(catchPatt.getNoun().getName(), &&val)
                                     reducer(catchBody)
                                 })
                             }
                         }
                     } else {
-                        def ejBody := reducer.withScope(ejScope, fn {
+                        def ejBody := reducer.withScope(fn {
                             reducer(expr.getBody())
                         })
-                        def catchBody := reducer.withScope(catchScope, fn {
+                        def catchBody := reducer.withScope(fn {
                             reducer(expr.getCatchBody())
                         })
                         astBuilder.EscapeExpr(ejPatt, ejBody, catchPatt, catchBody,
@@ -670,11 +622,10 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                     }
                 }
                 match =="FinallyExpr" {
-                    def [bodyScope, unwinderScope] := scopeAnnos[expr]
-                    def body := reducer.withScope(bodyScope, fn {
+                    def body := reducer.withScope(fn {
                         reducer(expr.getBody())
                     })
-                    def unwinder := reducer.withScope(unwinderScope, fn {
+                    def unwinder := reducer.withScope(fn {
                         reducer(expr.getUnwinder())
                     })
                     astBuilder.FinallyExpr(body, unwinder, null)
@@ -684,25 +635,24 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                     # we need to generate its code; otherwise, we must avoid dead
                     # branches.
                     def oldTest := expr.getTest()
-                    def [testScope, thenScope, elseScope] := scopeAnnos[expr]
-                    reducer.withScope(testScope, fn {
+                    reducer.withScope(fn {
                         def test := reducer(oldTest)
-                        if (isStatic(oldTest) && isLiteral(test)) {
+                        if (isStatic) {
                             traceln("if is static", expr)
                             if (test.getValue()) {
-                                reducer.withScope(thenScope, fn {
+                                reducer.withScope(fn {
                                     reducer(expr.getThen())
                                 })
                             } else {
-                                reducer.withScope(elseScope, fn {
+                                reducer.withScope(fn {
                                     reducer(expr.getElse())
                                 })
                             }
                         } else {
-                            def alt := reducer.withScope(thenScope, fn {
+                            def alt := reducer.withScope(fn {
                                 reducer(expr.getThen())
                             })
-                            def cons := reducer.withScope(elseScope, fn {
+                            def cons := reducer.withScope(fn {
                                 reducer(expr.getElse())
                             })
                             astBuilder.IfExpr(test, alt, cons, null)
@@ -713,15 +663,12 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                     var last := null
                     def rv := [].diverge()
                     for subExpr in (expr.getExprs()) {
-                        # If we have a polyvariant annotation on a definition, then
-                        # substitute and expand.
-                        if (subExpr =~ m`def @_ exit @_ := @rhs` &&
-                            rhs.getNodeName() == "NounExpr") {
-                            def anno := lookupAnno(rhs.getName())
-                            if (anno != null) {
-                                traceln("found poly", anno)
-                            }
-                        }
+                        # XXX If we have a polyvariant annotation on a
+                        # definition, then substitute and expand.
+                        # if (subExpr =~ m`def @_ exit @_ := @rhs` &&
+                        #     rhs.getNodeName() == "NounExpr") {
+                        #     def anno := lookupAnno(rhs.getName())
+                        # }
                         last := reducer(subExpr)
                         def trivialExprs := ["BindingExpr", "LiteralExpr", "NounExpr"]
                         if (!trivialExprs.contains(last.getNodeName())) {
@@ -738,18 +685,17 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                     def asExpr := reducer(expr.getAsExpr())
                     def auditors := [for a in (expr.getAuditors()) reducer(a)]
                     def patt := expr.getName()
-                    if (isStatic(expr) && !patt.refutable()) {
+                    if (isStatic) {
                         traceln("Binding static object", patt)
                         # Bind starting from the current closure.
-                        def [annoScope, valueScope] := freezeScope()
-                        def reducer := makeReducer(exprAnnos, scopeAnnos,
-                            annoScope, valueScope)
+                        def valueScope := freezeScope()
+                        def reducer := makeReducer(exprAnnos, valueScope)
                         # NB: The script must be reduced at unfold time, *not*
                         # at bind time. This is because the script's execution
                         # is actually suspended at bind time and it only runs
                         # during each unfold. Since we reduce in the order of
                         # operations, we must suspend here.
-                        def live := makeStaticObject(reducer, scopeAnnos,
+                        def live := makeStaticObject(reducer, 
                             expr.getScript())
                         # Tie the knot, if necessary.
                         if (patt.getNodeName() != "IgnorePattern") {
@@ -763,27 +709,27 @@ def makeReducer(exprAnnos, scopeAnnos, topAnnoScope, topValueScope) as DeepFroze
                             # Since we are residualizing, we need to optimize
                             # under our method/matcher bindings.
                             def s := expr.getScript()
-                            def methods := [for m in (s.getMethods()) reducer(m)]
-                            def matchers := [for m in (s.getMatchers()) reducer(m)]
+                            def methods := [for m in (s.getMethods()) {
+                                reducer.withScope(fn {
+                                    # XXX lazy
+                                    def body := reducer(m.getBody())
+                                    def resultGuard := reducer(m.getResultGuard())
+                                    astBuilder."Method"(m.getDocstring(),
+                                                        m.getVerb(),
+                                                        m.getPatterns(),
+                                                        m.getNamedPatterns(),
+                                                        resultGuard, body,
+                                                        null)
+                                })
+                            }]
+                            # XXX lazy
+                            def matchers := [for m in (s.getMatchers()) m]
                             astBuilder.Script(null, methods, matchers, null)
                         }
                         astBuilder.ObjectExpr(expr.getDocstring(), patt, asExpr,
                                               auditors, script, null)
                     }
                 }
-                match =="Method" {
-                    def [scope] := scopeAnnos[expr]
-                    # XXX lazy
-                    reducer.withScope(scope, fn {
-                        def body := reducer(expr.getBody())
-                        def resultGuard := reducer(expr.getResultGuard())
-                        astBuilder."Method"(expr.getDocstring(), expr.getVerb(),
-                                            expr.getPatterns(), expr.getNamedPatterns(),
-                                            resultGuard, body, null)
-                    })
-                }
-                # XXX lazy
-                match =="Matcher" { expr }
             }
 
 def freezeMap :DeepFrozen := [for `&&@k` => v in (safeScope) v.get().get() => k]
@@ -849,12 +795,12 @@ def mix(expr, _baseScope) as DeepFrozen:
         # Has side effects.
         "traceln",
     ].asSet()
-    def [_exprAnnos, _scopeAnnos] := staticFixpoint(expr, staticOuters)
-    # def reducer := makeReducer(exprAnnos, scopeAnnos, null, topValueScope)
-    # def mixed := reducer(expr)
-    # traceln("Mixed", mixed)
-    # return mixed.transform(uncallLiterals)
+    def exprAnnos := staticFixpoint(expr, staticOuters)
     traceln("Annotated", expr)
+    def reducer := makeReducer(exprAnnos, topValueScope)
+    def mixed := reducer(expr)
+    traceln("Mixed", mixed)
+    return mixed.transform(uncallLiterals)
 
 
 def makeEvalCase(expr):
