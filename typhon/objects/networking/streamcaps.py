@@ -93,6 +93,7 @@ class _EmptySource(Object):
     def run(self, sink):
         sink.call(u"complete", [])
 
+
 emptySource = _EmptySource()
 
 

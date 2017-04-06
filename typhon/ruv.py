@@ -109,6 +109,9 @@ class CConfig:
     shutdown_t = rffi_platform.Struct("uv_shutdown_t", [])
     write_t = rffi_platform.Struct("uv_write_t", [])
     tcp_t = rffi_platform.Struct("uv_tcp_t", [("data", rffi.VOIDP)])
+    udp_t = rffi_platform.Struct("uv_udp_t", [("data", rffi.VOIDP)])
+    udp_send_t = rffi_platform.Struct("uv_udp_send_t", [
+        ("data", rffi.VOIDP), ("handle", udp_tp)])
     pipe_t = rffi_platform.Struct("uv_pipe_t", [("data", rffi.VOIDP)])
     tty_t = rffi_platform.Struct("uv_tty_t", [("data", rffi.VOIDP)])
     fs_t = rffi_platform.Struct("uv_fs_t",
@@ -121,6 +124,7 @@ class CConfig:
     buf_t = rffi_platform.Struct("uv_buf_t",
                                  [("base", rffi.CCHARP),
                                   ("len", rffi.SIZE_T)])
+
 
 # I know, weird nomenclature. Not my fault. I'm just copying what other
 # RPython code does. ~ C.
@@ -141,6 +145,8 @@ connect_tp = rffi.lltype.Ptr(cConfig["connect_t"])
 shutdown_tp = rffi.lltype.Ptr(cConfig["shutdown_t"])
 write_tp = rffi.lltype.Ptr(cConfig["write_t"])
 tcp_tp = rffi.lltype.Ptr(cConfig["tcp_t"])
+udp_tp = rffi.lltype.Ptr(cConfig["udp_t"])
+udp_send_tp = rffi.lltype.Ptr(Config("udp_send_t"))
 pipe_tp = rffi.lltype.Ptr(cConfig["pipe_t"])
 tty_tp = rffi.lltype.Ptr(cConfig["tty_t"])
 fs_tp = rffi.lltype.Ptr(cConfig["fs_t"])
@@ -237,9 +243,11 @@ def stashFor(name, struct, initial=None):
 
     return stash, unstash, unstashing
 
+
 stashTimer, unstashTimer, unstashingTimer = stashFor(
     "timer", timer_tp, initial=(None, 0))
 stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
+stashHandle, unstashHandle, unstashingHandle = stashFor("handle", handle_tp)
 stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
 stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
 stashProcess, unstashProcess, unstashingProcess = stashFor("process",
@@ -272,6 +280,7 @@ loop_alive = rffi.llexternal("uv_loop_alive", [loop_tp], rffi.INT,
 def loopAlive(loop):
     return bool(intmask(loop_alive(loop)))
 
+
 loop_size = rffi.llexternal("uv_loop_size", [], rffi.SIZE_T,
                             compilation_info=eci)
 default_loop = rffi.llexternal("uv_default_loop", [], loop_tp,
@@ -292,8 +301,8 @@ def alloc_loop():
     check("loop_init", loop_init(loop))
     return loop
 
-RUN_DEFAULT, RUN_ONCE, RUN_NOWAIT = range(3)
 
+RUN_DEFAULT, RUN_ONCE, RUN_NOWAIT = range(3)
 
 alloc_cb = rffi.CCallback([handle_tp, rffi.SIZE_T, buf_tp], lltype.Void)
 close_cb = rffi.CCallback([handle_tp], lltype.Void)
@@ -359,6 +368,8 @@ is_active = rffi.llexternal("uv_is_active", [handle_tp], rffi.INT,
 def isActive(handleish):
     rv = intmask(is_active(rffi.cast(handle_tp, handleish)))
     return bool(rv)
+
+
 is_closing = rffi.llexternal("uv_is_closing", [handle_tp], rffi.INT,
                              compilation_info=eci)
 
@@ -366,6 +377,8 @@ is_closing = rffi.llexternal("uv_is_closing", [handle_tp], rffi.INT,
 def isClosing(handleish):
     rv = intmask(is_closing(rffi.cast(handle_tp, handleish)))
     return bool(rv)
+
+
 uv_close = rffi.llexternal(
     "uv_close", [handle_tp, close_cb], lltype.Void, compilation_info=eci)
 
@@ -463,6 +476,7 @@ class StreamJanitor(object):
         for stream in self.streams:
             closeAndFree(stream)
         self.streams = []
+
 
 streamJanitor = StreamJanitor()
 
@@ -626,8 +640,8 @@ def alloc_tcp(loop):
     return tcp
 
 
-sin = lltype.malloc(s.sockaddr_in, flavor="raw", zero=True)
-af4 = (s.AF_INET, sin, "c_sin_addr", "c_sin_family", "c_sin_port")
+sin4 = lltype.malloc(s.sockaddr_in, flavor="raw", zero=True)
+af4 = (s.AF_INET, sin4, "c_sin_addr", "c_sin_family", "c_sin_port")
 
 
 def tcp4Bind(stream, address, port):
@@ -692,6 +706,74 @@ def tcp6Connect(stream, address, port, callback):
     return rv
 
 
+# Documentation source:
+#   http://docs.libuv.org/en/v1.x/udp.htm
+udp_send_cb = rffi.CCallback([udp_send_tp, rffi.INT], lltype.Void)
+udp_recv_cb = rffi.CCallback(
+    [udp_tp, rffi.SSIZE_T, buf_tp, rffi.VOIDP, rffi.INT], lltype.Void)
+udp_init = rffi.llexternal(
+    "uv_udp_init", [loop_tp, udp_tp], rffi.INT, compilation_info=eci)
+udp_init_ex = rffi.llexternal(
+    "uv_udp_init_ex", [loop_tp, udp_tp, rffi.INT],
+    rffi.INT, compilation_info=eci)
+udp_bind = rffi.llexternal(
+    "uv_udp_bind", [udp_tp, rffi.VOIDP, rffi.INT],
+    rffi.INT, compilation_info=eci)
+udp_send = rffi.llexternal(
+    "uv_udp_send", [
+        udp_send_tp, udp_tp, buf_tp, rffi.SSIZE_T, rffi.VOIDP, udp_send_cb],
+    rffi.INT
+)
+# handle, bufs[],   nbufs,    addr
+# udp_try_send = rffi.llexternal(
+#     "uv_udp_try_send", [udp_tp, buf_tp, rffi.INT, rffi.VOIDP])
+udp_recv_start = rffi.llexternal(
+    "uv_udp_recv_start", [udp_tp, alloc_cb, udp_recv_cb], rffi.INT
+)
+udp_recv_stop = rffi.llexternal("uv_udp_recv_stop", [udp_tp], rffi.INT)
+
+
+def alloc_udp(loop):
+    udp = lltype.malloc(cConfig["udp_t"], flavor="raw", zero=True)
+    check("udp_init", udp_init(loop, udp, 0))
+    return udp
+
+
+def udpBind(inet, handle, address, port, flags=0):
+    inet, sin, s_addr, s_fam, s_port = af6 if inet == 6 else af4
+
+    rffi.setintfield(sin, s_fam, inet)
+    rffi.setintfield(sin, s_port, s.htons(port))
+    if inet_pton(inet, address, getattr(sin, s_addr)):
+        print "udpBind: inet_pton failed!?"
+        assert False
+
+    # Flags possible
+    rv = check("uv_udp_bind", udp_bind(handle, sin, flags))
+    return rv
+
+
+def udpSend(req, handle, bufs, addr, callback):
+    rv = check(
+        "uv_udp_send", udp_send(req, handle, bufs, len(bufs), addr, callback))
+    return rv
+
+
+def udpRecvStart(handle, alloc_callback, recv_callback):
+    rv = check(
+        "uv_udp_recv_start",
+        udp_recv_start(handle, alloc_callback, recv_callback)
+    )
+    return rv
+
+
+def udpRecvStop(handle):
+    rv = check(
+        "uv_udp_recv_stop", udp_recv_stop(handle)
+    )
+    return rv
+
+
 pipe_init = rffi.llexternal("uv_pipe_init", [loop_tp, pipe_tp, rffi.INT],
                             rffi.INT, compilation_info=eci)
 
@@ -722,12 +804,14 @@ def alloc_tty(loop, fd, readable):
     check("tty_init", tty_init(loop, tty, fd, readable))
     return tty
 
+
 _guess_handle = rffi.llexternal("uv_guess_handle", [rffi.INT], rffi.INT,
                                 compilation_info=eci)
 
 
 def guess_handle(fd):
     return check("guess_handle", _guess_handle(fd))
+
 
 fs_cb = rffi.CCallback([fs_tp], lltype.Void)
 

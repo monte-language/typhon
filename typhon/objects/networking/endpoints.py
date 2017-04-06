@@ -34,7 +34,7 @@ RUN_1 = getAtom(u"run", 1)
 RUN_2 = getAtom(u"run", 2)
 
 
-def connectCB(connect, status):
+def tcpConnectCB(connect, status):
     status = intmask(status)
     stream = connect.c_handle
 
@@ -120,9 +120,9 @@ class TCPClientEndpoint(Object):
 
         # Make the actual connection.
         if self.inet_type == 4:
-            ruv.tcp4Connect(stream, self.host, self.port, connectCB)
+            ruv.tcp4Connect(stream, self.host, self.port, tcpConnectCB)
         elif self.inet_type == 6:
-            ruv.tcp6Connect(stream, self.host, self.port, connectCB)
+            ruv.tcp6Connect(stream, self.host, self.port, tcpConnectCB)
 
         # Return the promises.
         return [fount, drain]
@@ -367,3 +367,77 @@ def makeTCP6ServerEndpoint(port):
     """
 
     return TCP6ServerEndpoint(unwrapInt(port))
+
+
+@autohelp
+class UDPEndpoint(Object):
+    """
+    Generic UDP endpoint.
+    """
+
+    def __init__(self, host, port, inet_type):
+        self.host = host
+        self.port = port
+        self.inet_type = inet_type
+
+    def toString(self):
+        return u"<endpoint (IPv%d, UDP): %s:%d>" % (
+            self.inet_type, self.host.decode("utf-8"), self.port)
+
+    @method("List")
+    def bind(self):
+        vat = currentVat.get()
+        handle = ruv.alloc_udp(vat.uv_loop)
+
+        source, sourceResolver = makePromise()
+        sink, sinkResolver = makePromise()
+
+        # Ugh, the hax.
+        resolvers = wrapList([sourceResolver, sinkResolver])
+        ruv.stashHandle(ruv.rffi.cast(ruv.handle_tp, handle),
+                        (vat, resolvers))
+
+        # Make the actual connection.
+        ruv.udpBind(self.inet, handle, self.host, self.port)
+
+        return [source, sink]
+
+    def send(self, data):
+        # vat = currentVat.get()
+        # handle = ruv.alloc_udp(vat.uv_loop)
+
+        source, sourceResolver = makePromise()
+        sink, sinkResolver = makePromise()
+
+        # # Ugh, the hax.
+        # resolvers = wrapList([sourceResolver, sinkResolver])
+        # ruv.stashStream(ruv.rffi.cast(ruv.stream_tp, handle),
+        #                 (vat, resolvers))
+
+        # # Make the actual connection.
+        # ruv.udpSend(handle, self.host, self.port, connectStreamCB)
+
+        # Return the promises.
+        return [source, sink]
+
+
+@runnable(RUN_2)
+def makeUDP4Endpoint(host, port):
+    """
+    Make a UDPv4 endpoint.
+    """
+
+    host = unwrapBytes(host)
+    port = unwrapInt(port)
+    return UDPEndpoint(host, port, 4)
+
+
+@runnable(RUN_2)
+def makeUDP6Endpoint(host, port):
+    """
+    Make a UDPv6 endpoint.
+    """
+
+    host = unwrapBytes(host)
+    port = unwrapInt(port)
+    return UDPEndpoint(host, port, 6)
