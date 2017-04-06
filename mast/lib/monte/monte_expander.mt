@@ -396,9 +396,7 @@ def expand(node, builder, fail) as DeepFrozen:
         def test := callExpr(flag, "not", [], [], span)
         def _null := nounExpr("null", span)
         def cons := callExpr(nounExpr("throw", span),
-            "run", [_null, litExpr("Failed to validate loop!",
-                                               span)],
-            [], span)
+            "run", [litExpr("Failed to validate loop!", span)], [], span)
         return builder.IfExpr(test, cons, _null, span)
 
     def expandFor(optKey, value, coll, block, catchPatt, catchBlock, span):
