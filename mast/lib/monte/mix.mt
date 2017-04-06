@@ -65,8 +65,6 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
     # The local frame.
     var locals := initialSplit.diverge()
 
-    traceln(`makeAnnoStack($initialSplit)`)
-
     return object annoStack:
         to lift(name :Str, reason :Str) :Bool:
             "
@@ -76,16 +74,16 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
             dynamic.
             "
 
-            # traceln(`annoStack.lift($name, $reason)`)
             def frame := if (locals.contains(name)) { locals } else {
                 for f in (scopeStack.reverse()) {
                     if (f.contains(name)) { break f }
                 }
             }
-            return if (name =~ via (frame.fetch) [dynamic, _]) {
+            return if (name =~ via (frame.fetch) [dynamic, oldReason]) {
+                traceln(`Name $name can't be lifted for $reason because it was already lifted for $oldReason`)
                 false
             } else {
-                traceln(`Lifted dynamic $name`)
+                traceln(`Lifted dynamic $name for $reason`)
                 frame[name] := [dynamic, reason]
                 true
             }
@@ -101,10 +99,8 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
             locals := escape ej {
                 scopeAnnos.fetch(expr, ej)[index].diverge()
             } catch _ { [].asMap().diverge() }
-            # traceln(`Pushed locals $locals`)
 
         to popScope():
-            # traceln(`Popped locals $locals`)
             def rv := locals.snapshot()
             locals := scopeStack.pop()
             return rv
@@ -117,7 +113,6 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
             # annotations. Dynamic annotations cannot be undone.
             if (locals.fetch(name, fn { static }) == static):
                 locals[name] := anno
-                traceln(`assignName($name, $anno)`)
 
         to lookupName(name :Str):
             def rv := if (locals.contains(name)) { locals[name] } else {
@@ -130,7 +125,6 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
                     throw(`annoStack.lookupName($name): Name not in scopes $visibleNames`)
                 }
             }
-            traceln(`lookupName($name) -> $rv`)
             return rv
 
         to nameIsStatic(name :Str) :Bool:
@@ -145,14 +139,12 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
             contradictory evidence.
             "
 
-            return escape ej { 
-                exprAnnos.fetch(expr, ej) == static
-            } catch _ { true }
+            return exprAnnos.fetch(expr, fn { true })
 
-        to snapshot():
+        to snapshot() :Map[Expr, Bool]:
             return exprAnnos.snapshot()
 
-def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
+def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as DeepFrozen:
     "
     Compute the least-dynamic fixpoint of `topExpr` relative to its
     `staticOuters`.
@@ -202,7 +194,6 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
     var changes :Int := 1
     bind refine:
         to matchBind(patt, var isStatic :Bool):
-            # traceln(`matchBind($patt, $annotation)`)
             switch (patt.getNodeName()):
                 match =="IgnorePattern":
                     refine(patt.getGuard())
@@ -235,7 +226,8 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
             if (expr == null):
                 return true
 
-            return annoStack.annotateExpr(expr, switch (expr.getNodeName()) {
+            def wasStatic := annoStack.isNotDynamic(expr)
+            def rv := annoStack.annotateExpr(expr, switch (expr.getNodeName()) {
                 match =="LiteralExpr" { true }
                 match =="BindingExpr" {
                     # BindingExprs can devirtualize VarSlots, so we consider them
@@ -246,14 +238,20 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
                     if (annoStack.lift(name, "Binding-expr")) { changes += 1 }
                     false
                 }
-                match =="NounExpr" { annoStack.nameIsStatic(expr.getName()) }
+                match =="NounExpr" {
+                    annoStack.nameIsStatic(expr.getName())
+                }
                 match =="AssignExpr" {
-                    def anno := refine(expr.getRvalue())
-                    # If the RHS isn't static, then we must generalize the entire
-                    # VarSlot's name, since we can no longer predict its values.
-                    if (!anno) {
-                        if (annoStack.lift(expr.getLvalue().getName(),
-                            "dynamic assign")) { changes += 1 }
+                    var anno := refine(expr.getRvalue())
+                    def target := expr.getLvalue().getName()
+                    # If the RHS isn't static, then we must generalize the
+                    # entire VarSlot's name, since we can no longer predict
+                    # its values. If the RHS is static, the LHS might still be
+                    # dynamic.
+                    if (anno) {
+                        anno &= annoStack.nameIsStatic(target)
+                    } else if (annoStack.lift(target, "dynamic assign")) {
+                        changes += 1
                     }
                     anno
                 }
@@ -269,7 +267,12 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
                     #     observe(name, val)
                     # }
                     def patt := expr.getPattern()
+                    # If the pattern's names aren't static, then we cannot let
+                    # their definition be residualized, so it must be dynamic.
                     refine.matchBind(patt, anno)
+                    for name in (selfNames(patt)) {
+                        anno &= annoStack.nameIsStatic(name)
+                    }
                     anno
                 }
                 match =="HideExpr" {
@@ -378,6 +381,11 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) as DeepFrozen:
                     anno
                 }
             })
+            # If we were static, but are no longer static, then that's a
+            # change too.
+            if (wasStatic &! rv):
+                changes += 1
+            return rv
 
     # Compute the initial split.
     refine(topExpr)
@@ -432,8 +440,23 @@ def makeStaticObject(reducer, script) as DeepFrozen:
                 }
             })
 
-def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
-    def valueStack := [topValueScope].diverge()
+def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
+    # Exception reification. When an exception is thrown, we copy it into the
+    # exception box, and this allows us to not need `unsealException`.
+    object noException as DeepFrozen {}
+    var exceptionBox := noException
+    object throwStatic:
+        to run(ex):
+            exceptionBox := ex
+            throw(ex)
+        to eject(ej, ex):
+            exceptionBox := ex
+            throw.eject(ej, ex)
+    def staticScope := [
+        "throw" => &&throwStatic,
+    ]
+
+    def valueStack := [staticScope | topValueScope].diverge()
     var locals := [].asMap().diverge()
 
     def pushScope():
@@ -450,9 +473,9 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
         return values
 
     def addName(name, value):
-        traceln(`addName($name, $value)`)
+        # traceln(`addName($name, $value)`)
         locals[name] := value
-        traceln("local keys", locals.getKeys())
+        # traceln("local keys", locals.getKeys())
 
     def lookupValue(name):
         if (locals.contains(name)):
@@ -468,6 +491,9 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
 
     def maybeValue(expr):
         return if (expr == null) { null } else { expr.getValue() }
+
+    def makeLit(value):
+        return astBuilder.LiteralExpr(value, null)
 
     return object reducer:
         to withScope(thunk):
@@ -513,9 +539,9 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
                 return null
 
             # Is this expression annotated static?
-            def isStatic :Bool := exprAnnos[expr] == static
+            def isStatic :Bool := exprAnnos[expr]
 
-            traceln(`reducer(${expr.getNodeName()}) isStatic => $isStatic`)
+            traceln(`reducer(${expr.getNodeName()}) isStatic $isStatic`)
 
             return switch (expr.getNodeName()) {
                 match =="LiteralExpr" { expr }
@@ -524,7 +550,7 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
                         def name := expr.getNoun().getName()
                         def binding := lookupValue(name)
                         traceln(`Static binding: &&$name := $binding`)
-                        astBuilder.LiteralExpr(binding, null)
+                        makeLit(binding)
                     } else { expr }
                 }
                 match =="NounExpr" {
@@ -532,7 +558,7 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
                         def name := expr.getName()
                         def noun := lookupValue(name).get().get()
                         traceln(`Static noun: &&$name := $noun`)
-                        astBuilder.LiteralExpr(noun, null)
+                        makeLit(noun)
                     } else { expr }
                 }
                 match =="AssignExpr" {
@@ -579,9 +605,24 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
                             traceln(`unfold($verb, $a, $na) -> $rv`)
                             rv
                         } else {
-                            def rv := M.call(r, verb, a, na)
-                            traceln(`M.call($r, $verb, $a, $na) -> $rv`)
-                            astBuilder.LiteralExpr(rv, null)
+                            try {
+                                def rv := M.call(r, verb, a, na)
+                                traceln(`M.call($r, $verb, $a, $na) -> result $rv`)
+                                makeLit(rv)
+                            } catch problem {
+                                if (exceptionBox != noException) {
+                                    traceln(`M.call($r, $verb, $a, $na) -> problem $exceptionBox`)
+                                    # Static throw.
+                                    def lit := makeLit(exceptionBox)
+                                    m`throw($lit)`
+                                } else {
+                                    # Reraise.
+                                    throw(problem)
+                                }
+                            } finally {
+                                # Clear the box for next time.
+                                exceptionBox := noException
+                            }
                         }
                     } else {
                         astBuilder.MethodCallExpr(receiver, verb, args, namedArgs, null)
@@ -601,7 +642,7 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
                             })
                         } catch val {
                             if (catchPatt == null) {
-                                astBuilder.LiteralExpr(val, null)
+                                makeLit(val)
                             } else {
                                 def catchBody := expr.getCatchBody()
                                 reducer.withScope(fn {
@@ -660,22 +701,30 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
                     })
                 }
                 match =="SeqExpr" {
-                    var last := null
-                    def rv := [].diverge()
-                    for subExpr in (expr.getExprs()) {
-                        # XXX If we have a polyvariant annotation on a
-                        # definition, then substitute and expand.
-                        # if (subExpr =~ m`def @_ exit @_ := @rhs` &&
-                        #     rhs.getNodeName() == "NounExpr") {
-                        #     def anno := lookupAnno(rhs.getName())
-                        # }
-                        last := reducer(subExpr)
-                        def trivialExprs := ["BindingExpr", "LiteralExpr", "NounExpr"]
-                        if (!trivialExprs.contains(last.getNodeName())) {
-                            rv.push(last)
+                    if (isStatic) {
+                        var rv := null
+                        for i => subExpr in (expr.getExprs()) {
+                            rv := reducer(subExpr)
                         }
+                        rv
+                    } else {
+                        var last := null
+                        def rv := [].diverge()
+                        for i => subExpr in (expr.getExprs()) {
+                            # XXX If we have a polyvariant annotation on a
+                            # definition, then substitute and expand.
+                            # if (subExpr =~ m`def @_ exit @_ := @rhs` &&
+                            #     rhs.getNodeName() == "NounExpr") {
+                            #     def anno := lookupAnno(rhs.getName())
+                            # }
+                            last := reducer(subExpr)
+                            def trivialExprs := ["BindingExpr", "LiteralExpr", "NounExpr"]
+                            if (!trivialExprs.contains(last.getNodeName())) {
+                                rv.push(last)
+                            }
+                        }
+                        if (rv.isEmpty()) { last } else { seq(rv.snapshot()) }
                     }
-                    if (rv.isEmpty()) { last } else { seq(rv.snapshot()) }
                 }
                 match =="CatchExpr" {
                     traceln("not entering catch", expr)
@@ -686,7 +735,14 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
                     def auditors := [for a in (expr.getAuditors()) reducer(a)]
                     def patt := expr.getName()
                     if (isStatic) {
-                        traceln("Binding static object", patt)
+                        def evalScope := [for k => v in (freezeScope())
+                                          `&&$k` => v]
+                        def obj := eval(expr, evalScope)
+                        traceln(`Static object: $obj`)
+                        reducer.matchBind(patt, obj)
+                        makeLit(obj)
+                    } else if (false) {
+                        traceln("Binding unfoldable object", patt)
                         # Bind starting from the current closure.
                         def valueScope := freezeScope()
                         def reducer := makeReducer(exprAnnos, valueScope)
@@ -703,7 +759,7 @@ def makeReducer(exprAnnos, topValueScope) as DeepFrozen:
                             def name := noun.getName()
                             addName(name, &&live)
                         }
-                        astBuilder.LiteralExpr(live, null)
+                        makeLit(live)
                     } else {
                         def script := {
                             # Since we are residualizing, we need to optimize
@@ -787,16 +843,17 @@ def mix(expr, _baseScope) as DeepFrozen:
     def topValueScope := [for `&&@k` => v in (safeScope) k => v]
     def staticOuters := topValueScope.getKeys().asSet() - [
         # Needs to be reimplemented as unfoldable code.
-        "_loop",
+        # "_loop",
+        # Can cause code explosion.
+        "_iterForever",
         # Ill-behaved.
         "``",
         # Hard to tame directly.
-        "throw",
+        # "throw",
         # Has side effects.
         "traceln",
     ].asSet()
     def exprAnnos := staticFixpoint(expr, staticOuters)
-    traceln("Annotated", expr)
     def reducer := makeReducer(exprAnnos, topValueScope)
     def mixed := reducer(expr)
     traceln("Mixed", mixed)
