@@ -65,4 +65,5 @@ result
 # Project bits
 mt-typhon
 rpython/
-pypy-*
+# This comes from build.sh for non-nix users
+pypy*bz2
