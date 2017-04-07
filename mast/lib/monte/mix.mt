@@ -663,13 +663,21 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                     }
                 }
                 match =="FinallyExpr" {
-                    def body := reducer.withScope(fn {
-                        reducer(expr.getBody())
-                    })
-                    def unwinder := reducer.withScope(fn {
-                        reducer(expr.getUnwinder())
-                    })
-                    astBuilder.FinallyExpr(body, unwinder, null)
+                    if (isStatic) {
+                        try {
+                            reducer.withScope(fn { reducer(expr.getBody()) })
+                        } finally {
+                            reducer.withScope(fn { reducer(expr.getUnwinder()) })
+                        }
+                    } else {
+                        def body := reducer.withScope(fn {
+                            reducer(expr.getBody())
+                        })
+                        def unwinder := reducer.withScope(fn {
+                            reducer(expr.getUnwinder())
+                        })
+                        astBuilder.FinallyExpr(body, unwinder, null)
+                    }
                 }
                 match =="IfExpr" {
                     # It is crucial for pruning that we only recurse into a branch if
@@ -845,9 +853,7 @@ def mix(expr, _baseScope) as DeepFrozen:
         # Needs to be reimplemented as unfoldable code.
         # "_loop",
         # Can cause code explosion.
-        "_iterForever",
-        # Ill-behaved.
-        "``",
+        # "_iterForever",
         # Hard to tame directly.
         # "throw",
         # Has side effects.
@@ -857,7 +863,9 @@ def mix(expr, _baseScope) as DeepFrozen:
     def reducer := makeReducer(exprAnnos, topValueScope)
     def mixed := reducer(expr)
     traceln("Mixed", mixed)
-    return mixed.transform(uncallLiterals)
+    def uncalled := mixed.transform(uncallLiterals)
+    traceln("Uncalled", uncalled)
+    return uncalled
 
 
 def makeEvalCase(expr):
@@ -886,20 +894,13 @@ unittest([for expr in ([
     m`def fact(x :Int) {
         return if (x < 2) { x } else { x * fact(x - 1) }
     }; fact(5)`,
-]) makeEvalCase(expr)])
-
-def derp(expr) as DeepFrozen:
-    def mixed := mix(expr, safeScope)
-    traceln("Mixed", mixed)
-
-def main(_argv :List[Str]) as DeepFrozen:
-    def triangle := m`def triangle(x :Int) {
+    # Finite loops.
+    m`def triangle(x :Int) {
         var a := 0
         for i in (0..x) { a += i }
         return a
-    }; [triangle(5), triangle(10)]`.expand()
-    derp(triangle)
-    def fb := m`def fb(upper :Int) :List[Str] {
+    }; [triangle(5), triangle(10)]`,
+    m`def fb(upper :Int) :List[Str] {
         return [for i in (0..upper) {
             if (i % 15 == 0) {
                 "FizzBuzz"
@@ -909,37 +910,51 @@ def main(_argv :List[Str]) as DeepFrozen:
                 "Buzz"
             } else {``$$i``}
         }]
-    }; fb(20)`.expand()
-    derp(fb)
-    def bf := m`def bf(insts) {
-        var i := 0
-        var pointer := 0
-        def tape := [0].diverge()
-        def output := [].diverge()
-        while (i < insts.size()) {
-            switch(insts[i]) {
-                match =='>' {
-                    pointer += 1
-                    while (pointer > tape.size()) { tape.push(0) }
-                }
-                match =='<' { pointer -= 1 }
-                match =='+' { tape[pointer] += 1 }
-                match =='-' { tape[pointer] -= 1 }
-                match =='.' { output.push(tape[pointer]) }
-                match ==',' { tape[pointer] := 0 }
-                match =='[' {
-                    if (tape[pointer] == 0) {
-                        while (insts[i] != ']') { i += 1 }
-                    }
-                }
-                match ==']' {
-                    if (tape[pointer] != 0) {
-                        while (insts[i] != '[') { i -= 1 }
-                    }
+    }; fb(20)`,
+]) makeEvalCase(expr)])
+
+def main(_argv :List[Str]) as DeepFrozen:
+    def bf := m`def bf(insts :Str) {
+        def jumps := {
+            def m := [].asMap().diverge()
+            def stack := [].diverge()
+            for i => c in (insts) {
+                if (c == '[') { stack.push(i) } else if (c == ']') {
+                    def j := stack.pop()
+                    m[i] := j
+                    m[j] := i
                 }
             }
-            i += 1
+            m.snapshot()
         }
-        return output
+
+        return def interpret() {
+            var i := 0
+            var pointer := 0
+            def tape := [0].diverge()
+            def output := [].diverge()
+            while (i < insts.size()) {
+                switch(insts[i]) {
+                    match =='>' {
+                        pointer += 1
+                        while (pointer > tape.size()) { tape.push(0) }
+                    }
+                    match =='<' { pointer -= 1 }
+                    match =='+' { tape[pointer] += 1 }
+                    match =='-' { tape[pointer] -= 1 }
+                    match =='.' { output.push(tape[pointer]) }
+                    match ==',' { tape[pointer] := 0 }
+                    match =='[' {
+                        if (tape[pointer] == 0) { i := jumps[i] }
+                    }
+                    match ==']' {
+                        if (tape[pointer] != 0) { i := jumps[i] }
+                    }
+                }
+                i += 1
+            }
+            return output.snapshot()
+        }
     }; bf("+++>>[-]<<[->>+<<]")`.expand()
-    derp(bf)
+    mix(bf, safeScope)
+    0
