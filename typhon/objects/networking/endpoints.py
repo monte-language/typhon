@@ -263,8 +263,9 @@ def connectionStreamCB(uv_server, status):
 
     try:
         with ruv.unstashingStream(uv_server) as (vat, handler):
-            uv_client = ruv.rffi.cast(ruv.stream_tp,
-                                      ruv.alloc_tcp(vat.uv_loop))
+            uv_client = ruv.rffi.cast(
+                ruv.stream_tp, ruv.alloc_tcp(vat.uv_loop)
+            )
             # Actually accept the connection.
             ruv.accept(uv_server, uv_client)
             # Incant the handler.
@@ -403,22 +404,23 @@ class UDPEndpoint(Object):
         return [source, sink]
 
     def send(self, data):
-        # vat = currentVat.get()
-        # handle = ruv.alloc_udp(vat.uv_loop)
+        vat = currentVat.get()
+        handle = ruv.alloc_udp(vat.uv_loop)
 
-        source, sourceResolver = makePromise()
-        sink, sinkResolver = makePromise()
+        # source, sourceResolver = makePromise()
+        # sink, sinkResolver = makePromise()
 
         # # Ugh, the hax.
         # resolvers = wrapList([sourceResolver, sinkResolver])
-        # ruv.stashStream(ruv.rffi.cast(ruv.stream_tp, handle),
+        # ruv.stashHandle(ruv.rffi.cast(ruv.handle_tp, handle),
         #                 (vat, resolvers))
 
-        # # Make the actual connection.
-        # ruv.udpSend(handle, self.host, self.port, connectStreamCB)
+        # Send the data
+        ruv.udpSend(ruv.udp_send_tp, handle, data, udpSendCB)
 
-        # Return the promises.
-        return [source, sink]
+
+def udpSendCB(req, status):
+    return status
 
 
 @runnable(RUN_2)
