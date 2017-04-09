@@ -420,25 +420,36 @@ interface Static :DeepFrozen {}
 def makeStaticObject(reducer, script) as DeepFrozen:
     def methods := [for m in (script.getMethods())
                     [m.getVerb(), m.getPatterns().size()] => m]
+
+    def unfold(m, args, namedArgs):
+        return reducer.withScope(fn {
+            traceln(`unfold($m, $args, $namedArgs)`)
+            for i => patt in (m.getPatterns()) {
+                reducer.matchBind(patt, args[i])
+            }
+            for namedPatt in (m.getNamedPatterns()) {
+                # XXX
+                namedPatt
+                namedArgs
+            }
+            def body := reducer(m.getBody())
+            def resultGuard := reducer(m.getResultGuard())
+            if (resultGuard == null) { body } else {
+                m`$resultGuard.coerce($body, null)`
+            }
+        })
+
     return object staticObject as Static:
-        to unfold(verb, args, _namedArgs):
-            "
-            Unfold a call to this object.
+        to _sealedDispatch(brand):
+            return if (brand == Static):
+                astBuilder.ObjectExpr(
+                    "Residual static object",
+                    astBuilder.IgnorePattern(null, null),
+                    null, [], script, null)
 
-            The returned method body will be recursively specialized.
-            "
-
+        match [verb, args, namedArgs]:
             def m := methods[[verb, args.size()]]
-            return reducer.withScope(fn {
-                for i => patt in (m.getPatterns()) {
-                    reducer.matchBind(patt, args[i])
-                }
-                def body := reducer(m.getBody())
-                def resultGuard := reducer(m.getResultGuard())
-                if (resultGuard == null) { body } else {
-                    m`$resultGuard.coerce($body, null)`
-                }
-            })
+            unfold(m, args, namedArgs).getValue()
 
 def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
     # Exception reification. When an exception is thrown, we copy it into the
@@ -447,9 +458,11 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
     var exceptionBox := noException
     object throwStatic:
         to run(ex):
+            traceln(`throw($ex)`)
             exceptionBox := ex
             throw(ex)
         to eject(ej, ex):
+            traceln(`throw.eject($ej, $ex)`)
             exceptionBox := ex
             throw.eject(ej, ex)
     def staticScope := [
@@ -518,11 +531,11 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                     addName(patt.getNoun().getName(), prize)
                 match =="FinalPattern":
                     def prize := reducer.runGuard(patt.getGuard(), specimen, ej)
-                    traceln("propagating constant", patt, prize)
+                    traceln("matchBind final", patt, prize)
                     addName(patt.getNoun().getName(), &&prize)
                 match =="VarPattern":
                     var prize := reducer.runGuard(patt.getGuard(), specimen, ej)
-                    traceln("propagating variable", patt, prize)
+                    traceln("matchBind var", patt, prize)
                     addName(patt.getNoun().getName(), &&prize)
                 match =="ListPattern":
                     def patts := patt.getPatterns()
@@ -600,31 +613,31 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                         def na := [for namedArg in (namedArgs)
                                    namedArg.getKey().getValue() =>
                                    namedArg.getValue().getValue()]
-                        if (r =~ static :Static) {
-                            def rv := static.unfold(verb, a, na)
-                            traceln(`unfold($verb, $a, $na) -> $rv`)
-                            rv
-                        } else {
-                            try {
-                                def rv := M.call(r, verb, a, na)
-                                traceln(`M.call($r, $verb, $a, $na) -> result $rv`)
-                                makeLit(rv)
-                            } catch problem {
-                                if (exceptionBox != noException) {
-                                    traceln(`M.call($r, $verb, $a, $na) -> problem $exceptionBox`)
-                                    # Static throw.
-                                    def lit := makeLit(exceptionBox)
-                                    m`throw($lit)`
-                                } else {
-                                    # Reraise.
-                                    throw(problem)
-                                }
-                            } finally {
-                                # Clear the box for next time.
-                                exceptionBox := noException
+                        try {
+                            def rv := M.call(r, verb, a, na)
+                            traceln(`M.call($r, $verb, $a, $na) -> result $rv`)
+                            makeLit(rv)
+                        } catch problem {
+                            if (exceptionBox != noException) {
+                                traceln(`M.call($r, $verb, $a, $na) -> problem $exceptionBox`)
+                                # Static throw.
+                                def lit := makeLit(exceptionBox)
+                                m`throw($lit)`
+                            } else {
+                                # Reraise.
+                                throw(problem)
                             }
+                        } finally {
+                            # Clear the box for next time.
+                            exceptionBox := noException
                         }
                     } else {
+                        # XXX we could unfold maybe
+                        # if (r =~ static :Static) {
+                        #     def rv := static.unfold(verb, a, na)
+                        #     traceln(`unfold($verb, $a, $na) -> $rv`)
+                        #     rv
+                        # } else {
                         astBuilder.MethodCallExpr(receiver, verb, args, namedArgs, null)
                     }
                 }
@@ -632,15 +645,18 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                     def ejPatt := expr.getEjectorPattern()
                     def catchPatt := expr.getCatchPattern()
                     if (isStatic) {
-                        traceln("starting static ejector", expr)
                         # We create a live ejector here.
                         escape ej {
+                            traceln("Entering ejector", ej)
                             def body := expr.getBody()
-                            reducer.withScope(fn {
+                            def rv := reducer.withScope(fn {
                                 addName(ejPatt.getNoun().getName(), &&ej)
                                 reducer(body)
                             })
+                            traceln("Didn't use ejector", ej)
+                            rv
                         } catch val {
+                            traceln("Ejector gave value", val)
                             if (catchPatt == null) {
                                 makeLit(val)
                             } else {
@@ -743,31 +759,19 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                     def auditors := [for a in (expr.getAuditors()) reducer(a)]
                     def patt := expr.getName()
                     if (isStatic) {
-                        def evalScope := [for k => v in (freezeScope())
-                                          `&&$k` => v]
-                        def obj := eval(expr, evalScope)
-                        traceln(`Static object: $obj`)
-                        reducer.matchBind(patt, obj)
-                        makeLit(obj)
-                    } else if (false) {
-                        traceln("Binding unfoldable object", patt)
-                        # Bind starting from the current closure.
-                        def valueScope := freezeScope()
-                        def reducer := makeReducer(exprAnnos, valueScope)
+                        def evalScope := freezeScope()
                         # NB: The script must be reduced at unfold time, *not*
                         # at bind time. This is because the script's execution
                         # is actually suspended at bind time and it only runs
                         # during each unfold. Since we reduce in the order of
                         # operations, we must suspend here.
-                        def live := makeStaticObject(reducer, 
-                            expr.getScript())
-                        # Tie the knot, if necessary.
-                        if (patt.getNodeName() != "IgnorePattern") {
-                            def noun := patt.getNoun()
-                            def name := noun.getName()
-                            addName(name, &&live)
-                        }
-                        makeLit(live)
+                        def obj := makeStaticObject(makeReducer(exprAnnos,
+                                                                evalScope),
+                                                    expr.getScript())
+                        traceln(`Static object: $obj`)
+                        traceln(`Scope: $evalScope`)
+                        reducer.matchBind(patt, obj)
+                        makeLit(obj)
                     } else {
                         def script := {
                             # Since we are residualizing, we need to optimize
@@ -803,6 +807,9 @@ def uncallLiterals(node, maker, args, span) as DeepFrozen:
 
     return if (node.getNodeName() == "LiteralExpr") {
         switch (args[0]) {
+            match obj :Static {
+                obj._sealedDispatch(Static).transform(uncallLiterals)
+            }
             match broken ? (Ref.isBroken(broken)) {
                 # Generate the uncall for broken refs by hand.
                 def problem := astBuilder.LiteralExpr(Ref.optProblem(broken),
@@ -846,9 +853,12 @@ def uncallLiterals(node, maker, args, span) as DeepFrozen:
         }
     } else { M.call(maker, "run", args + [span], [].asMap()) }
 
-def mix(expr, _baseScope) as DeepFrozen:
-    # XXX doesn't use the custom baseScope at all
-    def topValueScope := [for `&&@k` => v in (safeScope) k => v]
+def mix(expr, baseScope) as DeepFrozen:
+    def neededOuters := expr.getStaticScope().namesUsed()
+    # Only propagate exactly those values needed, to make reasoning and
+    # debugging easier.
+    def topValueScope := [for `&&@k` => v in (baseScope)
+                          ? (neededOuters.contains(k)) k => v]
     def staticOuters := topValueScope.getKeys().asSet() - [
         # Needs to be reimplemented as unfoldable code.
         # "_loop",
