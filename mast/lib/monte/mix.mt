@@ -442,10 +442,21 @@ def makeStaticObject(reducer, script) as DeepFrozen:
     return object staticObject as Static:
         to _sealedDispatch(brand):
             return if (brand == Static):
+                def ss := script.getStaticScope()
+                def body := seq([for name in (ss.namesUsed())
+                                 ? (!safeScope.contains(`&&$name`)) {
+                    def patt := astBuilder.FinalPattern(
+                        astBuilder.NounExpr(name, null), null, null)
+                    def rhs := astBuilder.LiteralExpr(
+                        reducer.lookupValue(name).get().get(), null)
+                    m`def $patt := $rhs`
+                }] + [
                 astBuilder.ObjectExpr(
                     "Residual static object",
                     astBuilder.IgnorePattern(null, null),
                     null, [], script, null)
+                ])
+                astBuilder.HideExpr(body, null)
 
         match [verb, args, namedArgs]:
             def m := methods[[verb, args.size()]]
@@ -490,14 +501,6 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
         locals[name] := value
         # traceln("local keys", locals.getKeys())
 
-    def lookupValue(name):
-        if (locals.contains(name)):
-            return locals[name]
-        for scope in (valueStack.reverse()):
-            return scope.fetch(name, __continue)
-        def stackDump := [for frame in (valueStack + [locals]) frame.getKeys()]
-        throw(`Unassigned name $name, searched $stackDump`)
-
     def movable(ex):
         return (ex == null || isLiteral(ex) ||
                 ["BindingExpr", "NounExpr"].contains(ex.getNodeName()))
@@ -509,6 +512,14 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
         return astBuilder.LiteralExpr(value, null)
 
     return object reducer:
+        to lookupValue(name :Str):
+            if (locals.contains(name)):
+                return locals[name]
+            for scope in (valueStack.reverse()):
+                return scope.fetch(name, __continue)
+            def stackDump := [for frame in (valueStack + [locals]) frame.getKeys()]
+            throw(`Unassigned name $name, searched $stackDump`)
+
         to withScope(thunk):
             pushScope()
             def rv := thunk()
@@ -561,7 +572,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                 match =="BindingExpr" {
                     if (isStatic) {
                         def name := expr.getNoun().getName()
-                        def binding := lookupValue(name)
+                        def binding := reducer.lookupValue(name)
                         traceln(`Static binding: &&$name := $binding`)
                         makeLit(binding)
                     } else { expr }
@@ -569,7 +580,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                 match =="NounExpr" {
                     if (isStatic) {
                         def name := expr.getName()
-                        def noun := lookupValue(name).get().get()
+                        def noun := reducer.lookupValue(name).get().get()
                         traceln(`Static noun: &&$name := $noun`)
                         makeLit(noun)
                     } else { expr }
@@ -579,7 +590,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                     def lhs := expr.getLvalue()
                     if (isStatic) {
                         def target := lhs.getName()
-                        def binding := lookupValue(target)
+                        def binding := reducer.lookupValue(target)
                         def value := rhs.getValue()
                         traceln(`Static assign: $target := $value`)
                         binding.get().put(value)
