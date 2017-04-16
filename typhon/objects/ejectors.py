@@ -14,10 +14,13 @@
 
 from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, UserException, userError
+from typhon.metrics import globalRecorder
 from typhon.objects.constants import NullObject
 from typhon.objects.data import StrObject
 from typhon.objects.root import Object, audited
 
+recorder = globalRecorder()
+usageRate = recorder.getRateFor("Ejector usage")
 
 @autohelp
 class Ejector(Object):
@@ -64,6 +67,7 @@ class Ejector(Object):
         return self
 
     def __exit__(self, *args):
+        usageRate.observe(not self.active)
         self.disable()
 
 
