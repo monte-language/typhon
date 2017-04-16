@@ -220,13 +220,13 @@ def deepFrozenSupersetOf(guard):
         return True
 
     if isinstance(guard, SameGuard):
-        ej = Ejector()
-        try:
-            v = guard.value
-            checkDeepFrozen(v, monteMap(), ej, v)
-            return True
-        except Ejecting:
-            return False
+        with Ejector() as ej:
+            try:
+                v = guard.value
+                checkDeepFrozen(v, monteMap(), ej, v)
+                return True
+            except Ejecting:
+                return False
 
     if isinstance(guard, FinalSlotGuard):
         return deepFrozenSupersetOf(guard.valueGuard)
@@ -234,26 +234,27 @@ def deepFrozenSupersetOf(guard):
         superGuard = getGlobalValue(superGuardName)
         if superGuard is None:
             continue
-        ej = Ejector()
-        try:
-            subGuard = superGuard.call(u"extractGuard", [guard, ej])
-            return deepFrozenSupersetOf(subGuard)
-        except Ejecting:
-            # XXX lets other ejectors get through
-            pass
+        with Ejector() as ej:
+            try:
+                subGuard = superGuard.call(u"extractGuard", [guard, ej])
+                return deepFrozenSupersetOf(subGuard)
+            except Ejecting as e:
+                # Just keep going.
+                if e.ejector is not ej:
+                    raise
     for pairGuardName in [u"Map", u"Pair"]:
         pairGuard = getGlobalValue(pairGuardName)
         if pairGuard is None:
             continue
-        ej = Ejector()
-        try:
-            guardPair = pairGuard.call(u"extractGuards", [guard, ej])
-            l = unwrapList(guardPair, ej)
-            if len(l) == 2:
-                return deepFrozenSupersetOf(l[0]) and deepFrozenSupersetOf(l[1])
-        except Ejecting:
-            # XXX lets other ejectors get through
-            pass
+        with Ejector() as ej:
+            try:
+                guardPair = pairGuard.call(u"extractGuards", [guard, ej])
+                l = unwrapList(guardPair, ej)
+                if len(l) == 2:
+                    return deepFrozenSupersetOf(l[0]) and deepFrozenSupersetOf(l[1])
+            except Ejecting as e:
+                if e.ejector is not ej:
+                    raise
     if (SubrangeGuard(deepFrozenGuard).call(u"passes", [guard])
             is wrapBool(True)):
         return True

@@ -284,18 +284,17 @@ def isList(obj):
 def listFromIterable(obj):
     rv = []
     iterator = obj.call(u"_makeIterator", [])
-    ej = Ejector()
-    while True:
-        try:
-            l = unwrapList(iterator.call(u"next", [ej]))
-            if len(l) != 2:
-                raise userError(u"makeList.fromIterable/1: Invalid iterator")
-            rv.append(l[1])
-        except Ejecting as ex:
-            if ex.ejector is ej:
-                ej.disable()
-                return rv[:]
-            raise
+    with Ejector() as ej:
+        while True:
+            try:
+                l = unwrapList(iterator.call(u"next", [ej]))
+                if len(l) != 2:
+                    raise userError(u"makeList.fromIterable/1: Invalid iterator")
+                rv.append(l[1])
+            except Ejecting as ex:
+                if ex.ejector is ej:
+                    return rv[:]
+                raise
 
 
 @autohelp

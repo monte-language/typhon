@@ -457,32 +457,28 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
     def visitEscapeOnlyExpr(self, patt, body):
         # jit_debug("EscapeOnlyExpr")
-        ej = Ejector()
-        self.matchBind(patt, ej)
-        try:
-            val = self.visitExpr(body)
-            ej.disable()
-            return val
-        except Ejecting as e:
-            if e.ejector is not ej:
-                raise
-            ej.disable()
-            return e.value
+        with Ejector() as ej:
+            self.matchBind(patt, ej)
+            try:
+                val = self.visitExpr(body)
+                return val
+            except Ejecting as e:
+                if e.ejector is not ej:
+                    raise
+                return e.value
 
     def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
         # jit_debug("EscapeExpr")
-        ej = Ejector()
-        self.matchBind(patt, ej)
-        try:
-            val = self.visitExpr(body)
-            ej.disable()
-            return val
-        except Ejecting as e:
-            if e.ejector is not ej:
-                raise
-            ej.disable()
-            self.matchBind(catchPatt, e.value)
-            return self.visitExpr(catchBody)
+        with Ejector() as ej:
+            self.matchBind(patt, ej)
+            try:
+                val = self.visitExpr(body)
+                return val
+            except Ejecting as e:
+                if e.ejector is not ej:
+                    raise
+                self.matchBind(catchPatt, e.value)
+                return self.visitExpr(catchBody)
 
     def visitFinallyExpr(self, body, atLast):
         # jit_debug("FinallyExpr")

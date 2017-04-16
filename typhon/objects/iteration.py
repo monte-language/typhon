@@ -78,6 +78,8 @@ def loop(iterable, consumer):
 
     iterator = iterable.call(u"_makeIterator", [])
 
+    # XXX We want to use a with-statement here, but we cannot because of
+    # something weird about the merge point.
     ej = Ejector()
     try:
         while True:
