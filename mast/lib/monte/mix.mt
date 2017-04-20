@@ -159,9 +159,6 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as De
     # Set up the annotation stacks.
     def annoStack := makeAnnoStack(annotations)
 
-    def chooseAnnotation(isStatic :Bool):
-        return isStatic.pick(static, [dynamic, "matchBind"])
-
     def refine
 
     def refineAll(exprs) :Bool:
