@@ -90,16 +90,16 @@ def optSame(first, second, cache=None):
     # We need to see whether our objects are settled. If not, then give up.
     if not first.isSettled() or not second.isSettled():
         # Well, actually, there's one chance that they could be equal, if
-        # they're the same object. But if they aren't, then we can't tell
-        # anything else about them, so we'll call it quits.
-        return EQUAL if first is second else NOTYET
+        # they're the same object. But they aren't, because of the early
+        # identity check above.
+        return NOTYET
 
     # Our objects are settled. Thus, we should be able to ask for their
     # resolutions.
     first = resolution(first)
     second = resolution(second)
 
-    # Two identical objects are equal.
+    # Two identical objects are equal. Again.
     if first is second:
         return EQUAL
 
@@ -233,8 +233,9 @@ def optSame(first, second, cache=None):
 def samenessHash(obj, depth, fringe, path=None):
     """
     Generate a hash code for an object that may not be completely
-    settled. Equality of hash code implies sameness of objects. The generated
-    hash is valid until settledness of a component changes.
+    settled. If two objects are the same, then they will have identical
+    hashes. The generated hash is valid until settledness of a component
+    changes.
     """
 
     if depth <= 0:
@@ -455,10 +456,18 @@ class Equalizer(Object):
 
     @method("Bool", "Any")
     def isSettled(self, specimen):
+        "Whether `specimen` is settled."
+
         return specimen.isSettled()
 
     @method("Any", "Any", "Any")
     def optSame(self, first, second):
+        """
+        Whether `first` and `second` are the same.
+
+        Returns `null` if `first` or `second` are too unsettled to compare.
+        """
+
         result = optSame(first, second)
         if result is NOTYET:
             return NullObject
@@ -466,10 +475,22 @@ class Equalizer(Object):
 
     @method("Bool", "Any", "Any")
     def sameEver(self, first, second):
+        """
+        Whether `first` and `second` are the same.
+
+        Throws if `first` or `second` are too unsettled to compare.
+        """
+
         return isSameEver(first, second)
 
     @method("Bool", "Any", "Any")
     def sameYet(self, first, second):
+        """
+        Whether `first` and `second` are the same.
+
+        Returns `false` if `first` or `second` are too unsettled to compare.
+        """
+
         result = optSame(first, second)
         return result is EQUAL
 
