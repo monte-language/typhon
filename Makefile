@@ -102,7 +102,9 @@ fun: mast/fun/elements.mast mast/fun/repl.mast mast/fun/termParser.mast
 
 bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mast \
 	mast/bench/primeCount.mast mast/bench/brot.mast \
-	mast/bench/entropy.mast mast/benchRunner.mast
+	mast/bench/entropy.mast \
+	mast/bench/core.mast \
+	mast/benchRunner.mast
 
 monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 	mast/lib/monte/monte_parser.mast mast/lib/monte/monte_expander.mast \
