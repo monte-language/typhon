@@ -1,15 +1,6 @@
 import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
 exports (runBenchmarks)
 
-def benchmarks :List[Str] := [
-    "brot",
-    # XXX stack overflow? "marley",
-    "montstone",
-    "nqueens",
-    "primeCount",
-    "richards",
-]
-
 def formatResults(loops :Int, duration :Double) :Str as DeepFrozen:
     def usec := duration * 1000000 / loops
     if (usec < 1000):
@@ -28,7 +19,8 @@ def runBenchmarks(benchmarks, bench, benchFile) as DeepFrozen:
 
     pieces with= (`<!doctype HTML>
     <head>
-    <title>Monte Benchmarks</title>
+        <meta charset="utf8" />
+        <title>Monte Benchmarks</title>
     </head>
     <body>
     <h1>Benchmarks</h1>
