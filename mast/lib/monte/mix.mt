@@ -918,22 +918,22 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                         }
                         rv
                     } else {
-                        var last := null
+                        def exprs := expr.getExprs()
+                        def init := exprs.slice(0, exprs.size() - 1)
+                        def last := exprs.last()
                         def rv := [].diverge()
-                        for i => subExpr in (expr.getExprs()) {
-                            # XXX If we have a polyvariant annotation on a
-                            # definition, then substitute and expand.
-                            # if (subExpr =~ m`def @_ exit @_ := @rhs` &&
-                            #     rhs.getNodeName() == "NounExpr") {
-                            #     def anno := lookupAnno(rhs.getName())
-                            # }
-                            last := reducer(subExpr)
+                        for subExpr in (init) {
+                            def reduced := reducer(subExpr)
+                            # If the reduced result is non-side-effecting,
+                            # drop it.
                             def trivialExprs := ["BindingExpr", "LiteralExpr", "NounExpr"]
-                            if (!trivialExprs.contains(last.getNodeName())) {
-                                rv.push(last)
+                            if (!trivialExprs.contains(reduced.getNodeName())) {
+                                rv.push(reduced)
                             }
                         }
-                        if (rv.isEmpty()) { last } else { seq(rv.snapshot()) }
+                        # Don't drop the last expr, regardless of what it is.
+                        rv.push(reducer(last))
+                        seq(rv.snapshot())
                     }
                 }
                 match =="CatchExpr" {
