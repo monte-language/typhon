@@ -1383,6 +1383,15 @@ class BytesObject(Object):
     def optInterface(self):
         return getGlobalValue(u"Bytes")
 
+    @method("List")
+    def _uncall(self):
+        from typhon.objects.makers import theMakeBytes
+        from typhon.objects.collections.lists import wrapList
+        from typhon.objects.collections.maps import EMPTY_MAP
+        ints = [IntObject(ord(c)) for c in self._bs]
+        return [theMakeBytes, StrObject(u"fromInts"),
+                wrapList([wrapList(ints)]), EMPTY_MAP]
+
     @method("Bytes", "Any")
     def add(self, other):
         if isinstance(other, BytesObject):
