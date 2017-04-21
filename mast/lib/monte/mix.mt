@@ -1,5 +1,5 @@
 import "unittest" =~ [=> unittest]
-exports (main, mix)
+exports (main, mix, mixSafeScope)
 
 # The partial evaluator.
 # We specialize Monte source to Monte source using straightforward offline
@@ -459,6 +459,184 @@ def makeStaticObject(reducer, script) as DeepFrozen:
             def m := methods[[verb, args.size()]]
             unfold(m, args, namedArgs).getValue()
 
+def pretty(topExpr, exprAnnos :Map[Expr, Bool]) :Str as DeepFrozen:
+    def pieces := [].diverge()
+    var indent :Int := 0
+    def annoStack := [].diverge()
+
+    def push(var piece :Str):
+        if (annoStack.last()):
+            def l := [].diverge()
+            for c in (piece):
+                if (!" \n".contains(c)):
+                    l.push('̲')
+                l.push(c)
+            piece := _makeStr.fromChars(l.snapshot())
+        pieces.push(piece)
+
+    def nl():
+        push("\n" + " " * indent)
+
+    def openBrace():
+        indent += 4
+        push(" {")
+        nl()
+
+    def closeBrace():
+        indent -= 4
+        nl()
+        push("}")
+        nl()
+
+    def go
+
+    def guard(expr):
+        if (expr != null):
+            push(" :")
+            go(expr)
+
+    def p(patt :Patt):
+        switch (patt.getNodeName()):
+            match =="IgnorePattern":
+                push("_")
+                guard(patt.getGuard())
+            match =="FinalPattern":
+                go(patt.getNoun())
+                guard(patt.getGuard())
+            match =="VarPattern":
+                push("var ")
+                go(patt.getNoun())
+                guard(patt.getGuard())
+            match =="BindingPattern":
+                push("&&")
+                go(patt.getNoun())
+            match =="ListPattern":
+                push("[")
+                if (patt.getPatterns() =~ [head] + patts):
+                    p(head)
+                    for subPatt in (patts):
+                        push(", ")
+                        p(subPatt)
+                push("]")
+            match =="ViaPattern":
+                push("via (")
+                go(patt.getExpr())
+                push(") ")
+                p(patt.getPattern())
+
+    bind go(expr :Expr):
+        annoStack.push(exprAnnos.fetch(expr, &false.get))
+        switch (expr.getNodeName()):
+            match =="LiteralExpr":
+                push(M.toQuote(expr.getValue()))
+            match =="BindingExpr":
+                push("&&")
+                push(expr.getName())
+            match =="NounExpr":
+                push(expr.getName())
+            match =="AssignExpr":
+                go(expr.getLvalue())
+                push(" := ")
+                go(expr.getRvalue())
+            match =="DefExpr":
+                push("def ")
+                p(expr.getPattern())
+                def ex := expr.getExit()
+                if (ex != null):
+                    push(" exit ")
+                    go(ex)
+                push(" := ")
+                go(expr.getExpr())
+            match =="HideExpr":
+                openBrace()
+                go(expr.getBody())
+                closeBrace()
+            match =="MethodCallExpr":
+                go(expr.getReceiver())
+                push(".")
+                push(expr.getVerb())
+                push("(")
+                if (expr.getArgs() =~ [head] + args):
+                    go(head)
+                    for arg in (args):
+                        push(", ")
+                        go(arg)
+                push(")")
+            match =="EscapeExpr":
+                push("escape ")
+                p(expr.getEjectorPattern())
+                openBrace()
+                go(expr.getBody())
+                closeBrace()
+                def catchPatt := expr.getCatchPattern()
+                if (catchPatt != null):
+                    push(" catch ")
+                    p(catchPatt)
+                    openBrace()
+                    go(expr.getCatchBody())
+                    closeBrace()
+            match =="FinallyExpr":
+                push("try ")
+                openBrace()
+                go(expr.getBody())
+                closeBrace()
+                push(" finally ")
+                openBrace()
+                go(expr.getUnwinder())
+                closeBrace()
+            match =="IfExpr":
+                push("if (")
+                go(expr.getTest())
+                push(")")
+                openBrace()
+                go(expr.getThen())
+                closeBrace()
+                push(" else ")
+                openBrace()
+                go(expr.getElse())
+                closeBrace()
+            match =="SeqExpr":
+                if (expr.getExprs() =~ [head] + exprs):
+                    go(head)
+                    for subExpr in (exprs):
+                        nl()
+                        go(subExpr)
+            match =="CatchExpr":
+                push("try ")
+                openBrace()
+                go(expr.getBody())
+                closeBrace()
+                push(" catch ")
+                p(expr.getPattern())
+                openBrace()
+                go(expr.getCatcher())
+                closeBrace()
+            match =="ObjectExpr":
+                push("object ")
+                p(expr.getName())
+                openBrace()
+                def script := expr.getScript()
+                for m in (script.getMethods()):
+                    push("method ")
+                    push(m.getVerb())
+                    push("(")
+                    if (m.getPatterns() =~ [head] + patts):
+                        p(head)
+                        for patt in (patts):
+                            push(", ")
+                            p(patt)
+                    push(")")
+                    guard(m.getResultGuard())
+                    openBrace()
+                    go(m.getBody())
+                    closeBrace()
+                closeBrace()
+        annoStack.pop()
+
+    go(topExpr)
+
+    return "".join(pieces)
+
 def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
     # Exception reification. When an exception is thrown, we copy it into the
     # exception box, and this allows us to not need `unsealException`.
@@ -530,7 +708,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
             }
 
         to matchBind(patt, specimen, => ej := null):
-            traceln(`reducer.matchBind($patt, $specimen, $ej)`)
+            # traceln(`reducer.matchBind($patt, $specimen, $ej)`)
             switch (patt.getNodeName()):
                 match =="IgnorePattern":
                     reducer.runGuard(patt.getGuard(), specimen, ej)
@@ -539,11 +717,11 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                     addName(patt.getNoun().getName(), prize)
                 match =="FinalPattern":
                     def prize := reducer.runGuard(patt.getGuard(), specimen, ej)
-                    traceln("matchBind final", patt, prize)
+                    # traceln("matchBind final", patt, prize)
                     addName(patt.getNoun().getName(), &&prize)
                 match =="VarPattern":
                     var prize := reducer.runGuard(patt.getGuard(), specimen, ej)
-                    traceln("matchBind var", patt, prize)
+                    # traceln("matchBind var", patt, prize)
                     addName(patt.getNoun().getName(), &&prize)
                 match =="ListPattern":
                     def patts := patt.getPatterns()
@@ -562,7 +740,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
             # Is this expression annotated static?
             def isStatic :Bool := exprAnnos[expr]
 
-            traceln(`reducer(${expr.getNodeName()}) isStatic $isStatic`)
+            # traceln(`reducer(${expr.getNodeName()}) isStatic $isStatic`)
 
             return switch (expr.getNodeName()) {
                 match =="LiteralExpr" { expr }
@@ -655,16 +833,16 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                     if (isStatic) {
                         # We create a live ejector here.
                         escape ej {
-                            traceln("Entering ejector", ej)
+                            # traceln("Entering ejector", ej)
                             def body := expr.getBody()
                             def rv := reducer.withScope(fn {
                                 addName(ejPatt.getNoun().getName(), &&ej)
                                 reducer(body)
                             })
-                            traceln("Didn't use ejector", ej)
+                            # traceln("Didn't use ejector", ej)
                             rv
                         } catch val {
-                            traceln("Ejector gave value", val)
+                            # traceln("Ejector gave value", val)
                             if (catchPatt == null) {
                                 makeLit(val)
                             } else {
@@ -711,7 +889,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                     reducer.withScope(fn {
                         def test := reducer(oldTest)
                         if (isStatic) {
-                            traceln("if is static", expr)
+                            # traceln("if is static", expr)
                             if (test.getValue()) {
                                 reducer.withScope(fn {
                                     reducer(expr.getThen())
@@ -759,7 +937,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                     }
                 }
                 match =="CatchExpr" {
-                    traceln("not entering catch", expr)
+                    throw(`We don't handle catch yet!`)
                     expr
                 }
                 match =="ObjectExpr" {
@@ -776,8 +954,8 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                         def obj := makeStaticObject(makeReducer(exprAnnos,
                                                                 evalScope),
                                                     expr.getScript())
-                        traceln(`Static object: $obj`)
-                        traceln(`Scope: $evalScope`)
+                        # traceln(`Static object: $obj`)
+                        # traceln(`Scope: $evalScope`)
                         reducer.matchBind(patt, obj)
                         makeLit(obj)
                     } else {
@@ -835,7 +1013,7 @@ def uncallLiterals(node, maker, args, span) as DeepFrozen:
                 astBuilder.MethodCallExpr(m`_makeList`, "run", newArgs, [], span)
             }
             match k ? (freezeMap.contains(k)) {
-                traceln(`Found $k in freezeMap`)
+                # traceln(`Found $k in freezeMap`)
                 return astBuilder.NounExpr(freezeMap[k], span)
             }
             match obj {
@@ -878,12 +1056,16 @@ def mix(expr, baseScope) as DeepFrozen:
         "traceln",
     ].asSet()
     def exprAnnos := staticFixpoint(expr, staticOuters)
+    traceln("Pretty", pretty(expr, exprAnnos))
     def reducer := makeReducer(exprAnnos, topValueScope)
     def mixed := reducer(expr)
-    traceln("Mixed", mixed)
+    # traceln("Mixed", mixed)
     def uncalled := mixed.transform(uncallLiterals)
     traceln("Uncalled", uncalled)
     return uncalled
+
+def mixSafeScope(expr) as DeepFrozen:
+    return mix(expr, safeScope)
 
 
 def makeEvalCase(expr):
