@@ -23,7 +23,7 @@ def Patt :DeepFrozen := astBuilder.getPatternGuard()
 def seq(exprs) as DeepFrozen:
     return if (exprs =~ [e]) { e } else { astBuilder.SeqExpr(exprs, null) }
 
-def selfNames(patt :Patt) :Set[Str] as DeepFrozen:
+def pattNames(patt :Patt) :Set[Str] as DeepFrozen:
     return switch (patt.getNodeName()) {
         match =="IgnorePattern" { [].asSet() }
         match =="BindingPattern" { [patt.getNoun().getName()].asSet() }
@@ -31,10 +31,10 @@ def selfNames(patt :Patt) :Set[Str] as DeepFrozen:
         match =="VarPattern" { [patt.getNoun().getName()].asSet() }
         match =="ListPattern" {
             var s := [].asSet()
-            for subPatt in (patt.getPatterns()) { s |= selfNames(subPatt) }
+            for subPatt in (patt.getPatterns()) { s |= pattNames(subPatt) }
             s
         }
-        match =="ViaPattern" { selfNames(patt.getPattern()) }
+        match =="ViaPattern" { pattNames(patt.getPattern()) }
     }
 
 def any(bs :List[Bool]) :Bool as DeepFrozen:
@@ -44,7 +44,6 @@ def any(bs :List[Bool]) :Bool as DeepFrozen:
     return false
 
 object static as DeepFrozen {}
-object polyvariant as DeepFrozen {}
 object dynamic as DeepFrozen {}
 
 def annoSum(annos) as DeepFrozen:
@@ -64,6 +63,19 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
     def scopeStack := [].diverge()
     # The local frame.
     var locals := initialSplit.diverge()
+
+    def lookupName(name :Str):
+        def rv := if (locals.contains(name)) { locals[name] } else {
+            escape ej {
+                for f in (scopeStack.reverse()) {
+                    if (f.contains(name)) { ej(f[name]) }
+                }
+                var visibleNames := [for m in (scopeStack + [locals])
+                                     m.getKeys()]
+                throw(`lookupName($name): Name not in scopes $visibleNames`)
+            }
+        }
+        return rv
 
     return object annoStack:
         to lift(name :Str, reason :Str) :Bool:
@@ -114,21 +126,8 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
             if (locals.fetch(name, fn { static }) == static):
                 locals[name] := anno
 
-        to lookupName(name :Str):
-            def rv := if (locals.contains(name)) { locals[name] } else {
-                escape ej {
-                    for f in (scopeStack.reverse()) {
-                        if (f.contains(name)) { ej(f[name]) }
-                    }
-                    var visibleNames := [for m in (scopeStack + [locals])
-                                         m.getKeys()]
-                    throw(`annoStack.lookupName($name): Name not in scopes $visibleNames`)
-                }
-            }
-            return rv
-
         to nameIsStatic(name :Str) :Bool:
-            def anno := annoStack.lookupName(name)
+            def anno := lookupName(name)
             return anno == static
 
         to isNotDynamic(expr :Expr) :Bool:
@@ -267,7 +266,7 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as De
                     # If the pattern's names aren't static, then we cannot let
                     # their definition be residualized, so it must be dynamic.
                     refine.matchBind(patt, anno)
-                    for name in (selfNames(patt)) {
+                    for name in (pattNames(patt)) {
                         anno &= annoStack.nameIsStatic(name)
                     }
                     anno
@@ -364,7 +363,7 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as De
                     if (!anno) {
                         # Compute the escaping names.
                         def namesUsed := script.getStaticScope().namesUsed()
-                        def freeNames := (namesUsed - selfNames(patt) -
+                        def freeNames := (namesUsed - pattNames(patt) -
                                           staticOuters).diverge()
                         if (!freeNames.isEmpty()) {
                             for name in (freeNames) {
@@ -414,7 +413,8 @@ def allLiteral(exprs :List[Expr]) :Bool as DeepFrozen:
 
 interface Static :DeepFrozen {}
 
-def makeStaticObject(reducer, script) as DeepFrozen:
+def makeStaticObject(reducer, objExpr) as DeepFrozen:
+    def script := objExpr.getScript()
     def methods := [for m in (script.getMethods())
                     [m.getVerb(), m.getPatterns().size()] => m]
 
@@ -449,9 +449,9 @@ def makeStaticObject(reducer, script) as DeepFrozen:
                     m`def $patt := $rhs`
                 }] + [
                 astBuilder.ObjectExpr(
-                    "Residual static object",
-                    astBuilder.IgnorePattern(null, null),
-                    null, [], script, null)
+                    objExpr.getDocstring(), objExpr.getName(),
+                    objExpr.getAsExpr(), objExpr.getAuditors(),
+                    script, null)
                 ])
                 astBuilder.HideExpr(body, null)
 
@@ -953,7 +953,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                         # operations, we must suspend here.
                         def obj := makeStaticObject(makeReducer(exprAnnos,
                                                                 evalScope),
-                                                    expr.getScript())
+                                                    expr)
                         # traceln(`Static object: $obj`)
                         # traceln(`Scope: $evalScope`)
                         reducer.matchBind(patt, obj)
