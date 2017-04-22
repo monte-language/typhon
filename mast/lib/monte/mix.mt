@@ -351,14 +351,15 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as De
                     # Annotate the script pieces. In order to be unfoldable, we
                     # must have only static scripts.
                     def script := expr.getScript()
-                    # From the POV of a method, its patterns are always static,
-                    # since they are static on every invocation of the method.
-                    # Ditto with matchers.
+                    # Even a static method will have dynamic inputs when
+                    # evaluated, so we must specialize as if that were the
+                    # case. On the other hand, an object can still be static
+                    # even if its method outputs are dynamic.
                     for m in (script.getMethods()) {
-                        anno &= annoMethod(m, shouldBeStatic)
+                        annoMethod(m, false)
                     }
                     for m in (script.getMatchers()) {
-                        anno &= annoMatcher(m, shouldBeStatic)
+                        annoMatcher(m, false)
                     }
                     if (!anno) {
                         # Compute the escaping names.
@@ -954,14 +955,15 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                         def obj := makeStaticObject(makeReducer(exprAnnos,
                                                                 evalScope),
                                                     expr)
-                        # traceln(`Static object: $obj`)
+                        traceln(`Virtualizing static object: $patt`)
                         # traceln(`Scope: $evalScope`)
                         reducer.matchBind(patt, obj)
                         makeLit(obj)
                     } else {
                         def script := {
                             # Since we are residualizing, we need to optimize
-                            # under our method/matcher bindings.
+                            # under our method/matcher bindings now instead of
+                            # later.
                             def s := expr.getScript()
                             def methods := [for m in (s.getMethods()) {
                                 reducer.withScope(fn {
