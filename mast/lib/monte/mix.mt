@@ -19,6 +19,7 @@ exports (main, mix, mixSafeScope)
 def Ast :DeepFrozen := astBuilder.getAstGuard()
 def Expr :DeepFrozen := astBuilder.getExprGuard()
 def Patt :DeepFrozen := astBuilder.getPatternGuard()
+def Meth :DeepFrozen := Ast["Method"]
 
 def seq(exprs) as DeepFrozen:
     return if (exprs =~ [e]) { e } else { astBuilder.SeqExpr(exprs, null) }
@@ -53,8 +54,10 @@ def annoSum(annos) as DeepFrozen:
     return static
 
 def makeAnnoStack(initialSplit :Map) as DeepFrozen:
-    # The per-expression Boolean annotation.
+    # The per-expression Boolean annotations. We'll be returning these.
     def exprAnnos := [].asMap().diverge()
+    # The per-method reannotation kits. We'll be returning these too.
+    def methodKits := [].asMap().diverge()
     # The per-scope rich annotations.
     def scopeAnnos := [].asMap().diverge()
 
@@ -140,23 +143,23 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
 
             return exprAnnos.fetch(expr, fn { true })
 
-        to snapshot() :Map[Expr, Bool]:
-            return exprAnnos.snapshot()
+        to addMethodKit(meth :Meth) :Void:
+            methodKits.fetch(meth, fn {
+                var newSplit := initialSplit | locals
+                for frame in (scopeStack.reverse()) { newSplit |= frame }
+                def methodKit() {
+                    return makeAnnoStack(newSplit)
+                }
+                methodKits[meth] := methodKit
+            })
 
-def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as DeepFrozen:
-    "
-    Compute the least-dynamic fixpoint of `topExpr` relative to its
-    `staticOuters`.
-    "
+        to getAnnos() :Pair[Map[Expr, Bool], Map[Meth, Any]]:
+            return [exprAnnos.snapshot(), methodKits.snapshot()]
 
+def staticFixpoint(staticOuters :Set[Str]) as DeepFrozen:
     # Seed the initial split.
-    var annotations :Map := [for name in (staticOuters) name => static]
-    annotations |= [for name in (topExpr.getStaticScope().namesUsed() -
-                                 staticOuters)
-                    name => [dynamic, "free in top scope"]]
-
-    # Set up the annotation stacks.
-    def annoStack := makeAnnoStack(annotations)
+    def outerAnnos :Map := [for name in (staticOuters) name => static]
+    var annoStack := null
 
     def refine
 
@@ -169,15 +172,6 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as De
     def nullOk(expr) :Bool:
         return if (expr == null) { true } else { refine(expr) }
 
-    def annoMethod(m, pattsAreStatic):
-        annoStack.pushScopeFrom(m, 0)
-        var anno := refine(m.getResultGuard())
-        for patt in (m.getPatterns()):
-            refine.matchBind(patt, pattsAreStatic)
-        anno &= refine(m.getBody())
-        annoStack.popScopeOnto(m)
-        return anno
-
     def annoMatcher(m, pattsAreStatic):
         annoStack.pushScopeFrom(m, 0)
         # Same rationale as methods.
@@ -188,7 +182,16 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as De
 
     # Refine.
     var changes :Int := 1
-    bind refine:
+    return bind refine:
+        to annoMethod(meth :Meth, args :List[Bool]) :Bool:
+            annoStack.pushScopeFrom(meth, 0)
+            var anno := refine(meth.getResultGuard())
+            for i => patt in (meth.getPatterns()):
+                refine.matchBind(patt, args[i])
+            anno &= refine(meth.getBody())
+            annoStack.popScopeOnto(meth)
+            return anno
+
         to matchBind(patt, var isStatic :Bool):
             switch (patt.getNodeName()):
                 match =="IgnorePattern":
@@ -356,7 +359,7 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as De
                     # case. On the other hand, an object can still be static
                     # even if its method outputs are dynamic.
                     for m in (script.getMethods()) {
-                        annoMethod(m, false)
+                        refine.annoMethod(m, [false] * m.getPatterns().size())
                     }
                     for m in (script.getMatchers()) {
                         annoMatcher(m, false)
@@ -384,18 +387,49 @@ def staticFixpoint(topExpr :Expr, staticOuters :Set[Str]) :Map[Expr, Bool] as De
                 changes += 1
             return rv
 
-    # Compute the initial split.
-    refine(topExpr)
-    changes := 1
+        to annotate(topExpr :Expr) :Pair[Map[Expr, Bool], Map[Meth, Any]]:
+            "
+            Compute the least-dynamic fixpoint of `topExpr` relative to its
+            `staticOuters`.
+            "
 
-    # Refine until there's nothing left.
-    while (changes > 0):
-        changes := 0
-        refine(topExpr)
-        traceln(`Changes: $changes`)
+            # Seed the initial split.
+            def freeNames := (topExpr.getStaticScope().namesUsed() -
+                              staticOuters)
+            def innerAnnos := [for name in (freeNames)
+                                name => [dynamic, "free in top scope"]]
 
-    # And that's it.
-    return annoStack.snapshot()
+            # Set up the annotation stack.
+            annoStack := makeAnnoStack(outerAnnos | innerAnnos)
+
+            # Compute the initial split.
+            refine(topExpr)
+            changes := 1
+
+            # Refine until there's nothing left.
+            while (changes > 0):
+                changes := 0
+                refine(topExpr)
+                traceln(`Changes: $changes`)
+
+            # And that's it.
+            return annoStack.getAnnos()
+
+        to annotateMethod(meth :Meth, args :List[Bool]) :Pair[Map[Expr, Bool], Map[Meth, Any]]:
+            # Seed the initial split.
+            def freeNames := (meth.getStaticScope().namesUsed() -
+                              staticOuters)
+            def innerAnnos := [for name in (freeNames)
+                                name => [dynamic, "free in top scope"]]
+
+            annoStack := makeAnnoStack(outerAnnos | innerAnnos)
+
+            changes := 1
+            while (changes > 0):
+                changes := 0
+                refine.annoMethod(meth, args)
+
+            return annoStack.getAnnos()
 
 def isLiteral(expr :Expr) :Bool as DeepFrozen:
     return switch (expr.getNodeName()) {
@@ -414,24 +448,29 @@ def allLiteral(exprs :List[Expr]) :Bool as DeepFrozen:
 
 interface Static :DeepFrozen {}
 
-def makeStaticObject(reducer, objExpr) as DeepFrozen:
+def makeStaticObject(makeReducer, _methodKits, evalScope, objExpr) as DeepFrozen:
     def script := objExpr.getScript()
     def methods := [for m in (script.getMethods())
                     [m.getVerb(), m.getPatterns().size()] => m]
 
-    def unfold(m, args, namedArgs):
+    def unfold(meth, args, namedArgs):
+        # def kit := methodKits[meth]()
+        def fixpoint := staticFixpoint(evalScope.getKeys().asSet())
+        def [annos, kits] := fixpoint.annotateMethod(meth,
+                                                     [true] * args.size())
+        def reducer := makeReducer(annos, kits, evalScope)
         return reducer.withScope(fn {
-            traceln(`unfold($m, $args, $namedArgs)`)
-            for i => patt in (m.getPatterns()) {
+            traceln(`unfold($meth, $args, $namedArgs)`)
+            for i => patt in (meth.getPatterns()) {
                 reducer.matchBind(patt, args[i])
             }
-            for namedPatt in (m.getNamedPatterns()) {
+            for namedPatt in (meth.getNamedPatterns()) {
                 # XXX
                 namedPatt
                 namedArgs
             }
-            def body := reducer(m.getBody())
-            def resultGuard := reducer(m.getResultGuard())
+            def body := reducer(meth.getBody())
+            def resultGuard := reducer(meth.getResultGuard())
             if (resultGuard == null) { body } else {
                 m`$resultGuard.coerce($body, null)`
             }
@@ -446,7 +485,7 @@ def makeStaticObject(reducer, objExpr) as DeepFrozen:
                     def patt := astBuilder.FinalPattern(
                         astBuilder.NounExpr(name, null), null, null)
                     def rhs := astBuilder.LiteralExpr(
-                        reducer.lookupValue(name).get().get(), null)
+                        evalScope[name].get().get(), null)
                     m`def $patt := $rhs`
                 }] + [
                 astBuilder.ObjectExpr(
@@ -525,7 +564,11 @@ def pretty(topExpr, exprAnnos :Map[Expr, Bool]) :Str as DeepFrozen:
                 push(") ")
                 p(patt.getPattern())
 
-    bind go(expr :Expr):
+    bind go(expr :NullOk[Expr]):
+        if (expr == null):
+            push("null")
+            return
+
         annoStack.push(exprAnnos.fetch(expr, &false.get))
         switch (expr.getNodeName()):
             match =="LiteralExpr":
@@ -638,7 +681,8 @@ def pretty(topExpr, exprAnnos :Map[Expr, Bool]) :Str as DeepFrozen:
 
     return "".join(pieces)
 
-def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
+def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
+                topValueScope) as DeepFrozen:
     # Exception reification. When an exception is thrown, we copy it into the
     # exception box, and this allows us to not need `unsealException`.
     object noException as DeepFrozen {}
@@ -855,14 +899,41 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                             }
                         }
                     } else {
-                        def ejBody := reducer.withScope(fn {
-                            reducer(expr.getBody())
-                        })
-                        def catchBody := reducer.withScope(fn {
-                            reducer(expr.getCatchBody())
-                        })
-                        astBuilder.EscapeExpr(ejPatt, ejBody, catchPatt, catchBody,
-                                              null)
+                        # We perform ejector analysis here. Note that we only
+                        # perform ejector analysis on dynamic escape-exprs.
+                        # This is because static escape-exprs already
+                        # effectively compute this correctly every time and do
+                        # not benefit from our analysis here, which is
+                        # necessarily a conservative heuristic.
+
+                        # Our analysis aims to remove ejectors which
+                        # can never fire and ejectors which are known to fire
+                        # exactly once.
+                        traceln("escape", expr)
+                        switch (ejPatt.getNodeName()) {
+                            match =="IgnorePattern" {
+                                # Ejector is never bound.
+                                astBuilder.HideExpr(reducer.withScope(fn {
+                                    reducer(expr.getBody())
+                                }), null)
+                            }
+                            match =="FinalPattern" {
+                                traceln("ej", expr)
+                                traceln("body", expr.getBody().getNodeName())
+                                throw("nope")
+                            }
+                            match _ {
+                                # Full fallback.
+                                def ejBody := reducer.withScope(fn {
+                                    reducer(expr.getBody())
+                                })
+                                def catchBody := reducer.withScope(fn {
+                                    reducer(expr.getCatchBody())
+                                })
+                                astBuilder.EscapeExpr(ejPatt, ejBody, catchPatt,
+                                                      catchBody, null)
+                            }
+                        }
                     }
                 }
                 match =="FinallyExpr" {
@@ -952,9 +1023,8 @@ def makeReducer(exprAnnos :Map[Expr, Bool], topValueScope) as DeepFrozen:
                         # is actually suspended at bind time and it only runs
                         # during each unfold. Since we reduce in the order of
                         # operations, we must suspend here.
-                        def obj := makeStaticObject(makeReducer(exprAnnos,
-                                                                evalScope),
-                                                    expr)
+                        def obj := makeStaticObject(makeReducer, methodKits,
+                                                    evalScope, expr)
                         traceln(`Virtualizing static object: $patt`)
                         # traceln(`Scope: $evalScope`)
                         reducer.matchBind(patt, obj)
@@ -1057,9 +1127,10 @@ def mix(expr, baseScope) as DeepFrozen:
         # Has side effects.
         "traceln",
     ].asSet()
-    def exprAnnos := staticFixpoint(expr, staticOuters)
+    def fixpoint := staticFixpoint(staticOuters)
+    def [exprAnnos, methodKits] := fixpoint.annotate(expr)
     traceln("Pretty", pretty(expr, exprAnnos))
-    def reducer := makeReducer(exprAnnos, topValueScope)
+    def reducer := makeReducer(exprAnnos, methodKits, topValueScope)
     def mixed := reducer(expr)
     # traceln("Mixed", mixed)
     def uncalled := mixed.transform(uncallLiterals)
