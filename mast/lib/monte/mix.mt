@@ -472,28 +472,57 @@ def makeStaticObject(makeReducer, _methodKits, evalScope, objExpr) as DeepFrozen
             def body := reducer(meth.getBody())
             def resultGuard := reducer(meth.getResultGuard())
             if (resultGuard == null) { body } else {
-                m`$resultGuard.coerce($body, null)`
+                def n := astBuilder.LiteralExpr(null, null)
+                reducer.call(resultGuard, "coerce", [body, n])
             }
         })
 
     return object staticObject as Static:
+        # XXX we need to actually unfold these methods so that they are fully
+        # reannotated.
         to _sealedDispatch(brand):
             return if (brand == Static):
-                def ss := script.getStaticScope()
-                def body := seq([for name in (ss.namesUsed())
-                                 ? (!safeScope.contains(`&&$name`)) {
-                    def patt := astBuilder.FinalPattern(
-                        astBuilder.NounExpr(name, null), null, null)
-                    def rhs := astBuilder.LiteralExpr(
-                        evalScope[name].get().get(), null)
-                    m`def $patt := $rhs`
-                }] + [
-                astBuilder.ObjectExpr(
-                    objExpr.getDocstring(), objExpr.getName(),
-                    objExpr.getAsExpr(), objExpr.getAuditors(),
-                    script, null)
-                ])
-                astBuilder.HideExpr(body, null)
+                def reducedScript := {
+                    # Since we are residualizing, we need to optimize
+                    # under our method/matcher bindings now instead of
+                    # later.
+                    def fixpoint := staticFixpoint(evalScope.getKeys().asSet())
+                    def [annos, kits] := fixpoint.annotate(objExpr)
+                    def reducer := makeReducer(annos, kits, evalScope)
+                    def methods := [for m in (script.getMethods()) {
+                        reducer.withScope(fn {
+                            # XXX lazy
+                            def body := reducer(m.getBody())
+                            def resultGuard := reducer(m.getResultGuard())
+                            astBuilder."Method"(m.getDocstring(),
+                                                m.getVerb(),
+                                                m.getPatterns(),
+                                                m.getNamedPatterns(),
+                                                resultGuard, body,
+                                                null)
+                        })
+                    }]
+                    # XXX lazy
+                    def matchers := [for m in (script.getMatchers()) m]
+                    astBuilder.Script(null, methods, matchers, null)
+                }
+                object staticTool:
+                    to run():
+                        def ss := reducedScript.getStaticScope()
+                        def body := seq([for name in (ss.namesUsed())
+                                         ? (!safeScope.contains(`&&$name`)) {
+                            def patt := astBuilder.FinalPattern(
+                                astBuilder.NounExpr(name, null), null, null)
+                            def rhs := astBuilder.LiteralExpr(
+                                evalScope[name].get().get(), null)
+                            m`def $patt := $rhs`
+                        }] + [
+                        astBuilder.ObjectExpr(
+                            objExpr.getDocstring(), objExpr.getName(),
+                            objExpr.getAsExpr(), objExpr.getAuditors(),
+                            reducedScript, null)
+                        ])
+                        return astBuilder.HideExpr(body, null)
 
         match [verb, args, namedArgs]:
             def m := methods[[verb, args.size()]]
@@ -778,6 +807,42 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                     def prize := transformer(specimen, ej)
                     reducer.matchBind(patt.getPattern(), prize, => ej)
 
+        to call(receiver :Expr, verb :Str, args :List[Expr],
+                namedArgs :List[Expr], => isStatic := false):
+            # XXX we could unfold maybe
+            # if (r =~ static :Static) {
+            #     def rv := static.unfold(verb, a, na)
+            #     traceln(`unfold($verb, $a, $na) -> $rv`)
+            #     rv
+            # } else {
+            return if (isLiteral(receiver) && allLiteral(args)):
+                def r := receiver.getValue()
+                def a := [for arg in (args) arg.getValue()]
+                def na := [for namedArg in (namedArgs)
+                           namedArg.getKey().getValue() =>
+                           namedArg.getValue().getValue()]
+                try:
+                    def rv := M.call(r, verb, a, na)
+                    traceln(`M.call($r, $verb, $a, $na) -> result $rv`)
+                    makeLit(rv)
+                catch problem:
+                    if (exceptionBox != noException):
+                        traceln(`M.call($r, $verb, $a, $na) -> problem $exceptionBox`)
+                        # Static throw.
+                        def lit := makeLit(exceptionBox)
+                        m`throw($lit)`
+                    else:
+                        # Reraise.
+                        throw(problem)
+                finally:
+                    # Clear the box for next time.
+                    exceptionBox := noException
+            else:
+                if (isStatic):
+                    throw(`reducer.call/4: Call should have been static but was dynamic instead`)
+                astBuilder.MethodCallExpr(receiver, verb, args, namedArgs,
+                                          null)
+
         to run(expr :NullOk[Ast]):
             if (expr == null):
                 return null
@@ -838,39 +903,9 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                     def args := [for arg in (expr.getArgs()) reducer(arg)]
                     def namedArgs := [for namedArg in (expr.getNamedArgs())
                                       reducer(namedArg)]
-                    if (isStatic) {
-                        def r := receiver.getValue()
-                        def a := [for arg in (args) arg.getValue()]
-                        def na := [for namedArg in (namedArgs)
-                                   namedArg.getKey().getValue() =>
-                                   namedArg.getValue().getValue()]
-                        try {
-                            def rv := M.call(r, verb, a, na)
-                            traceln(`M.call($r, $verb, $a, $na) -> result $rv`)
-                            makeLit(rv)
-                        } catch problem {
-                            if (exceptionBox != noException) {
-                                traceln(`M.call($r, $verb, $a, $na) -> problem $exceptionBox`)
-                                # Static throw.
-                                def lit := makeLit(exceptionBox)
-                                m`throw($lit)`
-                            } else {
-                                # Reraise.
-                                throw(problem)
-                            }
-                        } finally {
-                            # Clear the box for next time.
-                            exceptionBox := noException
-                        }
-                    } else {
-                        # XXX we could unfold maybe
-                        # if (r =~ static :Static) {
-                        #     def rv := static.unfold(verb, a, na)
-                        #     traceln(`unfold($verb, $a, $na) -> $rv`)
-                        #     rv
-                        # } else {
-                        astBuilder.MethodCallExpr(receiver, verb, args, namedArgs, null)
-                    }
+                    # And now we leave the rest to the subroutine.
+                    def result := reducer.call(receiver, verb, args,
+                                               namedArgs, => isStatic)
                 }
                 match =="EscapeExpr" {
                     def ejPatt := expr.getEjectorPattern()
@@ -906,10 +941,21 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                         # not benefit from our analysis here, which is
                         # necessarily a conservative heuristic.
 
+                        def fullFallback() {
+                            # Full fallback.
+                            def ejBody := reducer.withScope(fn {
+                                reducer(expr.getBody())
+                            })
+                            def catchBody := reducer.withScope(fn {
+                                reducer(expr.getCatchBody())
+                            })
+                            return astBuilder.EscapeExpr(ejPatt, ejBody, catchPatt, catchBody,
+                                                         null)
+                        }
+
                         # Our analysis aims to remove ejectors which
                         # can never fire and ejectors which are known to fire
                         # exactly once.
-                        traceln("escape", expr)
                         switch (ejPatt.getNodeName()) {
                             match =="IgnorePattern" {
                                 # Ejector is never bound.
@@ -918,21 +964,46 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                                 }), null)
                             }
                             match =="FinalPattern" {
-                                traceln("ej", expr)
-                                traceln("body", expr.getBody().getNodeName())
-                                throw("nope")
+                                def noun := ejPatt.getNoun()
+                                def name := noun.getName()
+                                def body := expr.getBody()
+                                if (body.getStaticScope().namesUsed().contains(name)) {
+                                    # Let's see if we can track down that usage.
+                                    switch (body.getNodeName()) {
+                                        # As with the cases of yesteryear, the case with catches
+                                        # isn't here yet.
+                                        match =="SeqExpr" ? (expr.getCatchPattern() == null) {
+                                            def exprs := body.getExprs()
+                                            # Search for the first spot where we definitely call
+                                            # the ejector. Trim away everything afterward.
+                                            def trimmed := {
+                                                def split := for i => ex in (exprs) {
+                                                    if (ex =~ m`$noun.run(@inner)`) {
+                                                        break [i, inner]
+                                                    }
+                                                }
+                                                if (split =~ [i, inner]) {
+                                                    exprs.slice(0, i).with(inner)
+                                                } else { exprs }
+                                            }
+                                            def newBody := seq(trimmed)
+                                            # If the new body doesn't use the ejector, then we'll
+                                            # discard the ejector altogether.
+                                            if (newBody.getStaticScope().namesUsed().contains(name)) {
+                                                astBuilder.EscapeExpr(ejPatt, newBody, null, null,
+                                                                      null)
+                                            } else { newBody }
+                                        }
+                                        match _ { fullFallback() }
+                                    }
+                                } else {
+                                    # Zero uses, so we can remove all of it.
+                                    astBuilder.HideExpr(reducer.withScope(fn {
+                                        reducer(body)
+                                    }), null)
+                                }
                             }
-                            match _ {
-                                # Full fallback.
-                                def ejBody := reducer.withScope(fn {
-                                    reducer(expr.getBody())
-                                })
-                                def catchBody := reducer.withScope(fn {
-                                    reducer(expr.getCatchBody())
-                                })
-                                astBuilder.EscapeExpr(ejPatt, ejBody, catchPatt,
-                                                      catchBody, null)
-                            }
+                            match _ { fullFallback() }
                         }
                     }
                 }
@@ -1066,7 +1137,7 @@ def uncallLiterals(node, maker, args, span) as DeepFrozen:
     return if (node.getNodeName() == "LiteralExpr") {
         switch (args[0]) {
             match obj :Static {
-                obj._sealedDispatch(Static).transform(uncallLiterals)
+                obj._sealedDispatch(Static)().transform(uncallLiterals)
             }
             match broken ? (Ref.isBroken(broken)) {
                 # Generate the uncall for broken refs by hand.
