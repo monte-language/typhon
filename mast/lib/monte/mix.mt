@@ -473,7 +473,8 @@ def makeStaticObject(makeReducer, _methodKits, evalScope, objExpr) as DeepFrozen
             def resultGuard := reducer(meth.getResultGuard())
             if (resultGuard == null) { body } else {
                 def n := astBuilder.LiteralExpr(null, null)
-                reducer.call(resultGuard, "coerce", [body, n])
+                # XXX namedArgs!
+                reducer.call(resultGuard, "coerce", [body, n], [])
             }
         })
 
@@ -1281,7 +1282,7 @@ def main(_argv :List[Str]) as DeepFrozen:
                 switch(insts[i]) {
                     match =='>' {
                         pointer += 1
-                        while (pointer > tape.size()) { tape.push(0) }
+                        while (pointer >= tape.size()) { tape.push(0) }
                     }
                     match =='<' { pointer -= 1 }
                     match =='+' { tape[pointer] += 1 }
