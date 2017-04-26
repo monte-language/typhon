@@ -1235,6 +1235,10 @@ unittest([for expr in ([
     m`def a := 5; def b := 7; a * b`,
     # Conditionals.
     m`if (true) { 2 } else { 4 }`,
+    # Ejectors.
+    m`escape ej { 1 }`,
+    m`escape ej { ej(7) }`,
+    m`escape ej { ej(7) } catch v { v + 5 }`,
     # Recursive functions.
     m`def fact(x :Int) {
         return if (x < 2) { x } else { x * fact(x - 1) }
