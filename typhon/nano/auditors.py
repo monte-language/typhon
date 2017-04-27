@@ -32,7 +32,7 @@ deepFrozenOuterNames = {
     u"Void": None, u"_auditedBy": None, u"_equalizer": None, u"_loop": None,
     u"_makeBytes": None, u"_makeDouble": None, u"_makeFinalSlot": None,
     u"_makeInt": None, u"_makeList": None, u"_makeMap": None,
-    u"_makeSourceSpan": None, u"_makeStr": None, u"_makeString": None,
+    u"_makeSourceSpan": None, u"_makeStr": None,
     u"_makeVarSlot": None, u"_slotToBinding": None, u"false": None,
     u"null": None, u"throw": None, u"trace": None, u"traceln": None,
     u"true": None,

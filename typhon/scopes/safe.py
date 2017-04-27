@@ -323,7 +323,6 @@ def safeScope():
         u"_makeMap": theMakeMap,
         u"_makeSourceSpan": makeSourceSpan,
         u"_makeStr": theMakeStr,
-        u"_makeString": theMakeStr,
         u"_makeVarSlot": theVarSlotMaker,
         u"_slotToBinding": theSlotBinder,
         u"throw": theThrower,
