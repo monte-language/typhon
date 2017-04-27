@@ -42,14 +42,15 @@ class ComputedInterface(Object):
     An interface generated on the fly for an object.
     """
 
-    _immutable_fields_ = "atoms[*]",
+    _immutable_fields_ = "atoms[*]", "docstring", "fqn"
 
     def __init__(self, obj):
         self.atoms = obj.respondingAtoms()
         self.docstring = obj.docString()
+        self.fqn = obj.fqn
 
     def toString(self):
-        return u"<computed interface>"
+        return u"<interface from %s>" % self.fqn
 
     @method("Any")
     def getDocstring(self):
