@@ -699,7 +699,7 @@ def scopeNames := [
     => null, => Infinity, => NaN, => false, => true,
     => _auditedBy, => _equalizer, => _loop,
     => _makeList, => _makeMap, => _makeInt, => _makeDouble,
-    => _makeSourceSpan, => _makeStr, => _makeString, => _slotToBinding,
+    => _makeSourceSpan, => _makeStr, => _slotToBinding,
     => _makeBytes, => _makeFinalSlot, => _makeVarSlot,
     => throw, => trace, => traceln,
     => _mapEmpty, => _mapExtract,
