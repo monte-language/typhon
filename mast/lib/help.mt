@@ -38,7 +38,7 @@ object help as DeepFrozen:
         def lines := [].diverge()
 
         def iface := specimen._getAllegedInterface()
-        lines.push(`Object: $specimen Object type: $iface`)
+        lines.push(`Object: $specimen Object interface: $iface`)
 
         def doc := iface.getDocstring()
         if (doc != null):
