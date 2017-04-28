@@ -12,14 +12,13 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.rarithmetic import intmask
-
 from typhon.autohelp import autohelp, method
 from typhon.errors import WrongType, userError
 from typhon.objects.collections.helpers import (KeySorter, ValueSorter,
                                                 monteMap)
 from typhon.objects.data import StrObject
 from typhon.objects.ejectors import throwStr
+from typhon.objects.hashing import hashList
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
@@ -92,13 +91,12 @@ class ConstMap(Object):
 
 
         # Nest each item, hand-unwrapping the nested "tuple" of items.
-        x = 0x345678
+        hashes = []
         for k, v in self.objectMap.items():
-            y = 0x345678
-            y = intmask((1000003 * y) ^ k.computeHash(depth - 1))
-            y = intmask((1000003 * y) ^ v.computeHash(depth - 1))
-            x = intmask((1000003 * x) ^ y)
-        return x
+            hashes.append(k.computeHash(depth - 1))
+            hashes.append(v.computeHash(depth - 1))
+        # Based on CPython's numbers.
+        return hashList(1000003, 2 ** 61 - 1, 0x345678, hashes)
 
     @staticmethod
     @profileTyphon("_makeMap.fromPairs/1")

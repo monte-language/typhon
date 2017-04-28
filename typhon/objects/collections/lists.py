@@ -13,7 +13,6 @@
 # under the License.
 
 from rpython.rlib.jit import elidable
-from rpython.rlib.rarithmetic import intmask
 
 from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, userError
@@ -21,6 +20,7 @@ from typhon.errors import UserException
 from typhon.objects.collections.helpers import MonteSorter
 from typhon.objects.data import IntObject, StrObject, unwrapInt
 from typhon.objects.ejectors import Ejector, throwStr
+from typhon.objects.hashing import hashList
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
@@ -339,12 +339,9 @@ class ConstList(Object):
             else:
                 raise userError(u"Must be settled")
 
-        # Use the same sort of hashing as CPython's tuple hash.
-        x = 0x345678
-        for obj in self.objs:
-            y = obj.computeHash(depth - 1)
-            x = intmask((1000003 * x) ^ y)
-        return x
+        # Based on CPython's numbers.
+        hashes = [obj.computeHash(depth - 1) for obj in self.objs]
+        return hashList(1000003, 2 ** 61 - 1, 0x345678, hashes)
 
     def isSettled(self, sofar=None):
         # Check for a usable cached result.

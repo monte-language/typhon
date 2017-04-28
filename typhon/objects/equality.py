@@ -24,6 +24,7 @@ from typhon.objects.collections.maps import ConstMap
 from typhon.objects.constants import TrueObject, FalseObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
+from typhon.objects.hashing import hashList
 from typhon.objects.refs import resolution, isResolved
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
@@ -268,20 +269,20 @@ def samenessHash(obj, depth, fringe, path=None):
 
     # Lists.
     if isinstance(o, ConstList):
-
         oList = unwrapList(o)
-        result = len(oList)
+        hashes = []
         for i, x in enumerate(oList):
             if fringe is None:
                 fr = None
             else:
                 fr = FringePath(i, path)
-            result ^= i ^ samenessHash(x, depth - 1, fringe, path=fr)
-        return result
+            hashes.append(samenessHash(x, depth - 1, fringe, path=fr))
+        return hashList(0x235357, 2 ** 61 - 1, 0, hashes)
 
     # The empty map. (Uncalls contain maps, thus this base case.)
     if isinstance(o, ConstMap) and o.empty():
         return 127
+
     from typhon.objects.proxy import FarRef, DisconnectedRef
     if isinstance(o, FarRef) or isinstance(o, DisconnectedRef):
         return samenessHash(o.handler, depth, fringe, path=path)
@@ -298,6 +299,7 @@ def samenessHash(obj, depth, fringe, path=None):
         return compute_identity_hash(o)
     elif fringe is None:
         raise userError(u"Must be settled")
+
     # Unresolved refs.
     fringe.append(FringeNode(o, path))
     return -1
@@ -377,16 +379,6 @@ class FringePath(object):
         return right is None
 
 
-def hashFringePath(path):
-    val = 0
-    shift = 0
-    while path is not None:
-        val ^= path.position << shift
-        shift = (shift + 4) % 32
-        path = path.next
-    return val
-
-
 class FringeNode(object):
     def __init__(self, obj, path):
         self.identity = obj
@@ -404,7 +396,13 @@ class FringeNode(object):
         return self.path.eq(other.path)
 
     def fringeHash(self):
-        return compute_identity_hash(self.identity) ^ hashFringePath(self.path)
+        path = self.path
+        hashes = []
+        while path is not None:
+            hashes.append(path.position)
+            path = path.next
+        pathHash = hashList(0x235357, 2 ** 61 - 1, 0, hashes)
+        return compute_identity_hash(self.identity) ^ pathHash
 
 
 # Only look at a few levels of the object graph for hash values.
@@ -413,7 +411,6 @@ HASH_DEPTH = 7
 @autohelp
 @audited.DFSelfless
 class TraversalKey(Object):
-
     def __init__(self, ref):
         self.ref = resolution(ref)
         self.fringe = []
@@ -421,9 +418,9 @@ class TraversalKey(Object):
         # Compute a "sameYet" hash, which represents a snapshot of how this
         # key's traversal had resolved at the time of key creation.
         snapHash = samenessHash(self.ref, HASH_DEPTH, self.fringe)
-        for f in self.fringe:
-            snapHash ^= f.fringeHash()
-        self.snapHash = snapHash
+        hashes = [f.fringeHash() for f in self.fringe]
+        hashes.append(snapHash)
+        self.snapHash = hashList(0x235357, 2 ** 61 - 1, 0, hashes)
 
     def toString(self):
         return u"<a traversal key>"

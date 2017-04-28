@@ -32,6 +32,9 @@ class DeepFrozenStamp(Object):
     """
 
     def computeHash(self, depth):
+        # The hashes here skip checking stamps, because we will otherwise
+        # descend into infinite regress. Ditto for every other hash
+        # computation in this module.
         return compute_identity_hash(self)
 
     def auditorStamps(self):

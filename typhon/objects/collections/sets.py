@@ -12,13 +12,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.rarithmetic import intmask
-
 from typhon.autohelp import autohelp, method
 from typhon.errors import WrongType, userError
 from typhon.objects.collections.helpers import monteSet
 from typhon.objects.comparison import Incomparable
 from typhon.objects.data import IntObject, StrObject
+from typhon.objects.hashing import hashList
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
@@ -50,14 +49,10 @@ class ConstSet(Object):
             else:
                 raise userError(u"Must be settled")
 
-
         # Hash as if we were a list, but change our starting seed so that
         # we won't hash exactly equal.
-        x = 0x3456789
-        for obj in self.objectSet.keys():
-            y = obj.computeHash(depth - 1)
-            x = intmask((1000003 * x) ^ y)
-        return x
+        hashes = [obj.computeHash(depth - 1) for obj in self.objectSet.keys()]
+        return hashList(1000003, 2 ** 61 - 1, 0x3456789, hashes)
 
     @method("Void", "Any")
     def _printOn(self, printer):

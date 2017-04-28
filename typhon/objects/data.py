@@ -21,7 +21,7 @@ from rpython.rlib import rgc
 from rpython.rlib.rbigint import BASE10, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
-from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
+from rpython.rlib.rarithmetic import LONG_BIT, ovfcheck
 from rpython.rlib.rstring import StringBuilder, UnicodeBuilder, replace, split
 from rpython.rlib.rstruct.ieee import pack_float
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
@@ -32,6 +32,7 @@ from typhon.errors import WrongType, userError
 from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.comparison import Incomparable
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
+from typhon.objects.hashing import hashInt, hashList
 from typhon.objects.root import Object, audited, runnable
 from typhon.prelude import getGlobalValue
 from typhon.quoting import quoteChar, quoteStr
@@ -80,8 +81,7 @@ class CharObject(Object):
         return quoteChar(self._c)
 
     def computeHash(self, depth):
-        # Don't waste time with the traditional string hash.
-        return ord(self._c)
+        return hashInt(0x12345, ord(self._c))
 
     def optInterface(self):
         return getGlobalValue(u"Char")
@@ -367,8 +367,7 @@ class IntObject(Object):
         return u"%d" % self._i
 
     def computeHash(self, depth):
-        # This is what CPython and RPython do.
-        return self._i
+        return hashInt(0x34567, self._i)
 
     def optInterface(self):
         return getGlobalValue(u"Int")
@@ -1100,17 +1099,12 @@ class StrObject(Object):
         return quoteStr(self._s)
 
     def computeHash(self, depth):
-        # Cribbed from RPython's _hash_string.
-        length = len(self._s)
-        if length == 0:
+        # Based on CPython's numbers.
+        if not self._s:
             return -1
+        hashes = [ord(c) for c in self._s]
         x = ord(self._s[0]) << 7
-        i = 0
-        while i < length:
-            x = intmask((1000003 * x) ^ ord(self._s[i]))
-            i += 1
-        x ^= length
-        return intmask(x)
+        return hashList(1000003, 2 ** 61 - 1, x, hashes)
 
     def sizeOf(self):
         return (rgc.get_rpy_memory_usage(self) +
@@ -1364,17 +1358,12 @@ class BytesObject(Object):
         return bytesToString(self._bs)
 
     def computeHash(self, depth):
-        # Cribbed from RPython's _hash_string.
-        length = len(self._bs)
-        if length == 0:
+        # Based on CPython's numbers.
+        if not self._bs:
             return -1
+        hashes = [ord(c) for c in self._bs]
         x = ord(self._bs[0]) << 7
-        i = 0
-        while i < length:
-            x = intmask((1000003 * x) ^ ord(self._bs[i]))
-            i += 1
-        x ^= length
-        return intmask(x)
+        return hashList(1000003, 2 ** 61 - 1, x, hashes)
 
     def sizeOf(self):
         return (rgc.get_rpy_memory_usage(self) +
