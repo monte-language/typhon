@@ -198,6 +198,13 @@ class TTYSource(StreamSource):
     def isATTY(self):
         return True
 
+    @method("Void", "Bool")
+    def setRawMode(self, rawMode):
+        if rawMode:
+            ruv.TTYSetMode(self._tty, ruv.TTY_MODE_RAW)
+        else:
+            ruv.TTYSetMode(self._tty, ruv.TTY_MODE_NORMAL)
+
 def writeStreamCB(uv_write, status):
     pass
 
