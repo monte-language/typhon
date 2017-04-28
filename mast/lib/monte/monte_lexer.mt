@@ -321,6 +321,8 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             throw.eject(fail, ["End of input in middle of literal", spanAtPoint()])
         else if (currentChar == '\t'):
             throw.eject(fail, ["Quoted tabs must be written as \\t", spanAtPoint()])
+        else if (currentChar == '\x1b'):
+            throw.eject(fail, ["Quoted ESC must be written as \\x1b", spanAtPoint()])
         else:
             def c := currentChar
             advance()
@@ -419,14 +421,16 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         popBrace(closer, fail)
         return composite(closer, null, span)
 
-    def consumeComment():
+    def consumeComment(fail):
         def startCol := colNumber
         while (!['\n', EOF].contains(currentChar)):
+            if (currentChar == '\x1b'):
+                throw.eject(fail, ["ESC characters are not allowed in Monte source.", spanAtPoint()])
             advance()
         def [comment, _] := endToken()
         return composite("#", comment.slice(1), _makeSourceSpan(inputName, true, lineNumber, startCol, lineNumber, colNumber))
 
-    def consumeWhitespaceAndComments():
+    def consumeWhitespaceAndComments(fail):
         var startLine := lineNumber
         var startCol := colNumber
         var spaces := skipSpaces()
@@ -435,7 +439,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             advance()
             spaces := skipSpaces()
             if (currentChar == '#'):
-                queuedTokens.insert(0, consumeComment())
+                queuedTokens.insert(0, consumeComment(fail))
                 startToken()
                 spaces := null
             startLine := lineNumber
@@ -464,7 +468,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         if (cur == '\n'):
             advance()
             if (canStartIndentedBlock):
-                def spaces := consumeWhitespaceAndComments()
+                def spaces := consumeWhitespaceAndComments(fail)
                 if (strict && !inStatementPosition()):
                     checkParenBalance(partialFail)
                     throw.eject(fail,
@@ -482,7 +486,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             else:
                 queuedTokens.insert(0, leaf("EOL"))
                 startToken()
-                def spaces := consumeWhitespaceAndComments()
+                def spaces := consumeWhitespaceAndComments(fail)
                 if (strict && spaces > indentPositionStack.last()):
                     throw.eject(fail, ["Unexpected indent", spanAtPoint()])
                 if (atEnd()):
@@ -684,7 +688,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             return leaf("/")
 
         if (cur == '#'):
-            return consumeComment()
+            return consumeComment(fail)
 
         if (cur == '%'):
             def nex := advance()
