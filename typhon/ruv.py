@@ -715,7 +715,10 @@ TTYSetMode = checking("tty_set_mode", tty_set_mode)
 tty_reset_mode = rffi.llexternal("uv_tty_reset_mode", [], rffi.INT,
                                  compilation_info=eci)
 TTYResetMode = checking("tty_reset_mode", tty_reset_mode)
-
+tty_get_winsize = rffi.llexternal("uv_tty_get_winsize",
+                                  [tty_tp, rffi.INTP, rffi.INTP], rffi.INT,
+                                  compilation_info=eci)
+TTYGetWinSize = checking("tty_get_winsize", tty_get_winsize)
 
 def alloc_tty(loop, fd, readable):
     tty = lltype.malloc(cConfig["tty_t"], flavor="raw", zero=True)

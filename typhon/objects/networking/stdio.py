@@ -5,7 +5,8 @@ from typhon.log import deprecated
 from typhon.objects.files import FileFount, FileDrain
 from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.networking.streamcaps import (FileSink, FileSource,
-                                                  StreamSink, StreamSource)
+                                                  StreamSink, TTYSink,
+                                                  TTYSource)
 from typhon.objects.root import Object, runnable
 from typhon.vats import currentVat
 
@@ -70,7 +71,7 @@ class stdio(Object):
         if kind == ruv.HANDLE_TTY:
             stdin = ruv.alloc_tty(uv_loop, 0, True)
             stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdin), 1)
-            return StreamSource(stream, vat)
+            return TTYSource(stdin, stream, vat)
         else:
             return FileSource(ruv.alloc_fs(), 0, vat)
 
@@ -82,7 +83,7 @@ class stdio(Object):
         if kind == ruv.HANDLE_TTY:
             stdout = ruv.alloc_tty(uv_loop, 1, False)
             stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdout), 1)
-            return StreamSink(stream, vat)
+            return TTYSink(stdout, stream, vat)
         else:
             return FileSink(ruv.alloc_fs(), 1, vat)
 
@@ -94,6 +95,6 @@ class stdio(Object):
         if kind == ruv.HANDLE_TTY:
             stderr = ruv.alloc_tty(uv_loop, 2, False)
             stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stderr), 1)
-            return StreamSink(stream, vat)
+            return TTYSink(stderr, stream, vat)
         else:
             return FileSink(ruv.alloc_fs(), 2, vat)
