@@ -42,6 +42,7 @@ And to act only after enqueueing:
 
     when (sink(obj)) -> { action() }
 """
+from signal import SIGWINCH
 
 from rpython.rlib.rarithmetic import intmask
 from rpython.rtyper.lltypesystem.lltype import scoped_alloc
@@ -54,6 +55,7 @@ from typhon.errors import userError
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject
 from typhon.objects.refs import makePromise
+from typhon.objects.signals import SignalHandle
 from typhon.objects.root import Object
 from typhon.vats import scopedVat
 
@@ -282,6 +284,10 @@ class TTYSink(StreamSink):
             width = intmask(widthp[0])
             height = intmask(heightp[0])
         return ConstList([wrapInt(width), wrapInt(height)])
+
+    @method("Any", "Any")
+    def whenWindowSizeChanges(self, cb):
+        return SignalHandle(SIGWINCH, cb, self._vat)
 
 @autohelp
 class FileSource(Object):
