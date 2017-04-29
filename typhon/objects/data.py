@@ -88,10 +88,22 @@ class CharObject(Object):
 
     @method("Char", "Int")
     def add(self, other):
+        """
+        Add to this object's code point, producing another character.
+
+        'c' + 2 == 'e'
+        """
+
         return self.withOffset(other)
 
     @method("Int")
     def asInteger(self):
+        """
+        The code point for this object.
+
+        'M'.asInteger() == 77
+        """
+
         return ord(self._c)
 
     @method("Str")
@@ -100,34 +112,72 @@ class CharObject(Object):
 
     @method("Str")
     def getCategory(self):
+        """
+        The Unicode category of this object's code point.
+        """
+
         return unicode(unicodedb.category(ord(self._c)))
 
     @method("Char", "Char")
     def max(self, other):
+        """
+        The greater code point of two characters.
+        """
+
         return max(self._c, other)
 
     @method("Char", "Char")
     def min(self, other):
+        """
+        The lesser code point of two characters.
+        """
+
         return min(self._c, other)
 
     @method("Char")
     def next(self):
+        """
+        The next code point.
+
+        'n'.next() == 'o'
+        """
+
         return self.withOffset(1)
 
     @method("Char")
     def previous(self):
+        """
+        The preceding code point.
+        """
+
         return self.withOffset(-1)
 
     @method("Int", "Char")
     def op__cmp(self, other):
+        """
+        General comparison of characters.
+        """
+
         return cmp(self._c, other)
 
     @method("Str")
     def quote(self):
+        """
+        A string quoting this object.
+
+        'q'.quote() == "'q'"
+        """
+
         return quoteChar(self._c)
 
     @method("Char", "Int")
     def subtract(self, other):
+        """
+        Subtract from this object's code point, producing another character.
+
+        'c' - 2 == 'a'
+        """
+
         return self.withOffset(-other)
 
     def withOffset(self, offset):
@@ -450,6 +500,11 @@ class IntObject(Object):
 
     @method("Any", "Any")
     def approxDivide(self, other):
+        """
+        Promote this object to `Double` and perform division with a given
+        divisor, returning the quotient.
+        """
+
         divisor = promoteToDouble(other)
         try:
             return DoubleObject(float(self._i) / divisor)
@@ -765,6 +820,10 @@ class BigInt(Object):
 
     @method("Int")
     def bitLength(self):
+        """
+        The number of bits required to store this object's value.
+        """
+
         return self.bi.bit_length()
 
     @method("BigInt")
@@ -935,20 +994,19 @@ makeSourceSpan = _makeSourceSpan()
 @audited.Transparent
 class SourceSpan(Object):
     """
-    Information about the original location of a span of text. Twines use
-    this to remember where they came from.
+    Information about the original location of a span of text. Twines use this
+    to remember where they came from.
 
     uri: Name of document this text came from.
 
-    isOneToOne: Whether each character in that Twine maps to the
-    corresponding source character position.
+    isOneToOne: Whether each character in that Twine maps to the corresponding
+    source character position.
 
-    startLine, endLine: Line numbers for the beginning and end of the
-    span. Line numbers start at 1.
+    startLine, endLine: Line numbers for the beginning and end of the span.
+    Line numbers start at 1.
 
-    startCol, endCol: Column numbers for the beginning and end of the
-    span. Column numbers start at 0.
-
+    startCol, endCol: Column numbers for the beginning and end of the span.
+    Column numbers start at 0.
     """
 
     def __init__(self, uri, isOneToOne, startLine, startCol,
@@ -963,8 +1021,8 @@ class SourceSpan(Object):
     @method("Any")
     def notOneToOne(self):
         """
-        Return a new SourceSpan for the same text that doesn't claim
-        one-to-one correspondence.
+        Return a SourceSpan for the same text as this object, but which
+        doesn't claim one-to-one correspondence.
         """
         return SourceSpan(self.uri, False,
                           self.startLine, self.startCol,
