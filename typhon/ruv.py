@@ -110,6 +110,7 @@ class CConfig:
     write_t = rffi_platform.Struct("uv_write_t", [])
     tcp_t = rffi_platform.Struct("uv_tcp_t", [("data", rffi.VOIDP)])
     pipe_t = rffi_platform.Struct("uv_pipe_t", [("data", rffi.VOIDP)])
+    signal_t = rffi_platform.Struct("uv_signal_t", [("data", rffi.VOIDP)])
     tty_t = rffi_platform.Struct("uv_tty_t", [("data", rffi.VOIDP)])
     fs_t = rffi_platform.Struct("uv_fs_t",
                                 [("data", rffi.VOIDP),
@@ -142,6 +143,7 @@ shutdown_tp = rffi.lltype.Ptr(cConfig["shutdown_t"])
 write_tp = rffi.lltype.Ptr(cConfig["write_t"])
 tcp_tp = rffi.lltype.Ptr(cConfig["tcp_t"])
 pipe_tp = rffi.lltype.Ptr(cConfig["pipe_t"])
+signal_tp = rffi.lltype.Ptr(cConfig["signal_t"])
 tty_tp = rffi.lltype.Ptr(cConfig["tty_t"])
 fs_tp = rffi.lltype.Ptr(cConfig["fs_t"])
 gai_tp = rffi.lltype.Ptr(cConfig["getaddrinfo_t"])
@@ -244,6 +246,7 @@ stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
 stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
 stashProcess, unstashProcess, unstashingProcess = stashFor("process",
                                                            process_tp)
+stashSignal, unstashSignal, unstashingSignal = stashFor("signal", signal_tp)
 
 
 @specialize.ll()
@@ -715,7 +718,10 @@ TTYSetMode = checking("tty_set_mode", tty_set_mode)
 tty_reset_mode = rffi.llexternal("uv_tty_reset_mode", [], rffi.INT,
                                  compilation_info=eci)
 TTYResetMode = checking("tty_reset_mode", tty_reset_mode)
-
+tty_get_winsize = rffi.llexternal("uv_tty_get_winsize",
+                                  [tty_tp, rffi.INTP, rffi.INTP], rffi.INT,
+                                  compilation_info=eci)
+TTYGetWinSize = checking("tty_get_winsize", tty_get_winsize)
 
 def alloc_tty(loop, fd, readable):
     tty = lltype.malloc(cConfig["tty_t"], flavor="raw", zero=True)
@@ -805,6 +811,24 @@ def IP6Name(sockaddr):
     with rffi.scoped_alloc_buffer(size) as buf:
         check("ip6_name", ip6_name(sockaddr, buf.raw, size))
         return buf.str(size).split('\x00', 1)[0]
+
+signal_cb = rffi.CCallback([signal_tp, rffi.INT], lltype.Void)
+signal_init = rffi.llexternal("uv_signal_init", [loop_tp, signal_tp],
+                              rffi.INT, compilation_info=eci)
+SignalInit = checking("signal_init", signal_init)
+signal_start = rffi.llexternal("uv_signal_start",
+                               [signal_tp, signal_cb, rffi.INT],
+                               rffi.INT, compilation_info=eci)
+SignalStart = checking("signal_start", signal_start)
+signal_stop = rffi.llexternal("uv_signal_stop", [signal_tp],
+                              rffi.INT, compilation_info=eci)
+SignalStop = checking("signal_stop", signal_stop)
+
+
+def alloc_signal(loop):
+    signal = lltype.malloc(cConfig["signal_t"], flavor="raw", zero=True)
+    check("signal_init", signal_init(loop, signal))
+    return signal
 
 
 def cleanup():

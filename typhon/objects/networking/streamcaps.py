@@ -42,10 +42,11 @@ And to act only after enqueueing:
 
     when (sink(obj)) -> { action() }
 """
+from signal import SIGWINCH
 
 from rpython.rlib.rarithmetic import intmask
 from rpython.rtyper.lltypesystem.lltype import scoped_alloc
-from rpython.rtyper.lltypesystem.rffi import charpsize2str
+from rpython.rtyper.lltypesystem.rffi import charpsize2str, INTP
 
 from typhon import ruv
 from typhon.atoms import getAtom
@@ -54,6 +55,7 @@ from typhon.errors import userError
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject
 from typhon.objects.refs import makePromise
+from typhon.objects.signals import SignalHandle
 from typhon.objects.root import Object
 from typhon.vats import scopedVat
 
@@ -180,6 +182,30 @@ class StreamSource(Object):
         ruv.readStart(self._stream._stream, ruv.allocCB, readStreamCB)
         return p
 
+    @method("Bool")
+    def isATTY(self):
+        return False
+
+@autohelp
+class TTYSource(StreamSource):
+    """
+    A stream source specifically for terminals.
+    """
+
+    def __init__(self, tty, stream, vat):
+        self._tty = tty
+        StreamSource.__init__(self, stream, vat)
+
+    @method("Bool")
+    def isATTY(self):
+        return True
+
+    @method("Void", "Bool")
+    def setRawMode(self, rawMode):
+        if rawMode:
+            ruv.TTYSetMode(self._tty, ruv.TTY_MODE_RAW)
+        else:
+            ruv.TTYSetMode(self._tty, ruv.TTY_MODE_NORMAL)
 
 def writeStreamCB(uv_write, status):
     pass
@@ -219,6 +245,9 @@ class StreamSink(Object):
     def abort(self, problem):
         self._cleanup()
 
+    @method("Bool")
+    def isATTY(self):
+        return False
 
 def readFileCB(fs):
     size = intmask(fs.c_result)
@@ -234,6 +263,31 @@ def readFileCB(fs):
             else:
                 # EOF.
                 source.complete()
+
+@autohelp
+class TTYSink(StreamSink):
+    """
+    A stream sink for terminals.
+    """
+
+    def __init__(self, tty, stream, vat):
+        self._tty = tty
+        StreamSink.__init__(self, stream, vat)
+
+    @method("Any")
+    def getWindowSize(self):
+        from typhon.objects.data import wrapInt
+        from typhon.objects.collections.lists import ConstList
+        with scoped_alloc(INTP.TO, 1) as widthp, \
+                scoped_alloc(INTP.TO, 1) as heightp:
+            ruv.TTYGetWinSize(self._tty, widthp, heightp)
+            width = intmask(widthp[0])
+            height = intmask(heightp[0])
+        return ConstList([wrapInt(width), wrapInt(height)])
+
+    @method("Any", "Any")
+    def whenWindowSizeChanges(self, cb):
+        return SignalHandle(SIGWINCH, cb, self._vat)
 
 @autohelp
 class FileSource(Object):
@@ -294,6 +348,9 @@ class FileSource(Object):
                        readFileCB)
         return p
 
+    @method("Bool")
+    def isATTY(self):
+        return False
 
 def writeFileCB(fs):
     try:
@@ -345,3 +402,7 @@ class FileSink(Object):
     @method.py("Void", "Any")
     def abort(self, problem):
         self._cleanup()
+
+    @method("Bool")
+    def isATTY(self):
+        return False
