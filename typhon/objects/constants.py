@@ -14,7 +14,7 @@
 # under the License.
 
 from typhon.autohelp import autohelp, method
-from typhon.errors import userError
+from typhon.errors import WrongType
 from typhon.objects.root import Object, audited
 from typhon.prelude import getGlobalValue
 
@@ -50,30 +50,58 @@ class _TrueObject(Object):
 
     @method("Bool", "Bool", _verb="and")
     def _and(self, other):
+        """
+        Logical conjunction; p ∧ q.
+        """
+
         return other
 
     @method("Bool", "Bool")
     def butNot(self, other):
+        """
+        Material nonimplication; p ↛ q.
+        """
+
         return not other
 
     @method("Bool", _verb="not")
     def _not(self):
+        """
+        Negation; ¬p.
+        """
+
         return False
 
     @method("Int", "Bool")
     def op__cmp(self, other):
+        """
+        Logical bicondition; p ↔ q.
+        """
+
         return True - other
 
     @method("Bool", "Bool", _verb="or")
     def _or(self, _):
+        """
+        Logical disjunction; p ∨ q.
+        """
+
         return True
 
     @method("Any", "Any", "Any")
     def pick(self, left, _):
+        """
+        Choose between two options based on this object's truth value.
+        """
+
         return left
 
     @method("Bool", "Bool")
     def xor(self, other):
+        """
+        Exclusive disjunction; p ↮ q.
+        """
+
         return not other
 
     def isTrue(self):
@@ -139,7 +167,7 @@ def unwrapBool(o):
         return True
     if b is FalseObject:
         return False
-    raise userError(u"Not a boolean!")
+    raise WrongType(u"Not a boolean!")
 
 def isBool(obj):
     from typhon.objects.refs import resolution
