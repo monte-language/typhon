@@ -73,7 +73,7 @@ def isBroken(o):
 @audited.DF
 class RefOps(Object):
     """
-    Ref management and utilities.
+    Reference ("ref") management and utilities.
     """
 
     def toString(self):
@@ -92,6 +92,10 @@ class RefOps(Object):
 
     @method("Str", "Any")
     def state(self, o):
+        """
+        Determine the resolution state of an object.
+        """
+
         if isinstance(o, Promise):
             s = o.state()
         else:
@@ -100,11 +104,19 @@ class RefOps(Object):
 
     @method("List", guard="Any")
     def promise(self, guard=None):
+        """
+        Create a [promise, resolver] pair.
+        """
+
         p, r = makePromise(guard=guard)
         return [p, r]
 
     @method("Any", "Any")
     def broken(self, problem):
+        """
+        Return a broken ref with a description of a problem.
+        """
+
         return UnconnectedRef(problem)
 
     def optBroken(self, optProblem):
@@ -115,6 +127,12 @@ class RefOps(Object):
 
     @method.py("Bool", "Any")
     def isNear(self, ref):
+        """
+        Whether an object is near.
+
+        Refs that are resolved to near objects are also near.
+        """
+
         if isinstance(ref, Promise):
             return ref.state() is NEAR
         else:
@@ -122,6 +140,10 @@ class RefOps(Object):
 
     @method.py("Bool", "Any")
     def isEventual(self, ref):
+        """
+        Whether an object is an eventual ref.
+        """
+
         if isinstance(ref, Promise):
             return ref.state() is EVENTUAL
         else:
@@ -129,10 +151,18 @@ class RefOps(Object):
 
     @method("Bool", "Any")
     def isBroken(self, ref):
+        """
+        Whether an object is a broken ref.
+        """
+
         return isBroken(ref)
 
     @method("Bool", "Any")
     def isResolved(self, ref):
+        """
+        Whether an object is resolved.
+        """
+
         return isResolved(ref)
 
     @method("Any", "Any")
@@ -147,6 +177,10 @@ class RefOps(Object):
 
     @method("Bool", "Any")
     def isFar(self, ref):
+        """
+        Whether an object is a far ref.
+        """
+
         return self.isEventual(ref) and isResolved(ref)
 
     @method("Any", "Any", "Any")
@@ -188,14 +222,30 @@ class RefOps(Object):
 
     @method("Bool", "Any")
     def isDeepFrozen(self, o):
+        """
+        Whether an object has the `DeepFrozen` property.
+        """
+
         return o.auditedBy(deepFrozenStamp)
 
     @method.py("Bool", "Any")
     def isSelfless(self, o):
+        """
+        Whether an object has the `Selfless` property.
+        """
+
         return o.auditedBy(selfless)
 
     @method("Bool", "Any")
     def isSelfish(self, o):
+        """
+        Whether an object is "selfish"; that is, whether it does not have the
+        `Selfless` property.
+
+        Refs that are not near cannot be examined for selfishness; they are
+        too far away.
+        """
+
         return self.isNear(o) and not self.isSelfless(o)
 
 
