@@ -545,7 +545,10 @@ class IntObject(Object):
 
     @method("Int", "Int")
     def mod(self, modulus):
-        return self._i % modulus
+        try:
+            return self._i % modulus
+        except ZeroDivisionError:
+            raise userError(u"mod/1: Integer division by zero")
 
     @method("Double", "Double", _verb="multiply")
     def multiplyDouble(self, other):
@@ -865,11 +868,17 @@ class BigInt(Object):
 
     @method("BigInt", "BigInt")
     def mod(self, modulus):
-        return self.bi.mod(modulus)
+        try:
+            return self.bi.mod(modulus)
+        except ZeroDivisionError:
+            raise userError(u"mod/1: Integer division by zero")
 
     @method("BigInt", "Int", _verb="mod")
     def modInt(self, modulus):
-        return self.bi.int_mod(modulus)
+        try:
+            return self.bi.int_mod(modulus)
+        except ZeroDivisionError:
+            raise userError(u"mod/1: Integer division by zero")
 
     @method("Double", "Double", _verb="multiply")
     def multiplyDouble(self, other):
