@@ -470,7 +470,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
             if (canStartIndentedBlock):
                 def spaces := consumeWhitespaceAndComments(fail)
                 if (strict && !inStatementPosition()):
-                    checkParenBalance(partialFail)
+                    checkParenBalance(fn msg { throw.eject(partialFail, makeParseError(msg)) })
                     throw.eject(fail,
                         ["Indented blocks only allowed in statement position", spanAtPoint()])
                 if (spaces > indentPositionStack.last()):
