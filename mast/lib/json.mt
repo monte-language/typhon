@@ -1,5 +1,15 @@
 import "unittest" =~ [=> unittest]
-exports (JSON, ::"json``")
+import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
+import "lib/streams" =~ [=> alterSink :DeepFrozen, => alterSource :DeepFrozen,
+    => collectStr :DeepFrozen,
+]
+exports (JSON, ::"json``", main)
+
+# The JSON mini-language for data serialization.
+# This module contains the following kit:
+# * JSON: A codec decoding JSON text to plain Monte values
+# * json``: A QP for JSON text
+# * main: A basic tool for testing validity of and pretty-printing JSON text
 
 object valueHoleMarker as DeepFrozen:
     pass
@@ -470,3 +480,21 @@ for specimen => value in (encoderSamples):
     def testJSONEncode(assert):
         assert.equal(JSON.encode(specimen, null), value)
     unittest([testJSONEncode])
+
+def main(_, => stdio) as DeepFrozen:
+    # Buffer it all; we don't really support incremental parsing yet.
+    def stdin := alterSource.decodeWith(UTF8, stdio.stdin())
+    def stdout := alterSink.encodeWith(UTF8, stdio.stdout())
+    def input := collectStr(stdin)
+    return when (input) ->
+        stdout<-(`1 $input$\n`)
+        escape ej:
+            def json := JSON.decode(input, ej)
+            stdout<-(`2 $json$\n`)
+            stdout<-(M.toQuote(json))
+            stdout<-("\n")
+            when (stdout<-complete()) -> { 0 }
+        catch problem:
+            when (stdout<-(`Couldn't decode JSON: $problem$\n`)) -> { 1 }
+    catch problem:
+        when (stdout<-(`Uh oh, $problem$\n`)) -> { 1 }
