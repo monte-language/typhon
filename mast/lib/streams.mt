@@ -8,6 +8,7 @@ exports (
     makePumpPair,
     endOfStream, EOSOk,
     flow, fuse,
+    collectStr,
     alterSink, alterSource,
 )
 
@@ -42,6 +43,8 @@ object makeSink as DeepFrozen:
     "A maker of several types of sinks."
 
     to asList() :Pair[Vow[List], Sink]:
+        "Collect data into a List."
+
         def l := [].diverge()
         def [p, r] := Ref.promise()
 
@@ -57,6 +60,13 @@ object makeSink as DeepFrozen:
 
         return [p, listSink]
 
+    to asStr() :Pair[Vow[Str], Sink]:
+        "Collect Strs and concatenate them into a single string."
+
+        # Reuse the list machinery.
+        def [p, listSink] := makeSink.asList()
+        return [when (p) -> { "".join(p) }, listSink]
+
 def testMakeSinkAsList(assert):
     def [l, sink] := makeSink.asList()
     return when (sink(1), sink(2), sink(3)) ->
@@ -69,9 +79,16 @@ def testMakeSinkAsListAbort(assert):
         when (sink.abort("Testing")) ->
             assert.willBreak(l)
 
+def testMakeSinkAsStr(assert):
+    def [s, sink] := makeSink.asStr()
+    return when (sink("suit"), sink("case")) ->
+        when (sink.complete()) ->
+            assert.willEqual(s, "suitcase")
+
 unittest([
     testMakeSinkAsList,
     testMakeSinkAsListAbort,
+    testMakeSinkAsStr,
 ])
 
 object makeSource as DeepFrozen:
@@ -164,6 +181,28 @@ unittest([
     testFlow,
     testFlowAbort,
     testFlowFail,
+])
+
+def collectStr(source) :Vow[Str] as DeepFrozen:
+    "Collect a single Str from a source of Strs."
+
+    def [s, sink] := makeSink.asStr()
+    return when (flow(source, sink)) -> { s }
+
+def testCollectStr(assert):
+    var i :Int := 0
+    def source(sink):
+        i += 1
+        if (i > 3):
+            sink.complete()
+        else:
+            sink(`$i`)
+    def s := collectStr(source)
+    when (s) ->
+        assert.equal(s, "123")
+
+unittest([
+    testCollectStr,
 ])
 
 object endOfStream as DeepFrozen:
