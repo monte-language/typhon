@@ -95,10 +95,10 @@ def makeAnnoStack(initialSplit :Map) as DeepFrozen:
                 }
             }
             return if (name =~ via (frame.fetch) [dynamic, oldReason]) {
-                traceln(`Name $name can't be lifted for $reason because it was already lifted for $oldReason`)
+                # traceln(`Name $name can't be lifted for $reason because it was already lifted for $oldReason`)
                 false
             } else {
-                traceln(`Lifted dynamic $name for $reason`)
+                # traceln(`Lifted dynamic $name for $reason`)
                 frame[name] := [dynamic, reason]
                 true
             }
@@ -410,7 +410,7 @@ def staticFixpoint(staticOuters :Set[Str]) as DeepFrozen:
             while (changes > 0):
                 changes := 0
                 refine(topExpr)
-                traceln(`Changes: $changes`)
+                # traceln(`Changes: $changes`)
 
             # And that's it.
             return annoStack.getAnnos()
@@ -460,7 +460,7 @@ def makeStaticObject(makeReducer, _methodKits, evalScope, objExpr) as DeepFrozen
                                                      [true] * args.size())
         def reducer := makeReducer(annos, kits, evalScope)
         return reducer.withScope(fn {
-            traceln(`unfold($meth, $args, $namedArgs)`)
+            # traceln(`unfold($meth, $args, $namedArgs)`)
             for i => patt in (meth.getPatterns()) {
                 reducer.matchBind(patt, args[i])
             }
@@ -719,11 +719,11 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
     var exceptionBox := noException
     object throwStatic:
         to run(ex):
-            traceln(`throw($ex)`)
+            # traceln(`throw($ex)`)
             exceptionBox := ex
             throw(ex)
         to eject(ej, ex):
-            traceln(`throw.eject($ej, $ex)`)
+            # traceln(`throw.eject($ej, $ex)`)
             exceptionBox := ex
             throw.eject(ej, ex)
     def staticScope := [
@@ -824,11 +824,11 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                            namedArg.getValue().getValue()]
                 try:
                     def rv := M.call(r, verb, a, na)
-                    traceln(`M.call($r, $verb, $a, $na) -> result $rv`)
+                    # traceln(`M.call($r, $verb, $a, $na) -> result $rv`)
                     makeLit(rv)
                 catch problem:
                     if (exceptionBox != noException):
-                        traceln(`M.call($r, $verb, $a, $na) -> problem $exceptionBox`)
+                        # traceln(`M.call($r, $verb, $a, $na) -> problem $exceptionBox`)
                         # Static throw.
                         def lit := makeLit(exceptionBox)
                         m`throw($lit)`
@@ -859,7 +859,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                     if (isStatic) {
                         def name := expr.getNoun().getName()
                         def binding := reducer.lookupValue(name)
-                        traceln(`Static binding: &&$name := $binding`)
+                        # traceln(`Static binding: &&$name := $binding`)
                         makeLit(binding)
                     } else { expr }
                 }
@@ -867,7 +867,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                     if (isStatic) {
                         def name := expr.getName()
                         def noun := reducer.lookupValue(name).get().get()
-                        traceln(`Static noun: &&$name := $noun`)
+                        # traceln(`Static noun: &&$name := $noun`)
                         makeLit(noun)
                     } else { expr }
                 }
@@ -878,7 +878,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                         def target := lhs.getName()
                         def binding := reducer.lookupValue(target)
                         def value := rhs.getValue()
-                        traceln(`Static assign: $target := $value`)
+                        # traceln(`Static assign: $target := $value`)
                         binding.get().put(value)
                         rhs
                     } else { astBuilder.AssignExpr(lhs, rhs, null) }
@@ -888,7 +888,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                     def ex := reducer(expr.getExit())
                     var rhs := reducer(expr.getExpr())
                     if (isStatic) {
-                        traceln(`Static def: def $patt exit $ex := $rhs`)
+                        # traceln(`Static def: def $patt exit $ex := $rhs`)
                         reducer.matchBind(patt, rhs.getValue(),
                                           "ej" => maybeValue(ex))
                         # And the return value of a DefExpr is the RHS.
@@ -1097,7 +1097,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                         # operations, we must suspend here.
                         def obj := makeStaticObject(makeReducer, methodKits,
                                                     evalScope, expr)
-                        traceln(`Virtualizing static object: $patt`)
+                        # traceln(`Virtualizing static object: $patt`)
                         # traceln(`Scope: $evalScope`)
                         reducer.matchBind(patt, obj)
                         makeLit(obj)
@@ -1201,12 +1201,12 @@ def mix(expr, baseScope) as DeepFrozen:
     ].asSet()
     def fixpoint := staticFixpoint(staticOuters)
     def [exprAnnos, methodKits] := fixpoint.annotate(expr)
-    traceln("Pretty", pretty(expr, exprAnnos))
+    # traceln("Pretty", pretty(expr, exprAnnos))
     def reducer := makeReducer(exprAnnos, methodKits, topValueScope)
     def mixed := reducer(expr)
     # traceln("Mixed", mixed)
     def uncalled := mixed.transform(uncallLiterals)
-    traceln("Uncalled", uncalled)
+    # traceln("Uncalled", uncalled)
     return uncalled
 
 def mixSafeScope(expr) as DeepFrozen:
