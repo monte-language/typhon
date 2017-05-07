@@ -87,7 +87,12 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             throw.eject(fail,
                 [`expected '(' for start of parenthesized expression, got ${M.toQuote(open)}`,
                  openSpan])
+        # We allow EOLs here in order to permit long non-seq-exprs to have
+        # their own long line to themselves.
+        acceptEOLs()
         def rv := expr(fail)
+        # Here too, so that parens don't have to be cuddled Lisp-style.
+        acceptEOLs()
         def [close, _, closeSpan] := advance(fail)
         if (close != ")"):
             position -= 1
@@ -1067,13 +1072,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             if (considerTag("for", ej)):
                 def [k, v, it] := forExprHead(ej)
                 def filt := if (considerTag("?", ej)) {
-                    # Accepts EOLs!?
-                    acceptTag("(", ej)
-                    acceptEOLs()
-                    def e := expr(ej)
-                    acceptEOLs()
-                    acceptTag(")", ej)
-                    e
+                    acceptParenExpr(ej)
                 } else {
                     null
                 }
