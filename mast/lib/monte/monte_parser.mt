@@ -56,7 +56,9 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         def specname := t[0]
         if (specname != tagname):
             position -= 1
-            throw.eject(fail, [`expected $tagname, got $specname`, t[2]])
+            throw.eject(fail,
+                [`expected ${M.toQuote(tagname)}, got ${M.toQuote(specname)}`,
+                 t[2]])
         return t
 
     def acceptEOLs():
@@ -67,6 +69,32 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             if (!["EOL", "#"].contains(t[0])):
                 return
             position += 1
+
+    # Forward-declared really early in order to be usable in combinators.
+    def expr
+
+    def acceptParenExpr(fail):
+        "
+        Accept a parenthesized expression, or fail.
+
+        The expression will unconditionally be bracketed by a pair of
+        parentheses.
+        "
+
+        def [open, _, openSpan] := advance(fail)
+        if (open != "("):
+            position -= 1
+            throw.eject(fail,
+                [`expected '(' for start of parenthesized expression, got ${M.toQuote(open)}`,
+                 openSpan])
+        def rv := expr(fail)
+        def [close, _, closeSpan] := advance(fail)
+        if (close != ")"):
+            position -= 1
+            throw.eject(fail,
+                [`expected ')' for end of parenthesized expression, got ${M.toQuote(close)}`,
+                 closeSpan])
+        return rv
 
     def peek():
         return if (position + 1 >= tokens.size()):
@@ -158,7 +186,6 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
         return [items.snapshot(), isMap]
 
-    def expr
     def order
     def comp
     def blockExpr
@@ -213,10 +240,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
            else:
                n
        else:
-           acceptTag("(", ej)
-           def e := expr(ej)
-           acceptTag(")", ej)
-           e
+           acceptParenExpr(ej)
 
     def nounAndName(ej):
         return if (peekTag() == VALUE_HOLE):
@@ -359,9 +383,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             builder.IgnorePattern(g, spanFrom(spanStart))
         else if (nex == "via"):
             advance(ej)
-            acceptTag("(", ej)
-            def e := expr(ej)
-            acceptTag(")", ej)
+            def e := acceptParenExpr(ej)
             builder.ViaPattern(e, pattern(ej), spanFrom(spanStart))
         else if (nex == "["):
             advance(ej)
@@ -385,9 +407,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         def spanStart := spanHere()
         def p := _pattern(ej)
         return if (considerTag("?", ej)):
-            acceptTag("(", ej)
-            def e := expr(ej)
-            acceptTag(")", ej)
+            def e := acceptParenExpr(ej)
             builder.SuchThatPattern(p, e, spanFrom(spanStart))
         else:
             p
@@ -732,9 +752,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         return if (tag == "if"):
             def spanStart := spanHere()
             advance(ej)
-            acceptTag("(", giveUp)
-            def test := expr(ej)
-            acceptTag(")", giveUp)
+            def test := acceptParenExpr(ej)
             if (indent):
                 blockLookahead(tryAgain)
             def consq := block(indent, ej)
@@ -787,9 +805,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         else if (tag == "switch"):
             def spanStart := spanHere()
             advance(ej)
-            acceptTag("(", ej)
-            def spec := expr(ej)
-            acceptTag(")", ej)
+            def spec := acceptParenExpr(ej)
             if (indent):
                 blockLookahead(tryAgain)
             builder.SwitchExpr(
@@ -822,9 +838,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         else if (tag == "while"):
             def spanStart := spanHere()
             advance(ej)
-            acceptTag("(", ej)
-            def test := expr(ej)
-            acceptTag(")", ej)
+            def test := acceptParenExpr(ej)
             if (indent):
                 blockLookahead(tryAgain)
             def whileblock := block(indent, ej)
@@ -1041,6 +1055,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             if (considerTag("for", ej)):
                 def [k, v, it] := forExprHead(ej)
                 def filt := if (considerTag("?", ej)) {
+                    # Accepts EOLs!?
                     acceptTag("(", ej)
                     acceptEOLs()
                     def e := expr(ej)
