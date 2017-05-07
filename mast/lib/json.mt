@@ -33,20 +33,34 @@ def specialEncodeChars :Map[Char, Str] := [
 
 def makeStream(s :Str) as DeepFrozen:
     var index :Int := 0
+
+    # Location information for lexer errors.
+    var line :Int := 0
+    var column :Int := 0
+
     return object stream:
+        to pos():
+            return [line, column]
+
         to next():
             def rv := s[index]
             index += 1
+            if (rv == '\n'):
+                line += 1
+                column := 0
+            else:
+                column += 1
             return rv
 
         to peek():
             return s[index]
 
         to accept(c :Char):
-            return if (s[index] == c) {index += 1; true} else {false}
+            return if (s[index] == c) {stream.next(); true} else {false}
 
-        to fastForward(count):
-            index += count
+        to require(c :Char, ej):
+            if (!stream.accept(c)):
+                throw.eject(ej, `$line:$column: Required char ${M.toQuote(c)}`)
 
         to finished() :Bool:
             return index >= s.size()
@@ -86,32 +100,41 @@ def makeLexer(ej) as DeepFrozen:
 
     return object lexer:
         to next(stream):
+            def pos := stream.pos()
+
             switch (stream.next()):
                 match ==' ':
                     pass
                 match =='\n':
                     pass
                 match =='{':
-                    tokens.push('{')
+                    tokens.push(['{', pos])
                 match =='}':
-                    tokens.push('}')
+                    tokens.push(['}', pos])
                 match ==',':
-                    tokens.push(',')
+                    tokens.push([',', pos])
                 match ==':':
-                    tokens.push(':')
+                    tokens.push([':', pos])
                 match =='[':
-                    tokens.push('[')
+                    tokens.push(['[', pos])
                 match ==']':
-                    tokens.push(']')
+                    tokens.push([']', pos])
                 match =='t':
-                    tokens.push(true)
-                    stream.fastForward(3)
+                    stream.require('r', ej)
+                    stream.require('u', ej)
+                    stream.require('e', ej)
+                    tokens.push([true, pos])
                 match =='f':
-                    tokens.push(false)
-                    stream.fastForward(4)
+                    stream.require('a', ej)
+                    stream.require('l', ej)
+                    stream.require('s', ej)
+                    stream.require('e', ej)
+                    tokens.push([false, pos])
                 match =='n':
-                    tokens.push(null)
-                    stream.fastForward(3)
+                    stream.require('u', ej)
+                    stream.require('l', ej)
+                    stream.require('l', ej)
+                    tokens.push([null, pos])
 
                 match =='"':
                     lexer.nextString(stream)
@@ -157,13 +180,15 @@ def makeLexer(ej) as DeepFrozen:
                         # double is dependent on whether the LHS was converted
                         # to a double by matching the fraction.
                         i *= 10 ** exponent
-                    tokens.push(i)
+                    tokens.push([i, pos])
 
                 match c:
-                    throw.eject(ej, `Unknown character $c`)
+                    def [line, column] := stream.pos()
+                    throw.eject(ej, `$line:$column: Unknown character $c`)
 
         to nextString(stream):
             def buf := [].diverge()
+            def pos := stream.pos()
 
             while (true):
                 switch (stream.next()):
@@ -187,7 +212,7 @@ def makeLexer(ej) as DeepFrozen:
                     match c:
                         buf.push(c.asString())
 
-            tokens.push("".join(buf))
+            tokens.push(["".join(buf), pos])
 
         to getTokens():
             return tokens.snapshot()
@@ -197,10 +222,10 @@ def makeLexer(ej) as DeepFrozen:
                 lexer.next(stream)
 
         to markValueHole(index):
-            tokens.push([valueHoleMarker, index])
+            tokens.push([[valueHoleMarker, index], [0, 0]])
 
         to markPatternHole(index):
-            tokens.push([patternHoleMarker, index])
+            tokens.push([[patternHoleMarker, index], [0, 0]])
 
 
 def parse(var tokens :List, ej) as DeepFrozen:
@@ -220,41 +245,53 @@ def parse(var tokens :List, ej) as DeepFrozen:
                 match _:
                     throw.eject(ej, "Congrats, you broke the JSON parser.")
 
+    def tokenPos(token):
+        return def viaTokenOf(specimen, ej):
+            def [[==token, pos]] + rest exit ej := specimen
+            return [pos, rest]
+
+    def token(t):
+        return def viaTokenOf(specimen, ej):
+            def [[==t, _]] + rest exit ej := specimen
+            return rest
+
     while (tokens.size() > 0):
         switch (tokens):
-            match [==','] + rest:
+            match via (token(',')) rest:
                 tokens := rest
-            match [=='{'] + rest:
+            match via (token('{')) rest:
                 stack.push(["object", [].asMap().diverge(), key])
                 tokens := rest
-            match [=='}'] + rest:
+            match via (tokenPos('}')) [pos, rest]:
                 if (stack.size() == 0):
-                    throw.eject(ej, "Stack underflow (unbalanced object)")
+                    def [l, c] := pos
+                    throw.eject(ej, `$l:$c: Stack underflow (unbalanced object)`)
                 def [=="object", obj, k] exit ej := stack.pop().snapshot()
                 key := k
                 pushValue(obj.snapshot())
                 tokens := rest
-            match [=='['] + rest:
+            match via (token('[')) rest:
                 stack.push(["array", [].diverge(), key])
                 tokens := rest
-            match [==']'] + rest:
+            match via (tokenPos(']')) [pos, rest]:
                 if (stack.size() == 0):
-                    throw.eject(ej, "Stack underflow (unbalanced array)")
+                    def [l, c] := pos
+                    throw.eject(ej, `$l:$c: Stack underflow (unbalanced array)`)
                 def [=="array", arr, k] exit ej := stack.pop().snapshot()
                 key := k
                 pushValue(arr.snapshot())
                 tokens := rest
-            match [k, ==':'] + rest:
+            match [[k, _], [==':', _]] + rest:
                 key := k
                 tokens := rest
-            match [v] + rest:
+            match [[v, _]] + rest:
                 pushValue(v)
                 key := null
                 tokens := rest
     if (stack.size() != 0):
-        throw.eject(ej, "Nonempty stack (unclosed object/array)")
+        throw.eject(ej, "EOF: Nonempty stack (unclosed object/array)")
     if (rv == null):
-        throw.eject(ej, "No object decoded (empty string)")
+        throw.eject(ej, "EOF: No object decoded (empty string)")
 
     return rv
 
