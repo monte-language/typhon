@@ -56,7 +56,7 @@ def makeStream(s :Str) as DeepFrozen:
             return s[index]
 
         to accept(c :Char):
-            return if (s[index] == c) {stream.next(); true} else {false}
+            return if (s[index] == c) { stream.next(); true } else { false }
 
         to require(c :Char, ej):
             if (!stream.accept(c)):
@@ -242,8 +242,6 @@ def parse(var tokens :List, ej) as DeepFrozen:
                     map[key] := value
                 match [=="array", list, _]:
                     list.push(value)
-                match _:
-                    throw.eject(ej, "Congrats, you broke the JSON parser.")
 
     def tokenPos(token):
         return def viaTokenOf(specimen, ej):
@@ -437,7 +435,7 @@ def decoderSamples := [
     `["\u00e9"]` => ["é"],
     "{\"face\\/off\":1997}" => ["face/off" => 1997],
     `{"first":{"second":{"third":42}}}` => ["first" => ["second" => ["third" => 42]]],
-    # Yeah, this two test really are supposed to be this precise. Any
+    # Yeah, these two tests really are supposed to be this precise. Any
     # imprecisions here should be due to implementation error, AFAICT.
     `{"pi":3.14}` => ["pi" => 3.14],
     `{"digits":0.7937000378463977}` => ["digits" => 0.7937000378463977],
@@ -458,7 +456,7 @@ def testJSONDecodeInvalid(assert):
         "{asdf}",
     ]
     for s in (specimens):
-        assert.ejects(fn ej {def via (JSON.decode) _ exit ej := s})
+        assert.ejects(fn ej { JSON.decode(s, ej) })
 
 unittest([
     testJSONDecodeInvalid,
