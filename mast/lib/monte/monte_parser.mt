@@ -513,11 +513,23 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         acceptEOLs()
         acceptTag("in", ej)
         acceptEOLs()
-        acceptTag("(", ej)
+        # XXX Why yes, this *is* open-coded. This should probably be factored,
+        # but I'm not sure how. ~ C.
+        def [open, _, openSpan] := advance(ej)
+        if (open != "("):
+            position -= 1
+            throw.eject(ej,
+                [`expected '(' for start of for-expr iterable, got ${M.toQuote(open)}`,
+                 openSpan])
         acceptEOLs()
         def it := comp(ej)
         acceptEOLs()
-        acceptTag(")", ej)
+        def [close, _, closeSpan] := advance(ej)
+        if (close != ")"):
+            position -= 1
+            throw.eject(ej,
+                [`expected ')' for end of for-expr iterable, got ${M.toQuote(close)}`,
+                 closeSpan])
         acceptEOLs()
         return if (p2 == null) {[null, p1, it]} else {[p1, p2, it]}
 
