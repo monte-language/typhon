@@ -30,7 +30,9 @@ let
                                          vmSrc = vmSrc;
                                          libsodium = libsodium0; };
     mast = callPackage ./mast.nix { mastSrc = mastSrc;
-                                    typhonVm = typhonVm; };
+                                    typhonVm = typhonVm;
+                                    pkgs = nixpkgs; };
+
     typhonDumpMAST = callPackage ./dump.nix {};
     # XXX broken for unknown reasons
     # bench = callPackage ./bench.nix { typhonVm = typhonVm; mast = mast; }
