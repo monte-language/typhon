@@ -299,7 +299,7 @@ def specimens := [
              \"For-loop body\"
              method run(_, x) {
                  if (validFlag_1.not()) {
-                     throw.run(null, \"Failed to validate loop!\")
+                     throw.run(\"Failed to validate loop!\")
                  } else {
                      null
                  }
@@ -311,6 +311,7 @@ def specimens := [
      finally:
          validFlag_1 := false
      null"],
+
     ["[for x in (y) ? (a) z]",
      "
      var validFlag_1 := true
@@ -319,7 +320,7 @@ def specimens := [
              \"For-loop body\"
              method run(_, x, skip_2) {
                  if (validFlag_1.not()) {
-                     throw.run(null, \"Failed to validate loop!\")
+                     throw.run(\"Failed to validate loop!\")
                  } else {
                      null
                  }
@@ -342,7 +343,7 @@ def specimens := [
              \"For-loop body\"
              method run(_, x, skip_2) {
                  if (validFlag_1.not()) {
-                     throw.run(null, \"Failed to validate loop!\")
+                     throw.run(\"Failed to validate loop!\")
                  } else {
                      null
                  }
@@ -638,10 +639,11 @@ def expandit(code):
     return expand(node, astBuilder, throw)
 
 for item in (fixedPointSpecimens):
-    tests.push(fn assert {
+    tests.push(def testExpanderCorrectness(assert) {
         def node := parseModule(makeMonteLexer(trim(item), "<test>"),
-                                astBuilder, throw)
-        assert.equal(expand(node, astBuilder, throw).canonical(), node.canonical())
+                                astBuilder, throw).canonical()
+        def expanded := expand(node, astBuilder, throw).canonical()
+        assert.equal(expanded, node)
     })
 
 for [specimen, result] in (specimens):
