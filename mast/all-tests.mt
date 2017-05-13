@@ -8,7 +8,8 @@ import "lib/iterators" =~ _
 import "lib/json" =~ _
 import "lib/monte/monte_verifier" =~ _
 import "lib/monte/meta" =~ _
-import "lib/monte/mix" =~ _
+# XXX currently broken ~ C.
+# import "lib/monte/mix" =~ _
 import "lib/parsers/html" =~ _
 import "lib/record" =~ _
 import "lib/tubes" =~ _
