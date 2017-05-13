@@ -142,33 +142,25 @@ def loaderMain():
                 def [=> main] | _ := module
                 M.call(main, "run", [subargs], unsafeScopeValues)
         match [=="dot", modname] + subargs:
-            def tubes := makeModuleAndConfiguration("lib/tubes")
-            when (tubes) ->
-                # An unconventional import statement, to be sure.
-                def [[=> makeUTF8EncodePump,
-                      => makePumpTube,
-                ] | _, _] := tubes
-
-                def stdout := makePumpTube(makeUTF8EncodePump())
-                stdout<-flowTo(makeStdOut())
-
-                def exps := makeModuleAndConfiguration(modname)
-                when (exps) ->
-                    # We only care about the config.
-                    def [_, topConfig] := exps
-                    stdout.receive(`digraph "$modname" {$\n`)
-                    # Iteration order doesn't really matter.
-                    def stack := [[modname, topConfig]].diverge()
-                    while (stack.size() != 0):
-                        def [name, config] := stack.pop()
-                        for depName => depConfig in (config.dependencyMap()):
-                            stdout.receive(`  "$name" -> "$depName";$\n`)
-                            if (depConfig != moduleGraphUnsatisfiedExit &&
-                                depConfig != moduleGraphLiveExit):
-                                stack.push([depName, depConfig])
-                    stdout.receive(`}$\n`)
-                    # Success!
-                    0
+            def stdout := stdio.stdout()
+            def exps := makeModuleAndConfiguration(modname)
+            when (exps) ->
+                # We only care about the config.
+                def [_, topConfig] := exps
+                stdout(b`digraph "$modname" {$\n`)
+                # Iteration order doesn't really matter.
+                def stack := [[modname, topConfig]].diverge()
+                while (stack.size() != 0):
+                    def [name, config] := stack.pop()
+                    for depName => depConfig in (config.dependencyMap()):
+                        stdout(b`  "$name" -> "$depName";$\n`)
+                        if (depConfig != moduleGraphUnsatisfiedExit &&
+                            depConfig != moduleGraphLiveExit):
+                            stack.push([depName, depConfig])
+                stdout(b`}$\n`)
+                # Success!
+                stdout.complete()
+                0
         match [=="test"] + modnames:
             def someMods := promiseAllFulfilled(
                 [for modname in (modnames)
