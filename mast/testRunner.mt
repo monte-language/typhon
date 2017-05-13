@@ -1,77 +1,6 @@
+import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/iterators" =~ [=> zip :DeepFrozen]
-exports (makeAsserter, makeTestDrain, runTests)
-
-# This magic sequence clears the current line of stdout and moves the cursor
-# to the beginning of the line. ~ C.
-def clearLine :Str := "\x1b[2K\r"
-
-def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
-    var lastSource := null
-    var lastTest := null
-    var total :Int := 0
-    var running :Int := 0
-    var completed :Int := 0
-    var errors :Int := 0
-
-    def formatError(err, source, test):
-        def line := `Error in source $source from test $test:$\n`
-        def l := [line] + err[1].reverse() + ["", err[0], ""]
-        stdout.receive("\n".join(l))
-
-    def updateScreen():
-        def counts := `completed/running/errors/total: $completed/$running/$errors/$total`
-        def info := ` Last source: $lastSource Last test: $lastTest`
-        stdout.receive(clearLine + counts + info)
-
-    def [p, r] := Ref.promise()
-
-    var complete :Bool := false
-    def maybeComplete():
-        if (complete && running == 0):
-            r.resolve(null)
-
-    return object testDrain:
-        to flowingFrom(_fount):
-            return testDrain
-
-        to receive([k, test]):
-            total += 1
-            running += 1
-            updateScreen()
-            def st :Str := M.toString(test)
-            return when (test<-(asserter(st))) ->
-                lastSource := k
-                lastTest := test
-                running -= 1
-                completed += 1
-                updateScreen()
-                maybeComplete()
-            catch p:
-                formatError(unsealException(p, throw), k, test)
-
-                # Update the screen after formatting and printing the error;
-                # this way, we aren't left without a status update for a
-                # period of time. ~ C.
-                lastSource := k
-                lastTest := test
-                running -= 1
-                errors += 1
-                updateScreen()
-                maybeComplete()
-
-        to flowStopped(_reason):
-            complete := true
-
-        to flowAborted(_reason):
-            complete := true
-
-        to completion():
-            return p
-
-def runTests(testInfo, testDrain, makeIterFount) as DeepFrozen:
-    def fount := makeIterFount(testInfo)
-    fount<-flowTo(testDrain)
-    return testDrain.completion()
+exports (makeRunner)
 
 def fancyNotEqual(l, r) :Str as DeepFrozen:
     def trail := [`Not equal, because ${M.toQuote(l)} != ${M.toQuote(r)}`].diverge()
@@ -228,3 +157,73 @@ def makeAsserter() as DeepFrozen:
                             assert.fail(`Cannot be equal: Ref.isBroken($r)`)
                         else:
                             throw(problem)
+
+# This magic sequence clears the current line of stdout and moves the cursor
+# to the beginning of the line. ~ C.
+def clearLine :Bytes := b`$\x1b[2K$\r`
+
+def makeRunner(stdout, unsealException) as DeepFrozen:
+    var lastSource := null
+    var lastTest := null
+    var total :Int := 0
+    var running :Int := 0
+    var completed :Int := 0
+    var errors :Int := 0
+
+    def formatError(err, source, test):
+        def line := `
+~~~
+Error in source $source from test $test:
+    ${"\n".join(err[1].reverse())}
+    ${err[0]}
+~~~
+`
+        stdout(UTF8.encode(line, null))
+
+    def updateScreen():
+        def counts := `completed/running/errors/total: $completed/$running/$errors/$total`
+        def info := ` Last source: $lastSource Last test: $lastTest`
+        stdout(clearLine + UTF8.encode(counts + info, null))
+
+    def startTest(asserter, k, test):
+        total += 1
+        running += 1
+
+        def st :Str := M.toString(test)
+        return when (test<-(asserter(st))) ->
+            lastSource := k
+            lastTest := test
+            running -= 1
+            completed += 1
+            updateScreen()
+        catch p:
+            formatError(unsealException(p, throw), k, test)
+
+            # Update the screen after formatting and printing the error;
+            # this way, we aren't left without a status update for a
+            # period of time. ~ C.
+            lastSource := k
+            lastTest := test
+            running -= 1
+            errors += 1
+            updateScreen()
+
+    return object runner:
+        to runTests(tests):
+            def asserter := makeAsserter()
+            def results := [for [k, test] in (tests)
+                            startTest<-(asserter, k, test)]
+            # Do the initial screen update.
+            updateScreen()
+            return when (promiseAllFulfilled(results)) ->
+                updateScreen()
+                stdout(UTF8.encode(`$\nRan ${results.size()} tests!$\n`, null))
+                object resultSummary:
+                    to fails():
+                        return asserter.fails()
+
+                    to total():
+                        return asserter.total()
+
+                    to errors():
+                        return asserter.errors()

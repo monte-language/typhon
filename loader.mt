@@ -166,32 +166,20 @@ def loaderMain():
                 [for modname in (modnames)
                  makeModuleAndConfiguration(modname,
                                             "collectTests" => true)] +
-                [(def testRunner := makeModuleAndConfiguration("testRunner")),
-                 (def tubes := makeModuleAndConfiguration("lib/tubes"))])
+                [def testRunner := makeModuleAndConfiguration("testRunner")])
             when (someMods) ->
-                def [[=> makeIterFount,
-                      => makeUTF8EncodePump,
-                      => makePumpTube
-                ] | _, _] := tubes
-                def [[=> makeAsserter,
-                      => makeTestDrain,
-                      => runTests
-                ] | _, _] := testRunner
-
-                def stdout := makePumpTube(makeUTF8EncodePump())
-                stdout <- flowTo(makeStdOut())
-
-                def asserter := makeAsserter()
-                def testDrain := makeTestDrain(stdout, unsealException, asserter)
-
-                when (runTests(collectedTests, testDrain, makeIterFount)) ->
-                    def fails := asserter.fails()
-                    stdout.receive(`${asserter.total()} tests run, $fails failures$\n`)
+                def [[=> makeRunner] | _, _] := testRunner
+                def stdout := stdio.stdout()
+                def runner := makeRunner(stdout, unsealException)
+                def results := runner<-runTests(collectedTests)
+                when (results) ->
+                    def fails := results.fails()
+                    stdout.receive(`${results.total()} tests run, $fails failures$\n`)
                     # Exit code: Only returns 0 if there were 0 failures.
-                    for loc => errors in (asserter.errors()):
-                        stdout.receive(`In $loc:$\n`)
+                    for loc => errors in (results.errors()):
+                        stdout(b`In $loc:$\n`)
                         for error in (errors):
-                            stdout.receive(`~ $error$\n`)
+                            stdout(b`~ $error$\n`)
                     fails.min(1)
         match [=="bench"] + modnames:
             def someMods := promiseAllFulfilled(
