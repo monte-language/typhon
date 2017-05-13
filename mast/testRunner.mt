@@ -195,7 +195,7 @@ Error in source $source from test $test:
             lastTest := test
             running -= 1
             completed += 1
-            updateScreen()
+            # updateScreen()
         catch p:
             formatError(unsealException(p, throw), k, test)
 
@@ -206,7 +206,7 @@ Error in source $source from test $test:
             lastTest := test
             running -= 1
             errors += 1
-            updateScreen()
+            # updateScreen()
 
     return object runner:
         to runTests(tests):
