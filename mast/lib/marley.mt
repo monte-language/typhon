@@ -305,7 +305,7 @@ def makeScanner(characters) as DeepFrozen:
         to nextToken():
             scanner.eatWhitespace()
             while (true):
-                traceln(`Scanning ${scanner.peek()}`)
+                # traceln(`Scanning ${scanner.peek()}`)
                 switch (scanner.nextChar()):
                     match c ? (alphanumeric.contains(c)):
                         # Identifier.
@@ -462,7 +462,7 @@ object ::"marley``" as DeepFrozen:
         def parser := makeMarley(marleyQLGrammar, "grammar")
         while (scanner.hasTokens()):
             def token := scanner.nextToken()
-            traceln(`Next token: $token`)
+            # traceln(`Next token: $token`)
             # traceln(`Parser: ${parser.getFailure()}`)
             parser.feed(token)
         def r := parser.results()[0]
