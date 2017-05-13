@@ -1,3 +1,4 @@
+import "lib/iterators" =~ [=> zip :DeepFrozen]
 exports (makeAsserter, makeTestDrain, runTests)
 
 # This magic sequence clears the current line of stdout and moves the cursor
@@ -72,6 +73,39 @@ def runTests(testInfo, testDrain, makeIterFount) as DeepFrozen:
     def fount := makeIterFount(testInfo)
     fount<-flowTo(testDrain)
     return testDrain.completion()
+
+def fancyNotEqual(l, r) :Str as DeepFrozen:
+    def trail := ["Not equal"].diverge()
+    def stack := [[l, r]].diverge()
+    while (!stack.isEmpty()):
+        traceln(`trail $trail stack $stack`)
+        switch (stack.pop()):
+            # Lists are transparent too, so do lists before transparency to
+            # avoid infinite regress.
+            match [lList :List, rList :List]:
+                if (lList.size() != rList.size()):
+                    trail.push(`because lists ${M.toQuote(lList)} and ${M.toQuote(rList)} have different lengths`)
+                else:
+                    for pair in (zip(lList, rList)):
+                        stack.push(pair)
+            match [lTrans :Transparent, rTrans :Transparent]:
+                trail.push("even though both sides are transparent")
+                def [lMaker, lVerb, lArgs, lNamedArgs] := lTrans._uncall()
+                def [rMaker, rVerb, rArgs, rNamedArgs] := rTrans._uncall()
+                if (lMaker != rMaker):
+                    trail.push(`because maker ${M.toQuote(lMaker)} != ${M.toQuote(rMaker)}`)
+                if (lVerb != rVerb):
+                    trail.push(`because verb ${M.toQuote(lVerb)} != ${M.toQuote(rVerb)}`)
+                if (lArgs != rArgs):
+                    trail.push("in the arguments of the uncalls")
+                    stack.push([lArgs, rArgs])
+                if (lNamedArgs != rNamedArgs):
+                    trail.push("in the named arguments of the uncalls")
+                    stack.push([lNamedArgs, rNamedArgs])
+            match [lThing, rThing]:
+                if (lThing != rThing):
+                    trail.push(`because ${M.toQuote(lThing)} != ${M.toQuote(rThing)}`)
+    return ", ".join(trail)
 
 def makeAsserter() as DeepFrozen:
     var successes :Int := 0
@@ -157,7 +191,7 @@ def makeAsserter() as DeepFrozen:
                     if (isEqual == null):
                         assert.fail(`Equality not settled: $l ≟ $r`)
                     if (!isEqual):
-                        assert.fail(`Not equal: $l != $r`)
+                        assert.fail(fancyNotEqual(l, r))
                     successes += 1
 
                 to notEqual(l, r):
