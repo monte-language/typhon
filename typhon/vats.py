@@ -13,7 +13,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
+from rpython.rlib.debug import debug_print
 from rpython.rlib.rthread import ThreadLocalReference, allocate_lock
 
 from typhon import log
@@ -21,6 +21,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, UserException, userError
 from typhon.objects.auditors import deepFrozenStamp
+from typhon.objects.constants import NullObject
 from typhon.objects.root import Object
 
 
@@ -99,6 +100,20 @@ class Vat(Object):
                   checkpoints=checkpoints)
         self._manager.vats.append(vat)
         return vat
+
+    @method("Void")
+    def traceQueueContents(self):
+        """
+        Dump information about the queue to the trace log.
+        """
+        from typhon.objects.printers import toString
+        debug_print("Pending queue for " + self.name.encode("utf-8"))
+        for (resolver, target, atom, args, namedArgs) in self._pending:
+            debug_print(toString(target).encode('utf-8') +
+                        "." + atom.verb.encode('utf-8') + "(" +
+                        ', '.join([toString(a).encode('utf-8')
+                                   for a in args]) + ")")
+        return NullObject
 
     def checkpoint(self, points=1):
         # If we're immortal, then pass. Otherwise, if we can perform the
