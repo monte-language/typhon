@@ -28,7 +28,6 @@ def makeTestDrain(stdout, unsealException, asserter) as DeepFrozen:
     var complete :Bool := false
     def maybeComplete():
         if (complete && running == 0):
-            traceln(`complete!`)
             r.resolve(null)
 
     return object testDrain:
@@ -75,10 +74,9 @@ def runTests(testInfo, testDrain, makeIterFount) as DeepFrozen:
     return testDrain.completion()
 
 def fancyNotEqual(l, r) :Str as DeepFrozen:
-    def trail := ["Not equal"].diverge()
+    def trail := [`Not equal, because ${M.toQuote(l)} != ${M.toQuote(r)}`].diverge()
     def stack := [[l, r]].diverge()
     while (!stack.isEmpty()):
-        traceln(`trail $trail stack $stack`)
         switch (stack.pop()):
             # Lists are transparent too, so do lists before transparency to
             # avoid infinite regress.
