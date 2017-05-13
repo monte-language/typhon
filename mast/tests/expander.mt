@@ -609,12 +609,13 @@ def specimens := [
               _makeList.run("blee")
           }
       }`],
+    # sendOnly.
     [`f<-(); g`, 
-     `M.sendOnly(f, "run", [], [].asMap())
-      g`],
+     `M.sendOnly(f, "run", _makeList.run(),
+                 _makeMap.fromPairs(_makeList.run())); g`],
     [`f<-verb(); g`, 
-     `M.sendOnly(f, "verb", [], [].asMap())
-      g`],
+     `M.sendOnly(f, "verb", _makeList.run(),
+                 _makeMap.fromPairs(_makeList.run())); g`],
 ]
 
 def trim(var s):
