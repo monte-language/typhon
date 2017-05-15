@@ -1,5 +1,5 @@
 import "unittest" =~ [=> unittest]
-exports (makeMarley, ::"marley``")
+exports (makeQuasiParser, makeMarley, ::"marley``")
 
 # Copyright (C) 2015 Google Inc. All rights reserved.
 #
@@ -480,24 +480,32 @@ def marleyQLGrammar :Grammar := [
 ]
 
 
-object ::"marley``" as DeepFrozen:
-    to valueMaker([piece]):
-        def scanner := makeScanner(piece)
-        def parser := makeMarley(marleyQLGrammar, "grammar")
-        while (scanner.hasTokens()):
-            def token := scanner.nextToken()
-            # traceln(`Next token: $token`)
-            # traceln(`Parser: ${parser.getFailure()}`)
-            parser.feed(token)
-        def grammar :Grammar := parser.oneResult()
-        return object ruleSubstituter:
-            to substitute(_):
-                return object marleyMaker:
-                    to run(startRule :Str):
-                       return makeMarley(grammar, startRule)
+def makeQuasiParser(scannerMaker :DeepFrozen, grammar :Grammar,
+                    startRule :Str, name :Str) as DeepFrozen:
+    return object quasiParser as DeepFrozen:
+        to _printOn(out):
+            out.print(`<$name``>`)
 
-                    to getGrammar() :Grammar:
-                        return grammar
+        to valueMaker([piece]):
+            def scanner := scannerMaker(piece)
+            def parser := makeMarley(grammar, startRule)
+            while (scanner.hasTokens()):
+                def token := scanner.nextToken()
+                # traceln(`Next token: $token`)
+                # traceln(`Parser: ${parser.getFailure()}`)
+                parser.feed(token)
+            def grammar :Grammar := parser.oneResult()
+            return object ruleSubstituter:
+                to substitute(_):
+                    return object marleyMaker:
+                        to run(startRule :Str):
+                           return makeMarley(grammar, startRule)
+
+                        to getGrammar() :Grammar:
+                            return grammar
+
+def ::"marley``" :DeepFrozen := makeQuasiParser(makeScanner, marleyQLGrammar,
+                                                "grammar", "marley")
 
 
 def testMarleyQPSingle(assert):
