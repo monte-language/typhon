@@ -771,6 +771,10 @@ def fsDiscard(fs):
     free(fs)
 
 
+def fsUnstashAndDiscard(fs):
+    unstashFS(fs)
+    fsDiscard(fs)
+
 gai_cb = rffi.CCallback([gai_tp, rffi.INT, s.addrinfo_ptr], lltype.Void)
 
 gai = rffi.llexternal("uv_getaddrinfo", [loop_tp, gai_tp, gai_cb, rffi.CCHARP,
