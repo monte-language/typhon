@@ -331,9 +331,8 @@ class GetContents(Object):
     # Our position reading from the file.
     pos = 0
 
-    def __init__(self, vat, fs, fd, resolver):
+    def __init__(self, vat, fd, resolver):
         self.vat = vat
-        self.fs = fs
         self.fd = fd
         self.resolver = resolver
 
@@ -342,19 +341,17 @@ class GetContents(Object):
         # XXX read size should be tunable
         self.buf = ruv.allocBuf(16384)
 
-        # Do our initial stashing.
-        ruv.stashFS(fs, (vat, self))
-
     def append(self, data):
         self.pieces.append(data)
         self.pos += len(data)
         # Queue another!
-        ruv.stashFS(self.fs, (self.vat, self))
         self.queueRead()
 
     def succeed(self):
         # Clean up libuv stuff.
-        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, ruv.fsDiscard)
+        fs = ruv.alloc_fs()
+        ruv.stashFS(fs, (self.vat, self))
+        ruv.fsClose(self.vat.uv_loop, fs, self.fd, ruv.fsUnstashAndDiscard)
 
         # Finally, resolve.
         buf = "".join(self.pieces)
@@ -362,16 +359,20 @@ class GetContents(Object):
 
     def fail(self, reason):
         # Clean up libuv stuff.
-        ruv.fsClose(self.vat.uv_loop, self.fs, self.fd, ruv.fsDiscard)
+        fs = ruv.alloc_fs()
+        ruv.stashFS(fs, (self.vat, self))
+        ruv.fsClose(self.vat.uv_loop, fs, self.fd, ruv.fsUnstashAndDiscard)
 
         # And resolve.
         self.resolver.smash(StrObject(u"libuv error: %s" % reason))
 
     def queueRead(self):
+        fs = ruv.alloc_fs()
+        ruv.stashFS(fs, (self.vat, self))
         with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
             bufs[0].c_base = self.buf.c_base
             bufs[0].c_len = self.buf.c_len
-            ruv.fsRead(self.vat.uv_loop, self.fs, self.fd, bufs, 1, -1,
+            ruv.fsRead(self.vat.uv_loop, fs, self.fd, bufs, 1, -1,
                        getContentsCB)
 
 def openGetContentsCB(fs):
@@ -383,14 +384,13 @@ def openGetContentsCB(fs):
             if fd < 0:
                 msg = ruv.formatError(fd).decode("utf-8")
                 r.smash(StrObject(u"Couldn't open file fount: %s" % msg))
-                # Done with fs.
-                ruv.fsDiscard(fs)
             else:
                 # Strategy: Read and use the callback to queue additional reads
                 # until done. This call is known to its caller to be expensive, so
                 # there's not much point in trying to be clever about things yet.
-                gc = GetContents(vat, fs, fd, r)
+                gc = GetContents(vat, fd, r)
                 gc.queueRead()
+        ruv.fsDiscard(fs)
     except:
         print "Exception in openGetContentsCB"
 
@@ -410,6 +410,7 @@ def getContentsCB(fs):
         else:
             # End of file! Complete the callback.
             self.succeed()
+        ruv.fsDiscard(fs)
     except Exception:
         print "Exception in getContentsCB"
 
@@ -423,7 +424,6 @@ def renameCB(fs):
             r.smash(StrObject(u"Couldn't rename file: %s" % msg))
         else:
             r.resolve(NullObject)
-        # Done with fs.
         ruv.fsDiscard(fs)
     except:
         print "Exception in renameCB"
@@ -444,13 +444,14 @@ class SetContents(Object):
         self.resolver.smash(StrObject(reason))
 
     def queueWrite(self):
+        fs = ruv.alloc_fs()
+        ruv.stashFS(fs, (self.vat, self))
         with ruv.scopedBufs([self.data]) as bufs:
-            ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
+            ruv.fsWrite(self.vat.uv_loop, fs, self.fd, bufs,
                         1, -1, writeSetContentsCB)
 
-    def startWriting(self, fd, fs):
+    def startWriting(self, fd):
         self.fd = fd
-        self.fs = fs
         self.queueWrite()
 
     def written(self, size):
@@ -460,44 +461,43 @@ class SetContents(Object):
             self.queueWrite()
         else:
             # Finished writing; let's move on to the rename.
-            ruv.fsClose(self.vat.uv_loop, self.fs, self.fd,
+            fs = ruv.alloc_fs()
+            ruv.stashFS(fs, (self.vat, self))
+            ruv.fsClose(self.vat.uv_loop, fs, self.fd,
                         closeSetContentsCB)
 
     def rename(self):
         # And issuing the rename is surprisingly straightforward.
         p = self.src.rename(self.dest.asBytes())
         self.resolver.resolve(p)
-        # At last, done with fs. No need to unstash; it was already unstashed
-        # in the callback. (We're being called *from the callback*.)
-        ruv.fsDiscard(self.fs)
 
 
 def openSetContentsCB(fs):
     try:
         fd = intmask(fs.c_result)
-        with ruv.unstashingFS(fs) as (vat, sc):
-            assert isinstance(sc, SetContents)
-            if fd < 0:
-                msg = ruv.formatError(fd).decode("utf-8")
-                sc.fail(u"Couldn't open file fount: %s" % msg)
-                # Done with fs.
-                ruv.fsDiscard(fs)
-            else:
-                sc.startWriting(fd, fs)
+        vat, sc = ruv.unstashFS(fs)
+        assert isinstance(sc, SetContents)
+        if fd < 0:
+            msg = ruv.formatError(fd).decode("utf-8")
+            sc.fail(u"Couldn't open file fount: %s" % msg)
+        else:
+            sc.startWriting(fd)
+        ruv.fsDiscard(fs)
     except:
         print "Exception in openSetContentsCB"
 
 
 def writeSetContentsCB(fs):
     try:
-        with ruv.unstashingFS(fs) as (vat, sc):
-            assert isinstance(sc, SetContents)
-            size = intmask(fs.c_result)
-            if size >= 0:
-                sc.written(size)
-            else:
-                msg = ruv.formatError(size).decode("utf-8")
-                sc.fail(u"libuv error: %s" % msg)
+        vat, sc = ruv.unstashFS(fs)
+        assert isinstance(sc, SetContents)
+        size = intmask(fs.c_result)
+        if size >= 0:
+            sc.written(size)
+        else:
+            msg = ruv.formatError(size).decode("utf-8")
+            sc.fail(u"libuv error: %s" % msg)
+        ruv.fsDiscard(fs)
     except:
         print "Exception in writeSetContentsCB"
 
@@ -515,6 +515,7 @@ def closeSetContentsCB(fs):
             else:
                 # Success.
                 sc.rename()
+        ruv.fsDiscard(fs)
     except:
         print "Exception in closeSetContentsCB"
 
