@@ -249,20 +249,23 @@ class StreamSink(Object):
     def isATTY(self):
         return False
 
+
 def readFileCB(fs):
     size = intmask(fs.c_result)
-    with ruv.unstashingFS(fs) as (vat, source):
-        assert isinstance(source, FileSource)
-        with scopedVat(vat):
-            if size > 0:
-                data = charpsize2str(source._buf.c_base, size)
-                source.deliver(data)
-            elif size < 0:
-                msg = ruv.formatError(size).decode("utf-8")
-                source.abort(u"libuv error: %s" % msg)
-            else:
-                # EOF.
-                source.complete()
+    vat, source = ruv.unstashFS(fs)
+    assert isinstance(source, FileSource)
+    with scopedVat(vat):
+        if size > 0:
+            data = charpsize2str(source._buf.c_base, size)
+            source.deliver(data)
+        elif size < 0:
+            msg = ruv.formatError(size).decode("utf-8")
+            source.abort(u"libuv error: %s" % msg)
+        else:
+            # EOF.
+            source.complete()
+    ruv.fsDiscard(fs)
+
 
 @autohelp
 class TTYSink(StreamSink):
@@ -295,8 +298,7 @@ class FileSource(Object):
     A source which reads bytestrings from a file.
     """
 
-    def __init__(self, fs, fd, vat):
-        self._fs = fs
+    def __init__(self, fd, vat):
         self._fd = fd
         self._vat = vat
 
@@ -305,16 +307,15 @@ class FileSource(Object):
         # XXX read size should be tunable
         self._buf = ruv.allocBuf(16384)
 
-        # Set this up only once.
-        ruv.stashFS(fs, (vat, self))
-
     def _nextSink(self):
         assert self._queue, "pepperocini"
         return self._queue.pop(0)
 
     def _cleanup(self):
         uv_loop = self._vat.uv_loop
-        ruv.fsClose(uv_loop, self._fs, self._fd, ruv.fsDiscard)
+        fs = ruv.alloc_fs()
+        ruv.stashFS(fs, (self._vat, self))
+        ruv.fsClose(uv_loop, fs, self._fd, ruv.fsUnstashAndDiscard)
         ruv.freeBuf(self._buf)
 
     def deliver(self, data):
@@ -344,7 +345,9 @@ class FileSource(Object):
         with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
             bufs[0].c_base = self._buf.c_base
             bufs[0].c_len = self._buf.c_len
-            ruv.fsRead(self._vat.uv_loop, self._fs, self._fd, bufs, 1, -1,
+            fs = ruv.alloc_fs()
+            ruv.stashFS(fs, (self._vat, self))
+            ruv.fsRead(self._vat.uv_loop, fs, self._fd, bufs, 1, -1,
                        readFileCB)
         return p
 
@@ -352,19 +355,22 @@ class FileSource(Object):
     def isATTY(self):
         return False
 
+
 def writeFileCB(fs):
     try:
-        with ruv.unstashingFS(fs) as (vat, sink):
-            assert isinstance(sink, FileSink)
-            size = intmask(fs.c_result)
-            if size > 0:
-                # XXX backpressure drain.written(size)
-                pass
-            elif size < 0:
-                msg = ruv.formatError(size).decode("utf-8")
-                sink.abort(StrObject(u"libuv error: %s" % msg))
+        vat, sink = ruv.unstashFS(fs)
+        assert isinstance(sink, FileSink)
+        size = intmask(fs.c_result)
+        if size > 0:
+            # XXX backpressure drain.written(size)
+            pass
+        elif size < 0:
+            msg = ruv.formatError(size).decode("utf-8")
+            sink.abort(StrObject(u"libuv error: %s" % msg))
+        ruv.fsDiscard(fs)
     except:
         print "Exception in writeFileCB"
+
 
 @autohelp
 class FileSink(Object):
@@ -374,16 +380,14 @@ class FileSink(Object):
 
     closed = False
 
-    def __init__(self, fs, fd, vat):
-        self._fs = fs
+    def __init__(self, fd, vat):
         self._fd = fd
         self._vat = vat
 
-        # Set this up only once.
-        ruv.stashFS(fs, (vat, self))
-
     def _cleanup(self):
-        ruv.fsClose(self._vat.uv_loop, self._fs, self._fd, ruv.fsDiscard)
+        fs = ruv.alloc_fs()
+        ruv.stashFS(fs, (self._vat, self))
+        ruv.fsClose(self._vat.uv_loop, fs, self._fd, ruv.fsUnstashAndDiscard)
         self.closed = True
 
     @method("Void", "Bytes")
@@ -392,7 +396,9 @@ class FileSink(Object):
             raise userError(u"run/1: Couldn't write to closed file")
 
         with ruv.scopedBufs([data]) as bufs:
-            ruv.fsWrite(self._vat.uv_loop, self._fs, self._fd, bufs, 1, -1,
+            fs = ruv.alloc_fs()
+            ruv.stashFS(fs, (self._vat, self))
+            ruv.fsWrite(self._vat.uv_loop, fs, self._fd, bufs, 1, -1,
                         writeFileCB)
 
     @method("Void")

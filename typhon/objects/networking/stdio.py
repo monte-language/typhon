@@ -73,7 +73,7 @@ class stdio(Object):
             stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdin), 1)
             return TTYSource(stdin, stream, vat)
         else:
-            return FileSource(ruv.alloc_fs(), 0, vat)
+            return FileSource(0, vat)
 
     @method("Any")
     def stdout(self):
@@ -85,7 +85,7 @@ class stdio(Object):
             stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stdout), 1)
             return TTYSink(stdout, stream, vat)
         else:
-            return FileSink(ruv.alloc_fs(), 1, vat)
+            return FileSink(1, vat)
 
     @method("Any")
     def stderr(self):
@@ -97,4 +97,4 @@ class stdio(Object):
             stream = ruv.wrapStream(ruv.rffi.cast(ruv.stream_tp, stderr), 1)
             return TTYSink(stderr, stream, vat)
         else:
-            return FileSink(ruv.alloc_fs(), 2, vat)
+            return FileSink(2, vat)
