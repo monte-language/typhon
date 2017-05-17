@@ -67,6 +67,13 @@ object makeSink as DeepFrozen:
         def [p, listSink] := makeSink.asList()
         return [when (p) -> { "".join(p) }, listSink]
 
+    to asBytes() :Pair[Vow[Str], Sink]:
+        "Collect Bytes and concatenate them into a single bytestring."
+
+        # Reuse the list machinery.
+        def [p, listSink] := makeSink.asList()
+        return [when (p) -> { b``.join(p) }, listSink]
+
 def testMakeSinkAsList(assert):
     def [l, sink] := makeSink.asList()
     return when (sink(1), sink(2), sink(3)) ->
@@ -85,10 +92,17 @@ def testMakeSinkAsStr(assert):
         when (sink.complete()) ->
             assert.willEqual(s, "suitcase")
 
+def testMakeSinkAsBytes(assert):
+    def [bs, sink] := makeSink.asBytes()
+    return when (sink(b`suit`), sink(b`case`)) ->
+        when (sink.complete()) ->
+            assert.willEqual(bs, b`suitcase`)
+
 unittest([
     testMakeSinkAsList,
     testMakeSinkAsListAbort,
     testMakeSinkAsStr,
+    testMakeSinkAsBytes,
 ])
 
 object makeSource as DeepFrozen:
@@ -189,6 +203,12 @@ def collectStr(source) :Vow[Str] as DeepFrozen:
     def [s, sink] := makeSink.asStr()
     return when (flow(source, sink)) -> { s }
 
+def collectBytes(source) :Vow[Bytes] as DeepFrozen:
+    "Collect a single Bytes from a source of Bytes."
+
+    def [bs, sink] := makeSink.asBytes()
+    return when (flow(source, sink)) -> { bs }
+
 def testCollectStr(assert):
     var i :Int := 0
     def source(sink):
@@ -201,8 +221,15 @@ def testCollectStr(assert):
     when (s) ->
         assert.equal(s, "123")
 
+def testCollectBytes(assert):
+    def source := makeSource.fromIterable([b`baseball`, b`diamond`, b`ring`])
+    def bs := collectBytes(source)
+    when (bs) ->
+        assert.equal(bs, b`baseballdiamondring`)
+
 unittest([
     testCollectStr,
+    testCollectBytes,
 ])
 
 object endOfStream as DeepFrozen:
