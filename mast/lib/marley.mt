@@ -189,10 +189,13 @@ def makeMarley(grammar :Grammar, startRule :Str) as DeepFrozen:
 
         to oneResult():
             def results := marley.results()
-            return if (results.size() == 1):
-                results[0]
-            else:
-                throw(`marley.oneResult/0: Couldn't choose one parse tree from the parse forest $results`)
+            return switch (results):
+                match [rv]:
+                    rv
+                match []:
+                    throw(`marley.oneResult/0: Parse failed: $failure`)
+                match _:
+                    throw(`marley.oneResult/0: Couldn't choose one parse tree from the parse forest $results`)
 
         to feed(token):
             if (failure != null):
@@ -205,6 +208,13 @@ def makeMarley(grammar :Grammar, startRule :Str) as DeepFrozen:
                 table := advance(position, token, table, ej)
             catch reason:
                 failure := reason
+
+        to forceFeed(token):
+            "Feed and require success, or throw on failure."
+
+            marley.feed(token)
+            if (marley.failed()):
+                throw(`marley.forceFeed/1: Parse failed at ${M.toQuote(token)}: $failure`)
 
         to feedMany(tokens):
             for token in (tokens):
@@ -356,6 +366,17 @@ def makeScanner(characters) as DeepFrozen:
                                 # traceln(`Finally, $s`)
                                 return ["identifier", s]
                             scanner.advance()
+                    match =='{':
+                        var depth :Int := 1
+                        var body := "{"
+                        while (depth > 0):
+                            def c := scanner.nextChar()
+                            if (c == '{'):
+                                depth += 1
+                            else if (c == '}'):
+                                depth -= 1
+                            body += c.asString()
+                        return ["reductionBody", ::"m``".fromStr(body)]
                     match =='<':
                         scanner.expect('-')
                         return "arrowhead"
@@ -375,8 +396,12 @@ def makeScanner(characters) as DeepFrozen:
                         return ["character", c]
                     match =='|':
                         return "pipe"
+                    match ==':':
+                        return "colon"
+                    match =='$':
+                        return "dollar"
                     match c:
-                        return ["unknown", c]
+                        throw(`scanner.nextToken/0: Can't handle ${M.toQuote(c)}`)
 
         to hasTokens() :Bool:
             # traceln(`Considering whether we have more tokens`)
@@ -484,16 +509,26 @@ def makeQuasiParser(scannerMaker :DeepFrozen, grammar :Grammar,
                     startRule :Str, name :Str) as DeepFrozen:
     return object quasiParser as DeepFrozen:
         to _printOn(out):
-            out.print(`<$name``>`)
+            out.print(`<$name````>`)
 
-        to valueMaker([piece]):
-            def scanner := scannerMaker(piece)
+        to valueHole(index :Int):
+            return [exprHoleTag, index]
+
+        to valueMaker(pieces):
             def parser := makeMarley(grammar, startRule)
-            while (scanner.hasTokens()):
-                def token := scanner.nextToken()
-                # traceln(`Next token: $token`)
-                # traceln(`Parser: ${parser.getFailure()}`)
-                parser.feed(token)
+
+            for piece in (pieces):
+                if (piece =~ [==exprHoleTag, index :Int]):
+                    # Pre-scanned for us.
+                    parser.forceFeed(piece)
+                else:
+                    def scanner := scannerMaker(piece)
+                    while (scanner.hasTokens()):
+                        def token := scanner.nextToken()
+                        # traceln(`Next token: $token`)
+                        # traceln(`Parser: ${parser.getFailure()}`)
+                        parser.forceFeed(token)
+
             def grammar :Grammar := parser.oneResult()
             return object ruleSubstituter:
                 to substitute(_):
