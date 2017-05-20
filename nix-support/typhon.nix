@@ -30,21 +30,21 @@ let
                                          vmSrc = vmSrc;
                                          libsodium = libsodium0; };
     mast = callPackage ./mast.nix { mastSrc = mastSrc;
-                                    typhonVm = typhonVm;
+                                    typhonVm = typhonVmJIT;
                                     pkgs = nixpkgs; };
 
     typhonDumpMAST = callPackage ./dump.nix {};
     # XXX broken for unknown reasons
-    # bench = callPackage ./bench.nix { typhonVm = typhonVm; mast = mast; }
+    # bench = callPackage ./bench.nix { typhonVm = typhonVmJIT; mast = mast; }
     monte = callPackage ./monte-script.nix {
-      typhonVm = typhonVm; mast = mast;
+      typhonVm = typhonVmJIT; mast = mast;
     };
     mtBusybox = monte.override { shellForMt = "${nixpkgs.busybox}/bin/sh"; };
     mtLite = mtBusybox.override { withBuild = false; };
     mtDocker = nixpkgs.dockerTools.buildImage {
         name = "monte-dev";
         tag = "latest";
-        contents = [nixpkgs.nix.out nixpkgs.busybox mtBusybox typhonVm];
+        contents = [nixpkgs.nix.out nixpkgs.busybox mtBusybox typhonVmJIT];
         runAsRoot = ''
           #!${nixpkgs.busybox}/bin/sh
           mkdir -p /etc
@@ -61,7 +61,7 @@ let
     mtLiteDocker = nixpkgs.dockerTools.buildImage {
         name = "repl";
         tag = "latest";
-        contents = [mtLite typhonVm];
+        contents = [mtLite typhonVmJIT];
         config = {
             Cmd = [ "/bin/monte" "repl" ];
             WorkingDir = "/";
