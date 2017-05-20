@@ -195,7 +195,8 @@ class StreamFount(Object):
 
 
 def writeCB(uv_write, status):
-    pass
+    vat, sb = ruv.unstashWrite(uv_write)
+    sb.deallocate()
 
 
 @autohelp
@@ -237,8 +238,10 @@ class StreamDrain(Object):
 
         data = unwrapBytes(data)
         uv_write = ruv.alloc_write()
-        with ruv.scopedBufs([data]) as bufs:
-            ruv.write(uv_write, self.stream, bufs, 1, writeCB)
+        sb = ruv.scopedBufs([data], self)
+        bufs = sb.allocate()
+        ruv.stashWrite(uv_write, (self.vat, sb))
+        ruv.write(uv_write, self.stream, bufs, 1, writeCB)
 
     @method("Void", "Any")
     def flowAborted(self, unused):

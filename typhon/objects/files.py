@@ -158,14 +158,17 @@ class FileFount(Object):
 
 def writeCB(fs):
     try:
-        with ruv.unstashingFS(fs) as (vat, drain):
-            assert isinstance(drain, FileDrain)
-            size = intmask(fs.c_result)
-            if size > 0:
-                drain.written(size)
-            elif size < 0:
-                msg = ruv.formatError(size).decode("utf-8")
-                drain.abort(u"libuv error: %s" % msg)
+        vat, sb = ruv.unstashFS(fs)
+        drain = sb.obj
+        assert isinstance(drain, FileDrain)
+        size = intmask(fs.c_result)
+        if size > 0:
+            drain.written(size)
+        elif size < 0:
+            msg = ruv.formatError(size).decode("utf-8")
+            drain.abort(u"libuv error: %s" % msg)
+        ruv.fsDiscard(fs)
+        sb.deallocate()
     except:
         print "Exception in writeCB"
 
@@ -239,9 +242,12 @@ class FileDrain(Object):
         self.closing()
 
     def queueWrite(self):
-        with ruv.scopedBufs(self.bufs) as bufs:
-            ruv.fsWrite(self.vat.uv_loop, self.fs, self.fd, bufs,
-                        len(self.bufs), -1, writeCB)
+        sb = ruv.scopedBufs(self.bufs, self)
+        fs = ruv.alloc_fs()
+        bufs = sb.allocate()
+        ruv.stashFS(fs, (self.vat, sb))
+        ruv.fsWrite(self.vat.uv_loop, fs, self.fd, bufs,
+                    len(self.bufs), -1, writeCB)
 
     def closing(self):
         if self._state is self.READY:
@@ -445,10 +451,11 @@ class SetContents(Object):
 
     def queueWrite(self):
         fs = ruv.alloc_fs()
-        ruv.stashFS(fs, (self.vat, self))
-        with ruv.scopedBufs([self.data]) as bufs:
-            ruv.fsWrite(self.vat.uv_loop, fs, self.fd, bufs,
-                        1, -1, writeSetContentsCB)
+        sb = ruv.scopedBufs([self.data], self)
+        bufs = sb.allocate()
+        ruv.stashFS(fs, (self.vat, sb))
+        ruv.fsWrite(self.vat.uv_loop, fs, self.fd, bufs,
+                    1, -1, writeSetContentsCB)
 
     def startWriting(self, fd):
         self.fd = fd
@@ -489,7 +496,8 @@ def openSetContentsCB(fs):
 
 def writeSetContentsCB(fs):
     try:
-        vat, sc = ruv.unstashFS(fs)
+        vat, sb = ruv.unstashFS(fs)
+        sc = sb.obj
         assert isinstance(sc, SetContents)
         size = intmask(fs.c_result)
         if size >= 0:
@@ -498,6 +506,7 @@ def writeSetContentsCB(fs):
             msg = ruv.formatError(size).decode("utf-8")
             sc.fail(u"libuv error: %s" % msg)
         ruv.fsDiscard(fs)
+        sb.deallocate()
     except:
         print "Exception in writeSetContentsCB"
 

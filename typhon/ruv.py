@@ -22,6 +22,7 @@ from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
 from typhon.log import log
 
+from typhon.objects.root import Object
 
 class UVError(Exception):
     """
@@ -107,7 +108,7 @@ class CConfig:
                                        lltype.Ptr(lltype.ForwardReference()))])
     stream_t = rffi_platform.Struct("uv_stream_t", [("data", rffi.VOIDP)])
     shutdown_t = rffi_platform.Struct("uv_shutdown_t", [])
-    write_t = rffi_platform.Struct("uv_write_t", [])
+    write_t = rffi_platform.Struct("uv_write_t", [("data", rffi.VOIDP)])
     tcp_t = rffi_platform.Struct("uv_tcp_t", [("data", rffi.VOIDP)])
     pipe_t = rffi_platform.Struct("uv_pipe_t", [("data", rffi.VOIDP)])
     signal_t = rffi_platform.Struct("uv_signal_t", [("data", rffi.VOIDP)])
@@ -242,6 +243,7 @@ def stashFor(name, struct, initial=None):
 stashTimer, unstashTimer, unstashingTimer = stashFor(
     "timer", timer_tp, initial=(None, 0))
 stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
+stashWrite, unstashWrite, unstashingWrite = stashFor("write", write_tp)
 stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
 stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
 stashProcess, unstashProcess, unstashingProcess = stashFor("process",
@@ -320,13 +322,14 @@ def allocCB(handle, size, buf):
     rffi.setintfield(buf, "c_len", size)
 
 
-class scopedBufs(object):
+class scopedBufs(Object):
 
-    def __init__(self, data):
+    def __init__(self, data, obj):
+        self.obj = obj
         self.data = data
         self.scoping = lltype.scoped_alloc(rffi.CArray(buf_t), len(self.data))
 
-    def __enter__(self):
+    def allocate(self):
         bufs = self.scoping.__enter__()
         self.metabufs = []
         for i, datum in enumerate(self.data):
@@ -341,12 +344,12 @@ class scopedBufs(object):
             self.metabufs.append((datum, charp, flag))
         return bufs
 
-    def __exit__(self, *args):
+    def deallocate(self):
         # Deallocate. Can't forget to do this, or else we could fill the
         # GC with pinned crap.
         for datum, charp, flag in self.metabufs:
             rffi.free_nonmovingbuffer(datum, charp, flag)
-        self.scoping.__exit__(*args)
+        self.scoping.__exit__()
 
 
 (HANDLE_ASYNC, HANDLE_CHECK, HANDLE_FS_EVENT, HANDLE_FS_POLL, HANDLE_HANDLE,

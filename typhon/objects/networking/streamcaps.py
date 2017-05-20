@@ -208,7 +208,8 @@ class TTYSource(StreamSource):
             ruv.TTYSetMode(self._tty, ruv.TTY_MODE_NORMAL)
 
 def writeStreamCB(uv_write, status):
-    pass
+    vat, sb = ruv.unstashWrite(uv_write)
+    sb.deallocate()
 
 @autohelp
 class StreamSink(Object):
@@ -234,8 +235,10 @@ class StreamSink(Object):
 
         # XXX backpressure?
         uv_write = ruv.alloc_write()
-        with ruv.scopedBufs([data]) as bufs:
-            ruv.write(uv_write, self._stream._stream, bufs, 1, writeStreamCB)
+        sb = ruv.scopedBufs([data], self)
+        bufs = sb.allocate()
+        ruv.stashWrite(uv_write, (self._vat, sb))
+        ruv.write(uv_write, self._stream._stream, bufs, 1, writeStreamCB)
 
     @method("Void")
     def complete(self):
@@ -358,7 +361,8 @@ class FileSource(Object):
 
 def writeFileCB(fs):
     try:
-        vat, sink = ruv.unstashFS(fs)
+        vat, sb = ruv.unstashFS(fs)
+        sink = sb.obj
         assert isinstance(sink, FileSink)
         size = intmask(fs.c_result)
         if size > 0:
@@ -367,6 +371,7 @@ def writeFileCB(fs):
         elif size < 0:
             msg = ruv.formatError(size).decode("utf-8")
             sink.abort(StrObject(u"libuv error: %s" % msg))
+        sb.deallocate()
         ruv.fsDiscard(fs)
     except:
         print "Exception in writeFileCB"
@@ -393,13 +398,14 @@ class FileSink(Object):
     @method("Void", "Bytes")
     def run(self, data):
         if self.closed:
-            raise userError(u"run/1: Couldn't write to closed file")
+            raise userError(u"run/1: Couldn't write to closged file")
 
-        with ruv.scopedBufs([data]) as bufs:
-            fs = ruv.alloc_fs()
-            ruv.stashFS(fs, (self._vat, self))
-            ruv.fsWrite(self._vat.uv_loop, fs, self._fd, bufs, 1, -1,
-                        writeFileCB)
+        sb = ruv.scopedBufs([data], self)
+        bufs = sb.allocate()
+        fs = ruv.alloc_fs()
+        ruv.stashFS(fs, (self._vat, sb))
+        ruv.fsWrite(self._vat.uv_loop, fs, self._fd, bufs, 1, -1,
+                    writeFileCB)
 
     @method("Void")
     def complete(self):
