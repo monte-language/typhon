@@ -183,19 +183,20 @@ Error in source $source from test $test:
     def updateScreen():
         def counts := `completed/running/errors/total: $completed/$running/$errors/$total`
         def info := ` Last source: $lastSource Last test: $lastTest`
-        stdout(clearLine + UTF8.encode(counts + info, null))
+        return stdout<-(clearLine + UTF8.encode(counts + info, null))
 
     def startTest(asserter, k, test):
         total += 1
         running += 1
 
         def st :Str := M.toString(test)
+        def padding := `spam$total` * 10000
         return when (test<-(asserter(st))) ->
             lastSource := k
             lastTest := test
             running -= 1
             completed += 1
-            # updateScreen()
+            updateScreen()
         catch p:
             formatError(unsealException(p, throw), k, test)
 
@@ -206,7 +207,7 @@ Error in source $source from test $test:
             lastTest := test
             running -= 1
             errors += 1
-            # updateScreen()
+            updateScreen()
 
     return object runner:
         to runTests(tests):
