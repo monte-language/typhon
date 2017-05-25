@@ -196,5 +196,6 @@ def loaderMain():
 
         match _:
             throw(usage)
-
-Ref.whenBroken(loaderMain(), fn x {traceln.exception(Ref.optProblem(x))})
+def exitStatus := loaderMain()
+Ref.whenBroken(exitStatus, fn x {traceln.exception(Ref.optProblem(x)); 1})
+exitStatus
