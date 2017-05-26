@@ -480,7 +480,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
                     queuedTokens.insert(0, composite("INDENT", null, spanAtPoint()))
                     return leaf("EOL")
                 else if (strict):
-                    throw.eject(partialFail, ["Expected an indented block", spanAtPoint()])
+                    throw.eject(partialFail, makeParseError(["Expected an indented block", spanAtPoint()]))
             if (!inStatementPosition()):
                 return leaf("EOL")
             else:
