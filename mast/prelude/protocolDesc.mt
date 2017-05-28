@@ -48,7 +48,6 @@ def _makeMessageDesc(docstring :Any[Void, Str], verb :Str, params :DeepFrozen,
         to getVerb() :Str:
             return verb
 
-
 def getMethods(auditor) :Set as DeepFrozen:
     if (auditor._respondsTo("getMethods", 0)):
         return auditor.getMethods()
