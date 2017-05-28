@@ -22,7 +22,7 @@ def _makeParamDesc(name :Str, guard :DeepFrozen) as DeepFrozen:
 
 
 def _makeMessageDesc(docstring :Any[Void, Str], verb :Str, params :DeepFrozen,
-                     guard :DeepFrozen) as DeepFrozen:
+                     namedParams :DeepFrozen, guard :DeepFrozen) as DeepFrozen:
     "Describe a message."
 
     return object messageDesc as DeepFrozen implements Selfless, TransparentStamp:
@@ -30,11 +30,17 @@ def _makeMessageDesc(docstring :Any[Void, Str], verb :Str, params :DeepFrozen,
             out.print(`<message $verb/${params.size()}>`)
 
         to _uncall():
-            return [_makeMessageDesc, "run", [docstring, verb, params, guard],
+            return [_makeMessageDesc, "run", [docstring, verb, params, namedParams, guard],
                     [].asMap()]
 
         to getArity() :Int:
             return params.size()
+
+        to getParams():
+            return params
+
+        to getNamedParams():
+            return namedParams
 
         to getDocstring() :Any[Void, Str]:
             return docstring

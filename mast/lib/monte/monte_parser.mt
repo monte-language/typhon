@@ -715,9 +715,14 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         }
         return builder.ParamDesc(name, g, spanFrom(spanStart))
 
+    def namedParamDesc(ej):
+        acceptTag("=>", ej)
+        return paramDesc(ej)
+
     def messageDescInner(indent, tryAgain, ej):
         acceptTag("(", ej)
         def params := acceptList(paramDesc)
+        def namedParams := acceptList(namedParamDesc)
         acceptTag(")", ej)
         def resultguard := if (considerTag(":", ej)) {
             if (peekTag() == "EOL") {
@@ -738,14 +743,14 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         } else {
             null
         }
-        return [doco, params, resultguard]
+        return [doco, params, namedParams, resultguard]
 
     def messageDesc(indent, ej):
         def spanStart := spanHere()
         acceptTag("to", ej)
         def verb := acceptVerb(ej)
-        def [doco, params, resultguard] := messageDescInner(indent, ej, ej)
-        return builder.MessageDesc(doco, verb, params, resultguard, spanFrom(spanStart))
+        def [doco, params, namedParams, resultguard] := messageDescInner(indent, ej, ej)
+        return builder.MessageDesc(doco, verb, params, namedParams, resultguard, spanFrom(spanStart))
 
     def interfaceBody(indent, ej):
         def doco := if (peekTag() == ".String.") {
@@ -977,9 +982,9 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 []
             }
             if (peekTag() == "("):
-                def [doco, params, resultguard] := messageDescInner(indent, tryAgain, ej)
+                def [doco, params, namedParams, resultguard] := messageDescInner(indent, tryAgain, ej)
                 builder.FunctionInterfaceExpr(doco, name, guards_, extends_, implements_,
-                     builder.MessageDesc(doco, "run", params, resultguard, spanFrom(spanStart)),
+                     builder.MessageDesc(doco, "run", params, namedParams, resultguard, spanFrom(spanStart)),
                      spanFrom(spanStart))
             else:
                 if (indent):

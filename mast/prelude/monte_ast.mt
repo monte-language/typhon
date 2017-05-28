@@ -1496,7 +1496,9 @@ def makeParamDesc(name :Str, guard :NullOk[Expr], span) as DeepFrozenStamp:
         &scope, "ParamDesc", fn f {[name, maybeTransform(guard, f)]})
 
 def makeMessageDesc(docstring :NullOk[Str], verb :Str,
-                    params :List[Ast["ParamDesc"]], resultGuard :NullOk[Expr],
+                    params :List[Ast["ParamDesc"]],
+                    namedParams :List[Ast["ParamDesc"]],
+                    resultGuard :NullOk[Expr],
                     span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {sumScopes(params + [resultGuard])})
     object messageDesc:
@@ -1505,6 +1507,8 @@ def makeMessageDesc(docstring :NullOk[Str], verb :Str,
         to getVerb():
             return verb
         to getParams():
+            return params
+        to getNamedParams():
             return params
         to getResultGuard():
             return resultGuard
@@ -1518,7 +1522,10 @@ def makeMessageDesc(docstring :NullOk[Str], verb :Str,
                 out.print(verb)
             else:
                 out.quote(verb)
-            printListOn("(", params, ", ", ")", out, priorities["pattern"])
+            printListOn("(", params, ", ", "", out, priorities["pattern"])
+            if (params.size() > 0 && namedParams.size() > 0):
+                out.print(", ")
+            printListOn("", namedParams, ", ", ")", out, priorities["pattern"])
             if (resultGuard != null):
                 out.print(" :")
                 resultGuard.subPrintOn(out, priorities["call"])
@@ -1533,8 +1540,8 @@ def makeMessageDesc(docstring :NullOk[Str], verb :Str,
                 if (bracey):
                     out.print("}")
 
-    return astWrapper(messageDesc, makeMessageDesc, [docstring, verb, params, resultGuard], span,
-        &scope, "MessageDesc", fn f {[docstring, verb, transformAll(params, f), maybeTransform(resultGuard, f)]})
+    return astWrapper(messageDesc, makeMessageDesc, [docstring, verb, params, namedParams, resultGuard], span,
+        &scope, "MessageDesc", fn f {[docstring, verb, transformAll(params, f), transformAll(namedParams, f), maybeTransform(resultGuard, f)]})
 
 
 def makeInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
@@ -1617,7 +1624,11 @@ def makeFunctionInterfaceExpr(docstring :NullOk[Str], name :NamePattern,
                 cuddle := false
             if (!cuddle):
                 out.print(" ")
-            printListOn("(", messageDesc.getParams(), ", ", ")", out, priorities["pattern"])
+            printListOn("(", messageDesc.getParams(), ", ", "", out, priorities["pattern"])
+            if (messageDesc.getParams().size() > 0 && messageDesc.getNamedParams().size() > 0):
+                out.print(", ")
+            printListOn("", messageDesc.getNamedParams(), ", ", ")", out, priorities["pattern"])
+
             if (messageDesc.getResultGuard() != null):
                 out.print(" :")
                 messageDesc.getResultGuard().subPrintOn(out, priorities["call"])
@@ -2422,8 +2433,8 @@ object astBuilder as DeepFrozenStamp:
         return makeObjectExpr(docstring, name, asExpr, auditors, script, span)
     to ParamDesc(name, guard, span):
         return makeParamDesc(name, guard, span)
-    to MessageDesc(docstring, verb, params, resultGuard, span):
-        return makeMessageDesc(docstring, verb, params, resultGuard, span)
+    to MessageDesc(docstring, verb, params, namedParams, resultGuard, span):
+        return makeMessageDesc(docstring, verb, params, namedParams, resultGuard, span)
     to InterfaceExpr(docstring, name, stamp, parents, auditors, messages, span):
         return makeInterfaceExpr(docstring, name, stamp, parents, auditors, messages, span)
     to FunctionInterfaceExpr(docstring, name, stamp, parents, auditors, messageDesc, span):

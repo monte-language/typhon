@@ -196,8 +196,8 @@ def findUnusedNames(expr) :List[Noun] as DeepFrozen:
                 flattenList(args)
             }
             match =="MessageDesc" {
-                def [_, _, params, guard] := args
-                flattenList(params) + optional(guard)
+                def [_, _, params, namedParams, guard] := args
+                flattenList(params + namedParams) + optional(guard)
             }
             match n ? (["MethodCallExpr", "SendExpr"].contains(n)) {
                 def [receiver, _, arguments, namedArgs] := args

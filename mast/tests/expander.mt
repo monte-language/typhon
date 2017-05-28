@@ -461,14 +461,14 @@ def specimens := [
           "yay"
           to baz(c :Int):
               "blee"
-          to boz(d) :Double
+          to boz(d, => e) :Double
       `,
       `
       def foo := {
           _makeProtocolDesc.run("yay", meta.context().getFQNPrefix().add("foo_T"), _makeList.run(x, y), _makeList.run(a, b), _makeList.run({
-              _makeMessageDesc.run("blee", "baz", _makeList.run(_makeParamDesc.run("c", Int)), Any)
+              _makeMessageDesc.run("blee", "baz", _makeList.run(_makeParamDesc.run("c", Int)), _makeList.run(), Any)
           }, {
-              _makeMessageDesc.run(null, "boz", _makeList.run(_makeParamDesc.run("d", Any)), Double)
+              _makeMessageDesc.run(null, "boz", _makeList.run(_makeParamDesc.run("d", Any)), _makeList.run(_makeParamDesc.run("e", Any)), Double)
           }))
       }`],
      ["

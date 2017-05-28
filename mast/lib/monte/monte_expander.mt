@@ -302,13 +302,14 @@ def expand(node, builder, fail) as DeepFrozen:
             match _:
                 fail(["Can only update-assign nouns and calls", span])
 
-    def expandMessageDesc(doco, verb, paramDescs, resultGuard, span):
+    def expandMessageDesc(doco, verb, paramDescs, namedParamDescs, resultGuard, span):
         def docExpr := if (doco == null) {nounExpr("null", span)} else {litExpr(doco, span)}
         def guardExpr := if (resultGuard == null) {nounExpr("Any", span)} else {
             resultGuard}
         return builder.HideExpr(callExpr(nounExpr("_makeMessageDesc", span),
             "run", [docExpr, litExpr(verb, span),
-                 emitList(paramDescs, span), guardExpr], [],
+                    emitList(paramDescs, span),
+                    emitList(namedParamDescs, span), guardExpr], [],
              span), span)
 
     def expandObject(doco, name, asExpr, auditors, [xtends, methods, matchers], span):
@@ -890,8 +891,8 @@ def expand(node, builder, fail) as DeepFrozen:
                 expandInterface(doco, name, guard, xtends,
                     mplements, messages, span)
             match =="MessageDesc":
-                def [doco, verb, params, resultGuard] := args
-                expandMessageDesc(doco, verb, params, resultGuard, span)
+                def [doco, verb, params, namedParams, resultGuard] := args
+                expandMessageDesc(doco, verb, params, namedParams, resultGuard, span)
             match =="ParamDesc":
                 def [name, guard] := args
                 callExpr(nounExpr("_makeParamDesc", span),
