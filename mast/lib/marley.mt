@@ -90,6 +90,7 @@ def advance(position :Int, token, var table, ej) as DeepFrozen:
 
     def enqueue(k, state):
         if (!table.contains(k, state)):
+            traceln(`table didn't have $k $state`)
             queue.push([k, state])
             table addState= (k, state)
 
@@ -104,6 +105,7 @@ def advance(position :Int, token, var table, ej) as DeepFrozen:
             match []:
                 # Completion.
                 def reduced := M.call(reduction, "run", result, [].asMap())
+                # traceln(`$reduction($result) -> $reduced`)
                 for oldState in (table[j]):
                     if (oldState =~
                         [oldHead, [==[nonterminal, head]] + tail, i, tree,
@@ -339,6 +341,13 @@ def makeScanner(characters) as DeepFrozen:
                 throw("Problem here")
             scanner.advance()
 
+        to accept(c):
+            return if (characters[pos] == c):
+                scanner.advance()
+                true
+            else:
+                false
+
         to nextChar():
             def rv := characters[pos]
             pos += 1
@@ -377,9 +386,13 @@ def makeScanner(characters) as DeepFrozen:
                                 depth -= 1
                             body += c.asString()
                         return ["reductionBody", ::"m``".fromStr(body)]
+                    match =='>':
+                        return "gt"
                     match =='<':
-                        scanner.expect('-')
-                        return "arrowhead"
+                        if (scanner.accept('-')):
+                            return "arrowhead"
+                        else:
+                            return "lt"
                     match =='←':
                         return "arrowhead"
                     match =='-':
@@ -435,14 +448,25 @@ object exprHole as DeepFrozen:
         return "an expression hole"
 
 
-def chooseReductionFor(rule) as DeepFrozen:
-    return switch (rule):
-        match []:
-            nullReduction
-        match [_]:
-            singleReduction
-        match _:
-            defaultReduction
+def makeReductionFor(rule, body) as DeepFrozen:
+    def patts := [for [_, binding] in (rule) {
+        if (binding == null) { mpatt`_` } else {
+            ::"mpatt``".fromStr(binding)
+        }
+    }]
+    def doc := "Automatically-generated reduction"
+    def meth := astBuilder."Method"(doc, "run", patts, [], null, body[1], null)
+    def script := astBuilder.Script(null, [meth], [], null)
+    def expr := astBuilder.ObjectExpr(doc, mpatt`reduce`, m`DeepFrozen`, [],
+                                      script, null)
+    def localGoodies := [
+        => &&exactly,
+        => &&exprHole,
+        => &&terminal,
+        => &&nonterminal,
+        => &&makeReductionFor,
+    ]
+    return eval(expr, safeScope | localGoodies)
 
 def makeEmptyList() :List as DeepFrozen:
     return []
@@ -450,36 +474,54 @@ def makeEmptyList() :List as DeepFrozen:
 def reduceRule(pieces, piece) :List as DeepFrozen:
     return if (piece == null) { pieces } else { pieces.with(piece) }
 
+def rulesOnly(rules) as DeepFrozen:
+    return [for [r, _] in (rules) r]
+
 def marleyQLGrammar :Grammar := [
-    "charLiteral" => [
+    "identifier" => [
+        [[[terminal, tag("identifier")]],
+         def reduceIdentifier([_, i]) as DeepFrozen { return i }],
+    ],
+    "rule" => [
         [[[terminal, tag("character")]],
          def reduceCharLiteral([_, c]) as DeepFrozen {
             return [terminal, exactly(c)]
+         }],
+        [[[nonterminal, "identifier"]],
+         def justNonTerm(i) as DeepFrozen { return [nonterminal, i] }],
+        [[[terminal, tag("dollar")]], def justExprHole(_) as DeepFrozen {
+            return [terminal, exprHole]
         }],
+        [[[terminal, exprHole]], singleReduction],
     ],
-    "identifier" => [
-        [[[terminal, tag("identifier")]],
-         def reduceIdentifier([_, i]) as DeepFrozen {
-             return [nonterminal, i]
+    "ruleBinding" => [
+        [[[nonterminal, "rule"]], def noBinding(rule) as DeepFrozen {
+            return [rule, null]
+        }],
+        [[[nonterminal, "rule"], [terminal, tag("colon")],
+          [nonterminal, "identifier"]],
+         def reduceRuleBinding(rule, _, binding) as DeepFrozen {
+             return [rule, binding]
          }],
     ],
-    "rule" => [
-        [[[nonterminal, "charLiteral"]], singleReduction],
-        [[[nonterminal, "identifier"]], singleReduction],
-    ],
     "rules" => [
-        [[[nonterminal, "rules"], [nonterminal, "rule"]], reduceRule],
+        [[[nonterminal, "rules"], [nonterminal, "ruleBinding"]], reduceRule],
         [[], makeEmptyList],
     ],
     "ruleSet" => [
         [[[nonterminal, "rules"]],
-         def chooseRuleReduction(rule) as DeepFrozen {
-             return [rule, chooseReductionFor(rule)]
+         def useDefaultReduction(rule) as DeepFrozen {
+             return [rulesOnly(rule), defaultReduction]
          }],
         [[[nonterminal, "rules"], [terminal, tag("arrowtail")],
           [terminal, exprHole]],
          def setRuleReduction(rule, _, reduction) as DeepFrozen {
-             return [rule, reduction]
+             return [rulesOnly(rule), reduction]
+         }],
+        [[[nonterminal, "rules"], [terminal, tag("arrowtail")],
+          [terminal, tag("reductionBody")]],
+         def buildRuleReduction(rule, _, body) as DeepFrozen {
+             return [rulesOnly(rule), makeReductionFor(rule, body)]
          }],
     ],
     "ruleSets" => [
@@ -493,7 +535,7 @@ def marleyQLGrammar :Grammar := [
     "production" => [
         [[[nonterminal, "identifier"], [terminal, tag("arrowhead")],
           [nonterminal, "ruleSets"]],
-         def reduceProduction([_, head], _, ruleSets) as DeepFrozen {
+         def reduceProduction(head, _, ruleSets) as DeepFrozen {
              return [head => ruleSets]
          }],
     ],
@@ -541,6 +583,27 @@ def makeQuasiParser(scannerMaker :DeepFrozen, grammar :Grammar,
 
 def ::"marley``" :DeepFrozen := makeQuasiParser(makeScanner, marleyQLGrammar,
                                                 "grammar", "marley")
+
+def marleyInMarley :Grammar := marley`
+    identifier ← ${tag("identifier")}:i ⤙ { i[1] }
+    rule ← ${tag("character")}:c ⤙ { [terminal, exactly(c[1])] }
+         | identifier:i ⤙ { [nonterminal, i] }
+         | '$$' ⤙ { [terminal, exprHole] }
+         | $$
+    rules ← rules:rs rule:r ⤙ { if (r == null) { rs } else { rs.with(r) } }
+          |
+    ruleSet ← rules:r ⤙ { [r, makeReductionFor(r)] }
+            | rules:r ${tag("arrowtail")} $$:red ⤙ { [r, red] }
+    ruleSets ← ruleSets:rss ${tag("pipe")} ruleSet:rs ⤙ { rss.with(rs) }
+             | ruleSet:rs ⤙ { [rs] }
+    production ← identifier:i ${tag("arrowhead")} ruleSets:rss ⤙ {
+        [i[1] => rss]
+    }
+    grammar ← grammar:g production:p ⤙ { g | p }
+            | production
+`.getGrammar()
+
+traceln(marleyInMarley)
 
 
 def testMarleyQPSingle(assert):
