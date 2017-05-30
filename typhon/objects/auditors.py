@@ -82,6 +82,48 @@ transparentStamp = TransparentStamp()
 
 
 @autohelp
+class SealedPortrayal(Object):
+    """
+    Sealed within this object is the portrayal of a Semitransparent object.
+    """
+
+    def __init__(self, p):
+        self.portrayal = p
+
+    def toString(self):
+        return u"<sealed portrayal>"
+
+
+@autohelp
+class SemitransparentStamp(Object):
+    """
+    Semitransparent's stamp.
+
+    Semitransparent objects are transparent to the equalizer and DeepFrozen
+    auditor alone.  This allows for structural equality and DeepFrozen auditing
+    of objects that attenuate authority. (If, in future, other objects need to
+    inspect Semitransparent object structure, an unsealer can be added to the
+    unsafe scope.)
+    """
+    def computeHash(self, depth):
+        return compute_identity_hash(self)
+
+    def auditorStamps(self):
+        return asSet([deepFrozenStamp])
+
+    @method("Any", "Any")
+    def seal(self, p):
+        return SealedPortrayal(p)
+
+    @method("Bool", "Any")
+    def audit(self, audition):
+        return True
+
+
+semitransparentStamp = SemitransparentStamp()
+
+
+@autohelp
 class TransparentGuard(Object):
     """
     Transparent's guard.
@@ -160,8 +202,15 @@ def checkDeepFrozen(specimen, seen, ej, root):
         checkDeepFrozen(specimen.optProblem(), seen, ej, root)
         return
     elif (specimen.auditedBy(selfless) and
-          specimen.auditedBy(transparentStamp)):
+          (specimen.auditedBy(transparentStamp))
+          or specimen.auditedBy(semitransparentStamp)):
         portrayal = specimen.call(u"_uncall", [])
+        if specimen.auditedBy(semitransparentStamp):
+            if isinstance(portrayal, SealedPortrayal):
+                portrayal = portrayal.portrayal
+            else:
+                throwStr(ej, u"Semitransparent portrayal was not sealed!")
+
         portrayalList = unwrapList(portrayal, ej)
         if len(portrayalList) != 4:
             throwStr(ej, u"Transparent object gave bad portrayal")

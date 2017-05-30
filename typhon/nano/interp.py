@@ -11,7 +11,8 @@ from typhon.nano.main import mainPipeline
 from typhon.nano.mix import StampedScriptIR, mix
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
                                 SEV_BINDING, SEV_NOUN, SEV_SLOT)
-from typhon.objects.auditors import selfless, transparentStamp
+from typhon.objects.auditors import (SealedPortrayal, selfless,
+                                     semitransparentStamp, transparentStamp)
 from typhon.objects.constants import NullObject
 from typhon.objects.collections.helpers import emptySet
 from typhon.objects.collections.lists import unwrapList, wrapList
@@ -252,14 +253,19 @@ class InterpObject(Object):
 
     def isSettled(self, sofar=None):
         if selfless in self.auditorStamps():
-            if transparentStamp in self.auditorStamps():
+            if (transparentStamp in self.auditorStamps()
+                or semitransparentStamp in self.auditorStamps()):
                 from typhon.objects.collections.maps import EMPTY_MAP
                 if sofar is None:
                     sofar = {self: None}
                 # Uncall and recurse.
-                return self.callAtom(_UNCALL_0, [],
-                                     EMPTY_MAP).isSettled(sofar=sofar)
-            # XXX Semitransparent support goes here
+                portrayal = self.callAtom(_UNCALL_0, [],
+                                          EMPTY_MAP)
+                if semitransparentStamp in self.auditorStamps():
+                    if not isinstance(portrayal, SealedPortrayal):
+                        userError(u'Semitransparent portrayal is not a SealedPortrayal!')
+                    portrayal = portrayal.portrayal
+                return portrayal.isSettled(sofar=sofar)
 
         # Well, we're resolved, so I guess that we're good!
         return True

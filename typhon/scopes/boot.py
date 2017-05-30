@@ -21,7 +21,8 @@ from typhon.load.nano import loadMASTBytes as realLoad
 from typhon.nano.interp import (evalToPair as astEvalToPair,
                                 scope2env)
 from typhon.nodes import kernelAstStamp
-from typhon.objects.auditors import deepFrozenStamp, transparentStamp
+from typhon.objects.auditors import (deepFrozenStamp, semitransparentStamp,
+                                     transparentStamp)
 from typhon.objects.collections.lists import ConstList
 from typhon.objects.collections.maps import ConstMap
 from typhon.objects.collections.sets import ConstSet
@@ -133,6 +134,7 @@ def bootScope(paths, recorder):
 
         u"DeepFrozenStamp": deepFrozenStamp,
         u"TransparentStamp": transparentStamp,
+        u"SemitransparentStamp": semitransparentStamp,
 
         u"getMonteFile": GetMonteFile(paths, recorder),
         u"astEval": ae,

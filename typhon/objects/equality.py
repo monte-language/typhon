@@ -18,12 +18,14 @@ from rpython.rlib.objectmodel import compute_identity_hash
 
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
-from typhon.objects.auditors import selfless, transparentStamp
+from typhon.objects.auditors import (SealedPortrayal, selfless,
+                                     semitransparentStamp, transparentStamp)
 from typhon.objects.collections.lists import ConstList, unwrapList
 from typhon.objects.collections.maps import ConstMap
 from typhon.objects.constants import TrueObject, FalseObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
+from typhon.objects.ejectors import throwStr
 from typhon.objects.refs import resolution, isResolved
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
@@ -206,8 +208,12 @@ def optSame(first, second, cache=None):
         if selfless not in second.auditorStamps():
             return INEQUAL
         # Then see if both objects can be compared by contents.
-        if (transparentStamp in first.auditorStamps() and
-                transparentStamp in second.auditorStamps()):
+        isSemitransparent = (semitransparentStamp in first.auditorStamps() and
+                             semitransparentStamp in second.auditorStamps())
+
+        if ((transparentStamp in first.auditorStamps() and
+                transparentStamp in second.auditorStamps())
+            or isSemitransparent):
 
             # This could recurse.
             if cache is None:
@@ -217,12 +223,19 @@ def optSame(first, second, cache=None):
             left = first.call(u"_uncall", [])
             right = second.call(u"_uncall", [])
 
+            if isSemitransparent:
+                if not isinstance(left, SealedPortrayal):
+                    userError(u'Left Semitransparent uncall in sameness comparison '
+                              u'was not a SealedPortrayal!')
+                left = left.portrayal
+                if not isinstance(right, SealedPortrayal):
+                    userError(u'Right Semitransparent uncall in sameness comparison '
+                              u'was not a SealedPortrayal!')
+                right = right.portrayal
             # Recurse, add the new value to the cache, and return.
             rv = optSame(left, right, cache)
             cache[first, second] = rv
             return rv
-        # XXX Add support for Semitransparent, comparing objects for structural
-        # equality even if they don't publicly reveal their contents.
         else:
             return NOTYET
 
@@ -291,7 +304,12 @@ def samenessHash(obj, depth, fringe, path=None):
         if transparentStamp in o.auditorStamps():
             return samenessHash(o.call(u"_uncall", []), depth, fringe,
                                 path=path)
-        # XXX Semitransparent support goes here
+        if semitransparentStamp in o.auditorStamps():
+            p = o.call(u"_uncall", [])
+            if not isinstance(p, SealedPortrayal):
+                userError(u'Semitransparent portrayal was not a SealedPortrayal!')
+            return samenessHash(p.portrayal, depth, fringe,
+                                path=path)
 
     # Objects compared by identity.
     if isResolved(o):
@@ -352,7 +370,12 @@ def samenessFringe(original, path, fringe, sofar=None):
         if transparentStamp in o.auditorStamps():
             sofar[o] = None
             return samenessFringe(o.call(u"_uncall", []), path, fringe, sofar)
-        # XXX Semitransparent support goes here
+        if semitransparentStamp in o.auditorStamps():
+            sofar[o] = None
+            p = o.call(u"_uncall", [])
+            if not isinstance(p, SealedPortrayal):
+                userError(u'Semitransparent portrayal was not a SealedPortrayal!')
+            return samenessFringe(p, path, fringe, sofar)
 
     if isResolved(o):
         return True
