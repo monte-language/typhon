@@ -8,9 +8,8 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
-from typhon.objects.collections.maps import EMPTY_MAP, monteMap
+from typhon.objects.collections.maps import monteMap
 from typhon.objects.data import BytesObject, StrObject, unwrapBytes
-from typhon.objects.networking.streams import StreamDrain, StreamFount
 from typhon.objects.networking.streamcaps import (StreamSink, StreamSource,
                                                   emptySource, nullSink)
 from typhon.objects.root import Object, audited
@@ -183,15 +182,9 @@ class makeProcess(Object):
     corresponding method on the process will return a live streamcap which
     is connected to the process; otherwise, the returned streamcap will be a
     no-op.
-
-    `=> stdinFount`, if not null, will be treated as a fount and it will be
-    flowed to a drain representing stdin. `=> stdoutDrain` and
-    `=> stderrDrain` are similar but should be drains which will have founts
-    flowed to them.
     """
 
-    @method("Any", "Bytes", "List", "Map", stdinFount="Any",
-            stdoutDrain="Any", stderrDrain="Any", stdin="Bool", stdout="Bool",
+    @method("Any", "Bytes", "List", "Map", stdin="Bool", stdout="Bool",
             stderr="Bool")
     def run(self, executable, argv, env, stdinFount=None, stdoutDrain=None,
             stderrDrain=None, stdin=False, stdout=False, stderr=False):
@@ -224,12 +217,6 @@ class makeProcess(Object):
             streams.append(stream)
             wrapped = ruv.wrapStream(stream, 1)
             stdinSink = StreamSink(wrapped, vat)
-        elif stdinFount is not None:
-            stream = ruv.rffi.cast(ruv.stream_tp,
-                                   ruv.alloc_pipe(vat.uv_loop))
-            streams.append(stream)
-            drain = StreamDrain(stream, vat)
-            vat.sendOnly(stdinFount, FLOWTO_1, [drain], EMPTY_MAP)
         else:
             streams.append(nullptr(ruv.stream_t))
         if stdout:
@@ -238,12 +225,6 @@ class makeProcess(Object):
             streams.append(stream)
             wrapped = ruv.wrapStream(stream, 1)
             stdoutSource = StreamSource(wrapped, vat)
-        elif stdoutDrain is not None:
-            stream = ruv.rffi.cast(ruv.stream_tp,
-                                   ruv.alloc_pipe(vat.uv_loop))
-            streams.append(stream)
-            fount = StreamFount(stream, vat)
-            vat.sendOnly(fount, FLOWTO_1, [stdoutDrain], EMPTY_MAP)
         else:
             streams.append(nullptr(ruv.stream_t))
         if stderr:
@@ -252,12 +233,6 @@ class makeProcess(Object):
             streams.append(stream)
             wrapped = ruv.wrapStream(stream, 1)
             stderrSource = StreamSource(wrapped, vat)
-        elif stderrDrain is not None:
-            stream = ruv.rffi.cast(ruv.stream_tp,
-                                   ruv.alloc_pipe(vat.uv_loop))
-            streams.append(stream)
-            fount = StreamFount(stream, vat)
-            vat.sendOnly(fount, FLOWTO_1, [stderrDrain], EMPTY_MAP)
         else:
             streams.append(nullptr(ruv.stream_t))
 

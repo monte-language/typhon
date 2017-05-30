@@ -22,8 +22,7 @@ from typhon.objects.networking.dns import getAddrInfo
 from typhon.objects.networking.endpoints import (
     makeTCP4ClientEndpoint, makeTCP4ServerEndpoint, makeTCP6ClientEndpoint,
     makeTCP6ServerEndpoint)
-from typhon.objects.networking.stdio import (
-    makeStdErr, makeStdIn, makeStdOut, stdio)
+from typhon.objects.networking.stdio import stdio
 from typhon.objects.processes import CurrentProcess, makeProcess
 from typhon.objects.root import Object, audited
 from typhon.objects.runtime import CurrentRuntime
@@ -59,9 +58,6 @@ def unsafeScope(config):
         u"getAddrInfo": getAddrInfo(),
         u"makeFileResource": makeFileResource(),
         u"makeProcess": makeProcess(),
-        u"makeStdErr": makeStdErr(),
-        u"makeStdIn": makeStdIn(),
-        u"makeStdOut": makeStdOut(),
         u"makeTCP4ClientEndpoint": makeTCP4ClientEndpoint(),
         u"makeTCP4ServerEndpoint": makeTCP4ServerEndpoint(),
         u"makeTCP6ClientEndpoint": makeTCP6ClientEndpoint(),
