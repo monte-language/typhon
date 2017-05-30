@@ -12,7 +12,7 @@ from collections import OrderedDict
 
 from typhon.errors import Ejecting, UserException
 from typhon.nano.scopes import SEV_BINDING, SEV_NOUN, SEV_SLOT
-from typhon.nano.structure import SplitAuditorsIR
+from typhon.nano.structure import AtomIR
 from typhon.objects.auditors import deepFrozenGuard
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
@@ -21,21 +21,25 @@ from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.user import Audition
 from typhon.objects.slots import Binding, FinalSlot, VarSlot
 
+from typhon.nano.mast import BuildKernelNodes
+from typhon.objects.user import AuditClipboard
+
+
 def mix(ast, outers):
     ast = FillOuters(outers).visitExpr(ast)
     ast = ThawLiterals().visitExpr(ast)
     ast = SpecializeCalls().visitExpr(ast)
+    ast = SplitAuditors().visitExpr(ast)
     ast = DischargeAuditors().visitExpr(ast)
     return ast
 
-NoOutersIR = SplitAuditorsIR.extend("NoOuters",
+NoOutersIR = AtomIR.extend("NoOuters",
     ["Object"],
     {
         "Expr": {
             "LiveExpr": [("obj", "Object")],
             "ObjectExpr": [("patt", "Patt"), ("guards", None),
-                           ("auditors", "Expr*"), ("script", "Script"),
-                           ("clipboard", None)],
+                           ("auditors", "Expr*"), ("script", "Script")],
             "-OuterExpr": None,
         }
     }
@@ -63,12 +67,12 @@ def retrieveGuard(severity, storage):
     else:
         assert False, "landlord"
 
-class FillOuters(SplitAuditorsIR.makePassTo(NoOutersIR)):
+class FillOuters(AtomIR.makePassTo(NoOutersIR)):
 
     def __init__(self, outers):
         self.outers = outers
 
-    def visitObjectExpr(self, patt, auditors, script, clipboard):
+    def visitObjectExpr(self, patt, auditors, script):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         script = self.visitScript(script)
@@ -82,7 +86,7 @@ class FillOuters(SplitAuditorsIR.makePassTo(NoOutersIR)):
             # Mark the guard as static by destroying the relevant dynamic
             # guard key. Use .pop() to avoid KeyErrors from unused bindings.
             script.layout.frameTable.dynamicGuards.pop(name, 0)
-        return self.dest.ObjectExpr(patt, guards, auditors, script, clipboard)
+        return self.dest.ObjectExpr(patt, guards, auditors, script)
 
     def visitOuterExpr(self, name, index):
         return self.dest.LiveExpr(self.outers[index])
@@ -185,26 +189,80 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
                         return self.dest.ExceptionExpr(ue)
         return self.dest.CallExpr(obj, atom, args, namedArgs)
 
-class DischargeAuditors(MixIR.selfPass()):
+
+SplitAuditorsIR = MixIR.extend(
+    "SplitAuditors",
+    ["AST"],
+    {
+        "Expr": {
+            "ClearObjectExpr": [("patt", "Patt"), ("script", "Script")],
+            "ObjectExpr": [("patt", "Patt"), ("guards", None),
+                           ("auditors", "Expr*"), ("script", "Script"),
+                           ("clipboard", None)],
+        },
+    }
+)
+
+
+class SplitAuditors(MixIR.makePassTo(SplitAuditorsIR)):
+
+    def visitObjectExpr(self, patt, guards, auditors, script):
+        patt = self.visitPatt(patt)
+        auditors = [self.visitExpr(auditor) for auditor in auditors]
+        script = self.visitScript(script)
+        if not auditors or (len(auditors) == 1 and
+                            isinstance(auditors[0], self.dest.NullExpr)):
+            # No more auditing.
+            return self.dest.ClearObjectExpr(patt, script)
+        else:
+            # Runtime auditing.
+            ast = BuildKernelNodes().visitExpr(script.mast)
+            clipboard = AuditClipboard(script.layout.fqn, ast)
+            return self.dest.ObjectExpr(patt, guards, auditors, script,
+                                        clipboard)
+
+
+StampedScriptIR = SplitAuditorsIR.extend("StampedScriptIR", [],
+    {
+        "Script": {
+            "ScriptExpr": [("name", None), ("doc", None), ("mast", None),
+                           ("layout", None), ("stamps", "Object*"),
+                           ("methods", "Method*"),
+                           ("matchers", "Matcher*")],
+        },
+    }
+)
+
+
+class DischargeAuditors(SplitAuditorsIR.makePassTo(StampedScriptIR)):
 
     def __init__(self):
         from typhon.metrics import globalRecorder
         recorder = globalRecorder()
         self.clearRate = recorder.getRateFor("DischargeAuditors clear")
 
+
+    def visitScriptExpr(self, name, doc, mast, layout, methods, matchers):
+        return self.dest.ScriptExpr(name, doc, mast, layout,
+                                    [],
+                                    [self.visitMethod(m) for m in methods],
+                                    [self.visitMatcher(m) for m in matchers])
+
     def visitObjectExpr(self, patt, guards, auditors, script, clipboard):
         script = self.visitScript(script)
+        patt = self.visitPatt(patt)
+        auditors = [self.visitExpr(a) for a in auditors]
         clear = False
         if auditors:
             asAuditor = auditors[0]
-            if isinstance(asAuditor, self.src.LiveExpr):
+            if isinstance(asAuditor, self.dest.LiveExpr):
                 patt.guard = asAuditor
                 from typhon.nano.interp import GuardInfo, anyGuardLookup
                 guardInfo = GuardInfo(guards, script.layout.frameTable, None, None,
                         anyGuardLookup)
                 with Audition(script.layout.fqn, clipboard.ast, guardInfo) as audition:
                     for i, auditor in enumerate(auditors):
-                        if not isinstance(auditor, self.src.LiveExpr):
+                        if not isinstance(auditor, self.dest.LiveExpr):
                             # Slice to save progress and take the non-clear
                             # path.
                             auditors = auditors[i:]
@@ -230,7 +288,7 @@ class DischargeAuditors(MixIR.selfPass()):
                 stamps = report.stamps.keys()
                 script = self.dest.ScriptExpr(script.name, script.doc,
                                               script.mast, script.layout,
-                                              script.stamps + stamps,
+                                              stamps,
                                               script.methods, script.matchers)
                 # In order to be truly clear, we must not have depended on any
                 # dynamic guards.

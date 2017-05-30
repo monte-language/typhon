@@ -7,19 +7,16 @@ Structural refactoring to improve the efficiency of the AST interpreter.
 from rpython.rlib.rbigint import BASE10
 
 from typhon.atoms import getAtom
-from typhon.nano.mast import BuildKernelNodes
-from typhon.nano.auditors import DeepFrozenIR
-from typhon.objects.user import AuditClipboard
+from typhon.nano.scopes import BoundNounsIR
 from typhon.quoting import quoteChar, quoteStr
 
 def refactorStructure(ast):
     ast = RemoveDefIgnore().visitExpr(ast)
     ast = SplitScript().visitExpr(ast)
     ast = MakeAtoms().visitExpr(ast)
-    ast = SplitAuditors().visitExpr(ast)
     return ast
 
-class RemoveDefIgnore(DeepFrozenIR.selfPass()):
+class RemoveDefIgnore(BoundNounsIR.selfPass()):
     """
     match m`def _ :@guard exit @ex := @rvalue`:
         if (guard == NullExpr):
@@ -37,7 +34,7 @@ class RemoveDefIgnore(DeepFrozenIR.selfPass()):
                 return self.dest.CallExpr(guard, u"coerce", [rvalue, ex], [])
         return self.super.visitDefExpr(self, patt, ex, rvalue)
 
-SplitScriptIR = DeepFrozenIR.extend("SplitScript", [],
+SplitScriptIR = BoundNounsIR.extend("SplitScript", [],
     {
         "Expr": {
             "ObjectExpr": [("patt", "Patt"), ("auditors", "Expr*"),
@@ -45,13 +42,13 @@ SplitScriptIR = DeepFrozenIR.extend("SplitScript", [],
         },
         "Script": {
             "ScriptExpr": [("name", None), ("doc", None), ("mast", None),
-                           ("layout", None), ("stamps", "Object*"),
-                           ("methods", "Method*"), ("matchers", "Matcher*")],
+                           ("layout", None), ("methods", "Method*"),
+                           ("matchers", "Matcher*")],
         },
     }
 )
 
-class SplitScript(DeepFrozenIR.makePassTo(SplitScriptIR)):
+class SplitScript(BoundNounsIR.makePassTo(SplitScriptIR)):
 
     def nameForPatt(self, patt):
         if isinstance(patt, self.dest.IgnorePatt):
@@ -59,14 +56,15 @@ class SplitScript(DeepFrozenIR.makePassTo(SplitScriptIR)):
         else:
             return patt.name
 
-    def visitObjectExpr(self, doc, patt, stamps, auditors, methods, matchers,
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers,
                         mast, layout):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         methods = [self.visitMethod(method) for method in methods]
         matchers = [self.visitMatcher(matcher) for matcher in matchers]
         name = self.nameForPatt(patt)
-        script = self.dest.ScriptExpr(name, doc, mast, layout, stamps, methods, matchers)
+        script = self.dest.ScriptExpr(name, doc, mast, layout, methods,
+                                      matchers)
         return self.dest.ObjectExpr(patt, auditors, script)
 
 AtomIR = SplitScriptIR.extend("Atom", [],
@@ -103,33 +101,6 @@ class MakeAtoms(SplitScriptIR.makePassTo(AtomIR)):
         return self.dest.MethodExpr(doc, atom, patts, namedPatts, guard, body,
                                     localSize)
 
-SplitAuditorsIR = AtomIR.extend("SplitAuditors",
-    ["AST"],
-    {
-        "Expr": {
-            "ClearObjectExpr": [("patt", "Patt"), ("script", "Script")],
-            "ObjectExpr": [("patt", "Patt"), ("auditors", "Expr*"),
-                           ("script", "Script"), ("clipboard", None)],
-        },
-    }
-)
-
-
-class SplitAuditors(AtomIR.makePassTo(SplitAuditorsIR)):
-
-    def visitObjectExpr(self, patt, auditors, script):
-        patt = self.visitPatt(patt)
-        auditors = [self.visitExpr(auditor) for auditor in auditors]
-        script = self.visitScript(script)
-        if not auditors or (len(auditors) == 1 and
-                            isinstance(auditors[0], self.dest.NullExpr)):
-            # No more auditing.
-            return self.dest.ClearObjectExpr(patt, script)
-        else:
-            # Runtime auditing.
-            ast = BuildKernelNodes().visitExpr(script.mast)
-            clipboard = AuditClipboard(script.layout.fqn, ast)
-            return self.dest.ObjectExpr(patt, auditors, script, clipboard)
 
 # Pretty-printer for the final pass.
 
@@ -158,7 +129,7 @@ class BraceContext(object):
         self.printer.line()
         self.printer.write(u"}")
 
-class PrettySpecialNouns(SplitAuditorsIR.makePassTo(None)):
+class PrettySpecialNouns(AtomIR.makePassTo(None)):
 
     indentLevel = 0
 

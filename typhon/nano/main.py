@@ -1,4 +1,3 @@
-from typhon.nano.auditors import dischargeAuditors
 from typhon.nano.escapes import elideEscapes
 from typhon.nano.mast import saveScripts
 from typhon.nano.scopes import layoutScopes, bindNouns
@@ -21,6 +20,5 @@ def mainPipeline(expr, safeScopeNames, fqnPrefix, inRepl):
                                                                 fqnPrefix, inRepl)
         bound = bindNouns(ll)
         ast = elideEscapes(bound)
-        ast = dischargeAuditors(ast)
         ast = refactorStructure(ast)
         return ast, outerNames, topLocalNames, localSize

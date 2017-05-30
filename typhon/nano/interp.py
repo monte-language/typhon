@@ -8,7 +8,7 @@ from rpython.rlib.jit import promote, unroll_safe, we_are_jitted
 from typhon.atoms import getAtom
 from typhon.errors import Ejecting, Refused, UserException, userError
 from typhon.nano.main import mainPipeline
-from typhon.nano.mix import MixIR, mix
+from typhon.nano.mix import StampedScriptIR, mix
 from typhon.nano.scopes import (SCOPE_FRAME, SCOPE_LOCAL,
                                 SEV_BINDING, SEV_NOUN, SEV_SLOT)
 from typhon.objects.auditors import selfless, transparentStamp
@@ -34,7 +34,7 @@ _UNCALL_0 = getAtom(u"_uncall", 0)
 NULL_BINDING = finalBinding(NullObject, anyGuard)
 
 
-ProfileNameIR = MixIR.extend("ProfileName",
+ProfileNameIR = StampedScriptIR.extend("ProfileName",
     ["ProfileName"],
     {
         "Method": {
@@ -50,7 +50,7 @@ ProfileNameIR = MixIR.extend("ProfileName",
     }
 )
 
-class MakeProfileNames(MixIR.makePassTo(ProfileNameIR)):
+class MakeProfileNames(StampedScriptIR.makePassTo(ProfileNameIR)):
     """
     Prebuild the strings which identify code objects to the profiler.
 
