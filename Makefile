@@ -9,7 +9,6 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 	boot/lib/enum.mast \
 	boot/lib/iterators.mast \
 	boot/lib/streams.mast \
-	boot/lib/tubes.mast \
 	boot/prelude.mast \
 	boot/prelude/monte_ast.mast \
 	boot/prelude/b.mast \
@@ -63,7 +62,6 @@ mast: mast/lib/enum.mast mast/lib/record.mast \
 	codec \
 	entropy \
 	parsers \
-	tubes \
 	games \
 	bench \
 	monte
@@ -94,8 +92,6 @@ entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 
 parsers: mast/lib/parsers/html.mast \
 	mast/lib/parsers/regex.mast
-
-tubes: mast/lib/tubes.mast
 
 games: mast/games/mafia.mast
 

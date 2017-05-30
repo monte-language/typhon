@@ -13,7 +13,6 @@ import "lib/monte/meta" =~ _
 # import "lib/monte/mix" =~ _
 import "lib/parsers/html" =~ _
 import "lib/record" =~ _
-import "lib/tubes" =~ _
 import "lib/streams" =~ _
 import "lib/words" =~ _
 import "tests/auditors" =~ _
