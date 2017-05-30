@@ -590,15 +590,16 @@ object _makeVerbFacet as DeepFrozenStamp:
     to curryCall(target, verb :Str):
         "Curry a call to `target` using `verb`."
 
-        return object curried:
+        return object curried implements Selfless, SemitransparentStamp:
             "A curried call.
 
              This object responds to messages with the verb \"run\" by passing
              them to another object with a different verb."
 
             to _uncall():
-                return [_makeVerbFacet, "curryCall", [target, verb],
-                        [].asMap()]
+                return SemitransparentStamp.seal([
+                    _makeVerbFacet, "curryCall", [target, verb],
+                    [].asMap()])
 
             match [=="run", args, namedArgs]:
                 M.call(target, verb, args, namedArgs)
@@ -606,15 +607,16 @@ object _makeVerbFacet as DeepFrozenStamp:
     to currySend(target, verb :Str):
         "Curry a send to `target` using `verb`."
 
-        return object curried:
+        return object curried implements Selfless, SemitransparentStamp:
             "A curried send.
 
              This object responds to messages with the verb \"run\" by passing
              them to another object with a different verb."
 
             to _uncall():
-                return [_makeVerbFacet, "currySend", [target, verb],
-                        [].asMap()]
+                return SemitransparentStamp.seal(
+                    [_makeVerbFacet, "currySend", [target, verb],
+                     [].asMap()])
 
             match [=="run", args, namedArgs]:
                 M.send(target, verb, args, namedArgs)
@@ -716,7 +718,8 @@ def scopeAsDF(scope):
 
 
 var preludeScope := scopeAsDF(scopeNames)
-def preludeStamps := [=> DeepFrozenStamp, => TransparentStamp, => KernelAstStamp]
+def preludeStamps := [=> DeepFrozenStamp, => TransparentStamp, => KernelAstStamp,
+                      => SemitransparentStamp]
 def dependencies := [].asMap().diverge()
 object stubLoader:
     to "import"(name):
