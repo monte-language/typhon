@@ -28,7 +28,8 @@ def findUndefinedNames(expr, outers) as DeepFrozen:
         def item := stack.pop()
         def names := item.getStaticScope().namesUsed().asSet()
         if ((offenders & names).size() > 0):
-            if (["NounExpr", "SlotExpr", "BindingExpr"].contains(item.getNodeName())):
+            if (["QuasiParserExpr", "QuasiParserPattern", "NounExpr",
+                 "SlotExpr", "BindingExpr"].contains(item.getNodeName())):
                 results.push(item)
             descendInto(item)
     return results

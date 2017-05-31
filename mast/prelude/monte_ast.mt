@@ -2294,7 +2294,7 @@ def makeQuasiParserExpr(name :NullOk[Str], quasis :List[QuasiPiece], span) as De
     })
     object quasiParserExpr:
         to getName():
-            return name
+            return name + "``"
         to getQuasis():
             return quasis
         to subPrintOn(out, _priority):
@@ -2310,7 +2310,7 @@ def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as
     })
     object quasiParserPattern:
         to getName():
-            return name
+            return name + "``"
         to getQuasis():
             return quasis
 
