@@ -177,12 +177,14 @@ def test_ObjectExpr(assert):
     assert.equal(expr("object foo extends baz:\n  pass"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], Script(NounExpr("baz"), [], []))`)
 
 def test_Function(assert):
-    assert.equal(expr("def foo() {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], [], null, LiteralExpr(1)))`)
-    assert.equal(expr("def foo() {}\n"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], [], null, SeqExpr([])))`)
-    assert.equal(expr("def foo() {\"yes\"}"), ta`ObjectExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], [], null, LiteralExpr("yes")))`)
-    assert.equal(expr("def foo(a, b) :c {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], [], NounExpr("c"), LiteralExpr(1)))`)
-    assert.equal(expr("def foo():\n  1"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([], [], null, LiteralExpr(1)))`)
-    assert.equal(expr("def foo(a, b) :c:\n  1"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript([FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], [], NounExpr("c"), LiteralExpr(1)))`)
+    assert.equal(expr("def foo() {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("run", [], [], null, LiteralExpr(1)))`)
+    assert.equal(expr("def foo.bar() {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("bar", [], [], null, LiteralExpr(1)))`)
+    assert.equal(expr("def foo() {}\n"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("run", [], [], null, SeqExpr([])))`)
+    assert.equal(expr("def foo() {\"yes\"}"), ta`ObjectExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("run", [], [], null, LiteralExpr("yes")))`)
+    assert.equal(expr("def foo(a, b) :c {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("run", [FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], [], NounExpr("c"), LiteralExpr(1)))`)
+    assert.equal(expr("def foo():\n  1"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("run", [], [], null, LiteralExpr(1)))`)
+    assert.equal(expr("def foo(a, b) :c:\n  1"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("run", [FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], [], NounExpr("c"), LiteralExpr(1)))`)
+    assert.equal(expr("def foo.baz() {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("baz", [], [], null, LiteralExpr(1)))`)
 
 def test_Interface(assert):
     assert.equal(expr("interface foo {\"yes\"}"), ta`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [], [])`)

@@ -1221,7 +1221,7 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
     return astWrapper(script, makeScript, [extend, methods, matchers], span,
         &scope, "Script", fn f {[maybeTransform(extend, f), transformAll(methods, f), transformAll(matchers, f)]})
 
-def makeFunctionScript(patterns :List[Pattern],
+def makeFunctionScript(verb :Str, patterns :List[Pattern],
                        namedPatterns :List[Ast["NamedParam", "NamedParamImport"]],
                        resultGuard :NullOk[Expr], body :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {
@@ -1231,6 +1231,8 @@ def makeFunctionScript(patterns :List[Pattern],
         (ps + returnScope + b).hide()
     })
     object functionScript:
+        to getVerb():
+            return verb
         to getPatterns():
             return patterns
         to getNamedPatterns():
@@ -1242,6 +1244,12 @@ def makeFunctionScript(patterns :List[Pattern],
         to printObjectHeadOn(name, asExpr, auditors, out, _priority):
             out.print("def ")
             name.subPrintOn(out, priorities["pattern"])
+            if (verb != "run"):
+                out.print(".")
+                if (isIdentifier(verb)):
+                    out.print(verb)
+                else:
+                    out.quote(verb)
             printListOn("(", patterns, ", ", "", out, priorities["pattern"])
             printListOn("", namedPatterns, ", ", ")", out, priorities["pattern"])
             if (resultGuard != null):
@@ -1256,7 +1264,7 @@ def makeFunctionScript(patterns :List[Pattern],
             body.subPrintOn(out, priority)
             out.print("\n")
     return astWrapper(functionScript, makeFunctionScript, [patterns, namedPatterns, resultGuard, body], span,
-        &scope, "FunctionScript", fn f {[transformAll(patterns, f), transformAll(namedPatterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
+        &scope, "FunctionScript", fn f {[verb, transformAll(patterns, f), transformAll(namedPatterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
 def makeFunctionExpr(patterns :List[Pattern],
                      namedPatterns :List[Ast["NamedParam", "NamedParamImport"]],
@@ -2411,8 +2419,8 @@ object astBuilder as DeepFrozenStamp:
         return makeCatcher(pattern, body, span)
     to Script(extend, methods, matchers, span):
         return makeScript(extend, methods, matchers, span)
-    to FunctionScript(patterns, namedPatterns, resultGuard, body, span):
-        return makeFunctionScript(patterns, namedPatterns, resultGuard, body, span)
+    to FunctionScript(verb, patterns, namedPatterns, resultGuard, body, span):
+        return makeFunctionScript(verb, patterns, namedPatterns, resultGuard, body, span)
     to FunctionExpr(patterns, namedPatterns, body, span):
         return makeFunctionExpr(patterns, namedPatterns, body, span)
     to ListExpr(items, span):
