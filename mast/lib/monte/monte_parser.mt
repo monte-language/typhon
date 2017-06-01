@@ -937,6 +937,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def spanStart := spanHere()
             advance(ej)
             var isBind := false
+            var verb := "run"
             if (!["IDENTIFIER", "::", "bind", PATTERN_HOLE, VALUE_HOLE].contains(peekTag())):
                 position := origPosition
                 return assign(ej)
@@ -952,8 +953,14 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             } else {
                 builder.FinalPattern(noun(ej), null, spanFrom(spanStart))
             }
+            if (considerTag(".", ej)) {
+                    verb := acceptVerb(ej)
+                    if (peekTag() != "(") {
+                        throw.eject(ej, ["expected (", spanNext()])
+                    }
+                }
             if (peekTag() == "("):
-                objectFunction(name, "run", indent, tryAgain, ej, spanStart)
+                objectFunction(name, verb, indent, tryAgain, ej, spanStart)
             else if (["exit", ":=", "QUASI_OPEN", "?", ":"].contains(peekTag())):
                 position := origPosition
                 assign(ej)
@@ -1307,7 +1314,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 null
             }
             # this might be a ForwardExpr or FunctionScript
-            if (["EOL", ";", "("].contains(peekTag()) &&
+            if (["EOL", ";", "(", "."].contains(peekTag()) &&
                     patt.getNodeName() == "FinalPattern" &&
                     ex == null):
                 # YEP we should go do that instead

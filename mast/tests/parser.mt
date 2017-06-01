@@ -184,6 +184,7 @@ def test_Function(assert):
     assert.equal(expr("def foo(a, b) :c {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("run", [FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], [], NounExpr("c"), LiteralExpr(1)))`)
     assert.equal(expr("def foo():\n  1"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("run", [], [], null, LiteralExpr(1)))`)
     assert.equal(expr("def foo(a, b) :c:\n  1"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("run", [FinalPattern(NounExpr("a"), null), FinalPattern(NounExpr("b"), null)], [], NounExpr("c"), LiteralExpr(1)))`)
+    assert.equal(expr("def foo.baz() {1}"), ta`ObjectExpr(null, FinalPattern(NounExpr("foo"), null), null, [], FunctionScript("baz", [], [], null, LiteralExpr(1)))`)
 
 def test_Interface(assert):
     assert.equal(expr("interface foo {\"yes\"}"), ta`InterfaceExpr("yes", FinalPattern(NounExpr("foo"), null), null, [], [], [])`)
