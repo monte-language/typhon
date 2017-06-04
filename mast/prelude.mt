@@ -740,7 +740,7 @@ def loadit(name):
 
 def importIntoScope(name):
     preludeScope |= scopeAsDF(loadit(name))
-
+dependencies["ast_printer"] := loadit("prelude/ast_printer")
 # AST (needed for auditors).
 importIntoScope("prelude/monte_ast")
 

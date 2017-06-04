@@ -79,7 +79,8 @@ testMast: default mast mast/tests/lexer.mast mast/tests/parser.mast \
 test: testVM testMast
 
 prelude: mast/prelude.mast mast/prelude/brand.mast mast/prelude/m.mast \
-	mast/prelude/monte_ast.mast mast/prelude/ql.mast mast/prelude/region.mast \
+	mast/prelude/ast_printer.mast mast/prelude/monte_ast.mast \
+	mast/prelude/ql.mast mast/prelude/region.mast \
 	mast/prelude/simple.mast mast/prelude/protocolDesc.mast \
 	mast/prelude/b.mast mast/prelude/transparent.mast \
 	mast/prelude/coreInterfaces.mast
