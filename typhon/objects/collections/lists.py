@@ -536,7 +536,9 @@ class ConstList(Object):
     def slice(self, start):
         if start < 0:
             raise userError(u"slice/1: Negative start")
-        return self.objs[start:]
+        stop = len(self.objs)
+        start = min(start, stop)
+        return self.objs[start:stop]
 
     @method("List", "Int", "Int", _verb="slice")
     def _slice(self, start, stop):
@@ -544,6 +546,8 @@ class ConstList(Object):
             raise userError(u"slice/1: Negative start")
         if stop < 0:
             raise userError(u"slice/2: Negative stop")
+        stop = min(stop, len(self.objs))
+        start = min(start, stop)
         return self.objs[start:stop]
 
     @method("Any")
