@@ -1,8 +1,5 @@
-import "unittest" =~ [=> unittest]
-import "lib/parsers/marley" =~ [=> marley__quasiParser :DeepFrozen]
+import "lib/parsers/marley" =~ [=> ::"marley``" :DeepFrozen]
 exports (Regex, parseRegex)
-
-
 
 interface _Regex :DeepFrozen:
     "Regular expressions."
