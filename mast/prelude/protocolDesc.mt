@@ -70,9 +70,6 @@ object _makeProtocolDesc as DeepFrozen:
         def parentMethods :List[Set] := [for parent in (parents)
                                          getMethods(parent)]
         def allMethods :Set := ownMethods | reduce(parentMethods)
-        def desiredMethods :Set := [for message in (allMethods)
-                                    [message.getVerb(),
-                                     message.getArity()]].asSet()
 
         object protocolDesc implements Selfless, TransparentStamp:
             "An interface; a description of an object protocol.
@@ -100,21 +97,10 @@ object _makeProtocolDesc as DeepFrozen:
                 "Determine whether an object implements this object as an
                  interface."
 
-                # XXX should we fail if any parent fails?
+                # If any parent interface fails, then we must fail as well.
                 for parent in (parents):
                     if (!audition.ask(parent)):
-                        traceln(`audit/1: Failed parent: $parent`)
-
-                # Check that all the methods are there and have the right
-                # verb/arity.
-                def script := audition.getObjectExpr().getScript()
-                def scriptMethods := [for m in (script.getMethods())
-                                      [m.getVerb(),
-                                       m.getPatterns().size()]].asSet()
-                def missingMethods := desiredMethods - scriptMethods
-                if (missingMethods.size() != 0):
-                    traceln(`audit/1: Missing methods: $missingMethods`)
-                    # XXX return false
+                        return false
 
                 return true
 
