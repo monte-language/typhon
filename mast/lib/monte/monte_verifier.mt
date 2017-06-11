@@ -352,7 +352,12 @@ def findSingleMethodObjects(expr) as DeepFrozen:
     def SMOFinder(node, _maker, _args, _span):
         if (node.getNodeName() == "ObjectExpr"):
             def script := node.getScript()
-            if (script.getNodeName() == "Script" && script.getMethods() =~ [_meth]):
+            # If the object has `extends` or matchers, then we can't actually
+            # use SMO syntax on it, so it'd be rude to complain.
+            if (script.getNodeName() == "Script" &&
+                script.getExtends() == null &&
+                script.getMethods() =~ [_meth] &&
+                script.getMatchers().isEmpty()):
                 def name := node.getName()
                 results.push([`Object $name has only one method`, name.getSpan()])
     expr.transform(SMOFinder)
@@ -362,4 +367,11 @@ def testSMO(assert):
     def l := findSingleMethodObjects(m`object obj { to meth() { null } }`)
     assert.equal(true, l =~ [[=="Object obj has only one method", _]])
 
-unittest([testSMO])
+def testSMOExtends(assert):
+    def l := findSingleMethodObjects(m`object obj extends parent { to meth() { null } }`)
+    assert.equal(l, [])
+
+unittest([
+    testSMO,
+    testSMOExtends,
+])
