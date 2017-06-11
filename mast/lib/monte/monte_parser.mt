@@ -1320,9 +1320,9 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 null
             }
             # this might be a ForwardExpr or FunctionScript
-            if (["EOL", ";", "(", "."].contains(peekTag()) &&
-                    patt.getNodeName() == "FinalPattern" &&
-                    ex == null):
+            if (peekTag() != ":=" &&
+                patt.getNodeName() == "FinalPattern" &&
+                ex == null):
                 # YEP we should go do that instead
                 position := defStart
                 basic(false, ej, ej)
