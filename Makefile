@@ -10,6 +10,7 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 	boot/lib/iterators.mast \
 	boot/lib/streams.mast \
 	boot/prelude.mast \
+	boot/prelude/ast_printer.mast \
 	boot/prelude/monte_ast.mast \
 	boot/prelude/b.mast \
 	boot/prelude/brand.mast \
