@@ -530,14 +530,13 @@ def makeQuasiParser(scannerMaker :DeepFrozen, grammar :Grammar,
                         parser.forceFeed(token)
 
             def grammar :Grammar := parser.oneResult()
-            return object ruleSubstituter:
-                to substitute(_):
-                    return object marleyMaker:
-                        to run(startRule :Str):
-                           return makeMarley(grammar, startRule)
+            return def ruleSubstituter.substitute(_):
+                return object marleyMaker:
+                    to run(startRule :Str):
+                       return makeMarley(grammar, startRule)
 
-                        to getGrammar() :Grammar:
-                            return grammar
+                    to getGrammar() :Grammar:
+                        return grammar
 
 def ::"marley``" :DeepFrozen := makeQuasiParser(makeScanner, marleyQLGrammar,
                                                 "grammar", "marley")

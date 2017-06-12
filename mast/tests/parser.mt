@@ -21,12 +21,10 @@ def astFromTerm(t):
                 astBuilder, t.getTag().getName(),
                 [for a in (t.getArgs()) astFromTerm(a)] + [null], [].asMap())
 
-object ::"ta``":
-    to valueMaker(template):
-        return object ta:
-            to substitute(vals):
-                def t := ::"term``".valueMaker(template).substitute(vals)
-                return astFromTerm(t)
+def ::"ta``".valueMaker(template):
+    return def ta.substitute(vals):
+        def t := ::"term``".valueMaker(template).substitute(vals)
+        return astFromTerm(t)
 
 def expr(s):
     return parseExpression(makeMonteLexer(s + "\n", "<test>"), astBuilder,

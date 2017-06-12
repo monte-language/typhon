@@ -8,35 +8,33 @@ object noPadding as DeepFrozen {}
 def makeZipper(iterables :List, padding) as DeepFrozen:
     def iterators := [for iterable in (iterables) iterable._makeIterator()]
     return if (padding == noPadding):
-        object truncatingZippingIterator:
-            to next(ej) :Pair[List, List]:
-                def ks := [].diverge()
-                def vs := [].diverge()
-                for iterator in (iterators):
-                    def [k, v] := iterator.next(ej)
-                    ks.push(k)
-                    vs.push(v)
-                return [ks.snapshot(), vs.snapshot()]
+        def truncatingZippingIterator.next(ej) :Pair[List, List]:
+            def ks := [].diverge()
+            def vs := [].diverge()
+            for iterator in (iterators):
+                def [k, v] := iterator.next(ej)
+                ks.push(k)
+                vs.push(v)
+            return [ks.snapshot(), vs.snapshot()]
     else:
         # Flag for figuring out whether we're finished with iteration.
         var finished :Bool := true
-        object paddingZippingIterator:
-            to next(ej) :Pair[List, List]:
-                finished := true
-                def ks := [].diverge()
-                def vs := [].diverge()
-                for iterator in (iterators):
-                    escape needsPadding:
-                        def [k, v] := iterator.next(needsPadding)
-                        finished := false
-                        ks.push(k)
-                        vs.push(v)
-                    catch _:
-                        ks.push(padding)
-                        vs.push(padding)
-                if (finished):
-                    ej("Iteration finished")
-                return [ks.snapshot(), vs.snapshot()]
+        def paddingZippingIterator.next(ej) :Pair[List, List]:
+            finished := true
+            def ks := [].diverge()
+            def vs := [].diverge()
+            for iterator in (iterators):
+                escape needsPadding:
+                    def [k, v] := iterator.next(needsPadding)
+                    finished := false
+                    ks.push(k)
+                    vs.push(v)
+                catch _:
+                    ks.push(padding)
+                    vs.push(padding)
+            if (finished):
+                ej("Iteration finished")
+            return [ks.snapshot(), vs.snapshot()]
 
 def allSameLength(iterables) :Bool as DeepFrozen:
     def ej := __return
@@ -62,7 +60,7 @@ object zip as DeepFrozen:
     "
 
     match [=="run", iterables ? (allSameLength(iterables)), _]:
-        object zipped:
+        def zipped._makeIterator():
             "
             A zipping iterator.
 
@@ -70,15 +68,13 @@ object zip as DeepFrozen:
             run ragged.
             "
 
-            to _makeIterator():
-                return makeZipper(iterables, noPadding)
+            return makeZipper(iterables, noPadding)
 
     match [=="ragged", iterables, [=> padding := noPadding] | _]:
-        object zippedRagged:
+        def zippedRagged._makeIterator():
             "A ragged zipping iterator."
 
-            to _makeIterator():
-                return makeZipper(iterables, padding)
+            return makeZipper(iterables, padding)
 
 def testZipLists(assert):
     def l := [1, 2, 3, 4, 5]

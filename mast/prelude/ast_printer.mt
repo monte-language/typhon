@@ -125,16 +125,16 @@ def quasiPrint(name, quasis, out) as DeepFrozenStamp:
     out.print("`")
 
 def printerActions :Map[Str, DeepFrozen] := [
-    "MetaContextExpr" => def printMetaContextExpr(self, out, priority) as DeepFrozenStamp {
+    "MetaContextExpr" => def printMetaContextExpr(_self, out, _priority) as DeepFrozenStamp {
         out.print("meta.context()")
     },
-    "MetaStateExpr" => def printMetaStateExpr(self, out, priority) as DeepFrozenStamp {
+    "MetaStateExpr" => def printMetaStateExpr(_self, out, _priority) as DeepFrozenStamp {
         out.print("meta.getState()")
     },
-    "LiteralExpr" => def printLiteralExpr(self, out, priority) as DeepFrozenStamp {
+    "LiteralExpr" => def printLiteralExpr(self, out, _priority) as DeepFrozenStamp {
         out.quote(self.getValue())
     },
-    "NounExpr" => def printNounExpr(self, out, priority) as DeepFrozenStamp {
+    "NounExpr" => def printNounExpr(self, out, _priority) as DeepFrozenStamp {
         def name := self.getName()
         if (isIdentifier(name)) {
         out.print(name)
@@ -143,11 +143,11 @@ def printerActions :Map[Str, DeepFrozen] := [
             out.quote(name)
         }
     },
-    "BindingExpr" => def printBindingExpr(self, out, priority) as DeepFrozenStamp {
+    "BindingExpr" => def printBindingExpr(self, out, _priority) as DeepFrozenStamp {
         out.print("&&")
         out.print(self.getNoun())
     },
-    "SlotExpr" => def printSlotExpr(self, out, priority) as DeepFrozenStamp {
+    "SlotExpr" => def printSlotExpr(self, out, _priority) as DeepFrozenStamp {
         out.print("&")
         out.print(self.getNoun())
     },
@@ -170,7 +170,7 @@ def printerActions :Map[Str, DeepFrozen] := [
             out.print(")")
         }
     },
-    "Module" => def printModule(self, out, priority) as DeepFrozenStamp {
+    "Module" => def printModule(self, out, _priority) as DeepFrozenStamp {
         for [petname, patt] in (self.getImports()) {
             out.print("import ")
             out.quote(petname)
@@ -185,12 +185,12 @@ def printerActions :Map[Str, DeepFrozen] := [
         }
         self.getBody().subPrintOn(out, priorities["indentExpr"])
     },
-    "NamedArg" => def printNamedArg(self, out, priority) as DeepFrozenStamp {
+    "NamedArg" => def printNamedArg(self, out, _priority) as DeepFrozenStamp {
         self.getKey().subPrintOn(out, priorities["prim"])
         out.print(" => ")
         self.getValue().subPrintOn(out, priorities["braceExpr"])
     },
-    "NamedArgExport" => def printNamedArgExport(self, out, priority) as DeepFrozenStamp {
+    "NamedArgExport" => def printNamedArgExport(self, out, _priority) as DeepFrozenStamp {
         out.print(" => ")
         self.getValue().subPrintOn(out, "braceExpr")
     },
@@ -252,7 +252,7 @@ def printerActions :Map[Str, DeepFrozen] := [
             out.print(")")
         }
     },
-    "GetExpr" => def printGetExpr(self, out, priority) as DeepFrozenStamp {
+    "GetExpr" => def printGetExpr(self, out, _priority) as DeepFrozenStamp {
         self.getReceiver().subPrintOn(out, priorities["call"])
         printListOn("[", self.getIndices(), ", ", "]", out, priorities["braceExpr"])
         },
@@ -548,7 +548,7 @@ def printerActions :Map[Str, DeepFrozen] := [
         self.getBody().subPrintOn(out, priority)
         out.print("\n")
     },
-    "FunctionExpr" => def printFunctionExpr(self, out, priority) as DeepFrozenStamp {
+    "FunctionExpr" => def printFunctionExpr(self, out, _priority) as DeepFrozenStamp {
         printExprSuiteOn(fn {
             printListOn("fn ", self.getPatterns(), ", ",
                         "", out, priorities["pattern"])
@@ -556,10 +556,10 @@ def printerActions :Map[Str, DeepFrozen] := [
                         "", out, priorities["pattern"])
         }, self.getBody(), false, out, priorities["assign"])
  },
-    "ListExpr" => def printListExpr(self, out, priority) as DeepFrozenStamp {
+    "ListExpr" => def printListExpr(self, out, _priority) as DeepFrozenStamp {
         printListOn("[", self.getItems(), ", ", "]", out, priorities["braceExpr"])
     },
-    "ListComprehensionExpr" => def printListComprehensionExpr(self, out, priority) as DeepFrozenStamp {
+    "ListComprehensionExpr" => def printListComprehensionExpr(self, out, _priority) as DeepFrozenStamp {
         out.print("[for ")
         def key := self.getKey()
         def value := self.getValue()
@@ -581,19 +581,19 @@ def printerActions :Map[Str, DeepFrozen] := [
         self.getBody().subPrintOn(out, priorities["braceExpr"])
         out.print("]")
     },
-    "MapExprAssoc" => def printMapExprAssoc(self, out, priority) as DeepFrozenStamp {
+    "MapExprAssoc" => def printMapExprAssoc(self, out, _priority) as DeepFrozenStamp {
         self.getKey().subPrintOn(out, priorities["braceExpr"])
         out.print(" => ")
         self.getValue().subPrintOn(out, priorities["braceExpr"])
     },
-    "MapExprExport" => def printMapExprExport(self, out, priority) as DeepFrozenStamp {
+    "MapExprExport" => def printMapExprExport(self, out, _priority) as DeepFrozenStamp {
         out.print("=> ")
         self.getValue().subPrintOn(out, priorities["prim"])
     },
-    "MapExpr" => def printMapExpr(self, out, priority) as DeepFrozenStamp {
+    "MapExpr" => def printMapExpr(self, out, _priority) as DeepFrozenStamp {
         printListOn("[", self.getPairs(), ", ", "]", out, priorities["braceExpr"])
     },
-    "MapComprehensionExpr" => def printMapComprehensionExpr(self, out, priority) as DeepFrozenStamp {
+    "MapComprehensionExpr" => def printMapComprehensionExpr(self, out, _priority) as DeepFrozenStamp {
         def key := self.getKey()
         def value := self.getValue()
         def iterable := self.getIterable()
@@ -652,7 +652,7 @@ def printerActions :Map[Str, DeepFrozen] := [
                 out, priority)
         }, self.getDocstring(), self.getScript(), out, priority)
     },
-    "ParamDesc" => def printParamDesc(self, out, priority) as DeepFrozenStamp {
+    "ParamDesc" => def printParamDesc(self, out, _priority) as DeepFrozenStamp {
         def name := self.getName()
         if (name == null) {
             out.print("_")
@@ -900,29 +900,29 @@ def printerActions :Map[Str, DeepFrozen] := [
             catcher.subPrintOn(out, priority)
         }
     },
-    "HideExpr" => def printHideExpr(self, out, priority) as DeepFrozenStamp {
+    "HideExpr" => def printHideExpr(self, out, _priority) as DeepFrozenStamp {
         def indentOut := out.indent(INDENT)
         indentOut.println("{")
         self.getBody().subPrintOn(indentOut, priorities["braceExpr"])
         out.println("")
         out.print("}")
     },
-    "ValueHoleExpr" => def printValueHoleExpr(self, out, priority) as DeepFrozenStamp {
+    "ValueHoleExpr" => def printValueHoleExpr(self, out, _priority) as DeepFrozenStamp {
         out.print("${expr-hole ")
         out.print(self.getIndex())
         out.print("}")
     },
-    "PatternHoleExpr" => def printPatternHoleExpr(self, out, priority) as DeepFrozenStamp {
+    "PatternHoleExpr" => def printPatternHoleExpr(self, out, _priority) as DeepFrozenStamp {
         out.print("@{expr-hole ")
         out.print(self.getIndex())
         out.print("}")
     },
-    "ValueHolePattern" => def printValueHolePattern(self, out, priority) as DeepFrozenStamp {
+    "ValueHolePattern" => def printValueHolePattern(self, out, _priority) as DeepFrozenStamp {
         out.print("${pattern-hole ")
         out.print(self.getIndex())
         out.print("}")
     },
-    "PatternHolePattern" => def printPatternHolePattern(self, out, priority) as DeepFrozenStamp {
+    "PatternHolePattern" => def printPatternHolePattern(self, out, _priority) as DeepFrozenStamp {
         out.print("@{pattern-hole ")
         out.print(self.getIndex())
         out.print("}")
@@ -966,7 +966,7 @@ def printerActions :Map[Str, DeepFrozen] := [
             guard.subPrintOn(out, priorities["order"])
         }
     },
-    "IgnorePattern" => def printIgnorePattern(self, out, priority) as DeepFrozenStamp {
+    "IgnorePattern" => def printIgnorePattern(self, out, _priority) as DeepFrozenStamp {
         out.print("_")
         def guard := self.getGuard()
         if (guard != null) {
@@ -974,7 +974,7 @@ def printerActions :Map[Str, DeepFrozen] := [
             guard.subPrintOn(out, priorities["order"])
         }
     },
-    "ListPattern" => def printListPattern(self, out, priority) as DeepFrozenStamp {
+    "ListPattern" => def printListPattern(self, out, _priority) as DeepFrozenStamp {
         printListOn("[", self.getPatterns(), ", ", "]", out, priorities["pattern"])
         def tail := self.getTail()
         if (tail != null) {
@@ -1011,7 +1011,7 @@ def printerActions :Map[Str, DeepFrozen] := [
             out.print(")")
         }
     },
-    "MapPattern" => def printMapPattern(self, out, priority) as DeepFrozenStamp {
+    "MapPattern" => def printMapPattern(self, out, _priority) as DeepFrozenStamp {
         printListOn("[", self.getPatterns(), ", ", "]", out, priorities["pattern"])
         def tail := self.getTail()
         if (tail != null) {
@@ -1059,7 +1059,7 @@ def printerActions :Map[Str, DeepFrozen] := [
         self.getExpr().subPrintOn(out, priorities["braceExpr"])
         out.print(")")
     },
-    "SamePattern" => def printSamePattern(self, out, priority) as DeepFrozenStamp {
+    "SamePattern" => def printSamePattern(self, out, _priority) as DeepFrozenStamp {
         if (self.getDirection()) {
             out.print("==")
         } else {
@@ -1067,7 +1067,7 @@ def printerActions :Map[Str, DeepFrozen] := [
         }
         self.getValue().subPrintOn(out, priorities["call"])
     },
-    "QuasiText" => def printQuasiText(self, out, priority) as DeepFrozenStamp {
+    "QuasiText" => def printQuasiText(self, out, _priority) as DeepFrozenStamp {
         out.print(self.getText())
     },
     "QuasiExprHole" => def printQuasiExprHole(self, out, priority) as DeepFrozenStamp {
@@ -1098,10 +1098,10 @@ def printerActions :Map[Str, DeepFrozen] := [
             out.print("}")
         }
     },
-    "QuasiParserExpr" => def printQuasiParserExpr(self, out, priority) as DeepFrozenStamp {
+    "QuasiParserExpr" => def printQuasiParserExpr(self, out, _priority) as DeepFrozenStamp {
         quasiPrint(self.getName(), self.getQuasis(), out)
     },
-    "QuasiParserPattern" => def printQuasiParserPattern(self, out, priority) as DeepFrozenStamp {
+    "QuasiParserPattern" => def printQuasiParserPattern(self, out, _priority) as DeepFrozenStamp {
         quasiPrint(self.getName(), self.getQuasis(), out)
     },
 ]

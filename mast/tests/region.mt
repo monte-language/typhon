@@ -15,16 +15,15 @@ def testContainment(assert):
 def testGuard(assert):
     def intspace := _makeOrderedSpace(Int, "Int")
     def reg := (intspace >= 0) & (intspace < 5)
-    assert.equal(def x :reg := 3, 3)
-    assert.ejects(fn ej {def x :reg exit ej := 7})
+    assert.equal(def _x :reg := 3, 3)
+    assert.ejects(fn ej {def _x :reg exit ej := 7})
 
 def testDeepFrozen(assert):
     def intspace := _makeOrderedSpace(Int, "Int")
     def reg := (intspace >= 0) & (intspace < 5)
     def x :reg := 2
-    object y implements DeepFrozen:
-        to add(a):
-            return a + x
+    def y.add(a) implements DeepFrozen:
+        return a + x
     assert.equal(y =~ _ :DeepFrozen, true)
 
 unittest([testIterable, testContainment, testGuard, testDeepFrozen])

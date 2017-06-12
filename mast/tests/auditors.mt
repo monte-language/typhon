@@ -20,9 +20,8 @@ def test_transparent_success(assert):
 def test_makerauditor_reuse(assert):
     def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
     def makeFoo() implements makerAuditor:
-        return object foo implements valueAuditor:
-            to _uncall():
-                return serializer(makeFoo, [])
+        return def foo._uncall() implements valueAuditor:
+            return serializer(makeFoo, [])
 
     assert.throws(fn {object makeFoo2 implements makerAuditor {}})
 
@@ -47,10 +46,8 @@ def test_require_valueauditor(assert):
     def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
     assert.throws(fn {
         def makeFoo(x, y) implements makerAuditor {
-            return object foo {
-                to _uncall() {
-                    return serializer(makeFoo, [x, y])
-                }
+            return def foo._uncall() {
+                return serializer(makeFoo, [x, y])
             }
         }
     })
@@ -59,10 +56,8 @@ def test_require_serializer(assert):
     def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
     assert.throws(fn {
         def makeFoo(x, y) implements makerAuditor {
-            return object foo implements valueAuditor {
-                to _uncall() {
-                    return [makeFoo, "run", [x, y], [].asMap()]
-                }
+            return def foo._uncall() implements valueAuditor {
+                return [makeFoo, "run", [x, y], [].asMap()]
             }
         }
     })
@@ -71,10 +66,8 @@ def test_require_finalpatts(assert):
     def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
     assert.throws(fn {
         def makeFoo(x, var y) implements makerAuditor {
-            return object foo implements valueAuditor {
-                to _uncall() {
-                    return serializer(makeFoo, [x, y])
-                }
+            return def foo._uncall() implements valueAuditor {
+                return serializer(makeFoo, [x, y])
             }
         }
     })

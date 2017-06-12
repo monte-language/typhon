@@ -338,20 +338,19 @@ def region(loader):
                 var topSetIndex :Int := 0
                 var currentIterator := topSets[0]._makeIterator()
 
-                return object regionIterator:
+                return def regionIterator.next(ej):
                     "Iterator for a region."
 
-                    to next(ej):
-                        escape ejTopSet:
-                            def rv := [i, currentIterator.next(ejTopSet)[1]]
-                            i += 1
-                            return rv
-                        catch _:
-                            topSetIndex += 1
-                            if (topSetIndex >= size):
-                                throw.eject(ej, "Iteration finished")
-                            currentIterator := topSets[topSetIndex]._makeIterator()
-                            return regionIterator.next(ej)
+                    escape ejTopSet:
+                        def rv := [i, currentIterator.next(ejTopSet)[1]]
+                        i += 1
+                        return rv
+                    catch _:
+                        topSetIndex += 1
+                        if (topSetIndex >= size):
+                            throw.eject(ej, "Iteration finished")
+                        currentIterator := topSets[topSetIndex]._makeIterator()
+                        return regionIterator.next(ej)
 
             # NB: I have omitted .descending/0 but it is not hard to implement.
             # You will want to add it to topsets first and then to regions. ~ C.
@@ -379,7 +378,7 @@ def region(loader):
                         return 0.0
         return self
     def _makeOrderedSpace
-    object _selmipriMakeOrderedSpace as DeepFrozenStamp:
+    def _selmipriMakeOrderedSpace(myType :DeepFrozen, myName :Str) as DeepFrozenStamp:
         "The maker of ordered vector spaces.
 
          This object implements several Monte operators, including those which
@@ -388,100 +387,97 @@ def region(loader):
         # Given a type whose reflexive (x <=> x) instances are fully
         # ordered, this makes an OrderedSpace for making Regions and
         # Twisters for those instances using operator notation.
-        to run(myType :DeepFrozen, myName :Str):
+        def region(newTopSets) as DeepFrozenStamp:
+            return _makeOrderedRegion(myType, myName, newTopSets)
 
-            def region(newTopSets) as DeepFrozenStamp:
-                return _makeOrderedRegion(myType, myName, newTopSets)
+        def maybeSubrangeDeepFrozen.audit(audition):
+            if (DeepFrozen.supersetOf(myType)):
+                audition.ask(SubrangeGuard[DeepFrozen])
+            return false
 
-            object maybeSubrangeDeepFrozen:
-                to audit(audition):
-                    if (DeepFrozen.supersetOf(myType)):
-                        audition.ask(SubrangeGuard[DeepFrozen])
-                    return false
+        # Be prepared to show our authorization at the border
+        def myTypeR :Same[myType] := myType
 
-            # Be prepared to show our authorization at the border
-            def myTypeR :Same[myType] := myType
+        # The OrderedSpace delegates to the myType.
+        return object OrderedSpace extends myType as DeepFrozenStamp implements maybeSubrangeDeepFrozen, Selfless, TransparentStamp:
+            "An ordered vector space.
 
-            # The OrderedSpace delegates to the myType.
-            return object OrderedSpace extends myType as DeepFrozenStamp implements maybeSubrangeDeepFrozen, Selfless, TransparentStamp:
-                "An ordered vector space.
+             As a guard, this object admits any value in the set of objects in
+             the space. Comparison operators may be used on this object to
+             create subguards which only admit a partition of the set."
 
-                 As a guard, this object admits any value in the set of objects in
-                 the space. Comparison operators may be used on this object to
-                 create subguards which only admit a partition of the set."
+            # Just uses the name used to construct this OrderedSpace
+            to _printOn(out):
+                out.print(myName)
 
-                # Just uses the name used to construct this OrderedSpace
-                to _printOn(out):
-                    out.print(myName)
+            to _uncall():
+                return [_makeOrderedSpace, "run", [myType, myName], [].asMap()]
 
-                to _uncall():
-                    return [_makeOrderedSpace, "run", [myType, myName], [].asMap()]
+            to coerce(specimen, ej) :myTypeR:
+                return myType.coerce(specimen, ej)
 
-                to coerce(specimen, ej) :myTypeR:
-                    return myType.coerce(specimen, ej)
+            to op__cmp(myY :myType):
+                "Return regions representing the possible positions for
+                 comparisons."
 
-                to op__cmp(myY :myType):
-                    "Return regions representing the possible positions for
-                     comparisons."
+                return object regionMaker:
+                    # (myType < myY)
+                    to belowZero():
+                        return region([_makeTopSet(myType, null, false, myY,
+                                                   false)])
 
-                    return object regionMaker:
-                        # (myType < myY)
-                        to belowZero():
-                            return region([_makeTopSet(myType, null, false, myY,
-                                                       false)])
+                    # (myType <= myY)
+                    to atMostZero():
+                        return region([_makeTopSet(myType, null, false, myY,
+                                                   true)])
 
-                        # (myType <= myY)
-                        to atMostZero():
-                            return region([_makeTopSet(myType, null, false, myY,
-                                                       true)])
+                    # (myType <=> myY)
+                    to isZero():
+                        return region([_makeTopSet(myType, myY, true, myY,
+                                                   true)])
 
-                        # (myType <=> myY)
-                        to isZero():
-                            return region([_makeTopSet(myType, myY, true, myY,
-                                                       true)])
+                    # (myType >= myY)
+                    to atLeastZero():
+                        return region([_makeTopSet(myType, myY, true, null,
+                                                   false)])
 
-                        # (myType >= myY)
-                        to atLeastZero():
-                            return region([_makeTopSet(myType, myY, true, null,
-                                                       false)])
+                    # (myType > myY)
+                    to aboveZero():
+                        return region([_makeTopSet(myType, myY, false, null,
+                                                   false)])
 
-                        # (myType > myY)
-                        to aboveZero():
-                            return region([_makeTopSet(myType, myY, false, null,
-                                                       false)])
+            to add(myOffset):
+                "Add an offset to all positions in this space."
 
-                to add(myOffset):
-                    "Add an offset to all positions in this space."
+                return object twister:
+                    to _printOn(out):
+                        out.print(`($myName + $myOffset)`)
 
-                    return object twister:
-                        to _printOn(out):
-                            out.print(`($myName + $myOffset)`)
+                    to run(addend :myType):
+                        return addend + myOffset
 
-                        to run(addend :myType):
-                            return addend + myOffset
+                    to getOffset():
+                        return myOffset
 
-                        to getOffset():
-                            return myOffset
+                    to add(moreOffset):
+                        return OrderedSpace + (myOffset + moreOffset)
 
-                        to add(moreOffset):
-                            return OrderedSpace + (myOffset + moreOffset)
+                    to subtract(moreOffset):
+                        return twister + -moreOffset
 
-                        to subtract(moreOffset):
-                            return twister + -moreOffset
+            to subtract(offset):
+                "Subtract an offset from all positions in this space."
+                return OrderedSpace + -offset
 
-                to subtract(offset):
-                    "Subtract an offset from all positions in this space."
-                    return OrderedSpace + -offset
+            to makeRegion(left :myType, leftClosed :Bool, right :myType,
+                          rightClosed :Bool):
+                "Make a region from a pair of endpoints."
+                return region([_makeTopSet(myType, left, leftClosed, right,
+                                           rightClosed)])
 
-                to makeRegion(left :myType, leftClosed :Bool, right :myType,
-                              rightClosed :Bool):
-                    "Make a region from a pair of endpoints."
-                    return region([_makeTopSet(myType, left, leftClosed, right,
-                                               rightClosed)])
-
-                to makeEmptyRegion():
-                    "Make the empty region."
-                    return region([])
+            to makeEmptyRegion():
+                "Make the empty region."
+                return region([])
 
 
     # The space cache. Hopefully this is not often-touched.

@@ -190,7 +190,6 @@ Error in source $source from test $test:
         running += 1
 
         def st :Str := M.toString(test)
-        def padding := `spam$total` * 10000
         return when (test<-(asserter(st))) ->
             lastSource := k
             lastTest := test
@@ -209,22 +208,21 @@ Error in source $source from test $test:
             errors += 1
             updateScreen()
 
-    return object runner:
-        to runTests(tests):
-            def asserter := makeAsserter()
-            def results := [for [k, test] in (tests)
-                            startTest<-(asserter, k, test)]
-            # Do the initial screen update.
+    return def runner.runTests(tests):
+        def asserter := makeAsserter()
+        def results := [for [k, test] in (tests)
+                        startTest<-(asserter, k, test)]
+        # Do the initial screen update.
+        updateScreen()
+        return when (promiseAllFulfilled(results)) ->
             updateScreen()
-            return when (promiseAllFulfilled(results)) ->
-                updateScreen()
-                stdout(UTF8.encode(`$\nRan ${results.size()} tests!$\n`, null))
-                object resultSummary:
-                    to fails():
-                        return asserter.fails()
+            stdout(UTF8.encode(`$\nRan ${results.size()} tests!$\n`, null))
+            object resultSummary:
+                to fails():
+                    return asserter.fails()
 
-                    to total():
-                        return asserter.total()
+                to total():
+                    return asserter.total()
 
-                    to errors():
-                        return asserter.errors()
+                to errors():
+                    return asserter.errors()

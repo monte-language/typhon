@@ -32,13 +32,12 @@ def makeEnum(names :List[Str]) as DeepFrozen:
                                     makeEnumObject(i, name)]
     def enumSet :Set[DeepFrozen] := enums.asSet()
 
-    object EnumGuard as DeepFrozen:
-        "A guard for an enumeration."
+    def EnumGuard.coerce(specimen, ej) as DeepFrozen:
+        "Require `specimen` to be a member of an enumeration."
 
-        to coerce(specimen, ej):
-            if (!enumSet.contains(specimen)):
-                throw.eject(ej, `$specimen is not one of $enums`)
-            return specimen
+        if (!enumSet.contains(specimen)):
+            throw.eject(ej, `$specimen is not one of $enums`)
+        return specimen
 
     return [EnumGuard] + enums
 

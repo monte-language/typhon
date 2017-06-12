@@ -19,18 +19,17 @@ object PATTERN_HOLE as DeepFrozen {}
 object VALUE_HOLE as DeepFrozen {}
 
 def makeString(chunks :DeepFrozen) as DeepFrozen:
-    return object stringMaker as DeepFrozen:
-        to substitute(values) :Str:
-            def rv := [].diverge()
-            for chunk in (chunks):
-                switch (chunk):
-                    match [==VALUE_HOLE, index]:
-                        rv.push(M.toString(values[index]))
-                    match [==PATTERN_HOLE, _]:
-                        throw("valueMaker/1: Pattern in expression context")
-                    match _:
-                        rv.push(M.toString(chunk))
-            return "".join(rv.snapshot())
+    return def stringMaker.substitute(values) :Str as DeepFrozen:
+        def rv := [].diverge()
+        for chunk in (chunks):
+            switch (chunk):
+                match [==VALUE_HOLE, index]:
+                    rv.push(M.toString(values[index]))
+                match [==PATTERN_HOLE, _]:
+                    throw("valueMaker/1: Pattern in expression context")
+                match _:
+                    rv.push(M.toString(chunk))
+        return "".join(rv.snapshot())
 
 
 object ::"``" as DeepFrozen:
@@ -64,61 +63,60 @@ object ::"``" as DeepFrozen:
             l.snapshot()
         }
 
-        return object simpleMatcher as DeepFrozen:
-            to matchBind(values, rawSpecimen, ej):
-                def specimen :Str exit ej := rawSpecimen
-                var i := 0
-                var j := 0
-                def bindings := [].diverge()
-                for n => piece in (pieces):
-                    def [typ, val] := piece
-                    if (typ == LITERAL):
-                        j := i + val.size()
-                        if (specimen.slice(i, j) != val):
-                            throw.eject(ej,
-                                 "expected " +  M.toQuote(val) +
-                                 "..., found " +
-                                 M.toQuote(specimen.slice(i, j)))
+        return def simpleMatcher.matchBind(values, rawSpecimen, ej) as DeepFrozen:
+            def specimen :Str exit ej := rawSpecimen
+            var i := 0
+            var j := 0
+            def bindings := [].diverge()
+            for n => piece in (pieces):
+                def [typ, val] := piece
+                if (typ == LITERAL):
+                    j := i + val.size()
+                    if (specimen.slice(i, j) != val):
+                        throw.eject(ej,
+                             "expected " +  M.toQuote(val) +
+                             "..., found " +
+                             M.toQuote(specimen.slice(i, j)))
 
-                    else if (typ == VALUE_HOLE):
-                        def s := M.toString(values[val])
-                        j := i + s.size()
-                        if (specimen.slice(i, j) != s):
-                            throw.eject(ej,
-                                 "expected " + M.toQuote(s) + "... ($-hole " +
-                                  M.toQuote(val) + ", found " +
-                                  M.toQuote(specimen.slice(i, j)))
+                else if (typ == VALUE_HOLE):
+                    def s := M.toString(values[val])
+                    j := i + s.size()
+                    if (specimen.slice(i, j) != s):
+                        throw.eject(ej,
+                             "expected " + M.toQuote(s) + "... ($-hole " +
+                              M.toQuote(val) + ", found " +
+                              M.toQuote(specimen.slice(i, j)))
 
-                    else if (typ == PATTERN_HOLE):
-                        if (n == pieces.size() - 1):
-                            bindings.push(specimen.slice(i, specimen.size()))
-                            i := specimen.size()
-                            continue
-                        def [nextType, var nextVal] := pieces[n + 1]
+                else if (typ == PATTERN_HOLE):
+                    if (n == pieces.size() - 1):
+                        bindings.push(specimen.slice(i, specimen.size()))
+                        i := specimen.size()
+                        continue
+                    def [nextType, var nextVal] := pieces[n + 1]
 
-                        if (nextType == VALUE_HOLE):
-                            nextVal := values[nextVal]
-                        else if (nextType == PATTERN_HOLE):
-                            # Double pattern. Whoa. What does it mean?
-                            bindings.push("")
-                            continue
+                    if (nextType == VALUE_HOLE):
+                        nextVal := values[nextVal]
+                    else if (nextType == PATTERN_HOLE):
+                        # Double pattern. Whoa. What does it mean?
+                        bindings.push("")
+                        continue
 
-                        # Start the search at i, so that we don't accidentally
-                        # go backwards in the string. (I cursed for a good two
-                        # days over this.) ~ C.
-                        j := specimen.indexOf(nextVal, i)
-                        if (j == -1):
-                            throw.eject(ej,
-                                 "expected " + M.toQuote(nextVal) +
-                                  "..., found " + M.toQuote(specimen.slice(i,
-                                                            specimen.size())))
-                        bindings.push(specimen.slice(i, j))
-                    i := j
+                    # Start the search at i, so that we don't accidentally
+                    # go backwards in the string. (I cursed for a good two
+                    # days over this.) ~ C.
+                    j := specimen.indexOf(nextVal, i)
+                    if (j == -1):
+                        throw.eject(ej,
+                             "expected " + M.toQuote(nextVal) +
+                              "..., found " + M.toQuote(specimen.slice(i,
+                                                        specimen.size())))
+                    bindings.push(specimen.slice(i, j))
+                i := j
 
-                if (i == specimen.size()):
-                    return bindings.snapshot()
+            if (i == specimen.size()):
+                return bindings.snapshot()
 
-                throw.eject(ej, "Excess unmatched: " + M.toQuote(specimen.slice(i, j)))
+            throw.eject(ej, "Excess unmatched: " + M.toQuote(specimen.slice(i, j)))
 
     to valueMaker(pieces):
         return makeString(pieces)
@@ -133,7 +131,7 @@ def testQuasiPatternHead(assert):
     assert.equal(head, `1`)
 
 def testQuasiPatternHeadFail(assert):
-    assert.ejects(fn j {def `@{head}23` exit j  := `1234`})
+    assert.ejects(fn j {def `@{_head}23` exit j  := `1234`})
 
 def testQuasiPatternMid(assert):
     def `1@{middle}3` := `123`

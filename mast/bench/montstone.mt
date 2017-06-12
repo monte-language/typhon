@@ -16,7 +16,6 @@
 # I am not afraid to include the relatively poorly-written parts of this
 # benchmark. ~ C.
 
-import "unittest" =~ [=> unittest]
 import "bench" =~ [=> bench]
 import "lib/enum" =~ [=> makeEnum]
 exports ()
@@ -216,7 +215,8 @@ def Proc0():
     var IntLoc1 :OneToFifty := 1
     var IntLoc2 :OneToFifty := 1
     var IntLoc3 :OneToFifty := 1
-    var CharLoc :Char := '\x00'
+    # NB: The linter caught this. ~ C.
+    var _CharLoc :Char := '\x00'
     var EnumLoc :Enumeration := Ident1
     var String1Loc :String30 := ""
     var String2Loc :String30 := ""

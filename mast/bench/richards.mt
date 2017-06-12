@@ -287,7 +287,7 @@ def runHandlerTask(task, packet, r):
 def makeHandlerTask := makeTaskMaker(runHandlerTask)
 
 
-def runIdleTask(task, packet, r):
+def runIdleTask(task, _packet, r):
     r["count"] -= 1
     if (r["count"] == 0):
         return task.hold()

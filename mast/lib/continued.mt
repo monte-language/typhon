@@ -19,9 +19,10 @@ exports (continued)
 # Continued fractions. Nearly all maths here comes from Gosper in the early
 # 70s. Nothing interesting here, aside from the wonders of maths.
 
-object infinity as DeepFrozen:
-    to _printOn(out):
-        out.print("∞")
+def infinity._printOn(out) as DeepFrozen:
+    "A marker for that which has no limit."
+
+    out.print("∞")
 
 def [Finity :DeepFrozen,
      FINITE :DeepFrozen,

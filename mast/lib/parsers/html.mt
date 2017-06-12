@@ -82,15 +82,14 @@ unittest([
 ])
 
 def makeTag(name :Str, fragments :List) as DeepFrozen:
-    return object tag:
-        to _printOn(out):
-            if (fragments.size() != 0):
-                out.print(`<$name>`)
-                for fragment in (fragments):
-                    out.print(`$fragment`)
-                out.print(`</$name>`)
-            else:
-                out.print(`<$name/>`)
+    return def tag._printOn(out):
+        if (fragments.size() != 0):
+            out.print(`<$name>`)
+            for fragment in (fragments):
+                out.print(`$fragment`)
+            out.print(`</$name>`)
+        else:
+            out.print(`<$name/>`)
 
 def parseFragment(cs) as DeepFrozen:
     if (cs.choose('<')):

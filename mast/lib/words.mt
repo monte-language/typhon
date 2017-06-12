@@ -13,18 +13,18 @@
 # under the License.
 import "unittest" =~ [=> unittest]
 exports (Word)
-object Word as DeepFrozen:
-    to get(width :Int):
-        # Precomputed.
-        def mask :Int := (1 << width) - 1
 
-        return object WordGuard:
-            to _printOn(out):
-                out.print(`Word[$width]`)
+def Word.get(width :Int) as DeepFrozen:
+    # Precomputed.
+    def mask :Int := (1 << width) - 1
 
-            to coerce(specimen, ej):
-                def int :Int exit ej := specimen
-                return int & mask
+    return object WordGuard:
+        to _printOn(out):
+            out.print(`Word[$width]`)
+
+        to coerce(specimen, ej):
+            def int :Int exit ej := specimen
+            return int & mask
 
 def testWord(assert):
     assert.ejects(fn ej {def x :Word[32] exit ej := "asdf"})

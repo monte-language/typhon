@@ -42,83 +42,81 @@ object ::"b``" as DeepFrozen:
         # especially at the tail end, and it messes up pattern matching.
         def chunks :DeepFrozen := [for piece in (pieces) ? (piece != "") piece]
 
-        return object byteMatcher as DeepFrozen:
-            to matchBind(values, specimen, ej):
-                # The strategy: Lay down "railroad" segments one at a time,
-                # matching against the specimen.
-                # XXX var position :(0..!specimen.size()) exit ej := 0
-                var position :Int := 0
-                var inPattern :Bool := false
-                def patterns := [].diverge()
-                var patternMarker := 0
+        return def byteMatcher.matchBind(values, specimen, ej) as DeepFrozen:
+            # The strategy: Lay down "railroad" segments one at a time,
+            # matching against the specimen.
+            # XXX var position :(0..!specimen.size()) exit ej := 0
+            var position :Int := 0
+            var inPattern :Bool := false
+            def patterns := [].diverge()
+            var patternMarker := 0
 
-                for var chunk in (chunks):
-                    if (chunk =~ [==bytePattern, index]):
-                        if (inPattern):
-                            throw.eject(ej,
-                                "Can't catenate patterns with patterns!")
-                        inPattern := true
-                        patternMarker := position
-
-                        continue
-
-                    if (chunk =~ [==byteValue, index]):
-                        chunk := values[index]
-                    else:
-                        chunk := _makeBytes.fromStr(chunk)
-
-                    def len := chunk.size()
+            for var chunk in (chunks):
+                if (chunk =~ [==bytePattern, index]):
                     if (inPattern):
-                        # Before we look for a match, let's double-check that
-                        # finding a match is possible with a length check.
-                        if (position + len > specimen.size()):
-                            throw.eject(ej, "Specimen too short")
+                        throw.eject(ej,
+                            "Can't catenate patterns with patterns!")
+                    inPattern := true
+                    patternMarker := position
 
-                        # Let's go find a match, and then slice off a pattern.
-                        while (specimen.slice(position, position + len) != chunk):
-                            position += 1
-                            if (position >= specimen.size()):
-                                throw.eject(ej, "Length mismatch")
+                    continue
 
-                        # Found a match! Mark the pattern, then jump ahead.
-                        patterns.push(specimen.slice(patternMarker, position))
-                        position += len
-                        inPattern := false
-
-                    else:
-                        if (specimen.slice(position, position + len) == chunk):
-                            position += len
-                        else:
-                            throw.eject(ej, "Couldn't match literal/value")
-
-                if (inPattern):
-                    # The final piece was a pattern.
-                    patterns.push(specimen.slice(patternMarker,
-                                                 specimen.size()))
+                if (chunk =~ [==byteValue, index]):
+                    chunk := values[index]
                 else:
-                    # The final piece was a value. Make sure that we're not
-                    # behind; if we are, it's usually because our specimen had
-                    # too many characters.
-                    if (specimen.size() > position):
-                        throw.eject(ej, "Specimen too long")
+                    chunk := _makeBytes.fromStr(chunk)
 
-                return patterns.snapshot()
+                def len := chunk.size()
+                if (inPattern):
+                    # Before we look for a match, let's double-check that
+                    # finding a match is possible with a length check.
+                    if (position + len > specimen.size()):
+                        throw.eject(ej, "Specimen too short")
+
+                    # Let's go find a match, and then slice off a pattern.
+                    while (specimen.slice(position, position + len) != chunk):
+                        position += 1
+                        if (position >= specimen.size()):
+                            throw.eject(ej, "Length mismatch")
+
+                    # Found a match! Mark the pattern, then jump ahead.
+                    patterns.push(specimen.slice(patternMarker, position))
+                    position += len
+                    inPattern := false
+
+                else:
+                    if (specimen.slice(position, position + len) == chunk):
+                        position += len
+                    else:
+                        throw.eject(ej, "Couldn't match literal/value")
+
+            if (inPattern):
+                # The final piece was a pattern.
+                patterns.push(specimen.slice(patternMarker,
+                                             specimen.size()))
+            else:
+                # The final piece was a value. Make sure that we're not
+                # behind; if we are, it's usually because our specimen had
+                # too many characters.
+                if (specimen.size() > position):
+                    throw.eject(ej, "Specimen too long")
+
+            return patterns.snapshot()
 
     to valueMaker(pieces):
         def chunks :DeepFrozen := [for piece in (pieces)
             if (piece =~ s :Str) { _makeBytes.fromStr(s) } else { piece }]
 
-        return object bytes as DeepFrozen:
-            to substitute(values) :Bytes:
-                var rv := _makeBytes.fromInts([])
-                for chunk in (chunks):
-                    switch (chunk):
-                        match [==byteValue, index]:
-                            switch (values[index]):
-                                match s :Str:
-                                    rv += _makeBytes.fromStr(s)
-                                match bs :Bytes:
-                                    rv += bs
-                        match bs :Bytes:
-                            rv += bs
-                return rv
+        return def bytes.substitute(values) :Bytes as DeepFrozen:
+            var rv := _makeBytes.fromInts([])
+            for chunk in (chunks):
+                switch (chunk):
+                    match [==byteValue, index]:
+                        switch (values[index]):
+                            match s :Str:
+                                rv += _makeBytes.fromStr(s)
+                            match bs :Bytes:
+                                rv += bs
+                    match bs :Bytes:
+                        rv += bs
+            return rv

@@ -45,9 +45,8 @@ def makePool(entropy) as DeepFrozen:
             return bits
 
 def testPool(assert):
-    object entropy:
-        to getEntropy():
-            return [5, 0xf]
+    def entropy.getEntropy():
+        return [5, 0xf]
 
     def pool := makePool(entropy)
     assert.equal(pool.getSomeBits(0), 0x0)

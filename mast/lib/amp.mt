@@ -153,17 +153,15 @@ def makeAMP(sink, handler) as DeepFrozen:
 
 
 def makeAMPServer(endpoint) as DeepFrozen:
-    return object AMPServerEndpoint:
-        to listenStream(handler):
-            def f(source, sink):
-                def amp := makeAMP(sink, handler)
-                flow(source, amp.sink())
-            endpoint.listenStream(f)
+    return def AMPServerEndpoint.listenStream(handler):
+        def f(source, sink):
+            def amp := makeAMP(sink, handler)
+            flow(source, amp.sink())
+        endpoint.listenStream(f)
 
 
 def makeAMPClient(endpoint) as DeepFrozen:
-    return object AMPClientEndpoint:
-        to connectStream(handler):
-            return when (def [source, sink] := endpoint.connectStream()) ->
-                def amp := makeAMP(sink, handler)
-                flow(source, amp.sink())
+    return def AMPClientEndpoint.connectStream(handler):
+        return when (def [source, sink] := endpoint.connectStream()) ->
+            def amp := makeAMP(sink, handler)
+            flow(source, amp.sink())
