@@ -912,13 +912,19 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def n := noun(ej)
             def g := maybeGuard()
             def name := builder.BindPattern(n, g, spanFrom(spanStart))
-            if (peekTag() == "("):
-                objectFunction(name, "run", indent, tryAgain, ej, spanStart)
-            else if (peekTag() == ":="):
-                position := origPosition
-                assign(ej)
-            else:
-                objectExpr(name, indent, tryAgain, ej, spanStart)
+            switch (peekTag()):
+                match ==".":
+                    # Custom verb.
+                    acceptTag(".", ej)
+                    def verb := acceptVerb(ej)
+                    objectFunction(name, verb, indent, tryAgain, ej, spanStart)
+                match =="(":
+                    objectFunction(name, "run", indent, tryAgain, ej, spanStart)
+                match ==":=":
+                    position := origPosition
+                    assign(ej)
+                match _:
+                    objectExpr(name, indent, tryAgain, ej, spanStart)
 
         else if (tag == "object"):
             def spanStart := spanHere()
@@ -1328,7 +1334,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         # this might be "bind foo(..):" or even "bind foo:"
         else if (["var", "bind"].contains(peekTag())):
             def patt := pattern(ej)
-            if (["(", "implements", "as", "extends", "(", "{"].contains(peekTag()) ||
+            if ([".", "implements", "as", "extends", "(", "{"].contains(peekTag()) ||
                        ((position + 2 >= tokens.size()) && peekTag() == ":" &&
                         tokens[position + 2][0] == "EOL")):
                 position := defStart
