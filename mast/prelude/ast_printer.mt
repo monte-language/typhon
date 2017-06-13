@@ -96,19 +96,57 @@ def printSuiteOn(leaderFn, printContents, cuddle, noLeaderNewline, out,
         printContents(indentOut, priorities["indentExpr"])
 
 def printExprSuiteOn(leaderFn, suite, cuddle, out, priority) as DeepFrozenStamp:
-        printSuiteOn(leaderFn, suite.subPrintOn, cuddle, false, out, priority)
+    printSuiteOn(leaderFn, suite.subPrintOn, cuddle, false, out, priority)
 
 def printDocExprSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozenStamp:
-        printSuiteOn(leaderFn, fn o, p {
-            printDocstringOn(docstring, o, true)
-            suite.subPrintOn(o, p)
-            }, false, true, out, priority)
+    printSuiteOn(leaderFn, fn o, p {
+        printDocstringOn(docstring, o, true)
+        suite.subPrintOn(o, p)
+        }, false, true, out, priority)
 
 def printObjectSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozenStamp:
-        printSuiteOn(leaderFn, fn o, p {
-            printDocstringOn(docstring, o, false)
-            suite.subPrintOn(o, p)
-            }, false, true, out, priority)
+    printSuiteOn(leaderFn, fn o, p {
+        printDocstringOn(docstring, o, false)
+        suite.subPrintOn(o, p)
+        }, false, true, out, priority)
+
+def printObjectHeadOn(script, name, asExpr, auditors, out, _priority) as DeepFrozenStamp:
+    def namedPatterns := script.getNamedPatterns()
+    def patterns := script.getPatterns()
+    def resultGuard := script.getResultGuard()
+    def verb := script.getVerb()
+    if (script.getNodeName() == "FunctionScript"):
+        out.print("def ")
+        name.subPrintOn(out, priorities["pattern"])
+        if (verb != "run"):
+            out.print(".")
+            if (isIdentifier()):
+                out.print(verb)
+            else:
+                out.quote(verb)
+        printListOn("(", patterns, ", ", "", out, priorities["pattern"])
+        printListOn("", namedPatterns, ", ", ")", out, priorities["pattern"])
+        if (resultGuard != null):
+            out.print(" :")
+            resultGuard.subPrintOn(out, priorities["call"])
+        if (asExpr != null):
+            out.print(" as ")
+            asExpr.subPrintOn(out, priorities["call"])
+        if (auditors.size() > 0):
+            printListOn(" implements ", auditors, ", ", "", out, priorities["call"])
+    else:
+        def extend := script.getExtends()
+        out.print("object ")
+        name.subPrintOn(out, priorities["pattern"])
+        if (asExpr != null):
+            out.print(" as ")
+            asExpr.subPrintOn(out, priorities["call"])
+        if (auditors.size() > 0):
+            printListOn(" implements ", auditors, ", ", "", out, priorities["call"])
+        if (extend != null):
+            out.print(" extends ")
+            extend.subPrintOn(out, priorities["order"])
+
 
 def quasiPrint(name, quasis, out) as DeepFrozenStamp:
     if (name != null):
@@ -647,9 +685,9 @@ def printerActions :Map[Str, DeepFrozen] := [
             printObjectSuiteOn
         }
         printIt(fn {
-            script.printObjectHeadOn(
-                self.getName(), self.getAsExpr(), self.getAuditors(),
-                out, priority)
+            printObjectHeadOn(
+                script, self.getName(), self.getAsExpr(),
+                self.getAuditors(), out, priority)
         }, self.getDocstring(), self.getScript(), out, priority)
     },
     "ParamDesc" => def printParamDesc(self, out, _priority) as DeepFrozenStamp {
