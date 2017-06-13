@@ -1,40 +1,6 @@
 import "boot" =~ [=> DeepFrozenStamp, => TransparentStamp, => KernelAstStamp]
-import "ast_printer" =~ [=> printerActions]
+import "ast_printer" =~ [=> astPrint :DeepFrozen]
 exports (astBuilder)
-
-def MONTE_KEYWORDS :List[Str] := [
-"as", "bind", "break", "catch", "continue", "def", "else", "escape",
-"exit", "extends", "exports", "finally", "fn", "for", "guards", "if",
-"implements", "in", "interface", "match", "meta", "method", "module",
-"object", "pass", "pragma", "return", "switch", "to", "try", "var",
-"via", "when", "while", "_"]
-
-def idStart :List[Char] := _makeList.fromIterable("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
-def idPart :List[Char] := idStart + _makeList.fromIterable("0123456789")
-def INDENT :Str := "    "
-
-# note to future drunk self: lower precedence number means add parens when
-# inside a higher-precedence-number expression
-def priorities :Map[Str, Int] := [
-     "indentExpr" => 0,
-     "braceExpr" => 1,
-     "assign" => 2,
-     "logicalOr" => 3,
-     "logicalAnd" => 4,
-     "comp" => 5,
-     "order" => 6,
-     "interval" => 7,
-     "shift" => 8,
-     "addsub" => 9,
-     "divmul" => 10,
-     "pow" => 11,
-     "prefix" => 12,
-     "send" => 13,
-     "coerce" => 14,
-     "call" => 15,
-     "prim" => 16,
-
-     "pattern" => 0]
 
 def makeStaticScope(read, set, defs, vars, metaStateExpr :Bool) as DeepFrozenStamp:
     def namesRead :Set[DeepFrozen] := read.asSet()
@@ -126,76 +92,6 @@ def transformAll(nodes, f) as DeepFrozenStamp:
 def astStamp.audit(_audition) :Bool as DeepFrozenStamp:
     return true
 
-def isIdentifier(name :Str) :Bool as DeepFrozenStamp:
-    if (MONTE_KEYWORDS.contains(name.toLowerCase())):
-        return false
-    return idStart.contains(name[0]) && all(name.slice(1), idPart.contains)
-
-def printListOn(left, nodes, sep, right, out, priority) as DeepFrozenStamp:
-    out.print(left)
-    if (nodes.size() >= 1):
-        for n in (nodes.slice(0, nodes.size() - 1)):
-            n.subPrintOn(out, priority)
-            out.print(sep)
-        nodes.last().subPrintOn(out, priority)
-    out.print(right)
-
-def printDocstringOn(docstring, out, indentLastLine) as DeepFrozenStamp:
-    if (docstring == null):
-        if (indentLastLine):
-            out.println("")
-        return
-    out.lnPrint("\"")
-    def lines := docstring.split("\n")
-    for line in (lines.slice(0, 0.max(lines.size() - 2))):
-        out.println(line)
-    if (lines.size() > 0):
-        out.print(lines.last())
-    if (indentLastLine):
-        out.println("\"")
-    else:
-        out.print("\"")
-
-def printSuiteOn(leaderFn, printContents, cuddle, noLeaderNewline, out,
-                 priority) as DeepFrozenStamp:
-    def indentOut := out.indent(INDENT)
-    if (priorities["braceExpr"] <= priority):
-        if (cuddle):
-            out.print(" ")
-        leaderFn()
-        if (noLeaderNewline):
-            indentOut.print(" {")
-        else:
-            indentOut.println(" {")
-        printContents(indentOut, priorities["braceExpr"])
-        out.println("")
-        out.print("}")
-    else:
-        if (cuddle):
-            out.println("")
-        leaderFn()
-        if (noLeaderNewline):
-            indentOut.print(":")
-        else:
-            indentOut.println(":")
-        printContents(indentOut, priorities["indentExpr"])
-
-def printExprSuiteOn(leaderFn, suite, cuddle, out, priority) as DeepFrozenStamp:
-        printSuiteOn(leaderFn, suite.subPrintOn, cuddle, false, out, priority)
-
-def printDocExprSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozenStamp:
-        printSuiteOn(leaderFn, fn o, p {
-            printDocstringOn(docstring, o, true)
-            suite.subPrintOn(o, p)
-            }, false, true, out, priority)
-
-def printObjectSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozenStamp:
-        printSuiteOn(leaderFn, fn o, p {
-            printDocstringOn(docstring, o, false)
-            suite.subPrintOn(o, p)
-            }, false, true, out, priority)
-
-
 object Ast as DeepFrozenStamp:
     to coerce(specimen, ej):
         if (!_auditedBy(astStamp, specimen) && !_auditedBy(KernelAstStamp, specimen)):
@@ -236,6 +132,102 @@ def NamePattern :DeepFrozen := Ast["FinalPattern", "VarPattern",
 # LiteralExpr included here because the optimizer uses it.
 def Noun :DeepFrozen := Ast["NounExpr", "TempNounExpr", "LiteralExpr"]
 
+
+def baseFieldName(name) as DeepFrozenStamp:
+    if (['*', '?'].contains(name[name.size() - 1])):
+        return name.slice(0, name.size() - 1)
+    return name
+
+def paramGuard(name, g) as DeepFrozenStamp:
+    def last := name[name.size() - 1]
+    if (last == '?'):
+        return NullOk[g]
+    if (last == '*'):
+        return List[g]
+    return g
+
+def transformArg(f, fname, guard, arg) as DeepFrozenStamp:
+        if (fname.endsWith("?") && arg == null):
+            return null
+        else if (fname.endsWith("*")):
+            return [for n in (arg)
+                    n.transform(f)]
+        else if (_auditedBy(astGuardStamp, guard)):
+            return arg.transform(f)
+        else:
+            return arg
+
+def transformArgs(f, fields, args) as DeepFrozenStamp:
+    return [for fname => guard in (fields) transformArg(f, fname, guard, args[baseFieldName(fname)])]
+
+def extractFieldName(contents, name):
+    if (name.slice(0, 3) != "get"):
+        return null
+    def subname := name.slice(3)
+    if (subname.isEmpty()):
+        return null
+    else:
+        def fname := subname.slice(0, 1).toLowerCase() + subname.slice(1)
+        if (contents.contains(fname)):
+            return fname
+
+def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp:
+    object nodeMaker as DeepFrozenStamp:
+        to _printOn(out):
+            out.print("make" + constructorName)
+
+        match [=="run", fullArgs, _]:
+            if (fullArgs.size() != (fields.size() + 1)):
+                throw("make" + M.toString(constructorName) + " expected " + M.toString(fields.size() + 1) + " arguments (got " + M.toString(fullArgs.size()) + ")")
+            def args := fullArgs.slice(0, fullArgs.size() - 1)
+            def span := fullArgs.last()
+            def contents := [
+                for [fname, _] => [guard, specimen :(paramGuard(fname, guard))]
+                in (zip(fields, args))
+                baseFieldName(fname) => specimen]
+            def node
+            def extraMethods := if (extraMethodMaker != null) { extraMethodMaker(node) }
+            bind node implements Selfless, TransparentStamp, astStamp:
+                to getSpan():
+                    return span
+                to withoutSpan():
+                    if (span == null):
+                        return node
+                    return M.call(nodeMaker, "run", args + [null], [].asMap())
+                to canonical():
+                    def noSpan(nod, mkr, canonicalArgs, span):
+                        return M.call(mkr, "run", canonicalArgs + [null], [].asMap())
+                    return node.transform(noSpan)
+
+                to getNodeName():
+                    return constructorName
+
+                to transform(f):
+                    return f(node, nodeMaker, transformArgs(f, fields, contents), span)
+
+                to _uncall():
+                    return [nodeMaker, "run", fullArgs, [].asMap()]
+
+                to _printOn(out):
+                    astPrint(node, out, 0)
+                    # out.print(constructorName)
+                    # out.print("(")
+                    # if (args.size() > 0):
+                    #     if (args.size() > 1):
+                    #         for a in (args.slice(0, args.size() - 1)):
+                    #             out.quote(a)
+                    #             out.print(", ")
+                    #     out.quote(args.last())
+                    # out.print(")")
+
+                match [name ? ((def fname := extractFieldName(contents, name)) != null), [], _]:
+                    if (!contents.contains(fname)):
+                        throw("Message refused: " + name + "/0 - not in " + M.toString(contents))
+                    contents[fname]
+
+                match msg:
+                    if (extraMethods == null):
+
 # The story of &scope:
 # Scopes are not used very often. They are expensive to calculate:
 # * Visits every node (O(n))
@@ -267,12 +259,7 @@ def astWrapper(node, maker, args, span, &scope, nodeName, transformArgs) as Deep
         to _uncall():
             return [maker, "run", args + [span], [].asMap()]
         to _printOn(out):
-            astNode.subPrintOn(out, 0)
-        to subPrintOn(out, priority):
-            if (printerActions.contains(nodeName)):
-                printerActions[nodeName](astNode, out, priority)
-            else:
-                node.subPrintOn(out, priority)
+            astPrint(astNode, out, 0)
 # 'value' is unguarded because the optimized uses LiteralExprs for non-literal
 # constants.
 def makeLiteralExpr(value, span) as DeepFrozenStamp:
@@ -906,17 +893,6 @@ def makeScript(extend :NullOk[Expr], methods :List[Ast["Method", "To"]],
                     return [pattern, last.getBody()]
             throw.eject(ej, "getCompleteMatcher/1: No matchers")
 
-        to printObjectHeadOn(name, asExpr, auditors, out, _priority):
-            out.print("object ")
-            name.subPrintOn(out, priorities["pattern"])
-            if (asExpr != null):
-                out.print(" as ")
-                asExpr.subPrintOn(out, priorities["call"])
-            if (auditors.size() > 0):
-                printListOn(" implements ", auditors, ", ", "", out, priorities["call"])
-            if (extend != null):
-                out.print(" extends ")
-                extend.subPrintOn(out, priorities["order"])
     return astWrapper(script, makeScript, [extend, methods, matchers], span,
         &scope, "Script", fn f {[maybeTransform(extend, f), transformAll(methods, f), transformAll(matchers, f)]})
 
@@ -940,25 +916,6 @@ def makeFunctionScript(verb :Str, patterns :List[Pattern],
             return resultGuard
         to getBody():
             return body
-        to printObjectHeadOn(name, asExpr, auditors, out, _priority):
-            out.print("def ")
-            name.subPrintOn(out, priorities["pattern"])
-            if (verb != "run"):
-                out.print(".")
-                if (isIdentifier(verb)):
-                    out.print(verb)
-                else:
-                    out.quote(verb)
-            printListOn("(", patterns, ", ", "", out, priorities["pattern"])
-            printListOn("", namedPatterns, ", ", ")", out, priorities["pattern"])
-            if (resultGuard != null):
-                out.print(" :")
-                resultGuard.subPrintOn(out, priorities["call"])
-            if (asExpr != null):
-                out.print(" as ")
-                asExpr.subPrintOn(out, priorities["call"])
-            if (auditors.size() > 0):
-                printListOn(" implements ", auditors, ", ", "", out, priorities["call"])
     return astWrapper(functionScript, makeFunctionScript, [patterns, namedPatterns, resultGuard, body], span,
         &scope, "FunctionScript", fn f {[verb, transformAll(patterns, f), transformAll(namedPatterns, f), maybeTransform(resultGuard, f), body.transform(f)]})
 
