@@ -50,3 +50,8 @@ def makeEntropy(generator) as DeepFrozen:
             # before taking a logarithm.
             def d := 1.0 - entropy.nextDouble()
             return -(d.log()) / lambda
+
+        to nextDraw(l :List):
+            "Draw randomly from `l`."
+
+            return l[entropy.nextInt(l.size())]
