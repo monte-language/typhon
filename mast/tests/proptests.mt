@@ -25,7 +25,7 @@ object arb:
                 return entropy.nextBool()
 
             to shrink(b :Bool) :List[Bool]:
-                return []
+                return [!b]
 
     to Bytes():
         def makeBytes(l):
@@ -108,51 +108,82 @@ object arb:
                 def singles := [for x in (s) [x].asSet()]
                 return singles
 
-object proptest:
+def prop.test(arbs, f, => iterations :Int := 500):
     "A property-based tester."
 
-    match [=="run", [test] + arbs, [=> iterations :Int := 500] | _]:
-        # traceln(`testing $test`)
-        for _ in (0..!iterations):
-            def args := [for arb in (arbs) arb.arbitrary()]
-            # traceln(`Trying $args`)
-            M.call(test, "run", args, [].asMap())
+    return object propTest:
+        to _printOn(out):
+            out.print(`<property ($f)>`)
 
-def IntFormsARing(assert):
-    def ringAxiomAbelianAssociative(a, b, c):
-        assert.equal((a + b) + c, a + (b + c))
-    proptest(ringAxiomAbelianAssociative, arb.Int(), arb.Int(), arb.Int())
-    def ringAxiomAbelianCommutative(a, b):
-        assert.equal(a + b, b + a)
-    proptest(ringAxiomAbelianCommutative, arb.Int(), arb.Int())
-    def ringAxiomAbelianIdentity(a):
-        assert.equal(a + 0, a)
-    proptest(ringAxiomAbelianIdentity, arb.Int())
-    def ringAxiomAbelianInverse(a):
-        assert.equal(a + (-a), 0)
-    proptest(ringAxiomAbelianInverse, arb.Int())
-    def ringAxiomMonoidAssociative(a, b, c):
-        assert.equal((a * b) * c, a * (b * c))
-    proptest(ringAxiomMonoidAssociative, arb.Int(), arb.Int(), arb.Int())
-    def ringAxiomMonoidIdentity(a):
-        assert.equal(a * 1, a)
-    proptest(ringAxiomMonoidIdentity, arb.Int())
-    def ringAxiomDistributiveLeft(a, b, c):
-        assert.equal(a * (b + c), a * b + a * c)
-    proptest(ringAxiomDistributiveLeft, arb.Int(), arb.Int(), arb.Int())
-    def ringAxiomDistributiveRight(a, b, c):
-        assert.equal((a + b) * c, a * c + b * c)
-    proptest(ringAxiomDistributiveRight, arb.Int(), arb.Int(), arb.Int())
+        to run(assert):
+            # traceln(`testing $test`)
+            # XXX needs to have a stack of pending cases to try, in order
+            # to search shrunken cases
+            def failures := [].diverge()
+            for _ in (0..!iterations):
+                def args := [for arb in (arbs) arb.arbitrary()]
 
-unittest([IntFormsARing])
+                object hypothesis:
+                    to assume(assumption :Bool) :Void:
+                        "Require `assumption` or abort the test."
 
-def ThingsWithZeroSizeAreEmpty(assert):
-    def zeroSizeIffEmpty(container):
-        assert.iff(container.size() == 0, container.isEmpty())
-    proptest(zeroSizeIffEmpty, arb.Bytes())
-    proptest(zeroSizeIffEmpty, arb.Str())
-    proptest(zeroSizeIffEmpty, arb.List(arb.Int()))
-    proptest(zeroSizeIffEmpty, arb.Map(arb.Int(), arb.Int()))
-    proptest(zeroSizeIffEmpty, arb.Set(arb.Int()))
+                        if (!assumption) { continue }
 
-unittest([ThingsWithZeroSizeAreEmpty])
+                    to assert(truth :Bool) :Void:
+                        "Require `truth` or fail the test."
+                        if (!truth) { failures.push(args) }
+
+                # traceln(`Trying $args`)
+                M.call(f, "run", [hypothesis] + args, [].asMap())
+            if (!failures.isEmpty()):
+                assert.fail(`Property $f failed on cases: ${failures.snapshot()}`)
+
+def ringAxioms(strategy):
+    def ringAxiomAbelianAssociative(hy, a, b, c):
+        hy.assert((a + b) + c == a + (b + c))
+    def ringAxiomAbelianCommutative(hy, a, b):
+        hy.assert(a + b == b + a)
+    def ringAxiomAbelianIdentity(hy, a):
+        hy.assert(a + 0 == a)
+    def ringAxiomAbelianInverse(hy, a):
+        hy.assert(a + (-a) == 0)
+    def ringAxiomMonoidAssociative(hy, a, b, c):
+        hy.assert((a * b) * c == a * (b * c))
+    def ringAxiomMonoidIdentity(hy, a):
+        hy.assert(a * 1 == a)
+    def ringAxiomDistributiveLeft(hy, a, b, c):
+        hy.assert(a * (b + c) == a * b + a * c)
+    def ringAxiomDistributiveRight(hy, a, b, c):
+        hy.assert((a + b) * c == a * c + b * c)
+    def one := [strategy]
+    def two := one * 2
+    def three := one * 3
+    unittest([
+        prop.test(three, ringAxiomAbelianAssociative),
+        prop.test(two, ringAxiomAbelianCommutative),
+        prop.test(one, ringAxiomAbelianIdentity),
+        prop.test(one, ringAxiomAbelianInverse),
+        prop.test(three, ringAxiomMonoidAssociative),
+        prop.test(one, ringAxiomMonoidIdentity),
+        prop.test(three, ringAxiomDistributiveLeft),
+        prop.test(three, ringAxiomDistributiveRight),
+    ])
+
+# Int is a ring.
+ringAxioms(arb.Int())
+
+def containers := [
+    arb.Bytes(),
+    arb.Str(),
+    arb.List(arb.Int()),
+    arb.Map(arb.Int(), arb.Int()),
+    arb.Set(arb.Int()),
+]
+
+# Containers have zero size iff they are empty.
+def zeroSizeIffEmpty(hy, container):
+    hy.assert(!((container.size() == 0) ^ container.isEmpty()))
+for container in (containers):
+    unittest([
+        prop.test([container], zeroSizeIffEmpty),
+    ])
