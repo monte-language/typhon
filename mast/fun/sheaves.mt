@@ -16,6 +16,29 @@ def union(sets :List[Set]) :Set as DeepFrozen:
         rv |= s
     return rv
 
+def makeASC(vertices :Set, facets :Set) as DeepFrozen:
+    def space :Set := {
+        var rv := facets
+        def stack := facets.asList().diverge()
+        while (!stack.isEmpty()) {
+            def s := stack.pop()
+            for ex in (s) {
+                def subset := s.without(ex)
+                if (!rv.contains(subset)) {
+                    rv with= (subset)
+                    stack.push(subset)
+                }
+            }
+        }
+        rv
+    }
+    return object abstractSimplicialComplex:
+        to vertices():
+            return vertices
+
+        to star(simplex :Set) :Set:
+            return [for s in (space) ? (simplex <= s) s].asSet()
+
 def main(_) as DeepFrozen:
     def baseSections := [
         ['x'].asSet() => [0].asSet(),
@@ -52,5 +75,14 @@ def main(_) as DeepFrozen:
     traceln(`Stalk at 'x' is ${basisSheaf.stalk('x')}`)
     traceln(`Section at {'x', 'y'} is ${basisSheaf.section(['x', 'y'].asSet())}`)
     traceln(`Global section is ${globalSection()}`)
+
+    def asc := makeASC([1, 2, 3, 4, 5].asSet(), [
+        [1, 2].asSet(),
+        [1, 3].asSet(),
+        [3, 4].asSet(),
+        [2, 3, 5].asSet(),
+    ].asSet())
+    traceln(asc.star([3].asSet()))
+    traceln(asc.star([2].asSet()))
 
     return 0
