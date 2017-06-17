@@ -398,8 +398,19 @@ def makeCoreAst() as DeepFrozenStamp:
         "Module" => ["imports*" => Import_, "exports*" => Str, "body" => Expr]
     ]
     ])
-    return astBuilder_
-
+    return object astBuilder:
+        to getAstGuard():
+            return Ast
+        to getPatternGuard():
+            return Pattern
+        to getExprGuard():
+            return Expr
+        to getNamePatternGuard():
+            return NamePattern
+        to getNounGuard():
+            return Noun
+        match msg:
+            M.callWithPair(astBuilder_, msg)
 
 def makeScopeWalker() as DeepFrozen:
     def scopesSeen := [].asMap().diverge()
