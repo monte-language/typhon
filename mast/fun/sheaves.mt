@@ -35,12 +35,40 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
         }
         rv
     }
+    def defaultRestrictions :Map[Pair[Set, Set], Any] := {
+        # NB: Can't have subsets of singleton sets.
+        def m := [for u in (space) ? (u.size() > 1) u => {
+            def positions := [for i => x in (u) x => i]
+            def patt := astBuilder.ListPattern([for i => _x in (u) {
+                # XXX need to get the guards from `vertices` into here
+                # somehow.
+                astBuilder.FinalPattern(astBuilder.NounExpr(`x$i`, null),
+                                        null, null)
+            }], null, null)
+            [for v in (space) ? (v <= u) v => {
+                def body := astBuilder.ListExpr([for x in (v) {
+                    astBuilder.NounExpr(`x${positions[x]}`, null)
+                }], null)
+                eval(m`fn $patt { $body }`.expand(), safeScope)
+            }]
+        }]
+        def rv := [].asMap().diverge()
+        for u => vs in (m) {
+            for v => res in (vs) {
+                rv[[u, v]] := res
+            }
+        }
+        rv.snapshot()
+    }
     return object abstractSimplicialComplex:
         to vertices():
             return vertices
 
         to star(simplex :Set) :Set:
             return [for s in (space) ? (simplex <= s) s].asSet()
+
+        to flabbySheaf():
+            return abstractSimplicialComplex.sheaf(defaultRestrictions)
 
         to sheaf(restrictions :Map[Pair[Set, Set], Any]):
             def resIndex := {
@@ -87,21 +115,19 @@ def main(_) as DeepFrozen:
     traceln(asc.star([3].asSet()))
     traceln(asc.star([2].asSet()))
 
-    def sheaf := asc.sheaf([
-        [[1, 2].asSet(), [1].asSet()] => fn [x, _] { x },
-        [[1, 2].asSet(), [2].asSet()] => fn [_, y] { y },
-    ])
+    def sheaf := asc.flabbySheaf()
     traceln(sheaf)
     traceln(sheaf.stalkAt([2, 3, 5].asSet()))
-    traceln(sheaf.sectionAt([[1].asSet() => 1], null))
+    traceln(sheaf.sectionAt([[1].asSet() => [1]], null))
     traceln(sheaf.sectionAt([
         [1, 2].asSet() => [1, 2],
-        [2].asSet() => 2,
+        [2].asSet() => [2],
     ], null))
+    traceln(sheaf.sectionAt([[2, 3, 5].asSet() => [1, 2, 3]], null))
     escape badSection:
         traceln(sheaf.sectionAt([
             [1, 2].asSet() => [1, 2],
-            [2].asSet() => 3,
+            [2].asSet() => [3],
         ], badSection))
     catch problem:
         traceln(`Sheaf section failure: $problem`)
