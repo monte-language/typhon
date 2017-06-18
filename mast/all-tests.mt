@@ -7,6 +7,7 @@ import "lib/enum" =~ _
 import "lib/iterators" =~ _
 import "lib/json" =~ _
 import "lib/marley" =~ _
+import "lib/matrices" =~ _
 import "lib/monte/monte_verifier" =~ _
 import "lib/monte/meta" =~ _
 # XXX currently broken ~ C.
