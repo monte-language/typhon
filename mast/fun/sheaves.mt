@@ -19,9 +19,37 @@ def union(sets :List[Set]) :Set as DeepFrozen:
         rv |= s
     return rv
 
+def countEdge(b :Set, a :Set ? (a.size() + 1 == b.size())) :Int as DeepFrozen:
+    # 0 if a is not a face of b, +1 if a is a correctly-oriented face of b, -1
+    # if a is a backwards face of b
+    return if (a < b) {
+        for vertex in (b) {
+            def sub := b.without(vertex)
+            if (sub <=> a) {
+                # They might already be in the right order, which is not just
+                # lucky, but expected for nearly all edges.
+                break if (sub == a) { 1 } else {
+                    # Crappy case. Dump them both to lists and walk until we
+                    # either loop or find a swapped vertex.
+                    def l := sub.asList()
+                    def r := a.asList()
+                    def offset :(Int >= 0) := r.indexOf(l[0])
+                    def size := r.size()
+                    escape swapped {
+                        for i => v in (l) {
+                            if (r[(i + offset) % size] != v) { swapped() }
+                        }
+                        # Full loop, no swaps.
+                        1
+                    } catch _ { -1 }
+                }
+            }
+        }
+    } else { 0 }
+
 def makeASC(vertices :Map, facets :Set) as DeepFrozen:
     def space :Set := {
-        var rv := facets
+        var rv := [].asSet()
         def stack := facets.asList().diverge()
         while (!stack.isEmpty()) {
             def s := stack.pop()
@@ -63,6 +91,12 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
     return object abstractSimplicialComplex:
         to vertices():
             return vertices
+
+        to eulerCharacteristic() :Int:
+            var rv :Int := 0
+            for s in (space):
+                rv += -1 ** (s.size() - 1)
+            return rv
 
         to star(simplex :Set) :Set:
             return [for s in (space) ? (simplex <= s) s].asSet()
@@ -112,6 +146,7 @@ def main(_) as DeepFrozen:
         [3, 4].asSet(),
         [2, 3, 5].asSet(),
     ].asSet())
+    traceln(`Euler: ${asc.eulerCharacteristic()}`)
     traceln(asc.star([3].asSet()))
     traceln(asc.star([2].asSet()))
 
