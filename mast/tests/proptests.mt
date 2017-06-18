@@ -55,11 +55,11 @@ object arb as DeepFrozen:
             to shrink(c :Char) :List[Char]:
                 return []
 
-    to Int():
+    to Int(=> ceiling :Int := 2 ** 128):
         return object arbInt as Arb:
             to arbitrary(entropy) :Int:
                 # Hypothesis uses this as its ceiling.
-                def i := entropy.nextInt(2 ** 128)
+                def i := entropy.nextInt(ceiling)
                 return if (entropy.nextBool()) {i} else {-i}
 
             to shrink(i :Int) :List[Int]:
