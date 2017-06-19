@@ -143,16 +143,15 @@ def baseFieldName(name) as DeepFrozenStamp:
 
 def paramGuard(name, g) as DeepFrozenStamp:
     def last := name[name.size() - 1]
-    if (last == "?"):
+    if (last == '?'):
         return NullOk[g]
-    if (last == "*"):
+    if (last == '*'):
         return List[g]
     return g
 
 def transformArg(f, fname, guard, arg) as DeepFrozenStamp:
-        if (fname.endsWith("?")):
-            if (arg == null):
-                return null
+        if (fname.endsWith("?") && arg == null):
+            return null
         else if (fname.endsWith("*")):
             return [for n in (arg)
                     n.transform(f)]
@@ -235,16 +234,19 @@ def makeAstBuilder(description) as DeepFrozenStamp:
                 for constructorName :Str => fields in (constructorGroup):
                     nodeInfo[constructorName] := fields
             def convert(node):
-                def fullContents := node._uncall()[2]
-                def contents := fullContents.slice(0, fullContents.size() - 1)
-                def span := fullContents.last()
+                def contents := node._uncall()[2]
+                traceln(M.toString(contents) + " " + M.toString(node.getNodeName()))
                 def convertedContents := [
-                    for [_, fieldname] => [arg, guard] in (zip(contents, nodeInfo))
+                    for [_, fieldname] => [arg, guard]
+                    in (zip(contents, nodeInfo[node.getNodeName()]))
                     if (fieldname.endsWith("*")) { [for item in (arg) convert(item)]
+                    } else if (arg == null) { null
                     } else if (_auditedBy(astGuardStamp, guard)) { convert(arg)
                     } else { arg }]
-                M.call(ms[node.getNodeName()], "run", convertedContents + [span],
-                       [].asMap())
+                return M.call(ms[node.getNodeName()], "run",
+                              convertedContents + [null],
+                              [].asMap())
+            return convert(expr)
         match [verb ? (makers.contains(verb)), args, namedArgs]:
             M.call(makers[verb], "run", args, namedArgs)
 

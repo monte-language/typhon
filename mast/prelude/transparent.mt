@@ -38,7 +38,7 @@ object Transparent as DeepFrozenStamp:
         def makerAuditor.audit(audition) implements DeepFrozenStamp:
             if (Ref.isResolved(positionalArgNames)):
                 throw("Maker auditor has already been used")
-            def objectExpr := audition.getObjectExpr()
+            def objectExpr := astBuilder2.convertFromKernel(audition.getObjectExpr())
             def patternSS := objectExpr.getName().getStaticScope()
             def objNouns := patternSS.getDefNames().asList()
             def objName := if (objNouns.size() > 0 && objNouns[0] != null) {objNouns[0]} else {null}
