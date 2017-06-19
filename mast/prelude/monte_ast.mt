@@ -137,7 +137,7 @@ def NamePattern :DeepFrozen := Ast["FinalPattern", "VarPattern",
 def Noun :DeepFrozen := Ast["NounExpr", "TempNounExpr", "LiteralExpr"]
 
 def baseFieldName(name) as DeepFrozenStamp:
-    if (["*", "?"].contains(name[name.size() - 1])):
+    if (['*', '?'].contains(name[name.size() - 1])):
         return name.slice(0, name.size() - 1)
     return name
 
@@ -161,10 +161,10 @@ def transformArg(f, fname, guard, arg) as DeepFrozenStamp:
             return arg
 
 def transformArgs(f, fields, args) as DeepFrozenStamp:
-    return [for fname => guard in (fields) transformArg(f, fname, guard, args)]
+    return [for fname => guard in (fields) transformArg(f, fname, guard, args[baseFieldName(fname)])]
 
-def makeNodeAuthor(constructorName, fields) as DeepFrozenStamp:
-    return object nodeMaker as DeepFrozenStamp:
+def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp:
+    object nodeMaker as DeepFrozenStamp:
         to _printOn(out):
             out.print("make" + constructorName)
 
@@ -177,7 +177,9 @@ def makeNodeAuthor(constructorName, fields) as DeepFrozenStamp:
                 for [fname, _] => [guard, specimen :(paramGuard(fname, guard))]
                 in (zip(fields, args))
                 baseFieldName(fname) => specimen]
-            object node implements Selfless, TransparentStamp, astStamp:
+            def node
+            def extraMethods := if (extraMethodMaker != null) { extraMethodMaker(node) }
+            bind node implements Selfless, TransparentStamp, astStamp:
                 to getSpan():
                     return span
                 to withoutSpan():
@@ -216,16 +218,24 @@ def makeNodeAuthor(constructorName, fields) as DeepFrozenStamp:
                         throw("Message refused: get/0")
                     def fname := subname.slice(0, 1).toLowerCase() + subname.slice(1)
                     if (!contents.contains(fname)):
-                        throw("Message refused: " + name + "/0")
+                        throw("Message refused: " + name + "/0 - not in " + M.toString(contents))
                     contents[fname]
 
-def makeAstBuilder(description) as DeepFrozenStamp:
+                match msg:
+                    if (extraMethods == null):
+                        throw("Message refused: " + msg[0] + "/" + M.toString(msg[1].size()))
+                    M.callWithMessage(extraMethods, msg)
+    return nodeMaker
+
+def makeAstBuilder(description, extraMethodMakers) as DeepFrozenStamp:
     def gs := [for constructors in (description)
                M.call(Ast, "get", constructors.getKeys(), [].asMap())]
     def ms := [].asMap().diverge()
     for constructorGroup in (description):
         for constructorName :Str => fields in (constructorGroup):
-            ms[constructorName] := makeNodeAuthor(constructorName, fields)
+            ms[constructorName] := makeNodeAuthor(
+                constructorName, fields,
+                extraMethodMakers.fetch(constructorName, fn {null}))
     def makers := ms.snapshot()
     object _astBuilder implements DeepFrozenStamp:
         to convertFromKernel(expr):
@@ -235,7 +245,6 @@ def makeAstBuilder(description) as DeepFrozenStamp:
                     nodeInfo[constructorName] := fields
             def convert(node):
                 def contents := node._uncall()[2]
-                traceln(M.toString(contents) + " " + M.toString(node.getNodeName()))
                 def convertedContents := [
                     for [_, fieldname] => [arg, guard]
                     in (zip(contents, nodeInfo[node.getNodeName()]))
@@ -243,10 +252,11 @@ def makeAstBuilder(description) as DeepFrozenStamp:
                     } else if (arg == null) { null
                     } else if (_auditedBy(astGuardStamp, guard)) { convert(arg)
                     } else { arg }]
-                return M.call(ms[node.getNodeName()], "run",
+                return M.call(_astBuilder, node.getNodeName(),
                               convertedContents + [null],
                               [].asMap())
             return convert(expr)
+
         match [verb ? (makers.contains(verb)), args, namedArgs]:
             M.call(makers[verb], "run", args, namedArgs)
 
@@ -512,7 +522,7 @@ def makeScopeWalker() as DeepFrozenStamp:
         to nodeSetsName(node, name :Str):
             return getStaticScope(node).getNamesSet().contains(name)
         to nodeReadsName(node, name :Str):
-            return getStaticScope(node).getNamesSet().contains(name)
+            return getStaticScope(node).getNamesRead().contains(name)
         to nodeBindsName(node, name :Str):
             return getStaticScope(node).outNames().contains(name)
 
@@ -533,17 +543,17 @@ def makeCoreAst() as DeepFrozenStamp:
         "SeqExpr"               => ["exprs*" => Expr],
         "MethodCallExpr"        => ["receiver" => Expr,
                                     "verb" => Str,
-                                    "arglist*" => Expr,
+                                    "args*" => Expr,
                                     "namedArgs*" => NamedArg],
         "FunCallExpr"           => ["receiver" => Expr,
-                                    "arglist*" => Expr,
+                                    "args*" => Expr,
                                     "namedArgs*" => NamedArg],
         "SendExpr"              => ["receiver" => Expr,
                                     "verb" => Str,
-                                    "arglist*" => Expr,
+                                    "args*" => Expr,
                                     "namedArgs*" => NamedArg],
         "FunSendExpr"           => ["receiver" => Expr,
-                                    "arglist*" => Expr,
+                                    "args*" => Expr,
                                     "namedArgs*" => NamedArg],
         "GetExpr"               => ["receiver" => Expr,
                                     "indices*" => Expr],
@@ -598,7 +608,7 @@ def makeCoreAst() as DeepFrozenStamp:
         "FinallyExpr"           => ["body" => Expr, "unwinder" => Expr],
         "TryExpr"               => ["body" => Expr],
         "EscapeExpr"            => ["ejectorPattern" => Pattern, "body" => Expr,
-                                    "catcher?" => Catcher],
+                                    "catchPattern?" => Pattern, "catchBody?" => Expr],
         "SwitchExpr"            => ["specimen" => Expr, "matchers*" => Matcher],
         "WhenExpr"              => ["args*" => Expr, "body" => Expr,
                                     "catchers*" => Catcher, "finally?" => Expr],
@@ -643,9 +653,11 @@ def makeCoreAst() as DeepFrozenStamp:
     ],
     "Method" => [
         "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Pattern,
-                     "namedParam*" => NamedParam, "resultGuard?" => Expr],
+                     "namedParams*" => NamedParam, "resultGuard?" => Expr,
+                     "body" => Expr],
         "To"     => ["docstring?" => Str, "verb" => Str, "params*" => Pattern,
-                     "namedParam*" => NamedParam, "resultGuard?" => Expr]
+                     "namedParams*" => NamedParam, "resultGuard?" => Expr,
+                     "body" => Expr]
     ],
     "Matcher" => [
         "Matcher" => ["pattern" => Pattern, "body" => Expr]
@@ -679,8 +691,24 @@ def makeCoreAst() as DeepFrozenStamp:
     "Module" => [
         "Module" => ["imports*" => Import_, "exports*" => Str, "body" => Expr]
     ]
-    ])
+    ],
+    [
+    "Script" => fn super {
+        object scriptExtras {
+            to getMethodNamed(verb, ej) {
+                "Look up the first method with the given verb, or eject if no such
+                method exists."
+
+                for meth in (super.getMethods()) {
+                        if (meth.getVerb() == verb) {
+                            return meth
+                        }
+                }
+                throw.eject(ej, "No method named " + verb)
+            }}}])
     return object astBuilder implements DeepFrozenStamp:
+        to makeScopeWalker():
+            return makeScopeWalker()
         to getAstGuard():
             return Ast
         to getPatternGuard():
@@ -716,6 +744,7 @@ def makeCoreAst() as DeepFrozenStamp:
                 makeScopeWalker().nodeUsesName(guard, noun.getName())):
                 throw("Kernel guard cycle not allowed")
             return astBuilder_.makeVarPattern(noun, guard, span)
+
         match msg:
             M.callWithMessage(astBuilder_, msg)
 

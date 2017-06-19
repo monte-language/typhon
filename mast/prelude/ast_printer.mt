@@ -111,11 +111,11 @@ def printObjectSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozenS
         }, false, true, out, priority)
 
 def printObjectHeadOn(script, name, asExpr, auditors, out, _priority) as DeepFrozenStamp:
-    def namedPatterns := script.getNamedParams()
-    def patterns := script.getParams()
-    def resultGuard := script.getResultGuard()
-    def verb := script.getVerb()
     if (script.getNodeName() == "FunctionScript"):
+        def namedPatterns := script.getNamedParams()
+        def patterns := script.getParams()
+        def resultGuard := script.getResultGuard()
+        def verb := script.getVerb()
         out.print("def ")
         name.subPrintOn(out, priorities["pattern"])
         if (verb != "run"):
