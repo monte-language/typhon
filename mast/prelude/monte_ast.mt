@@ -738,12 +738,12 @@ def makeCoreAst() as DeepFrozenStamp:
             if (guard != null && noun.getNodeName() == "NounExpr" &&
                 makeScopeWalker().nodeUsesName(guard, noun.getName())):
                 throw("Kernel guard cycle not allowed")
-            return astBuilder_.makeFinalPattern(noun, guard, span)
+            return astBuilder_.FinalPattern(noun, guard, span)
         to VarPattern(noun, guard :NullOk[Expr], span):
             if (guard != null && noun.getNodeName() == "NounExpr" &&
                 makeScopeWalker().nodeUsesName(guard, noun.getName())):
                 throw("Kernel guard cycle not allowed")
-            return astBuilder_.makeVarPattern(noun, guard, span)
+            return astBuilder_.VarPattern(noun, guard, span)
 
         match msg:
             M.callWithMessage(astBuilder_, msg)
