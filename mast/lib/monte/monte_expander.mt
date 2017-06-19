@@ -393,18 +393,11 @@ def expand(node, builder, fail) as DeepFrozen:
         if ((right.outNames() & left.namesUsed()).size() > 0):
             fail(["Use on left would get captured by definition on right", span])
 
-    def produceValidateFor(flag, span):
-        def test := callExpr(flag, "not", [], [], span)
-        def _null := nounExpr("null", span)
-        def cons := callExpr(nounExpr("throw", span),
-            "run", [litExpr("Failed to validate loop!", span)], [], span)
-        return builder.IfExpr(test, cons, _null, span)
 
     def expandFor(optKey, value, coll, block, catchPatt, catchBlock, span):
         def key := if (optKey == null) {ignorePatt(null, span)} else {optKey}
         validateFor(key.getStaticScope() + value.getStaticScope(),
                     coll.getStaticScope(), fail, span)
-        def fTemp := tempNounExpr("validFlag", span)
         # `key` and `value` are patterns. We cannot permit any code to run
         # within the loop until we've done _validateFor(), which normally
         # means that we use temp nouns and postpone actually unifying the key
@@ -442,7 +435,6 @@ def expand(node, builder, fail) as DeepFrozen:
                 null,
                 [builder."Method"(null, "run", patts, [], null,
                 seqExpr([
-                    produceValidateFor(fTemp, span),
                     makeEscapeExpr(
                         builder.FinalPattern(nounExpr("__continue", span), null, span),
                         seqExpr(defs + [
@@ -455,12 +447,8 @@ def expand(node, builder, fail) as DeepFrozen:
         return makeEscapeExpr(
             builder.FinalPattern(nounExpr("__break", span), null, span),
             seqExpr([
-                defExpr(builder.VarPattern(fTemp, null, span), null,
-                    nounExpr("true", span), span),
-                builder.FinallyExpr(
-                    callExpr(nounExpr("_loop", span),
-                        "run", [coll, obj], [], span),
-                    builder.AssignExpr(fTemp, nounExpr("false", span), span), span),
+                callExpr(nounExpr("_loop", span),
+                         "run", [coll, obj], [], span),
                 nounExpr("null", span)
             ], span),
             catchPatt,
@@ -471,7 +459,6 @@ def expand(node, builder, fail) as DeepFrozen:
         def key := if (optKey == null) {ignorePatt(null, span)} else {optKey}
         validateFor(exp.getStaticScope(), coll.getStaticScope(), fail, span)
         validateFor(key.getStaticScope() + value.getStaticScope(), coll.getStaticScope(), fail, span)
-        def fTemp := tempNounExpr("validFlag", span)
         # Same concept as expandFor(). ~ C.
         def [patts, defs] := if (key.refutable()) {
             # The key is refutable, so we go with the traditional layout.
@@ -500,7 +487,7 @@ def expand(node, builder, fail) as DeepFrozen:
         def [skipPatt, maybeFilterExpr] := if (filter != null) {
             def skip := tempNounExpr("skip", span)
             [
-                builder.FinalPattern(skip, null, span), 
+                builder.FinalPattern(skip, null, span),
                 builder.IfExpr(filter, exp,
                     callExpr(skip, "run", [], [], span), span),
             ]
@@ -511,18 +498,11 @@ def expand(node, builder, fail) as DeepFrozen:
             ignorePatt(null, span), null, [], builder.Script(
                 null,
                 [builder."Method"(null, "run", patts.with(skipPatt), [], null,
-                seqExpr([produceValidateFor(fTemp, span)] +
-                        defs.with(maybeFilterExpr), span),
-                    span)],
+                seqExpr(defs.with(maybeFilterExpr), span), span)],
             [], span), span)
-        return seqExpr([
-            defExpr(builder.VarPattern(fTemp, null, span), null,
-                nounExpr("true", span), span),
-            builder.FinallyExpr(
-                callExpr(nounExpr(collector, span),
-                    "run", [coll, obj], [], span),
-                builder.AssignExpr(fTemp, nounExpr("false", span), span), span),
-            ], span)
+        return callExpr(nounExpr(collector, span),
+                     "run", [coll, obj], [], span)
+
 
     def refPromise(span):
         return callExpr(nounExpr("Ref", span), "promise", [], [], span)

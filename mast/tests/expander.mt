@@ -293,70 +293,43 @@ def specimens := [
           z
      ",
      "
-     var validFlag_1 := true
-     try:
-         _loop.run(y, object _ {
-             \"For-loop body\"
-             method run(_, x) {
-                 if (validFlag_1.not()) {
-                     throw.run(\"Failed to validate loop!\")
-                 } else {
-                     null
-                 }
-                 z
-                 null
-             }
+     _loop.run(y, object _ {
+         \"For-loop body\"
+         method run(_, x) {
+             z
+             null
+         }
 
-         })
-     finally:
-         validFlag_1 := false
+     })
      null"],
 
     ["[for x in (y) ? (a) z]",
      "
-     var validFlag_1 := true
-     try:
-         _accumulateList.run(y, object _ {
-             \"For-loop body\"
-             method run(_, x, skip_2) {
-                 if (validFlag_1.not()) {
-                     throw.run(\"Failed to validate loop!\")
-                 } else {
-                     null
-                 }
-                 if (a) {
-                     z
-                 } else {
-                     skip_2.run()
-                 }
+     _accumulateList.run(y, object _ {
+         \"For-loop body\"
+         method run(_, x, skip_1) {
+             if (a) {
+                 z
+             } else {
+                 skip_1.run()
              }
+         }
 
-         })
-     finally:
-         validFlag_1 := false"],
+         })"],
 
     ["[for x in (y) ? (a) k => v]",
      "
-     var validFlag_1 := true
-     try:
-         _accumulateMap.run(y, object _ {
-             \"For-loop body\"
-             method run(_, x, skip_2) {
-                 if (validFlag_1.not()) {
-                     throw.run(\"Failed to validate loop!\")
-                 } else {
-                     null
-                 }
-                 if (a) {
-                     _makeList.run(k, v)
-                 } else {
-                     skip_2.run()
-                 }
+     _accumulateMap.run(y, object _ {
+         \"For-loop body\"
+         method run(_, x, skip_1) {
+             if (a) {
+                 _makeList.run(k, v)
+             } else {
+                 skip_1.run()
              }
+         }
 
-         })
-     finally:
-         validFlag_1 := false"],
+     })"],
 
     ["
      while (x):
