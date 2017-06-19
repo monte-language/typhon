@@ -38,12 +38,13 @@ object Transparent as DeepFrozenStamp:
         def makerAuditor.audit(audition) implements DeepFrozenStamp:
             if (Ref.isResolved(positionalArgNames)):
                 throw("Maker auditor has already been used")
+            def sw := astBuilder.makeScopeWalker()
             def objectExpr := astBuilder2.convertFromKernel(audition.getObjectExpr())
-            def patternSS := objectExpr.getName().getStaticScope()
+            def patternSS := sw.getStaticScope(objectExpr.getName())
             def objNouns := patternSS.getDefNames().asList()
             def objName := if (objNouns.size() > 0 && objNouns[0] != null) {objNouns[0]} else {null}
             def closureNames := [].diverge()
-            for name in (objectExpr.getScript().getStaticScope().namesUsed()):
+            for name in (sw.getStaticScope(objectExpr.getScript()).namesUsed()):
                 if (name != objName):
                     closureNames.push(name)
             var valueAuditorNoun := null
@@ -108,7 +109,7 @@ object Transparent as DeepFrozenStamp:
                         ebody.getExprs()} else {[ebody]}
                 var returnFound := false
                 for ex in (exprs):
-                    if (ex.getStaticScope().getNamesRead().contains("__return")):
+                    if (sw.nodeReadsName(ex, "__return")):
                         if (ex.getNodeName() == "MethodCallExpr" && ex.getReceiver() =~ m`__return`):
                             returnFound := true
                             targetExpr := ex
