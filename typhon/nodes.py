@@ -874,7 +874,8 @@ class Method(Expr):
     def uncall(self):
         return wrapList(
             [StrObject(self._d if self._d else u""), StrObject(self._verb),
-             wrapList(self._ps), wrapList(self._namedParams), self._g,
+             wrapList(self._ps), wrapList(self._namedParams),
+             self._g if self._g is not None else NullObject,
              self._b])
 
     def pretty(self, out):
@@ -920,17 +921,17 @@ class Method(Expr):
 
     @method("Str")
     def getNodeName(self):
-        return u"MethodExpr"
+        return u"Method"
 
     def getAtom(self):
         return getAtom(self._verb, len(self._ps))
 
     @method("List")
-    def getPatterns(self):
+    def getParams(self):
         return self._ps
 
     @method("List")
-    def getNamedPatterns(self):
+    def getNamedParams(self):
         return self._namedParams
 
     @method("Any")
@@ -1128,7 +1129,7 @@ class Script(Expr):
 
     @method("Str")
     def getNodeName(self):
-        return u"ScriptExpr"
+        return u"Script"
 
     @method("List")
     def getMethods(self):
