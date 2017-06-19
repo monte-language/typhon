@@ -178,7 +178,7 @@ def makeNodeAuthor(constructorName, fields) as DeepFrozenStamp:
                 for [fname, _] => [guard, specimen :(paramGuard(fname, guard))]
                 in (zip(fields, args))
                 baseFieldName(fname) => specimen]
-            object node implements astStamp:
+            object node implements Selfless, TransparentStamp, astStamp:
                 to getSpan():
                     return span
                 to withoutSpan():
@@ -229,10 +229,290 @@ def makeAstBuilder(description) as DeepFrozenStamp:
             ms[constructorName] := makeNodeAuthor(constructorName, fields)
     def makers := ms.snapshot()
     object _astBuilder implements DeepFrozenStamp:
+        to convertFromKernel(expr):
+            def nodeInfo := [].diverge()
+            for constructorGroup in (description):
+                for constructorName :Str => fields in (constructorGroup):
+                    nodeInfo[constructorGroup] := fields
+            def convert(node):
+                def fullContents := node._uncall()[2]
+                def contents := fullContents.slice(0, fullContents.size() - 1)
+                def span := fullContents.last()
+                def convertedContents := [
+                    for [fieldname, _] => [arg, guard] in (zip(contents, nodeInfo))
+                    if (fieldname.endsWith("*")) { [for item in (arg) convert(item)]
+                    } else if (_auditedBy(astGuardStamp, guard)) { convert(arg)
+                    } else { arg }]
+                M.call(ms[node.getNodeName()], "run", convertedContents + [span],
+                       [].asMap())
         match [verb ? (makers.contains(verb)), args, namedArgs]:
             M.call(makers[verb], "run", args, namedArgs)
 
     return gs + [_astBuilder]
+
+def makeScopeWalker() as DeepFrozenStamp:
+    def scopesSeen := [].asMap().diverge()
+    def getStaticScope
+    def sumScopes(nodes):
+        var result := emptyScope
+        for node in (nodes):
+            if (node != null):
+                result += getStaticScope(node)
+        return result
+
+    def scopeMaybe(optNode):
+        if (optNode == null):
+            return emptyScope
+        return getStaticScope(optNode)
+    bind getStaticScope(node):
+        if (scopesSeen.contains(node)):
+            return scopesSeen[node]
+        def bail := __return
+        def s(scope):
+            bail(scopesSeen[node] := scope)
+        def nodeName := node.getNodeName()
+        if (nodeName == "NounExpr"):
+            s(makeStaticScope([node.getName()], [], [], [], false))
+        if (nodeName == "TempNounExpr"):
+            s(makeStaticScope([node], [], [], [], false))
+        if (["SlotExpr", "BindingExpr"].contains(nodeName)):
+            s(getStaticScope(node.getNoun()))
+        if (nodeName == "MetaStateExpr"):
+            s(makeStaticScope([], [], [], [], true))
+        if (nodeName == "SeqExpr"):
+            s(sumScopes(node.getExprs()))
+        if (nodeName == "Module"):
+            def interiorScope := (sumScopes([for [_n, p] in (node.getImports()) p]) +
+                                  getStaticScope(node.getBody()))
+            def exportListScope := sumScopes(node.getExports())
+            def exportScope := makeStaticScope(
+                exportListScope.getNamesRead() - interiorScope.outNames(),
+                [], [for e in (node.getExports())
+                     ? (interiorScope.outNames().contains(e.getName()))
+                     e.getName()], [], false)
+            s(interiorScope.hide() + exportScope)
+        if (nodeName == "NamedArg"):
+            s(getStaticScope(node.getKey()) + getStaticScope(node.getValue()))
+        if (nodeName == "NamedArgExport"):
+            s(getStaticScope(node.getValue()))
+        if (["MethodCallExpr", "FunCallExpr", "SendExpr", "FunSendExpr"].contains(nodeName)):
+            s(sumScopes([node.getReceiver()] + node.getArgs() + node.getNamedArgs()))
+        if (nodeName == "GetExpr"):
+            s(sumScopes([node.getReceiver()] + node.getIndices()))
+        if (["AndExpr", "OrExpr", "BinaryExpr",
+             "RangeExpr", "SameExpr", "CompareExpr"].contains(nodeName)):
+            s(getStaticScope(node.getLeft()) + getStaticScope(node.getRight()))
+        if (["MatchBindExpr", "MismatchExpr"].contains(nodeName)):
+            s(getStaticScope(node.getSpecimen()) + getStaticScope(node.getPattern()))
+        if (["PrefixExpr", "CurryExpr"].contains(nodeName)):
+            s(getStaticScope(node.getReceiver()))
+        if (nodeName == "CoerceExpr"):
+            s(getStaticScope(node.getSpecimen()) + getStaticScope(node.getGuard()))
+        if (nodeName == "ExitExpr"):
+            s(scopeMaybe(node.getValue()))
+        if (nodeName == "ForwardExpr"):
+            s(makeStaticScope(
+                [], [], [node.getNoun().getName(), node.getNoun().getName() +
+                         "_Resolver"], [], false))
+        if (nodeName == "DefExpr"):
+            s(if (node.getExit() == null) {
+                getStaticScope(node.getPattern()) + getStaticScope(node.getExpr())
+            } else {
+                sumScopes([node.getPattern(), node.getExit(), node.getExpr()])
+            })
+        if (["AssignExpr", "AugAssignExpr"].contains(nodeName)):
+            def lname := node.getLvalue().getNodeName()
+            def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
+                makeStaticScope([], [node.getLvalue().getName()], [], [], false)
+            } else {
+                getStaticScope(node.getLvalue())
+            }
+            s(lscope + getStaticScope(node.getRvalue()))
+        if (nodeName == "VerbAssignExpr"):
+            def lname := node.getLvalue().getNodeName()
+            def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
+                makeStaticScope([], [node.getLvalue().getName()], [], [], false)
+            } else {
+                getStaticScope(node.getLvalue())
+            }
+            s(lscope + sumScopes(node.getRvalues()))
+
+        if (["Method", "To", "MethodExpr"].contains(nodeName)):
+            s(sumScopes(node.getParams() + node.getNamedParams() +
+                        [node.getResultGuard(), node.getBody()]))
+        if (["Matcher", "Catcher"].contains(nodeName)):
+            s((getStaticScope(node.getPattern()) +
+              getStaticScope(node.getBody())).hide())
+        if (nodeName == "Script" || nodeName == "ScriptExpr"):
+            def baseScope := sumScopes(node.getMethods() + node.getMatchers())
+            def extend := node.getExtends()
+            if (extend == null):
+                s(baseScope)
+            else:
+                s(getStaticScope(extend) +
+                  makeStaticScope([], [], ["super"], [], false) + baseScope)
+        if (nodeName == "FunctionScript"):
+            def ps := sumScopes(node.getParams() + node.getNamedParams())
+            def returnScope := makeStaticScope([], [], ["__return"], [], false)
+            def b := sumScopes([node.getResultGuard(), node.getBody()])
+            s((ps + returnScope + b).hide())
+        if (nodeName == "FunctionExpr"):
+            s(sumScopes(node.getParams() + node.getNamedParams() +
+                        [node.getBody()]).hide())
+        if (nodeName == "ListExpr"):
+            s(sumScopes(node.getItems()))
+        if (["MapExprAssoc", "NamedArg"].contains(nodeName)):
+            s(getStaticScope(node.getKey()) + getStaticScope(node.getValue()))
+        if (["MapExprExport", "NamedArgExport"].contains(nodeName)):
+            s(getStaticScope(node.getValue()))
+        if (nodeName == "MapExpr"):
+            s(sumScopes(node.getPairs()))
+        if (nodeName == "MapComprehensionExpr"):
+              s(sumScopes([node.getIterable(), node.getKey(),
+                           node.getValue(), node.getFilter(),
+                           node.getBodyKey(), node.getBodyValue()]).hide())
+        if (nodeName == "ListComprehensionExpr"):
+              s(sumScopes([node.getIterable(), node.getKey(),
+                           node.getValue(), node.getFilter(),
+                           node.getBody()]).hide())
+        if (nodeName == "ForExpr"):
+              s(((makeStaticScope([], [], ["__break"], [], false) +
+                  sumScopes([node.getIterable(), node.getKey(),
+                             node.getValue()]) +
+                  makeStaticScope([], [], ["__continue"], [], false) +
+                  node.getBody().getStaticScope()).hide() +
+                 scopeMaybe(node.getCatchPattern()) +
+                 scopeMaybe(node.getCatchBody())).hide())
+        if (nodeName == "ObjectExpr"):
+              s(getStaticScope(node.getName()) +
+                sumScopes([node.getAsExpr()] + node.getAuditors()).hide() +
+                getStaticScope(node.getScript()))
+        if (nodeName == "ParamDesc"):
+              s(scopeMaybe(node.getGuard()))
+        if (nodeName == "MessageDesc"):
+              s(sumScopes(node.getParams() + [node.getResultGuard()]))
+        if (nodeName == "InterfaceExpr"):
+                s(sumScopes([node.getName()] + node.getParents() +
+                            [node.getStamp()] + node.getAuditors() +
+                            node.getMessages()))
+        if (nodeName == "FunctionInterfaceExpr"):
+                s(sumScopes([node.getName()] + node.getParents() +
+                            [node.getStamp()] + node.getAuditors() +
+                            [node.getMessageDesc()]))
+        if (nodeName == "CatchExpr"):
+            s(getStaticScope(node.getBody()).hide() +
+              (getStaticScope(node.getPattern()) +
+               getStaticScope(node.getCatcher())).hide())
+        if (nodeName == "FinallyExpr"):
+            s(getStaticScope(node.getBody()).hide() +
+              getStaticScope(node.getUnwinder()).hide())
+        if (nodeName == "TryExpr"):
+            if (node.getFinally() == null):
+                s((getStaticScope(node.getBody()) +
+                  sumScopes(node.getCatchers())).hide())
+            else:
+                s((getStaticScope(node.getBody()) +
+                   sumScopes(node.getCatchers())).hide() +
+                  getStaticScope(node.getFinally()).hide())
+        if (nodeName == "EscapeExpr"):
+            if (node.getCatchPattern() == null):
+                s((getStaticScope(node.getEjectorPattern()) +
+                          getStaticScope(node.getBody())).hide())
+            else:
+                s((getStaticScope(node.getEjectorPattern()) +
+                          getStaticScope(node.getBody())).hide() +
+                         (getStaticScope(node.getCatchPattern()) +
+                          getStaticScope(node.getCatchBody())).hide())
+        if (nodeName == "SwitchExpr"):
+            s((getStaticScope(node.getSpecimen()) +
+               sumScopes(node.getMatchers())).hide())
+        if (nodeName == "WhenExpr"):
+            s(sumScopes(node.getArgs() + [node.getBody()]).hide() +
+              sumScopes(node.getCatchers()) +
+              scopeMaybe(node.getFinally()).hide())
+        if (nodeName == "IfExpr"):
+            if (node.getElse() == null):
+                s((getStaticScope(node.getTest()) +
+                  getStaticScope(node.getThen())).hide())
+            else:
+                s((getStaticScope(node.getTest()) +
+                   getStaticScope(node.getThen())).hide() +
+                  getStaticScope(node.getElse()).hide())
+        if (nodeName == "WhileExpr"):
+            s((makeStaticScope([], [], ["__break"], [], false) +
+               getStaticScope(node.getTest()) +
+               makeStaticScope([], [], ["__continue"], [], false) +
+               getStaticScope(node.getBody())).hide() +
+              scopeMaybe(node.getCatcher()).hide())
+        if (nodeName == "HideExpr"):
+            s(getStaticScope(node.getBody()).hide())
+        if (["ValueHoleExpr", "ValueHolePattern",
+             "PatternHoleExpr", "PatternHolePattern",
+             "QuasiText", "LiteralExpr", "MetaContextExpr"].contains(nodeName)):
+            s(emptyScope)
+        if (nodeName == "FinalPattern"):
+            def gs := scopeMaybe(node.getGuard())
+            def noun := node.getNoun()
+            if (noun.getNodeName() == "NounExpr" &&
+                  gs.namesUsed().contains(noun.getName())):
+                throw("Kernel guard cycle not allowed")
+            s(makeStaticScope([], [], [noun.getName()], [], false) +
+              gs)
+        if (["VarPattern", "SlotPattern"].contains(nodeName)):
+            def gs := scopeMaybe(node.getGuard())
+            def noun := node.getNoun()
+            if (noun.getNodeName() == "NounExpr" &&
+                  gs.namesUsed().contains(noun.getName())):
+                throw("Kernel guard cycle not allowed")
+            s(makeStaticScope([], [], [], [noun.getName()], false) +
+              gs)
+        if (nodeName == "BindingPattern"):
+            s(makeStaticScope([], [], [], [node.getNoun().getName()], false))
+        if (nodeName == "BindPattern"):
+            s(makeStaticScope([node.getNoun().getName() + "_Resolver"],
+                              [], [], [], false) +
+              scopeMaybe(node.getGuard()))
+        if (nodeName == "IgnorePattern"):
+            s(scopeMaybe(node.getGuard()))
+        if (nodeName == "ListPattern"):
+            s(sumScopes(node.getPatterns() + [node.getTail()]))
+        if (["MapPatternAssoc", "NamedParam"].contains(nodeName)):
+            s(getStaticScope(node.getKey()) + getStaticScope(node.getValue()) +
+              scopeMaybe(node.getDefault()))
+        if (["MapPatternImport", "NamedParamImport"].contains(nodeName)):
+            s(getStaticScope(node.getValue()) + scopeMaybe(node.getDefault()))
+        if (nodeName == "MapPattern"):
+            s(sumScopes(node.getPatterns() + [node.getTail()]))
+        if (nodeName == "ViaPattern"):
+            s(getStaticScope(node.getExpr()) + getStaticScope(node.getPattern()))
+        if (nodeName == "SuchThatPattern"):
+            s(getStaticScope(node.getPattern()) + getStaticScope(node.getExpr()))
+        if (nodeName == "SamePattern"):
+            s(getStaticScope(node.getValue()))
+        if (["QuasiParserExpr", "QuasiParserPattern"].contains(nodeName)):
+            def base := if(node.getName() == null) {
+                emptyScope
+            } else {
+                makeStaticScope([node.getName() + "``"], [], [], [], false)
+            }
+            s(base + sumScopes(node.getQuasis()))
+        if (nodeName == "QuasiPatternHole"):
+            s(getStaticScope(node.getPattern()))
+        if (nodeName == "QuasiExprHole"):
+            s(getStaticScope(node.getExpr()))
+        throw("Unrecognized node name " + M.toQuote(nodeName))
+
+    return object scopeWalker:
+        to getStaticScope(node):
+            return getStaticScope(node)
+        to nodeUsesName(node, name :Str):
+            return getStaticScope(node).namesUsed().contains(name)
+        to nodeSetsName(node, name :Str):
+            return getStaticScope(node).getNamesSet().contains(name)
+        to nodeReadsName(node, name :Str):
+            return getStaticScope(node).getNamesSet().contains(name)
+        to nodeBindsName(node, name :Str):
+            return getStaticScope(node).outNames().contains(name)
 
 def makeCoreAst() as DeepFrozenStamp:
     def Noun := Ast["NounExpr"]
@@ -398,7 +678,7 @@ def makeCoreAst() as DeepFrozenStamp:
         "Module" => ["imports*" => Import_, "exports*" => Str, "body" => Expr]
     ]
     ])
-    return object astBuilder:
+    return object astBuilder implements DeepFrozenStamp:
         to getAstGuard():
             return Ast
         to getPatternGuard():
@@ -409,241 +689,34 @@ def makeCoreAst() as DeepFrozenStamp:
             return NamePattern
         to getNounGuard():
             return Noun
+        to TempNounExpr(namePrefix :Str, span):
+            return object tempNounExpr implements DeepFrozenStamp, astStamp:
+                to getNodeName():
+                    return "TempNounExpr"
+                to transform(f):
+                    return f(tempNounExpr, astBuilder.TempNounExpr, [namePrefix], span)
+                to getName():
+                    # this object IS a name, at least for comparison/expansion purposes
+                    return tempNounExpr
+                to getNamePrefix():
+                    return namePrefix
+                to _printOn(out):
+                    out.print("TempNounExpr(")
+                    out.quote(namePrefix)
+                    out.print(")")
+        to FinalPattern(noun, guard :NullOk[Expr], span):
+            if (guard != null && noun.getNodeName() == "NounExpr" &&
+                makeScopeWalker().nodeUsesName(guard, noun.getName())):
+                throw("Kernel guard cycle not allowed")
+            return astBuilder_.makeFinalPattern(noun, guard, span)
+        to VarPattern(noun, guard :NullOk[Expr], span):
+            if (guard != null && noun.getNodeName() == "NounExpr" &&
+                makeScopeWalker().nodeUsesName(guard, noun.getName())):
+                throw("Kernel guard cycle not allowed")
+            return astBuilder_.makeVarPattern(noun, guard, span)
         match msg:
             M.callWithPair(astBuilder_, msg)
 
-def makeScopeWalker() as DeepFrozen:
-    def scopesSeen := [].asMap().diverge()
-    def getStaticScope
-    def sumScopes(nodes):
-        var result := emptyScope
-        for node in (nodes):
-            if (node != null):
-                result += getStaticScope(node)
-        return result
-
-    def scopeMaybe(optNode):
-        if (optNode == null):
-            return emptyScope
-        return getStaticScope(optNode)
-    bind getStaticScope(node):
-        if (scopesSeen.contains(node)):
-            return scopesSeen[node]
-        def bail := __return
-        def s(scope):
-            bail(scopesSeen[node] := scope)
-        def nodeName := node.getNodeName()
-        if (nodeName == "NounExpr"):
-            s(makeStaticScope([node.getName()], [], [], [], false))
-        if (["SlotExpr", "BindingExpr"].contains(nodeName)):
-            s(getStaticScope(node.getNoun().getName()))
-        if (nodeName == "MetaStateExpr"):
-            s(makeStaticScope([], [], [], [], true))
-        if (nodeName == "SeqExpr"):
-            s(sumScopes(node.getExprs()))
-        if (nodeName == "Module"):
-            def interiorScope := (sumScopes([for [_n, p] in (node.getImportsList()) p]) +
-                                  getStaticScope(node.getBody()))
-            def exportListScope := sumScopes(node.getExportsList())
-            def exportScope := makeStaticScope(
-                exportListScope.getNamesRead() - interiorScope.outNames(),
-                [], [for e in (node.getExportsList())
-                     ? (interiorScope.outNames().contains(e.getName()))
-                     e.getName()], [], false)
-            s(interiorScope.hide() + exportScope)
-        if (nodeName == "NamedArg"):
-            s(getStaticScope(node.getKey()) + getStaticScope(node.getValue()))
-        if (nodeName == "NamedArgExport"):
-            s(getStaticScope(node.getValue()))
-        if (["MethodCallExpr", "FuncallExpr", "SendExpr", "FunSendExpr"].contains(nodeName)):
-            s(sumScopes([node.getReceiver()] + node.getArgs() + node.getNamedArgs()))
-        if (nodeName == "GetExpr"):
-            s(sumScopes([node.getReceiver()] + node.getIndices()))
-        if (["AndExpr", "OrExpr", "BinaryExpr",
-             "RangeExpr", "SameExpr"].contains(nodeName)):
-            s(getStaticScope(node.getLeft()) + getStaticScope(node.getRight()))
-        if (["MatchBindExpr", "MismatchExpr"].contains(nodeName)):
-            s(getStaticScope(node.getSpecimen()) + getStaticScope(node.getPattern()))
-        if (["PrefixExpr", "CurryExpr"].contains(nodeName)):
-            s(getStaticScope(node.getReceiver()))
-        if (nodeName == "CoerceExpr"):
-            s(getStaticScope(node.getSpecimen()) + getStaticScope(node.getGuard()))
-        if (nodeName == "ExitExpr"):
-            s(scopeMaybe(node.getValue()))
-        if (nodeName == "ForwardExpr"):
-            s(makeStaticScope(
-                [], [], [node.getNoun().getName(), node.getNoun().getName() +
-                         "_Resolver"], [], false))
-        if (nodeName == "DefExpr"):
-            s(if (node.getExit() == null) {
-                getStaticScope(node.getPattern()) + getStaticScope(node.getExpr())
-            } else {
-                sumScopes([node.getPattern(), node.getExit(), node.getExpr()])
-            })
-        if (["AssignExpr", "VerbAssignExpr", "AugAssignExpr"].contains(nodeName)):
-            def lname := node.getLvalue().getNodeName()
-            def lscope := if (lname == "NounExpr" || lname == "TempNounExpr") {
-                makeStaticScope([], [node.getLvalue().getName()], [], [], false)
-            } else {
-                getStaticScope(node.getLvalue())
-            }
-            s(lscope + getStaticScope(node.getRvalue()))
-        if (["Method", "To"].contains(nodeName)):
-            s(sumScopes(node.getParams() + node.getNamedParams() +
-                        [node.getResultGuard(), node.getBody()]))
-        if (["Matcher", "Catcher"].contains(nodeName)):
-            s((getStaticScope(node.getPattern()) +
-              getStaticScope(node.getBody())).hide())
-        if (nodeName == "Script"):
-            def baseScope := sumScopes(node.getMethods() + node.getMatchers())
-            def extend := node.getExtends()
-            if (extend == null):
-                s(baseScope)
-            else:
-                s(getStaticScope(extend) +
-                  makeStaticScope([], [], ["super"], [], false) + baseScope)
-        if (nodeName == "FunctionScript"):
-            def ps := sumScopes(node.getParams() + node.getNamedParams())
-            def returnScope := makeStaticScope([], [], ["__return"], [], false)
-            def b := sumScopes([node.getResultGuard(), node.getBody()])
-            s((ps + returnScope + b).hide())
-        if (nodeName == "FunctionExpr"):
-            s(sumScopes(node.getParams() + node.getNamedParams() +
-                        [node.getBody()]).hide())
-        if (nodeName == "ListExpr"):
-            s(sumScopes(node.getItems()))
-        if (["MapExprAssoc", "NamedArg"].contains(nodeName)):
-            s(getStaticScope(node.getKey()) + getStaticScope(node.getValue()))
-        if (["MapExprExport", "NamedArgExport"].contains(nodeName)):
-            s(getStaticScope(node.getValue()))
-        if (nodeName == "MapComprehensionExpr"):
-              s(sumScopes([node.getIterable(), node.getKey(),
-                           node.getValue(), node.getFilter(),
-                           node.getBodyKey(), node.getBodyValue()]).hide())
-        if (nodeName == "ForExpr"):
-              s(((makeStaticScope([], [], ["__break"], [], false) +
-                  sumScopes([node.getIterable(), node.getKey(),
-                             node.getValue()]) +
-                  makeStaticScope([], [], ["__continue"], [], false) +
-                  node.getBody().getStaticScope()).hide() +
-                 scopeMaybe(node.getCatchPattern()) +
-                 scopeMaybe(node.getCatchBody())).hide())
-        if (nodeName == "ObjectExpr"):
-              s(getStaticScope(node.getName()) +
-                sumScopes([node.getAsExpr()] + node.getAuditors()).hide() +
-                getStaticScope(node.getScript()))
-        if (nodeName == "ParamDesc"):
-              s(scopeMaybe(node.getGuard()))
-        if (nodeName == "MessageDesc"):
-              s(sumScopes(node.getParams() + [node.getResultGuard()]))
-        if (nodeName == "InterfaceExpr"):
-                s(sumScopes([node.getName()] + node.getParents() +
-                            [node.getStamp()] + node.getAuditors() +
-                            node.getMessages()))
-        if (nodeName == "FunctionInterfaceExpr"):
-                s(sumScopes([node.getName()] + node.getParents() +
-                            [node.getStamp()] + node.getAuditors() +
-                            [node.getMessageDesc()]))
-        if (nodeName == "CatchExpr"):
-            s(getStaticScope(node.getBody()).hide() +
-              (getStaticScope(node.getPattern()) +
-               getStaticScope(node.getCatcher())).hide())
-        if (nodeName == "FinallyExpr"):
-            s(getStaticScope(node.getBody()).hide() +
-              getStaticScope(node.getUnwinder()).hide())
-        if (nodeName == "TryExpr"):
-            if (node.getFinallyBlock() == null):
-                s((getStaticScope(node.getBody()) +
-                  sumScopes(node.getCatchers())).hide())
-            else:
-                s((getStaticScope(node.getBody()) +
-                   sumScopes(node.getCatchers())).hide() +
-                  getStaticScope(node.getFinallyBlock()).hide())
-        if (nodeName == "EscapeExpr"):
-            if (node.getCatchPattern() == null):
-                s((getStaticScope(node.getEjectorPattern()) +
-                          getStaticScope(node.getBody())).hide())
-            else:
-                s((getStaticScope(node.getEjectorPattern()) +
-                          getStaticScope(node.getBody())).hide() +
-                         (getStaticScope(node.getCatchPattern()) +
-                          getStaticScope(node.getCatchBody())).hide())
-        if (nodeName == "SwitchExpr"):
-            s((getStaticScope(node.getSpecimen()) +
-               sumScopes(node.getMatchers())).hide())
-        if (nodeName == "WhenExpr"):
-            s(sumScopes(node.getArgs() + [node.getBody()]).hide() +
-              sumScopes(node.getCatchers()) +
-              scopeMaybe(node.getFinallyBlock()).hide())
-        if (nodeName == "IfExpr"):
-            if (node.getElse() == null):
-                s((getStaticScope(node.getTest()) +
-                  getStaticScope(node.getThen())).hide())
-            else:
-                s((getStaticScope(node.getTest()) +
-                   getStaticScope(node.getThen())).hide() +
-                  getStaticScope(node.getElse()).hide())
-        if (nodeName == "WhileExpr"):
-            s((makeStaticScope([], [], ["__break"], [], false) +
-               getStaticScope(node.getTest()) +
-               makeStaticScope([], [], ["__continue"], [], false) +
-               getStaticScope(node.getBody())).hide() +
-              scopeMaybe(node.getCatcher()).hide())
-        if (nodeName == "HideExpr"):
-            s(getStaticScope(node.getBody()).hide())
-        if (["ValueHoleExpr", "ValueHolePattern",
-             "PatternHoleExpr", "PatternHolePattern",
-             "QuasiText", "LiteralExpr"].contains(nodeName)):
-            s(emptyScope)
-        if (nodeName == "FinalPattern"):
-            def gs := scopeMaybe(node.getGuard())
-            def noun := node.getNoun()
-            if (noun.getNodeName() == "NounExpr" &&
-                  gs.namesUsed().contains(noun.getName())):
-                throw("Kernel guard cycle not allowed")
-            s(makeStaticScope([], [], [noun.getName()], [], false) +
-              gs)
-        if (["VarPattern", "SlotPattern"].contains(nodeName)):
-            def gs := scopeMaybe(node.getGuard())
-            def noun := node.getNoun()
-            if (noun.getNodeName() == "NounExpr" &&
-                  gs.namesUsed().contains(noun.getName())):
-                throw("Kernel guard cycle not allowed")
-            s(makeStaticScope([], [], [], [noun.getName()], false) +
-              gs)
-        if (nodeName == "BindingPattern"):
-            s(makeStaticScope([], [], [], [node.getNoun().getName()], false))
-        if (nodeName == "BindPattern"):
-            s(makeStaticScope([node.getName() + "_Resolver"],
-                              [], [], [], false) +
-              scopeMaybe(node.getGuard()))
-        if (nodeName == "IgnorePattern"):
-            s(scopeMaybe(node.getGuard()))
-        if (nodeName == "ListPattern"):
-            s(sumScopes(node.getPatterns() + [node.getTail()]))
-        if (["MapPatternAssoc", "NamedParam"].contains(nodeName)):
-            s(getStaticScope(node.getKey()) + getStaticScope(node.getValue()) +
-              scopeMaybe(node.getDefault()))
-        if (["MapPatternImport", "NamedParamImport"].contains(nodeName)):
-            s(getStaticScope(node.getValue()) + scopeMaybe(node.getDefault()))
-        if (nodeName == "MapPattern"):
-            s(sumScopes(node.getPatterns() + [node.getTail()]))
-        if (nodeName == "ViaPattern"):
-            s(getStaticScope(node.getExpr()) + getStaticScope(node.getPattern()))
-        if (nodeName == "SuchThatPattern"):
-            s(getStaticScope(node.getPattern()) + getStaticScope(node.getExpr()))
-        if (nodeName == "SamePattern"):
-            s(getStaticScope(node.getValue()))
-        if (["QuasiParserExpr", "QuasiParserPattern"].contains(nodeName)):
-            if(node.getName() == null):
-                s(emptyScope)
-            else:
-                s(makeStaticScope([node.getName() + "``"], [], [], [], false) +
-                  sumScopes(node.getQuasis()))
-        if (nodeName == "QuasiPatternHole"):
-            s(getStaticScope(node.getPattern()))
-        if (nodeName == "QuasiExprHole"):
-            s(getStaticScope(node.getExpr()))
 
 # The story of &scope:
 # Scopes are not used very often. They are expensive to calculate:
@@ -1209,9 +1282,9 @@ def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
             return docstring
         to getVerb():
             return verb
-        to getPatterns():
+        to getParams():
             return patterns
-        to getNamedPatterns():
+        to getNamedParams():
             return namedPatts
         to getResultGuard():
             return resultGuard
@@ -1239,9 +1312,9 @@ def makeTo(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
             return docstring
         to getVerb():
             return verb
-        to getPatterns():
+        to getParams():
             return patterns
-        to getNamedPatterns():
+        to getNamedParams():
             return namedPatts
         to getResultGuard():
             return resultGuard
@@ -1330,9 +1403,9 @@ def makeFunctionScript(verb :Str, patterns :List[Pattern],
     object functionScript:
         to getVerb():
             return verb
-        to getPatterns():
+        to getParams():
             return patterns
-        to getNamedPatterns():
+        to getNamedParams():
             return namedPatterns
         to getResultGuard():
             return resultGuard
@@ -1347,10 +1420,10 @@ def makeFunctionExpr(patterns :List[Pattern],
     def &scope := makeLazySlot(fn {(sumScopes(patterns + namedPatterns) +
                                     body.getStaticScope()).hide()})
     object functionExpr:
-        to getPatterns():
+        to getParams():
             return patterns
 
-        to getNamedPatterns():
+        to getNamedParams():
             return namedPatterns
 
         to getBody():
@@ -1797,6 +1870,9 @@ def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozenStamp:
         to getNoun():
             return noun
 
+        to getGuard():
+            return guard
+
         to refutable() :Bool:
             return guard != null
 
@@ -1860,7 +1936,7 @@ def makeMapPatternAssoc(key :Expr, value :Pattern, default :NullOk[Expr], span) 
 def makeMapPatternImport(pattern :NamePattern, default :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {pattern.getStaticScope() + scopeMaybe(default)})
     object mapPatternImport:
-        to getPattern():
+        to getValue():
             return pattern
         to getDefault():
             return default
@@ -1888,7 +1964,7 @@ def makeNamedParam(key :Expr, patt :Pattern, default :NullOk[Expr], span) as Dee
     object namedParam:
         to getKey():
             return key
-        to getPattern():
+        to getValue():
             return patt
         to getDefault():
             return default
@@ -1899,7 +1975,7 @@ def makeNamedParamImport(patt :NamePattern, default :NullOk[Expr], span) as Deep
     def &scope := makeLazySlot(fn {patt.getStaticScope() +
                                    scopeMaybe(default)})
     object namedParamImport:
-        to getPattern():
+        to getValue():
             return patt
         to getDefault():
             return default

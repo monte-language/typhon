@@ -111,8 +111,8 @@ def printObjectSuiteOn(leaderFn, docstring, suite, out, priority) as DeepFrozenS
         }, false, true, out, priority)
 
 def printObjectHeadOn(script, name, asExpr, auditors, out, _priority) as DeepFrozenStamp:
-    def namedPatterns := script.getNamedPatterns()
-    def patterns := script.getPatterns()
+    def namedPatterns := script.getNamedParams()
+    def patterns := script.getParams()
     def resultGuard := script.getResultGuard()
     def verb := script.getVerb()
     if (script.getNodeName() == "FunctionScript"):
@@ -522,8 +522,8 @@ def printerActions :Map[Str, DeepFrozen] := [
         printDocExprSuiteOn(fn {
             out.lnPrint("method ")
             def verb := self.getVerb()
-            def patterns := self.getPatterns()
-            def namedPatts := self.getNamedPatterns()
+            def patterns := self.getParams()
+            def namedPatts := self.getNamedParams()
             def resultGuard := self.getResultGuard()
             if (isIdentifier(verb)) {
                 out.print(verb)
@@ -545,8 +545,8 @@ def printerActions :Map[Str, DeepFrozen] := [
         printDocExprSuiteOn(fn {
             out.lnPrint("to ")
             def verb := self.getVerb()
-            def patterns := self.getPatterns()
-            def namedPatts := self.getNamedPatterns()
+            def patterns := self.getParams()
+            def namedPatts := self.getNamedParams()
             def resultGuard := self.getResultGuard()
             if (isIdentifier(verb)) {
                 out.print(verb)
@@ -588,9 +588,9 @@ def printerActions :Map[Str, DeepFrozen] := [
     },
     "FunctionExpr" => def printFunctionExpr(self, out, _priority) as DeepFrozenStamp {
         printExprSuiteOn(fn {
-            printListOn("fn ", self.getPatterns(), ", ",
+            printListOn("fn ", self.getParams(), ", ",
                         "", out, priorities["pattern"])
-            printListOn("", self.getNamedPatterns(), ", ",
+            printListOn("", self.getNamedParams(), ", ",
                         "", out, priorities["pattern"])
         }, self.getBody(), false, out, priorities["assign"])
  },
@@ -1041,7 +1041,7 @@ def printerActions :Map[Str, DeepFrozen] := [
     },
     "MapPatternImport" => def printMapPatternImport(self, out, priority) as DeepFrozenStamp {
         out.print("=> ")
-        self.getPattern().subPrintOn(out, priority)
+        self.getValue().subPrintOn(out, priority)
         def default := self.getDefault()
         if (default != null) {
             out.print(" := (")
@@ -1068,7 +1068,7 @@ def printerActions :Map[Str, DeepFrozen] := [
             out.print(")")
         }
         out.print(" => ")
-        self.getPattern().subPrintOn(out, priority)
+        self.getValue().subPrintOn(out, priority)
         if (default != null) {
             out.print(" := (")
             default.subPrintOn(out, priorities["braceExpr"])
@@ -1077,7 +1077,7 @@ def printerActions :Map[Str, DeepFrozen] := [
     },
     "NamedParamImport" => def printNamedParamImport(self, out, priority) as DeepFrozenStamp {
         out.print("=> ")
-        self.getPattern().subPrintOn(out, priority)
+        self.getValue().subPrintOn(out, priority)
         def default := self.getDefault()
         if (default != null) {
             out.print(" := (")

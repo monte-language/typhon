@@ -826,13 +826,14 @@ def expand(node, builder, fail) as DeepFrozen:
                 mapExtract(k, v, default, span)
             match =="MapPatternImport":
                 def [subnode, default] := args
-                def pattName := node.getPattern().getNodeName()
+                def patt := node.getValue()
+                def pattName := patt.getNodeName()
                 def [k, v] := if (pattName == "FinalPattern" || pattName == "VarPattern") {
-                    [litExpr(node.getPattern().getNoun().getName(), span), subnode]
+                    [litExpr(patt.getNoun().getName(), span), subnode]
                 } else if (pattName == "SlotPattern") {
-                    [litExpr("&" + node.getPattern().getNoun().getName(), span), subnode]
+                    [litExpr("&" + patt.getNoun().getName(), span), subnode]
                 } else if (pattName == "BindingPattern") {
-                    [litExpr("&&" + node.getPattern().getNoun().getName(), span), subnode]
+                    [litExpr("&&" + patt.getNoun().getName(), span), subnode]
                 }
                 mapExtract(k, v, default, span)
             match =="ListPattern":
