@@ -230,16 +230,16 @@ def makeAstBuilder(description) as DeepFrozenStamp:
     def makers := ms.snapshot()
     object _astBuilder implements DeepFrozenStamp:
         to convertFromKernel(expr):
-            def nodeInfo := [].diverge()
+            def nodeInfo := [].asMap().diverge()
             for constructorGroup in (description):
                 for constructorName :Str => fields in (constructorGroup):
-                    nodeInfo[constructorGroup] := fields
+                    nodeInfo[constructorName] := fields
             def convert(node):
                 def fullContents := node._uncall()[2]
                 def contents := fullContents.slice(0, fullContents.size() - 1)
                 def span := fullContents.last()
                 def convertedContents := [
-                    for [fieldname, _] => [arg, guard] in (zip(contents, nodeInfo))
+                    for [_, fieldname] => [arg, guard] in (zip(contents, nodeInfo))
                     if (fieldname.endsWith("*")) { [for item in (arg) convert(item)]
                     } else if (_auditedBy(astGuardStamp, guard)) { convert(arg)
                     } else { arg }]
@@ -715,7 +715,7 @@ def makeCoreAst() as DeepFrozenStamp:
                 throw("Kernel guard cycle not allowed")
             return astBuilder_.makeVarPattern(noun, guard, span)
         match msg:
-            M.callWithPair(astBuilder_, msg)
+            M.callWithMessage(astBuilder_, msg)
 
 
 # The story of &scope:
@@ -729,7 +729,7 @@ def makeCoreAst() as DeepFrozenStamp:
 def astWrapper(node, maker, args, span, &scope, nodeName, transformArgs) as DeepFrozenStamp:
     return object astNode extends node implements Selfless, TransparentStamp, astStamp:
         to getStaticScope():
-            return scope
+            return null
         to getSpan():
             return span
         to withoutSpan():
@@ -1159,6 +1159,10 @@ def makeForwardExpr(patt :Ast["FinalPattern"], span) as DeepFrozenStamp:
         &scope, "ForwardExpr", fn f {[patt.transform(f)]})
 
 def makeVarPattern(noun :Noun, guard :NullOk[Expr], span) as DeepFrozenStamp:
+    if (guard != null && noun.getNodeName() == "NounExpr" &&
+        makeScopeWalker().nodeUsesName(guard, noun.getName())):
+        throw("Kernel guard cycle not allowed")
+
     def &scope := makeLazySlot(fn {makeStaticScope([], [], [],
                                                    [noun.getName()],
                                                    false) +
@@ -1839,10 +1843,10 @@ def makePatternHolePattern(index :Int, span) as DeepFrozenStamp:
 
 # Guard  would be 'noun :Noun' but optimizer will fold some constants here.
 def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozenStamp:
-    def gs := scopeMaybe(guard)
-    if (noun.getNodeName() == "NounExpr" &&
-        gs.namesUsed().contains(noun.getName())):
+    if (guard != null && noun.getNodeName() == "NounExpr" &&
+        makeScopeWalker().nodeUsesName(guard, noun.getName())):
         throw("Kernel guard cycle not allowed")
+    def gs := scopeMaybe(guard)
     def scope := makeStaticScope([], [], [noun.getName()], [], false) + gs
     object finalPattern:
         to getNoun():
@@ -1861,11 +1865,10 @@ def makeFinalPattern(noun :Any, guard :NullOk[Expr], span) as DeepFrozenStamp:
         fn f {[noun.transform(f), maybeTransform(guard, f)]})
 
 def makeSlotPattern(noun :Noun, guard :NullOk[Expr] , span) as DeepFrozenStamp:
-    def gs := scopeMaybe(guard)
-    if (noun.getNodeName() == "NounExpr" &&
-        gs.namesUsed().contains(noun.getName())):
+    if (guard != null && noun.getNodeName() == "NounExpr" &&
+        makeScopeWalker().nodeUsesName(guard, noun.getName())):
         throw("Kernel guard cycle not allowed")
-    def scope := makeStaticScope([], [], [], [noun.getName()], false) + gs
+    def scope := makeStaticScope([], [], [], [noun.getName()], false) + scopeMaybe(guard)
     object slotPattern:
         to getNoun():
             return noun
@@ -2087,6 +2090,8 @@ def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as
         &scope, "QuasiParserPattern", fn f {[name, transformAll(quasis, f)]})
 
 object astBuilder as DeepFrozenStamp:
+    to makeScopeWalker():
+        return makeScopeWalker()
     to getAstGuard():
         return Ast
     to getPatternGuard():

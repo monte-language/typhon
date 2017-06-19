@@ -46,7 +46,7 @@ def ifAnd(ast, maker, args, span) as DeepFrozen:
 
 def ifOr(ast, maker, args, span) as DeepFrozen:
     "Expand or-expressions inside if-expressions."
-
+    def sw := astBuilder.makeScopeWalker()
     if (ast.getNodeName() == "IfExpr"):
         def [test, consequent, alternative] := args
 
@@ -57,8 +57,8 @@ def ifOr(ast, maker, args, span) as DeepFrozen:
             # left must not define any name used by right; otherwise, if
             # left's test fails, right's test will try to access undefined
             # names.
-            if ((left.getStaticScope().outNames() &
-                 right.getStaticScope().namesUsed()).size() == 0):
+            if ((sw.getStaticScope(left).outNames() &
+                 sw.getStaticScope(right).namesUsed()).size() == 0):
                 return maker(left, consequent, maker(right, consequent,
                                                      alternative, span), span)
 
@@ -81,7 +81,7 @@ def modPow(ast, maker, args, span) as DeepFrozen:
 
 
 def expand(node, builder, fail) as DeepFrozen:
-
+    def sw := builder.makeScopeWalker()
     def defExpr := builder.DefExpr
     def ignorePatt := builder.IgnorePattern
     def litExpr := builder.LiteralExpr
@@ -166,8 +166,8 @@ def expand(node, builder, fail) as DeepFrozen:
     def makeEscapeExpr(ejPatt, ejExpr, catchPatt, catchExpr, span):
         if (catchPatt == null && catchExpr == null):
             # Stage one looks good. Let's do the scope check.
-            def pattNames := ejPatt.getStaticScope().outNames()
-            def exprNames := ejExpr.getStaticScope().namesUsed()
+            def pattNames := sw.getStaticScope(ejPatt).outNames()
+            def exprNames := sw.getStaticScope(ejExpr).namesUsed()
             if ((pattNames & exprNames).size() == 0):
                 # Stage two succeeded: The expr doesn't use the ejector at
                 # all. Elide.
@@ -190,10 +190,10 @@ def expand(node, builder, fail) as DeepFrozen:
                                    [], null, body, span)], [], span),
              span)
 
-    def expandMatchBind(args, span, fail):
+    def expandMatchBind(sw, args, span, fail):
         def [spec, patt] := args
-        def pattScope := patt.getStaticScope()
-        def specScope := spec.getStaticScope()
+        def pattScope := sw.getStaticScope(patt)
+        def specScope := sw.getStaticScope(spec)
         if ((pattScope.outNames() & specScope.namesUsed()).size() > 0):
             fail(["Use on left isn't really in scope of matchbind pattern: ${conflicts.getKeys()}", span])
         def [sp, ejector, result, problem, broken] :=  [
@@ -394,10 +394,10 @@ def expand(node, builder, fail) as DeepFrozen:
             fail(["Use on left would get captured by definition on right", span])
 
 
-    def expandFor(optKey, value, coll, block, catchPatt, catchBlock, span):
+    def expandFor(sw, optKey, value, coll, block, catchPatt, catchBlock, span):
         def key := if (optKey == null) {ignorePatt(null, span)} else {optKey}
-        validateFor(key.getStaticScope() + value.getStaticScope(),
-                    coll.getStaticScope(), fail, span)
+        validateFor(sw.getStaticScope(key) + sw.getStaticScope(value),
+                    sw.getStaticScope(coll), fail, span)
         # `key` and `value` are patterns. We cannot permit any code to run
         # within the loop until we've done _validateFor(), which normally
         # means that we use temp nouns and postpone actually unifying the key
@@ -455,10 +455,10 @@ def expand(node, builder, fail) as DeepFrozen:
             catchBlock,
             span)
 
-    def expandComprehension(optKey, value, coll, filter, exp, collector, span):
+    def expandComprehension(sw, optKey, value, coll, filter, exp, collector, span):
         def key := if (optKey == null) {ignorePatt(null, span)} else {optKey}
-        validateFor(exp.getStaticScope(), coll.getStaticScope(), fail, span)
-        validateFor(key.getStaticScope() + value.getStaticScope(), coll.getStaticScope(), fail, span)
+        validateFor(sw.getStaticScope(exp), sw.getStaticScope(coll), fail, span)
+        validateFor(sw.getStaticScope(key) + sw.getStaticScope(value), sw.getStaticScope(coll), fail, span)
         # Same concept as expandFor(). ~ C.
         def [patts, defs] := if (key.refutable()) {
             # The key is refutable, so we go with the traditional layout.
@@ -665,9 +665,9 @@ def expand(node, builder, fail) as DeepFrozen:
                 callExpr(guard, "coerce",
                     [spec, nounExpr("throw", span)], [], span)
             match =="MatchBindExpr":
-                expandMatchBind(args, span, fail)
+                expandMatchBind(sw, args, span, fail)
             match =="MismatchExpr":
-                callExpr(expandMatchBind(args, span, fail), "not", [], [], span)
+                callExpr(expandMatchBind(sw, args, span, fail), "not", [], [], span)
             match =="SameExpr":
                 def [left, right, same :Bool] := args
                 def sameEver := callExpr(nounExpr("_equalizer", span),
@@ -678,15 +678,15 @@ def expand(node, builder, fail) as DeepFrozen:
             match =="AndExpr":
                 def [left, right] := args
                 expandLogical(
-                    left.getStaticScope().outNames(),
-                    right.getStaticScope().outNames(),
+                    sw.getStaticScope(left).outNames(),
+                    sw.getStaticScope(right).outNames(),
                     fn s, f {builder.IfExpr(left, builder.IfExpr(right, s, f, span), f, span)},
                     span)
             match =="OrExpr":
                 def [left, right] := args
 
-                def leftmap := left.getStaticScope().outNames()
-                def rightmap := right.getStaticScope().outNames()
+                def leftmap := sw.getStaticScope(left).outNames()
+                def rightmap := sw.getStaticScope(right).outNames()
                 def partialFail(failed, s, broken):
                     var failedDefs := []
                     for n in (failed):
@@ -712,12 +712,12 @@ def expand(node, builder, fail) as DeepFrozen:
                     span)
             match =="DefExpr":
                 def [patt, ej, rval] := args
-                def pattScope := patt.getStaticScope()
+                def pattScope := sw.getStaticScope(patt)
                 def varPatts := pattScope.getVarNames()
                 def rvalScope := if (ej == null) {
-                    rval.getStaticScope()
+                    sw.getStaticScope(rval)
                 } else {
-                    ej.getStaticScope() + rval.getStaticScope()
+                    sw.getStaticScope(ej) + sw.getStaticScope(rval)
                 }
                 def rvalUsed := rvalScope.namesUsed()
                 if ((varPatts & rvalUsed).size() != 0):
@@ -933,13 +933,13 @@ def expand(node, builder, fail) as DeepFrozen:
                 builder.NamedParam(k, pattern, default, span)
             match =="ForExpr":
                 def [coll, key, value, block, catchPatt, catchBlock] := args
-                expandFor(key, value, coll, block, catchPatt, catchBlock, span)
+                expandFor(sw, key, value, coll, block, catchPatt, catchBlock, span)
             match =="ListComprehensionExpr":
                 def [coll, filter, key, value, exp] := args
-                expandComprehension(key, value, coll, filter, exp, "_accumulateList", span)
+                expandComprehension(sw, key, value, coll, filter, exp, "_accumulateList", span)
             match =="MapComprehensionExpr":
                 def [coll, filter, key, value, kExp, vExp] := args
-                expandComprehension(key, value, coll, filter,
+                expandComprehension(sw, key, value, coll, filter,
                     emitList([kExp, vExp], span), "_accumulateMap", span)
             match =="SwitchExpr":
                 def [expr, matchers] := args
