@@ -49,7 +49,7 @@ def countEdge(b :Set, a :Set ? (a.size() + 1 == b.size())) :Int as DeepFrozen:
 
 def makeASC(vertices :Map, facets :Set) as DeepFrozen:
     def space :Set := {
-        var rv := [].asSet()
+        var rv := facets.asSet()
         def stack := facets.asList().diverge()
         while (!stack.isEmpty()) {
             def s := stack.pop()
@@ -63,6 +63,7 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
         }
         rv
     }
+    # traceln(`space $space`)
     def defaultRestrictions :Map[Pair[Set, Set], Any] := {
         # NB: Can't have subsets of singleton sets.
         def m := [for u in (space) ? (u.size() > 1) u => {
@@ -88,6 +89,7 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
         }
         rv.snapshot()
     }
+    # traceln(`defaultRestrictions $defaultRestrictions`)
     return object abstractSimplicialComplex:
         to vertices():
             return vertices
@@ -105,14 +107,17 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
             return abstractSimplicialComplex.sheaf(defaultRestrictions)
 
         to sheaf(restrictions :Map[Pair[Set, Set], Any]):
+            # Fill in any missing ones.
+            def ress := restrictions | defaultRestrictions
             def resIndex := {
                 def rv := [].asMap().diverge()
-                for [u, v] => res in (restrictions) {
+                for [u, v] => res in (ress) {
                     if (!rv.contains(u)) { rv[u] := [].diverge() }
                     rv[u].push([v, res])
                 }
                 [for k => v in (rv) k => v.snapshot()]
             }
+            # traceln(`resIndex $resIndex`)
             return object abstractSheaf as Sheaf:
                 to stalkAt(u :Set):
                     return [for x in (u) vertices[x]]
@@ -137,7 +142,7 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
                     return fullSection.snapshot()
 
                 to restriction(u :Set, v :Set):
-                    return restrictions[[u, v]]
+                    return ress[[u, v]]
 
 def main(_) as DeepFrozen:
     def asc := makeASC([for x in ([1, 2, 3, 4, 5]) x => Int], [
@@ -166,5 +171,15 @@ def main(_) as DeepFrozen:
         ], badSection))
     catch problem:
         traceln(`Sheaf section failure: $problem`)
+
+    def simpleXorASC := makeASC([for x in (['x', 'y', 'z']) x => Bool], [
+        # x ^ y == z
+        ['x', 'y', 'z'].asSet(),
+    ].asSet())
+    def simpleXorSheaf := simpleXorASC.flabbySheaf()
+    def section := [
+        ['x', 'y', 'z'].asSet() => [true, false, true],
+    ]
+    traceln(simpleXorSheaf.sectionAt(section, null))
 
     return 0
