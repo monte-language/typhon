@@ -56,6 +56,13 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
             for ex in (s) {
                 def subset := s.without(ex)
                 if (!rv.contains(subset)) {
+                    # XXX We don't have a good poset representation, so
+                    # instead we are forced to iterate to confirm that,
+                    # indeed, we haven't occurred in this poset so far.
+                    def ej := __continue
+                    for specimen in (rv) {
+                        if (specimen <=> subset) { ej() }
+                    }
                     rv with= (subset)
                     stack.push(subset)
                 }
@@ -64,7 +71,7 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
         rv
     }
     # traceln(`space $space`)
-    def defaultRestrictions :Map[Pair[Set, Set], Any] := {
+    def restrictions :Map[Pair[Set, Set], Any] := {
         # NB: Can't have subsets of singleton sets.
         def m := [for u in (space) ? (u.size() > 1) u => {
             def positions := [for i => x in (u) x => i]
@@ -89,7 +96,7 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
         }
         rv.snapshot()
     }
-    # traceln(`defaultRestrictions $defaultRestrictions`)
+    # traceln(`restrictions $restrictions`)
     return object abstractSimplicialComplex:
         to vertices():
             return vertices
@@ -104,45 +111,30 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
             return [for s in (space) ? (simplex <= s) s].asSet()
 
         to flabbySheaf():
-            return abstractSimplicialComplex.sheaf(defaultRestrictions)
+            return abstractSimplicialComplex.sheaf([].asMap())
 
-        to sheaf(restrictions :Map[Pair[Set, Set], Any]):
-            # Fill in any missing ones.
-            def ress := restrictions | defaultRestrictions
-            def resIndex := {
-                def rv := [].asMap().diverge()
-                for [u, v] => res in (ress) {
-                    if (!rv.contains(u)) { rv[u] := [].diverge() }
-                    rv[u].push([v, res])
-                }
-                [for k => v in (rv) k => v.snapshot()]
-            }
-            # traceln(`resIndex $resIndex`)
+        to sheaf(consistency :Map[Set, Any]):
             return object abstractSheaf as Sheaf:
                 to stalkAt(u :Set):
                     return [for x in (u) vertices[x]]
 
-                to sectionAt(assignment :Map[Set, Any], ej) :Map[Set, Any]:
-                    def fullSection := assignment.diverge()
-                    def stack := assignment.getKeys().diverge()
-                    # For all u in the assignment, recursively look for u -> v
-                    # in the provided restrictions, and include v in the
-                    # assignment.
-                    while (!stack.isEmpty()):
-                        def u := stack.pop()
-                        for [v, res] in (resIndex.fetch(u, fn { [] })):
-                            def val := res(fullSection[u])
-                            if (fullSection.contains(v)):
-                                # Check consistency.
-                                if (!(fullSection[v] <=> val)):
-                                    throw.eject(ej, `Section $assignment couldn't be extended to include $v because ${fullSection[v]} != $val`)
-                            else:
-                                fullSection[v] := val
-                                stack.push(v)
+                to sectionAt(assignment :Map, ej) :Map:
+                    def fullSection := [].asMap().diverge()
+                    # For all sets in the space, if they are fully specified
+                    # by the given section, then check their consistency and
+                    # then include them.
+                    for s in (space):
+                        def section := [for x in (s)
+                                        assignment.fetch(x, __continue)]
+                        if (consistency.contains(s)):
+                            def con := consistency[s]
+                            if (!M.call(con, "run", section, [].asMap())):
+                                continue
+                        fullSection[s] := section
                     return fullSection.snapshot()
 
                 to restriction(u :Set, v :Set):
-                    return ress[[u, v]]
+                    return restrictions[[u, v]]
 
 def main(_) as DeepFrozen:
     def asc := makeASC([for x in ([1, 2, 3, 4, 5]) x => Int], [
@@ -158,28 +150,36 @@ def main(_) as DeepFrozen:
     def sheaf := asc.flabbySheaf()
     traceln(sheaf)
     traceln(sheaf.stalkAt([2, 3, 5].asSet()))
-    traceln(sheaf.sectionAt([[1].asSet() => [1]], null))
+    traceln(sheaf.sectionAt([1 => 1], null))
     traceln(sheaf.sectionAt([
-        [1, 2].asSet() => [1, 2],
-        [2].asSet() => [2],
+        1 => 1,
+        2 => 2,
     ], null))
-    traceln(sheaf.sectionAt([[2, 3, 5].asSet() => [1, 2, 3]], null))
-    escape badSection:
-        traceln(sheaf.sectionAt([
-            [1, 2].asSet() => [1, 2],
-            [2].asSet() => [3],
-        ], badSection))
-    catch problem:
-        traceln(`Sheaf section failure: $problem`)
 
-    def simpleXorASC := makeASC([for x in (['x', 'y', 'z']) x => Bool], [
+    def simpleXorASC := makeASC([for x in (['x', 'y', 'z', 'w']) x => Bool], [
         # x ^ y == z
         ['x', 'y', 'z'].asSet(),
+        # x ^ z == w
+        ['x', 'z', 'w'].asSet(),
     ].asSet())
-    def simpleXorSheaf := simpleXorASC.flabbySheaf()
-    def section := [
-        ['x', 'y', 'z'].asSet() => [true, false, true],
+    def xorCheck(in0 :Bool, in1 :Bool, out :Bool) :Bool:
+        # Check the truth table, yo.
+        return in0 ^ in1 ^ !out
+    def simpleXorSheaf := simpleXorASC.sheaf([
+        ['x', 'y', 'z'].asSet() => xorCheck,
+        ['x', 'z', 'w'].asSet() => xorCheck,
+    ])
+    def incorrect := [
+        'x' => false,
+        'y' => false,
+        'z' => true,
     ]
-    traceln(simpleXorSheaf.sectionAt(section, null))
+    traceln("Incorrect section", simpleXorSheaf.sectionAt(incorrect, null))
+    def correct := [
+        'x' => true,
+        'y' => false,
+        'z' => true,
+    ]
+    traceln("Correct section", simpleXorSheaf.sectionAt(correct, null))
 
     return 0
