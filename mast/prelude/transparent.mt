@@ -39,7 +39,7 @@ object Transparent as DeepFrozenStamp:
             if (Ref.isResolved(positionalArgNames)):
                 throw("Maker auditor has already been used")
             def sw := astBuilder.makeScopeWalker()
-            def objectExpr := astBuilder2.convertFromKernel(audition.getObjectExpr())
+            def objectExpr := astBuilder.convertFromKernel(audition.getObjectExpr())
             def patternSS := sw.getStaticScope(objectExpr.getName())
             def objNouns := patternSS.getDefNames().asList()
             def objName := if (objNouns.size() > 0 && objNouns[0] != null) {objNouns[0]} else {null}

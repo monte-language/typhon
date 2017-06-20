@@ -1,7 +1,7 @@
 import "boot" =~ [=> DeepFrozenStamp, => TransparentStamp, => KernelAstStamp]
 import "lib/iterators" =~ [=> zip :DeepFrozen]
-import "ast_printer" =~ [=> printerActions]
-exports (astBuilder, astBuilder2)
+import "ast_printer" =~ [=> astPrint :DeepFrozen]
+exports (astBuilder0, astBuilder)
 
 def makeStaticScope(read, set, defs, vars, metaStateExpr :Bool) as DeepFrozenStamp:
     def namesRead :Set[DeepFrozen] := read.asSet()
@@ -101,7 +101,7 @@ object Ast as DeepFrozenStamp implements astGuardStamp:
         if (!_auditedBy(astStamp, specimen) && !_auditedBy(KernelAstStamp, specimen)):
             def conformed := specimen._conformTo(Ast)
             if (!_auditedBy(astStamp, conformed) && !_auditedBy(KernelAstStamp, conformed)):
-                throw.eject(ej, "not an ast node")
+                throw.eject(ej, M.toString(specimen) + " not an ast node")
             else:
                 return conformed
         return specimen
@@ -163,6 +163,17 @@ def transformArg(f, fname, guard, arg) as DeepFrozenStamp:
 def transformArgs(f, fields, args) as DeepFrozenStamp:
     return [for fname => guard in (fields) transformArg(f, fname, guard, args[baseFieldName(fname)])]
 
+def extractFieldName(contents, name):
+    if (name.slice(0, 3) != "get"):
+        return null
+    def subname := name.slice(3)
+    if (subname.isEmpty()):
+        return null
+    else:
+        def fname := subname.slice(0, 1).toLowerCase() + subname.slice(1)
+        if (contents.contains(fname)):
+            return fname
+
 def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp:
     object nodeMaker as DeepFrozenStamp:
         to _printOn(out):
@@ -201,22 +212,18 @@ def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp
                     return [nodeMaker, "run", fullArgs, [].asMap()]
 
                 to _printOn(out):
-                    #printerActions[constructorName](node, out, 0)
-                    out.print(constructorName)
-                    out.print("(")
-                    if (args.size() > 0):
-                        if (args.size() > 1):
-                            for a in (args.slice(0, args.size() - 1)):
-                                out.quote(a)
-                                out.print(", ")
-                        out.quote(args.last())
-                    out.print(")")
+                    astPrint(node, out, 0)
+                    # out.print(constructorName)
+                    # out.print("(")
+                    # if (args.size() > 0):
+                    #     if (args.size() > 1):
+                    #         for a in (args.slice(0, args.size() - 1)):
+                    #             out.quote(a)
+                    #             out.print(", ")
+                    #     out.quote(args.last())
+                    # out.print(")")
 
-                match [name ? (name.startsWith("get")), [], _]:
-                    def subname := name.slice(3)
-                    if (subname.isEmpty()):
-                        throw("Message refused: get/0")
-                    def fname := subname.slice(0, 1).toLowerCase() + subname.slice(1)
+                match [name ? ((def fname := extractFieldName(contents, name)) != null), [], _]:
                     if (!contents.contains(fname)):
                         throw("Message refused: " + name + "/0 - not in " + M.toString(contents))
                     contents[fname]
@@ -294,7 +301,8 @@ def makeScopeWalker() as DeepFrozenStamp:
         if (nodeName == "SeqExpr"):
             s(sumScopes(node.getExprs()))
         if (nodeName == "Module"):
-            def interiorScope := (sumScopes([for [_n, p] in (node.getImports()) p]) +
+            def interiorScope := (sumScopes([for im in (node.getImports())
+                                             im.getPattern()]) +
                                   getStaticScope(node.getBody()))
             def exportListScope := sumScopes(node.getExports())
             def exportScope := makeStaticScope(
@@ -392,7 +400,7 @@ def makeScopeWalker() as DeepFrozenStamp:
                   sumScopes([node.getIterable(), node.getKey(),
                              node.getValue()]) +
                   makeStaticScope([], [], ["__continue"], [], false) +
-                  node.getBody().getStaticScope()).hide() +
+                  getStaticScope(node.getBody())).hide() +
                  scopeMaybe(node.getCatchPattern()) +
                  scopeMaybe(node.getCatchBody())).hide())
         if (nodeName == "ObjectExpr"):
@@ -526,8 +534,32 @@ def makeScopeWalker() as DeepFrozenStamp:
         to nodeBindsName(node, name :Str):
             return getStaticScope(node).outNames().contains(name)
 
+def operatorsToNamePrio :Map[Str, List[Str]] := [
+    "+" => ["add", "addsub"],
+    "-" => ["subtract", "addsub"],
+    "*" => ["multiply", "divmul"],
+    "//" => ["floorDivide", "divmul"],
+    "/" => ["approxDivide", "divmul"],
+    "%" => ["mod", "divmul"],
+    "**" => ["pow", "pow"],
+    "&" => ["and", "comp"],
+    "|" => ["or", "comp"],
+    "^" => ["xor", "comp"],
+    "&!" => ["butNot", "comp"],
+    "<<" => ["shiftLeft", "comp"],
+    ">>" => ["shiftRight", "comp"]]
+
+def comparatorsToName :Map[Str, Str] := [
+    ">" => "greaterThan", "<" => "lessThan",
+    ">=" => "geq", "<=" => "leq",
+    "<=>" => "asBigAs"]
+
+
+def unaryOperatorsToName :Map[Str, Str] := [
+    "~" => "complement", "!" => "not", "-" => "negate"]
+
 def makeCoreAst() as DeepFrozenStamp:
-    def Noun := Ast["NounExpr"]
+    def Noun := Ast["NounExpr", "TempNounExpr"]
 
     def [Expr, Pattern, NamedArg, MapItem, MapPatternItem,
          NamedParam, Method_, Matcher, Catcher, Script,
@@ -535,9 +567,10 @@ def makeCoreAst() as DeepFrozenStamp:
          astBuilder_] := makeAstBuilder([
     "Expr" => [
         "LiteralExpr"           => ["value" => Any],
+        "TempNounExpr"          => [],
         "NounExpr"              => ["name" => Str],
-        "SlotExpr"              => ["name" => Str],
-        "BindingExpr"           => ["name" => Str],
+        "SlotExpr"              => ["noun" => Noun],
+        "BindingExpr"           => ["noun" => Noun],
         "MetaContextExpr"       => [].asMap(),
         "MetaStateExpr"         => [].asMap(),
         "SeqExpr"               => ["exprs*" => Expr],
@@ -563,6 +596,8 @@ def makeCoreAst() as DeepFrozenStamp:
                                     "right" => Expr],
         "CompareExpr"           => ["left" => Expr, "op" => Str,
                                     "right" => Expr],
+        "RangeExpr"             => ["left" => Expr, "op" => Str,
+                                    "right" => Expr],
         "SameExpr"              => ["left" => Expr, "right" => Expr,
                                     "direction" => Bool],
         "MatchBindExpr"         => ["specimen" => Expr, "pattern" => Pattern],
@@ -571,18 +606,18 @@ def makeCoreAst() as DeepFrozenStamp:
         "CoerceExpr"            => ["specimen" => Expr, "guard?" => Expr],
         "CurryExpr"             => ["receiver" => Expr, "verb" => Str, "isSend" => Bool],
         "ExitExpr"              => ["name" => Str, "value?" => Expr],
-        "ForwardExpr"           => ["name" => Str],
+        "ForwardExpr"           => ["pattern" => Ast["FinalPattern"]],
         "DefExpr"               => ["pattern" => Pattern, "exit?" => Expr,
                                     "expr" => Expr],
         "AssignExpr"            => ["lvalue" => Expr, "rvalue" => Expr],
         "VerbAssignExpr"        => ["verb" => Str, "lvalue" => Expr,
                                     "rvalues*" => Expr],
-        "AugAssignExpr"         => ["op" => Str, "lvalue" => Str, "rvalue" => Expr],
+        "AugAssignExpr"         => ["op" => Str, "lvalue" => Expr, "rvalue" => Expr],
         "FunctionExpr"          => ["params*" => Pattern,
                                     "namedParams*" => NamedParam,
                                     "body" => Expr],
         "ListExpr"              => ["items*" => Expr],
-        "ListComprehensionExpr" => ["iterable*" => Expr,
+        "ListComprehensionExpr" => ["iterable" => Expr,
                                     "filter?" => Expr,
                                     "key?" => Pattern,
                                     "value" => Pattern,
@@ -590,7 +625,7 @@ def makeCoreAst() as DeepFrozenStamp:
         "MapExpr"               => ["pairs*" => MapItem],
         "MapComprehensionExpr"  => ["iterable" => Expr, "filter?" => Expr,
                                     "key?" => Pattern, "value" => Pattern,
-                                    "body" => Expr],
+                                    "bodyKey" => Expr, "bodyValue" => Expr],
         "ForExpr"               => ["iterable" => Expr, "key?" => Pattern,
                                     "value" => Pattern, "body" => Expr,
                                     "catchPattern?" => Pattern,
@@ -604,7 +639,7 @@ def makeCoreAst() as DeepFrozenStamp:
         "FunctionInterfaceExpr" => ["docstring?" => Str, "name" => NamePattern,
                                     "stamp?" => NamePattern, "parents*" => Expr,
                                     "auditors*" => Expr, "messageDesc" => MessageDesc],
-        "CatchExpr"             => ["body" => Expr, "catcher" => Catcher],
+        "CatchExpr"             => ["body" => Expr, "pattern" => Pattern, "catcher" => Expr],
         "FinallyExpr"           => ["body" => Expr, "unwinder" => Expr],
         "TryExpr"               => ["body" => Expr],
         "EscapeExpr"            => ["ejectorPattern" => Pattern, "body" => Expr,
@@ -645,11 +680,11 @@ def makeCoreAst() as DeepFrozenStamp:
     ],
     "MapPatternItem" => [
         "MapPatternAssoc"  => ["key" => Expr, "value" => Pattern, "default?" => Expr],
-        "MapPatternImport" => ["value" => Pattern],
+        "MapPatternImport" => ["value" => Pattern, "default?" => Expr],
     ],
     "NamedParam" => [
         "NamedParam"       => ["key" => Expr, "value" => Pattern, "default?" => Expr],
-        "NamedParamImport" => ["value" => Pattern],
+        "NamedParamImport" => ["value" => Pattern, "default?" => Expr],
     ],
     "Method" => [
         "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Pattern,
@@ -670,7 +705,8 @@ def makeCoreAst() as DeepFrozenStamp:
                              "matchers*" => Matcher],
         "FunctionScript" => ["verb" => Str, "params*" => Pattern,
                              "namedParams*" => NamedParam,
-                             "resultGuard?" => Expr]
+                             "resultGuard?" => Expr,
+                             "body" => Expr]
     ],
     "ParamDesc" => [
         "ParamDesc" => ["name" => Str, "guard?" => Expr]
@@ -689,7 +725,7 @@ def makeCoreAst() as DeepFrozenStamp:
         "Import" => ["name" => Str, "pattern" => Pattern],
     ],
     "Module" => [
-        "Module" => ["imports*" => Import_, "exports*" => Str, "body" => Expr]
+        "Module" => ["imports*" => Import_, "exports*" => Noun, "body" => Expr]
     ]
     ],
     [
@@ -705,7 +741,163 @@ def makeCoreAst() as DeepFrozenStamp:
                         }
                 }
                 throw.eject(ej, "No method named " + verb)
-            }}}])
+            }
+            to getCompleteMatcher(ej) {
+                "Obtain the pattern and body of the 'complete' matcher, or eject
+                 if it is not present.
+
+                 A 'complete' matcher is a matcher which is last in the list of
+                 matchers and which has a pattern that cannot fail. Such matchers
+                 are common in transparent forwarders and other composed objects."
+
+                if (super.getMatchers().size() > 0) {
+                    def last := super.getMatchers().last()
+                    def pattern := last.getPattern()
+                    if (pattern.refutable()) {
+                        throw.eject(ej, "getCompleteMatcher/1: Ultimate matcher pattern is refutable")
+                    } else {
+                        return [pattern, last.getBody()]
+                    }
+                }
+                throw.eject(ej, "getCompleteMatcher/1: No matchers")
+            }
+        }},
+    "VarPattern" => fn super {
+        object varPatternExtras {
+            to withGuard(newGuard) {
+                return astBuilder_.VarPattern(super.getNoun(), newGuard, super.getSpan())
+            }
+            to refutable() :Bool {
+                return super.getGuard() != null
+            }
+        }},
+    "FinalPattern" => fn super {
+        object finalPatternExtras {
+            to withGuard(newGuard) {
+                return astBuilder_.FinalPattern(super.getNoun(), newGuard, super.getSpan())
+            }
+            to refutable() :Bool {
+                return super.getGuard() != null
+            }
+        }},
+    "SlotPattern" => fn super {
+        object slotPatternExtras {
+            to refutable() :Bool {
+                return super.getGuard() != null
+            }
+        }},
+    "BindPattern" => fn super {
+        object bindPatternExtras {
+            to refutable() :Bool {
+                return super.getGuard() != null
+            }
+        }},
+    "BindingPattern" => fn super {
+        object bindingPatternExtras {
+            to refutable() :Bool {
+                return true
+            }
+        }},
+    "IgnorePattern" => fn super {
+        object ignorePatternExtras {
+            to refutable() :Bool {
+                return super.getGuard() != null
+            }
+        }},
+    "ListPattern" => fn super {
+        object listPatternExtras {
+            to refutable() :Bool {
+                return true
+            }
+        }},
+    "MapPattern" => fn super {
+        object mapPatternExtras {
+            to refutable() :Bool {
+                return true
+            }
+        }},
+    "ViaPattern" => fn super {
+        object viaPatternExtras {
+            to refutable() :Bool {
+                return true
+            }
+        }},
+    "SuchThatPattern" => fn super {
+        object suchThatPatternExtras {
+            to refutable() :Bool {
+                return true
+            }
+        }},
+    "SamePattern" => fn super {
+        object samePatternExtras {
+            to refutable() :Bool {
+                return true
+            }
+        }},
+    "QuasiParserPattern" => fn super {
+        object quasiParserPatternExtras {
+            to refutable() :Bool {
+                return true
+            }
+        }},
+    "ForwardExpr" => fn super {
+        object forwardExprExtras {
+            to getNoun() {
+                return super.getPattern().getNoun()
+            }
+        }},
+    "BinaryExpr" => fn super {
+        object binaryExprExtras {
+            to getOpName() {
+                return operatorsToNamePrio[super.getOp()][0]
+            }
+            to getPriorityName() {
+                return operatorsToNamePrio[super.getOp()][1]
+            }
+        }},
+    "CompareExpr" => fn super {
+        object compareExprExtras {
+            to getOpName() {
+                return comparatorsToName[super.getOp()]
+            }
+        }},
+    "RangeExpr" => fn super {
+        object rangeExprExtras {
+            to getOpName() {
+                if (super.getOp() == "..") {
+                    return "thru"
+                } else if (super.getOp() == "..!") {
+                    return "till"
+                }
+            }
+        }},
+    "PrefixExpr" => fn super {
+        object prefixExprExtras {
+            to getOpName() {
+                return unaryOperatorsToName[super.getOp()]
+            }
+        }},
+    "AugAssignExpr" => fn super {
+        object augAssignExprExtras {
+            to getOpName() {
+                return operatorsToNamePrio[super.getOp()][0]
+            }
+        }},
+    "EscapeExpr" => fn super {
+        object escapeExprExtras {
+            to withBody(newBody :Expr) {
+                return astBuilder_.EscapeExpr(
+                    super.getEjectorPattern(), newBody, super.getCatchPattern(),
+                    super.getCatchBody(), super.getSpan())
+            }
+        }},
+    "Method" => fn super {
+        object methodExtras {
+            to withBody(newBody) {
+                return astBuilder_."Method"(super.getDocstring(), super.getVerb(), super.getParams(), super.getNamedParams(), super.getResultGuard(), newBody, super.getSpan())
+            }
+        }}
+    ])
     return object astBuilder implements DeepFrozenStamp:
         to makeScopeWalker():
             return makeScopeWalker()
@@ -744,6 +936,23 @@ def makeCoreAst() as DeepFrozenStamp:
                 makeScopeWalker().nodeUsesName(guard, noun.getName())):
                 throw("Kernel guard cycle not allowed")
             return astBuilder_.VarPattern(noun, guard, span)
+        to SeqExpr(exprs, span):
+            # Let's not allocate unnecessarily.
+            if (exprs.size() == 1):
+                return exprs[0]
+            # It's common to accidentally nest SeqExprs, mostly because it's legal and
+            # semantically unsurprising (distributive, etc.) So we un-nest them here
+            # as a courtesy. ~ C.
+            def fixedExprs := {
+                def l := [].diverge()
+                for ex in (exprs) {
+                        if (ex.getNodeName() == "SeqExpr") {
+                                l.extend(ex.getExprs())
+                        } else { l.push(ex) }
+                }
+                l.snapshot()
+            }
+            return astBuilder_.SeqExpr(fixedExprs, span)
 
         match msg:
             M.callWithMessage(astBuilder_, msg)
@@ -780,12 +989,7 @@ def astWrapper(node, maker, args, span, &scope, nodeName, transformArgs) as Deep
         to _uncall():
             return [maker, "run", args + [span], [].asMap()]
         to _printOn(out):
-            astNode.subPrintOn(out, 0)
-        to subPrintOn(out, priority):
-            if (printerActions.contains(nodeName)):
-                printerActions[nodeName](astNode, out, priority)
-            else:
-                node.subPrintOn(out, priority)
+            astPrint(astNode, out, 0)
 # 'value' is unguarded because the optimized uses LiteralExprs for non-literal
 # constants.
 def makeLiteralExpr(value, span) as DeepFrozenStamp:
@@ -892,7 +1096,7 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozenStamp:
 
 def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {
-        def interiorScope := (sumScopes([for [_n, p] in (importsList) p]) +
+        def interiorScope := (sumScopes([for im in (importsList) im.getPattern()]) +
                               body.getStaticScope())
         def exportListScope := sumScopes(exportsList)
         def exportScope := makeStaticScope(
@@ -1028,21 +1232,6 @@ def makeOrExpr(left :Expr, right :Expr, span) as DeepFrozenStamp:
     return astWrapper(orExpr, makeOrExpr, [left, right], span,
         &scope, "OrExpr", fn f {[left.transform(f), right.transform(f)]})
 
-def operatorsToNamePrio :Map[Str, List[Str]] := [
-    "+" => ["add", "addsub"],
-    "-" => ["subtract", "addsub"],
-    "*" => ["multiply", "divmul"],
-    "//" => ["floorDivide", "divmul"],
-    "/" => ["approxDivide", "divmul"],
-    "%" => ["mod", "divmul"],
-    "**" => ["pow", "pow"],
-    "&" => ["and", "comp"],
-    "|" => ["or", "comp"],
-    "^" => ["xor", "comp"],
-    "&!" => ["butNot", "comp"],
-    "<<" => ["shiftLeft", "comp"],
-    ">>" => ["shiftRight", "comp"]]
-
 def makeBinaryExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {left.getStaticScope() +
                                    right.getStaticScope()})
@@ -1059,11 +1248,6 @@ def makeBinaryExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozenStamp:
             return right
     return astWrapper(binaryExpr, makeBinaryExpr, [left, op, right], span,
         &scope, "BinaryExpr", fn f {[left.transform(f), op, right.transform(f)]})
-
-def comparatorsToName :Map[Str, Str] := [
-    ">" => "greaterThan", "<" => "lessThan",
-    ">=" => "geq", "<=" => "leq",
-    "<=>" => "asBigAs"]
 
 def makeCompareExpr(left :Expr, op :Str, right :Expr, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {left.getStaticScope() +
@@ -1132,9 +1316,6 @@ def makeMismatchExpr(specimen :Expr, pattern :Pattern, span) as DeepFrozenStamp:
             return pattern
     return astWrapper(mismatchExpr, makeMismatchExpr, [specimen, pattern], span,
         &scope, "MismatchExpr", fn f {[specimen.transform(f), pattern.transform(f)]})
-
-def unaryOperatorsToName :Map[Str, Str] := [
-    "~" => "complement", "!" => "not", "-" => "negate"]
 
 def makePrefixExpr(op :Str, receiver :Expr, span) as DeepFrozenStamp:
     def scope := receiver.getStaticScope()
@@ -1748,9 +1929,6 @@ def makeEscapeExpr(ejectorPattern :Pattern, body :Expr,
             return makeEscapeExpr(ejectorPattern, newBody, catchPattern,
                                   catchBody, span)
 
-        to withCatchBody(newBody :NullOk[Expr]):
-            return makeEscapeExpr(ejectorPattern, body, catchPattern,
-                                  newBody, span)
 
     return astWrapper(escapeExpr, makeEscapeExpr,
          [ejectorPattern, body, catchPattern, catchBody], span,
@@ -2120,7 +2298,7 @@ def makeQuasiParserPattern(name :NullOk[Str], quasis :List[QuasiPiece], span) as
     return astWrapper(quasiParserPattern, makeQuasiParserPattern, [name, quasis], span,
         &scope, "QuasiParserPattern", fn f {[name, transformAll(quasis, f)]})
 
-object astBuilder as DeepFrozenStamp:
+object astBuilder0 as DeepFrozenStamp:
     to makeScopeWalker():
         return makeScopeWalker()
     to getAstGuard():
@@ -2304,4 +2482,4 @@ object astBuilder as DeepFrozenStamp:
     to QuasiParserPattern(name, quasis, span):
         return makeQuasiParserPattern(name, quasis, span)
 
-def astBuilder2 :DeepFrozen := makeCoreAst()
+def astBuilder :DeepFrozen := makeCoreAst()

@@ -589,12 +589,12 @@ def expand(node, builder, fail) as DeepFrozen:
                 # Build the dependency list and import list at the same time.
                 def dependencies := [].diverge()
                 def importExprs := [].diverge()
-                for [source, patt] in (importsList):
-                    def dependency := litExpr(source, span)
+                for im in (importsList):
+                    def dependency := litExpr(im.getName(), im.getSpan())
                     dependencies.push(dependency)
-                    importExprs.push(defExpr(patt, null,
-                        callExpr(pkg, "import", [dependency], [], span),
-                        span))
+                    importExprs.push(defExpr(im.getPattern(), null,
+                        callExpr(pkg, "import", [dependency], [], im.getSpan()),
+                        im.getSpan()))
                 def exportExpr := emitMap([for noun in (exportsList)
                                    emitList([litExpr(noun.getName(),
                                                         noun.getSpan()), noun],
