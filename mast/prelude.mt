@@ -741,6 +741,7 @@ def loadit(name):
 def importIntoScope(name):
     preludeScope |= scopeAsDF(loadit(name))
 dependencies["ast_printer"] := loadit("prelude/ast_printer")
+dependencies["lib/iterators"] := loadit("lib/iterators")
 # AST (needed for auditors).
 importIntoScope("prelude/monte_ast")
 
@@ -766,7 +767,6 @@ importIntoScope("prelude/b")
 
 # Parsing stack. These don't directly contribute to scope but are loaded by m.
 for module in ([
-    "lib/iterators",
     "lib/monte/monte_lexer",
     "lib/monte/monte_parser",
     "lib/monte/monte_expander",

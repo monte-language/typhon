@@ -86,7 +86,7 @@ def makeMASTContext() as DeepFrozen:
 
         to packNamedPatt(patt) :Bytes:
             def k := MASTContext.packExpr(patt.getKey())
-            def p := MASTContext.packPatt(patt.getPattern())
+            def p := MASTContext.packPatt(patt.getValue())
             def e := MASTContext.packExpr(patt.getDefault())
             return k + p + e
 
@@ -159,8 +159,8 @@ def makeMASTContext() as DeepFrozen:
                 match =="Method":
                     def doc := packStr(expr.getDocstring())
                     def verb := packStr(expr.getVerb())
-                    def patts := MASTContext.packPatts(expr.getPatterns())
-                    def namedPatts := MASTContext.packNamedPatts(expr.getNamedPatterns())
+                    def patts := MASTContext.packPatts(expr.getParams())
+                    def namedPatts := MASTContext.packNamedPatts(expr.getNamedParams())
                     def guard := MASTContext.packExpr(expr.getResultGuard())
                     def body := MASTContext.packExpr(expr.getBody())
                     b`M$doc$verb$patts$namedPatts$guard$body`

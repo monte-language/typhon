@@ -5,8 +5,9 @@ def Ast :DeepFrozen := ::"m``".getAstBuilder().getAstGuard()
 def Noun :DeepFrozen := ::"m``".getAstBuilder().getNounGuard()
 
 def findUndefinedNames(expr, outers) as DeepFrozen:
+    def sw := astBuilder.makeScopeWalker()
     def outerNames := [for `&&@name` in (outers.getKeys()) name].asSet()
-    def ss := expr.getStaticScope()
+    def ss := sw.getStaticScope(expr)
     def namesUsed := ss.namesUsed().asSet()
     def offenders := namesUsed &! outerNames
     if (offenders.size() == 0):
@@ -26,7 +27,7 @@ def findUndefinedNames(expr, outers) as DeepFrozen:
     descendInto(expr)
     while (stack.size() > 0):
         def item := stack.pop()
-        def names := item.getStaticScope().namesUsed().asSet()
+        def names := sw.getStaticScope(item).namesUsed().asSet()
         if ((offenders & names).size() > 0):
             if (["QuasiParserExpr", "QuasiParserPattern", "NounExpr",
                  "SlotExpr", "BindingExpr"].contains(item.getNodeName())):
@@ -57,11 +58,11 @@ def optional(l :NullOk[List]) :List as DeepFrozen:
 def filterNouns(l :List[Noun], s :Set[Str]) :List[Noun] as DeepFrozen:
     return [for noun in (l) ? (!s.contains(noun.getName())) noun]
 
-def usedSet(node) :Set[Str] as DeepFrozen:
+def usedSet(sw, node) :Set[Str] as DeepFrozen:
     return if (node == null) {
         [].asSet()
     } else {
-        node.getStaticScope().namesUsed()
+        sw.getStaticScope(node).namesUsed()
     }
 
 def findUnusedNames(expr) :List[Pair] as DeepFrozen:
@@ -71,28 +72,29 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
     To indicate that a name is intentionally unused, simply prefix it with
     '_'.
     "
-
+    def sw := astBuilder.makeScopeWalker()
     def unusedNameFinder(node, _maker, args, _span) :List[Noun]:
         def rv := switch (node.getNodeName()) {
             # Modules
             match =="Module" {
                 def [importsList, _exportsList, body] := args
-                def incoming := flattenList([for [_, patt] in (importsList) patt])
-                def l := filterNouns(incoming, usedSet(node.getBody()))
+                def incoming := flattenList(importsList)
+                def l := filterNouns(incoming, usedSet(sw, node.getBody()))
                 def s := {
                     var rv := [].asSet()
-                    for ex in (node.getExports()) { rv |= usedSet(ex) }
+                    for ex in (node.getExports()) { rv |= usedSet(sw, ex) }
                     rv
                 }
                 l + filterNouns(body, s)
             }
+            match =="Import" { args[1] }
             # Sequences.
             match =="SeqExpr" {
                 var rv := []
                 def exprs := node.getExprs()
                 for i => expr in (args[0]) {
                     rv += expr
-                    def namesRead := usedSet(exprs[i])
+                    def namesRead := usedSet(sw, exprs[i])
                     rv := filterNouns(rv, namesRead)
                 }
                 rv
@@ -112,7 +114,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             }
             match =="CatchExpr" {
                 def [body, patt, catcher] := args
-                body + filterNouns(patt + catcher, usedSet(node.getCatcher()))
+                body + filterNouns(patt + catcher, usedSet(sw, node.getCatcher()))
             }
             match =="CoerceExpr" {
                 def [specimen, guard] := args
@@ -126,10 +128,10 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="EscapeExpr" {
                 def [ejPatt, ejBody, catchPatt, catchBody] := args
                 def ej := filterNouns(ejPatt + ejBody,
-                                      usedSet(node.getBody()))
+                                      usedSet(sw, node.getBody()))
                 if (catchBody != null) {
                     def c := filterNouns(catchPatt + catchBody,
-                                         usedSet(node.getCatchBody()))
+                                         usedSet(sw, node.getCatchBody()))
                     ej + c
                 } else {
                     ej
@@ -140,10 +142,10 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="ForExpr" {
                 def [iterable, key, value, body, catchPatt, catchBody] := args
                 def l := filterNouns(iterable + optional(key) + value + body,
-                                     usedSet(node.getBody()))
+                                     usedSet(sw, node.getBody()))
                 def c := if (catchBody != null) {
                     filterNouns(catchPatt + catchBody,
-                                usedSet(node.getCatchBody()))
+                                usedSet(sw, node.getCatchBody()))
                 } else { [] }
                 l + c
             }
@@ -155,7 +157,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="FunctionExpr" {
                 def [patts, namedPatts, body] := args
                 filterNouns(flattenList(patts) + flattenList(namedPatts) + body,
-                            usedSet(node.getBody()))
+                            usedSet(sw, node.getBody()))
             }
             match =="FunctionInterfaceExpr" { args[1] }
             match =="GetExpr" {
@@ -166,8 +168,8 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="IfExpr" {
                 def [test, consq, alt] := args
                 def l := test + consq + optional(alt)
-                var namesRead := usedSet(node.getThen())
-                if (alt != null) { namesRead |= usedSet(node.getElse()) }
+                var namesRead := usedSet(sw, node.getThen())
+                if (alt != null) { namesRead |= usedSet(sw, node.getElse()) }
                 filterNouns(l, namesRead)
             }
             match =="InterfaceExpr" { args[1] }
@@ -177,16 +179,20 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="ListComprehensionExpr" {
                 def [iterable, filter, key, value, body] := args
                 def l := iterable + optional(filter) + optional(key) + value
-                def used := (usedSet(node.getFilter()) |
-                             usedSet(node.getBody()))
+                def used := (usedSet(sw, node.getKey()) |
+                             usedSet(sw, node.getValue()) |
+                             usedSet(sw, node.getFilter()) |
+                             usedSet(sw, node.getBody()))
                 filterNouns(l + body, used)
             }
             match =="MapComprehensionExpr" {
                 def [iterable, filter, key, value, bodyk, bodyv] := args
                 def l := iterable + optional(filter) + optional(key) + value
-                def used := (usedSet(node.getFilter()) |
-                             usedSet(node.getBodyKey()) |
-                             usedSet(node.getBodyValue()))
+                def used := (usedSet(sw, node.getKey()) |
+                             usedSet(sw, node.getValue()) |
+                             usedSet(sw, node.getFilter()) |
+                             usedSet(sw, node.getBodyKey()) |
+                             usedSet(sw, node.getBodyValue()))
                 filterNouns(l + bodyk + bodyv, used)
             }
             match =="MapExprAssoc" {
@@ -211,7 +217,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
                 def s := {
                     var rv := [].asSet()
                     for matcher in (node.getMatchers()) {
-                        rv |= usedSet(matcher)
+                        rv |= usedSet(sw, matcher)
                     }
                     rv
                 }
@@ -241,12 +247,12 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="WhenExpr" {
                 def [arguments, body, catchers, finallyBlock] := args
                 def l := filterNouns(flattenList(arguments) + body,
-                                     usedSet(node.getBody()))
+                                     usedSet(sw, node.getBody()))
                 l + flattenList(catchers) + optional(finallyBlock)
             }
             match =="WhileExpr" {
                 def [test, body, catcher] := args
-                def l := filterNouns(test + body, usedSet(node.getBody()))
+                def l := filterNouns(test + body, usedSet(sw, node.getBody()))
                 l + optional(catcher)
             }
             # Named arguments.
@@ -258,11 +264,11 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="FunctionScript" {
                 def [_verb, patts, namedPatts, guard, body] := args
                 def l := flattenList(patts) + flattenList(namedPatts) + body
-                optional(guard) + filterNouns(l, usedSet(node.getBody()))
+                optional(guard) + filterNouns(l, usedSet(sw, node.getBody()))
             }
             match n ? (["Matcher", "Catcher"].contains(n)) {
                 def [patt, body] := args
-                filterNouns(patt + body, usedSet(node.getBody()))
+                filterNouns(patt + body, usedSet(sw, node.getBody()))
             }
             match =="ObjectExpr" {
                 # Ignore object names, for `return object obj ...`
@@ -279,7 +285,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
                 def [_, _, patts, namedPatts, guard, _body] := args
                 def l := (flattenList(patts) + flattenList(namedPatts) +
                           optional(guard))
-                def namesRead := usedSet(node.getBody())
+                def namesRead := usedSet(sw, node.getBody())
                 filterNouns(l, namesRead)
             }
             # Patterns.
@@ -308,7 +314,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="SamePattern" { args[0] }
             match =="SuchThatPattern" {
                 def [patt, ex] := args
-                filterNouns(patt + ex, usedSet(node.getExpr()))
+                filterNouns(patt + ex, usedSet(sw, node.getExpr()))
             }
             match =="ViaPattern" { flattenList(args) }
             # Empty leaves which can't contain anything interesting.

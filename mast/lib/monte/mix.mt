@@ -186,7 +186,7 @@ def staticFixpoint(staticOuters :Set[Str]) as DeepFrozen:
         to annoMethod(meth :Meth, args :List[Bool]) :Bool:
             annoStack.pushScopeFrom(meth, 0)
             var anno := refine(meth.getResultGuard())
-            for i => patt in (meth.getPatterns()):
+            for i => patt in (meth.getParams()):
                 refine.matchBind(patt, args[i])
             anno &= refine(meth.getBody())
             annoStack.popScopeOnto(meth)
@@ -359,14 +359,15 @@ def staticFixpoint(staticOuters :Set[Str]) as DeepFrozen:
                     # case. On the other hand, an object can still be static
                     # even if its method outputs are dynamic.
                     for m in (script.getMethods()) {
-                        refine.annoMethod(m, [false] * m.getPatterns().size())
+                        refine.annoMethod(m, [false] * m.getParams().size())
                     }
                     for m in (script.getMatchers()) {
                         annoMatcher(m, false)
                     }
                     if (!anno) {
                         # Compute the escaping names.
-                        def namesUsed := script.getStaticScope().namesUsed()
+
+                        def namesUsed := astBuilder.makeScopeWalker().getStaticScope(script).namesUsed()
                         def freeNames := (namesUsed - pattNames(patt) -
                                           staticOuters).diverge()
                         if (!freeNames.isEmpty()) {
@@ -394,7 +395,7 @@ def staticFixpoint(staticOuters :Set[Str]) as DeepFrozen:
             "
 
             # Seed the initial split.
-            def freeNames := (topExpr.getStaticScope().namesUsed() -
+            def freeNames := (astBuilder.makeScopeWalker().getStaticScope(topExpr).namesUsed() -
                               staticOuters)
             def innerAnnos := [for name in (freeNames)
                                 name => [dynamic, "free in top scope"]]
@@ -417,7 +418,7 @@ def staticFixpoint(staticOuters :Set[Str]) as DeepFrozen:
 
         to annotateMethod(meth :Meth, args :List[Bool]) :Pair[Map[Expr, Bool], Map[Meth, Any]]:
             # Seed the initial split.
-            def freeNames := (meth.getStaticScope().namesUsed() -
+            def freeNames := (astBuilder.makeScopeWalker().getStaticScope(meth).namesUsed() -
                               staticOuters)
             def innerAnnos := [for name in (freeNames)
                                 name => [dynamic, "free in top scope"]]
@@ -451,7 +452,7 @@ interface Static :DeepFrozen {}
 def makeStaticObject(makeReducer, _methodKits, evalScope, objExpr) as DeepFrozen:
     def script := objExpr.getScript()
     def methods := [for m in (script.getMethods())
-                    [m.getVerb(), m.getPatterns().size()] => m]
+                    [m.getVerb(), m.getParams().size()] => m]
 
     def unfold(meth, args, namedArgs):
         # def kit := methodKits[meth]()
@@ -461,10 +462,10 @@ def makeStaticObject(makeReducer, _methodKits, evalScope, objExpr) as DeepFrozen
         def reducer := makeReducer(annos, kits, evalScope)
         return reducer.withScope(fn {
             # traceln(`unfold($meth, $args, $namedArgs)`)
-            for i => patt in (meth.getPatterns()) {
+            for i => patt in (meth.getParams()) {
                 reducer.matchBind(patt, args[i])
             }
-            for namedPatt in (meth.getNamedPatterns()) {
+            for namedPatt in (meth.getNamedParams()) {
                 # XXX
                 namedPatt
                 namedArgs
@@ -497,8 +498,8 @@ def makeStaticObject(makeReducer, _methodKits, evalScope, objExpr) as DeepFrozen
                             def resultGuard := reducer(m.getResultGuard())
                             astBuilder."Method"(m.getDocstring(),
                                                 m.getVerb(),
-                                                m.getPatterns(),
-                                                m.getNamedPatterns(),
+                                                m.getParams(),
+                                                m.getNamedParams(),
                                                 resultGuard, body,
                                                 null)
                         })
@@ -509,7 +510,7 @@ def makeStaticObject(makeReducer, _methodKits, evalScope, objExpr) as DeepFrozen
                 }
                 object staticTool:
                     to run():
-                        def ss := reducedScript.getStaticScope()
+                        def ss := astBuilder.makeScopeWalker().getStaticScope(reducedScript)
                         def body := seq([for name in (ss.namesUsed())
                                          ? (!safeScope.contains(`&&$name`)) {
                             def patt := astBuilder.FinalPattern(
@@ -694,7 +695,7 @@ def pretty(topExpr, exprAnnos :Map[Expr, Bool]) :Str as DeepFrozen:
                     push("method ")
                     push(m.getVerb())
                     push("(")
-                    if (m.getPatterns() =~ [head] + patts):
+                    if (m.getParams() =~ [head] + patts):
                         p(head)
                         for patt in (patts):
                             push(", ")
@@ -968,7 +969,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                                 def noun := ejPatt.getNoun()
                                 def name := noun.getName()
                                 def body := expr.getBody()
-                                if (body.getStaticScope().namesUsed().contains(name)) {
+                                if (astBuilder.makeScopeWalker().getStaticScope(body).namesUsed().contains(name)) {
                                     # Let's see if we can track down that usage.
                                     switch (body.getNodeName()) {
                                         # As with the cases of yesteryear, the case with catches
@@ -990,7 +991,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                                             def newBody := seq(trimmed)
                                             # If the new body doesn't use the ejector, then we'll
                                             # discard the ejector altogether.
-                                            if (newBody.getStaticScope().namesUsed().contains(name)) {
+                                            if (astBuilder.makeScopeWalker().getStaticScope(newBody).namesUsed().contains(name)) {
                                                 astBuilder.EscapeExpr(ejPatt, newBody, null, null,
                                                                       null)
                                             } else { newBody }
@@ -1114,8 +1115,8 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                                     def resultGuard := reducer(m.getResultGuard())
                                     astBuilder."Method"(m.getDocstring(),
                                                         m.getVerb(),
-                                                        m.getPatterns(),
-                                                        m.getNamedPatterns(),
+                                                        m.getParams(),
+                                                        m.getNamedParams(),
                                                         resultGuard, body,
                                                         null)
                                 })
@@ -1184,7 +1185,7 @@ def uncallLiterals(node, maker, args, span) as DeepFrozen:
     } else { M.call(maker, "run", args + [span], [].asMap()) }
 
 def mix(expr, baseScope) as DeepFrozen:
-    def neededOuters := expr.getStaticScope().namesUsed()
+    def neededOuters := astBuilder.makeScopeWalker().getStaticScope(expr).namesUsed()
     # Only propagate exactly those values needed, to make reasoning and
     # debugging easier.
     def topValueScope := [for `&&@k` => v in (baseScope)
