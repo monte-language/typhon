@@ -214,4 +214,20 @@ def main(_) as DeepFrozen:
     traceln("Largest correct", largestSectionAt(simpleXorSheaf, correct,
                                                 null))
 
+    def fullAdder := makeASC([for x in (["A", "B", "Cin", "Cout", "S"]) x => Bool], [
+        # S == A ^ B ^ Cin
+        ["S", "A", "B", "Cin"].asSet(),
+        # Cout == (A * B) + (Cin * (A ^ B))
+        ["Cout", "A", "B", "Cin"].asSet(),
+    ].asSet())
+    def fullAdderSheaf := fullAdder.sheaf([
+        ["S", "A", "B", "Cin"].asSet() => fn s, a, b, cin { !s ^ a ^ b ^ cin },
+        ["Cout", "A", "B", "Cin"].asSet() => fn cout, a, b, cin {
+            !cout ^ ((a & b) | (cin & (a ^ b)))
+        },
+    ])
+    def addsToThree := ["Cout" => true, "S" => true]
+    traceln("What section adds to three:",
+            largestSectionAt(fullAdderSheaf, addsToThree, null))
+
     return 0
