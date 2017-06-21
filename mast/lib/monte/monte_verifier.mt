@@ -77,7 +77,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             # Modules
             match =="Module" {
                 def [importsList, _exportsList, body] := args
-                def incoming := flattenList([for [_, patt] in (importsList) patt])
+                def incoming := flattenList(importsList)
                 def l := filterNouns(incoming, usedSet(node.getBody()))
                 def s := {
                     var rv := [].asSet()
@@ -86,6 +86,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
                 }
                 l + filterNouns(body, s)
             }
+            match =="Import" { args[1] }
             # Sequences.
             match =="SeqExpr" {
                 var rv := []

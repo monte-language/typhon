@@ -302,7 +302,8 @@ def makeScopeWalker() as DeepFrozenStamp:
         if (nodeName == "SeqExpr"):
             s(sumScopes(node.getExprs()))
         if (nodeName == "Module"):
-            def interiorScope := (sumScopes([for [_n, p] in (node.getImports()) p]) +
+            def interiorScope := (sumScopes([for im in (node.getImports())
+                                             im.getPattern()]) +
                                   getStaticScope(node.getBody()))
             def exportListScope := sumScopes(node.getExports())
             def exportScope := makeStaticScope(
@@ -1095,7 +1096,7 @@ def makeSeqExpr(exprs :List[Expr], span) as DeepFrozenStamp:
 
 def makeModule(importsList, exportsList, body, span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {
-        def interiorScope := (sumScopes([for [_n, p] in (importsList) p]) +
+        def interiorScope := (sumScopes([for im in (importsList) im.getPattern()]) +
                               body.getStaticScope())
         def exportListScope := sumScopes(exportsList)
         def exportScope := makeStaticScope(

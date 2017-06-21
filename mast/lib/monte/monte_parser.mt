@@ -1398,6 +1398,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         while (true):
             acceptEOLs()
             acceptTag("import", __break)
+            def importStart := spanHere()
             def importName := acceptTag(".String.", ej)[1]
             acceptTag("=~", ej)
             var importPattern := pattern(ej)
@@ -1410,7 +1411,8 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 builder.IgnorePattern(null, importPattern.getSpan()),
                 importPattern.getSpan())
 
-            importsList.push([importName, importPattern])
+            importsList.push(builder."Import"(importName, importPattern,
+                                              spanFrom(importStart)))
             seqSep(ej)
         def exportsList := if (considerTag("exports", ej)) {
             acceptTag("(", ej)
