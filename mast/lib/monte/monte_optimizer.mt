@@ -21,13 +21,13 @@ def finalPatternToName(pattern, ej) as DeepFrozen:
 def exprOrNull(expr) as DeepFrozen:
     return if (expr == null) {a.LiteralExpr("null", null)} else {expr}
 
-def weakenPattern(var pattern, nodes) as DeepFrozen:
+def weakenPattern(sw, var pattern, nodes) as DeepFrozen:
     "Reduce the strength of patterns based on their usage in scope."
 
     if (pattern.getNodeName() == "VarPattern"):
         def name :Str := pattern.getNoun().getName()
         for node in (nodes):
-            if (node.getStaticScope().getNamesSet().contains(name)):
+            if (sw.nodeSetsName(node, name)):
                 return pattern
         # traceln(`Weakening var $name`)
         pattern := a.FinalPattern(pattern.getNoun(), pattern.getGuard(),
@@ -36,7 +36,7 @@ def weakenPattern(var pattern, nodes) as DeepFrozen:
     if (pattern.getNodeName() == "FinalPattern"):
         def name :Str := pattern.getNoun().getName()
         for node in (nodes):
-            if (node.getStaticScope().namesUsed().contains(name)):
+            if (sw.nodeUsesName(node, name)):
                 return pattern
         # traceln(`Weakening def $name`)
         pattern := a.IgnorePattern(pattern.getGuard(), pattern.getSpan())
@@ -47,6 +47,7 @@ def specialize(name, value) as DeepFrozen:
     "Specialize the given name to the given AST value via substitution."
 
     def specializeNameToValue(ast, maker, args, span):
+        def sw := astBuilder.makeScopeWalker()
         switch (ast.getNodeName()):
             match =="NounExpr":
                 if (args[0] == name):
@@ -54,15 +55,14 @@ def specialize(name, value) as DeepFrozen:
 
             match =="SeqExpr":
                 # XXX summons zalgo :c
-                def scope := ast.getStaticScope()
-                if (scope.outNames().contains(name)):
+                if (sw.nodeBindsName(ast, name)):
                     # We're going to delve into the sequence and try to only do
                     # replacements on the elements which don't have the name
                     # defined.
                     var newExprs := []
                     var change := true
                     for i => expr in (ast.getExprs()):
-                        if (expr.getStaticScope().outNames().contains(name)):
+                        if (sw.nodeBindsName(expr, name)):
                             change := false
                         newExprs with= (if (change) {args[0][i]} else {expr})
                     return maker(newExprs, span)
@@ -70,16 +70,12 @@ def specialize(name, value) as DeepFrozen:
             match _:
                 # If it doesn't use the name, then there's no reason to visit
                 # it and we can just continue on our way.
-                def scope := ast.getStaticScope()
-                if (!scope.namesUsed().contains(name)):
+                if (!sw.nodeUsesName(ast, name)):
                     return ast
 
         return M.call(maker, "run", args + [span], [].asMap())
 
     return specializeNameToValue
-
-def nodeUsesName(node, name :Str) as DeepFrozen:
-    return node.getStaticScope().namesUsed().contains(name)
 
 object NOUN as DeepFrozen:
     "The tag for static values that are actually nouns."
@@ -92,8 +88,10 @@ def mix(expr,
      `staticValues` should be a mapping of names to live values. The values
      should be closed under their union with the safe scope with uncall; this
      is necessary to freeze them should the need arise.
-    
+
      This function recurses on its own, to avoid visiting every node."
+
+    def sw := astBuilder.makeScopeWalker()
 
     def remix(e):
         return mix(e, => staticValues, => safeFinalNames)
@@ -138,7 +136,7 @@ def mix(expr,
             # Nothing fancy yet; just recurse.
             def body := remix(expr.getBody())
             def catcher := remix(expr.getCatcher())
-            def pattern := weakenPattern(expr.getPattern(), [catcher])
+            def pattern := weakenPattern(sw, expr.getPattern(), [catcher])
             a.CatchExpr(body, pattern, catcher, expr.getSpan())
 
         match =="DefExpr":
@@ -218,7 +216,7 @@ def mix(expr,
 
         match =="EscapeExpr":
             def body := expr.getBody()
-            def ejPatt := weakenPattern(expr.getEjectorPattern(), [body])
+            def ejPatt := weakenPattern(sw, expr.getEjectorPattern(), [body])
             # m`escape ej {expr}` -> m`expr`
             if (ejPatt.getNodeName() == "IgnorePattern"):
                 remix(body)
@@ -246,7 +244,7 @@ def mix(expr,
                                     # used within the expr, then rebuild and
                                     # remix. Otherwise, strip the escape
                                     # entirely.
-                                    if (nodeUsesName(arg, name)):
+                                    if (sw.nodeUsesName(arg, name)):
                                         remix(expr.withBody(arg))
                                     else:
                                         remix(arg)
@@ -356,7 +354,7 @@ def mix(expr,
 
         match =="Matcher":
             def body := remix(expr.getBody())
-            def pattern := weakenPattern(expr.getPattern(), [body])
+            def pattern := weakenPattern(sw, expr.getPattern(), [body])
             a.Matcher(pattern, body, expr.getSpan())
 
         match =="Method":
@@ -479,21 +477,21 @@ def allSatisfy(pred, specimens) :Bool as DeepFrozen:
             return false
     return true
 
-# def weakenAllPatterns(ast, maker, args, span) as DeepFrozen:
+# def weakenAllPatterns(sw, ast, maker, args, span) as DeepFrozen:
 #     "Find and weaken all patterns."
 #
 #     switch (ast.getNodeName()):
 #         match =="EscapeExpr":
 #             def [var ejPatt, ejBody, var catchPatt, catchBody] := args
-#             ejPatt := weakenPattern(ejPatt, [ejBody])
+#             ejPatt := weakenPattern(sw, ejPatt, [ejBody])
 #             if (catchPatt != null):
-#                 catchPatt := weakenPattern(catchPatt, [catchBody])
+#                 catchPatt := weakenPattern(sw, catchPatt, [catchBody])
 #
 #             return maker(ejPatt, ejBody, catchPatt, catchBody, span)
 #
 #         match =="Matcher":
 #             def [var pattern, body] := args
-#             pattern := weakenPattern(pattern, [body])
+#             pattern := weakenPattern(sw, pattern, [body])
 #
 #             return maker(pattern, body, span)
 #
@@ -503,12 +501,12 @@ def allSatisfy(pred, specimens) :Bool as DeepFrozen:
 #             def body := args[5]
 #             def candidatePatterns := patterns + namedPatterns
 #             patterns := [for i => pattern in (patterns)
-#                          weakenPattern(pattern,
+#                          weakenPattern(sw, pattern,
 #                                        candidatePatterns.slice(i + 1) + [body])]
 #
 #             var pi := patterns.size()
 #             namedPatterns := [for i => pattern in (namedPatterns)
-#                               weakenPattern(pattern,
+#                               weakenPattern(sw, pattern,
 #                                             candidatePatterns.slice(pi += 1) + [body])]
 #             return maker(args[0], args[1], patterns, namedPatterns, args[4], body, span)
 #
@@ -522,7 +520,7 @@ def allSatisfy(pred, specimens) :Bool as DeepFrozen:
 #             for i => expr in exprs:
 #                 if (expr.getNodeName() == "DefExpr"):
 #                     var defPatt := expr.getPattern()
-#                     defPatt := weakenPattern(defPatt, exprs.slice(i + 1))
+#                     defPatt := weakenPattern(sw, defPatt, exprs.slice(i + 1))
 #                     def newDef := a.DefExpr(defPatt, expr.getExit(),
 #                                             expr.getExpr(), expr.getSpan())
 #                     exprs with= (i, newDef)

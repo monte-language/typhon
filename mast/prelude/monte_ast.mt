@@ -401,7 +401,7 @@ def makeScopeWalker() as DeepFrozenStamp:
                   sumScopes([node.getIterable(), node.getKey(),
                              node.getValue()]) +
                   makeStaticScope([], [], ["__continue"], [], false) +
-                  node.getBody().getStaticScope()).hide() +
+                  getStaticScope(node.getBody())).hide() +
                  scopeMaybe(node.getCatchPattern()) +
                  scopeMaybe(node.getCatchBody())).hide())
         if (nodeName == "ObjectExpr"):
@@ -531,7 +531,7 @@ def makeScopeWalker() as DeepFrozenStamp:
         to nodeSetsName(node, name :Str):
             return getStaticScope(node).getNamesSet().contains(name)
         to nodeReadsName(node, name :Str):
-            return getStaticScope(node).getNamesSet().contains(name)
+            return getStaticScope(node).getNamesRead().contains(name)
         to nodeBindsName(node, name :Str):
             return getStaticScope(node).outNames().contains(name)
 

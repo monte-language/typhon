@@ -366,7 +366,8 @@ def staticFixpoint(staticOuters :Set[Str]) as DeepFrozen:
                     }
                     if (!anno) {
                         # Compute the escaping names.
-                        def namesUsed := script.getStaticScope().namesUsed()
+
+                        def namesUsed := astBuilder.makeScopeWalker().getStaticScope(script).namesUsed()
                         def freeNames := (namesUsed - pattNames(patt) -
                                           staticOuters).diverge()
                         if (!freeNames.isEmpty()) {
@@ -394,7 +395,7 @@ def staticFixpoint(staticOuters :Set[Str]) as DeepFrozen:
             "
 
             # Seed the initial split.
-            def freeNames := (topExpr.getStaticScope().namesUsed() -
+            def freeNames := (astBuilder.makeScopeWalker().getStaticScope(topExpr).namesUsed() -
                               staticOuters)
             def innerAnnos := [for name in (freeNames)
                                 name => [dynamic, "free in top scope"]]
@@ -417,7 +418,7 @@ def staticFixpoint(staticOuters :Set[Str]) as DeepFrozen:
 
         to annotateMethod(meth :Meth, args :List[Bool]) :Pair[Map[Expr, Bool], Map[Meth, Any]]:
             # Seed the initial split.
-            def freeNames := (meth.getStaticScope().namesUsed() -
+            def freeNames := (astBuilder.makeScopeWalker().getStaticScope(meth).namesUsed() -
                               staticOuters)
             def innerAnnos := [for name in (freeNames)
                                 name => [dynamic, "free in top scope"]]
@@ -509,7 +510,7 @@ def makeStaticObject(makeReducer, _methodKits, evalScope, objExpr) as DeepFrozen
                 }
                 object staticTool:
                     to run():
-                        def ss := reducedScript.getStaticScope()
+                        def ss := astBuilder.makeScopeWalker().getStaticScope(reducedScript)
                         def body := seq([for name in (ss.namesUsed())
                                          ? (!safeScope.contains(`&&$name`)) {
                             def patt := astBuilder.FinalPattern(
@@ -968,7 +969,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                                 def noun := ejPatt.getNoun()
                                 def name := noun.getName()
                                 def body := expr.getBody()
-                                if (body.getStaticScope().namesUsed().contains(name)) {
+                                if (astBuilder.makeScopeWalker().getStaticScope(body).namesUsed().contains(name)) {
                                     # Let's see if we can track down that usage.
                                     switch (body.getNodeName()) {
                                         # As with the cases of yesteryear, the case with catches
@@ -990,7 +991,7 @@ def makeReducer(exprAnnos :Map[Expr, Bool], methodKits :Map[Meth, Any],
                                             def newBody := seq(trimmed)
                                             # If the new body doesn't use the ejector, then we'll
                                             # discard the ejector altogether.
-                                            if (newBody.getStaticScope().namesUsed().contains(name)) {
+                                            if (astBuilder.makeScopeWalker().getStaticScope(newBody).namesUsed().contains(name)) {
                                                 astBuilder.EscapeExpr(ejPatt, newBody, null, null,
                                                                       null)
                                             } else { newBody }
@@ -1184,7 +1185,7 @@ def uncallLiterals(node, maker, args, span) as DeepFrozen:
     } else { M.call(maker, "run", args + [span], [].asMap()) }
 
 def mix(expr, baseScope) as DeepFrozen:
-    def neededOuters := expr.getStaticScope().namesUsed()
+    def neededOuters := astBuilder.makeScopeWalker().getStaticScope(expr).namesUsed()
     # Only propagate exactly those values needed, to make reasoning and
     # debugging easier.
     def topValueScope := [for `&&@k` => v in (baseScope)
