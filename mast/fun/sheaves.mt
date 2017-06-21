@@ -115,6 +115,9 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
 
         to sheaf(consistency :Map[Set, Any]):
             return object abstractSheaf as Sheaf:
+                to vertices():
+                    return abstractSimplicialComplex.vertices()
+
                 to stalkAt(u :Set):
                     return [for x in (u) vertices[x]]
 
@@ -135,6 +138,31 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
 
                 to restriction(u :Set, v :Set):
                     return restrictions[[u, v]]
+
+def possibilities(guard) as DeepFrozen:
+    return switch (guard):
+        match ==Bool:
+            [true, false]
+
+def largestSectionAt(sheaf, assignment, ej) as DeepFrozen:
+    var largest := sheaf.sectionAt(assignment, ej)
+    var sections := [assignment => largest]
+    def vs := sheaf.vertices()
+    # For each vertex not yet assigned, we will try out the possible
+    # assignments and see what kinds of sections we get.
+    for vertex => guard in (vs):
+        # Skip already-assigned vertices.
+        if (assignment.contains(vertex)):
+            continue
+        def rv := [].asMap().diverge()
+        for p in (possibilities(guard)):
+            for ass => _ in (sections):
+                def new := ass.with(vertex, p)
+                def contender := rv[new] := sheaf.sectionAt(new, __continue)
+                if (contender.size() > largest.size()):
+                    largest := contender
+        sections := rv.snapshot()
+    return largest
 
 def main(_) as DeepFrozen:
     def asc := makeASC([for x in ([1, 2, 3, 4, 5]) x => Int], [
@@ -175,11 +203,15 @@ def main(_) as DeepFrozen:
         'z' => true,
     ]
     traceln("Incorrect section", simpleXorSheaf.sectionAt(incorrect, null))
+    traceln("Largest incorrect", largestSectionAt(simpleXorSheaf, incorrect,
+                                                  null))
     def correct := [
         'x' => true,
         'y' => false,
         'z' => true,
     ]
     traceln("Correct section", simpleXorSheaf.sectionAt(correct, null))
+    traceln("Largest correct", largestSectionAt(simpleXorSheaf, correct,
+                                                null))
 
     return 0
