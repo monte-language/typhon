@@ -37,11 +37,11 @@ def makeInterpObject(_doc, _name, script, scopes: List[Scope], makeEvaluator) as
     # TODO: auditors
     # TODO: def miranda := eval(`object $name {}`, [].asMap())
     def dispatch := [for m in (script.getMethods())
-                     [m.getVerb(), m.getPatterns().size()] => m]
+                     [m.getVerb(), m.getParams().size()] => m]
 
     def runMethod(meth, args, _namedArgs):
         def e := makeEvaluator(scopes)
-        def ps := meth.getPatterns()
+        def ps := meth.getParams()
         for ix in (0..!ps.size()):
             e.matchBind(ps[ix], args[ix])
         # TODO: namedargs

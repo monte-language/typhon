@@ -528,8 +528,8 @@ bind printerActions :Map[Str, DeepFrozen] := [
         printDocExprSuiteOn(fn {
             out.lnPrint("method ")
             def verb := self.getVerb()
-            def patterns := self.getPatterns()
-            def namedPatts := self.getNamedPatterns()
+            def patterns := self.getParams()
+            def namedPatts := self.getNamedParams()
             def resultGuard := self.getResultGuard()
             if (isIdentifier(verb)) {
                 out.print(verb)
@@ -551,8 +551,8 @@ bind printerActions :Map[Str, DeepFrozen] := [
         printDocExprSuiteOn(fn {
             out.lnPrint("to ")
             def verb := self.getVerb()
-            def patterns := self.getPatterns()
-            def namedPatts := self.getNamedPatterns()
+            def patterns := self.getParams()
+            def namedPatts := self.getNamedParams()
             def resultGuard := self.getResultGuard()
             if (isIdentifier(verb)) {
                 out.print(verb)
@@ -594,9 +594,9 @@ bind printerActions :Map[Str, DeepFrozen] := [
     },
     "FunctionExpr" => def printFunctionExpr(self, out, _priority) as DeepFrozenStamp {
         printExprSuiteOn(fn {
-            printListOn("fn ", self.getPatterns(), ", ",
+            printListOn("fn ", self.getParams(), ", ",
                         "", out, priorities["pattern"])
-            printListOn("", self.getNamedPatterns(), ", ",
+            printListOn("", self.getNamedParams(), ", ",
                         "", out, priorities["pattern"])
         }, self.getBody(), false, out, priorities["assign"])
  },

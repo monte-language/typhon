@@ -927,11 +927,11 @@ class Method(Expr):
         return getAtom(self._verb, len(self._ps))
 
     @method("List")
-    def getPatterns(self):
+    def getParams(self):
         return self._ps
 
     @method("List")
-    def getNamedPatterns(self):
+    def getNamedParams(self):
         return self._namedParams
 
     @method("Any")

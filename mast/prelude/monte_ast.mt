@@ -787,9 +787,9 @@ def makeMethod(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
             return docstring
         to getVerb():
             return verb
-        to getPatterns():
+        to getParams():
             return patterns
-        to getNamedPatterns():
+        to getNamedParams():
             return namedPatts
         to getResultGuard():
             return resultGuard
@@ -817,9 +817,9 @@ def makeTo(docstring :NullOk[Str], verb :Str, patterns :List[Pattern],
             return docstring
         to getVerb():
             return verb
-        to getPatterns():
+        to getParams():
             return patterns
-        to getNamedPatterns():
+        to getNamedParams():
             return namedPatts
         to getResultGuard():
             return resultGuard
@@ -908,9 +908,9 @@ def makeFunctionScript(verb :Str, patterns :List[Pattern],
     object functionScript:
         to getVerb():
             return verb
-        to getPatterns():
+        to getParams():
             return patterns
-        to getNamedPatterns():
+        to getNamedParams():
             return namedPatterns
         to getResultGuard():
             return resultGuard
@@ -925,10 +925,10 @@ def makeFunctionExpr(patterns :List[Pattern],
     def &scope := makeLazySlot(fn {(sumScopes(patterns + namedPatterns) +
                                     body.getStaticScope()).hide()})
     object functionExpr:
-        to getPatterns():
+        to getParams():
             return patterns
 
-        to getNamedPatterns():
+        to getNamedParams():
             return namedPatterns
 
         to getBody():
@@ -1438,7 +1438,7 @@ def makeMapPatternAssoc(key :Expr, value :Pattern, default :NullOk[Expr], span) 
 def makeMapPatternImport(pattern :NamePattern, default :NullOk[Expr], span) as DeepFrozenStamp:
     def &scope := makeLazySlot(fn {pattern.getStaticScope() + scopeMaybe(default)})
     object mapPatternImport:
-        to getPattern():
+        to getValue():
             return pattern
         to getDefault():
             return default
@@ -1466,7 +1466,7 @@ def makeNamedParam(key :Expr, patt :Pattern, default :NullOk[Expr], span) as Dee
     object namedParam:
         to getKey():
             return key
-        to getPattern():
+        to getValue():
             return patt
         to getDefault():
             return default
@@ -1477,7 +1477,7 @@ def makeNamedParamImport(patt :NamePattern, default :NullOk[Expr], span) as Deep
     def &scope := makeLazySlot(fn {patt.getStaticScope() +
                                    scopeMaybe(default)})
     object namedParamImport:
-        to getPattern():
+        to getValue():
             return patt
         to getDefault():
             return default

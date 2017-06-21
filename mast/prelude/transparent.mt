@@ -73,7 +73,7 @@ object Transparent as DeepFrozenStamp:
             } catch _ {
                 throw(audition.getFQN() + " has no \"run\" method")
             }
-            def params := meth.getPatterns()
+            def params := meth.getParams()
             def pnames := [].diverge()
             def npnames := [].asMap().diverge()
             for p in (params):
@@ -82,7 +82,7 @@ object Transparent as DeepFrozenStamp:
                           "have only unguarded FinalSlot patterns in " +
                           "their signature, not " + M.toQuote(p))
                 pnames.push(p.getNoun().getName())
-            def namedParams := meth.getNamedPatterns()
+            def namedParams := meth.getNamedParams()
             for np in (namedParams):
                 def p := np.getPattern()
                 if (p.getNodeName() != "FinalPattern" || p.getGuard() != null):
@@ -139,8 +139,8 @@ object Transparent as DeepFrozenStamp:
             } catch _ {
                 throw("Value object has no ._uncall() method")
             }
-            if (uncallMethod.getPatterns().size() != 0 ||
-                uncallMethod.getNamedPatterns().size() != 0):
+            if (uncallMethod.getParams().size() != 0 ||
+                uncallMethod.getNamedParams().size() != 0):
                 throw("Value object's _uncall method must not take any parameters")
             def makerNoun := objectExpr.getName().getNoun()
             var uncallExpr := uncallMethod.getBody()
