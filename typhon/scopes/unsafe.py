@@ -48,7 +48,12 @@ class FindTyphonFile(Object):
         return NullObject
 
 
-def unsafeScope(config):
+def unsafeScope(config, secretVat):
+    """
+    Create an unsafe scope configured with `config` and doing impure work in
+    `secretVat`.
+    """
+
     return finalize({
         u"Timer": Timer(),
         u"bench": bench(),

@@ -191,9 +191,8 @@ def runTyphon(argv):
     rsignal.pypysig_ignore(rsignal.SIGPIPE)
 
     # Initialize our first vat. It shall be immortal.
-    vatManager = VatManager()
-    vat = Vat(vatManager, uv_loop, checkpoints=-1)
-    vatManager.vats.append(vat)
+    vatManager = VatManager(uv_loop)
+    vat = vatManager.createVat(u"pa", checkpoints=-1)
 
     # Update loop timing information. Until the loop really gets going, we
     # have to do this ourselves in order to get the timing correct for early
@@ -225,7 +224,11 @@ def runTyphon(argv):
     ss[u"safeScope"] = finalBinding(ConstMap(reflectedSS), deepFrozenGuard)
     reflectedSS[StrObject(u"&&safeScope")] = ss[u"safeScope"]
     scope[u"safeScope"] = ss[u"safeScope"]
-    scope.update(unsafeScope(config))
+
+    # Build the unsafe scope. The secret vat is closed over by the unsafe
+    # scope, but otherwise is a secret to everybody.
+    secretVat = vatManager.createVat(u"selmipri", checkpoints=-1)
+    scope.update(unsafeScope(config, secretVat))
     # The initial vat is included as `currentVat` to the first level of
     # loading and such.
     scope[u"currentVat"] = finalBinding(vat, anyGuard)

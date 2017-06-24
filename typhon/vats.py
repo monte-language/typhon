@@ -46,12 +46,14 @@ class Vat(Object):
 
     turnResolver = None
 
-    def __init__(self, manager, uv_loop, name=None, checkpoints=0):
+    def __init__(self, manager, name=None, checkpoints=0):
         assert checkpoints != 0, "No, you can't create a zero-checkpoint vat"
         self.checkpoints = checkpoints
 
         self._manager = manager
-        self.uv_loop = uv_loop
+        # XXX this is going away eventually because it is too
+        # poorly-encapsulated!
+        self.uv_loop = self._manager.uv_loop
 
         if name is not None:
             self.name = name
@@ -96,10 +98,7 @@ class Vat(Object):
         that this new vat may make.
         """
 
-        vat = Vat(self._manager, self.uv_loop, name,
-                  checkpoints=checkpoints)
-        self._manager.vats.append(vat)
-        return vat
+        return self._manager.createVat(name, checkpoints)
 
     @method("Void")
     def traceQueueContents(self):
@@ -251,8 +250,14 @@ class VatManager(object):
     A collection of vats.
     """
 
-    def __init__(self):
+    def __init__(self, uv_loop):
+        self.uv_loop = uv_loop
         self.vats = []
+
+    def createVat(self, name, checkpoints):
+        vat = Vat(self, name=name, checkpoints=checkpoints)
+        self.vats.append(vat)
+        return vat
 
     def anyVatHasTurns(self):
         for vat in self.vats:
