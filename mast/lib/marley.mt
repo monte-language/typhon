@@ -1,4 +1,5 @@
 import "unittest" =~ [=> unittest]
+import "lib/enum" =~ [=> makeEnum]
 exports (makeQuasiParser, makeMarley, ::"marley``")
 
 # Copyright (C) 2015 Google Inc. All rights reserved.
@@ -23,14 +24,12 @@ exports (makeQuasiParser, makeMarley, ::"marley``")
 # polymorphic over the token and input types and can support non-character
 # parses.
 
-object terminal as DeepFrozen:
-    pass
+def [_Prod :DeepFrozen,
+     TERM :DeepFrozen,
+     NONTERM :DeepFrozen,
+] := makeEnum(["terminal", "nonterminal"])
 
-object nonterminal as DeepFrozen:
-    pass
-
-# def RuleTag :DeepFrozen := Any[Same[terminal], Same[nonterminal]]
-def Rule :DeepFrozen := DeepFrozen # Pair[List[Pair[RuleTag, DeepFrozen]], DeepFrozen]
+def Rule :DeepFrozen := DeepFrozen # Pair[List[Pair[Prod, DeepFrozen]], DeepFrozen]
 def Rules :DeepFrozen := List[Rule]
 def Grammar :DeepFrozen := Map[Str, Rules]
 
@@ -106,17 +105,17 @@ def advance(position :Int, token, var table, ej) as DeepFrozen:
                 def reduced := M.call(reduction, "run", result, [].asMap())
                 for oldState in (table[j]):
                     if (oldState =~
-                        [oldHead, [==[nonterminal, head]] + tail, i, tree,
+                        [oldHead, [==[NONTERM, head]] + tail, i, tree,
                          red]):
                         # traceln(`Completed $oldHead $i..$k`)
                         enqueue(k, [oldHead, tail, i, tree.with(reduced),
                                     red])
-            match [[==nonterminal, rule]] + _:
+            match [[==NONTERM, rule]] + _:
                 # Prediction.
                 for [production, reduction] in (table.getRuleNamed(rule)):
                     # traceln(`Predicted $rule → $production`)
                     enqueue(k, [rule, production, k, [], reduction])
-            match [[==terminal, literal]] + tail:
+            match [[==TERM, literal]] + tail:
                 # Scan.
                 # Scans can only take place when the token is in the position
                 # immediately following the position of the scanning rule.
@@ -155,7 +154,7 @@ def initialTable(grammar :Grammar, startRule :Str) as DeepFrozen:
         if (!startingSet.contains(rule)):
             startingSet with= (rule)
             # If nonterminal, then predict into that nonterminal's next rule.
-            if (rule =~ [_, [[==nonterminal, nextRule]] + _, _, _, _]):
+            if (rule =~ [_, [[==NONTERM, nextRule]] + _, _, _, _]):
                 queueRule(nextRule)
 
     def tables := [startingSet]
@@ -260,8 +259,8 @@ def constant(x :DeepFrozen) as DeepFrozen:
 def parens :Grammar := [
     "parens" => [
         [[], nullReduction],
-        [[[terminal, exactly('(')], [nonterminal, "parens"],
-         [terminal, exactly(')')]], nullReduction],
+        [[[TERM, exactly('(')], [NONTERM, "parens"],
+         [TERM, exactly(')')]], nullReduction],
     ],
 ]
 
@@ -286,25 +285,25 @@ def testMarleyParensPartial(assert):
 def testMarleyWP(assert):
     def wp := [
         "P" => [
-            [[[nonterminal, "S"]], singleReduction],
+            [[[NONTERM, "S"]], singleReduction],
         ],
         "S" => [
-            [[[nonterminal, "S"], [terminal, exactly('+')],
-              [nonterminal, "M"]],
+            [[[NONTERM, "S"], [TERM, exactly('+')],
+              [NONTERM, "M"]],
              def add(x, _, y) as DeepFrozen { return x + y }],
-            [[[nonterminal, "M"]], singleReduction],
+            [[[NONTERM, "M"]], singleReduction],
         ],
         "M" => [
-            [[[nonterminal, "M"], [terminal, exactly('*')],
-              [nonterminal, "T"]],
+            [[[NONTERM, "M"], [TERM, exactly('*')],
+              [NONTERM, "T"]],
              def mul(x, _, y) as DeepFrozen { return x * y }],
-            [[[nonterminal, "T"]], singleReduction],
+            [[[NONTERM, "T"]], singleReduction],
         ],
         "T" => [
-            [[[terminal, exactly('1')]], constant(1)],
-            [[[terminal, exactly('2')]], constant(2)],
-            [[[terminal, exactly('3')]], constant(3)],
-            [[[terminal, exactly('4')]], constant(4)],
+            [[[TERM, exactly('1')]], constant(1)],
+            [[[TERM, exactly('2')]], constant(2)],
+            [[[TERM, exactly('3')]], constant(3)],
+            [[[TERM, exactly('4')]], constant(4)],
         ],
     ]
     def wpParser := makeMarley(wp, "P")
@@ -452,55 +451,55 @@ def reduceRule(pieces, piece) :List as DeepFrozen:
 
 def marleyQLGrammar :Grammar := [
     "charLiteral" => [
-        [[[terminal, tag("character")]],
+        [[[TERM, tag("character")]],
          def reduceCharLiteral([_, c]) as DeepFrozen {
-            return [terminal, exactly(c)]
+            return [TERM, exactly(c)]
         }],
     ],
     "identifier" => [
-        [[[terminal, tag("identifier")]],
+        [[[TERM, tag("identifier")]],
          def reduceIdentifier([_, i]) as DeepFrozen {
-             return [nonterminal, i]
+             return [NONTERM, i]
          }],
     ],
     "rule" => [
-        [[[nonterminal, "charLiteral"]], singleReduction],
-        [[[nonterminal, "identifier"]], singleReduction],
+        [[[NONTERM, "charLiteral"]], singleReduction],
+        [[[NONTERM, "identifier"]], singleReduction],
     ],
     "rules" => [
-        [[[nonterminal, "rules"], [nonterminal, "rule"]], reduceRule],
+        [[[NONTERM, "rules"], [NONTERM, "rule"]], reduceRule],
         [[], makeEmptyList],
     ],
     "ruleSet" => [
-        [[[nonterminal, "rules"]],
+        [[[NONTERM, "rules"]],
          def chooseRuleReduction(rule) as DeepFrozen {
              return [rule, chooseReductionFor(rule)]
          }],
-        [[[nonterminal, "rules"], [terminal, tag("arrowtail")],
-          [terminal, exprHole]],
+        [[[NONTERM, "rules"], [TERM, tag("arrowtail")],
+          [TERM, exprHole]],
          def setRuleReduction(rule, _, reduction) as DeepFrozen {
              return [rule, reduction]
          }],
     ],
     "ruleSets" => [
-        [[[nonterminal, "ruleSets"], [terminal, tag("pipe")],
-          [nonterminal, "ruleSet"]],
+        [[[NONTERM, "ruleSets"], [TERM, tag("pipe")],
+          [NONTERM, "ruleSet"]],
          def reduceRuleSet(ruleSets, _, ruleSet) as DeepFrozen {
              return ruleSets.with(ruleSet)
          }],
-        [[[nonterminal, "ruleSet"]], defaultReduction],
+        [[[NONTERM, "ruleSet"]], defaultReduction],
     ],
     "production" => [
-        [[[nonterminal, "identifier"], [terminal, tag("arrowhead")],
-          [nonterminal, "ruleSets"]],
+        [[[NONTERM, "identifier"], [TERM, tag("arrowhead")],
+          [NONTERM, "ruleSets"]],
          def reduceProduction([_, head], _, ruleSets) as DeepFrozen {
              return [head => ruleSets]
          }],
     ],
     "grammar" => [
-        [[[nonterminal, "grammar"], [nonterminal, "production"]],
+        [[[NONTERM, "grammar"], [NONTERM, "production"]],
          def reduceGrammar(g, p) as DeepFrozen { return g | p }],
-        [[[nonterminal, "production"]], singleReduction],
+        [[[NONTERM, "production"]], singleReduction],
     ],
 ]
 
@@ -545,8 +544,8 @@ def ::"marley``" :DeepFrozen := makeQuasiParser(makeScanner, marleyQLGrammar,
 def testMarleyQPSingle(assert):
     def handwritten :Grammar := [
         "breakfast" => [
-            [[[nonterminal, "eggs"], [terminal, exactly('&')],
-              [nonterminal, "bacon"]], defaultReduction]
+            [[[NONTERM, "eggs"], [TERM, exactly('&')],
+              [NONTERM, "bacon"]], defaultReduction]
         ]
     ]
     def generated :Grammar := marley`breakfast ← eggs '&' bacon`.getGrammar()
@@ -555,7 +554,7 @@ def testMarleyQPSingle(assert):
 def testMarleyQPEmpty(assert):
     def handwritten :Grammar := [
         "empty" => [[[], nullReduction]],
-        "nonempty" => [[[[nonterminal, "empty"]], singleReduction]],
+        "nonempty" => [[[[NONTERM, "empty"]], singleReduction]],
     ]
     def generated :Grammar := marley`
         empty ←
@@ -566,8 +565,8 @@ def testMarleyQPEmpty(assert):
 def testMarleyQPAlt(assert):
     def handwritten :Grammar := [
         "breakfast" => [
-            [[[nonterminal, "eggs"]], singleReduction],
-            [[[nonterminal, "bacon"]], singleReduction]
+            [[[NONTERM, "eggs"]], singleReduction],
+            [[[NONTERM, "bacon"]], singleReduction]
         ]
     ]
     def generated :Grammar := marley`breakfast ← eggs | bacon`.getGrammar()
