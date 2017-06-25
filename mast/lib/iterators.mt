@@ -107,3 +107,48 @@ unittest([
     testZipListsRagged,
     testZipListsRaggedPadding,
 ])
+
+
+object async as DeepFrozen:
+    "Various asynchronous iteration combinators."
+
+    to "for"(iterable, body) :Vow[Void]:
+        "An asynchronous for-loop."
+
+        def iter := iterable._makeIterator()
+
+        def go():
+            return escape ej:
+                def [k, v] := iter.next(ej)
+                when (body(k, v)) -> { go() }
+            catch _:
+                null
+
+        return go()
+
+    to "while"(test, body) :Vow[Void]:
+        "An asynchronous while-loop."
+
+        def go():
+            return if (test()):
+                when (body()) -> { go() }
+            else:
+                null
+
+        return go()
+
+def testAsyncFor(assert):
+    def l := [1, 2, 3]
+    var acc := 0
+    return when (async."for"(l, fn _, v { acc += v })) ->
+        assert.equal(acc, 6)
+
+def testAsyncWhile(assert):
+    var acc := 0
+    return when (async."while"(fn { acc < 6 }, fn { acc += 1 })) ->
+        assert.equal(acc, 6)
+
+unittest([
+    testAsyncFor,
+    testAsyncWhile,
+])
