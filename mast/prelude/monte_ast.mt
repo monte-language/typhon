@@ -272,6 +272,8 @@ def makeScopeWalker() as DeepFrozenStamp:
             s(makeStaticScope([], [], [], [], true))
         if (nodeName == "SeqExpr"):
             s(sumScopes(node.getExprs()))
+        if (nodeName == "Import"):
+            s(getStaticScope(node.getPattern()))
         if (nodeName == "Module"):
             def interiorScope := (sumScopes([for im in (node.getImports())
                                              im.getPattern()]) +
