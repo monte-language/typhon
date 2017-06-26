@@ -1,4 +1,3 @@
-import "lib/enum" =~ [=> makeEnum :DeepFrozen]
 exports (main)
 
 object identity as DeepFrozen:
@@ -116,232 +115,34 @@ def flowT(m :DeepFrozen) as DeepFrozen:
                 })
             }
 
-# C is for Control.
-def [Inst :DeepFrozen,
-    instLiteral :DeepFrozen, instDrop :DeepFrozen,
-    instNoun :DeepFrozen,
-    instDup :DeepFrozen, instAssign :DeepFrozen,
-] := makeEnum([
-    "literal", "drop",
-    "noun",
-    "dup", "assign",
-])
+def ev(m, ev, e) as DeepFrozen:
+    "
+    An extensible definitional interpreter for Monte, in operational monad
+    `m`, interpreting expression `e`.
+    "
 
-# K is for Kontinuation.
-def [Kont :DeepFrozen,
-    kontDone :DeepFrozen,
-] := makeEnum([
-    "done",
-])
+    def r(expr):
+        return ev(m, ev, expr)
 
-def compileToInst(topExpr) as DeepFrozen:
-    def frameStack := [[].asMap().diverge()].diverge()
-    def literalStack := [[].asMap().diverge()].diverge()
-    def instStack := [[].diverge()].diverge()
-
-    def popFrame():
-        return [frameStack.pop().size(),
-                literalStack.pop().getKeys(),
-                instStack.pop().snapshot()]
-
-    def writeInst(inst :Inst, i :Int):
-        instStack.last().push([inst, i])
-
-    object compiler:
-        to literal(value):
-            def lits := literalStack.last()
-            def index := lits.fetch(value, fn { lits[value] := lits.size() })
-            writeInst(instLiteral, index)
-
-        to drop():
-            writeInst(instDrop, 0)
-
-        to noun(name :Str):
-            def frame := frameStack.last()
-            def index := frame[name]
-            writeInst(instNoun, index)
-
-        to dup():
-            writeInst(instDup, 0)
-
-        to assign(name :Str):
-            def frame := frameStack.last()
-            def index := frame[name] := frame.size()
-            writeInst(instAssign, index)
-
-        to matchBind(patt):
-            switch (patt.getNodeName()):
-                match =="FinalPattern":
-                    compiler.drop()
-                    compiler.assign(patt.getNoun().getName())
-
-        to run(expr):
-            if (expr == null):
-                compiler.literal(null)
-                return
-
-            switch (expr.getNodeName()):
-                # Layer 0: Sequencing.
-                match =="LiteralExpr":
-                    compiler.literal(expr.getValue())
-                match =="SeqExpr":
-                    def [head] + tail := expr.getExprs()
-                    compiler(head)
-                    for t in (tail):
-                        compiler.drop()
-                        compiler(t)
-                # Layer 1: Read-only store.
-                match =="NounExpr":
-                    compiler.noun(expr.getName())
-                match =="BindingExpr":
-                    compiler.binding(expr.getNoun().getName())
-                # Layer 2: Read-write store.
-                match =="DefExpr":
-                    compiler(expr.getExpr())
-                    compiler.dup()
-                    compiler(expr.getExit())
-                    compiler.matchBind(expr.getPattern())
-
-    compiler(topExpr)
-    return popFrame()
-
-def modify(m, action) as DeepFrozen:
-    return m."bind"(m.get(), fn state { m.put(action(state)) })
-
-def modifyEnv(m, action) as DeepFrozen:
-    return modify(m, fn state { state.modifyEnv(action) })
-
-def tick(m, _expr) as DeepFrozen:
-    return m."bind"(m.get(), fn state {
-        def [[env, kaddr, kstore, time], store] := state  
-        # def newTime := [expr, kaddr, time]
-        def newTime := time + 1
-        m.put([[env, kaddr, kstore, newTime], store])
-    })
-
-def getNoun(m, name) as DeepFrozen:
-    return m."bind"(m.get(), fn state {
-        def [[env, _, _, _], store] := state
-        m.unit(store[env[name]])
-    })
-
-def putNoun(m, name, value) as DeepFrozen:
-    return m."bind"(m.get(), fn state {
-        def [[env, kaddr, kstore, time], store] := state  
-        def k := [name, time]
-        def newEnv := env | [name => k]
-        def newStore := store | [k => value]
-        m.put([[newEnv, kaddr, kstore, time], newStore])
-    })
-
-def C :DeepFrozen := List[Pair[Inst, Int]]
-
-def makeCESKState(c :C, e, s, k :Kont) as DeepFrozen:
-    # E is [stack, frame]
-
-    return object CESKState:
-        to c() :C:
-            return c
-
-        to e():
-            return e
-
-        to peek():
-            return e[0].last()
-
-        to modifyEnv(action):
-            return makeCESKState(c, action(e), s, k)
-
-        to s():
-            return s
-
-        to k() :Kont:
-            return k
-
-        to isFinal() :Bool:
-            "Whether this state is a final, non-steppable state."
-
-            return !c.isEmpty() && k == kontDone
-
-def stepConcrete(m, literals) as DeepFrozen:
-    def push(value):
-        return modifyEnv(m, fn [stack, frame] {
-            [stack.with(value), frame]
-        })
-
-    return m."bind"(m.get(), fn state {
-        switch (state.c()) {
-            match [] {
-                # No more instructions, so we need to perform a return.
-                switch (state.c()) {
-                    match ==kontDone { throw(state.peek()) }
-                }
-            }
-            match [[inst, index]] + insts {
-                # def prelude := tick(m, null)
-                def prelude := m.unit(null)
-                def body := switch (inst) {
-                    # Layer 0: Sequencing.
-                    match ==instLiteral { push(literals[index]) }
-                    match ==instDrop {
-                        modifyEnv(m, fn [stack, frame] {
-                            [stack.slice(0, stack.size() - 1), frame]
-                        })
-                    }
-                    # Layer 1: Read-only store.
-                    match ==instNoun {
-                        modifyEnv(m, fn [stack, frame] {
-                            [stack.with(frame[index]), frame]
-                        })
-                    }
-                    # Layer 2: Read-write store.
-                    match ==instDup {
-                        modifyEnv(m, fn [stack, frame] {
-                            traceln(`dup $stack`)
-                            [stack.with(stack.last()), frame]
-                        })
-                    }
-                    match ==instAssign {
-                        modifyEnv(m, fn [stack, frame] {
-                            traceln(`assign $stack`)
-                            [stack.slice(0, stack.size() - 1),
-                             frame.with(index, stack.last())]
-                        })
-                    }
-                }
-                def footer := modify(m, fn state {
-                    makeCESKState(insts, state.e(), state.s(), state.k())
-                })
-                m."bind"(prelude, fn _ {
-                    m."bind"(body, fn result {
-                        m."bind"(footer, fn _ { m.unit(result) })
-                    })
-                })
-            }
-        }
-    })
+    return switch (e.getNodeName()):
+        # Layer 0: Sequencing.
+        match =="LiteralExpr":
+            m.unit(e.getValue())
+        match =="SeqExpr":
+            var rv := m.unit(null)
+            for expr in (e.getExprs()):
+                rv := m."bind"(rv, fn _ { r(expr) })
+            rv
 
 def main(_argv) as DeepFrozen:
-    def f(m):
-        traceln(`Running interpreter on monad $m`)
-        def ast := m`def x := 5; def y := 2; 42; x; y`
-        def [_, literals, insts] := compileToInst(ast)
-        # [stack, frame]
-        def env := [[], []]
-        # [env, kaddr, kstore, time]
-        def psi := [env, null, [null => kontDone], 0]
-        # [psi, store]
-        var state := makeCESKState(insts, env, psi, kontDone)
-        def rv := while (true) {
-            traceln(`old state`, state)
-            def action := stepConcrete(m, literals)
-            def [_, newState] := action(state)
-            traceln(newState)
-            state := newState
-            break
-        }
+    def f(m, ev):
+        traceln(`Running interpreter $ev on monad $m`)
+        # def ast := m`def x := 5; def y := 2; 42; x; y`
+        def ast := m`42; 5; 7`
+        def action := ev(m, ev, ast)
+        def rv := action(null)
         traceln(rv)
-    f(ambT(stateT(identity)))
-    f(flowT(identity))
-    f(stateT(ambT(identity)))
+    f(ambT(stateT(identity)), ev)
+    f(flowT(identity), ev)
+    f(stateT(ambT(identity)), ev)
     return 0
