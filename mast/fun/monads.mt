@@ -115,14 +115,59 @@ def flowT(m :DeepFrozen) as DeepFrozen:
                 })
             }
 
+def operational(m :DeepFrozen) as DeepFrozen:
+    "Make a monad fully operational."
+
+    return object operationalMonad extends m as DeepFrozen:
+        to _printOn(out):
+            out.print(`<*($m)>`)
+
+        to modify(f):
+            return m."bind"(m.get(), fn s { m.put(f(s)) })
+
+def makeBinding(value, guard, isFinal :Bool) as DeepFrozen:
+    return object binding:
+        to _printOn(out):
+            out.print(`<binding($value, $guard, $isFinal)>`)
+
+        to isFinal():
+            return isFinal
+
+        to getGuard():
+            return guard
+
+        to get():
+            return def slot.get():
+                return value
+
 def ev(m, ev, e) as DeepFrozen:
     "
     An extensible definitional interpreter for Monte, in operational monad
     `m`, interpreting expression `e`.
     "
 
+    if (e == null):
+        return m.unit(null)
+
     def r(expr):
         return ev(m, ev, expr)
+
+    def matchBind(patt, specimen, _ej):
+        return switch (patt.getNodeName()):
+            match =="FinalPattern":
+                m."bind"(r(patt.getGuard()), fn g {
+                    def binding := makeBinding(specimen, g, true)
+                    m.modify(fn store {
+                        store.with("&&" + patt.getNoun().getName(), binding)
+                    })
+                })
+            match =="VarPattern":
+                m."bind"(r(patt.getGuard()), fn g {
+                    def binding := makeBinding(specimen, g, false)
+                    m.modify(fn store {
+                        store.with("&&" + patt.getNoun().getName(), binding)
+                    })
+                })
 
     return switch (e.getNodeName()):
         # Layer 0: Sequencing.
@@ -133,14 +178,47 @@ def ev(m, ev, e) as DeepFrozen:
             for expr in (e.getExprs()):
                 rv := m."bind"(rv, fn _ { r(expr) })
             rv
+        # Layer 1: Read-only store.
+        match =="NounExpr":
+            m."bind"(m.get(), fn [("&&" + e.getName()) => b] | _ {
+                m.unit(b.get().get())
+            })
+        match =="BindingExpr":
+            m."bind"(m.get(), fn [("&&" + e.getName()) => b] | _ {
+                m.unit(b)
+            })
+        # Layer 2: Read-write store.
+        match =="DefExpr":
+            m."bind"(r(e.getExpr()), fn rhs {
+                m."bind"(r(e.getExit()), fn ex {
+                    m."bind"(matchBind(e.getPattern(), rhs, ex), fn ==null {
+                        m.unit(rhs)
+                    })
+                })
+            })
+        match =="AssignExpr":
+            def name := "&&" + e.getLvalue().getName()
+            m."bind"(r(e.getRvalue()), fn rhs {
+                m."bind"(m.get(), fn [(name) => b] | store {
+                    if (!b.isFinal()) {
+                        def binding := makeBinding(rhs, b.getGuard(), false)
+                        m."bind"(m.put(store.with(name, binding)), fn ==null {
+                            m.unit(rhs)
+                        })
+                    } else {
+                        throw("derp")
+                    }
+                })
+            })
 
 def main(_argv) as DeepFrozen:
     def f(m, ev):
-        traceln(`Running interpreter $ev on monad $m`)
+        def om := operational(m)
+        traceln(`Running interpreter $ev on monad $om`)
         # def ast := m`def x := 5; def y := 2; 42; x; y`
-        def ast := m`42; 5; 7`
-        def action := ev(m, ev, ast)
-        def rv := action(null)
+        def ast := m`var x := 1; x := 2; 3`
+        def action := ev(om, ev, ast)
+        def rv := action([].asMap())
         traceln(rv)
     f(ambT(stateT(identity)), ev)
     f(flowT(identity), ev)
