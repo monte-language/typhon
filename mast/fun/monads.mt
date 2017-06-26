@@ -9,6 +9,67 @@ object identity as DeepFrozen:
     to "bind"(action, f):
         return f(action)
 
+def eitherT(m :DeepFrozen) as DeepFrozen:
+    "The either monad transformer."
+
+    object LEFT as DeepFrozen {}
+    object RIGHT as DeepFrozen {}
+
+    return object either as DeepFrozen:
+        to _printOn(out):
+            out.print(`<either($m)>`)
+
+        to unit(x):
+            return m.unit([RIGHT, x])
+
+        to "bind"(action, f):
+            return m."bind"(action, fn a {
+                if (a =~ [==RIGHT, v]) { f(v) } else { m.unit(a) }
+            })
+
+        to fail(message):
+            return m.unit([LEFT, message])
+
+        to get():
+            return m."bind"(m.get(), either.unit)
+
+        to put(x):
+            return m."bind"(m.put(x), either.unit)
+
+def readerT(m :DeepFrozen) as DeepFrozen:
+    "The reader monad transformer."
+
+    return object reader as DeepFrozen:
+        to _printOn(out):
+            out.print(`<reader($m)>`)
+
+        to unit(x):
+            return fn _ { m.unit(x) }
+
+        to "bind"(action, f):
+            return fn e { m."bind"(action(e), fn a { f(a)(e) }) }
+
+        to ask():
+            return fn e { m.unit(e) }
+
+        to local(f, action):
+            return fn e { action(f(e)) }
+
+        to fail(message):
+            return m."bind"(m.fail(message), reader.unit)
+
+        to get():
+            return m."bind"(m.get(), reader.unit)
+
+        to put(x):
+            return m."bind"(m.put(x), reader.unit)
+
+        to zero():
+            return m."bind"(m.zero(), reader.unit)
+
+        to alt(left, right):
+            return fn e { m.alt(left(e), right(e)) }
+
 def stateT(m :DeepFrozen) as DeepFrozen:
     "The state monad transformer."
 
@@ -206,9 +267,14 @@ def ev(m, ev, e) as DeepFrozen:
                             m.unit(rhs)
                         })
                     } else {
-                        throw("derp")
+                        m.fail(`Binding $b was final!`)
                     }
                 })
+            })
+        # Layer 3: Scopes.
+        match =="HideExpr":
+            m."bind"(m.get(), fn store {
+                m.local(fn e { e | store }, r(e.getBody()))
             })
 
 def main(_argv) as DeepFrozen:
@@ -216,11 +282,9 @@ def main(_argv) as DeepFrozen:
         def om := operational(m)
         traceln(`Running interpreter $ev on monad $om`)
         # def ast := m`def x := 5; def y := 2; 42; x; y`
-        def ast := m`var x := 1; x := 2; 3`
+        def ast := m`def x := 1; { def y := 2 }; 3`
         def action := ev(om, ev, ast)
-        def rv := action([].asMap())
+        def rv := action([].asMap())([].asMap())
         traceln(rv)
-    f(ambT(stateT(identity)), ev)
-    f(flowT(identity), ev)
-    f(stateT(ambT(identity)), ev)
+    f(readerT(eitherT(stateT(identity))), ev)
     return 0
