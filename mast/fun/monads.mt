@@ -186,6 +186,23 @@ def operational(m :DeepFrozen) as DeepFrozen:
         to modify(f):
             return m."bind"(m.get(), fn s { m.put(f(s)) })
 
+        to lookup(name):
+            return m."bind"(m.get(), fn store {
+                if (store.contains(name)) { m.unit(store[name]) } else {
+                    m."bind"(m.ask(), fn env {
+                        if (env.contains(name)) { m.unit(env[name]) } else {
+                            m.fail(`Name $name not found`)
+                        }
+                    })
+                }
+            })
+
+        to freshScope(action):
+            return m."bind"(m.get(), fn store {
+                m.local(fn e { e | store },
+                        m."bind"(m.put([].asMap()), fn _ { action }))
+            })
+
 def makeBinding(value, guard, isFinal :Bool) as DeepFrozen:
     return object binding:
         to _printOn(out):
@@ -241,13 +258,11 @@ def ev(m, ev, e) as DeepFrozen:
             rv
         # Layer 1: Read-only store.
         match =="NounExpr":
-            m."bind"(m.get(), fn [("&&" + e.getName()) => b] | _ {
+            m."bind"(m.lookup("&&" + e.getName()), fn b {
                 m.unit(b.get().get())
             })
         match =="BindingExpr":
-            m."bind"(m.get(), fn [("&&" + e.getName()) => b] | _ {
-                m.unit(b)
-            })
+            m."bind"(m.lookup("&&" + e.getName()), fn b { m.unit(b) })
         # Layer 2: Read-write store.
         match =="DefExpr":
             m."bind"(r(e.getExpr()), fn rhs {
@@ -260,12 +275,13 @@ def ev(m, ev, e) as DeepFrozen:
         match =="AssignExpr":
             def name := "&&" + e.getLvalue().getName()
             m."bind"(r(e.getRvalue()), fn rhs {
-                m."bind"(m.get(), fn [(name) => b] | store {
+                m."bind"(m.lookup(name), fn b {
                     if (!b.isFinal()) {
                         def binding := makeBinding(rhs, b.getGuard(), false)
-                        m."bind"(m.put(store.with(name, binding)), fn ==null {
-                            m.unit(rhs)
+                        def write := m.modify(fn store {
+                            store.with(name, binding)
                         })
+                        m."bind"(write, fn _ { m.unit(rhs) })
                     } else {
                         m.fail(`Binding $b was final!`)
                     }
@@ -273,18 +289,26 @@ def ev(m, ev, e) as DeepFrozen:
             })
         # Layer 3: Scopes.
         match =="HideExpr":
-            m."bind"(m.get(), fn store {
-                m.local(fn e { e | store }, r(e.getBody()))
-            })
+            m.freshScope(r(e.getBody()))
+        match =="IfExpr":
+            m.freshScope(m."bind"(r(e.getTest()), fn test {
+                if (test =~ b :Bool) {
+                    m.freshScope(r(b.pick(e.getThen(), e.getElse())))
+                } else {
+                    m.fail(`Test value $test didn't conform to Bool`)
+                }
+            }))
 
 def main(_argv) as DeepFrozen:
     def f(m, ev):
         def om := operational(m)
         traceln(`Running interpreter $ev on monad $om`)
         # def ast := m`def x := 5; def y := 2; 42; x; y`
-        def ast := m`def x := 1; { def y := 2 }; 3`
+        def ast := m`def x := 1; { def y := 2 }; if (true) { 2 } else { 3 }`
         def action := ev(om, ev, ast)
-        def rv := action([].asMap())([].asMap())
+        def env := [=> &&true]
+        def store := [].asMap()
+        def rv := action(env)(store)
         traceln(rv)
     f(readerT(eitherT(stateT(identity))), ev)
     return 0
