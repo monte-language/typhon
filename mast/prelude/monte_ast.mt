@@ -497,6 +497,8 @@ def makeScopeWalker() as DeepFrozenStamp:
         throw("Unrecognized node name " + M.toQuote(nodeName))
 
     return object scopeWalker:
+        to getEmptyScope():
+            return emptyScope
         to getStaticScope(node):
             return getStaticScope(node)
         to nodeUsesName(node, name :Str):

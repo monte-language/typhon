@@ -312,21 +312,38 @@ def expand(node, builder, fail) as DeepFrozen:
                     emitList(namedParamDescs, span), guardExpr], [],
              span), span)
 
-    def expandObject(doco, name, asExpr, auditors, [xtends, methods, matchers], span):
-        # Easy case: There's no object being extended, so the object's fine
-        # as-is. Just assemble it.
-        if (xtends == null):
-            return builder.ObjectExpr(doco, name, asExpr, auditors,
-                                      builder.Script(null, methods, matchers,
-                                                     span),
-                                      span)
+    def refPromise(span):
+        return callExpr(nounExpr("Ref", span), "promise", [], [], span)
 
+    def buildRefCycle(conflicts, makeInnerExpr, span):
+        def promises := [].diverge()
+        def resolvers := [].diverge()
+        def renamings := [].asMap().diverge()
+        for oldname in (conflicts):
+            # Not calling nounFromScope because temp names won't conflict
+            def newname := tempNounExpr(oldname, span)
+            def newnameR := tempNounExpr(oldname + "R", span)
+            renamings[oldname] := newname
+            def pair := [builder.FinalPattern(newname, null, span),
+                         builder.FinalPattern(newnameR, null, span)]
+            promises.push(defExpr(builder.ListPattern(pair, null, span),
+                null, refPromise(span), span))
+            resolvers.push(callExpr(newnameR, "resolve",
+                 [nounExpr(oldname, span)], [], span))
+        def resName := tempNounExpr("value", span)
+        resolvers.push(resName)
+        def resPatt := builder.FinalPattern(resName, null, span)
+        def resDef := defExpr(resPatt, null, makeInnerExpr(renamings), span)
+        return seqExpr(promises.snapshot() + [resDef] + resolvers.snapshot(), span)
+
+    def _expandObject(renamings, doco, name, asExpr, auditors, [xtends, methods, matchers], span):
         def p := tempNounExpr("pair", span)
+
         def superExpr := if (xtends.getNodeName() == "NounExpr") {
             defExpr(builder.BindingPattern(nounExpr("super", span), span), null,
                 builder.BindingExpr(xtends, span), span)
         } else {
-            defExpr(builder.FinalPattern(nounExpr("super", span), null, span), null, xtends, span)
+            defExpr(builder.FinalPattern(nounExpr("super", span), null, span), null, renameCycles(xtends, renamings), span)
         }
 
         # We need to get the result of the asExpr into the guard for the
@@ -364,6 +381,28 @@ def expand(node, builder, fail) as DeepFrozen:
                                   [nounExpr("super", span), p], [], span), span)], span), span)], span),
                     span), span)], span), span)
 
+    def expandObject(doco, name, asExpr, auditors, [xtends, methods, matchers], span):
+        # Easy case: There's no object being extended, so the object's fine
+        # as-is. Just assemble it.
+        def objNameScope := sw.getStaticScope(name)
+        var auditorScope := if (asExpr == null) { sw.getEmptyScope()
+                            } else { sw.getStaticScope(asExpr) }
+        for a in (auditors):
+            auditorScope += sw.getStaticScope(a)
+        if ((objNameScope.outNames() & auditorScope.namesUsed()).size() > 0):
+            fail(["Auditors cannot use self", span])
+        if (xtends == null):
+            return builder.ObjectExpr(doco, name, asExpr, auditors,
+                                      builder.Script(null, methods, matchers,
+                                                     span),
+                                      span)
+        def extendScope := sw.getStaticScope(xtends)
+        def conflicts := objNameScope.outNames() & extendScope.namesUsed()
+        return if (conflicts.size() > 0) {
+            buildRefCycle(conflicts, fn renamings {_expandObject(renamings, doco, name, asExpr, auditors, [xtends, methods, matchers], span)}, span)
+        } else {
+            _expandObject([].asMap(), doco, name, asExpr, auditors, [xtends, methods, matchers], span)
+        }
 
     def expandInterface(doco, name, guard, xtends, mplements, messages, span):
         def verb := if (guard == null) {"run"} else {"makePair"}
@@ -504,15 +543,13 @@ def expand(node, builder, fail) as DeepFrozen:
                      "run", [coll, obj], [], span)
 
 
-    def refPromise(span):
-        return callExpr(nounExpr("Ref", span), "promise", [], [], span)
-
     def mapExtract(k, v, default, span):
         def n := nounExpr("_mapExtract", span)
         return if (default == null):
             [callExpr(n, "run", [k], [], span), v]
         else:
             [callExpr(n, "withDefault", [k, default], [], span), v]
+
 
     def expandTransformer(node, _maker, args, span):
         # traceln(`expander: ${node.getNodeName()}: Expanding $node`)
@@ -723,33 +760,16 @@ def expand(node, builder, fail) as DeepFrozen:
                 if ((varPatts & rvalUsed).size() != 0):
                     fail(["Circular 'var' definition not allowed", span])
                 if ((pattScope.namesUsed() & rvalScope.outNames()).size() != 0):
-                    fail(["Pattern may not used var defined on the right", span])
+                    fail(["Pattern may not use var defined on the right", span])
                 def conflicts := pattScope.outNames() & rvalUsed
                 if (conflicts.size() == 0):
                     defExpr(patt, ej, rval, span)
                 else:
-                    def promises := [].diverge()
-                    def resolvers := [].diverge()
-                    def renamings := [].asMap().diverge()
-                    for oldname in (conflicts):
-                        # Not calling nounFromScope because temp names won't conflict
-                        def newname := tempNounExpr(oldname, span)
-                        def newnameR := tempNounExpr(oldname + "R", span)
-                        renamings[oldname] := newname
-                        def pair := [builder.FinalPattern(newname, null, span),
-                                     builder.FinalPattern(newnameR, null, span)]
-                        promises.push(defExpr(builder.ListPattern(pair, null, span),
-                            null, refPromise(span), span))
-                        resolvers.push(callExpr(newnameR, "resolve",
-                             [nounExpr(oldname, span)], [], span))
-                    def resName := tempNounExpr("value", span)
-                    resolvers.push(resName)
-                    def renamedEj := if (ej == null) {null} else {renameCycles(ej, renamings)}
-                    def renamedRval := renameCycles(rval, renamings)
-                    def resPatt := builder.FinalPattern(resName, null, span)
-                    def resDef := defExpr(resPatt, null,
-                         defExpr(patt, renamedEj, renamedRval, span), span)
-                    seqExpr(promises.snapshot() + [resDef] + resolvers.snapshot(), span)
+                    buildRefCycle(conflicts, fn renamings {
+                        def renamedRval := renameCycles(rval, renamings)
+                        def renamedEj := if (ej == null) {null} else {renameCycles(ej, renamings)}
+                        defExpr(patt, renamedEj, renamedRval, span)
+                        }, span)
             match =="ForwardExpr":
                 def [patt] := args
                 def rname := nounExpr(patt.getNoun().getName() + "_Resolver", span)
