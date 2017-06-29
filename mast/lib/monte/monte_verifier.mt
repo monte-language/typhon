@@ -211,6 +211,12 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
                 def [receiver, _, arguments, namedArgs] := args
                 receiver + flattenList(arguments) + flattenList(namedArgs)
             }
+            match =="ControlExpr" {
+                def [target, op, argList, paramList, body, _] := args
+                def l := target + flattenList(argList) + flattenList(paramList) + body
+                def s := usedSet(sw, node.getBody())
+                filterNouns(l, s)
+            }
             match =="ParamDesc" { optional(args[1]) }
             match =="SwitchExpr" {
                 def [specimen, matchers] := args

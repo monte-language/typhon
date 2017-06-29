@@ -292,8 +292,9 @@ def makeScopeWalker() as DeepFrozenStamp:
         if (["MethodCallExpr", "FunCallExpr", "SendExpr", "FunSendExpr"].contains(nodeName)):
             s(sumScopes([node.getReceiver()] + node.getArgs() + node.getNamedArgs()))
         if (nodeName == "ControlExpr"):
-            s(node.getTarget() + (node.getArgs() + node.getParams() +
-                                  node.getBody()).hide())
+            s(getStaticScope(node.getTarget()) +
+              (sumScopes(node.getArgs() + node.getParams()) +
+               getStaticScope(node.getBody())).hide())
         if (nodeName == "GetExpr"):
             s(sumScopes([node.getReceiver()] + node.getIndices()))
         if (["AndExpr", "OrExpr", "BinaryExpr",
