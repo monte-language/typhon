@@ -291,6 +291,9 @@ def makeScopeWalker() as DeepFrozenStamp:
             s(getStaticScope(node.getValue()))
         if (["MethodCallExpr", "FunCallExpr", "SendExpr", "FunSendExpr"].contains(nodeName)):
             s(sumScopes([node.getReceiver()] + node.getArgs() + node.getNamedArgs()))
+        if (nodeName == "ControlExpr"):
+            s(node.getTarget() + (node.getArgs() + node.getParams() +
+                                  node.getBody()).hide())
         if (nodeName == "GetExpr"):
             s(sumScopes([node.getReceiver()] + node.getIndices()))
         if (["AndExpr", "OrExpr", "BinaryExpr",
@@ -578,6 +581,11 @@ def makeCoreAst() as DeepFrozenStamp:
                                     "direction" => Bool],
         "MatchBindExpr"         => ["specimen" => Expr, "pattern" => Pattern],
         "MismatchExpr"          => ["specimen" => Expr, "pattern" => Pattern],
+        "ControlExpr"           => ["target" => Expr, "operator" => Str,
+                                    "args*" => Expr,
+                                    "params*" => Pattern,
+                                    "body" => Expr,
+                                    "isTop" => Bool],
         "PrefixExpr"            => ["op" => Str, "receiver" => Expr],
         "CoerceExpr"            => ["specimen" => Expr, "guard?" => Expr],
         "CurryExpr"             => ["receiver" => Expr, "verb" => Str, "isSend" => Bool],

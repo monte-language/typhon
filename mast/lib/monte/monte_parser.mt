@@ -1,5 +1,9 @@
 exports (parseModule, parseExpression, parsePattern)
 
+def CONTROL_OPERATORS :DeepFrozen := [
+    "catch", "else", "escape", "finally", "fn", "guards",
+    "in", "match", "meta",  "try", "IDENTIFIER", "->"].asSet()
+
 def spanCover(left, right) as DeepFrozen:
     if (left == null || right == null):
         return null
@@ -1178,7 +1182,43 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 if (callish("MethodCallExpr", false)):
                     break
             else if (peekTag() == "("):
+                # this can go two ways, and we're going to be optimistic about
+                # the first one
                 funcallish("FunCallExpr")
+                if (CONTROL_OPERATORS.contains(peekTag())):
+                    def o := advance(ej)
+                    def operator := if (o[0] == "IDENTIFIER") {
+                        _makeStr.fromStr(o[1], o[2])
+                    } else {
+                        o[0]
+                    }
+                    def [_, [args, namedArgs, _]] := trailers.pop()
+                    if (namedArgs.size() > 0):
+                        throw.eject(ej, ["Control blocks don't take named args",
+                                         namedArgs[0].getSpan()])
+                    def params := acceptList(pattern)
+                    trailers.push(["ControlExpr",
+                                   [operator, args, params, block(false, ej), false,
+                                    spanFrom(spanStart)]])
+                    while (CONTROL_OPERATORS.contains(peekTag())):
+                        def o := advance(ej)
+                        def operator := if (o[0] == "IDENTIFIER") {
+                            _makeStr.fromStr(o[1], o[2])
+                        } else {
+                            o[0]
+                        }
+                        def [args, params] := if (considerTag("(", ej)) {
+                            def es := acceptList(expr)
+                            acceptTag(")", ej)
+                            [es, []]
+                        } else {
+                            [[], acceptList(pattern)]
+                        }
+                        trailers.push(["ControlExpr",
+                                       [operator, args, params, block(false, ej), false,
+                                        spanFrom(spanStart)]])
+                    trailers.push(["ControlExpr", trailers.pop()[1].with(4, true)])
+                    break
             else if (considerTag("<-", ej)):
                 if (peekTag() == "("):
                     funcallish("FunSendExpr")

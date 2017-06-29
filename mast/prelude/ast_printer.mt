@@ -256,6 +256,28 @@ bind printerActions :Map[Str, DeepFrozen] := [
             out.print(")")
         }
     },
+    "ControlExpr" => def printControlExpr(self, out, _priority) as DeepFrozenStamp {
+        out.print(self.getTarget())
+        printExprSuiteOn(fn {
+            if (self.getTarget().getNodeName() != "ControlExpr") {
+                printListOn(" (", self.getArgs(), ", ", ") ", out,
+                            priorities["braceExpr"])
+                out.print(self.getOperator())
+                printListOn(" ", self.getParams(), ", ",
+                            "", out, priorities["pattern"])
+            } else {
+                out.print(" ")
+                out.print(self.getOperator())
+                if (self.getArgs().size() > 0) {
+                    printListOn(" (", self.getArgs(), ", ", ")", out,
+                                priorities["braceExpr"])
+                } else {
+                printListOn(" ", self.getParams(), ", ",
+                            "", out, priorities["pattern"])
+                }
+            }
+        }, self.getBody(), false, out, priorities["braceExpr"])
+    },
     "FunCallExpr" => def printFunCallExpr(self, out, priority) as DeepFrozenStamp {
         if (priorities["call"] < priority) {
             out.print("(")

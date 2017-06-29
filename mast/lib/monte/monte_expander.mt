@@ -687,6 +687,54 @@ def expand(node, builder, fail) as DeepFrozen:
                     "send", [receiver, litExpr(verb, span),
                              emitList(margs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
                      span)
+            match =="ControlExpr":
+                def [target, operator, cargs, params, body, top] := args
+                def t := if (node.getTarget().getNodeName() != "ControlExpr") {
+                        callExpr(nounExpr("DeepFrozen", span), "coerce",
+                                 [target, nounExpr("throw", span)], [], span)
+                    } else {
+                        target
+                    }
+                def fnEj := tempNounExpr("ej", span)
+                def tempNouns := [for _ in (params) tempNounExpr("p", span)]
+                def ejPatt := builder.FinalPattern(fnEj, null, span)
+                def tempPatts := [for n in (tempNouns)
+                                  builder.FinalPattern(n, null, span)]
+                def emitPattsIn():
+                    return if (params.size() > 0) {
+                            tempPatts + [ejPatt]
+                        } else {
+                            []
+                        }
+                def emitPattsOut():
+                    return if (params.size() > 0) {
+                            defExpr(
+                                builder.ListPattern(params, null,
+                                                    span),
+                                fnEj,
+                                emitList(tempNouns, span), span)
+                        } else {
+                            seqExpr([], span)
+                        }
+                def cexpr := callExpr(
+                    t, "control",
+                    [litExpr(operator, span),
+                     litExpr(cargs.size(), span),
+                     litExpr(params.size(), span),
+                     makeFn(
+                         null, [], emitList([
+                             emitList(cargs, span),
+                             makeFn(
+                                 null, emitPattsIn(), seqExpr(
+                                     [emitPattsOut(),
+                                      body],
+                                     span), span)], span), span)
+                    ], [], span)
+                return if (top) {
+                        callExpr(cexpr, "controlRun", [], [], span)
+                    } else {
+                        cexpr
+                    }
             match =="PrefixExpr":
                 callExpr(args[1], node.getOpName(), [], [], span)
             match =="BinaryExpr":
