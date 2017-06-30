@@ -202,6 +202,10 @@ def alterMethods(cls):
                         unwrapper))
                     assignments.append("%s = %s(%s)" % (argName, unwrapper,
                         argName))
+                else:
+                    imports.add("from typhon.objects.refs import resolution")
+                    assignments.append("%s = resolution(%s)" % (argName,
+                                                                argName))
             for k, v in kwargs.iteritems():
                 # Look up the default value. We're going to pop this in and
                 # use None as a sentinel value in .extractStringKey(). ~ C.
