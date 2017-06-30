@@ -176,6 +176,22 @@ def flowT(m :DeepFrozen) as DeepFrozen:
                 })
             }
 
+def sequence(m :DeepFrozen, l :List) as DeepFrozen:
+    "
+    Collate a list `l` of monadic actions in monad `m` into a single action,
+    yielding a list of the yields of each individual action.
+    "
+
+    return if (l =~ [head] + tail):
+        var rv := m."bind"(head, fn x { m.unit([x]) })
+        for action in (tail):
+            rv := m."bind"(rv, fn xs {
+                m."bind"(action, fn x { m.unit(xs.with(x)) })
+            })
+        rv
+    else:
+        m.unit([])
+
 def makeMonadControl(m :DeepFrozen, operator :Str, argArity :Int,
                      paramArity :Int, block) as DeepFrozen:
     def fail(message):
@@ -360,6 +376,22 @@ def ev(m, ev, e) as DeepFrozen:
             m.freshScope(m (r(e.getTest())) do test :Bool {
                 m.freshScope(r(test.pick(e.getThen(), e.getElse())))
             })
+        # Layer 4: Calls.
+        match =="MethodCallExpr":
+            m (r(e.getReceiver())) do receiver {
+                def margs := sequence(m, [for arg in (e.getArgs()) r(arg)])
+                m (margs) do args {
+                    def mnargs := [for narg in (e.getNamedArgs())
+                                   m (r(narg.getKey()),
+                                      r(narg.getValue())) do k, v {
+                                          m.unit([k, v])
+                                   }]
+                    m (sequence(m, mnargs)) lift nargs {
+                        def namedArgs := [for [k, v] in (nargs) k => v]
+                        M.call(receiver, e.getVerb(), args, namedArgs)
+                    }
+                }
+            }
 
 def main(_argv) as DeepFrozen:
     def f(m, ev):
@@ -371,7 +403,12 @@ def main(_argv) as DeepFrozen:
         traceln(demoAction(null)(null))
         traceln(`Running interpreter $ev on monad $om`)
         # def ast := m`def x := 5; def y := 2; 42; x; y`
-        def ast := m`def x := 1; { def y := 2 }; if (true) { 2 } else { 3 }`
+        def ast := m`{
+            def x := 1
+            { def y := 2 }
+            if (true) { 2 } else { 3 }
+            true.xor(true)
+        }`
         def action := ev(om, ev, ast)
         def env := [=> &&true]
         def store := [].asMap()
