@@ -178,14 +178,43 @@ def flowT(m :DeepFrozen) as DeepFrozen:
 
 def makeMonadControl(m :DeepFrozen, operator :Str, argArity :Int,
                      paramArity :Int, block) as DeepFrozen:
+    # XXX check if monad supports .fail/1 and enable it in that case!
     var action := switch ([operator, argArity, paramArity]) {
-        match ==["do", 1, 1] {
-            def [[value], lambda] := block()
-            m."bind"(value, fn x { lambda(x, null) })
+        match [=="do", _size, ==_size] {
+            def [values, lambda] := block()
+            var collector := m.unit([])
+            for value in (values) {
+                collector := m."bind"(collector, fn xs {
+                    m."bind"(value, fn v { m.unit(xs.with(v)) })
+                })
+            }
+            m."bind"(collector, fn xs {
+                M.call(lambda, "run", xs.with(null), [].asMap())
+            })
+        }
+        match [=="do", _size, ==0] {
+            def [values, lambda] := block()
+            var runner := m.unit(null)
+            for value in (values) {
+                runner := m."bind"(runner, fn _ { value })
+            }
+            m."bind"(runner, fn _ { lambda() })
         }
         match ==["lift", 1, 1] {
             def [[value], lambda] := block()
             m."bind"(value, fn x { m.unit(lambda(x, null)) })
+        }
+        match ==["lift", 1, 0] {
+            def [[value], lambda] := block()
+            m."bind"(value, fn _ { m.unit(lambda()) })
+        }
+        match ==["modify", 1, 1] {
+            def [[value], lambda] := block()
+            m."bind"(value, fn x {
+                m."bind"(m.modify(fn s { lambda(s, null) }), fn _ {
+                    m.unit(x)
+                })
+            })
         }
     }
     return object controlFlow:
@@ -197,6 +226,16 @@ def makeMonadControl(m :DeepFrozen, operator :Str, argArity :Int,
                 }
                 match ==["lift", 0, 1] {
                     m."bind"(action, fn x { m.unit(lambda(x, null)) })
+                }
+                match ==["lift", 0, 0] {
+                    m."bind"(action, fn x { m.unit(lambda()) })
+                }
+                match ==["modify", 0, 1] {
+                    m."bind"(action, fn x {
+                        m."bind"(m.modify(fn s { lambda(s, null) }), fn _ {
+                            m.unit(x)
+                        })
+                    })
                 }
             }
             return controlFlow
@@ -265,19 +304,19 @@ def ev(m, ev, e) as DeepFrozen:
     def matchBind(patt, specimen, _ej):
         return switch (patt.getNodeName()):
             match =="FinalPattern":
-                m."bind"(r(patt.getGuard()), fn g {
+                m (r(patt.getGuard())) do g {
                     def binding := makeBinding(specimen, g, true)
                     m.modify(fn store {
                         store.with("&&" + patt.getNoun().getName(), binding)
                     })
-                })
+                }
             match =="VarPattern":
-                m."bind"(r(patt.getGuard()), fn g {
+                m (r(patt.getGuard())) do g {
                     def binding := makeBinding(specimen, g, false)
                     m.modify(fn store {
                         store.with("&&" + patt.getNoun().getName(), binding)
                     })
-                })
+                }
 
     return switch (e.getNodeName()):
         # Layer 0: Sequencing.
@@ -286,50 +325,41 @@ def ev(m, ev, e) as DeepFrozen:
         match =="SeqExpr":
             var rv := m.unit(null)
             for expr in (e.getExprs()):
-                rv := m."bind"(rv, fn _ { r(expr) })
+                rv := m (rv) do { r(expr) }
             rv
         # Layer 1: Read-only store.
         match =="NounExpr":
-            m."bind"(m.lookup("&&" + e.getName()), fn b {
-                m.unit(b.get().get())
-            })
+            m (m.lookup("&&" + e.getName())) lift b { b.get().get() }
         match =="BindingExpr":
-            m."bind"(m.lookup("&&" + e.getName()), fn b { m.unit(b) })
+            m.lookup("&&" + e.getName())
         # Layer 2: Read-write store.
         match =="DefExpr":
-            m."bind"(r(e.getExpr()), fn rhs {
-                m."bind"(r(e.getExit()), fn ex {
-                    m."bind"(matchBind(e.getPattern(), rhs, ex), fn ==null {
-                        m.unit(rhs)
-                    })
-                })
-            })
+            m (r(e.getExpr()), r(e.getExit())) do rhs, ex {
+                m (matchBind(e.getPattern(), rhs, ex)) lift { rhs }
+            }
         match =="AssignExpr":
             def name := "&&" + e.getLvalue().getName()
-            m."bind"(r(e.getRvalue()), fn rhs {
-                m."bind"(m.lookup(name), fn b {
-                    if (!b.isFinal()) {
-                        def binding := makeBinding(rhs, b.getGuard(), false)
-                        def write := m.modify(fn store {
-                            store.with(name, binding)
-                        })
-                        m."bind"(write, fn _ { m.unit(rhs) })
-                    } else {
-                        m.fail(`Binding $b was final!`)
-                    }
-                })
-            })
+            m (r(e.getRvalue()), m.lookup(name)) do rhs, b {
+                if (!b.isFinal()) {
+                    def binding := makeBinding(rhs, b.getGuard(), false)
+                    m (m.modify(fn store {
+                        store.with(name, binding)
+                    })) lift { rhs }
+                } else {
+                    m.fail(`Binding $b was final!`)
+                }
+            }
         # Layer 3: Scopes.
         match =="HideExpr":
             m.freshScope(r(e.getBody()))
         match =="IfExpr":
-            m.freshScope(m."bind"(r(e.getTest()), fn test {
+            m.freshScope(m (r(e.getTest())) do test {
                 if (test =~ b :Bool) {
                     m.freshScope(r(b.pick(e.getThen(), e.getElse())))
                 } else {
                     m.fail(`Test value $test didn't conform to Bool`)
                 }
-            }))
+            })
 
 def main(_argv) as DeepFrozen:
     def f(m, ev):
