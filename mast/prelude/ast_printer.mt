@@ -259,23 +259,16 @@ bind printerActions :Map[Str, DeepFrozen] := [
     "ControlExpr" => def printControlExpr(self, out, _priority) as DeepFrozenStamp {
         out.print(self.getTarget())
         printExprSuiteOn(fn {
-            if (self.getTarget().getNodeName() != "ControlExpr") {
+            # Controller base needs () markers to enter lambda-args syntax
+            # even without any args provided.
+            if (self.getTarget().getNodeName() != "ControlExpr" ||
+                self.getArgs().size() > 0) {
                 printListOn(" (", self.getArgs(), ", ", ") ", out,
                             priorities["braceExpr"])
-                out.print(self.getOperator())
-                printListOn(" ", self.getParams(), ", ",
-                            "", out, priorities["pattern"])
-            } else {
-                out.print(" ")
-                out.print(self.getOperator())
-                if (self.getArgs().size() > 0) {
-                    printListOn(" (", self.getArgs(), ", ", ")", out,
-                                priorities["braceExpr"])
-                } else {
-                printListOn(" ", self.getParams(), ", ",
-                            "", out, priorities["pattern"])
-                }
             }
+            out.print(self.getOperator())
+            printListOn(" ", self.getParams(), ", ", "", out,
+                        priorities["pattern"])
         }, self.getBody(), false, out, priorities["braceExpr"])
     },
     "FunCallExpr" => def printFunCallExpr(self, out, priority) as DeepFrozenStamp {

@@ -1201,19 +1201,30 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                     trailers.push(["ControlExpr",
                                    [operator, args, params, block(false, ej), false,
                                     spanFrom(spanStart)]])
-                    while (CONTROL_OPERATORS.contains(peekTag())):
+                    # Assume that we have many more control-exprs to parse.
+                    # We'll break when done.
+                    while (true):
+                        # If there are arguments, then they must be
+                        # parenthesized. Zero-argument empty parens are legal.
+                        # Otherwise, we need a control word. If we peek and
+                        # find neither, then we aren't parsing a control-expr.
+                        if (!CONTROL_OPERATORS.with("(").contains(peekTag())):
+                            break
+                        def args := if (considerTag("(", ej)) {
+                            def es := acceptList(expr)
+                            acceptTag(")", ej)
+                            es
+                        } else { [] }
+                        if (!CONTROL_OPERATORS.contains(peekTag())):
+                            formatError(null, ej)
                         def o := advance(ej)
                         def operator := if (o[0] == "IDENTIFIER") {
                             _makeStr.fromStr(o[1], o[2])
                         } else {
                             o[0]
                         }
-                        def [args, params] := if (considerTag("(", ej)) {
-                            def es := acceptList(expr)
-                            acceptTag(")", ej)
-                            [es, []]
-                        } else {
-                            [[], acceptList(pattern)]
+                        def params := if (peekTag() == "{") { [] } else {
+                            acceptList(pattern)
                         }
                         trailers.push(["ControlExpr",
                                        [operator, args, params, block(false, ej), false,
