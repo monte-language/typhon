@@ -178,36 +178,44 @@ def flowT(m :DeepFrozen) as DeepFrozen:
 
 def makeMonadControl(m :DeepFrozen, operator :Str, argArity :Int,
                      paramArity :Int, block) as DeepFrozen:
-    # XXX check if monad supports .fail/1 and enable it in that case!
-    var action := switch ([operator, argArity, paramArity]) {
-        match [=="do", _size, ==_size] {
-            def [values, lambda] := block()
-            var collector := m.unit([])
-            for value in (values) {
-                collector := m."bind"(collector, fn xs {
-                    m."bind"(value, fn v { m.unit(xs.with(v)) })
-                })
-            }
-            m."bind"(collector, fn xs {
-                M.call(lambda, "run", xs.with(null), [].asMap())
+    def fail(message):
+        return if (m._respondsTo("fail", 1)) { m.fail(message) } else {
+            throw(message)
+        }
+
+    def collect(block, => lift :Bool):
+        def [values, lambda] := block()
+        var collector := m.unit([])
+        for value in (values) {
+            collector := m."bind"(collector, fn xs {
+                m."bind"(value, fn v { m.unit(xs.with(v)) })
             })
         }
-        match [=="do", _size, ==0] {
-            def [values, lambda] := block()
-            var runner := m.unit(null)
-            for value in (values) {
-                runner := m."bind"(runner, fn _ { value })
+        return m."bind"(collector, fn xs {
+            escape ej {
+                def rv := M.call(lambda, "run", xs.with(ej), [].asMap())
+                if (lift) { m.unit(rv) } else { rv }
+            } catch problem {
+                fail(`Failure in monad: $problem`)
             }
-            m."bind"(runner, fn _ { lambda() })
+        })
+
+    def run(block, => lift :Bool):
+        def [values, lambda] := block()
+        var runner := m.unit(null)
+        for value in (values) {
+            runner := m."bind"(runner, fn _ { value })
         }
-        match ==["lift", 1, 1] {
-            def [[value], lambda] := block()
-            m."bind"(value, fn x { m.unit(lambda(x, null)) })
-        }
-        match ==["lift", 1, 0] {
-            def [[value], lambda] := block()
-            m."bind"(value, fn _ { m.unit(lambda()) })
-        }
+        return m."bind"(runner, fn _ {
+            def rv := lambda()
+            if (lift) { m.unit(rv) } else { rv }
+        })
+
+    var action := switch ([operator, argArity, paramArity]) {
+        match [=="do", _size, ==_size] { collect(block, "lift" => false) }
+        match [=="do", _size, ==0] { run(block, "lift" => false) }
+        match [=="lift", _size, ==_size] { collect(block, "lift" => true) }
+        match [=="lift", _size, ==0] { run(block, "lift" => true) }
         match ==["modify", 1, 1] {
             def [[value], lambda] := block()
             m."bind"(value, fn x {
@@ -339,26 +347,18 @@ def ev(m, ev, e) as DeepFrozen:
             }
         match =="AssignExpr":
             def name := "&&" + e.getLvalue().getName()
-            m (r(e.getRvalue()), m.lookup(name)) do rhs, b {
-                if (!b.isFinal()) {
-                    def binding := makeBinding(rhs, b.getGuard(), false)
-                    m (m.modify(fn store {
-                        store.with(name, binding)
-                    })) lift { rhs }
-                } else {
-                    m.fail(`Binding $b was final!`)
-                }
+            m (r(e.getRvalue()), m.lookup(name)) do rhs, b ? (!b.isFinal()) {
+                def binding := makeBinding(rhs, b.getGuard(), false)
+                m (m.modify(fn store {
+                    store.with(name, binding)
+                })) lift { rhs }
             }
         # Layer 3: Scopes.
         match =="HideExpr":
             m.freshScope(r(e.getBody()))
         match =="IfExpr":
-            m.freshScope(m (r(e.getTest())) do test {
-                if (test =~ b :Bool) {
-                    m.freshScope(r(b.pick(e.getThen(), e.getElse())))
-                } else {
-                    m.fail(`Test value $test didn't conform to Bool`)
-                }
+            m.freshScope(m (r(e.getTest())) do test :Bool {
+                m.freshScope(r(test.pick(e.getThen(), e.getElse())))
             })
 
 def main(_argv) as DeepFrozen:
