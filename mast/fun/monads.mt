@@ -307,6 +307,8 @@ def makeBinding(value, guard, isFinal :Bool) as DeepFrozen:
             return def slot.get():
                 return value
 
+object CLOSURE as DeepFrozen {}
+
 def ev(m, ev, e) as DeepFrozen:
     "
     An extensible definitional interpreter for Monte, in operational monad
@@ -319,18 +321,22 @@ def ev(m, ev, e) as DeepFrozen:
     def r(expr):
         return ev(m, ev, expr)
 
+    def setBinding(name, binding):
+        return m.modify(fn store {
+            store.with("&&" + name, binding)
+        })
+
     def matchBind(patt, specimen, _ej):
         return switch (patt.getNodeName()):
             match =="FinalPattern":
                 m (r(patt.getGuard())) do g {
                     def binding := makeBinding(specimen, g, true)
-                    m.modify(fn store {
-                        store.with("&&" + patt.getNoun().getName(), binding)
-                    })
+                    setBinding(patt.getNoun().getName(), binding)
                 }
             match =="VarPattern":
                 m (r(patt.getGuard())) do g {
                     def binding := makeBinding(specimen, g, false)
+                    setBinding(patt.getNoun().getName(), binding)
                     m.modify(fn store {
                         store.with("&&" + patt.getNoun().getName(), binding)
                     })
@@ -372,6 +378,7 @@ def ev(m, ev, e) as DeepFrozen:
             })
         # Layer 4: Calls.
         match =="MethodCallExpr":
+            def verb := e.getVerb()
             m (r(e.getReceiver())) do receiver {
                 def margs := sequence(m, [for arg in (e.getArgs()) r(arg)])
                 m (margs) do args {
@@ -380,11 +387,31 @@ def ev(m, ev, e) as DeepFrozen:
                                       r(narg.getValue())) do k, v {
                                           m.unit([k, v])
                                    }]
-                    m (sequence(m, mnargs)) lift nargs {
+                    m (sequence(m, mnargs)) do nargs {
                         def namedArgs := [for [k, v] in (nargs) k => v]
-                        M.call(receiver, e.getVerb(), args, namedArgs)
+                        if (receiver =~ [==CLOSURE, script, env]) {
+                            # XXX so naïve
+                            def meth := script.getMethodNamed(verb, null)
+                            def mbinds := [for i => param in (meth.getParams()) {
+                                matchBind(param, args[i], null)
+                            }]
+                            m.local(fn _ { env }, m (sequence(m, mbinds)) do {
+                                r(meth.getBody())
+                            })
+                        } else {
+                            m.unit(M.call(receiver, verb, args, namedArgs))
+                        }
                     }
                 }
+            }
+        match =="ObjectExpr":
+            m (m.get(), m.ask()) do store, env {
+                # XXX do auditors here-ish
+                # XXX self
+                def closure := [CLOSURE, e.getScript(), store | env]
+                # XXX change this when doing auditors
+                def b := makeBinding(closure, Any, true)
+                m (matchBind(e.getName(), b, null)) lift { closure }
             }
 
 def main(_argv) as DeepFrozen:
@@ -402,6 +429,10 @@ def main(_argv) as DeepFrozen:
             { def y := 2 }
             if (true) { 2 } else { 3 }
             true.xor(true)
+            object obj {
+                method run(x) { x + 1 }
+            }
+            obj.run(x)
         }`
         def action := ev(om, ev, ast)
         def env := [=> &&true]
