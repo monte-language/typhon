@@ -176,12 +176,44 @@ def flowT(m :DeepFrozen) as DeepFrozen:
                 })
             }
 
+def makeMonadControl(m :DeepFrozen, operator :Str, argArity :Int,
+                     paramArity :Int, block) as DeepFrozen:
+    var action := switch ([operator, argArity, paramArity]) {
+        match ==["do", 1, 1] {
+            def [[value], lambda] := block()
+            m."bind"(value, fn x { lambda(x, null) })
+        }
+        match ==["lift", 1, 1] {
+            def [[value], lambda] := block()
+            m."bind"(value, fn x { m.unit(lambda(x, null)) })
+        }
+    }
+    return object controlFlow:
+        to control(operator :Str, argArity :Int, paramArity :Int, block):
+            def [values, lambda] := block()
+            action := switch ([operator, argArity, paramArity]) {
+                match ==["do", 0, 1] {
+                    m."bind"(action, fn x { lambda(x, null) })
+                }
+                match ==["lift", 0, 1] {
+                    m."bind"(action, fn x { m.unit(lambda(x, null)) })
+                }
+            }
+            return controlFlow
+
+        to controlRun():
+            return action
+
 def operational(m :DeepFrozen) as DeepFrozen:
     "Make a monad fully operational."
 
     return object operationalMonad extends m as DeepFrozen:
         to _printOn(out):
             out.print(`<*($m)>`)
+
+        to control(operator :Str, argArity :Int, paramArity :Int, block):
+            return makeMonadControl(operationalMonad, operator, argArity,
+                                    paramArity, block)
 
         to modify(f):
             return m."bind"(m.get(), fn s { m.put(f(s)) })
@@ -302,6 +334,11 @@ def ev(m, ev, e) as DeepFrozen:
 def main(_argv) as DeepFrozen:
     def f(m, ev):
         def om := operational(m)
+        traceln(`control demo`)
+        def demoAction := om (m.unit(42)) do x { om.unit(x + 1) } lift x {
+            x * 2
+        }
+        traceln(demoAction(null)(null))
         traceln(`Running interpreter $ev on monad $om`)
         # def ast := m`def x := 5; def y := 2; 42; x; y`
         def ast := m`def x := 1; { def y := 2 }; if (true) { 2 } else { 3 }`
