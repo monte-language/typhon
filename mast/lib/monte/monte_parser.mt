@@ -561,7 +561,8 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             [null, null, null]
         }
         acceptEOLs()
-        return if (!indent && peekTag() == "}"):
+        return if ((!indent && peekTag() == "}") ||
+                   (indent && peekTag() == "DEDENT" && doco != null)):
             [doco, builder.SeqExpr(
                 if (doco == null) {[]
                 } else {[builder.LiteralExpr(doco, docoSpan)]}, null)]
