@@ -1211,7 +1211,12 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                         def [args, params] := if (considerTag("(", ej)) {
                             def es := acceptList(expr)
                             acceptTag(")", ej)
-                            [es, []]
+                            if (peekTag != "{") {
+                                # Aw, and it has baby patterns following, too!
+                                [es, acceptList(pattern)]
+                            } else {
+                                [es, []]
+                            }
                         } else {
                             [[], acceptList(pattern)]
                         }

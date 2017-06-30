@@ -271,10 +271,9 @@ bind printerActions :Map[Str, DeepFrozen] := [
                 if (self.getArgs().size() > 0) {
                     printListOn(" (", self.getArgs(), ", ", ")", out,
                                 priorities["braceExpr"])
-                } else {
+                }
                 printListOn(" ", self.getParams(), ", ",
                             "", out, priorities["pattern"])
-                }
             }
         }, self.getBody(), false, out, priorities["braceExpr"])
     },
