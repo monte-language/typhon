@@ -201,13 +201,7 @@ def makeMonadControl(m :DeepFrozen, operator :Str, argArity :Int,
 
     def collect(block, => lift :Bool):
         def [values, lambda] := block()
-        var collector := m.unit([])
-        for value in (values) {
-            collector := m."bind"(collector, fn xs {
-                m."bind"(value, fn v { m.unit(xs.with(v)) })
-            })
-        }
-        return m."bind"(collector, fn xs {
+        return m."bind"(sequence(m, values), fn xs {
             escape ej {
                 def rv := M.call(lambda, "run", xs.with(ej), [].asMap())
                 if (lift) { m.unit(rv) } else { rv }
