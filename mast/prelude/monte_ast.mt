@@ -223,7 +223,8 @@ def makeAstBuilder(description, extraMethodMakers) as DeepFrozenStamp:
                 for constructorName :Str => fields in (constructorGroup):
                     nodeInfo[constructorName] := fields
             def convert(node):
-                def contents := node._uncall()[2]
+                def fullContents := node._uncall()[2]
+                def contents := fullContents.slice(0, fullContents.size() - 1)
                 def convertedContents := [
                     for [_, fieldname] => [arg, guard]
                     in (zip(contents, nodeInfo[node.getNodeName()]))
