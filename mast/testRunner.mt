@@ -132,9 +132,10 @@ def makeAsserter() as DeepFrozen:
                 to throws(f):
                     try:
                         f()
-                        assert.fail("No exception was thrown")
-                    catch _:
+                    catch p:
                         successes += 1
+                        return p
+                    assert.fail("No exception was thrown")
 
                 # These variants wait for their arguments to resolve before
                 # performing their work. As a result, they share the common
