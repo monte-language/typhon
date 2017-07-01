@@ -2,10 +2,10 @@ import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "unittest" =~ [=> unittest]
 exports ()
 
-def lex(s):
+def lex(s, => balanceBraces := true):
     def l := makeMonteLexer(s, "test")
     def toks := [for [tag, data, _ ] in (l) [tag, data]]
-    if ((def err := l.getSyntaxError()) != null):
+    if (balanceBraces && (def err := l.getSyntaxError()) != null):
         throw(err)
     if (toks.size() > 0 && toks.last()[0] == "EOL"):
        return toks.slice(0, toks.size() - 1)
@@ -40,9 +40,9 @@ def test_float(assert):
     assert.equal(lex("3e-2"), [[".float64.", 3e-2]])
 
 def test_holes(assert):
-    assert.equal(lex("${"), [["${", null]])
+    assert.equal(lex("${", "balanceBraces" => false), [["${", null]])
     assert.equal(lex("$blee"), [["DOLLAR_IDENT", "blee"]])
-    assert.equal(lex("@{"), [["@{", null]])
+    assert.equal(lex("@{", "balanceBraces" => false), [["@{", null]])
     assert.equal(lex("@blee"), [["AT_IDENT", "blee"]])
     assert.equal(lex("@_fred"), [["AT_IDENT", "_fred"]])
     assert.equal(lex("@_"), [["AT_IDENT", "_"]])
@@ -79,7 +79,7 @@ def test_plus(assert):
 def test_minus(assert):
     assert.equal(lex("-"), [["-", null]])
     assert.equal(lex("-="), [["-=", null]])
-    assert.equal(lex("-> {"), [["->", null], ["{", null]])
+    assert.equal(lex("-> {", "balanceBraces" => false), [["->", null], ["{", null]])
 
 def test_colon(assert):
     assert.equal(lex(":x"), [[":", null], ["IDENTIFIER", "x"]])

@@ -77,7 +77,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
     })
 
     def makeParseError(error):
-        return object parseError:
+        object parseError:
             to formatCompact():
                 if (error =~ [errMsg, span]):
                     if (span == null):
@@ -124,6 +124,8 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
 
             to _printOn(out):
                 out.print(parseError.formatPretty())
+        errorMessage := parseError
+        return parseError
 
     def atEnd():
         return position == input.size()
