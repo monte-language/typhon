@@ -43,14 +43,14 @@ def allSameLength(iterables) :Bool as DeepFrozen:
             traceln("zip: Couldn't tell size of iterable")
             ej(true)
         }
-    return if (iterables =~ [head] + tail):
+    if (iterables =~ [head] + tail):
         def headSize := trySize(head)
         for t in (tail):
             if (headSize != trySize(t)):
-                break false
-        true
+                return false
+        return true
     else:
-        true
+        return true
 
 object zip as DeepFrozen:
     "
@@ -85,7 +85,7 @@ def testZipLists(assert):
 def testZipListsSameLengthCheck(assert):
     def l := [1, 2, 3, 4, 5]
     def r := [6, 7, 8, 9, 10, 11]
-    assert.throws(fn { _makeList.fromIterable(zip.ragged(l, r)) })
+    assert.throws(fn { _makeList.fromIterable(zip(l, r)) })
 
 def testZipListsRagged(assert):
     def l := [1, 2, 3, 4, 5]
