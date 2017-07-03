@@ -91,6 +91,9 @@ def expand(node, builder, fail) as DeepFrozen:
     def tempNounExpr := builder.TempNounExpr
     def viaPatt := builder.ViaPattern
 
+    def plainPatt(n, span):
+        return builder.FinalPattern(n, null, span)
+
     def nounFromScopeName(n, span):
         if (n =~ _ :Str):
             return nounExpr(n, span)
@@ -949,9 +952,19 @@ def expand(node, builder, fail) as DeepFrozen:
                         if (guard == null) {nounExpr("Any", span)} else {guard}], [], span)
             match =="FunctionExpr":
                 def [patterns, namedPatts, block] := args
+                def out := nounExpr("out", span)
+                def repr := `<fn at $span>`
+                def call := builder.MethodCallExpr(out, "print",
+                                                   [builder.LiteralExpr(repr, span)],
+                                                   [], span)
                 builder.ObjectExpr(null, ignorePatt(null, span), null, [],
                     builder.Script(null,
-                         [builder."Method"(null, "run", patterns, namedPatts, null, block, span)],
+                         [builder."Method"(null, "run", patterns, namedPatts,
+                                           null, block, span),
+                          builder."Method"(null, "_printOn",
+                                           [plainPatt(out, span)], [], null,
+                                           call, span),
+                         ],
                          [],
                          span), span)
             match =="ObjectExpr":
