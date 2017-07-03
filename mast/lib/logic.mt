@@ -7,6 +7,21 @@ exports (logic, main)
 
 # http://homes.soic.indiana.edu/ccshan/logicprog/LogicT-icfp2005.pdf
 
+object state as DeepFrozen:
+    "A state monad."
+
+    to unit(x):
+        return fn s { [x, s] }
+
+    to "bind"(action, f):
+        return fn s { def [a, s2] := action(s); f(a)(s2) }
+
+    to get():
+        return fn s { [s, s] }
+
+    to put(s):
+        return fn _ { [null, s] }
+
 object logic as DeepFrozen:
     "A fair backtracking logic monad."
 
@@ -25,13 +40,15 @@ object logic as DeepFrozen:
         return fn sk { fn fk { left(sk)(right(sk)(fk)) } }
 
     to split(action):
+        def lift(m):
+            return fn sk { fn fk { state."bind"(m, fn a { sk(a)(fk) }) } }
         def reflect(result):
             return if (result =~ [a, act]) {
                 logic.plus(logic.unit(a), act)
             } else { logic.zero() }
         def ssk(a):
-            return fn r { logic.unit([a, logic."bind"(r, reflect)]) }
-        return action(ssk)(logic.unit(null))
+            return fn fk { state.unit([a, logic."bind"(lift(fk), reflect)]) }
+        return lift(action(ssk)(state.unit(null)))
 
     to interleave(left, right):
         return logic."bind"(logic.split(left), fn r {
@@ -63,12 +80,13 @@ object logic as DeepFrozen:
         return logic.ifThen(logic.once(test), fn _ { logic.zero() },
                             logic.unit(null))
 
-    to observe(action, ej):
-        return escape sk:
-            action(sk)(ej)
+    to observe(action, s, ej):
+        return action(fn a { fn fk { state.unit(a) } })(ej)(s)
 
-    to collect(action) :List:
-        return action(fn a { fn l { l.with(a) } })([])
+    to collect(action, s):
+        return action(fn a { fn fk {
+            state."bind"(fk, fn l { state.unit(l.with(a)) })
+        } })(state.unit([]))(s)
 
     to control(operator :Str, argArity :Int, paramArity :Int, block):
         var currentAction := {
@@ -131,7 +149,7 @@ object logic as DeepFrozen:
 
 def whereSanityCheck(hy, x, y):
     def action := logic (logic.unit(x)) where z { z < y }
-    def l := logic.collect(action)
+    def l := logic.collect(action, null)
     # Iff x < y, then z < y too.
     hy.assert(l == (x < y).pick([x], []))
 
@@ -143,6 +161,6 @@ def main(_argv) as DeepFrozen:
     def action := logic (0..10) choose x {
         logic.unit(x * 2)
     } where x :Int { x > 7 }
-    traceln(logic.observe(action, throw))
-    traceln(logic.collect(action))
+    traceln(logic.observe(action, null, throw))
+    traceln(logic.collect(action, null))
     return 0
