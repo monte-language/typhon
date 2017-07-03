@@ -3,15 +3,15 @@ import "tests/proptests" =~ [
     => arb :DeepFrozen,
     => prop :DeepFrozen,
 ]
-exports (main)
+exports (logic, main)
 
 # http://homes.soic.indiana.edu/ccshan/logicprog/LogicT-icfp2005.pdf
 
 object logic as DeepFrozen:
     "A fair backtracking logic monad."
 
-    to run(x):
-        return fn sk { fn fk { sk(x)(fk) } }
+    to unit(x):
+        return fn sk { sk(x) }
 
     to "bind"(action, f):
         # action : (a -> r -> r) -> r -> r
@@ -27,16 +27,16 @@ object logic as DeepFrozen:
     to split(action):
         def reflect(result):
             return if (result =~ [a, act]) {
-                logic.plus(logic(a), act)
+                logic.plus(logic.unit(a), act)
             } else { logic.zero() }
         def ssk(a):
-            return fn r { logic([a, logic."bind"(r, reflect)]) }
-        return action(ssk)(logic(null))
+            return fn r { logic.unit([a, logic."bind"(r, reflect)]) }
+        return action(ssk)(logic.unit(null))
 
     to interleave(left, right):
         return logic."bind"(logic.split(left), fn r {
             if (r =~ [a, act]) {
-                logic.plus(logic(a), logic.interleave(right, act))
+                logic.plus(logic.unit(a), logic.interleave(right, act))
             } else { right }
         })
 
@@ -56,12 +56,12 @@ object logic as DeepFrozen:
 
     to once(action):
         return logic."bind"(logic.split(action), fn r {
-            if (r =~ [a, _act]) { logic(a) } else { logic.zero() }
+            if (r =~ [a, _act]) { logic.unit(a) } else { logic.zero() }
         })
 
     to not(test):
         return logic.ifThen(logic.once(test), fn _ { logic.zero() },
-                            logic(null))
+                            logic.unit(null))
 
     to observe(action, ej):
         return escape sk:
@@ -77,8 +77,8 @@ object logic as DeepFrozen:
                 match ==["choose", 1, 1] {
                     def [iterable] := actions
                     def [head] + tail := [for a in (iterable) a]
-                    var act := logic(head)
-                    for t in (tail) { act := logic.plus(act, logic(t)) }
+                    var act := logic.unit(head)
+                    for t in (tail) { act := logic.plus(act, logic.unit(t)) }
                     logic.">>-"(act, fn a { lambda(a, null) })
                 }
                 match ==["do", 1, 1] {
@@ -90,7 +90,7 @@ object logic as DeepFrozen:
                     logic.">>-"(action, fn a {
                         escape ej {
                             if (lambda(a, ej)) {
-                                logic(a)
+                                logic.unit(a)
                             } else { logic.zero() }
                         } catch _ { logic.zero() }
                     })
@@ -104,8 +104,8 @@ object logic as DeepFrozen:
                     match ==["choose", 1, 1] {
                         def [[iterable], lambda] := block()
                         def [head] + tail := [for a in (iterable) a]
-                        var act := logic(head)
-                        for t in (tail) { act := logic.plus(act, logic(t)) }
+                        var act := logic.unit(head)
+                        for t in (tail) { act := logic.plus(act, logic.unit(t)) }
                         currentAction := logic.">>-"(currentAction, fn _ { act })
                         logic.">>-"(currentAction, fn a { lambda(a, null) })
                     }
@@ -118,7 +118,7 @@ object logic as DeepFrozen:
                         logic.">>-"(currentAction, fn a {
                             escape ej {
                                 if (lambda(a, ej)) {
-                                    logic(a)
+                                    logic.unit(a)
                                 } else { logic.zero() }
                             } catch _ { logic.zero() }
                         })
@@ -130,7 +130,7 @@ object logic as DeepFrozen:
                 return currentAction
 
 def whereSanityCheck(hy, x, y):
-    def action := logic (logic(x)) where z { z < y }
+    def action := logic (logic.unit(x)) where z { z < y }
     def l := logic.collect(action)
     # Iff x < y, then z < y too.
     hy.assert(l == (x < y).pick([x], []))
@@ -141,7 +141,7 @@ unittest([
 
 def main(_argv) as DeepFrozen:
     def action := logic (0..10) choose x {
-        logic(x * 2)
+        logic.unit(x * 2)
     } where x :Int { x > 7 }
     traceln(logic.observe(action, throw))
     traceln(logic.collect(action))
