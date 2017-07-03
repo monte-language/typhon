@@ -215,17 +215,17 @@ def expand(node, builder, fail) as DeepFrozen:
             bindingexprs with= (builder.BindingExpr(noun, span))
 
         return seqExpr([
-            defExpr(builder.FinalPattern(sp, null, span), null, spec, span),
-            defExpr(builder.ListPattern([builder.FinalPattern(result, null, span)] +
+            defExpr(plainPatt(sp, span), null, spec, span),
+            defExpr(builder.ListPattern([plainPatt(result, span)] +
                                         bindingpatts, null, span),
                 null,
                 makeEscapeExpr(
-                    builder.FinalPattern(ejector, null, span),
+                    plainPatt(ejector, span),
                     seqExpr([
                         defExpr(patt, ejector, sp, span),
                         emitList([nounExpr("true", span)] +
                             bindingexprs, span)], span),
-                    builder.FinalPattern(problem, null, span),
+                    plainPatt(problem, span),
                     seqExpr([
                         defExpr(viaPatt(
                             nounExpr("_slotToBinding", span),
@@ -258,7 +258,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 "failureList", [litExpr(exprSize, span)], [], span)
             return seqExpr([
                 defExpr(
-                    builder.ListPattern([builder.FinalPattern(result, null, span)] +
+                    builder.ListPattern([plainPatt(result, span)] +
                         bindingpatts, null, span),
                     null,
                     f(success, failure), span),
@@ -274,8 +274,7 @@ def expand(node, builder, fail) as DeepFrozen:
         def ares := tempNounExpr("ares", span)
         return seqExpr([
             callExpr(rcvr, putVerb(verb, fail, span),
-                margs + [defExpr(builder.FinalPattern(ares,
-                        null, span),
+                margs + [defExpr(plainPatt(ares, span),
                 null, right, span)], [], span),
             ares], span)
 
@@ -287,13 +286,12 @@ def expand(node, builder, fail) as DeepFrozen:
             match =="MethodCallExpr":
                 def [rcvr, methverb, margs, _mnamedargs, lspan] := leftargs
                 def recip := tempNounExpr("recip", lspan)
-                def seq := [defExpr(builder.FinalPattern(recip,
-                                null, lspan),
+                def seq := [defExpr(plainPatt(recip, lspan),
                             null, rcvr, lspan)].diverge()
                 def setArgs := [].diverge()
                 for arg in (margs):
                     def a := tempNounExpr("arg", span)
-                    seq.push(defExpr(builder.FinalPattern(a, null, lspan),
+                    seq.push(defExpr(plainPatt(a, lspan),
                          null, arg, lspan))
                     setArgs.push(a)
                 seq.extend(expandCallAssign([recip, methverb, setArgs.snapshot(), []], callExpr(callExpr(recip, methverb, setArgs.snapshot(), [], span), verb, vargs, [], span), fail, span).getExprs())
@@ -327,15 +325,15 @@ def expand(node, builder, fail) as DeepFrozen:
             def newname := tempNounExpr(oldname, span)
             def newnameR := tempNounExpr(oldname + "R", span)
             renamings[oldname] := newname
-            def pair := [builder.FinalPattern(newname, null, span),
-                         builder.FinalPattern(newnameR, null, span)]
+            def pair := [plainPatt(newname, span),
+                         plainPatt(newnameR, span)]
             promises.push(defExpr(builder.ListPattern(pair, null, span),
                 null, refPromise(span), span))
             resolvers.push(callExpr(newnameR, "resolve",
                  [nounExpr(oldname, span)], [], span))
         def resName := tempNounExpr("value", span)
         resolvers.push(resName)
-        def resPatt := builder.FinalPattern(resName, null, span)
+        def resPatt := plainPatt(resName, span)
         def resDef := defExpr(resPatt, null, makeInnerExpr(renamings), span)
         return seqExpr(promises.snapshot() + [resDef] + resolvers.snapshot(), span)
 
@@ -346,7 +344,7 @@ def expand(node, builder, fail) as DeepFrozen:
             defExpr(builder.BindingPattern(nounExpr("super", span), span), null,
                 builder.BindingExpr(xtends, span), span)
         } else {
-            defExpr(builder.FinalPattern(nounExpr("super", span), null, span), null, renameCycles(xtends, renamings), span)
+            defExpr(plainPatt(nounExpr("super", span), span), null, renameCycles(xtends, renamings), span)
         }
 
         # We need to get the result of the asExpr into the guard for the
@@ -357,21 +355,21 @@ def expand(node, builder, fail) as DeepFrozen:
         if (asExpr == null):
             return defExpr(name, null, builder.HideExpr(seqExpr([superExpr,
                 builder.ObjectExpr(doco, name, null, auditors, builder.Script(null, methods,
-                    matchers + [builder.Matcher(builder.FinalPattern(p, null, span),
+                    matchers + [builder.Matcher(plainPatt(p, span),
                          callExpr(nounExpr("M", span), "callWithMessage",
                               [nounExpr("super", span), p], [], span), span)], span), span)], span),
                 span), span)
         else if (asExpr.getNodeName() == "NounExpr"):
             return defExpr(name.withGuard(asExpr), null, builder.HideExpr(seqExpr([superExpr,
                 builder.ObjectExpr(doco, name, asExpr, auditors, builder.Script(null, methods,
-                    matchers + [builder.Matcher(builder.FinalPattern(p, null, span),
+                    matchers + [builder.Matcher(plainPatt(p, span),
                          callExpr(nounExpr("M", span), "callWithMessage",
                               [nounExpr("super", span), p], [], span), span)], span), span)], span),
                 span), span)
         else:
             def auditorNoun := tempNounExpr("auditor", span)
-            def auditorExpr := defExpr(builder.FinalPattern(auditorNoun, null, span),
-                                               null, asExpr, span)
+            def auditorExpr := defExpr(plainPatt(auditorNoun, span),
+                                       null, asExpr, span)
             # The auditorExpr must be evaluated early enough to be used as the
             # definition guard. Unfortunately, I cannot think of any simple
             # nor convoluted way to evaluate the superExpr first while still
@@ -379,7 +377,7 @@ def expand(node, builder, fail) as DeepFrozen:
             return builder.HideExpr(seqExpr([auditorExpr,
                 defExpr(name.withGuard(auditorNoun), null, builder.HideExpr(seqExpr([superExpr,
                     builder.ObjectExpr(doco, name, auditorNoun, auditors, builder.Script(null, methods,
-                        matchers + [builder.Matcher(builder.FinalPattern(p, null, span),
+                        matchers + [builder.Matcher(plainPatt(p, span),
                              callExpr(nounExpr("M", span), "callWithMessage",
                                   [nounExpr("super", span), p], [], span), span)], span), span)], span),
                     span), span)], span), span)
@@ -454,8 +452,8 @@ def expand(node, builder, fail) as DeepFrozen:
             def kTemp := tempNounExpr("key", span)
             def vTemp := tempNounExpr("value", span)
             [
-                [builder.FinalPattern(kTemp, null, span),
-                 builder.FinalPattern(vTemp, null, span)],
+                [plainPatt(kTemp, span),
+                 plainPatt(vTemp, span)],
                 [defExpr(key, null, kTemp, span),
                  defExpr(value, null, vTemp, span)],
             ]
@@ -463,7 +461,7 @@ def expand(node, builder, fail) as DeepFrozen:
             # Irrefutable key, refutable value. Split the difference.
             def vTemp := tempNounExpr("value", span)
             [
-                [key, builder.FinalPattern(vTemp, null, span)],
+                [key, plainPatt(vTemp, span)],
                 [defExpr(value, null, vTemp, span)],
             ]
         } else {
@@ -478,7 +476,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 [builder."Method"(null, "run", patts, [], null,
                 seqExpr([
                     makeEscapeExpr(
-                        builder.FinalPattern(nounExpr("__continue", span), null, span),
+                        plainPatt(nounExpr("__continue", span), span),
                         seqExpr(defs + [
                             block,
                             nounExpr("null", span)
@@ -487,7 +485,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 ], span), span)],
             [], span), span)
         return makeEscapeExpr(
-            builder.FinalPattern(nounExpr("__break", span), null, span),
+            plainPatt(nounExpr("__break", span), span),
             seqExpr([
                 callExpr(nounExpr("_loop", span),
                          "run", [coll, obj], [], span),
@@ -507,8 +505,8 @@ def expand(node, builder, fail) as DeepFrozen:
             def kTemp := tempNounExpr("key", span)
             def vTemp := tempNounExpr("value", span)
             [
-                [builder.FinalPattern(kTemp, null, span),
-                 builder.FinalPattern(vTemp, null, span)],
+                [plainPatt(kTemp, span),
+                 plainPatt(vTemp, span)],
                 [defExpr(key, null, kTemp, span),
                  defExpr(value, null, vTemp, span)],
             ]
@@ -516,7 +514,7 @@ def expand(node, builder, fail) as DeepFrozen:
             # Irrefutable key, refutable value. Split the difference.
             def vTemp := tempNounExpr("value", span)
             [
-                [key, builder.FinalPattern(vTemp, null, span)],
+                [key, plainPatt(vTemp, span)],
                 [defExpr(value, null, vTemp, span)],
             ]
         } else {
@@ -529,7 +527,7 @@ def expand(node, builder, fail) as DeepFrozen:
         def [skipPatt, maybeFilterExpr] := if (filter != null) {
             def skip := tempNounExpr("skip", span)
             [
-                builder.FinalPattern(skip, null, span),
+                plainPatt(skip, span),
                 builder.IfExpr(filter, exp,
                     callExpr(skip, "run", [], [], span), span),
             ]
@@ -656,8 +654,8 @@ def expand(node, builder, fail) as DeepFrozen:
                     nounExpr("DeepFrozen", span), [],
                     builder.Script(null,
                          [builder."Method"(null, "run",
-                                           [builder.FinalPattern(pkg, null,
-                                           span)], [], DFMap, runBody, span),
+                                           [plainPatt(pkg, span)], [], DFMap,
+                                           runBody, span),
                           dependenciesMethod],
                          [], span), span)
             match =="SeqExpr":
@@ -700,9 +698,9 @@ def expand(node, builder, fail) as DeepFrozen:
                     }
                 def fnEj := tempNounExpr("ej", span)
                 def tempNouns := [for _ in (params) tempNounExpr("p", span)]
-                def ejPatt := builder.FinalPattern(fnEj, null, span)
+                def ejPatt := plainPatt(fnEj, span)
                 def tempPatts := [for n in (tempNouns)
-                                  builder.FinalPattern(n, null, span)]
+                                  plainPatt(n, span)]
                 def emitPattsIn():
                     return if (params.size() > 0) {
                             tempPatts + [ejPatt]
@@ -826,7 +824,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 def rname := nounExpr(patt.getNoun().getName() + "_Resolver", span)
                 seqExpr([
                     defExpr(builder.ListPattern([patt,
-                            builder.FinalPattern(rname, null, span)], null,
+                            plainPatt(rname, span)], null,
                             span),
                         null, refPromise(span), span), rname], span)
             match =="AssignExpr":
@@ -971,7 +969,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 def [doco, patt, asExpr, auditors, script] := args
                 switch (node.getName().getNodeName()):
                     match =="BindPattern":
-                        def name := builder.FinalPattern(node.getName().getNoun(), null, span)
+                        def name := plainPatt(node.getName().getNoun(), span)
                         def o := expandObject(doco, name, asExpr, auditors, script, span)
                         defExpr(patt, null, builder.HideExpr(o, span), span)
                     match =="FinalPattern":
@@ -986,13 +984,13 @@ def expand(node, builder, fail) as DeepFrozen:
             match =="FunctionScript":
                 def [verb, params, namedParams, guard, block] := args
                 [null, [builder."Method"(null, verb, params, namedParams, guard,
-                    makeEscapeExpr(builder.FinalPattern(nounExpr("__return", span), null, span),
+                    makeEscapeExpr(plainPatt(nounExpr("__return", span), span),
                         seqExpr([block, nounExpr("null", span)], span), null, null, span),
                             span)], []]
             match =="To":
                 def [doco, verb, params, namedParams, guard, block] := args
                 builder."Method"(doco, verb, params, namedParams, guard,
-                    makeEscapeExpr(builder.FinalPattern(nounExpr("__return", span), null, span),
+                    makeEscapeExpr(plainPatt(nounExpr("__return", span), span),
                         seqExpr([block, nounExpr("null", span)], span), null, null, span),
                             span)
             match =="Method":
@@ -1034,14 +1032,14 @@ def expand(node, builder, fail) as DeepFrozen:
                     [sp] + failures, [], span)
                 for [m, fail, ej] in (reversed(zip(matchers, failures, ejs))):
                     block := makeEscapeExpr(
-                        builder.FinalPattern(ej, null, span),
+                        plainPatt(ej, span),
                         seqExpr([
                             defExpr(m.getPattern(), ej, sp, span),
                             m.getBody()], span),
-                        builder.FinalPattern(fail, null, span),
+                        plainPatt(fail, span),
                         block, span)
                 builder.HideExpr(seqExpr([
-                    defExpr(builder.FinalPattern(sp, null, span), null, expr, span),
+                    defExpr(plainPatt(sp, span), null, expr, span),
                     block], span), span)
             match =="TryExpr":
                 def [tryblock, catchers, finallyblock] := args
@@ -1054,7 +1052,7 @@ def expand(node, builder, fail) as DeepFrozen:
             match =="WhileExpr":
                 def [test, block, catcher] := args
                 makeEscapeExpr(
-                    builder.FinalPattern(nounExpr("__break", span), null, span),
+                    plainPatt(nounExpr("__break", span), span),
                         callExpr(nounExpr("_loop", span), "run",
                             [nounExpr("_iterForever", span),
                              builder.ObjectExpr(null, ignorePatt(null, span), null, [],
@@ -1068,9 +1066,9 @@ def expand(node, builder, fail) as DeepFrozen:
                                                  test,
                                                  seqExpr([
                                                      makeEscapeExpr(
-                                                         builder.FinalPattern(
+                                                         plainPatt(
                                                              nounExpr("__continue", span),
-                                                             null, span),
+                                                             span),
                                                          block, null, null, span),
                                                      nounExpr("true", span)],
                                                 span), callExpr(nounExpr("__break", span), "run", [], [], span), span), span)],
@@ -1096,7 +1094,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 def wr := callExpr(nounExpr("Ref", span),
                     "whenResolved", [expr,
                                      makeFn("when-catch 'done' function",
-                                            [builder.FinalPattern(resolution, null, span)],
+                                            [plainPatt(resolution, span)],
                                             whenblock,
                                             expr.getSpan())], [], span)
                 def prob2 := tempNounExpr("problem", span)
@@ -1106,7 +1104,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 for cat in (catchers):
                     def fail := tempNounExpr("fail", cat.getSpan())
                     handler := makeEscapeExpr(
-                        builder.FinalPattern(fail, null, cat.getSpan()),
+                        plainPatt(fail, cat.getSpan()),
                         seqExpr([
                             defExpr(cat.getPattern(),
                                             fail,
@@ -1118,10 +1116,10 @@ def expand(node, builder, fail) as DeepFrozen:
                         nounExpr("Ref", span), "whenBroken", [
                             wr, makeFn(
                                 "when-catch 'catch' function",
-                                [builder.FinalPattern(broken, null, span)],
+                                [plainPatt(broken, span)],
                                 seqExpr([
                                     defExpr(
-                                        builder.FinalPattern(prob2, null, span),
+                                        plainPatt(prob2, span),
                                         null,
                                         callExpr(
                                             nounExpr("Ref", span), "optProblem",
