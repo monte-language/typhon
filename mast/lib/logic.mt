@@ -37,10 +37,16 @@ def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
 
         to unify(u, v) :NullOk[Any]:
             def rv := switch ([state.walk(u), state.walk(v)]) {
-                match [[==VARS, x], [==VARS, y]] ? (x == y) {state}
-                match [[==VARS, x], y] {makeState([x => y] | s, c)}
-                match [x, [==VARS, y]] {makeState([y => x] | s, c)}
-                match [x, y] {if (x == y) {state}}
+                match [[==VARS, x], [==VARS, y]] ? (x == y) { state }
+                match [[==VARS, x], y] { makeState([x => y] | s, c) }
+                match [x, [==VARS, y]] { makeState([y => x] | s, c) }
+                match [[x] + xs, [y] + ys] {
+                    # Note that this only works when input lists are converted
+                    # to be Scheme-style.
+                    def s := state.unify(x, y)
+                    if (s != null) { s.unify(xs, ys) } else { null }
+                }
+                match [x, y] { if (x == y) { state } }
             }
             traceln(`Unify: $u ≡ $v in $s: $rv`)
             return rv
@@ -136,10 +142,40 @@ object logic as DeepFrozen:
     to new():
         return logic.unit(makeState([].asMap(), 0))
 
+    to exists(size :Int, lambda):
+        return def exists(var s):
+            def vs := [].diverge()
+            for _ in (0..!size) {
+                def [sc, v] := s.fresh()
+                s := sc
+                vs.push(v)
+            }
+            var acc := logic.unit(s)
+            def rv := M.call(lambda, "run", vs.snapshot(),
+                             [].asMap())
+            if (rv =~ clauses :List) {
+                for clause in (clauses) {
+                    acc := logic.">>-"(acc, clause)
+                }
+            } else { acc := logic.">>-"(acc, rv) }
+            return acc
+
     to "≡"(u, v):
         return def unify(s):
             def sc := s.unify(u, v)
             return if (sc == null) { logic.zero() } else { logic.unit(sc) }
+
+    to cond(branches :List):
+        return def conde(s):
+            def root := logic.unit(s)
+            def [var rv] + tail := [for branch in (branches) {
+                var a := root
+                for twig in (branch) { a := logic.">>-"(a, twig) }
+                a
+            }]
+            for t in (tail):
+                rv := logic.interleave(rv, t)
+            return rv
 
     # The controller.
 
@@ -157,7 +193,9 @@ object logic as DeepFrozen:
                             vs.push(v)
                         }
                         var acc := logic.unit(s)
-                        vs.push(null)
+                        # If we have more than one input, then we need an
+                        # ejector.
+                        if (size > 0) { vs.push(null) }
                         def rv := M.call(lambda, "run", vs.snapshot(),
                                          [].asMap())
                         if (rv =~ clauses :List) {
@@ -184,7 +222,9 @@ object logic as DeepFrozen:
                                 vs.push(v)
                             }
                             var acc := logic.unit(s)
-                            vs.push(null)
+                            # If we have more than one input, then we need an
+                            # ejector.
+                            if (size > 0) { vs.push(null) }
                             def rv := M.call(lambda, "run", vs.snapshot(),
                                              [].asMap())
                             if (rv =~ clauses :List) {
@@ -201,11 +241,38 @@ object logic as DeepFrozen:
             to controlRun():
                 return currentAction
 
-def main(_argv) as DeepFrozen:
-    def action := logic (logic.new()) exists b, c {[
-        logic."≡"(b, true),
-        logic."≡"(b, c),
-    ]} exists i { logic."≡"(i, 5) }
+def ::"append⁰"(l, s, out) as DeepFrozen:
+    return def append(state):
+        return logic.">>-"(logic.unit(state), logic.cond([
+            [logic."≡"(l, []), logic."≡"(s, out)],
+            [logic.exists(2, fn a, d {[
+                logic."≡"([a, d], l),
+                logic.exists(1, fn res {[
+                    logic."≡"([a, res], out), ::"append⁰"(d, s, res),
+                 ]}),
+             ]})],
+        ]))
+
+def demoAction(action) as DeepFrozen:
     traceln(logic.observe(action, null))
     traceln(logic.collect(action))
+
+def nest(l :List) :List as DeepFrozen:
+    return switch (l):
+        match []:
+            return []
+        match [x] + xs:
+            return [x, nest(xs)]
+
+def main(_argv) as DeepFrozen:
+    demoAction(logic (logic.new()) exists b, c {[
+        logic."≡"(b, true),
+        logic."≡"(b, c),
+    ]} exists i { logic."≡"(i, 5) })
+    # any⁰.
+    demoAction(logic (logic.new()) exists { logic."≡"(null, null) })
+    # append⁰.
+    demoAction(logic (logic.new()) exists s {
+        ::"append⁰"(nest([1]), s, nest([1, 2, 3]))
+    })
     return 0
