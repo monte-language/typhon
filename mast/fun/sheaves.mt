@@ -1,3 +1,4 @@
+import "lib/iterators" =~ [=> zip :DeepFrozen]
 import "lib/uKanren" =~ [=> anyValue :DeepFrozen, => kanren :DeepFrozen]
 exports (main)
 
@@ -60,6 +61,9 @@ def countEdge(b :Set, a :Set ? (a.size() + 1 == b.size())) :Int as DeepFrozen:
 
 def makeSection(vertices :Map, consistency :Map, assignments :Map) as DeepFrozen:
     return object section as Section:
+        to _printOn(out):
+            out.print(`<section($assignments)>`)
+
         to isGlobal() :Bool:
             return assignments.size() == vertices.size()
 
@@ -67,12 +71,17 @@ def makeSection(vertices :Map, consistency :Map, assignments :Map) as DeepFrozen
             return section.extending(extension, null)
 
         to extending(extension :Map, ej) :Section:
+            def iter := section.extensions(extension)
+            for s in (iter):
+                return s
+            throw.eject(ej, `.extending/2: Couldn't extend with $extension`)
+
+        to extensions(extension :Map):
+            "Create an iterable exploration of the possible extensions."
+
             # Set up the full map of vertices to check.
             def fullSection := assignments | extension
             def index := [for i => v in (vertices.getKeys()) v => i]
-
-            # XXX
-            anyValue
 
             # Define the top-level program. It contains each piece of the
             # consistency structure as a subgoal, and also performs the
@@ -86,10 +95,17 @@ def makeSection(vertices :Map, consistency :Map, assignments :Map) as DeepFrozen
                         M.call(goalMaker, "run", swizzle, [].asMap())
                     }])
             def program := kanren.fresh(topLevel, vertices.size())
-            if (kanren.satisfiable(program)):
-                return makeSection(vertices, consistency, extension)
-            else:
-                throw.eject(ej, `.extending/2: Couldn't extend with $extension`)
+            def iterable := kanren.asIterable(program)
+            return def extensionIterable._makeIterator():
+                def it := iterable._makeIterator()
+                return def extensionIterator.next(ej):
+                    def [k, v] := it.next(ej)
+                    def impliedSection := [for [vertex, value]
+                                           in (zip.ragged(vertices.getKeys(), v))
+                                           ? (value != anyValue)
+                                           vertex => value]
+                    return [k, makeSection(vertices, consistency,
+                                           impliedSection)]
 
         to get(vertex):
             return assignments[vertex]
@@ -211,7 +227,15 @@ def main(_) as DeepFrozen:
     def fullAdderSheaf := fullAdderASC.sheaf([
         ["A", "B", "Cin", "Cout", "S"].asSet() => fullAdder,
     ])
-    def addsToThree := ["Cout" => true, "S" => true]
+    {
+        def addsToThree := ["Cout" => true, "S" => true]
+        def section := fullAdderSheaf.emptySection()
+        for s in (section.extensions(addsToThree)) {
+            traceln("Section adds to three:", s)
+        }
+    }
+    def addsToTwo := ["Cout" => true, "S" => false]
     def section := fullAdderSheaf.emptySection()
-    traceln("What section adds to three:", section.extendTo(addsToThree))
+    for s in (section.extensions(addsToTwo)):
+        traceln("Section adds to two:", s)
     return 0
