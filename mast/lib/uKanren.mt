@@ -56,7 +56,7 @@ def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
                 }
                 match [x, y] { if (x == y) { state } }
             }
-            traceln(`Unify: $u ≡ $v in $s: $rv`)
+            # traceln(`Unify: $u ≡ $v in $s: $rv`)
             return rv
 
 # NB: Streams can be null, which is the zero, a pair of [result, stream], or a
@@ -175,7 +175,7 @@ object kanren as DeepFrozen:
             def nextState(ej):
                 while (true):
                     switch (results) {
-                        match [] { ej(`No more states`) }
+                        match ==null { throw.eject(ej, `No more states`) }
                         match [x, f] { results := f; return x }
                         match f { results := f() }
                     }
