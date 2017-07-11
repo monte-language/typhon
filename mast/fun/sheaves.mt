@@ -1,17 +1,28 @@
+import "lib/uKanren" =~ [=> anyValue :DeepFrozen, => kanren :DeepFrozen]
 exports (main)
+
+interface Section :DeepFrozen:
+    to isGlobal() :Bool:
+        "Whether this section is defined everywhere."
+
+    to extendTo(assignments :Map) :Section:
+        "
+        Extend this section to also have the given values at the given
+        vertices.
+        "
+
+    to extending(assignments :Map, ej) :Section:
+        "Attempt an extension."
+
+    to get(assignment):
+        "Look up `assignment` in this section."
 
 interface Sheaf :DeepFrozen:
     to stalkAt(u :Set) :Set:
         "The stalk of this sheaf in the neighborhood of `u`."
 
-    to sectionAt(assignment :Map[Set, Any], ej) :Map[Set, Any]:
-        "
-        Validate and complete a section with a given `assignment` of values
-        to subsets of this sheaf.
-        "
-
-    to restriction(u :Set, v :Set) :Map:
-        "The restriction map from `u` to `v`."
+    to emptySection() :Section:
+        "The unique section which has no assignments."
 
 def union(sets :List[Set]) :Set as DeepFrozen:
     var rv := [].asSet()
@@ -47,6 +58,42 @@ def countEdge(b :Set, a :Set ? (a.size() + 1 == b.size())) :Int as DeepFrozen:
         }
     } else { 0 }
 
+def makeSection(vertices :Map, consistency :Map, assignments :Map) as DeepFrozen:
+    return object section as Section:
+        to isGlobal() :Bool:
+            return assignments.size() == vertices.size()
+
+        to extendTo(extension :Map) :Section:
+            return section.extending(extension, null)
+
+        to extending(extension :Map, ej) :Section:
+            # Set up the full map of vertices to check.
+            def fullSection := assignments | extension
+            def index := [for i => v in (vertices.getKeys()) v => i]
+
+            # XXX
+            anyValue
+
+            # Define the top-level program. It contains each piece of the
+            # consistency structure as a subgoal, and also performs the
+            # initial assignments.
+            object topLevel:
+                match [=="run", vars, _]:
+                    kanren.allOf([for v => value in (fullSection) {
+                        kanren.unify(vars[index[v]], value)
+                    }] + [for vs => goalMaker in (consistency) {
+                        def swizzle := [for v in (vs) vars[index[v]]]
+                        M.call(goalMaker, "run", swizzle, [].asMap())
+                    }])
+            def program := kanren.fresh(topLevel, vertices.size())
+            if (kanren.satisfiable(program)):
+                return makeSection(vertices, consistency, extension)
+            else:
+                throw.eject(ej, `.extending/2: Couldn't extend with $extension`)
+
+        to get(vertex):
+            return assignments[vertex]
+
 def makeASC(vertices :Map, facets :Set) as DeepFrozen:
     def space :Set := {
         var rv := facets.asSet()
@@ -71,32 +118,6 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
         rv
     }
     # traceln(`space $space`)
-    def restrictions :Map[Pair[Set, Set], Any] := {
-        # NB: Can't have subsets of singleton sets.
-        def m := [for u in (space) ? (u.size() > 1) u => {
-            def positions := [for i => x in (u) x => i]
-            def patt := astBuilder.ListPattern([for i => _x in (u) {
-                # XXX need to get the guards from `vertices` into here
-                # somehow.
-                astBuilder.FinalPattern(astBuilder.NounExpr(`x$i`, null),
-                                        null, null)
-            }], null, null)
-            [for v in (space) ? (v <= u) v => {
-                def body := astBuilder.ListExpr([for x in (v) {
-                    astBuilder.NounExpr(`x${positions[x]}`, null)
-                }], null)
-                eval(m`fn $patt { $body }`.expand(), safeScope)
-            }]
-        }]
-        def rv := [].asMap().diverge()
-        for u => vs in (m) {
-            for v => res in (vs) {
-                rv[[u, v]] := res
-            }
-        }
-        rv.snapshot()
-    }
-    # traceln(`restrictions $restrictions`)
     return object abstractSimplicialComplex:
         to vertices():
             return vertices
@@ -113,7 +134,13 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
         to flabbySheaf():
             return abstractSimplicialComplex.sheaf([].asMap())
 
-        to sheaf(consistency :Map[Set, Any]):
+        to sheaf(consistency :Map):
+            "
+            Build a sheaf according to a `consistency` structure.
+
+            Keys are sets of vertices and values are kanren goals.
+            "
+
             return object abstractSheaf as Sheaf:
                 to vertices():
                     return abstractSimplicialComplex.vertices()
@@ -121,23 +148,8 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
                 to stalkAt(u :Set):
                     return [for x in (u) vertices[x]]
 
-                to sectionAt(assignment :Map, ej) :Map:
-                    def fullSection := [].asMap().diverge()
-                    # For all sets in the space, if they are fully specified
-                    # by the given section, then check their consistency and
-                    # then include them.
-                    for s in (space):
-                        def section := [for x in (s)
-                                        assignment.fetch(x, __continue)]
-                        if (consistency.contains(s)):
-                            def con := consistency[s]
-                            if (!M.call(con, "run", section, [].asMap())):
-                                continue
-                        fullSection[s] := section
-                    return fullSection.snapshot()
-
-                to restriction(u :Set, v :Set):
-                    return restrictions[[u, v]]
+                to emptySection() :Section:
+                    return makeSection(vertices, consistency, [].asMap())
 
 def possibilities(guard) as DeepFrozen:
     return switch (guard):
@@ -165,69 +177,41 @@ def largestSectionAt(sheaf, assignment, ej) as DeepFrozen:
     return largest
 
 def main(_) as DeepFrozen:
-    def asc := makeASC([for x in ([1, 2, 3, 4, 5]) x => Int], [
-        [1, 2].asSet(),
-        [1, 3].asSet(),
-        [3, 4].asSet(),
-        [2, 3, 5].asSet(),
-    ].asSet())
-    traceln(`Euler: ${asc.eulerCharacteristic()}`)
-    traceln(asc.star([3].asSet()))
-    traceln(asc.star([2].asSet()))
-
-    def sheaf := asc.flabbySheaf()
-    traceln(sheaf)
-    traceln(sheaf.stalkAt([2, 3, 5].asSet()))
-    traceln(sheaf.sectionAt([1 => 1], null))
-    traceln(sheaf.sectionAt([
-        1 => 1,
-        2 => 2,
-    ], null))
-
-    def simpleXorASC := makeASC([for x in (['x', 'y', 'z', 'w']) x => Bool], [
-        # x ^ y == z
-        ['x', 'y', 'z'].asSet(),
-        # x ^ z == w
-        ['x', 'z', 'w'].asSet(),
-    ].asSet())
-    def xorCheck(in0 :Bool, in1 :Bool, out :Bool) :Bool:
-        # Check the truth table, yo.
-        return in0 ^ in1 ^ !out
-    def simpleXorSheaf := simpleXorASC.sheaf([
-        ['x', 'y', 'z'].asSet() => xorCheck,
-        ['x', 'z', 'w'].asSet() => xorCheck,
+    def and := kanren.table([
+        [false, false, false],
+        [true, false, false],
+        [false, true, false],
+        [true, true, true],
     ])
-    def incorrect := [
-        'x' => false,
-        'y' => false,
-        'z' => true,
-    ]
-    traceln("Incorrect section", simpleXorSheaf.sectionAt(incorrect, null))
-    traceln("Largest incorrect", largestSectionAt(simpleXorSheaf, incorrect,
-                                                  null))
-    def correct := [
-        'x' => true,
-        'y' => false,
-        'z' => true,
-    ]
-    traceln("Correct section", simpleXorSheaf.sectionAt(correct, null))
-    traceln("Largest correct", largestSectionAt(simpleXorSheaf, correct,
-                                                null))
-
-    def fullAdder := makeASC([for x in (["A", "B", "Cin", "Cout", "S"]) x => Bool], [
-        # S == A ^ B ^ Cin
-        ["S", "A", "B", "Cin"].asSet(),
-        # Cout == (A * B) + (Cin * (A ^ B))
-        ["Cout", "A", "B", "Cin"].asSet(),
-    ].asSet())
-    def fullAdderSheaf := fullAdder.sheaf([
-        ["S", "A", "B", "Cin"].asSet() => fn s, a, b, cin { !s ^ a ^ b ^ cin },
-        ["Cout", "A", "B", "Cin"].asSet() => fn cout, a, b, cin {
-            !cout ^ ((a & b) | (cin & (a ^ b)))
-        },
+    def xor := kanren.table([
+        [false, false, false],
+        [true, false, true],
+        [false, true, true],
+        [true, true, false],
+    ])
+    def or := kanren.table([
+        [false, false, false],
+        [true, false, true],
+        [false, true, true],
+        [true, true, true],
+    ])
+    def halfAdder(a, b, s, c):
+        return kanren.allOf([xor(a, b, s), and(a, b, c)])
+    def fullAdder(a, b, cin, cout, s):
+        return kanren.fresh(fn firstSum, firstCarry, secondCarry {
+            kanren.allOf([
+                halfAdder(a, b, firstSum, firstCarry),
+                halfAdder(firstSum, cin, s, secondCarry),
+                or(firstCarry, secondCarry, cout),
+            ])
+        }, 3)
+    def fullAdderASC := makeASC([for x in (["A", "B", "Cin", "Cout", "S"])
+                                 x => Bool],
+                                [].asSet())
+    def fullAdderSheaf := fullAdderASC.sheaf([
+        ["A", "B", "Cin", "Cout", "S"].asSet() => fullAdder,
     ])
     def addsToThree := ["Cout" => true, "S" => true]
-    traceln("What section adds to three:",
-            largestSectionAt(fullAdderSheaf, addsToThree, null))
-
+    def section := fullAdderSheaf.emptySection()
+    traceln("What section adds to three:", section.extendTo(addsToThree))
     return 0
