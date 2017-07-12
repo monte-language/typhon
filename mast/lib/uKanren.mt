@@ -199,13 +199,50 @@ object kanren as DeepFrozen:
                 i += 1
                 return rv
 
+    # Controller.
+
+    to control(operator :Str, argArity :Int, paramArity :Int, block):
+        "Build goals incrementally."
+
+        def buildGoal(config, block):
+            def [args, lambda] := block()
+            return switch (config) {
+                match [=="exists", ==0, count :(Int > 0)] {
+                    kanren.fresh(object addEjector {
+                        match [=="run", vars, _] {
+                            M.call(lambda, "run", vars + [null], [].asMap())
+                        }
+                    }, count)
+                }
+                match ==["forAll", 1, 1] {
+                    def [iterable] := args
+                    kanren.allOf([for v in (iterable) lambda(v, null)])
+                }
+                match ==["forAll", 1, 2] {
+                    def [iterable] := args
+                    kanren.allOf([for k => v in (iterable) lambda(k, v, null)])
+                }
+            }
+
+        var g := buildGoal([operator, argArity, paramArity], block)
+
+        return object kanrenController:
+            to control(operator :Str, argArity :Int, paramArity :Int, block):
+                def nextGoal := buildGoal([operator, argArity, paramArity],
+                                          block)
+                g := conj(g, nextGoal)
+                return kanrenController
+
+            to controlRun():
+                return g
+
 def testSingleUnify(hy, i):
-    def g := kanren.fresh(fn v { kanren.unify(v, i) }, 1)
+    def g := kanren () exists v { kanren.unify(v, i) }
     def l := _makeList.fromIterable(kanren.asIterable(g))
     hy.assert(l == [[i]])
 
 def testTransparentMapUnify(hy, i, j):
-    def g := kanren.fresh(fn k, v { kanren.unify([k => v], [i => j])}, 2)
+    def g := kanren () exists k, v { kanren.unify([k => v], [i => j]) }
     def l := _makeList.fromIterable(kanren.asIterable(g))
     hy.assert(l == [[i, j]])
 
