@@ -15,6 +15,7 @@ import "lib/monte/meta" =~ _
 import "lib/parsers/html" =~ _
 import "lib/record" =~ _
 import "lib/streams" =~ _
+import "lib/uKanren" =~ _
 import "lib/words" =~ _
 import "tests/auditors" =~ _
 import "tests/b" =~ _

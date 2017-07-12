@@ -1,3 +1,8 @@
+import "unittest" =~ [=> unittest]
+import "tests/proptests" =~ [
+    => arb :DeepFrozen,
+    => prop :DeepFrozen,
+]
 exports (anyValue, kanren)
 "µKanren."
 
@@ -185,3 +190,12 @@ object kanren as DeepFrozen:
                 def rv := [i, state.reifyAll()]
                 i += 1
                 return rv
+
+def testSingleUnify(hy, i):
+    def g := kanren.fresh(fn v { kanren.unify(v, i) }, 1)
+    def l := _makeList.fromIterable(kanren.asIterable(g))
+    hy.assert(l == [[i]])
+
+unittest([
+    prop.test([arb.Int()], testSingleUnify),
+])
