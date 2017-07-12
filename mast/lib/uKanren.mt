@@ -9,6 +9,9 @@ exports (anyValue, kanren)
 object VARS as DeepFrozen:
     "Variables are tagged with this object."
 
+object PORTRAYAL as DeepFrozen:
+    "Transparent uncalls are tagged with this object."
+
 object anyValue as DeepFrozen:
     "This is not a concrete value."
 
@@ -22,12 +25,6 @@ def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
             out.print(pairs)
             out.print(")")
 
-        to get(key :Int):
-            return s[key]
-
-        to reify(key :Int):
-            return state.walk(s[key])
-
         to reifyAll() :List:
             "
             A list of all reified values, indexed by variable.
@@ -38,8 +35,14 @@ def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
 
             # XXX this logic will change when we introduce constraints.
             return [for i in (0..!c) if (s.contains(i)) {
-                def rv := state.walk(s[i])
-                if (rv =~ [==VARS, _]) { anyValue } else { rv }
+                switch (state.walk(s[i])) {
+                    match [==VARS, _] { anyValue }
+                    # Rebuild any portrayed objects.
+                    match [==PORTRAYAL, target, verb, args, namedArgs] {
+                        M.call(target, verb, args, namedArgs)
+                    }
+                    match rv { rv }
+                }
             } else { anyValue }]
 
         to fresh():
@@ -59,7 +62,12 @@ def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
                     def s := state.unify(x, y)
                     if (s == null) { s } else { s.unify(xs, ys) }
                 }
-                match [x, y] { if (x == y) { state } }
+                match [x, ==x] { state }
+                match [x :Transparent, y :Transparent] {
+                    def l := [PORTRAYAL]
+                    state.unify(l + x._uncall(), l + y._uncall())
+                }
+                match _ { null }
             }
             # traceln(`Unify: $u ≡ $v in $s: $rv`)
             return rv
@@ -196,6 +204,12 @@ def testSingleUnify(hy, i):
     def l := _makeList.fromIterable(kanren.asIterable(g))
     hy.assert(l == [[i]])
 
+def testTransparentMapUnify(hy, i, j):
+    def g := kanren.fresh(fn k, v { kanren.unify([k => v], [i => j])}, 2)
+    def l := _makeList.fromIterable(kanren.asIterable(g))
+    hy.assert(l == [[i, j]])
+
 unittest([
     prop.test([arb.Int()], testSingleUnify),
+    prop.test([arb.Int(), arb.Int()], testTransparentMapUnify),
 ])
