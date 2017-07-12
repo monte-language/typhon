@@ -167,31 +167,6 @@ def makeASC(vertices :Map, facets :Set) as DeepFrozen:
                 to emptySection() :Section:
                     return makeSection(vertices, consistency, [].asMap())
 
-def possibilities(guard) as DeepFrozen:
-    return switch (guard):
-        match ==Bool:
-            [true, false]
-
-def largestSectionAt(sheaf, assignment, ej) as DeepFrozen:
-    var largest := sheaf.sectionAt(assignment, ej)
-    var sections := [assignment => largest]
-    def vs := sheaf.vertices()
-    # For each vertex not yet assigned, we will try out the possible
-    # assignments and see what kinds of sections we get.
-    for vertex => guard in (vs):
-        # Skip already-assigned vertices.
-        if (assignment.contains(vertex)):
-            continue
-        def rv := [].asMap().diverge()
-        for p in (possibilities(guard)):
-            for ass => _ in (sections):
-                def new := ass.with(vertex, p)
-                def contender := rv[new] := sheaf.sectionAt(new, __continue)
-                if (contender.size() > largest.size()):
-                    largest := contender
-        sections := rv.snapshot()
-    return largest
-
 def main(_) as DeepFrozen:
     def and := kanren.table([
         [false, false, false],
