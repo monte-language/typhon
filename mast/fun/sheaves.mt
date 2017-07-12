@@ -88,12 +88,12 @@ def makeSection(vertices :Map, consistency :Map, assignments :Map) as DeepFrozen
             # initial assignments.
             object topLevel:
                 match [=="run", vars, _]:
-                    kanren.allOf([for v => value in (fullSection) {
+                    kanren (fullSection) forAll v, value {
                         kanren.unify(vars[index[v]], value)
-                    }] + [for vs => goalMaker in (consistency) {
+                    } (consistency) forAll vs, goalMaker {
                         def swizzle := [for v in (vs) vars[index[v]]]
                         M.call(goalMaker, "run", swizzle, [].asMap())
-                    }])
+                    }
             def program := kanren.fresh(topLevel, vertices.size())
             def iterable := kanren.asIterable(program)
             return def extensionIterable._makeIterator():
@@ -214,13 +214,13 @@ def main(_) as DeepFrozen:
     def halfAdder(a, b, s, c):
         return kanren.allOf([xor(a, b, s), and(a, b, c)])
     def fullAdder(a, b, cin, cout, s):
-        return kanren.fresh(fn firstSum, firstCarry, secondCarry {
+        return kanren () exists firstSum, firstCarry, secondCarry {
             kanren.allOf([
                 halfAdder(a, b, firstSum, firstCarry),
                 halfAdder(firstSum, cin, s, secondCarry),
                 or(firstCarry, secondCarry, cout),
             ])
-        }, 3)
+        }
     def fullAdderASC := makeASC([for x in (["A", "B", "Cin", "Cout", "S"])
                                  x => Bool],
                                 [].asSet())
