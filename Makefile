@@ -91,7 +91,7 @@ prelude: mast/prelude.mast mast/prelude/brand.mast mast/prelude/m.mast \
 codec: mast/lib/codec.mast mast/lib/codec/utf8.mast mast/lib/codec/percent.mast
 
 entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
-	mast/lib/entropy/xorshift.mast mast/lib/entropy/pi.mast \
+	mast/lib/entropy/pi.mast \
 	mast/lib/entropy/pcg.mast
 
 parsers: mast/lib/parsers/html.mast \

@@ -2,6 +2,8 @@ import "lib/continued" =~ [=> continued :DeepFrozen]
 import "unittest" =~ [=> unittest]
 exports (makePiEntropy)
 
+# Do not use this module for anything other than testing; it is completely
+# deterministic.
 
 def makePiEntropy() as DeepFrozen:
     def pi := continued.pi().extractDigits(2)
@@ -9,6 +11,11 @@ def makePiEntropy() as DeepFrozen:
     pi.produceDigit(null)
 
     return object piEntropy:
+        "
+        A totally deterministic but random-appearing entropy source based on
+        the binary expansion of π.
+        "
+
         to getAlgorithm() :Str:
             return "π"
 
