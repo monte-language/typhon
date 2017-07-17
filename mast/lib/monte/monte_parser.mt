@@ -1362,6 +1362,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             }
             # this might be a ForwardExpr or FunctionScript
             if (peekTag() != ":=" &&
+                peekTag() != ":" &&
                 patt.getNodeName() == "FinalPattern" &&
                 ex == null):
                 # YEP we should go do that instead
