@@ -58,6 +58,7 @@ mast: mast/lib/enum.mast mast/lib/record.mast \
 	mast/lib/json.mast \
 	mast/lib/marley.mast \
 	mast/lib/matrices.mast \
+	mast/lib/monads.mast \
 	mast/lib/streams.mast \
 	mast/lib/uKanren.mast \
 	mast/lib/words.mast \
