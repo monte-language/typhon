@@ -13,6 +13,7 @@ import "lib/monte/meta" =~ _
 # XXX currently broken ~ C.
 # import "lib/monte/mix" =~ _
 import "lib/parsers/html" =~ _
+import "lib/rats" =~ _
 import "lib/record" =~ _
 import "lib/streams" =~ _
 import "lib/uKanren" =~ _
