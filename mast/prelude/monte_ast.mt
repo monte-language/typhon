@@ -715,6 +715,16 @@ def makeCoreAst() as DeepFrozenStamp:
     ]
     ],
     [
+    "BindingExpr" => fn super {
+        def bindingExprExtras.getName() {
+            return super.getNoun().getName()
+        }
+    },
+    "SlotExpr" => fn super {
+        def slotExprExtras.getName() {
+            return super.getNoun().getName()
+        }
+    },
     "Script" => fn super {
         object scriptExtras {
             to getMethodNamed(verb, ej) {
