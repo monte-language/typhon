@@ -72,7 +72,18 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
     To indicate that a name is intentionally unused, simply prefix it with
     '_'.
     "
+
     def sw := astBuilder.makeScopeWalker()
+
+    def sequence(nameList, nodes):
+        var rv := []
+        for i => names in (nameList) {
+            rv += names
+            def namesRead := usedSet(sw, nodes[i])
+            rv := filterNouns(rv, namesRead)
+        }
+        return rv
+
     def unusedNameFinder(node, _maker, args, _span) :List[Noun]:
         def rv := switch (node.getNodeName()) {
             # Modules
@@ -89,16 +100,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             }
             match =="Import" { args[1] }
             # Sequences.
-            match =="SeqExpr" {
-                var rv := []
-                def exprs := node.getExprs()
-                for i => expr in (args[0]) {
-                    rv += expr
-                    def namesRead := usedSet(sw, exprs[i])
-                    rv := filterNouns(rv, namesRead)
-                }
-                rv
-            }
+            match =="SeqExpr" { sequence(args[0], node.getExprs()) }
             # Full exprs.
             match n ? (["AndExpr", "OrExpr"].contains(n)) {
                 flattenList(args)
@@ -123,7 +125,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             match =="CurryExpr" { args[0] }
             match =="DefExpr" {
                 def [pattern, exit_, rhs] := args
-                pattern + optional(exit_) + rhs
+                filterNouns(pattern, usedSet(sw, node.getExpr())) + optional(exit_) + rhs
             }
             match =="EscapeExpr" {
                 def [ejPatt, ejBody, catchPatt, catchBody] := args
@@ -212,7 +214,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
                 receiver + flattenList(arguments) + flattenList(namedArgs)
             }
             match =="ControlExpr" {
-                def [target, op, argList, paramList, body, _] := args
+                def [target, _op, argList, paramList, body, _] := args
                 def l := target + flattenList(argList) + flattenList(paramList) + body
                 def s := usedSet(sw, node.getBody())
                 filterNouns(l, s)
@@ -304,7 +306,7 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             }
             match n ? (["ListPattern", "MapPattern"].contains(n)) {
                 def [patts, tail] := args
-                def ps := flattenList(patts)
+                def ps := sequence(patts, node.getPatterns())
                 ps + optional(tail)
             }
             match =="BindPattern" { optional(args[1]) }
@@ -347,12 +349,20 @@ def testUsedVarAugAssign(assert):
 def testUsedVarAssign(assert):
     assert.equal(findUnusedNames(m`var x := 0; fn { x := 1 }`).size(), 0)
 
+def testUsedDefRecursive(assert):
+    assert.equal(findUnusedNames(m`def x := [1, x]`).size(), 0)
+
+def testUsedListPattern(assert):
+    assert.equal(findUnusedNames(m`def [guard, _param :guard] := pair`).size(), 0)
+
 unittest([
     testUnusedDef,
     testUsedSuchThat,
     testUsedExtends,
     testUsedVarAugAssign,
     testUsedVarAssign,
+    testUsedDefRecursive,
+    testUsedListPattern,
 ])
 
 def findSingleMethodObjects(expr) as DeepFrozen:
