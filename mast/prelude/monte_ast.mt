@@ -104,9 +104,6 @@ def NamePattern :DeepFrozen := Ast["FinalPattern", "VarPattern",
                                    "BindingPattern", "IgnorePattern",
                                    "ValueHolePattern", "PatternHolePattern"]
 
-# LiteralExpr included here because the optimizer uses it.
-def Noun :DeepFrozen := Ast["NounExpr", "TempNounExpr", "LiteralExpr"]
-
 
 def baseFieldName(name) as DeepFrozenStamp:
     if (['*', '?'].contains(name[name.size() - 1])):
@@ -544,7 +541,7 @@ def makeCoreAst() as DeepFrozenStamp:
 
     def [Expr, Pattern, NamedArg, MapItem, MapPatternItem,
          NamedParam, Method_, Matcher, Catcher, Script,
-         ParamDesc, MessageDesc, QuasiPiece, Import_, Module,
+         ParamDesc, MessageDesc, QuasiPiece, Import_, _Module,
          astBuilder_] := makeAstBuilder([
     "Expr" => [
         "LiteralExpr"           => ["value" => Any],
@@ -777,71 +774,60 @@ def makeCoreAst() as DeepFrozenStamp:
             }
         }},
     "SlotPattern" => fn super {
-        object slotPatternExtras {
-            to refutable() :Bool {
-                return super.getGuard() != null
-            }
-        }},
+        def slotPatternExtras.refutable() :Bool {
+            return super.getGuard() != null
+        }
+    },
     "BindPattern" => fn super {
-        object bindPatternExtras {
-            to refutable() :Bool {
-                return super.getGuard() != null
-            }
-        }},
-    "BindingPattern" => fn super {
-        object bindingPatternExtras {
-            to refutable() :Bool {
-                return true
-            }
-        }},
+        def bindPatternExtras.refutable() :Bool {
+            return super.getGuard() != null
+        }
+    },
+    "BindingPattern" => fn _super {
+        def bindingPatternExtras.refutable() :Bool {
+            return true
+        }
+    },
     "IgnorePattern" => fn super {
-        object ignorePatternExtras {
-            to refutable() :Bool {
-                return super.getGuard() != null
-            }
-        }},
-    "ListPattern" => fn super {
-        object listPatternExtras {
-            to refutable() :Bool {
-                return true
-            }
-        }},
-    "MapPattern" => fn super {
-        object mapPatternExtras {
-            to refutable() :Bool {
-                return true
-            }
-        }},
-    "ViaPattern" => fn super {
-        object viaPatternExtras {
-            to refutable() :Bool {
-                return true
-            }
-        }},
-    "SuchThatPattern" => fn super {
-        object suchThatPatternExtras {
-            to refutable() :Bool {
-                return true
-            }
-        }},
-    "SamePattern" => fn super {
-        object samePatternExtras {
-            to refutable() :Bool {
-                return true
-            }
-        }},
-    "QuasiParserPattern" => fn super {
-        object quasiParserPatternExtras {
-            to refutable() :Bool {
-                return true
-            }
-        }},
+        def ignorePatternExtras.refutable() :Bool {
+            return super.getGuard() != null
+        }
+    },
+    "ListPattern" => fn _super {
+        def listPatternExtras.refutable() :Bool {
+            return true
+        }
+    },
+    "MapPattern" => fn _super {
+        def mapPatternExtras.refutable() :Bool {
+            return true
+        }
+    },
+    "ViaPattern" => fn _super {
+        def viaPatternExtras.refutable() :Bool {
+            return true
+        }
+    },
+    "SuchThatPattern" => fn _super {
+        def suchThatPatternExtras.refutable() :Bool {
+            return true
+        }
+    },
+    "SamePattern" => fn _super {
+        def samePatternExtras.refutable() :Bool {
+            return true
+        }
+    },
+    "QuasiParserPattern" => fn _super {
+        def quasiParserPatternExtras.refutable() :Bool {
+            return true
+        }
+    },
     "ForwardExpr" => fn super {
-        object forwardExprExtras {
-            to getNoun() {
-                return super.getPattern().getNoun()
-            }
-        }},
+        def forwardExprExtras.getNoun() {
+            return super.getPattern().getNoun()
+        }
+    },
     "BinaryExpr" => fn super {
         object binaryExprExtras {
             to getOpName() {
@@ -852,47 +838,45 @@ def makeCoreAst() as DeepFrozenStamp:
             }
         }},
     "CompareExpr" => fn super {
-        object compareExprExtras {
-            to getOpName() {
-                return comparatorsToName[super.getOp()]
-            }
-        }},
+        def compareExprExtras.getOpName() {
+            return comparatorsToName[super.getOp()]
+        }
+    },
     "RangeExpr" => fn super {
-        object rangeExprExtras {
-            to getOpName() {
-                if (super.getOp() == "..") {
-                    return "thru"
-                } else if (super.getOp() == "..!") {
-                    return "till"
-                }
+        def rangeExprExtras.getOpName() {
+            if (super.getOp() == "..") {
+                return "thru"
+            } else if (super.getOp() == "..!") {
+                return "till"
             }
-        }},
+        }
+    },
     "PrefixExpr" => fn super {
-        object prefixExprExtras {
-            to getOpName() {
-                return unaryOperatorsToName[super.getOp()]
-            }
-        }},
+        def prefixExprExtras.getOpName() {
+            return unaryOperatorsToName[super.getOp()]
+        }
+    },
     "AugAssignExpr" => fn super {
-        object augAssignExprExtras {
-            to getOpName() {
-                return operatorsToNamePrio[super.getOp()][0]
-            }
-        }},
+        def augAssignExprExtras.getOpName() {
+            return operatorsToNamePrio[super.getOp()][0]
+        }
+    },
     "EscapeExpr" => fn super {
-        object escapeExprExtras {
-            to withBody(newBody :Expr) {
-                return astBuilder_.EscapeExpr(
-                    super.getEjectorPattern(), newBody, super.getCatchPattern(),
-                    super.getCatchBody(), super.getSpan())
-            }
-        }},
+        def escapeExprExtras.withBody(newBody :Expr) {
+            return astBuilder_.EscapeExpr(
+                super.getEjectorPattern(), newBody, super.getCatchPattern(),
+                super.getCatchBody(), super.getSpan())
+        }
+    },
     "Method" => fn super {
-        object methodExtras {
-            to withBody(newBody) {
-                return astBuilder_."Method"(super.getDocstring(), super.getVerb(), super.getParams(), super.getNamedParams(), super.getResultGuard(), newBody, super.getSpan())
-            }
-        }}
+        def methodExtras.withBody(newBody) {
+            return astBuilder_."Method"(super.getDocstring(), super.getVerb(),
+                                        super.getParams(),
+                                        super.getNamedParams(),
+                                        super.getResultGuard(), newBody,
+                                        super.getSpan())
+        }
+    }
     ])
     return object astBuilder implements DeepFrozenStamp:
         to makeScopeWalker():
