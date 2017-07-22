@@ -104,7 +104,6 @@ def NamePattern :DeepFrozen := Ast["FinalPattern", "VarPattern",
                                    "BindingPattern", "IgnorePattern",
                                    "ValueHolePattern", "PatternHolePattern"]
 
-
 def baseFieldName(name) as DeepFrozenStamp:
     if (['*', '?'].contains(name[name.size() - 1])):
         return name.slice(0, name.size() - 1)
@@ -204,8 +203,11 @@ def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp
     return nodeMaker
 
 def makeAstBuilder(description, extraMethodMakers) as DeepFrozenStamp:
+    # Build the guards.
     def gs := [for constructors in (description)
                M.call(Ast, "get", constructors.getKeys(), [].asMap())]
+
+    # Build the makers.
     def ms := [].asMap().diverge()
     for constructorGroup in (description):
         for constructorName :Str => fields in (constructorGroup):
@@ -213,8 +215,11 @@ def makeAstBuilder(description, extraMethodMakers) as DeepFrozenStamp:
                 constructorName, fields,
                 extraMethodMakers.fetch(constructorName, fn {null}))
     def makers := ms.snapshot()
+
     object _astBuilder implements DeepFrozenStamp:
         to convertFromKernel(expr):
+            "Build a fascimile of `expr` from this builder's materials."
+
             def nodeInfo := [].asMap().diverge()
             for constructorGroup in (description):
                 for constructorName :Str => fields in (constructorGroup):
@@ -233,6 +238,37 @@ def makeAstBuilder(description, extraMethodMakers) as DeepFrozenStamp:
                               convertedContents + [null],
                               [].asMap())
             return convert(expr)
+
+        to makePass(sub):
+            def visitVerb(s, ej):
+                if (s.slice(0, 5) != "visit"):
+                    throw.eject(ej, "not a constructor")
+                return s.slice(5, s.size())
+            return object superPass:
+                # For via-patt usage.
+
+                to visiting(value, _ej):
+                    return value
+
+                to visitingList(value, ej):
+                    def l :List exit ej := value
+                    return [for item in (l) sub.visit(item)]
+
+                # Main workhorse methods.
+
+                to visit(value):
+                    return if (value =~ ast :Ast) {
+                        def argConstructor := ast.getNodeName()
+                        def subArgs := [for subArg in (ast._uncall()[2])
+                                        sub.visit(subArg)]
+                        M.call(sub, "visit" + argConstructor, subArgs, [].asMap())
+                    } else { value }
+
+                match [via (visitVerb) constructor, args, _]:
+                    def newArgs := [for arg in (args) if (arg =~ l :List) {
+                        [for item in (l) sub.visit(item)]
+                    } else { sub.visit(arg) }]
+                    M.call(makers[constructor], "run", newArgs, [].asMap())
 
         match [verb ? (makers.contains(verb)), args, namedArgs]:
             M.call(makers[verb], "run", args, namedArgs)

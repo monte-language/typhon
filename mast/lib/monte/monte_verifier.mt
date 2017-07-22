@@ -371,18 +371,17 @@ def findSingleMethodObjects(expr) as DeepFrozen:
     "
 
     def results := [].diverge()
-    def SMOFinder(node, _maker, _args, _span):
-        if (node.getNodeName() == "ObjectExpr"):
-            def script := node.getScript()
+    object SMOFinder extends astBuilder.makePass(SMOFinder):
+        to visitObjectExpr(_docstring, name, _asExpr, _auditors,
+                           via (SMOFinder.visiting) script, span):
             # If the object has `extends` or matchers, then we can't actually
             # use SMO syntax on it, so it'd be rude to complain.
             if (script.getNodeName() == "Script" &&
                 script.getExtends() == null &&
                 script.getMethods() =~ [_meth] &&
                 script.getMatchers().isEmpty()):
-                def name := node.getName()
-                results.push([`Object $name has only one method`, name.getSpan()])
-    expr.transform(SMOFinder)
+                results.push([`Object $name has only one method`, span])
+    SMOFinder.visit(expr)
     return results.snapshot()
 
 def testSMO(assert):
