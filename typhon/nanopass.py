@@ -13,11 +13,11 @@ class CompilerFailed(Exception):
         self.span = span
 
     def __str__(self):
-        return self.formatError().encode("utf-8")
+        return self.formatError()
 
     def formatError(self):
         l = [
-            u"Compiler invariant failed" #: " + self.problem,
+            u"Compiler invariant failed: " + self.problem,
         ]
         # if self.span is not None:
         #     l += [
@@ -25,7 +25,7 @@ class CompilerFailed(Exception):
         #         u"Line %d, column %d" % (self.span.startLine,
         #                                  self.span.startCol),
         #     ]
-        return u"\n".join(l)
+        return u"\n".join(l).encode("utf-8")
 
 
 def freezeField(field, ty):
