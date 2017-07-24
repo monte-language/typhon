@@ -27,59 +27,6 @@ def renameCycles(node, renamings) as DeepFrozen:
     return node.transform(renamer)
 
 
-def ifAnd(ast, maker, args, span) as DeepFrozen:
-    "Expand and-expressions inside if-expressions."
-
-    if (ast.getNodeName() == "IfExpr"):
-        def [test, consequent, alternative] := args
-
-        if (test.getNodeName() == "AndExpr"):
-            def left := test.getLeft()
-            def right := test.getRight()
-
-            # The name occurrence check is not required.
-            return maker(left, maker(right, consequent, alternative, span),
-                         alternative, span)
-
-    return M.call(maker, "run", args + [span], [].asMap())
-
-
-def ifOr(ast, maker, args, span) as DeepFrozen:
-    "Expand or-expressions inside if-expressions."
-    def sw := astBuilder.makeScopeWalker()
-    if (ast.getNodeName() == "IfExpr"):
-        def [test, consequent, alternative] := args
-
-        if (test.getNodeName() == "OrExpr"):
-            def left := test.getLeft()
-            def right := test.getRight()
-
-            # left must not define any name used by right; otherwise, if
-            # left's test fails, right's test will try to access undefined
-            # names.
-            if ((sw.getStaticScope(left).outNames() &
-                 sw.getStaticScope(right).namesUsed()).size() == 0):
-                return maker(left, consequent, maker(right, consequent,
-                                                     alternative, span), span)
-
-    return M.call(maker, "run", args + [span], [].asMap())
-
-
-def modPow(ast, maker, args, span) as DeepFrozen:
-    "Expand modular exponentation method calls."
-
-    if (ast.getNodeName() == "MethodCallExpr"):
-        escape ej:
-            def [receiver, verb ? (verb :Str == "mod"), [m], []] exit ej := args
-            if (receiver.getNodeName() == "MethodCallExpr"):
-                def x := receiver.getReceiver()
-                def verb ? (verb :Str == "pow") exit ej := receiver.getVerb()
-                def [e] exit ej := receiver.getArgs()
-                return maker(x, "modPow", [e, m], [], span)
-
-    return M.call(maker, "run", args + [span], [].asMap())
-
-
 def expand(node, builder, fail) as DeepFrozen:
     def sw := builder.makeScopeWalker()
     def defExpr := builder.DefExpr
@@ -90,6 +37,7 @@ def expand(node, builder, fail) as DeepFrozen:
     def seqExpr := builder.SeqExpr
     def tempNounExpr := builder.TempNounExpr
     def viaPatt := builder.ViaPattern
+    def ifExpr := builder.IfExpr
 
     def plainPatt(n, span):
         return builder.FinalPattern(n, null, span)
@@ -109,36 +57,82 @@ def expand(node, builder, fail) as DeepFrozen:
             nounExpr("_makeMap", span),
             "fromPairs", [emitList(items, span)], [], span)
 
-    def seqSendOnly(ast, maker, args, span):
+    object earlyExpandIfAnd extends builder.makePass(earlyExpandIfAnd):
+        "Expand and-expressions inside if-expressions."
+
+        to visitIfExpr(test, cons, alt, span):
+            return if (test.getNodeName() == "AndExpr"):
+                def left := test.getLeft()
+                def right := test.getRight()
+
+                # The name occurrence check is not required.
+                ifExpr(left, ifExpr(right, cons, alt, span), alt, span)
+            else:
+                ifExpr(test, cons, alt, span)
+
+    object earlyExpandIfOr extends builder.makePass(earlyExpandIfOr):
+        "Expand or-expressions inside if-expressions."
+
+        to visitIfExpr(test, cons, alt, span):
+            return if (test.getNodeName() == "OrExpr"):
+                def sw := astBuilder.makeScopeWalker()
+                def left := test.getLeft()
+                def right := test.getRight()
+
+                # left must not define any name used by right; otherwise, if
+                # left's test fails, right's test will try to access undefined
+                # names.
+                if ((sw.getStaticScope(left).outNames() &
+                     sw.getStaticScope(right).namesUsed()).size() == 0):
+                    ifExpr(left, cons, ifExpr(right, cons, alt, span), span)
+                else:
+                    ifExpr(test, cons, alt, span)
+            else:
+                ifExpr(test, cons, alt, span)
+
+    def buildSendOnly(receiver, verb, args, namedArgs, span):
+        def map := [for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)]
+        return callExpr(nounExpr("M", span), "sendOnly",
+                        [receiver, verb, emitList(args, span),
+                         emitMap(map, span)], [], span)
+
+    object sequenceSendOnly extends builder.makePass(sequenceSendOnly):
         "Expand send-expressions inside seq-expressions to use M.sendOnly()."
 
-        if (ast.getNodeName() == "SeqExpr"):
-            def exprs := args[0].diverge()
+        to visitSeqExpr(exprs, span):
+            def rv := exprs.diverge()
             def last := exprs.size() - 1
-            for i => var expr in (exprs):
-                expr transform= (seqSendOnly)
+            for i => via (super.visiting) var expr in (exprs):
                 if (i != last):
                     if (expr.getNodeName() == "SendExpr"):
-                        def receiver := expr.getReceiver()
-                        def verb := expr.getVerb()
-                        def margs := expr.getArgs()
-                        def namedArgs := expr.getNamedArgs()
-                        expr := callExpr(nounExpr("M", span),
-                            "sendOnly", [receiver, litExpr(verb, span),
-                                     emitList(margs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
-                             span)
+                        def verb := litExpr(expr.getVerb(), span)
+                        expr := buildSendOnly(expr.getReceiver(), verb,
+                                              expr.getArgs(),
+                                              expr.getNamedArgs(), span)
                     else if (expr.getNodeName() == "FunSendExpr"):
-                        def receiver := expr.getReceiver()
-                        def margs := expr.getArgs()
-                        def namedArgs := expr.getNamedArgs()
-                        expr := callExpr(nounExpr("M", span),
-                            "sendOnly", [receiver, litExpr("run", span),
-                                     emitList(margs, span), emitMap([for na in (namedArgs) emitList([na.getKey(), na.getValue()], span)], span)], [],
-                            span)
-                exprs[i] := expr
-            return maker(exprs.snapshot(), span)
+                        def verb := litExpr("run", span)
+                        expr := buildSendOnly(expr.getReceiver(), verb,
+                                              expr.getArgs(),
+                                              expr.getNamedArgs(), span)
+                rv[i] := expr
+            return builder.SeqExpr(rv.snapshot(), span)
 
-        return M.call(maker, "run", args + [span], [].asMap())
+    object fuseModPow extends builder.makePass(fuseModPow):
+        "Expand modular exponentation method calls."
+
+        to visitMethodCallExpr(via (super.visiting) receiver, verb :Str,
+                               via (super.visitingList) args,
+                               via (super.visitingList) namedArgs, span):
+            # x.pow(e).mod(m)
+            return if (verb == "mod" && args =~ [m] && namedArgs == [] &&
+                       receiver.getNodeName() == "MethodCallExpr" &&
+                       receiver.getVerb() == "pow" &&
+                       receiver.getArgs() =~ [e] &&
+                       receiver.getNamedArgs() == []):
+                def x := receiver.getReceiver()
+                callExpr(x, "modPow", [e, m], [], span)
+            else:
+                callExpr(receiver, verb, args, namedArgs, span)
 
     def buildQuasi(name, inputs):
         def parts := ["parts" => [].diverge(),
@@ -528,8 +522,8 @@ def expand(node, builder, fail) as DeepFrozen:
             def skip := tempNounExpr("skip", span)
             [
                 plainPatt(skip, span),
-                builder.IfExpr(filter, exp,
-                    callExpr(skip, "run", [], [], span), span),
+                ifExpr(filter, exp, callExpr(skip, "run", [], [], span),
+                       span),
             ]
         } else {
             [ignorePatt(null, span), exp]
@@ -766,7 +760,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 expandLogical(
                     sw.getStaticScope(left).outNames(),
                     sw.getStaticScope(right).outNames(),
-                    fn s, f {builder.IfExpr(left, builder.IfExpr(right, s, f, span), f, span)},
+                    fn s, f {ifExpr(left, ifExpr(right, s, f, span), f, span)},
                     span)
             match =="OrExpr":
                 def [left, right] := args
@@ -793,8 +787,8 @@ def expand(node, builder, fail) as DeepFrozen:
                         for n in (leftmap - rightmap) {
                             leftOnly with= (n)
                         }
-                        builder.IfExpr(left, partialFail(rightOnly, s, broken),
-                            builder.IfExpr(right, partialFail(leftOnly, s, broken), f, span), span)},
+                        ifExpr(left, partialFail(rightOnly, s, broken),
+                            ifExpr(right, partialFail(leftOnly, s, broken), f, span), span)},
                     span)
             match =="DefExpr":
                 def [patt, ej, rval] := args
@@ -1062,7 +1056,7 @@ def expand(node, builder, fail) as DeepFrozen:
                                          ignorePatt(null, span)],
                                          [],
                                          nounExpr("Bool", span),
-                                             builder.IfExpr(
+                                             ifExpr(
                                                  test,
                                                  seqExpr([
                                                      makeEscapeExpr(
@@ -1087,7 +1081,7 @@ def expand(node, builder, fail) as DeepFrozen:
                     }
                 }
                 def resolution := tempNounExpr("resolution", span)
-                def whenblock := builder.IfExpr(
+                def whenblock := ifExpr(
                     callExpr(nounExpr("Ref", span), "isBroken",
                          [resolution], [], span),
                     resolution, block, span)
@@ -1175,24 +1169,25 @@ def expand(node, builder, fail) as DeepFrozen:
 
     var ast := node
 
-    # Appetizers.
+    # Early passes, because we're slowly working in from both sides.
+    def earlyPasses := [
+        earlyExpandIfAnd,
+        earlyExpandIfOr,
+        sequenceSendOnly,
+    ]
 
-    # Pre-expand certain simple if-expressions. The transformation isn't total
-    # but covers many easy cases and doesn't require temporaries.
-    ast transform= (ifAnd)
-    ast transform= (ifOr)
-
-    # Do sends within sequences.
-    ast transform= (seqSendOnly)
+    for earlyPass in (earlyPasses):
+        ast := earlyPass.visit(ast)
 
     # The main course. Expand everything not yet expanded.
     ast := reifyTemporaries(ast.transform(expandTransformer))
 
-    # Dessert.
+    # The late passes.
+    def latePasses := [
+        fuseModPow,
+    ]
 
-    # "Expand" modular exponentation. There is extant Monte code which only
-    # runs to completion in reasonable time when this transformation is
-    # applied.
-    ast transform= (modPow)
+    for latePass in (latePasses):
+        ast := latePass.visit(ast)
 
     return ast
