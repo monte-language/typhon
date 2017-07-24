@@ -117,6 +117,27 @@ def expand(node, builder, fail) as DeepFrozen:
                 rv[i] := expr
             return builder.SeqExpr(rv.snapshot(), span)
 
+    def makeEscapeExpr(ejPatt, ejExpr, catchPatt, catchExpr, span):
+        if (catchPatt == null && catchExpr == null):
+            # Stage one looks good. Let's do the scope check.
+            def pattNames := sw.getStaticScope(ejPatt).outNames()
+            def exprNames := sw.getStaticScope(ejExpr).namesUsed()
+            if ((pattNames & exprNames).size() == 0):
+                # Stage two succeeded: The expr doesn't use the ejector at
+                # all. Elide.
+                # traceln(`Eliding: $ejPatt isn't used by $ejExpr`)
+                # traceln(`pattNames := $pattNames`)
+                # traceln(`exprNames := $exprNames`)
+                return ejExpr
+        return builder.EscapeExpr(ejPatt, ejExpr, catchPatt, catchExpr, span)
+
+    object expandTo extends builder.makePass(expandTo):
+        to visitTo(docstring, verb, params, namedParams, guard, block, span):
+            return builder."Method"(docstring, verb, params, namedParams, guard,
+                makeEscapeExpr(plainPatt(nounExpr("__return", span), span),
+                    seqExpr([block, nounExpr("null", span)], span), null, null, span),
+                        span)
+
     object fuseModPow extends builder.makePass(fuseModPow):
         "Expand modular exponentation method calls."
 
@@ -159,20 +180,6 @@ def expand(node, builder, fail) as DeepFrozen:
         for p in (parts):
             ps with= (p.snapshot())
         return ps
-
-    def makeEscapeExpr(ejPatt, ejExpr, catchPatt, catchExpr, span):
-        if (catchPatt == null && catchExpr == null):
-            # Stage one looks good. Let's do the scope check.
-            def pattNames := sw.getStaticScope(ejPatt).outNames()
-            def exprNames := sw.getStaticScope(ejExpr).namesUsed()
-            if ((pattNames & exprNames).size() == 0):
-                # Stage two succeeded: The expr doesn't use the ejector at
-                # all. Elide.
-                # traceln(`Eliding: $ejPatt isn't used by $ejExpr`)
-                # traceln(`pattNames := $pattNames`)
-                # traceln(`exprNames := $exprNames`)
-                return ejExpr
-        return builder.EscapeExpr(ejPatt, ejExpr, catchPatt, catchExpr, span)
 
     def makeSlotPatt(n, span):
         return viaPatt(nounExpr("_slotToBinding", span),
@@ -982,11 +989,7 @@ def expand(node, builder, fail) as DeepFrozen:
                         seqExpr([block, nounExpr("null", span)], span), null, null, span),
                             span)], []]
             match =="To":
-                def [doco, verb, params, namedParams, guard, block] := args
-                builder."Method"(doco, verb, params, namedParams, guard,
-                    makeEscapeExpr(plainPatt(nounExpr("__return", span), span),
-                        seqExpr([block, nounExpr("null", span)], span), null, null, span),
-                            span)
+                throw("impossible as usual")
             match =="Method":
                 def [doco, verb, params, namedParams, guard, block] := args
                 builder."Method"(doco, verb, params, namedParams, guard, block, span)
@@ -1174,6 +1177,7 @@ def expand(node, builder, fail) as DeepFrozen:
         earlyExpandIfAnd,
         earlyExpandIfOr,
         sequenceSendOnly,
+        expandTo,
     ]
 
     for earlyPass in (earlyPasses):
