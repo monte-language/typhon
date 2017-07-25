@@ -335,7 +335,7 @@ def makeScopeWalker() as DeepFrozenStamp:
 
         if (["Method", "To", "MethodExpr"].contains(nodeName)):
             s(sumScopes(node.getParams() + node.getNamedParams() +
-                        [node.getResultGuard(), node.getBody()]))
+                        [node.getResultGuard(), node.getBody()]).hide())
         if (["Matcher", "Catcher"].contains(nodeName)):
             s((getStaticScope(node.getPattern()) +
               getStaticScope(node.getBody())).hide())
