@@ -63,7 +63,7 @@ object arb as DeepFrozen:
                 return if (entropy.nextBool()) {i} else {-i}
 
             to shrink(i :Int) :List[Int]:
-                return [i >> 1]
+                return if (i == 0 || i == -1) { [] } else { [i >> 1] }
 
     to Str():
         return object arbStr extends arb.List(arb.Char()):
@@ -124,7 +124,7 @@ object arb as DeepFrozen:
                 # We don't know which of our subordinates created the value.
                 return []
 
-def prop.test(arbs, f, => iterations :Int := 500) as DeepFrozen:
+def prop.test(arbs, f, => iterations :Int := 100) as DeepFrozen:
     "A property-based tester."
 
     def entropy := makeEntropy(makePCG(42, 5))
@@ -134,12 +134,28 @@ def prop.test(arbs, f, => iterations :Int := 500) as DeepFrozen:
             out.print(`<property ($f)>`)
 
         to run(assert):
-            # traceln(`testing $test`)
-            # XXX needs to have a stack of pending cases to try, in order
-            # to search shrunken cases
             def failures := [].diverge()
-            for _ in (0..!iterations):
-                def args := [for arb in (arbs) arb.arbitrary(entropy)]
+            def cases := [for _ in (0..!iterations) {
+                [for arb in (arbs) arb.arbitrary(entropy)]
+            }].diverge()
+            def tried := [].asSet().diverge()
+            def failed := [].asSet().diverge()
+            while (!cases.isEmpty()):
+                def args := cases.pop()
+                tried.include(args)
+
+                def fail(message):
+                    # Generate some shrunken cases. Shrink one argument at a
+                    # time in order to explore as many corners of the failure
+                    # as possible.
+                    for i => arb in (arbs):
+                        for head in (arb.shrink(args[i])):
+                            def case := args.with(i, head)
+                            if (!tried.contains(case)):
+                                cases.push(case)
+                    if (!failed.contains(args)):
+                        failed.include(args)
+                        failures.push([args, message])
 
                 object hypothesis:
                     to assume(assumption :Bool) :Void:
@@ -149,12 +165,23 @@ def prop.test(arbs, f, => iterations :Int := 500) as DeepFrozen:
 
                     to assert(truth :Bool) :Void:
                         "Require `truth` or fail the test."
-                        if (!truth) { failures.push(args) }
+                        if (!truth):
+                            fail("hy.assert(false)")
 
-                # traceln(`Trying $args`)
+                    to sameEver(left, right) :Void:
+                        if (left != right):
+                            fail(`hy.sameEver($left, $right)`)
+
+                    to asBigAs(left, right) :Void:
+                        if (!(left <=> right)):
+                            fail(`hy.asBigAs($left, $right)`)
+
                 M.call(f, "run", [hypothesis] + args, [].asMap())
             if (!failures.isEmpty()):
-                assert.fail(`Property $f failed on cases: ${failures.snapshot()}`)
+                def messages := [for [args, blurb] in (failures) {
+                    `Case $args failure: $blurb`
+                }]
+                assert.fail(`Property $f failed on cases: ${"\n".join(messages)}`)
 
 def ringAxioms(strategy):
     def ringAxiomAbelianAssociative(hy, a, b, c):
