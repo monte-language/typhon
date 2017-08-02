@@ -161,7 +161,10 @@ def prop.test(arbs, f, => iterations :Int := 100) as DeepFrozen:
                     to assume(assumption :Bool) :Void:
                         "Require `assumption` or abort the test."
 
-                        if (!assumption) { continue }
+                        # XXX miscompile?
+                        # if (!assumption) { continue }
+                        if (!assumption):
+                            throw.eject(__continue, "assumption failed")
 
                     to assert(truth :Bool) :Void:
                         "Require `truth` or fail the test."
