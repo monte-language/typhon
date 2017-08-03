@@ -101,6 +101,43 @@ def fullMulStep([left :Pair, right :Pair, acc :Pair]) as DeepFrozen:
 
 def mulMachine :DeepFrozen := makeCycleMachine(fullMulStep)
 
+def divisorTables :List[List[Int]] := [for divisor in (1..!p) {
+    def l := ([0] * (p - 1)).diverge()
+    # Boring fencepost.
+    var i := divisor - 1
+    for quotient in (1..!p) {
+        l[i] := quotient
+        i += divisor
+        if (i >= p) { i -= p }
+    }
+    l.snapshot()
+}]
+# traceln(`divisorTables $divisorTables`)
+
+def negate([digits, quote]) as DeepFrozen:
+    # Complement all digits and then add one.
+    def ds := [for d in (digits) complementDigit(d)]
+    def q := [for d in (quote) complementDigit(d)]
+    # NB: [[1], [0]] is 0'1
+    return addMachine.collectCycle([[ds, q], [[1], [0]], 0])
+
+def divideStep([dividend :Pair, divisor :Pair]) as DeepFrozen:
+    def table := divisorTables[rollState(divisor)[0] - 1]
+    def [i, minuend] := rollState(dividend)
+    # If the digit is zero, emit zero for the quotient and roll onward.
+    if (i == 0):
+        return [0, [minuend, divisor]]
+
+    def digit := table[i - 1]
+    # Runtime assertion: Our rightmost digit on the dividend matches the
+    # subtrahend.
+    def [==i, sub] := rollState(halfMulMachine.collectCycle([divisor, digit, 0]))
+    def subtrahend := negate(sub)
+    def dividendNext := addMachine.collectCycle([minuend, subtrahend, 0])
+    return [digit, [dividendNext, divisor]]
+
+def divMachine :DeepFrozen := makeCycleMachine(divideStep)
+
 def allZero(l) :Bool as DeepFrozen:
     for i in (l):
         if (i != 0):
@@ -140,6 +177,11 @@ object zeroRat as DeepFrozen implements Rat:
 
     to multiply(_ :Rat):
         return zeroRat
+
+    to approxDivide(_ :Rat):
+        return zeroRat
+
+    # NB: .reciprocal() deliberately omitted
 
 object makeRat as DeepFrozen:
     # XXX this could directly negate as it iterates through digits, but it
@@ -236,7 +278,19 @@ object makeRat as DeepFrozen:
                 return digits.last() > quote.last()
 
             to belowZero() :Bool:
-                return digits.last() < quote.last()
+                # NB: This should be < instead of <= if we were working by
+                # hand, because on paper, it's not possible to have a
+                # correctly-reduced rat where the last digits before the quote
+                # is the digit at the end of the quote. On paper, however, we
+                # are constantly papering over the fact that there are often
+                # implicit leading zeros. In a properly-constructed rat,
+                # there's only a few possible numbers that can have this
+                # problem. In particular, -p ** k, for positive k, generates
+                # -1, -p, -(p ** 2), which all have proper representations
+                # where the first and last digit are equal, and this is
+                # actually only the first member of a family of (p - 1)
+                # sequences in total with this property.
+                return digits.last() <= quote.last()
 
             to atLeastZero() :Bool:
                 return rat.aboveZero()
@@ -251,11 +305,8 @@ object makeRat as DeepFrozen:
                 return [digits, quote, exponent]
 
             to negate():
-                # Complement all digits and then add one.
-                def ds := [for d in (digits) complementDigit(d)]
-                def q := [for d in (quote) complementDigit(d)]
-                def base := makeRat(ds, q, exponent)
-                return base + makeRat([1], [0], exponent)
+                def [ds, q] := negate([digits, quote])
+                return makeRat.improper(ds, q, exponent)
 
             to add(other :Rat):
                 # Easy case, because why not?
@@ -297,6 +348,24 @@ object makeRat as DeepFrozen:
                 def [ds, q] := mulMachine.collectCycle(initialState)
                 return makeRat.improper(ds, q, finalExponent)
 
+            to approxDivide(other :Rat) :Rat:
+                if (other == zeroRat):
+                    throw("rat.approxDivide/1: Divide by zero")
+
+                def [otherDigits, otherQuote, otherExponent] := other.digits()
+                def finalExponent := exponent - otherExponent
+                def initialState := [[digits, quote],
+                                     [otherDigits, otherQuote]]
+                def [ds, q] := divMachine.collectCycle(initialState)
+                return makeRat.improper(ds, q, finalExponent)
+
+            to reciprocal() :Rat:
+                # Just do 1 / x.
+                def initialState := [[[1], [0]], [digits, quote]]
+                def [ds, q] := divMachine.collectCycle(initialState)
+                # Note that the final exponent is 0 - exponent.
+                return makeRat.improper(ds, q, -exponent)
+
 def ratComparison(hy, i):
     def r :Rat := makeRat.fromInt(i)
     if (i > 0):
@@ -323,16 +392,30 @@ def ratAdditionInverse(hy, x):
     def s :Rat := makeRat.fromInt(-x)
     hy.sameEver(r + s, zeroRat)
 
-def ceiling := 2 ** 16
+def ratMultiplication(hy, x, y):
+    def r1 :Rat := makeRat.fromInt(x * y)
+    def r2 :Rat := makeRat.fromInt(x) * makeRat.fromInt(y)
+    hy.asBigAs(r1, r2)
+
+def ratMultiplicationInverse(hy, x):
+    # Avoid divide-by-zero.
+    hy.assume(x != 0)
+    def r :Rat := makeRat.fromInt(x)
+    def one :Rat := makeRat.fromInt(1)
+    hy.asBigAs(r * r.reciprocal(), one)
+    hy.asBigAs(r / r, one)
+
+def ceiling := 2 ** 8
 unittest([
     prop.test([arb.Int(=> ceiling)], ratComparison),
     prop.test([arb.Int(=> ceiling), arb.Int(=> ceiling)], ratAddition),
     prop.test([arb.Int(=> ceiling)], ratAdditionInverse),
+    prop.test([arb.Int(=> ceiling), arb.Int(=> ceiling)], ratMultiplication),
+    prop.test([arb.Int(=> ceiling)], ratMultiplicationInverse),
 ])
 
 def main(_argv) as DeepFrozen:
-    def one := makeRat.fromInt(1)
-    def negativeOne := makeRat.fromInt(-1)
-    traceln(one, negativeOne)
-    traceln(one + negativeOne)
+    def two := makeRat.fromInt(2)
+    def three := makeRat.fromInt(3)
+    traceln(two / three)
     return 0
