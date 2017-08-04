@@ -1,4 +1,5 @@
 import "unittest" =~ [=> unittest]
+import "lib/iterators" =~ [=> zip :DeepFrozen]
 import "tests/proptests" =~ [
     => arb :DeepFrozen,
     => prop :DeepFrozen,
@@ -183,6 +184,12 @@ object zeroRat as DeepFrozen implements Rat:
 
     # NB: .reciprocal() deliberately omitted
 
+    to roundToSize(_size :Int):
+        return zeroRat
+
+    to roundToPrecision(_epsilon :Rat):
+        return zeroRat
+
 object makeRat as DeepFrozen:
     # XXX this could directly negate as it iterates through digits, but it
     # doesn't, because it is very hard to get right
@@ -210,7 +217,6 @@ object makeRat as DeepFrozen:
 
     to improper(digits :List[Int], quote :List[Int], exponent :Int) :Rat:
         "Fix up `digits` and `quote` to a canonical form, and make a `Rat`."
-        # traceln(`improper($digits $quote $exponent)`)
 
         return if (allZero(digits) && allZero(quote)) { zeroRat } else {
             var e := exponent
@@ -268,7 +274,7 @@ object makeRat as DeepFrozen:
                     # traceln(`exponent $exponent n $n d $d top $top bottom $bottom`)
                     n - d * top / bottom
                 }
-                approx *= p ** exponent
+                approx *= p.asDouble() ** exponent
                 out.print(`<rat($approx)>`)
 
             to isZero() :Bool:
@@ -359,12 +365,53 @@ object makeRat as DeepFrozen:
                 def [ds, q] := divMachine.collectCycle(initialState)
                 return makeRat.improper(ds, q, finalExponent)
 
+            to abs() :Rat:
+                return if (rat.belowZero()) { rat.negate() } else { rat }
+
             to reciprocal() :Rat:
                 # Just do 1 / x.
                 def initialState := [[[1], [0]], [digits, quote]]
                 def [ds, q] := divMachine.collectCycle(initialState)
                 # Note that the final exponent is 0 - exponent.
                 return makeRat.improper(ds, q, -exponent)
+
+            to roundToSize(size :Int):
+                if (digits.size() + quote.size() < size):
+                    # No sacrifices are necessary today!
+                    return rat
+
+                def ds := digits.reverse()
+                def q := (quote * (size // quote.size() + 1)).slice(0, size).reverse()
+                var carry := 0
+                def padding := 0
+                def newDigits := [for [minuend, subtrahend] in (zip.ragged(ds, q, => padding)) {
+                    var x := minuend - subtrahend - carry
+                    carry := if (x < 0) {
+                        x += p
+                        1
+                    } else { 0 }
+                    x
+                }]
+                return makeRat.improper(newDigits, [0],
+                                        exponent - newDigits.size())
+
+            to roundToPrecision(epsilon :Rat ? (epsilon.aboveZero())):
+                # Since epsilon is positive, we know that it's of the form:
+                # x..'y.. where y > x
+                # This means that, when converted to a finite form, any
+                # truncation of epsilon will start with the positive digit:
+                # y - x
+                # This is the most significant digit of epsilon, and it's
+                # always positive, so this is reliably our starting point. We
+                # just have to make our cutoff have enough digits to sneak
+                # under.
+                def start := digits.size() + exponent
+                def [otherDigits, otherQuote, otherExponent] := epsilon.digits()
+                var extra := otherDigits.size() + otherQuote.size()
+                def otherStart := otherDigits.size() + otherExponent
+                def size := start - otherStart + extra
+                # It could be that we're already smaller than epsilon!
+                return if (size > 0) { rat.roundToSize(size) } else { rat }
 
 def ratComparison(hy, i):
     def r :Rat := makeRat.fromInt(i)
@@ -415,7 +462,11 @@ unittest([
 ])
 
 def main(_argv) as DeepFrozen:
-    def two := makeRat.fromInt(2)
-    def three := makeRat.fromInt(3)
-    traceln(two / three)
+    def r := makeRat.fromInt(2) / makeRat.fromInt(3)
+    traceln(`Goal: $r`)
+    for i in (1..!15):
+        traceln(r.roundToSize(i))
+    def epsilon := makeRat.fromInt(1) / makeRat.fromInt(1000000)
+    traceln(`epsilon $epsilon`)
+    traceln(r.roundToPrecision(epsilon))
     return 0
