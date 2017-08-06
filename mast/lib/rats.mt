@@ -10,7 +10,7 @@ interface Rat :DeepFrozen:
     "Rational numbers."
 
 # The prime base for our representation.
-def p :Int := 5
+def p :Int := 251
 def complementDigit(i :Int) as DeepFrozen:
     return p - i - 1
 
@@ -102,19 +102,6 @@ def fullMulStep([left :Pair, right :Pair, acc :Pair]) as DeepFrozen:
 
 def mulMachine :DeepFrozen := makeCycleMachine(fullMulStep)
 
-def divisorTables :List[List[Int]] := [for divisor in (1..!p) {
-    def l := ([0] * (p - 1)).diverge()
-    # Boring fencepost.
-    var i := divisor - 1
-    for quotient in (1..!p) {
-        l[i] := quotient
-        i += divisor
-        if (i >= p) { i -= p }
-    }
-    l.snapshot()
-}]
-# traceln(`divisorTables $divisorTables`)
-
 def negate([digits, quote]) as DeepFrozen:
     # Complement all digits and then add one.
     def ds := [for d in (digits) complementDigit(d)]
@@ -122,22 +109,35 @@ def negate([digits, quote]) as DeepFrozen:
     # NB: [[1], [0]] is 0'1
     return addMachine.collectCycle([[ds, q], [[1], [0]], 0])
 
-def divideStep([dividend :Pair, divisor :Pair]) as DeepFrozen:
-    def table := divisorTables[rollState(divisor)[0] - 1]
-    def [i, minuend] := rollState(dividend)
-    # If the digit is zero, emit zero for the quotient and roll onward.
-    if (i == 0):
-        return [0, [minuend, divisor]]
+def divMachines :List[DeepFrozen] := [for divisor in (1..!p) {
+    def table :List[Int] := {
+        def l := ([0] * (p - 1)).diverge()
+        # Boring fencepost.
+        var i := divisor - 1
+        for quotient in (1..!p) {
+            l[i] := quotient
+            i += divisor
+            if (i >= p) { i -= p }
+        }
+        l.snapshot()
+    }
+    # traceln(`table for $divisor is $table`)
 
-    def digit := table[i - 1]
-    # Runtime assertion: Our rightmost digit on the dividend matches the
-    # subtrahend.
-    def [==i, sub] := rollState(halfMulMachine.collectCycle([divisor, digit, 0]))
-    def subtrahend := negate(sub)
-    def dividendNext := addMachine.collectCycle([minuend, subtrahend, 0])
-    return [digit, [dividendNext, divisor]]
+    def divideStep([dividend :Pair, divisor :Pair]) as DeepFrozen {
+        def [i, minuend] := rollState(dividend)
+        # If the digit is zero, emit zero for the quotient and roll onward.
+        if (i == 0) { return [0, [minuend, divisor]] }
 
-def divMachine :DeepFrozen := makeCycleMachine(divideStep)
+        def digit := table[i - 1]
+        # Runtime assertion: Our rightmost digit on the dividend matches the
+        # subtrahend.
+        def [==i, sub] := rollState(halfMulMachine.collectCycle([divisor, digit, 0]))
+        def subtrahend := negate(sub)
+        def dividendNext := addMachine.collectCycle([minuend, subtrahend, 0])
+        return [digit, [dividendNext, divisor]]
+    }
+    makeCycleMachine(divideStep)
+}]
 
 def allZero(l) :Bool as DeepFrozen:
     for i in (l):
@@ -148,6 +148,9 @@ def allZero(l) :Bool as DeepFrozen:
 object zeroRat as DeepFrozen implements Rat:
     to _printOn(out):
         out.print("<rat(0)>")
+
+    to asDouble() :Double:
+        return 0.0
 
     to isZero():
         return true
@@ -249,6 +252,9 @@ object makeRat as DeepFrozen:
             "A rational number in ℚ."
 
             to _printOn(out):
+                out.print(`<rat(${rat.asDouble()})>`)
+
+            to asDouble() :Double:
                 var ds := digits
                 var q := quote
                 # Our digits must be capped with a non-zero digit. If there
@@ -274,8 +280,7 @@ object makeRat as DeepFrozen:
                     # traceln(`exponent $exponent n $n d $d top $top bottom $bottom`)
                     n - d * top / bottom
                 }
-                approx *= p.asDouble() ** exponent
-                out.print(`<rat($approx)>`)
+                return approx * p.asDouble() ** exponent
 
             to isZero() :Bool:
                 return false
@@ -360,8 +365,10 @@ object makeRat as DeepFrozen:
 
                 def [otherDigits, otherQuote, otherExponent] := other.digits()
                 def finalExponent := exponent - otherExponent
-                def initialState := [[digits, quote],
-                                     [otherDigits, otherQuote]]
+                def otherState := [otherDigits, otherQuote]
+                def initialState := [[digits, quote], otherState]
+                def i := rollState(otherState)[0] - 1
+                def divMachine := divMachines[i]
                 def [ds, q] := divMachine.collectCycle(initialState)
                 return makeRat.improper(ds, q, finalExponent)
 
@@ -371,6 +378,8 @@ object makeRat as DeepFrozen:
             to reciprocal() :Rat:
                 # Just do 1 / x.
                 def initialState := [[[1], [0]], [digits, quote]]
+                def i := digits[0] - 1
+                def divMachine := divMachines[i]
                 def [ds, q] := divMachine.collectCycle(initialState)
                 # Note that the final exponent is 0 - exponent.
                 return makeRat.improper(ds, q, -exponent)
