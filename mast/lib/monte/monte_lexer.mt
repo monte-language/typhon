@@ -17,12 +17,14 @@ def isIdentifierPart(c) as DeepFrozen:
         return false
     return idPart.contains(c)
 
-def MONTE_KEYWORDS :DeepFrozen := [
+def RESERVED_WORDS :DeepFrozen := ["let"].asSet()
+def MONTE_KEYWORDS :DeepFrozen := RESERVED_WORDS | [
     "as", "bind", "break", "catch", "continue", "def", "else", "escape",
     "exit", "extends", "exports", "finally", "fn", "for", "guards", "if",
     "implements", "import", "in", "interface", "match", "meta", "method",
     "object", "pass", "pragma", "return", "switch", "to", "try", "var",
-    "via", "when", "while"].asSet()
+    "via", "when", "while",
+].asSet()
 
 def composite(name, data, span) as DeepFrozen:
     return [name, data, span]
