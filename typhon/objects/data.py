@@ -550,6 +550,21 @@ class IntObject(Object):
         except ZeroDivisionError:
             raise userError(u"mod/1: Integer division by zero")
 
+    @method("List", "Int")
+    def divMod(self, modulus):
+        """
+        Compute the pair `[quotient, remainder]` such that `modulus *
+        quotient + remainder` is this integer and `remainder < modulus` for
+        positive moduli or `remainder > modulus` for negative moduli.
+        """
+
+        try:
+            q = self._i // modulus
+            r = self._i % modulus
+            return [IntObject(q), IntObject(r)]
+        except ZeroDivisionError:
+            raise userError(u"divMod/1: Integer division by zero")
+
     @method("Double", "Double", _verb="multiply")
     def multiplyDouble(self, other):
         return self._i * other
@@ -879,6 +894,21 @@ class BigInt(Object):
             return self.bi.int_mod(modulus)
         except ZeroDivisionError:
             raise userError(u"mod/1: Integer division by zero")
+
+    def _divMod(self, modulus):
+        try:
+            q, r = self.bi.divmod(modulus)
+            return [BigInt(q), BigInt(r)]
+        except ZeroDivisionError:
+            raise userError(u"divMod/1: Integer division by zero")
+
+    @method("List", "BigInt")
+    def divMod(self, modulus):
+        return self._divMod(modulus)
+
+    @method("List", "Int", _verb="divMod")
+    def divModInt(self, modulus):
+        return self._divMod(rbigint.fromint(modulus))
 
     @method("Double", "Double", _verb="multiply")
     def multiplyDouble(self, other):

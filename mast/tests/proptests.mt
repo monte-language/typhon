@@ -220,6 +220,15 @@ def ringAxioms(strategy):
 # Int is a ring.
 ringAxioms(arb.Int())
 
+def divisionAxiom(hy, dividend, divisor):
+    def [quotient, remainder] := dividend.divMod(divisor)
+    hy.sameEver(dividend, divisor * quotient + remainder)
+
+# Division is correct.
+unittest([
+    prop.test([arb.Int(), arb.Int()], divisionAxiom),
+])
+
 def containers := [
     arb.Bytes(),
     arb.Str(),
