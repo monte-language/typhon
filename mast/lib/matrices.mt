@@ -4,6 +4,7 @@ import "tests/proptests" =~ [
     => arb :DeepFrozen,
     => prop :DeepFrozen,
 ]
+import "lib/iterators" =~ [=> zip :DeepFrozen]
 exports (Mat, makeMatrix)
 
 interface Mat :DeepFrozen:
@@ -23,7 +24,7 @@ def sum(xs :List[Int]) :Int as DeepFrozen:
 
 def [makerAuditor :DeepFrozen, &&valueAuditor, &&serializer] := Transparent.makeAuditorKit()
 object makeMatrix as DeepFrozen implements makerAuditor:
-    "Column-major matrices."
+    "Polymorphic column-major matrices."
 
     to run(columns) :Mat:
         def rowSize := columns[0].size()
@@ -42,6 +43,11 @@ object makeMatrix as DeepFrozen implements makerAuditor:
 
             to get(i :Int, j :Int) :Int:
                 return columns[j][i]
+
+            to transpose() :Mat:
+                def cs := _makeList.fromIterable(M.call(zip, "run", columns,
+                                                        [].asMap()))
+                return makeMatrix(cs)
 
             to multiply(mat :Mat) :Mat:
                 return makeMatrix([for j in (0..!columns.size()) {
@@ -72,7 +78,11 @@ def matrixIdentityLeft(hy, mat):
 def matrixIdentityRight(hy, mat):
     hy.assert(mat == mat * makeMatrix.identity(3))
 
+def matrixTransposeIdentity(hy, mat):
+    hy.assert(mat == mat.transpose().transpose())
+
 unittest([
     prop.test([arbMat(3, 3)], matrixIdentityLeft),
     prop.test([arbMat(3, 3)], matrixIdentityRight),
+    prop.test([arbMat(3, 3)], matrixTransposeIdentity),
 ])
