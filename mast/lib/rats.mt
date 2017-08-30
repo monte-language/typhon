@@ -470,6 +470,30 @@ unittest([
     prop.test([arb.Int(=> ceiling)], ratMultiplicationInverse),
 ])
 
+def ratsNumericalStabilitySuite(assert):
+    def r := makeRat.fromInt
+    # Numerical Methods p107, fast.ai Computational Linear Algebra for Coders
+    {
+        def two := r(2)
+        def oneHalf := two.reciprocal()
+        def threeFifths := r(3) / r(5)
+        def f(x) {
+            return if (x <= oneHalf) { two * x } else {
+                two * x - r(1)
+            }
+        }
+        var x := r(10).reciprocal()
+        for _ in (0..!80) {
+            traceln(x)
+            x := f(x)
+        }
+        if (!(x <=> threeFifths)) { assert.fail(`$x != 3/5`) }
+    }
+
+unittest([
+    ratsNumericalStabilitySuite,
+])
+
 def main(_argv) as DeepFrozen:
     def r := makeRat.fromInt(2) / makeRat.fromInt(3)
     traceln(`Goal: $r`)
