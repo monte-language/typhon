@@ -748,7 +748,7 @@ def env2scope(outerNames, env):
     return scope
 
 
-def evalMonte(expr, environment, fqnPrefix, inRepl=False):
+def evalMonte(expr, environment, fqnPrefix, inRepl):
     # Run the main nanopass pipeline.
     ast, outerNames, topLocalNames, localSize = mainPipeline(expr,
             environment.keys(), fqnPrefix, inRepl)
@@ -770,7 +770,7 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     return result, topLocals
 
 
-def evalToPair(expr, scopeMap, inRepl=False, filename=u"<eval>"):
+def evalToPair(expr, scopeMap, filename, inRepl=False):
     scope = unwrapMap(scopeMap)
     result, topLocals = evalMonte(expr, scope2env(scope), filename, inRepl)
     d = scope.copy()

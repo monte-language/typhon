@@ -90,4 +90,4 @@ class AstModule(Module):
 
     @dont_look_inside
     def eval(self, env):
-            return evalMonte(self.astSource, env, self.origin)
+            return evalMonte(self.astSource, env, self.origin, False)

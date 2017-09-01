@@ -1,5 +1,5 @@
 import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
-exports (makeMASTContext)
+exports (makeMASTContext, readMAST)
 
 def packInt(var i :(Int >= 0)) :Bytes as DeepFrozen:
     if (i == 0):
@@ -32,12 +32,14 @@ def packSpan(s) :Bytes as DeepFrozen:
     def endCol := packInt(s.getEndCol())
     return type + startLine + startCol + endLine + endCol
 
+def MAGIC :Bytes := b`Mont$\xe0MAST`
+
 def makeMASTContext() as DeepFrozen:
     "Make a MAST context."
 
     var exprIndex :Int := 0
     var pattIndex :Int := 0
-    def streams := [b`Mont$\xe0MAST$\x01`].diverge()
+    def streams := [MAGIC + b`$\x01`].diverge()
 
     return object MASTContext:
         "A MAST context."
@@ -217,3 +219,242 @@ def makeMASTContext() as DeepFrozen:
                 match =="BindingPattern":
                     def name := packStr(patt.getNoun().getName())
                     b`PB$name`
+
+
+def makeMASTStream(bytes, withSpans, filename) as DeepFrozen:
+    var index := 0
+    return object mastStream:
+        to getIndex():
+            return index
+        to exhausted():
+            return index >= bytes.size()
+
+        to nextByte(=> FAIL):
+            if (mastStream.exhausted()):
+                throw.eject(FAIL, `nextByte: Buffer underrun while streaming`)
+            def rv := bytes[index]
+            index += 1
+            return rv
+
+        to nextBytes(count :(Int > 0), => FAIL):
+            if (mastStream.exhausted()):
+                throw.eject(FAIL, "nextBytes: Buffer underrun while streaming")
+            def rv := bytes.slice(index, index + count)
+            index += count
+            return rv
+
+        to nextDouble(=> FAIL):
+            return _makeDouble.fromBytes(mastStream.nextBytes(8), FAIL)
+
+        to nextVarInt(=> FAIL):
+            var shift := 0
+            var bi := 0
+            var cont := true
+            while (cont):
+                def b := mastStream.nextByte(=> FAIL)
+                bi |= (b & 0x7f) << shift
+                shift += 7
+                cont := (b & 0x80) != 0
+            return bi
+
+        to nextInt():
+            return mastStream.nextVarInt()
+
+        to nextStr(=> FAIL):
+            def size := mastStream.nextInt(=> FAIL)
+            if (size == 0):
+                return ""
+            def via (UTF8.decode) s exit FAIL := mastStream.nextBytes(size)
+            return s
+
+        to nextSpan(=> FAIL):
+            if (!withSpans):
+                return null
+            def b := '\x00' + mastStream.nextByte()
+            def oneToOne := if (b == 'S') { true
+            } else if (b == 'B') { false
+            } else {throw.eject(FAIL, `Couldn't decode span tag $b in ${bytes.slice(index - 10, index + 10)}`)}
+            return _makeSourceSpan(filename, oneToOne,
+                                   mastStream.nextInt(),
+                                   mastStream.nextInt(),
+                                   mastStream.nextInt(),
+                                   mastStream.nextInt())
+def makeMASTReaderContext(builder) as DeepFrozen:
+    def exprs := [].diverge()
+    def patts := [].diverge()
+    def Expr := builder.getExprGuard()
+    def Pattern := builder.getPatternGuard()
+    def Ast := builder.getAstGuard()
+    def chr(i):
+        return '\x00' + i
+    return object mastContext:
+        to getExprs():
+            return exprs.snapshot()
+        to decodeNextTag(stream, => FAIL):
+            def readPatternList():
+                return [for _ in (0..!(stream.nextInt()))
+                        patts[stream.nextInt(=> FAIL)]]
+            def readExprList(guard):
+                return [for _ in (0..!(stream.nextInt()))
+                        exprs[stream.nextInt(=> FAIL)]]
+            def nextExpr() :Expr:
+                return exprs[stream.nextInt(=> FAIL)]
+            def nextNamedExprs():
+                return [for _ in (0..!(stream.nextInt()))
+                        builder.NamedArg(nextExpr(), nextExpr(), null)]
+            def nextPattern() :Pattern:
+                return patts[stream.nextInt(=> FAIL)]
+            def span():
+                return stream.nextSpan(=> FAIL)
+            def tag := chr(stream.nextByte(=> FAIL))
+            #traceln(`Tag: $tag ${stream.getIndex()}`)
+            if (tag == 'L'):
+                def literalTag := chr(stream.nextByte(=> FAIL))
+                # traceln(`Literal tag: $literalTag`)
+                if (literalTag == 'C'):
+                    var buf := b``
+                    while (true):
+                        buf with= (stream.nextByte(=> FAIL))
+                        def via (UTF8.decode) c exit __continue := buf
+                        exprs.push(builder.LiteralExpr(c[0], span()))
+                        break
+                else if (literalTag == 'D'):
+                    exprs.push(builder.LiteralExpr(stream.nextDouble(=> FAIL),
+                                                   span()))
+                else if (literalTag == 'I'):
+                    def i := stream.nextVarInt(=> FAIL)
+                    var si :=  i >> 1
+                    if ((i & 1) != 0):
+                        si ^= -1
+                    exprs.push(builder.LiteralExpr(si, span()))
+                else if (literalTag == 'N'):
+                    exprs.push(builder.LiteralExpr(null, span()))
+                else if (literalTag == 'S'):
+                    exprs.push(builder.LiteralExpr(stream.nextStr(=> FAIL),
+                                                   span()))
+                else:
+                    throw.eject(FAIL, `Didn't know literal tag $literalTag`)
+            else if (tag == 'P'):
+                def pattTag := chr(stream.nextByte(=> FAIL))
+                # traceln(`Pattern tag: $pattTag`)
+                if (pattTag == 'F'):
+                    def name := stream.nextStr(=> FAIL)
+                    def guard := nextExpr()
+                    def sp := span()
+                    patts.push(builder.FinalPattern(builder.NounExpr(name, sp),
+                                                    guard, sp))
+                else if (pattTag == 'I'):
+                    def guard := nextExpr()
+                    patts.push(builder.IgnorePattern(guard, span()))
+                else if (pattTag == 'V'):
+                    def name := stream.nextStr(=> FAIL)
+                    def guard := nextExpr()
+                    def sp := span()
+                    patts.push(builder.VarPattern(builder.NounExpr(name, sp),
+                                                  guard, sp))
+                else if (pattTag == 'L'):
+                    patts.push(builder.ListPattern(readPatternList(), null, span()))
+                else if (pattTag == 'A'):
+                    patts.push(builder.ViaPattern(nextExpr(), nextPattern(),
+                                                  span()))
+                else if (pattTag == 'B'):
+                    def n := stream.nextStr(=> FAIL)
+                    def sp := span()
+                    patts.push(builder.BindingPattern(builder.NounExpr(n, sp),
+                                                      sp))
+            else if (tag == 'N'):
+                exprs.push(builder.NounExpr(stream.nextStr(=> FAIL), span()))
+            else if (tag == 'B'):
+                def n := stream.nextStr(=> FAIL)
+                def sp := span()
+                exprs.push(builder.BindingExpr(
+                    builder.NounExpr(n, sp), sp))
+            else if (tag == 'S'):
+                exprs.push(builder.SeqExpr(readExprList(Expr), span()))
+            else if (tag == 'C'):
+                exprs.push(builder.MethodCallExpr(
+                    nextExpr(), stream.nextStr(=> FAIL),
+                    readExprList(Expr),
+                    nextNamedExprs(), span()))
+            else if (tag == 'D'):
+                exprs.push(builder.DefExpr(nextPattern(), nextExpr(), nextExpr(),
+                                           span()))
+            else if (tag == 'e'):
+                exprs.push(builder.EscapeExpr(nextPattern(), nextExpr(), null,
+                                              null, span()))
+            else if (tag == 'E'):
+                exprs.push(builder.EscapeExpr(nextPattern(), nextExpr(), nextPattern(),
+                                              nextExpr(), span()))
+            else if (tag == 'O'):
+                exprs.push(builder.ObjectExpr(stream.nextStr(=> FAIL),
+                                              nextPattern(),
+                                              nextExpr(),
+                                              readExprList(Expr),
+                                              builder.Script(
+                                                  null,
+                                                  readExprList(Ast["Method"]),
+                                                  readExprList(Ast["Matcher"]),
+                                                  # hey watch this
+                                                  def sp := span()),
+                                              sp))
+            else if (tag == 'M'):
+                exprs.push(builder."Method"(stream.nextStr(=> FAIL),
+                                          stream.nextStr(=> FAIL),
+                                          readPatternList(),
+                                          [for _ in (0..!(stream.nextInt()))
+                                           builder.NamedParam(nextExpr(), nextPattern(),
+                                                              nextExpr(), null)],
+                                          nextExpr(),
+                                          nextExpr(),
+                                          span()))
+            else if (tag == 'R'):
+                exprs.push(builder.Matcher(nextPattern(), nextExpr(), span()))
+            else if (tag == 'A'):
+                def lval := stream.nextStr(=> FAIL)
+                def expr := nextExpr()
+                def sp := span()
+                exprs.push(builder.AssignExpr(builder.NounExpr(lval, sp), expr, sp))
+            else if (tag == 'F'):
+                exprs.push(builder.FinallyExpr(nextExpr(), nextExpr(), span()))
+            else if (tag == 'Y'):
+                exprs.push(builder.CatchExpr(nextExpr(), nextPattern(),
+                                             nextExpr(), span()))
+            else if (tag == 'H'):
+                exprs.push(builder.HideExpr(nextExpr(), span()))
+            else if (tag == 'I'):
+                exprs.push(builder.IfExpr(nextExpr(), nextExpr(), nextExpr(), span()))
+            else if (tag == 'T'):
+                exprs.push(builder.MetaStateExpr(span()))
+            else if (tag == 'X'):
+                exprs.push(builder.MetaContextExpr(span()))
+            else:
+                throw.eject(FAIL, `Didn't know tag $tag`)
+            # if (patts.size() > 0):
+            #     traceln(`Top pattern: ${patts.last()}`)
+            # else:
+            #     traceln(`No patterns yet`)
+            # if (exprs.size() > 0):
+            #     traceln(`Top exprs: ${exprs.last()}`)
+            # else:
+            #     traceln(`No exprs yet`)
+
+def readMAST(bs :Bytes, => filename := "<unknown>",
+             => builder := astBuilder, => FAIL) as DeepFrozen:
+    if (bs.slice(0, MAGIC.size()) != MAGIC):
+        throw.eject(FAIL, `Wrong magic bytes '${bs.slice(0, MAGIC.size())}'`)
+    def version := bs[MAGIC.size()]
+    def content := bs.slice(MAGIC.size() + 1)
+    def withSpans := if (version == 0) {
+        false
+    } else if (version == 1) {
+        true
+    } else {
+        throw.eject(FAIL, `Unsupported MAST version $version`)
+    }
+    def stream := makeMASTStream(content, withSpans, filename)
+    def ctx := makeMASTReaderContext(builder)
+    while (!stream.exhausted()):
+        ctx.decodeNextTag(stream)
+    if (ctx.getExprs().size() == 0):
+        throw.eject(FAIL, "No expressions in MAST")
+    return ctx.getExprs().last()

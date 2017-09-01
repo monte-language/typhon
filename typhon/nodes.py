@@ -155,6 +155,11 @@ def printList(names):
     return u"[%s]" % u", ".join(names)
 
 
+def _nano():
+    from typhon.nano.mast import MastIR
+    return MastIR
+
+
 @autohelp
 @audited.DF
 class StaticScope(Object):
@@ -289,6 +294,10 @@ class _Null(Expr):
     def getNodeName(self):
         return u"LiteralExpr"
 
+    def asNano(self):
+        return _nano().NullExpr()
+
+
 Null = _Null()
 
 
@@ -328,6 +337,9 @@ class Int(Expr):
         except OverflowError:
             return BigInt(self.bi)
 
+    def asNano(self):
+        return _nano().IntExpr(self.bi)
+
 
 @autohelp
 class Str(Expr):
@@ -354,6 +366,9 @@ class Str(Expr):
     @method("Str")
     def getValue(self):
         return self._s
+
+    def asNano(self):
+        return _nano().StrExpr(self._s)
 
 
 def strToString(s):
@@ -388,6 +403,9 @@ class Double(Expr):
     def getValue(self):
         return self._d
 
+    def asNano(self):
+        return _nano().DoubleExpr(self._d)
+
 
 @autohelp
 class Char(Expr):
@@ -414,6 +432,9 @@ class Char(Expr):
     @method("Char")
     def getValue(self):
         return self._c
+
+    def asNano(self):
+        return _nano().CharExpr(self._c)
 
 
 @autohelp
@@ -444,7 +465,10 @@ class Assign(Expr):
 
     @method("Str")
     def getNodeName(self):
-        return u"change"
+        return u"AssignExpr"
+
+    def asNano(self):
+        return _nano().AssignExpr(self.target, self.rvalue.asNano())
 
 
 @autohelp
@@ -505,6 +529,9 @@ class NamedArg(Expr):
     @method("Any")
     def getValue(self):
         return self.value
+
+    def asNano(self):
+        return _nano().NamedArgExpr(self.key.asNano(), self.value.asNano())
 
 
 @autohelp
@@ -583,6 +610,12 @@ class Call(Expr):
     def getNamedArgs(self):
         return self._namedArgs
 
+    def asNano(self):
+        return _nano().CallExpr(self._target.asNano(),
+                                self._verb,
+                                [a.asNano() for a in self._args],
+                                [na.asNano() for na in self._namedArgs])
+
 
 @autohelp
 @withMaker
@@ -627,6 +660,12 @@ class Def(Expr):
     @method("Str")
     def getNodeName(self):
         return u"DefExpr"
+
+    def asNano(self):
+        return _nano().DefExpr(
+            self._p.asNano(),
+            self._e.asNano() if self._e is not None else _nano().NullExpr(),
+            self._v.asNano())
 
 
 @autohelp
@@ -674,6 +713,18 @@ class Escape(Expr):
     def getNodeName(self):
         return u"EscapeExpr"
 
+    def asNano(self):
+        if self._catchPattern is not None and self._catchNode is not None:
+            return _nano().EscapeExpr(
+                self._pattern.asNano(),
+                self._node.asNano(),
+                self._catchPattern.asNano(),
+                self._catchNode.asNano())
+        else:
+            return _nano().EscapeOnlyExpr(
+                self._pattern.asNano(),
+                self._node.asNano())
+
 
 @autohelp
 @withMaker
@@ -705,6 +756,8 @@ class Finally(Expr):
     def getNodeName(self):
         return u"FinallyExpr"
 
+    def asNano(self):
+        return _nano().FinallyExpr(self._block.asNano(), self._atLast.asNano())
 
 @autohelp
 @withMaker
@@ -729,6 +782,8 @@ class Hide(Expr):
     def getNodeName(self):
         return u"HideExpr"
 
+    def asNano(self):
+        return _nano().HideExpr(self._inner.asNano())
 
 @autohelp
 @withMaker
@@ -764,6 +819,9 @@ class If(Expr):
     def getNodeName(self):
         return u"IfExpr"
 
+    def asNano(self):
+        return _nano().IfExpr(self._test.asNano(), self._then.asNano(),
+                              self._otherwise.asNano())
 
 @autohelp
 @withMaker
@@ -804,6 +862,8 @@ class Matcher(Expr):
     def getBody(self):
         return self._block
 
+    def asNano(self):
+        return _nano().MatcherExpr(self._pattern.asNano(), self._block.asNano())
 
 @autohelp
 @withMaker
@@ -823,6 +883,8 @@ class MetaContextExpr(Expr):
     def getNodeName(self):
         return u"MetaContextExpr"
 
+    def asNano(self):
+        return _nano().MetaContextExpr()
 
 @autohelp
 @withMaker
@@ -842,6 +904,8 @@ class MetaStateExpr(Expr):
     def getNodeName(self):
         return u"MetaStateExpr"
 
+    def asNano(self):
+        return _nano().MetaStateExpr()
 
 @autohelp
 @withMaker
@@ -946,6 +1010,14 @@ class Method(Expr):
     def getBody(self):
         return self._b
 
+    def asNano(self):
+        return _nano().MethodExpr(
+            self._d, self._verb,
+            [p.asNano() for p in self._ps],
+            [np.asNano() for np in self._namedParams],
+            self._g.asNano() if self._g is not None else _nano().NullExpr(),
+            self._b.asNano())
+
 
 @autohelp
 @withMaker
@@ -978,6 +1050,8 @@ class Noun(Expr):
     def getName(self):
         return self.name
 
+    def asNano(self):
+        return _nano().NounExpr(self.name)
 
 def nounToString(n):
     if not isinstance(n, Noun):
@@ -1036,6 +1110,15 @@ class Obj(Expr):
             out.indent().writeLine('"%s"' % self._d.encode("utf-8"))
         self._script.pretty(out.indent())
         out.writeLine("}")
+
+    def asNano(self):
+        return _nano().ObjectExpr(
+            self._d,
+            self._n.asNano(),
+            ([self._as.asNano() if self._as is not None else _nano().NullExpr()] +
+             [i.asNano() for i in self._implements]),
+            [m.asNano() for m in self._script._methods],
+            [m.asNano() for m in self._script._matchers])
 
     @method.py("Any")
     def getStaticScope(self):
@@ -1207,6 +1290,8 @@ class Sequence(Expr):
     def getExprs(self):
         return self._l
 
+    def asNano(self):
+        return _nano().SeqExpr([it.asNano() for it in self._l])
 
 @autohelp
 @withMaker
@@ -1241,6 +1326,11 @@ class Try(Expr):
     @method("Str")
     def getNodeName(self):
         return u"CatchExpr"
+
+    def asNano(self):
+        return _nano().TryExpr(self._first.asNano(),
+                               self._pattern.asNano(),
+                               self._then.asNano())
 
 
 @autohelp
@@ -1283,6 +1373,9 @@ class BindingPattern(Pattern):
     @method("Str")
     def getNodeName(self):
         return u"BindingPattern"
+
+    def asNano(self):
+        return _nano().BindingPatt(self._noun)
 
 
 @autohelp
@@ -1330,6 +1423,12 @@ class FinalPattern(Pattern):
             return NullObject
         return self._g
 
+    def asNano(self):
+        return _nano().FinalPatt(
+            self._n,
+            self._g.asNano() if self._g is not None else _nano().NullExpr()
+        )
+
 
 @autohelp
 @withMaker
@@ -1362,6 +1461,10 @@ class IgnorePattern(Pattern):
     def getNodeName(self):
         return u"IgnorePattern"
 
+    def asNano(self):
+        return _nano().IgnorePatt(
+            self._g.asNano() if self._g is not None else _nano().NullExpr()
+        )
 
 @autohelp
 @withMaker
@@ -1413,6 +1516,8 @@ class ListPattern(Pattern):
     def getNodeName(self):
         return u"ListPattern"
 
+    def asNano(self):
+        return _nano().ListPatt([p.asNano() for p in self._ps])
 
 @autohelp
 @withMaker
@@ -1461,6 +1566,13 @@ class NamedParam(Pattern):
             throwStr(ej, u"getDefault/1: Parameter has no default")
         return self._default
 
+    def asNano(self):
+        return _nano().NamedPattern(
+            self._k.asNano(),
+            self._p.asNano(),
+            self._default.asNano() if self._default is not None else _nano().NullExpr()
+        )
+
 
 @autohelp
 @withMaker
@@ -1497,6 +1609,11 @@ class VarPattern(Pattern):
     def getNodeName(self):
         return u"VarPattern"
 
+    def asNano(self):
+        return _nano().VarPatt(
+            self._n,
+            self._g.asNano() if self._g is not None else _nano().NullExpr()
+        )
 
 @autohelp
 @withMaker
@@ -1529,6 +1646,8 @@ class ViaPattern(Pattern):
     def getNodeName(self):
         return u"ViaPattern"
 
+    def asNano(self):
+        return _nano().ViaPatt(self._expr.asNano(), self._pattern.asNano(), None)
 
 def formatName(p):
     if isinstance(p, FinalPattern):

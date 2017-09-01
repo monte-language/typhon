@@ -18,9 +18,10 @@ from typhon.autohelp import autohelp, method
 from typhon.errors import userError
 from typhon.importing import AstModule, obtainModule
 from typhon.load.nano import loadMASTBytes as realLoad
+from typhon.nano.mast import ASTWrapper, BuildKernelNodes, theASTBuilder
 from typhon.nano.interp import (evalToPair as astEvalToPair,
                                 scope2env)
-from typhon.nodes import kernelAstStamp
+from typhon.nodes import Expr, kernelAstStamp
 from typhon.objects.auditors import (deepFrozenStamp, semitransparentStamp,
                                      transparentStamp)
 from typhon.objects.collections.lists import ConstList
@@ -98,17 +99,49 @@ class AstEval(Object):
     def __init__(self, recorder):
         self.recorder = recorder
 
+    @method("Any", "Any", "Any", "Str")
+    @profileTyphon("typhonAstEval.run/3")
+    def run(self, ast, scope, filename):
+        if not isinstance(ast, ASTWrapper.Expr):
+            raise userError(u"Expected a Typhon kernel AST expression")
+        return astEvalToPair(ast._ast, scope, filename, False)[0]
+
+    @method("List", "Any", "Any", "Str", inRepl="Bool")
+    def evalToPair(self, ast, scope, filename, inRepl=False):
+        if not isinstance(ast, ASTWrapper.Expr):
+            raise userError(u"Expected a Typhon kernel AST expression")
+        result, envMap = astEvalToPair(ast._ast, scope, filename, inRepl)
+        return [result, envMap]
+
+
+@autohelp
+@audited.DF
+class AstEval0(Object):
+
+    def __init__(self, recorder):
+        self.recorder = recorder
+
     @method("Any", "Any", "Any")
-    @profileTyphon("astEval.run/2")
+    @profileTyphon("typhonAstEval.run/2")
     def run(self, bs, scope):
         ast = realLoad(unwrapBytes(bs))
-        return astEvalToPair(ast, scope)[0]
+        return astEvalToPair(ast, scope, u"<eval>")[0]
 
-    @method("List", "Any", "Any", inRepl="Bool", filename="Str")
-    def evalToPair(self, bs, scope, inRepl=False, filename=u"<eval>"):
+    @method("List", "Any", "Any", inRepl="Bool")
+    def evalToPair(self, bs, scope, inRepl=False):
         ast = realLoad(unwrapBytes(bs))
-        result, envMap = astEvalToPair(ast, scope, inRepl, filename)
+        result, envMap = astEvalToPair(ast, scope, u"<eval>", inRepl)
         return [result, envMap]
+
+
+@runnable(RUN_1, [deepFrozenStamp])
+def loadMAST(bs):
+    return BuildKernelNodes().visitExpr(realLoad(unwrapBytes(bs)))
+
+
+@runnable(RUN_1, [deepFrozenStamp])
+def loadMAST(bs):
+    return BuildKernelNodes().visitExpr(realLoad(unwrapBytes(bs)))
 
 
 def bootScope(paths, recorder):
@@ -137,5 +170,8 @@ def bootScope(paths, recorder):
         u"SemitransparentStamp": semitransparentStamp,
 
         u"getMonteFile": GetMonteFile(paths, recorder),
-        u"astEval": ae,
+        u"loadMAST": loadMAST(),
+        u"typhonAstEval": ae,
+        u"typhonAstBuilder": theASTBuilder,
+        u"astEval": AstEval0(recorder)
     })

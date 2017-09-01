@@ -61,6 +61,7 @@ def loaderMain():
 
 
     def makeModuleAndConfiguration(modname,
+                                   newReader,
                                    => collectTests := false,
                                    => collectBenchmarks := false):
         def depMap := [].asMap().diverge()
@@ -83,8 +84,13 @@ def loaderMain():
                 def code := makeFileResource(fname).getContents()
                 return when (code) ->
                     try:
-                        def [modObj, _] := astEval.evalToPair(code, safeScope,
-                                                              "filename" => fname)
+                        def modObj := if (newReader) {
+                            typhonAstEval(normalize(readMAST(code), typhonAstBuilder),
+                                          safeScope, fname)
+                        } else {
+                            astEval.evalToPair(code, safeScope,
+                                               "filename" => fname)[0]
+                        }
                         depMap[modname] := makeModuleConfiguration(modObj, [].asMap())
                     catch problem:
                         traceln(`Unable to eval file ${M.toQuote(fname)}`)
@@ -121,15 +127,19 @@ def loaderMain():
             def [[(modname) => module], config] := (moduleAndConfig :ModuleStructure)
             [module, config]
 
-    def args := currentProcess.getArguments().slice(2)
+    var args := currentProcess.getArguments().slice(2)
     traceln(`Loader args: $args`)
     def usage := "Usage: loader run <modname> <args> | loader test <modname>"
     if (args.size() < 1):
         throw(usage)
+    def newReader := args[0] == "-anf"
+    if (newReader):
+        args := args.slice(1)
+
     return switch (args):
         match [=="run", modname] + subargs:
             traceln(`Loading $modname`)
-            def exps := makeModuleAndConfiguration(modname)
+            def exps := makeModuleAndConfiguration(modname, newReader)
             when (exps) ->
                 def [module, _] := exps
                 def excludes := ["typhonEval", "_findTyphonFile", "bench"]
@@ -144,7 +154,7 @@ def loaderMain():
                 M.call(main, "run", [subargs], unsafeScopeValues)
         match [=="dot", modname] + subargs:
             def stdout := stdio.stdout()
-            def exps := makeModuleAndConfiguration(modname)
+            def exps := makeModuleAndConfiguration(modname, newReader)
             when (exps) ->
                 # We only care about the config.
                 def [_, topConfig] := exps
@@ -166,8 +176,9 @@ def loaderMain():
             def someMods := promiseAllFulfilled(
                 [for modname in (modnames)
                  makeModuleAndConfiguration(modname,
+                                            newReader,
                                             "collectTests" => true)] +
-                [def testRunner := makeModuleAndConfiguration("testRunner")])
+                [def testRunner := makeModuleAndConfiguration("testRunner", newReader)])
             when (someMods) ->
                 def [[=> makeRunner] | _, _] := testRunner
                 def stdout := stdio.stdout()
@@ -186,6 +197,7 @@ def loaderMain():
             def someMods := promiseAllFulfilled(
                 [for modname in (modnames)
                  makeModuleAndConfiguration(modname,
+                                            newReader,
                                             "collectBenchmarks" => true)] +
                 [(def benchRunner := makeModuleAndConfiguration("benchRunner"))])
             return when (someMods) ->

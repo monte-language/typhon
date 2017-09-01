@@ -33,6 +33,7 @@ from typhon.objects.auditors import deepFrozenStamp
 from typhon.objects.comparison import Incomparable
 from typhon.objects.constants import NullObject, unwrapBool, wrapBool
 from typhon.objects.root import Object, audited, runnable
+from typhon.spans import Span
 from typhon.prelude import getGlobalValue
 from typhon.quoting import quoteChar, quoteStr
 
@@ -1112,6 +1113,10 @@ class SourceSpan(Object):
                        IntObject(self.startCol), IntObject(self.endLine),
                        IntObject(self.endCol)]), EMPTY_MAP]
 
+    def toSpan(self):
+        return Span(self.uri.toString(), self._isOneToOne,
+                    self.startLine, self.startCol,
+                    self.endLine, self.endCol)
 
 def spanCover(a, b):
     """

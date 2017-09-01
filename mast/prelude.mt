@@ -709,7 +709,7 @@ def scopeNames := [
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
-    => M, => Ref,  => throw, => astEval, => promiseAllFulfilled,
+    => M, => Ref,  => throw, => astEval, => typhonAstEval, => typhonAstBuilder, => loadMAST, => promiseAllFulfilled,
     => makeLazySlot]
 
 def scopeAsDF(scope):
@@ -772,10 +772,10 @@ for module in ([
     "lib/monte/monte_expander",
     "lib/monte/monte_optimizer",
     "lib/codec/utf8",
-    "lib/monte/mast",
 ]):
     dependencies[module] := loadit(module)
-
+importIntoScope("lib/monte/normalizer")
+importIntoScope("lib/monte/mast")
 # The big kahuna: The Monte compiler and QL.
 # Note: This isn't portable. The usage of typhonEval() ties us to Typhon. This
 # doesn't *have* to be the case, but it's the case we currently want to deal

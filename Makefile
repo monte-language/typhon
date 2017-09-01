@@ -2,6 +2,7 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 	boot/lib/monte/monte_parser.mast \
 	boot/lib/monte/monte_expander.mast \
 	boot/lib/monte/monte_optimizer.mast \
+	boot/lib/monte/normalizer.mast \
 	boot/lib/monte/monte_verifier.mast \
 	boot/lib/monte/mast.mast \
 	boot/lib/codec/utf8.mast \
@@ -110,6 +111,7 @@ bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mas
 
 monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 	mast/lib/monte/monte_parser.mast mast/lib/monte/monte_expander.mast \
+	mast/lib/monte/normalizer.mast \
 	mast/lib/monte/monte_optimizer.mast \
 	mast/lib/monte/mast.mast mast/lib/monte/monte_verifier.mast \
 	mast/lib/monte/meta.mast mast/lib/monte/mix.mast mast/format.mast \

@@ -1,8 +1,22 @@
-from rpython.rlib.rbigint import BASE10
+import sys
+import linecache
+from types import ModuleType
+import py
+
+from rpython.rlib.rbigint import BASE10, rbigint
 
 from typhon import nodes
+from typhon.atoms import getAtom
+from typhon.autohelp import autoguard, autohelp, method
+from typhon.errors import userError
 from typhon.nanopass import makeIR
+from typhon.objects.constants import NullObject
+from typhon.objects.data import SourceSpan
+from typhon.objects.root import Object, audited
 from typhon.quoting import quoteChar, quoteStr
+from typhon.objects.collections.lists import ConstList
+
+GETSTARTLINE_0 = getAtom(u"getStartLine", 0)
 
 def saveScripts(ast):
     ast = SanityCheck().visitExpr(ast)
@@ -434,3 +448,141 @@ class BuildKernelNodes(MastIR.makePassTo(None)):
         return nodes.Method(doc, verb, [self.visitPatt(p) for p in patts],
                             [self.visitNamedPatt(p) for p in namedPatts],
                             self.visitExpr(guard), self.visitExpr(body))
+
+class GeneratedCodeLoader(object):
+    """
+    Object for use as a module's __loader__, to display generated
+    source.
+    """
+    def __init__(self, source):
+        self.source = source
+    def get_source(self, name):
+        return self.source
+
+
+def wrapperCls(name, superName, paramInfo):
+    accessors = []
+  #   if paramInfo:
+  #       for pname, typ in paramInfo:
+  #           g = paramGuards.get(name, {}).get(pname, "Any")
+  #           accessors.append("""
+  # @method("%s")
+  # def get%s(self):
+  #  return self._ast.%s
+  #           """ % (g, pname.title(), pname))
+    return """
+ @autohelp
+ class %s(%s):
+  __module__ = 'typhon.nano.mast_generatedwrapper'
+  def __init__(self, ast):
+   assert isinstance(ast, MastIR.%s)
+   self._ast = ast
+%s
+""" % (name, superName, name, '\n'.join(accessors))
+
+def paramCheck(pname, typ, name):
+    if typ is None or typ in MastIR.terminals:
+
+        ptype = paramGuards.get(name, {}).get(pname, None)
+        if ptype == "Int":
+            return "\n  %s_0 = rbigint.fromint(%s)\n" % (pname, pname)
+        else:
+            return "\n  %s_0 = %s\n" % (pname, pname)
+    elif typ[-1] == '*':
+        typ = typ[:-1]
+        return """
+  if not isinstance (%s, ConstList):
+   raise userError(u'Expected "%s" to be a list of %s')
+  for item in %s.objs:
+   if not (isinstance(item, ASTWrapper.%s) or item is NullObject):
+    raise userError(u'Expected "%s" a list of %s')
+  %s_0 = [MastIR.NullExpr(None) if it is NullObject else it._ast for it in %s.objs]
+""" % (pname, pname, typ, pname, typ, pname, typ, pname, pname)
+    else:
+        return """
+  if %s is NullObject:
+   %s_0 = MastIR.NullExpr(None)
+  else:
+   if not isinstance(%s, ASTWrapper.%s):
+    raise userError(u'Expected \"%s\" to be %s')
+   %s_0 = %s._ast
+""" % (pname, pname, pname, typ, pname, typ, pname, pname)
+
+paramGuards = {
+    'CharExpr': {'c': 'Char'},
+    'DoubleExpr': {'d': 'Double'},
+    'IntExpr': {'i': 'Int'},
+    'StrExpr': {'s': 'Str'},
+    'CallExpr': {'verb': 'Str'},
+    'ObjectExpr': {'doc': 'Str'},
+    'MethodExpr': {'doc': 'Str', 'verb': 'Str'},
+    'Noun': 'Str',
+}
+
+def guardNames(name, paramInfo):
+    names = ["Any"]
+    for pname, typ in paramInfo:
+        if typ is None:
+            names.append(paramGuards[name][pname])
+        elif typ in MastIR.terminals:
+            names.append(paramGuards[typ])
+        else:
+            names.append("Any")
+
+    names.append("Any")
+    return names
+def checkSpan():
+    return """
+  if span is NullObject:
+   span_0 = None
+  elif isinstance(span, SourceSpan):
+   span_0 = span.toSpan()
+  else:
+   raise userError(u'Expected "span" to be a SourceSpan')
+"""
+
+def makeMastBuilder():
+    "NOT_RPYTHON"
+    import itertools
+    methods = []
+    wrapperClasses = []
+    for groupName, group in MastIR.nonterms.items():
+        wrapperClasses.append(wrapperCls(groupName, "Object", None))
+        for name, paramInfo in group.items():
+            wrapperClasses.append(wrapperCls(name, groupName, paramInfo))
+            params = [n[0] for n in paramInfo] + ['span']
+            checks = [paramCheck(pname, typ, name)
+                      for pname, typ in paramInfo]
+            checks.append(checkSpan())
+            ps = [p + "_0" for p in params]
+            wrapper = "ASTWrapper.%s(MastIR.%s(%s))" % (name, name, ', '.join(ps))
+            methods.append("\n @method(%s)\n def %s(%s):%s\n  return %s" % (
+                ', '.join(['"%s"' % g for g in guardNames(name, paramInfo)]),
+                name, ', '.join(['self'] + params), ''.join(checks), wrapper))
+    src = """
+class ASTWrapper(object):
+ __module__ = 'typhon.nano.mast_generatedwrapper'
+%s
+@autohelp
+@audited.DF
+class ASTBuilder(Object):
+ __module__ = 'typhon.nano.mast_generatedwrapper'
+ _immutable=True
+%s
+""" % (''.join(wrapperClasses),''.join(methods))
+    d = {'ConstList': ConstList, 'userError': userError, 'Object': Object, 'audited': audited, 'method': method, 'autohelp': autohelp, 'SourceSpan': SourceSpan, 'rbigint': rbigint, 'NullObject': NullObject, 'MastIR': MastIR}
+    modname = "typhon.nano.mast_generatedwrapper"
+    fname = "typhon/nano/mast_generatedwrapper.py"
+    open(fname, 'w').write(src)
+    mod = ModuleType(modname)
+    mod.__loader__ = GeneratedCodeLoader(src)
+    mod.__dict__ .update(d)
+    mod.__file__ = fname
+    sys.modules[modname] = mod
+    exec py.code.Source(src).compile(fname) in mod.__dict__
+    linecache.getlines(fname, mod.__dict__)
+    return mod.ASTBuilder, mod.ASTWrapper
+
+
+ASTBuilder, ASTWrapper = makeMastBuilder()
+theASTBuilder = ASTBuilder()

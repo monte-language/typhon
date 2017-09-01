@@ -402,14 +402,6 @@ def makeScopeWalker() as DeepFrozenStamp:
         if (nodeName == "FinallyExpr"):
             s(getStaticScope(node.getBody()).hide() +
               getStaticScope(node.getUnwinder()).hide())
-        if (nodeName == "TryExpr"):
-            if (node.getFinally() == null):
-                s((getStaticScope(node.getBody()) +
-                  sumScopes(node.getCatchers())).hide())
-            else:
-                s((getStaticScope(node.getBody()) +
-                   sumScopes(node.getCatchers())).hide() +
-                  getStaticScope(node.getFinally()).hide())
         if (nodeName == "EscapeExpr"):
             if (node.getCatchPattern() == null):
                 s((getStaticScope(node.getEjectorPattern()) +
@@ -626,7 +618,6 @@ def makeCoreAst() as DeepFrozenStamp:
                                     "auditors*" => Expr, "messageDesc" => MessageDesc],
         "CatchExpr"             => ["body" => Expr, "pattern" => Pattern, "catcher" => Expr],
         "FinallyExpr"           => ["body" => Expr, "unwinder" => Expr],
-        "TryExpr"               => ["body" => Expr],
         "EscapeExpr"            => ["ejectorPattern" => Pattern, "body" => Expr,
                                     "catchPattern?" => Pattern, "catchBody?" => Expr],
         "SwitchExpr"            => ["specimen" => Expr, "matchers*" => Matcher],

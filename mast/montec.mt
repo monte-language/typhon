@@ -1,5 +1,4 @@
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
-import "lib/monte/mast" =~ [=> makeMASTContext :DeepFrozen]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
 import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
@@ -62,6 +61,7 @@ def parseArguments(var argv, ej) as DeepFrozen:
     def inputFile
     def outputFile
     while (argv.size() > 0):
+        traceln(`ARGV $argv`)
         switch (argv):
             match [=="-mix"] + tail:
                 useMixer := true
