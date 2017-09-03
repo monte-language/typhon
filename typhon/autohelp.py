@@ -399,7 +399,7 @@ def autoguard(*tys, **kwargs):
 
         @method.py("Bool", "Any")
         def supersetOf(self, other):
-            return False
+            return self is other
 
         @method("Str")
         def getDocstring(self):
