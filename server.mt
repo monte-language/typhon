@@ -1,7 +1,11 @@
-import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
-import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
-import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
+import "lib/entropy/entropy" =~ [=> makeEntropy :DeepFrozen]
+import "lib/entropy/pcg" =~ [=> makePCG :DeepFrozen]
+
+import "saver" =~ [
+    => makeSaver :DeepFrozen,
+    => makeUnique :DeepFrozen,
+    => makeReviver :DeepFrozen]
 exports (main)
 
 def makeFile(makeFileResource, path) as DeepFrozen:
@@ -14,31 +18,27 @@ def makeFile(makeFileResource, path) as DeepFrozen:
             return when (def input := File.getContents()) ->
                 UTF8.decode(input, throw)
 
-def load(code :Str, name: Str, ej) as DeepFrozen:
-    traceln(`loading $name`)
-    # traceln(code)
-    def tokens := makeMonteLexer(code, name)
-    def ast := expand(parseModule(tokens, astBuilder, ej),
-                      astBuilder, ej)
-    # traceln(`app $name AST: $ast`)
-    def moduleBody := eval(ast, safeScope)
-    def package := null  # umm...
-    def moduleExports := moduleBody(package)
-    # traceln(`app $name module: $module`)
-    return moduleExports
 
-
-def main(argv :List[Str], =>makeFileResource) :Vow[Int] as DeepFrozen:
+def main(argv :List[Str], =>makeFileResource, =>currentRuntime) :Vow[Int] as DeepFrozen:
+    def [_, seed] := currentRuntime.getCrypt().makeSecureEntropy().getEntropy()
+    def rng := makeEntropy(makePCG(seed, 0))
+    def unique := makeUnique(rng.nextInt)
     def cwd := makeFile(makeFileResource, ".")
+    def dbfile := cwd / "capper.db"
+    def reviver := makeReviver(cwd)
+    def saver := makeSaver(unique, dbfile, reviver.toMaker)
+
     def args := argv.slice(2)  # normally 1, but monte eval is a little goofy
 
-    return if (args =~ [=="--make", appName]):
-        # perhaps: cwd`apps/$appName/main.mt`
-        when (def appCode := (cwd / "apps" / appName / "main.mt").getText()) ->
-            def [=> make :DeepFrozen] | _ := load(appCode, appName, throw)
-            def thing := make()
-            def state := thing._unCall()
-            traceln(`$appName state: $state`)
+    return if (args =~ [=="--make", appName] + _appArgs):
+        # perhaps: cwd`apps/$appName/server.mt`
+        #@@def obj := M.send(saver, "make", [appName] + appArgs, [].asMap())
+        def obj := saver<-make(appName)
+        when (obj) ->
+            traceln(`$appName obj: $obj`)
+            traceln(`$appName state: ${obj._unCall()}`)
+            obj.setGreeting("bye bye!")
+            traceln(`$appName state2: ${obj._unCall()}`)
             0
         catch oops:
             traceln(`???`)
