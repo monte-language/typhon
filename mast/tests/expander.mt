@@ -357,8 +357,12 @@ def specimens := [
      def foo := {
          def super := baz.get()
          object foo {
-             match pair_1 {
-                 M.callWithMessage(super, pair_1)
+             method _printOn(out_1) {
+                 out_1.print(\"<foo>\")
+                 null
+             }
+             match message_2 {
+                 M.callWithMessage(super, message_2)
              }
 
          }

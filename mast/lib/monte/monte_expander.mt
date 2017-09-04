@@ -338,7 +338,7 @@ def expand(node, builder, fail) as DeepFrozen:
         return seqExpr(promises.snapshot() + [resDef] + resolvers.snapshot(), span)
 
     def _expandObject(renamings, doco, name, asExpr, auditors, [xtends, methods, matchers], span):
-        def p := tempNounExpr("pair", span)
+        def p := tempNounExpr("message", span)
 
         def superExpr := if (xtends.getNodeName() == "NounExpr") {
             defExpr(builder.BindingPattern(nounExpr("super", span), span), null,
@@ -347,6 +347,40 @@ def expand(node, builder, fail) as DeepFrozen:
             defExpr(plainPatt(nounExpr("super", span), span), null, renameCycles(xtends, renamings), span)
         }
 
+        # Offer a better selection of Miranda methods than the runtime.
+        def newMethods := methods + {
+            var needPrintOn :Bool := true
+            for m in (methods) {
+                switch ([m.getVerb(), m.getParams().size()]) {
+                    match ==["_printOn", 1] { needPrintOn := false }
+                    match _ { null }
+                }
+            }
+            def l := [].diverge()
+            if (needPrintOn) {
+                # method _printOn(out) { out.print("<name>") ; null }
+                def out := tempNounExpr("out", span)
+                def n := name.getNoun().getName()
+                def label := litExpr(`<$n>`, span)
+                def seq := [
+                    callExpr(out, "print", [label], [], span),
+                    nounExpr("null", span),
+                ]
+                def m := builder."Method"(null, "_printOn",
+                                          [plainPatt(out, span)], [], null,
+                                          seqExpr(seq, span), span)
+                l.push(m)
+            }
+            l
+        }
+        def newMatchers := matchers + [
+            # match message { M.callWithMessage(super, message) }
+            builder.Matcher(plainPatt(p, span),
+                callExpr(nounExpr("M", span), "callWithMessage",
+                         [nounExpr("super", span), p], [], span), span)
+        ]
+        def script := builder.Script(null, newMethods, newMatchers, span)
+
         # We need to get the result of the asExpr into the guard for the
         # overall defExpr. If (and only if!) we have the auditor as a single
         # noun (e.g. DeepFrozen), then we should use it directly; otherwise,
@@ -354,17 +388,11 @@ def expand(node, builder, fail) as DeepFrozen:
         # similar but subtler logic was used in superExpr. ~ C.
         if (asExpr == null):
             return defExpr(name, null, builder.HideExpr(seqExpr([superExpr,
-                builder.ObjectExpr(doco, name, null, auditors, builder.Script(null, methods,
-                    matchers + [builder.Matcher(plainPatt(p, span),
-                         callExpr(nounExpr("M", span), "callWithMessage",
-                              [nounExpr("super", span), p], [], span), span)], span), span)], span),
+                builder.ObjectExpr(doco, name, null, auditors, script, span)], span),
                 span), span)
         else if (asExpr.getNodeName() == "NounExpr"):
             return defExpr(name.withGuard(asExpr), null, builder.HideExpr(seqExpr([superExpr,
-                builder.ObjectExpr(doco, name, asExpr, auditors, builder.Script(null, methods,
-                    matchers + [builder.Matcher(plainPatt(p, span),
-                         callExpr(nounExpr("M", span), "callWithMessage",
-                              [nounExpr("super", span), p], [], span), span)], span), span)], span),
+                builder.ObjectExpr(doco, name, asExpr, auditors, script, span)], span),
                 span), span)
         else:
             def auditorNoun := tempNounExpr("auditor", span)
@@ -376,10 +404,8 @@ def expand(node, builder, fail) as DeepFrozen:
             # scoping it correctly. ~ C.
             return builder.HideExpr(seqExpr([auditorExpr,
                 defExpr(name.withGuard(auditorNoun), null, builder.HideExpr(seqExpr([superExpr,
-                    builder.ObjectExpr(doco, name, auditorNoun, auditors, builder.Script(null, methods,
-                        matchers + [builder.Matcher(plainPatt(p, span),
-                             callExpr(nounExpr("M", span), "callWithMessage",
-                                  [nounExpr("super", span), p], [], span), span)], span), span)], span),
+                    builder.ObjectExpr(doco, name, auditorNoun, auditors,
+                    script, span)], span),
                     span), span)], span), span)
 
     def expandObject(doco, name, asExpr, auditors, [xtends, methods, matchers], span):
