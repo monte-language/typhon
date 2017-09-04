@@ -9,21 +9,21 @@ def makeTraversalKey := <elib:tables.TraversalKey>
 def makeFlexCycleBreaker
 def makeConstCycleBreaker
 
-/**
- * Provides CycleBeaker equivalents to any of the operations defined by
- * {@link EMap}.
- * <p>
- * This used as the super-object for wrapping an EMap independent of
- * whether the original is a ConstMap or a FlexMap. Because these are exactly
- * the read-only operations, this is also used directly as the object that
- * corresponds to an {@link ROMap} (a Read-Only EMap).
- *
- * @param roPMap Should either be a {@link ROMap} or a {@link ConstMap}, ie, a
- *               valid response from {@link EMap#readOnly()}. This should be a
- *               <i>PowerMap</i>, ie, all the keys in this map should be
- *               {@link TraversalKey}s.
- * @author Mark S. Miller
- */
+# /**
+#  * Provides CycleBeaker equivalents to any of the operations defined by
+#  * {@link EMap}.
+#  * <p>
+#  * This used as the super-object for wrapping an EMap independent of
+#  * whether the original is a ConstMap or a FlexMap. Because these are exactly
+#  * the read-only operations, this is also used directly as the object that
+#  * corresponds to an {@link ROMap} (a Read-Only EMap).
+#  *
+#  * @param roPMap Should either be a {@link ROMap} or a {@link ConstMap}, ie, a
+#  *               valid response from {@link EMap#readOnly()}. This should be a
+#  *               <i>PowerMap</i>, ie, all the keys in this map should be
+#  *               {@link TraversalKey}s.
+#  * @author Mark S. Miller
+#  */
 def makeROCycleBreaker(roPMap) :near {
     def readOnlyCycleBreaker {
 
@@ -48,11 +48,11 @@ def makeROCycleBreaker(roPMap) :near {
     }
 }
 
-/**
- *
- *
- * @author Mark S. Miller
- */
+# /**
+#  *
+#  *
+#  * @author Mark S. Miller
+#  */
 bind makeFlexCycleBreaker(flexPMap) :near {
     # Note that this is just delegation, not inheritance, in that we are not
     # initializing the template with flexCycleBreaker. By the same token,
@@ -67,11 +67,11 @@ bind makeFlexCycleBreaker(flexPMap) :near {
     }
 }
 
-/**
- *
- *
- * @author Mark S. Miller
- */
+# /**
+#  *
+#  *
+#  * @author Mark S. Miller
+#  */
 bind makeConstCycleBreaker(constPMap) :near {
     def constCycleBreaker extends makeROCycleBreaker(constPMap.readOnly()) {
 
@@ -81,33 +81,33 @@ bind makeConstCycleBreaker(constPMap) :near {
 
 def EMPTYConstCycleBreaker := makeConstCycleBreaker([].asMap())
 
-/**
- * A CycleBreaker is like an EMap except that it accepts unsettled
- * references as keys.
- * <p>
- * This has somewhat counter-intuitive results, as is to be documented at
- * <a href="http://www.erights.org/elib/equality/same-ref.html"
- * >Reference Sameness</a>.
- * <p>
- * With a CycleBreaker, one can write alorithms to finitely walk infinite
- * partial structures like
- * <pre>    def x := [x, p]</pre>
- * even when <tt>p</tt> is an unresolved Promise. Without CycleBreaker (or
- * rather, without the primitive it uses, {@link TraversalKey}) this does not
- * otherwise seem possible.
- *
- * @author Mark S. Miller
- */
+# /**
+#  * A CycleBreaker is like an EMap except that it accepts unsettled
+#  * references as keys.
+#  * <p>
+#  * This has somewhat counter-intuitive results, as is to be documented at
+#  * <a href="http://www.erights.org/elib/equality/same-ref.html"
+#  * >Reference Sameness</a>.
+#  * <p>
+#  * With a CycleBreaker, one can write alorithms to finitely walk infinite
+#  * partial structures like
+#  * <pre>    def x := [x, p]</pre>
+#  * even when <tt>p</tt> is an unresolved Promise. Without CycleBreaker (or
+#  * rather, without the primitive it uses, {@link TraversalKey}) this does not
+#  * otherwise seem possible.
+#  *
+#  * @author Mark S. Miller
+#  */
 def makeCycleBreaker {
 
-    /**
-     *
-     */
+    # /**
+    #  *
+    #  */
     to run() :near { EMPTYConstCycleBreaker }
 
-    /**
-     *
-     */
+    # /**
+    #  *
+    #  */
     to byInverting(map) :near {
         def result := EMPTYConstCycleBreaker.diverge()
         for key => value in map {
