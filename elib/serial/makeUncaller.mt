@@ -70,7 +70,7 @@ object makeUncaller {
     #  * <li>The list of arguments
     #  * </ul>
     #  */
-    to makeAmplifier(unsealer) :Uncaller {
+    method makeAmplifier(unsealer) :Uncaller {
         object amplifier {
             to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {
 

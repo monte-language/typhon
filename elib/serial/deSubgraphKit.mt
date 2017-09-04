@@ -124,7 +124,7 @@ def makeUnevaler(uncallerList, scalpelMap) :Near {
 
             # /** Build a use-occurrence of a variable. */
             def genVarUse(varID :Any[Str, Int]) :Node {
-                if (varID =~ varName :Str) {
+                return if (varID =~ varName :Str) {
                     builder.buildImport(varName)
                 } else {
                     builder.buildIbid(varID)
@@ -143,10 +143,10 @@ def makeUnevaler(uncallerList, scalpelMap) :Near {
                 def promIndex := builder.buildPromise()
                 scalpel[obj] := promIndex
                 def rValue := genObject(obj)
-                builder.buildDefrec(promIndex+1, rValue)
+                return builder.buildDefrec(promIndex+1, rValue)
             }
 
-            builder.buildRoot(generate(root))
+            return builder.buildRoot(generate(root))
         }
 
         # /**
@@ -201,29 +201,29 @@ object deSubgraphKit {
     #  *     of behaviors.
     #  * </ul>
     #  */
-    to getMinimalScope() :Near { minimalScope }
+    method getMinimalScope() :Near { minimalScope }
 
     # /**
     #  * XXX For now, it's the same as the minimalScope, but we expect to add
     #  * more bindings from the safeScope; possibly all of them.
     #  */
-    to getDefaultScope() :Near { defaultScope }
+    method getDefaultScope() :Near { defaultScope }
 
     # /**
     #  *
     #  */
-    to getMinimalScalpel() :Near { minimalScalpel }
+    method getMinimalScalpel() :Near { toScalpel(minimalScope) }
 
     # /**
     #  * XXX For now, it's the same as the minimalScalpel, but we expect to add
     #  * more bindings from the safeScope; possibly all of them.
     #  */
-    to getDefaultScalpel() :Near { defaultScalpel }
+    method getDefaultScalpel() :Near { toScalpel(defaultScope) }
 
     # /**
     #  *
     #  */
-    to getDefaultUncallers() :Uncaller[] { defaultUncallers }
+    method getDefaultUncallers() :Uncaller[] { defaultUncallers }
 
     # /**
     #  * Makes a builder which evaluates a Data-E tree in the default scope to a
@@ -231,7 +231,7 @@ object deSubgraphKit {
     #  *
     #  * @see #getMinimalScope
     #  */
-    to makeBuilder() :Near {
+    method makeBuilder() :Near {
         deSubgraphKit.makeBuilder(defaultScope)
     }
 
@@ -252,7 +252,7 @@ object deSubgraphKit {
         def Node := Any
         def Root := Any
 
-        object deSubgraphBuilder implements DEBuilderOf(Node, Root) {
+        return object deSubgraphBuilder implements DEBuilderOf(Node, Root) {
             to getNodeType() :Near { Node }
             to getRootType() :Near { Root }
 
