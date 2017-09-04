@@ -5,6 +5,7 @@
 
 import "serial.RemoteCall" =~ [=>makeRemoteCall :DeepFrozen]
 import "org.erights.e.elib.serial.Uncaller" =~ [=>Uncaller :DeepFrozen]
+import "./guards" =~ [Tuple :DeepFrozen, NotNull :DeepFrozen]
 
 object minimalUncaller implements Uncaller {
     to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {
@@ -99,7 +100,7 @@ object makeUncaller {
                 if (Ref.isSelfless(obj)) {
                     for baseUncaller in (baseUncallers) {
                         if (baseUncaller.optUncall(obj) =~
-                              result :notNull) {
+                              result :NotNull) {
 
                             return result
                         }

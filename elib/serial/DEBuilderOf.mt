@@ -4,7 +4,7 @@
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
 # module "org.erights.e.elib.serial.DEBuilderOf"
-
+import "./guards" =~ [=>Guard :DeepFrozen]
 
 # /**
 #  * Data-E is the subset of E used for serializing a subgraph by unevaling to an
