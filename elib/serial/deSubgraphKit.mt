@@ -21,9 +21,9 @@ def minimalScope := [
     "true"              => true,
     "NaN"               => NaN,
     "Infinity"          => Infinity,
-    "__makeList"        => _makeList,
-    "__makeInt"         => _makeInt,
+    "_makeList"        => _makeList,
 #    "__identityFunc"    => __identityFunc,
+    "_makeInt"         => _makeInt,
 #    "import__uriGetter" => import__uriGetter
 ]
 
