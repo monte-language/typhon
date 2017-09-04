@@ -10,12 +10,12 @@ import "./elib/serial/DEBuilderOf" =~ [=>DEBuilderOf :DeepFrozen]
 # TODO: import "serial.deSrcKit" =~ [=>deSrcKit :DeepFrozen]
 import "./elib/tables/makeCycleBreaker" =~ [=>makeCycleBreaker :DeepFrozen]
 import "./elib/serial/makeUncaller" =~ [=>makeUncaller :DeepFrozen, =>Uncaller :DeepFrozen]
+exports (makeUnevaler, deSubgraphKit)
 
-
-def defaultUncallers := makeUncaller.getDefaultUncallers()
+def defaultUncallers :DeepFrozen := makeUncaller.getDefaultUncallers()
 
 # See comment on getMinimalScope() below.
-def minimalScope := [
+def minimalScope :DeepFrozen := [
     "null"              => null,
     "false"             => false,
     "true"              => true,
@@ -27,11 +27,10 @@ def minimalScope := [
 #    "import__uriGetter" => import__uriGetter
 ]
 
-def defaultScope := minimalScope
+def defaultScope :DeepFrozen := minimalScope
+def toScalpel(scope) as DeepFrozen:
+    return makeCycleBreaker.byInverting(scope)
 
-def minimalScalpel := makeCycleBreaker.byInverting(minimalScope)
-
-def defaultScalpel := minimalScalpel
 
 # /**
 #  * Serialize by generating an expression whose evaluation would produce a
@@ -60,12 +59,12 @@ def defaultScalpel := minimalScalpel
 #  *                   each recognize(..).
 #  * @author Mark S. Miller
 #  */
-def makeUnevaler(uncallerList, scalpelMap) :Near {
+def makeUnevaler(uncallerList, scalpelMap) :Near as DeepFrozen {
 
     # /**
     #  *
     #  */
-    object unevaler {
+    return object unevaler {
         # /**
         #  *
         #  */
@@ -166,8 +165,6 @@ def makeUnevaler(uncallerList, scalpelMap) :Near {
     }
 }
 
-def defaultRecognizer := makeUnevaler(defaultUncallers, defaultScalpel)
-
 
 # /**
 #  * Unserializes/evals by building a subgraph of objects, or serializes/unevals
@@ -175,7 +172,7 @@ def defaultRecognizer := makeUnevaler(defaultUncallers, defaultScalpel)
 #  *
 #  * @author Mark S. Miller
 #  */
-object deSubgraphKit {
+object deSubgraphKit as DeepFrozen {
 
     # /**
     #  * This is the default scope used for recognizing/serializing/unevaling and
@@ -292,7 +289,9 @@ object deSubgraphKit {
     # /**
     #  *
     #  */
-    to getDefaultRecognizer() :Near { defaultRecognizer }
+    to getDefaultRecognizer() :Near {
+        return makeUnevaler(defaultUncallers, toScalpel(defaultScope))
+    }
 
     # /**
     #  *
@@ -304,7 +303,7 @@ object deSubgraphKit {
             optUncallers
         }
         def scalpel := if (null == optScalpel) {
-            defaultScalpel
+            toScalpel(defaultScope)
         } else {
             optScalpel
         }
@@ -314,7 +313,8 @@ object deSubgraphKit {
     # /**
     #  * Uses the default recognizer
     #  */
-    to recognize(root, builder) :(def Root := builder.getRootType()) {
+    method recognize(root, builder) :(def _Root := builder.getRootType()) {
+        def defaultRecognizer := deSubgraphKit.getDefaultRecognizer()
         defaultRecognizer.recognize(root, builder)
     }
 }

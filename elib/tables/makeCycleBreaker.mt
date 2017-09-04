@@ -2,12 +2,11 @@
 
 # Copyright 2003 Hewlett Packard, Inc. under the terms of the MIT X license
 # found at http://www.opensource.org/licenses/mit-license.html ................
+exports (makeCycleBreaker)
 
-import ":org.erights.e.elib.tables.TraversalKey" =~ [=>TraversalKey :DeepFrozen]
-import "tables.TraversalKey" =~ [=>makeTraversalKey :DeepFrozen]
+def makeTraversalKey :DeepFrozen := _equalizer.makeTraversalKey
 
-def makeFlexCycleBreaker
-def makeConstCycleBreaker
+object it as DeepFrozen {
 
 # /**
 #  * Provides CycleBeaker equivalents to any of the operations defined by
@@ -24,27 +23,27 @@ def makeConstCycleBreaker
 #  *               {@link TraversalKey}s.
 #  * @author Mark S. Miller
 #  */
-def makeROCycleBreaker(roPMap) :Near {
+method makeROCycleBreaker(roPMap) :Near {
     object readOnlyCycleBreaker {
 
-        to diverge()        :Near { makeFlexCycleBreaker(roPMap.diverge()) }
-        to snapshot()       :Near { makeConstCycleBreaker(roPMap.snapshot()) }
+        method diverge()        :Near { it.makeFlexCycleBreaker(roPMap.diverge()) }
+        method snapshot()       :Near { it.makeConstCycleBreaker(roPMap.snapshot()) }
         # The following implementation technique is only possible because we're
         # using delegation rather than inheritance.
-        to readOnly()       :Near { readOnlyCycleBreaker }
+        method readOnly()       :Near { readOnlyCycleBreaker }
 
-        to maps(key)     :Bool { roPMap.maps(makeTraversalKey(key)) }
-        to get(key)          :Any { roPMap[makeTraversalKey(key)] }
-        to fetch(key, instead) :Any { roPMap.fetch(makeTraversalKey(key),instead) }
+        method maps(key)     :Bool { roPMap.maps(makeTraversalKey(key)) }
+        method get(key)          :Any { roPMap[makeTraversalKey(key)] }
+        method fetch(key, instead) :Any { roPMap.fetch(makeTraversalKey(key),instead) }
 
-        to with(key, val) :Near {
-            makeConstCycleBreaker(roPMap.with(makeTraversalKey(key), val))
+        method with(key, val) :Near {
+            it.makeConstCycleBreaker(roPMap.with(makeTraversalKey(key), val))
         }
-        to without(key) :Near {
-            makeConstCycleBreaker(roPMap.without(makeTraversalKey(key)))
+        method without(key) :Near {
+            it.makeConstCycleBreaker(roPMap.without(makeTraversalKey(key)))
         }
 
-        to getPowerMap()    :Near { roPMap.readOnly() }
+        method getPowerMap()    :Near { roPMap.readOnly() }
     }
 }
 
@@ -53,17 +52,17 @@ def makeROCycleBreaker(roPMap) :Near {
 #  *
 #  * @author Mark S. Miller
 #  */
-bind makeFlexCycleBreaker(flexPMap) :Near {
+method makeFlexCycleBreaker(flexPMap) :Near {
     # Note that this is just delegation, not inheritance, in that we are not
     # initializing the template with flexCycleBreaker. By the same token,
     # the template makes no reference to <tt>self</tt>.
-    object flexCycleBreaker extends makeROCycleBreaker(flexPMap.readOnly()) {
+    object flexCycleBreaker extends it.makeROCycleBreaker(flexPMap.readOnly()) {
 
         to put(key, value)  :Void { flexPMap[makeTraversalKey(key)] := value }
 
-        to getPowerMap()    :Near { flexPMap }
+        method getPowerMap()    :Near { flexPMap }
 
-        to removeKey(key)   :Void { flexPMap.removeKey(makeTraversalKey(key)) }
+        method removeKey(key)   :Void { flexPMap.removeKey(makeTraversalKey(key)) }
     }
 }
 
@@ -72,14 +71,16 @@ bind makeFlexCycleBreaker(flexPMap) :Near {
 #  *
 #  * @author Mark S. Miller
 #  */
-bind makeConstCycleBreaker(constPMap) :Near {
-    object constCycleBreaker extends makeROCycleBreaker(constPMap.readOnly()) {
+method makeConstCycleBreaker(constPMap) :Near {
+    object constCycleBreaker extends it.makeROCycleBreaker(constPMap.readOnly()) {
 
-        to getPowerMap()    :Near { constPMap.snapshot() }
+        method getPowerMap()    :Near { constPMap.snapshot() }
     }
 }
 
-def EMPTYConstCycleBreaker := makeConstCycleBreaker([].asMap())
+method EMPTYConstCycleBreaker() { it.makeConstCycleBreaker([].asMap()) }
+
+}
 
 # /**
 #  * A CycleBreaker is like an EMap except that it accepts unsettled
@@ -98,21 +99,21 @@ def EMPTYConstCycleBreaker := makeConstCycleBreaker([].asMap())
 #  *
 #  * @author Mark S. Miller
 #  */
-object makeCycleBreaker {
+object makeCycleBreaker as DeepFrozen {
 
     # /**
     #  *
     #  */
-    to run() :Near { EMPTYConstCycleBreaker }
+    method run() :Near { it.EMPTYConstCycleBreaker() }
 
     # /**
     #  *
     #  */
     to byInverting(map) :Near {
-        def result := EMPTYConstCycleBreaker.diverge()
+        def result := it.EMPTYConstCycleBreaker().diverge()
         for key => value in (map) {
             result[value] := key
         }
-        result.snapshot()
+        return result.snapshot()
     }
 }

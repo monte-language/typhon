@@ -5,6 +5,7 @@
 
 # module "org.erights.e.elib.serial.DEBuilderOf"
 import "./guards" =~ [=>Guard :DeepFrozen]
+exports (DEBuilderOf)
 
 # /**
 #  * Data-E is the subset of E used for serializing a subgraph by unevaling to an
@@ -15,7 +16,7 @@ import "./guards" =~ [=>Guard :DeepFrozen]
 #  * >Unserialization as Expression Evaluation</a>.
 #  * @author Mark S. Miller
 #  */
-def DEBuilderOf(Node :Guard, _Root :Guard) :Guard {
+def DEBuilderOf(Node :Guard, _Root :Guard) :Guard as DeepFrozen {
 
     interface _DEBuilder {
 

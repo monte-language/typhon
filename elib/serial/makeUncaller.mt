@@ -5,13 +5,14 @@
 
 # import "serial.RemoteCall" =~ [=>makeRemoteCall :DeepFrozen]
 import "./guards" =~ [Tuple :DeepFrozen, NotNull :DeepFrozen]
+exports (makeUncaller, Uncaller)
 
 def Portrayal :DeepFrozen := Tuple[Any, Str, List, Map[Str, Any]]
 
 interface Uncaller :DeepFrozen:
     to optUncall(obj) :NullOk[Portrayal]
 
-object minimalUncaller implements Uncaller {
+object minimalUncaller as DeepFrozen implements Uncaller {
     method optUncall(obj) :NullOk[Portrayal] {
         if (Ref.isNear(obj)) {
             obj.__optUncall()
@@ -24,9 +25,9 @@ object minimalUncaller implements Uncaller {
     to _muteSMO() {}
 }
 
-def minimalUncallers := [minimalUncaller]  # TODO: , import__uriGetter
+def minimalUncallers :DeepFrozen := [minimalUncaller]  # TODO: , import__uriGetter
 
-def defaultUncallers := minimalUncallers
+def defaultUncallers :DeepFrozen := minimalUncallers
 
 # /**
 #  * Makes an uncall function that, when applied to a transparent-enough object,
@@ -38,7 +39,7 @@ def defaultUncallers := minimalUncallers
 #  *
 #  * @author Mark S. Miller
 #  */
-object makeUncaller {
+object makeUncaller as DeepFrozen {
 
     # /**
     #  *
