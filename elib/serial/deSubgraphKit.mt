@@ -5,13 +5,12 @@
 
 # module "org.erights.e.elib.serial.deSubgraphKit"
 
-import "org.erights.e.elib.serial.Uncaller" =~ [=>Uncaller :DeepFrozen]
+# TODO: import "serial.deASTKit" =~ [=>deASTKit :DeepFrozen]
+import "./elib/serial/DEBuilderOf" =~ [=>DEBuilderOf :DeepFrozen]
+# TODO: import "serial.deSrcKit" =~ [=>deSrcKit :DeepFrozen]
+import "./elib/tables/makeCycleBreaker" =~ [=>makeCycleBreaker :DeepFrozen]
+import "./elib/serial/makeUncaller" =~ [=>makeUncaller :DeepFrozen, =>Uncaller :DeepFrozen]
 
-import "serial.deASTKit" =~ [=>deASTKit :DeepFrozen]
-import "serial.DEBuilderOf" =~ [=>DEBuilderOf :DeepFrozen]
-import "serial.deSrcKit" =~ [=>deSrcKit :DeepFrozen]
-import "tables.makeCycleBreaker" =~ [=>makeCycleBreaker :DeepFrozen]
-import "serial.makeUncaller" =~ [=>makeUncaller :DeepFrozen]
 
 def defaultUncallers := makeUncaller.getDefaultUncallers()
 
@@ -23,9 +22,9 @@ def minimalScope := [
     "NaN"               => NaN,
     "Infinity"          => Infinity,
     "__makeList"        => _makeList,
-    "__identityFunc"    => __identityFunc,
     "__makeInt"         => _makeInt,
-    "import__uriGetter" => import__uriGetter
+#    "__identityFunc"    => __identityFunc,
+#    "import__uriGetter" => import__uriGetter
 ]
 
 def defaultScope := minimalScope

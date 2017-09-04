@@ -3,9 +3,13 @@
 # Copyright 2003 Hewlett Packard, Inc. under the terms of the MIT X license
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
-import "serial.RemoteCall" =~ [=>makeRemoteCall :DeepFrozen]
-import "org.erights.e.elib.serial.Uncaller" =~ [=>Uncaller :DeepFrozen]
+# import "serial.RemoteCall" =~ [=>makeRemoteCall :DeepFrozen]
 import "./guards" =~ [Tuple :DeepFrozen, NotNull :DeepFrozen]
+
+def Portrayal :DeepFrozen := Tuple[Any, Str, List, Map[Str, Any]]
+
+interface Uncaller :DeepFrozen:
+    to optUncall(obj) :NullOk[Portrayal]
 
 object minimalUncaller implements Uncaller {
     to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {
@@ -14,12 +18,12 @@ object minimalUncaller implements Uncaller {
         } else if (Ref.isBroken(obj)) {
             [Ref, "broken", [Ref.optProblem(obj)]]
         } else {
-            makeRemoteCall.optUncall(obj)
+            throw("TODO: makeRemoteCall.optUncall(obj)")
         }
     }
 }
 
-def minimalUncallers := [minimalUncaller, import__uriGetter]
+def minimalUncallers := [minimalUncaller]  # TODO: , import__uriGetter
 
 def defaultUncallers := minimalUncallers
 
