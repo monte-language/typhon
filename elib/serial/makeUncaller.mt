@@ -44,13 +44,13 @@ object makeUncaller as DeepFrozen {
     # /**
     #  *
     #  */
-    to getMinimalUncallers() :Uncaller[] { minimalUncallers }
+    method getMinimalUncallers() :List[Uncaller] { minimalUncallers }
 
     # /**
     #  * XXX For now it's the same as minimalUncallers, but we expect to add
     #  * the other uriGetters from the safeScope.
     #  */
-    to getDefaultUncallers() :Uncaller[] { defaultUncallers }
+    method getDefaultUncallers() :List[Uncaller] { defaultUncallers }
 
     # /**
     #  * Makes an amplifyingUncall to implement selective transparency.

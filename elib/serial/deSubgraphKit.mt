@@ -83,7 +83,7 @@ def makeUnevaler(uncallerList, scalpelMap) :Near as DeepFrozen {
             # /**
             #  * traverse an uncall portrayal
             #  */
-            def genCall(rec, verb :Str, args :Any[], nargs :Map[Str, Any]) :Node {
+            def genCall(rec, verb :Str, args :List[Any], nargs :Map[Str, Any]) :Node {
                 return builder.buildCall(
                     generate(rec), verb,
                     [for arg in (args) generate(arg)],
@@ -221,7 +221,7 @@ object deSubgraphKit as DeepFrozen {
     # /**
     #  *
     #  */
-    method getDefaultUncallers() :Uncaller[] { defaultUncallers }
+    method getDefaultUncallers() :List[Uncaller] { defaultUncallers }
 
     # /**
     #  * Makes a builder which evaluates a Data-E tree in the default scope to a
