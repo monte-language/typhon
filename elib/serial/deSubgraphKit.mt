@@ -136,8 +136,8 @@ def makeUnevaler(uncallerList, scalpelMap) :Near {
             #  * above state.
             #  */
             bind generate(obj) :Node {
-                if (scalpel.get(obj, null) =~ varID :notNull) {
-                    return genVarUse(varID)
+                escape notSeen {
+                    return genVarUse(scalpel.fetch(obj, notSeen))
                 }
                 def promIndex := builder.buildPromise()
                 scalpel[obj] := promIndex

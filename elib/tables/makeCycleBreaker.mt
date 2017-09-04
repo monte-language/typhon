@@ -35,7 +35,7 @@ def makeROCycleBreaker(roPMap) :Near {
 
         to maps(key)     :Bool { roPMap.maps(makeTraversalKey(key)) }
         to get(key)          :Any { roPMap[makeTraversalKey(key)] }
-        to get(key, instead) :Any { roPMap.get(makeTraversalKey(key),instead) }
+        to fetch(key, instead) :Any { roPMap.fetch(makeTraversalKey(key),instead) }
 
         to with(key, val) :Near {
             makeConstCycleBreaker(roPMap.with(makeTraversalKey(key), val))
