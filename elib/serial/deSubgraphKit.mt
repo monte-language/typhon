@@ -5,13 +5,13 @@
 
 # module "org.erights.e.elib.serial.deSubgraphKit"
 
-def Uncaller := <type:org.erights.e.elib.serial.Uncaller>
+def Uncaller := type_uriGetter("org.erights.e.elib.serial.Uncaller")
 
-def deASTKit := <elib:serial.deASTKit>
-def DEBuilderOf := <elib:serial.DEBuilderOf>
-def deSrcKit := <elib:serial.deSrcKit>
-def makeCycleBreaker := <elib:tables.makeCycleBreaker>
-def makeUncaller := <elib:serial.makeUncaller>
+def deASTKit := elib_uriGetter("serial.deASTKit")
+def DEBuilderOf := elib_uriGetter("serial.DEBuilderOf")
+def deSrcKit := elib_uriGetter("serial.deSrcKit")
+def makeCycleBreaker := elib_uriGetter("tables.makeCycleBreaker")
+def makeUncaller := elib_uriGetter("serial.makeUncaller")
 
 def defaultUncallers := makeUncaller.getDefaultUncallers()
 
@@ -66,7 +66,7 @@ def makeUnevaler(uncallerList, scalpelMap) :near {
     # /**
     #  *
     #  */
-    def unevaler {
+    object unevaler {
         # /**
         #  *
         #  */
@@ -88,8 +88,8 @@ def makeUnevaler(uncallerList, scalpelMap) :near {
             def genCall(rec, verb :String, args :any[]) :Node {
                 def recExpr := generate(rec)
                 var argExprs := []
-                for arg in args {
-                    argExprs with= generate(arg)
+                for arg in (args) {
+                    argExprs with= (generate(arg))
                 }
                 builder.buildCall(recExpr, verb, argExprs)
             }
@@ -114,7 +114,7 @@ def makeUnevaler(uncallerList, scalpelMap) :near {
                     return builder.buildLiteral(twine)
                 }
 
-                for uncaller in uncallers {
+                for uncaller in (uncallers) {
                     if (uncaller.optUncall(obj) =~ [rec, verb, args]) {
                         return genCall(rec, verb, args)
                     }
@@ -174,7 +174,7 @@ def defaultRecognizer := makeUnevaler(defaultUncallers, defaultScalpel)
 #  *
 #  * @author Mark S. Miller
 #  */
-def deSubgraphKit {
+object deSubgraphKit {
 
     # /**
     #  * This is the default scope used for recognizing/serializing/unevaling and
@@ -252,7 +252,7 @@ def deSubgraphKit {
         def Node := any
         def Root := any
 
-        def deSubgraphBuilder implements DEBuilderOf(Node, Root) {
+        object deSubgraphBuilder implements DEBuilderOf(Node, Root) {
             to getNodeType() :near { Node }
             to getRootType() :near { Root }
 
@@ -265,7 +265,7 @@ def deSubgraphKit {
                 E.call(rec, verb, args)
             }
 
-            to buildDefine(rValue :Node) :[Node, int] {
+            to buildDefine(rValue :Node) :Pair[Node, int] {
                 def tempIndex := nextTemp
                 nextTemp += 1
                 temps[tempIndex] := rValue

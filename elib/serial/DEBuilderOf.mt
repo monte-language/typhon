@@ -3,7 +3,7 @@
 # Copyright 2002 Combex, Inc. under the terms of the MIT X license
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
-module "org.erights.e.elib.serial.DEBuilderOf"
+# module "org.erights.e.elib.serial.DEBuilderOf"
 
 
 # /**
@@ -44,7 +44,7 @@ def DEBuilderOf(Node :Guard, Root :Guard) :Guard {
         #  * <p>
         #  * [] => buildLiteral(value) => [value]
         #  */
-        to buildLiteral(value :(int | float64 | char | String)) :Node
+        to buildLiteral(value :Any[int, float64, char, String]) :Node
 
         # /**
         #  * Generates a use-occurrence of a named variable.
@@ -81,7 +81,7 @@ def DEBuilderOf(Node :Guard, Root :Guard) :Guard {
         #  * If rValue needs to use the new variable, use
         #  * buildPromise/buildDefrec instead.
         #  */
-        to buildDefine(rValue :Node) :[Node, int]
+        to buildDefine(rValue :Node) :Pair[Node, int]
 
         # /**
         #  * Like a forward variable declaration in E (def varName).

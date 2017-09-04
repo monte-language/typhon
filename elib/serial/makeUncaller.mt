@@ -3,11 +3,11 @@
 # Copyright 2003 Hewlett Packard, Inc. under the terms of the MIT X license
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
-def makeRemoteCall := <elib:serial.RemoteCall>
-def Uncaller := <type:org.erights.e.elib.serial.Uncaller>
+def makeRemoteCall := elib_uriGetter("serial.RemoteCall")
+def Uncaller := type_uriGetter("org.erights.e.elib.serial.Uncaller")
 
-def minimalUncaller implements Uncaller {
-    to optUncall(obj) :nullOk([any, String, any[]]) {
+object minimalUncaller implements Uncaller {
+    to optUncall(obj) :nullOk[Tuple[any, String, List[any]]] {
         if (Ref.isNear(obj)) {
             obj.__optUncall()
         } else if (Ref.isBroken(obj)) {
@@ -32,7 +32,7 @@ def defaultUncallers := minimalUncallers
 #  *
 #  * @author Mark S. Miller
 #  */
-def makeUncaller {
+object makeUncaller {
 
     # /**
     #  *
@@ -71,8 +71,8 @@ def makeUncaller {
     #  * </ul>
     #  */
     to makeAmplifier(unsealer) :Uncaller {
-        def amplifier {
-            to optUncall(obj) :nullOk([any, String, any[]]) {
+        object amplifier {
+            to optUncall(obj) :nullOk[Tuple[any, String, List[any]]] {
 
                 if (unsealer.amplify(obj) =~ [result]) {
                     result
@@ -94,10 +94,10 @@ def makeUncaller {
     #  */
     to onlySelfless(baseUncallers) :Uncaller {
 
-        def onlySelflessUncaller {
-            to optUncall(obj) :nullOk([any, String, any[]]) {
+        object onlySelflessUncaller {
+            to optUncall(obj) :nullOk[Tuple[any, String, List[any]]] {
                 if (Ref.isSelfless(obj)) {
-                    for baseUncaller in baseUncallers {
+                    for baseUncaller in (baseUncallers) {
                         if (baseUncaller.optUncall(obj) =~
                               result :notNull) {
 

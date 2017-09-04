@@ -3,8 +3,8 @@
 # Copyright 2003 Hewlett Packard, Inc. under the terms of the MIT X license
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
-def TraversalKey := <type:org.erights.e.elib.tables.TraversalKey>
-def makeTraversalKey := <elib:tables.TraversalKey>
+def TraversalKey := type_uriGetter(":org.erights.e.elib.tables.TraversalKey")
+def makeTraversalKey := elib_uriGetter("tables.TraversalKey")
 
 def makeFlexCycleBreaker
 def makeConstCycleBreaker
@@ -25,7 +25,7 @@ def makeConstCycleBreaker
 #  * @author Mark S. Miller
 #  */
 def makeROCycleBreaker(roPMap) :near {
-    def readOnlyCycleBreaker {
+    object readOnlyCycleBreaker {
 
         to diverge()        :near { makeFlexCycleBreaker(roPMap.diverge()) }
         to snapshot()       :near { makeConstCycleBreaker(roPMap.snapshot()) }
@@ -57,7 +57,7 @@ bind makeFlexCycleBreaker(flexPMap) :near {
     # Note that this is just delegation, not inheritance, in that we are not
     # initializing the template with flexCycleBreaker. By the same token,
     # the template makes no reference to <tt>self</tt>.
-    def flexCycleBreaker extends makeROCycleBreaker(flexPMap.readOnly()) {
+    object flexCycleBreaker extends makeROCycleBreaker(flexPMap.readOnly()) {
 
         to put(key, value)  :void { flexPMap[makeTraversalKey(key)] := value }
 
@@ -73,7 +73,7 @@ bind makeFlexCycleBreaker(flexPMap) :near {
 #  * @author Mark S. Miller
 #  */
 bind makeConstCycleBreaker(constPMap) :near {
-    def constCycleBreaker extends makeROCycleBreaker(constPMap.readOnly()) {
+    object constCycleBreaker extends makeROCycleBreaker(constPMap.readOnly()) {
 
         to getPowerMap()    :near { constPMap.snapshot() }
     }
@@ -98,7 +98,7 @@ def EMPTYConstCycleBreaker := makeConstCycleBreaker([].asMap())
 #  *
 #  * @author Mark S. Miller
 #  */
-def makeCycleBreaker {
+object makeCycleBreaker {
 
     # /**
     #  *
@@ -110,7 +110,7 @@ def makeCycleBreaker {
     #  */
     to byInverting(map) :near {
         def result := EMPTYConstCycleBreaker.diverge()
-        for key => value in map {
+        for key => value in (map) {
             result[value] := key
         }
         result.snapshot()
