@@ -232,7 +232,7 @@ class FlexList(Object):
     @method.py("Void", "Int", "Any")
     def put(self, index, value):
         top = self.strategy.size(self)
-        if 0 <= index <= top:
+        if 0 <= index < top:
             self.strategy.store(self, index, value)
         else:
             raise userError(u"put/2: Index %d out of bounds for list of length %d" %
