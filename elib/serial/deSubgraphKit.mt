@@ -84,13 +84,11 @@ def makeUnevaler(uncallerList, scalpelMap) :Near {
             # /**
             #  * traverse an uncall portrayal
             #  */
-            def genCall(rec, verb :Str, args :Any[]) :Node {
-                def recExpr := generate(rec)
-                var argExprs := []
-                for arg in (args) {
-                    argExprs with= (generate(arg))
-                }
-                builder.buildCall(recExpr, verb, argExprs)
+            def genCall(rec, verb :Str, args :Any[], nargs :Map[Str, Any]) :Node {
+                return builder.buildCall(
+                    generate(rec), verb,
+                    [for arg in (args) generate(arg)],
+                    [for name => arg in (nargs) name => generate(arg)])
             }
 
             # /**
@@ -105,17 +103,19 @@ def makeUnevaler(uncallerList, scalpelMap) :Near {
                 if (obj =~ i :Int)     { return builder.buildLiteral(i) }
                 if (obj =~ f :Double) { return builder.buildLiteral(f) }
                 if (obj =~ c :Char)    { return builder.buildLiteral(c) }
+                if (obj =~ s :Str)    { return builder.buildLiteral(s) }
 
                 # Bare strings are transparent and aren't scalars, but
                 # still can't be uncalled. Instead, they are also
                 # translated into literal expressions
-                if (obj =~ twine :Twine && twine.isBare()) {
-                    return builder.buildLiteral(twine)
-                }
+                # TODO: when/if monte gets Twine
+                # if (obj =~ twine :Twine && twine.isBare()) {
+                #     return builder.buildLiteral(twine)
+                # }
 
                 for uncaller in (uncallers) {
-                    if (uncaller.optUncall(obj) =~ [rec, verb, args]) {
-                        return genCall(rec, verb, args)
+                    if (uncaller.optUncall(obj) =~ [rec, verb, args, nargs]) {
+                        return genCall(rec, verb, args, nargs)
                     }
                 }
                 throw(`Can't uneval ${M.toQuote(obj)}`)
@@ -262,8 +262,8 @@ object deSubgraphKit {
             to buildImport(varName :Str) :Node { scope[varName] }
             to buildIbid(tempIndex :Int)    :Node { temps[tempIndex] }
 
-            to buildCall(rec :Node, verb :Str, args :Node[]) :Node {
-                E.call(rec, verb, args)
+            to buildCall(rec :Node, verb :Str, args :List[Node], nargs :Map[Str, Node]) :Node {
+                M.call(rec, verb, args, nargs)
             }
 
             to buildDefine(rValue :Node) :Pair[Node, Int] {

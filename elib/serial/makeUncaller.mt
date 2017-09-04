@@ -12,11 +12,11 @@ interface Uncaller :DeepFrozen:
     to optUncall(obj) :NullOk[Portrayal]
 
 object minimalUncaller implements Uncaller {
-    to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {
+    method optUncall(obj) :NullOk[Portrayal] {
         if (Ref.isNear(obj)) {
             obj.__optUncall()
         } else if (Ref.isBroken(obj)) {
-            [Ref, "broken", [Ref.optProblem(obj)]]
+            [Ref, "broken", [Ref.optProblem(obj)], [].asMap()]
         } else {
             throw("TODO: makeRemoteCall.optUncall(obj)")
         }
@@ -78,7 +78,7 @@ object makeUncaller {
     #  */
     method makeAmplifier(unsealer) :Uncaller {
         object amplifier {
-            to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {
+            to optUncall(obj) :NullOk[Portrayal] {
 
                 if (unsealer.amplify(obj) =~ [result]) {
                     result
@@ -102,7 +102,7 @@ object makeUncaller {
     to onlySelfless(baseUncallers) :Uncaller {
 
         object onlySelflessUncaller {
-            to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {
+            method optUncall(obj) :NullOk[Portrayal] {
                 if (Ref.isSelfless(obj)) {
                     for baseUncaller in (baseUncallers) {
                         if (baseUncaller.optUncall(obj) =~
