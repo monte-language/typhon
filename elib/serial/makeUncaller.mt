@@ -15,7 +15,7 @@ interface Uncaller :DeepFrozen:
 object minimalUncaller as DeepFrozen implements Uncaller {
     method optUncall(obj) :NullOk[Portrayal] {
         if (Ref.isNear(obj)) {
-            obj.__optUncall()
+            obj._uncall()
         } else if (Ref.isBroken(obj)) {
             [Ref, "broken", [Ref.optProblem(obj)], [].asMap()]
         } else {
