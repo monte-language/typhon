@@ -69,7 +69,7 @@ def makeUnevaler(uncallerList, scalpelMap) :Near {
         # /**
         #  *
         #  */
-        to recognize(root, builder) :(def Root := builder.getRootType()) {
+        to recognize(root, builder) :(def _Root := builder.getRootType()) {
 
             def Node := builder.getNodeType()
 
@@ -155,12 +155,14 @@ def makeUnevaler(uncallerList, scalpelMap) :Near {
         #  * When using an unevalers printFunc for this purpose, we have instead
         #  * a read-eval-uneval loop.
         #  */
-        to makePrintFunc() :Near {
-            def printFunc(value, out :TextWriter) :Void {
-                def builder := deASTKit.wrap(deSrcKit.makeBuilder())
-                out.print(unevaler.recognize(value, builder))
-            }
-        }
+        # TODO: to makePrintFunc() :Near {
+        #     def printFunc(value, out :TextWriter) :Void {
+        #         def builder := deASTKit.wrap(deSrcKit.makeBuilder())
+        #         out.print(unevaler.recognize(value, builder))
+        #     }
+        # }
+
+        to _muteSMO() {}
     }
 }
 

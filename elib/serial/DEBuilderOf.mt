@@ -15,9 +15,9 @@ import "./guards" =~ [=>Guard :DeepFrozen]
 #  * >Unserialization as Expression Evaluation</a>.
 #  * @author Mark S. Miller
 #  */
-def DEBuilderOf(Node :Guard, Root :Guard) :Guard {
+def DEBuilderOf(Node :Guard, _Root :Guard) :Guard {
 
-    interface DEBuilder {
+    interface _DEBuilder {
 
         # /**
         #  * What's the actual type corresponding to the Node type parameter?

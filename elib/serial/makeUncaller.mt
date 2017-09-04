@@ -21,6 +21,7 @@ object minimalUncaller implements Uncaller {
             throw("TODO: makeRemoteCall.optUncall(obj)")
         }
     }
+    to _muteSMO() {}
 }
 
 def minimalUncallers := [minimalUncaller]  # TODO: , import__uriGetter
@@ -85,6 +86,7 @@ object makeUncaller {
                     null
                 }
             }
+            to _muteSMO() {}
         }
     }
 
@@ -112,6 +114,7 @@ object makeUncaller {
                 }
                 null
             }
+            to _muteSMO() {}
         }
     }
 }
