@@ -16,7 +16,7 @@ exports (DEBuilderOf)
 #  * >Unserialization as Expression Evaluation</a>.
 #  * @author Mark S. Miller
 #  */
-def DEBuilderOf(Node :Guard, _Root :Guard) :Guard as DeepFrozen {
+def DEBuilderOf.get(Node :Guard, _Root :Guard) :Guard as DeepFrozen {
 
     interface _DEBuilder {
 
