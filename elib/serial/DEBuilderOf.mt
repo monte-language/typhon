@@ -44,7 +44,7 @@ def DEBuilderOf(Node :Guard, Root :Guard) :Guard {
         #  * <p>
         #  * [] => buildLiteral(value) => [value]
         #  */
-        to buildLiteral(value :Any[int, float64, char, String]) :Node
+        to buildLiteral(value :Any[Int, Double, Char, Str]) :Node
 
         # /**
         #  * Generates a use-occurrence of a named variable.
@@ -53,7 +53,7 @@ def DEBuilderOf(Node :Guard, Root :Guard) :Guard {
         #  * <p>
         #  * Load the value of the named variable from the scope.
         #  */
-        to buildImport(varName :String) :Node
+        to buildImport(varName :Str) :Node
 
         # /**
         #  * Generates a use-occurrence of an temp variable.
@@ -62,14 +62,14 @@ def DEBuilderOf(Node :Guard, Root :Guard) :Guard {
         #  * <p>
         #  * Load the value of the temp variable at that index.
         #  */
-        to buildIbid(tempIndex :int) :Node
+        to buildIbid(tempIndex :Int) :Node
 
         # /**
         #  * Generates a call-expression.
         #  * <p>
         #  * [rec, arg0,...] => buildCall(verb,arity) => [result]
         #  */
-        to buildCall(rec :Node, verb :String, args :Node[]) :Node
+        to buildCall(rec :Node, verb :Str, args :List[Node]) :Node
 
         # /**
         #  * Allocates the next tempIndex, defines it to hold the value of
@@ -81,7 +81,7 @@ def DEBuilderOf(Node :Guard, Root :Guard) :Guard {
         #  * If rValue needs to use the new variable, use
         #  * buildPromise/buildDefrec instead.
         #  */
-        to buildDefine(rValue :Node) :Pair[Node, int]
+        to buildDefine(rValue :Node) :Pair[Node, Int]
 
         # /**
         #  * Like a forward variable declaration in E (def varName).
@@ -91,13 +91,13 @@ def DEBuilderOf(Node :Guard, Root :Guard) :Guard {
         #  * Allocates the next two temp variables. Defines them to hold a
         #  * promise and its Resolver, respectively.
         #  */
-        to buildPromise() :int
+        to buildPromise() :Int
 
         # /**
         #  * Resolves a promise to the value of rValue.
         #  * <p>
         #  * [rValue] => buildDefrec(resolverIndex) => [rValue]
         #  */
-        to buildDefrec(resolverIndex :int, rValue :Node) :Node
+        to buildDefrec(resolverIndex :Int, rValue :Node) :Node
     }
 }

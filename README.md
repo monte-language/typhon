@@ -12,3 +12,10 @@
   - :(g1 | g2) -> :Any[g1, g2]
   - <scheme:rest> -> scheme_uriGetter("rest")
   - for pat in expr -> for pat in (expr)
+
+  - datatype names: capitalize int, char;
+    float64 -> Double, String -> Str, boolean -> Bool
+  - guard names: capitalize any, near, void, nullOk
+  - syntax helpers: one `_` for `__makeList`, `__makeInt`
+  - E.toQuote -> M.toQuote
+    - TODO: E.call(rx, verb, args) to M.call(rx, verb, args, nargs)

@@ -22,9 +22,9 @@ def minimalScope := [
     "true"              => true,
     "NaN"               => NaN,
     "Infinity"          => Infinity,
-    "__makeList"        => __makeList,
+    "__makeList"        => _makeList,
     "__identityFunc"    => __identityFunc,
-    "__makeInt"         => __makeInt,
+    "__makeInt"         => _makeInt,
     "import__uriGetter" => import__uriGetter
 ]
 
@@ -61,7 +61,7 @@ def defaultScalpel := minimalScalpel
 #  *                   each recognize(..).
 #  * @author Mark S. Miller
 #  */
-def makeUnevaler(uncallerList, scalpelMap) :near {
+def makeUnevaler(uncallerList, scalpelMap) :Near {
 
     # /**
     #  *
@@ -85,7 +85,7 @@ def makeUnevaler(uncallerList, scalpelMap) :near {
             # /**
             #  * traverse an uncall portrayal
             #  */
-            def genCall(rec, verb :String, args :any[]) :Node {
+            def genCall(rec, verb :Str, args :Any[]) :Node {
                 def recExpr := generate(rec)
                 var argExprs := []
                 for arg in (args) {
@@ -103,9 +103,9 @@ def makeUnevaler(uncallerList, scalpelMap) :near {
                 # The scalars null, true, and false should have already
                 # been picked up by the scalpel -- they should be in the
                 # provided scalpelMap.
-                if (obj =~ i :int)     { return builder.buildLiteral(i) }
-                if (obj =~ f :float64) { return builder.buildLiteral(f) }
-                if (obj =~ c :char)    { return builder.buildLiteral(c) }
+                if (obj =~ i :Int)     { return builder.buildLiteral(i) }
+                if (obj =~ f :Double) { return builder.buildLiteral(f) }
+                if (obj =~ c :Char)    { return builder.buildLiteral(c) }
 
                 # Bare strings are transparent and aren't scalars, but
                 # still can't be uncalled. Instead, they are also
@@ -119,12 +119,12 @@ def makeUnevaler(uncallerList, scalpelMap) :near {
                         return genCall(rec, verb, args)
                     }
                 }
-                throw(`Can't uneval ${E.toQuote(obj)}`)
+                throw(`Can't uneval ${M.toQuote(obj)}`)
             }
 
             # /** Build a use-occurrence of a variable. */
-            def genVarUse(varID :(String | int)) :Node {
-                if (varID =~ varName :String) {
+            def genVarUse(varID :Any[Str, Int]) :Node {
+                if (varID =~ varName :Str) {
                     builder.buildImport(varName)
                 } else {
                     builder.buildIbid(varID)
@@ -156,8 +156,8 @@ def makeUnevaler(uncallerList, scalpelMap) :near {
         #  * When using an unevalers printFunc for this purpose, we have instead
         #  * a read-eval-uneval loop.
         #  */
-        to makePrintFunc() :near {
-            def printFunc(value, out :TextWriter) :void {
+        to makePrintFunc() :Near {
+            def printFunc(value, out :TextWriter) :Void {
                 def builder := deASTKit.wrap(deSrcKit.makeBuilder())
                 out.print(unevaler.recognize(value, builder))
             }
@@ -201,24 +201,24 @@ object deSubgraphKit {
     #  *     of behaviors.
     #  * </ul>
     #  */
-    to getMinimalScope() :near { minimalScope }
+    to getMinimalScope() :Near { minimalScope }
 
     # /**
     #  * XXX For now, it's the same as the minimalScope, but we expect to add
     #  * more bindings from the safeScope; possibly all of them.
     #  */
-    to getDefaultScope() :near { defaultScope }
+    to getDefaultScope() :Near { defaultScope }
 
     # /**
     #  *
     #  */
-    to getMinimalScalpel() :near { minimalScalpel }
+    to getMinimalScalpel() :Near { minimalScalpel }
 
     # /**
     #  * XXX For now, it's the same as the minimalScalpel, but we expect to add
     #  * more bindings from the safeScope; possibly all of them.
     #  */
-    to getDefaultScalpel() :near { defaultScalpel }
+    to getDefaultScalpel() :Near { defaultScalpel }
 
     # /**
     #  *
@@ -231,7 +231,7 @@ object deSubgraphKit {
     #  *
     #  * @see #getMinimalScope
     #  */
-    to makeBuilder() :near {
+    to makeBuilder() :Near {
         deSubgraphKit.makeBuilder(defaultScope)
     }
 
@@ -241,7 +241,7 @@ object deSubgraphKit {
     #  * This <i>is</i> Data-E Unserialization. It is also a subset of E
     #  * evaluation.
     #  */
-    to makeBuilder(scope) :near {
+    to makeBuilder(scope) :Near {
 
         # The index of the next temp variable
         var nextTemp := 0
@@ -249,30 +249,30 @@ object deSubgraphKit {
         # The frame of temp variables
         def temps := [].diverge()
 
-        def Node := any
-        def Root := any
+        def Node := Any
+        def Root := Any
 
         object deSubgraphBuilder implements DEBuilderOf(Node, Root) {
-            to getNodeType() :near { Node }
-            to getRootType() :near { Root }
+            to getNodeType() :Near { Node }
+            to getRootType() :Near { Root }
 
             to buildRoot(root :Node)        :Root { root }
             to buildLiteral(value)          :Node { value }
-            to buildImport(varName :String) :Node { scope[varName] }
-            to buildIbid(tempIndex :int)    :Node { temps[tempIndex] }
+            to buildImport(varName :Str) :Node { scope[varName] }
+            to buildIbid(tempIndex :Int)    :Node { temps[tempIndex] }
 
-            to buildCall(rec :Node, verb :String, args :Node[]) :Node {
+            to buildCall(rec :Node, verb :Str, args :Node[]) :Node {
                 E.call(rec, verb, args)
             }
 
-            to buildDefine(rValue :Node) :Pair[Node, int] {
+            to buildDefine(rValue :Node) :Pair[Node, Int] {
                 def tempIndex := nextTemp
                 nextTemp += 1
                 temps[tempIndex] := rValue
                 [rValue, tempIndex]
             }
 
-            to buildPromise() :int {
+            to buildPromise() :Int {
                 def promIndex := nextTemp
                 nextTemp += 2
                 def [prom,res] := Ref.promise()
@@ -281,7 +281,7 @@ object deSubgraphKit {
                 promIndex
             }
 
-            to buildDefrec(resIndex :int, rValue :Node) :Node {
+            to buildDefrec(resIndex :Int, rValue :Node) :Node {
                 temps[resIndex].resolve(rValue)
                 rValue
             }
@@ -291,12 +291,12 @@ object deSubgraphKit {
     # /**
     #  *
     #  */
-    to getDefaultRecognizer() :near { defaultRecognizer }
+    to getDefaultRecognizer() :Near { defaultRecognizer }
 
     # /**
     #  *
     #  */
-    to makeRecognizer(optUncallers, optScalpel) :near {
+    to makeRecognizer(optUncallers, optScalpel) :Near {
         def uncallers := if (null == optUncallers) {
             defaultUncallers
         } else {

@@ -7,7 +7,7 @@ def makeRemoteCall := elib_uriGetter("serial.RemoteCall")
 def Uncaller := type_uriGetter("org.erights.e.elib.serial.Uncaller")
 
 object minimalUncaller implements Uncaller {
-    to optUncall(obj) :nullOk[Tuple[any, String, List[any]]] {
+    to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {
         if (Ref.isNear(obj)) {
             obj.__optUncall()
         } else if (Ref.isBroken(obj)) {
@@ -72,7 +72,7 @@ object makeUncaller {
     #  */
     to makeAmplifier(unsealer) :Uncaller {
         object amplifier {
-            to optUncall(obj) :nullOk[Tuple[any, String, List[any]]] {
+            to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {
 
                 if (unsealer.amplify(obj) =~ [result]) {
                     result
@@ -95,7 +95,7 @@ object makeUncaller {
     to onlySelfless(baseUncallers) :Uncaller {
 
         object onlySelflessUncaller {
-            to optUncall(obj) :nullOk[Tuple[any, String, List[any]]] {
+            to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {
                 if (Ref.isSelfless(obj)) {
                     for baseUncaller in (baseUncallers) {
                         if (baseUncaller.optUncall(obj) =~

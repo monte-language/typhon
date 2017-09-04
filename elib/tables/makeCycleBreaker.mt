@@ -24,27 +24,27 @@ def makeConstCycleBreaker
 #  *               {@link TraversalKey}s.
 #  * @author Mark S. Miller
 #  */
-def makeROCycleBreaker(roPMap) :near {
+def makeROCycleBreaker(roPMap) :Near {
     object readOnlyCycleBreaker {
 
-        to diverge()        :near { makeFlexCycleBreaker(roPMap.diverge()) }
-        to snapshot()       :near { makeConstCycleBreaker(roPMap.snapshot()) }
+        to diverge()        :Near { makeFlexCycleBreaker(roPMap.diverge()) }
+        to snapshot()       :Near { makeConstCycleBreaker(roPMap.snapshot()) }
         # The following implementation technique is only possible because we're
         # using delegation rather than inheritance.
-        to readOnly()       :near { readOnlyCycleBreaker }
+        to readOnly()       :Near { readOnlyCycleBreaker }
 
-        to maps(key)     :boolean { roPMap.maps(makeTraversalKey(key)) }
-        to get(key)          :any { roPMap[makeTraversalKey(key)] }
-        to get(key, instead) :any { roPMap.get(makeTraversalKey(key),instead) }
+        to maps(key)     :Bool { roPMap.maps(makeTraversalKey(key)) }
+        to get(key)          :Any { roPMap[makeTraversalKey(key)] }
+        to get(key, instead) :Any { roPMap.get(makeTraversalKey(key),instead) }
 
-        to with(key, val) :near {
+        to with(key, val) :Near {
             makeConstCycleBreaker(roPMap.with(makeTraversalKey(key), val))
         }
-        to without(key) :near {
+        to without(key) :Near {
             makeConstCycleBreaker(roPMap.without(makeTraversalKey(key)))
         }
 
-        to getPowerMap()    :near { roPMap.readOnly() }
+        to getPowerMap()    :Near { roPMap.readOnly() }
     }
 }
 
@@ -53,17 +53,17 @@ def makeROCycleBreaker(roPMap) :near {
 #  *
 #  * @author Mark S. Miller
 #  */
-bind makeFlexCycleBreaker(flexPMap) :near {
+bind makeFlexCycleBreaker(flexPMap) :Near {
     # Note that this is just delegation, not inheritance, in that we are not
     # initializing the template with flexCycleBreaker. By the same token,
     # the template makes no reference to <tt>self</tt>.
     object flexCycleBreaker extends makeROCycleBreaker(flexPMap.readOnly()) {
 
-        to put(key, value)  :void { flexPMap[makeTraversalKey(key)] := value }
+        to put(key, value)  :Void { flexPMap[makeTraversalKey(key)] := value }
 
-        to getPowerMap()    :near { flexPMap }
+        to getPowerMap()    :Near { flexPMap }
 
-        to removeKey(key)   :void { flexPMap.removeKey(makeTraversalKey(key)) }
+        to removeKey(key)   :Void { flexPMap.removeKey(makeTraversalKey(key)) }
     }
 }
 
@@ -72,10 +72,10 @@ bind makeFlexCycleBreaker(flexPMap) :near {
 #  *
 #  * @author Mark S. Miller
 #  */
-bind makeConstCycleBreaker(constPMap) :near {
+bind makeConstCycleBreaker(constPMap) :Near {
     object constCycleBreaker extends makeROCycleBreaker(constPMap.readOnly()) {
 
-        to getPowerMap()    :near { constPMap.snapshot() }
+        to getPowerMap()    :Near { constPMap.snapshot() }
     }
 }
 
@@ -103,12 +103,12 @@ object makeCycleBreaker {
     # /**
     #  *
     #  */
-    to run() :near { EMPTYConstCycleBreaker }
+    to run() :Near { EMPTYConstCycleBreaker }
 
     # /**
     #  *
     #  */
-    to byInverting(map) :near {
+    to byInverting(map) :Near {
         def result := EMPTYConstCycleBreaker.diverge()
         for key => value in (map) {
             result[value] := key
