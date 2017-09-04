@@ -4,10 +4,10 @@
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
 # import "serial.RemoteCall" =~ [=>makeRemoteCall :DeepFrozen]
-import "./guards" =~ [Tuple :DeepFrozen, NotNull :DeepFrozen]
+import "./guards" =~ [=>NotNull :DeepFrozen]  # =>DFTuple :DeepFrozen
 exports (makeUncaller, Uncaller)
 
-def Portrayal :DeepFrozen := Tuple[Any, Str, List, Map[Str, Any]]
+def Portrayal :DeepFrozen := List  # Tuple[Any, Str, List, Map[Str, Any]]
 
 interface Uncaller :DeepFrozen:
     to optUncall(obj) :NullOk[Portrayal]

@@ -1,15 +1,6 @@
+# import "guards" =~ [=>Tuple :DeepFrozen]
 import "./elib/serial/DEBuilderOf" =~ [=> DEBuilderOf :DeepFrozen]
 exports (deJSONKit)
-
-# object Tuple as DeepFrozen:
-#     match [=="get", _subguards, _]:
-#         return def tuple.coerce(specimen, ej):
-#         List.coerce(specimen, ej)
-#         #Same[subguards.size()].coerce(specimen.size(), ej)
-#         #for ix => g in (subguards):  # should use zip(subguards, specimen) ...
-#         #    g.coerce(specimen[ix], ej)
-#         return specimen
-
 
 object deJSONKit as DeepFrozen {
     to makeBuilder() {
@@ -21,7 +12,7 @@ object deJSONKit as DeepFrozen {
         def Noun := Pair[Same["import"], Str]
         def Ibid := Pair[Same["ibid"], Int]
         def Call := List  # Tuple[Same["call"], Expr, Str, List[Expr], Map[Str, Expr]]
-        def DefExpr := List  # Tuple[Same["define"], Int, Expr]
+        def DefExpr := List # Tuple[Same["define"], Int, Expr]
         def DefRec := List  # Tuple[Same["defrec"], Int, Expr]
         bind Expr := Any[Literal, Noun, Ibid, Call, DefExpr, DefRec]
 
