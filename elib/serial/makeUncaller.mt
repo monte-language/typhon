@@ -3,8 +3,8 @@
 # Copyright 2003 Hewlett Packard, Inc. under the terms of the MIT X license
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
-def makeRemoteCall := elib_uriGetter("serial.RemoteCall")
-def Uncaller := type_uriGetter("org.erights.e.elib.serial.Uncaller")
+import "serial.RemoteCall" =~ [=>makeRemoteCall :DeepFrozen]
+import "org.erights.e.elib.serial.Uncaller" =~ [=>Uncaller :DeepFrozen]
 
 object minimalUncaller implements Uncaller {
     to optUncall(obj) :NullOk[Tuple[Any, Str, List[Any]]] {

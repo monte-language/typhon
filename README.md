@@ -11,6 +11,8 @@
   - :g[] -> :List[g]
   - :(g1 | g2) -> :Any[g1, g2]
   - <scheme:rest> -> scheme_uriGetter("rest")
+    - def N := <scheme:rest> ->
+      import "rest" =~ [=>N :DeepFrozen]
   - for pat in expr -> for pat in (expr)
 
   - datatype names: capitalize int, char;
@@ -19,3 +21,4 @@
   - syntax helpers: one `_` for `__makeList`, `__makeInt`
   - E.toQuote -> M.toQuote
     - TODO: E.call(rx, verb, args) to M.call(rx, verb, args, nargs)
+

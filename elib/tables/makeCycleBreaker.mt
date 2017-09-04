@@ -3,8 +3,8 @@
 # Copyright 2003 Hewlett Packard, Inc. under the terms of the MIT X license
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
-def TraversalKey := type_uriGetter(":org.erights.e.elib.tables.TraversalKey")
-def makeTraversalKey := elib_uriGetter("tables.TraversalKey")
+import ":org.erights.e.elib.tables.TraversalKey" =~ [=>TraversalKey :DeepFrozen]
+import "tables.TraversalKey" =~ [=>makeTraversalKey :DeepFrozen]
 
 def makeFlexCycleBreaker
 def makeConstCycleBreaker

@@ -5,13 +5,13 @@
 
 # module "org.erights.e.elib.serial.deSubgraphKit"
 
-def Uncaller := type_uriGetter("org.erights.e.elib.serial.Uncaller")
+import "org.erights.e.elib.serial.Uncaller" =~ [=>Uncaller :DeepFrozen]
 
-def deASTKit := elib_uriGetter("serial.deASTKit")
-def DEBuilderOf := elib_uriGetter("serial.DEBuilderOf")
-def deSrcKit := elib_uriGetter("serial.deSrcKit")
-def makeCycleBreaker := elib_uriGetter("tables.makeCycleBreaker")
-def makeUncaller := elib_uriGetter("serial.makeUncaller")
+import "serial.deASTKit" =~ [=>deASTKit :DeepFrozen]
+import "serial.DEBuilderOf" =~ [=>DEBuilderOf :DeepFrozen]
+import "serial.deSrcKit" =~ [=>deSrcKit :DeepFrozen]
+import "tables.makeCycleBreaker" =~ [=>makeCycleBreaker :DeepFrozen]
+import "serial.makeUncaller" =~ [=>makeUncaller :DeepFrozen]
 
 def defaultUncallers := makeUncaller.getDefaultUncallers()
 
