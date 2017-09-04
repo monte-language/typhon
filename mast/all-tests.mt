@@ -22,6 +22,7 @@ import "tests/b" =~ _
 import "tests/expander" =~ _
 import "tests/fail-arg" =~ _
 import "tests/flexMap" =~ _
+import "tests/guards" =~ _
 import "tests/lexer" =~ _
 import "tests/optimizer" =~ _
 import "tests/parser" =~ _
