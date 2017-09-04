@@ -144,14 +144,14 @@ def printObjectHeadOn(script, name, asExpr, auditors, out, _priority) as DeepFro
         def extend := script.getExtends()
         out.print("object ")
         astPrint(name, out, priorities["pattern"])
+        if (extend != null):
+            out.print(" extends ")
+            astPrint(extend, out, priorities["order"])
         if (asExpr != null):
             out.print(" as ")
             astPrint(asExpr, out, priorities["call"])
         if (auditors.size() > 0):
             printListOn(" implements ", auditors, ", ", "", out, priorities["call"])
-        if (extend != null):
-            out.print(" extends ")
-            astPrint(extend, out, priorities["order"])
 
 
 def quasiPrint(name, quasis, out) as DeepFrozenStamp:
