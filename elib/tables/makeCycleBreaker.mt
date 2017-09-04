@@ -6,6 +6,15 @@ exports (makeCycleBreaker)
 
 def makeTraversalKey :DeepFrozen := _equalizer.makeTraversalKey
 
+def readOnly(m) as DeepFrozen:
+    return if (m =~ _:Map):
+        m
+    else:
+        object ro extends m:
+            to put(_k, _v):
+                throw("read only")
+
+
 object it as DeepFrozen {
 
 # /**
@@ -43,7 +52,7 @@ method makeROCycleBreaker(roPMap) :Near {
             it.makeConstCycleBreaker(roPMap.without(makeTraversalKey(key)))
         }
 
-        method getPowerMap()    :Near { roPMap.readOnly() }
+        method getPowerMap()    :Near { readOnly(roPMap) }
     }
 }
 
@@ -56,7 +65,7 @@ method makeFlexCycleBreaker(flexPMap) :Near {
     # Note that this is just delegation, not inheritance, in that we are not
     # initializing the template with flexCycleBreaker. By the same token,
     # the template makes no reference to <tt>self</tt>.
-    object flexCycleBreaker extends it.makeROCycleBreaker(flexPMap.readOnly()) {
+    object flexCycleBreaker extends it.makeROCycleBreaker(readOnly(flexPMap)) {
 
         to put(key, value)  :Void { flexPMap[makeTraversalKey(key)] := value }
 
@@ -72,7 +81,7 @@ method makeFlexCycleBreaker(flexPMap) :Near {
 #  * @author Mark S. Miller
 #  */
 method makeConstCycleBreaker(constPMap) :Near {
-    object constCycleBreaker extends it.makeROCycleBreaker(constPMap.readOnly()) {
+    object constCycleBreaker extends it.makeROCycleBreaker(readOnly(constPMap)) {
 
         method getPowerMap()    :Near { constPMap.snapshot() }
     }
