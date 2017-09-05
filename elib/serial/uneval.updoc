@@ -1,0 +1,165 @@
+#!/usr/bin/env rune
+
+# Copyright 2002 Combex, Inc. under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+    ? def deSubgraphKit := <elib:serial.deSubgraphKit>
+    # value <deSubgraphKit>
+
+    ? def x := [1, x, 3]
+    # value: [1, ***CYCLE***, 3]
+
+    ? def deSrcKit := <elib:serial.deSrcKit>
+    # value: <deSrcKit>
+
+    ? deSubgraphKit.recognize(x, deSrcKit.makeBuilder())
+    # value: "def t_0 := [def t_2 := 1, t_0, def t_4 := 3]
+    #        "
+
+    ? def deAssemblyKit := <elib:serial.deAssemblyKit>
+    # value <deAssemblyKit>
+
+    ? deSubgraphKit.recognize(x, deAssemblyKit.makeBuilder())
+    # value: "OP_PROMISE # [t_0, t_1]
+    #        OP_IMPORT(\"__makeList\")
+    #        OP_PROMISE # [t_2, t_3]
+    #        OP_LIT_WHOLENUM(1)
+    #        OP_DEFREC(3)
+    #        OP_IBID(0)
+    #        OP_PROMISE # [t_4, t_5]
+    #        OP_LIT_WHOLENUM(3)
+    #        OP_DEFREC(5)
+    #        OP_CALL(\"run\", 3)
+    #        OP_DEFREC(1)
+    #        OP_ROOT
+    #        "
+
+    ? def deENodeKit := <elib:serial.deENodeKit>
+    # value <deENodeKit>
+
+    ? def ast := deSubgraphKit.recognize(x, deENodeKit.makeBuilder())
+    # value: e`def [t_0 :any, t_1 :any] := Ref.promise()
+    #          t_1.resolve(__makeList.run(1, t_0, 3))
+    #          t_0`
+
+    ? deSubgraphKit.recognize(x, deSrcKit.makeBuilder())
+    # value: "def t_0 := [def t_2 := 1, t_0, def t_4 := 3]
+    #        "
+
+    ? deENodeKit.recognize(ast, deSrcKit.makeBuilder())
+    # value: "def t_0 := [1, t_0, 3]
+    #        "
+
+    ? deENodeKit.recognize(ast, deAssemblyKit.makeBuilder())
+    # value: "OP_PROMISE # [t_0, t_1]
+    #        OP_IMPORT(\"__makeList\")
+    #        OP_LIT_WHOLENUM(1)
+    #        OP_IBID(0)
+    #        OP_LIT_WHOLENUM(3)
+    #        OP_CALL(\"run\", 3)
+    #        OP_DEFREC(1)
+    #        OP_ROOT
+    #        "
+
+OP_PROMISE # [t_0, t_1]
+OP_IMPORT(\"__makeList\")    # [__makeList]
+OP_LIT_WHOLENUM(1)           # [__makeList, 1]
+OP_IBID(0)                   # [__makeList, 1, t_0]
+OP_LIT_WHOLENUM(3)           # [__makeList, 1, t_0, 3]
+OP_CALL(\"run\", 3)          # [[1, t_0, 3]]
+OP_DEFREC(1)                 # def t_0 := TOS
+OP_ROOT                      # return TOS
+
+    ? def deBytecodeKit := <elib:serial.deBytecodeKit>
+    # value: <deBytecodeKit>
+
+    ? def code := deENodeKit.recognize(ast, deBytecodeKit.makeBuilder())
+    > code.size()
+    # value: 30
+
+    ? deBytecodeKit.recognize(code, deAssemblyKit.makeBuilder())
+    # value: "OP_PROMISE # [t_0, t_1]
+    #        OP_IMPORT(\"__makeList\")
+    #        OP_LIT_WHOLENUM(1)
+    #        OP_IBID(0)
+    #        OP_LIT_WHOLENUM(3)
+    #        OP_CALL(\"run\", 3)
+    #        OP_DEFREC(1)
+    #        OP_ROOT
+    #        "
+
+    ? deSubgraphKit.recognize(x, deSubgraphKit.makeBuilder())
+    # value: [1, ***CYCLE***, 3]
+
+    ? deBytecodeKit.recognize(code, deSubgraphKit.makeBuilder())
+    # value: [1, ***CYCLE***, 3]
+
+    ? def unQuote := <elib:oldeio.UnQuote>
+    # value: <import:org.erights.e.elib.oldeio.UnQuote>
+
+    ? def testUneval(obj) :near {
+    >     def ast := deSubgraphKit.recognize(obj, deENodeKit.makeBuilder())
+    >     def src := deENodeKit.recognize(ast, deSrcKit.makeBuilder())
+    >     unQuote(src.trim())
+    > }
+    # value: <testUneval>
+
+    ? testUneval(x)
+    # value: def t_0 := [1, t_0, 3]
+
+    ? deSubgraphKit.recognize(introducer.getNetConfig(),
+    >                         deENodeKit.makeBuilder())
+    # value: e`import__uriGetter.get("net.vattp.data.NetConfig").\
+    #            run(def t_6 :any := __makeList.run(), t_6, t_6)`
+
+    ? testUneval(introducer.getNetConfig())
+    # value: <import:net.vattp.data.NetConfig>(def t_0 := [], t_0, t_0)
+
+    ? def makeRemoteCall := <elib:serial.RemoteCall>
+    # value: <import:org.erights.e.elib.serial.RemoteCall>
+
+    ? def rc := makeRemoteCall(3, "add", [5])
+    # value: <Eventual ref>
+
+    ? testUneval(rc)
+    # value: 3.add(5)
+
+    ? def opaque__uriGetter {
+    >     to get(str :String)   :any { throw(`couldn't serialize: $str`) }
+    >     to getOptNameFor(obj) :nullOk(String) { null }
+    > }
+    # value: <opaque__uriGetter>
+
+    ? def makeUncall := <elib:serial.makeUncall>
+    # value: <makeUncall>
+
+    ? def uncall := makeUncall()
+    # value: <uncall>
+
+    ? def uncall2 := makeUncall.cauterizer(uncall, opaque__uriGetter)
+    # value: <cauterizingUncall>
+
+    ? def makeUneval := <elib:serial.makeUneval>
+    # value: <makeUneval>
+
+    ? def scope2 := deSubgraphKit.getMinimalScope().with("opaque__uriGetter",
+    >                                                    opaque__uriGetter)
+
+    ? def uneval2 := makeUneval(null, uncall2, scope2)
+    # value: <uneval>
+
+    ? def testUneval2(obj) :near {
+    >     def ast := uneval2(obj, deENodeKit.makeBuilder())
+    >     def src := deENodeKit.recognize(ast, deSrcKit.makeBuilder())
+    >     unQuote(src.trim())
+    > }
+    # value: <testUneval2>
+
+    ? def xxx := thunk{}
+    # value: <...__main$1>
+
+    ? testUneval([xxx])
+    # problem: Can't uneval <...__main$1>
+
+    ? testUneval2([xxx])
+    # value: [<opaque:...__main$1>]
