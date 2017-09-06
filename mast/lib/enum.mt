@@ -22,6 +22,8 @@ def makeEnumObject(i :DeepFrozen, name :DeepFrozen) as DeepFrozen:
         to asInteger() :Int:
             return i
 
+def DF :Same[DeepFrozen] := DeepFrozen
+
 def makeEnum(names :List[Str]) as DeepFrozen:
     "Make an enumeration from a list of names.
 
@@ -32,7 +34,7 @@ def makeEnum(names :List[Str]) as DeepFrozen:
                                     makeEnumObject(i, name)]
     def enumSet :Set[DeepFrozen] := enums.asSet()
 
-    def EnumGuard.coerce(specimen, ej) as DeepFrozen:
+    def EnumGuard.coerce(specimen, ej) :DF as DeepFrozen implements SubrangeGuard[DeepFrozen]:
         "Require `specimen` to be a member of an enumeration."
 
         if (!enumSet.contains(specimen)):
@@ -49,4 +51,13 @@ def testEnum(assert):
     assert.ejects(fn ej {def _ :Fubar exit ej := 42})
     assert.doesNotEject(fn ej {def _ :Fubar exit ej := FOO})
 
-unittest([testEnum])
+def testEnumSubrangeDF(assert):
+    def [Fubar, FOO :Fubar, BAR :Fubar] := makeEnum(["foo", "bar"])
+    def df.foo() as DeepFrozen:
+        return [FOO, BAR]
+    assert.equal(df.foo(), [FOO, BAR])
+
+unittest([
+    testEnum,
+    testEnumSubrangeDF,
+])
