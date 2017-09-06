@@ -271,8 +271,12 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             # Script pieces.
             match =="FunctionScript" {
                 def [_verb, patts, namedPatts, guard, body] := args
-                def l := flattenList(patts) + flattenList(namedPatts) + body
-                optional(guard) + filterNouns(l, usedSet(sw, node.getBody()))
+                var l := flattenList(patts) + flattenList(namedPatts)
+                if (guard != null) {
+                    l := filterNouns(l, usedSet(sw, node.getResultGuard())) + guard
+                }
+                l += body
+                filterNouns(l, usedSet(sw, node.getBody()))
             }
             match n ? (["Matcher", "Catcher"].contains(n)) {
                 def [patt, body] := args
@@ -291,8 +295,10 @@ def findUnusedNames(expr) :List[Pair] as DeepFrozen:
             }
             match n ? (["Method", "To"].contains(n)) {
                 def [_, _, patts, namedPatts, guard, _body] := args
-                def l := (flattenList(patts) + flattenList(namedPatts) +
-                          optional(guard))
+                var l := flattenList(patts) + flattenList(namedPatts)
+                if (guard != null) {
+                    l := filterNouns(l, usedSet(sw, node.getResultGuard())) + guard
+                }
                 def namesRead := usedSet(sw, node.getBody())
                 filterNouns(l, namesRead)
             }
@@ -355,6 +361,13 @@ def testUsedDefRecursive(assert):
 def testUsedListPattern(assert):
     assert.equal(findUnusedNames(m`def [guard, _param :guard] := pair`).size(), 0)
 
+def testUsedResultGuard(assert):
+    assert.equal(findUnusedNames(m`def f(x) :x { null }`).size(), 0)
+    assert.equal(findUnusedNames(m`object f {
+        to run(x) :x { null }
+        method run(x) :x { null }
+    }`).size(), 0)
+
 unittest([
     testUnusedDef,
     testUsedSuchThat,
@@ -363,6 +376,7 @@ unittest([
     testUsedVarAssign,
     testUsedDefRecursive,
     testUsedListPattern,
+    testUsedResultGuard,
 ])
 
 def findSingleMethodObjects(expr) as DeepFrozen:
