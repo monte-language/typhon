@@ -1,5 +1,6 @@
 import py
 
+from rpython.rlib.debug import debug_print
 from rpython.rlib.unroll import unrolling_iterable
 
 
@@ -184,6 +185,7 @@ def visit%(name)s(self, specimen):
             Throw a fatal error with span information.
             """
 
+            debug_print(problem.encode("utf-8"))
             raise CompilerFailed(problem, span)
         attrs["errorWithSpan"] = errorWithSpan
 
