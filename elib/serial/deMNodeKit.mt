@@ -49,6 +49,10 @@ object deMNodeKit as DeepFrozen {
         # Which temp variables have been reused?
         def varReused := [].diverge()  # [].diverge(Bool)
 
+        def asPattern(name :Str, "guard" => guard :EExpr := ANY) :FinalPattern {
+            return astBuilder.FinalPattern(astBuilder.NounExpr(name, null), guard, null)
+        }
+
         object deASTBuilder implements DEBuilderOf[EExpr, EExpr] {
 
             method getNodeType() :Near { EExpr }
@@ -67,7 +71,7 @@ object deMNodeKit as DeepFrozen {
                 var badNames := [].asSet().diverge()
                 for tempIndex => wasReused in (varReused) {
                     if (! wasReused) {
-                        badNames.addElement(`t_$tempIndex`)
+                        badNames.include(`t_$tempIndex`)
                     }
                 }
                 badNames := badNames.snapshot()
@@ -107,14 +111,15 @@ object deMNodeKit as DeepFrozen {
             }
 
             method buildCall(rec :EExpr, verb :Str, args :List[EExpr], nargs :Map[Str, EExpr]) :EExpr {
-                astBuilder.CallExpr(rec, verb, args, nargs, null)
+                def namedArgs := [for key => value in (nargs) ["key" => key, "value" => value]]
+                astBuilder.MethodCallExpr(rec, verb, args, namedArgs, null)
             }
 
             method buildDefine(rValue :EExpr) :Pair[EExpr, Int] {
                 def tempIndex := nextTemp
                 nextTemp += 1
-                varReused[tempIndex] := false
-                def tempPatt := astBuilder.FinalPattern(::"m``".fromStr(`t_$tempIndex`), ANY)
+                varReused.push(false)
+                def tempPatt := asPattern(`t_$tempIndex`)
                 def defExpr := astBuilder.DefExpr(tempPatt, null, rValue, null)
                 [defExpr, tempIndex]
             }
@@ -122,8 +127,8 @@ object deMNodeKit as DeepFrozen {
             method buildPromise() :Int {
                 def promIndex := nextTemp
                 nextTemp += 2
-                varReused[promIndex] := false
-                varReused[promIndex+1] := false
+                varReused.push(false)
+                varReused.push(false)
                 promIndex
             }
 
@@ -133,12 +138,12 @@ object deMNodeKit as DeepFrozen {
             #  */
             method buildDefrec(resIndex :Int, rValue :EExpr) :EExpr {
                 def promIndex := resIndex-1
-                def promPatt := astBuilder.FinalPattern(`t_$promIndex`, ANY, null)
+                def promPatt := asPattern(`t_$promIndex`)
 
                 if (varReused[promIndex]) {
                     # We have a cycle
                     def promNoun := astBuilder.NounExpr(`t_$promIndex`, null)
-                    def resPatt  := astBuilder.FinalPattern (`t_$resIndex`, ANY, null)
+                    def resPatt  := asPattern(`t_$resIndex`)
                     def resNoun  := astBuilder.NounExpr(`t_$resIndex`, null)
 
                     # XXX Should we instead generate the same expansion
