@@ -149,8 +149,8 @@ object deMNodeKit as DeepFrozen {
                     # XXX Should we instead generate the same expansion
                     # generarated by the E parser? This would remove a
                     # recognizion case below.
-                    m`def [$promPatt, $resPatt] := Ref.promise()
-                      $resNoun.resolve($rValue)
+                    m`def [$promPatt, $resPatt] := Ref.promise();$\
+                      $resNoun.resolve($rValue);$\
                       $promNoun`
 
                 } else {
