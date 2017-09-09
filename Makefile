@@ -6,6 +6,8 @@ deJSONKit.mast: elib-serial
 
 elib-serial: elib-tables \
              elib/serial/deSubgraphKit.mast \
+             elib/serial/deSrcKit.mast \
+             elib/serial/deMNodeKit.mast \
              elib/serial/makeUncaller.mast \
              elib/serial/DEBuilderOf.mast
 
