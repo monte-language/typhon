@@ -1,4 +1,4 @@
-# import "guards" =~ [=>Tuple :DeepFrozen]
+import "guards" =~ [=>Tuple :DeepFrozen]
 import "./elib/serial/DEBuilderOf" =~ [=> DEBuilderOf :DeepFrozen]
 exports (deJSONKit)
 
@@ -8,12 +8,16 @@ object deJSONKit as DeepFrozen {
         # as JSON-happy data structures
         # http://wiki.erights.org/wiki/Data-E_in_JSON
         def Expr
-        def Literal := Any[Int, Double, Str, Pair[Same["char"], Str]]  #@@Char, Bool, null
+        def Literal := Any[Int, Double, Str, Pair[Same["char"], Str]]
         def Noun := Pair[Same["import"], Str]
         def Ibid := Pair[Same["ibid"], Int]
-        def Call := List  # Tuple[Same["call"], Expr, Str, List[Expr], Map[Str, Expr]]
-        def DefExpr := List # Tuple[Same["define"], Int, Expr]
-        def DefRec := List  # Tuple[Same["defrec"], Int, Expr]
+        # We'll leave the recursive bits to dynamic checks.
+        #           Tuple[Same["call"], Expr, Str, List[Expr], Map[Str, Expr]]
+        def Call := Tuple[Same["call"],  Any, Str, List      , Map[Str,  Any]]
+        #              Tuple[Same["define"], Int, Expr]
+        def DefExpr := Tuple[Same["define"], Int,  Any]
+        #             Tuple[Same["defrec"], Int, Expr]
+        def DefRec := Tuple[Same["defrec"], Int,  Any]
         bind Expr := Any[Literal, Noun, Ibid, Call, DefExpr, DefRec]
 
         var nextTemp :Int := 0
@@ -29,7 +33,7 @@ object deJSONKit as DeepFrozen {
             to buildIbid(tempIndex :Int) :Expr {
                 if (! (tempIndex < nextTemp)) { throw(`assertion failure: $tempIndex < $nextTemp`) }
                 varReused[tempIndex] := true
-                traceln(`buildIbid: $tempIndex marked reused.`)  #@@
+                # traceln(`buildIbid: $tempIndex marked reused.`)
                 return ["ibid", tempIndex]
             }
             to buildCall(rec :Expr, verb :Str, args :List[Expr], nargs :Map[Str, Expr]) :Expr {
@@ -53,7 +57,7 @@ object deJSONKit as DeepFrozen {
             }
             to buildDefrec(resIndex :Int, rValue :Expr) :Expr {
                 def promIndex := resIndex - 1
-                traceln(`buildDefrec: $promIndex reused? ${varReused[promIndex]}.`)  #@@
+                # traceln(`buildDefrec: $promIndex reused? ${varReused[promIndex]}.`)
                 return if (varReused[promIndex]) {
                     # We have a cycle
                     ["defrec", promIndex, rValue]
@@ -67,5 +71,6 @@ object deJSONKit as DeepFrozen {
 
     to recognize() {
         throw("@@not implemented")
+        #@@Char
     }
 }
