@@ -537,7 +537,9 @@ def unaryOperatorsToName :Map[Str, Str] := [
     "~" => "complement", "!" => "not", "-" => "negate"]
 
 def makeCoreAst() as DeepFrozenStamp:
-    def Noun := Ast["ValueHoleExpr", "NounExpr", "TempNounExpr"]
+    def Noun := Ast[
+        "ValueHoleExpr", "PatternHoleExpr", "NounExpr", "TempNounExpr",
+    ]
 
     def [Expr, Pattern, NamedArg, MapItem, MapPatternItem,
          NamedParam, Method_, Matcher, Catcher, Script,
