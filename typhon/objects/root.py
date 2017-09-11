@@ -135,7 +135,7 @@ class Object(object):
             self._samenessHash = _, samenessHash = True, self.computeHash(7)
         return samenessHash
 
-    def call(self, verb, arguments, namedArgs=None):
+    def call(self, verb, arguments, namedArgs=None, span=None):
         """
         Pass a message immediately to this object.
 
@@ -144,9 +144,9 @@ class Object(object):
 
         arity = len(arguments)
         atom = getAtom(verb, arity)
-        return self.callAtom(atom, arguments, namedArgs)
+        return self.callAtom(atom, arguments, namedArgs, span)
 
-    def callAtom(self, atom, arguments, namedArgsMap=None):
+    def callAtom(self, atom, arguments, namedArgsMap=None, span=None):
         """
         This method is used to reuse atoms without having to rebuild them.
 
@@ -168,19 +168,19 @@ class Object(object):
         try:
             return self.recvNamed(atom, arguments, namedArgsMap)
         except Refused as r:
-            r.addTrail(self, atom, arguments)
+            r.addTrail(self, atom, arguments, span)
             raise
         except UserException as ue:
-            ue.addTrail(self, atom, arguments)
+            ue.addTrail(self, atom, arguments, span)
             raise
         except MemoryError:
             ue = userError(u"Memory corruption or exhausted heap")
-            ue.addTrail(self, atom, arguments)
+            ue.addTrail(self, atom, arguments, span)
             raise ue
         except StackOverflow:
             check_stack_overflow()
             ue = userError(u"Stack overflow")
-            ue.addTrail(self, atom, arguments)
+            ue.addTrail(self, atom, arguments, span)
             raise ue
 
     def mirandaMethods(self, atom, arguments, namedArgsMap):

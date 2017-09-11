@@ -72,7 +72,7 @@ class FillOuters(AtomIR.makePassTo(NoOutersIR)):
     def __init__(self, outers):
         self.outers = outers
 
-    def visitObjectExpr(self, patt, auditors, script):
+    def visitObjectExpr(self, patt, auditors, script, span):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         script = self.visitScript(script)
@@ -86,10 +86,10 @@ class FillOuters(AtomIR.makePassTo(NoOutersIR)):
             # Mark the guard as static by destroying the relevant dynamic
             # guard key. Use .pop() to avoid KeyErrors from unused bindings.
             script.layout.frameTable.dynamicGuards.pop(name, 0)
-        return self.dest.ObjectExpr(patt, guards, auditors, script)
+        return self.dest.ObjectExpr(patt, guards, auditors, script, span)
 
-    def visitOuterExpr(self, name, index):
-        return self.dest.LiveExpr(self.outers[index])
+    def visitOuterExpr(self, name, index, span):
+        return self.dest.LiveExpr(self.outers[index], span)
 
 NoLiteralsIR = NoOutersIR.extend("NoLiterals",
     [],
@@ -105,20 +105,20 @@ NoLiteralsIR = NoOutersIR.extend("NoLiterals",
 
 class ThawLiterals(NoOutersIR.makePassTo(NoLiteralsIR)):
 
-    def visitCharExpr(self, c):
-        return self.dest.LiveExpr(CharObject(c))
+    def visitCharExpr(self, c, span):
+        return self.dest.LiveExpr(CharObject(c), span)
 
-    def visitDoubleExpr(self, d):
-        return self.dest.LiveExpr(DoubleObject(d))
+    def visitDoubleExpr(self, d, span):
+        return self.dest.LiveExpr(DoubleObject(d), span)
 
-    def visitIntExpr(self, bi):
+    def visitIntExpr(self, bi, span):
         try:
-            return self.dest.LiveExpr(IntObject(bi.toint()))
+            return self.dest.LiveExpr(IntObject(bi.toint()), span)
         except OverflowError:
-            return self.dest.LiveExpr(BigInt(bi))
+            return self.dest.LiveExpr(BigInt(bi), span)
 
-    def visitStrExpr(self, s):
-        return self.dest.LiveExpr(StrObject(s))
+    def visitStrExpr(self, s, span):
+        return self.dest.LiveExpr(StrObject(s), span)
 
 MixIR = NoLiteralsIR.extend("Mix",
     ["Exception"],
@@ -169,7 +169,7 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
                 return obj
         return None
 
-    def visitCallExpr(self, obj, atom, args, namedArgs):
+    def visitCallExpr(self, obj, atom, args, namedArgs, span):
         obj = self.visitExpr(obj)
         args = [self.visitExpr(arg) for arg in args]
         namedArgs = [self.visitNamedArg(namedArg) for namedArg in namedArgs]
@@ -183,11 +183,11 @@ class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
                         result = liveObj.call(atom.verb, liveArgs)
                         assert result is not None, "livewire"
                         if isDeepFrozen(result):
-                            return self.dest.LiveExpr(result)
+                            return self.dest.LiveExpr(result, span)
                         # print "Not DF:", str(result)[:50]
                     except UserException as ue:
-                        return self.dest.ExceptionExpr(ue)
-        return self.dest.CallExpr(obj, atom, args, namedArgs)
+                        return self.dest.ExceptionExpr(ue, span)
+        return self.dest.CallExpr(obj, atom, args, namedArgs, span)
 
 
 SplitAuditorsIR = MixIR.extend(
@@ -206,20 +206,20 @@ SplitAuditorsIR = MixIR.extend(
 
 class SplitAuditors(MixIR.makePassTo(SplitAuditorsIR)):
 
-    def visitObjectExpr(self, patt, guards, auditors, script):
+    def visitObjectExpr(self, patt, guards, auditors, script, span):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         script = self.visitScript(script)
         if not auditors or (len(auditors) == 1 and
                             isinstance(auditors[0], self.dest.NullExpr)):
             # No more auditing.
-            return self.dest.ClearObjectExpr(patt, script)
+            return self.dest.ClearObjectExpr(patt, script, span)
         else:
             # Runtime auditing.
             ast = BuildKernelNodes().visitExpr(script.mast)
             clipboard = AuditClipboard(script.layout.fqn, ast)
             return self.dest.ObjectExpr(patt, guards, auditors, script,
-                                        clipboard)
+                                        clipboard, span)
 
 
 StampedScriptIR = SplitAuditorsIR.extend("StampedScriptIR", [],
@@ -242,13 +242,15 @@ class DischargeAuditors(SplitAuditorsIR.makePassTo(StampedScriptIR)):
         self.clearRate = recorder.getRateFor("DischargeAuditors clear")
 
 
-    def visitScriptExpr(self, name, doc, mast, layout, methods, matchers):
+    def visitScriptExpr(self, name, doc, mast, layout, methods, matchers,
+                        span):
         return self.dest.ScriptExpr(name, doc, mast, layout,
                                     [],
                                     [self.visitMethod(m) for m in methods],
-                                    [self.visitMatcher(m) for m in matchers])
+                                    [self.visitMatcher(m) for m in matchers],
+                                    span)
 
-    def visitObjectExpr(self, patt, guards, auditors, script, clipboard):
+    def visitObjectExpr(self, patt, guards, auditors, script, clipboard, span):
         script = self.visitScript(script)
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(a) for a in auditors]
@@ -289,14 +291,16 @@ class DischargeAuditors(SplitAuditorsIR.makePassTo(StampedScriptIR)):
                 script = self.dest.ScriptExpr(script.name, script.doc,
                                               script.mast, script.layout,
                                               stamps,
-                                              script.methods, script.matchers)
+                                              script.methods, script.matchers,
+                                              span)
                 # In order to be truly clear, we must not have depended on any
                 # dynamic guards.
                 clear &= not report.isDynamic
 
         if clear:
             self.clearRate.yes()
-            return self.dest.ClearObjectExpr(patt, script)
+            return self.dest.ClearObjectExpr(patt, script, span)
         else:
             self.clearRate.no()
-            return self.dest.ObjectExpr(patt, guards, auditors, script, clipboard)
+            return self.dest.ObjectExpr(patt, guards, auditors, script,
+                                        clipboard, span)

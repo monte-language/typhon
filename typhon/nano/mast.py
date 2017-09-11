@@ -45,7 +45,7 @@ MastIR = makeIR("Mast",
             "FinalPatt": [("name", "Noun"), ("guard", "Expr")],
             "VarPatt": [("name", "Noun"), ("guard", "Expr")],
             "ListPatt": [("patts", "Patt*")],
-            "ViaPatt": [("trans", "Expr"), ("patt", "Patt"), ("span", None)],
+            "ViaPatt": [("trans", "Expr"), ("patt", "Patt")],
         },
         "NamedArg": {
             "NamedArgExpr": [("key", "Expr"), ("value", "Expr")],
@@ -62,17 +62,17 @@ MastIR = makeIR("Mast",
                            ("namedPatts", "NamedPatt*"), ("guard", "Expr"),
                            ("body", "Expr")],
         },
-    }
+    },
 )
 
 class SanityCheck(MastIR.selfPass()):
 
-    def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers, span):
         if isinstance(patt, self.src.ViaPatt):
             self.errorWithSpan(u"via-patts not yet permitted in object-exprs",
                                patt.span)
         return self.super.visitObjectExpr(self, doc, patt, auditors,
-                methods, matchers)
+                                          methods, matchers, span)
 
 
 SaveScriptIR = MastIR.extend("SaveScript", [],
@@ -87,14 +87,14 @@ SaveScriptIR = MastIR.extend("SaveScript", [],
 
 class SaveScripts(MastIR.makePassTo(SaveScriptIR)):
 
-    def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
-        mast = MastIR.ObjectExpr(doc, patt, auditors, methods, matchers)
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers, span):
+        mast = MastIR.ObjectExpr(doc, patt, auditors, methods, matchers, span)
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         methods = [self.visitMethod(method) for method in methods]
         matchers = [self.visitMatcher(matcher) for matcher in matchers]
         return self.dest.ObjectExpr(doc, patt, auditors, methods, matchers,
-                                    mast)
+                                    mast, span)
 
 
 class PrettyMAST(MastIR.makePassTo(None)):
@@ -108,31 +108,31 @@ class PrettyMAST(MastIR.makePassTo(None)):
     def write(self, s):
         self.buf.append(s)
 
-    def visitNullExpr(self):
+    def visitNullExpr(self, span):
         self.write(u"null")
 
-    def visitCharExpr(self, c):
+    def visitCharExpr(self, c, span):
         self.write(quoteChar(c[0]))
 
-    def visitDoubleExpr(self, d):
+    def visitDoubleExpr(self, d, span):
         self.write(u"%f" % d)
 
-    def visitIntExpr(self, i):
+    def visitIntExpr(self, i, span):
         self.write(i.format(BASE10).decode("utf-8"))
 
-    def visitStrExpr(self, s):
+    def visitStrExpr(self, s, span):
         self.write(quoteStr(s))
 
-    def visitAssignExpr(self, name, rvalue):
+    def visitAssignExpr(self, name, rvalue, span):
         self.write(name)
         self.write(u" := ")
         self.visitExpr(rvalue)
 
-    def visitBindingExpr(self, name):
+    def visitBindingExpr(self, name, span):
         self.write(u"&&")
         self.write(name)
 
-    def visitCallExpr(self, obj, verb, args, namedArgs):
+    def visitCallExpr(self, obj, verb, args, namedArgs, span):
         self.visitExpr(obj)
         self.write(u".")
         self.write(verb)
@@ -149,7 +149,7 @@ class PrettyMAST(MastIR.makePassTo(None)):
                 self.visitNamedArg(namedArg)
         self.write(u")")
 
-    def visitDefExpr(self, patt, ex, rvalue):
+    def visitDefExpr(self, patt, ex, rvalue, span):
         if isinstance(patt, MastIR.VarPatt):
             self.write(u"def ")
         self.visitPatt(patt)
@@ -159,14 +159,14 @@ class PrettyMAST(MastIR.makePassTo(None)):
         self.write(u" := ")
         self.visitExpr(rvalue)
 
-    def visitEscapeOnlyExpr(self, patt, body):
+    def visitEscapeOnlyExpr(self, patt, body, span):
         self.write(u"escape ")
         self.visitPatt(patt)
         self.write(u" {")
         self.visitExpr(body)
         self.write(u"}")
 
-    def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
+    def visitEscapeExpr(self, patt, body, catchPatt, catchBody, span):
         self.write(u"escape ")
         self.visitPatt(patt)
         self.write(u" {")
@@ -177,19 +177,19 @@ class PrettyMAST(MastIR.makePassTo(None)):
         self.visitExpr(catchBody)
         self.write(u"}")
 
-    def visitFinallyExpr(self, body, atLast):
+    def visitFinallyExpr(self, body, atLast, span):
         self.write(u"try {")
         self.visitExpr(body)
         self.write(u"} finally {")
         self.visitExpr(atLast)
         self.write(u"}")
 
-    def visitHideExpr(self, body):
+    def visitHideExpr(self, body, span):
         self.write(u"{")
         self.visitExpr(body)
         self.write(u"}")
 
-    def visitIfExpr(self, test, cons, alt):
+    def visitIfExpr(self, test, cons, alt, span):
         self.write(u"if (")
         self.visitExpr(test)
         self.write(u") {")
@@ -198,16 +198,16 @@ class PrettyMAST(MastIR.makePassTo(None)):
         self.visitExpr(alt)
         self.write(u"}")
 
-    def visitMetaContextExpr(self):
+    def visitMetaContextExpr(self, span):
         self.write(u"meta.context()")
 
-    def visitMetaStateExpr(self):
+    def visitMetaStateExpr(self, span):
         self.write(u"meta.state()")
 
-    def visitNounExpr(self, name):
+    def visitNounExpr(self, name, span):
         self.write(name)
 
-    def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers, span):
         self.write(u"object ")
         self.visitPatt(patt)
         if auditors:
@@ -227,14 +227,14 @@ class PrettyMAST(MastIR.makePassTo(None)):
             self.visitMatcher(matcher)
         self.write(u"}")
 
-    def visitSeqExpr(self, exprs):
+    def visitSeqExpr(self, exprs, span):
         if exprs:
             self.visitExpr(exprs[0])
             for expr in exprs[1:]:
                 self.write(u"; ")
                 self.visitExpr(expr)
 
-    def visitTryExpr(self, body, catchPatt, catchBody):
+    def visitTryExpr(self, body, catchPatt, catchBody, span):
         self.write(u"try {")
         self.visitExpr(body)
         self.write(u"} catch ")
@@ -243,30 +243,30 @@ class PrettyMAST(MastIR.makePassTo(None)):
         self.visitExpr(catchBody)
         self.write(u"}")
 
-    def visitIgnorePatt(self, guard):
+    def visitIgnorePatt(self, guard, span):
         self.write(u"_")
         if not isinstance(guard, MastIR.NullExpr):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitBindingPatt(self, name):
+    def visitBindingPatt(self, name, span):
         self.write(u"&&")
         self.write(name)
 
-    def visitFinalPatt(self, name, guard):
+    def visitFinalPatt(self, name, guard, span):
         self.write(name)
         if not isinstance(guard, MastIR.NullExpr):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitVarPatt(self, name, guard):
+    def visitVarPatt(self, name, guard, span):
         self.write(u"var ")
         self.write(name)
         if not isinstance(guard, MastIR.NullExpr):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitListPatt(self, patts):
+    def visitListPatt(self, patts, span):
         self.write(u"[")
         if patts:
             self.visitPatt(patts[0])
@@ -275,32 +275,32 @@ class PrettyMAST(MastIR.makePassTo(None)):
                 self.visitPatt(patt)
         self.write(u"]")
 
-    def visitViaPatt(self, trans, patt):
+    def visitViaPatt(self, trans, patt, span):
         self.write(u"via (")
         self.visitExpr(trans)
         self.write(u") ")
         self.visitPatt(patt)
 
-    def visitNamedArgExpr(self, key, value):
+    def visitNamedArgExpr(self, key, value, span):
         self.visitExpr(key)
         self.write(u" => ")
         self.visitExpr(value)
 
-    def visitNamedPattern(self, key, patt, default):
+    def visitNamedPattern(self, key, patt, default, span):
         self.visitExpr(key)
         self.write(u" => ")
         self.visitPatt(patt)
         self.write(u" := ")
         self.visitExpr(default)
 
-    def visitMatcherExpr(self, patt, body):
+    def visitMatcherExpr(self, patt, body, span):
         self.write(u"match ")
         self.visitPatt(patt)
         self.write(u" {")
         self.visitExpr(body)
         self.write(u"}")
 
-    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body):
+    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body, span):
         self.write(u"method ")
         self.write(verb)
         self.write(u"(")
@@ -326,65 +326,65 @@ class PrettyMAST(MastIR.makePassTo(None)):
 
 
 class BuildKernelNodes(MastIR.makePassTo(None)):
-    def visitNullExpr(self):
+    def visitNullExpr(self, span):
         return nodes.Null
 
-    def visitCharExpr(self, c):
+    def visitCharExpr(self, c, span):
         return nodes.Char(c)
 
-    def visitDoubleExpr(self, d):
+    def visitDoubleExpr(self, d, span):
         return nodes.Double(d)
 
-    def visitIntExpr(self, i):
+    def visitIntExpr(self, i, span):
         return nodes.Int(i)
 
-    def visitStrExpr(self, s):
+    def visitStrExpr(self, s, span):
         return nodes.Str(s)
 
-    def visitAssignExpr(self, name, rvalue):
+    def visitAssignExpr(self, name, rvalue, span):
         return nodes.Assign(name, self.visitExpr(rvalue))
 
-    def visitBindingExpr(self, name):
+    def visitBindingExpr(self, name, span):
         return nodes.Binding(name)
 
-    def visitCallExpr(self, obj, verb, args, namedArgs):
+    def visitCallExpr(self, obj, verb, args, namedArgs, span):
         return nodes.Call(self.visitExpr(obj), verb,
                           [self.visitExpr(a) for a in args],
                           [self.visitNamedArg(na) for na in namedArgs])
 
-    def visitDefExpr(self, patt, ex, rvalue):
+    def visitDefExpr(self, patt, ex, rvalue, span):
         return nodes.Def(self.visitPatt(patt), self.visitExpr(ex),
                          self.visitExpr(rvalue))
 
-    def visitEscapeOnlyExpr(self, patt, body):
+    def visitEscapeOnlyExpr(self, patt, body, span):
         return nodes.Escape(self.visitPatt(patt), self.visitExpr(body),
                             None, None)
 
-    def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
+    def visitEscapeExpr(self, patt, body, catchPatt, catchBody, span):
         return nodes.Escape(self.visitPatt(patt), self.visitExpr(body),
                             self.visitPatt(catchPatt),
                             self.visitExpr(catchBody))
 
-    def visitFinallyExpr(self, body, atLast):
+    def visitFinallyExpr(self, body, atLast, span):
         return nodes.Finally(self.visitExpr(body), self.visitExpr(atLast))
 
-    def visitHideExpr(self, body):
+    def visitHideExpr(self, body, span):
         return nodes.Hide(self.visitExpr(body))
 
-    def visitIfExpr(self, test, cons, alt):
+    def visitIfExpr(self, test, cons, alt, span):
         return nodes.If(self.visitExpr(test), self.visitExpr(cons),
                         self.visitExpr(alt))
 
-    def visitMetaContextExpr(self):
+    def visitMetaContextExpr(self, span):
         return nodes.MetaContextExpr()
 
-    def visitMetaStateExpr(self):
+    def visitMetaStateExpr(self, span):
         return nodes.MetaStateExpr()
 
-    def visitNounExpr(self, name):
+    def visitNounExpr(self, name, span):
         return nodes.Noun(name)
 
-    def visitObjectExpr(self, doc, patt, auditors, methods, matchers):
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers, span):
         return nodes.Obj(doc, self.visitPatt(patt),
                          self.visitExpr(auditors[0]),
                          [self.visitExpr(a) for a in auditors[1:]],
@@ -393,44 +393,44 @@ class BuildKernelNodes(MastIR.makePassTo(None)):
                              [self.visitMethod(m) for m in methods],
                              [self.visitMatcher(m) for m in matchers]))
 
-    def visitSeqExpr(self, exprs):
+    def visitSeqExpr(self, exprs, span):
         return nodes.Sequence([self.visitExpr(e) for e in exprs])
 
-    def visitTryExpr(self, body, catchPatt, catchBody):
+    def visitTryExpr(self, body, catchPatt, catchBody, span):
         return nodes.Try(self.visitExpr(body), self.visitPatt(catchPatt),
                          self.visitExpr(catchBody))
 
-    def visitIgnorePatt(self, guard):
+    def visitIgnorePatt(self, guard, span):
         return nodes.IgnorePattern(self.visitExpr(guard))
 
-    def visitBindingPatt(self, name):
+    def visitBindingPatt(self, name, span):
         return nodes.BindingPattern(nodes.Noun(name))
 
-    def visitFinalPatt(self, name, guard):
+    def visitFinalPatt(self, name, guard, span):
         return nodes.FinalPattern(nodes.Noun(name),
                                   self.visitExpr(guard))
 
-    def visitVarPatt(self, name, guard):
+    def visitVarPatt(self, name, guard, span):
         return nodes.VarPattern(nodes.Noun(name), self.visitExpr(guard))
 
-    def visitListPatt(self, patts):
+    def visitListPatt(self, patts, span):
         return nodes.ListPattern([self.visitPatt(p) for p in patts], nodes._Null)
 
     def visitViaPatt(self, trans, patt, span):
         return nodes.ViaPattern(self.visitExpr(trans), self.visitPatt(patt))
 
-    def visitNamedArgExpr(self, key, value):
+    def visitNamedArgExpr(self, key, value, span):
         return nodes.NamedArg(self.visitExpr(key), self.visitExpr(value))
 
-    def visitNamedPattern(self, key, patt, default):
+    def visitNamedPattern(self, key, patt, default, span):
         return nodes.NamedParam(self.visitExpr(key), self.visitPatt(patt),
                                 self.visitExpr(default))
 
-    def visitMatcherExpr(self, patt, body):
+    def visitMatcherExpr(self, patt, body, span):
         return nodes.Matcher(self.visitPatt(patt),
                              self.visitExpr(body))
 
-    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body):
+    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body, span):
         return nodes.Method(doc, verb, [self.visitPatt(p) for p in patts],
                             [self.visitNamedPatt(p) for p in namedPatts],
                             self.visitExpr(guard), self.visitExpr(body))

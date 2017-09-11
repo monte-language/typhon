@@ -277,10 +277,10 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
     def visitExprNested(self, node):
         return self.visitExprWithLayout(node, ScopeBox(self.layout))
 
-    def visitFinalPatt(self, name, guard):
+    def visitFinalPatt(self, name, guard, span):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
-        result = self.dest.FinalPatt(name, self.visitExpr(guard), origLayout)
+        result = self.dest.FinalPatt(name, self.visitExpr(guard), origLayout, span)
         # NB: If there's a guard, then we'll promote this to slot severity so
         # that auditors can recover the guard. ~ C.
         if isinstance(result.guard, self.dest.NullExpr):
@@ -292,19 +292,19 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
         self.layout.node = result
         return result
 
-    def visitTempPatt(self, name):
+    def visitTempPatt(self, name, span):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
-        result = self.dest.TempPatt(name, origLayout)
+        result = self.dest.TempPatt(name, origLayout, span)
         self.layout = ScopeItem(self.layout, name, SEV_NOUN)
         origLayout.addChild(self.layout)
         self.layout.node = result
         return result
 
-    def visitVarPatt(self, name, guard):
+    def visitVarPatt(self, name, guard, span):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
-        result = self.dest.VarPatt(name, self.visitExpr(guard), origLayout)
+        result = self.dest.VarPatt(name, self.visitExpr(guard), origLayout, span)
         # Perhaps in the future we could do some sort of absorbing, but not
         # today. Nope.
         self.layout = ScopeItem(self.layout, name, SEV_SLOT)
@@ -312,19 +312,19 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
         origLayout.addChild(self.layout)
         return result
 
-    def visitBindingPatt(self, name):
+    def visitBindingPatt(self, name, span):
         origLayout = self.layout
         self.layout.requireShadowable(name, True)
-        result = self.dest.BindingPatt(name, origLayout)
+        result = self.dest.BindingPatt(name, origLayout, span)
         self.layout = ScopeItem(self.layout, name, SEV_BINDING)
         self.layout.node = result
         origLayout.addChild(self.layout)
         return result
 
-    def visitHideExpr(self, body):
+    def visitHideExpr(self, body, span):
         return self.visitExprNested(body)
 
-    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body):
+    def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body, span):
         origLayout = self.layout
         self.layout = ScopeBox(self.layout)
         origLayout.addChild(self.layout)
@@ -332,22 +332,22 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
             doc, verb,
             [self.visitPatt(p) for p in patts],
             [self.visitNamedPatt(np) for np in namedPatts],
-            self.visitExpr(guard), self.visitExpr(body), origLayout)
+            self.visitExpr(guard), self.visitExpr(body), origLayout, span)
         self.layout.node = result
         self.layout = origLayout
         return result
 
-    def visitMatcherExpr(self, patt, body):
+    def visitMatcherExpr(self, patt, body, span):
         origLayout = self.layout
         self.layout = ScopeBox(self.layout)
         origLayout.addChild(self.layout)
         result = self.dest.MatcherExpr(self.visitPatt(patt),
-                                       self.visitExpr(body), origLayout)
+                                       self.visitExpr(body), origLayout, span)
         self.layout.node = result
         self.layout = origLayout
         return result
 
-    def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast):
+    def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast, span):
         if isinstance(patt, self.src.IgnorePatt):
             objName = u'_'
         elif isinstance(patt, self.src.FinalPatt) or isinstance(
@@ -377,43 +377,43 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
             # Everything else captures the layout previous to its node, but
             # here we store the ScopeFrame itself (since there's no other
             # good place to put it).
-            self.layout)
+            self.layout, span)
         self.layout.node = result
         self.layout = origLayout
         return result
 
-    def visitMetaContextExpr(self):
-        return self.dest.MetaContextExpr(self.layout)
+    def visitMetaContextExpr(self, span):
+        return self.dest.MetaContextExpr(self.layout, span)
 
-    def visitMetaStateExpr(self):
-        return self.dest.MetaStateExpr(self.layout)
+    def visitMetaStateExpr(self, span):
+        return self.dest.MetaStateExpr(self.layout, span)
 
-    def visitNounExpr(self, name):
-        return self.dest.NounExpr(name, self.layout)
+    def visitNounExpr(self, name, span):
+        return self.dest.NounExpr(name, self.layout, span)
 
-    def visitTempNounExpr(self, name):
-        return self.dest.TempNounExpr(name, self.layout)
+    def visitTempNounExpr(self, name, span):
+        return self.dest.TempNounExpr(name, self.layout, span)
 
-    def visitSlotExpr(self, name):
+    def visitSlotExpr(self, name, span):
         self.layout.deepen(name, SEV_SLOT)
-        return self.dest.SlotExpr(name, self.layout)
+        return self.dest.SlotExpr(name, self.layout, span)
 
-    def visitBindingExpr(self, name):
+    def visitBindingExpr(self, name, span):
         self.layout.deepen(name, SEV_BINDING)
-        return self.dest.BindingExpr(name, self.layout)
+        return self.dest.BindingExpr(name, self.layout, span)
 
-    def visitEscapeOnlyExpr(self, patt, body):
+    def visitEscapeOnlyExpr(self, patt, body, span):
         origLayout = self.layout
         self.layout = ScopeBox(origLayout)
         origLayout.addChild(self.layout)
         p = self.visitPatt(patt)
         b = self.visitExpr(body)
-        result = self.dest.EscapeOnlyExpr(p, b)
+        result = self.dest.EscapeOnlyExpr(p, b, span)
         self.layout.node = result
         self.layout = origLayout
         return result
 
-    def visitEscapeExpr(self, ejPatt, ejBody, catchPatt, catchBody):
+    def visitEscapeExpr(self, ejPatt, ejBody, catchPatt, catchBody, span):
         origLayout = self.layout
         self.layout = layout1 = ScopeBox(origLayout)
         p = self.visitPatt(ejPatt)
@@ -423,18 +423,19 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
         origLayout.addChild(layout2)
         cp = self.visitPatt(catchPatt)
         cb = self.visitExpr(catchBody)
-        result = self.dest.EscapeExpr(p, b, cp, cb)
+        result = self.dest.EscapeExpr(p, b, cp, cb, span)
         layout1.node = result
         layout2.node = result
         self.layout = origLayout
         return result
 
-    def visitFinallyExpr(self, body, atLast):
+    def visitFinallyExpr(self, body, atLast, span):
         return self.dest.FinallyExpr(
             self.visitExprNested(body),
-            self.visitExprNested(atLast))
+            self.visitExprNested(atLast),
+            span)
 
-    def visitIfExpr(self, test, consq, alt):
+    def visitIfExpr(self, test, consq, alt, span):
         origLayout = self.layout
         self.layout = layout1 = ScopeBox(origLayout)
         origLayout.addChild(layout1)
@@ -443,20 +444,20 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
         self.layout = layout2 = ScopeBox(origLayout)
         origLayout.addChild(layout2)
         e = self.visitExpr(alt)
-        result = self.dest.IfExpr(t, c, e)
+        result = self.dest.IfExpr(t, c, e, span)
         layout1.node = result
         layout2.node = result
         self.layout = origLayout
         return result
 
-    def visitTryExpr(self, body, catchPatt, catchBody):
+    def visitTryExpr(self, body, catchPatt, catchBody, span):
         b = self.visitExprNested(body)
         origLayout = self.layout
         self.layout = ScopeBox(origLayout)
         origLayout.addChild(self.layout)
         cp = self.visitPatt(catchPatt)
         cb = self.visitExpr(catchBody)
-        result = self.dest.TryExpr(b, cp, cb)
+        result = self.dest.TryExpr(b, cp, cb, span)
         self.layout.node = result
         self.layout = origLayout
         return result
@@ -480,17 +481,17 @@ ReifyMetaStateIR = LayoutIR.extend(
 
 class ReifyMetaState(LayoutIR.makePassTo(ReifyMetaStateIR)):
 
-    def makeList(self, exprs, layout):
-        _makeList = self.dest.NounExpr(u"_makeList", layout)
-        return self.dest.CallExpr(_makeList, u"run", exprs, [])
+    def makeList(self, exprs, layout, span):
+        _makeList = self.dest.NounExpr(u"_makeList", layout, span)
+        return self.dest.CallExpr(_makeList, u"run", exprs, [], span)
 
-    def makeNamePair(self, name, layout):
-        k = self.dest.StrExpr(u"&&" + name)
-        v = self.dest.BindingExpr(name, layout)
-        pair = self.makeList([k, v], layout)
-        return self.makeList([pair], layout)
+    def makeNamePair(self, name, layout, span):
+        k = self.dest.StrExpr(u"&&" + name, span)
+        v = self.dest.BindingExpr(name, layout, span)
+        pair = self.makeList([k, v], layout, span)
+        return self.makeList([pair], layout, span)
 
-    def visitMetaStateExpr(self, layout):
+    def visitMetaStateExpr(self, layout, span):
         s = layout
         while not isinstance(s, ScopeFrame):
             if isinstance(s, ScopeOuter):
@@ -499,10 +500,11 @@ class ReifyMetaState(LayoutIR.makePassTo(ReifyMetaStateIR)):
             s = s.next
         else:
             frame = s.frameNames
-        pairs = self.makeList([self.makeNamePair(name, layout)
-                               for name in frame.keys()], layout)
+        pairs = self.makeList([self.makeNamePair(name, layout, span)
+                               for name in frame.keys()], layout, span)
         return self.dest.CallExpr(
-            self.dest.NounExpr(u"_makeMap", layout), u"fromPairs", [pairs], [])
+            self.dest.NounExpr(u"_makeMap", layout, span), u"fromPairs",
+            [pairs], [], span)
 
 
 ReifyMetaContextIR = ReifyMetaStateIR.extend(
@@ -515,16 +517,16 @@ ReifyMetaContextIR = ReifyMetaStateIR.extend(
 
 class ReifyMetaContext(ReifyMetaStateIR.makePassTo(ReifyMetaContextIR)):
 
-    def visitMetaContextExpr(self, layout):
+    def visitMetaContextExpr(self, layout, span):
         fqn = layout.fqn
         frame = ScopeFrame(layout, u'META')
         return self.dest.ObjectExpr(
             u"",
-            self.dest.IgnorePatt(self.dest.NullExpr()),
+            self.dest.IgnorePatt(self.dest.NullExpr(span), span),
             [], [self.dest.MethodExpr(
-                u"", u"getFQNPrefix", [], [], self.dest.NullExpr(),
-                self.dest.StrExpr(fqn + u'$'), layout)],
-            [], None, frame)
+                u"", u"getFQNPrefix", [], [], self.dest.NullExpr(span),
+                self.dest.StrExpr(fqn + u'$', span), layout, span)],
+            [], None, frame, span)
 
 
 BoundNounsIR = ReifyMetaContextIR.extend(
@@ -568,116 +570,116 @@ BoundNounsIR = ReifyMetaContextIR.extend(
 
 class SpecializeNouns(ReifyMetaContextIR.makePassTo(BoundNounsIR)):
 
-    def visitBindingPatt(self, name, layout):
-        return self.dest.BindingPatt(name, layout.position + 1)
+    def visitBindingPatt(self, name, layout, span):
+        return self.dest.BindingPatt(name, layout.position + 1, span)
 
-    def visitFinalPatt(self, name, guard, layout):
+    def visitFinalPatt(self, name, guard, layout, span):
         _, _, severity = layout.findChild(name)
         guard = self.visitExpr(guard)
         if severity is SEV_NOUN:
-            return self.dest.NounPatt(name, guard, layout.position + 1)
+            return self.dest.NounPatt(name, guard, layout.position + 1, span)
         elif severity is SEV_SLOT:
-            return self.dest.FinalSlotPatt(name, guard, layout.position + 1)
+            return self.dest.FinalSlotPatt(name, guard, layout.position + 1, span)
         elif severity is SEV_BINDING:
-            return self.dest.FinalBindingPatt(name, guard, layout.position + 1)
+            return self.dest.FinalBindingPatt(name, guard, layout.position + 1, span)
         else:
             assert False, "snape"
 
-    def visitTempPatt(self, name, layout):
+    def visitTempPatt(self, name, layout, span):
         _, _, severity = layout.findChild(name)
-        guard = self.dest.NullExpr()
+        guard = self.dest.NullExpr(span)
         if severity is SEV_NOUN:
-            return self.dest.NounPatt(name, guard, layout.position + 1)
+            return self.dest.NounPatt(name, guard, layout.position + 1, span)
         elif severity is SEV_SLOT:
-            return self.dest.FinalSlotPatt(name, guard, layout.position + 1)
+            return self.dest.FinalSlotPatt(name, guard, layout.position + 1, span)
         elif severity is SEV_BINDING:
-            return self.dest.FinalBindingPatt(name, guard, layout.position + 1)
+            return self.dest.FinalBindingPatt(name, guard, layout.position + 1, span)
         else:
             assert False, "snape"
 
-    def visitVarPatt(self, name, guard, layout):
+    def visitVarPatt(self, name, guard, layout, span):
         _, _, severity = layout.findChild(name)
         guard = self.visitExpr(guard)
         # NB: Not prepared to handle SEV_NOUN vars yet.
         if severity is SEV_SLOT:
-            return self.dest.VarSlotPatt(name, guard, layout.position + 1)
+            return self.dest.VarSlotPatt(name, guard, layout.position + 1, span)
         elif severity is SEV_BINDING:
-            return self.dest.VarBindingPatt(name, guard, layout.position + 1)
+            return self.dest.VarBindingPatt(name, guard, layout.position + 1, span)
         else:
             assert False, "snape"
 
-    def makeStorage(self, name, index, scope):
+    def makeStorage(self, name, index, scope, span):
         if scope is SCOPE_LOCAL:
-            return self.dest.LocalExpr(name, index, scope)
+            return self.dest.LocalExpr(name, index, span)
         elif scope is SCOPE_FRAME:
-            return self.dest.FrameExpr(name, index, scope)
+            return self.dest.FrameExpr(name, index, span)
         elif scope is SCOPE_OUTER:
-            return self.dest.OuterExpr(name, index, scope)
+            return self.dest.OuterExpr(name, index, span)
         else:
             assert False, "thesaurus"
 
-    def bindingToSlot(self, noun):
-        return self.dest.CallExpr(noun, u"get", [], [])
+    def bindingToSlot(self, noun, span):
+        return self.dest.CallExpr(noun, u"get", [], [], span)
 
-    def slotToNoun(self, noun):
-        return self.dest.CallExpr(noun, u"get", [], [])
+    def slotToNoun(self, noun, span):
+        return self.dest.CallExpr(noun, u"get", [], [], span)
 
-    def visitNounExpr(self, name, layout):
+    def visitNounExpr(self, name, layout, span):
         # Automatically add to closures of frames.
         scope, idx, severity = layout.find(name, True)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
-        storage = self.makeStorage(name, idx, scope)
+        storage = self.makeStorage(name, idx, scope, span)
         if severity is SEV_BINDING:
-            return self.slotToNoun(self.bindingToSlot(storage))
+            return self.slotToNoun(self.bindingToSlot(storage, span), span)
         elif severity is SEV_SLOT:
-            return self.slotToNoun(storage)
+            return self.slotToNoun(storage, span)
         else:
             return storage
 
-    def visitTempNounExpr(self, name, layout):
+    def visitTempNounExpr(self, name, layout, span):
         scope, idx, severity = layout.find(name, True)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
-        storage = self.makeStorage(name, idx, scope)
+        storage = self.makeStorage(name, idx, scope, span)
         if severity is SEV_BINDING:
-            return self.slotToNoun(self.bindingToSlot(storage))
+            return self.slotToNoun(self.bindingToSlot(storage, span), span)
         elif severity is SEV_SLOT:
-            return self.slotToNoun(storage)
+            return self.slotToNoun(storage, span)
         else:
             return storage
 
-    def visitSlotExpr(self, name, layout):
+    def visitSlotExpr(self, name, layout, span):
         scope, idx, severity = layout.find(name, True)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
-        storage = self.makeStorage(name, idx, scope)
+        storage = self.makeStorage(name, idx, scope, span)
         if severity is SEV_BINDING:
-            return self.bindingToSlot(storage)
+            return self.bindingToSlot(storage, span)
         else:
             return storage
 
-    def visitBindingExpr(self, name, layout):
+    def visitBindingExpr(self, name, layout, span):
         scope, idx, _ = layout.find(name, True)
         if scope is None:
             raise scopeError(layout, name + u" is not defined")
-        return self.makeStorage(name, idx, scope)
+        return self.makeStorage(name, idx, scope, span)
 
     def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body,
-                        layout):
+                        layout, span):
         return self.dest.MethodExpr(
             doc, verb,
             [self.visitPatt(p) for p in patts],
             [self.visitNamedPatt(np) for np in namedPatts],
             self.visitExpr(guard),
             self.visitExpr(body),
-            countLocalSize(layout, 0) + 2)
+            countLocalSize(layout, 0) + 2, span)
 
-    def visitMatcherExpr(self, patt, body, layout):
+    def visitMatcherExpr(self, patt, body, layout, span):
         return self.dest.MatcherExpr(
             self.visitPatt(patt),
             self.visitExpr(body),
-            countLocalSize(layout, 0) + 2)
+            countLocalSize(layout, 0) + 2, span)
 
 class ComputeFrameTables(BoundNounsIR.selfPass()):
     """
@@ -685,7 +687,7 @@ class ComputeFrameTables(BoundNounsIR.selfPass()):
     """
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
-                        layout):
+                        layout, span):
         layout.computeFrameTable(self)
         return self.super.visitObjectExpr(self, doc, patt, auditors, methods,
-                                          matchers, mast, layout)
+                                          matchers, mast, layout, span)

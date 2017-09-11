@@ -164,7 +164,8 @@ class MASTContext(object):
     def nextNamedExprs(self, stream):
         size = stream.nextInt()
         return [MastIR.NamedArgExpr(self.nextExpr(stream),
-                                    self.nextExpr(stream))
+                                    self.nextExpr(stream),
+                                    None)
                 for _ in range(size)]
 
     def nextNamedPatts(self, stream):
@@ -305,7 +306,7 @@ class MASTContext(object):
             doc = stream.nextStr()
             verb = stream.nextStr()
             patts = self.nextPatts(stream)
-            namedPatts = [MastIR.NamedPattern(key, value, default)
+            namedPatts = [MastIR.NamedPattern(key, value, default, None)
                           for (key, value, default)
                           in self.nextNamedPatts(stream)]
             guard = self.nextExpr(stream)

@@ -72,22 +72,30 @@ class UserException(Exception):
     def getPayload(self):
         return self.payload
 
-    def addTrail(self, target, atom, args):
+    def addTrail(self, target, atom, args, span):
         """
         Add a traceback frame to this exception.
         """
 
-        self.trail.append((target, atom, args))
+        self.trail.append((target, atom, args, span))
 
     def formatTrail(self):
         rv = []
-        for target, atom, args in self.trail:
+        for target, atom, args, span in self.trail:
             argStringList = [printObjTerse(arg) for arg in args]
             argString = u", ".join(argStringList)
+            if span is None:
+                spanStr = u""
+            else:
+                spanStr = u" %s:%s::%s:%s" % (
+                    str(span.startLine).decode('utf-8'),
+                    str(span.startCol).decode('utf-8'),
+                    str(span.endLine).decode('utf-8'),
+                    str(span.endCol).decode('utf-8'))
             rv.append(u"  %s.%s(%s)" % (printObjTerse(target), atom.verb,
-                                                argString))
+                                        argString))
             path, name = target.fqn.split(u"$", 1)
-            rv.append(u"File '%s', in object %s:" % (path, name))
+            rv.append(u"File '%s'%s, in object %s:" % (path, spanStr, name))
         return rv
 
 

@@ -64,22 +64,22 @@ class MakeProfileNames(StampedScriptIR.makePassTo(ProfileNameIR)):
         # method/matcher without a body. ~ C.
         self.objectNames = []
 
-    def visitClearObjectExpr(self, patt, script):
+    def visitClearObjectExpr(self, patt, script, span):
         # Push, do the recursion, pop.
         objName = script.name
         self.objectNames.append((objName.encode("utf-8"),
             script.layout.fqn.encode("utf-8").split("$")[0]))
-        rv = self.super.visitClearObjectExpr(self, patt, script)
+        rv = self.super.visitClearObjectExpr(self, patt, script, span)
         self.objectNames.pop()
         return rv
 
-    def visitObjectExpr(self, patt, guards, auditors, script, clipboard):
+    def visitObjectExpr(self, patt, guards, auditors, script, clipboard, span):
         # Push, do the recursion, pop.
         objName = script.name
         self.objectNames.append((objName.encode("utf-8"),
             script.layout.fqn.encode("utf-8").split("$")[0]))
         rv = self.super.visitObjectExpr(self, patt, guards, auditors, script,
-                                        clipboard)
+                                        clipboard, span)
         self.objectNames.pop()
         return rv
 
@@ -88,7 +88,7 @@ class MakeProfileNames(StampedScriptIR.makePassTo(ProfileNameIR)):
         return "mt:%s.%s:1:%s" % (name, inner, fqn)
 
     def visitMethodExpr(self, doc, atom, patts, namedPatts, guard, body,
-            localSize):
+            localSize, span):
         # NB: `atom.repr` is tempting but wrong. ~ C.
         description = "%s/%d" % (atom.verb.encode("utf-8"), atom.arity)
         profileName = self.makeProfileName(description)
@@ -98,15 +98,15 @@ class MakeProfileNames(StampedScriptIR.makePassTo(ProfileNameIR)):
         guard = self.visitExpr(guard)
         body = self.visitExpr(body)
         rv = self.dest.MethodExpr(profileName, doc, atom, patts, namedPatts,
-                guard, body, localSize)
+                                  guard, body, localSize, span)
         rvmprof.register_code(rv, lambda method: method.profileName)
         return rv
 
-    def visitMatcherExpr(self, patt, body, localSize):
+    def visitMatcherExpr(self, patt, body, localSize, span):
         profileName = self.makeProfileName("matcher")
         patt = self.visitPatt(patt)
         body = self.visitExpr(body)
-        rv = self.dest.MatcherExpr(profileName, patt, body, localSize)
+        rv = self.dest.MatcherExpr(profileName, patt, body, localSize, span)
         rvmprof.register_code(rv, lambda matcher: matcher.profileName)
         return rv
 
@@ -417,30 +417,30 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             ej = theThrower
         return guard.call(u"coerce", [specimen, ej])
 
-    def visitLiveExpr(self, obj):
+    def visitLiveExpr(self, obj, span):
         # jit_debug("LiveExpr")
         # Ta-dah~
         return obj
 
-    def visitExceptionExpr(self, exception):
+    def visitExceptionExpr(self, exception, span):
         # jit_debug("ExceptionExpr")
         raise exception
 
-    def visitNullExpr(self):
+    def visitNullExpr(self, span):
         # jit_debug("NullExpr")
         return NullObject
 
-    def visitLocalExpr(self, name, idx):
+    def visitLocalExpr(self, name, idx, span):
         # jit_debug("LocalExpr %s" % name.encode("utf-8"))
         return self.locals[idx]
 
-    def visitFrameExpr(self, name, idx):
+    def visitFrameExpr(self, name, idx, span):
         # jit_debug("FrameExpr %s" % name.encode("utf-8"))
         return self.frame[idx]
 
     # Length of args and namedArgs are fixed. ~ C.
     @unroll_safe
-    def visitCallExpr(self, obj, atom, args, namedArgs):
+    def visitCallExpr(self, obj, atom, args, namedArgs, span):
         # jit_debug("CallExpr")
         rcvr = self.visitExpr(obj)
         argVals = [self.visitExpr(a) for a in args]
@@ -452,16 +452,16 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             namedArgMap = ConstMap(d)
         else:
             namedArgMap = EMPTY_MAP
-        return rcvr.callAtom(atom, argVals, namedArgMap)
+        return rcvr.callAtom(atom, argVals, namedArgMap, span)
 
-    def visitDefExpr(self, patt, ex, rvalue):
+    def visitDefExpr(self, patt, ex, rvalue, span):
         # jit_debug("DefExpr")
         ex = self.visitExpr(ex)
         val = self.visitExpr(rvalue)
         self.matchBind(patt, val, ex)
         return val
 
-    def visitEscapeOnlyExpr(self, patt, body):
+    def visitEscapeOnlyExpr(self, patt, body, span):
         # jit_debug("EscapeOnlyExpr")
         with Ejector() as ej:
             self.matchBind(patt, ej)
@@ -473,7 +473,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                     raise
                 return e.value
 
-    def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
+    def visitEscapeExpr(self, patt, body, catchPatt, catchBody, span):
         # jit_debug("EscapeExpr")
         with Ejector() as ej:
             self.matchBind(patt, ej)
@@ -486,14 +486,14 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                 self.matchBind(catchPatt, e.value)
                 return self.visitExpr(catchBody)
 
-    def visitFinallyExpr(self, body, atLast):
+    def visitFinallyExpr(self, body, atLast, span):
         # jit_debug("FinallyExpr")
         try:
             return self.visitExpr(body)
         finally:
             self.visitExpr(atLast)
 
-    def visitIfExpr(self, test, cons, alt):
+    def visitIfExpr(self, test, cons, alt, span):
         # jit_debug("IfExpr")
         if unwrapBool(self.visitExpr(test)):
             return self.visitExpr(cons)
@@ -519,7 +519,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
     # Everything passed to this method, except self, is immutable. ~ C.
     @unroll_safe
-    def visitClearObjectExpr(self, patt, script):
+    def visitClearObjectExpr(self, patt, script, span):
         # jit_debug("ClearObjectExpr")
         objName = script.name
         frameTable = script.layout.frameTable
@@ -563,7 +563,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     # immutable. Clipboards are not a problem since their loops are
     # internalized in methods. ~ C.
     @unroll_safe
-    def visitObjectExpr(self, patt, guards, auditors, script, clipboard):
+    def visitObjectExpr(self, patt, guards, auditors, script, clipboard, span):
         # jit_debug("ObjectExpr")
 
         # Discover the object's common name and also find the
@@ -632,14 +632,14 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     # Risky; we expect that the list of exprs is from a SeqExpr and that it's
     # immutable. ~ C.
     @unroll_safe
-    def visitSeqExpr(self, exprs):
+    def visitSeqExpr(self, exprs, span):
         # jit_debug("SeqExpr")
         result = NullObject
         for expr in exprs:
             result = self.visitExpr(expr)
         return result
 
-    def visitTryExpr(self, body, catchPatt, catchBody):
+    def visitTryExpr(self, body, catchPatt, catchBody, span):
         # jit_debug("TryExpr")
         try:
             return self.visitExpr(body)
@@ -647,13 +647,13 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             self.matchBind(catchPatt, sealException(ex))
             return self.visitExpr(catchBody)
 
-    def visitIgnorePatt(self, guard):
+    def visitIgnorePatt(self, guard, span):
         # jit_debug("IgnorePatt")
         if not isinstance(guard, self.src.NullExpr):
             g = self.visitExpr(guard)
             self.runGuard(g, self.specimen, self.patternFailure)
 
-    def visitNounPatt(self, name, guard, index):
+    def visitNounPatt(self, name, guard, index, span):
         # jit_debug("NounPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             val = self.specimen
@@ -662,11 +662,11 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
             val = self.runGuard(g, self.specimen, self.patternFailure)
         self.locals[index] = val
 
-    def visitBindingPatt(self, name, index):
+    def visitBindingPatt(self, name, index, span):
         # jit_debug("BindingPatt %s" % name.encode("utf-8"))
         self.locals[index] = self.specimen
 
-    def visitFinalBindingPatt(self, name, guard, idx):
+    def visitFinalBindingPatt(self, name, guard, idx, span):
         # jit_debug("FinalBindingPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
@@ -675,7 +675,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         val = self.runGuard(guard, self.specimen, self.patternFailure)
         self.locals[idx] = finalBinding(val, guard)
 
-    def visitFinalSlotPatt(self, name, guard, idx):
+    def visitFinalSlotPatt(self, name, guard, idx, span):
         # jit_debug("FinalSlotPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
@@ -684,7 +684,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         val = self.runGuard(guard, self.specimen, self.patternFailure)
         self.locals[idx] = FinalSlot(val, guard)
 
-    def visitVarBindingPatt(self, name, guard, idx):
+    def visitVarBindingPatt(self, name, guard, idx, span):
         # jit_debug("VarBindingPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
@@ -693,7 +693,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         val = self.runGuard(guard, self.specimen, self.patternFailure)
         self.locals[idx] = varBinding(val, guard)
 
-    def visitVarSlotPatt(self, name, guard, idx):
+    def visitVarSlotPatt(self, name, guard, idx, span):
         # jit_debug("VarSlotPatt %s" % name.encode("utf-8"))
         if isinstance(guard, self.src.NullExpr):
             guard = anyGuard
@@ -704,7 +704,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
     # The list of patts is immutable. ~ C.
     @unroll_safe
-    def visitListPatt(self, patts):
+    def visitListPatt(self, patts, span):
         # jit_debug("ListPatt")
         listSpecimen = unwrapList(self.specimen, ej=self.patternFailure)
         ej = self.patternFailure
@@ -718,10 +718,10 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         # jit_debug("ViaPatt")
         ej = self.patternFailure
         v = self.visitExpr(trans)
-        newSpec = v.callAtom(RUN_2, [self.specimen, ej])
+        newSpec = v.callAtom(RUN_2, [self.specimen, ej], EMPTY_MAP, span)
         self.matchBind(patt, newSpec, ej)
 
-    def visitNamedArgExpr(self, key, value):
+    def visitNamedArgExpr(self, key, value, span):
         return (self.visitExpr(key), self.visitExpr(value))
 
 
@@ -770,9 +770,9 @@ def evalMonte(expr, environment, fqnPrefix, inRepl=False):
     return result, topLocals
 
 
-def evalToPair(expr, scopeMap, inRepl=False):
+def evalToPair(expr, scopeMap, inRepl=False, filename=u"<eval>"):
     scope = unwrapMap(scopeMap)
-    result, topLocals = evalMonte(expr, scope2env(scope), u"<eval>", inRepl)
+    result, topLocals = evalMonte(expr, scope2env(scope), filename, inRepl)
     d = scope.copy()
     # XXX Future versions may choose to keep old env structures so that
     # debuggers can rewind and inspect bindings in old REPL lines.

@@ -25,14 +25,15 @@ class RemoveDefIgnore(BoundNounsIR.selfPass()):
             m`$guard.coerce($rvalue, $ex)`
     """
 
-    def visitDefExpr(self, patt, ex, rvalue):
+    def visitDefExpr(self, patt, ex, rvalue, span):
         if isinstance(patt, self.src.IgnorePatt):
             guard = patt.guard
             if isinstance(guard, self.src.NullExpr):
                 return rvalue
             else:
-                return self.dest.CallExpr(guard, u"coerce", [rvalue, ex], [])
-        return self.super.visitDefExpr(self, patt, ex, rvalue)
+                return self.dest.CallExpr(guard, u"coerce", [rvalue, ex], [],
+                                          span)
+        return self.super.visitDefExpr(self, patt, ex, rvalue, span)
 
 SplitScriptIR = BoundNounsIR.extend("SplitScript", [],
     {
@@ -57,15 +58,15 @@ class SplitScript(BoundNounsIR.makePassTo(SplitScriptIR)):
             return patt.name
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers,
-                        mast, layout):
+                        mast, layout, span):
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
         methods = [self.visitMethod(method) for method in methods]
         matchers = [self.visitMatcher(matcher) for matcher in matchers]
         name = self.nameForPatt(patt)
         script = self.dest.ScriptExpr(name, doc, mast, layout, methods,
-                                      matchers)
-        return self.dest.ObjectExpr(patt, auditors, script)
+                                      matchers, span)
+        return self.dest.ObjectExpr(patt, auditors, script, span)
 
 AtomIR = SplitScriptIR.extend("Atom", [],
     {
@@ -83,15 +84,15 @@ AtomIR = SplitScriptIR.extend("Atom", [],
 
 class MakeAtoms(SplitScriptIR.makePassTo(AtomIR)):
 
-    def visitCallExpr(self, obj, verb, args, namedArgs):
+    def visitCallExpr(self, obj, verb, args, namedArgs, span):
         obj = self.visitExpr(obj)
         atom = getAtom(verb, len(args))
         args = [self.visitExpr(arg) for arg in args]
         namedArgs = [self.visitNamedArg(namedArg) for namedArg in namedArgs]
-        return self.dest.CallExpr(obj, atom, args, namedArgs)
+        return self.dest.CallExpr(obj, atom, args, namedArgs, span)
 
     def visitMethodExpr(self, doc, verb, patts, namedPatts, guard, body,
-                        localSize):
+                        localSize, span):
         atom = getAtom(verb, len(patts))
         patts = [self.visitPatt(patt) for patt in patts]
         namedPatts = [self.visitNamedPatt(namedPatt) for namedPatt in
@@ -99,7 +100,7 @@ class MakeAtoms(SplitScriptIR.makePassTo(AtomIR)):
         guard = self.visitExpr(guard)
         body = self.visitExpr(body)
         return self.dest.MethodExpr(doc, atom, patts, namedPatts, guard, body,
-                                    localSize)
+                                    localSize, span)
 
 
 # Pretty-printer for the final pass.
@@ -153,22 +154,22 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
     def braces(self):
         return BraceContext(self)
 
-    def visitNullExpr(self):
+    def visitNullExpr(self, span):
         self.write(u"null")
 
-    def visitCharExpr(self, c):
+    def visitCharExpr(self, c, span):
         self.write(quoteChar(c[0]))
 
-    def visitDoubleExpr(self, d):
+    def visitDoubleExpr(self, d, span):
         self.write(u"%f" % d)
 
-    def visitIntExpr(self, i):
+    def visitIntExpr(self, i, span):
         self.write(i.format(BASE10).decode("utf-8"))
 
-    def visitStrExpr(self, s):
+    def visitStrExpr(self, s, span):
         self.write(quoteStr(s))
 
-    def visitCallExpr(self, obj, atom, args, namedArgs):
+    def visitCallExpr(self, obj, atom, args, namedArgs, span):
         self.visitExpr(obj)
         self.write(u".")
         self.write(atom.verb)
@@ -185,7 +186,7 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
                 self.visitNamedArg(namedArg)
         self.write(u")")
 
-    def visitDefExpr(self, patt, ex, rvalue):
+    def visitDefExpr(self, patt, ex, rvalue, span):
         if not (isinstance(patt, self.src.VarSlotPatt) or
                 isinstance(patt, self.src.VarBindingPatt)):
             self.write(u"def ")
@@ -196,13 +197,13 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
         self.write(u" := ")
         self.visitExpr(rvalue)
 
-    def visitEscapeOnlyExpr(self, patt, body):
+    def visitEscapeOnlyExpr(self, patt, body, span):
         self.write(u"escape ")
         self.visitPatt(patt)
         with self.braces():
             self.visitExpr(body)
 
-    def visitEscapeExpr(self, patt, body, catchPatt, catchBody):
+    def visitEscapeExpr(self, patt, body, catchPatt, catchBody, span):
         self.write(u"escape ")
         self.visitPatt(patt)
         with self.braces():
@@ -212,7 +213,7 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(catchBody)
 
-    def visitFinallyExpr(self, body, atLast):
+    def visitFinallyExpr(self, body, atLast, span):
         self.write(u"try")
         with self.braces():
             self.visitExpr(body)
@@ -220,7 +221,7 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(atLast)
 
-    def visitIfExpr(self, test, cons, alt):
+    def visitIfExpr(self, test, cons, alt, span):
         self.write(u"if (")
         self.visitExpr(test)
         self.write(u")")
@@ -230,27 +231,27 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(alt)
 
-    def visitLocalExpr(self, name, index):
+    def visitLocalExpr(self, name, index, span):
         self.write(name)
         self.write(u"⒧")
         self.write(asIndex(index))
 
-    def visitFrameExpr(self, name, index):
+    def visitFrameExpr(self, name, index, span):
         self.write(name)
         self.write(u"⒡")
         self.write(asIndex(index))
 
-    def visitOuterExpr(self, name, index):
+    def visitOuterExpr(self, name, index, span):
         self.write(name)
         self.write(asIndex(index))
 
-    def visitClearObjectExpr(self, patt, script):
+    def visitClearObjectExpr(self, patt, script, span):
         self.write(u"object ")
         self.visitPatt(patt)
         with self.braces():
             self.visitScript(script)
 
-    def visitObjectExpr(self, patt, auditors, script, clipboard):
+    def visitObjectExpr(self, patt, auditors, script, span):
         self.write(u"object ")
         self.visitPatt(patt)
         if not auditors:
@@ -269,14 +270,14 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
         with self.braces():
             self.visitScript(script)
 
-    def visitSeqExpr(self, exprs):
+    def visitSeqExpr(self, exprs, span):
         if exprs:
             self.visitExpr(exprs[0])
             for expr in exprs[1:]:
                 self.writeLine(u";")
                 self.visitExpr(expr)
 
-    def visitTryExpr(self, body, catchPatt, catchBody):
+    def visitTryExpr(self, body, catchPatt, catchBody, span):
         self.write(u"try")
         with self.braces():
             self.visitExpr(body)
@@ -285,25 +286,25 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(catchBody)
 
-    def visitIgnorePatt(self, guard):
+    def visitIgnorePatt(self, guard, span):
         self.write(u"_")
         if not isinstance(guard, self.src.NullExpr):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitBindingPatt(self, name, idx):
+    def visitBindingPatt(self, name, idx, span):
         self.write(u"&&")
         self.write(name)
         self.write(asIndex(idx))
 
-    def visitNounPatt(self, name, guard, idx):
+    def visitNounPatt(self, name, guard, idx, span):
         self.write(name)
         self.write(asIndex(idx))
         if not isinstance(guard, self.src.NullExpr):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitFinalSlotPatt(self, name, guard, idx):
+    def visitFinalSlotPatt(self, name, guard, idx, span):
         self.write(u"(&)")
         self.write(name)
         self.write(asIndex(idx))
@@ -311,7 +312,7 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitVarSlotPatt(self, name, guard, idx):
+    def visitVarSlotPatt(self, name, guard, idx, span):
         self.write(u"var (&)")
         self.write(name)
         self.write(asIndex(idx))
@@ -319,7 +320,7 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitFinalBindingPatt(self, name, guard, idx):
+    def visitFinalBindingPatt(self, name, guard, idx, span):
         self.write(u"(&&)")
         self.write(name)
         self.write(asIndex(idx))
@@ -327,7 +328,7 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitVarBindingPatt(self, name, guard, idx):
+    def visitVarBindingPatt(self, name, guard, idx, span):
         self.write(u"var (&&)")
         self.write(name)
         self.write(asIndex(idx))
@@ -335,7 +336,7 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
             self.write(u" :")
             self.visitExpr(guard)
 
-    def visitListPatt(self, patts):
+    def visitListPatt(self, patts, span):
         self.write(u"[")
         if patts:
             self.visitPatt(patts[0])
@@ -350,26 +351,26 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
         self.write(u") ")
         self.visitPatt(patt)
 
-    def visitNamedArgExpr(self, key, value):
+    def visitNamedArgExpr(self, key, value, span):
         self.visitExpr(key)
         self.write(u" => ")
         self.visitExpr(value)
 
-    def visitNamedPattern(self, key, patt, default):
+    def visitNamedPattern(self, key, patt, default, span):
         self.visitExpr(key)
         self.write(u" => ")
         self.visitPatt(patt)
         self.write(u" := ")
         self.visitExpr(default)
 
-    def visitMatcherExpr(self, patt, body, layout):
+    def visitMatcherExpr(self, patt, body, layout, span):
         self.write(u"match ")
         self.visitPatt(patt)
         with self.braces():
             self.visitExpr(body)
 
     def visitMethodExpr(self, doc, atom, patts, namedPatts, guard, body,
-                        layout):
+                        layout, span):
         self.write(u"method ")
         self.write(atom.verb)
         self.write(u"(")
@@ -392,15 +393,11 @@ class PrettySpecialNouns(AtomIR.makePassTo(None)):
         with self.braces():
             self.visitExpr(body)
 
-    def visitScriptExpr(self, name, doc, mast, layout, stamps, methods,
-                        matchers):
+    def visitScriptExpr(self, name, doc, mast, layout, methods,
+                        matchers, span):
         self.write(u"closure ⎣")
         self.write(u" ".join(layout.frameNames.keys()))
         self.writeLine(u"⎤;")
-        if stamps:
-            self.write(u"stamps ⌠")
-            self.write(u" ".join([stamp.toString() for stamp in stamps]))
-            self.writeLine(u"⌡;")
         # Newlines after every method/matcher, except for the final one in the
         # script. Tricky.
         if methods:

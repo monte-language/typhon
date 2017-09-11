@@ -104,10 +104,10 @@ class AstEval(Object):
         ast = realLoad(unwrapBytes(bs))
         return astEvalToPair(ast, scope)[0]
 
-    @method("List", "Any", "Any", inRepl="Bool")
-    def evalToPair(self, bs, scope, inRepl=False):
+    @method("List", "Any", "Any", inRepl="Bool", filename="Str")
+    def evalToPair(self, bs, scope, inRepl=False, filename=u"<eval>"):
         ast = realLoad(unwrapBytes(bs))
-        result, envMap = astEvalToPair(ast, scope, inRepl)
+        result, envMap = astEvalToPair(ast, scope, inRepl, filename)
         return [result, envMap]
 
 

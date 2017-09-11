@@ -15,20 +15,20 @@ class FindUsage(BoundNounsIR.selfPass()):
     def __init__(self, index):
         self.index = index
 
-    def visitLocalExpr(self, name, index):
+    def visitLocalExpr(self, name, index, span):
         if index == self.index:
             self.found = True
-        return self.dest.LocalExpr(name, index)
+        return self.dest.LocalExpr(name, index, span)
 
     def visitObjectExpr(self, doc, patt, auditors, methods, matchers, mast,
-                        layout):
+                        layout, span):
         frameNames = layout.frameNames
         for name, (position, scope, index, severity) in frameNames.items():
             if scope is SCOPE_LOCAL and index == self.index:
                 self.found = True
                 break
         return self.dest.ObjectExpr(doc, patt, auditors, methods, matchers,
-                                    mast, layout)
+                                    mast, layout, span)
 
 class ElideMethodReturn(BoundNounsIR.selfPass()):
 
@@ -51,14 +51,14 @@ class ElideMethodReturn(BoundNounsIR.selfPass()):
             return expr.obj
         return expr
 
-    def visitEscapeOnlyExpr(self, patt, body):
+    def visitEscapeOnlyExpr(self, patt, body, span):
         patt = self.visitPatt(patt)
         body = self.visitExpr(body)
 
         index = self.pattIndex(patt)
         if index == -1:
             # Nope, weird pattern.
-            return self.dest.EscapeOnlyExpr(patt, body)
+            return self.dest.EscapeOnlyExpr(patt, body, span)
 
         if isinstance(body, self.dest.SeqExpr):
             exprs = body.exprs
@@ -77,11 +77,11 @@ class ElideMethodReturn(BoundNounsIR.selfPass()):
                         if (expr.verb == u"run" and len(expr.args) == 1 and
                                 len(expr.namedArgs) == 0):
                             # Okay. Let's do the slice and return what's left.
-                            seq = self.dest.SeqExpr(exprs[:i] + expr.args)
+                            seq = self.dest.SeqExpr(exprs[:i] + expr.args, span)
                             fu = FindUsage(index)
                             fu.visitExpr(seq)
                             if fu.found:
-                                return self.dest.EscapeOnlyExpr(patt, seq)
+                                return self.dest.EscapeOnlyExpr(patt, seq, span)
                             else:
                                 return seq
-        return self.dest.EscapeOnlyExpr(patt, body)
+        return self.dest.EscapeOnlyExpr(patt, body, span)

@@ -20,12 +20,12 @@ class CompilerFailed(Exception):
         l = [
             u"Compiler invariant failed: " + self.problem,
         ]
-        # if self.span is not None:
-        #     l += [
-        #         u"In file '%s'" % self.span.source,
-        #         u"Line %d, column %d" % (self.span.startLine,
-        #                                  self.span.startCol),
-        #     ]
+        if self.span is not None:
+            l += [
+                u"In file '%s'" % self.span.source,
+                u"Line %d, column %d" % (self.span.startLine,
+                                         self.span.startCol),
+            ]
         return u"\n".join(l).encode("utf-8")
 
 
@@ -70,10 +70,10 @@ def makeIR(name, terminals, nonterms):
                 return piece
 
         def build(tag, constructor, pieces):
-            ipieces = unrolling_iterable(enumerate(pieces))
+            ipieces = unrolling_iterable(enumerate(pieces + [['span', None]]))
             class Constructor(NT):
                 _immutable_ = True
-                _immutable_fields_ = (["_constructorTag"] +
+                _immutable_fields_ = (["_constructorTag", "span"] +
                         [freezeField(field, ty) for field, ty in pieces])
 
                 _constructorTag = tag
@@ -85,7 +85,7 @@ def makeIR(name, terminals, nonterms):
                 def asTree(self):
                     "NOT_RPYTHON"
                     l = [constructor]
-                    for piece, ty in pieces:
+                    for i, (piece, ty) in ipieces:
                         if ty is None:
                             l.append(getattr(self, piece))
                         elif ty.endswith("*"):
@@ -132,7 +132,7 @@ def makeIR(name, terminals, nonterms):
                             s = "%s = self.visit%s(%s)" % (piece, ty, piece)
                         mods.append(s)
                 params = {
-                    "args": ",".join(p[0] for p in pieces),
+                    "args": ",".join(p[0] for p in pieces + [['span']]),
                     "name": visitName,
                     "constructor": constructor,
                     "mods": ";".join(mods)
@@ -156,7 +156,8 @@ def makeIR(name, terminals, nonterms):
                     attrs[visitName] = d[visitName]
                     attrs[visitName].__name__ += str(increment())
                 tag = getattr(self, constructor)._constructorTag
-                specimenPieces = ",".join("specimen.%s" % p[0] for p in pieces)
+                specimenPieces = ",".join("specimen.%s" % p[0] for p in pieces
+                                          + [['span']])
                 callVisit = "self.%s(%s)" % (visitName, specimenPieces)
                 conClasses.append((tag, constructor, callVisit))
             # Construct subordinate clauses for the visitor on this
@@ -229,6 +230,7 @@ def visit%(name)s(self, specimen):
                     else:
                         # Addition to a possibly-already-extant constructor.
                         # We'll overwrite the old constructor with the new.
+                        
                         nts[nt][constructor] = pieces
             else:
                 nts[nt] = constructors
