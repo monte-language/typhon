@@ -3,7 +3,6 @@ import "lib/json" =~ [=> JSON :DeepFrozen]
 import "lib/streams" =~ [
     => alterSink :DeepFrozen,
     => alterSource :DeepFrozen,
-    => flow :DeepFrozen,
 ]
 import "fun/repl" =~ [=> runREPL :DeepFrozen]
 import "lib/help" =~ [=> help :DeepFrozen]
@@ -62,12 +61,9 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
                         failure += "\n" + line
                     buf := []
 
-def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
-         => getAddrInfo, # => packageLoader,
-         => makeFileResource, => makeProcess,
-         => stdio,
-         => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint,
-         => unsealException, => unsafeScope) as DeepFrozen:
+def main(_argv,
+         # => packageLoader,
+         => stdio, => unsealException, => unsafeScope) as DeepFrozen:
 
     # def playWith(module :Str, scope :Map) :Void:
     #     "Import a module and bring it into the environment."
@@ -75,13 +71,7 @@ def main(argv, => Timer, => currentProcess, => currentRuntime, => currentVat,
     #     for k :Str => v :DeepFrozen in map:
     #         environment with= (k, &&v)
     #         traceln(`Adding $k to environment`)
-    var environment := safeScope | [
-        # Typhon unsafe scope.
-        => &&Timer, => &&currentProcess, => &&currentRuntime, => &&currentVat,
-        => &&getAddrInfo,
-        => &&makeFileResource, => &&makeProcess, => &&stdio,
-        => &&makeTCP4ClientEndpoint, => &&makeTCP4ServerEndpoint,
-        => &&unsealException,
+    var environment := safeScope | unsafeScope | [
         # REPL-only fun.
         => &&JSON, => &&UTF8, => &&help, # => &&playWith,
     ]
