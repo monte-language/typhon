@@ -109,6 +109,19 @@ def expand(node, builder, fail) as DeepFrozen:
             nounExpr("_makeMap", span),
             "fromPairs", [emitList(items, span)], [], span)
 
+    def emitIf(test, cons, alt, span):
+        "Smart version of `builder.IfExpr`."
+
+        return if (test.getNodeName() == "NounExpr") {
+            switch (test.getName()) {
+                match =="true" { cons }
+                match =="false" { alt }
+                match _ { builder.IfExpr(test, cons, alt, span) }
+            }
+        } else {
+            builder.IfExpr(test, cons, alt, span)
+        }
+
     def seqSendOnly(ast, maker, args, span):
         "Expand send-expressions inside seq-expressions to use M.sendOnly()."
 
@@ -554,8 +567,8 @@ def expand(node, builder, fail) as DeepFrozen:
             def skip := tempNounExpr("skip", span)
             [
                 plainPatt(skip, span),
-                builder.IfExpr(filter, exp,
-                    callExpr(skip, "run", [], [], span), span),
+                emitIf(filter, exp, callExpr(skip, "run", [], [], span),
+                       span),
             ]
         } else {
             [ignorePatt(null, span), exp]
@@ -792,7 +805,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 expandLogical(
                     sw.getStaticScope(left).outNames(),
                     sw.getStaticScope(right).outNames(),
-                    fn s, f {builder.IfExpr(left, builder.IfExpr(right, s, f, span), f, span)},
+                    fn s, f { emitIf(left, emitIf(right, s, f, span), f, span) },
                     span)
             match =="OrExpr":
                 def [left, right] := args
@@ -819,9 +832,9 @@ def expand(node, builder, fail) as DeepFrozen:
                         for n in (leftmap - rightmap) {
                             leftOnly with= (n)
                         }
-                        builder.IfExpr(left, partialFail(rightOnly, s, broken),
-                            builder.IfExpr(right, partialFail(leftOnly, s, broken), f, span), span)},
-                    span)
+                        emitIf(left, partialFail(rightOnly, s, broken),
+                            emitIf(right, partialFail(leftOnly, s, broken), f, span), span)
+                    }, span)
             match =="DefExpr":
                 def [patt, ej, rval] := args
                 def pattScope := sw.getStaticScope(patt)
@@ -1088,7 +1101,7 @@ def expand(node, builder, fail) as DeepFrozen:
                                          ignorePatt(null, span)],
                                          [],
                                          nounExpr("Bool", span),
-                                             builder.IfExpr(
+                                             emitIf(
                                                  test,
                                                  seqExpr([
                                                      makeEscapeExpr(
@@ -1113,6 +1126,8 @@ def expand(node, builder, fail) as DeepFrozen:
                     }
                 }
                 def resolution := tempNounExpr("resolution", span)
+                # NB: Not using `emitIf` when we know that the test is neither
+                # `true` nor `false`. ~ C.
                 def whenblock := builder.IfExpr(
                     callExpr(nounExpr("Ref", span), "isBroken",
                          [resolution], [], span),
