@@ -1,20 +1,59 @@
-# TODO: import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest]
 import "guards" =~ [=>Tuple :DeepFrozen]
 import "./elib/serial/DEBuilderOf" =~ [=> DEBuilderOf :DeepFrozen]
 exports (main, Name, nameStart, nameChar, Element, Text, deMarkupKit)
 
-def nameStart :DeepFrozen := 'a' .. 'z' | 'A' .. 'Z'
-def nameChar :DeepFrozen := nameStart | '0' .. '9' | ':' .. ':'
-
 
 def oneOf(chars :DeepFrozen) as DeepFrozen:
+    "String matching guard builder with utilities.
+
+    chars may be anything with a .contains(ch :Char) method.
+    "
     return object oneOf as DeepFrozen:
         to coerce(specimen, ej):
             if (!chars.contains(specimen)):
                 ej(`found $specimen when expecting $chars`)
             return specimen
 
+        to add(rest :DeepFrozen):
+            "Prefix this guard to a string guard.
+
+            e.g. oneOf(nameStart) + oneOf(nameChar).star()
+            "
+            return def concat.coerce(specimen, ej) as DeepFrozen:
+                Str.coerce(specimen, ej)
+                oneOf.coerce(specimen[0], ej)
+                rest.coerce(specimen.slice(1), ej)
+                return specimen
+
+        to star():
+            "Repeat any nuber of times (Kleene-star).
+            "
+            return def repeat.coerce(specimen, ej) as DeepFrozen:
+                for ch in (specimen):
+                    oneOf.coerce(ch, ej)
+                return specimen
+
+        to plus():
+            "One or more repetitions.
+
+            def word := oneOf('a'..'z').plus()
+            "
+            return oneOf + oneOf.star()
+
+        to findFirst(s :Str) :Tuple[Str, NullOk[Char], Str]:
+            "Find the first of these characters to occur.
+            "
+            var out :Tuple[Str, NullOk[Char], Str] := [s, null, ""]
+
+            for delim in (chars):
+                if (s.split(delim.asString(), 1) =~ [pre, post] && pre.size() < out[0].size()):
+                    out := [pre, delim, post]
+            return out
+
         to split(s :Str, "max"=>max :NullOk[Int>0] := null) :List[Str]:
+            "(split is dead code, but it's tested, working dead code!)
+            "
             def out := [].diverge()
             var piece :Int := 0
             var sep :Int := -1
@@ -39,23 +78,184 @@ def oneOf(chars :DeepFrozen) as DeepFrozen:
             }
             return out.snapshot()
                     
-        to add(rest :DeepFrozen):
-            return def concat.coerce(specimen, ej) as DeepFrozen:
-                Str.coerce(specimen, ej)
-                oneOf.coerce(specimen[0], ej)
-                rest.coerce(specimen.slice(1), ej)
-                return specimen
+def oneOfTest(assert) as DeepFrozen:
+    for [s, delim, m, expected] in ([
+        ["", [], null, [""]],
+        ["a   b c", [' '], null, ["a", "b", "c"]],
+        ["a \n  b c", [' ', '\n'], null, ["a", "b", "c"]],
+        ["a   b c", [' '], 1, ["a", "b c"]]
+    ]):
+        assert.equal(oneOf(delim).split(s, "max"=>m), expected)
 
-        to repeat():
-            return def repeat.coerce(specimen, ej) as DeepFrozen:
-                for ch in (specimen):
-                    oneOf.coerce(ch, ej)
-                return specimen
+    for [s, delim, expected] in ([
+        ["blah bla <b>spif", ['<', '&'], ["blah bla ", '<', "b>spif"]],
+        ["blah &bla <b>spif", ['<', '&'], ["blah ", '&', "bla <b>spif"]],
+        ["blah <bla <b>&spif", ['<', '&'], ["blah ", '<', "bla <b>&spif"]],
+        ["", [], ["", null, ""]],
+    ]):
+        assert.equal(oneOf(delim).findFirst(s), expected)
 
-def Name :DeepFrozen := oneOf(nameStart) + oneOf(nameChar).repeat()
+
+########
+# A Name is a Str consisting of a nameStart followed by any number of nameChar.
+
+def nameStart :DeepFrozen := 'a' .. 'z' | 'A' .. 'Z'
+def nameChar :DeepFrozen := nameStart | '0' .. '9' | ':' .. ':'
+
+
+def Name :DeepFrozen := oneOf(nameStart) + oneOf(nameChar).star()
+
+def nameTests(assert) as DeepFrozen:
+    for n in (["p", "h1"]):
+        assert.equal(n :Name, n)
+    for s in (["x y", "", "23", "<p>", "&lt;"]):
+        assert.throws(fn { s :Name })
+
 
 # hmm... some characters not allowed, right?
 def Text :DeepFrozen := Str
+
+
+##########
+# MLReader cf. SAX
+
+def makeMLReader(handler,
+                 =>ws := [' ', '\n'],
+                 =>entities := ["amp"=>"&", "lt"=>"<", "gt"=>">", "quot"=>"\"", "apos"=>"'"]) as DeepFrozen {
+    def Numeral := oneOf('0'..'9').plus()
+
+    def doEntity(ampPost :Text) :Text {
+        return if (ampPost =~ `#@{charCode :Numeral};@rest`) {
+            def ch := ('\x00' + _makeInt(charCode)).asString()
+            handler.characters(ch)
+            rest
+        } else if (ampPost =~ `@{entityName :Name ? (entities.contains(entityName))};@rest`) {
+            handler.characters(entities[entityName])
+            rest
+        } else {
+            handler.characters("&")
+            ampPost
+        }
+    }
+
+    def makeTag(ltPost :Text) {
+        var ix :Int := 0
+        var ch := null
+        def advance() {
+            return if (ix < ltPost.size()) {
+                ch := ltPost[ix]
+                ix += 1
+                true
+            } else {
+                ch := null
+                false
+            }
+        }
+        advance()
+
+        def skipSpace() {
+            while (ws.contains(ch) && advance()) {  }
+        }
+        def expect(fail, options) {
+            if (options.contains(ch)) {
+                advance()
+            } else {
+                traceln(`expect($options) got $ch`)
+                fail(ix)
+            }
+        }
+        def name(fail) {
+            def start := ix - 1
+            expect(fail, nameStart)
+            while(nameChar.contains(ch) && advance()) { }
+            def out := ltPost.slice(start, ix - 1)
+            skipSpace()
+            # traceln(`name: ltPost[$start..$ix] = $out`)
+            return out
+        }
+        def attribute(fail) {
+            def attrName := name(fail)
+            skipSpace()
+            expect(fail, ['='])
+            skipSpace()
+            def delim := ch
+            expect(fail, ['\'', '"'])
+            def mark := ix - 1
+            while (ch != delim && advance()) {
+                if (['<', '&'].contains(ch)) {
+                    throw("#@@TODO: handle &quot; etc. in value")
+                }
+            }
+            def value := ltPost.slice(mark, ix - 1)
+            advance()
+            skipSpace()
+            return [attrName, value]
+        }
+
+        return object tag {
+            to start() :Text {
+                escape badTag {
+                    def tagName := name(badTag)
+                    def attrs := [].diverge()
+                    while (nameStart.contains(ch)) {
+                        attrs.push(attribute(badTag))
+                    }
+                    expect(badTag, ['>'])
+                    # traceln(`got tag to $ix: $tagName $attrs`)
+                    handler.startElement(tagName, _makeMap.fromPairs(attrs))
+                } catch errIx {
+                    handler.error([ltPost, errIx])
+                }
+
+                return ltPost.slice(ix - 1)
+            }
+            to end() :Text {
+                escape badTag {
+                    expect(badTag, ['/'])
+                    def tagName := name(badTag)
+                    expect(badTag, ['>'])
+                    handler.endElement(tagName)
+                } catch errIx {
+                    handler.error([ltPost, errIx])
+                }
+
+                return ltPost.slice(ix - 1)
+            }
+        }
+    }
+
+    return def XMLReader.parse(var markup :Text) :Void {
+        while(markup.size() > 0) {
+            def [text, delim, rest] := oneOf(['<', '^']).findFirst(markup)
+            if (text.size() > 0) {
+                handler.characters(text)
+            }
+
+            # traceln(`M:${markup.slice(0, 4)}... => ${[text, delim, rest]}`)
+            switch (delim) {
+                match ==null { markup := "" }
+                match =='&' { markup := doEntity(rest) }
+                match =='<' {
+                    markup := if (rest == "") {
+                        handler.characters("<")
+                        ""
+                    } else if (rest[0] == '/') {
+                        makeTag(rest).end()
+                    } else if (nameStart.contains(rest[0])) {
+                        makeTag(rest).start()
+                    } else {
+                        handler.characters("<")
+                        rest
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+###
+# Element data
 
 # TODO. postponed due to:
 # ~ Problem: Message refused: (<NamedParam>).getNodeName()
@@ -70,11 +270,10 @@ def Content :DeepFrozen := Any[Element, Text, List[Any[Element, Text]]]
 def makeElement(tag :Name,
                 "attrs"=>attrs :Map[Name, Str] := [].asMap(),
                 "children"=>children :List[Content] := []) as DeepFrozen:
-    #  implements makerAuditor
     return object element implements Selfless, Element:
         to _uncall():
             # return serializer(makeElement, tag, "attrs"=>attrs, "children"=>children)
-            return makeElement(tag, "attrs"=>attrs, "children"=>children)
+            return [makeElement, "run", [tag], ["attrs"=>attrs, "children"=>children]]
         to _printOn(p):
             p.print(`<$tag`)
             for n => v in (attrs):
@@ -112,33 +311,11 @@ object deMarkupKit as DeepFrozen {
         }
     }
 
-    to recognize(var markup :Str, builder) :(def _Root := builder.getRootType()) {
-        def entities := ["amp"=>"&", "lt"=>"<", "gt"=>">", "quot"=>"\"", "apos"=>"'"]  # TODO: parameterize
-        def digits := '0' .. '9'
-        def Numeral := oneOf(digits).repeat()
-
-        def findDelim(markup) :Tuple[Str, NullOk[Char], Str] {
-            def ampFound := markup =~ `@ampPre&@ampPost`
-            def ltFound := markup =~ `@ltPre<@ltPost`
-            return switch ([ampFound, ltFound]) {
-                match ==[true, true] {
-                    if (ampPre.size() < ltPre.size()) {
-                        [ampPre, '&', ampPost]
-                    } else {
-                        [ltPre, '<', ltPost]
-                    }
-                }
-                match [==true, _] { [ampPre, '&', ampPost] }
-                match [_, ==true] { [ltPre, '<', ltPost] }
-                match [_, _] { [markup, null, ""] }
-            }
-        }
+    to recognize(markup :Str, builder) :(def _Root := builder.getRootType()) {
 
         var pendingTags :List[Tuple[Name, Map[Str, Text], List[Content]]] := []
         def root
-        def pushStart(name :Name, attrs: Map[Str, Text]) {
-            pendingTags := [[name, attrs, []]] + pendingTags
-        }
+
         def addChild(c :Content) {
             if (pendingTags.size() == 0) {
                 if (c =~ text :Text) {
@@ -151,167 +328,27 @@ object deMarkupKit as DeepFrozen {
                 pendingTags := [[n, a, children + [c]]] + rest
             }
         }
-        def popEnd(endTagName :Name) {
-            def [[startTagName, attrs, children]] + rest := pendingTags
-            if (endTagName != startTagName) {
-                throw("@@TODO: handle tag mismatches?!")
-            }
-            def elt := builder.buildCall(makeElement, "run", [startTagName],
-                                         ["attrs"=>attrs, "children"=>children])
-            pendingTags := rest
-            addChild(elt)
-        }
 
-        def doEntity(ampPost :Text) :Text {
-            return if (ampPost =~ `#@{charCode :Numeral};@rest`) {
-                addChild(('\x00' + _makeInt(charCode)).asString())
-                rest
-            } else if (ampPost =~ `@{entityName :Name ? (entities.contains(entityName))};@rest`) {
-                addChild(entities[entityName])
-                rest
-            } else {
-                addChild("&")
-                ampPost
+        object handler {
+            to characters(chars :Text) { addChild(chars) }
+            to startElement(name :Name, attrs: Map[Str, Text]) {
+                pendingTags := [[name, attrs, []]] + pendingTags
+            }
+            to endElement(endTagName :Name) {
+                def [[startTagName, attrs, children]] + rest := pendingTags
+                if (endTagName != startTagName) {
+                    throw("@@TODO: handle tag mismatches?!")
+                }
+                def elt := builder.buildCall(makeElement, "run", [startTagName],
+                                             ["attrs"=>attrs, "children"=>children])
+                pendingTags := rest
+                addChild(elt)
             }
         }
 
-        def ws := [' ', '\n']
-        def err(ltPost, ix) {
-            traceln(`err: $ix [${ltPost.slice(0, ix)}]`)
-            builder.buildCall("@@ERROR", "run", [ltPost.slice(0, ix)], [].asMap())
-            markup := ltPost.slice(ix)
-        }
-        def doStartTag(ltPost :Text) :Text {
-            var ix :Int := 0
-            var ch := null
-            def advance() {
-                return if (ix < ltPost.size()) {
-                    ch := ltPost[ix]
-                    ix += 1
-                    true
-                } else {
-                    ch := null
-                    false
-                }
-            }
-            advance()
-
-            def skipSpace() {
-                while (ws.contains(ch) && advance()) {  }
-            }
-            def expect(fail, options) {
-                if (options.contains(ch)) {
-                    advance()
-                } else {
-                    traceln(`expect($options) got $ch`)
-                    fail(ix)
-                }
-            }
-            def name(fail) {
-                def start := ix - 1
-                expect(fail, nameStart)
-                while(nameChar.contains(ch) && advance()) { }
-                def out := ltPost.slice(start, ix - 1)
-                skipSpace()
-                # traceln(`name: ltPost[$start..$ix] = $out`)
-                return out
-            }
-            def attribute(fail) {
-                def attrName := name(fail)
-                skipSpace()
-                expect(fail, ['='])
-                skipSpace()
-                def delim := ch
-                expect(fail, ['\'', '"'])
-                def mark := ix - 1
-                while (ch != delim && advance()) {
-                    if (['<', '&'].contains(ch)) {
-                        throw("#@@TODO: handle &quot; etc. in value")
-                    }
-                }
-                def value := ltPost.slice(mark, ix - 1)
-                advance()
-                skipSpace()
-                return [attrName, value]
-            }
-
-            escape badTag {
-                def tagName := name(badTag)
-                def attrs := [].diverge()
-                while (nameStart.contains(ch)) {
-                    attrs.push(attribute(badTag))
-                }
-                expect(badTag, ['>'])
-                # traceln(`got tag: $tagName $attrs`)
-                pushStart(tagName, _makeMap.fromPairs(attrs))
-            } catch errIx {
-                err(ltPost, errIx)
-            }
-    
-            return ltPost.slice(ix - 1)
-        }
-        def doEndTag(ltPost: Text) :Text {
-            var state := '/'
-
-            for ix => ch in (ltPost) {
-                switch (state) {
-                    match =='/' { state := 'A' }
-                    match =='A' {
-                        if(!nameChar.contains(ch)) {
-                            popEnd(ltPost.slice(1, ix))
-                            if (ch == '>') {
-                                return ltPost.slice(ix + 1)
-                            }
-                            state := '>'
-                        }
-                    }
-                    match =='>' {
-                        if (ch == '>') {
-                            return ltPost.slice(ix + 1)
-                        } else if (ws.contains(ch)) {
-                            # keep going...
-                        } else {
-                            # oops! </name ???
-                            # TODO: check html5 spec?
-                            err(ltPost, ix)
-                            break
-                        }
-                    }
-                }
-            }
-            return ""
-        }
-
-        while(true) {
-            def [text, delim, rest] := findDelim(markup)
-            if (text.size() > 0) {
-                addChild(text)
-            }
-
-            # traceln(`M:${markup.slice(0, 4)}... => ${[text, delim, rest]} tags: $pendingTags`)
-            switch (delim) {
-                match ==null {
-                    return root
-                }
-                match =='&' { markup := doEntity(rest) }
-                match =='<' {
-                    if (rest == "") {
-                        addChild("<")
-                        return
-                    } else if (rest[0] == '/') {
-                        markup := doEndTag(rest)
-                    } else if (nameStart.contains(rest[0])) {
-                        markup := doStartTag(rest)
-                    } else {
-                        addChild("<")
-                        markup := rest
-                    }
-                }
-                match _ {
-                    throw("oops!")
-                }
-            }
-        }
+        def parser := makeMLReader(handler)
+        parser.parse(markup)
+        return root
     }
 }
 
@@ -387,63 +424,56 @@ object deMLNodeKit as DeepFrozen {
 }
 
 
-def main(_args) :Int as DeepFrozen:
-    def unittest(cases):
-        var successes :Int := 0
-        var failures :Int := 0
-        object assert:
-            to equal(l, r):
-                if (l == r) {
-                    successes += 1
-                } else {
-                    traceln(`failed: $l == $r`)
-                    failures += 1
-                }
-            to throws(f):
-                try:
-                    f()
-                    traceln(`did not throw: $f`)
-                    failures += 1
-                catch _:
-                    successes += 1
-        for case in (cases):
-            case(assert)
-        
-        return ["success"=>successes, "fail"=>failures]
-            
-    def results := unittest(
-        [for [s, d, n, r] in ([
-            ["", [], null, [""]],
-            ["a   b c", [' '], null, ["a", "b", "c"]],
-            ["a \n  b c", [' ', '\n'], null, ["a", "b", "c"]],
-            ["a   b c", [' '], 1, ["a", "b c"]]
-        ])
-         fn assert { assert.equal(oneOf(d).split(s, "max"=>n), r) }] +
-        [for n in ([
-            "p",
-            "h1"
-        ]) fn assert { assert.equal(n :Name, n) }] +
-        [for s in ([
-            "x y",
-            "",
-            "23"
-        ]) fn assert { assert.throws(fn { s :Name }) }]
-    )
-    traceln(results)
-
-    for m in ([
-        "<p></p>",
-        "<h2>AT&amp;T</h2>",
-        "<h2>AT & T</h2>",
-        "<h2>AT &#65; T</h2>",
-        "<p > a < b </p>",
-        "<p ></p >",
-        "<p>sdlkf<em class='xx'>WHEE!</em \n>...</p >",
-        "<div><a href='x'   class=\"fun\"   >...</a>sdlfkj</div>",
-        "<div><a href=\"y\">...</a>sdlfkj</div>",
-        "<<p>hi</p>"]):
-        traceln(`markup: $m`)
+def kitTest(assert) as DeepFrozen:
+    for [m, rootTag] in ([
+        ["<p></p>", "p"],
+        ["<h2>AT&amp;T</h2>", "h2"],
+        ["<h2>AT & T</h2>", "h2"],
+        ["<h2>AT &#65; T</h2>", "h2"],
+        ["<p > a < b </p>", "p"],
+        ["<p ></p >", "p"],
+        ["<p>sdlkf<em class='xx'>WHEE!</em \n>...</p >", "p"],
+        ["<div><a href='x'   class=\"fun\"   >...</a>sdlfkj</div>", "div"],
+        ["<div><a href=\"y\">...</a>sdlfkj</div>", "div"],
+        ["<<p>hi</p>", "p"]
+    ]):
+        # traceln(`markup: $m`)
         def doc := deMarkupKit.recognize(m, deMLNodeKit.makeBuilder())
-        traceln(`parsed doc: $doc`)
+        # traceln(`parsed doc: $doc`)
+        def [_rx, _verb, [actual], _nargs] := doc._uncall()
+        assert.equal(actual, rootTag)
+
+unittest([
+    oneOfTest,
+    nameTests,
+    kitTest
+])
+
+
+def main(_args) :Int as DeepFrozen:
+    "interactive unit testing: monte eval markupKit.mt
+    "
+    var successes :Int := 0
+    var failures :Int := 0
+    object assert:
+        to equal(l, r):
+            if (l == r) {
+                successes += 1
+            } else {
+                traceln(`failed: $l == $r`)
+                failures += 1
+            }
+        to throws(f):
+            try:
+                f()
+                traceln(`did not throw: $f`)
+                failures += 1
+            catch _:
+                successes += 1
+            
+    oneOfTest(assert)
+    nameTests(assert)
+    kitTest(assert)
+    traceln(["success" => successes, "failure" => failures])
 
     return 0
