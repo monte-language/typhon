@@ -273,6 +273,14 @@ def makeMLReader(handler,
                         makeTag(rest).end()
                     } else if (nameStart.contains(rest[0])) {
                         makeTag(rest).start()
+                    } else if (rest =~ `!--@comment-->@more`) {
+                        handler.comment(comment)
+                        more
+                    } else if (rest.slice(0, "!doctype".size()).toLowerCase() == "!doctype" &&
+                               (def after := rest.slice("!doctype".size())).contains(">")) {
+                        def `@decl>@more` := after
+                        handler.doctype(decl)
+                        more
                     } else {
                         handler.characters("<")
                         rest
@@ -367,10 +375,12 @@ object deMarkupKit as DeepFrozen {
         }
 
         object handler {
-            to characters(chars :Text) { addChild(chars) }
+            to doctype(decl) { traceln(`TODO: build <!doctype$decl>`) }
+            to comment(txt) { traceln(`TODO: build <!--$txt-->`) }
             to startElement(name :Name, attrs: Map[Str, Text]) {
                 pendingTags := [[name, attrs, []]] + pendingTags
             }
+            to characters(chars :Text) { addChild(chars) }
             to endElement(endTagName :Name) {
                 def [[startTagName, attrs, children]] + rest := pendingTags
                 if (endTagName != startTagName) {
@@ -473,6 +483,8 @@ def kitTest(assert) as DeepFrozen:
         ["<h2>AT & T</h2>", "h2"],
         ["<h2>AT &#65; T</h2>", "h2"],
         ["<p > a < b </p>", "p"],
+        ["<!--<h1>--><p>..</p>", "p"],
+        ["<!doctype html><html>...</html>", "html"],
         ["<p ></p >", "p"],
         ["<p>sdlkf<em class='xx'>WHEE!</em \n>...</p >", "p"],
         ["<div><a href='x'   class=\"fun\"   >...</a>sdlfkj</div>", "div"],
