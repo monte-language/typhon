@@ -130,17 +130,17 @@ def makeMLReader(handler,
                  =>entities := ["amp"=>"&", "lt"=>"<", "gt"=>">", "quot"=>"\"", "apos"=>"'"]) as DeepFrozen {
     def Numeral := oneOf('0'..'9').plus()
 
-    def doEntity(ampPost :Text) :Text {
-        return if (ampPost =~ `#@{charCode :Numeral};@rest`) {
+    def tryEntity(ampPost :Text, thunk) :Int {
+        return if (ampPost =~ `#@{charCode :Numeral};@_rest`) {
             def ch := ('\x00' + _makeInt(charCode)).asString()
-            handler.characters(ch)
-            rest
-        } else if (ampPost =~ `@{entityName :Name ? (entities.contains(entityName))};@rest`) {
-            handler.characters(entities[entityName])
-            rest
+            thunk(ch)
+            charCode.size() + 2
+        } else if (ampPost =~ `@{entityName :Name ? (entities.contains(entityName))};@_rest`) {
+            thunk(entities[entityName])
+            entityName.size() + 2
         } else {
-            handler.characters("&")
-            ampPost
+            thunk("&")
+            0
         }
     }
 
@@ -186,13 +186,15 @@ def makeMLReader(handler,
             skipSpace()
             def delim := ch
             expect(fail, ['\'', '"'])
-            def mark := ix - 1
-            while (ch != delim && advance()) {
-                if (['<', '&'].contains(ch)) {
-                    throw("#@@TODO: handle &quot; etc. in value")
+            var value :Str := ""
+            while (ch != delim) {
+                if (ch == '&') {
+                    ix += tryEntity(ltPost.slice(ix), fn s { value += s}) - 1
+                } else {
+                    value += ch.asString()
                 }
+                if (!advance()) { break }
             }
-            def value := ltPost.slice(mark, ix - 1)
             advance()
             skipSpace()
             return [attrName, value]
@@ -254,7 +256,7 @@ def makeMLReader(handler,
             # traceln(`M:${markup.slice(0, 4)}... => ${[text, delim, rest]}`)
             switch (delim) {
                 match ==null { markup := "" }
-                match =='&' { markup := doEntity(rest) }
+                match =='&' { markup := rest.slice(tryEntity(rest, handler.characters)) }
                 match =='<' {
                     markup := if (rest == "") {
                         handler.characters("<")
@@ -294,6 +296,10 @@ def makeElement(tag :Name,
         to _uncall():
             # return serializer(makeElement, tag, "attrs"=>attrs, "children"=>children)
             return [makeElement, "run", [tag], ["attrs"=>attrs, "children"=>children]]
+
+        to getAttr(name :Name, =>FAIL):
+            return attrs.fetch(name, FAIL)
+
         to _printOn(p):
             p.print(`<$tag`)
             for n => v in (attrs):
@@ -448,6 +454,7 @@ object deMLNodeKit as DeepFrozen {
 
 
 def kitTest(assert) as DeepFrozen:
+    def parse := fn m { deMarkupKit.recognize(m, deMLNodeKit.makeBuilder()) }
     for [m, rootTag] in ([
         ["<p></p>", "p"],
         ["<br />", "br"],
@@ -462,10 +469,13 @@ def kitTest(assert) as DeepFrozen:
         ["<<p>hi</p>", "p"]
     ]):
         # traceln(`markup: $m`)
-        def doc := deMarkupKit.recognize(m, deMLNodeKit.makeBuilder())
+        def doc := parse(m)
         # traceln(`parsed doc: $doc`)
         def [_rx, _verb, [actual], _nargs] := doc._uncall()
         assert.equal(actual, rootTag)
+
+    assert.equal(parse("<a href='AT&amp;T'>...</a>").getAttr("href"), "AT&T")
+
 
 unittest([
     oneOfTest,
@@ -501,10 +511,11 @@ def main(args :List[Str], =>makeFileResource) :Vow[Int] as DeepFrozen:
         return 0
 
     if (args =~ [_eval, _script, fname] + _):
-        traceln(args)
+        traceln(`$fname: reading...`)
         return when (def bs := makeFileResource(fname) <- getContents()) ->
+            traceln(`$fname: UTF8 decoding ${bs.size()} bytes...`)
             def markup := UTF8.decode(bs, throw)
-            traceln(`$fname: ${markup.size()} chars`)
+            traceln(`$fname: parsing ${markup.size()} chars...`)
             def doc := deMarkupKit.recognize(markup, deMLNodeKit.makeBuilder())
             def [_rx, _verb, [root], _nargs] := doc._uncall()
             traceln(`root: $root`)
