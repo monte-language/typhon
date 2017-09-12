@@ -1432,10 +1432,14 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         return if (["continue", "break", "return"].contains(peekTag())):
             def spanStart := spanHere()
             def ex := advanceTag(ej)
+            # Called like `continue()` or `break()`
             if (peekTag() == "(" && tokens[position + 2][0] == ")"):
                 position += 2
                 builder.ExitExpr(ex, null, spanFrom(spanStart))
-            else if (["EOL", "#", ";", "DEDENT", null].contains(peekTag())):
+            # Is there an expression coming up? Peek to make an educated
+            # guess. If no, then act like `break null`; otherwise, parse an
+            # expression.
+            else if (["}", "EOL", "#", ";", "DEDENT", null].contains(peekTag())):
                 builder.ExitExpr(ex, null, spanFrom(spanStart))
             else:
                 def val := blockExpr(ej)

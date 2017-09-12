@@ -322,6 +322,11 @@ def test_Exits(assert):
     assert.equal(expr("continue"), ta`ExitExpr("continue", null)`)
     assert.equal(expr("break"), ta`ExitExpr("break", null)`)
 
+    # The bareword nature of ExitExpr means that it sometimes clashes with
+    # surrounding/trailing tags.
+    assert.equal(expr("if (true) { break }"),
+                 ta`IfExpr(NounExpr("true"), ExitExpr("break", null), null)`)
+
 def test_IgnorePattern(assert):
     assert.equal(pattern("_"), ta`IgnorePattern(null)`)
     assert.equal(pattern("_ :Int"), ta`IgnorePattern(NounExpr("Int"))`)
@@ -406,4 +411,16 @@ def test_module(assert):
 #     assert.equal(pattern("${2}"), ta`ValueHoleExpr(0)`)
 #     assert.equal(pattern("@{2}"), ta`PatternHoleExpr(0)`)
 
-unittest([test_Literal, test_Noun, test_QuasiliteralExpr, test_Hide, test_Call, test_Send, test_Get, test_Meta, test_List, test_Map, test_ListComprehensionExpr, test_MapComprehensionExpr, test_IfExpr, test_EscapeExpr, test_ForExpr, test_FunctionExpr, test_SwitchExpr, test_TryExpr, test_WhileExpr, test_WhenExpr, test_ObjectExpr, test_Function, test_Interface, test_Def, test_Assign, test_Prefix, test_Coerce, test_Infix, test_Exits, test_IgnorePattern, test_FinalPattern, test_VarPattern, test_BindPattern, test_SamePattern, test_NotSamePattern, test_SlotPattern, test_BindingPattern, test_ViaPattern, test_ListPattern, test_MapPattern, test_QuasiliteralPattern, test_SuchThatPattern, test_module])
+unittest([
+    test_Literal, test_Noun, test_QuasiliteralExpr, test_Hide, test_Call,
+    test_Send, test_Get, test_Meta, test_List, test_Map,
+    test_ListComprehensionExpr, test_MapComprehensionExpr, test_IfExpr,
+    test_EscapeExpr, test_ForExpr, test_FunctionExpr, test_SwitchExpr,
+    test_TryExpr, test_WhileExpr, test_WhenExpr, test_ObjectExpr,
+    test_Function, test_Interface, test_Def, test_Assign, test_Prefix,
+    test_Coerce, test_Infix, test_Exits, test_IgnorePattern,
+    test_FinalPattern, test_VarPattern, test_BindPattern, test_SamePattern,
+    test_NotSamePattern, test_SlotPattern, test_BindingPattern,
+    test_ViaPattern, test_ListPattern, test_MapPattern,
+    test_QuasiliteralPattern, test_SuchThatPattern, test_module,
+])
