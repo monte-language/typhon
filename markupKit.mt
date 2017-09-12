@@ -1,4 +1,5 @@
 import "unittest" =~ [=> unittest]
+import "lib/codec/utf8" =~ [=>UTF8 :DeepFrozen]
 import "guards" =~ [=>Tuple :DeepFrozen]
 import "./elib/serial/DEBuilderOf" =~ [=> DEBuilderOf :DeepFrozen]
 exports (main, Name, nameStart, nameChar, Element, Text, deMarkupKit)
@@ -121,6 +122,11 @@ def Text :DeepFrozen := Str
 
 def makeMLReader(handler,
                  =>ws := [' ', '\n'],
+                 =>selfClosing := [
+                     # HTML 4
+                     "area", "base", "br", "col", "hr", "img", "input", "link", "meta", "param",
+                     # HTML 5
+                     "command", "keygen", "source"],
                  =>entities := ["amp"=>"&", "lt"=>"<", "gt"=>">", "quot"=>"\"", "apos"=>"'"]) as DeepFrozen {
     def Numeral := oneOf('0'..'9').plus()
 
@@ -200,9 +206,23 @@ def makeMLReader(handler,
                     while (nameStart.contains(ch)) {
                         attrs.push(attribute(badTag))
                     }
-                    expect(badTag, ['>'])
-                    # traceln(`got tag to $ix: $tagName $attrs`)
                     handler.startElement(tagName, _makeMap.fromPairs(attrs))
+                    # XML-ish mode
+                    if (selfClosing.size() == 0) {
+                        if (ch == '/') {
+                            expect(badTag, ['>'])
+                            handler.endElement(tagName)
+                        } else {
+                            expect(badTag, ['>'])
+                        }
+                    } else {
+                        if (ch == '/') { advance() }
+                        expect(badTag, ['>'])
+                        # traceln(`got tag to $ix: $tagName $attrs`)
+                        if (selfClosing.contains(tagName)) {
+                            handler.endElement(tagName)
+                        }
+                    }
                 } catch errIx {
                     handler.error([ltPost, errIx])
                 }
@@ -269,7 +289,7 @@ def Content :DeepFrozen := Any[Element, Text, List[Any[Element, Text]]]
 
 def makeElement(tag :Name,
                 "attrs"=>attrs :Map[Name, Str] := [].asMap(),
-                "children"=>children :List[Content] := []) as DeepFrozen:
+                "children"=>children :NullOk[List[Content]] := []) as DeepFrozen:
     return object element implements Selfless, Element:
         to _uncall():
             # return serializer(makeElement, tag, "attrs"=>attrs, "children"=>children)
@@ -278,10 +298,13 @@ def makeElement(tag :Name,
             p.print(`<$tag`)
             for n => v in (attrs):
                 p.print(` $n="$v"`)   #@@ TODO: fix markup in v
-            p.print(">")
-            for ch in (children):
-                ch._printOn(p)
-            p.print(`</$tag>`)
+            if (children == null):
+                p.print(" />")
+            else:
+                p.print(">")
+                for ch in (children):
+                    ch._printOn(p)
+                p.print(`</$tag>`)
 
 
 object deMarkupKit as DeepFrozen {
@@ -427,6 +450,7 @@ object deMLNodeKit as DeepFrozen {
 def kitTest(assert) as DeepFrozen:
     for [m, rootTag] in ([
         ["<p></p>", "p"],
+        ["<br />", "br"],
         ["<h2>AT&amp;T</h2>", "h2"],
         ["<h2>AT & T</h2>", "h2"],
         ["<h2>AT &#65; T</h2>", "h2"],
@@ -450,30 +474,44 @@ unittest([
 ])
 
 
-def main(_args) :Int as DeepFrozen:
-    "interactive unit testing: monte eval markupKit.mt
-    "
-    var successes :Int := 0
-    var failures :Int := 0
-    object assert:
-        to equal(l, r):
-            if (l == r) {
-                successes += 1
-            } else {
-                traceln(`failed: $l == $r`)
-                failures += 1
-            }
-        to throws(f):
-            try:
-                f()
-                traceln(`did not throw: $f`)
-                failures += 1
-            catch _:
-                successes += 1
-            
-    oneOfTest(assert)
-    nameTests(assert)
-    kitTest(assert)
-    traceln(["success" => successes, "failure" => failures])
+def main(args :List[Str], =>makeFileResource) :Vow[Int] as DeepFrozen:
+    def runTests():
+        var successes :Int := 0
+        var failures :Int := 0
+        object assert:
+            to equal(l, r):
+                if (l == r) {
+                    successes += 1
+                } else {
+                    traceln(`failed: $l == $r`)
+                    failures += 1
+                }
+            to throws(f):
+                try:
+                    f()
+                    traceln(`did not throw: $f`)
+                    failures += 1
+                catch _:
+                    successes += 1
 
-    return 0
+        oneOfTest(assert)
+        nameTests(assert)
+        kitTest(assert)
+        traceln(["success" => successes, "failure" => failures])
+        return 0
+
+    if (args =~ [_eval, _script, fname] + _):
+        traceln(args)
+        return when (def bs := makeFileResource(fname) <- getContents()) ->
+            def markup := UTF8.decode(bs, throw)
+            traceln(`$fname: ${markup.size()} chars`)
+            def doc := deMarkupKit.recognize(markup, deMLNodeKit.makeBuilder())
+            def [_rx, _verb, [root], _nargs] := doc._uncall()
+            traceln(`root: $root`)
+            0
+        catch oops:
+            traceln.exception(oops)
+            1
+    else:
+        return runTests()
+
