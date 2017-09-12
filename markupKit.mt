@@ -100,8 +100,16 @@ def oneOfTest(assert) as DeepFrozen:
 ########
 # A Name is a Str consisting of a nameStart followed by any number of nameChar.
 
-def nameStart :DeepFrozen := 'a' .. 'z' | 'A' .. 'Z'
-def nameChar :DeepFrozen := nameStart | '0' .. '9' | ':' .. ':'
+# TODO: non-ASCII stuff from https://www.w3.org/TR/xml/#NT-Name
+# [4] NameStartChar	   ::=   	":" | [A-Z] | "_" | [a-z] |
+#                   [#xC0-#xD6] | [#xD8-#xF6] | [#xF8-#x2FF] | [#x370-#x37D] | [#x37F-#x1FFF] |
+#                   [#x200C-#x200D] | [#x2070-#x218F] | [#x2C00-#x2FEF] | [#x3001-#xD7FF] |
+#                   [#xF900-#xFDCF] | [#xFDF0-#xFFFD] | [#x10000-#xEFFFF]
+# [4a] NameChar	   ::=   	NameStartChar | "-" | "." | [0-9] | #xB7 | [#x0300-#x036F] | [#x203F-#x2040]
+# [5]  Name	   ::=   	NameStartChar (NameChar)*
+
+def nameStart :DeepFrozen := ':'..':' | 'A'..'Z' | '_'..'_' | 'a'..'z' 
+def nameChar :DeepFrozen := nameStart | '-'..'-' | '.'..'.' | '0'..'9'
 
 
 def Name :DeepFrozen := oneOf(nameStart) + oneOf(nameChar).star()
@@ -366,12 +374,15 @@ object deMarkupKit as DeepFrozen {
             to endElement(endTagName :Name) {
                 def [[startTagName, attrs, children]] + rest := pendingTags
                 if (endTagName != startTagName) {
-                    throw("@@TODO: handle tag mismatches?!")
+                    throw(`@@TODO: $endTagName != $startTagName ($pendingTags)`)
                 }
                 def elt := builder.buildCall(makeElement, "run", [startTagName],
                                              ["attrs"=>attrs, "children"=>children])
                 pendingTags := rest
                 addChild(elt)
+            }
+            to error([s :Str, ix :Int]) {
+                traceln(`@@got ERROR! ${s.slice(ix - 20, ix)}**${s.slice(ix, ix + 1)}**${s.slice(ix + 1, ix+20)}...`)
             }
         }
 
@@ -466,7 +477,8 @@ def kitTest(assert) as DeepFrozen:
         ["<p>sdlkf<em class='xx'>WHEE!</em \n>...</p >", "p"],
         ["<div><a href='x'   class=\"fun\"   >...</a>sdlfkj</div>", "div"],
         ["<div><a href=\"y\">...</a>sdlfkj</div>", "div"],
-        ["<<p>hi</p>", "p"]
+        ["<<p>hi</p>", "p"],
+        ["<my-stuff>...</my-stuff>", "my-stuff"]
     ]):
         # traceln(`markup: $m`)
         def doc := parse(m)
