@@ -22,7 +22,7 @@ def chr(i :Int) :Char as DeepFrozen:
 
 def decodeCore(var bs :Bytes, _ej) as DeepFrozen:
     var offset :Int := 0
-    var rv :Str := ""
+    def buf := [].diverge()
     while (true):
         if (offset >= bs.size()):
             # End of input.
@@ -31,7 +31,7 @@ def decodeCore(var bs :Bytes, _ej) as DeepFrozen:
         def b := bs[offset]
         if ((b & 0x80) == 0x00):
             # One byte.
-            rv with= (chr(b))
+            buf.push(chr(b))
             offset += 1
         else if ((b & 0xe0) == 0xc0):
             # Two bytes.
@@ -40,7 +40,7 @@ def decodeCore(var bs :Bytes, _ej) as DeepFrozen:
 
             var c := (b & 0x1f) << 6
             c |= bs[offset + 1] & 0x3f
-            rv with= (chr(c))
+            buf.push(chr(c))
             offset += 2
         else if ((b & 0xf0) == 0xe0):
             # Three bytes.
@@ -50,7 +50,7 @@ def decodeCore(var bs :Bytes, _ej) as DeepFrozen:
             var c := (b & 0x0f) << 12
             c |= (bs[offset + 1] & 0x3f) << 6
             c |= bs[offset + 2] & 0x3f
-            rv with= (chr(c))
+            buf.push(chr(c))
             offset += 3
         else if ((b & 0xf7) == 0xf0):
             # Four bytes.
@@ -61,13 +61,13 @@ def decodeCore(var bs :Bytes, _ej) as DeepFrozen:
             c |= (bs[offset + 1] & 0x3f) << 12
             c |= (bs[offset + 2] & 0x3f) << 6
             c |= bs[offset + 3] & 0x3f
-            rv with= (chr(c))
+            buf.push(chr(c))
             offset += 4
         else:
             # Invalid sequence. Move forward and try again.
-            rv with= ('\ufffd')
+            buf.push('\ufffd')
             offset += 1
-    return [rv, bs.slice(offset)]
+    return ["".join([for ch in (buf) ch.asString()]), bs.slice(offset)]
 
 def testDecodeCoreThreeBytes(assert):
     assert.equal(decodeCore(b`$\xe2`, null), ["", b`$\xe2`])
