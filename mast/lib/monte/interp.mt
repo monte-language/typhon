@@ -130,17 +130,28 @@ def stage(ast, var context) :Pair as DeepFrozen:
 
     return switch (ast.getNodeName()) {
         match =="SeqExpr" {
-            def exprs := [].diverge()
-            var final := m`null`
-            def removables := ["LiteralExpr", "NounExpr", "BindingExpr"]
-            for expr in (ast.getExprs()) {
-                if (!removables.contains(final.getNodeName())) {
-                    exprs.push(final)
-                }
-                final := s(expr)
+            # Rather than get smart here, we're going to first iterate through
+            # the sequence to stage it, and then fix up nested sequences in a
+            # second iteration.
+            var exprs := [for expr in (ast.getExprs()) s(expr)]
+            def last := if (exprs.isEmpty()) { m`null` } else {
+                def rv := exprs.last()
+                exprs := exprs.slice(0, exprs.size() - 1)
+                rv
             }
-            exprs.push(final)
-            def rv := switch (exprs.snapshot()) {
+            def removables := ["LiteralExpr", "NounExpr", "BindingExpr"]
+            def exprStack := exprs.diverge()
+            def goodExprs := [].diverge()
+            while (!exprStack.isEmpty()) {
+                def expr := exprStack.pop()
+                def nodeName := expr.getNodeName()
+                if (nodeName == "SeqExpr") {
+                    for node in (expr.getExprs()) { exprStack.push(node) }
+                } else if (!removables.contains(nodeName)) {
+                    goodExprs.push(expr)
+                }
+            }
+            def rv := switch (goodExprs.reverse() + [last]) {
                 match [x] { x }
                 match l { astBuilder.SeqExpr(l, ast.getSpan()) }
             }
