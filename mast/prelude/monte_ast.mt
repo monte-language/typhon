@@ -132,16 +132,16 @@ def transformArg(f, fname, guard, arg) as DeepFrozenStamp:
 def transformArgs(f, fields, args) as DeepFrozenStamp:
     return [for fname => guard in (fields) transformArg(f, fname, guard, args[baseFieldName(fname)])]
 
-def extractFieldName(contents, name):
-    if (name.slice(0, 3) != "get"):
-        return null
-    def subname := name.slice(3)
-    if (subname.isEmpty()):
-        return null
-    else:
-        def fname := subname.slice(0, 1).toLowerCase() + subname.slice(1)
-        if (contents.contains(fname)):
-            return fname
+def withPrefix(prefix :Str):
+    def l := prefix.size()
+    return def prefixed(specimen, ej):
+        def s :Str exit ej := specimen
+        return if (s.startsWith(prefix)) {
+            s.slice(l, l + 1).toLowerCase() + s.slice(l + 1)
+        } else {
+            throw.eject(ej, M.toQuote(s) + "did not start with prefix " +
+                        M.toQuote(prefix))
+        }
 
 def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp:
     object nodeMaker as DeepFrozenStamp:
@@ -192,10 +192,13 @@ def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp
                     #     out.quote(args.last())
                     # out.print(")")
 
-                match [name ? ((def fname := extractFieldName(contents, name)) != null), [], _]:
-                    if (!contents.contains(fname)):
-                        throw("Message refused: " + name + "/0 - not in " + M.toString(contents))
-                    contents[fname]
+                match [via (withPrefix("get")) via (contents.fetch) value, [], _]:
+                    value
+
+                match [via (withPrefix("with")) fname, [value], _]:
+                    M.call(nodeMaker, "run",
+                           contents.with(fname, value).getValues().with(span),
+                           [].asMap())
 
                 match msg:
                     if (extraMethods == null):
