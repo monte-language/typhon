@@ -26,7 +26,10 @@ def makeContext(frameStack :List[Map[Str, DeepFrozen]],
                 exState :Pair[DeepFrozen, DeepFrozen]) :DeepFrozen as DeepFrozen:
     return object context as DeepFrozen:
         to _printOn(out):
-            out.print(`<context locals=${frameStack[0].getKeys()}>`)
+            out.print(`<context exState=$exState locals=${frameStack[0].getKeys()}>`)
+
+        to isNormal() :Bool:
+            return exState[0] == NORMAL
 
         to pushFrame() :DeepFrozen:
             return makeContext([[].asMap()] + frameStack, ejectors, exState)
@@ -57,7 +60,8 @@ def makeContext(frameStack :List[Map[Str, DeepFrozen]],
             def [nextState, ejected] := if (exState == [EJECTING, token]) {
                 [[NORMAL, null], true]
             } else { [exState, false] }
-            return [[ejected, ex.isPossible()], makeContext(frameStack, ejs, exState)]
+            return [[ejected, ex.isPossible()],
+                    makeContext(frameStack, ejs, nextState)]
 
         to fetch(name :Str, ej) :DeepFrozen:
             "Do a frame lookup."
@@ -119,7 +123,7 @@ def unfold.literal(receiver, verb, args, namedArgs, ej) as DeepFrozen:
         match _:
             fail()
 
-def stage(ast, var context) :Pair as DeepFrozen:
+def stage(ast, var context ? (context.isNormal())) :Pair as DeepFrozen:
     if (ast == null):
         return [null, context]
 
@@ -128,12 +132,20 @@ def stage(ast, var context) :Pair as DeepFrozen:
         context := c
         return rv
 
+    def push():
+        context pushFrame= ()
+
+    def pop():
+        context := context.popFrame()[1]
+
     return switch (ast.getNodeName()) {
         match =="SeqExpr" {
             # Rather than get smart here, we're going to first iterate through
             # the sequence to stage it, and then fix up nested sequences in a
-            # second iteration.
-            var exprs := [for expr in (ast.getExprs()) s(expr)]
+            # second iteration. If we become erroring at any point, then we
+            # will propagate that erroring status and stop staging.
+            var exprs := [for expr in (ast.getExprs())
+                          ? (context.isNormal()) s(expr)]
             def last := if (exprs.isEmpty()) { m`null` } else {
                 def rv := exprs.last()
                 exprs := exprs.slice(0, exprs.size() - 1)
@@ -204,57 +216,71 @@ def stage(ast, var context) :Pair as DeepFrozen:
         }
         match =="AssignExpr" {
             def rhs := s(ast.getRvalue())
-            [astBuilder.AssignExpr(ast.getLvalue(), rhs, ast.getSpan()),
-             context]
+            [ast.withRvalue(rhs), context]
         }
         match =="HideExpr" {
-            context pushFrame= ()
+            push()
             def body := s(ast.getBody())
-            context := context.popFrame()[1]
+            pop()
             # Check the scope to see if any names were defined within this
             # block. If not, then we don't have to keep hiding.
             def sw := astBuilder.makeScopeWalker()
             def ss := sw.getStaticScope(body)
             def rv := if (ss.outNames().isEmpty()) { body } else {
-                astBuilder.HideExpr(body, ast.getSpan())
+                ast.withBody(body)
             }
             [rv, context]
         }
         match =="EscapeExpr" {
-            context pushFrame= ()
+            push()
             def ejPatt := ast.getEjectorPattern()
             def [token, c1] := context.freshEjector(ejPatt.getNoun().getName())
             context := c1
             var body := s(ast.getBody())
             def [[ejected :Bool, isPossible :Bool], c2] := context.finishEjector(token)
-            traceln(`ejected $ejected (possible $isPossible) from context $context`)
-            traceln(`did body $body`)
             context := c2.popFrame()[1]
             var catcher := ast.getCatchBody()
-            traceln(`doing catcher $catcher`)
             var catchPatt := ast.getCatchPattern()
             # If we definitely ejected, and there's a catcher, then we must
             # rebuild the body to have the catcher's code alongside it.
             if (ejected && catcher != null) {
-                context pushFrame= ()
+                push()
                 # context matchBind= (catchPatt, body, null, stage)
                 body := s(m`def $catchPatt := { $body }; $catcher`)
-                traceln(`fused body+catcher $body`)
-                context := context.popFrame()[1]
+                pop()
             }
             # If it's possible that the ejector could be called, then we have
             # to leave the ejector body in. Otherwise, discard it.
             def rv := if (isPossible) {
                 if (catcher != null) {
-                    context pushFrame= ()
+                    push()
                     catcher := s(catcher)
-                    traceln(`did catcher $catcher`)
-                    context := context.popFrame()[1]
+                    pop()
                 }
                 astBuilder.EscapeExpr(ejPatt, body, catchPatt,
                                       catcher, ast.getSpan())
             } else { body }
             [rv, context]
+        }
+        match =="ObjectExpr" {
+            # XXX as is common in my interps, I'm punting on auditors for now
+            # XXX many punt
+            def script := ast.getScript()
+            def methods := [for m in (script.getMethods()) {
+                push()
+                def body := s(m.getBody())
+                pop()
+                m.withBody(body)
+            }]
+            def matchers := [for m in (script.getMatchers()) {
+                push()
+                def body := s(m.getBody())
+                pop()
+                m.withBody(body)
+            }]
+            def newScript := astBuilder.Script(null, methods, matchers,
+                                               ast.getSpan())
+            [ast.withScript(newScript), context]
         }
         match _v { [ast, context] }
     }
@@ -272,6 +298,7 @@ def main(_argv) as DeepFrozen:
             z += 2
             ej(traceln(inner + " world"))
         } catch problem { z *= 2; outer }
+        def f(w) { z += x; return w + y }
         x + y + z
     }`.expand()
     traceln(stage(testcase, emptyContext))
