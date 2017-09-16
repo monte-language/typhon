@@ -13,6 +13,9 @@ def makeEx(name :Str, => token :DeepFrozen, => possible :Bool) :DeepFrozen as De
         to _printOn(out):
             out.print(`<ex info [possible => $possible]>`)
 
+        to name() :Str:
+            return name
+
         to isPossible() :Bool:
             return possible
 
@@ -45,6 +48,9 @@ def makeContext(frameStack :List[Map[Str, DeepFrozen]],
             def [frame] + tail := frameStack
             return [ejToken, makeContext([frame.with(name, ejToken)] + tail,
                                          ejectors.with(ejToken, ex), exState)]
+
+        to ejName(token :DeepFrozen) :DeepFrozen:
+            return ejectors[token].name()
 
         to throwEjector(token :DeepFrozen ? (ejectors.contains(token))) :DeepFrozen:
             # In case we get downgraded later, we should mark that we are at
@@ -90,6 +96,54 @@ def makeContext(frameStack :List[Map[Str, DeepFrozen]],
                 }
                 match =="VarPattern" { throw.eject(ej, "nope") }
             }
+
+        to guts():
+            return [frameStack, ejectors, exState]
+
+        to mergeAndPop(other) :DeepFrozen:
+            "
+            Merge this context with another one, popping a frame from both
+            ontexts.
+
+            This operation is like an SSA phi-node and probably is only useful
+            for correctly interpreting if-expressions.
+            "
+
+            # Our stacks need to be the same depth. The new stack should agree
+            # on all of the frames below the top frame.
+            # Our ejectors should be the same as their ejectors, but they may
+            # have fired some ejectors we might not have fired, and vice
+            # versa. Thus an OR is in order.
+            # If we are normal in both branches, then we are normal. If we are
+            # definitely ejecting from the same ejector in both branches, then
+            # we are definitely ejecting. Otherwise, we'll decay to
+            # possibly-ejecting and calling code will do fixups on their end.
+            def newStack := frameStack.slice(1)
+            def [[_] + ==newStack, otherEj, otherEx] := other.guts()
+            def [newEx, ourToken, theirToken] := if (exState == otherEx) {
+                [exState, null, null]
+            } else {
+                # Only mismatches are possible.
+                switch ([exState, otherEx]) {
+                    match [[==NORMAL, _], [==EJECTING, t]] {
+                        [[NORMAL, null], null, t]
+                    }
+                    match [[==EJECTING, t], [==NORMAL, _]] {
+                        [[NORMAL, null], t, null]
+                    }
+                    match [[==EJECTING, ours], [==EJECTING, theirs]] {
+                        [[NORMAL, null], ours, theirs]
+                    }
+                }
+            }
+            def newEj := [for token => ex in (otherEj) token => {
+                # New possibilities from our recent decay.
+                if (token == ourToken || token == theirToken ||
+                    ejectors[token].isPossible()) {
+                    ex.maybeFired()
+                } else { ex }
+            }]
+            return [makeContext(newStack, newEj, newEx), ourToken, theirToken]
 
 def emptyContext :DeepFrozen := makeContext([[].asMap()], [].asMap(),
                                             [NORMAL, null])
@@ -282,6 +336,36 @@ def stage(ast, var context ? (context.isNormal())) :Pair as DeepFrozen:
                                                ast.getSpan())
             [ast.withScript(newScript), context]
         }
+        match =="IfExpr" {
+            # To split the computation, we use the same context for both
+            # branches, and then we merge them afterwards. Frame depths have
+            # to be the same on both contexts for a successful merge, which
+            # constrains the order of operations here.
+            push()
+            def test := s(ast.getTest())
+            def ctx := context
+            push()
+            var cons := s(ast.getThen())
+            pop()
+            def consCtx := context
+            context := ctx
+            push()
+            var alt := s(ast.getElse())
+            pop()
+            def [finalCtx, consToken, altToken] := context.mergeAndPop(consCtx)
+            if (consToken != null) {
+                def name := astBuilder.NounExpr(finalCtx.ejName(consToken),
+                                                null)
+                cons := m`$name($cons)`
+            }
+            if (altToken != null) {
+                def name := astBuilder.NounExpr(finalCtx.ejName(altToken),
+                                                null)
+                alt := m`$name($alt)`
+            }
+            def rv := astBuilder.IfExpr(test, cons, alt, ast.getSpan())
+            [rv, finalCtx]
+        }
         match _v { [ast, context] }
     }
 
@@ -299,6 +383,16 @@ def main(_argv) as DeepFrozen:
             ej(traceln(inner + " world"))
         } catch problem { z *= 2; outer }
         def f(w) { z += x; return w + y }
+        def next := escape ej1 {
+            escape ej2 {
+                if (unknownTest) {
+                    sideEffect()
+                    ej2(x)
+                } else { ej2(y) }
+            }
+        } catch problem {
+            "No" + problem
+        }
         x + y + z
     }`.expand()
     traceln(stage(testcase, emptyContext))
