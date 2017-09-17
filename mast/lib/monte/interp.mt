@@ -1,10 +1,11 @@
 import "lib/enum" =~ [=> makeEnum :DeepFrozen]
 exports (main)
 
-def [_ExState :DeepFrozen,
+def [ExState :DeepFrozen,
     NORMAL :DeepFrozen,
     EJECTING :DeepFrozen,
-] := makeEnum(["normal", "ejecting"])
+    THROWING :DeepFrozen,
+] := makeEnum(["normal", "ejecting", "throwing"])
 
 interface EjToken :DeepFrozen {}
 
@@ -26,7 +27,7 @@ def makeEx(name :Str, => token :DeepFrozen, => possible :Bool) :DeepFrozen as De
 # first in iteration.
 def makeContext(frameStack :List[Map[Str, DeepFrozen]],
                 ejectors :Map[DeepFrozen, DeepFrozen],
-                exState :Pair[DeepFrozen, DeepFrozen]) :DeepFrozen as DeepFrozen:
+                exState :Pair[ExState, DeepFrozen]) :DeepFrozen as DeepFrozen:
     return object context as DeepFrozen:
         to _printOn(out):
             out.print(`<context exState=$exState locals=${frameStack[0].getKeys()}>`)
@@ -49,8 +50,12 @@ def makeContext(frameStack :List[Map[Str, DeepFrozen]],
             return [ejToken, makeContext([frame.with(name, ejToken)] + tail,
                                          ejectors.with(ejToken, ex), exState)]
 
-        to ejName(token :DeepFrozen) :DeepFrozen:
-            return ejectors[token].name()
+        to reifyEjector(token :DeepFrozen) :Pair[DeepFrozen, DeepFrozen]:
+            "Turn an ejector token into a noun."
+            def ex := ejectors[token]
+            def ejs := ejectors.with(token, ex.maybeFired())
+            def rv := astBuilder.NounExpr(ex.name(), null)
+            return [rv, makeContext(frameStack, ejs, exState)]
 
         to throwEjector(token :DeepFrozen ? (ejectors.contains(token))) :DeepFrozen:
             # In case we get downgraded later, we should mark that we are at
@@ -69,6 +74,14 @@ def makeContext(frameStack :List[Map[Str, DeepFrozen]],
             return [[ejected, ex.isPossible()],
                     makeContext(frameStack, ejs, nextState)]
 
+        to throwException() :DeepFrozen:
+            # We only model one level of exceptions. No chaining.
+            # XXX signal recovery if ejector has to be downgraded!
+            return makeContext(frameStack, ejectors, [THROWING, null])
+
+        to catchException() :DeepFrozen:
+            return makeContext(frameStack, ejectors, [NORMAL, null])
+
         to fetch(name :Str, ej) :DeepFrozen:
             "Do a frame lookup."
             for frame in (frameStack):
@@ -81,10 +94,10 @@ def makeContext(frameStack :List[Map[Str, DeepFrozen]],
             return makeContext([frame.with(name, value)] + tail, ejectors,
                                exState)
 
-        to matchBind(patt, specimen, ej, stage) :NullOk[DeepFrozen]:
+        to matchBind(patt, specimen, ej, stage) :DeepFrozen:
             "
-            Extend this context to contain a matched pattern, or return `null`
-            on failure.
+            Extend this context to contain a matched pattern, or eject on
+            failure.
             "
             return switch (patt.getNodeName()) {
                 match =="FinalPattern" {
@@ -95,6 +108,7 @@ def makeContext(frameStack :List[Map[Str, DeepFrozen]],
                     c1.assign(patt.getNoun().getName(), specimen)
                 }
                 match =="VarPattern" { throw.eject(ej, "nope") }
+                match =="ViaPattern" { throw.eject(ej, "nope") }
             }
 
         to guts():
@@ -192,6 +206,11 @@ def stage(ast, var context ? (context.isNormal())) :Pair as DeepFrozen:
     def pop():
         context := context.popFrame()[1]
 
+    def reifyEj(token):
+        def [ej, ctx] := context.reifyEjector(token)
+        context := ctx
+        return ej
+
     return switch (ast.getNodeName()) {
         match =="SeqExpr" {
             # Rather than get smart here, we're going to first iterate through
@@ -225,7 +244,10 @@ def stage(ast, var context ? (context.isNormal())) :Pair as DeepFrozen:
         }
         match =="DefExpr" {
             def rhs := s(ast.getExpr())
-            def ex := s(ast.getExit())
+            var ex := s(ast.getExit())
+            if (ex =~ token :EjToken) {
+                ex := reifyEj(token)
+            }
             def patt := ast.getPattern()
             escape ej {
                 [rhs, context.matchBind(patt, rhs, ej, stage)]
@@ -299,7 +321,6 @@ def stage(ast, var context ? (context.isNormal())) :Pair as DeepFrozen:
             # rebuild the body to have the catcher's code alongside it.
             if (ejected && catcher != null) {
                 push()
-                # context matchBind= (catchPatt, body, null, stage)
                 body := s(m`def $catchPatt := { $body }; $catcher`)
                 pop()
             }
@@ -354,46 +375,82 @@ def stage(ast, var context ? (context.isNormal())) :Pair as DeepFrozen:
             pop()
             def [finalCtx, consToken, altToken] := context.mergeAndPop(consCtx)
             if (consToken != null) {
-                def name := astBuilder.NounExpr(finalCtx.ejName(consToken),
-                                                null)
-                cons := m`$name($cons)`
+                cons := m`${reifyEj(consToken)}.run($cons)`
             }
             if (altToken != null) {
-                def name := astBuilder.NounExpr(finalCtx.ejName(altToken),
-                                                null)
-                alt := m`$name($alt)`
+                alt := m`${reifyEj(altToken)}.run($alt)`
             }
             def rv := astBuilder.IfExpr(test, cons, alt, ast.getSpan())
             [rv, finalCtx]
+        }
+        match =="CatchExpr" {
+            # XXX handle exceptions!
+            push()
+            def body := s(ast.getBody())
+            pop()
+            push()
+            def catcher := s(ast.getCatcher())
+            pop()
+            def rv := astBuilder.CatchExpr(body, ast.getPattern(), catcher,
+            ast.getSpan())
+            [rv, context]
+        }
+        match =="FinallyExpr" {
+            # XXX handle exceptions!
+            push()
+            def body := s(ast.getBody())
+            pop()
+            push()
+            def unwinder := s(ast.getUnwinder())
+            pop()
+            def rv := astBuilder.FinallyExpr(body, unwinder, ast.getSpan())
+            [rv, context]
         }
         match _v { [ast, context] }
     }
 
 def main(_argv) as DeepFrozen:
-    def testcase := m`{
-        def x := 2
-        def y := {
-            def z := 3
-            x + z
-        }
-        var z := 1
-        escape ej {
-            def inner := "hello"
-            z += 2
-            ej(traceln(inner + " world"))
-        } catch problem { z *= 2; outer }
-        def f(w) { z += x; return w + y }
-        def next := escape ej1 {
-            escape ej2 {
-                if (unknownTest) {
-                    sideEffect()
-                    ej2(x)
-                } else { ej2(y) }
+    def bf := m`def bf(insts :Str) {
+        def jumps := {
+            def m := [].asMap().diverge()
+            def stack := [].diverge()
+            for i => c in (insts) {
+                if (c == '[') { stack.push(i) } else if (c == ']') {
+                    def j := stack.pop()
+                    m[i] := j
+                    m[j] := i
+                }
             }
-        } catch problem {
-            "No" + problem
+            m.snapshot()
         }
-        x + y + z
-    }`.expand()
-    traceln(stage(testcase, emptyContext))
+
+        return def interpret() {
+            var i := 0
+            var pointer := 0
+            def tape := [0].diverge()
+            def output := [].diverge()
+            while (i < insts.size()) {
+                switch(insts[i]) {
+                    match =='>' {
+                        pointer += 1
+                        while (pointer >= tape.size()) { tape.push(0) }
+                    }
+                    match =='<' { pointer -= 1 }
+                    match =='+' { tape[pointer] += 1 }
+                    match =='-' { tape[pointer] -= 1 }
+                    match =='.' { output.push(tape[pointer]) }
+                    match ==',' { tape[pointer] := 0 }
+                    match =='[' {
+                        if (tape[pointer] == 0) { i := jumps[i] }
+                    }
+                    match ==']' {
+                        if (tape[pointer] != 0) { i := jumps[i] }
+                    }
+                }
+                i += 1
+            }
+            return output.snapshot()
+        }
+    }; bf("+++>>[-]<<[->>+<<]")`.expand()
+    traceln(stage(bf, emptyContext))
     return 0
