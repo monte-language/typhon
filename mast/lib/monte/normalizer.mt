@@ -22,7 +22,7 @@ CExpr
   TryExpr Expr Patt Expr
   # no SeqExpr
 Expr
-  LetExpr Let* Expr
+  LetExpr Let* Exprry
   AExpr
   CExpr
 Let
@@ -121,7 +121,7 @@ def normalize(ast, builder) as DeepFrozen:
 
     return ast.transform(normalizeTransformer)
 
-def makeLetBinder(n, builder, [defs :Set, outerRenames :Map]):
+def makeLetBinder(n, builder, [defs :Set, outerRenames :Map]) as DeepFrozen:
     def letBindings := [].diverge()
     def renames := outerRenames.diverge()
     var seq := 0
@@ -204,7 +204,7 @@ object normalize0 as DeepFrozen:
         else if (nn == "MetaContextExpr"):
             return builder.MetaContextExpr()
         else if (nn == "MetaStateExpr"):
-            return builder.MetaContextExpr()
+            return builder.MetaStateExpr()
         else:
             return binder.addTempBinding(normalize0.complex(ast, builder, binder))
 
@@ -237,7 +237,7 @@ object normalize0 as DeepFrozen:
         else if (nn == "FinallyExpr"):
             return builder.FinallyExpr(
                 normalize0.normalize(ast.getBody(), builder, binder.getDefs()),
-                normalize0.normalize(ast.getAtLast(), builder, binder.getDefs()),
+                normalize0.normalize(ast.getUnwinder(), builder, binder.getDefs()),
                 span)
         else if (nn == "HideExpr"):
             # XXX figure out a renaming scheme to avoid inner-let
@@ -330,7 +330,7 @@ object normalize0 as DeepFrozen:
                     builder.NounExpr("_selfBind", span),
                     "run",
                     [oi,
-                     builder.LiteralExpr(binder.getRename(name), span),
+                     builder.StrExpr(binder.getRename(name), span),
                      builder.NounExpr(binder.getRename(name), span)],
                     [], span))
             return oi

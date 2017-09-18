@@ -1,7 +1,7 @@
 import "boot" =~ [=> DeepFrozenStamp, => TransparentStamp, => KernelAstStamp]
 import "lib/iterators" =~ [=> zip :DeepFrozen]
-import "ast_printer" =~ [=> astPrint :DeepFrozen]
-exports (astBuilder)
+import "ast_printer" =~ [=> astPrint :DeepFrozen, => nastPrint :DeepFrozen]
+exports (astBuilder, nastBuilder)
 
 def makeStaticScope(read, set, defs, vars, metaStateExpr :Bool) as DeepFrozenStamp:
     def namesRead :Set[DeepFrozen] := read.asSet()
@@ -143,7 +143,7 @@ def extractFieldName(contents, name):
         if (contents.contains(fname)):
             return fname
 
-def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp:
+def makeNodeAuthor(constructorName, fields, extraMethodMaker, printNode) as DeepFrozenStamp:
     object nodeMaker as DeepFrozenStamp:
         to _printOn(out):
             out.print("make" + constructorName)
@@ -181,7 +181,7 @@ def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp
                     return [nodeMaker, "run", fullArgs, [].asMap()]
 
                 to _printOn(out):
-                    astPrint(node, out, 0)
+                    printNode(node, out, 0)
                     # out.print(constructorName)
                     # out.print("(")
                     # if (args.size() > 0):
@@ -203,7 +203,7 @@ def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp
                     M.callWithMessage(extraMethods, msg)
     return nodeMaker
 
-def makeAstBuilder(description, extraMethodMakers) as DeepFrozenStamp:
+def makeAstBuilder(description, extraMethodMakers, printNode) as DeepFrozenStamp:
     def gs := [for constructors in (description)
                M.call(Ast, "get", constructors.getKeys(), [].asMap())]
     def ms := [].asMap().diverge()
@@ -211,7 +211,7 @@ def makeAstBuilder(description, extraMethodMakers) as DeepFrozenStamp:
         for constructorName :Str => fields in (constructorGroup):
             ms[constructorName] := makeNodeAuthor(
                 constructorName, fields,
-                extraMethodMakers.fetch(constructorName, fn {null}))
+                extraMethodMakers.fetch(constructorName, fn {null}), printNode)
     def makers := ms.snapshot()
     object _astBuilder implements DeepFrozenStamp:
         to convertFromKernel(expr):
@@ -870,7 +870,7 @@ def makeCoreAst() as DeepFrozenStamp:
                                         super.getSpan())
         }
     }
-    ])
+    ], astPrint)
     return object astBuilder implements DeepFrozenStamp:
         to makeScopeWalker():
             return makeScopeWalker()
@@ -931,3 +931,60 @@ def makeCoreAst() as DeepFrozenStamp:
             M.callWithMessage(astBuilder_, msg)
 
 def astBuilder :DeepFrozen := makeCoreAst()
+
+def makeNAST() as DeepFrozenStamp:
+    def AExpr
+    def CExpr
+    def Expr := Any[AExpr, CExpr]
+    def [bind AExpr, bind CExpr, NamedArg, NamedParam,
+         Method_, Matcher, Let_,
+         astBuilder_] := makeAstBuilder([
+    "AExpr" => [
+        "IntExpr"         => ["i" => Int],
+        "StrExpr"         => ["s" => Str],
+        "DoubleExpr"      => ["d" => Double],
+        "CharExpr"        => ["c" => Char],
+        "NullExpr"        => [].asMap(),
+        "NounExpr"        => ["name" => Str],
+        "BindingExpr"     => ["name" => Str],
+        "MetaContextExpr" => [].asMap(),
+        "MetaStateExpr"   => [].asMap(),
+    ],
+    "CExpr" => [
+        "AssignExpr"      => ["lvalue" => Str, "rvalue" => Expr],
+        "CallExpr"        => ["receiver" => AExpr,
+                                    "verb" => Str,
+                                    "args*" => AExpr,
+                                    "namedArgs*" => NamedArg],
+        "ObjectExpr"            => ["docstring?" => Str, "auditors*" => AExpr,
+                                    "methods*" => Method_, "matchers*" => Matcher],
+        "TryExpr"               => ["body" => Expr, "catchPattern" => Str,
+                                    "catchBody" => Expr],
+        "FinallyExpr"           => ["body" => Expr, "unwinder" => Expr],
+        "EscapeOnlyExpr"        => ["ejectorPattern" => Str, "body" => Expr],
+        "EscapeExpr"            => ["ejectorPattern" => Str, "body" => Expr,
+                                    "catchPattern" => Str, "catchBody" => Expr],
+        "IfExpr"                => ["test" => AExpr, "then" => Expr, "else" => Expr],
+        "LetExpr"               => ["defs*" => Let_, "body" => Expr],
+    ],
+    "NamedArg" => [
+        "NamedArgExpr"       => ["key" => AExpr, "value" => AExpr],
+    ],
+    "NamedParam" => [
+        "NamedParam"       => ["key" => AExpr, "value" => Str, "default?" => AExpr],
+    ],
+    "Method" => [
+        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Str,
+                     "namedParams" => Str, "body" => Expr],
+    ],
+    "Matcher" => [
+        "Matcher" => ["pattern" => Str, "body" => Expr]
+    ],
+    "Let" => [
+        "LetDef" => ["name" => Str, "expr" => Expr],
+    ]
+    ], [].asMap(), nastPrint)
+    return astBuilder_
+
+
+def nastBuilder :DeepFrozen := makeNAST()

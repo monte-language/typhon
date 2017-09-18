@@ -1,5 +1,5 @@
 import "boot" =~ [=> DeepFrozenStamp]
-exports (printerActions, astPrint)
+exports (printerActions, astPrint, nastPrint)
 
 def all(iterable, pred) as DeepFrozenStamp:
     for item in (iterable):
@@ -44,6 +44,10 @@ def priorities :Map[Str, Int] := [
 def printerActions
 def astPrint(node, out, priority) as DeepFrozenStamp:
     printerActions[node.getNodeName()](node, out, priority)
+
+def nastPrinterActions
+def nastPrint(node, out, priority) as DeepFrozenStamp:
+    nastPrinterActions[node.getNodeName()](node, out, priority)
 
 def isIdentifier(name :Str) :Bool as DeepFrozenStamp:
     if (MONTE_KEYWORDS.contains(name.toLowerCase())):
@@ -1164,3 +1168,101 @@ bind printerActions :Map[Str, DeepFrozen] := [
         quasiPrint(self.getName(), self.getQuasis(), out)
     },
 ]
+
+def nastPrintListOn(left, nodes, right, out) as DeepFrozenStamp:
+    out.print(left)
+    if (nodes.size() >= 1):
+        for n in (nodes.slice(0, nodes.size() - 1)):
+            nastPrint(n, out, 1)
+            out.print(", ")
+        nastPrint(nodes.last(), out, 1)
+    out.print(right)
+
+def nastPrintExprSuiteOn(leaderFn, suite, cuddle, out) as DeepFrozenStamp:
+    printSuiteOn(leaderFn,
+                 fn o, p { nastPrint(suite, o, p) },
+                 cuddle, cuddle, out, 1)
+{
+bind nastPrinterActions := [
+    "IntExpr" => def printIntExpr(self, out, _priority) as DeepFrozenStamp {
+        out.quote(self.getI())
+    },
+    "StrExpr" => def printStrExpr(self, out, _priority) as DeepFrozenStamp {
+        out.quote(self.getS())
+    },
+    "DoubleExpr" => def printDoubleExpr(self, out, _priority) as DeepFrozenStamp {
+        out.quote(self.getD())
+    },
+    "CharExpr" => def printCharExpr(self, out, _priority) as DeepFrozenStamp {
+        out.quote(self.getC())
+    },
+    "NullExpr" => def printNullExpr(_, out, _) as DeepFrozenStamp {
+        out.print("null")
+    },
+    "NounExpr" => printerActions["NounExpr"],
+    "BindingExpr" => def printBindingExpr(self, out, _priority) as DeepFrozenStamp {
+        out.print("&&")
+        printerActions["NounExpr"](self, out, _priority)
+    },
+    "MetaContextExpr" => printerActions["MetaContextExpr"],
+    "MetaStateExpr" => printerActions["MetaStateExpr"],
+    "AssignExpr" => def printAssignExpr(self, out, _priority) as DeepFrozenStamp {
+        out.print(self.getLvalue())
+        out.print(" := ")
+        out.print(self.getRValue())
+    },
+    "CallExpr" =>  def printCallExpr(self, out, _priority) as DeepFrozenStamp {
+        nastPrint(self.getReceiver(), out, priorities["call"])
+        out.print(".")
+        def verb := self.getVerb()
+        if (isIdentifier(verb)) {
+            out.print(verb)
+        } else {
+            out.quote(verb)
+        }
+        nastPrintListOn("(", self.getArgs() + self.getNamedArgs(), ")", out)
+    },
+    "ObjectExpr" => def printObjectExpr(self, out, _priority) as DeepFrozenStamp {
+        out.print("object _")
+        if ((def aas := self.getAuditors()).size() > 0) {
+            out.print(" implements ")
+            nastPrintListOn("", aas, "", out)
+        }
+        out.print("{...}")
+    },
+    "TryExpr" => def printTryExpr(self, out, _priority) as DeepFrozenStamp {
+        nastPrintExprSuiteOn(fn{out.print("try")}, self.getBody(), false, out)
+        nastPrintExprSuiteOn(fn{out.print("catch "); out.print(self.getCatchPattern())},
+                             self.getCatchBody(), true, out)
+    },
+    "FinallyExpr" => def printFinallyExpr(self, out, _priority) as DeepFrozenStamp {
+        nastPrintExprSuiteOn(fn{out.print("try")}, self.getBody(), false, out)
+        nastPrintExprSuiteOn(fn{out.print("finally")}, self.getUnwinder(), true, out)
+    },
+    "EscapeExpr" => def printEscapeExpr(self, out, _priority) as DeepFrozenStamp {
+        nastPrintExprSuiteOn(fn{out.print("escape "); out.print(self.getEjectorPattern())}, self.getBody(), false, out)
+        nastPrintExprSuiteOn(fn{out.print("catch "); out.print(self.getCatchPattern())},
+                             self.getCatchBody(), true, out)
+    },
+    "EscapeOnlyExpr" => def printEscapeOnlyExpr(self, out, _priority) as DeepFrozenStamp {
+        nastPrintExprSuiteOn(fn{out.print("escape "); out.print(self.getEjectorPattern())}, self.getBody(), false, out)
+    },
+    "NamedArgExpr" => def printNamedArgExpr(self, out, _priority) as DeepFrozenStamp {
+        nastPrint(self.getKey(), out, 1)
+        out.print(" => ")
+        nastPrint(self.getValue(), out, 1)
+    },
+    "LetExpr" => def printLetExpr(self, out, _priority) as DeepFrozenStamp {
+        out.print("let \n")
+        def lo := out.indent(INDENT)
+        for letDef in (self.getDefs()) {
+            lo.print(letDef.getName())
+            lo.print(" = ")
+            nastPrint(letDef.getExpr(), lo, 1)
+            lo.print("\n")
+        }
+        out.print("in ")
+        nastPrint(self.getBody(), out, 1)
+    },
+]
+}
