@@ -127,11 +127,12 @@ def makeLetBinder(n, builder, [defs :Set, outerRenames, &seq]) as DeepFrozen:
         to letExprFor(expr, span):
             return if (letBindings.isEmpty()) {
                 expr
-            } else if (letBindings.size() == 1 &&
-                     expr.getNodeName() == "NounExpr" &&
-                     letBindings[0][0] == expr.getName()) {
-                # let x = 1 in x
-                letBindings[0][1]
+            } else if (expr.getNodeName() == "NounExpr" &&
+                       (letBindings.last()[0] == expr.getName())) {
+                builder.LetExpr([for args in
+                                 (letBindings.slice(0, letBindings.size() - 1))
+                                 M.call(builder, "LetDef", args, [].asMap())],
+                                letBindings.last()[1], span)
             } else {
                 builder.LetExpr([for args in (letBindings)
                                  M.call(builder, "LetDef", args, [].asMap())],
