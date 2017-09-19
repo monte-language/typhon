@@ -23,6 +23,7 @@ import "tests/expander" =~ _
 import "tests/fail-arg" =~ _
 import "tests/flexMap" =~ _
 import "tests/lexer" =~ _
+import "tests/normalizer" =~ _
 import "tests/optimizer" =~ _
 import "tests/parser" =~ _
 import "tests/promises" =~ _

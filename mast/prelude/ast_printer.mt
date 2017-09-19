@@ -1253,7 +1253,7 @@ bind nastPrinterActions := [
         nastPrint(self.getValue(), out, 1)
     },
     "LetExpr" => def printLetExpr(self, out, _priority) as DeepFrozenStamp {
-        out.print("let \n")
+        out.print("let\n")
         def lo := out.indent(INDENT)
         for letDef in (self.getDefs()) {
             lo.print(letDef.getName())
