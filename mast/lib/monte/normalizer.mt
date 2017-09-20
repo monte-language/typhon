@@ -93,6 +93,11 @@ def makeLetBinder(n, builder, [defs :Set, outerRenames, &seq]) as DeepFrozen:
             return n.complex(ast0, builder, letBinder)
         to getP(patt, exit_, expr):
             n.pattern(patt, exit_, expr, builder, letBinder)
+        to hide(ast0):
+            def innerBinder := makeLetBinder(n, builder, letBinder.getDefs())
+            def i := n.complex(ast0, builder, innerBinder)
+            letBindings.extend(innerBinder.getBindings())
+            return i
         to addBinding(var name :Str, bindingExpr, span):
             for [lname, _, lspan] in (letBindings):
                 if (lname == name):
@@ -213,8 +218,7 @@ object normalize0 as DeepFrozen:
                 normalize0.normalize(ast.getUnwinder(), builder, binder.getDefs()),
                 span)
         else if (nn == "HideExpr"):
-            # XXX figure out a renaming scheme to avoid inner-let
-            return normalize0.normalize(ast.getBody(), builder, binder.getDefs())
+            return binder.hide(ast.getBody())
         else if (nn == "MethodCallExpr"):
             def r := binder.getI(ast.getReceiver())
             def argList := [for arg in (ast.getArgs()) binder.getI(arg)]
