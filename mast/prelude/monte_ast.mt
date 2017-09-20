@@ -937,7 +937,7 @@ def makeNAST() as DeepFrozenStamp:
     def CExpr
     def Expr := Any[AExpr, CExpr]
     def [bind AExpr, bind CExpr, NamedArg, NamedParam,
-         Method_, Matcher, Let_,
+         Method_, Matcher, Slot, Let_,
          astBuilder_] := makeAstBuilder([
     "AExpr" => [
         "IntExpr"         => ["i" => Int],
@@ -978,9 +978,14 @@ def makeNAST() as DeepFrozenStamp:
     "Matcher" => [
         "Matcher" => ["pattern" => Str, "body" => Expr]
     ],
+    "Slot" => [
+        "TempSlot"        => ["value" => Expr],
+        "FinalSlot"       => ["value" => Expr, "guard" => AExpr],
+        "VarSlot"         => ["value" => Expr, "guard" => AExpr],
+    ],
     "Let" => [
-        "LetDef" => ["name" => Str, "expr" => Expr],
-    ]
+        "LetDef" => ["name" => Str, "expr" => Any[Slot, Expr]],
+    ],
     ], [].asMap(), nastPrint)
     return astBuilder_
 

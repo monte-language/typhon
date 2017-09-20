@@ -1209,7 +1209,7 @@ bind nastPrinterActions := [
     "AssignExpr" => def printAssignExpr(self, out, _priority) as DeepFrozenStamp {
         out.print(self.getLvalue())
         out.print(" := ")
-        out.print(self.getRValue())
+        out.print(self.getRvalue())
     },
     "CallExpr" =>  def printCallExpr(self, out, _priority) as DeepFrozenStamp {
         nastPrint(self.getReceiver(), out, priorities["call"])
@@ -1237,7 +1237,7 @@ bind nastPrinterActions := [
     },
     "FinallyExpr" => def printFinallyExpr(self, out, _priority) as DeepFrozenStamp {
         nastPrintExprSuiteOn(fn{out.print("try")}, self.getBody(), false, out)
-        nastPrintExprSuiteOn(fn{out.print("finally")}, self.getUnwinder(), true, out)
+        nastPrintExprSuiteOn(fn{out.print(" finally")}, self.getUnwinder(), false, out)
     },
     "EscapeExpr" => def printEscapeExpr(self, out, _priority) as DeepFrozenStamp {
         nastPrintExprSuiteOn(fn{out.print("escape "); out.print(self.getEjectorPattern())}, self.getBody(), false, out)
@@ -1247,22 +1247,72 @@ bind nastPrinterActions := [
     "EscapeOnlyExpr" => def printEscapeOnlyExpr(self, out, _priority) as DeepFrozenStamp {
         nastPrintExprSuiteOn(fn{out.print("escape "); out.print(self.getEjectorPattern())}, self.getBody(), false, out)
     },
+    "IfExpr" => def printIfExpr(self, out, priority) as DeepFrozenStamp {
+        nastPrintExprSuiteOn(fn {
+            out.print("if (")
+            nastPrint(self.getTest(), out, priorities["braceExpr"])
+            out.print(")")
+            }, self.getThen(), false, out)
+        def alt := self.getElse()
+        if (alt.getNodeName() != "NullExpr") {
+            if (alt.getNodeName() == "IfExpr") {
+                if (priorities["braceExpr"] <= priority) {
+                    out.print(" ")
+                } else {
+                    out.println("")
+                }
+                out.print("else ")
+                nastPrint(alt, out, priority)
+            } else {
+                nastPrintExprSuiteOn(fn {out.print("else")}, alt, true, out)
+            }
+        }
+
+    },
     "NamedArgExpr" => def printNamedArgExpr(self, out, _priority) as DeepFrozenStamp {
         nastPrint(self.getKey(), out, 1)
         out.print(" => ")
         nastPrint(self.getValue(), out, 1)
     },
     "LetExpr" => def printLetExpr(self, out, _priority) as DeepFrozenStamp {
-        out.print("let\n")
+        out.print("let")
         def lo := out.indent(INDENT)
+        lo.println("")
         for letDef in (self.getDefs()) {
             lo.print(letDef.getName())
             lo.print(" = ")
             nastPrint(letDef.getExpr(), lo, 1)
-            lo.print("\n")
+            lo.println("")
         }
         out.print("in ")
         nastPrint(self.getBody(), out, 1)
     },
+    "FinalSlot" => def printFinalSlot(self, out, _priority) as DeepFrozenStamp {
+        out.print("_makeFinalSlot(")
+        nastPrint(self.getValue(), out, 1)
+        out.print(", ")
+        if ((def g := self.getGuard()) != null) {
+            nastPrint(g, out, 1)
+        } else {
+            out.print("null")
+        }
+        out.print(")")
+    },
+    "VarSlot" => def printVarSlot(self, out, _priority) as DeepFrozenStamp {
+        out.print("_makeVarSlot(")
+        nastPrint(self.getValue(), out, 1)
+        out.print(", ")
+        if ((def g := self.getGuard()) != null) {
+            nastPrint(g, out, 1)
+        } else {
+            out.print("null")
+        }
+        out.print(")")
+    },
+    "TempSlot" => def printTempSlot(self, out, _priority) as DeepFrozenStamp {
+        out.print("_makeTempSlot(")
+        nastPrint(self.getValue(), out, 1)
+        out.print(")")
+    }
 ]
 }
