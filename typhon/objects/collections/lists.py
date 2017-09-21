@@ -24,8 +24,6 @@ from typhon.objects.ejectors import Ejector, throwStr
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
-from typhon.rstrategies import rstrategies
-from typhon.strategies.lists import strategyFactory
 
 
 @autohelp
@@ -54,216 +52,244 @@ class listIterator(Object):
         else:
             throwStr(ej, u"Iterator exhausted")
 
-
 @autohelp
 class FlexList(Object):
+    pass
+
+def makeFlexList(unwrap, wrap, quoteOn):
     """
-    A mutable list of objects.
+    Make a mutable list class with the given unwrapper and wrapper, which must
+    form an iso up to equivalence, and also `quoteOn`, which must take a live
+    printer object and put the equivalent of `M.toQuote/1` onto it.
+
+    NOT_RPYTHON
     """
 
-    rstrategies.make_accessors(strategy="strategy", storage="storage")
+    @autohelp
+    class SpecializedFlexList(FlexList):
+        """
+        A mutable list of objects.
+        """
 
-    strategy = None
+        def __init__(self, vals, guard=None):
+            self._guard = guard
+            self._vals = [self._unwrap(val) for val in vals]
 
-    def __init__(self, flexObjects):
-        strategy = strategyFactory.strategy_type_for(flexObjects)
-        strategyFactory.set_initial_strategy(self, strategy, len(flexObjects),
-                                             flexObjects)
+        def toString(self):
+            return toString(self)
 
-    def toString(self):
-        return toString(self)
+        def wrapped(self):
+            return [wrap(val) for val in self._vals]
 
-    @method("Void", "Any")
-    def _printOn(self, printer):
-        printer.call(u"print", [StrObject(u"[")])
-        items = self.strategy.fetch_all(self)
-        for i, obj in enumerate(items):
-            printer.call(u"quote", [obj])
-            if i + 1 < len(items):
-                printer.call(u"print", [StrObject(u", ")])
-        printer.call(u"print", [StrObject(u"].diverge()")])
+        def _unwrap(self, val):
+            if self._guard is not None:
+                from typhon.objects.constants import NullObject
+                val = self._guard.call(u"coerce", [val, NullObject])
+            return unwrap(val)
 
-    @method("Bool")
-    def empty(self):
-        return self.strategy.size(self) == 0
+        @method("Void", "Any")
+        def _printOn(self, printer):
+            printer.call(u"print", [StrObject(u"[")])
+            for i, obj in enumerate(self._vals):
+                quoteOn(printer, obj)
+                if i + 1 < len(self._vals):
+                    printer.call(u"print", [StrObject(u", ")])
+            printer.call(u"print", [StrObject(u"].diverge(")])
+            if self._guard is not None:
+                self._guard.call(u"_printOn", [printer])
+            printer.call(u"print", [StrObject(u")")])
 
-    @method("List", "List")
-    def join(self, pieces):
-        l = []
-        filler = self.strategy.fetch_all(self)
-        first = True
-        for piece in pieces:
-            # For all iterations except the first, append a copy of
-            # ourselves.
-            if first:
-                first = False
+        @method("List", "List")
+        def join(self, pieces):
+            l = []
+            first = True
+            filler = self.wrapped()
+            for piece in pieces:
+                # For all iterations except the first, append a copy of
+                # ourselves.
+                if first:
+                    first = False
+                else:
+                    l.extend(filler)
+                l.append(piece)
+            return l[:]
+
+        @method("List")
+        def _uncall(self):
+            from typhon.objects.collections.maps import EMPTY_MAP
+            args = [] if self._guard is None else [self._guard]
+            return [wrapList(self.wrapped()), StrObject(u"diverge"),
+                    wrapList(args), EMPTY_MAP]
+
+        @method("List", "List")
+        def add(self, other):
+            return self.wrapped() + other
+
+        @method.py("Any", "Any")
+        def diverge(self, guard):
+            return flexListFromGuard(self.wrapped(), guard)
+
+        @method("Any", _verb=u"diverge")
+        def _divergeAny(self):
+            return SpecializedFlexList(self.wrapped(), self._guard)
+
+        @method("Void", "Any")
+        def extend(self, other):
+            # XXX factor me plz
+            try:
+                data = unwrapList(other)
+            except:
+                data = listFromIterable(other)
+            for val in data:
+                self.push(val)
+
+        @method("Any", "Int")
+        def get(self, index):
+            # Lookup by index.
+            if not 0 <= index < len(self._vals):
+                raise userError(u"get/1: Index %d is out of bounds" % index)
+            return self._vals[index]
+
+        @method("Void", "Int", "Any")
+        def insert(self, index, value):
+            if index == len(self._vals):
+                self.push(value)
+            elif 0 <= index < len(self._vals):
+                self.put(index, value)
             else:
-                l.extend(filler)
+                raise userError(u"insert/2: Index %d is out of bounds" % index)
 
-            l.append(piece)
-        return l[:]
+        @method("Any")
+        def last(self):
+            try:
+                return self._vals[-1]
+            except IndexError:
+                raise userError(u"last/0: Empty list has no last element")
 
-    @method("List")
-    def _uncall(self):
-        from typhon.objects.collections.maps import EMPTY_MAP
-        return [wrapList(self.snapshot()), StrObject(u"diverge"),
-                wrapList([]), EMPTY_MAP]
+        @method("List", "Int")
+        def multiply(self, count):
+            # multiply/1: Create a new list by repeating this list's contents.
+            return self.wrapped() * count
 
-    @method("List", "List")
-    def add(self, other):
-        return self.strategy.fetch_all(self) + other
+        @method("Any")
+        def pop(self):
+            try:
+                return wrap(self._vals.pop())
+            except IndexError:
+                raise userError(u"pop/0: Pop from empty list")
 
-    @method("Any")
-    def diverge(self):
-        return FlexList(self.strategy.fetch_all(self))
+        @method.py("Void", "Any")
+        def push(self, value):
+            self._vals.append(self._unwrap(value))
 
-    @method("Void", "Any")
-    def extend(self, other):
-        # XXX factor me plz
-        try:
-            data = unwrapList(other)
-        except:
-            data = listFromIterable(other)
-        # Required to avoid passing an empty list to .append(), which
-        # apparently cannot deal. Also a quick win. ~ C.
-        if len(data) != 0:
-            self.strategy.append(self, data)
+        @method("List")
+        def reverse(self):
+            new = self.wrapped()
+            new.reverse()
+            return new
 
-    @method("Any", "Int")
-    def get(self, index):
-        # Lookup by index.
-        if index >= self.strategy.size(self) or index < 0:
-            raise userError(u"get/1: Index %d is out of bounds" % index)
-        return self.strategy.fetch(self, index)
+        @method("Void")
+        def reverseInPlace(self):
+            self._vals.reverse()
 
-    @method("Void", "Int", "Any")
-    def insert(self, index, value):
-        if index < 0:
-            raise userError(u"insert/2: Index %d is out of bounds" % index)
-        self.strategy.insert(self, index, [value])
+        @method("List", "Any", _verb="with")
+        def _with(self, value):
+            # with/1: Create a new list with an appended object.
+            return self.wrapped() + [value]
 
-    @method("Any")
-    def last(self):
-        size = self.strategy.size(self)
-        if size:
-            return self.strategy.fetch(self, size - 1)
-        raise userError(u"last/0: Empty list has no last element")
+        @method("List", "Int", "Any", _verb="with")
+        def withIndex(self, index, value):
+            # Make a new ConstList.
+            if not 0 <= index < len(self._vals):
+                raise userError(u"with/2: Index %d is out of bounds" % index)
+            new = self.wrapped()
+            new[index] = value
+            return new
 
-    @method("List", "Int")
-    def multiply(self, count):
-        # multiply/1: Create a new list by repeating this list's contents.
-        return self.strategy.fetch_all(self) * count
+        @method("Any")
+        def _makeIterator(self):
+            # This is the behavior we choose: Iterating over a FlexList grants
+            # iteration over a snapshot of the list's contents at that point.
+            return listIterator(self.wrapped())
 
-    @method("Any")
-    def pop(self):
-        try:
-            return self.strategy.pop(self, self.strategy.size(self) - 1)
-        except IndexError:
-            raise userError(u"pop/0: Pop from empty list")
+        @method("Map")
+        def asMap(self):
+            from typhon.objects.collections.maps import monteMap
+            d = monteMap()
+            for i, o in enumerate(self.wrapped()):
+                d[IntObject(i)] = o
+            return d
 
-    @method("Void", "Any")
-    def push(self, value):
-        self.strategy.append(self, [value])
+        @method("Set")
+        def asSet(self):
+            from typhon.objects.collections.maps import monteMap
+            d = monteMap()
+            for o in self.wrapped():
+                d[o] = None
+            return d
 
-    @method("List")
-    def reverse(self):
-        new = self.strategy.fetch_all(self)[:]
-        new.reverse()
-        return new
+        @method.py("Bool", "Any")
+        def contains(self, needle):
+            # Slow path.
+            from typhon.objects.equality import EQUAL, optSame
+            for specimen in self.wrapped():
+                if optSame(needle, specimen) is EQUAL:
+                    return True
+            return False
 
-    @method("Void")
-    def reverseInPlace(self):
-        new = self.strategy.fetch_all(self)[:]
-        new.reverse()
-        self.strategy.store_all(self, new)
+        @method("Int", "Any")
+        def indexOf(self, needle):
+            # Slow path.
+            from typhon.objects.equality import EQUAL, optSame
+            for index, specimen in enumerate(self.wrapped()):
+                if optSame(needle, specimen) is EQUAL:
+                    return index
+            return -1
 
-    @method("List", "Any", _verb="with")
-    def _with(self, value):
-        # with/1: Create a new list with an appended object.
-        return self.strategy.fetch_all(self) + [value]
+        @method.py("Void", "Int", "Any")
+        def put(self, index, value):
+            top = len(self._vals)
+            if index == top:
+                self._vals.append(self._unwrap(value))
+            elif 0 <= index < top:
+                self._vals[index] = self._unwrap(value)
+            else:
+                raise userError(u"put/2: Index %d out of bounds for list of length %d" %
+                               (index, top))
 
-    @method("List", "Int", "Any", _verb="with")
-    def withIndex(self, index, value):
-        # Make a new ConstList.
-        if index >= self.strategy.size(self) or index < 0:
-            raise userError(u"with/2: Index %d is out of bounds" % index)
-        new = self.strategy.fetch_all(self)[:]
-        new[index] = value
-        return new
+        @method("Int")
+        def size(self):
+            return len(self._vals)
 
-    @method("Any")
-    def _makeIterator(self):
-        # This is the behavior we choose: Iterating over a FlexList grants
-        # iteration over a snapshot of the list's contents at that point.
-        return listIterator(self.strategy.fetch_all(self))
+        @method("Bool")
+        def isEmpty(self):
+            return not self._vals
 
-    @method("Map")
-    def asMap(self):
-        from typhon.objects.collections.maps import monteMap
-        d = monteMap()
-        for i, o in enumerate(self.strategy.fetch_all(self)):
-            d[IntObject(i)] = o
-        return d
+        @method("List", "Int")
+        def slice(self, start):
+            if start < 0:
+                raise userError(u"slice/1: Negative start")
+            return [wrap(val) for val in self._vals[start:]]
 
-    @method("Set")
-    def asSet(self):
-        from typhon.objects.collections.maps import monteMap
-        d = monteMap()
-        for o in self.strategy.fetch_all(self):
-            d[o] = None
-        return d
+        @method("List", "Int", "Int", _verb="slice")
+        def _slice(self, start, stop):
+            if start < 0:
+                raise userError(u"slice/2: Negative start")
+            if stop < 0:
+                raise userError(u"slice/2: Negative stop")
+            return [wrap(val) for val in self._vals[start:stop]]
 
-    @method.py("Bool", "Any")
-    def contains(self, needle):
-        from typhon.objects.equality import EQUAL, optSame
-        for specimen in self.strategy.fetch_all(self):
-            if optSame(needle, specimen) is EQUAL:
-                return True
-        return False
+        @method.py("List")
+        def snapshot(self):
+            return self.wrapped()
 
-    @method("Int", "Any")
-    def indexOf(self, needle):
-        from typhon.objects.equality import EQUAL, optSame
-        for index, specimen in enumerate(self.strategy.fetch_all(self)):
-            if optSame(needle, specimen) is EQUAL:
-                return index
-        return -1
+    return SpecializedFlexList
 
-    @method.py("Void", "Int", "Any")
-    def put(self, index, value):
-        top = self.strategy.size(self)
-        if 0 <= index < top:
-            self.strategy.store(self, index, value)
-        else:
-            raise userError(u"put/2: Index %d out of bounds for list of length %d" %
-                           (index, top))
+anyFlexList = makeFlexList(lambda val: val, lambda val: val,
+                           lambda printer, val: val.call(u"_printOn", [printer]))
 
-    @method("Int")
-    def size(self):
-        return self.strategy.size(self)
-
-    @method("Bool")
-    def isEmpty(self):
-        return not self.strategy.size(self)
-
-    @method("List", "Int")
-    def slice(self, start):
-        if start < 0:
-            raise userError(u"slice/1: Negative start")
-        stop = self.strategy.size(self)
-        return self.strategy.slice(self, start, stop)
-
-    @method("List", "Int", "Int", _verb="slice")
-    def _slice(self, start, stop):
-        if start < 0:
-            raise userError(u"slice/2: Negative start")
-        if stop < 0:
-            raise userError(u"slice/2: Negative stop")
-        return self.strategy.slice(self, start, stop)
-
-    @method.py("List")
-    def snapshot(self):
-        return self.strategy.fetch_all(self)
+def flexListFromGuard(wrappedVals, guard):
+    return anyFlexList(wrappedVals, guard)
 
 
 def unwrapList(o, ej=None):
@@ -272,7 +298,7 @@ def unwrapList(o, ej=None):
     if isinstance(l, ConstList):
         return l.objs
     if isinstance(l, FlexList):
-        return l.strategy.fetch_all(l)
+        return l.wrapped()
     throwStr(ej, u"Not a list!")
 
 def isList(obj):
@@ -391,21 +417,22 @@ class ConstList(Object):
             l.append(piece)
         return l[:]
 
-    @method("Any")
-    def diverge(self):
-        # XXX is this copy necessary?
-        return FlexList(self.objs[:])
+    @method("Any", "Any")
+    def diverge(self, guard):
+        # NB: No copy needed here.
+        return anyFlexList(self.objs, guard)
+
+    @method("Any", _verb="diverge")
+    def _divergeAny(self):
+        # NB: No copy needed here.
+        return anyFlexList(self.objs)
 
     @method("Any", "Int")
     def get(self, index):
         # Lookup by index.
-        if index < 0:
-            raise userError(u"get/1: Index %d cannot be negative" % index)
-
-        try:
-            return self.objs[index]
-        except IndexError:
+        if not 0 <= index < len(self.objs):
             raise userError(u"get/1: Index %d is out of bounds" % index)
+        return self.objs[index]
 
     @method("Any")
     def last(self):
