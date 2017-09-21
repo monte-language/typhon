@@ -1224,11 +1224,33 @@ bind nastPrinterActions := [
     },
     "ObjectExpr" => def printObjectExpr(self, out, _priority) as DeepFrozenStamp {
         out.print("object _")
-        if ((def aas := self.getAuditors()).size() > 0) {
+        def aas := self.getAuditors()
+        if (aas.size() > 1 ||
+                aas[0].getNodeName() != "NullExpr") {
             out.print(" implements ")
             nastPrintListOn("", aas, "", out)
         }
-        out.print("{...}")
+        out.println(" {")
+        for m in (self.getMethods() + self.getMatchers()) {
+            nastPrint(m, out.indent(INDENT), 1)
+        }
+        out.println("")
+        out.print("}")
+    },
+    "Method" => def printMethod(self, out, _priority) as DeepFrozenStamp {
+        nastPrintExprSuiteOn(fn{
+            out.print("method ")
+            out.print(self.getVerb())
+            out.print(" (")
+            out.print(", ".join(self.getParams() + [self.getNamedParams()]))
+            out.print(")")
+        }, self.getBody(), false, out)
+    },
+    "Matcher" => def printMatcher(self, out, _priority) as DeepFrozenStamp {
+        nastPrintExprSuiteOn(fn{
+            out.print("matcher ")
+            out.print(self.getPattern())
+        }, self.getBody(), false, out)
     },
     "TryExpr" => def printTryExpr(self, out, _priority) as DeepFrozenStamp {
         nastPrintExprSuiteOn(fn{out.print("try")}, self.getBody(), false, out)

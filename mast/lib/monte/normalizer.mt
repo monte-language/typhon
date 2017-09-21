@@ -274,13 +274,12 @@ object normalize0 as DeepFrozen:
                                     builder.NounExpr(npi, span))
                 def g := meth.getResultGuard()
                 def gb := if (g == null) {
-                    binder.getC(meth.getBody())
+                    methBinder.getC(meth.getBody())
                 } else {
-                    builder.CallExpr(
-                        builder.NounExpr("_guardCoerce", span),
-                        "run",
-                        [binder.getI(meth.getBody()), binder.getI(g), null],
-                        [], span)
+                    methBinder.guardCoerceFor(methBinder.getI(meth.getBody()),
+                                              methBinder.getI(g),
+                                              builder.NounExpr("throw", span),
+                                              span)
                 }
                 methods.push(
                     builder."Method"(meth.getDocstring(), meth.getVerb(),
@@ -297,16 +296,28 @@ object normalize0 as DeepFrozen:
                         matcherBinder.getC(matcher.getBody()), span), span))
             def oi := builder.NounExpr(
                 binder.addTempBinding(
-                    builder.ObjectExpr(ast.getDoc(), ai,
-                                       methods, matchers, span), span),
+                    builder.ObjectExpr(ast.getDocstring(), ai,
+                                       methods.snapshot(),
+                                       matchers.snapshot(),
+                                       span), span),
                 span)
             def selfNames := [].diverge()
-            object binderWrapper extends binder:
-                to addBinding(name, expr):
-                    selfNames.push(name)
-                    return binder.addBinding(name, expr)
-            normalize0.pattern(ast.getPattern(), null, oi,
-                               builder, binderWrapper)
+            def op := ast.getName()
+            if (op.getNodeName() == "FinalPattern"):
+                def on := op.getNoun().getName()
+                binder.addBinding(on, builder.FinalSlot(oi, ai[0], span), span)
+                selfNames.push(on)
+            else if (op.getNodeName() == "VarPattern"):
+                def on := op.getNoun().getName()
+                binder.addBinding(on, builder.VarSlot(oi, ai[0], span), span)
+                selfNames.push(on)
+            else:
+                object binderWrapper extends binder:
+                    to addBinding(name, expr, span):
+                        selfNames.push(name)
+                        return binder.addBinding(name, expr, span)
+                normalize0.pattern(op, null, oi,
+                                   builder, binderWrapper)
             for name in (selfNames):
                 binder.addTempBinding(builder.CallExpr(
                     builder.NounExpr("_selfBind", span),
