@@ -1309,7 +1309,7 @@ bind nastPrinterActions := [
         out.print("in ")
         nastPrint(self.getBody(), out, 1)
     },
-    "FinalSlot" => def printFinalSlot(self, out, _priority) as DeepFrozenStamp {
+    "FinalBinding" => def printFinalSlot(self, out, _priority) as DeepFrozenStamp {
         out.print("_makeFinalSlot(")
         nastPrint(self.getValue(), out, 1)
         out.print(", ")
@@ -1320,7 +1320,7 @@ bind nastPrinterActions := [
         }
         out.print(")")
     },
-    "VarSlot" => def printVarSlot(self, out, _priority) as DeepFrozenStamp {
+    "VarBinding" => def printVarSlot(self, out, _priority) as DeepFrozenStamp {
         out.print("_makeVarSlot(")
         nastPrint(self.getValue(), out, 1)
         out.print(", ")
@@ -1331,7 +1331,7 @@ bind nastPrinterActions := [
         }
         out.print(")")
     },
-    "TempSlot" => def printTempSlot(self, out, _priority) as DeepFrozenStamp {
+    "TempBinding" => def printTempSlot(self, out, _priority) as DeepFrozenStamp {
         out.print("_makeTempSlot(")
         nastPrint(self.getValue(), out, 1)
         out.print(")")

@@ -936,7 +936,7 @@ def makeNAST() as DeepFrozenStamp:
     def AExpr
     def CExpr
     def Expr := Any[AExpr, CExpr]
-    def [bind AExpr, bind CExpr, NamedArg, NamedParam,
+    def [bind AExpr, bind CExpr, NamedArg,
          Method_, Matcher, Slot, Let_,
          astBuilder_] := makeAstBuilder([
     "AExpr" => [
@@ -951,7 +951,6 @@ def makeNAST() as DeepFrozenStamp:
         "MetaStateExpr"   => [].asMap(),
     ],
     "CExpr" => [
-        "AssignExpr"      => ["lvalue" => Str, "rvalue" => Expr],
         "CallExpr"        => ["receiver" => AExpr, "verb" => Str,
                               "args*" => AExpr, "namedArgs*" => NamedArg],
         "ObjectExpr"      => ["docstring?" => Str, "auditors*" => AExpr,
@@ -968,9 +967,6 @@ def makeNAST() as DeepFrozenStamp:
     "NamedArg" => [
         "NamedArgExpr"       => ["key" => AExpr, "value" => AExpr],
     ],
-    "NamedParam" => [
-        "NamedParam"       => ["key" => AExpr, "value" => Str, "default?" => AExpr],
-    ],
     "Method" => [
         "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Str,
                      "namedParams" => Str, "body" => Expr],
@@ -979,9 +975,9 @@ def makeNAST() as DeepFrozenStamp:
         "Matcher" => ["pattern" => Str, "body" => Expr]
     ],
     "Slot" => [
-        "TempSlot"        => ["value" => Expr],
-        "FinalSlot"       => ["value" => Expr, "guard" => AExpr],
-        "VarSlot"         => ["value" => Expr, "guard" => AExpr],
+        "TempBinding"        => ["value" => Expr],
+        "FinalBinding"       => ["value" => Expr, "guard" => AExpr],
+        "VarBinding"         => ["value" => Expr, "guard" => AExpr],
     ],
     "Let" => [
         "LetDef" => ["name" => Str, "expr" => Any[Slot, Expr]],
@@ -991,3 +987,59 @@ def makeNAST() as DeepFrozenStamp:
 
 
 def nastBuilder :DeepFrozen := makeNAST()
+
+def makeLayoutNAST() as DeepFrozenStamp:
+    def AExpr
+    def CExpr
+    def Expr := Any[AExpr, CExpr]
+    def [bind AExpr, bind CExpr, NamedArg,
+         Method_, Matcher, Slot, Let_,
+         astBuilder_] := makeAstBuilder([
+    "AExpr" => [
+        "IntExpr"         => ["i" => Int],
+        "StrExpr"         => ["s" => Str],
+        "DoubleExpr"      => ["d" => Double],
+        "CharExpr"        => ["c" => Char],
+        "NullExpr"        => [].asMap(),
+        "NounExpr"        => ["name" => Str, "layout" => Any],
+        "BindingExpr"     => ["name" => Str, "layout" => Any],
+        "MetaContextExpr" => ["layout" => Any],
+        "MetaStateExpr"   => ["layout" => Any],
+    ],
+    "CExpr" => [
+        "CallExpr"        => ["receiver" => AExpr, "verb" => Str,
+                              "args*" => AExpr, "namedArgs*" => NamedArg],
+        "ObjectExpr"      => ["docstring?" => Str, "auditors*" => AExpr,
+                              "methods*" => Method_, "matchers*" => Matcher,
+                              "layout" => Any],
+        "TryExpr"         => ["body" => Expr, "catchPattern" => Str,
+                              "catchBody" => Expr],
+        "FinallyExpr"     => ["body" => Expr, "unwinder" => Expr],
+        "EscapeOnlyExpr"  => ["ejectorPattern" => Str, "body" => Expr],
+        "EscapeExpr"      => ["ejectorPattern" => Str, "body" => Expr,
+                              "catchPattern" => Str, "catchBody" => Expr],
+        "IfExpr"          => ["test" => AExpr, "then" => Expr, "else" => Expr],
+        "LetExpr"         => ["defs*" => Let_, "body" => Expr, "layout" => Any],
+    ],
+    "NamedArg" => [
+        "NamedArgExpr"       => ["key" => AExpr, "value" => AExpr],
+    ],
+    "Method" => [
+        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Str,
+                     "namedParams" => Str, "body" => Expr, "layout" => Any],
+    ],
+    "Matcher" => [
+        "Matcher" => ["pattern" => Str, "body" => Expr, "layout" => Any]
+    ],
+    "Slot" => [
+        "TempBinding"        => ["value" => Expr],
+        "FinalBinding"       => ["value" => Expr, "guard" => AExpr],
+        "VarBinding"         => ["value" => Expr, "guard" => AExpr],
+    ],
+    "Let" => [
+        "LetDef" => ["name" => Str, "expr" => Any[Slot, Expr]],
+    ],
+    ], [].asMap(), nastPrint)
+    return astBuilder_
+
+def layoutNASTBuilder :DeepFrozen := makeLayoutNAST()

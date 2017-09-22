@@ -109,7 +109,7 @@ def makeLetBinder(n, builder, [defs :Set, outerRenames, &seq]) as DeepFrozen:
             letBindings.push([name, bindingExpr, span])
         to addTempBinding(bindingExpr, span):
             def s := gensym("__t")
-            letBinder.addBinding(s, builder.TempSlot(bindingExpr, span), span)
+            letBinder.addBinding(s, builder.TempBinding(bindingExpr, span), span)
             return s
         to getDefs():
             return [defs | [for b in (letBindings) b[0]].asSet(), renames, &seq]
@@ -187,10 +187,13 @@ object normalize0 as DeepFrozen:
         def span := ast.getSpan()
         def nn := ast.getNodeName()
         if (nn == "AssignExpr"):
-            return builder.AssignExpr(ast.getLvalue().getName(),
-                                      normalize0.normalize(ast.getRvalue(),
-                                                           builder, binder.getDefs()),
-                                      span)
+            def bi := binder.addTempBinding(
+                builder.CallExpr(
+                    builder.BindingExpr(ast.getLvalue().getName(), span),
+                    "get", [], [], span), span)
+            return builder.CallExpr(
+                builder.NounExpr(bi, span),
+                "put", [binder.getI(ast.getRvalue())], [], span)
         else if (nn == "DefExpr"):
             def expr := binder.getI(ast.getExpr())
             def ei := if ((def ex := ast.getExit()) != null) {
@@ -305,11 +308,11 @@ object normalize0 as DeepFrozen:
             def op := ast.getName()
             if (op.getNodeName() == "FinalPattern"):
                 def on := op.getNoun().getName()
-                binder.addBinding(on, builder.FinalSlot(oi, ai[0], span), span)
+                binder.addBinding(on, builder.FinalBinding(oi, ai[0], span), span)
                 selfNames.push(on)
             else if (op.getNodeName() == "VarPattern"):
                 def on := op.getNoun().getName()
-                binder.addBinding(on, builder.VarSlot(oi, ai[0], span), span)
+                binder.addBinding(on, builder.VarBinding(oi, ai[0], span), span)
                 selfNames.push(on)
             else:
                 object binderWrapper extends binder:
@@ -354,9 +357,9 @@ object normalize0 as DeepFrozen:
 
 
         if (pn == "FinalPattern"):
-            matchSlot(builder.FinalSlot)
+            matchSlot(builder.FinalBinding)
         else if (pn == "VarPattern"):
-            matchSlot(builder.VarSlot)
+            matchSlot(builder.VarBinding)
         else if (pn == "BindingPattern"):
             binder.addBinding(p.getNoun().getName(), si, span)
         else if (pn == "IgnorePattern"):
