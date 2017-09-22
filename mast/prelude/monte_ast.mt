@@ -953,7 +953,8 @@ def makeNAST() as DeepFrozenStamp:
     "CExpr" => [
         "CallExpr"        => ["receiver" => AExpr, "verb" => Str,
                               "args*" => AExpr, "namedArgs*" => NamedArg],
-        "ObjectExpr"      => ["docstring?" => Str, "auditors*" => AExpr,
+        "ObjectExpr"      => ["docstring?" => Str, "kernelAST" => Any,
+                              "auditors*" => AExpr,
                               "methods*" => Method_, "matchers*" => Matcher],
         "TryExpr"         => ["body" => Expr, "catchPattern" => Str,
                               "catchBody" => Expr],
@@ -1009,7 +1010,8 @@ def makeLayoutNAST() as DeepFrozenStamp:
     "CExpr" => [
         "CallExpr"        => ["receiver" => AExpr, "verb" => Str,
                               "args*" => AExpr, "namedArgs*" => NamedArg],
-        "ObjectExpr"      => ["docstring?" => Str, "auditors*" => AExpr,
+        "ObjectExpr"      => ["docstring?" => Str, "kernelAST" => Any,
+                              "auditors*" => AExpr,
                               "methods*" => Method_, "matchers*" => Matcher,
                               "layout" => Any],
         "TryExpr"         => ["body" => Expr, "catchPattern" => Str,

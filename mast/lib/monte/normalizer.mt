@@ -299,7 +299,8 @@ object normalize0 as DeepFrozen:
                         matcherBinder.getC(matcher.getBody()), span), span))
             def oi := builder.NounExpr(
                 binder.addTempBinding(
-                    builder.ObjectExpr(ast.getDocstring(), ai,
+                    builder.ObjectExpr(ast.getDocstring(),
+                                       ast, ai,
                                        methods.snapshot(),
                                        matchers.snapshot(),
                                        span), span),
