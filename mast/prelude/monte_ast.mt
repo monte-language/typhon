@@ -945,8 +945,9 @@ def makeNAST() as DeepFrozenStamp:
         "DoubleExpr"      => ["d" => Double],
         "CharExpr"        => ["c" => Char],
         "NullExpr"        => [].asMap(),
-        "NounExpr"        => ["name" => Str],
-        "BindingExpr"     => ["name" => Str],
+        "NounExpr"        => ["name" => Str, "index" => Int],
+        "BindingExpr"     => ["name" => Str, "index" => Int],
+        "TempExpr"        => ["index" => Int],
         "MetaContextExpr" => [].asMap(),
         "MetaStateExpr"   => [].asMap(),
     ],
@@ -956,24 +957,27 @@ def makeNAST() as DeepFrozenStamp:
         "ObjectExpr"      => ["docstring?" => Str, "kernelAST" => Any,
                               "auditors*" => AExpr,
                               "methods*" => Method_, "matchers*" => Matcher],
-        "TryExpr"         => ["body" => Expr, "catchPattern" => Str,
+        "TryExpr"         => ["body" => Expr, "catchPattern" => Int,
                               "catchBody" => Expr],
         "FinallyExpr"     => ["body" => Expr, "unwinder" => Expr],
-        "EscapeOnlyExpr"  => ["ejectorPattern" => Str, "body" => Expr],
-        "EscapeExpr"      => ["ejectorPattern" => Str, "body" => Expr,
-                              "catchPattern" => Str, "catchBody" => Expr],
+        "EscapeOnlyExpr"  => ["ejectorPattern" => Int, "body" => Expr],
+        "EscapeExpr"      => ["ejectorPattern" => Int, "body" => Expr,
+                              "catchPattern" => Int, "catchBody" => Expr],
         "IfExpr"          => ["test" => AExpr, "then" => Expr, "else" => Expr],
         "LetExpr"         => ["defs*" => Let_, "body" => Expr],
+        "GuardCoerce"     => ["specimen" => AExpr, "guard" => AExpr, "exit" => AExpr],
+        "ListCoerce"      => ["specimen" => AExpr, "size" => Int, "exit" => AExpr],
+        "NamedParamExtract" => ["params" => AExpr, "key" => AExpr, "default" => AExpr],
     ],
     "NamedArg" => [
         "NamedArgExpr"       => ["key" => AExpr, "value" => AExpr],
     ],
     "Method" => [
-        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Str,
-                     "namedParams" => Str, "body" => Expr],
+        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Int,
+                     "namedParams" => Int, "body" => Expr],
     ],
     "Matcher" => [
-        "Matcher" => ["pattern" => Str, "body" => Expr]
+        "Matcher" => ["pattern" => Int, "body" => Expr]
     ],
     "Slot" => [
         "TempBinding"        => ["value" => Expr],
@@ -981,7 +985,7 @@ def makeNAST() as DeepFrozenStamp:
         "VarBinding"         => ["value" => Expr, "guard" => AExpr],
     ],
     "Let" => [
-        "LetDef" => ["name" => Str, "expr" => Any[Slot, Expr]],
+        "LetDef" => ["index" => Int,  "expr" => Any[Slot, Expr], "name" => Str],
     ],
     ], [].asMap(), nastPrint)
     return astBuilder_
@@ -1004,6 +1008,7 @@ def makeLayoutNAST() as DeepFrozenStamp:
         "NullExpr"        => [].asMap(),
         "NounExpr"        => ["name" => Str, "layout" => Any],
         "BindingExpr"     => ["name" => Str, "layout" => Any],
+        "TempExpr"        => ["index" => Int, "layout" => Any],
         "MetaContextExpr" => ["layout" => Any],
         "MetaStateExpr"   => ["layout" => Any],
     ],
@@ -1039,7 +1044,7 @@ def makeLayoutNAST() as DeepFrozenStamp:
         "VarBinding"         => ["value" => Expr, "guard" => AExpr],
     ],
     "Let" => [
-        "LetDef" => ["name" => Str, "expr" => Any[Slot, Expr]],
+        "LetDef" => ["index" => Int, "expr" => Any[Slot, Expr], "name" => Str],
     ],
     ], [].asMap(), nastPrint)
     return astBuilder_

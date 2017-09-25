@@ -76,16 +76,8 @@ def normalize(ast, builder) as DeepFrozen:
 
     return ast.transform(normalizeTransformer)
 
-def makeLetBinder(n, builder, [defs :Set, outerRenames, &seq]) as DeepFrozen:
+def makeLetBinder(n, builder, [outerNames, &seq, parent]) as DeepFrozen:
     def letBindings := [].diverge()
-    def renames := outerRenames.diverge()
-    def gensym(s):
-        var gs := `${s}_$seq`
-        seq += 1
-        while (defs.contains(gs)):
-            gs := `${s}_$seq`
-            seq += 1
-        return gs
     return object letBinder:
         to getI(ast0):
             return n.immediate(ast0, builder, letBinder)
@@ -93,44 +85,43 @@ def makeLetBinder(n, builder, [defs :Set, outerRenames, &seq]) as DeepFrozen:
             return n.complex(ast0, builder, letBinder)
         to getP(patt, exit_, expr):
             n.pattern(patt, exit_, expr, builder, letBinder)
-        to addBinding(var name :Str, bindingExpr, span):
-            for [lname, _, lspan] in (letBindings):
-                if (lname == name):
+        to addBinding(name :Str, bindingExpr, span):
+            for [_, _, lname, lspan] in (letBindings):
+                if (lname != "" && lname == name):
                     throw(`Error at $span: "$name" already defined at $lspan`)
-            if (defs.contains(name)):
-                def newname := gensym(name)
-                renames[name] := newname
-                name := newname
-            letBindings.push([name, bindingExpr, span])
+            letBindings.push([seq += 1, bindingExpr, name, span])
+            return seq
         to addTempBinding(bindingExpr, span):
-            def s := gensym("__t")
-            letBinder.addBinding(s, builder.TempBinding(bindingExpr, span), span)
-            return s
+            return letBinder.addBinding("", builder.TempBinding(bindingExpr, span), span)
         to getDefs():
-            return [defs | [for b in (letBindings) b[0]].asSet(), renames, &seq]
-        to getRename(n):
-            return renames.fetch(n, fn {n})
+            return [outerNames, &seq, letBinder]
+        to getSeq():
+            return seq
         to getBindings():
             return letBindings
-        to gensym(n):
-            return gensym(n)
+        to getIndexFor(name, span):
+            for [idx, binding, lname, _] in (letBindings):
+                if (lname == name):
+                    return idx
+            if (parent == null):
+                if ((def i := outerNames.indexOf(name)) >= 0):
+                    return i
+                throw(`Undefined name $name at $span`)
+
+            return parent.getIndexFor(name, span)
 
         to guardCoerceFor(speci, gi, ei, span):
-            return builder.NounExpr(
-                letBinder.addTempBinding(builder.CallExpr(
-                    builder.NounExpr("_guardCoerce", span),
-                    "run",
-                    [speci, gi, ei],
-                    [], span), span), span)
+            return builder.TempExpr(
+                letBinder.addTempBinding(builder.GuardCoerce(speci, gi, ei, span), span), span)
         to letExprFor(expr, span):
             return if (letBindings.isEmpty()) {
                 expr
-            } else if (expr.getNodeName() == "NounExpr" &&
-                       (letBindings.last()[0] == expr.getName())) {
+            } else if (expr.getNodeName() == "TempExpr" &&
+                       (letBindings.last()[0] == expr.getIndex())) {
                 if (letBindings.size() == 1) {
                     letBindings[0][1].getValue()
                 } else {
-                builder.LetExpr([for args in
+                    builder.LetExpr([for args in
                                  (letBindings.slice(0, letBindings.size() - 1))
                                  M.call(builder, "LetDef", args, [].asMap())],
                                 letBindings.last()[1].getValue(), span)
@@ -141,11 +132,19 @@ def makeLetBinder(n, builder, [defs :Set, outerRenames, &seq]) as DeepFrozen:
                                 expr, span)
             }
 
+def makeParamBinder(count, [outerNames, &seq, parent]) as DeepFrozen:
+    def paramBindings := [for _ in (0..!count) seq += 1]
+    object paramBinder:
+        to getIndexFor(name, span):
+            return parent.getIndexFor(name, span)
+        to getDefs():
+            return [outerNames, &seq, parent]
+    return [paramBinder, paramBindings]
+
 object normalize0 as DeepFrozen:
-    to run(ast, builder):
-        var gensym_seq :Int := 0
-        return normalize0.normalize(ast, builder, [[].asSet(), [].asMap(),
-                                                   &gensym_seq])
+    to run(ast, outerNames, builder):
+        var gensym_seq :Int := outerNames.size() - 1
+        return normalize0.normalize(ast, builder, [outerNames, &gensym_seq, null])
 
     to normalize(ast, builder, defs):
         def binder := makeLetBinder(normalize0, builder, defs)
@@ -165,16 +164,23 @@ object normalize0 as DeepFrozen:
                 match v {throw("Unknown literal " + M.toQuote(v))}
             }
         else if (nn == "NounExpr"):
-            return builder.NounExpr(binder.getRename(ast.getName()), span)
+            if (ast.getName() == "null"):
+                return builder.NullExpr(span)
+            return builder.NounExpr(
+                def n := ast.getName(),
+                binder.getIndexFor(n, span),
+                span)
         else if (nn == "BindingExpr"):
             return builder.BindingExpr(
-                binder.getRename(ast.getNoun().getName()), span)
+                def n := ast.getNoun().getName(),
+                binder.getIndexFor(n, span),
+                span)
         else if (nn == "MetaContextExpr"):
             return builder.MetaContextExpr()
         else if (nn == "MetaStateExpr"):
             return builder.MetaStateExpr()
         else:
-            return builder.NounExpr(
+            return builder.TempExpr(
                 binder.addTempBinding(normalize0.complex(ast, builder, binder), span),
                 span)
 
@@ -184,10 +190,12 @@ object normalize0 as DeepFrozen:
         if (nn == "AssignExpr"):
             def bi := binder.addTempBinding(
                 builder.CallExpr(
-                    builder.BindingExpr(ast.getLvalue().getName(), span),
+                    builder.BindingExpr(def n := ast.getLvalue().getName(),
+                                        binder.getIndexFor(n, span),
+                                        span),
                     "get", [], [], span), span)
             return builder.CallExpr(
-                builder.NounExpr(bi, span),
+                builder.TempExpr(bi, span),
                 "put", [binder.getI(ast.getRvalue())], [], span)
         else if (nn == "DefExpr"):
             def expr := binder.getI(ast.getExpr())
@@ -197,19 +205,19 @@ object normalize0 as DeepFrozen:
             binder.getP(ast.getPattern(), ei, expr)
             return expr
         else if (nn == "EscapeExpr"):
-            def ei := binder.gensym("_ej")
-            def innerBinder := makeLetBinder(normalize0, builder, binder.getDefs())
-            innerBinder.getP(ast.getEjectorPattern(), null, builder.NounExpr(ei, span))
+            def [paramBox, [ei]] := makeParamBinder(1, binder.getDefs())
+            def innerBinder := makeLetBinder(normalize0, builder, paramBox.getDefs())
+            innerBinder.getP(ast.getEjectorPattern(), null, builder.TempExpr(ei, span))
             def b := innerBinder.letExprFor(innerBinder.getC(ast.getBody()), span)
             if (ast.getCatchPattern() == null):
                 return builder.EscapeOnlyExpr(ei, b, span)
             else:
-                def ci := binder.gensym("_p")
-                def catchBinder := makeLetBinder(normalize0, builder, binder.getDefs())
-                catchBinder.getP(ast.getCatchPattern(), null, builder.NounExpr(ci, span))
+                def [paramBox, [pi]] := makeParamBinder(1, binder.getDefs())
+                def catchBinder := makeLetBinder(normalize0, builder, paramBox.getDefs())
+                catchBinder.getP(ast.getCatchPattern(), null, builder.TempExpr(pi, span))
                 def cb := catchBinder.letExprFor(catchBinder.getC(ast.getCatchBody()),
                                                  span)
-                return builder.EscapeExpr(ei, b, ci, cb, span)
+                return builder.EscapeExpr(ei, b, pi, cb, span)
         else if (nn == "FinallyExpr"):
             return builder.FinallyExpr(
                 normalize0.normalize(ast.getBody(), builder, binder.getDefs()),
@@ -240,9 +248,9 @@ object normalize0 as DeepFrozen:
             return binder.getC(exprs.last())
         else if (nn == "CatchExpr"):
             def b := normalize0.normalize(ast.getBody(), builder, binder.getDefs())
-            def ci := binder.gensym("_p")
-            def catchBinder := makeLetBinder(normalize0, builder, binder.getDefs())
-            catchBinder.getP(ast.getPattern(), null, builder.NounExpr(ci, span))
+            def [paramBox, [ci]] := makeParamBinder(1, binder.getDefs())
+            def catchBinder := makeLetBinder(normalize0, builder, paramBox.getDefs())
+            catchBinder.getP(ast.getPattern(), null, builder.TempExpr(ci, span))
             def cb := catchBinder.letExprFor(
                 catchBinder.getC(ast.getCatcher()), span)
             return builder.TryExpr(b, ci, cb, span)
@@ -252,32 +260,47 @@ object normalize0 as DeepFrozen:
             } else {
                 [builder.NullExpr(span)]
             } + [for aud in (ast.getAuditors()) binder.getI(aud)]
+            def objectBinding
+            def oi := builder.TempExpr(binder.addBinding("", objectBinding, span), span)
+            def op := ast.getName()
+            # FinalPattern/VarPattern must be handled specially to implement 'as'.
+            if (ast.getAsExpr() != null):
+                if (op.getNodeName() == "FinalPattern"):
+                    binder.addBinding(op.getNoun().getName(),
+                                      builder.FinalBinding(oi, ai[0], span), span)
+                else if (op.getNodeName() == "VarPattern"):
+                    binder.addBinding(op.getNoun().getName(),
+                                      builder.VarBinding(oi, ai[0], span), span)
+                else:
+                    throw("\"as\" in ObjectExpr not allowed with complex pattern")
+            else:
+                normalize0.pattern(op, null, oi, builder, binder)
+
             def methods := [].diverge()
             def matchers := [].diverge()
             for meth in (ast.getScript().getMethods()):
-                # uh oh, this won't catch redefs of self-binding. hopefully
-                # expander does
-                def methBinder := makeLetBinder(normalize0, builder, binder.getDefs())
-                def parami := [for p in (meth.getParams())
-                               methBinder.gensym("_param")]
-                def namedParami := methBinder.gensym("_namedParams")
+                def [paramBox, allParami] := makeParamBinder(meth.getParams().size() + 1,
+                                                             binder.getDefs())
+                def methBinder := makeLetBinder(normalize0, builder,
+                                                paramBox.getDefs())
+                def parami := allParami.slice(0, allParami.size() - 1)
+                def namedParami := allParami.last()
                 for i => p in (meth.getParams()):
-                    methBinder.getP(p, null, builder.NounExpr(parami[i], span))
+                    methBinder.getP(p, null, builder.TempExpr(parami[i], span))
                 for np in (meth.getNamedParams()):
-                    def npi := methBinder.addTempBinding(
-                        builder.CallExpr(builder.NounExpr("_namedParamExtract", span),
-                                         "run", [methBinder.getI(np.getKey()),
-                                                 methBinder.getI(np.getDefault())],
-                                         [], span), span)
+                    def npi := methBinder.addTempBinding(builder.NamedParamExtract(
+                        namedParami,
+                        methBinder.getI(np.getKey()),
+                        methBinder.getI(np.getDefault()), span), span)
                     methBinder.getP(np.getValue(), null,
-                                    builder.NounExpr(npi, span))
+                                    builder.TempExpr(npi, span))
                 def g := meth.getResultGuard()
                 def gb := if (g == null) {
                     methBinder.getC(meth.getBody())
                 } else {
                     methBinder.guardCoerceFor(methBinder.getI(meth.getBody()),
                                               methBinder.getI(g),
-                                              builder.NounExpr("throw", span),
+                                              builder.NullExpr(span),
                                               span)
                 }
                 methods.push(
@@ -285,47 +308,20 @@ object normalize0 as DeepFrozen:
                                      parami, namedParami,
                                      methBinder.letExprFor(gb, span), span))
             for matcher in (ast.getScript().getMatchers()):
+                def [paramBox, [mi]] := makeParamBinder(1, binder.getDefs())
                 def matcherBinder := makeLetBinder(normalize0, builder,
-                                                   binder.getDefs())
-                def mi := matcherBinder.gensym("_msg")
+                                                   paramBox.getDefs())
                 matcherBinder.getP(matcher.getPattern(), null,
-                                   builder.NounExpr(mi, span))
+                                   builder.TempExpr(mi, span))
                 matchers.push(builder.Matcher(
                     mi, matcherBinder.letExprFor(
                         matcherBinder.getC(matcher.getBody()), span), span))
-            def oi := builder.NounExpr(
-                binder.addTempBinding(
-                    builder.ObjectExpr(ast.getDocstring(),
-                                       ast, ai,
-                                       methods.snapshot(),
-                                       matchers.snapshot(),
-                                       span), span),
-                span)
-            def selfNames := [].diverge()
-            def op := ast.getName()
-            if (op.getNodeName() == "FinalPattern"):
-                def on := op.getNoun().getName()
-                binder.addBinding(on, builder.FinalBinding(oi, ai[0], span), span)
-                selfNames.push(on)
-            else if (op.getNodeName() == "VarPattern"):
-                def on := op.getNoun().getName()
-                binder.addBinding(on, builder.VarBinding(oi, ai[0], span), span)
-                selfNames.push(on)
-            else:
-                object binderWrapper extends binder:
-                    to addBinding(name, expr, span):
-                        selfNames.push(name)
-                        return binder.addBinding(name, expr, span)
-                normalize0.pattern(op, null, oi,
-                                   builder, binderWrapper)
-            for name in (selfNames):
-                binder.addTempBinding(builder.CallExpr(
-                    builder.NounExpr("_selfBind", span),
-                    "run",
-                    [oi,
-                     builder.StrExpr(binder.getRename(name), span),
-                     builder.NounExpr(binder.getRename(name), span)],
-                    [], span), span)
+            bind objectBinding := builder.TempBinding(builder.ObjectExpr(
+                ast.getDocstring(),
+                ast, ai,
+                methods.snapshot(),
+                matchers.snapshot(),
+                span), span)
             return oi
         else if (["LiteralExpr", "NounExpr", "BindingExpr", "MetaStateExpr", "MetaContextExpr"].contains(nn)):
             return normalize0.immediate(ast, builder, binder)
@@ -335,7 +331,7 @@ object normalize0 as DeepFrozen:
     to pattern(p, exitNode, si, builder, binder):
         def span := p.getSpan()
         def ei := if (exitNode == null) {
-            builder.NounExpr("throw", span)
+            builder.NullExpr(span)
         } else {
             exitNode
         }
@@ -368,20 +364,18 @@ object normalize0 as DeepFrozen:
             binder.guardCoerceFor(si, gi, ei, span)
         else if (pn == "ListPattern"):
             def ps := p.getPatterns()
-            def li := builder.NounExpr(
-                binder.addTempBinding(builder.CallExpr(
-                    builder.NounExpr("_listCoerce", span),
-                    "run", [si, builder.IntExpr(ps.size(), span), ei],
-                    [], span), span), span)
+            def li := builder.TempExpr(
+                binder.addTempBinding(builder.ListCoerce(
+                    si, ps.size(), ei, span), span), span)
             for idx => subp in (ps):
                 def subi := binder.addTempBinding(
                     builder.CallExpr(li, "get",
                                      [builder.IntExpr(idx, span)], [],
                                      span), span)
-                binder.getP(subp, ei, builder.NounExpr(subi, span))
+                binder.getP(subp, ei, builder.TempExpr(subi, span))
         else if (pn == "ViaPattern"):
             def vi := binder.getI(p.getExpr())
             def si2 := binder.addTempBinding(builder.CallExpr(
                 vi, "run", [si, ei], [], span), span)
-            binder.getP(p.getPattern(), exitNode, builder.NounExpr(si2, span))
+            binder.getP(p.getPattern(), exitNode, builder.TempExpr(si2, span))
         return binder.getBindings()
