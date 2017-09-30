@@ -96,7 +96,7 @@ entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 	mast/lib/entropy/pcg.mast
 
 parsers: mast/lib/parsers/html.mast \
-	mast/lib/parsers/regex.mast
+	mast/lib/parse.mast
 
 games: mast/games/mafia.mast
 

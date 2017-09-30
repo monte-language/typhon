@@ -3,9 +3,11 @@ import "tests/proptests" =~ [
     => arb :DeepFrozen,
     => prop :DeepFrozen,
 ]
-exports (Regex)
+exports (Parse)
 
-interface _Regex :DeepFrozen:
+# Parse: Dead-simple reasonably-performing incremental parser toolkit.
+
+interface _Parse :DeepFrozen:
     "Regular expressions."
 
     to possible() :Bool:
@@ -25,7 +27,7 @@ interface _Regex :DeepFrozen:
     to leaders() :Set:
         "Compute the set of values which can advance this regular expression."
 
-object nullRegex as DeepFrozen implements _Regex:
+object nullParse as DeepFrozen implements _Parse:
     "∅, the regular expression which doesn't match."
 
     to _printOn(out) :Void:
@@ -37,13 +39,16 @@ object nullRegex as DeepFrozen implements _Regex:
     to acceptsEmpty() :Bool:
         return false
 
-    to derive(_) :_Regex:
-        return nullRegex
+    to derive(_) :_Parse:
+        return nullParse
 
     to leaders() :Set:
         return [].asSet()
 
-object emptyRegex as DeepFrozen implements _Regex:
+    to size() :Int:
+        return 1
+
+object emptyParse as DeepFrozen implements _Parse:
     "ε, the regular expression which matches only the empty string."
 
     to _printOn(out) :Void:
@@ -55,30 +60,30 @@ object emptyRegex as DeepFrozen implements _Regex:
     to acceptsEmpty() :Bool:
         return true
 
-    to derive(_) :_Regex:
-        return nullRegex
+    to derive(_) :_Parse:
+        return nullParse
 
     to leaders() :Set:
         return [].asSet()
 
-    to asString() :Str:
-        return ""
+    to size() :Int:
+        return 1
 
-object Regex extends _Regex as DeepFrozen:
+object Parse extends _Parse as DeepFrozen:
     "Regular expressions."
 
-    to "ø"() :Regex:
-        return nullRegex
+    to null() :Parse:
+        return nullParse
 
-    to "ε"() :Regex:
-        return emptyRegex
+    to empty() :Parse:
+        return emptyParse
 
-    to "|"(left :DeepFrozen, right :DeepFrozen) :Regex:
+    to alt(left :DeepFrozen, right :DeepFrozen) :Parse:
         if (!left.possible()):
             return right
         if (!right.possible()):
             return left
-        return object orRegex as DeepFrozen implements _Regex:
+        return object orParse as DeepFrozen implements _Parse:
             "An alternating regular expression."
 
             to _printOn(out) :Void:
@@ -90,21 +95,24 @@ object Regex extends _Regex as DeepFrozen:
             to acceptsEmpty() :Bool:
                 return left.acceptsEmpty() || right.acceptsEmpty()
 
-            to derive(character) :Regex:
-                return Regex."|"(left.derive(character),
+            to derive(character) :Parse:
+                return Parse.alt(left.derive(character),
                                  right.derive(character))
 
             to leaders() :Set:
                 return left.leaders() | right.leaders()
 
-    to "&"(left :DeepFrozen, right :DeepFrozen) :Regex:
+            to size() :Int:
+                return left.size() + right.size()
+
+    to cat(left :DeepFrozen, right :DeepFrozen) :Parse:
         if (!left.possible() || !right.possible()):
-            return nullRegex
+            return nullParse
 
         # Honest Q: Would using a lazy slot to cache left.acceptsEmpty() help here
         # at all? ~ C.
 
-        return object andRegex as DeepFrozen implements _Regex:
+        return object catParse as DeepFrozen implements _Parse:
             "A catenated regular expression."
 
             to _printOn(out) :Void:
@@ -116,10 +124,10 @@ object Regex extends _Regex as DeepFrozen:
             to acceptsEmpty() :Bool:
                 return left.acceptsEmpty() && right.acceptsEmpty()
 
-            to derive(character) :_Regex:
-                def deriveLeft := Regex."&"(left.derive(character), right)
+            to derive(character) :_Parse:
+                def deriveLeft := Parse.cat(left.derive(character), right)
                 return if (left.acceptsEmpty()):
-                    Regex."|"(deriveLeft, right.derive(character))
+                    Parse.alt(deriveLeft, right.derive(character))
                 else:
                     deriveLeft
 
@@ -129,12 +137,15 @@ object Regex extends _Regex as DeepFrozen:
                 else:
                     left.leaders()
 
-    to "*"(regex :DeepFrozen) :Regex:
-        return object starRegex as DeepFrozen implements _Regex:
+            to size() :Int:
+                return left.size() + right.size()
+
+    to repeat(parse :DeepFrozen) :Parse:
+        return object starParse as DeepFrozen implements _Parse:
             "The Kleene star of a regular expression."
 
             to _printOn(out) :Void:
-                out.print(`$regex*`)
+                out.print(`$parse*`)
 
             to possible() :Bool:
                 return true
@@ -142,14 +153,17 @@ object Regex extends _Regex as DeepFrozen:
             to acceptsEmpty() :Bool:
                 return true
 
-            to derive(character) :_Regex:
-                return Regex."&"(regex.derive(character), starRegex)
+            to derive(character) :_Parse:
+                return Parse.cat(parse.derive(character), starParse)
 
             to leaders() :Set:
-                return regex.leaders()
+                return parse.leaders()
 
-    to "=="(value :DeepFrozen) :Regex:
-        return object equalRegex as DeepFrozen implements _Regex:
+            to size() :Int:
+                return 1 + parse.size()
+
+    to exactly(value :DeepFrozen) :Parse:
+        return object equalParse as DeepFrozen implements _Parse:
             "A regular expression that matches exactly one value."
 
             to _printOn(out) :Void:
@@ -161,17 +175,20 @@ object Regex extends _Regex as DeepFrozen:
             to acceptsEmpty() :Bool:
                 return false
 
-            to derive(character) :_Regex:
+            to derive(character) :_Parse:
                 return if (character == value):
-                    emptyRegex
+                    emptyParse
                 else:
-                    nullRegex
+                    nullParse
 
             to leaders() :Set:
                 return [value].asSet()
 
-    to "∈"(values :Set[DeepFrozen]) :Regex:
-        return object containsRegex as DeepFrozen implements _Regex:
+            to size() :Int:
+                return 1
+
+    to contains(values :Set[DeepFrozen]) :Parse:
+        return object containsParse as DeepFrozen implements _Parse:
             "A regular expression that matches any value in a finite set."
 
             to _printOn(out) :Void:
@@ -184,17 +201,20 @@ object Regex extends _Regex as DeepFrozen:
             to acceptsEmpty() :Bool:
                 return false
 
-            to derive(character) :_Regex:
+            to derive(character) :_Parse:
                 for value in (values):
                     if (value == character):
-                        return emptyRegex
-                return nullRegex
+                        return emptyParse
+                return nullParse
 
             to leaders() :Set:
                 return values
 
-    to "?"(predicate :DeepFrozen) :Regex:
-        return object suchThatRegex as DeepFrozen implements _Regex:
+            to size() :Int:
+                return 1
+
+    to suchThat(predicate :DeepFrozen) :Parse:
+        return object suchThatParse as DeepFrozen implements _Parse:
             "A regular expression that matches any value passing a predicate.
 
              The predicate must be `DeepFrozen` to prevent certain stateful
@@ -209,32 +229,35 @@ object Regex extends _Regex as DeepFrozen:
             to acceptsEmpty() :Bool:
                 return false
 
-            to derive(character) :_Regex:
+            to derive(character) :_Parse:
                 return if (predicate(character)):
-                    emptyRegex
+                    emptyParse
                 else:
-                    nullRegex
+                    nullParse
 
             to leaders() :Set:
                 return [].asSet()
 
-    match [=="anyOf", rs, _]:
-        var regex := nullRegex
-        for r in (rs):
-            regex := Regex."|"(regex, r)
-        regex
+            to size() :Int:
+                return 1
 
-def regexCat(hy, c1, c2):
-    def regex := Regex."&"(Regex."=="(c1), Regex."=="(c2))
-    hy.assert(regex.derive(c1).derive(c2).acceptsEmpty())
+    match [=="anyOf", rs, _]:
+        var parse := nullParse
+        for r in (rs):
+            parse := Parse.alt(parse, r)
+        parse
+
+def parseCat(hy, c1, c2):
+    def parse := Parse.cat(Parse.exactly(c1), Parse.exactly(c2))
+    hy.assert(parse.derive(c1).derive(c2).acceptsEmpty())
 
 unittest([
-    prop.test([arb.Char(), arb.Char()], regexCat),
+    prop.test([arb.Char(), arb.Char()], parseCat),
 ])
 
 object exprHoleTag as DeepFrozen {}
 
-def makeQuasiLexer(regex :DeepFrozen, classifier :DeepFrozen, name :Str) as DeepFrozen:
+def makeQuasiLexer(lexer :DeepFrozen, classifier :DeepFrozen, name :Str) as DeepFrozen:
     return def makeQuasiParser(parserMaker :DeepFrozen) as DeepFrozen:
         return object quasiParser as DeepFrozen:
             to _printOn(out):
@@ -251,15 +274,15 @@ def makeQuasiLexer(regex :DeepFrozen, classifier :DeepFrozen, name :Str) as Deep
                         # Pre-scanned for us.
                         tokens.push([".hole.", index, null])
                     else:
-                        var scanner := regex
+                        var scanner := lexer
                         var start :Int := 0
                         for i => c in (piece):
-                            traceln(`scanner $scanner start $start i $i c $c`)
+                            traceln(`scanner $scanner size ${scanner.size()}`)
                             scanner derive= (c)
                             if (!scanner.acceptsEmpty()):
                                 # Scanner just died; mark the token and
                                 # reboot.
-                                scanner := regex.derive(c)
+                                scanner := lexer.derive(c)
                                 if (i <= start):
                                     throw("Scanner failed to make progress")
                                 def s := piece.slice(start, i)
@@ -275,12 +298,12 @@ def makeQuasiLexer(regex :DeepFrozen, classifier :DeepFrozen, name :Str) as Deep
                 return def ruleSubstituter.substitute(_):
                     return tree
 
-def parens := Regex."∈"("()".asSet())
+def parens := Parse.contains("()".asSet())
 def identifier(members :Set[DeepFrozen]) as DeepFrozen:
-    def char := Regex."∈"(members)
-    return Regex."&"(char, Regex."*"(char))
-def whitespace := Regex."*"(Regex."∈"(" \n".asSet()))
-def comma := Regex."=="(',')
+    def char := Parse.contains(members)
+    return Parse.cat(char, Parse.repeat(char))
+def whitespace := Parse.repeat(Parse.contains(" \n".asSet()))
+def comma := Parse.exactly(',')
 def class(s :Str) :Str as DeepFrozen:
     return switch (s) {
         match =="(" { "openParen" }
@@ -292,6 +315,6 @@ def class(s :Str) :Str as DeepFrozen:
 def makeParser() as DeepFrozen:
     return fn tokens { tokens }
 def idChars := "abcdefghijklmnopqrstuvwxyz.".asSet()
-def termPieces := Regex.anyOf(parens, identifier(idChars), whitespace, comma)
+def termPieces := Parse.anyOf(parens, identifier(idChars), whitespace, comma)
 def ::"term``" := makeQuasiLexer(termPieces, class, "term")(makeParser)
 traceln(term`add(.int.(${2}), .int.(${5}))`)
