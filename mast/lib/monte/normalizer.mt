@@ -379,3 +379,235 @@ object normalize0 as DeepFrozen:
                 vi, "run", [si, ei], [], span), span)
             binder.getP(p.getPattern(), exitNode, builder.TempExpr(si2, span))
         return binder.getBindings()
+
+# Storage class. Binding and usage are used to determine how to store refs in
+# the object frame.
+
+def [NOUN :Int, BINDING :Int] := [0, 1]
+
+def layoutScopes(ast, outerNames, builder, inRepl) as DeepFrozen:
+    def allNames := [].asMap().diverge()
+    def accessTypes := [].asMap().diverge()
+    def _layoutScopes(ast):
+        def layoutExprList(exprs):
+            var freeNames := [].asSet()
+            def newExprs := [].diverge()
+            var localSize := 0
+            for a in (ast.getAuditors):
+                def [new, newFreeNames, ls] := _layoutScopes(a)
+                freeNames |= newFreeNames
+                localSize := localSize.max(ls)
+                newExprs.push(new)
+            return [newExprs, freeNames, localSize]
+        def nn := ast.getNodeName()
+        if (nn == "TempExpr"):
+           return [builder.TempExpr(ast.getIndex(), ast.getSpan()), [].asSet(), 0]
+        else if (nn == "LetExpr"):
+            def newExprs := [].diverge()
+            def newDefs := [].diverge()
+            def boundNames := [].asSet()
+            var freeNames := [].asSet()
+            var subLocalSize := 0
+            # Process all of the exprs in let defs, process the body, then go
+            # through defs _again_ to construct final form with storage type
+            # (NOUN, BINDING).
+            for letdef in (ast.getDefs()):
+                def binding := letdef.getExpr()
+                if (!binding.getNodeName().endsWith("Binding")):
+                    def [newBinding, bFreeNames, bLocalSize] := _layoutScopes(binding)
+                    newExprs.push(newBinding)
+                    freeNames |= bFreeNames
+                    subLocalSize max= (bLocalSize)
+                else:
+                    def expr := binding.getValue()
+                    def [newExpr, eFreeNames, eLocalSize] := _layoutScopes(expr)
+                    freeNames |= eFreeNames
+                    subLocalSize max= (eLocalSize)
+                    def guard := if (["VarBinding", "FinalBinding"].contains(
+                        binding.getNodeName())) {
+                            def [newGuard, gf, gls] := _layoutScopes(binding.getGuard())
+                            freeNames |= gf
+                            subLocalSize max= (gls)
+                            newGuard
+                        } else { null }
+                    newExprs.push([newExpr, guard])
+            def [newBody, bFreeNames, bLocalSize] := _layoutScopes(ast.getBody())
+            freeNames |= bFreeNames
+            subLocalSize max= (bLocalSize)
+            # All references to names bound in this LetExpr have now been seen.
+            # We can now decide which bindings can be deslotified. Since
+            # deslotification requires rewriting NounExprs, we leave that for a
+            # future pass. Maybe.
+            for i => letdef in (ast.getDefs()):
+                def binding := letdef.getExpr()
+                def bn := binding.getNodeName()
+                if (bn == "TempBinding"):
+                    def [newVal, ==null] := newExprs[i]
+                    newDefs.push(builder.LetDef(
+                        builder.TempBinding(newVal, binding.getSpan()),
+                        letdef.getSpan()))
+                else:
+                    def newBinding := if (bn == "FinalBinding") {
+                        def [newVal, newGuard] := newExprs[i]
+                        builder.FinalBinding(newVal, newGuard,
+                                             accessTypes[letdef.getIndex()],
+                                             binding.getSpan())
+                    } else if (bn == "VarBinding") {
+                        def [newVal, newGuard] := newExprs[i]
+                        builder.VarBinding(newVal, newGuard,
+                                           accessTypes[letdef.getIndex()],
+                                           binding.getSpan())
+                    } else {
+                        newExprs[i]
+                    }
+                    allNames[letdef.getIndex()] := [letdef.getName(), newExpr]
+                    boundNames.include(letdef.getIndex())
+                    newDefs.push(builder.LetDef(letdef.getIndex(), newBinding,
+                                                letdef.getName(), letdef.getSpan()))
+            return [builder.LetExpr(newDefs, newBody, ast.getSpan()),
+                    freeNames &! boundNames,
+                    boundNames.size() + subLocalSize]
+        else if (nn == "ObjectExpr"):
+            def [newAuditors, aNames, localSize] := layoutExprList(ast.getAuditors())
+            def newMethods := [].diverge()
+            var frameNames := [].asSet()
+            for m in (ast.getMethods()):
+                def [newBody, mFreeNames, mls] := _layoutScopes(m.getBody())
+                frameNames |= mFreeNames
+                newMethods.push(builder.Method(
+                    m.getDocstring(), m.getVerb(),
+                    m.getParams(), m.getNamedParams(),
+                    newBody, mls, m.getSpan()))
+            def newMatchers := [].diverge()
+            for m in (ast.getMatchers()):
+                def [newBody, mFreeNames, mls] := _layoutScopes(m.getBody())
+                frameNames |= mFreeNames
+                newMatchers.push(builder.Matcher(
+                    m.getPattern(), newBody, mls, m.getSpan()))
+           return [builder.ObjectExpr(ast.getDocstring(), ast.getKernelAST(),
+                                      newAuditors.snapshot(),
+                                      newMethods.snapshot(),
+                                      newMatchers.snapshot(),
+                                      frameNames, ast.getSpan()),
+                   aNames,
+                   localSize]
+       else if (nn == "NounExpr"):
+           if (!accessTypes.contains(ast.getIndex())):
+               accessTypes[ast.getIndex()] := NOUN
+            return [builder.NounExpr(ast.getName(), ast.getIndex(), ast.getSpan()),
+                    [ast.getIndex()].asSet(), 0]
+       else if (nn == "BindingExpr"):
+           accessTypes[ast.getIndex()] := BINDING
+            return [builder.NounExpr(ast.getName(), ast.getIndex(), ast.getSpan()),
+                    [ast.getIndex()].asSet(), 0]
+       else if (nn == "IntExpr"):
+           return [builder.IntExpr(ast.getI(), ast.getSpan()), [].asSet(), 0]
+       else if (nn == "DoubleExpr"):
+           return [builder.DoubleExpr(ast.getD(), ast.getSpan()), [].asSet(), 0]
+       else if (nn == "CharExpr"):
+           return [builder.CharExpr(ast.getC(), ast.getSpan()), [].asSet(), 0]
+       else if (nn == "StrExpr"):
+           return [builder.StrExpr(ast.getS(), ast.getSpan()), [].asSet(), 0]
+       else if (nn == "NullExpr"):
+           return [builder.NullExpr(ast.getSpan()), [].asSet(), 0]
+       else if (nn == "MetaContextExpr"):
+           return [builder.MetaContextExpr(ast.getSpan()), [].asSet(), 0]
+       else if (nn == "MetaStateExpr"):
+           return [builder.MetaContextExpr(ast.getSpan()), [].asSet(), 0]
+       else if (nn == "CallExpr"):
+           def [newRcvr, rFreeNames, rLocalSize] := _layoutScopes(ast.getReceiver())
+           def [newArgs, aFreeNames, aLocalSize] := layoutExprList(ast.getArgs())
+           def [newNArgs, nFreeNames, nLocalSize] := layoutExprList(ast.getNamedArgs())
+           return [builder.CallExpr(newRcvr, ast.getVerb(), newArgs, newNArgs,
+                                    ast.getSpan()),
+                   rFreeNames | aFreeNames | nFreeNames,
+                   rLocalSize.max(aLocalSize).max(nLocalSize)]
+       else if (nn == "NamedArgExpr"):
+           def [newK, kFreeNames, kLocalSize] := _layoutScopes(ast.getKey())
+           def [newV, vFreeNames, vLocalSize] := _layoutScopes(ast.getValue())
+           return [builder.NamedArgExpr(newK, newV, ast.getSpan()),
+                   kFreeNames | vFreeNames,
+                   kLocalSize.max(vLocalSize)]
+       else if (nn == "TryExpr"):
+           def [newBody, bFreeNames, bLocalSize] := _layoutScopes(ast.getBody())
+           def [newCatchBody, cFreeNames, cLocalSize] := _layoutScopes(
+               ast.getCatchBody())
+           return [builder.TryExpr(newBody, ast.getCatchPattern(),
+                                   newCatchBody, ast.getSpan()),
+                   bFreeNames | cFreeNames,
+                   bLocalSize.max(cLocalSize)]
+       else if (nn == "FinallyExpr"):
+           def [newBody, bFreeNames, bLocalSize] := _layoutScopes(ast.getBody())
+           def [newUnwinder, uFreeNames, uLocalSize] := _layoutScopes(
+               ast.getUnwinder())
+           return [builder.FinallyExpr(newBody, newUnwinder, ast.getSpan()),
+                   bFreeNames | uFreeNames,
+                   bLocalSize.max(uLocalSize)]
+       else if (nn == "EscapeExpr"):
+           def [newBody, bFreeNames, bLocalSize] := _layoutScopes(ast.getBody())
+           def [newCatchBody, cFreeNames, cLocalSize] := _layoutScopes(
+               ast.getCatchBody())
+           return [builder.EscapeExpr(ast.getEjectorPattern(), newBody,
+                                      ast.getCatchPattern(), newCatchBody,
+                                      ast.getSpan()),
+                   bFreeNames | cFreeNames,
+                   bLocalSize.max(cLocalSize)]
+       else if (nn == "EscapeOnlyExpr"):
+           def [newBody, bFreeNames, bLocalSize] := _layoutScopes(ast.getBody())
+           return [builder.EscapeOnlyExpr(ast.getEjectorPattern(), newBody,
+                                      ast.getSpan()),
+                   bFreeNames,
+                   bLocalSize]
+       else if (nn == "IfExpr"):
+           def [newTest, tFreeNames, tLocalSize] := _layoutScopes(ast.getTest())
+           def [newConsq, cFreeNames, cLocalSize] := _layoutScopes(ast.getThen())
+           def [newAlt, aFreeNames, aLocalSize] := _layoutScopes(ast.getElse())
+           return [builder.IfExpr(newTest, newConsq, newAlt, ast.getSpan()),
+                   tFreeNames | cFreeNames | aFreeNames,
+                   tLocalSize.max(cLocalSize).max(aLocalSize)]
+       else if (nn == "GuardCoerce"):
+           def [newSpecimen, sFreeNames, sLocalSize] := _layoutScopes(
+               ast.getSpecimen())
+           def [newGuard, gFreeNames, gLocalSize] := _layoutScopes(ast.getGuard())
+           def [newExit, eFreeNames, eLocalSize] := _layoutScopes(ast.getExit())
+           return [builder.GuardCoerce(newSpecimen, newGuard, newExit, ast.getSpan()),
+                   sFreeNames | gFreeNames | eFreeNames,
+                   sLocalSize.max(gLocalSize).max(eLocalSize)]
+       else if (nn == "ListCoerce"):
+           def [newSpecimen, sFreeNames, sLocalSize] := _layoutScopes(
+               ast.getSpecimen())
+           def [newExit, eFreeNames, eLocalSize] := _layoutScopes(ast.getExit())
+           return [builder.GuardCoerce(newSpecimen, ast.getSize(), newExit,
+                                       ast.getSpan()),
+                   sFreeNames | eFreeNames,
+                   sLocalSize.max(eLocalSize)]
+       else if (nn == "NamedParamExtract"):
+           def [newParams, pFreeNames, pLocalSize] := _layoutScopes(
+               ast.getParams())
+           def [newKey, kFreeNames, kLocalSize] := _layoutScopes(ast.getKey())
+           def [newDefault, dFreeNames, dLocalSize] := _layoutScopes(ast.getDefault())
+           return [builder.NamedParamExtract(newParams, newKey, newDefault,
+                                             ast.getSpan()),
+                   pFreeNames | kFreeNames | dFreeNames,
+                   pLocalSize.max(kLocalSize).max(dLocalSize)]
+
+    def [expr, freeNames, localSize] := _layoutScopes(ast)
+
+
+#AssignExpr -> slot.put()
+#lay out frames, rewrite nouns
+#expand MetaStateExpr
+#----------------------
+#Expand MetaContextExpr
+#elide trivial 'return'
+#replace CallExpr verbs with atoms
+
+"
+Layout plan:
+LetDef gains originalName
+LetDef name becomes index
+Global list of definitions built
+Global list of noun severity built
+Walk AST building frames for objects
+
+"

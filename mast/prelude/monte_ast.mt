@@ -1006,11 +1006,11 @@ def makeLayoutNAST() as DeepFrozenStamp:
         "DoubleExpr"      => ["d" => Double],
         "CharExpr"        => ["c" => Char],
         "NullExpr"        => [].asMap(),
-        "NounExpr"        => ["name" => Str, "layout" => Any],
-        "BindingExpr"     => ["name" => Str, "layout" => Any],
-        "TempExpr"        => ["index" => Int, "layout" => Any],
-        "MetaContextExpr" => ["layout" => Any],
-        "MetaStateExpr"   => ["layout" => Any],
+        "NounExpr"        => ["name" => Str, "index" => Int],
+        "BindingExpr"     => ["name" => Str, "index" => Int],
+        "TempExpr"        => ["index" => Int],
+        "MetaContextExpr" => [],
+        "MetaStateExpr"   => [],
     ],
     "CExpr" => [
         "CallExpr"        => ["receiver" => AExpr, "verb" => Str,
@@ -1018,7 +1018,7 @@ def makeLayoutNAST() as DeepFrozenStamp:
         "ObjectExpr"      => ["docstring?" => Str, "kernelAST" => Any,
                               "auditors*" => AExpr,
                               "methods*" => Method_, "matchers*" => Matcher,
-                              "layout" => Any],
+                              "frame" => List[Int]],
         "TryExpr"         => ["body" => Expr, "catchPattern" => Str,
                               "catchBody" => Expr],
         "FinallyExpr"     => ["body" => Expr, "unwinder" => Expr],
@@ -1026,22 +1026,22 @@ def makeLayoutNAST() as DeepFrozenStamp:
         "EscapeExpr"      => ["ejectorPattern" => Str, "body" => Expr,
                               "catchPattern" => Str, "catchBody" => Expr],
         "IfExpr"          => ["test" => AExpr, "then" => Expr, "else" => Expr],
-        "LetExpr"         => ["defs*" => Let_, "body" => Expr, "layout" => Any],
+        "LetExpr"         => ["defs*" => Let_, "body" => Expr],
     ],
     "NamedArg" => [
         "NamedArgExpr"       => ["key" => AExpr, "value" => AExpr],
     ],
     "Method" => [
         "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Str,
-                     "namedParams" => Str, "body" => Expr, "layout" => Any],
+                     "namedParams" => Str, "body" => Expr, "localSize" => Int],
     ],
     "Matcher" => [
-        "Matcher" => ["pattern" => Str, "body" => Expr, "layout" => Any]
+        "Matcher" => ["pattern" => Str, "body" => Expr, "localSize" => Int]
     ],
     "Slot" => [
         "TempBinding"        => ["value" => Expr],
-        "FinalBinding"       => ["value" => Expr, "guard" => AExpr],
-        "VarBinding"         => ["value" => Expr, "guard" => AExpr],
+        "FinalBinding"       => ["value" => Expr, "guard" => AExpr, "storage" => Int],
+        "VarBinding"         => ["value" => Expr, "guard" => AExpr, "storage" => Int],
     ],
     "Let" => [
         "LetDef" => ["index" => Int, "expr" => Any[Slot, Expr], "name" => Str],
