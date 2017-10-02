@@ -6,6 +6,176 @@ import "tests/proptests" =~ [
 exports (Parse)
 
 # Parse: Dead-simple reasonably-performing incremental parser toolkit.
+# Based largely on this functional pearl:
+# http://matt.might.net/papers/might2011derivatives.pdf
+
+def sameYet :DeepFrozen := _equalizer.sameYet
+
+# Not using lib/enum because we might need to be prelude-compatible at some
+# point in the future.
+object empty as DeepFrozen {}
+object eps as DeepFrozen {}
+object ::"δ" as DeepFrozen {}
+def cat(l, r) as DeepFrozen:
+    return if (sameYet(l, empty) || sameYet(r, empty)) { empty } else {
+        [cat, l, r]
+    }
+def alt(l, r) as DeepFrozen:
+    return if (sameYet(l, empty)) { r } else if (sameYet(r, empty)) {
+        l
+    } else { [alt, l, r] }
+object rep as DeepFrozen {}
+def red(l, f) as DeepFrozen:
+    return if (sameYet(l, empty)) { empty } else { [red, l, f] }
+
+object exactly as DeepFrozen {}
+# These two are not in the original paper. They permit matching inputs not by
+# equality, but by set membership or predicate.
+object oneOf as DeepFrozen {}
+object suchThat as DeepFrozen {}
+
+def singletonSet(specimen, ej) as DeepFrozen:
+    def s :Set ? (s.size() == 1) exit ej := specimen
+    return s.asList()[0]
+
+def memo(f :DeepFrozen, default :DeepFrozen) as DeepFrozen:
+    object pending as DeepFrozen {}
+    return object memoized as DeepFrozen:
+        match [=="run", topArgs, _]:
+            var table := [].asMap()
+            object recurse:
+                match [=="run", args, _]:
+                    if (table.contains(args)):
+                        if (table[args] == pending):
+                            def rv := M.call(default, "run", args, [].asMap())
+                            table with= (args, rv)
+                            rv
+                        else:
+                            table[args]
+                    else:
+                        table with= (args, pending)
+                        def rv := M.call(f, "run", [recurse] + args, [].asMap())
+                        table with= (args, rv)
+                        rv
+            M.call(recurse, "run", topArgs, [].asMap())
+
+def compact(parser) as DeepFrozen:
+    var table := [].asMap()
+    def turn(before):
+        def [p, r] := Ref.promise()
+        table with= (before, p)
+        return def it.into(after):
+            r.resolve(after)
+            return after
+    def go(p):
+        if (table.contains(p)):
+            return table[p]
+        return switch (p) {
+            match [==::"δ", l] { turn(p).into([::"δ", compact(l)]) }
+            match [==cat, l, r] {
+                turn(p).into(if (l =~ [==eps, via (singletonSet) t1]) {
+                        red(go(r), fn t2 { [t1, t2] })
+                    } else if (r =~ [==eps, via (singletonSet) t2]) {
+                        red(go(l), fn t1 { [t1, t2] })
+                    } else { cat(go(l), go(r)) })
+            }
+            match [==alt, l, r] { turn(p).into(alt(compact(l), compact(r))) }
+            match [==rep, l] {
+                if (l == empty) { [eps, [[]].asSet()] } else {
+                    turn(p).into([rep, go(l)])
+                }
+            }
+            match [==red, l, f] {
+                switch (l) {
+                    match [==eps, ts] { [eps, [for t in (ts) f(t)].asSet()] }
+                    match [==red, p, g] { red(go(p), fn x { f(g(x)) }) }
+                    match _ { red(go(l), f) }
+                }
+            }
+            match p { p }
+        }
+    return go(parser)
+
+def derive(c, parser) as DeepFrozen:
+    var table := [].asMap()
+    def turn(before):
+        def [p, r] := Ref.promise()
+        table with= (before, p)
+        return def it.into(after):
+            r.resolve(after)
+            return after
+    def go(p):
+        if (table.contains(p)):
+            return table[p]
+        return switch (p) {
+            match ==empty { empty }
+            match [==eps, _] { empty }
+            match [==::"δ", _] { empty }
+            match [==cat, l, r] {
+                turn(p).into({
+                    def dl := go(l)
+                    def dr := go(r)
+                    alt(cat(dl, r), cat([::"δ", l], dr))
+                })
+            }
+            match [==alt, l, r] {
+                turn(p).into(alt(go(l), go(r)))
+            }
+            match [==rep, l] {
+                turn(p).into({
+                    red(cat(go(l), parser), fn [h, t] { [h] + t })
+                })
+            }
+            match [==red, l, f] { red(go(l), f) }
+
+            match [==exactly, specimen] {
+                if (c == specimen) { [eps, [c].asSet()] } else { empty }
+            }
+            match [==oneOf, set] {
+                if (set.contains(c)) { [eps, [c].asSet()] } else { empty }
+            }
+            match [==suchThat, pred] {
+                if (pred(c)) { [eps, [c].asSet()] } else { empty }
+            }
+        }
+    return go(parser)
+
+def _parseNull(parseNull, parser) :Set as DeepFrozen:
+    return switch (parser) {
+        match ==empty { [].asSet() }
+        match [==eps, set] { set }
+        match [==::"δ", l] { parseNull(l) }
+        match [==cat, l, r] {
+            var s := [].asSet()
+            for p in (parseNull(l)) {
+                for q in (parseNull(r)) { s with= ([p, q]) }
+            }
+            s
+        }
+        match [==alt, l, r] { parseNull(l) | parseNull(r) }
+        match [==rep, _] { [[]].asSet() }
+        match [==red, l, f] { [for x in (parseNull(l)) f(x)].asSet() }
+
+        match [==exactly, _] { [].asSet() }
+        match [==oneOf, _] { [].asSet() }
+        match [==suchThat, _] { [].asSet() }
+    }
+def _parseNullDefault(_) as DeepFrozen { return [].asSet() }
+def parseNull :DeepFrozen := memo(_parseNull, _parseNullDefault)
+
+def testParse(var parser, input):
+    traceln(`initial parser $parser`)
+    for char in (input):
+        parser := compact(derive(char, parser))
+        # parser := derive(char, parser)
+        traceln(`fed char $char, got $parser`)
+    return parseNull(parser)
+
+def testParser := alt(cat(testParser, alt([exactly, 'a'], [exactly, 'b'])),
+                      [eps, [null].asSet()])
+traceln(testParse(testParser, "aaaaaa"))
+traceln(testParse(testParser, "ababab"))
+traceln(testParse(testParser, "abacab"))
 
 interface _Parse :DeepFrozen:
     "Regular expressions."
