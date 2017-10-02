@@ -12,8 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.rarithmetic import intmask
-
 from typhon.autohelp import autohelp, method
 from typhon.errors import WrongType, userError
 from typhon.objects.collections.helpers import monteSet
@@ -40,24 +38,8 @@ class ConstSet(Object):
         return toString(self)
 
     def computeHash(self, depth):
-        # We're in too deep.
-        if depth <= 0:
-            # We won't continue hashing, but we do have to be certain that we
-            # are settled.
-            if self.isSettled():
-                # That settles it; they're settled.
-                return -63
-            else:
-                raise userError(u"Must be settled")
-
-
-        # Hash as if we were a list, but change our starting seed so that
-        # we won't hash exactly equal.
-        x = 0x3456789
-        for obj in self.objectSet.keys():
-            y = obj.computeHash(depth - 1)
-            x = intmask((1000003 * x) ^ y)
-        return x
+        from typhon.objects.equality import samenessHash
+        return samenessHash(self, depth, None)
 
     @method("Void", "Any")
     def _printOn(self, printer):

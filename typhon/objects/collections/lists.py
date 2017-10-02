@@ -13,7 +13,6 @@
 # under the License.
 
 from rpython.rlib.jit import elidable
-from rpython.rlib.rarithmetic import intmask
 
 from typhon.autohelp import autohelp, method
 from typhon.errors import Ejecting, userError
@@ -329,22 +328,8 @@ class ConstList(Object):
         printer.call(u"print", [StrObject(u"]")])
 
     def computeHash(self, depth):
-        # We're in too deep.
-        if depth <= 0:
-            # We won't continue hashing, but we do have to be certain that we
-            # are settled.
-            if self.isSettled():
-                # That settles it; they're settled.
-                return -1
-            else:
-                raise userError(u"Must be settled")
-
-        # Use the same sort of hashing as CPython's tuple hash.
-        x = 0x345678
-        for obj in self.objs:
-            y = obj.computeHash(depth - 1)
-            x = intmask((1000003 * x) ^ y)
-        return x
+        from typhon.objects.equality import samenessHash
+        return samenessHash(self, depth, None)
 
     def isSettled(self, sofar=None):
         # Check for a usable cached result.

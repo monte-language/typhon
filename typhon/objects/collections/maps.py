@@ -12,8 +12,6 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.rarithmetic import intmask
-
 from typhon.autohelp import autohelp, method
 from typhon.errors import WrongType, userError
 from typhon.objects.collections.helpers import (KeySorter, ValueSorter,
@@ -80,25 +78,8 @@ class ConstMap(Object):
             printer.call(u"print", [StrObject(u".asMap()")])
 
     def computeHash(self, depth):
-        # We're in too deep.
-        if depth <= 0:
-            # We won't continue hashing, but we do have to be certain that we
-            # are settled.
-            if self.isSettled():
-                # That settles it; they're settled.
-                return -127
-            else:
-                raise userError(u"Must be settled")
-
-
-        # Nest each item, hand-unwrapping the nested "tuple" of items.
-        x = 0x345678
-        for k, v in self.objectMap.items():
-            y = 0x345678
-            y = intmask((1000003 * y) ^ k.computeHash(depth - 1))
-            y = intmask((1000003 * y) ^ v.computeHash(depth - 1))
-            x = intmask((1000003 * x) ^ y)
-        return x
+        from typhon.objects.equality import samenessHash
+        return samenessHash(self, depth, None)
 
     @staticmethod
     @profileTyphon("_makeMap.fromPairs/1")
