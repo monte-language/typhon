@@ -171,11 +171,11 @@ def testParse(var parser, input):
         traceln(`fed char $char, got $parser`)
     return parseNull(parser)
 
-def testParser := alt(cat(testParser, alt([exactly, 'a'], [exactly, 'b'])),
-                      [eps, [null].asSet()])
-traceln(testParse(testParser, "aaaaaa"))
-traceln(testParse(testParser, "ababab"))
-traceln(testParse(testParser, "abacab"))
+# def testParser := alt(cat(testParser, alt([exactly, 'a'], [exactly, 'b'])),
+#                       [eps, [null].asSet()])
+# traceln(testParse(testParser, "aaaaaa"))
+# traceln(testParse(testParser, "ababab"))
+# traceln(testParse(testParser, "abacab"))
 
 interface _Parse :DeepFrozen:
     "Regular expressions."
