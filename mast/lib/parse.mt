@@ -11,13 +11,31 @@ exports (Parse)
 
 def sameYet :DeepFrozen := _equalizer.sameYet
 
+def singletonSet(specimen, ej) as DeepFrozen:
+    def s :Set ? (s.size() == 1) exit ej := specimen
+    return s.asList()[0]
+
 # Not using lib/enum because we might need to be prelude-compatible at some
 # point in the future.
 object empty as DeepFrozen {}
 object eps as DeepFrozen {}
 object ::"δ" as DeepFrozen {}
+def red(l, f) as DeepFrozen:
+    return if (sameYet(l, empty)) {
+        empty
+    } else if (l =~ [==eps, ts]) {
+        [eps, [for t in (ts) f(t)].asSet()]
+    } else if (l =~ [==red, p, g]) {
+        [red, p, fn t { f(g(t)) }]
+    } else { [red, l, f] }
 def cat(l, r) as DeepFrozen:
-    return if (sameYet(l, empty) || sameYet(r, empty)) { empty } else {
+    return if (sameYet(l, empty) || sameYet(r, empty)) {
+        empty
+    } else if (l =~ [==eps, via (singletonSet) t1]) {
+        red(r, fn t2 { [t1, t2] })
+    } else if (r =~ [==eps, via (singletonSet) t2]) {
+        red(l, fn t1 { [t1, t2] })
+    } else {
         [cat, l, r]
     }
 def alt(l, r) as DeepFrozen:
@@ -25,8 +43,6 @@ def alt(l, r) as DeepFrozen:
         l
     } else { [alt, l, r] }
 object rep as DeepFrozen {}
-def red(l, f) as DeepFrozen:
-    return if (sameYet(l, empty)) { empty } else { [red, l, f] }
 
 object exactly as DeepFrozen {}
 # These two are not in the original paper. They permit matching inputs not by
@@ -34,11 +50,7 @@ object exactly as DeepFrozen {}
 object oneOf as DeepFrozen {}
 object suchThat as DeepFrozen {}
 
-def singletonSet(specimen, ej) as DeepFrozen:
-    def s :Set ? (s.size() == 1) exit ej := specimen
-    return s.asList()[0]
-
-def memo(f :DeepFrozen, default :DeepFrozen) as DeepFrozen:
+def kleeneMemo(f :DeepFrozen, default :DeepFrozen) as DeepFrozen:
     object pending as DeepFrozen {}
     return object memoized as DeepFrozen:
         match [=="run", topArgs, _]:
@@ -47,7 +59,7 @@ def memo(f :DeepFrozen, default :DeepFrozen) as DeepFrozen:
                 match [=="run", args, _]:
                     if (table.contains(args)):
                         if (table[args] == pending):
-                            def rv := M.call(default, "run", args, [].asMap())
+                            def rv := default()
                             table with= (args, rv)
                             rv
                         else:
@@ -68,10 +80,11 @@ def compact(parser) as DeepFrozen:
             r.resolve(after)
             return after
     def go(p):
-        if (table.contains(p)):
-            return table[p]
+        escape ej:
+            return table.fetch(p, ej)
+
         return switch (p) {
-            match [==::"δ", l] { turn(p).into([::"δ", compact(l)]) }
+            match [==::"δ", l] { turn(p).into([::"δ", go(l)]) }
             match [==cat, l, r] {
                 turn(p).into(if (l =~ [==eps, via (singletonSet) t1]) {
                         red(go(r), fn t2 { [t1, t2] })
@@ -79,7 +92,7 @@ def compact(parser) as DeepFrozen:
                         red(go(l), fn t1 { [t1, t2] })
                     } else { cat(go(l), go(r)) })
             }
-            match [==alt, l, r] { turn(p).into(alt(compact(l), compact(r))) }
+            match [==alt, l, r] { turn(p).into(alt(go(l), go(r))) }
             match [==rep, l] {
                 if (l == empty) { [eps, [[]].asSet()] } else {
                     turn(p).into([rep, go(l)])
@@ -105,8 +118,10 @@ def derive(c, parser) as DeepFrozen:
             r.resolve(after)
             return after
     def go(p):
-        if (table.contains(p)):
-            return table[p]
+        # Check the memo table.
+        escape ej:
+            return table.fetch(p, ej)
+
         return switch (p) {
             match ==empty { empty }
             match [==eps, _] { empty }
@@ -160,22 +175,51 @@ def _parseNull(parseNull, parser) :Set as DeepFrozen:
         match [==oneOf, _] { [].asSet() }
         match [==suchThat, _] { [].asSet() }
     }
-def _parseNullDefault(_) as DeepFrozen { return [].asSet() }
-def parseNull :DeepFrozen := memo(_parseNull, _parseNullDefault)
+def parseNull :DeepFrozen := kleeneMemo(_parseNull, [].asSet)
+
+def _sizeOf(sizeOf, parser) :Int as DeepFrozen:
+    return 1 + switch (parser) {
+        match ==empty { 0 }
+        match [==eps, _] { 0 }
+        match [==::"δ", l] { sizeOf(l) }
+        match [==cat, l, r] { sizeOf(l) + sizeOf(r) }
+        match [==alt, l, r] { sizeOf(l) + sizeOf(r) }
+        match [==rep, l] { sizeOf(l) }
+        match [==red, l, _] { sizeOf(l) }
+
+        match [==exactly, _] { 0 }
+        match [==oneOf, _] { 0 }
+        match [==suchThat, _] { 0 }
+    }
+def zero :Int := 0
+def sizeOf :DeepFrozen := kleeneMemo(_sizeOf, &zero.get)
 
 def testParse(var parser, input):
-    traceln(`initial parser $parser`)
+    traceln(`initial parser $parser sizeOf ${sizeOf(parser)}`)
     for char in (input):
         parser := compact(derive(char, parser))
         # parser := derive(char, parser)
-        traceln(`fed char $char, got $parser`)
+        traceln(`fed char $char, got $parser sizeOf ${sizeOf(parser)}`)
     return parseNull(parser)
 
-# def testParser := alt(cat(testParser, alt([exactly, 'a'], [exactly, 'b'])),
-#                       [eps, [null].asSet()])
-# traceln(testParse(testParser, "aaaaaa"))
-# traceln(testParse(testParser, "ababab"))
-# traceln(testParse(testParser, "abacab"))
+def joinedBy(parser, comma) as DeepFrozen:
+    return cat(parser, [rep, cat(comma, parser)])
+def bracket(parser, bra, ket) as DeepFrozen:
+    return cat(bra, cat(parser, ket))
+# XXX shitty name
+def makeId(members :Set[DeepFrozen]) as DeepFrozen:
+    def char := [oneOf, members]
+    return cat(char, [rep, char])
+
+{
+    def whitespace := [rep, [oneOf, " \n".asSet()]]
+    def comma := [exactly, ',']
+    def id := makeId("abcdefghijklmnopqrstuvwxyz.".asSet())
+    def number := makeId("1234567890".asSet())
+    def [term, atom] := [cat(id, bracket(joinedBy(atom, comma), [exactly, '('], [exactly, ')'])), alt(number, term)]
+    # def ::"term``" := makeQuasiLexer(termPieces, class, "term")(makeParser)
+    # traceln(testParse(term, "a(2)"))
+}
 
 interface _Parse :DeepFrozen:
     "Regular expressions."
