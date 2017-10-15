@@ -75,9 +75,9 @@ def _parseNull(parseNull, parser) :Set as DeepFrozen:
 def parseNull :DeepFrozen := kleeneMemo(_parseNull, [].asSet)
 
 def breakOut(parser) as DeepFrozen:
-    var m := [].asMap()
+    var m := [empty => 0]
     def stack := [parser].diverge()
-    var label :Int := 0
+    var label :Int := 1
     while (!stack.isEmpty()):
         def piece := stack.pop()
         if (!m.contains(piece)):
@@ -86,91 +86,69 @@ def breakOut(parser) as DeepFrozen:
             for p in (piece):
                 if (p =~ _ :List):
                     stack.push(p)
+    traceln(`breakOut has ${m.size()}`)
     return m
 
-def compact(parser) as DeepFrozen:
-    var table := [].asMap()
-    def turn(before):
-        def [p, r] := Ref.promise()
-        table with= (before, p)
-        return def it.into(after):
-            r.resolve(after)
-            return after
-    def go(p):
-        escape ej:
-            return table.fetch(p, ej)
-
-        return turn(p).into(switch (p) {
-            match [==::"δ", l] { [::"δ", go(l)] }
-            match [==cat, l, r] {
-                if (l == empty || r == empty) {
-                    empty
-                } else if (l =~ [==eps, via (singletonSet) t1]) {
-                    [red, go(r), fn t2 { [t1, t2] }]
-                } else if (r =~ [==eps, via (singletonSet) t2]) {
-                    [red, go(l), fn t1 { [t1, t2] }]
-                } else { [cat, go(l), go(r)] }
-            }
-            match [==alt, l, r] {
-                def cl := go(l)
-                def cr := go(r)
-                if (sameYet(cl, empty)) {
-                    go(r)
-                } else if (sameYet(cr, empty)) {
-                    go(l)
-                } else { [alt, go(l), go(r)] }
-            }
-            match [==rep, l] {
-                def cl := go(l)
-                if (sameYet(cl, empty)) { [eps, [[]].asSet()] } else {
-                    [rep, cl]
-                }
-            }
-            match [==red, var l, var f] {
-                while (l =~ [==red, inner, g]) {
-                    l := go(inner)
-                    f := fn x { f(g(x)) }
-                }
-                if (l =~ [==eps, ts]) {
-                    [eps, [for t in (ts) f(t)].asSet()]
-                } else { [red, go(l), f] }
-            }
-            match p { p }
-        })
-    def rv := go(parser)
-    dump(rv)
-    return rv
-
 def derive(c, parser) as DeepFrozen:
-    var table := [].asMap()
-    def turn(before):
-        def [p, r] := Ref.promise()
-        table with= (before, p)
-        return def it.into(after):
-            r.resolve(after)
-            return after
-    def go(p):
-        # Check the memo table.
-        escape ej:
-            return table.fetch(p, ej)
-
-        return turn(p).into(switch (p) {
+    # NB: Cycles are likelier to happen on earlier pieces. (Proof: Think about
+    # it for a bit.) This reversal makes sameYet likelier to return true. ~ C.
+    def breakout := breakOut(parser).reverse()
+    def table := [for piece => _ in (breakout) piece => Ref.promise()]
+    def go(piece):
+        return table[piece][0]
+    def derived := [for piece => _ in (table) piece => {
+        def next := switch (piece) {
             match ==empty { empty }
             match [==eps, _] { empty }
             match [==::"δ", _] { empty }
             match [==cat, l, r] {
                 def dl := go(l)
+                def [lhs, skipLeft] := if (sameYet(dl, empty)) {
+                    [empty, true]
+                } else if (dl =~ [==eps, via (singletonSet) t1]) {
+                    [[red, r, fn t2 { [t1, t2] }], false]
+                } else { [[cat, dl, r], false] }
                 def dr := go(r)
-                [alt, [cat, dl, r], [cat, [::"δ", l], dr]]
+                def [rhs, skipRight] := if (sameYet(dr, empty)) {
+                    [empty, true]
+                } else {
+                    def nullable := parseNull(l)
+                    if (nullable.isEmpty()) {
+                        [empty, true]
+                    } else if (nullable.size() == 1) {
+                        def t1 := nullable.asList()[0]
+                        [[red, dr, fn t2 { [t1, t2] }], false]
+                    } else {
+                        [cat, [eps, nullable], dr]
+                    }
+                }
+                if (skipLeft) {
+                    if (skipRight) { empty } else { rhs }
+                } else if (skipRight) { lhs } else { [alt, lhs, rhs] }
             }
             match [==alt, l, r] {
-                [alt, go(l), go(r)]
+                def dl := go(l)
+                def dr := go(r)
+                if (sameYet(dl, empty)) { dr } else if (sameYet(dr, empty)) {
+                    dl
+                } else { [alt, dl, dr] }
             }
             match [==rep, l] {
-                [red, [cat, go(l), parser], fn [h, t] { [h] + t }]
+                def dl := go(l)
+                if (sameYet(dl, empty)) { [eps, [[]].asSet()] } else {
+                    [red, [cat, dl, piece], fn [h, t] { [h] + t }]
+                }
             }
-            match [==red, l, f] { [red, go(l), f] }
-
+            match [==red, l, var f] {
+                var dl := go(l)
+                while (dl =~ [==red, inner, g]) {
+                    dl := inner
+                    f := fn x { f(g(x)) }
+                }
+                if (dl =~ [==eps, ts]) {
+                    [eps, [for t in (ts) f(t)].asSet()]
+                } else { [red, dl, f] }
+            }
             match [==exactly, specimen] {
                 if (c == specimen) { [eps, [c].asSet()] } else { empty }
             }
@@ -180,10 +158,11 @@ def derive(c, parser) as DeepFrozen:
             match [==suchThat, pred] {
                 if (pred(c)) { [eps, [c].asSet()] } else { empty }
             }
-        })
-    def rv := go(parser)
-    dump(rv)
-    return rv
+        }
+        table[piece][1].resolve(next)
+        next 
+    }]
+    return derived[parser]
 
 def _sizeOf(sizeOf, parser) :Int as DeepFrozen:
     return 1 + switch (parser) {
@@ -204,9 +183,7 @@ def sizeOf :DeepFrozen := kleeneMemo(_sizeOf, &zero.get)
 
 def testParse(var parser, input):
     traceln(`initial parser sizeOf ${sizeOf(parser)}`)
-    dump(parser)
     for char in (input):
-        # parser := compact(derive(char, parser))
         parser := derive(char, parser)
         traceln(`fed char $char, got sizeOf ${sizeOf(parser)}`)
         throw("plz")
@@ -234,7 +211,7 @@ def makeId(members :Set[DeepFrozen]) as DeepFrozen:
                           [exactly, '('], [exactly, ')'])],
                          [alt, number, term]]
     # def ::"term``" := makeQuasiLexer(termPieces, class, "term")(makeParser)
-    traceln(testParse(term, "add(.int.(2), .int.(5))"))
+    # traceln(testParse(term, "add(.int.(2), .int.(5))"))
 }
 
 interface _Parse :DeepFrozen:
