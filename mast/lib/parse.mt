@@ -9,8 +9,6 @@ exports (Parse)
 # Based largely on this functional pearl:
 # http://matt.might.net/papers/might2011derivatives.pdf
 
-def sameYet :DeepFrozen := _equalizer.sameYet
-
 def singletonSet(specimen, ej) as DeepFrozen:
     def s :Set ? (s.size() == 1) exit ej := specimen
     return s.asList()[0]
@@ -19,7 +17,6 @@ def singletonSet(specimen, ej) as DeepFrozen:
 # point in the future.
 object empty as DeepFrozen {}
 object eps as DeepFrozen {}
-object ::"δ" as DeepFrozen {}
 object red as DeepFrozen {}
 object cat as DeepFrozen {}
 object alt as DeepFrozen {}
@@ -30,6 +27,8 @@ object exactly as DeepFrozen {}
 # equality, but by set membership or predicate.
 object oneOf as DeepFrozen {}
 object suchThat as DeepFrozen {}
+
+def emptyYet(x) as DeepFrozen { return _equalizer.sameYet(x, empty) }
 
 def kleeneMemo(f :DeepFrozen, default :DeepFrozen) as DeepFrozen:
     object pending as DeepFrozen {}
@@ -56,7 +55,6 @@ def _parseNull(parseNull, parser) :Set as DeepFrozen:
     return switch (parser) {
         match ==empty { [].asSet() }
         match [==eps, set] { set }
-        match [==::"δ", l] { parseNull(l) }
         match [==cat, l, r] {
             var s := [].asSet()
             for p in (parseNull(l)) {
@@ -91,7 +89,7 @@ def breakOut(parser) as DeepFrozen:
 
 def derive(c, parser) as DeepFrozen:
     # NB: Cycles are likelier to happen on earlier pieces. (Proof: Think about
-    # it for a bit.) This reversal makes sameYet likelier to return true. ~ C.
+    # it for a bit.) This reversal makes emptyYet likelier to return true. ~ C.
     def breakout := breakOut(parser).reverse()
     def table := [for piece => _ in (breakout) piece => Ref.promise()]
     def go(piece):
@@ -100,16 +98,15 @@ def derive(c, parser) as DeepFrozen:
         def next := switch (piece) {
             match ==empty { empty }
             match [==eps, _] { empty }
-            match [==::"δ", _] { empty }
             match [==cat, l, r] {
                 def dl := go(l)
-                def [lhs, skipLeft] := if (sameYet(dl, empty)) {
+                def [lhs, skipLeft] := if (emptyYet(dl)) {
                     [empty, true]
                 } else if (dl =~ [==eps, via (singletonSet) t1]) {
                     [[red, r, fn t2 { [t1, t2] }], false]
                 } else { [[cat, dl, r], false] }
                 def dr := go(r)
-                def [rhs, skipRight] := if (sameYet(dr, empty)) {
+                def [rhs, skipRight] := if (emptyYet(dr)) {
                     [empty, true]
                 } else {
                     def nullable := parseNull(l)
@@ -119,7 +116,7 @@ def derive(c, parser) as DeepFrozen:
                         def t1 := nullable.asList()[0]
                         [[red, dr, fn t2 { [t1, t2] }], false]
                     } else {
-                        [cat, [eps, nullable], dr]
+                        [[cat, [eps, nullable], dr], false]
                     }
                 }
                 if (skipLeft) {
@@ -129,23 +126,23 @@ def derive(c, parser) as DeepFrozen:
             match [==alt, l, r] {
                 def dl := go(l)
                 def dr := go(r)
-                if (sameYet(dl, empty)) { dr } else if (sameYet(dr, empty)) {
+                if (emptyYet(dl)) { dr } else if (emptyYet(dr)) {
                     dl
                 } else { [alt, dl, dr] }
             }
             match [==rep, l] {
                 def dl := go(l)
-                if (sameYet(dl, empty)) { [eps, [[]].asSet()] } else {
+                if (emptyYet(dl)) { [eps, [[]].asSet()] } else {
                     [red, [cat, dl, piece], fn [h, t] { [h] + t }]
                 }
             }
             match [==red, l, var f] {
                 var dl := go(l)
-                while (dl =~ [==red, inner, g]) {
-                    dl := inner
-                    f := fn x { f(g(x)) }
-                }
-                if (dl =~ [==eps, ts]) {
+                # if (dl =~ [==red, inner, g]) {
+                #     dl := inner
+                #     f := fn x { traceln(1, x); f(g(x)) }
+                # }
+                if (emptyYet(dl)) { empty } else if (dl =~ [==eps, ts]) {
                     [eps, [for t in (ts) f(t)].asSet()]
                 } else { [red, dl, f] }
             }
@@ -168,7 +165,6 @@ def _sizeOf(sizeOf, parser) :Int as DeepFrozen:
     return 1 + switch (parser) {
         match ==empty { 0 }
         match [==eps, _] { 0 }
-        match [==::"δ", l] { sizeOf(l) }
         match [==cat, l, r] { sizeOf(l) + sizeOf(r) }
         match [==alt, l, r] { sizeOf(l) + sizeOf(r) }
         match [==rep, l] { sizeOf(l) }
@@ -186,13 +182,14 @@ def testParse(var parser, input):
     for char in (input):
         parser := derive(char, parser)
         traceln(`fed char $char, got sizeOf ${sizeOf(parser)}`)
-        throw("plz")
+        # throw("plz")
     return parseNull(parser)
 
 def optional(parser) as DeepFrozen:
     return [alt, [eps, [null].asSet()], parser]
 def joinedBy(parser, comma) as DeepFrozen:
-    return [red, [cat, [red, parser, _makeList], [rep, [cat, comma, parser]]],
+    return [red, [cat, [red, parser, _makeList],
+                  [rep, [red, [cat, comma, parser], fn [_, x] { x }]]],
             fn [h, t] { h + t }]
 def bracket(parser, bra, ket) as DeepFrozen:
     return [red, [cat, bra, [cat, parser, ket]], fn [_, [x, _]] { x }]
@@ -200,18 +197,19 @@ def bracket(parser, bra, ket) as DeepFrozen:
 def makeId(members :Set[DeepFrozen]) as DeepFrozen:
     def char := [oneOf, members]
     # XXX factor to oneOrMore
-    return [red, [cat, char, [rep, char]], fn [h, t] { [h] + t }]
+    return [red, [red, [cat, char, [rep, char]], fn [h, t] { [h] + t }],
+            _makeStr.fromChars]
 
 {
     def whitespace := [rep, [oneOf, " \n".asSet()]]
-    def comma := [exactly, ',']
+    def comma := [cat, [exactly, ','], optional(whitespace)]
     def id := makeId("abcdefghijklmnopqrstuvwxyz.".asSet())
-    def number := makeId("1234567890".asSet())
+    def number := [red, makeId("1234567890".asSet()), _makeInt]
     def [term, atom] := [[cat, id, bracket(optional(joinedBy(atom, comma)),
                           [exactly, '('], [exactly, ')'])],
                          [alt, number, term]]
     # def ::"term``" := makeQuasiLexer(termPieces, class, "term")(makeParser)
-    # traceln(testParse(term, "add(.int.(2), .int.(5))"))
+    traceln(testParse(term, "add(.int.(2), .int.(5))"))
 }
 
 interface _Parse :DeepFrozen:
