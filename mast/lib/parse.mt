@@ -1,17 +1,13 @@
-import "unittest" =~ [=> unittest]
-import "tests/proptests" =~ [
-    => arb :DeepFrozen,
-    => prop :DeepFrozen,
-]
-exports (Parse)
+# import "unittest" =~ [=> unittest]
+# import "tests/proptests" =~ [
+#     => arb :DeepFrozen,
+#     => prop :DeepFrozen,
+# ]
+exports (mp)
 
 # Parse: Dead-simple reasonably-performing incremental parser toolkit.
 # Based largely on this functional pearl:
 # http://matt.might.net/papers/might2011derivatives.pdf
-
-def singletonSet(specimen, ej) as DeepFrozen:
-    def s :Set ? (s.size() == 1) exit ej := specimen
-    return s.asList()[0]
 
 # Not using lib/enum because we might need to be prelude-compatible at some
 # point in the future.
@@ -72,6 +68,24 @@ def _parseNull(parseNull, parser) :Set as DeepFrozen:
     }
 def parseNull :DeepFrozen := kleeneMemo(_parseNull, [].asSet)
 
+def _leaders(leaders, parser) :Set as DeepFrozen:
+    return switch (parser) {
+        match ==empty { [].asSet() }
+        match [==cat, l, r] {
+            if (!parseNull(l).isEmpty()) {
+                leaders(l) | leaders(r)
+            } else { leaders(l) }
+        }
+        match [==alt, l, r] { leaders(l) | leaders(r) }
+        match [==rep, l] { leaders(l).with(eps) }
+        match [==red, l, _] { leaders(l) }
+        match [==eps, _] { [eps].asSet() }
+        match [tag, _] ? ([exactly, oneOf, suchThat].contains(tag)) {
+            [parser].asSet()
+        }
+    }
+def leaders :DeepFrozen := kleeneMemo(_leaders, [].asSet)
+
 def breakOut(parser) as DeepFrozen:
     var m := [empty => 0]
     def stack := [parser].diverge()
@@ -86,6 +100,10 @@ def breakOut(parser) as DeepFrozen:
                     stack.push(p)
     traceln(`breakOut has ${m.size()}`)
     return m
+
+def singletonSet(specimen, ej) as DeepFrozen:
+    def s :Set ? (s.size() == 1) exit ej := specimen
+    return s.asList()[0]
 
 def derive(c, parser) as DeepFrozen:
     # NB: Cycles are likelier to happen on earlier pieces. (Proof: Think about
@@ -179,347 +197,155 @@ def sizeOf :DeepFrozen := kleeneMemo(_sizeOf, &zero.get)
 
 def testParse(var parser, input):
     traceln(`initial parser sizeOf ${sizeOf(parser)}`)
+    traceln(`leaders ${leaders(parser)}`)
     for char in (input):
         parser := derive(char, parser)
         traceln(`fed char $char, got sizeOf ${sizeOf(parser)}`)
+        traceln(`leaders ${leaders(parser)}`)
         # throw("plz")
     return parseNull(parser)
 
-def optional(parser) as DeepFrozen:
-    return [alt, [eps, [null].asSet()], parser]
-def joinedBy(parser, comma) as DeepFrozen:
-    return [red, [cat, [red, parser, _makeList],
-                  [rep, [red, [cat, comma, parser], fn [_, x] { x }]]],
-            fn [h, t] { h + t }]
-def bracket(parser, bra, ket) as DeepFrozen:
-    return [red, [cat, bra, [cat, parser, ket]], fn [_, [x, _]] { x }]
-# XXX shitty name
-def makeId(members :Set[DeepFrozen]) as DeepFrozen:
-    def char := [oneOf, members]
-    # XXX factor to oneOrMore
-    return [red, [red, [cat, char, [rep, char]], fn [h, t] { [h] + t }],
-            _makeStr.fromChars]
+def whitespace :DeepFrozen := [oneOf, " \n".asSet()]
+
+object noValue as DeepFrozen {}
+
+object mp as DeepFrozen:
+    # Primitives.
+
+    to exactly(value):
+        return [exactly, value]
+
+    to oneOf(values :Set):
+        return [oneOf, values]
+
+    to reduce(parser, f):
+        return [red, parser, f]
+
+    to zeroOrMore(parser):
+        return [red, parser]
+
+    # Standard combinators.
+
+    to oneOrMore(parser):
+        return [red, [cat, parser, [rep, parser]], fn [h, t] { [h] + t }]
+
+    to optional(parser, => default := null):
+        return [alt, [eps, [default].asSet()], parser]
+
+    to joinedBy(parser, comma):
+        return [red, [cat, [red, parser, _makeList],
+                      [rep, [red, [cat, comma, parser], fn [_, x] { x }]]],
+                fn [h, t] { h + t }]
+
+    to bracket(parser, bra, ket):
+        return [red, [cat, bra, [cat, parser, ket]], fn [_, [x, _]] { x }]
+
+    # For parsing characters specifically.
+
+    to keyword(s :Str, => value := noValue):
+        def [h] + t := s.asList()
+        var p := [exactly, h]
+        for char in (t):
+            p := [cat, p, [exactly, t]]
+        return [red, p, fn _ { if (value == noValue) { s } else { value } }]
+
+    to token(s :Str):
+        "Eat leading whitespace and then parse `s`."
+        return [red, [cat, mp.optional(whitespace), mp.keyword(s)],
+                fn [_, y] { y }]
+
+    to stringOf(chars :Set[Char]):
+        def char := [oneOf, chars]
+        return [red, mp.oneOrMore(char), _makeStr.fromChars]
+
+    to integer():
+        # XXX support other radices
+        def digits := "1234567890".asSet()
+        def f(ds):
+            return _makeInt(_makeStr.fromChars(ds))
+        return [red, mp.oneOrMore([oneOf, digits]), f]
 
 {
-    def whitespace := [rep, [oneOf, " \n".asSet()]]
-    def comma := [cat, [exactly, ','], optional(whitespace)]
-    def id := makeId("abcdefghijklmnopqrstuvwxyz.".asSet())
-    def number := [red, makeId("1234567890".asSet()), _makeInt]
-    def [term, atom] := [[cat, id, bracket(optional(joinedBy(atom, comma)),
-                          [exactly, '('], [exactly, ')'])],
-                         [alt, number, term]]
-    # def ::"term``" := makeQuasiLexer(termPieces, class, "term")(makeParser)
-    traceln(testParse(term, "add(.int.(2), .int.(5))"))
+    def e := mp.reduce([cat, mp.oneOf("eE".asSet()),
+                                mp.optional(mp.oneOf("+-".asSet()))],
+                               fn [_, negate] { negate == '-' })
+    def digits := mp.integer()
+    def exp := [red, [cat, e, digits],
+                fn [negate, i] { if (negate) { -i } else { i } }]
+    def frac := [red, [cat, mp.exactly('.'), digits], fn [_, y] { y }]
+    def int := [red, [cat, mp.optional('-'), digits],
+                fn [negate, i] { if (negate == null) { i } else { -i } }]
+    def number := [cat, int, [cat, mp.optional(frac), mp.optional(exp)]]
+    def char := [suchThat, fn x { x != '"' }]
+    def chars := mp.zeroOrMore(char)
+    def string := mp.bracket(chars, mp.exactly('"'), mp.exactly('"'))
+#     def [value, elements, array, pair, members, obj] := [
+#         [alt, string, [alt, number, [alt, obj, [alt, array,
+#             [alt, mp.keyword("true", "value" => true),
+#                 [alt, mp.keyword("false", "value" => false),
+#                     mp.keyword("null", "value" => null)
+#         ]]]]]],
+#         mp.optional(mp.joinedBy(value, mp.token(',')), "default" => []),
+#         mp.bracket(elements, mp.token('['), mp.token(']')),
+#         [red, [cat, string, [cat, mp.token(':'), value]],
+#          fn [k, [_, v]] { [k, v] }],
+#         [red, mp.optional(mp.joinedBy(pair, mp.token(',')), "default" => []),
+#          fn pairs { [for [k, v] in (pairs) k => v] }],
+#         mp.bracket(members, mp.token('{'), mp.token('}')),
+#     ]
+#     traceln(testParse(obj, "{\"key\":[1,\"Monte\",true,null]}"))
 }
 
-interface _Parse :DeepFrozen:
-    "Regular expressions."
-
-    to possible() :Bool:
-        "Whether this regular expression can match anything ever."
-
-    to acceptsEmpty() :Bool:
-        "Whether this regular expression accepts the empty string.
-
-         Might calls this function δ()."
-
-    to derive(character):
-        "Compute the derivative of this regular expression with respect to the
-         given character.
-
-         The derivative is fully polymorphic."
-
-    to leaders() :Set:
-        "Compute the set of values which can advance this regular expression."
-
-object nullParse as DeepFrozen implements _Parse:
-    "∅, the regular expression which doesn't match."
-
-    to _printOn(out) :Void:
-        out.print("∅")
-
-    to possible() :Bool:
-        return false
-
-    to acceptsEmpty() :Bool:
-        return false
-
-    to derive(_) :_Parse:
-        return nullParse
-
-    to leaders() :Set:
-        return [].asSet()
-
-    to size() :Int:
-        return 1
-
-object emptyParse as DeepFrozen implements _Parse:
-    "ε, the regular expression which matches only the empty string."
-
-    to _printOn(out) :Void:
-        out.print("ε")
-
-    to possible() :Bool:
-        return true
-
-    to acceptsEmpty() :Bool:
-        return true
-
-    to derive(_) :_Parse:
-        return nullParse
-
-    to leaders() :Set:
-        return [].asSet()
-
-    to size() :Int:
-        return 1
-
-object Parse extends _Parse as DeepFrozen:
-    "Regular expressions."
-
-    to null() :Parse:
-        return nullParse
-
-    to empty() :Parse:
-        return emptyParse
-
-    to alt(left :DeepFrozen, right :DeepFrozen) :Parse:
-        if (!left.possible()):
-            return right
-        if (!right.possible()):
-            return left
-        return object orParse as DeepFrozen implements _Parse:
-            "An alternating regular expression."
-
-            to _printOn(out) :Void:
-                out.print(`($left)|($right)`)
-
-            to possible() :Bool:
-                return left.possible() || right.possible()
-
-            to acceptsEmpty() :Bool:
-                return left.acceptsEmpty() || right.acceptsEmpty()
-
-            to derive(character) :Parse:
-                return Parse.alt(left.derive(character),
-                                 right.derive(character))
-
-            to leaders() :Set:
-                return left.leaders() | right.leaders()
-
-            to size() :Int:
-                return left.size() + right.size()
-
-    to cat(left :DeepFrozen, right :DeepFrozen) :Parse:
-        if (!left.possible() || !right.possible()):
-            return nullParse
-
-        # Honest Q: Would using a lazy slot to cache left.acceptsEmpty() help here
-        # at all? ~ C.
-
-        return object catParse as DeepFrozen implements _Parse:
-            "A catenated regular expression."
-
-            to _printOn(out) :Void:
-                out.print(`$left$right`)
-
-            to possible() :Bool:
-                return left.possible() && right.possible()
-
-            to acceptsEmpty() :Bool:
-                return left.acceptsEmpty() && right.acceptsEmpty()
-
-            to derive(character) :_Parse:
-                def deriveLeft := Parse.cat(left.derive(character), right)
-                return if (left.acceptsEmpty()):
-                    Parse.alt(deriveLeft, right.derive(character))
-                else:
-                    deriveLeft
-
-            to leaders() :Set:
-                return if (left.acceptsEmpty()):
-                    left.leaders() | right.leaders()
-                else:
-                    left.leaders()
-
-            to size() :Int:
-                return left.size() + right.size()
-
-    to repeat(parse :DeepFrozen) :Parse:
-        return object starParse as DeepFrozen implements _Parse:
-            "The Kleene star of a regular expression."
-
-            to _printOn(out) :Void:
-                out.print(`$parse*`)
-
-            to possible() :Bool:
-                return true
-
-            to acceptsEmpty() :Bool:
-                return true
-
-            to derive(character) :_Parse:
-                return Parse.cat(parse.derive(character), starParse)
-
-            to leaders() :Set:
-                return parse.leaders()
-
-            to size() :Int:
-                return 1 + parse.size()
-
-    to exactly(value :DeepFrozen) :Parse:
-        return object equalParse as DeepFrozen implements _Parse:
-            "A regular expression that matches exactly one value."
-
-            to _printOn(out) :Void:
-                out.print(M.toQuote(value))
-
-            to possible() :Bool:
-                return true
-
-            to acceptsEmpty() :Bool:
-                return false
-
-            to derive(character) :_Parse:
-                return if (character == value):
-                    emptyParse
-                else:
-                    nullParse
-
-            to leaders() :Set:
-                return [value].asSet()
-
-            to size() :Int:
-                return 1
-
-    to contains(values :Set[DeepFrozen]) :Parse:
-        return object containsParse as DeepFrozen implements _Parse:
-            "A regular expression that matches any value in a finite set."
-
-            to _printOn(out) :Void:
-                def guts := "".join([for value in (values) M.toQuote(value)])
-                out.print(`[$guts]`)
-
-            to possible() :Bool:
-                return true
-
-            to acceptsEmpty() :Bool:
-                return false
-
-            to derive(character) :_Parse:
-                for value in (values):
-                    if (value == character):
-                        return emptyParse
-                return nullParse
-
-            to leaders() :Set:
-                return values
-
-            to size() :Int:
-                return 1
-
-    to suchThat(predicate :DeepFrozen) :Parse:
-        return object suchThatParse as DeepFrozen implements _Parse:
-            "A regular expression that matches any value passing a predicate.
-
-             The predicate must be `DeepFrozen` to prevent certain stateful
-             shenanigans."
-
-            to _printOn(out) :Void:
-                predicate._printOn(out)
-
-            to possible() :Bool:
-                return true
-
-            to acceptsEmpty() :Bool:
-                return false
-
-            to derive(character) :_Parse:
-                return if (predicate(character)):
-                    emptyParse
-                else:
-                    nullParse
-
-            to leaders() :Set:
-                return [].asSet()
-
-            to size() :Int:
-                return 1
-
-    match [=="anyOf", rs, _]:
-        var parse := nullParse
-        for r in (rs):
-            parse := Parse.alt(parse, r)
-        parse
-
-def parseCat(hy, c1, c2):
-    def parse := Parse.cat(Parse.exactly(c1), Parse.exactly(c2))
-    hy.assert(parse.derive(c1).derive(c2).acceptsEmpty())
-
-unittest([
-    prop.test([arb.Char(), arb.Char()], parseCat),
-])
-
-object exprHoleTag as DeepFrozen {}
-
-def makeQuasiLexer(lexer :DeepFrozen, classifier :DeepFrozen, name :Str) as DeepFrozen:
-    return def makeQuasiParser(parserMaker :DeepFrozen) as DeepFrozen:
-        return object quasiParser as DeepFrozen:
-            to _printOn(out):
-                out.print(`<$name````>`)
-
-            to valueHole(index :Int):
-                return [exprHoleTag, index]
-
-            to valueMaker(pieces):
-                def tokens := [].diverge()
-
-                for piece in (pieces):
-                    if (piece =~ [==exprHoleTag, index :Int]):
-                        # Pre-scanned for us.
-                        tokens.push([".hole.", index, null])
-                    else:
-                        var scanner := lexer
-                        var start :Int := 0
-                        for i => c in (piece):
-                            traceln(`scanner $scanner size ${scanner.size()}`)
-                            scanner derive= (c)
-                            if (!scanner.acceptsEmpty()):
-                                # Scanner just died; mark the token and
-                                # reboot.
-                                scanner := lexer.derive(c)
-                                if (i <= start):
-                                    throw("Scanner failed to make progress")
-                                def s := piece.slice(start, i)
-                                start := i
-                                tokens.push([classifier(s), s, null])
-                        if (!scanner.acceptsEmpty()):
-                            # Ragged edge.
-                            throw(`Scanner wanted one of ${scanner.leaders()}, got EOS`)
-                        def s := piece.slice(start, piece.size())
-                        tokens.push([classifier(s), s, null])
-
-                def tree := parserMaker()(tokens)
-                return def ruleSubstituter.substitute(_):
-                    return tree
-
-def parens := Parse.contains("()".asSet())
-def identifier(members :Set[DeepFrozen]) as DeepFrozen:
-    def char := Parse.contains(members)
-    return Parse.cat(char, Parse.repeat(char))
-def whitespace := Parse.repeat(Parse.contains(" \n".asSet()))
-def comma := Parse.exactly(',')
-def class(s :Str) :Str as DeepFrozen:
-    return switch (s) {
-        match =="(" { "openParen" }
-        match ==")" { "closeParen" }
-        match =="," { "comma" }
-        match s ? (" \n".contains(s[0])) { "whitespace" }
-        match _identifier { "identifier" }
-    }
-def makeParser() as DeepFrozen:
-    return fn tokens { tokens }
-def idChars := "abcdefghijklmnopqrstuvwxyz.".asSet()
-def termPieces := Parse.anyOf(parens, identifier(idChars), whitespace, comma)
-def ::"term``" := makeQuasiLexer(termPieces, class, "term")(makeParser)
-traceln(term`add(.int.(${2}), .int.(${5}))`)
+# def parseCat(hy, c1, c2):
+#     def parse := Parse.cat(Parse.exactly(c1), Parse.exactly(c2))
+#     hy.assert(parse.derive(c1).derive(c2).acceptsEmpty())
+# 
+# unittest([
+#     prop.test([arb.Char(), arb.Char()], parseCat),
+# ])
+#
+# object exprHoleTag as DeepFrozen {}
+# 
+# def makeQuasiLexer(lexer :DeepFrozen, classifier :DeepFrozen, name :Str) as DeepFrozen:
+#     return def makeQuasiParser(parserMaker :DeepFrozen) as DeepFrozen:
+#         return object quasiParser as DeepFrozen:
+#             to _printOn(out):
+#                 out.print(`<$name````>`)
+# 
+#             to valueHole(index :Int):
+#                 return [exprHoleTag, index]
+# 
+#             to valueMaker(pieces):
+#                 def tokens := [].diverge()
+# 
+#                 for piece in (pieces):
+#                     if (piece =~ [==exprHoleTag, index :Int]):
+#                         # Pre-scanned for us.
+#                         tokens.push([".hole.", index, null])
+#                     else:
+#                         var scanner := lexer
+#                         var start :Int := 0
+#                         for i => c in (piece):
+#                             traceln(`scanner $scanner size ${scanner.size()}`)
+#                             scanner derive= (c)
+#                             if (!scanner.acceptsEmpty()):
+#                                 # Scanner just died; mark the token and
+#                                 # reboot.
+#                                 scanner := lexer.derive(c)
+#                                 if (i <= start):
+#                                     throw("Scanner failed to make progress")
+#                                 def s := piece.slice(start, i)
+#                                 start := i
+#                                 tokens.push([classifier(s), s, null])
+#                         if (!scanner.acceptsEmpty()):
+#                             # Ragged edge.
+#                             throw(`Scanner wanted one of ${scanner.leaders()}, got EOS`)
+#                         def s := piece.slice(start, piece.size())
+#                         tokens.push([classifier(s), s, null])
+# 
+#                 def tree := parserMaker()(tokens)
+#                 return def ruleSubstituter.substitute(_):
+#                     return tree
+
+# def ::"term``" := makeQuasiLexer(termPieces, class, "term")(makeParser)
+# traceln(term`add(.int.(${2}), .int.(${5}))`)
