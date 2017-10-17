@@ -1087,6 +1087,8 @@ def expand(node, builder, fail) as DeepFrozen:
                     block := builder.CatchExpr(block, cat.getPattern(), cat.getBody(), span)
                 if (finallyblock != null):
                     block := builder.FinallyExpr(block, finallyblock, span)
+                else if (catchers.size() == 0):
+                    block := builder.CatchExpr(block, builder.IgnorePattern(null, span), builder.SeqExpr([], span), span)
                 block
             match =="WhileExpr":
                 def [test, block, catcher] := args

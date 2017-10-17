@@ -190,10 +190,12 @@ bind printerActions :Map[Str, DeepFrozen] := [
             out.print("::")
             out.quote(name)
         }
+        try {if ((def a := self.getAddress()) != null) { out.print(a)} else {out.print("∅")}} catch _ {}
     },
     "BindingExpr" => def printBindingExpr(self, out, _priority) as DeepFrozenStamp {
         out.print("&&")
         out.print(self.getNoun())
+        try {if ((def a := self.getAddress()) != null) { out.print(a)} else {out.print("∅")}} catch _ {}
     },
     "SlotExpr" => def printSlotExpr(self, out, _priority) as DeepFrozenStamp {
         out.print("&")
@@ -1306,22 +1308,24 @@ bind nastPrinterActions := [
         out.print("let")
         def lo := out.indent(INDENT)
         lo.println("")
-        for letDef in (self.getDefs()) {
-            switch (letDef.getExpr().getNodeName()) {
-                match =="TempBinding" {
-                    lo.print("_t")
-                }
-                match _ {
-                    lo.print(letDef.getName())
-                }
-            }
-            lo.print(letDef.getIndex())
-            lo.print(" = ")
-            nastPrint(letDef.getExpr(), lo, 1)
-            lo.println("")
-        }
+        for letDef in (self.getDefs()) { lo.print(letDef)}
         out.print("in ")
         nastPrint(self.getBody(), out, 1)
+    },
+    "LetDef" => def printLetDef(self, out ,_priority) as DeepFrozenStamp {
+        switch (self.getExpr().getNodeName()) {
+                match =="TempBinding" {
+                    out.print("_t")
+                }
+                match _ {
+                    out.print(self.getName())
+                    try {if ((def a := self.getAddress()) != null) { out.print(a)} else {out.print("∅")}} catch _ {}
+                }
+            }
+            out.print(self.getIndex())
+            out.print(" = ")
+            nastPrint(self.getExpr(), out, 1)
+            out.println("")
     },
     "GuardCoerce" => def printGuardCoerce(self, out, _priority) as DeepFrozenStamp {
         out.print("_guardCoerce(")

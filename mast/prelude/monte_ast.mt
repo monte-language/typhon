@@ -1,7 +1,7 @@
 import "boot" =~ [=> DeepFrozenStamp, => TransparentStamp, => KernelAstStamp]
 import "lib/iterators" =~ [=> zip :DeepFrozen]
 import "ast_printer" =~ [=> astPrint :DeepFrozen, => nastPrint :DeepFrozen]
-exports (astBuilder, nastBuilder)
+exports (astBuilder, nastBuilder, layoutNASTBuilder, boundNounsBuilder)
 
 def makeStaticScope(read, set, defs, vars, metaStateExpr :Bool) as DeepFrozenStamp:
     def namesRead :Set[DeepFrozen] := read.asSet()
@@ -1022,11 +1022,14 @@ def makeLayoutNAST() as DeepFrozenStamp:
         "TryExpr"         => ["body" => Expr, "catchPattern" => Str,
                               "catchBody" => Expr],
         "FinallyExpr"     => ["body" => Expr, "unwinder" => Expr],
-        "EscapeOnlyExpr"  => ["ejectorPattern" => Str, "body" => Expr],
-        "EscapeExpr"      => ["ejectorPattern" => Str, "body" => Expr,
-                              "catchPattern" => Str, "catchBody" => Expr],
+        "EscapeOnlyExpr"  => ["ejectorPattern" => Int, "body" => Expr],
+        "EscapeExpr"      => ["ejectorPattern" => Int, "body" => Expr,
+                              "catchPattern" => Int, "catchBody" => Expr],
         "IfExpr"          => ["test" => AExpr, "then" => Expr, "else" => Expr],
         "LetExpr"         => ["defs*" => Let_, "body" => Expr],
+        "GuardCoerce"     => ["specimen" => AExpr, "guard" => AExpr, "exit" => AExpr],
+        "ListCoerce"      => ["specimen" => AExpr, "size" => Int, "exit" => AExpr],
+        "NamedParamExtract" => ["params" => AExpr, "key" => AExpr, "default" => AExpr],
     ],
     "NamedArg" => [
         "NamedArgExpr"       => ["key" => AExpr, "value" => AExpr],
@@ -1050,3 +1053,67 @@ def makeLayoutNAST() as DeepFrozenStamp:
     return astBuilder_
 
 def layoutNASTBuilder :DeepFrozen := makeLayoutNAST()
+
+
+def makeBoundNounsAST() as DeepFrozenStamp:
+    def AExpr
+    def CExpr
+    def Expr := Any[AExpr, CExpr]
+    def [bind AExpr, bind CExpr, NamedArg,
+         Method_, Matcher, Slot, Let_,
+         astBuilder_] := makeAstBuilder([
+    "AExpr" => [
+        "IntExpr"         => ["i" => Int],
+        "StrExpr"         => ["s" => Str],
+        "DoubleExpr"      => ["d" => Double],
+        "CharExpr"        => ["c" => Char],
+        "NullExpr"        => [].asMap(),
+        "NounExpr"        => ["name" => Str, "index" => Int, "address" => Any],
+        "BindingExpr"     => ["name" => Str, "index" => Int, "address" => Any],
+        "TempExpr"        => ["index" => Int],
+        "MetaContextExpr" => [],
+        "MetaStateExpr"   => [],
+    ],
+    "CExpr" => [
+        "CallExpr"        => ["receiver" => AExpr, "verb" => Str,
+                              "args*" => AExpr, "namedArgs*" => NamedArg],
+        "ObjectExpr"      => ["docstring?" => Str, "kernelAST" => Any,
+                              "auditors*" => AExpr,
+                              "methods*" => Method_, "matchers*" => Matcher,
+                              "frame" => Any],
+        "TryExpr"         => ["body" => Expr, "catchPattern" => Str,
+                              "catchBody" => Expr],
+        "FinallyExpr"     => ["body" => Expr, "unwinder" => Expr],
+        "EscapeOnlyExpr"  => ["ejectorPattern" => Int, "body" => Expr],
+        "EscapeExpr"      => ["ejectorPattern" => Int, "body" => Expr,
+                              "catchPattern" => Int, "catchBody" => Expr],
+        "IfExpr"          => ["test" => AExpr, "then" => Expr, "else" => Expr],
+        "LetExpr"         => ["defs*" => Let_, "body" => Expr],
+        "GuardCoerce"     => ["specimen" => AExpr, "guard" => AExpr, "exit" => AExpr],
+        "ListCoerce"      => ["specimen" => AExpr, "size" => Int, "exit" => AExpr],
+        "NamedParamExtract" => ["params" => AExpr, "key" => AExpr, "default" => AExpr],
+    ],
+    "NamedArg" => [
+        "NamedArgExpr"       => ["key" => AExpr, "value" => AExpr],
+    ],
+    "Method" => [
+        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Str,
+                     "namedParams" => Str, "body" => Expr, "layout" => Any],
+    ],
+    "Matcher" => [
+        "Matcher" => ["pattern" => Str, "body" => Expr, "layout" => Any]
+    ],
+    "Slot" => [
+        "TempBinding"        => ["value" => Expr],
+        "FinalBinding"       => ["value" => Expr, "guard" => AExpr],
+        "VarBinding"         => ["value" => Expr, "guard" => AExpr],
+    ],
+    "Let" => [
+        "LetDef" => ["index" => Int, "expr" => Any[Slot, Expr], "name" => Str,
+                     "address?" => Any],
+    ],
+    ], [].asMap(), nastPrint)
+    return astBuilder_
+
+def boundNounsBuilder :DeepFrozen := makeBoundNounsAST()
+
