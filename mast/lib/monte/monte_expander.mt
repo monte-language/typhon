@@ -20,6 +20,9 @@ def renameCycles(node, renamings) as DeepFrozen:
             match =="NounExpr" {
                 renamings.fetch(node.getName(), fn {node})
             }
+            match =="TempNounExpr" {
+                node
+            }
             match _ {
                 M.call(maker, "run", args + [span], [].asMap())
             }
