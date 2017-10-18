@@ -222,7 +222,7 @@ object mp as DeepFrozen:
         return [red, parser, f]
 
     to zeroOrMore(parser):
-        return [red, parser]
+        return [rep, parser]
 
     # Standard combinators.
 
@@ -246,7 +246,7 @@ object mp as DeepFrozen:
         def [h] + t := s.asList()
         var p := [exactly, h]
         for char in (t):
-            p := [cat, p, [exactly, t]]
+            p := [cat, p, [exactly, char]]
         return [red, p, fn _ { if (value == noValue) { s } else { value } }]
 
     to token(s :Str):
@@ -273,27 +273,28 @@ object mp as DeepFrozen:
     def exp := [red, [cat, e, digits],
                 fn [negate, i] { if (negate) { -i } else { i } }]
     def frac := [red, [cat, mp.exactly('.'), digits], fn [_, y] { y }]
-    def int := [red, [cat, mp.optional('-'), digits],
+    def int := [red, [cat, mp.optional([exactly, '-']), digits],
                 fn [negate, i] { if (negate == null) { i } else { -i } }]
     def number := [cat, int, [cat, mp.optional(frac), mp.optional(exp)]]
     def char := [suchThat, fn x { x != '"' }]
     def chars := mp.zeroOrMore(char)
-    def string := mp.bracket(chars, mp.exactly('"'), mp.exactly('"'))
-#     def [value, elements, array, pair, members, obj] := [
-#         [alt, string, [alt, number, [alt, obj, [alt, array,
-#             [alt, mp.keyword("true", "value" => true),
-#                 [alt, mp.keyword("false", "value" => false),
-#                     mp.keyword("null", "value" => null)
-#         ]]]]]],
-#         mp.optional(mp.joinedBy(value, mp.token(',')), "default" => []),
-#         mp.bracket(elements, mp.token('['), mp.token(']')),
-#         [red, [cat, string, [cat, mp.token(':'), value]],
-#          fn [k, [_, v]] { [k, v] }],
-#         [red, mp.optional(mp.joinedBy(pair, mp.token(',')), "default" => []),
-#          fn pairs { [for [k, v] in (pairs) k => v] }],
-#         mp.bracket(members, mp.token('{'), mp.token('}')),
-#     ]
-#     traceln(testParse(obj, "{\"key\":[1,\"Monte\",true,null]}"))
+    def string := [red, mp.bracket(chars, mp.exactly('"'), mp.exactly('"')),
+                   _makeStr.fromChars]
+    def [value, elements, array, pair, members, obj] := [
+        [alt, string, [alt, number, [alt, obj, [alt, array,
+            [alt, mp.keyword("true", "value" => true),
+                [alt, mp.keyword("false", "value" => false),
+                    mp.keyword("null", "value" => null)
+        ]]]]]],
+        mp.optional(mp.joinedBy(value, mp.token(",")), "default" => []),
+        mp.bracket(elements, mp.token("["), mp.token("]")),
+        [red, [cat, string, [cat, mp.token(":"), value]],
+         fn [k, [_, v]] { [k, v] }],
+        [red, mp.optional(mp.joinedBy(pair, mp.token(",")), "default" => []),
+         fn pairs { [for [k, v] in (pairs) k => v] }],
+        mp.bracket(members, mp.token("{"), mp.token("}")),
+    ]
+    traceln(testParse(obj, "{\"key\":[1,\"Monte\",true,null]}"))
 }
 
 # def parseCat(hy, c1, c2):
