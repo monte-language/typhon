@@ -1019,7 +1019,7 @@ def makeLayoutNAST() as DeepFrozenStamp:
                               "auditors*" => AExpr,
                               "methods*" => Method_, "matchers*" => Matcher,
                               "frame" => List[Int]],
-        "TryExpr"         => ["body" => Expr, "catchPattern" => Str,
+        "TryExpr"         => ["body" => Expr, "catchPattern" => Int,
                               "catchBody" => Expr],
         "FinallyExpr"     => ["body" => Expr, "unwinder" => Expr],
         "EscapeOnlyExpr"  => ["ejectorPattern" => Int, "body" => Expr],
@@ -1035,11 +1035,11 @@ def makeLayoutNAST() as DeepFrozenStamp:
         "NamedArgExpr"       => ["key" => AExpr, "value" => AExpr],
     ],
     "Method" => [
-        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Str,
-                     "namedParams" => Str, "body" => Expr, "localSize" => Int],
+        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Int,
+                     "namedParams" => Int, "body" => Expr, "localSize" => Int],
     ],
     "Matcher" => [
-        "Matcher" => ["pattern" => Str, "body" => Expr, "localSize" => Int]
+        "Matcher" => ["pattern" => Int, "body" => Expr, "localSize" => Int]
     ],
     "Slot" => [
         "TempBinding"        => ["value" => Expr],
@@ -1081,7 +1081,7 @@ def makeBoundNounsAST() as DeepFrozenStamp:
                               "auditors*" => AExpr,
                               "methods*" => Method_, "matchers*" => Matcher,
                               "frame" => Any],
-        "TryExpr"         => ["body" => Expr, "catchPattern" => Str,
+        "TryExpr"         => ["body" => Expr, "catchPattern" => Int,
                               "catchBody" => Expr],
         "FinallyExpr"     => ["body" => Expr, "unwinder" => Expr],
         "EscapeOnlyExpr"  => ["ejectorPattern" => Int, "body" => Expr],
@@ -1097,11 +1097,11 @@ def makeBoundNounsAST() as DeepFrozenStamp:
         "NamedArgExpr"       => ["key" => AExpr, "value" => AExpr],
     ],
     "Method" => [
-        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Str,
-                     "namedParams" => Str, "body" => Expr, "layout" => Any],
+        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Int,
+                     "namedParams" => Int, "body" => Expr, "layout" => Any],
     ],
     "Matcher" => [
-        "Matcher" => ["pattern" => Str, "body" => Expr, "layout" => Any]
+        "Matcher" => ["pattern" => Int, "body" => Expr, "layout" => Any]
     ],
     "Slot" => [
         "TempBinding"        => ["value" => Expr],

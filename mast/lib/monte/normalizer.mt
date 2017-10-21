@@ -439,7 +439,7 @@ def layoutScopes(topExpr, builder) as DeepFrozen:
             # All references to names bound in this LetExpr have now been seen.
             # We can now decide which bindings can be deslotified. Since
             # deslotification requires rewriting NounExprs, we leave that for a
-            # future pass. Maybe.
+            # future pass.
             for i => letdef in (ast.getDefs()):
                 def binding := letdef.getExpr()
                 def bn := binding.getNodeName()
@@ -479,7 +479,7 @@ def layoutScopes(topExpr, builder) as DeepFrozen:
             for m in (ast.getMethods()):
                 def [newBody, mFreeNames, mls] := _layoutScopes(m.getBody())
                 frameNames |= mFreeNames
-                newMethods.push(builder.MethodExpr(
+                newMethods.push(builder."Method"(
                     m.getDocstring(), m.getVerb(),
                     m.getParams(), m.getNamedParams(),
                     newBody, mls, m.getSpan()))
@@ -493,7 +493,7 @@ def layoutScopes(topExpr, builder) as DeepFrozen:
                                        newAuditors.snapshot(),
                                        newMethods.snapshot(),
                                        newMatchers.snapshot(),
-                                       frameNames, ast.getSpan()),
+                                       frameNames.asList(), ast.getSpan()),
                     aNames,
                     localSize]
         else if (nn == "NounExpr"):
@@ -600,9 +600,9 @@ def layoutScopes(topExpr, builder) as DeepFrozen:
     def [expr, _freeNames, _localSize] := _layoutScopes(topExpr)
     return [expr, allNames]
 
-def [FINAL :Int, VAR_ :Int] := [1, 2]
 # you're aware i'm a bad person, right?
-
+def [FINAL :Int, VAR_ :Int] := [1, 2]
+def regions :DeepFrozen := ["FinalBinding" => FINAL, "VarBinding" => VAR_]
 def [OUTER :Int, FRAME :Int, LOCAL :Int] := [0, 1, 2]
 
 def asPrettyIndex(i :Int) :Str as DeepFrozen:
@@ -657,7 +657,8 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
             [].asMap().diverge()])
     pushLocalStack()
     def addNewAddress(idx):
-        traceln(`addNewAddress $idx`)
+        if (allAddresses.contains(idx)):
+                return allAddresses[idx]
         if (idx < outerNames.size()):
             def a := if (inRepl) {
                 # outers may include bindings from previous interactions
@@ -667,51 +668,33 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
                 makeAddress(OUTER, NOUN, FINAL, idx)
             }
             allAddresses[idx] := a
-            traceln(`allAddresses $allAddresses`)
             return a
-
-        if (frameNameStack.last().contains(idx)):
-            # mentioned in frame
-            def la := allAddresses[idx]
-            if (frameStack.last()[la.getRegion()].contains(idx)):
-                return frameStack.last()[la.getRegion()][idx]
-            # tow this binding outside the environment
-            def a := makeAddress(FRAME, la.getRegion(), la.getMode(),
-                               frameStack.last()[la.getRegion()].size())
-            frameStack.last()[la.getRegion()][idx] := la
-            return a
-
-        # not outer or frame, must be local
         def b := allNames[idx]
-        if (allAddresses.contains(idx)):
-            return allAddresses[idx]
+        def region := regions.fetch(b.getNodeName(), fn {BINDING})
+        if (frameNameStack.last().contains(idx)):
+            # tow this binding outside the environment
+            def a := makeAddress(FRAME, region, b.getStorage(),
+                                 frameStack.last()[region].size())
+            frameStack.last()[region][idx] := a
+            return a
 
-        def a := if (b.getNodeName() == "FinalBinding") {
-            makeAddress(LOCAL, FINAL, b.getStorage(),
-                               localStack.last()[FINAL].size())
-        } else if (b.getNodeName() == "VarBinding") {
-            makeAddress(LOCAL, VAR_, b.getStorage(),
-                               localStack.last()[VAR_].size())
-        } else {
-            makeAddress(LOCAL, BINDING, BINDING,
-                               localStack.last()[BINDING].size())
-        }
+        def a := makeAddress(LOCAL, region, b.getStorage(),
+                             localStack.last()[region].size())
         localStack.last()[a.getRegion()][idx] := a
         allAddresses[idx] := a
-        traceln(`allAddresses $allAddresses`)
         return a
 
     def _specializeNouns(ast):
         def specializeExprList(exprs):
-            return [for ex in (exprs) {def ey := _specializeNouns(ex); traceln(`Produced $ey`); ey}]
+            return [for ex in (exprs) _specializeNouns(ex)]
         def nn := ast.getNodeName()
-        traceln(`Entered $ast $nn`)
         if (nn == "TempExpr"):
             allAddresses[ast.getIndex()] := null
             return builder.TempExpr(ast.getIndex(), ast.getSpan())
         else if (nn == "LetExpr"):
-            # need a way to let processing a single letdef.getExpr() result in multiple new letdefs
-            # newExprs needs to become Pair[List[Expr], guard]
+            # need a way to let processing a single letdef.getExpr() result in
+            # multiple new letdefs
+            # newExprs thus becomes Tuple[Expr, Expr, List[LetDef]]
             def newExprs := [].diverge()
             def newDefs := [].diverge()
             for letdef in (ast.getDefs()):
@@ -727,14 +710,12 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
                             binding.getNodeName())) {
                          _specializeNouns(binding.getGuard())
                         } else { null }
-                    traceln(`$newExpr yielded $extras, letdefstack is $letdefStack`)
                     newExprs.push([newExpr, guard, extras])
                 letdefStack.pop()
             def bodyExtras := [].diverge()
             letdefStack.push(bodyExtras)
             def newBody := _specializeNouns(ast.getBody())
             letdefStack.pop()
-            traceln(`newExprs $newExprs`)
             for i => letdef in (ast.getDefs()):
                 def binding := letdef.getExpr()
                 def bn := binding.getNodeName()
@@ -766,14 +747,14 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
             return builder.LetExpr(newDefs.snapshot() + bodyExtras.snapshot(),
                                    newBody, ast.getSpan())
         else if (nn == "ObjectExpr"):
-            def newAuditors := _specializeNouns(ast.getAuditors())
+            def newAuditors := specializeExprList(ast.getAuditors())
             def newMethods := [].diverge()
             def newMatchers := [].diverge()
             frameNameStack.push(ast.getFrame())
             pushFrameStack()
             for m in (ast.getMethods()):
                 pushLocalStack()
-                def newBody := _specializeNouns(ast.getBody())
+                def newBody := _specializeNouns(m.getBody())
                 newMethods.push(builder."Method"(
                     m.getDocstring(), m.getVerb(),
                     m.getParams(), m.getNamedParams(),
@@ -784,21 +765,21 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
                 newMatchers.push(builder.Matcher(
                     m.getPattern(), newBody, localStack.pop(), m.getSpan()))
             frameNameStack.pop()
-            def frame := frameStack.pop().getValues()
+            def [fBindings, fDefs, fVars] := frameStack.pop()
             return builder.ObjectExpr(ast.getDocstring(), ast.getKernelAST(),
                                       newAuditors.snapshot(),
                                       newMethods.snapshot(),
                                       newMatchers.snapshot(),
-                                      frame, ast.getSpan())
+                                      [fBindings.getValues(),
+                                       fDefs.getValues(),
+                                       fVars.getValues()],
+                                      ast.getSpan())
         else if (nn == "NounExpr"):
-            traceln(`NounExpr ${ast.getIndex()}`)
             def addr := addNewAddress(ast.getIndex())
             if (addr.getMode() == BINDING):
-                traceln(`NounExpr $ast for binding`)
                 def b := builder.BindingExpr(
                     ast.getName(), ast.getIndex(),
-                    addNewAddress(ast.getIndex()),
-                    ast.getSpan())
+                    addr, ast.getSpan())
                 def temp1 := gensym_seq
                 gensym_seq += 1
                 letdefStack.last().push(builder.LetDef(
@@ -818,7 +799,6 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
                             "get", [], [], ast.getSpan()),
                             ast.getSpan()),
                         "", null, ast.getSpan()))
-                traceln(`Extras ${letdefStack.last()}`)
                 return builder.TempExpr(temp2, ast.getSpan())
             else:
                 return builder.NounExpr(ast.getName(), ast.getIndex(),
