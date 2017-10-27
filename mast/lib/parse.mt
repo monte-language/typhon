@@ -3,7 +3,7 @@
 #     => arb :DeepFrozen,
 #     => prop :DeepFrozen,
 # ]
-exports (mp)
+exports (mp, main)
 
 # Parse: Dead-simple reasonably-performing incremental parser toolkit.
 # Based largely on this functional pearl:
@@ -195,50 +195,64 @@ def _sizeOf(sizeOf, parser) :Int as DeepFrozen:
 def zero :Int := 0
 def sizeOf :DeepFrozen := kleeneMemo(_sizeOf, &zero.get)
 
-def testParse(var parser, input):
-    traceln(`initial parser sizeOf ${sizeOf(parser)}`)
-    traceln(`leaders ${leaders(parser)}`)
-    for char in (input):
-        parser := derive(char, parser)
-        traceln(`fed char $char, got sizeOf ${sizeOf(parser)}`)
-        traceln(`leaders ${leaders(parser)}`)
-        # throw("plz")
-    return parseNull(parser)
-
-def whitespace :DeepFrozen := [oneOf, " \n".asSet()]
-
 object noValue as DeepFrozen {}
+object parserMarker as DeepFrozen {}
+
+def unwrap(combinator, ej) as DeepFrozen:
+    def parser := combinator._sealedDispatch(parserMarker)
+    return if (parser == null) {
+        throw.eject(ej, `Not a parser combinator`)
+    } else { parser }
+
+def wrap(parser) as DeepFrozen:
+    return object parserCombinator:
+        to _sealedDispatch(brand):
+            return if (brand == parserMarker) { parser }
+
+        to size() :Int:
+            return sizeOf(parser)
+
+        # Standard combinators.
+
+        to reduce(f):
+            return wrap([red, parser, f])
+
+        to add(via (unwrap) other):
+            return wrap([cat, parser, other])
+
+        to or(via (unwrap) other):
+            return wrap([alt, parser, other])
+
+        to zeroOrMore():
+            return wrap([rep, parser])
+
+        to oneOrMore():
+            return wrap([red, [cat, parser, [rep, parser]],
+                fn [h, t] { [h] + t }])
+
+        to optional(=> default := null):
+            return wrap([alt, [eps, [default].asSet()], parser])
+
+        to join(via (unwrap) element):
+            return wrap([red, [cat, [red, element, _makeList],
+                          [rep, [red, [cat, parser, element], fn [_, x] { x }]]],
+                    fn [h, t] { h + t }])
+
+        to bracket(via (unwrap) bra, via (unwrap) ket):
+            return wrap([red, [cat, bra, [cat, parser, ket]],
+                fn [_, [x, _]] { x }])
 
 object mp as DeepFrozen:
     # Primitives.
 
     to exactly(value):
-        return [exactly, value]
+        return wrap([exactly, value])
 
     to oneOf(values :Set):
-        return [oneOf, values]
+        return wrap([oneOf, values])
 
-    to reduce(parser, f):
-        return [red, parser, f]
-
-    to zeroOrMore(parser):
-        return [rep, parser]
-
-    # Standard combinators.
-
-    to oneOrMore(parser):
-        return [red, [cat, parser, [rep, parser]], fn [h, t] { [h] + t }]
-
-    to optional(parser, => default := null):
-        return [alt, [eps, [default].asSet()], parser]
-
-    to joinedBy(parser, comma):
-        return [red, [cat, [red, parser, _makeList],
-                      [rep, [red, [cat, comma, parser], fn [_, x] { x }]]],
-                fn [h, t] { h + t }]
-
-    to bracket(parser, bra, ket):
-        return [red, [cat, bra, [cat, parser, ket]], fn [_, [x, _]] { x }]
+    to suchThat(predicate):
+        return wrap([suchThat, predicate])
 
     # For parsing characters specifically.
 
@@ -247,55 +261,81 @@ object mp as DeepFrozen:
         var p := [exactly, h]
         for char in (t):
             p := [cat, p, [exactly, char]]
-        return [red, p, fn _ { if (value == noValue) { s } else { value } }]
+        return wrap([red, p,
+            fn _ { if (value == noValue) { s } else { value } }])
 
     to token(s :Str):
         "Eat leading whitespace and then parse `s`."
-        return [red, [cat, mp.optional(whitespace), mp.keyword(s)],
-                fn [_, y] { y }]
+
+        def whitespace := wrap([oneOf, " \n".asSet()]).zeroOrMore()
+        return (whitespace + mp.keyword(s)).reduce(fn [_, y] { y })
 
     to stringOf(chars :Set[Char]):
-        def char := [oneOf, chars]
-        return [red, mp.oneOrMore(char), _makeStr.fromChars]
+        def char := wrap([oneOf, chars])
+        return wrap([red, char.oneOrMore(), _makeStr.fromChars])
 
     to integer():
         # XXX support other radices
         def digits := "1234567890".asSet()
         def f(ds):
             return _makeInt(_makeStr.fromChars(ds))
-        return [red, mp.oneOrMore([oneOf, digits]), f]
+        return wrap([oneOf, digits]).oneOrMore().reduce(f)
 
-{
-    def e := mp.reduce([cat, mp.oneOf("eE".asSet()),
-                                mp.optional(mp.oneOf("+-".asSet()))],
-                               fn [_, negate] { negate == '-' })
+def main(_argv) as DeepFrozen:
+    def e := {
+        def p := mp.oneOf("eE".asSet()) + mp.oneOf("+-".asSet()).optional()
+        p.reduce(fn [_, negate] { negate == '-' })
+    }
     def digits := mp.integer()
-    def exp := [red, [cat, e, digits],
-                fn [negate, i] { if (negate) { -i } else { i } }]
-    def frac := [red, [cat, mp.exactly('.'), digits], fn [_, y] { y }]
-    def int := [red, [cat, mp.optional([exactly, '-']), digits],
-                fn [negate, i] { if (negate == null) { i } else { -i } }]
-    def number := [cat, int, [cat, mp.optional(frac), mp.optional(exp)]]
-    def char := [suchThat, fn x { x != '"' }]
-    def chars := mp.zeroOrMore(char)
-    def string := [red, mp.bracket(chars, mp.exactly('"'), mp.exactly('"')),
-                   _makeStr.fromChars]
+    def exp := (e + digits).reduce(fn [negate, i] {
+        if (negate) { -i } else { i }
+    })
+    def frac := (mp.exactly('.') + digits).reduce(fn [_, y] { y })
+    def int := (mp.exactly('-').optional() + digits).reduce(fn [negate, i] {
+        if (negate == null) { i } else { -i }
+    })
+    def number := int + frac.optional() + exp.optional()
+    def char := mp.suchThat(fn x { x != '"' })
+    def chars := char.zeroOrMore()
+    def string := chars.bracket(mp.exactly('"'),
+        mp.exactly('"')).reduce(_makeStr.fromChars)
     def [value, elements, array, pair, members, obj] := [
-        [alt, string, [alt, number, [alt, obj, [alt, array,
-            [alt, mp.keyword("true", "value" => true),
-                [alt, mp.keyword("false", "value" => false),
-                    mp.keyword("null", "value" => null)
-        ]]]]]],
-        mp.optional(mp.joinedBy(value, mp.token(",")), "default" => []),
-        mp.bracket(elements, mp.token("["), mp.token("]")),
-        [red, [cat, string, [cat, mp.token(":"), value]],
-         fn [k, [_, v]] { [k, v] }],
-        [red, mp.optional(mp.joinedBy(pair, mp.token(",")), "default" => []),
-         fn pairs { [for [k, v] in (pairs) k => v] }],
-        mp.bracket(members, mp.token("{"), mp.token("}")),
+        string | number | obj | array | mp.keyword("true", "value" => true) |
+            mp.keyword("false", "value" => false) |
+            mp.keyword("null", "value" => null),
+        mp.token(",").join(value).optional("default" => []),
+        elements.bracket(mp.token("["), mp.token("]")),
+        (string + mp.token(":") + value).reduce(fn [k, [_, v]] { [k, v] }),
+        mp.token(",").join(pair).optional("default" => []).reduce(fn pairs {
+            [for [k, v] in (pairs) k => v]
+        }),
+        members.bracket(mp.token("{"), mp.token("}")),
     ]
-    traceln(testParse(obj, "{\"key\":[1,\"Monte\",true,null]}"))
+    def testParse(var parser, input):
+        for char in (input):
+            traceln(`Feeding ${M.toQuote(char)}`)
+            def old := parser
+            parser := derive(char, parser)
+            def ls := leaders(parser)
+            if (ls.isEmpty()):
+                throw(`Fed ${M.toQuote(char)}, couldn't advance; wanted ${leaders(old)}`)
+        return parseNull(parser)
+    traceln(testParse(unwrap(obj, null), `
+{
+  "selska": [
+    "zirpu"
+  ],
+  "selcmi": {
+    "bangu": {
+      "ve tavla": {}
+    }
+  },
+  "du": {
+    "se vacri": "plini"
+  }
 }
+    `))
+    return 0
 
 # def parseCat(hy, c1, c2):
 #     def parse := Parse.cat(Parse.exactly(c1), Parse.exactly(c2))
