@@ -1,9 +1,9 @@
-# import "unittest" =~ [=> unittest]
-# import "tests/proptests" =~ [
-#     => arb :DeepFrozen,
-#     => prop :DeepFrozen,
-# ]
-exports (mp, main)
+import "unittest" =~ [=> unittest]
+import "tests/proptests" =~ [
+    => arb :DeepFrozen,
+    => prop :DeepFrozen,
+]
+exports (mp, ::"parse``", main)
 
 # Parse: Dead-simple reasonably-performing incremental parser toolkit.
 # Based largely on this functional pearl:
@@ -98,12 +98,15 @@ def breakOut(parser) as DeepFrozen:
             for p in (piece):
                 if (p =~ _ :List):
                     stack.push(p)
-    traceln(`breakOut has ${m.size()}`)
     return m
 
 def singletonSet(specimen, ej) as DeepFrozen:
     def s :Set ? (s.size() == 1) exit ej := specimen
     return s.asList()[0]
+
+def compose(f, g) as DeepFrozen:
+    return def composed(x):
+        return g(f(x))
 
 def derive(c, parser) as DeepFrozen:
     # NB: Cycles are likelier to happen on earlier pieces. (Proof: Think about
@@ -154,12 +157,13 @@ def derive(c, parser) as DeepFrozen:
                     [red, [cat, dl, piece], fn [h, t] { [h] + t }]
                 }
             }
-            match [==red, l, var f] {
+            match [==red, l, outerRed] {
+                var f := outerRed
                 var dl := go(l)
-                # if (dl =~ [==red, inner, g]) {
-                #     dl := inner
-                #     f := fn x { traceln(1, x); f(g(x)) }
-                # }
+                if (dl =~ [==red, inner, innerRed]) {
+                    dl := inner
+                    f := compose(innerRed, outerRed)
+                }
                 if (emptyYet(dl)) { empty } else if (dl =~ [==eps, ts]) {
                     [eps, [for t in (ts) f(t)].asSet()]
                 } else { [red, dl, f] }
@@ -337,56 +341,93 @@ def main(_argv) as DeepFrozen:
     `))
     return 0
 
-# def parseCat(hy, c1, c2):
-#     def parse := Parse.cat(Parse.exactly(c1), Parse.exactly(c2))
-#     hy.assert(parse.derive(c1).derive(c2).acceptsEmpty())
-# 
-# unittest([
-#     prop.test([arb.Char(), arb.Char()], parseCat),
-# ])
-#
-# object exprHoleTag as DeepFrozen {}
-# 
-# def makeQuasiLexer(lexer :DeepFrozen, classifier :DeepFrozen, name :Str) as DeepFrozen:
-#     return def makeQuasiParser(parserMaker :DeepFrozen) as DeepFrozen:
-#         return object quasiParser as DeepFrozen:
-#             to _printOn(out):
-#                 out.print(`<$name````>`)
-# 
-#             to valueHole(index :Int):
-#                 return [exprHoleTag, index]
-# 
-#             to valueMaker(pieces):
-#                 def tokens := [].diverge()
-# 
-#                 for piece in (pieces):
-#                     if (piece =~ [==exprHoleTag, index :Int]):
-#                         # Pre-scanned for us.
-#                         tokens.push([".hole.", index, null])
-#                     else:
-#                         var scanner := lexer
-#                         var start :Int := 0
-#                         for i => c in (piece):
-#                             traceln(`scanner $scanner size ${scanner.size()}`)
-#                             scanner derive= (c)
-#                             if (!scanner.acceptsEmpty()):
-#                                 # Scanner just died; mark the token and
-#                                 # reboot.
-#                                 scanner := lexer.derive(c)
-#                                 if (i <= start):
-#                                     throw("Scanner failed to make progress")
-#                                 def s := piece.slice(start, i)
-#                                 start := i
-#                                 tokens.push([classifier(s), s, null])
-#                         if (!scanner.acceptsEmpty()):
-#                             # Ragged edge.
-#                             throw(`Scanner wanted one of ${scanner.leaders()}, got EOS`)
-#                         def s := piece.slice(start, piece.size())
-#                         tokens.push([classifier(s), s, null])
-# 
-#                 def tree := parserMaker()(tokens)
-#                 return def ruleSubstituter.substitute(_):
-#                     return tree
+def parserPrimitiveAlt(hy, c1, c2):
+    def p := [alt, [exactly, c1], [exactly, c2]]
+    hy.assert(parseNull(derive(c1, p)).contains(c1))
+    hy.assert(parseNull(derive(c2, p)).contains(c2))
 
-# def ::"term``" := makeQuasiLexer(termPieces, class, "term")(makeParser)
-# traceln(term`add(.int.(${2}), .int.(${5}))`)
+def parserPrimitiveCat(hy, c1, c2):
+    def p := [cat, [exactly, c1], [exactly, c2]]
+    hy.assert(parseNull(derive(c2, derive(c1, p))).contains([c1, c2]))
+
+unittest([
+    prop.test([arb.Char(), arb.Char()], parserPrimitiveAlt),
+    prop.test([arb.Char(), arb.Char()], parserPrimitiveCat),
+])
+
+
+object exprHoleTag as DeepFrozen {}
+
+def throwParseError(parser) as DeepFrozen:
+    throw(`Error: ${leaders(parser)}`)
+
+def makeQP(name :Str, parser :DeepFrozen, substituter :DeepFrozen) as DeepFrozen:
+    return object quasiParser as DeepFrozen:
+        to _printOn(out):
+            out.print(`<$name````>`)
+
+        to valueHole(index :Int):
+            return [exprHoleTag, index]
+
+        to valueMaker(pieces):
+            var p := parser
+
+            def advance(x):
+                def old := p
+                p := derive(x, p)
+                traceln(`Leaders: ${leaders(p)}`)
+                if (leaders(p).isEmpty()):
+                    throwParseError(old)
+
+            for piece in (pieces):
+                if (piece =~ [==exprHoleTag, index :Int]):
+                    advance(piece)
+                else:
+                    for char in (piece):
+                        advance(char)
+
+            def forest := parseNull(parser)
+            if (forest =~ via (singletonSet) tree):
+                return def ruleSubstituter.substitute(values):
+                    return substituter(tree, values)
+            else if (forest.isEmpty()):
+                throw(`Parse error`)
+            else:
+                throw(`Ambiguous parse forest: $forest`)
+
+object nt as DeepFrozen {}
+
+def ws := [oneOf, " \n".asSet()]
+def eat(p) :DeepFrozen:
+    def eatWhitespace([_, x]) as DeepFrozen:
+        return x
+    return [red, [cat, [rep, ws], p], eatWhitespace]
+
+def oneOrMore(p) :DeepFrozen:
+    def cons([h, t]) as DeepFrozen:
+        return [h] + t
+    return [red, [cat, p, [rep, p]], cons]
+
+def chars := [oneOf, [for c in ('a'..'z' | 'A'..'Z' | '0'..'9') c].asSet()]
+def word := [red, oneOrMore(chars), _makeStr.fromChars]
+
+def expr := oneOrMore(eat(word))
+
+def buildEq([name, [_, [p, _]]]) as DeepFrozen:
+    traceln(`buildEq $name $p`)
+    return [name, p]
+def eq := [red, [cat, eat(word), [cat, eat([exactly, '=']),
+    [cat, expr, eat([exactly, ';'])]]], buildEq]
+def buildQP([eqs, _]) as DeepFrozen:
+    traceln(`buildQP $eqs`)
+    return _makeMap.fromPairs(eqs)
+def qp := [red, [cat, oneOrMore(eq), [rep, ws]], buildQP]
+
+def finishQP(nts :Map[Str, DeepFrozen], _) :DeepFrozen as DeepFrozen:
+    def m := [for k => _ in (nts) k => Ref.promise()]
+    throw(m)
+
+def ::"parse``" :DeepFrozen := makeQP("parse", qp, finishQP)
+# traceln(parse`
+#     x = y z;
+# `)
