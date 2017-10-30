@@ -681,8 +681,13 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
             allAddresses[idx] := a
             return a
         def b := allNames[idx].getExpr()
-        def bStorage := if (["FinalBinding", "VarBinding"].contains(b.getNodeName())) {
-                                b.getStorage() } else { BINDING }
+        def bStorage := if (b.getNodeName() == "FinalBinding") {
+            # we are going to synthesize Binding objects as-needed for
+            # BindingExprs, rather than storing them ahead of time
+            NOUN
+        } else if (b.getNodeName() ==  "VarBinding") {
+            b.getStorage()
+        } else { BINDING }
         def region := regions.fetch(b.getNodeName(), fn {BINDING})
         if (frameNameStack.last().contains(idx)):
             # tow this binding outside the environment

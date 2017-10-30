@@ -363,17 +363,13 @@ def testNormalize(assert):
     _t10 = _makeTempSlot(2)
     z∅11 = _makeFinalSlot(3, null)
     _t12 = _makeTempSlot(3)
-    _t16 = _makeTempSlot(&&x7.get())
-    _t17 = _makeTempSlot(_t16.get())
-    _t18 = _makeTempSlot(&&z11.get())
-    _t19 = _makeTempSlot(_t18.get())
-    _t20 = _makeTempSlot(_makeList5.run(\"&&x\", &&x7))
-    _t21 = _makeTempSlot(_makeList5.run(\"&&z\", &&z11))
-    _t22 = _makeTempSlot(_makeList5.run(_t20, _t21))
-    _t23 = _makeTempSlot(_makeMap6.fromPairs(_t22))
+    _t16 = _makeTempSlot(_makeList5.run(\"&&x\", &&x7))
+    _t17 = _makeTempSlot(_makeList5.run(\"&&z\", &&z11))
+    _t18 = _makeTempSlot(_makeList5.run(_t16, _t17))
+    _t19 = _makeTempSlot(_makeMap6.fromPairs(_t18))
     _t13 = _makeTempSlot(object {
     method run (_t15) {
-            f0.run(_t17, _t19, _t23)
+            f0.run(x7, z11, _t19)
         }
     })
     o∅14 = _makeFinalSlot(_t13, null)
