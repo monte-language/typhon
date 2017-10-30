@@ -180,7 +180,7 @@ object anfTransform as DeepFrozen:
         else if (nn == "MetaContextExpr"):
             return builder.MetaContextExpr()
         else if (nn == "MetaStateExpr"):
-            return builder.MetaStateExpr()
+            return builder.MetaStateExpr(span)
         else:
             return builder.TempExpr(
                 binder.addTempBinding(anfTransform.complex(ast, builder, binder), span),
@@ -387,9 +387,10 @@ object anfTransform as DeepFrozen:
 
 def [BINDING :Int, NOUN :Int, UNUSED :Int] := [0, 1, 2]
 
-def layoutScopes(topExpr, builder) as DeepFrozen:
+def layoutScopes(topExpr, outerNames, builder) as DeepFrozen:
     def allNames := [].asMap().diverge()
     def accessTypes := [].asMap().diverge()
+    def hasMeta := [].diverge()
     def _layoutScopes(ast):
         def layoutExprList(exprs):
             var freeNames := [].asSet()
@@ -465,10 +466,11 @@ def layoutScopes(topExpr, builder) as DeepFrozen:
                     } else {
                         newExprs[i]
                     }
-                    allNames[letdef.getIndex()] := newBinding
                     boundNames.include(letdef.getIndex())
-                    newDefs.push(builder.LetDef(letdef.getIndex(), newBinding,
-                                                letdef.getName(), letdef.getSpan()))
+                    def newDef := builder.LetDef(letdef.getIndex(), newBinding,
+                                                letdef.getName(), letdef.getSpan())
+                    allNames[letdef.getIndex()] := newDef
+                    newDefs.push(newDef)
             return [builder.LetExpr(newDefs.snapshot(), newBody, ast.getSpan()),
                     freeNames &! boundNames,
                     boundNames.size() + subLocalSize]
@@ -476,6 +478,7 @@ def layoutScopes(topExpr, builder) as DeepFrozen:
             def [newAuditors, aNames, localSize] := layoutExprList(ast.getAuditors())
             def newMethods := [].diverge()
             var frameNames := [].asSet()
+            hasMeta.push(false)
             for m in (ast.getMethods()):
                 def [newBody, mFreeNames, mls] := _layoutScopes(m.getBody())
                 frameNames |= mFreeNames
@@ -489,11 +492,16 @@ def layoutScopes(topExpr, builder) as DeepFrozen:
                 frameNames |= mFreeNames
                 newMatchers.push(builder.Matcher(
                     m.getPattern(), newBody, mls, m.getSpan()))
+            def frameNameList := [for idx in (frameNames)
+                                  ? (idx >= outerNames.size()) idx]
+            if (hasMeta.pop()):
+                for fname in (frameNameList):
+                    accessTypes[fname] := BINDING
             return [builder.ObjectExpr(ast.getDocstring(), ast.getKernelAST(),
                                        newAuditors.snapshot(),
                                        newMethods.snapshot(),
                                        newMatchers.snapshot(),
-                                       frameNames.asList(), ast.getSpan()),
+                                       frameNameList, ast.getSpan()),
                     aNames,
                     localSize]
         else if (nn == "NounExpr"):
@@ -519,7 +527,10 @@ def layoutScopes(topExpr, builder) as DeepFrozen:
         else if (nn == "MetaContextExpr"):
             return [builder.MetaContextExpr(ast.getSpan()), [].asSet(), 0]
         else if (nn == "MetaStateExpr"):
-            return [builder.MetaContextExpr(ast.getSpan()), [].asSet(), 0]
+            if (hasMeta.size() == 0):
+                throw("meta.getState() used outside of object expr")
+            hasMeta[hasMeta.size() - 1] := true
+            return [builder.MetaStateExpr(ast.getSpan()), [].asSet(), 0]
         else if (nn == "CallExpr"):
             def [newRcvr, rFreeNames, rLocalSize] := _layoutScopes(ast.getReceiver())
             def [newArgs, aFreeNames, aLocalSize] := layoutExprList(ast.getArgs())
@@ -669,20 +680,30 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
             }
             allAddresses[idx] := a
             return a
-        def b := allNames[idx]
+        def b := allNames[idx].getExpr()
+        def bStorage := if (["FinalBinding", "VarBinding"].contains(b.getNodeName())) {
+                                b.getStorage() } else { BINDING }
         def region := regions.fetch(b.getNodeName(), fn {BINDING})
         if (frameNameStack.last().contains(idx)):
             # tow this binding outside the environment
-            def a := makeAddress(FRAME, region, b.getStorage(),
+            def a := makeAddress(FRAME, region, bStorage,
                                  frameStack.last()[region].size())
             frameStack.last()[region][idx] := a
             return a
 
-        def a := makeAddress(LOCAL, region, b.getStorage(),
+        def a := makeAddress(LOCAL, region, bStorage,
                              localStack.last()[region].size())
         localStack.last()[a.getRegion()][idx] := a
         allAddresses[idx] := a
         return a
+    def pushTempBinding(expr, span):
+        def temp := gensym_seq
+        gensym_seq += 1
+        letdefStack.last().push(builder.LetDef(
+            temp,
+            builder.TempBinding(expr, span),
+            "", null, span))
+        return builder.TempExpr(temp, span)
 
     def _specializeNouns(ast):
         def specializeExprList(exprs):
@@ -780,26 +801,16 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
                 def b := builder.BindingExpr(
                     ast.getName(), ast.getIndex(),
                     addr, ast.getSpan())
-                def temp1 := gensym_seq
-                gensym_seq += 1
-                letdefStack.last().push(builder.LetDef(
-                    temp1,
-                    builder.TempBinding(
-                        builder.CallExpr(b, "get", [], [], ast.getSpan()),
-                        ast.getSpan()),
-                    "", null, ast.getSpan()))
+                def temp1 := pushTempBinding(
+                    builder.CallExpr(b, "get", [], [], ast.getSpan()),
+                    ast.getSpan())
 
-                def temp2 := gensym_seq
-                gensym_seq += 1
-                letdefStack.last().push(builder.LetDef(
-                    temp2,
-                    builder.TempBinding(
-                        builder.CallExpr(
-                            builder.TempExpr(temp1, ast.getSpan()),
-                            "get", [], [], ast.getSpan()),
-                            ast.getSpan()),
-                        "", null, ast.getSpan()))
-                return builder.TempExpr(temp2, ast.getSpan())
+                def temp2 := pushTempBinding(
+                    builder.CallExpr(
+                        temp1,
+                        "get", [], [], ast.getSpan()),
+                    ast.getSpan())
+                return temp2
             else:
                 return builder.NounExpr(ast.getName(), ast.getIndex(),
                                       addr, ast.getSpan())
@@ -820,7 +831,35 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
         else if (nn == "MetaContextExpr"):
             return builder.MetaContextExpr(ast.getSpan())
         else if (nn == "MetaStateExpr"):
-            return builder.MetaContextExpr(ast.getSpan())
+            def makeMapNoun := builder.NounExpr(
+                "_makeMap",
+                def mmi := outerNames.indexOf("_makeMap"),
+                makeAddress(OUTER, NOUN, FINAL, mmi),
+                ast.getSpan())
+            def makeListNoun := builder.NounExpr(
+                "_makeList",
+                def mli := outerNames.indexOf("_makeList"),
+                makeAddress(OUTER, NOUN, FINAL, mli),
+                ast.getSpan())
+            def pairs := [
+                for idx in (frameNameStack.last())
+                pushTempBinding(
+                    builder.CallExpr(
+                        makeListNoun, "run",
+                        [builder.StrExpr("&&" + allNames[idx].getName(),
+                                         ast.getSpan()),
+                         builder.BindingExpr(
+                             allNames[idx].getName(),
+                             idx,
+                             addNewAddress(idx),
+                             ast.getSpan())], [],
+                        ast.getSpan()), ast.getSpan())]
+            def temp := pushTempBinding(
+                builder.CallExpr(makeListNoun,
+                                 "run", pairs, [], ast.getSpan()),
+                ast.getSpan())
+            return pushTempBinding(builder.CallExpr(
+                makeMapNoun, "fromPairs", [temp], [], ast.getSpan()), ast.getSpan())
         else if (nn == "CallExpr"):
             def newRcvr := _specializeNouns(ast.getReceiver())
             def newArgs := specializeExprList(ast.getArgs())
@@ -880,20 +919,20 @@ def specializeNouns([topExpr, allNames], outerNames, builder, var gensym_seq, in
 def normalize0(ast, outerNames, inRepl) as DeepFrozen:
     def [anfTree, numVariables] := anfTransform(ast, outerNames, nastBuilder)
     return specializeNouns(
-        layoutScopes(anfTree, layoutNASTBuilder),
+        layoutScopes(anfTree, outerNames, layoutNASTBuilder),
         outerNames, boundNounsBuilder, numVariables, inRepl)
 
 #[x] Ensure non-repl outers are not shadowed
 #[x] AssignExpr -> slot.put()
 #[x] lay out frames
 # - Remove localsSize
-#[ ] rewrite nouns
+#[x] rewrite nouns
 # + LetDef adds [class, region, mode, idx] addressing
 # + NounExpr/BindingExpr address bindings by [class, region, mode, idx]
 # + NounExpr wrapped in .get.get() if needed
 
 
-#[ ] expand MetaStateExpr
+#[x] expand MetaStateExpr
 #elide trivial 'return'
 #----------------------
 #Expand MetaFQNExpr
