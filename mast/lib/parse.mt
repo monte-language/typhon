@@ -133,16 +133,16 @@ def derive(c, parser) as DeepFrozen:
                     def nullable := parseNull(l)
                     if (nullable.isEmpty()) {
                         [empty, true]
-                    } else if (nullable.size() == 1) {
-                        def t1 := nullable.asList()[0]
+                    } else if (nullable =~ via (singletonSet) t1) {
                         [[red, dr, fn t2 { [t1, t2] }], false]
                     } else {
                         [[cat, [eps, nullable], dr], false]
                     }
                 }
-                if (skipLeft) {
+                def rv := if (skipLeft) {
                     if (skipRight) { empty } else { rhs }
                 } else if (skipRight) { lhs } else { [alt, lhs, rhs] }
+                rv
             }
             match [==alt, l, r] {
                 def dl := go(l)
@@ -343,12 +343,12 @@ def main(_argv) as DeepFrozen:
 
 def parserPrimitiveAlt(hy, c1, c2):
     def p := [alt, [exactly, c1], [exactly, c2]]
-    hy.assert(parseNull(derive(c1, p)).contains(c1))
-    hy.assert(parseNull(derive(c2, p)).contains(c2))
+    hy.sameEver(parseNull(derive(c1, p)), [c1].asSet())
+    hy.sameEver(parseNull(derive(c2, p)), [c2].asSet())
 
 def parserPrimitiveCat(hy, c1, c2):
     def p := [cat, [exactly, c1], [exactly, c2]]
-    hy.assert(parseNull(derive(c2, derive(c1, p))).contains([c1, c2]))
+    hy.sameEver(parseNull(derive(c2, derive(c1, p))), [[c1, c2]].asSet())
 
 def parserPrimitiveRep(hy, c, size):
     hy.assume(size >= 0)
@@ -356,12 +356,30 @@ def parserPrimitiveRep(hy, c, size):
     var d := p
     for _ in (0..!size):
         d := derive(c, d)
-    hy.assert(parseNull(d).contains([c] * size))
+    hy.sameEver(parseNull(d), [[c] * size].asSet())
 
 unittest([
     prop.test([arb.Char(), arb.Char()], parserPrimitiveAlt),
     prop.test([arb.Char(), arb.Char()], parserPrimitiveCat),
     prop.test([arb.Char(), arb.Int("ceiling" => 42)], parserPrimitiveRep),
+])
+
+
+def oneOrMore(p) :DeepFrozen:
+    def cons([h, t]) as DeepFrozen:
+        return [h] + t
+    return [red, [cat, p, [rep, p]], cons]
+
+def parserHelperOneOrMore(hy, c, size):
+    hy.assume(size >= 1)
+    def p := oneOrMore([exactly, c])
+    var d := p
+    for _ in (0..!size):
+        d := derive(c, d)
+    hy.sameEver(parseNull(d), [[c] * size].asSet())
+
+unittest([
+    prop.test([arb.Char(), arb.Int("ceiling" => 42)], parserHelperOneOrMore),
 ])
 
 
@@ -384,7 +402,6 @@ def makeQP(name :Str, parser :DeepFrozen, substituter :DeepFrozen) as DeepFrozen
             def advance(x):
                 def old := p
                 p := derive(x, p)
-                traceln(`Leaders: ${leaders(p)}`)
                 if (leaders(p).isEmpty()):
                     throwParseError(old)
 
@@ -404,31 +421,47 @@ def makeQP(name :Str, parser :DeepFrozen, substituter :DeepFrozen) as DeepFrozen
             else:
                 throw(`Ambiguous parse forest: $forest`)
 
+
+def testParser(p, cases :Map):
+    return def testParserCase(assert):
+        for input => output in (cases):
+            var d := p
+            for char in (input):
+                d := derive(char, d)
+            assert.equal(parseNull(d), [output].asSet())
+
 object nt as DeepFrozen {}
+
+def snd([_, x]) as DeepFrozen:
+    return x
 
 def ws := [oneOf, " \n".asSet()]
 def eat(p) :DeepFrozen:
-    def eatWhitespace([_, x]) as DeepFrozen:
-        return x
-    return [red, [cat, [rep, ws], p], eatWhitespace]
+    return [red, [cat, [rep, ws], p], snd]
 
-def oneOrMore(p) :DeepFrozen:
-    def cons([h, t]) as DeepFrozen:
-        return [h] + t
-    return [red, [cat, p, [rep, p]], cons]
+unittest([
+    testParser(eat([exactly, 'x']), ["x" => 'x', " x" => 'x', "  x" => 'x']),
+])
 
 def chars := [oneOf, [for c in ('a'..'z' | 'A'..'Z' | '0'..'9') c].asSet()]
 def word := [red, oneOrMore(chars), _makeStr.fromChars]
 
+unittest([
+    testParser(word, ["word" => "word", "hunter2" => "hunter2"]),
+    # testParser(eat(word), [
+    #     "  word" => "word", "  hunter2" => "hunter2",
+    #     " word" => "word", " hunter2" => "hunter2",
+    #     "word" => "word", "hunter2" => "hunter2",
+    # ]),
+])
+
 def expr := oneOrMore(eat(word))
 
 def buildEq([name, [_, [p, _]]]) as DeepFrozen:
-    traceln(`buildEq $name $p`)
     return [name, p]
 def eq := [red, [cat, eat(word), [cat, eat([exactly, '=']),
     [cat, expr, eat([exactly, ';'])]]], buildEq]
 def buildQP([eqs, _]) as DeepFrozen:
-    traceln(`buildQP $eqs`)
     return _makeMap.fromPairs(eqs)
 def qp := [red, [cat, oneOrMore(eq), [rep, ws]], buildQP]
 
