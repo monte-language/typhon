@@ -350,9 +350,18 @@ def parserPrimitiveCat(hy, c1, c2):
     def p := [cat, [exactly, c1], [exactly, c2]]
     hy.assert(parseNull(derive(c2, derive(c1, p))).contains([c1, c2]))
 
+def parserPrimitiveRep(hy, c, size):
+    hy.assume(size >= 0)
+    def p := [rep, [exactly, c]]
+    var d := p
+    for _ in (0..!size):
+        d := derive(c, d)
+    hy.assert(parseNull(d).contains([c] * size))
+
 unittest([
     prop.test([arb.Char(), arb.Char()], parserPrimitiveAlt),
     prop.test([arb.Char(), arb.Char()], parserPrimitiveCat),
+    prop.test([arb.Char(), arb.Int("ceiling" => 42)], parserPrimitiveRep),
 ])
 
 
