@@ -63,7 +63,7 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
 
 def main(_argv,
          # => packageLoader,
-         => stdio, => unsealException, => unsafeScope) as DeepFrozen:
+         => stdio, => unsealException, => unsafeScope) :Vow[Int] as DeepFrozen:
 
     # def playWith(module :Str, scope :Map) :Void:
     #     "Import a module and bring it into the environment."

@@ -111,7 +111,9 @@ def parseArguments(var argv, ej) as DeepFrozen:
             return readStdin
 
 
-def main(argv, => Timer, => makeFileResource, => unsealException, => stdio) as DeepFrozen:
+def main(argv,
+         => Timer, => makeFileResource, => unsealException,
+         => stdio) :Vow[Int] as DeepFrozen:
     def config := parseArguments(argv, throw)
     def inputFile := config.getInputFile()
     def outputFile := config.getOutputFile()

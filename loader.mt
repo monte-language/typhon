@@ -40,7 +40,9 @@ def makeModuleConfiguration(module :DeepFrozen,
 
 def ModuleStructure :DeepFrozen := Pair[Map[Str, Map[Str, Any]], NullOk[Config]]
 
-def loaderMain():
+def loaderMain() :Vow[Int]:
+    "Run the thing and return the status code."
+
     def collectedTests := [].diverge()
     def collectedBenches := [].diverge()
     object testCollector:
