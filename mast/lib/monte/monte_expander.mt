@@ -200,14 +200,24 @@ def expand(node, builder, fail) as DeepFrozen:
         return viaPatt(nounExpr("_slotToBinding", span),
              builder.BindingPattern(n, span), span)
 
-    def makeFn(doc, args, body, span):
-        return builder.ObjectExpr(doc,
+    def makeFn(flavor, args, namedArgs, body, span):
+        "Like m`fn $args { $body }`, but in Kernel-Monte."
+
+        def out := nounExpr("out", span)
+        def repr := `<$flavor fn at $span>`
+        def print := builder.MethodCallExpr(out, "print",
+                                            [builder.LiteralExpr(repr, span)],
+                                            [], span)
+        # Just use the (short) flavor as the docstring. They're not examined
+        # often and the M.toString/1 will be more informative to folks anyway.
+        return builder.ObjectExpr(flavor,
              ignorePatt(null, span), null, [],
-             builder.Script(null,
-                 [builder."Method"(null, "run",
-                                   args,
-                                   [], null, body, span)], [], span),
-             span)
+             builder.Script(null, [
+                 builder."Method"(null, "run", args, namedArgs, null, body,
+                                  span),
+                 builder."Method"(null, "_printOn", [plainPatt(out, span)],
+                                  [], null, print, span),
+             ], [], span), span)
 
     def expandMatchBind(sw, args, span, fail):
         def [spec, patt] := args
@@ -765,10 +775,10 @@ def expand(node, builder, fail) as DeepFrozen:
                      litExpr(cargs.size(), span),
                      litExpr(params.size(), span),
                      makeFn(
-                         null, [], emitList([
+                         "control-block", [], [], emitList([
                              emitList(cargs, span),
                              makeFn(
-                                 null, emitPattsIn(), seqExpr(
+                                 "control-lambda", emitPattsIn(), [], seqExpr(
                                      [emitPattsOut(),
                                       body],
                                      span), span)], span), span)
@@ -992,21 +1002,7 @@ def expand(node, builder, fail) as DeepFrozen:
                         if (guard == null) {nounExpr("Any", span)} else {guard}], [], span)
             match =="FunctionExpr":
                 def [patterns, namedPatts, block] := args
-                def out := nounExpr("out", span)
-                def repr := `<fn at $span>`
-                def call := builder.MethodCallExpr(out, "print",
-                                                   [builder.LiteralExpr(repr, span)],
-                                                   [], span)
-                builder.ObjectExpr(null, ignorePatt(null, span), null, [],
-                    builder.Script(null,
-                         [builder."Method"(null, "run", patterns, namedPatts,
-                                           null, block, span),
-                          builder."Method"(null, "_printOn",
-                                           [plainPatt(out, span)], [], null,
-                                           call, span),
-                         ],
-                         [],
-                         span), span)
+                makeFn("anonymous", patterns, namedPatts, block, span)
             match =="ObjectExpr":
                 def [doco, patt, asExpr, auditors, script] := args
                 switch (node.getName().getNodeName()):
@@ -1137,8 +1133,8 @@ def expand(node, builder, fail) as DeepFrozen:
                     resolution, block, span)
                 def wr := callExpr(nounExpr("Ref", span),
                     "whenResolved", [expr,
-                                     makeFn("when-catch 'done' function",
-                                            [plainPatt(resolution, span)],
+                                     makeFn("when-resolved",
+                                            [plainPatt(resolution, span)], [],
                                             whenblock,
                                             expr.getSpan())], [], span)
                 def prob2 := tempNounExpr("problem", span)
@@ -1159,8 +1155,8 @@ def expand(node, builder, fail) as DeepFrozen:
                 def wb := callExpr(
                         nounExpr("Ref", span), "whenBroken", [
                             wr, makeFn(
-                                "when-catch 'catch' function",
-                                [plainPatt(broken, span)],
+                                "when-broken",
+                                [plainPatt(broken, span)], [],
                                 seqExpr([
                                     defExpr(
                                         plainPatt(prob2, span),
@@ -1174,8 +1170,8 @@ def expand(node, builder, fail) as DeepFrozen:
                 else:
                     callExpr(
                         wb, "_whenMoreResolved",
-                        [makeFn("when-catch 'finally' function",
-                                [ignorePatt(null, span)],
+                        [makeFn("when-finally",
+                                [ignorePatt(null, span)], [],
                                 finallyblock, span)], [], span)
             match nodeName:
                 M.call(builder, nodeName, args + [span], [].asMap())

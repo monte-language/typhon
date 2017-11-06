@@ -487,13 +487,16 @@ def specimens := [
      "
      Ref.whenResolved(x,
      object _ {
-         \"when-catch 'done' function\"
+         \"when-resolved\"
          method run(resolution_1) {
              if (Ref.isBroken(resolution_1)) {
                  resolution_1
              } else {
                  y
              }
+         }
+         method _printOn(out) {
+             out.print(\"<when-resolved fn at <<test>#:span::1:6:1:7>>\")
          }
 
      })
@@ -508,7 +511,7 @@ def specimens := [
      Ref.whenBroken(
      Ref.whenResolved(x,
      object _ {
-         \"when-catch 'done' function\"
+         \"when-resolved\"
          method run(resolution_1) {
              if (Ref.isBroken(resolution_1)) {
                  resolution_1
@@ -516,10 +519,13 @@ def specimens := [
                  y
              }
          }
+         method _printOn(out) {
+             out.print(\"<when-resolved fn at <<test>#:span::1:6:1:7>>\")
+         }
 
      }),
      object _ {
-         \"when-catch 'catch' function\"
+         \"when-broken\"
          method run(broken_2) {
              def problem_3 := Ref.optProblem(broken_2)
              escape fail_4 {
@@ -528,6 +534,9 @@ def specimens := [
              } catch _ {
                  problem_3
              }
+         }
+         method _printOn(out) {
+             out.print(\"<when-broken fn at <<test>#:span::1:0:6:1>>\")
          }
 
      })"],
