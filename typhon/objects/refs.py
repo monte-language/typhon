@@ -262,7 +262,7 @@ class WhenBrokenReactor(Object):
         self.vat = vat
 
     def toString(self):
-        return u"<whenBrokenReactor>"
+        return u"<when broken: %s>" % self._cb.toString()
 
     @method("Void", "Any")
     def run(self, unused):
@@ -305,7 +305,7 @@ class WhenResolvedReactor(Object):
         self.vat = vat
 
     def toString(self):
-        return u"<whenResolvedReactor>"
+        return u"<when resolved: %s>" % self._cb.toString()
 
     @method("Void", "Any")
     def run(self, unused):
