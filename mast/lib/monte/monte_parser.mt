@@ -5,9 +5,9 @@ def CONTROL_OPERATORS :DeepFrozen := [
     "in", "match", "meta",  "try", "IDENTIFIER", "->"].asSet()
 
 def spanCover(left, right) as DeepFrozen:
-    if (left == null || right == null):
-        return null
-    return left.combine(right)
+    return if (left == null) { right } else if (right == null) { left } else {
+        left.combine(right)
+    }
 
 def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def [VALUE_HOLE, PATTERN_HOLE] := [lex.valueHole(), lex.patternHole()]
@@ -478,12 +478,12 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         acceptEOLs()
         def contents := if (considerTag("pass", ej)) {
             acceptEOLs()
-            builder.SeqExpr([], null)
+            builder.SeqExpr([], spanHere())
         } else {
             escape e {
                 seq(indent, e)
             } catch _ {
-                builder.SeqExpr([], null)
+                builder.SeqExpr([], spanHere())
             }
         }
         if (indent):
@@ -565,7 +565,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                    (indent && peekTag() == "DEDENT" && doco != null)):
             [doco, builder.SeqExpr(
                 if (doco == null) {[]
-                } else {[builder.LiteralExpr(doco, docoSpan)]}, null)]
+                } else {[builder.LiteralExpr(doco, docoSpan)]}, spanHere())]
         else:
             var contents := seq(indent, ej)
             if (doco != null &&
@@ -891,7 +891,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 acceptTag("{", ej)
             acceptEOLs()
             def whenblock := if (!indent && peekTag() == "}") {
-                builder.SeqExpr([], null)
+                builder.SeqExpr([], spanHere())
             } else {
                 seq(indent, fn e {traceln(`sad day! $e`); ej(e)})
             }
@@ -1082,7 +1082,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             advance(ej)
             acceptEOLs()
             if (considerTag("}", ej)):
-                return builder.HideExpr(builder.SeqExpr([], null), spanFrom(spanStart))
+                return builder.HideExpr(builder.SeqExpr([], spanHere()), spanFrom(spanStart))
             def e := seq(false, ej)
             acceptEOLs()
             acceptTag("}", ej)
