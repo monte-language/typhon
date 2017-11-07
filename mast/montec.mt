@@ -112,7 +112,7 @@ def parseArguments(var argv, ej) as DeepFrozen:
 
 
 def main(argv,
-         => Timer, => makeFileResource, => unsealException,
+         => Timer, => makeFileResource,
          => stdio) :Vow[Int] as DeepFrozen:
     def config := parseArguments(argv, throw)
     def inputFile := config.getInputFile()
@@ -190,11 +190,4 @@ def main(argv,
     def pipeline := makePipeline(Timer, stages)
     def p := pipeline.promisedResult()
     pipeline.advance()
-    return when (p) ->
-        traceln("All done!")
-        0
-    catch via (unsealException) [problem, traceback]:
-        for line in (traceback.reverse()):
-            traceln(line)
-        traceln(`Problem: $problem`)
-        1
+    return when (p) -> { 0 }
