@@ -76,7 +76,7 @@ def makeAsserter() as DeepFrozen:
                         logIt(label, `SILENCED (todo): $message`)
                     else:
                         fails += 1
-                        throw(logIt(label, message))
+                        logIt(label, message)
 
                 to todo(reason :Str):
                     "Neuter this asserter.
@@ -151,13 +151,6 @@ def makeAsserter() as DeepFrozen:
                 to willEqual(l, r):
                     return when (l, r) ->
                         assert.equal(l, r)
-                    catch problem:
-                        if (Ref.isBroken(l)):
-                            assert.fail(`Cannot be equal: Ref.isBroken($l)`)
-                        else if (Ref.isBroken(r)):
-                            assert.fail(`Cannot be equal: Ref.isBroken($r)`)
-                        else:
-                            throw(problem)
 
 # This magic sequence clears the current line of stdout and moves the cursor
 # to the beginning of the line. ~ C.
@@ -175,7 +168,6 @@ def makeRunner(stdout, unsealException) as DeepFrozen:
         def line := `
 ~~~
 Error in source $source from test $test:
-    ${"\n".join(err[1].reverse())}
     ${err[0]}
 ~~~
 `
@@ -197,8 +189,11 @@ Error in source $source from test $test:
             running -= 1
             completed += 1
             updateScreen()
-        catch p:
-            formatError(unsealException(p, throw), k, test)
+        catch problem:
+            if (problem =~ via (unsealException) [_, err]):
+                formatError(err, k, test)
+            else:
+                formatError(problem, k, test)
 
             # Update the screen after formatting and printing the error;
             # this way, we aren't left without a status update for a
