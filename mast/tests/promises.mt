@@ -39,3 +39,12 @@ unittest([
     testHarnessWhenPromise,
     testHarnessWhenPromiseLater,
 ])
+
+def vowInt(assert):
+    def [p :Vow[Int], r] := Ref.promise()
+    r.resolve(42)
+    return when (p) -> { assert.equal(p, 42) }
+
+unittest([
+    vowInt,
+])
