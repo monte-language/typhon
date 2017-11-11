@@ -45,6 +45,15 @@ def vowInt(assert):
     r.resolve(42)
     return when (p) -> { assert.equal(p, 42) }
 
+def vowIntBroken(assert):
+    def [p :Vow[Int], r] := Ref.promise()
+    r.smash("test")
+    return when (p) -> { assert.equal(p, 42) } catch _ {
+        assert.equal(true, Ref.isBroken(p))
+        assert.equal("test", Ref.optProblem(p))
+    }
+
 unittest([
     vowInt,
+    vowIntBroken,
 ])

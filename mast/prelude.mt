@@ -414,12 +414,13 @@ object Vow as DeepFrozenStamp:
                 } else if (Ref.isBroken(specimen)) {
                     specimen
                 } else if (Ref.isEventual(specimen) &! Ref.isFar(specimen)) {
-                    # XXX I don't know why FAIL isn't always passed in here.
-                    # Something about our ref stack is off, maybe. ~ C.
-                    def cb(x, => FAIL := null) {
-                        return subGuard.coerce(x, FAIL)
+                    def neverBreakTheChain(x, => FAIL) {
+                        # Monadic chaining: We propagate all brokenness as-is.
+                        return if (Ref.isBroken(x)) { x } else {
+                            subGuard.coerce(x, FAIL)
+                        }
                     }
-                    Ref.whenResolved(specimen, cb)
+                    Ref.whenResolved(specimen, neverBreakTheChain)
                 } else {
                     throw.eject(ej, ["Not avowable:", specimen])
                 }
