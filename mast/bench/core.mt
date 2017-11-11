@@ -35,3 +35,14 @@ def ifBench(i):
 
 for i in (0..5):
     bench(fn { ifBench(i) }, `If-expr case $i`)
+
+
+def sameEverIntBench(i):
+    return i == i
+
+bench(fn { for i in (0..10) { sameEverIntBench(i) } }, `.sameEver/2 Int`)
+
+def asBigAsIntBench(i):
+    return i <=> i
+
+bench(fn { for i in (0..10) { asBigAsIntBench(i) } }, `.asBigAs/2 Int`)
