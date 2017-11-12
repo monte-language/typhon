@@ -452,10 +452,9 @@ def decoderSamples := [
     `{"x": null}` => ["x" => null],
 ]
 
-for specimen => value in (decoderSamples):
-    def testJSONDecode(assert):
+def testJSONDecode(assert):
+    for specimen => value in (decoderSamples):
         assert.equal(JSON.decode(specimen, null), value)
-    unittest([testJSONDecode])
 
 def testJSONDecodeInvalid(assert):
     def specimens := [
@@ -468,18 +467,19 @@ def testJSONDecodeInvalid(assert):
     for s in (specimens):
         assert.ejects(fn ej { JSON.decode(s, ej) })
 
-unittest([
-    testJSONDecodeInvalid,
-])
-
 def encoderSamples := [
     ["first" => 42, "second" => [5, 7]] => "{\"first\":42,\"second\":[5,7]}",
 ]
 
-for specimen => value in (encoderSamples):
-    def testJSONEncode(assert):
+def testJSONEncode(assert):
+    for specimen => value in (encoderSamples):
         assert.equal(JSON.encode(specimen, null), value)
-    unittest([testJSONEncode])
+
+unittest([
+    testJSONDecode,
+    testJSONDecodeInvalid,
+    testJSONEncode,
+])
 
 def main(_, => stdio) as DeepFrozen:
     # Buffer it all; we don't really support incremental parsing yet.
