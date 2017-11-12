@@ -41,8 +41,8 @@ Diffing Typhon Binaries
 By default, git won't show diffs of binary files. I don't especially blame it.
 However, with a bit of a filter, we can give git what it needs::
 
-    $ nix-env -iA typhonDumpMAST -f default.nix
-    $ git config diff.typhon.textconv mt-dump-mast
+    $ nix-env -iA monte -f default.nix
+    $ git config --replace-all diff.typhon.textconv 'monte dump-mast'
 
 This configuration option, along with the ``.gitattributes`` in the
 repository, will let git display textual diffs of the binary ASTs.

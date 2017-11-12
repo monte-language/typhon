@@ -65,16 +65,17 @@ let
 
     Usage: monte <command>
     Command list:
-      repl                  Starts interactive prompt in current package.
-      lint <filename>       Reads source file, reports syntax errors.
-      eval <filename>       Execute the code in a single source file.
-      format <filename>     Print a canonically-formatted version of source file.
-      add <name> <url>      Add a dependency to this package.
-      rm <name>             Remove a dependency from this package.
-      run <entrypoint>      Invokes an entrypoint in current package.
-      test <entrypoint>     Collects and executes tests defined for entrypoint.
-      bench <entrypoint>    Collects and executes benchmarks defined for entrypoint.
-      dot <entrypoint>      Creates a .dot graph of dependencies.
+      repl                      Starts interactive prompt in current package.
+      lint <filename>           Reads source file, reports syntax errors.
+      eval <filename>           Execute the code in a single source file.
+      format <filename>         Print a canonically-formatted version of source file.
+      add <name> <url>          Add a dependency to this package.
+      rm <name>                 Remove a dependency from this package.
+      run <entrypoint>          Invokes an entrypoint in current package.
+      test <entrypoint>         Collects and executes tests defined for entrypoint.
+      bench <entrypoint>        Collects and executes benchmarks defined for entrypoint.
+      dot <entrypoint>          Creates a .dot graph of dependencies.
+      dump-mast <filename.mast> Print the Kernel-Monte from a MAST file.
       ${buildDoc}
 
     EOF
@@ -127,6 +128,15 @@ let
                     ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} -l $PWD \
                         ${mast}/loader run ''${SOURCE%.mast} "$@"
                 fi
+            fi
+            ;;
+        dump-mast)
+            SOURCE=$2
+            if [[ -z $SOURCE ]]; then
+                usage 1
+            else
+                ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} \
+                  ${mast}/loader run tools/dump "$SOURCE"
             fi
             ;;
         format)

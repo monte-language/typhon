@@ -69,7 +69,8 @@ mast: mast/lib/enum.mast mast/lib/record.mast \
 	parsers \
 	games \
 	bench \
-	monte
+	monte \
+	tools
 
 testVM: default
 	trial typhon
@@ -117,6 +118,8 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 	mast/lib/monte/mast.mast mast/lib/monte/monte_verifier.mast \
 	mast/lib/monte/meta.mast mast/lib/monte/mix.mast mast/format.mast \
 	mast/montec.mast mast/testRunner.mast mast/all-tests.mast
+
+tools: mast/tools/dump.mast
 
 mast/prelude.mast: mast/prelude.mt
 	@ echo "MONTEC-UNSAFE $<"
