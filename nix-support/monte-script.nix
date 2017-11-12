@@ -86,10 +86,12 @@ let
     case $OPERATION in
         ${buildCmds}
         repl)
-            $RLWRAP ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader run repl
+            $RLWRAP ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} \
+              ${mast}/loader run tools/repl
             if [ $? == 1 ]; then
                 echo "Due to a Docker bug, readline-style editing is not currently available in this REPL. Sorry."
-                ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} ${mast}/loader run repl
+                ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} \
+                  ${mast}/loader run tools/repl
             fi
             ;;
         lint)

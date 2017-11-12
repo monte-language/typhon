@@ -119,7 +119,7 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 	mast/lib/monte/meta.mast mast/lib/monte/mix.mast mast/format.mast \
 	mast/montec.mast mast/testRunner.mast mast/all-tests.mast
 
-tools: mast/tools/dump.mast
+tools: mast/tools/dump.mast mast/tools/repl.mast
 
 mast/prelude.mast: mast/prelude.mt
 	@ echo "MONTEC-UNSAFE $<"
