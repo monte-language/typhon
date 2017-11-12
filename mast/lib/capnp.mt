@@ -76,15 +76,14 @@ def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
 
         to _makeIterator():
             var position :Int := 0
-            return object listIterator:
-                to next(ej):
-                    if (position >= size):
-                        throw.eject(ej, "End of iteration")
-                    def element := storage.get(message, segment, offset,
-                                               position)
-                    def rv := [position, element]
-                    position += 1
-                    return rv
+            return def listIterator.next(ej):
+                if (position >= size):
+                    throw.eject(ej, "End of iteration")
+                def element := storage.get(message, segment, offset,
+                                           position)
+                def rv := [position, element]
+                position += 1
+                return rv
 
         to get(index :Int):
             return storage.get(message, segment, offset, index)
@@ -353,13 +352,12 @@ def makeStructList(struct) as DeepFrozen:
 
                 to _makeIterator():
                     var position :Int := 0
-                    return object interpretedListIterator:
-                        to next(ej):
-                            if (position >= pointer.size()):
-                                throw.eject(ej, "End of iteration")
-                            def rv := [position, interpretedList[position]]
-                            position += 1
-                            return rv
+                    return def interpretedListIterator.next(ej):
+                        if (position >= pointer.size()):
+                            throw.eject(ej, "End of iteration")
+                        def rv := [position, interpretedList[position]]
+                        position += 1
+                        return rv
 
                 to _asData():
                     return [for x in (interpretedList) asData(x)]
