@@ -45,21 +45,18 @@ def loaderMain() :Vow[Int]:
 
     def collectedTests := [].diverge()
     def collectedBenches := [].diverge()
-    object testCollector:
-        to get(locus):
-            return def testBucket(tests):
-                for t in (tests):
-                    collectedTests.push([locus, t])
+    def testCollector.get(locus):
+        return def testBucket(tests):
+            for t in (tests):
+                collectedTests.push([locus, t])
 
-    object benchCollector:
-        to get(locus):
-            return def benchBucket(aBench, name :Str):
-                collectedBenches.push([`$locus: $name`, aBench])
+    def benchCollector.get(locus):
+        return def benchBucket(aBench, name :Str):
+            collectedBenches.push([`$locus: $name`, aBench])
 
     def makeLoader(imports :Map):
-        return object loader:
-            to "import"(name):
-                return imports[name]
+        return def loader."import"(name):
+            return imports[name]
 
 
     def makeModuleAndConfiguration(modname,
@@ -118,7 +115,6 @@ def loaderMain() :Vow[Int]:
                             config withMissingDependency= (depName)
                     # Update the dependency map with the latest config.
                     depMap[modname] := config
-                    def pre := collectedTests.size()
                     var imports := [].asMap()
                     for [importable, _] in (deps :List[ModuleStructure]):
                         imports |= importable
@@ -154,7 +150,7 @@ def loaderMain() :Vow[Int]:
                 # entrypoint named `main`.
                 def [=> main] | _ := module
                 M.call(main, "run", [subargs], unsafeScopeValues)
-        match [=="dot", modname] + subargs:
+        match [=="dot", modname] + _subargs:
             def stdout := stdio.stdout()
             def exps := makeModuleAndConfiguration(modname, newReader)
             when (exps) ->
@@ -187,14 +183,18 @@ def loaderMain() :Vow[Int]:
                 def runner := makeRunner(stdout, unsealException)
                 def results := runner<-runTests(collectedTests)
                 when (results) ->
-                    def fails := results.fails()
-                    stdout.receive(`${results.total()} tests run, $fails failures$\n`)
+                    def fails :Int := results.fails()
+                    stdout(b`${M.toString(results.total())} tests run, `)
+                    stdout(b`${M.toString(fails)} failures$\n`)
                     # Exit code: Only returns 0 if there were 0 failures.
                     for loc => errors in (results.errors()):
                         stdout(b`In $loc:$\n`)
                         for error in (errors):
                             stdout(b`~ $error$\n`)
-                    fails.min(1)
+                    when (stdout.complete()) -> { fails.min(1) }
+                catch problem:
+                    stdout(b`Test suite failed: ${M.toString(problem)}$\n`)
+                    when (stdout.complete()) -> { 1 }
         match [=="bench"] + modnames:
             def someMods := promiseAllFulfilled(
                 [for modname in (modnames)
