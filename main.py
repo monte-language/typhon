@@ -255,10 +255,15 @@ def runTyphon(argv):
         ruv.update_time(uv_loop)
         debug_print("Taking initial turn in script...")
         result = NullObject
-        with recorder.context("Time spent in vats"):
-            with scopedVat(vat):
-                result = module.eval(unsafeScopeDict)[0]
-        if result is None:
+        try:
+            with recorder.context("Time spent in vats"):
+                with scopedVat(vat):
+                    result = module.eval(unsafeScopeDict)[0]
+            if result is None:
+                return 1
+        except UserException as ue:
+            debug_print("Caught exception while taking initial turn:",
+                    ue.formatError())
             return 1
 
         # Exit status code.
