@@ -1,5 +1,5 @@
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
-exports (main)
+exports (makeMessage, main)
 
 # Where we are currently at:
 # $ capnp compile -o $(which cat) schema.capnp > meta.capn
