@@ -8,7 +8,7 @@ exports (
     makePumpPair,
     endOfStream, EOSOk,
     flow, fuse,
-    collectStr,
+    collectStr, collectBytes,
     alterSink, alterSource,
 )
 
@@ -67,7 +67,7 @@ object makeSink as DeepFrozen:
         def [p, listSink] := makeSink.asList()
         return [when (p) -> { "".join(p) }, listSink]
 
-    to asBytes() :Pair[Vow[Str], Sink]:
+    to asBytes() :Pair[Vow[Bytes], Sink]:
         "Collect Bytes and concatenate them into a single bytestring."
 
         # Reuse the list machinery.
@@ -201,13 +201,15 @@ def collectStr(source) :Vow[Str] as DeepFrozen:
     "Collect a single Str from a source of Strs."
 
     def [s, sink] := makeSink.asStr()
-    return when (flow(source, sink)) -> { s }
+    flow(source, sink)
+    return s
 
 def collectBytes(source) :Vow[Bytes] as DeepFrozen:
     "Collect a single Bytes from a source of Bytes."
 
     def [bs, sink] := makeSink.asBytes()
-    return when (flow(source, sink)) -> { bs }
+    flow(source, sink)
+    return bs
 
 def testCollectStr(assert):
     var i :Int := 0
