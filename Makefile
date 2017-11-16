@@ -52,6 +52,7 @@ mast: mast/lib/enum.mast mast/lib/record.mast \
 	mast/lib/amp.mast \
 	mast/lib/ansiColor.mast \
 	mast/lib/capnp.mast \
+	mast/lib/capn.mast \
 	mast/lib/complex.mast \
 	mast/lib/continued.mast \
 	mast/lib/gai.mast \

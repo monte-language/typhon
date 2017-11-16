@@ -1,47 +1,7 @@
-import "capn/bootstrap" =~ [=> CodeGeneratorRequest :DeepFrozen]
+import "capn/bootstrap" =~ [=> builder :DeepFrozen]
+import "lib/capn" =~ [=> makeMessage :DeepFrozen]
 import "lib/streams" =~ [=> collectBytes :DeepFrozen]
 exports (main)
-
-def typeWidths :List[Pair[Int, Bool]] := [
-    # void
-    [0, true],
-    # bool
-    [1, true],
-    # int8
-    [8, true],
-    # int16
-    [16, true],
-    # int32
-    [32, true],
-    # int64
-    [64, true],
-    # uint8
-    [8, true],
-    # uint16
-    [16, true],
-    # uint32
-    [32, true],
-    # uint64
-    [64, true],
-    # float32
-    [32, true],
-    # float64
-    [64, true],
-    # text
-    [1, false],
-    # data
-    [1, false],
-    # list
-    [1, false],
-    # XXX enums
-    [16, true],
-    # struct
-    [1, false],
-    # interface
-    [1, false],
-    # anyPointer
-    [1, false],
-]
 
 def getWord(offset :Int, width :Int, => signed :Bool := false) as DeepFrozen:
     def fullOffset := offset * width
@@ -63,27 +23,24 @@ def getPointer(offset :Int) as DeepFrozen:
     return m`root.getPointer(${astBuilder.LiteralExpr(offset, null)})`
 
 def bootstrap(bs :Bytes) as DeepFrozen:
-    def cgr := CodeGeneratorRequest.unpack(bs)
+    def root := makeMessage(bs).getRoot()
+    def cgr := builder.CodeGeneratorRequest(root)
     def nodeNames := [for node in (cgr.nodes()) node.id() => {
         def displayName := node.displayName()
         displayName.slice(node.displayNameLengthPrefix(), displayName.size())
     }]
-    def nodes := [for node in (cgr.nodes()) {
+    def nodes := [for node in (cgr.nodes()) ? (node._which() == 1) {
         def displayName := node.displayName()
         def shortName := displayName.slice(node.displayNameLengthPrefix(),
                                            displayName.size())
-        traceln(node.id(), displayName, shortName, node._which())
-        def noun := astBuilder.NounExpr(shortName, null)
-        def maker := if (node._which() == 1) {
-            def fields := node.fields()
-            def accessors := [for field in (fields) {
-                def name := field.name()
-                def body := if (field._which() != 0) { m`null` } else {
+        def fields := node.fields()
+        def accessors := [for field in (fields) {
+            def name := field.name()
+            def body := switch (field._which()) {
+                match ==0 {
                     def slot := field.slot()
                     def type := slot.type()
-                    def [width, isData] := typeWidths[type._which()]
                     def offset := slot.offset()
-                    traceln(`field $name offset $offset width $width isData $isData`)
                     switch (type._which()) {
                         match ==0 { m`null` }
                         match ==1 { m`${getWord(offset, 1)} == 1` }
@@ -106,51 +63,52 @@ def bootstrap(bs :Bytes) as DeepFrozen:
                             def innerExpr := switch (innerType._which()) {
                                 match ==16 {
                                     def n := nodeNames[innerType.typeId()]
-                                    astBuilder.NounExpr(n, null)
+                                    astBuilder.MethodCallExpr(m`builder`, n,
+                                                              [m`r`], [],
+                                                              null)
                                 }
                             }
-                            m`[for r in (${getPointer(offset)}) $innerExpr(r)]`
+                            m`[for r in (${getPointer(offset)}) $innerExpr]`
                         }
                         # XXX enums?
                         match ==15 { m`null` }
                         match ==16 {
                             def n := nodeNames[type.typeId()]
-                            def expr := astBuilder.NounExpr(n, null)
-                            m`$expr(${getPointer(offset)})`
+                            astBuilder.MethodCallExpr(m`builder`, n,
+                                                      [getPointer(offset)],
+                                                      [], null)
                         }
                         # XXX ???
                         match ==18 { m`null` }
                     }
                 }
-                astBuilder."Method"(null, name, [], [], null, body, null)
-            }]
-            traceln(`made accessors $accessors`)
-            def script := astBuilder.Script(null, accessors, [], null)
-            def patt := astBuilder.FinalPattern(astBuilder.NounExpr(displayName, null),
-                                                null, null)
-            def struct := astBuilder.ObjectExpr(null, patt, m`DeepFrozen`, [],
-                                                script, null)
-            m`object $noun as DeepFrozen {
-                method unpack(bs :Bytes) {
-                    $noun.fromRoot(makeMessage(bs).getRoot())
+                match ==1 {
+                    def group := field.group()
+                    def n := nodeNames[group.typeId()]
+                    astBuilder.MethodCallExpr(m`builder`, n, [m`root`], [],
+                                              null)
                 }
-                method fromRoot(root :DeepFrozen) { $struct }
-            }`
-        } else {
-            m`object $noun as DeepFrozen {}`
-        }
-        [maker, noun]
+            }
+            astBuilder."Method"(null, name, [], [], null, body, null)
+        }]
+        def script := astBuilder.Script(null, accessors, [], null)
+        def patt := astBuilder.FinalPattern(astBuilder.NounExpr(displayName, null),
+                                            null, null)
+        def struct := astBuilder.ObjectExpr(null, patt, m`DeepFrozen`, [],
+                                            script, null)
+        astBuilder."Method"(null, shortName, [mpatt`root :DeepFrozen`],
+                            [], null, struct, null)
     }]
-    def listPatt := astBuilder.ListPattern(
-        [for [_, ex] in (nodes) astBuilder.FinalPattern(ex, null, null)],
-        null, null)
-    def listExpr := astBuilder.ListExpr([for [obj, _] in (nodes) obj], null)
-    def body := m`def $listPatt := $listExpr`
-    def exportExpr := astBuilder.MapExpr(
-        [for [_, ex] in (nodes) astBuilder.MapExprExport(ex, null)], null)
+    def script := astBuilder.Script(null, nodes, [], null)
+    def builderObj := astBuilder.ObjectExpr(null, mpatt`builder`,
+                                            m`DeepFrozen`, [], script, null)
     def module := m`object _ as DeepFrozen {
-        method dependencies() :List[Str] { ["lib/codec/utf8", "lib/capn"] }
-        method run(package) :Map[Str, DeepFrozen] { $body; $exportExpr }
+        method dependencies() :List[Str] { ["lib/capn"] }
+        method run(package) :Map[Str, DeepFrozen] {
+            def [=> makeMessage :DeepFrozen, => text :DeepFrozen] | _ := package."import"("lib/capn")
+            $builderObj
+            [=> builder]
+        }
     }`
     return module
 
