@@ -13,7 +13,7 @@ def shift(i :Int, offset :(0..!64), width :(0..64)) :Int as DeepFrozen:
 
 def makeStructPointer(message :DeepFrozen, segment :Int, offset :Int,
                       dataSize :Int, pointerSize :Int) as DeepFrozen:
-    return object structPointer:
+    return object structPointer as DeepFrozen:
         to _printOn(out):
             out.print(`<struct @@$segment+$offset d$dataSize p$pointerSize>`)
 
@@ -69,8 +69,8 @@ def makeCompositeStorage :DeepFrozen := {
 }
 
 def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
-                    storage) as DeepFrozen:
-    return object listPointer:
+                    storage :DeepFrozen) as DeepFrozen:
+    return object listPointer as DeepFrozen:
         to _printOn(out):
             out.print(`<list of $storage @@$segment+$offset x$size>`)
 
