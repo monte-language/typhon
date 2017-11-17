@@ -27,11 +27,18 @@ def bootstrap(bs :Bytes) as DeepFrozen:
     def cgr := builder.CodeGeneratorRequest(root)
     def nodeNames := [for node in (cgr.nodes()) node.id() => {
         def displayName := node.displayName()
-        displayName.slice(node.displayNameLengthPrefix(), displayName.size())
+        displayName.slice(node.displayNamePrefixLength(), displayName.size())
     }]
     def nodes := [for node in (cgr.nodes()) ? (node._which() == 1) {
+        def struct := node.struct()
+        def [whichExpr, whichMeths] := if (struct.discriminantCount() != 0) {
+            def d := m`def which :Int := ${getWord(struct.discriminantOffset(), 16)}`
+            def meth := astBuilder."Method"(null, "_which", [], [], null,
+                                            m`which`, null)
+            [d, [meth]]
+        } else { [m`null`, []] }
         def displayName := node.displayName()
-        def shortName := displayName.slice(node.displayNameLengthPrefix(),
+        def shortName := displayName.slice(node.displayNamePrefixLength(),
                                            displayName.size())
         def fields := node.fields()
         def accessors := [for field in (fields) {
@@ -91,13 +98,17 @@ def bootstrap(bs :Bytes) as DeepFrozen:
             }
             astBuilder."Method"(null, name, [], [], null, body, null)
         }]
-        def script := astBuilder.Script(null, accessors, [], null)
+        def script := astBuilder.Script(null, accessors + whichMeths, [], null)
         def patt := astBuilder.FinalPattern(astBuilder.NounExpr(displayName, null),
                                             null, null)
-        def struct := astBuilder.ObjectExpr(null, patt, m`DeepFrozen`, [],
+        def structObj := astBuilder.ObjectExpr(null, patt, m`DeepFrozen`, [],
                                             script, null)
-        astBuilder."Method"(null, shortName, [mpatt`root :DeepFrozen`],
-                            [], null, struct, null)
+        def body := m`{
+            $whichExpr
+            $structObj
+        }`
+        astBuilder."Method"(null, shortName, [mpatt`root :DeepFrozen`], [],
+                            null, body, null)
     }]
     def script := astBuilder.Script(null, nodes, [], null)
     def builderObj := astBuilder.ObjectExpr(null, mpatt`builder`,

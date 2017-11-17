@@ -42,12 +42,18 @@ def Node(root) as DeepFrozen:
             return which
         to id():
             return root.getWord(0)
-        to displayNameLengthPrefix():
+        to displayNamePrefixLength():
             return root.getWord(1) & 0xffff
         to displayName():
             return text(root.getPointer(0))
         to fields():
             return [for r in (root.getPointer(3)) Field(r)]
+        to struct():
+            return object struct:
+                to discriminantCount():
+                    return root.getWord(3) >> 48 & 0xffff
+                to discriminantOffset():
+                    return root.getWord(4) & 0xffffffff
 
 object builder as DeepFrozen:
     to CodeGeneratorRequest(root :DeepFrozen):
