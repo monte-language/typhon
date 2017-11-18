@@ -9,12 +9,14 @@ def Type(root) as DeepFrozen:
     return object type:
         to _which():
             return which
-        to typeId():
-            return root.getWord(1)
-        to elementType():
-            return Type(root.getPointer(0))
         to brand():
             return Brand(root.getPointer(0))
+        to list():
+            return def list.elementType():
+                return Type(root.getPointer(0))
+        to struct():
+            return def struct.typeId():
+                return root.getWord(1)
 
 def Field(root) as DeepFrozen:
     def which := root.getWord(1) & 0xff
@@ -38,6 +40,10 @@ def Field(root) as DeepFrozen:
 def Node(root) as DeepFrozen:
     def which := root.getWord(1) >> 32 & 0xff
     return object node:
+        to _printOn(out):
+            out.print("<")
+            out.print(node.displayName())
+            out.print(">")
         to _which():
             return which
         to id():
@@ -46,14 +52,18 @@ def Node(root) as DeepFrozen:
             return root.getWord(1) & 0xffff
         to displayName():
             return text(root.getPointer(0))
-        to fields():
-            return [for r in (root.getPointer(3)) Field(r)]
+        to scopeId():
+            return root.getWord(2)
         to struct():
             return object struct:
+                to fields():
+                    return [for r in (root.getPointer(3)) Field(r)]
                 to discriminantCount():
                     return root.getWord(3) >> 48 & 0xffff
                 to discriminantOffset():
                     return root.getWord(4) & 0xffffffff
+                to isGroup():
+                    return (root.getWord(3) >> 32 & 1) == 1
 
 object builder as DeepFrozen:
     to CodeGeneratorRequest(root :DeepFrozen):

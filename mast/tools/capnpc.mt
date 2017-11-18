@@ -22,94 +22,101 @@ def getWord(offset :Int, width :Int, => signed :Bool := false) as DeepFrozen:
 def getPointer(offset :Int) as DeepFrozen:
     return m`root.getPointer(${astBuilder.LiteralExpr(offset, null)})`
 
+def shortName(node) as DeepFrozen:
+    def displayName := node.displayName()
+    return displayName.slice(node.displayNamePrefixLength(),
+                             displayName.size())
+
+def buildStruct(nodeMap, node ? (node._which() == 1), groups) as DeepFrozen:
+    def struct := node.struct()
+    def [whichExpr, whichMeths] := if (struct.discriminantCount() != 0) {
+        def d := m`def which :Int := ${getWord(struct.discriminantOffset(), 16)}`
+        def meth := astBuilder."Method"(null, "_which", [], [], null,
+                                        m`which`, null)
+        [d, [meth]]
+    } else { [m`null`, []] }
+    def fields := struct.fields()
+    def accessors := [for field in (fields) {
+        def name := field.name()
+        def body := switch (field._which()) {
+            match ==0 {
+                def slot := field.slot()
+                def type := slot.type()
+                def offset := slot.offset()
+                switch (type._which()) {
+                    match ==0 { m`null` }
+                    match ==1 { m`${getWord(offset, 1)} == 1` }
+                    match ==2 { getWord(offset, 8, "signed" => true) }
+                    match ==3 { getWord(offset, 16, "signed" => true) }
+                    match ==4 { getWord(offset, 32, "signed" => true) }
+                    match ==5 { getWord(offset, 64, "signed" => true) }
+                    match ==6 { getWord(offset, 8) }
+                    match ==7 { getWord(offset, 16) }
+                    match ==8 { getWord(offset, 32) }
+                    match ==9 { getWord(offset, 64) }
+                    # XXX floats?
+                    match ==10 { m`null` }
+                    match ==11 { m`null` }
+                    match ==12 { m`text(${getPointer(offset)})` }
+                    # XXX ???
+                    match ==13 { m`null` }
+                    match ==14 {
+                        def innerType := type.list().elementType()
+                        def innerExpr := switch (innerType._which()) {
+                            match ==16 {
+                                def n := shortName(nodeMap[innerType.struct().typeId()])
+                                astBuilder.MethodCallExpr(m`builder`, n,
+                                                          [m`r`], [],
+                                                          null)
+                            }
+                        }
+                        m`[for r in (${getPointer(offset)}) $innerExpr]`
+                    }
+                    # XXX enums?
+                    match ==15 { m`null` }
+                    match ==16 {
+                        def n := shortName(nodeMap[type.struct().typeId()])
+                        astBuilder.MethodCallExpr(m`builder`, n,
+                                                  [getPointer(offset)],
+                                                  [], null)
+                    }
+                    # XXX ???
+                    match ==18 { m`null` }
+                }
+            }
+            match ==1 {
+                def group := field.group()
+                def [groupNode, groupGroups] := groups[group.typeId()]
+                buildStruct(nodeMap, groupNode, groupGroups)
+            }
+        }
+        astBuilder."Method"(null, name, [], [], null, body, null)
+    }]
+    def script := astBuilder.Script(null, accessors + whichMeths, [], null)
+    def patt := astBuilder.FinalPattern(astBuilder.NounExpr(node.displayName(), null),
+                                        null, null)
+    def structObj := astBuilder.ObjectExpr(null, patt, m`DeepFrozen`, [],
+                                        script, null)
+    return m`{
+        $whichExpr
+        $structObj
+    }`
+
 def bootstrap(bs :Bytes) as DeepFrozen:
     def root := makeMessage(bs).getRoot()
     def cgr := builder.CodeGeneratorRequest(root)
-    def nodeNames := [for node in (cgr.nodes()) node.id() => {
-        def displayName := node.displayName()
-        displayName.slice(node.displayNamePrefixLength(), displayName.size())
-    }]
-    def nodes := [for node in (cgr.nodes()) ? (node._which() == 1) {
-        def struct := node.struct()
-        def [whichExpr, whichMeths] := if (struct.discriminantCount() != 0) {
-            def d := m`def which :Int := ${getWord(struct.discriminantOffset(), 16)}`
-            def meth := astBuilder."Method"(null, "_which", [], [], null,
-                                            m`which`, null)
-            [d, [meth]]
-        } else { [m`null`, []] }
-        def displayName := node.displayName()
-        def shortName := displayName.slice(node.displayNamePrefixLength(),
-                                           displayName.size())
-        def fields := node.fields()
-        def accessors := [for field in (fields) {
-            def name := field.name()
-            def body := switch (field._which()) {
-                match ==0 {
-                    def slot := field.slot()
-                    def type := slot.type()
-                    def offset := slot.offset()
-                    switch (type._which()) {
-                        match ==0 { m`null` }
-                        match ==1 { m`${getWord(offset, 1)} == 1` }
-                        match ==2 { getWord(offset, 8, "signed" => true) }
-                        match ==3 { getWord(offset, 16, "signed" => true) }
-                        match ==4 { getWord(offset, 32, "signed" => true) }
-                        match ==5 { getWord(offset, 64, "signed" => true) }
-                        match ==6 { getWord(offset, 8) }
-                        match ==7 { getWord(offset, 16) }
-                        match ==8 { getWord(offset, 32) }
-                        match ==9 { getWord(offset, 64) }
-                        # XXX floats?
-                        match ==10 { m`null` }
-                        match ==11 { m`null` }
-                        match ==12 { m`text(${getPointer(offset)})` }
-                        # XXX ???
-                        match ==13 { m`null` }
-                        match ==14 {
-                            def innerType := type.elementType()
-                            def innerExpr := switch (innerType._which()) {
-                                match ==16 {
-                                    def n := nodeNames[innerType.typeId()]
-                                    astBuilder.MethodCallExpr(m`builder`, n,
-                                                              [m`r`], [],
-                                                              null)
-                                }
-                            }
-                            m`[for r in (${getPointer(offset)}) $innerExpr]`
-                        }
-                        # XXX enums?
-                        match ==15 { m`null` }
-                        match ==16 {
-                            def n := nodeNames[type.typeId()]
-                            astBuilder.MethodCallExpr(m`builder`, n,
-                                                      [getPointer(offset)],
-                                                      [], null)
-                        }
-                        # XXX ???
-                        match ==18 { m`null` }
-                    }
-                }
-                match ==1 {
-                    def group := field.group()
-                    def n := nodeNames[group.typeId()]
-                    astBuilder.MethodCallExpr(m`builder`, n, [m`root`], [],
-                                              null)
-                }
-            }
-            astBuilder."Method"(null, name, [], [], null, body, null)
-        }]
-        def script := astBuilder.Script(null, accessors + whichMeths, [], null)
-        def patt := astBuilder.FinalPattern(astBuilder.NounExpr(displayName, null),
-                                            null, null)
-        def structObj := astBuilder.ObjectExpr(null, patt, m`DeepFrozen`, [],
-                                            script, null)
-        def body := m`{
-            $whichExpr
-            $structObj
-        }`
-        astBuilder."Method"(null, shortName, [mpatt`root :DeepFrozen`], [],
-                            null, body, null)
-    }]
+    def nodeMap := [for node in (cgr.nodes()) node.id() => node]
+    def childrenOf(parentId):
+        return [for id => node in (nodeMap) ? (node._which() == 1 &&
+                    node.struct().isGroup() && node.scopeId() == parentId)
+                id => [node, childrenOf(id)]]
+    def nodeTree := [for id => node in (nodeMap) ? (node._which() == 1 &&
+        !node.struct().isGroup()) id => [node, childrenOf(id)]]
+    def nodes := [for _id => [node, groups] in (nodeTree)
+                  astBuilder."Method"(null, shortName(node),
+                                      [mpatt`root :DeepFrozen`], [], null,
+                                      buildStruct(nodeMap, node, groups),
+                                      null)]
     def script := astBuilder.Script(null, nodes, [], null)
     def builderObj := astBuilder.ObjectExpr(null, mpatt`builder`,
                                             m`DeepFrozen`, [], script, null)
