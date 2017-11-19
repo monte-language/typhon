@@ -88,7 +88,8 @@ class ConstMap(Object):
         d = monteMap()
         for obj in unwrapList(wrappedPairs):
             pair = unwrapList(obj)
-            assert len(pair) == 2, "Not a pair!"
+            if len(pair) != 2:
+                raise userError(u"fromPairs/1: Not a pair")
             d[pair[0]] = pair[1]
         return ConstMap(d)
 
@@ -310,7 +311,8 @@ class FlexMap(Object):
         d = monteMap()
         for obj in unwrapList(wrappedPairs):
             pair = unwrapList(obj)
-            assert len(pair) == 2, "Not a pair!"
+            if len(pair) != 2:
+                raise userError(u"fromPairs/1: Not a pair")
             d[pair[0]] = pair[1]
         return ConstMap(d)
 
