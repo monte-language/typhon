@@ -31,8 +31,7 @@ def buildStruct(nodeMap, node ? (node._which() == 1), groups) as DeepFrozen:
     def struct := node.struct()
     def [whichExpr, whichMeths] := if (struct.discriminantCount() != 0) {
         def d := m`def which :Int := ${getWord(struct.discriminantOffset(), 16)}`
-        def meth := astBuilder."Method"(null, "_which", [], [], null,
-                                        m`which`, null)
+        def meth := m`method _which() { which }`
         [d, [meth]]
     } else { [m`null`, []] }
     def fields := struct.fields()
