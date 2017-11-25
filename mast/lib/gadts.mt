@@ -55,13 +55,11 @@ def makeGADT(label :Str, constructors :Map[Str, Map[Str, DeepFrozen]]) as DeepFr
 
         # Assemble the pretty-printer.
         def comma := m`out.print(", ")`
-        def printOnBody := m`{
+        def printOn := m`to _printOn(out) :Void {
             out.print(${astBuilder.LiteralExpr(`<$label.$con(`, null)})
             ${astBuilder.SeqExpr([comma].join(prints), null)}
             out.print(")>")
         }`
-        def printOn := astBuilder."To"(null, "_printOn", [mpatt`out`], [],
-                                       m`Void`, printOnBody, null)
 
         def originalNames := astBuilder.MapExpr(
             [for noun in (nouns) astBuilder.MapExprExport(noun, null)], null)
@@ -70,10 +68,10 @@ def makeGADT(label :Str, constructors :Map[Str, Map[Str, DeepFrozen]]) as DeepFr
         def with := astBuilder.Matcher(mpatt`[=="with", [], updates]`,
                                        withBody, null)
 
-        def _con := astBuilder."Method"(null, "_constructor", [], [], m`Str`,
-            conLit, null)
-        def _elts := astBuilder."Method"(null, "_elements", [], [], m`List`,
-            astBuilder.ListExpr(nouns, null), null)
+        def _con := m`method _constructor() :Str { $conLit }`
+        def _elts := m`method _elements() :List {
+            ${astBuilder.ListExpr(nouns, null)}
+        }`
         def meths := getters + [printOn, _con, _elts]
         def script := astBuilder.Script(null, meths, [with], null)
         def body := astBuilder.ObjectExpr(null, mpatt`_`, m`DeepFrozen`,
@@ -94,9 +92,8 @@ def makeGADT(label :Str, constructors :Map[Str, Map[Str, DeepFrozen]]) as DeepFr
             }
         }
     }`
-    def control := astBuilder."Method"(null, "control",
-        [mpatt`verb :Str`, mpatt`argCount :Int`, mpatt`paramCount :Int`,
-         mpatt`block`], [], null, controlBody, null)
+    def control := m`method control(verb :Str, argCount :Int, paramCount :Int,
+                                    block) { $controlBody }`
 
     # Assemble the final object.
     def namePatt := astBuilder.FinalPattern(labelNoun, null, null)
