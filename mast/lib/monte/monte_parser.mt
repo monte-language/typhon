@@ -1498,7 +1498,14 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
                 start(e)
             }
             match =="expression" {
-                seq(true, e)
+                # Make life better for m`` users. Methods and matchers start
+                # with keywords, so we can unambiguously start with them. ~ C.
+                switch (peekTag()) {
+                    match =="method" { meth(false, e) }
+                    match =="to" { meth(false, e) }
+                    match =="match" { matchers(false, e) }
+                    match _ { seq(true, e) }
+                }
             }
             match =="pattern" {
                 pattern(e)
