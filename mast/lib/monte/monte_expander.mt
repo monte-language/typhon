@@ -61,7 +61,7 @@ def ifOr(ast, maker, args, span) as DeepFrozen:
             # left's test fails, right's test will try to access undefined
             # names.
             if ((sw.getStaticScope(left).outNames() &
-                 sw.getStaticScope(right).namesUsed()).size() == 0):
+                 sw.getStaticScope(right).namesUsed()).isEmpty()):
                 return maker(left, consequent, maker(right, consequent,
                                                      alternative, span), span)
 
@@ -187,7 +187,7 @@ def expand(node, builder, fail) as DeepFrozen:
             # Stage one looks good. Let's do the scope check.
             def pattNames := sw.getStaticScope(ejPatt).outNames()
             def exprNames := sw.getStaticScope(ejExpr).namesUsed()
-            if ((pattNames & exprNames).size() == 0):
+            if ((pattNames & exprNames).isEmpty()):
                 # Stage two succeeded: The expr doesn't use the ejector at
                 # all. Elide.
                 # traceln(`Eliding: $ejPatt isn't used by $ejExpr`)
@@ -223,8 +223,9 @@ def expand(node, builder, fail) as DeepFrozen:
         def [spec, patt] := args
         def pattScope := sw.getStaticScope(patt)
         def specScope := sw.getStaticScope(spec)
-        if ((pattScope.outNames() & specScope.namesUsed()).size() > 0):
-            fail(["Use on left isn't really in scope of matchbind pattern: ${conflicts.getKeys()}", span])
+        def conflicts := pattScope.outNames() & specScope.namesUsed()
+        if (!conflicts.isEmpty()):
+            fail([`Use on left isn't really in scope of matchbind pattern: ${conflicts.getKeys()}`, span])
         def [sp, ejector, result, problem, broken] :=  [
             tempNounExpr("sp", span),
             tempNounExpr("fail", span),
@@ -274,14 +275,14 @@ def expand(node, builder, fail) as DeepFrozen:
             bindingpatts with= (builder.BindingPattern(nounFromScopeName(n, span), span))
             bindingexprs with= (builder.BindingExpr(nounFromScopeName(n, span), span))
 
-        if ((def exprSize := bindingexprs.size()) != 0):
+        if (!bindingexprs.isEmpty()):
             # Annoying path; we must consider the possibility that some names
             # are conditionally defined and must be broken.
             def result := tempNounExpr("ok", span)
             def success := emitList([nounExpr("true", span)] +
                 bindingexprs, span)
             def failure := callExpr(nounExpr("_booleanFlow", span),
-                "failureList", [litExpr(exprSize, span)], [], span)
+                "failureList", [litExpr(bindingexprs.size(), span)], [], span)
             return seqExpr([
                 defExpr(
                     builder.ListPattern([plainPatt(result, span)] +
@@ -442,7 +443,7 @@ def expand(node, builder, fail) as DeepFrozen:
                             } else { sw.getStaticScope(asExpr) }
         for a in (auditors):
             auditorScope += sw.getStaticScope(a)
-        if ((objNameScope.outNames() & auditorScope.namesUsed()).size() > 0):
+        if (!(objNameScope.outNames() & auditorScope.namesUsed()).isEmpty()):
             fail(["Auditors cannot use self", span])
         if (xtends == null):
             return builder.ObjectExpr(doco, name, asExpr, auditors,
@@ -451,7 +452,7 @@ def expand(node, builder, fail) as DeepFrozen:
                                       span)
         def extendScope := sw.getStaticScope(xtends)
         def conflicts := objNameScope.outNames() & extendScope.namesUsed()
-        return if (conflicts.size() > 0) {
+        return if (!conflicts.isEmpty()) {
             buildRefCycle(conflicts, fn renamings {_expandObject(renamings, doco, name, asExpr, auditors, [xtends, methods, matchers], span)}, span)
         } else {
             _expandObject([].asMap(), doco, name, asExpr, auditors, [xtends, methods, matchers], span)
@@ -480,9 +481,9 @@ def expand(node, builder, fail) as DeepFrozen:
                 "get", [litExpr(0, span)], [], span)
 
     def validateFor(left, right, fail, span):
-        if ((left.outNames() & right.namesUsed()).size() > 0):
+        if (!(left.outNames() & right.namesUsed()).isEmpty()):
             fail(["Use on right isn't really in scope of definition", span])
-        if ((right.outNames() & left.namesUsed()).size() > 0):
+        if (!(right.outNames() & left.namesUsed()).isEmpty()):
             fail(["Use on left would get captured by definition on right", span])
 
 
@@ -754,21 +755,14 @@ def expand(node, builder, fail) as DeepFrozen:
                 def tempPatts := [for n in (tempNouns)
                                   plainPatt(n, span)]
                 def emitPattsIn():
-                    return if (params.size() > 0) {
-                            tempPatts + [ejPatt]
-                        } else {
-                            []
-                        }
+                    return if (params.isEmpty()) { [] } else {
+                        tempPatts + [ejPatt]
+                    }
                 def emitPattsOut():
-                    return if (params.size() > 0) {
-                            defExpr(
-                                builder.ListPattern(params, null,
-                                                    span),
-                                fnEj,
+                    return if (params.isEmpty()) { [] } else {
+                        defExpr(builder.ListPattern(params, null, span), fnEj,
                                 emitList(tempNouns, span), span)
-                        } else {
-                            seqExpr([], span)
-                        }
+                    }
                 def cexpr := callExpr(
                     t, "control",
                     [litExpr(operator, span),
@@ -858,12 +852,12 @@ def expand(node, builder, fail) as DeepFrozen:
                     sw.getStaticScope(ej) + sw.getStaticScope(rval)
                 }
                 def rvalUsed := rvalScope.namesUsed()
-                if ((varPatts & rvalUsed).size() != 0):
+                if (!(varPatts & rvalUsed).isEmpty()):
                     fail(["Circular 'var' definition not allowed", span])
-                if ((pattScope.namesUsed() & rvalScope.outNames()).size() != 0):
+                if (!(pattScope.namesUsed() & rvalScope.outNames()).isEmpty()):
                     fail(["Pattern may not use var defined on the right", span])
                 def conflicts := pattScope.outNames() & rvalUsed
-                if (conflicts.size() == 0):
+                if (conflicts.isEmpty()):
                     defExpr(patt, ej, rval, span)
                 else:
                     buildRefCycle(conflicts, fn renamings {
@@ -1139,7 +1133,8 @@ def expand(node, builder, fail) as DeepFrozen:
                                             expr.getSpan())], [], span)
                 def prob2 := tempNounExpr("problem", span)
                 var handler := prob2
-                if (catchers.size() == 0):
+                if (catchers.isEmpty()):
+                    # No when-broken clauses to emit.
                     return wr
                 for cat in (catchers):
                     def fail := tempNounExpr("fail", cat.getSpan())
