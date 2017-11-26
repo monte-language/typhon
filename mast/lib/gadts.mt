@@ -1,5 +1,5 @@
 import "lib/iterators" =~ [=> zip :DeepFrozen]
-exports (main)
+exports (makeGADT, main)
 
 def transpose(l :List) as DeepFrozen:
     return _makeList.fromIterable(M.call(zip, "run", l, [].asMap()))
@@ -29,6 +29,8 @@ def makeController(cons :Map[Str, Int], lambdas :Map) as DeepFrozen:
                 }
 
 def makeGADT(label :Str, constructors :Map[Str, Map[Str, DeepFrozen]]) as DeepFrozen:
+    interface GADTStamp :DeepFrozen {}
+
     def labelNoun := astBuilder.NounExpr(label, null)
 
     # Build the constructors.
@@ -75,7 +77,7 @@ def makeGADT(label :Str, constructors :Map[Str, Map[Str, DeepFrozen]]) as DeepFr
         def meths := getters + [printOn, _con, _elts]
         def script := astBuilder.Script(null, meths, [with], null)
         def body := astBuilder.ObjectExpr(null, mpatt`_`, m`DeepFrozen`,
-                                          [], script, null)
+                                          [m`GADTStamp`], script, null)
         def meth := astBuilder."Method"(null, con, [], nps, null, body, null)
 
         def controlPair := astBuilder.MapExprAssoc(conLit,
@@ -95,13 +97,18 @@ def makeGADT(label :Str, constructors :Map[Str, Map[Str, DeepFrozen]]) as DeepFr
     def control := m`method control(verb :Str, argCount :Int, paramCount :Int,
                                     block) { $controlBody }`
 
+    def coerce := m`method coerce(specimen, ej) {
+        def prize :GADTStamp exit ej := specimen
+        prize
+    }`
+
     # Assemble the final object.
     def namePatt := astBuilder.FinalPattern(labelNoun, null, null)
-    def script := astBuilder.Script(null, cons.with(control), [], null)
+    def script := astBuilder.Script(null, cons + [control, coerce], [], null)
     def expr := astBuilder.ObjectExpr(null, namePatt, m`DeepFrozen`, [],
                                       script, null)
     def guardScope := [for [k, b] in (extraScope.getValues()) `&&$k` => b]
-    def helperScope := [=> &&makeController]
+    def helperScope := [=> &&makeController, => &&GADTStamp]
     return eval(m`${expr}`.expand(), safeScope | guardScope | helperScope)
 
 def main(_argv) as DeepFrozen:
