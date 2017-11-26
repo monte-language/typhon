@@ -148,7 +148,7 @@ object _makeProtocolDesc as DeepFrozen:
                                  [].asMap()]
                 return [makePair, "get", [0], [].asMap()]
 
-            to audit(_):
-                throw("Can't audit with this object")
+            to audit(_audition):
+                return false
 
         return [protocolDesc, protocolDescStamp]
