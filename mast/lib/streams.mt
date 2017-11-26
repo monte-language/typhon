@@ -316,7 +316,7 @@ def _makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
                 p
             match ==PACKETS:
                 def [packet] + packets := state
-                if (packets.size() == 0):
+                if (packets.isEmpty()):
                     ps := QUIET
                     state := null
                 else:
@@ -328,7 +328,7 @@ def _makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
                 p
             match ==CLOSING:
                 def [packet] + packets := state
-                if (packets.size() == 0):
+                if (packets.isEmpty()):
                     ps := FINISHED
                     state := null
                 else:
@@ -344,6 +344,11 @@ def _makePumpPair(pump) :Pair[Sink, Source] as DeepFrozen:
             switch (ps):
                 match ==QUIET:
                     def [eos, packets] := trimPackets(pump(packet))
+                    # If we get no packets from the pump, but the pump hasn't
+                    # signaled EOS, then this is just priming the pump and
+                    # we're still quiet. That's why we switch on EOS first and
+                    # leave one case empty. (Should this just be a single big
+                    # switch-expr?) ~ C.
                     if (eos):
                         if (packets.isEmpty()):
                             ps := FINISHED
