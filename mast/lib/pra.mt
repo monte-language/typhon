@@ -1,5 +1,11 @@
 import "unittest" =~ [=> unittest :Any]
-exports (main)
+exports (PRA, tsub, main)
+
+interface _PRA :DeepFrozen guards PRAStamp :DeepFrozen {}
+
+def tsub(x :Int, y :Int) :Int as DeepFrozen implements PRAStamp:
+    "Truncated subtraction."
+    return (x - y).max(0)
 
 object PRA as DeepFrozen:
     "
@@ -18,6 +24,10 @@ object PRA as DeepFrozen:
     to audit(audition) :Bool:
         # Must be DF.
         audition.ask(DeepFrozen)
+
+        if (audition.ask(_PRA)):
+            # UV hand stamp.
+            return true
 
         # Grab the body. We only enforce behavior for .run().
         def objExpr := astBuilder.convertFromKernel(audition.getObjectExpr())
@@ -65,10 +75,19 @@ object PRA as DeepFrozen:
                     Int
                 }
                 match =="MethodCallExpr" {
-                    switch ([go(expr.getReceiver()), expr.getVerb()]) {
-                        match ==[Int, "add"] {
-                            if (go(expr.getArgs()[0]) != Int) {
-                                throw(`Incorrectly-typed call: $expr`)
+                    if (expr =~ m`_equalizer.sameEver(@l, @r)`) {
+                        def lhs := go(l)
+                        def rhs := go(r)
+                        if (lhs != rhs) {
+                            throw(`Incorrectly-typed equality: $lhs != $rhs`)
+                        }
+                        Bool
+                    } else {
+                        switch ([go(expr.getReceiver()), expr.getVerb()]) {
+                            match ==[Int, "add"] {
+                                if (go(expr.getArgs()[0]) != Int) {
+                                    throw(`Incorrectly-typed call: $expr`)
+                                }
                             }
                         }
                     }
@@ -106,7 +125,9 @@ unittest([
 
 def main(_argv) as DeepFrozen:
     traceln(PRA)
-    def pick(x :Int, y :Int, b :Bool) :Int as PRA:
-        return if (b) { x } else { y }
-    traceln(pick(2, 3, false))
+    def fact(x :Int) :Int as PRA:
+        return if (x == 0) { 1 } else if (x == 1) { 1 } else {
+            fact(tsub(x, 1)) * x
+        }
+    traceln(fact(5))
     return 0
