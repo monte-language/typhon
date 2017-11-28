@@ -55,6 +55,18 @@ object arb as DeepFrozen:
             to shrink(c :Char) :List[Char]:
                 return []
 
+    to Double():
+        def edges := [NaN, Infinity, -Infinity]._makeIterator()
+        return object arbInt as Arb:
+            to arbitrary(entropy) :Double:
+                return escape ej:
+                    edges.next(ej)[1]
+                catch _:
+                    entropy.nextDouble()
+
+            to shrink(d :Double) :List[Double]:
+                return []
+
     to Int(=> ceiling :Int := 2 ** 128):
         return object arbInt as Arb:
             to arbitrary(entropy) :Int:
@@ -244,3 +256,38 @@ for container in (containers):
     unittest([
         prop.test([container], zeroSizeIffEmpty),
     ])
+
+# Promises appear to be near once they are resolved.
+def resolvedPromisesAreNear(hy, i):
+    def x
+    bind x := i
+    hy.assert(Ref.isNear(x))
+
+unittest([
+    prop.test([arb.Int()], resolvedPromisesAreNear),
+])
+
+# Equality axioms.
+
+# Identity.
+
+# Basic identity template for most data.
+def sameEverIdentity(hy, x):
+    hy.assert(x == x)
+
+# Cyclic structures, including maps and lists, compare equal.
+def sameEverIdentityCycles(hy, i):
+    def l := [i, l]
+    def m := [i => m]
+    hy.assert(l == l)
+    hy.assert(m == m)
+
+unittest([
+    prop.test([arb.Bytes()], sameEverIdentity),
+    prop.test([arb.Char()], sameEverIdentity),
+    prop.test([arb.Double()], sameEverIdentity),
+    prop.test([arb.Int()], sameEverIdentity),
+    prop.test([arb.Str()], sameEverIdentity),
+    # Any data will do here.
+    prop.test([arb.Int()], sameEverIdentityCycles),
+])
