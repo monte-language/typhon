@@ -25,31 +25,26 @@ def makePipeline(timer, [var stage] + var stages) as DeepFrozen:
             return p
 
         to advance():
-            def p := timer.sendTimestamp(fn then {
-                def rv := stage<-(data)
-                when (rv) -> {
-                    timer.sendTimestamp(fn now {
-                        def taken := now - then
-                        traceln(`$stage took $taken seconds`)
-                        data := rv
-                    })
-                }
-            })
+            def p := timer.measureTimeTaken(fn { stage(data) })
             when (p) ->
-                if (stages.size() == 0):
-                    # Done; notify everybody.
+                def [result, timeTaken] := p
+                traceln(`$stage took $timeTaken seconds`)
+                when (result) ->
+                    data := result
+                    if (stages.size() == 0):
+                        # Done; notify everybody.
+                        for r in (resultPromises):
+                            r.resolve(data)
+                    else:
+                        def [s] + ss := stages
+                        stage := s
+                        stages := ss
+                        pipeline.advance()
+                catch problem:
+                    traceln.exception(problem)
+                    # Done in a different sort of way.
                     for r in (resultPromises):
-                        r.resolve(data)
-                else:
-                    def [s] + ss := stages
-                    stage := s
-                    stages := ss
-                    pipeline.advance()
-            catch problem:
-                traceln.exception(problem)
-                # Done in a different sort of way.
-                for r in (resultPromises):
-                    r.smash(problem)
+                        r.smash(problem)
 
 def parseArguments(var argv, ej) as DeepFrozen:
     var useMixer :Bool := false
