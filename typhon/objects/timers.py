@@ -27,6 +27,7 @@ from typhon.vats import currentVat
 
 FROMNOW_1 = getAtom(u"fromNow", 1)
 RESOLVE_1 = getAtom(u"resolve", 1)
+RUN_0 = getAtom(u"run", 0)
 RUN_1 = getAtom(u"run", 1)
 SENDTIMESTAMP_1 = getAtom(u"sendTimestamp", 1)
 UNSAFENOW_0 = getAtom(u"unsafeNow", 0)
@@ -39,6 +40,24 @@ def resolveTimer(uv_timer):
     # Convert from ms to s.
     d = intmask(now - then) / 1000.0
     resolver.resolve(DoubleObject(d))
+
+
+@autohelp
+class TimeMeasurer(Object):
+    """
+    This is the End of Time.
+    """
+
+    def __init__(self, f):
+        self.f = f
+
+    @method("List")
+    def run(self):
+        before = time.time()
+        result = self.f.call(u"run", [])
+        after = time.time()
+        elapsed = max(after - before, 0.0)
+        return [result, DoubleObject(elapsed)]
 
 
 @autohelp
@@ -59,6 +78,17 @@ class Timer(Object):
 
     Use with caution.
     """
+
+    @method("Any", "Any")
+    def measureTimeTaken(self, f):
+        """
+        Like m`f<-()`, but returns a promise for a pair
+        `[result, timeTaken :Double]` in seconds.
+        """
+
+        from typhon.objects.collections.maps import EMPTY_MAP
+        vat = currentVat.get()
+        return vat.send(TimeMeasurer(f), RUN_0, [], EMPTY_MAP)
 
     @method("Double")
     def unsafeNow(self):
