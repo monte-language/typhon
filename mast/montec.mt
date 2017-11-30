@@ -16,13 +16,11 @@ exports (main)
 
 def makePipeline(timer, [var stage] + var stages) as DeepFrozen:
     var data := null
-    def resultPromises := [].diverge()
+    def finalResult
 
     return object pipeline:
         to promisedResult():
-            def [p, r] := Ref.promise()
-            resultPromises.push(r)
-            return p
+            return finalResult
 
         to advance():
             def p := timer.measureTimeTaken(fn { stage(data) })
@@ -33,23 +31,19 @@ def makePipeline(timer, [var stage] + var stages) as DeepFrozen:
                     data := result
                     if (stages.size() == 0):
                         # Done; notify everybody.
-                        for r in (resultPromises):
-                            r.resolve(data)
+                        bind finalResult := data
                     else:
                         def [s] + ss := stages
                         stage := s
                         stages := ss
                         pipeline.advance()
                 catch problem:
-                    traceln.exception(problem)
-                    # Done in a different sort of way.
-                    for r in (resultPromises):
-                        r.smash(problem)
+                    bind finalResult := Ref.broken(problem)
 
 def parseArguments(var argv, ej) as DeepFrozen:
     var useMixer :Bool := false
     var arguments :List[Str] := []
-    var verifyNames :Bool := true
+    var verify :Bool := true
     var terseErrors :Bool := false
     var justLint :Bool := false
     var readStdin :Bool := false
@@ -62,7 +56,7 @@ def parseArguments(var argv, ej) as DeepFrozen:
                 useMixer := true
                 argv := tail
             match [=="-noverify"] + tail:
-                verifyNames := false
+                verify := false
                 argv := tail
             match [=="-terse"] + tail:
                 terseErrors := true
@@ -90,8 +84,8 @@ def parseArguments(var argv, ej) as DeepFrozen:
         to justLint() :Bool:
             return justLint
 
-        to verifyNames() :Bool:
-            return verifyNames
+        to verify() :Bool:
+            return verify
 
         to terseErrors() :Bool:
             return terseErrors
@@ -104,6 +98,15 @@ def parseArguments(var argv, ej) as DeepFrozen:
 
         to readStdin() :Bool:
             return readStdin
+
+
+def expandTree(tree) as DeepFrozen:
+    return expand(tree, astBuilder, throw)
+
+def serialize(tree) as DeepFrozen:
+    def context := makeMASTContext()
+    context(tree)
+    return context.bytes()
 
 
 def main(argv,
@@ -144,7 +147,7 @@ def main(argv,
 
             throw("Syntax error")
         }
-        if (config.verifyNames()):
+        if (config.verify()):
             def stdout := stdio.stdout()
             var anyErrors :Bool := false
             for [report, isSerious] in ([
@@ -163,14 +166,6 @@ def main(argv,
             if (anyErrors):
                 throw("There were name usage errors!")
         return tree
-
-    def expandTree(tree):
-        return expand(tree, astBuilder, throw)
-
-    def serialize(tree):
-        def context := makeMASTContext()
-        context(tree)
-        return context.bytes()
 
     def writeOutputFile(bs):
         return makeFileResource(outputFile)<-setContents(bs)
