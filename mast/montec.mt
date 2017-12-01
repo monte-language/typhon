@@ -14,7 +14,19 @@ import "lib/monte/monte_verifier" =~ [
 
 exports (main)
 
-def makePipeline(timer, [var stage] + var stages) as DeepFrozen:
+def makeStopwatch(timer) as DeepFrozen:
+    return def stopwatch(f):
+        return object stopwatchProxy:
+            match message:
+                def p := timer.measureTimeTaken(fn {
+                    M.callWithMessage(f, message)
+                })
+                when (p) ->
+                    def [rv, timeTaken] := p
+                    traceln(`stopwatch: $f took ${timeTaken}s`)
+                    rv
+
+def makePipeline([var stage] + var stages) as DeepFrozen:
     var data := null
     def finalResult
 
@@ -23,22 +35,18 @@ def makePipeline(timer, [var stage] + var stages) as DeepFrozen:
             return finalResult
 
         to advance():
-            def p := timer.measureTimeTaken(fn { stage(data) })
-            when (p) ->
-                def [result, timeTaken] := p
-                traceln(`$stage took $timeTaken seconds`)
-                when (result) ->
-                    data := result
-                    if (stages.size() == 0):
-                        # Done; notify everybody.
-                        bind finalResult := data
-                    else:
-                        def [s] + ss := stages
-                        stage := s
-                        stages := ss
-                        pipeline.advance()
-                catch problem:
-                    bind finalResult := Ref.broken(problem)
+            when (def result := stage<-(data)) ->
+                data := result
+                if (stages.size() == 0):
+                    # Done; notify everybody.
+                    bind finalResult := data
+                else:
+                    def [s] + ss := stages
+                    stage := s
+                    stages := ss
+                    pipeline.advance()
+            catch problem:
+                bind finalResult := Ref.broken(problem)
 
 def parseArguments(var argv, ej) as DeepFrozen:
     var useMixer :Bool := false
@@ -116,6 +124,8 @@ def main(argv,
     def inputFile := config.getInputFile()
     def outputFile := config.getOutputFile()
 
+    def stopwatch := makeStopwatch(Timer)
+
     def stdout := alterSink.encodeWith(UTF8, stdio.stdout())
 
     def readAllStdinText():
@@ -147,37 +157,46 @@ def main(argv,
 
             throw("Syntax error")
         }
-        if (config.verify()):
-            def stdout := stdio.stdout()
-            var anyErrors :Bool := false
-            for [report, isSerious] in ([
-                [findUndefinedNames(tree, safeScope), true],
-                [findUnusedNames(tree), false],
-                [findSingleMethodObjects(tree), false],
-            ]):
-                if (report.size() > 0):
-                    anyErrors |= isSerious
-                    for [message, span] in (report):
-                        def err := lex.makeParseError([message, span])
-                        def s := if (config.terseErrors()) {
-                            `$inputFile:${err.formatCompact()}$\n`
-                        } else { err.formatPretty() }
-                        stdout(UTF8.encode(s, null))
-            if (anyErrors):
-                throw("There were name usage errors!")
+        return [lex, tree]
+
+    def verify([lex, tree]):
+        def stdout := stdio.stdout()
+        var anyErrors :Bool := false
+        for [report, isSerious] in ([
+            [findUndefinedNames(tree, safeScope), true],
+            [findUnusedNames(tree), false],
+            [findSingleMethodObjects(tree), false],
+        ]):
+            if (!report.isEmpty()):
+                anyErrors |= isSerious
+                for [message, span] in (report):
+                    def err := lex.makeParseError([message, span])
+                    def s := if (config.terseErrors()) {
+                        `$inputFile:${err.formatCompact()}$\n`
+                    } else { err.formatPretty() }
+                    stdout(UTF8.encode(s, null))
+        if (anyErrors):
+            throw("There were name usage errors!")
         return tree
 
     def writeOutputFile(bs):
         return makeFileResource(outputFile)<-setContents(bs)
 
-    def stages := [
+    def frontend := [
         readInputFile,
-        parse,
-        expandTree,
-    ] + if (config.useMixer()) {[optimize]} else {[]} + [
-        serialize,
-    ] + if (config.justLint()) {[]} else {[writeOutputFile]}
-    def pipeline := makePipeline(Timer, stages)
+        stopwatch(parse),
+        if (config.verify()) { stopwatch(verify) } else {
+            fn [_lex, tree] { tree }
+        },
+    ]
+    def backend := if (config.justLint()) {[]} else {[
+        stopwatch(expandTree),
+        if (config.useMixer()) { stopwatch(optimize) },
+        stopwatch(serialize),
+        writeOutputFile,
+    ]}
+    def stages := [for s in (frontend + backend) ? (s != null) s]
+    def pipeline := makePipeline(stages)
     def p := pipeline.promisedResult()
     pipeline.advance()
     return when (p) -> { 0 }
