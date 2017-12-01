@@ -26,27 +26,11 @@ def makeStopwatch(timer) as DeepFrozen:
                     traceln(`stopwatch: $f took ${timeTaken}s`)
                     rv
 
-def makePipeline([var stage] + var stages) as DeepFrozen:
-    var data := null
-    def finalResult
-
-    return object pipeline:
-        to promisedResult():
-            return finalResult
-
-        to advance():
-            when (def result := stage<-(data)) ->
-                data := result
-                if (stages.size() == 0):
-                    # Done; notify everybody.
-                    bind finalResult := data
-                else:
-                    def [s] + ss := stages
-                    stage := s
-                    stages := ss
-                    pipeline.advance()
-            catch problem:
-                bind finalResult := Ref.broken(problem)
+def runPipeline([var stage] + var stages) as DeepFrozen:
+    var rv := stage<-()
+    for s in (stages):
+        rv := when (def p := rv) -> { s<-(p) }
+    return rv
 
 def parseArguments(var argv, ej) as DeepFrozen:
     var useMixer :Bool := false
@@ -135,7 +119,7 @@ def main(argv,
         flow(stdio.stdin(), decodedSink)
         return when (l) -> { "".join(l) }
 
-    def readInputFile(_):
+    def readInputFile():
         if (inputFile == "-" || config.readStdin()):
             return readAllStdinText()
         def p := makeFileResource(inputFile)<-getContents()
@@ -196,7 +180,5 @@ def main(argv,
         writeOutputFile,
     ]}
     def stages := [for s in (frontend + backend) ? (s != null) s]
-    def pipeline := makePipeline(stages)
-    def p := pipeline.promisedResult()
-    pipeline.advance()
-    return when (p) -> { 0 }
+    def p := runPipeline(stages)
+    return when (p) -> { 0 } catch problem { traceln.exception(problem); 1 }
