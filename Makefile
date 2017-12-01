@@ -48,7 +48,7 @@ $(boot_objects): boot/%: mast/%
 	@ echo "BOOT $<"
 	@ cp $< $@
 
-mast: mast/lib/enum.mast mast/lib/record.mast \
+mast: mast/lib/enum.mast \
 	mast/lib/amp.mast \
 	mast/lib/ansiColor.mast \
 	mast/lib/capn.mast \

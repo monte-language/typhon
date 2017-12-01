@@ -1,5 +1,6 @@
 import "lib/iterators" =~ [=> zip :DeepFrozen]
-exports (makeGADT, main)
+import "unittest" =~ [=> unittest :Any]
+exports (makeGADT)
 
 def transpose(l :List) as DeepFrozen:
     return _makeList.fromIterable(M.call(zip, "run", l, [].asMap()))
@@ -111,15 +112,44 @@ def makeGADT(label :Str, constructors :Map[Str, Map[Str, DeepFrozen]]) as DeepFr
     def helperScope := [=> &&makeController, => &&GADTStamp]
     return eval(m`${expr}`.expand(), safeScope | guardScope | helperScope)
 
-def main(_argv) as DeepFrozen:
+def testGADTAccessors(assert):
     def These := makeGADT("These", [
         "this" => ["x" => DeepFrozen],
         "that" => ["y" => DeepFrozen],
-        "these" => ["x" => DeepFrozen, "y" => DeepFrozen],
     ])
-    traceln(These)
-    def val := These.this("x" => 42)
-    traceln(val, val.x(), val.with("x" => 13))
-    def dispatch := These () this x { x } that y { y } these x, y { [x, y] }
-    traceln("dispatched", dispatch(val))
-    return 0
+    def this := These.this("x" => 42)
+    def that := These.that("y" => 7)
+    assert.equal(this.x(), 42)
+    assert.equal(that.y(), 7)
+
+def testGADTWith(assert):
+    def These := makeGADT("These", [
+        "this" => ["x" => DeepFrozen],
+        "that" => ["y" => DeepFrozen],
+    ])
+    var this := These.this("x" => 42)
+    assert.equal(this.x(), 42)
+    this := this.with("x" => 7)
+    assert.equal(this.x(), 7)
+
+def testGADTDispatch(assert):
+    def These := makeGADT("These", [
+        "this" => ["x" => DeepFrozen],
+        "that" => ["y" => DeepFrozen],
+    ])
+    # Incomplete.
+    assert.throws(fn {
+        These () this x { x }
+    })
+    # Non-existent case.
+    assert.throws(fn {
+        These () this x { x } that y { y } testing { 42 }
+    })
+    # This one should be fine.
+    These () this x { x } that y { y }
+
+unittest([
+    testGADTAccessors,
+    testGADTWith,
+    testGADTDispatch,
+])
