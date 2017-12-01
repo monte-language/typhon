@@ -205,12 +205,10 @@ def expand(node, builder, fail) as DeepFrozen:
 
         def out := nounExpr("out", span)
         def repr := `<$flavor fn at $span>`
-        def print := builder.MethodCallExpr(out, "print",
-                                            [builder.LiteralExpr(repr, span)],
-                                            [], span)
+        def print := callExpr(out, "print", [litExpr(repr, span)], [], span)
         # Just use the (short) flavor as the docstring. They're not examined
         # often and the M.toString/1 will be more informative to folks anyway.
-        return builder.ObjectExpr(flavor,
+        def rv := builder.ObjectExpr(flavor,
              ignorePatt(null, span), null, [],
              builder.Script(null, [
                  builder."Method"(null, "run", args, namedArgs, null, body,
@@ -218,6 +216,7 @@ def expand(node, builder, fail) as DeepFrozen:
                  builder."Method"(null, "_printOn", [plainPatt(out, span)],
                                   [], null, print, span),
              ], [], span), span)
+        return rv
 
     def expandMatchBind(sw, args, span, fail):
         def [spec, patt] := args
@@ -754,29 +753,25 @@ def expand(node, builder, fail) as DeepFrozen:
                 def ejPatt := plainPatt(fnEj, span)
                 def tempPatts := [for n in (tempNouns)
                                   plainPatt(n, span)]
-                def emitPattsIn():
-                    return if (params.isEmpty()) { [] } else {
-                        tempPatts + [ejPatt]
-                    }
-                def emitPattsOut():
-                    return if (params.isEmpty()) { [] } else {
+                def pattsIn := if (params.isEmpty()) { [] } else {
+                    tempPatts.with(ejPatt)
+                }
+                def outBody := if (params.isEmpty()) { body } else {
+                    seqExpr([
                         defExpr(builder.ListPattern(params, null, span), fnEj,
-                                emitList(tempNouns, span), span)
-                    }
+                                emitList(tempNouns, span), span),
+                        body], span)
+                }
+                def lambda := makeFn("control-lambda", pattsIn, [], outBody,
+                                     span)
+                def block := makeFn("control-block", [], [],
+                    emitList([emitList(cargs, span), lambda], span), span)
                 def cexpr := callExpr(
                     t, "control",
                     [litExpr(operator, span),
                      litExpr(cargs.size(), span),
                      litExpr(params.size(), span),
-                     makeFn(
-                         "control-block", [], [], emitList([
-                             emitList(cargs, span),
-                             makeFn(
-                                 "control-lambda", emitPattsIn(), [], seqExpr(
-                                     [emitPattsOut(),
-                                      body],
-                                     span), span)], span), span)
-                    ], [], span)
+                     block], [], span)
                 return if (top) {
                         callExpr(cexpr, "controlRun", [], [], span)
                     } else {
