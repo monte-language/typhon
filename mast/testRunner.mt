@@ -196,7 +196,7 @@ Error in source $source from test $test:
             lastTest := test
             running -= 1
             completed += 1
-            updateScreen()
+            #updateScreen()
         catch p:
             formatError(unsealException(p, throw), k, test)
 
