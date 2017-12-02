@@ -132,7 +132,6 @@ def expand(node, builder, fail) as DeepFrozen:
             def exprs := args[0].diverge()
             def last := exprs.size() - 1
             for i => var expr in (exprs):
-                expr transform= (seqSendOnly)
                 if (i != last):
                     if (expr.getNodeName() == "SendExpr"):
                         def receiver := expr.getReceiver()
@@ -1171,14 +1170,18 @@ def expand(node, builder, fail) as DeepFrozen:
         def seen := [].asMap().diverge()
         var i := 0
 
-        def Ast := builder.getAstGuard()
+        # AST nodes uncall to a special maker, so we need to capture the maker
+        # for nouns. We'll use this to accelerate the recursion.
+        def nounMaker := builder.NounExpr("hack", null)._uncall()[0]
 
         def nameFinder(node):
-            if (node =~ _ :Ast && node.getNodeName() == "NounExpr"):
-                nameList.push(node.getName())
-            else if (node._uncall() =~ [_, _, args, _]):
-                for arg in (args):
-                    nameFinder(arg)
+            # If it's a noun, then save its name. Otherwise, recurse.
+            if (node._uncall() =~ [maker, _, args, _]):
+                if (maker == nounMaker):
+                    nameList.push(args[0])
+                else:
+                    for arg in (args):
+                        nameFinder(arg)
 
         nameFinder(tree)
         def names := nameList.asSet()
@@ -1216,7 +1219,8 @@ def expand(node, builder, fail) as DeepFrozen:
     ast transform= (seqSendOnly)
 
     # The main course. Expand everything not yet expanded.
-    ast := reifyTemporaries(ast.transform(expandTransformer))
+    ast transform= (expandTransformer)
+    ast := reifyTemporaries(ast)
 
     # Dessert.
 
