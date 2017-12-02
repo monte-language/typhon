@@ -1,4 +1,5 @@
 import "fun/elements" =~ _
+import "lib/amp" =~ _
 import "lib/codec/percent" =~ _
 import "lib/codec/utf8" =~ _
 import "lib/continued" =~ _
