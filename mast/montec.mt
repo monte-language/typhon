@@ -15,7 +15,7 @@ import "lib/monte/monte_verifier" =~ [
 exports (main)
 
 def makeStopwatch(timer) as DeepFrozen:
-    return def stopwatch(f):
+    return def stopwatch(f, => source :NullOk[Str] := null):
         return object stopwatchProxy:
             match message:
                 def p := timer.measureTimeTaken(fn {
@@ -23,11 +23,14 @@ def makeStopwatch(timer) as DeepFrozen:
                 })
                 when (p) ->
                     def [rv, timeTaken] := p
-                    traceln(`stopwatch: $f took ${timeTaken}s`)
+                    if (source == null):
+                        traceln(`stopwatch: $f took ${timeTaken}s`)
+                    else:
+                        traceln(`stopwatch: $source: $f took ${timeTaken}s`)
                     rv
 
-def runPipeline([var stage] + var stages) as DeepFrozen:
-    var rv := stage<-()
+def runPipeline(starter, [var stage] + var stages) as DeepFrozen:
+    var rv := when (starter) -> { stage<-(starter) }
     for s in (stages):
         rv := when (def p := rv) -> { s<-(p) }
     return rv
@@ -39,6 +42,7 @@ def parseArguments(var argv, ej) as DeepFrozen:
     var terseErrors :Bool := false
     var justLint :Bool := false
     var readStdin :Bool := false
+    var muffinPath :NullOk[Str] := null
     def inputFile
     def outputFile
     while (argv.size() > 0):
@@ -58,6 +62,9 @@ def parseArguments(var argv, ej) as DeepFrozen:
                 argv := tail
             match [=="-stdin"] + tail:
                 readStdin := true
+                argv := tail
+            match [=="-muffin", path] + tail:
+                muffinPath := path
                 argv := tail
             match [arg] + tail:
                 arguments with= (arg)
@@ -91,6 +98,9 @@ def parseArguments(var argv, ej) as DeepFrozen:
         to readStdin() :Bool:
             return readStdin
 
+        to muffinPath() :NullOk[Str]:
+            return muffinPath
+
 
 def expandTree(tree) as DeepFrozen:
     return expand(tree, astBuilder, throw)
@@ -99,6 +109,11 @@ def serialize(tree) as DeepFrozen:
     def context := makeMASTContext()
     context(tree)
     return context.bytes()
+
+def makeMuffin(loader) as DeepFrozen:
+    return def muffin(mod):
+        traceln(`Got muffin request! Loader is $loader`)
+        return mod
 
 
 def main(argv,
@@ -111,20 +126,6 @@ def main(argv,
     def stopwatch := makeStopwatch(Timer)
 
     def stdout := alterSink.encodeWith(UTF8, stdio.stdout())
-
-    def readAllStdinText():
-        def [l, sink] := makeSink.asList()
-        def decodedSink := alterSink.decodeWith(UTF8, sink,
-                                                "withExtras" => true)
-        flow(stdio.stdin(), decodedSink)
-        return when (l) -> { "".join(l) }
-
-    def readInputFile():
-        if (inputFile == "-" || config.readStdin()):
-            return readAllStdinText()
-        def p := makeFileResource(inputFile)<-getContents()
-        return when (p) ->
-            UTF8.decode(p, null)
 
     def parse(data :Str):
         "Parse and verify a Monte source file."
@@ -163,22 +164,51 @@ def main(argv,
             throw("There were name usage errors!")
         return tree
 
+    def makeLoader(fileReader, config):
+        return def loadPetname(pn :Str):
+            def pipeline := [
+                fileReader,
+                stopwatch(parse, "source" => pn),
+                if (config.verify()) {
+                    stopwatch(verify, "source" => pn)
+                } else { fn [_lex, tree] { tree } },
+                # NB: Not expanding or optimizing here; we will expand and
+                # optimize the entire program at once instead.
+            ]
+            return runPipeline(pn, pipeline)
+
+    def starter := if (inputFile == "-" || config.readStdin()) {
+        def [l, sink] := makeSink.asList()
+        def decodedSink := alterSink.decodeWith(UTF8, sink,
+                                                "withExtras" => true)
+        flow(stdio.stdin(), decodedSink)
+        when (l) -> { "".join(l) }
+    } else {
+        def p := makeFileResource(inputFile)<-getContents()
+        when (p) -> { UTF8.decode(p, null) }
+    }
+
     def writeOutputFile(bs):
         return makeFileResource(outputFile)<-setContents(bs)
 
     def frontend := [
-        readInputFile,
         stopwatch(parse),
         if (config.verify()) { stopwatch(verify) } else {
             fn [_lex, tree] { tree }
         },
     ]
     def backend := if (config.justLint()) {[]} else {[
+        if ((def path := config.muffinPath()) != null) {
+            makeMuffin(makeLoader(fn petname {
+                def p := makeFileResource(`$path/$petname.mt`)<-getContents()
+                when (p) -> { UTF8.decode(p, null) }
+            }, config))
+        },
         stopwatch(expandTree),
         if (config.useMixer()) { stopwatch(optimize) },
         stopwatch(serialize),
         writeOutputFile,
     ]}
     def stages := [for s in (frontend + backend) ? (s != null) s]
-    def p := runPipeline(stages)
+    def p := runPipeline(starter, stages)
     return when (p) -> { 0 } catch problem { traceln.exception(problem); 1 }
