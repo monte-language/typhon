@@ -538,7 +538,7 @@ def makeCoreAst() as DeepFrozenStamp:
 
     def [Expr, Pattern, NamedArg, MapItem, MapPatternItem,
          NamedParam, Method_, Matcher, Catcher, Script,
-         ParamDesc, MessageDesc, QuasiPiece, Import_, _Module,
+         ParamDesc, MessageDesc, QuasiPiece, Import_,
          astBuilder_] := makeAstBuilder([
     "Expr" => [
         "LiteralExpr"           => ["value" => Any],
@@ -632,6 +632,8 @@ def makeCoreAst() as DeepFrozenStamp:
         "QuasiParserExpr"       => ["name?" => Str, "quasis*" => QuasiPiece],
         "ValueHoleExpr"         => ["index" => Int],
         "PatternHoleExpr"       => ["index" => Int],
+        "Module"                => ["imports*" => Import_, "exports*" => Noun,
+                                    "body" => Expr],
     ],
     "Pattern" => [
         "IgnorePattern"      => ["guard?" => Expr],
@@ -703,9 +705,6 @@ def makeCoreAst() as DeepFrozenStamp:
     "Import" => [
         "Import" => ["name" => Str, "pattern" => Pattern],
     ],
-    "Module" => [
-        "Module" => ["imports*" => Import_, "exports*" => Noun, "body" => Expr]
-    ]
     ],
     [
     "BindingExpr" => fn super {
