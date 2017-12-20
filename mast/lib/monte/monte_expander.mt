@@ -1206,9 +1206,30 @@ def expand(node, builder, fail) as DeepFrozen:
                 return M.call(builder, nodeName, args + [span], [].asMap())
         return tree.transform(renameTransformer)
 
+    def moduleImports(ast, maker, args, span):
+        "Desugar module import-patterns to standard Full-Monte patterns."
+
+        if (ast.getNodeName() == "Module"):
+            def [imps, exps, body] := args
+            def newImps := [for imp in (imps) {
+                def patt := imp.getPattern()
+                if (patt.getNodeName() == "MapPattern" && patt.getTail() == null) {
+                    def ignorePatt := builder.IgnorePattern(null, patt.getSpan())
+                    def newPatt := builder.MapPattern(patt.getPatterns(),
+                                                      ignorePatt, patt.getSpan())
+                    builder."Import"(imp.getName(), newPatt, imp.getSpan())
+                } else { imp }
+            }]
+            return maker(newImps, exps, body, span)
+
+        return M.call(maker, "run", args + [span], [].asMap())
+
     var ast := node
 
     # Appetizers.
+
+    # Fix up import patterns.
+    ast transform= (moduleImports)
 
     # Pre-expand certain simple if-expressions. The transformation isn't total
     # but covers many easy cases and doesn't require temporaries.

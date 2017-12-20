@@ -1458,16 +1458,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             def importStart := spanHere()
             def importName := acceptTag(".String.", ej)[1]
             acceptTag("=~", ej)
-            var importPattern := pattern(ej)
-            # This might be better placed in the expander, but pre-expansion
-            # rewriting of patterns doesn't fit our current bottom-up expansion
-            # strategy. Good idea to move it if that changes. ~ A.
-            if (importPattern.getNodeName() == "MapPattern" && importPattern.getTail() == null):
-                importPattern := builder.MapPattern(
-                importPattern.getPatterns(),
-                builder.IgnorePattern(null, importPattern.getSpan()),
-                importPattern.getSpan())
-
+            def importPattern := pattern(ej)
             importsList.push(builder."Import"(importName, importPattern,
                                               spanFrom(importStart)))
             seqSep(ej)
