@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 import "tests/proptests" =~ [
     => Arb :DeepFrozen,
     => arb :DeepFrozen,

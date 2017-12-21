@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports (PercentEncoding)
 
 def unreserved :Set[Int] := b`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~/`.asSet()

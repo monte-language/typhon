@@ -1,5 +1,6 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports ()
+
 def testFlexMapPrinting(assert):
     assert.equal(M.toString([].asMap().diverge()), "[].asMap().diverge()")
     assert.equal(M.toString([5 => 42].diverge()), "[5 => 42].diverge()")

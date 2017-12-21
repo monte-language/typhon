@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports (elementsOf)
 
 def table :Str := "

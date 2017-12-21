@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 import "lib/monte/monte_parser" =~ [
     => parseModule :DeepFrozen,
 ]

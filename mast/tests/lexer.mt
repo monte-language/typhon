@@ -1,5 +1,5 @@
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports ()
 
 def lex(s, => balanceBraces := true):

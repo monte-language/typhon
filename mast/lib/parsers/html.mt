@@ -11,8 +11,9 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports (parseFragment)
+
 def lowercase :Set[Char] := "abcdefghijklmnopqrstuvwxyz".asSet()
 def uppercase :Set[Char] := "ABCDEFGHIJKLMNOPQRSTUVWXYZ".asSet()
 def digits :Set[Char] := "0123456789".asSet()

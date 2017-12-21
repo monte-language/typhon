@@ -1,5 +1,6 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports ()
+
 def noFail(x):
     return x + 1
 

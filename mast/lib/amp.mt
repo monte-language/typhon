@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 import "lib/enum" =~ [=> makeEnum]
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/streams" =~ [

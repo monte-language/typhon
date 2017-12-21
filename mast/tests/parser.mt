@@ -1,7 +1,7 @@
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseExpression, => parsePattern, => parseModule]
 import "fun/termParser" =~ [=> ::"term``"]
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports ()
 
 def astFromTerm(t):

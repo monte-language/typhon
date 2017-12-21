@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports (makeEnum)
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #

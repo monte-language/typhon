@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports ()
 
 # m`` has a flag which prevents mixing unexpanded ASTs. Humor it for now and

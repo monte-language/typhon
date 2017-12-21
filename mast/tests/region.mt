@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 
 def testIterable(assert):
     def intspace := _makeOrderedSpace(Int, "Int")

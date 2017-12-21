@@ -1,7 +1,7 @@
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseModule]
 import "lib/monte/monte_expander" =~ [=> expand]
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports ()
 
 def tests := [].diverge()

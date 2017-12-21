@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 import "lib/entropy/entropy" =~ [=> makeEntropy :DeepFrozen]
 import "lib/entropy/pcg" =~ [=> makePCG :DeepFrozen]
 exports (Arb, arb, prop)

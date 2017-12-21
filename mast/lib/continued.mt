@@ -12,8 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 import "lib/enum" =~ [=> makeEnum]
-import "unittest" =~ [=> unittest]
-import "bench" =~ [=> bench]
+import "unittest" =~ [=> unittest :Any]
+import "bench" =~ [=> bench :Any]
 exports (continued)
 
 # Continued fractions. Nearly all maths here comes from Gosper in the early

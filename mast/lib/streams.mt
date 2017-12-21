@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 import "lib/enum" =~ [=> makeEnum :DeepFrozen]
 # For testing only; not to be re-exported. ~ C.
 import "lib/codec/utf8" =~ [=> UTF8]

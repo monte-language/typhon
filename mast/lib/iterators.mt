@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports (zip)
 
 # A prelude-safe library of tools for working with iterators.

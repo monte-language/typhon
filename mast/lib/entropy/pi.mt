@@ -1,5 +1,5 @@
 import "lib/continued" =~ [=> continued :DeepFrozen]
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports (makePiEntropy)
 
 # Do not use this module for anything other than testing; it is completely

@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 import "lib/enum" =~ [=> makeEnum]
 exports (makeQuasiParser, makeMarley, ::"marley``")
 

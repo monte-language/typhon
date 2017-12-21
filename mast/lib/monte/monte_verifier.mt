@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 exports (findUndefinedNames, findUnusedNames, findSingleMethodObjects)
 
 def Ast :DeepFrozen := ::"m``".getAstBuilder().getAstGuard()

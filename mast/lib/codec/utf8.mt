@@ -12,8 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import "bench" =~ [=> bench]
-import "unittest" =~ [=> unittest]
+import "bench" =~ [=> bench :Any]
+import "unittest" =~ [=> unittest :Any]
 exports (UTF8)
 
 def chr(i :Int) :Char as DeepFrozen:

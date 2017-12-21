@@ -1,4 +1,4 @@
-import "unittest" =~ [=> unittest]
+import "unittest" =~ [=> unittest :Any]
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/streams" =~ [=> alterSink :DeepFrozen, => alterSource :DeepFrozen,
     => collectStr :DeepFrozen,
