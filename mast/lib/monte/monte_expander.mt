@@ -1206,6 +1206,26 @@ def expand(node, builder, fail) as DeepFrozen:
                 return M.call(builder, nodeName, args + [span], [].asMap())
         return tree.transform(renameTransformer)
 
+    def defaultPattDF(patt):
+        return if (patt.getNodeName() == "FinalPattern") {
+            var g := patt.getGuard()
+            if (g == null) { g := nounExpr("DeepFrozen", patt.getSpan()) }
+            builder.FinalPattern(patt.getNoun(), g, patt.getSpan())
+        } else { patt }
+
+    def turnImportPattsDF(item):
+        return switch (item.getNodeName()) {
+            match =="MapPatternAssoc" {
+                builder.MapPatternAssoc(item.getKey(),
+                                        defaultPattDF(item.getValue()),
+                                        item.getDefault(), item.getSpan())
+            }
+            match =="MapPatternImport" {
+                builder.MapPatternImport(defaultPattDF(item.getValue()),
+                                         item.getDefault(), item.getSpan())
+            }
+        }
+
     def moduleImports(ast, maker, args, span):
         "Desugar module import-patterns to standard Full-Monte patterns."
 
@@ -1215,8 +1235,9 @@ def expand(node, builder, fail) as DeepFrozen:
                 def patt := imp.getPattern()
                 if (patt.getNodeName() == "MapPattern" && patt.getTail() == null) {
                     def ignorePatt := builder.IgnorePattern(null, patt.getSpan())
-                    def newPatt := builder.MapPattern(patt.getPatterns(),
-                                                      ignorePatt, patt.getSpan())
+                    def newItems := [for item in (patt.getPatterns()) turnImportPattsDF(item)]
+                    def newPatt := builder.MapPattern(newItems, ignorePatt,
+                                                      patt.getSpan())
                     builder."Import"(imp.getName(), newPatt, imp.getSpan())
                 } else { imp }
             }]

@@ -574,7 +574,7 @@ def specimens := [
     [`import "blee" =~ [=> a] | b; exports (foo); def foo := 1`,
      `object _ as DeepFrozen {
           method run(package_1) :(Map.get(Str, DeepFrozen)) {
-              def via (_mapExtract.run("a")) [a, b] := package_1."import"("blee")
+              def via (_mapExtract.run("a")) [a :DeepFrozen, b] := package_1."import"("blee")
               def foo := 1
               _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))
           }
@@ -586,7 +586,7 @@ def specimens := [
     [`import "blee" =~ [=> a]; exports (foo); def foo := 1`,
      `object _ as DeepFrozen {
           method run(package_1) :(Map.get(Str, DeepFrozen)) {
-              def via (_mapExtract.run("a")) [a, _] := package_1."import"("blee")
+              def via (_mapExtract.run("a")) [a :DeepFrozen, _] := package_1."import"("blee")
               def foo := 1
               _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))
           }
