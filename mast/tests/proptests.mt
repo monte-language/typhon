@@ -68,16 +68,21 @@ object arb as DeepFrozen:
                 return []
 
     to Int(=> ceiling :Int := 2 ** 128):
+        def edges := [0, 1, -1, 255, ceiling]._makeIterator()
         return object arbInt as Arb:
             to arbitrary(entropy) :Int:
-                # Hypothesis uses this as its ceiling.
-                def i := entropy.nextInt(ceiling)
-                return if (entropy.nextBool()) {i} else {-i}
+                return escape ej:
+                    edges.next(ej)[1]
+                catch _:
+                    # Hypothesis uses this as its ceiling.
+                    def i := entropy.nextInt(ceiling)
+                    if (entropy.nextBool()) {i} else {-i}
 
             to shrink(i :Int) :List[Int]:
                 return if (i == 0 || i == -1) { [] } else { [i >> 1] }
 
     to Str():
+        # XXX why extend here?
         return object arbStr extends arb.List(arb.Char()):
             to arbitrary(entropy) :Str:
                 return _makeStr.fromChars(super.arbitrary(entropy))
@@ -233,6 +238,7 @@ def ringAxioms(strategy):
 ringAxioms(arb.Int())
 
 def divisionAxiom(hy, dividend, divisor):
+    hy.assume(divisor != 0)
     def [quotient, remainder] := dividend.divMod(divisor)
     hy.sameEver(dividend, divisor * quotient + remainder)
 

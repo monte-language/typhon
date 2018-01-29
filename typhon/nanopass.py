@@ -230,7 +230,6 @@ def visit%(name)s(self, specimen):
                     else:
                         # Addition to a possibly-already-extant constructor.
                         # We'll overwrite the old constructor with the new.
-                        
                         nts[nt][constructor] = pieces
             else:
                 nts[nt] = constructors
