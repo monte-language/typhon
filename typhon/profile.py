@@ -33,6 +33,9 @@ def profileTyphon(name):
     """
 
     def deco(f):
+        # XXX disabled for now.
+        return f
+
         # Prepare the full location name.
         lineNo = inspect.getsourcelines(f)[1]
         moduleName = os.path.basename(inspect.getsourcefile(f))

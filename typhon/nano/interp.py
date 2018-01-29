@@ -187,9 +187,9 @@ class InterpObject(Object):
         return d
 
     # Two loops, both of which loop over greens. ~ C.
-    @rvmprof.vmprof_execute_code("method",
-            lambda self, method, args, namedArgs: method,
-            result_class=Object)
+    # @rvmprof.vmprof_execute_code("method",
+    #         lambda self, method, args, namedArgs: method,
+    #         result_class=Object)
     @unroll_safe
     def runMethod(self, method, args, namedArgs):
         e = Evaluator(self.frame, method.localSize)
@@ -217,9 +217,9 @@ class InterpObject(Object):
             return v
         return e.runGuard(resultGuard, v, None)
 
-    @rvmprof.vmprof_execute_code("matcher",
-            lambda self, matcher, message, ej: matcher,
-            result_class=Object)
+    # @rvmprof.vmprof_execute_code("matcher",
+    #         lambda self, matcher, message, ej: matcher,
+    #         result_class=Object)
     def runMatcher(self, matcher, message, ej):
         e = Evaluator(self.frame, matcher.localSize)
         e.matchBind(matcher.patt, message, ej)

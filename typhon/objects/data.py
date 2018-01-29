@@ -23,7 +23,7 @@ from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
 from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
 from rpython.rlib.rstring import StringBuilder, UnicodeBuilder, replace, split
-from rpython.rlib.rstruct.ieee import pack_float
+from rpython.rlib.rstruct.ieee import float_pack
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 
 from typhon.atoms import getAtom
@@ -334,9 +334,10 @@ class DoubleObject(Object):
 
     @method("Bytes")
     def toBytes(self):
-        result = []
-        pack_float(result, self._d, 8, True)
-        return result[0]
+        # float_pack() takes a double and gives us the packed integer; we need
+        # to reinterpret it as packed ASCII and repack into bytes.
+        x = float_pack(self._d, 8)
+        return "".join([chr(x >> ((7 - i) * 8) & 0xff) for i in range(8)])
 
     @method("Double", "Double")
     def add(self, other):

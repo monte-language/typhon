@@ -3,8 +3,8 @@
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let
   pypySrc = fetchzip {
-    url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.7.0-src.tar.bz2";
-    sha256 = "0v0qv5rx5zv5cd6j4d3aq3528dfxl4ym08jsjg2h16fl42nw056b";
+    url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.8.0-src.tar.bz2";
+    sha256 = "0l98kxp1rrgpg5qiijvmdakwrvffj0rgq0zfbb21kd3j7bn1bg51";
   };
   optLevel = if buildJIT then "-Ojit" else "-O2";
 in
@@ -39,6 +39,7 @@ stdenv.mkDerivation {
     source $stdenv/setup
     mkdir -p ./rpython/_cache
     cp -r ${pypySrc}/rpython .
+    chmod -R u+w rpython/
     cp -r $src/main.py .
     # Run the tests.
     trial typhon
