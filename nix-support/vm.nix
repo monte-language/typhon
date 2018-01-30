@@ -3,8 +3,8 @@
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let
   pypySrc = fetchzip {
-    url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.9.0-src.tar.bz2";
-    sha256 = "03i68i0dym57hmzig9fi0v6vfa2pi1cmclhcpk1glvpmsmingi05";
+    url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.10.0-src.tar.bz2";
+    sha256 = "11l1wpk2rk8m44jiwzvc8rqcbpnv3g348a2z017z2dhqfsc7a6af";
   };
   optLevel = if buildJIT then "-Ojit" else "-O2";
 in
