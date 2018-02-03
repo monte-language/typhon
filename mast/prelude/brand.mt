@@ -75,14 +75,32 @@ def makeBrandPair(nickname :NullOk[Str]) as DeepFrozen:
             return brand
 
         to unseal(box):
-            "Unseal a box and retrieve its contents.
+            "
+            Unseal a box and retrieve its contents, or throw on failure.
 
-             This object can only unseal boxes created by this object's
-             corresponding sealer."
+            This object can only unseal boxes created by this object's
+            corresponding sealer.
+            "
+
+            return unsealer.unsealing(box, null)
+
+        to unsealing(box, ej):
+            "
+            Unseal a box and retrieve its contents, or eject on failure.
+
+            This object can only unseal boxes created by this object's
+            corresponding sealer.
+            "
+
             scratchpad := sentinel
-            box.shareContent()
+            # XXX should we use an interface instead? Can we use an interface
+            # at this point in the prelude?
+            try:
+                box.shareContent()
+            catch _:
+                throw.eject(ej, `$unsealer caught exception trying to open $box`)
             if (scratchpad == sentinel):
-                throw(`$unsealer cannot unseal $box`)
+                throw.eject(ej, `$unsealer cannot unseal $box`)
             def contents := scratchpad
             scratchpad := sentinel
             return contents
@@ -94,8 +112,7 @@ def testBrandCorrect(assert):
     def [ana, cata] := makeBrandPair("correct")
     assert.equal(cata.unseal(ana.seal(42)), 42)
 
-    object singleton:
-        pass
+    object singleton {}
 
     assert.equal(cata.unseal(ana.seal(singleton)), singleton)
 
@@ -105,9 +122,17 @@ def testBrandMismatch(assert):
     assert.throws(fn { cata.unseal(up.seal(42)) })
     assert.throws(fn { down.unseal(ana.seal(42)) })
 
+def testBrandUnsealing(assert):
+    def [ana, cata] := makeBrandPair("unsealing")
+
+    object singleton {}
+
+    assert.equal(cata.unsealing(ana.seal(singleton), null), singleton)
+
 unittest([
     testBrandCorrect,
     testBrandMismatch,
+    testBrandUnsealing,
 ])
 
 [=> makeBrandPair]
