@@ -45,8 +45,7 @@ object ::"b``" as DeepFrozen:
         return def byteMatcher.matchBind(values, specimen, ej) as DeepFrozen:
             # The strategy: Lay down "railroad" segments one at a time,
             # matching against the specimen.
-            # XXX var position :(0..!specimen.size()) exit ej := 0
-            var position :Int := 0
+            var position :(0..specimen.size()) := 0
             var inPattern :Bool := false
             def patterns := [].diverge()
             var patternMarker := 0
