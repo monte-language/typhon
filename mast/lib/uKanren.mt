@@ -1,29 +1,24 @@
+import "lib/gadts" =~ [=> makeGADT]
 import "unittest" =~ [=> unittest :Any]
-import "tests/proptests" =~ [
-    => arb :DeepFrozen,
-    => prop :DeepFrozen,
-]
+import "tests/proptests" =~ [=> arb, => prop]
 exports (anyValue, kanren)
 "µKanren."
 
-object VARS as DeepFrozen:
-    "Variables are tagged with this object."
-
-object PORTRAYAL as DeepFrozen:
-    "Transparent uncalls are tagged with this object."
+def Term :DeepFrozen := makeGADT("Term", [
+    "varb" => ["index" => Int],
+    "opaque" => ["value" => DeepFrozen],
+    "pair" => ["head" => DeepFrozen, "tail" => DeepFrozen],
+])
 
 object anyValue as DeepFrozen:
     "This is not a concrete value."
 
-def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
+def makeState(s :Map[Int, Term], c :Int) as DeepFrozen:
     return object state:
         "µKanren 's/c'."
 
         to _printOn(out):
-            out.print("µKanrenState(")
-            def pairs := ", ".join([for k => v in (s) `_$k := $v`])
-            out.print(pairs)
-            out.print(")")
+            out.print(`µKanrenState($s)`)
 
         to reifyAll() :List:
             "
@@ -34,40 +29,43 @@ def makeState(s :Map[Int, Any], c :Int) as DeepFrozen:
             "
 
             # XXX this logic will change when we introduce constraints.
+            def walk(val):
+                return if (val =~ t :Term) {
+                    Term (t) varb i { anyValue } opaque x { x } pair h, t { [h, t] }
+                } else { val }
             return [for i in (0..!c) if (s.contains(i)) {
-                switch (state.walk(s[i])) {
-                    match [==VARS, _] { anyValue }
-                    # Rebuild any portrayed objects.
-                    match [==PORTRAYAL, target, verb, args, namedArgs] {
-                        M.call(target, verb, args, namedArgs)
-                    }
-                    match rv { rv }
-                }
+                walk(state.walk(s[i]))
             } else { anyValue }]
 
         to fresh():
-            return [makeState(s, c + 1), [VARS, c]]
+            return [makeState(s, c + 1), Term.varb("index" => c)]
 
-        to walk(u):
-            return if (u =~ [==VARS, k] && s.contains(k)) {
-                state.walk(s[k])
-            } else { u }
+        to walk(u :Term) :Term:
+            return Term (u) varb k {
+                escape ej { state.walk(s.fetch(k, ej)) } catch _ { u }
+            } opaque _ { u } pair h, t {
+                Term.pair("head" => state.walk(h), "tail" => state.walk(t))
+            }
 
-        to unify(u, v) :NullOk[Any]:
-            def rv := switch ([state.walk(u), state.walk(v)]) {
-                match [[==VARS, x], [==VARS, y]] ? (x == y) { state }
-                match [[==VARS, x], y] { makeState([x => y] | s, c) }
-                match [x, [==VARS, y]] { makeState([y => x] | s, c) }
-                match [[x] + xs, [y] + ys] {
-                    def s := state.unify(x, y)
-                    if (s == null) { s } else { s.unify(xs, ys) }
+        to unify(u :Term, v :Term) :NullOk[Any]:
+            def uWalk := state.walk(u)
+            def vWalk := state.walk(v)
+            # This logic should be symmetrical. If it's not, fix it. ~ C.
+            def rv := Term (uWalk) varb i {
+                Term (vWalk) varb j { if (i == j) { state } } opaque _ {
+                    makeState([i => vWalk] | s, c)
+                } pair h, t { makeState([i => [h, t]] | s, c) }
+            } opaque x {
+                Term (vWalk) varb j {
+                    makeState([j => uWalk] | s, c)
+                } opaque y { if (x == y) { state } } pair _, _ { null }
+            } pair h, t {
+                Term (vWalk) varb j {
+                    makeState([j => uWalk] | s, c)
+                } opaque x { null } pair h2, t2 {
+                    def s2 := state.unify(h, h2)
+                    if (s2 != null) { s2.unify(t, t2) }
                 }
-                match [x, ==x] { state }
-                match [x :Transparent, y :Transparent] {
-                    def l := [PORTRAYAL]
-                    state.unify(l + x._uncall(), l + y._uncall())
-                }
-                match _ { null }
             }
             # traceln(`Unify: $u ≡ $v in $s: $rv`)
             return rv
@@ -111,12 +109,17 @@ def delay(g) as DeepFrozen:
         }
     }
 
+def termify(value) as DeepFrozen:
+    return if (value =~ t :Term) { t } else { Term.opaque(=> value) }
+
 object kanren as DeepFrozen:
     "A µKanren for relational logical constraint solving."
 
     # Goal construction.
 
-    to unify(u, v):
+    to unify(var u, var v):
+        u := termify(u)
+        v := termify(v)
         return def unifyingGoal(state) as NoSnooze:
             def nextState := state.unify(u, v)
             return if (nextState != null) { [nextState, null] }
@@ -132,12 +135,14 @@ object kanren as DeepFrozen:
             }]
             return M.call(f, "run", vars, [].asMap())(state)
 
-    to unifyAll([head] + tail):
+    to unifyAll([var head] + tail):
         "Unify all variables."
+
+        head := termify(head)
 
         return def unifyAllGoal(var state) :List:
             for t in (tail):
-                state := state.unify(head, t)
+                state := state.unify(head, termify(t))
                 if (state == null):
                     return []
             return [state]
@@ -241,6 +246,7 @@ def testSingleUnify(hy, i):
     def l := _makeList.fromIterable(kanren.asIterable(g))
     hy.assert(l == [[i]])
 
+# XXX this functionality was removed because it's very tricky to get right.
 def testTransparentMapUnify(hy, i, j):
     def g := kanren () exists k, v { kanren.unify([k => v], [i => j]) }
     def l := _makeList.fromIterable(kanren.asIterable(g))
@@ -248,5 +254,5 @@ def testTransparentMapUnify(hy, i, j):
 
 unittest([
     prop.test([arb.Int()], testSingleUnify),
-    prop.test([arb.Int(), arb.Int()], testTransparentMapUnify),
+    # prop.test([arb.Int(), arb.Int()], testTransparentMapUnify),
 ])
