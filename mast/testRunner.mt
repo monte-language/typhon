@@ -190,6 +190,7 @@ Error in source $source from test $test:
             completed += 1
             updateScreen()
         catch problem:
+            # traceln.exception(problem)
             if (problem =~ via (unsealException) [_, err]):
                 formatError(err, k, test)
             else:

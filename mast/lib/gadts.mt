@@ -93,6 +93,20 @@ def makeGADT(label :Str, constructors :Map[Str, Map[Str, DeepFrozen]]) as DeepFr
                 makeController($controlMap, [].asMap()).control(verb, 0,
                     paramCount, block)
             }
+            match ==1 {
+                var controller := makeController($controlMap, [].asMap())
+                def [[value], lambda] := block()
+                def fauxBlock() { return [[], lambda] }
+                controller control= (verb, 0, paramCount, fauxBlock)
+                object fauxController {
+                    method control(verb, argCount, paramCount, block) {
+                        controller control= (verb, argCount, paramCount,
+                                             block)
+                        fauxController
+                    }
+                    method controlRun() { controller.controlRun()(value) }
+                }
+            }
         }
     }`
     def control := m`method control(verb :Str, argCount :Int, paramCount :Int,
@@ -110,6 +124,7 @@ def makeGADT(label :Str, constructors :Map[Str, Map[Str, DeepFrozen]]) as DeepFr
                                       script, null)
     def guardScope := [for [k, b] in (extraScope.getValues()) `&&$k` => b]
     def helperScope := [=> &&makeController, => &&GADTStamp]
+    # traceln(`Building GADT expr`, expr)
     return eval(m`${expr}`.expand(), safeScope | guardScope | helperScope)
 
 def testGADTAccessors(assert):
@@ -148,8 +163,17 @@ def testGADTDispatch(assert):
     # This one should be fine.
     These () this x { x } that y { y }
 
+def testGADTDispatchImmediate(assert):
+    def These := makeGADT("These", [
+        "this" => ["x" => DeepFrozen],
+        "that" => ["y" => DeepFrozen],
+    ])
+    def val := These.this("x" => 42)
+    assert.equal(These (val) this x { x } that y { y }, 42)
+
 unittest([
     testGADTAccessors,
     testGADTWith,
     testGADTDispatch,
+    testGADTDispatchImmediate,
 ])
