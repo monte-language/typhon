@@ -22,13 +22,16 @@ let
         p == loc "/Makefile" ||
         p == loc "/loader.mast" ||
         p == loc "/repl.mast")) ./..;
+  vmConfig = {
+    inherit vmSrc;
+    libsodium = libsodium0;
+    # Want to build Typhon with Clang instead of GCC? Uncomment this next
+    # line. ~ C.
+    # stdenv = nixpkgs.clangStdenv;
+  };
   typhon = with nixpkgs; rec {
-    typhonVm = callPackage ./vm.nix { vmSrc = vmSrc;
-                                      buildJIT = false;
-                                      libsodium = libsodium0; };
-    typhonVmJIT = callPackage ./vm.nix { buildJIT = true;
-                                         vmSrc = vmSrc;
-                                         libsodium = libsodium0; };
+    typhonVm = callPackage ./vm.nix (vmConfig // { buildJIT = false; });
+    typhonVmJIT = callPackage ./vm.nix (vmConfig // { buildJIT = true; });
     mast = callPackage ./mast.nix { mastSrc = mastSrc;
                                     typhonVm = typhonVmJIT;
                                     pkgs = nixpkgs; };
