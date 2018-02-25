@@ -104,7 +104,8 @@ parsers: mast/lib/parsers/html.mast \
 
 games: mast/games/mafia.mast
 
-fun: mast/fun/elements.mast mast/fun/repl.mast mast/fun/termParser.mast
+fun: mast/fun/elements.mast mast/fun/repl.mast mast/fun/termParser.mast \
+	mast/fun/mli.mast
 
 bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mast \
 	mast/bench/primeCount.mast mast/bench/brot.mast \

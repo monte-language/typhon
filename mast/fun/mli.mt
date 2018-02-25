@@ -6,6 +6,14 @@ def compile(expr) as DeepFrozen:
 
     def matchBind(patt):
         return switch (patt.getNodeName()) {
+            match =="IgnorePattern" {
+                if (patt.getGuard() == null) {
+                    fn _, _, _ { null }
+                } else {
+                    def guard := compile(patt.getGuard())
+                    fn env, specimen, ex { guard(env).coerce(specimen, ex) }
+                }
+            }
             match =="BindingPattern" {
                 def name := "&&" + patt.getNoun().getName()
                 fn env, specimen, _ { env[name] := specimen }
@@ -18,6 +26,18 @@ def compile(expr) as DeepFrozen:
                     def guard := compile(patt.getGuard())
                     fn env, specimen, ex {
                         def binding :(guard(env)) exit ex := specimen
+                        env[name] := &&binding
+                    }
+                }
+            }
+            match =="VarPattern" {
+                def name := "&&" + patt.getNoun().getName()
+                if (patt.getGuard() == null) {
+                    fn env, var specimen, _ { env[name] := &&specimen }
+                } else {
+                    def guard := compile(patt.getGuard())
+                    fn env, specimen, _ {
+                        var binding :(guard(env)) := specimen
                         env[name] := &&binding
                     }
                 }
@@ -67,6 +87,10 @@ def compile(expr) as DeepFrozen:
                 rv
             }
         }
+        match =="HideExpr" {
+            def body := compile(expr.getBody())
+            fn env { body(env.diverge()) }
+        }
         match =="IfExpr" {
             def test := compile(expr.getTest())
             def cons := compile(expr.getThen())
@@ -82,6 +106,11 @@ def compile(expr) as DeepFrozen:
                 patt(env, rv, ex(env))
                 rv
             }
+        }
+        match =="AssignExpr" {
+            def name := "&&" + expr.getLvalue().getName()
+            def rhs := compile(expr.getRvalue())
+            fn env { env[name].get().put(rhs(env)) }
         }
         match =="EscapeExpr" {
             def ejPatt := matchBind(expr.getEjectorPattern())
@@ -165,7 +194,50 @@ def compile(expr) as DeepFrozen:
 def ev(expr, scope) as DeepFrozen:
     return compile(expr)(scope.diverge())
 
+def ast :DeepFrozen := m`def bf(insts :Str) {
+    def jumps := {
+        def m := [].asMap().diverge()
+        def stack := [].diverge()
+        for i => c in (insts) {
+            if (c == '[') { stack.push(i) } else if (c == ']') {
+                def j := stack.pop()
+                m[i] := j
+                m[j] := i
+            }
+        }
+        m.snapshot()
+    }
+
+    return def interpret() {
+        var i := 0
+        var pointer := 0
+        def tape := [0].diverge()
+        def output := [].diverge()
+        while (i < insts.size()) {
+            switch(insts[i]) {
+                match =='>' {
+                    pointer += 1
+                    while (pointer >= tape.size()) { tape.push(0) }
+                }
+                match =='<' { pointer -= 1 }
+                match =='+' { tape[pointer] += 1 }
+                match =='-' { tape[pointer] -= 1 }
+                match =='.' { output.push(tape[pointer]) }
+                match ==',' { tape[pointer] := 0 }
+                match =='[' {
+                    if (tape[pointer] == 0) { i := jumps[i] }
+                }
+                match ==']' {
+                    if (tape[pointer] != 0) { i := jumps[i] }
+                }
+            }
+            i += 1
+        }
+        return output.snapshot()
+    }
+}`
+
 def main(_argv) as DeepFrozen:
-    def f := ev(m`fn x { fn { x } }`.expand(), safeScope)
-    traceln(f, f(2), f(42)())
+    def bf := ev(ast.expand(), safeScope)
+    traceln(bf("+++.>>.<<[->>+<<].>>.")())
     return 0
