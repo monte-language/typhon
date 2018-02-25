@@ -1,5 +1,9 @@
 exports (main)
 
+def nullLiteral :DeepFrozen := astBuilder.LiteralExpr(null, null)
+def isNull(expr) as DeepFrozen:
+    return expr == null || expr =~ m`null` || expr =~ m`${nullLiteral}`
+
 def compile(expr) as DeepFrozen:
     def compileMap(exprs):
         return [for e in (exprs) compile(e)]
@@ -7,10 +11,11 @@ def compile(expr) as DeepFrozen:
     def matchBind(patt):
         return switch (patt.getNodeName()) {
             match =="IgnorePattern" {
-                if (patt.getGuard() == null) {
+                def guardExpr := patt.getGuard()
+                if (isNull(guardExpr)) {
                     fn _, _, _ { null }
                 } else {
-                    def guard := compile(patt.getGuard())
+                    def guard := compile(guardExpr)
                     fn env, specimen, ex { guard(env).coerce(specimen, ex) }
                 }
             }
@@ -20,10 +25,11 @@ def compile(expr) as DeepFrozen:
             }
             match =="FinalPattern" {
                 def name := "&&" + patt.getNoun().getName()
-                if (patt.getGuard() == null) {
+                def guardExpr := patt.getGuard()
+                if (isNull(guardExpr)) {
                     fn env, specimen, _ { env[name] := &&specimen }
                 } else {
-                    def guard := compile(patt.getGuard())
+                    def guard := compile(guardExpr)
                     fn env, specimen, ex {
                         def binding :(guard(env)) exit ex := specimen
                         env[name] := &&binding
@@ -32,10 +38,11 @@ def compile(expr) as DeepFrozen:
             }
             match =="VarPattern" {
                 def name := "&&" + patt.getNoun().getName()
-                if (patt.getGuard() == null) {
+                def guardExpr := patt.getGuard()
+                if (isNull(guardExpr)) {
                     fn env, var specimen, _ { env[name] := &&specimen }
                 } else {
-                    def guard := compile(patt.getGuard())
+                    def guard := compile(guardExpr)
                     fn env, specimen, _ {
                         var binding :(guard(env)) := specimen
                         env[name] := &&binding
@@ -65,7 +72,17 @@ def compile(expr) as DeepFrozen:
         return [for patt in (patts) matchBind(patt)]
 
     def matchBindNamed(np):
-        return switch (np.getNodeName()) {
+        def key := if (np.getNodeName() == "NamedParamImport") {
+            np.getValue().getNoun().getName()
+        } else { compile(np.getKey()) }
+        def value := matchBind(np.getValue())
+        return if (np.getDefault() == null) {
+            fn env, map, ex { value(env, map[key(env)], ex) }
+        } else {
+            def default := compile(np.getDefault())
+            fn env, map, ex {
+                value(env, map.fetch(key(env), fn { default(env) }), ex)
+            }
         }
 
     if (expr == null) { return fn _ { null } }
@@ -126,7 +143,7 @@ def compile(expr) as DeepFrozen:
             } else {
                 def catchPatt := matchBind(expr.getCatchPattern())
                 def catchBody := compile(expr.getCatchBody())
-                fn var env {
+                fn env {
                     escape ej {
                         def innerEnv := env.diverge()
                         ejPatt(innerEnv, ej, null)
@@ -137,6 +154,25 @@ def compile(expr) as DeepFrozen:
                         catchBody(innerEnv)
                     }
                 }
+            }
+        }
+        match =="CatchExpr" {
+            def body := compile(expr.getBody())
+            def patt := matchBind(expr.getPattern())
+            def catcher := compile(expr.getCatcher())
+            fn env {
+                try { body(env.diverge()) } catch problem {
+                    def innerEnv := env.diverge()
+                    patt(innerEnv, problem, null)
+                    catcher(innerEnv)
+                }
+            }
+        }
+        match =="FinallyExpr" {
+            def body := compile(expr.getBody())
+            def unwinder := compile(expr.getUnwinder())
+            fn env {
+                try { body(env.diverge()) } finally { unwinder(env.diverge()) }
             }
         }
         match =="MethodCallExpr" {
@@ -164,6 +200,7 @@ def compile(expr) as DeepFrozen:
                           (astBuilder.makeScopeWalker().getStaticScope(expr).namesUsed())
                           "&&" + name]
             def displayName := `<${expr.getName()}>`
+            def namePatt := matchBind(expr.getName())
             fn env {
                 def closure := [for name in (names) name => env[name]]
                 object interpObject {
@@ -187,6 +224,8 @@ def compile(expr) as DeepFrozen:
                         }
                     }
                 }
+                namePatt(env, interpObject, null)
+                interpObject
             }
         }
     }
@@ -194,7 +233,7 @@ def compile(expr) as DeepFrozen:
 def ev(expr, scope) as DeepFrozen:
     return compile(expr)(scope.diverge())
 
-def ast :DeepFrozen := m`def bf(insts :Str) {
+def bfInterp :DeepFrozen := m`def bf(insts :Str) {
     def jumps := {
         def m := [].asMap().diverge()
         def stack := [].diverge()
@@ -237,7 +276,17 @@ def ast :DeepFrozen := m`def bf(insts :Str) {
     }
 }`
 
-def main(_argv) as DeepFrozen:
-    def bf := ev(ast.expand(), safeScope)
+def main(_argv, => makeFileResource) as DeepFrozen:
+    def bf := ev(bfInterp.expand(), safeScope)
     traceln(bf("+++.>>.<<[->>+<<].>>.")())
-    return 0
+    def bs := makeFileResource("mast/fun/mli.mast")<-getContents()
+    return when (bs) ->
+        escape ej:
+            def ast := readMAST(bs, "filename" => "meta", "FAIL" => ej)
+            def module := ev(ast, safeScope)
+            traceln("module", module)
+            traceln("deps", module.dependencies())
+            traceln("instantiated", module(null))
+            0
+        catch problem:
+            when (traceln(`Problem decoding MAST: $problem`)) -> { 1 }
