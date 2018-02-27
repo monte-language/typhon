@@ -4,234 +4,260 @@ def nullLiteral :DeepFrozen := astBuilder.LiteralExpr(null, null)
 def isNull(expr) as DeepFrozen:
     return expr == null || expr =~ m`null` || expr =~ m`${nullLiteral}`
 
-def compile(expr) as DeepFrozen:
-    def compileMap(exprs):
-        return [for e in (exprs) compile(e)]
+def assign(env, index, binding) :Void as DeepFrozen:
+    while (env.size() <= index):
+        env.push(null)
+    env[index] := binding
 
-    def matchBind(patt):
-        return switch (patt.getNodeName()) {
-            match =="IgnorePattern" {
-                def guardExpr := patt.getGuard()
-                if (isNull(guardExpr)) {
-                    fn _, _, _ { null }
-                } else {
-                    def guard := compile(guardExpr)
-                    fn env, specimen, ex { guard(env).coerce(specimen, ex) }
-                }
-            }
-            match =="BindingPattern" {
-                def name := "&&" + patt.getNoun().getName()
-                fn env, specimen, _ { env[name] := specimen }
-            }
-            match =="FinalPattern" {
-                def name := "&&" + patt.getNoun().getName()
-                def guardExpr := patt.getGuard()
-                if (isNull(guardExpr)) {
-                    fn env, specimen, _ { env[name] := &&specimen }
-                } else {
-                    def guard := compile(guardExpr)
-                    fn env, specimen, ex {
-                        def binding :(guard(env)) exit ex := specimen
-                        env[name] := &&binding
-                    }
-                }
-            }
-            match =="VarPattern" {
-                def name := "&&" + patt.getNoun().getName()
-                def guardExpr := patt.getGuard()
-                if (isNull(guardExpr)) {
-                    fn env, var specimen, _ { env[name] := &&specimen }
-                } else {
-                    def guard := compile(guardExpr)
-                    fn env, specimen, _ {
-                        var binding :(guard(env)) := specimen
-                        env[name] := &&binding
-                    }
-                }
-            }
-            match =="ListPattern" {
-                def patts := [for p in (patt.getPatterns()) matchBind(p)]
-                def size :Int := patts.size()
-                fn env, specimen, ex {
-                    def l :List exit ex := specimen
-                    if (l.size() == size) {
-                        for i => p in (patts) { p(env, l[i], ex) }
+def makeCompiler(frame) as DeepFrozen:
+    def indexOf(name):
+        def i := frame.indexOf(name)
+        return if (i >= 0) { i } else {
+            def rv := frame.size()
+            frame.push(name)
+            rv
+        }
+
+    return object compile:
+        to all(exprs):
+            return [for e in (exprs) compile(e)]
+
+        to matchBind(patt):
+            return switch (patt.getNodeName()) {
+                match =="IgnorePattern" {
+                    def guardExpr := patt.getGuard()
+                    if (isNull(guardExpr)) {
+                        fn _, _, _ { null }
                     } else {
-                        throw.eject(ex, `List specimen $l doesn't have size $size`)
+                        def guard := compile(guardExpr)
+                        fn env, specimen, ex { guard(env).coerce(specimen, ex) }
                     }
                 }
-            }
-            match =="ViaPattern" {
-                def p := matchBind(patt.getPattern())
-                def trans := compile(patt.getExpr())
-                fn env, specimen, ex { p(env, trans(env)(specimen, ex), ex) }
-            }
-        }
-
-    def matchBindMap(patts):
-        return [for patt in (patts) matchBind(patt)]
-
-    def matchBindNamed(np):
-        def key := if (np.getNodeName() == "NamedParamImport") {
-            np.getValue().getNoun().getName()
-        } else { compile(np.getKey()) }
-        def value := matchBind(np.getValue())
-        return if (np.getDefault() == null) {
-            fn env, map, ex { value(env, map[key(env)], ex) }
-        } else {
-            def default := compile(np.getDefault())
-            fn env, map, ex {
-                value(env, map.fetch(key(env), fn { default(env) }), ex)
-            }
-        }
-
-    if (expr == null) { return fn _ { null } }
-    return switch (expr.getNodeName()) {
-        match =="LiteralExpr" { fn _ { expr.getValue() } }
-        match =="BindingExpr" {
-            def name :Str := "&&" + expr.getName()
-            fn env { env[name] }
-        }
-        match =="NounExpr" {
-            def name :Str := "&&" + expr.getName()
-            fn env { env[name].get().get() }
-        }
-        match =="SeqExpr" {
-            def exprs := compileMap(expr.getExprs())
-            fn env {
-                var rv := null
-                for ex in (exprs) { rv := ex(env) }
-                rv
-            }
-        }
-        match =="HideExpr" {
-            def body := compile(expr.getBody())
-            fn env { body(env.diverge()) }
-        }
-        match =="IfExpr" {
-            def test := compile(expr.getTest())
-            def cons := compile(expr.getThen())
-            def alt := compile(expr.getElse())
-            fn env { (test(env) :Bool).pick(cons, alt)(env) }
-        }
-        match =="DefExpr" {
-            def ex := compile(expr.getExit())
-            def patt := matchBind(expr.getPattern())
-            def rhs := compile(expr.getExpr())
-            fn env {
-                def rv := rhs(env)
-                patt(env, rv, ex(env))
-                rv
-            }
-        }
-        match =="AssignExpr" {
-            def name := "&&" + expr.getLvalue().getName()
-            def rhs := compile(expr.getRvalue())
-            fn env { env[name].get().put(rhs(env)) }
-        }
-        match =="EscapeExpr" {
-            def ejPatt := matchBind(expr.getEjectorPattern())
-            def ejBody := compile(expr.getBody())
-            if (expr.getCatchBody() == null) {
-                fn var env {
-                    escape ej {
-                        def innerEnv := env.diverge()
-                        ejPatt(innerEnv, ej, null)
-                        ejBody(innerEnv)
-                    }
+                match =="BindingPattern" {
+                    def index := indexOf(patt.getNoun().getName())
+                    # fn env, specimen, _ { env[index] := specimen }
+                    fn env, specimen, _ { assign(env, index, specimen) }
                 }
-            } else {
-                def catchPatt := matchBind(expr.getCatchPattern())
-                def catchBody := compile(expr.getCatchBody())
-                fn env {
-                    escape ej {
-                        def innerEnv := env.diverge()
-                        ejPatt(innerEnv, ej, null)
-                        ejBody(innerEnv)
-                    } catch val {
-                        def innerEnv := env.diverge()
-                        catchPatt(innerEnv, val, null)
-                        catchBody(innerEnv)
-                    }
-                }
-            }
-        }
-        match =="CatchExpr" {
-            def body := compile(expr.getBody())
-            def patt := matchBind(expr.getPattern())
-            def catcher := compile(expr.getCatcher())
-            fn env {
-                try { body(env.diverge()) } catch problem {
-                    def innerEnv := env.diverge()
-                    patt(innerEnv, problem, null)
-                    catcher(innerEnv)
-                }
-            }
-        }
-        match =="FinallyExpr" {
-            def body := compile(expr.getBody())
-            def unwinder := compile(expr.getUnwinder())
-            fn env {
-                try { body(env.diverge()) } finally { unwinder(env.diverge()) }
-            }
-        }
-        match =="MethodCallExpr" {
-            def receiver := compile(expr.getReceiver())
-            def args := compileMap(expr.getArgs())
-            def namedArgs := [for namedArg in (expr.getNamedArgs())
-                              [compile(namedArg.getKey()),
-                               compile(namedArg.getValue())]]
-            fn env {
-                M.call(receiver(env), expr.getVerb(),
-                       [for arg in (args) arg(env)],
-                       [for [k, v] in (namedArgs) k(env) => v(env)])
-            }
-        }
-        match =="ObjectExpr" {
-            # XXX matchers and auditions
-            def script := expr.getScript()
-            def atoms := [for meth in (script.getMethods())
-                          [meth.getVerb(), meth.getParams().size()] =>
-                          [matchBindMap(meth.getParams()),
-                           [for np in (meth.getNamedParams())
-                            matchBindNamed(np)],
-                           compile(meth.getBody())]]
-            def names := [for name in
-                          (astBuilder.makeScopeWalker().getStaticScope(expr).namesUsed())
-                          "&&" + name]
-            def displayName := `<${expr.getName()}>`
-            def namePatt := matchBind(expr.getName())
-            fn env {
-                def closure := [for name in (names) name => env[name]]
-                object interpObject {
-                    to _printOn(out) { out.print(displayName) }
-
-                    match [verb, args, namedArgs] {
-                        escape ret {
-                            for [v, size] => [patts, nps, body] in (atoms) {
-                                if (v == verb && args.size() == size) {
-                                    def innerEnv := closure.diverge()
-                                    for i => patt in (patts) {
-                                        patt(innerEnv, args[i], null)
-                                    }
-                                    for np in (nps) {
-                                        np(innerEnv, namedArgs, null)
-                                    }
-                                    ret(body(innerEnv))
-                                }
-                            }
-                            throw(`Object doesn't respond to [$verb, $args, $namedArgs]`)
+                match =="FinalPattern" {
+                    def index := indexOf(patt.getNoun().getName())
+                    def guardExpr := patt.getGuard()
+                    if (isNull(guardExpr)) {
+                        # fn env, specimen, _ { env[index] := &&specimen }
+                        fn env, specimen, _ { assign(env, index, &&specimen) }
+                    } else {
+                        def guard := compile(guardExpr)
+                        fn env, specimen, ex {
+                            def binding :(guard(env)) exit ex := specimen
+                            # env[index] := &&binding
+                            assign(env, index, &&binding)
                         }
                     }
                 }
-                namePatt(env, interpObject, null)
-                interpObject
+                match =="VarPattern" {
+                    def index := indexOf(patt.getNoun().getName())
+                    def guardExpr := patt.getGuard()
+                    if (isNull(guardExpr)) {
+                        # fn env, var specimen, _ { env[index] := &&specimen }
+                        fn env, var specimen, _ { assign(env, index, &&specimen) }
+                    } else {
+                        def guard := compile(guardExpr)
+                        fn env, specimen, _ {
+                            var binding :(guard(env)) := specimen
+                            assign(env, index, &&binding)
+                        }
+                    }
+                }
+                match =="ListPattern" {
+                    def patts := [for p in (patt.getPatterns()) compile.matchBind(p)]
+                    def size :Int := patts.size()
+                    fn env, specimen, ex {
+                        def l :List exit ex := specimen
+                        if (l.size() == size) {
+                            for i => p in (patts) { p(env, l[i], ex) }
+                        } else {
+                            throw.eject(ex, `List specimen $l doesn't have size $size`)
+                        }
+                    }
+                }
+                match =="ViaPattern" {
+                    def p := compile.matchBind(patt.getPattern())
+                    def trans := compile(patt.getExpr())
+                    fn env, specimen, ex { p(env, trans(env)(specimen, ex), ex) }
+                }
             }
-        }
-    }
+
+        to matchBindAll(patts):
+            return [for patt in (patts) compile.matchBind(patt)]
+
+        to matchBindNamed(np):
+            def key := if (np.getNodeName() == "NamedParamImport") {
+                np.getValue().getNoun().getName()
+            } else { compile(np.getKey()) }
+            def value := compile.matchBind(np.getValue())
+            return if (np.getDefault() == null) {
+                fn env, map, ex { value(env, map[key(env)], ex) }
+            } else {
+                def default := compile(np.getDefault())
+                fn env, map, ex {
+                    value(env, map.fetch(key(env), fn { default(env) }), ex)
+                }
+            }
+
+        to run(expr):
+            if (expr == null) { return fn _ { null } }
+            return switch (expr.getNodeName()) {
+                match =="LiteralExpr" { fn _ { expr.getValue() } }
+                match =="BindingExpr" {
+                    def index := indexOf(expr.getName())
+                    fn env { env[index] }
+                }
+                match =="NounExpr" {
+                    def index := indexOf(expr.getName())
+                    fn env { env[index].get().get() }
+                }
+                match =="SeqExpr" {
+                    def exprs := compile.all(expr.getExprs())
+                    fn env {
+                        var rv := null
+                        for ex in (exprs) { rv := ex(env) }
+                        rv
+                    }
+                }
+                match =="HideExpr" {
+                    def body := makeCompiler(frame.diverge())(expr.getBody())
+                    fn env { body(env.diverge()) }
+                }
+                match =="IfExpr" {
+                    def test := compile(expr.getTest())
+                    def cons := compile(expr.getThen())
+                    def alt := compile(expr.getElse())
+                    fn env { (test(env) :Bool).pick(cons, alt)(env) }
+                }
+                match =="DefExpr" {
+                    def ex := compile(expr.getExit())
+                    def patt := compile.matchBind(expr.getPattern())
+                    def rhs := compile(expr.getExpr())
+                    fn env {
+                        def rv := rhs(env)
+                        patt(env, rv, ex(env))
+                        rv
+                    }
+                }
+                match =="AssignExpr" {
+                    def index := indexOf(expr.getLvalue().getName())
+                    def rhs := compile(expr.getRvalue())
+                    fn env { env[index].get().put(rhs(env)) }
+                }
+                match =="EscapeExpr" {
+                    def ejCompiler := makeCompiler(frame.diverge())
+                    def ejPatt := ejCompiler.matchBind(expr.getEjectorPattern())
+                    def ejBody := ejCompiler(expr.getBody())
+                    if (expr.getCatchBody() == null) {
+                        fn var env {
+                            escape ej {
+                                def innerEnv := env.diverge()
+                                ejPatt(innerEnv, ej, null)
+                                ejBody(innerEnv)
+                            }
+                        }
+                    } else {
+                        def catchCompiler := makeCompiler(frame.diverge())
+                        def catchPatt := catchCompiler.matchBind(expr.getCatchPattern())
+                        def catchBody := catchCompiler(expr.getCatchBody())
+                        fn env {
+                            escape ej {
+                                def innerEnv := env.diverge()
+                                ejPatt(innerEnv, ej, null)
+                                ejBody(innerEnv)
+                            } catch val {
+                                def innerEnv := env.diverge()
+                                catchPatt(innerEnv, val, null)
+                                catchBody(innerEnv)
+                            }
+                        }
+                    }
+                }
+                match =="CatchExpr" {
+                    def body := makeCompiler(frame.diverge())(expr.getBody())
+                    def catchCompiler := makeCompiler(frame.diverge())
+                    def patt := catchCompiler.matchBind(expr.getPattern())
+                    def catcher := catchCompiler(expr.getCatcher())
+                    fn env {
+                        try { body(env.diverge()) } catch problem {
+                            def innerEnv := env.diverge()
+                            patt(innerEnv, problem, null)
+                            catcher(innerEnv)
+                        }
+                    }
+                }
+                match =="FinallyExpr" {
+                    def body := makeCompiler(frame.diverge())(expr.getBody())
+                    def unwinder := makeCompiler(frame.diverge())(expr.getUnwinder())
+                    fn env {
+                        try { body(env.diverge()) } finally { unwinder(env.diverge()) }
+                    }
+                }
+                match =="MethodCallExpr" {
+                    def receiver := compile(expr.getReceiver())
+                    def args := compile.all(expr.getArgs())
+                    def namedArgs := [for namedArg in (expr.getNamedArgs())
+                                      [compile(namedArg.getKey()),
+                                       compile(namedArg.getValue())]]
+                    fn env {
+                        M.call(receiver(env), expr.getVerb(),
+                               [for arg in (args) arg(env)],
+                               [for [k, v] in (namedArgs) k(env) => v(env)])
+                    }
+                }
+                match =="ObjectExpr" {
+                    # XXX matchers and auditions
+                    def script := expr.getScript()
+                    def ss := astBuilder.makeScopeWalker().getStaticScope(script)
+                    def namesUsed := ss.namesUsed().asList()
+                    def atoms := [for meth in (script.getMethods())
+                        [meth.getVerb(), meth.getParams().size()] => {
+                            def innerCompiler := makeCompiler(namesUsed.diverge())
+                            def params := innerCompiler.matchBindAll(meth.getParams())
+                            def nps := [for np in (meth.getNamedParams())
+                                        innerCompiler.matchBindNamed(np)]
+                            [params, nps, innerCompiler(meth.getBody())]
+                        }]
+                    def indices := [for name in (namesUsed) indexOf(name)]
+                    def displayName := `<${expr.getName()}>`
+                    def namePatt := compile.matchBind(expr.getName())
+                    fn env {
+                        def closure
+                        object interpObject {
+                            to _printOn(out) { out.print(displayName) }
+                            match [verb, args, namedArgs] {
+                                escape ret {
+                                    for [v, size] => [patts, nps, body] in (atoms) {
+                                        if (v == verb && args.size() == size) {
+                                            def innerEnv := closure.diverge()
+                                            for i => patt in (patts) {
+                                                patt(innerEnv, args[i], null)
+                                            }
+                                            for np in (nps) {
+                                                np(innerEnv, namedArgs, null)
+                                            }
+                                            ret(body(innerEnv))
+                                        }
+                                    }
+                                    throw(`Object doesn't respond to [$verb, $args, $namedArgs]`)
+                                }
+                            }
+                        }
+                        namePatt(env, interpObject, null)
+                        bind closure := [for index in (indices) env[index]]
+                        interpObject
+                    }
+                }
+            }
 
 def ev(expr, scope) as DeepFrozen:
-    return compile(expr)(scope.diverge())
+    def names := [for `&&@k` => _ in (scope) k].diverge()
+    def compile := makeCompiler(names)
+    return compile(expr)(scope.getValues().diverge())
 
 def bfInterp :DeepFrozen := m`def bf(insts :Str) {
     def jumps := {
