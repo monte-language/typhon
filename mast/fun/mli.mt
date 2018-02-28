@@ -1,4 +1,7 @@
-exports (main)
+exports (makeCompiler, ev, main)
+
+# Using closures for code generation:
+# http://www.iro.umontreal.ca/~feeley/papers/FeeleyLapalmeCL87.pdf
 
 def nullLiteral :DeepFrozen := astBuilder.LiteralExpr(null, null)
 def isNull(expr) as DeepFrozen:
@@ -210,7 +213,7 @@ def makeCompiler(frame) as DeepFrozen:
                     }
                 }
                 match =="ObjectExpr" {
-                    # XXX matchers and auditions
+                    # XXX auditions
                     def script := expr.getScript()
                     def ss := astBuilder.makeScopeWalker().getStaticScope(script)
                     def namesUsed := ss.namesUsed().asList()
@@ -222,28 +225,40 @@ def makeCompiler(frame) as DeepFrozen:
                                         innerCompiler.matchBindNamed(np)]
                             [params, nps, innerCompiler(meth.getBody())]
                         }]
+                    def matchers := [for m in (script.getMatchers()) {
+                            def innerCompiler := makeCompiler(namesUsed.diverge())
+                            def patt := innerCompiler.matchBind(m.getPattern())
+                            def body := innerCompiler(m.getBody())
+                            [patt, body]
+                        }]
                     def indices := [for name in (namesUsed) indexOf(name)]
                     def displayName := `<${expr.getName()}>`
                     def namePatt := compile.matchBind(expr.getName())
                     fn env {
                         def closure
                         object interpObject {
-                            to _printOn(out) { out.print(displayName) }
-                            match [verb, args, namedArgs] {
-                                escape ret {
-                                    for [v, size] => [patts, nps, body] in (atoms) {
-                                        if (v == verb && args.size() == size) {
+                            match message {
+                                def [verb, args, namedArgs] := message
+                                escape noMethod {
+                                    def [patts, nps, body] := atoms.fetch([verb, args.size()], noMethod)
+                                    def innerEnv := closure.diverge()
+                                    for i => patt in (patts) {
+                                        patt(innerEnv, args[i], null)
+                                    }
+                                    for np in (nps) {
+                                        np(innerEnv, namedArgs, null)
+                                    }
+                                    body(innerEnv)
+                                } catch _ {
+                                    escape ret {
+                                        for [patt, body] in (matchers) {
                                             def innerEnv := closure.diverge()
-                                            for i => patt in (patts) {
-                                                patt(innerEnv, args[i], null)
-                                            }
-                                            for np in (nps) {
-                                                np(innerEnv, namedArgs, null)
-                                            }
+                                            patt(innerEnv, message,
+                                                 __continue)
                                             ret(body(innerEnv))
                                         }
+                                        throw(`Object $namePatt didn't respond to [$verb, $args, $namedArgs]`)
                                     }
-                                    throw(`Object doesn't respond to [$verb, $args, $namedArgs]`)
                                 }
                             }
                         }
@@ -309,10 +324,10 @@ def main(_argv, => makeFileResource) as DeepFrozen:
     return when (bs) ->
         escape ej:
             def ast := readMAST(bs, "filename" => "meta", "FAIL" => ej)
-            def module := ev(ast, safeScope)
+            def module := ev(ast, safeScope)(null)
             traceln("module", module)
-            traceln("deps", module.dependencies())
-            traceln("instantiated", module(null))
+            def metamod := module["ev"](ast, safeScope)(null)
+            traceln("metamod", metamod)
             0
         catch problem:
             when (traceln(`Problem decoding MAST: $problem`)) -> { 1 }
