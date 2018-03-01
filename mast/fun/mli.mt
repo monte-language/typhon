@@ -234,6 +234,15 @@ def makeCompiler(frame) as DeepFrozen:
                     def indices := [for name in (namesUsed) indexOf(name)]
                     def displayName := `<${expr.getName()}>`
                     def namePatt := compile.matchBind(expr.getName())
+                    def miranda(message, ej) {
+                        return switch (message) {
+                            match [=="_printOn", [out], _] {
+                                out.print(displayName)
+                                ej(null)
+                            }
+                            match _ { null }
+                        }
+                    }
                     fn env {
                         def closure
                         object interpObject {
@@ -257,6 +266,7 @@ def makeCompiler(frame) as DeepFrozen:
                                                  __continue)
                                             ret(body(innerEnv))
                                         }
+                                        miranda(message, ret)
                                         throw(`Object $namePatt didn't respond to [$verb, $args, $namedArgs]`)
                                     }
                                 }
