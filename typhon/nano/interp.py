@@ -135,6 +135,9 @@ class InterpObject(Object):
         self.script = script
         self.frame = frame
 
+        from typhon.metrics import globalRecorder
+        globalRecorder().makeInstanceOf(self.fqn)
+
     def docString(self):
         return self.script.doc
 

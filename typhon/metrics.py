@@ -3,6 +3,7 @@ from __future__ import division
 from time import time
 
 from rpython.rlib.debug import debug_print
+from rpython.rlib.listsort import make_timsort_class
 
 
 def percent(part, whole):
@@ -47,6 +48,12 @@ class RecorderContext(object):
         self.recorder.popContext()
 
 
+def scriptCountCmp(left, right):
+    return left[1] > right[1]
+
+ScriptSorter = make_timsort_class(lt=scriptCountCmp)
+
+
 class Recorder(object):
 
     startTime = endTime = 0
@@ -54,6 +61,7 @@ class Recorder(object):
     def __init__(self):
         self.timings = {}
         self.rates = {}
+        self.scripts = {}
         self.contextStack = []
 
     def start(self):
@@ -91,6 +99,17 @@ class Recorder(object):
             self.rates[label] = RecorderRate()
         return self.rates[label]
 
+    def makeInstanceOf(self, label):
+        if label in self.scripts:
+            self.scripts[label] += 1
+        else:
+            self.scripts[label] = 1
+
+    def topScripts(self):
+        items = self.scripts.items()
+        ScriptSorter(items).sort()
+        return items[:10]
+
     def printResults(self):
         total = self.endTime - self.startTime
         debug_print("Total recorded time:", total)
@@ -102,6 +121,10 @@ class Recorder(object):
         debug_print("Recorded rates:")
         for label, rate in self.rates.iteritems():
             debug_print("~", label + ":", rate.rate())
+
+        debug_print("Most commonly-instantiated scripts:")
+        for label, count in self.topScripts():
+            debug_print("~", label.encode("utf-8") + ":", count)
 
     def context(self, label):
         return RecorderContext(self, label)
