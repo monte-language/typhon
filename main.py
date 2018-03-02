@@ -275,7 +275,8 @@ def runTyphon(argv):
             # exitStatus = se.code
         finally:
             recorder.stop()
-            recorder.printResults()
+            if config.metrics:
+                recorder.printResults()
 
     # Clean up and exit.
     cleanUpEverything()

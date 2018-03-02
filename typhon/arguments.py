@@ -53,6 +53,9 @@ class Configuration(object):
     # Whether to run benchmarks.
     benchmark = False
 
+    # Whether to print metrics.
+    metrics = False
+
     # User settings for the JIT. By default:
     # * The trace limit is over 9000 and prime.
     jit = "trace_limit=9001"
@@ -92,6 +95,8 @@ class Configuration(object):
                 self.profile = True
             elif item == "-b":
                 self.benchmark = True
+            elif item == "-m":
+                self.metrics = True
             elif item == "--jit":
                 self.jit = stream.nextItem()
             else:
