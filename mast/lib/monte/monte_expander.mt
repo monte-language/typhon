@@ -203,7 +203,9 @@ def expand(node, builder, fail) as DeepFrozen:
         "Like m`fn $args { $body }`, but in Kernel-Monte."
 
         def out := nounExpr("out", span)
-        def repr := `<$flavor fn at $span>`
+        def repr := if (flavor.isEmpty()) { `<fn at $span>` } else {
+            `<$flavor fn at $span>`
+        }
         def print := callExpr(out, "print", [litExpr(repr, span)], [], span)
         # Just use the (short) flavor as the docstring. They're not examined
         # often and the M.toString/1 will be more informative to folks anyway.
@@ -990,7 +992,7 @@ def expand(node, builder, fail) as DeepFrozen:
                         if (guard == null) {nounExpr("Any", span)} else {guard}], [], span)
             match =="FunctionExpr":
                 def [patterns, namedPatts, block] := args
-                makeFn("anonymous", patterns, namedPatts, block, span)
+                makeFn("", patterns, namedPatts, block, span)
             match =="ObjectExpr":
                 def [doco, patt, asExpr, auditors, script] := args
                 switch (node.getName().getNodeName()):
