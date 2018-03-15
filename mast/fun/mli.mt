@@ -7,10 +7,31 @@ def nullLiteral :DeepFrozen := astBuilder.LiteralExpr(null, null)
 def isNull(expr) as DeepFrozen:
     return expr == null || expr =~ m`null` || expr =~ m`${nullLiteral}`
 
-def assign(env, index, binding) :Void as DeepFrozen:
-    while (env.size() <= index):
-        env.push(null)
-    env[index] := binding
+def assign(var env :List, index, binding) as DeepFrozen:
+    if (env.size() <= index):
+        env += [null] * (index - env.size() + 1)
+    return env.with(index, binding)
+
+def map(exprs :List, var env) as DeepFrozen:
+    def rv := [].diverge()
+    for expr in (exprs):
+        def [x, e] := expr(env)
+        rv.push(x)
+        env := e
+    return [rv.snapshot(), env]
+
+def mapPairs(exprs :List, var env) as DeepFrozen:
+    def rv := [].asMap().diverge()
+    for [key, val] in (exprs):
+        def [k, e] := key(env)
+        def [v, e2] := val(e)
+        rv[k] := v
+        env := e2
+    return [rv.snapshot(), env]
+
+# Our CC:
+# Expressions take an env and return a value and updated env.
+# Patterns take an env, a specimen, and an ejector, and return an updated env.
 
 def makeCompiler(frame) as DeepFrozen:
     def indexOf(name):
@@ -30,10 +51,14 @@ def makeCompiler(frame) as DeepFrozen:
                 match =="IgnorePattern" {
                     def guardExpr := patt.getGuard()
                     if (isNull(guardExpr)) {
-                        fn _, _, _ { null }
+                        fn env, _, _ { env }
                     } else {
                         def guard := compile(guardExpr)
-                        fn env, specimen, ex { guard(env).coerce(specimen, ex) }
+                        fn env, specimen, ex {
+                            def [g, e] := guard(env)
+                            g.coerce(specimen, ex)
+                            e
+                        }
                     }
                 }
                 match =="BindingPattern" {
@@ -50,9 +75,10 @@ def makeCompiler(frame) as DeepFrozen:
                     } else {
                         def guard := compile(guardExpr)
                         fn env, specimen, ex {
-                            def binding :(guard(env)) exit ex := specimen
+                            def [g, e] := guard(env)
+                            def binding :g exit ex := specimen
                             # env[index] := &&binding
-                            assign(env, index, &&binding)
+                            assign(e, index, &&binding)
                         }
                     }
                 }
@@ -65,18 +91,20 @@ def makeCompiler(frame) as DeepFrozen:
                     } else {
                         def guard := compile(guardExpr)
                         fn env, specimen, _ {
-                            var binding :(guard(env)) := specimen
-                            assign(env, index, &&binding)
+                            def [g, e] := guard(env)
+                            var binding :g := specimen
+                            assign(e, index, &&binding)
                         }
                     }
                 }
                 match =="ListPattern" {
                     def patts := [for p in (patt.getPatterns()) compile.matchBind(p)]
                     def size :Int := patts.size()
-                    fn env, specimen, ex {
+                    fn var env, specimen, ex {
                         def l :List exit ex := specimen
                         if (l.size() == size) {
-                            for i => p in (patts) { p(env, l[i], ex) }
+                            for i => p in (patts) { env := p(env, l[i], ex) }
+                            env
                         } else {
                             throw.eject(ex, `List specimen $l doesn't have size $size`)
                         }
@@ -85,7 +113,10 @@ def makeCompiler(frame) as DeepFrozen:
                 match =="ViaPattern" {
                     def p := compile.matchBind(patt.getPattern())
                     def trans := compile(patt.getExpr())
-                    fn env, specimen, ex { p(env, trans(env)(specimen, ex), ex) }
+                    fn env, specimen, ex {
+                        def [v, e] := trans(env)
+                        p(e, v(specimen, ex), ex)
+                    }
                 }
             }
 
@@ -98,69 +129,86 @@ def makeCompiler(frame) as DeepFrozen:
             } else { compile(np.getKey()) }
             def value := compile.matchBind(np.getValue())
             return if (np.getDefault() == null) {
-                fn env, map, ex { value(env, map[key(env)], ex) }
+                fn env, map, ex {
+                    def [k, e] := key(env)
+                    value(e, map[k], ex)
+                }
             } else {
                 def default := compile(np.getDefault())
                 fn env, map, ex {
-                    value(env, map.fetch(key(env), fn { default(env) }), ex)
+                    def [k, e] := key(env)
+                    def [v, e2] := escape ej {
+                        [map.fetch(k, ej), e]
+                    } catch _ { default(e) }
+                    value(e2, v, ex)
                 }
             }
 
         to run(expr):
             if (expr == null) { return fn _ { null } }
             return switch (expr.getNodeName()) {
-                match =="LiteralExpr" { fn _ { expr.getValue() } }
+                match =="LiteralExpr" { fn env { [expr.getValue(), env] } }
                 match =="BindingExpr" {
                     def index := indexOf(expr.getName())
-                    fn env { env[index] }
+                    fn env { [env[index], env] }
                 }
                 match =="NounExpr" {
                     def index := indexOf(expr.getName())
-                    fn env { env[index].get().get() }
+                    fn env { [env[index].get().get(), env] }
                 }
                 match =="SeqExpr" {
                     def exprs := compile.all(expr.getExprs())
-                    fn env {
+                    fn var env {
                         var rv := null
-                        for ex in (exprs) { rv := ex(env) }
-                        rv
+                        for ex in (exprs) {
+                            def [v, e] := ex(env)
+                            rv := v
+                            env := e
+                        }
+                        [rv, env]
                     }
                 }
                 match =="HideExpr" {
                     def body := makeCompiler(frame.diverge())(expr.getBody())
-                    fn env { body(env.diverge()) }
+                    fn env { [body(env)[0], env] }
                 }
                 match =="IfExpr" {
                     def test := compile(expr.getTest())
                     def cons := compile(expr.getThen())
                     def alt := compile(expr.getElse())
-                    fn env { (test(env) :Bool).pick(cons, alt)(env) }
+                    fn env {
+                        def [t :Bool, e] := test(env)
+                        [t.pick(cons, alt)(e)[0], env]
+                    }
                 }
                 match =="DefExpr" {
                     def ex := compile(expr.getExit())
                     def patt := compile.matchBind(expr.getPattern())
                     def rhs := compile(expr.getExpr())
                     fn env {
-                        def rv := rhs(env)
-                        patt(env, rv, ex(env))
-                        rv
+                        def [rv, e] := rhs(env)
+                        def [exiter, e2] := ex(e)
+                        [rv, patt(e2, rv, exiter)]
                     }
                 }
                 match =="AssignExpr" {
                     def index := indexOf(expr.getLvalue().getName())
                     def rhs := compile(expr.getRvalue())
-                    fn env { env[index].get().put(rhs(env)) }
+                    fn env {
+                        def [r, e] := rhs(env)
+                        e[index].get().put(r)
+                        [r, e]
+                    }
                 }
                 match =="EscapeExpr" {
                     def ejCompiler := makeCompiler(frame.diverge())
                     def ejPatt := ejCompiler.matchBind(expr.getEjectorPattern())
                     def ejBody := ejCompiler(expr.getBody())
                     if (expr.getCatchBody() == null) {
-                        fn var env {
+                        fn env {
                             escape ej {
-                                def innerEnv := env.diverge()
-                                ejPatt(innerEnv, ej, null)
-                                ejBody(innerEnv)
+                                def innerEnv := ejPatt(env, ej, null)
+                                [ejBody(innerEnv)[0], env]
                             }
                         }
                     } else {
@@ -169,13 +217,11 @@ def makeCompiler(frame) as DeepFrozen:
                         def catchBody := catchCompiler(expr.getCatchBody())
                         fn env {
                             escape ej {
-                                def innerEnv := env.diverge()
-                                ejPatt(innerEnv, ej, null)
-                                ejBody(innerEnv)
+                                def innerEnv := ejPatt(innerEnv, ej, null)
+                                [ejBody(innerEnv)[0], env]
                             } catch val {
-                                def innerEnv := env.diverge()
-                                catchPatt(innerEnv, val, null)
-                                catchBody(innerEnv)
+                                def innerEnv := catchPatt(innerEnv, val, null)
+                                [catchBody(innerEnv)[0], env]
                             }
                         }
                     }
@@ -186,10 +232,12 @@ def makeCompiler(frame) as DeepFrozen:
                     def patt := catchCompiler.matchBind(expr.getPattern())
                     def catcher := catchCompiler(expr.getCatcher())
                     fn env {
-                        try { body(env.diverge()) } catch problem {
-                            def innerEnv := env.diverge()
-                            patt(innerEnv, problem, null)
-                            catcher(innerEnv)
+                        try {
+                            def [rv, _] := body(env)
+                            [rv, env]
+                        } catch problem {
+                            def innerEnv := patt(env, problem, null)
+                            [catcher(innerEnv), env]
                         }
                     }
                 }
@@ -197,7 +245,10 @@ def makeCompiler(frame) as DeepFrozen:
                     def body := makeCompiler(frame.diverge())(expr.getBody())
                     def unwinder := makeCompiler(frame.diverge())(expr.getUnwinder())
                     fn env {
-                        try { body(env.diverge()) } finally { unwinder(env.diverge()) }
+                        try {
+                            def [rv, _] := body(env)
+                            [rv, env]
+                        } finally { unwinder(env) }
                     }
                 }
                 match =="MethodCallExpr" {
@@ -207,9 +258,11 @@ def makeCompiler(frame) as DeepFrozen:
                                       [compile(namedArg.getKey()),
                                        compile(namedArg.getValue())]]
                     fn env {
-                        M.call(receiver(env), expr.getVerb(),
-                               [for arg in (args) arg(env)],
-                               [for [k, v] in (namedArgs) k(env) => v(env)])
+                        def [r, e] := receiver(env)
+                        def [a, e2] := map(args, e)
+                        def [ns, e3] := mapPairs(namedArgs, e2)
+                        def rv := M.call(r, expr.getVerb(), a, ns)
+                        [rv, e3]
                     }
                 }
                 match =="ObjectExpr" {
@@ -250,21 +303,21 @@ def makeCompiler(frame) as DeepFrozen:
                                 def [verb, args, namedArgs] := message
                                 escape noMethod {
                                     def [patts, nps, body] := atoms.fetch([verb, args.size()], noMethod)
-                                    def innerEnv := closure.diverge()
+                                    var innerEnv := closure
                                     for i => patt in (patts) {
-                                        patt(innerEnv, args[i], null)
+                                        innerEnv := patt(innerEnv, args[i], null)
                                     }
                                     for np in (nps) {
-                                        np(innerEnv, namedArgs, null)
+                                        innerEnv := np(innerEnv, namedArgs, null)
                                     }
-                                    body(innerEnv)
+                                    body(innerEnv)[0]
                                 } catch _ {
                                     escape ret {
                                         for [patt, body] in (matchers) {
-                                            def innerEnv := closure.diverge()
-                                            patt(innerEnv, message,
-                                                 __continue)
-                                            ret(body(innerEnv))
+                                            def innerEnv := patt(closure,
+                                                                 message,
+                                                                 __continue)
+                                            ret(body(innerEnv)[0])
                                         }
                                         miranda(message, ret)
                                         throw(`Object $namePatt didn't respond to [$verb, $args, $namedArgs]`)
@@ -272,9 +325,9 @@ def makeCompiler(frame) as DeepFrozen:
                                 }
                             }
                         }
-                        namePatt(env, interpObject, null)
-                        bind closure := [for index in (indices) env[index]]
-                        interpObject
+                        def e := namePatt(env, interpObject, null)
+                        bind closure := [for index in (indices) e[index]]
+                        [interpObject, e]
                     }
                 }
             }
@@ -282,7 +335,7 @@ def makeCompiler(frame) as DeepFrozen:
 def ev(expr, scope) as DeepFrozen:
     def names := [for `&&@k` => _ in (scope) k].diverge()
     def compile := makeCompiler(names)
-    return compile(expr)(scope.getValues().diverge())
+    return compile(expr)(scope.getValues())[0]
 
 def bfInterp :DeepFrozen := m`def bf(insts :Str) {
     def jumps := {
