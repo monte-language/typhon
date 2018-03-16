@@ -22,7 +22,10 @@ from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
 from typhon.log import log
 
+from typhon.futures import Ok, Err, ERR
 from typhon.objects.root import Object
+from typhon.vats import scopedVat
+
 
 class UVError(Exception):
     """
@@ -245,6 +248,7 @@ stashTimer, unstashTimer, unstashingTimer = stashFor(
 stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
 stashWrite, unstashWrite, unstashingWrite = stashFor("write", write_tp)
 stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
+stashFS2, unstashFS2, unstashingFS2 = stashFor("fs2", fs_tp)
 stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
 stashProcess, unstashProcess, unstashingProcess = stashFor("process",
                                                            process_tp)
@@ -763,6 +767,91 @@ fs_rename = rffi.llexternal("uv_fs_rename", [loop_tp, fs_tp, rffi.CCHARP,
                                              rffi.CCHARP, fs_cb],
                             rffi.INT, compilation_info=eci)
 fsRename = checking("fs_rename", fs_rename)
+
+
+def magic_fsReadCB(fs):
+    size = intmask(fs.c_result)
+    state, k = unstashFS2(fs)
+    fsDiscard(fs)
+    if size > 0:
+            data = rffi.charpsize2str(state.buf.c_base, size)
+            k(state, Ok(data))
+    elif size < 0:
+        k(state, (ERR, "", formatError(size).decode("utf-8")))
+    else:
+        k(state, Ok(""))
+
+
+class FSReadFuture(object):
+    def __init__(self, vat, fd, buf):
+        self.vat = vat
+        self.fd = fd
+        self.buf = buf
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        stashFS2(fs, (state, k))
+        with lltype.scoped_alloc(rffi.CArray(buf_t), 1) as bufs:
+            bufs[0].c_base = self.buf.c_base
+            bufs[0].c_len = self.buf.c_len
+            fsRead(self.vat.uv_loop, fs, self.fd, bufs, 1, -1,
+                   magic_fsReadCB)
+
+
+def magic_fsRead(vat, fd, buf):
+    return FSReadFuture(vat, fd, buf)
+
+
+def magic_fsOpenCB(fs):
+    fd = intmask(fs.c_result)
+    state, k = unstashFS2(fs)
+    fsDiscard(fs)
+    with scopedVat(state.vat):
+        if fd < 0:
+            # XXX error handling
+            msg = formatError(fd).decode("utf-8")
+            k(state, (ERR, 0, msg))
+        else:
+            k(state, Ok(fd))
+
+
+class FSOpenFuture(object):
+    def __init__(self, vat, path, flags, mode):
+        self.vat = vat
+        self.path = path
+        self.flags = flags
+        self.mode = mode
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        stashFS2(fs, (state, k))
+        fsOpen(self.vat.uv_loop, fs, self.path, self.flags, self.mode,
+               magic_fsOpenCB)
+
+
+def magic_fsOpen(vat, path, flags, mode):
+    return FSOpenFuture(vat, path, flags, mode)
+
+
+def magic_fsClose(vat, f):
+    return FSCloseFuture(vat, f)
+
+
+def magic_fsCloseCB(fs):
+    state, k = unstashFS2(fs)
+    fsDiscard(fs)
+    k(state, Ok(None))
+
+
+class FSCloseFuture(object):
+    def __init__(self, vat, f):
+        self.vat = vat
+        self.f = f
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        stashFS2(fs, (state, k))
+        fsClose(self.vat.uv_loop, fs, magic_fsCloseCB)
 
 
 def alloc_fs():

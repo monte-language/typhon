@@ -23,6 +23,7 @@ from typhon import log, rsodium, ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
+from typhon.futures import FutureCtx, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapStr
 from typhon.objects.refs import LocalResolver, makePromise
@@ -257,6 +258,81 @@ def closeSetContentsCB(fs):
         print "Exception in closeSetContentsCB"
 
 
+def readLoopCore(state, data):
+    if data == "":
+        return Break("".join(state.pieces))
+    else:
+        state.pieces.append(data)
+        state.pos += len(data)
+        return Continue()
+
+
+class _State1(FutureCtx):
+    def __init__(_1, vat, self, pieces, pos, outerState, k):
+        _1.vat = vat
+        _1.self = self
+        _1.pieces = pieces
+        _1.pos = pos
+        _1.outerState = outerState
+        _1.k = k
+
+
+def readLoop_k0(state, result):
+    (inStatus, data, inErr) = result
+    (status, output, err) = readLoopCore(state, data)
+    if status == LOOP_CONTINUE:
+        state.self.run(state, readLoop_k0)
+    elif status == LOOP_BREAK:
+        state.k(state.outerState, Ok(output))
+    else:
+        raise ValueError(status)
+
+
+class ReadLoopFuture(object):
+    def __init__(self, f):
+        self.f = f
+        # cheating a little for the sake of brevity
+        self.buf = ruv.allocBuf(16384)
+
+    def run(self, state, k):
+        ruv.magic_fsRead(state.vat, self.f, self.buf).run(
+            _State1(state.vat, self, [], 0, state, k),
+            readLoop_k0)
+
+
+def readLoop(f):
+    return ReadLoopFuture(f)
+
+
+class _State0(FutureCtx):
+    def __init__(_0, vat, self, r):
+        _0.vat = vat
+        _0.self = self
+        _0.r = r
+        _0.f = 0
+        _0.buf = None
+
+
+def getContents_k3(state, _):
+    resolve(state.r, state.buf).run(state, None)
+
+
+def getContents_k2(state, result):
+    (status, buf, err) = result
+    state.buf = buf
+    ruv.magic_fsClose(state.self.vat, state.f).run(state, getContents_k3)
+
+
+def getContents_k1(state, result):
+    (status, f, err) = result
+    state.f = f
+    readLoop(state.f).run(state, getContents_k2)
+
+
+def getContents_k0(state):
+    state.self.open(flags=os.O_RDONLY, mode=0000).run(state, getContents_k1)
+
+
 @autohelp
 class FileResource(Object):
     """
@@ -280,21 +356,15 @@ class FileResource(Object):
         return "/".join(self.segments)
 
     @specialize.call_location()
-    def open(self, callback, flags=None, mode=None):
+    def open(self, flags=None, mode=None):
         # Always call this as .open(callback, flags=..., mode=...)
         assert flags is not None
         assert mode is not None
 
-        p, r = makePromise()
         vat = currentVat.get()
-        uv_loop = vat.uv_loop
-        fs = ruv.alloc_fs()
-
         path = self.asBytes()
         log.log(["fs"], u"makeFileResource: Opening file '%s'" % path.decode("utf-8"))
-        ruv.stashFS(fs, (vat, r))
-        ruv.fsOpen(uv_loop, fs, path, flags, mode, callback)
-        return p
+        return ruv.magic_fsOpen(vat, path, flags, mode)
 
     def rename(self, dest):
         p, r = makePromise()
@@ -316,7 +386,17 @@ class FileResource(Object):
 
     @method("Any")
     def getContents(self):
-        return self.open(openGetContentsCB, flags=os.O_RDONLY, mode=0000)
+        p, r = makePromise()
+        vat = currentVat.get()
+        getContents_k0(_State0(vat, self, r))
+        return p
+        # with io:
+        #     f = self.open(flags=os.O_RDONLY, mode=0000)
+        #     buf = readLoop(f)
+        #     fsClose(f)
+        #     resolve(r, buf)
+
+        # return self.open(openGetContentsCB, flags=os.O_RDONLY, mode=0000)
 
     @method("Any", "Bytes")
     def setContents(self, data):
