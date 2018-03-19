@@ -795,7 +795,7 @@ def magic_fsReadCB(fs):
         k.do(state, Ok(""))
 
 
-class FSReadFuture(object):
+class magic_fsRead(object):
     callbackType = FSReadFutureCallback
     def __init__(self, vat, fd, buf):
         self.vat = vat
@@ -810,10 +810,6 @@ class FSReadFuture(object):
             bufs[0].c_len = self.buf.c_len
             fsRead(self.vat.uv_loop, fs, self.fd, bufs, 1, -1,
                    magic_fsReadCB)
-
-
-def magic_fsRead(vat, fd, buf):
-    return FSReadFuture(vat, fd, buf)
 
 
 fsOpen_erase, fsOpen_unerase = new_erasing_pair("fsOpen")
@@ -831,10 +827,12 @@ def magic_fsOpenCB(fs):
         else:
             k.do(state, Ok(fd))
 
+
 class FSOpenFutureCallback(object):
     pass
 
-class FSOpenFuture(object):
+
+class magic_fsOpen(object):
     callbackType = FSOpenFutureCallback
     def __init__(self, vat, path, flags, mode):
         self.vat = vat
@@ -849,14 +847,6 @@ class FSOpenFuture(object):
                magic_fsOpenCB)
 
 
-def magic_fsOpen(vat, path, flags, mode):
-    return FSOpenFuture(vat, path, flags, mode)
-
-
-def magic_fsClose(vat, f):
-    return FSCloseFuture(vat, f)
-
-
 def magic_fsCloseCB(fs):
     state, v = unstashFS2(fs)
     k = fsClose_unerase(v)
@@ -866,10 +856,12 @@ def magic_fsCloseCB(fs):
 
 fsClose_erase, fsClose_unerase = new_erasing_pair("fsClose")
 
+
 class FSCloseFutureCallback(object):
     pass
 
-class FSCloseFuture(object):
+
+class magic_fsClose(object):
     callbackType = FSCloseFutureCallback
     def __init__(self, vat, f):
         self.vat = vat

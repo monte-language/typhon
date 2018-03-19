@@ -24,6 +24,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
 from typhon.futures import FutureCtx, FutureCallback, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE
+from typhon.macros import macros, io#, io_loop
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapStr
 from typhon.objects.refs import LocalResolver, makePromise
@@ -53,101 +54,6 @@ class FileUnpauser(Object):
             self.fount.unpause()
             # Let go so that the fount can be GC'd if necessary.
             self.fount = None
-
-
-class GetContents(Object):
-    """
-    Struct used to manage getContents/0 calls.
-
-    Has to be an Object so that it can be unified with LocalResolver.
-    No, seriously.
-    """
-
-    # Our position reading from the file.
-    pos = 0
-
-    def __init__(self, vat, fd, resolver):
-        self.vat = vat
-        self.fd = fd
-        self.resolver = resolver
-
-        self.pieces = []
-
-        # XXX read size should be tunable
-        self.buf = ruv.allocBuf(16384)
-
-    def append(self, data):
-        self.pieces.append(data)
-        self.pos += len(data)
-        # Queue another!
-        self.queueRead()
-
-    def succeed(self):
-        # Clean up libuv stuff.
-        fs = ruv.alloc_fs()
-        ruv.stashFS(fs, (self.vat, self))
-        ruv.fsClose(self.vat.uv_loop, fs, self.fd, ruv.fsUnstashAndDiscard)
-
-        # Finally, resolve.
-        buf = "".join(self.pieces)
-        self.resolver.resolve(BytesObject(buf))
-
-    def fail(self, reason):
-        # Clean up libuv stuff.
-        fs = ruv.alloc_fs()
-        ruv.stashFS(fs, (self.vat, self))
-        ruv.fsClose(self.vat.uv_loop, fs, self.fd, ruv.fsUnstashAndDiscard)
-
-        # And resolve.
-        self.resolver.smash(StrObject(u"libuv error: %s" % reason))
-
-    def queueRead(self):
-        fs = ruv.alloc_fs()
-        ruv.stashFS(fs, (self.vat, self))
-        with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
-            bufs[0].c_base = self.buf.c_base
-            bufs[0].c_len = self.buf.c_len
-            ruv.fsRead(self.vat.uv_loop, fs, self.fd, bufs, 1, -1,
-                       getContentsCB)
-
-def openGetContentsCB(fs):
-    try:
-        fd = intmask(fs.c_result)
-        vat, r = ruv.unstashFS(fs)
-        assert isinstance(r, LocalResolver)
-        with scopedVat(vat):
-            if fd < 0:
-                msg = ruv.formatError(fd).decode("utf-8")
-                r.smash(StrObject(u"Couldn't open file fount: %s" % msg))
-            else:
-                # Strategy: Read and use the callback to queue additional reads
-                # until done. This call is known to its caller to be expensive, so
-                # there's not much point in trying to be clever about things yet.
-                gc = GetContents(vat, fd, r)
-                gc.queueRead()
-        ruv.fsDiscard(fs)
-    except:
-        print "Exception in openGetContentsCB"
-
-def getContentsCB(fs):
-    try:
-        size = intmask(fs.c_result)
-        # Don't use with-statements here; instead, each next action in
-        # GetContents will re-stash if necessary. ~ C.
-        vat, self = ruv.unstashFS(fs)
-        assert isinstance(self, GetContents)
-        if size > 0:
-            data = charpsize2str(self.buf.c_base, size)
-            self.append(data)
-        elif size < 0:
-            msg = ruv.formatError(size).decode("utf-8")
-            self.fail(msg)
-        else:
-            # End of file! Complete the callback.
-            self.succeed()
-        ruv.fsDiscard(fs)
-    except Exception:
-        print "Exception in getContentsCB"
 
 
 def renameCB(fs):
@@ -293,7 +199,9 @@ class ReadLoop_K0(ruv.FSReadFutureCallback):
 readLoop_k0 = ReadLoop_K0()
 
 
-class ReadLoopFuture(ruv.FSReadFutureCallback):
+class readLoop(ruv.FSReadFutureCallback):
+    callbackType = ruv.FSReadFutureCallback
+
     def __init__(self, f, buf):
         self.f = f
         self.buf = buf
@@ -302,56 +210,6 @@ class ReadLoopFuture(ruv.FSReadFutureCallback):
         ruv.magic_fsRead(state.vat, self.f, self.buf).run(
             _State1(state.vat, self, self.buf, [], 0, state, k),
             readLoop_k0)
-
-
-def readLoop(f, buf):
-    return ReadLoopFuture(f, buf)
-
-
-class _State0(FutureCtx):
-    def __init__(_0, vat, self, r):
-        _0.vat = vat
-        _0.self = self
-        _0.r = r
-        _0.f = 0
-        _0.contents = None
-
-
-class GetContents_K3(ruv.FSCloseFutureCallback):
-    def do(self, state, _):
-        resolve(state.r, BytesObject(state.contents)).run(state, None)
-
-
-getContents_k3 = GetContents_K3()
-
-
-class GetContents_K2(ruv.FSReadFutureCallback):
-    def do(self, state, result):
-        (status, contents, err) = result
-        state.contents = contents
-        ruv.magic_fsClose(state.vat, state.f).run(state, getContents_k3)
-
-
-getContents_k2 = GetContents_K2()
-
-
-class GetContents_K1(ruv.FSOpenFutureCallback):
-    def do(self, state, result):
-        (status, f, err) = result
-        state.f = f
-        readLoop(state.f, ruv.allocBuf(16384)).run(state, getContents_k2)
-
-
-getContents_k1 = GetContents_K1()
-
-
-class GetContents_K0(object):
-    def do(self, state, result):
-        state.self.open(flags=os.O_RDONLY, mode=0000).run(state,
-                                                          getContents_k1)
-
-
-getContents_k0 = GetContents_K0()
 
 
 @autohelp
@@ -376,16 +234,6 @@ class FileResource(Object):
     def asBytes(self):
         return "/".join(self.segments)
 
-    @specialize.call_location()
-    def open(self, flags=None, mode=None):
-        # Always call this as .open(callback, flags=..., mode=...)
-        assert flags is not None
-        assert mode is not None
-
-        vat = currentVat.get()
-        path = self.asBytes()
-        log.log(["fs"], u"makeFileResource: Opening file '%s'" % path.decode("utf-8"))
-        return ruv.magic_fsOpen(vat, path, flags, mode)
 
     def rename(self, dest):
         p, r = makePromise()
@@ -409,15 +257,17 @@ class FileResource(Object):
     def getContents(self):
         p, r = makePromise()
         vat = currentVat.get()
-        getContents_k0.do(_State0(vat, self, r), Ok(0))
+        buf = ruv.allocBuf(16384)
+        path = self.asBytes()
+        log.log(["fs"], u"makeFileResource: Opening file '%s'" % path.decode("utf-8"))
+        with io:
+            f = 0
+            f = ruv.magic_fsOpen(vat, path, os.O_RDONLY, 0000)
+            # contents = io_loop[ruv.magic_fsRead(vat, f, buf), readLoopCore]
+            contents = readLoop(f, buf)
+            ruv.magic_fsClose(vat, f)
+            resolve(r, BytesObject(contents))
         return p
-        # with io:
-        #     f = self.open(flags=os.O_RDONLY, mode=0000)
-        #     contents = readLoop(f, ruv.allocBuf(16384))
-        #     fsClose(f)
-        #     resolve(r, contents)
-
-        # return self.open(openGetContentsCB, flags=os.O_RDONLY, mode=0000)
 
     @method("Any", "Bytes")
     def setContents(self, data):
