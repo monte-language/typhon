@@ -279,13 +279,13 @@ class _State1(FutureCtx):
 
 
 class ReadLoop_K0(ruv.FSReadFutureCallback):
-    def readLoop_k0(self, state, result):
+    def do(self, state, result):
         (inStatus, data, inErr) = result
         (status, output, err) = readLoopCore(state, data)
         if status == LOOP_CONTINUE:
             state.future.run(state, readLoop_k0)
         elif status == LOOP_BREAK:
-            state.k(state.outerState, Ok(output))
+            state.k.do(state.outerState, Ok(output))
         else:
             raise ValueError(status)
 
@@ -319,7 +319,7 @@ class _State0(FutureCtx):
 
 class GetContents_K3(ruv.FSCloseFutureCallback):
     def do(self, state, _):
-        resolve(state.r, state.buf).run(state, None)
+        resolve(state.r, BytesObject(state.contents)).run(state, None)
 
 
 getContents_k3 = GetContents_K3()

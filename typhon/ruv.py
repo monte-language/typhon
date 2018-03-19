@@ -878,7 +878,7 @@ class FSCloseFuture(object):
     def run(self, state, k):
         fs = alloc_fs()
         stashFS2(fs, (state, fsClose_erase(k)))
-        fsClose(self.vat.uv_loop, fs, magic_fsCloseCB)
+        fsClose(self.vat.uv_loop, fs, self.f, magic_fsCloseCB)
 
 
 def alloc_fs():
