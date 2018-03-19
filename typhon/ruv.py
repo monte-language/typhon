@@ -22,7 +22,7 @@ from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
 from typhon.log import log
 
-from typhon.futures import Ok, Err, ERR
+from typhon.futures import Ok, Err, ERR, FutureCallback
 from typhon.objects.root import Object
 from typhon.vats import scopedVat
 
@@ -248,7 +248,8 @@ stashTimer, unstashTimer, unstashingTimer = stashFor(
 stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
 stashWrite, unstashWrite, unstashingWrite = stashFor("write", write_tp)
 stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
-stashFS2, unstashFS2, unstashingFS2 = stashFor("fs2", fs_tp)
+stashFS2, unstashFS2, unstashingFS2 = stashFor("fs2", fs_tp,
+                                               initial=FutureCallback())
 stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
 stashProcess, unstashProcess, unstashingProcess = stashFor("process",
                                                            process_tp)
@@ -775,11 +776,11 @@ def magic_fsReadCB(fs):
     fsDiscard(fs)
     if size > 0:
             data = rffi.charpsize2str(state.buf.c_base, size)
-            k(state, Ok(data))
+            k.do(state, Ok(data))
     elif size < 0:
-        k(state, (ERR, "", formatError(size).decode("utf-8")))
+        k.do(state, (ERR, "", formatError(size).decode("utf-8")))
     else:
-        k(state, Ok(""))
+        k.do(state, Ok(""))
 
 
 class FSReadFuture(object):
@@ -808,11 +809,10 @@ def magic_fsOpenCB(fs):
     fsDiscard(fs)
     with scopedVat(state.vat):
         if fd < 0:
-            # XXX error handling
             msg = formatError(fd).decode("utf-8")
-            k(state, (ERR, 0, msg))
+            k.do(state, (ERR, 0, msg))
         else:
-            k(state, Ok(fd))
+            k.do(state, Ok(fd))
 
 
 class FSOpenFuture(object):
@@ -840,7 +840,7 @@ def magic_fsClose(vat, f):
 def magic_fsCloseCB(fs):
     state, k = unstashFS2(fs)
     fsDiscard(fs)
-    k(state, Ok(None))
+    k.do(state, Ok(None))
 
 
 class FSCloseFuture(object):

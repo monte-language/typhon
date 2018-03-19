@@ -23,7 +23,7 @@ from typhon import log, rsodium, ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
-from typhon.futures import FutureCtx, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE
+from typhon.futures import FutureCtx, FutureCallback, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapStr
 from typhon.objects.refs import LocalResolver, makePromise
@@ -268,40 +268,43 @@ def readLoopCore(state, data):
 
 
 class _State1(FutureCtx):
-    def __init__(_1, vat, self, pieces, pos, outerState, k):
+    def __init__(_1, vat, buf, pieces, pos, outerState, k):
         _1.vat = vat
-        _1.self = self
+        _1.buf = buf
         _1.pieces = pieces
         _1.pos = pos
         _1.outerState = outerState
         _1.k = k
 
 
-def readLoop_k0(state, result):
-    (inStatus, data, inErr) = result
-    (status, output, err) = readLoopCore(state, data)
-    if status == LOOP_CONTINUE:
-        state.self.run(state, readLoop_k0)
-    elif status == LOOP_BREAK:
-        state.k(state.outerState, Ok(output))
-    else:
-        raise ValueError(status)
+class ReadLoop_K0(FutureCallback):
+    def readLoop_k0(self, state, result):
+        (inStatus, data, inErr) = result
+        (status, output, err) = readLoopCore(state, data)
+        if status == LOOP_CONTINUE:
+            state.future.run(state, readLoop_k0)
+        elif status == LOOP_BREAK:
+            state.k(state.outerState, Ok(output))
+        else:
+            raise ValueError(status)
+
+
+readLoop_k0 = ReadLoop_K0()
 
 
 class ReadLoopFuture(object):
-    def __init__(self, f):
+    def __init__(self, f, buf):
         self.f = f
-        # cheating a little for the sake of brevity
-        self.buf = ruv.allocBuf(16384)
+        self.buf = buf
 
     def run(self, state, k):
         ruv.magic_fsRead(state.vat, self.f, self.buf).run(
-            _State1(state.vat, self, [], 0, state, k),
+            _State1(state.vat, self.buf, [], 0, state, k),
             readLoop_k0)
 
 
-def readLoop(f):
-    return ReadLoopFuture(f)
+def readLoop(f, buf):
+    return ReadLoopFuture(f, buf)
 
 
 class _State0(FutureCtx):
@@ -313,24 +316,41 @@ class _State0(FutureCtx):
         _0.buf = None
 
 
-def getContents_k3(state, _):
-    resolve(state.r, state.buf).run(state, None)
+class GetContents_K3(FutureCallback):
+    def do(self, state, _):
+        resolve(state.r, state.buf).run(state, None)
 
 
-def getContents_k2(state, result):
-    (status, buf, err) = result
-    state.buf = buf
-    ruv.magic_fsClose(state.self.vat, state.f).run(state, getContents_k3)
+getContents_k3 = GetContents_K3()
 
 
-def getContents_k1(state, result):
-    (status, f, err) = result
-    state.f = f
-    readLoop(state.f).run(state, getContents_k2)
+class GetContents_K2(FutureCallback):
+    def do(self, state, result):
+        (status, contents, err) = result
+        state.contents = contents
+        ruv.magic_fsClose(state.vat, state.f).run(state, getContents_k3)
 
 
-def getContents_k0(state):
-    state.self.open(flags=os.O_RDONLY, mode=0000).run(state, getContents_k1)
+getContents_k2 = GetContents_K2()
+
+
+class GetContents_K1(FutureCallback):
+    def do(self, state, result):
+        (status, f, err) = result
+        state.f = f
+        readLoop(state.f, ruv.allocBuf(16384)).run(state, getContents_k2)
+
+
+getContents_k1 = GetContents_K1()
+
+
+class GetContents_K0(FutureCallback):
+    def do(self, state, result):
+        state.self.open(flags=os.O_RDONLY, mode=0000).run(state,
+                                                          getContents_k1)
+
+
+getContents_k0 = GetContents_K0()
 
 
 @autohelp
@@ -388,7 +408,7 @@ class FileResource(Object):
     def getContents(self):
         p, r = makePromise()
         vat = currentVat.get()
-        getContents_k0(_State0(vat, self, r))
+        getContents_k0.do(_State0(vat, self, r), Ok(0))
         return p
         # with io:
         #     f = self.open(flags=os.O_RDONLY, mode=0000)
