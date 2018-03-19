@@ -268,8 +268,9 @@ def readLoopCore(state, data):
 
 
 class _State1(FutureCtx):
-    def __init__(_1, vat, buf, pieces, pos, outerState, k):
+    def __init__(_1, vat, future, buf, pieces, pos, outerState, k):
         _1.vat = vat
+        _1.future = future
         _1.buf = buf
         _1.pieces = pieces
         _1.pos = pos
@@ -277,7 +278,7 @@ class _State1(FutureCtx):
         _1.k = k
 
 
-class ReadLoop_K0(FutureCallback):
+class ReadLoop_K0(ruv.FSReadFutureCallback):
     def readLoop_k0(self, state, result):
         (inStatus, data, inErr) = result
         (status, output, err) = readLoopCore(state, data)
@@ -292,14 +293,14 @@ class ReadLoop_K0(FutureCallback):
 readLoop_k0 = ReadLoop_K0()
 
 
-class ReadLoopFuture(object):
+class ReadLoopFuture(ruv.FSReadFutureCallback):
     def __init__(self, f, buf):
         self.f = f
         self.buf = buf
 
     def run(self, state, k):
         ruv.magic_fsRead(state.vat, self.f, self.buf).run(
-            _State1(state.vat, self.buf, [], 0, state, k),
+            _State1(state.vat, self, self.buf, [], 0, state, k),
             readLoop_k0)
 
 
@@ -313,10 +314,10 @@ class _State0(FutureCtx):
         _0.self = self
         _0.r = r
         _0.f = 0
-        _0.buf = None
+        _0.contents = None
 
 
-class GetContents_K3(FutureCallback):
+class GetContents_K3(ruv.FSCloseFutureCallback):
     def do(self, state, _):
         resolve(state.r, state.buf).run(state, None)
 
@@ -324,7 +325,7 @@ class GetContents_K3(FutureCallback):
 getContents_k3 = GetContents_K3()
 
 
-class GetContents_K2(FutureCallback):
+class GetContents_K2(ruv.FSReadFutureCallback):
     def do(self, state, result):
         (status, contents, err) = result
         state.contents = contents
@@ -334,7 +335,7 @@ class GetContents_K2(FutureCallback):
 getContents_k2 = GetContents_K2()
 
 
-class GetContents_K1(FutureCallback):
+class GetContents_K1(ruv.FSOpenFutureCallback):
     def do(self, state, result):
         (status, f, err) = result
         state.f = f
@@ -344,7 +345,7 @@ class GetContents_K1(FutureCallback):
 getContents_k1 = GetContents_K1()
 
 
-class GetContents_K0(FutureCallback):
+class GetContents_K0(object):
     def do(self, state, result):
         state.self.open(flags=os.O_RDONLY, mode=0000).run(state,
                                                           getContents_k1)
@@ -412,9 +413,9 @@ class FileResource(Object):
         return p
         # with io:
         #     f = self.open(flags=os.O_RDONLY, mode=0000)
-        #     buf = readLoop(f)
+        #     contents = readLoop(f, ruv.allocBuf(16384))
         #     fsClose(f)
-        #     resolve(r, buf)
+        #     resolve(r, contents)
 
         # return self.open(openGetContentsCB, flags=os.O_RDONLY, mode=0000)
 

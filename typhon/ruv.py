@@ -16,6 +16,7 @@ from rpython.rlib import _rsocket_rffi as s
 from rpython.rlib.objectmodel import current_object_addr_as_int, specialize
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.rawstorage import alloc_raw_storage, free_raw_storage
+from rpython.rlib.rerased import new_erasing_pair
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rtyper.tool import rffi_platform
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
@@ -248,8 +249,6 @@ stashTimer, unstashTimer, unstashingTimer = stashFor(
 stashStream, unstashStream, unstashingStream = stashFor("stream", stream_tp)
 stashWrite, unstashWrite, unstashingWrite = stashFor("write", write_tp)
 stashFS, unstashFS, unstashingFS = stashFor("fs", fs_tp)
-stashFS2, unstashFS2, unstashingFS2 = stashFor("fs2", fs_tp,
-                                               initial=FutureCallback())
 stashGAI, unstashGAI, unstashingGAI = stashFor("gai", gai_tp)
 stashProcess, unstashProcess, unstashingProcess = stashFor("process",
                                                            process_tp)
@@ -769,12 +768,25 @@ fs_rename = rffi.llexternal("uv_fs_rename", [loop_tp, fs_tp, rffi.CCHARP,
                             rffi.INT, compilation_info=eci)
 fsRename = checking("fs_rename", fs_rename)
 
+fsRead_erase, fsRead_unerase = new_erasing_pair("fsRead")
+
+
+class FSReadFutureCallback(object):
+    pass
+
+
+stashFS2, unstashFS2, unstashingFS2 = stashFor("fs2", fs_tp,
+                                               initial=fsRead_erase(
+                                                   FSReadFutureCallback()))
+
 
 def magic_fsReadCB(fs):
     size = intmask(fs.c_result)
-    state, k = unstashFS2(fs)
+    state, v = unstashFS2(fs)
+    k = fsRead_unerase(v)
     fsDiscard(fs)
     if size > 0:
+            # XXX is this coupling to state contents dangerous?
             data = rffi.charpsize2str(state.buf.c_base, size)
             k.do(state, Ok(data))
     elif size < 0:
@@ -784,6 +796,7 @@ def magic_fsReadCB(fs):
 
 
 class FSReadFuture(object):
+    callbackType = FSReadFutureCallback
     def __init__(self, vat, fd, buf):
         self.vat = vat
         self.fd = fd
@@ -791,7 +804,7 @@ class FSReadFuture(object):
 
     def run(self, state, k):
         fs = alloc_fs()
-        stashFS2(fs, (state, k))
+        stashFS2(fs, (state, fsRead_erase(k)))
         with lltype.scoped_alloc(rffi.CArray(buf_t), 1) as bufs:
             bufs[0].c_base = self.buf.c_base
             bufs[0].c_len = self.buf.c_len
@@ -803,9 +816,13 @@ def magic_fsRead(vat, fd, buf):
     return FSReadFuture(vat, fd, buf)
 
 
+fsOpen_erase, fsOpen_unerase = new_erasing_pair("fsOpen")
+
+
 def magic_fsOpenCB(fs):
     fd = intmask(fs.c_result)
-    state, k = unstashFS2(fs)
+    state, v = unstashFS2(fs)
+    k = fsOpen_unerase(v)
     fsDiscard(fs)
     with scopedVat(state.vat):
         if fd < 0:
@@ -814,8 +831,11 @@ def magic_fsOpenCB(fs):
         else:
             k.do(state, Ok(fd))
 
+class FSOpenFutureCallback(object):
+    pass
 
 class FSOpenFuture(object):
+    callbackType = FSOpenFutureCallback
     def __init__(self, vat, path, flags, mode):
         self.vat = vat
         self.path = path
@@ -824,7 +844,7 @@ class FSOpenFuture(object):
 
     def run(self, state, k):
         fs = alloc_fs()
-        stashFS2(fs, (state, k))
+        stashFS2(fs, (state, fsOpen_erase(k)))
         fsOpen(self.vat.uv_loop, fs, self.path, self.flags, self.mode,
                magic_fsOpenCB)
 
@@ -838,19 +858,26 @@ def magic_fsClose(vat, f):
 
 
 def magic_fsCloseCB(fs):
-    state, k = unstashFS2(fs)
+    state, v = unstashFS2(fs)
+    k = fsClose_unerase(v)
     fsDiscard(fs)
     k.do(state, Ok(None))
 
 
+fsClose_erase, fsClose_unerase = new_erasing_pair("fsClose")
+
+class FSCloseFutureCallback(object):
+    pass
+
 class FSCloseFuture(object):
+    callbackType = FSCloseFutureCallback
     def __init__(self, vat, f):
         self.vat = vat
         self.f = f
 
     def run(self, state, k):
         fs = alloc_fs()
-        stashFS2(fs, (state, k))
+        stashFS2(fs, (state, fsClose_erase(k)))
         fsClose(self.vat.uv_loop, fs, magic_fsCloseCB)
 
 
@@ -866,6 +893,7 @@ def fsDiscard(fs):
 def fsUnstashAndDiscard(fs):
     unstashFS(fs)
     fsDiscard(fs)
+
 
 gai_cb = rffi.CCallback([gai_tp, rffi.INT, s.addrinfo_ptr], lltype.Void)
 
