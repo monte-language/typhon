@@ -102,6 +102,16 @@ def augment(parser) as DeepFrozen:
                 return rest(a)(s1, ej)
             })
 
+        to chainRight(op):
+            def [scan, head, rest] := [
+                binding(parser, rest),
+                op + scan,
+                fn a {
+                    def r := head % fn [f, b] { f(a, b) }
+                    augment(binding(r, rest)) / pure(a)
+                }]
+            return augment(scan)
+
 object pk as DeepFrozen:
     "A parser kit."
 
@@ -123,12 +133,13 @@ object pk as DeepFrozen:
         ej(`parse error?`)
 
 def main(_argv) as DeepFrozen:
-    def s := sliceString("1+1+1+1+1")
+    def s := sliceString("1+1-1+1+1")
     def one := pk.equals('1') % fn _ { 1 }
     def plus := pk.equals('+') % fn _ { fn x, y { x + y } }
-    def parser := one.chainLeft(plus)
+    def minus := pk.equals('-') % fn _ { fn x, y { x - y } }
+    def sums := one.chainLeft(plus / minus)
     escape ej:
-        traceln(`yay`, parser(s, ej))
+        traceln(`yay1`, sums(s, ej))
     catch problem:
         traceln(`nope`, problem)
     traceln(`yerp`)
