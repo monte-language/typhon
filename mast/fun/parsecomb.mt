@@ -1,4 +1,4 @@
-exports (main)
+exports (main, pk)
 
 # http://www.cs.nott.ac.uk/~pszgmh/pearl.pdf
 # http://vaibhavsagar.com/blog/2018/02/04/revisiting-monadic-parsing-haskell/
@@ -15,6 +15,9 @@ def sliceString(s :Str) as DeepFrozen:
                 return if (i <= size) {
                     [s[index], makeStringSlicer(i)]
                 } else { ej(`End of string`) }
+
+            to eject(ej, reason):
+                throw.eject(ej, reason)
 
     return makeStringSlicer(0)
 
@@ -69,10 +72,13 @@ def augment(parser) as DeepFrozen:
         to complement():
             return augment(def complement(s, ej) {
                 return escape fail {
-                    parser(s, fail)
-                    ej(`parser succeeded`)
+                    def [_, s2] := parser(s, fail)
+                    s2.eject(ej, `not $parser`)
                 } catch _ { [null, s] }
             })
+
+        to optional():
+            return augmentedParser / pure(null)
 
         to zeroOrMore():
             return augment(def zeroOrMore(var s, _ej) {
@@ -97,10 +103,7 @@ def augment(parser) as DeepFrozen:
             def rest(a):
                 def r := tail % fn [f, b] { f(a, b) }
                 return augment(binding(r, rest)) / pure(a)
-            return augment(def chainLeft(s, ej) {
-                def [a, s1] := parser(s, ej)
-                return rest(a)(s1, ej)
-            })
+            return augment(binding(parser, rest))
 
         to chainRight(op):
             def [scan, head, rest] := [
@@ -112,6 +115,9 @@ def augment(parser) as DeepFrozen:
                 }]
             return augment(scan)
 
+        to bracket(bra, ket):
+            return bra >> augmentedParser << ket
+
 object pk as DeepFrozen:
     "A parser kit."
 
@@ -121,7 +127,9 @@ object pk as DeepFrozen:
     to satisfies(pred :DeepFrozen):
         return augment(def satisfier(s, ej) as DeepFrozen {
             def rv := def [c, next] := s.next(ej)
-            return if (pred(c)) { rv } else { ej(`didn't satisfy $pred`) }
+            return if (pred(c)) { rv } else {
+                next.eject(ej, `something satisfying $pred`)
+            }
         })
 
     to equals(obj :DeepFrozen):
@@ -129,17 +137,29 @@ object pk as DeepFrozen:
             return obj == c
         })
 
-    to never(_s, ej):
-        ej(`parse error?`)
+    to never(s, ej):
+        s.eject(ej, `an impossibility`)
 
 def main(_argv) as DeepFrozen:
-    def s := sliceString("1+1-1+1+1")
-    def one := pk.equals('1') % fn _ { 1 }
-    def plus := pk.equals('+') % fn _ { fn x, y { x + y } }
-    def minus := pk.equals('-') % fn _ { fn x, y { x - y } }
-    def sums := one.chainLeft(plus / minus)
+    def s := sliceString("-1234")
+    def e := (pk.equals('e') / pk.equals('E')) + (
+        pk.equals('+') / pk.equals('-')).optional()
+    def zero := '0'.asInteger()
+    def digit := pk.satisfies('0'..'9') % fn c { c.asInteger() - zero }
+    def digits := digit.oneOrMore() % fn ds {
+        var i :Int := 0
+        for d in (ds) { i := i * 10 + d }
+        i
+    }
+    def exp := e >> digits
+    def frac := pk.equals('.') >> digits
+    def int := (pk.equals('-') >> digits) % fn i { -i } / digits
+    def number := (int + frac.optional() + exp.optional()) % fn [[i, f], e] {
+        # XXX do floats or whatever
+        [i, f, e]
+    }
     escape ej:
-        traceln(`yay1`, sums(s, ej))
+        traceln(`whoo`, number(s, ej))
     catch problem:
         traceln(`nope`, problem)
     traceln(`yerp`)
