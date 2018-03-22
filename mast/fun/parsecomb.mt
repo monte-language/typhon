@@ -140,8 +140,11 @@ object pk as DeepFrozen:
     to never(s, ej):
         s.eject(ej, `an impossibility`)
 
+    to mapping(m :Map):
+        return pk.satisfies(m.contains) % m.get
+
 def main(_argv) as DeepFrozen:
-    def s := sliceString("-1234")
+    def s := sliceString(`"Olé for \\\"\\ Monte"`)
     def e := (pk.equals('e') / pk.equals('E')) + (
         pk.equals('+') / pk.equals('-')).optional()
     def zero := '0'.asInteger()
@@ -158,8 +161,24 @@ def main(_argv) as DeepFrozen:
         # XXX do floats or whatever
         [i, f, e]
     }
+    def plainChar(c) :Bool as DeepFrozen:
+        return c != '"' && c != '\\'
+    # XXX \u
+    def char := pk.satisfies(plainChar) / (pk.equals('\\') >> pk.mapping([
+        '"' => '"',
+        '\\' => '\\',
+        '/' => '/',
+        'b' => '\b',
+        'f' => '\f',
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+    ]))
+    def quote := pk.equals('"')
+    def string := (char.zeroOrMore() % _makeStr.fromChars).bracket(quote, quote)
+    def value := string / number
     escape ej:
-        traceln(`whoo`, number(s, ej))
+        traceln(`whoo`, value(s, ej))
     catch problem:
         traceln(`nope`, problem)
     traceln(`yerp`)
