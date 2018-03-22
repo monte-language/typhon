@@ -5,8 +5,8 @@ exports (main, pk)
 
 def sliceString(s :Str) as DeepFrozen:
     def size :Int := s.size()
-    def makeStringSlicer(index :Int):
-        return object stringSlicer:
+    def makeStringSlicer(index :Int) as DeepFrozen:
+        return object stringSlicer as DeepFrozen:
             to _printOn(out):
                 out.print(`<string size=$size index=$index>`)
 
