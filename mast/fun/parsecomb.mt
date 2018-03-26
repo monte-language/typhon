@@ -153,7 +153,8 @@ object pk as DeepFrozen:
         return pk.satisfies(m.contains) % m.get
 
 def main(_argv) as DeepFrozen:
-    def s := sliceString(`[1,"2",true,4,[],{"key":"val"}]`)
+    def s := sliceString(`[1, "2", true, 4, [], {"key": "val"}]`)
+    def ws := pk.satisfies(" \n".asSet().contains).zeroOrMore()
     def e := (pk.equals('e') / pk.equals('E')) + (
         pk.equals('+') / pk.equals('-')).optional()
     def zero := '0'.asInteger()
@@ -184,16 +185,16 @@ def main(_argv) as DeepFrozen:
         't' => '\t',
     ]))
     def quote := pk.equals('"')
-    def comma := pk.equals(',')
+    def comma := ws >> pk.equals(',')
     def string := (char.zeroOrMore() % _makeStr.fromChars).bracket(quote, quote)
     def constant := (pk.string("true") >> pk.pure(true)) / (
         pk.string("false") >> pk.pure(false)) / (pk.string("null") >> pk.pure(null))
     def array
     def obj
-    def value := string / number / obj / array / constant
+    def value := ws >> (string / number / obj / array / constant)
     def elements := value.joinedBy(comma)
     bind array := elements.optional().bracket(pk.equals('['), pk.equals(']'))
-    def pair := ((string << pk.equals(':')) + value)
+    def pair := ((ws >> string << ws << pk.equals(':')) + value)
     def members := pair.joinedBy(comma) % _makeMap.fromPairs
     bind obj := members.optional().bracket(pk.equals('{'), pk.equals('}'))
     escape ej:
