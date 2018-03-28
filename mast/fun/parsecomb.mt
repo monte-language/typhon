@@ -5,21 +5,28 @@ exports (main, pk)
 
 def sliceString(s :Str) as DeepFrozen:
     def size :Int := s.size()
-    def makeStringSlicer(index :Int) as DeepFrozen:
+    def makeStringSlicer(index :Int, line :Int, col :Int) as DeepFrozen:
+        def pos() as DeepFrozen:
+            return _makeSourceSpan(`<parsed string>`, true, line, col, line,
+                                   col + 1)
+
         return object stringSlicer as DeepFrozen:
             to _printOn(out):
-                out.print(`<string size=$size index=$index>`)
+                out.print(`<string line=$line col=$col>`)
 
             to next(ej):
                 def i := index + 1
                 return if (i <= size) {
-                    [s[index], makeStringSlicer(i)]
-                } else { ej(`End of string`) }
+                    def slicer := if (s[index] == '\n') {
+                        makeStringSlicer(i, line + 1, 1)
+                    } else { makeStringSlicer(i, line, col + 1) }
+                    [s[index], slicer]
+                } else { stringSlicer.eject(ej, `End of string`) }
 
-            to eject(ej, reason):
-                throw.eject(ej, reason)
+            to eject(ej, reason :Str):
+                throw.eject(ej, [reason, pos()])
 
-    return makeStringSlicer(0)
+    return makeStringSlicer(0, 1, 1)
 
 def concat([x, xs :List]) as DeepFrozen:
     return [x] + xs
@@ -66,7 +73,13 @@ def augment(parser) as DeepFrozen:
             return augment(def orderedChoice(s, ej) {
                 return escape first {
                     parser(s, first)
-                } catch _ { other(s, ej) }
+                } catch [err1, _] {
+                    escape second {
+                        other(s, second)
+                    } catch [err2, _] {
+                        s.eject(ej, `$err1 or $err2`)
+                    }
+                }
             })
 
         to complement():
@@ -128,17 +141,23 @@ object pk as DeepFrozen:
         return s.next(ej)
 
     to satisfies(pred :DeepFrozen):
-        return augment(def satisfier(s, ej) as DeepFrozen {
-            def rv := def [c, next] := s.next(ej)
-            return if (pred(c)) { rv } else {
-                next.eject(ej, `something satisfying $pred`)
-            }
-        })
+        object satisfier as DeepFrozen:
+            to _printOn(out):
+                out.print(`<satisfies($pred)>`)
+            to run(s, ej):
+                def rv := def [c, next] := s.next(ej)
+                return if (pred(c)) { rv } else {
+                    next.eject(ej, `something satisfying $pred`)
+                }
+        return augment(satisfier)
 
     to equals(obj :DeepFrozen):
-        return pk.satisfies(def equalizer(c) as DeepFrozen {
-            return obj == c
-        })
+        object equalizer as DeepFrozen:
+            to _printOn(out):
+                out.print(`<==${M.toQuote(obj)}>`)
+            to run(c):
+                return obj == c
+        return pk.satisfies(equalizer)
 
     to string(iterable):
         var p := pk.pure(null)
@@ -153,7 +172,10 @@ object pk as DeepFrozen:
         return pk.satisfies(m.contains) % m.get
 
 def main(_argv) as DeepFrozen:
-    def s := sliceString(`[1, "2", true, 4, [], {"key": "val"}]`)
+    def s := sliceString(`{"k":"v",
+        "first": [1, "2", true, 4, [], {"key": "val"}],
+        "second": "derp"
+    }`)
     def ws := pk.satisfies(" \n".asSet().contains).zeroOrMore()
     def e := (pk.equals('e') / pk.equals('E')) + (
         pk.equals('+') / pk.equals('-')).optional()
@@ -193,10 +215,10 @@ def main(_argv) as DeepFrozen:
     def obj
     def value := ws >> (string / number / obj / array / constant)
     def elements := value.joinedBy(comma)
-    bind array := elements.optional().bracket(pk.equals('['), pk.equals(']'))
+    bind array := elements.optional().bracket(pk.equals('['), ws >> pk.equals(']'))
     def pair := ((ws >> string << ws << pk.equals(':')) + value)
     def members := pair.joinedBy(comma) % _makeMap.fromPairs
-    bind obj := members.optional().bracket(pk.equals('{'), pk.equals('}'))
+    bind obj := members.optional().bracket(pk.equals('{'), ws >> pk.equals('}'))
     escape ej:
         traceln(`whoo`, value(s, ej))
     catch problem:
