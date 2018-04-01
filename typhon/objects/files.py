@@ -23,7 +23,7 @@ from typhon import log, rsodium, ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
-from typhon.futures import FutureCtx, FutureCallback, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE
+from typhon.futures import FutureCtx, FutureCallback, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE, OK, smash
 from typhon.macros import macros, io#, io_loop
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapStr
@@ -187,6 +187,8 @@ class _State1(FutureCtx):
 class ReadLoop_K0(ruv.FSReadFutureCallback):
     def do(self, state, result):
         (inStatus, data, inErr) = result
+        if inStatus != OK:
+            return state.k.do(state.outerState, result)
         (status, output, err) = readLoopCore(state, data)
         if status == LOOP_CONTINUE:
             state.future.run(state, readLoop_k0)
@@ -210,6 +212,50 @@ class readLoop(ruv.FSReadFutureCallback):
         ruv.magic_fsRead(state.vat, self.f, self.buf).run(
             _State1(state.vat, self, self.buf, [], 0, state, k),
             readLoop_k0)
+
+
+class _State2(FutureCtx):
+    def __init__(_2, vat, future, outerState, k):
+        _2.vat = vat
+        _2.future = future
+        _2.outerState = outerState
+        _2.k = k
+
+
+def writeLoopCore(state, size):
+
+    if state.data:
+        return Continue()
+    else:
+        return Break(None)
+
+
+class WriteLoop_K0(object):
+    def do(self, state, result):
+        (inStatus, size, inErr) = result
+        if inStatus != OK:
+            state.k.do(state.outerState, result)
+        state.data = state.data[size:]
+        if state.data:
+            state.future.run(state, writeLoop_k0)
+        else:
+            state.k.do(state.outerState, Ok(None))
+
+
+writeLoop_k0 = WriteLoop_K0()
+
+
+class writeLoop(ruv.FSWriteFutureCallback):
+    callbackType = ruv.FSWriteFutureCallback
+
+    def __init__(self, f, data):
+        self.f = f
+        self.data = data
+
+    def run(self, state, k):
+        ruv.magic_fsWrite(state.vat, self.f, self.data).run(
+            _State2(state.vat, self, state, k),
+            writeLoop_k0)
 
 
 @autohelp
@@ -262,11 +308,19 @@ class FileResource(Object):
         log.log(["fs"], u"makeFileResource: Opening file '%s'" % path.decode("utf-8"))
         with io:
             f = 0
-            f = ruv.magic_fsOpen(vat, path, os.O_RDONLY, 0000)
-            # contents = io_loop[ruv.magic_fsRead(vat, f, buf), readLoopCore]
-            contents = readLoop(f, buf)
-            ruv.magic_fsClose(vat, f)
-            resolve(r, BytesObject(contents))
+            try:
+                f = ruv.magic_fsOpen(vat, path, os.O_RDONLY, 0000)
+            except object as err:
+                smash(r, StrObject(u"Couldn't open file fount: %s" % err))
+            else:
+                try:
+                    contents = readLoop(f, buf)
+                except object as err:
+                    ruv.magic_fsClose(vat, f)
+                    smash(r, StrObject(u"libuv error: %s" % err))
+                else:
+                    ruv.magic_fsClose(vat, f)
+                    resolve(r, BytesObject(contents))
         return p
 
     @method("Any", "Bytes")
@@ -275,16 +329,26 @@ class FileResource(Object):
 
         p, r = makePromise()
         vat = currentVat.get()
-        uv_loop = vat.uv_loop
-        fs = ruv.alloc_fs()
-
         path = sibling.asBytes()
         # Use CREAT | EXCL to cause a failure if the temporary file
         # already exists.
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-        sc = SetContents(vat, data, r, sibling, self)
-        ruv.stashFS(fs, (vat, sc))
-        ruv.fsOpen(uv_loop, fs, path, flags, 0777, openSetContentsCB)
+        with io:
+            f = 0
+            try:
+                f = ruv.magic_fsOpen(vat, path, flags, 0777)
+            except object as err:
+                smash(r, StrObject(u"Couldn't open file fount: %s" % err))
+            else:
+                try:
+                    writeLoop(f, data)
+                except object as err:
+                    ruv.magic_fsClose(vat, f)
+                    smash(r, StrObject(u"libuv error: %s" % err))
+                else:
+                    ruv.magic_fsClose(vat, f)
+                    ruv.magic_fsRename(vat, self.asBytes(), sibling.asBytes())
+                    resolve(r, NullObject)
         return p
 
     @method("Any", "Any", _verb="rename")

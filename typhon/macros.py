@@ -1,8 +1,9 @@
 import __builtin__
 from ast import (Assign, Expr, Subscript, Attribute, List, Tuple, Name, Import,
                  ImportFrom, FunctionDef, ClassDef, ListComp, For, Num,
-                 ExceptHandler, Call, Store, Load, alias, arguments,
+                 TryExcept, ExceptHandler, Call, Store, Load, alias, arguments,
                  copy_location, fix_missing_locations)
+from collections import namedtuple
 import copy
 from macropy.core.macros import Macros, Walker, injected_vars, post_processing
 from typhon.futures import OK
@@ -66,6 +67,116 @@ def rewriteAsCallback(expr, state, globalNames, boundNames, freeNames):
     return expr
 
 
+JumpItem = namedtuple('JumpItem', ['exName', 'exStart', 'exEnd',
+                                   'elseStart', 'elseEnd'])
+FlowItem = namedtuple('FlowItem', ['opNum', 'expr', 'targetName'])
+Op = namedtuple('Op', ['expr', 'successIndex', 'failIndex',
+                       'successName', 'failName'])
+
+
+def buildOperationsTable(lines):
+    """
+    Flatten try/except statements to prepare them for generation of callbacks.
+    """
+    opCount = [0]
+    flowList = []
+
+    def collectLine(line):
+        if isinstance(line, Assign):
+            assert isinstance(line.targets[0], Name), (
+                "assignment in io blocks must be to single names")
+            flowList.append(FlowItem(opCount[0], line.value,
+                                     line.targets[0].id))
+            opCount[0] += 1
+        elif isinstance(line, Expr):
+            flowList.append(FlowItem(opCount[0], line.value, None))
+            opCount[0] += 1
+        elif isinstance(line, TryExcept):
+            tryIdx = len(flowList)
+            flowList.append("try")
+            for tryline in line.body:
+                collectLine(tryline)
+            assert len(line.handlers) == 1, (
+                "try statements in io blocks must "
+                "have exactly one except block")
+            exName = line.handlers[0].name.id
+            exStart = opCount[0]
+            for excline in line.handlers[0].body:
+                collectLine(excline)
+            exEnd = opCount[0] - 1
+            elseStart = None
+            elseEnd = None
+            if line.orelse:
+                elseStart = opCount[0]
+                for elseline in line.orelse:
+                    collectLine(elseline)
+                elseEnd = opCount[0] - 1
+            flowList[tryIdx] = JumpItem(exName, exStart, exEnd,
+                                        elseStart, elseEnd)
+
+        else:
+            raise SyntaxError("Expected assign statement, call, or try/except "
+                              "statement in io block, not " +
+                              line.__class__.__name__)
+
+    for line in lines:
+        collectLine(line)
+    opList = []
+    jumpStack = []
+    finalIndex = flowList[-1].opNum
+    for item in flowList[:-1]:
+        if isinstance(item, JumpItem):
+            jumpStack.append(item)
+        else:
+            opNum, expr, successName = item
+            while (jumpStack and
+                   opNum >= (jumpStack[-1].elseEnd or
+                             jumpStack[-1].exEnd)):
+                jumpStack.pop()
+            if not jumpStack:
+                # No questions about control flow.
+                opList.append(Op(expr, opNum + 1, None, successName, None))
+                continue
+            for j in reversed(jumpStack):
+                if opNum < j.exStart:
+                    failIndex = j.exStart
+                    failName = j.exName
+                    break
+            else:
+                failIndex = None
+                failName = None
+            # assume we're continuing to next line
+            successIndex = opNum + 1
+            for j in reversed(jumpStack):
+                # are we at the end of a try block? continue to else block
+                if successIndex == j.exStart:
+                    if j.elseStart:
+                        successIndex = j.elseStart
+                    else:
+                        # No else block for this try block.
+                        # Gets tricky here, we might have further instructions
+                        # or we might be on a control edge still
+                        successIndex = j.exEnd + 1
+                        continue
+                # are we at the end of an except block?
+                # continue after else block
+                elif j.elseStart is not None:
+                    if successIndex == j.elseStart:
+                        # we've wandered out of an except block
+                        successIndex = j.elseEnd + 1
+                        continue
+                elif opNum == j.exEnd:
+                    successIndex = (j.elseEnd or j.exEnd) + 1
+                    continue
+                break
+            if successIndex > finalIndex:
+                successIndex = None
+            opList.append(Op(expr, successIndex, failIndex, successName,
+                             failName))
+    opList.append(Op(flowList[-1].expr, None, None, None, None))
+    return opList
+
+
 @macros.block
 def io(tree, target, gen_sym, moduleGlobals, toEmit, **kw):
     firstCallback = nextCallback = gen_sym("iostart_callback")
@@ -86,7 +197,7 @@ def io(tree, target, gen_sym, moduleGlobals, toEmit, **kw):
     for i, line in enumerate(tree):
         def emit(node):
             toEmit.append(copy_location(node, line))
-        assert isinstance(line, (Assign, Expr)), "Only assignments and calls allowed in io block"
+        assert isinstance(line, (Assign, Expr, TryExcept)), "Only assignments and calls allowed in io block"
         expr = line.value
         if isinstance(expr, Num) and isinstance(line, Assign):
             boundNames[line.targets[0].id] = expr
