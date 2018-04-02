@@ -1,14 +1,16 @@
-exports (main, pk)
+exports (main, pk, makeSlicer)
+
+# Parsing Ejectors are Neat. This is hopefully the penultimate parsing kit for
+# any Monte module, including prelude usage.
 
 # http://www.cs.nott.ac.uk/~pszgmh/pearl.pdf
 # http://vaibhavsagar.com/blog/2018/02/04/revisiting-monadic-parsing-haskell/
 
-def sliceString(s :Str) as DeepFrozen:
+def makeSlicer.fromString(s :Str, => sourceName :Str := "<parsed string>") as DeepFrozen:
     def size :Int := s.size()
     def makeStringSlicer(index :Int, line :Int, col :Int) as DeepFrozen:
         def pos() as DeepFrozen:
-            return _makeSourceSpan(`<parsed string>`, true, line, col, line,
-                                   col + 1)
+            return _makeSourceSpan(sourceName, true, line, col, line, col + 1)
 
         return object stringSlicer as DeepFrozen:
             to _printOn(out):
@@ -172,10 +174,21 @@ object pk as DeepFrozen:
         return pk.satisfies(m.contains) % m.get
 
 def main(_argv) as DeepFrozen:
-    def s := sliceString(`{"k":"v",
-        "first": [1, "2", true, 4, [], {"key": "val"}],
-        "second": "derp"
-    }`)
+    def s := makeSlicer.fromString(`
+{
+  "selska": [
+    "zirpu"
+  ],
+  "selcmi": {
+    "bangu": {
+      "ve tavla": {}
+    }
+  },
+  "du": {
+    "se vacri": "plini"
+  }
+}
+    `)
     def ws := pk.satisfies(" \n".asSet().contains).zeroOrMore()
     def e := (pk.equals('e') / pk.equals('E')) + (
         pk.equals('+') / pk.equals('-')).optional()
@@ -215,10 +228,10 @@ def main(_argv) as DeepFrozen:
     def obj
     def value := ws >> (string / number / obj / array / constant)
     def elements := value.joinedBy(comma)
-    bind array := elements.optional().bracket(pk.equals('['), ws >> pk.equals(']'))
+    bind array := (elements / pk.pure([])).bracket(pk.equals('['), ws >> pk.equals(']'))
     def pair := ((ws >> string << ws << pk.equals(':')) + value)
     def members := pair.joinedBy(comma) % _makeMap.fromPairs
-    bind obj := members.optional().bracket(pk.equals('{'), ws >> pk.equals('}'))
+    bind obj := (members / pk.pure([].asMap())).bracket(pk.equals('{'), ws >> pk.equals('}'))
     escape ej:
         traceln(`whoo`, value(s, ej))
     catch problem:

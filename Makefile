@@ -61,6 +61,7 @@ mast: mast/lib/enum.mast \
 	mast/lib/json.mast \
 	mast/lib/marley.mast \
 	mast/lib/matrices.mast \
+	mast/lib/pen.mast \
 	mast/lib/pra.mast \
 	mast/lib/streams.mast \
 	mast/lib/uKanren.mast \
@@ -105,7 +106,7 @@ parsers: mast/lib/parsers/html.mast \
 games: mast/games/mafia.mast
 
 fun: mast/fun/elements.mast mast/fun/repl.mast mast/fun/termParser.mast \
-	mast/fun/mli.mast mast/fun/parsecomb.mast
+	mast/fun/mli.mast
 
 bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mast \
 	mast/bench/primeCount.mast mast/bench/brot.mast \
