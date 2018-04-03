@@ -1,33 +1,14 @@
 import "unittest" =~ [=> unittest :Any]
-import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
-import "lib/streams" =~ [=> alterSink :DeepFrozen, => alterSource :DeepFrozen,
-    => collectStr :DeepFrozen,
-]
-exports (JSON, ::"json``", main)
+import "lib/codec/utf8" =~ [=> UTF8]
+import "lib/pen" =~ [=> pk, => makeSlicer]
+import "lib/streams" =~ [=> alterSink, => alterSource, => collectStr]
+exports (JSON, main)
 
 # The JSON mini-language for data serialization.
 # This module contains the following kit:
 # * JSON: A codec decoding JSON text to plain Monte values
-# * json``: A QP for JSON text
 # * main: A basic tool for testing validity of and pretty-printing JSON text
 
-object valueHoleMarker as DeepFrozen:
-    pass
-
-object patternHoleMarker as DeepFrozen:
-    pass
-
-
-def specialDecodeChars :Map[Char, Str] := [
-    '"' => "\"",
-    '\\' => "\\",
-    '/' => "/",
-    'b' => "\b",
-    'f' => "\f",
-    'n' => "\n",
-    'r' => "\r",
-    't' => "\t",
-]
 
 def specialEncodeChars :Map[Char, Str] := [
     '"' => "\\\"",
@@ -41,357 +22,67 @@ def specialEncodeChars :Map[Char, Str] := [
 ]
 
 
-def makeStream(s :Str) as DeepFrozen:
-    var index :Int := 0
+def parse(s, ej) as DeepFrozen:
+    def ws := pk.satisfies(" \n".asSet().contains).zeroOrMore()
+    def e := (pk.equals('e') / pk.equals('E')) + (
+        pk.equals('+') / pk.equals('-')).optional()
+    def zero := '0'.asInteger()
+    def digit := pk.satisfies('0'..'9') % fn c { c.asInteger() - zero }
+    def digits := digit.oneOrMore() % fn ds {
+        var i :Int := 0
+        for d in (ds) { i := i * 10 + d }
+        i
+    }
+    def exp := e >> digits
+    def frac := pk.equals('.') >> digits
+    def int := (pk.equals('-') >> digits) % fn i { -i } / digits
+    def number := (int + frac.optional() + exp.optional()) % fn [[i, f], e] {
+        var rv := i
+        if (f != null) {
+            var divisor := 1
+            while (divisor < f) { divisor *= 10 }
+            rv += f / divisor
+        }
+        if (e != null) { rv *= 10 ** e }
+        rv
+    }
+    def plainChar(c) :Bool as DeepFrozen:
+        return c != '"' && c != '\\'
+    def hex := digit / pk.mapping([
+        'a' => 10, 'b' => 11, 'c' => 12,
+        'd' => 13, 'e' => 14, 'f' => 15,
+        'A' => 10, 'B' => 11, 'C' => 12,
+        'D' => 13, 'E' => 14, 'F' => 15,
+    ])
+    def unicodeEscape := hex * 4 % fn [x, y, z, w] {
+        '\x00' + (x * (16 ** 3) + y * (16 ** 2) + z * 16 + w)
+    }
+    def char := pk.satisfies(plainChar) / (pk.equals('\\') >> (pk.mapping([
+        '"' => '"',
+        '\\' => '\\',
+        '/' => '/',
+        'b' => '\b',
+        'f' => '\f',
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+    ]) / (pk.equals('u') >> unicodeEscape)))
+    def quote := pk.equals('"')
+    def comma := ws >> pk.equals(',')
+    def string := (char.zeroOrMore() % _makeStr.fromChars).bracket(quote, quote)
+    def constant := (pk.string("true") >> pk.pure(true)) / (
+        pk.string("false") >> pk.pure(false)) / (pk.string("null") >> pk.pure(null))
+    def array
+    def obj
+    def value := ws >> (string / number / obj / array / constant)
+    def elements := value.joinedBy(comma)
+    bind array := (elements / pk.pure([])).bracket(pk.equals('['), ws >> pk.equals(']'))
+    def pair := ((ws >> string << ws << pk.equals(':')) + value)
+    def members := pair.joinedBy(comma) % _makeMap.fromPairs
+    bind obj := (members / pk.pure([].asMap())).bracket(pk.equals('{'), ws >> pk.equals('}'))
 
-    # Location information for lexer errors.
-    var line :Int := 0
-    var column :Int := 0
-
-    return object stream:
-        to pos():
-            return [line, column]
-
-        to next():
-            def rv := s[index]
-            index += 1
-            if (rv == '\n'):
-                line += 1
-                column := 0
-            else:
-                column += 1
-            return rv
-
-        to peek():
-            return s[index]
-
-        to accept(c :Char):
-            return if (s[index] == c) { stream.next(); true } else { false }
-
-        to require(c :Char, ej):
-            if (!stream.accept(c)):
-                throw.eject(ej, `$line:$column: Required char ${M.toQuote(c)}`)
-
-        to finished() :Bool:
-            return index >= s.size()
-
-
-def Digits :DeepFrozen := '0'..'9'
-def charDigit(c :Digits) :(0..9) as DeepFrozen:
-    "Lex a character into an integer.
-
-     The definition of this function should leave little room for doubt on its
-     behavior."
-
-    # 0x30 == '0'.asInteger()
-    return c.asInteger() - 0x30
-
-def Hex :DeepFrozen := Digits | ('a'..'f') | ('A'..'F')
-def charHex(c :Hex) :(0x0..0xf) as DeepFrozen:
-    "Lex a character into a hexadecimal integer.
-
-     The definition of this function should leave little room for doubt on its
-     behavior."
-
-    return switch (c):
-        match _ :Digits:
-            # 0x30 == '0'.asInteger()
-            c.asInteger() - 0x30
-        match _ :('a'..'f'):
-            # 0x57 - 0xa == 'a'.asInteger()
-            c.asInteger() - 0x57
-        match _ :('A'..'F'):
-            # 0x37 - 0xa == 'A'.asInteger()
-            c.asInteger() - 0x37
-
-
-def makeLexer(ej) as DeepFrozen:
-    def tokens := [].diverge()
-
-    return object lexer:
-        to next(stream):
-            def pos := stream.pos()
-
-            switch (stream.next()):
-                match ==' ':
-                    pass
-                match =='\n':
-                    pass
-                match =='{':
-                    tokens.push(['{', pos])
-                match =='}':
-                    tokens.push(['}', pos])
-                match ==',':
-                    tokens.push([',', pos])
-                match ==':':
-                    tokens.push([':', pos])
-                match =='[':
-                    tokens.push(['[', pos])
-                match ==']':
-                    tokens.push([']', pos])
-                match =='t':
-                    stream.require('r', ej)
-                    stream.require('u', ej)
-                    stream.require('e', ej)
-                    tokens.push([true, pos])
-                match =='f':
-                    stream.require('a', ej)
-                    stream.require('l', ej)
-                    stream.require('s', ej)
-                    stream.require('e', ej)
-                    tokens.push([false, pos])
-                match =='n':
-                    stream.require('u', ej)
-                    stream.require('l', ej)
-                    stream.require('l', ej)
-                    tokens.push([null, pos])
-
-                match =='"':
-                    lexer.nextString(stream)
-
-                match digit ? ("0123456789".contains(digit)):
-                    # Things I miss from C: do-while. ~ C.
-                    var i := digit.asInteger() - '0'.asInteger()
-                    while ("0123456789".contains(stream.peek())):
-                        i *= 10
-                        i += charDigit(stream.next())
-                    # We now check for the fraction and exponent. Either,
-                    # both, or neither.
-                    if (stream.accept('.')):
-                        # Fraction.
-                        var fraction := 0
-                        var divisor := 1
-                        while ("0123456789".contains(stream.peek())):
-                            divisor *= 10
-                            fraction *= 10
-                            fraction += charDigit(stream.next())
-                        # Scale the fraction.
-                        fraction /= divisor
-                        # And apply the fraction.
-                        i += fraction
-                    # Safe; the second branch only executes when the first
-                    # branch fails, and the stream is not advanced on failure.
-                    if (stream.accept('E') || stream.accept('e')):
-                        def negative :Bool := stream.accept('-')
-                        # If not negative, could be explicitly positive.
-                        if (!negative):
-                            stream.accept('+')
-                        # Y'know, maybe this should be a function or a method
-                        # on the stream...
-                        var exponent := charDigit(stream.next())
-                        while ("0123456789".contains(stream.peek())):
-                            exponent *= 10
-                            exponent += charDigit(stream.next())
-                        # Apply the negative flag.
-                        if (negative):
-                            exponent := -exponent
-                        # And now apply the exponent. Note that the RHS is an
-                        # integer; whether this results in an integer or
-                        # double is dependent on whether the LHS was converted
-                        # to a double by matching the fraction.
-                        i *= 10 ** exponent
-                    tokens.push([i, pos])
-
-                match c:
-                    def [line, column] := stream.pos()
-                    throw.eject(ej, `$line:$column: Unknown character $c`)
-
-        to nextString(stream):
-            def buf := [].diverge()
-            def pos := stream.pos()
-
-            while (true):
-                switch (stream.next()):
-                    match =='"':
-                        break
-                    match =='\\':
-                        switch (stream.next()):
-                            match =='u':
-                                # Unicode escape.
-                                var i := 0
-                                for _ in (0..!4):
-                                    def x :Hex exit ej := stream.next()
-                                    i *= 16
-                                    i += charHex(x)
-                                buf.push(('\x00' + i).asString())
-                            match via (specialDecodeChars.fetch) v:
-                                # Substituted from the table.
-                                buf.push(v)
-                            match c:
-                                throw.eject(ej, `Bad escape character $c`)
-                    match c:
-                        buf.push(c.asString())
-
-            tokens.push(["".join(buf), pos])
-
-        to getTokens():
-            return tokens.snapshot()
-
-        to lex(stream):
-            while (!stream.finished()):
-                lexer.next(stream)
-
-        to markValueHole(index):
-            tokens.push([[valueHoleMarker, index], [0, 0]])
-
-        to markPatternHole(index):
-            tokens.push([[patternHoleMarker, index], [0, 0]])
-
-
-def parse(var tokens :List, ej) as DeepFrozen:
-    var stack := [].diverge()
-    var key := null
-    var rv := null
-
-    def pushValue(value):
-        if (stack.size() == 0):
-            rv := value
-        else:
-            switch (stack.last()):
-                match [=="object", map, _]:
-                    map[key] := value
-                match [=="array", list, _]:
-                    list.push(value)
-
-    def tokenPos(token):
-        return def viaTokenOf(specimen, ej):
-            def [[==token, pos]] + rest exit ej := specimen
-            return [pos, rest]
-
-    def token(t):
-        return def viaTokenOf(specimen, ej):
-            def [[==t, _]] + rest exit ej := specimen
-            return rest
-
-    while (tokens.size() > 0):
-        switch (tokens):
-            match via (token(',')) rest:
-                tokens := rest
-            match via (token('{')) rest:
-                stack.push(["object", [].asMap().diverge(), key])
-                tokens := rest
-            match via (tokenPos('}')) [pos, rest]:
-                if (stack.size() == 0):
-                    def [l, c] := pos
-                    throw.eject(ej, `$l:$c: Stack underflow (unbalanced object)`)
-                def [=="object", obj, k] exit ej := stack.pop().snapshot()
-                key := k
-                pushValue(obj.snapshot())
-                tokens := rest
-            match via (token('[')) rest:
-                stack.push(["array", [].diverge(), key])
-                tokens := rest
-            match via (tokenPos(']')) [pos, rest]:
-                if (stack.size() == 0):
-                    def [l, c] := pos
-                    throw.eject(ej, `$l:$c: Stack underflow (unbalanced array)`)
-                def [=="array", arr, k] exit ej := stack.pop().snapshot()
-                key := k
-                pushValue(arr.snapshot())
-                tokens := rest
-            match [[k, _], [==':', _]] + rest:
-                key := k
-                tokens := rest
-            match [[v, _]] + rest:
-                pushValue(v)
-                key := null
-                tokens := rest
-    if (stack.size() != 0):
-        throw.eject(ej, "EOF: Nonempty stack (unclosed object/array)")
-    if (rv == null):
-        throw.eject(ej, "EOF: No object decoded (empty string)")
-
-    return rv
-
-
-def makeJSON(value) as DeepFrozen:
-    return object JSON:
-        to substitute(values):
-            if (values == []):
-                return JSON
-
-            return switch (value):
-                match [==valueHoleMarker, index]:
-                    makeJSON(values[index].getValue())
-                match l :List:
-                    makeJSON([for v in (l)
-                              makeJSON(v).substitute(values).getValue()])
-                match m :Map:
-                    makeJSON([for k => v in (m)
-                              k => makeJSON(v).substitute(values).getValue()])
-                match _:
-                    JSON
-
-        to _matchBind(values, specimen, ej):
-            def pattern := JSON.substitute(values)
-            def s := specimen.getValue()
-            var rv := [].asMap()
-
-            switch (value):
-                match [==patternHoleMarker, index]:
-                    rv := rv.with(index, specimen)
-                match ss :List:
-                    def l :List exit ej := value
-                    if (l.size() != ss.size()):
-                        throw.eject(ej, "Lists are not of the same size")
-                    var i := 0
-                    while (i < l.size()):
-                        def v := makeJSON(l[i])
-                        rv |= v._matchBind(values, makeJSON(ss[i]), ej)
-                        i += 1
-                match ss :Map:
-                    # Asymmetry in the patterns for clarity: Only drill down
-                    # into keys which are present in the pattern.
-                    def m :Map exit ej := s
-                    for k => v in (ss):
-                        rv |= makeJSON(v)._matchBind(values, makeJSON(m[k]), ej)
-                match ==value:
-                    pass
-                match _:
-                    pass
-
-            return rv
-
-        to matchBind(values, specimen, ej):
-            def matched := JSON._matchBind(values, specimen, ej)
-            def rv := [].diverge()
-
-            for k => v in (matched):
-                while (k >= rv.size()):
-                    rv.push(null)
-                rv[k] := v
-
-            return rv.snapshot()
-
-        to getValue():
-            return value
-
-
-object ::"json``" as DeepFrozen:
-    to valueMaker(pieces):
-        def lexer := makeLexer()
-
-        for piece in (pieces):
-            switch (piece):
-                match [==valueHoleMarker, index]:
-                    lexer.markValueHole(index)
-                match [==patternHoleMarker, index]:
-                    lexer.markPatternHole(index)
-                match _:
-                    def stream := makeStream(piece)
-                    lexer.lex(stream)
-
-        def parsed := parse(lexer.getTokens(), null)
-        return makeJSON(parsed)
-
-    to matchMaker(pieces):
-        return ::"json``".valueMaker(pieces)
-
-    to valueHole(index):
-        return [valueHoleMarker, index]
-
-    to patternHole(index):
-        return [patternHoleMarker, index]
+    def slicer := makeSlicer.fromString(s)
+    return value(slicer, ej)[0]
 
 
 object JSON as DeepFrozen:
@@ -399,10 +90,7 @@ object JSON as DeepFrozen:
 
     to decode(specimen, ej):
         def s :Str exit ej := specimen
-        def lexer := makeLexer(ej)
-        def stream := makeStream(s)
-        lexer.lex(stream)
-        return parse(lexer.getTokens(), ej)
+        return parse(s, ej)
 
     to encode(specimen, ej) :Str:
         return switch (specimen):
@@ -448,13 +136,19 @@ def decoderSamples := [
     # Yeah, these two tests really are supposed to be this precise. Any
     # imprecisions here should be due to implementation error, AFAICT.
     `{"pi":3.14}` => ["pi" => 3.14],
+    `{"nine":3e2}` => ["nine" => 300],
     `{"digits":0.7937000378463977}` => ["digits" => 0.7937000378463977],
     `{"x": null}` => ["x" => null],
 ]
 
 def testJSONDecode(assert):
     for specimen => value in (decoderSamples):
-        assert.equal(JSON.decode(specimen, null), value)
+        escape ej:
+            def result := JSON.decode(specimen, ej)
+            assert.equal(result, value)
+        catch problem:
+            traceln("Parser failure:", specimen, problem)
+            assert.fail(problem)
 
 def testJSONDecodeInvalid(assert):
     def specimens := [

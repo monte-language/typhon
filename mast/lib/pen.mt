@@ -92,6 +92,17 @@ def augment(parser) as DeepFrozen:
                 } catch _ { [null, s] }
             })
 
+        to multiply(count :Int):
+            return augment(def multiply(var s, ej) {
+                def cs := [].diverge()
+                for _ in (0..!count) {
+                    def [c, next] := parser(s, ej)
+                    cs.push(c)
+                    s := next
+                }
+                return [cs.snapshot(), s]
+            })
+
         to optional():
             return augmentedParser / pure(null)
 
@@ -189,49 +200,7 @@ def main(_argv) as DeepFrozen:
   }
 }
     `)
-    def ws := pk.satisfies(" \n".asSet().contains).zeroOrMore()
-    def e := (pk.equals('e') / pk.equals('E')) + (
-        pk.equals('+') / pk.equals('-')).optional()
-    def zero := '0'.asInteger()
-    def digit := pk.satisfies('0'..'9') % fn c { c.asInteger() - zero }
-    def digits := digit.oneOrMore() % fn ds {
-        var i :Int := 0
-        for d in (ds) { i := i * 10 + d }
-        i
-    }
-    def exp := e >> digits
-    def frac := pk.equals('.') >> digits
-    def int := (pk.equals('-') >> digits) % fn i { -i } / digits
-    def number := (int + frac.optional() + exp.optional()) % fn [[i, f], e] {
-        # XXX do floats or whatever
-        [i, f, e]
-    }
-    def plainChar(c) :Bool as DeepFrozen:
-        return c != '"' && c != '\\'
-    # XXX \u
-    def char := pk.satisfies(plainChar) / (pk.equals('\\') >> pk.mapping([
-        '"' => '"',
-        '\\' => '\\',
-        '/' => '/',
-        'b' => '\b',
-        'f' => '\f',
-        'n' => '\n',
-        'r' => '\r',
-        't' => '\t',
-    ]))
-    def quote := pk.equals('"')
-    def comma := ws >> pk.equals(',')
-    def string := (char.zeroOrMore() % _makeStr.fromChars).bracket(quote, quote)
-    def constant := (pk.string("true") >> pk.pure(true)) / (
-        pk.string("false") >> pk.pure(false)) / (pk.string("null") >> pk.pure(null))
-    def array
-    def obj
-    def value := ws >> (string / number / obj / array / constant)
-    def elements := value.joinedBy(comma)
-    bind array := (elements / pk.pure([])).bracket(pk.equals('['), ws >> pk.equals(']'))
-    def pair := ((ws >> string << ws << pk.equals(':')) + value)
-    def members := pair.joinedBy(comma) % _makeMap.fromPairs
-    bind obj := (members / pk.pure([].asMap())).bracket(pk.equals('{'), ws >> pk.equals('}'))
+    def value
     escape ej:
         traceln(`whoo`, value(s, ej))
     catch problem:
