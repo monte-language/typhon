@@ -13,7 +13,8 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def [VALUE_HOLE, PATTERN_HOLE] := [lex.valueHole(), lex.patternHole()]
     def _toks := [].diverge()
     while (true):
-         _toks.push(lex.next(__break, errPartial)[1])
+        def [[name, data], span] := lex.next(__break, errPartial)[1]
+        _toks.push([name, data, span])
     catch p:
         if (p != null):
             throw.eject(err, p)

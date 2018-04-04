@@ -4,7 +4,7 @@ exports ()
 
 def lex(s, => balanceBraces := true):
     def l := makeMonteLexer(s, "test")
-    def toks := [for [tag, data, _ ] in (l) [tag, data]]
+    def toks := [for [token, _ ] in (l) token]
     if (balanceBraces && (def err := l.getSyntaxError()) != null):
         throw(err)
     if (toks.size() > 0 && toks.last()[0] == "EOL"):

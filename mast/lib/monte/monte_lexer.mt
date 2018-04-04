@@ -27,7 +27,7 @@ def MONTE_KEYWORDS :DeepFrozen := RESERVED_WORDS | [
 ].asSet()
 
 def composite(name, data, span) as DeepFrozen:
-    return [name, data, span]
+    return [[name, data], span]
 
 # `input` is a list of characters and holes. It might not be a string.
 def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
@@ -784,7 +784,7 @@ def _makeMonteLexer(input, braceStack, var nestLevel, inputName) as DeepFrozen:
         if (cur =~ [hole ? ([VALUE_HOLE, PATTERN_HOLE].contains(hole)),
                     index :Int, _]):
             advance()
-            return [hole, index, spanAtPoint()]
+            return [[hole, index], spanAtPoint()]
 
         throw.eject(fail, [`Unrecognized character ${quote(cur)}`, spanAtPoint()])
 
