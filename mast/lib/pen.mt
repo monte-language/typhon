@@ -1,4 +1,4 @@
-exports (main, pk, makeSlicer)
+exports (pk, makeSlicer)
 
 # Parsing Ejectors are Neat. This is hopefully the penultimate parsing kit for
 # any Monte module, including prelude usage.
@@ -6,29 +6,51 @@ exports (main, pk, makeSlicer)
 # http://www.cs.nott.ac.uk/~pszgmh/pearl.pdf
 # http://vaibhavsagar.com/blog/2018/02/04/revisiting-monadic-parsing-haskell/
 
-def makeSlicer.fromString(s :Str, => sourceName :Str := "<parsed string>") as DeepFrozen:
-    def size :Int := s.size()
-    def makeStringSlicer(index :Int, line :Int, col :Int) as DeepFrozen:
-        def pos() as DeepFrozen:
-            return _makeSourceSpan(sourceName, true, line, col, line, col + 1)
+object makeSlicer as DeepFrozen:
+    to fromString(s :Str, => sourceName :Str := "<parsed string>"):
+        def size :Int := s.size()
+        def makeStringSlicer(index :Int, line :Int, col :Int) as DeepFrozen:
+            def pos() as DeepFrozen:
+                return _makeSourceSpan(sourceName, true, line, col, line, col + 1)
 
-        return object stringSlicer as DeepFrozen:
-            to _printOn(out):
-                out.print(`<string line=$line col=$col>`)
+            return object stringSlicer as DeepFrozen:
+                to _printOn(out):
+                    out.print(`<string line=$line col=$col>`)
 
-            to next(ej):
-                def i := index + 1
-                return if (i <= size) {
-                    def slicer := if (s[index] == '\n') {
-                        makeStringSlicer(i, line + 1, 1)
-                    } else { makeStringSlicer(i, line, col + 1) }
-                    [s[index], slicer]
-                } else { stringSlicer.eject(ej, `End of string`) }
+                to next(ej):
+                    def i := index + 1
+                    return if (i <= size) {
+                        def slicer := if (s[index] == '\n') {
+                            makeStringSlicer(i, line + 1, 1)
+                        } else { makeStringSlicer(i, line, col + 1) }
+                        [s[index], slicer]
+                    } else { stringSlicer.eject(ej, `End of string`) }
 
-            to eject(ej, reason :Str):
-                throw.eject(ej, [reason, pos()])
+                to eject(ej, reason :Str):
+                    throw.eject(ej, [reason, pos()])
 
-    return makeStringSlicer(0, 1, 1)
+        return makeStringSlicer(0, 1, 1)
+
+    to fromPairs(pairs :List):
+        def size :Int := pairs.size()
+        def makeListSlicer(index :Int) as DeepFrozen:
+            def [token, span] := pairs[index]
+
+            return object listSlicer as DeepFrozen:
+                to _printOn(out):
+                    out.print(`<list $index/$size>`)
+
+                to next(ej):
+                    def i := index + 1
+                    return if (i <= size) {
+                        def slicer := makeListSlicer(i)
+                        [token, slicer]
+                    } else { listSlicer.eject(ej, `End of token-list`) }
+
+                to eject(ej, reason :Str):
+                    throw.eject(ej, [reason, span])
+
+        return makeListSlicer(0)
 
 def concat([x, xs :List]) as DeepFrozen:
     return [x] + xs
@@ -183,27 +205,3 @@ object pk as DeepFrozen:
 
     to mapping(m :Map):
         return pk.satisfies(m.contains) % m.get
-
-def main(_argv) as DeepFrozen:
-    def s := makeSlicer.fromString(`
-{
-  "selska": [
-    "zirpu"
-  ],
-  "selcmi": {
-    "bangu": {
-      "ve tavla": {}
-    }
-  },
-  "du": {
-    "se vacri": "plini"
-  }
-}
-    `)
-    def value
-    escape ej:
-        traceln(`whoo`, value(s, ej))
-    catch problem:
-        traceln(`nope`, problem)
-    traceln(`yerp`)
-    return 0
