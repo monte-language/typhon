@@ -9,6 +9,7 @@ boot_objects = boot/lib/monte/monte_lexer.mast \
 	boot/montec.mast \
 	boot/lib/enum.mast \
 	boot/lib/iterators.mast \
+	boot/lib/pen.mast \
 	boot/lib/streams.mast \
 	boot/prelude.mast \
 	boot/prelude/ast_printer.mast \
@@ -61,7 +62,6 @@ mast: mast/lib/enum.mast \
 	mast/lib/json.mast \
 	mast/lib/marley.mast \
 	mast/lib/matrices.mast \
-	mast/lib/pen.mast \
 	mast/lib/pra.mast \
 	mast/lib/streams.mast \
 	mast/lib/uKanren.mast \
@@ -101,6 +101,7 @@ entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 	mast/lib/entropy/pcg.mast
 
 parsers: mast/lib/parsers/html.mast \
+	mast/lib/pen.mast \
 	mast/lib/parse.mast
 
 games: mast/games/mafia.mast

@@ -768,7 +768,9 @@ importIntoScope("prelude/b")
 
 # Parsing stack. These don't directly contribute to scope but are loaded by m.
 for module in ([
+    "lib/pen",
     "lib/monte/monte_lexer",
+    # parser needs pen
     "lib/monte/monte_parser",
     "lib/monte/monte_expander",
     "lib/monte/monte_optimizer",
