@@ -29,6 +29,9 @@ object makeSlicer as DeepFrozen:
                 to eject(ej, reason :Str):
                     throw.eject(ej, [reason, pos()])
 
+                to span():
+                    return pos()
+
         return makeStringSlicer(0, 1, 1)
 
     to fromPairs(pairs :List):
@@ -50,6 +53,9 @@ object makeSlicer as DeepFrozen:
                 to eject(ej, reason :Str):
                     throw.eject(ej, [reason, span])
 
+                to span():
+                    return span
+
         return makeListSlicer(0)
 
 def concat([x, xs :List]) as DeepFrozen:
@@ -69,7 +75,7 @@ def augment(parser) as DeepFrozen:
         to mod(reducer):
             return augment(def reduce(s1, ej) {
                 def [c, s2] := parser(s1, ej)
-                return [reducer(c), s2]
+                return [reducer(c, "span" => s2.span()), s2]
             })
 
         to add(other):
