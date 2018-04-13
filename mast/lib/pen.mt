@@ -58,6 +58,32 @@ object makeSlicer as DeepFrozen:
 
         return makeListSlicer(0)
 
+    to fromList(l :List):
+        def size :Int := l.size()
+        def makeListSlicer(index :Int) as DeepFrozen:
+            def token := l[index]
+            def pos() as DeepFrozen:
+                return _makeSourceSpan("<list>", false, 0, index, 0, index + 1)
+
+            return object listSlicer as DeepFrozen:
+                to _printOn(out):
+                    out.print(`<list $index/$size>`)
+
+                to next(ej):
+                    def i := index + 1
+                    return if (i <= size) {
+                        def slicer := makeListSlicer(i)
+                        [token, slicer]
+                    } else { listSlicer.eject(ej, `End of token-list`) }
+
+                to eject(ej, reason :Str):
+                    throw.eject(ej, [reason, pos()])
+
+                to span():
+                    return pos()
+
+        return makeListSlicer(0)
+
 def concat([x, xs :List]) as DeepFrozen:
     return [x] + xs
 
