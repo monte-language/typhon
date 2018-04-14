@@ -34,10 +34,10 @@ object makeSlicer as DeepFrozen:
 
         return makeStringSlicer(0, 1, 1)
 
-    to fromPairs(pairs :List):
+    to fromPairs(pairs :List[DeepFrozen]):
         def size :Int := pairs.size()
         def makeListSlicer(index :Int) as DeepFrozen:
-            def [token, span] := pairs[index]
+            def [token :DeepFrozen, span :DeepFrozen] := pairs[index]
 
             return object listSlicer as DeepFrozen:
                 to _printOn(out):
@@ -58,10 +58,10 @@ object makeSlicer as DeepFrozen:
 
         return makeListSlicer(0)
 
-    to fromList(l :List):
+    to fromList(l :List[DeepFrozen]):
         def size :Int := l.size()
         def makeListSlicer(index :Int) as DeepFrozen:
-            def token := l[index]
+            def token :DeepFrozen := l[index]
             def pos() as DeepFrozen:
                 return _makeSourceSpan("<list>", false, 0, index, 0, index + 1)
 
