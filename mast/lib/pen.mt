@@ -6,6 +6,16 @@ exports (pk, makeSlicer)
 # http://www.cs.nott.ac.uk/~pszgmh/pearl.pdf
 # http://vaibhavsagar.com/blog/2018/02/04/revisiting-monadic-parsing-haskell/
 
+object finishedSlicer as DeepFrozen:
+    to next(ej):
+        finishedSlicer.eject(ej, "end of stream")
+
+    to eject(ej, reason :Str):
+        throw.eject(ej, [reason, null])
+
+    to span():
+        return null
+
 object makeSlicer as DeepFrozen:
     to fromString(s :Str, => sourceName :Str := "<parsed string>"):
         def size :Int := s.size()
@@ -37,6 +47,9 @@ object makeSlicer as DeepFrozen:
     to fromPairs(pairs :List[DeepFrozen]):
         def size :Int := pairs.size()
         def makeListSlicer(index :Int) as DeepFrozen:
+            if (index >= size):
+                return finishedSlicer
+
             def [token :DeepFrozen, span :DeepFrozen] := pairs[index]
 
             return object listSlicer as DeepFrozen:
@@ -61,6 +74,9 @@ object makeSlicer as DeepFrozen:
     to fromList(l :List[DeepFrozen]):
         def size :Int := l.size()
         def makeListSlicer(index :Int) as DeepFrozen:
+            if (index >= size):
+                return finishedSlicer
+
             def token :DeepFrozen := l[index]
             def pos() as DeepFrozen:
                 return _makeSourceSpan("<list>", false, 0, index, 0, index + 1)
@@ -198,6 +214,9 @@ def augment(parser) as DeepFrozen:
         to bracket(bra, ket):
             return bra >> augmentedParser << ket
 
+def done(slicer) :Bool as DeepFrozen:
+    return escape ej { slicer.next(ej); false } catch _ { true }
+
 object pk as DeepFrozen:
     "A parser kit."
 
@@ -237,3 +256,15 @@ object pk as DeepFrozen:
 
     to mapping(m :Map):
         return pk.satisfies(m.contains) % m.get
+
+    to recurse(parser):
+        return augment(def recurse(s, ej) {
+            def [items :List, next] exit ej := s.next(ej)
+            def [rv, tail] exit ej := parser(makeSlicer.fromList(items), ej)
+            # If the tail isn't empty, then we didn't finish the parse.
+            escape isEmpty {
+                def [extra, _] := tail.next(isEmpty)
+                throw.eject(ej, `extra token $extra at the end of the list`)
+            }
+            return [rv, next]
+        })
