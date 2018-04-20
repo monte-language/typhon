@@ -217,7 +217,7 @@ def opsToCallbacks(originalOpList):
 
 
 @macros.block
-def io(tree, target, gen_sym, moduleGlobals, toEmit, **kw):
+def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
     """
     RPython doesn't allow many things that are convenient in Python, such as
     nested functions, and furthermore its type checker is very restrictive.
@@ -247,28 +247,87 @@ def io(tree, target, gen_sym, moduleGlobals, toEmit, **kw):
     `except object as err:` since the macro implementation ignores the type
     normally used for matching.
     """
-    firstCallback = nextCallback = gen_sym("iostart_callback")
+
+    None_ = Name("None", Load())
     stateClassName = gen_sym("State")
-    FutureCtx_ = gen_sym("FutureCtx")
-    OK_ = gen_sym("Ok")
-    Err_ = gen_sym("Err")
+    FutureCtx_ = importNames["FutureCtx"]
+    OK_ = importNames["OK"]
+    ERR_ = importNames["ERR"]
+    self_ = gen_sym("self")
+    state = gen_sym("state")
+    result = gen_sym("result")
+    status = gen_sym("status")
+    successValue = gen_sym("successValue")
+    failValue = gen_sym("failureValue")
     freeNames = []
     boundNames = {}
-    topLine = None
-    None_ = Name("None", Load())
-    nextCallbackBase = Name("object", Load())
-    successSym = None
-    failSym = None
-    toEmit.append(ImportFrom("typhon.futures", [alias("FutureCtx", FutureCtx_),
-                                                alias("Ok", OK_),
-                                                alias("Err", Err_)],
-                             0))
-    emittedCallbacks = [None]
-    failureTargets = [None]
-    def emitCallbackClass(callbackBody):
-        self_ = gen_sym("self")
-        state = gen_sym("state")
-        result = gen_sym("result")
+
+    if not toEmit:
+        toEmit.append()
+
+
+    ops = buildOperationsTable(tree)
+    initialState, callbacks = opsToCallbacks(ops)
+    boundNames.update(initialState)
+    callbackNames = [gen_sym("ioCallback") for _ in callbacks]
+    for callbackName, cb in zip(callbackNames, callbacks):
+        if cb.successName:
+            successArm = [Assign([Attribute(Name(state, Load()),
+                                            cb.successName, Store())],
+                                 Name(successValue, Load()))]
+            boundNames.setdefault(cb.successName, None_)
+        else:
+            successArm = []
+        if cb.successExpr:
+            if cb.successIndex is not None:
+                successCb = Name(callbackNames[cb.successIndex], Load())
+            else:
+                successCb = None_
+            successArm.append(Expr(Call(Attribute(
+                rewriteAsCallback(copy.deepcopy(cb.successExpr), state,
+                                  moduleGlobals, boundNames, freeNames),
+                "run", Load()),
+                                        [Name(state, Load()),
+                                         successCb], [],
+                                        None, None)))
+        if cb.failExpr:
+            if cb.failName:
+                failArm = [Assign([Attribute(Name(state, Load()),
+                                             cb.failName, Store())],
+                                  Name(failValue, Load()))]
+                boundNames.setdefault(cb.failName, None_)
+            else:
+                failArm = []
+            if cb.failIndex is not None:
+                failCb = Name(callbackNames[cb.failIndex], Load())
+            else:
+                failCb = None_
+            failArm.append(Expr(Call(Attribute(
+                rewriteAsCallback(copy.deepcopy(cb.failExpr), state,
+                                  moduleGlobals, boundNames,
+                                  freeNames),
+                "run", Load()),
+                                     [Name(state, Load()),
+                                      failCb], [],
+                                     None, None)))
+        finalThrow = Raise(Call(Name('RuntimeError', Load()),
+                                [Str('unexpected failure in io '
+                                     'callback')],
+                                [], None, None), None, None)
+        failStmt = If(Compare(Name(status, Load()), [Eq()],
+                              [Name(ERR_, Load())]),
+                      failArm,
+                      [finalThrow]) if cb.failExpr else finalThrow
+        successStmt = If(Compare(Name(status, Load()), [Eq()],
+                                 [Name(OK_, Load())]),
+                         successArm,
+                         [failStmt]) if cb.successExpr else failStmt
+        callbackBody = [Assign([Tuple([Name(status, Store()),
+                                       Name(successValue, Store()),
+                                       Name(failValue, Store())], Store())],
+                               Name(result, Load())),
+                        successStmt]
+
         callbackClassName = callbackName + "_Class"
         callbackMethod = FunctionDef("do",
                                      arguments(
@@ -279,70 +338,20 @@ def io(tree, target, gen_sym, moduleGlobals, toEmit, **kw):
                                      callbackBody,
                                      [])
         callbackClass = ClassDef(callbackClassName,
-                                 [callbackBase],
+                                 [cb.base],
                                  [callbackMethod], [])
-        emit(callbackClass)
+        toEmit.append(callbackClass)
         callbackInstance = Assign([Name(callbackName, Store())],
-                                  Call(Name(callbackClassName, Load()), [], [], None, None))
-        emit(callbackInstance)
+                                  Call(Name(callbackClassName, Load()), [], [],
+                                       None, None))
+        toEmit.append(callbackInstance)
 
-    def emit(line):
-        emittedCallbacks.append(generate(line, emittedCallbacks[-1],
-                                         failureTargets[-1]))
-    def generate(line, successExpr, failExpr):
-        expr = line.value
-        successSym = gen_sym("value")
-        failSym = gen_sym("err")
-        if successCallback or failCallback:
-            status = gen_sym("status")
-            collectResult = [Assign([Tuple([Name(status, Store()),
-                                            Name(successSym, Store()),
-                                            Name(failSym, Store())], Store())],
-                                    Name(result, Load())),]
-                             # Assign([Attribute(Name(state, Load()),
-                             #                   successSym, Store())],
-                             #        Name(successName, Load()))]
-        else:
-            collectResult = []
 
-        callbackBody = Expr(Call(Attribute(
-            rewriteAsCallback(copy.deepcopy(expr), state, moduleGlobals,
-                              boundNames, freeNames), "run", Load()),
-                            [Name(state, Load()), Name(successCallback, Load())], [], None, None))
-        
-
-        if isinstance(expr, Num) and successName:
-            boundNames[successName] = expr
-            continue
-        assert isinstance(expr, Call), "io block line must be a call to an io operation"
-        opname = expr.func
-        opnameStr = opname.id if isinstance(opname, Name) else None
-        callbackName = nextCallback
-        callbackBase = nextCallbackBase
-        if (i + 1) == len(tree):
-            nextCallback = "None"
-        else:
-            successSym = gen_sym(successName or "value")
-            errSym = gen_sym(failName or "err")
-            nextCallback = gen_sym(opnameStr or "io")
-            nextCallbackBase = Attribute(expr.func, "callbackType", Load()) #if  else Name("object", Load())
-
-        if isinstance(line, Assign):
-            # XXX could support tuple assignment here if we wanted
-            assert isinstance(line.targets[0], Name), ("assignment in io blocks"
-                                                       " must be to single names")
-            targetName = line.targets[0].id
-
-        else:
-            targetName = None
-    for line in reversed(tree):
-        emit(line)
-        
     createState = Call(Name(stateClassName, Load()),
                        [Name(n, Load()) for n in freeNames], [], None, None)
     topLine = copy_location(Expr(
-        Call(Attribute(Name(firstCallback, Load()), "do", Load()),
-             [createState, Tuple([Name(OK_, Load()), None_, None_], Load())],
+        Call(Attribute(ops[-1].expr, "run", Load()),
+             [createState, Name(callbackNames[0], Load())],
              [], None, None)),
         tree[0])
     stateInit = FunctionDef(
@@ -355,13 +364,22 @@ def io(tree, target, gen_sym, moduleGlobals, toEmit, **kw):
     stateClass = ClassDef(stateClassName,
                           [Name(FutureCtx_, Load())],
                           [stateInit], [])
-    emit(stateClass)
+    toEmit.append(stateClass)
     return [fix_missing_locations(topLine)]
 
+@injected_vars.append
+def importNames(tree, src, gen_sym, **kw):
+    return {
+        "FutureCtx": gen_sym("FutureCtx"),
+        "OK": gen_sym("OK"),
+        "ERR": gen_sym("ERR")
+    }
 
 @injected_vars.append
-def toEmit(tree, src, **kw):
-    return []
+def toEmit(tree, src, importNames, **kw):
+    return [ImportFrom("typhon.futures",
+                       [alias(k, v) for k, v in importNames.items()],
+                       0)]
 
 
 @injected_vars.append

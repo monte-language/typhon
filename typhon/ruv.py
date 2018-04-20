@@ -812,6 +812,47 @@ class magic_fsRead(object):
                    magic_fsReadCB)
 
 
+fsWrite_erase, fsWrite_unerase = new_erasing_pair("fsWrite")
+
+
+class FSWriteFutureCallback(object):
+    pass
+
+
+def magic_fsWriteCB(fs):
+    state, v = unstashFS2(fs)
+    wb = fsWrite_unerase(v)
+    size = intmask(fs.c_result)
+    fsDiscard(fs)
+    wb.deallocate()
+    if size >= 0:
+        wb.k.do(state, Ok(size))
+    else:
+        wb.k.do(state, (ERR, 0, formatError(size).decode("utf-8")))
+
+
+class WriteBuf(scopedBufs):
+    def __init__(self, data, k):
+        self.data = [data]
+        self.k = k
+        self.scoping = lltype.scoped_alloc(rffi.CArray(buf_t), len(self.data))
+
+
+class magic_fsWrite(object):
+    def __init__(self, vat, fd, data):
+        self.vat = vat
+        self.fd = fd
+        self.data = data
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        wb = WriteBuf(self.data, k)
+        stashFS2(fs, (state, fsWrite_erase(wb)))
+        bufs = wb.allocate()
+        fsWrite(self.vat.uv_loop, fs, self.fd, bufs, 1, -1,
+                magic_fsWriteCB)
+
+
 fsOpen_erase, fsOpen_unerase = new_erasing_pair("fsOpen")
 
 
@@ -871,6 +912,39 @@ class magic_fsClose(object):
         fs = alloc_fs()
         stashFS2(fs, (state, fsClose_erase(k)))
         fsClose(self.vat.uv_loop, fs, self.f, magic_fsCloseCB)
+
+
+fsRename_erase, fsRename_unerase = new_erasing_pair("fsRename")
+
+
+class FSRenameFutureCallback(object):
+    pass
+
+class magic_fsRename(object):
+    callbackType = FSRenameFutureCallback
+    def __init__(self, vat, src, dest):
+        self.vat = vat
+        self.src = src
+        self.dest = dest
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        stashFS2(fs, (state, fsRename_erase(k)))
+        fsRename(self.vat.uv_loop, fs, self.src, self.dest, magic_fsRenameCB)
+
+
+def magic_fsRenameCB(fs):
+    success = intmask(fs.c_result)
+    state, v = unstashFS2(fs)
+    k = fsRename_unerase(v)
+    fsDiscard(fs)
+
+    if success < 0:
+        msg = formatError(success).decode("utf-8")
+        k.do(state, (ERR, None, msg))
+    else:
+        k.do(state, Ok(None))
+    fsDiscard(fs)
 
 
 def alloc_fs():

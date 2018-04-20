@@ -1,4 +1,4 @@
-{stdenv, fetchzip, fetchFromGitHub, lib, libsodium, libuv, libffi, pkgconfig, python27, python27Packages, vmSrc, buildJIT}:
+{stdenv, fetchzip, fetchFromGitHub, lib, libsodium, libuv, libffi, pkgconfig, pypy, pypyPackages, vmSrc, buildJIT}:
 
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let
@@ -6,7 +6,7 @@ let
     url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.10.0-src.tar.bz2";
     sha256 = "11l1wpk2rk8m44jiwzvc8rqcbpnv3g348a2z017z2dhqfsc7a6af";
   };
-  macropy = python27Packages.buildPythonPackage rec {
+  macropy = pypyPackages.buildPythonPackage rec {
     pname = "macropy";
     version = "1.0.4";
     name = "${pname}-${version}";
@@ -25,8 +25,8 @@ stdenv.mkDerivation {
 
   src = vmSrc;
 
-  buildInputs = [ python27
-                  python27Packages.py python27Packages.pytest python27Packages.twisted
+  buildInputs = [ pypy
+                  pypyPackages.py pypyPackages.pytest pypyPackages.twisted
                   macropy pypySrc
                   pkgconfig libffi libuv libsodium ];
   propagatedBuildInputs = [ libffi libuv libsodium ];
@@ -56,7 +56,7 @@ stdenv.mkDerivation {
     # Run the tests.
     trial typhon
     # Do the actual translation.
-    ${python27}/bin/python -mrpython ${optLevel} main.py
+    ${pypy}/bin/pypy -mrpython ${optLevel} main.py
     '';
 
   # We do still have the check phase, but we do the untranslated test before

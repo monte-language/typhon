@@ -176,24 +176,24 @@ def readLoopCore(state, data):
 class _State1(FutureCtx):
     def __init__(_1, vat, future, buf, pieces, pos, outerState, k):
         _1.vat = vat
-        _1.future = future
+        _1.future1 = future
         _1.buf = buf
         _1.pieces = pieces
         _1.pos = pos
         _1.outerState = outerState
-        _1.k = k
+        _1.k1 = k
 
 
 class ReadLoop_K0(ruv.FSReadFutureCallback):
     def do(self, state, result):
         (inStatus, data, inErr) = result
         if inStatus != OK:
-            return state.k.do(state.outerState, result)
+            return state.k1.do(state.outerState, result)
         (status, output, err) = readLoopCore(state, data)
         if status == LOOP_CONTINUE:
-            state.future.run(state, readLoop_k0)
+            state.future1.run(state, readLoop_k0)
         elif status == LOOP_BREAK:
-            state.k.do(state.outerState, Ok(output))
+            state.k1.do(state.outerState, Ok(output))
         else:
             raise ValueError(status)
 
@@ -201,7 +201,7 @@ class ReadLoop_K0(ruv.FSReadFutureCallback):
 readLoop_k0 = ReadLoop_K0()
 
 
-class readLoop(ruv.FSReadFutureCallback):
+class readLoop(object):
     callbackType = ruv.FSReadFutureCallback
 
     def __init__(self, f, buf):
@@ -217,7 +217,7 @@ class readLoop(ruv.FSReadFutureCallback):
 class _State2(FutureCtx):
     def __init__(_2, vat, future, outerState, k):
         _2.vat = vat
-        _2.future = future
+        _2.future2 = future
         _2.outerState = outerState
         _2.k = k
 
@@ -230,22 +230,22 @@ def writeLoopCore(state, size):
         return Break(None)
 
 
-class WriteLoop_K0(object):
+class WriteLoop_K0(ruv.FSWriteFutureCallback):
     def do(self, state, result):
         (inStatus, size, inErr) = result
         if inStatus != OK:
             state.k.do(state.outerState, result)
         state.data = state.data[size:]
         if state.data:
-            state.future.run(state, writeLoop_k0)
+            state.future2.run(state, writeLoop_k0)
         else:
-            state.k.do(state.outerState, Ok(None))
+            state.k.do(state.outerState, Ok(0))
 
 
 writeLoop_k0 = WriteLoop_K0()
 
 
-class writeLoop(ruv.FSWriteFutureCallback):
+class writeLoop(object):
     callbackType = ruv.FSWriteFutureCallback
 
     def __init__(self, f, data):
