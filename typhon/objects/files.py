@@ -224,7 +224,7 @@ class _State2(FutureCtx):
 
 def writeLoopCore(state, size):
 
-    if state.data:
+    if state.future2.data:
         return Continue()
     else:
         return Break(None)
@@ -235,8 +235,8 @@ class WriteLoop_K0(ruv.FSWriteFutureCallback):
         (inStatus, size, inErr) = result
         if inStatus != OK:
             state.k.do(state.outerState, result)
-        state.data = state.data[size:]
-        if state.data:
+        state.future2.data = state.future2.data[size:]
+        if state.future2.data:
             state.future2.run(state, writeLoop_k0)
         else:
             state.k.do(state.outerState, Ok(0))
@@ -347,7 +347,7 @@ class FileResource(Object):
                     smash(r, StrObject(u"libuv error: %s" % err))
                 else:
                     ruv.magic_fsClose(vat, f)
-                    ruv.magic_fsRename(vat, self.asBytes(), sibling.asBytes())
+                    ruv.magic_fsRename(vat, path, self.asBytes())
                     resolve(r, NullObject)
         return p
 

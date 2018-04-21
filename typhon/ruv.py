@@ -938,13 +938,12 @@ def magic_fsRenameCB(fs):
     state, v = unstashFS2(fs)
     k = fsRename_unerase(v)
     fsDiscard(fs)
-
     if success < 0:
         msg = formatError(success).decode("utf-8")
         k.do(state, (ERR, None, msg))
     else:
         k.do(state, Ok(None))
-    fsDiscard(fs)
+
 
 
 def alloc_fs():
