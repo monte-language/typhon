@@ -861,12 +861,11 @@ def magic_fsOpenCB(fs):
     state, v = unstashFS2(fs)
     k = fsOpen_unerase(v)
     fsDiscard(fs)
-    with scopedVat(state.vat):
-        if fd < 0:
-            msg = formatError(fd).decode("utf-8")
-            k.do(state, (ERR, 0, msg))
-        else:
-            k.do(state, Ok(fd))
+    if fd < 0:
+        msg = formatError(fd).decode("utf-8")
+        k.do(state, (ERR, 0, msg))
+    else:
+        k.do(state, Ok(fd))
 
 
 class FSOpenFutureCallback(object):

@@ -56,114 +56,6 @@ class FileUnpauser(Object):
             self.fount = None
 
 
-def renameCB(fs):
-    try:
-        success = intmask(fs.c_result)
-        vat, r = ruv.unstashFS(fs)
-        if success < 0:
-            msg = ruv.formatError(success).decode("utf-8")
-            r.smash(StrObject(u"Couldn't rename file: %s" % msg))
-        else:
-            r.resolve(NullObject)
-        ruv.fsDiscard(fs)
-    except:
-        print "Exception in renameCB"
-
-
-class SetContents(Object):
-
-    pos = 0
-
-    def __init__(self, vat, data, resolver, src, dest):
-        self.vat = vat
-        self.data = data
-        self.resolver = resolver
-        self.src = src
-        self.dest = dest
-
-    def fail(self, reason):
-        self.resolver.smash(StrObject(reason))
-
-    def queueWrite(self):
-        fs = ruv.alloc_fs()
-        sb = ruv.scopedBufs([self.data], self)
-        bufs = sb.allocate()
-        ruv.stashFS(fs, (self.vat, sb))
-        ruv.fsWrite(self.vat.uv_loop, fs, self.fd, bufs,
-                    1, -1, writeSetContentsCB)
-
-    def startWriting(self, fd):
-        self.fd = fd
-        self.queueWrite()
-
-    def written(self, size):
-        self.pos += size
-        self.data = self.data[size:]
-        if self.data:
-            self.queueWrite()
-        else:
-            # Finished writing; let's move on to the rename.
-            fs = ruv.alloc_fs()
-            ruv.stashFS(fs, (self.vat, self))
-            ruv.fsClose(self.vat.uv_loop, fs, self.fd,
-                        closeSetContentsCB)
-
-    def rename(self):
-        # And issuing the rename is surprisingly straightforward.
-        p = self.src.rename(self.dest.asBytes())
-        self.resolver.resolve(p)
-
-
-def openSetContentsCB(fs):
-    try:
-        fd = intmask(fs.c_result)
-        vat, sc = ruv.unstashFS(fs)
-        assert isinstance(sc, SetContents)
-        if fd < 0:
-            msg = ruv.formatError(fd).decode("utf-8")
-            sc.fail(u"Couldn't open file fount: %s" % msg)
-        else:
-            sc.startWriting(fd)
-        ruv.fsDiscard(fs)
-    except:
-        print "Exception in openSetContentsCB"
-
-
-def writeSetContentsCB(fs):
-    try:
-        vat, sb = ruv.unstashFS(fs)
-        sc = sb.obj
-        assert isinstance(sc, SetContents)
-        size = intmask(fs.c_result)
-        if size >= 0:
-            sc.written(size)
-        else:
-            msg = ruv.formatError(size).decode("utf-8")
-            sc.fail(u"libuv error: %s" % msg)
-        ruv.fsDiscard(fs)
-        sb.deallocate()
-    except:
-        print "Exception in writeSetContentsCB"
-
-
-def closeSetContentsCB(fs):
-    try:
-        vat, sc = ruv.unstashFS(fs)
-        # Need to scope vat here.
-        with scopedVat(vat):
-            assert isinstance(sc, SetContents)
-            size = intmask(fs.c_result)
-            if size < 0:
-                msg = ruv.formatError(size).decode("utf-8")
-                sc.fail(u"libuv error: %s" % msg)
-            else:
-                # Success.
-                sc.rename()
-        ruv.fsDiscard(fs)
-    except:
-        print "Exception in closeSetContentsCB"
-
-
 def readLoopCore(state, data):
     if data == "":
         return Break("".join(state.pieces))
@@ -280,18 +172,6 @@ class FileResource(Object):
     def asBytes(self):
         return "/".join(self.segments)
 
-
-    def rename(self, dest):
-        p, r = makePromise()
-        vat = currentVat.get()
-        uv_loop = vat.uv_loop
-        fs = ruv.alloc_fs()
-
-        src = self.asBytes()
-        ruv.stashFS(fs, (vat, r))
-        ruv.fsRename(uv_loop, fs, src, dest, renameCB)
-        return p
-
     def sibling(self, segment):
         return FileResource(self.segments[:-1] + [segment])
 
@@ -351,11 +231,21 @@ class FileResource(Object):
                     resolve(r, NullObject)
         return p
 
-    @method("Any", "Any", _verb="rename")
-    def _rename(self, fr):
+    @method("Any", "Any")
+    def rename(self, fr):
         if not isinstance(fr, FileResource):
             raise userError(u"rename/1: Must be file resource")
-        return self.rename(fr.asBytes())
+        dest = fr.asBytes()
+        p, r = makePromise()
+        vat = currentVat.get()
+        with io:
+            try:
+                ruv.magic_fsRename(vat, self.asBytes(), dest)
+            except object as err:
+                smash(r, StrObject(u"Couldn't rename file: %s" % err))
+            else:
+                resolve(r, NullObject)
+        return p
 
     @method("Any", "Str", _verb="sibling")
     def _sibling(self, name):
