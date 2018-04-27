@@ -68,17 +68,17 @@ def rewriteAsCallback(expr, state, globalNames, boundNames, freeNames):
     return expr
 
 
-Op = namedtuple('Op', ['expr', 'successIndex', 'failIndex',
+Op = namedtuple('Op', ['expr', 'successOp', 'failOp',
                        'successName', 'failName'])
 
 
-def buildOperationsTable(lines):
+def buildOperationsDAG(lines):
     """
     Dissects control and data flow to prepare for generating callbacks.
     Returns a list of tuples, in reverse order of execution, containing:
      * a single expression
-     * Relative address (or None) for the next operation on success
-     * Relative address (or None) for the next operation on failure
+     * next operation on success
+     * next operation on failure
      * Name to bind (or None) on success
      * Name to bind (or None) on failure
     """
@@ -88,67 +88,63 @@ def buildOperationsTable(lines):
         if isinstance(line, Assign):
             assert isinstance(line.targets[0], Name), (
                 "assignment in io blocks must be to single names")
-            flowList.append(Op(line.value, successTarget if flowList else None,
+            flowList.append(Op(line.value, successTarget,
                                failTarget, line.targets[0].id, failName))
         elif isinstance(line, Expr):
-            flowList.append(Op(line.value, successTarget if flowList else None,
+            flowList.append(Op(line.value, successTarget,
                                failTarget, None, failName))
         elif isinstance(line, TryExcept):
             assert len(line.handlers) == 1, (
                 "try statements in io blocks must "
                 "have exactly one except block")
-            # jump target at end of else
-            exitPoint = len(flowList)
             if line.orelse:
                 # process else block in reverse order
                 collectLine(line.orelse[-1], failTarget, failName,
                             successTarget)
                 for elseline in reversed(line.orelse[:-1]):
-                    collectLine(elseline, failTarget, failName, -1)
-            # jump target at beginning of else
-            elsePoint = len(flowList)
-            exName = line.handlers[0].name.id
-            excSuccessTarget = (exitPoint - len(flowList) + successTarget
-                                if exitPoint else None)
-            excFailTarget = (exitPoint - len(flowList) + failTarget
-                             if failTarget else None)
-            # process except block in reverse order
-            collectLine(line.handlers[0].body[-1], excFailTarget, failName,
-                        excSuccessTarget)
-            for excline in reversed(line.handlers[0].body[:-1]):
-                excFailTarget = (exitPoint - len(flowList) + failTarget
-                                 if failTarget else None)
-                collectLine(excline, excFailTarget, failName, -1)
-            #jump target at beginning of catch block
-            catchPoint = len(flowList)
-            if line.orelse:
-                # jump into else when done
-                trySuccessTarget = elsePoint - len(flowList) - 1
+                    collectLine(elseline, failTarget, failName, flowList[-1])
+                # jump target at beginning of else
+                elseTarget = flowList[-1]
             else:
-                # jump to end of except when done
-                trySuccessTarget = (exitPoint - len(flowList) + successTarget
-                                    if exitPoint else None)
+                elseTarget = successTarget
+            exName = line.handlers[0].name.id
+            # process except block in reverse order
+            collectLine(line.handlers[0].body[-1], failTarget, failName,
+                        successTarget)
+            for excline in reversed(line.handlers[0].body[:-1]):
+                collectLine(excline, failTarget, failName, flowList[-1])
+            catchTarget = flowList[-1]
             # process try block in reverse order
-            collectLine(line.body[-1], -1, exName, trySuccessTarget)
+            collectLine(line.body[-1], catchTarget, exName, elseTarget)
             for tryline in reversed(line.body[:-1]):
-                collectLine(tryline, catchPoint - len(flowList) - 1,
-                            exName, -1)
+                collectLine(tryline, catchTarget,
+                            exName, flowList[-1])
         else:
             raise SyntaxError("Expected assign statement, call, or try/except "
                               "statement in io block, not " +
                               line.__class__.__name__)
 
     for line in reversed(lines):
-        collectLine(line, None, None, -1)
+        collectLine(line, None, None, flowList[-1] if flowList else None)
     return flowList
 
 
-CallbackInfo = namedtuple(
-    'CallbackInfo', ['base', 'successName', 'successExpr', 'successIndex',
-                     'failName', 'failExpr', 'failIndex'])
+class CallbackInfo(object):
+    """
+    Not a namedtuple because callback links need to be patched after creation.
+    """
+    def __init__(self, base, successName, successExpr, failName, failExpr):
+        self.base = base
+        self.successName = successName
+        self.successExpr = successExpr
+        self.failName = failName
+        self.failExpr = failExpr
+        self.successCB = None
+        self.failCB = None
+        self.functionName = None
 
 
-def opsToCallbacks(originalOpList):
+def opsToCallbacks(ops):
     """
     Convert a list of ops into callbacks.
 
@@ -162,57 +158,48 @@ def opsToCallbacks(originalOpList):
      * Expression to execute upon failure
      * Callback number to pass control to on error
     """
-    ops = []
     initialState = {}
     # collect initial constants and remove from ops list
     while True:
-        oo = originalOpList[-1]
+        oo = ops[-1]
         if isinstance(oo.expr, (Num, Str)) and oo.successName:
             initialState[oo.successName] = oo.expr
-            del originalOpList[-1]
+            del ops[-1]
         else:
             break
 
-    # Convert relative addresses to absolute addresses
-
-    ops = [op._replace(successIndex=i - op.successIndex
-                       if op.successIndex is not None else None,
-                       failIndex=i - op.failIndex
-                       if op.failIndex is not None else None)
-           for i, op in enumerate(reversed(originalOpList))]
+    ops = ops[::-1]
     successNeedsPatching = {}
     failNeedsPatching = {}
     callbacks = []
-    for expr, successIndex, failIndex, successName, failName in ops:
+    for expr, successOp, failOp, successName, failName in ops:
         successExpr = None
         failExpr = None
-        if successIndex:
+        if successOp:
             # Look at successor op and put its expr in this callback
-            successExpr = ops[successIndex].expr
-            if ops[successIndex].successIndex or ops[successIndex].failIndex:
+            successExpr = successOp.expr
+            if successOp.successOp or successOp.failOp:
                 # Fix up this callback later with address of callback following
                 # this expr (if any)
                 successNeedsPatching.setdefault(successExpr, set()).add(
                     len(callbacks))
-        if failIndex:
-            failExpr = ops[failIndex].expr
-            if ops[failIndex].successIndex or ops[failIndex].failIndex:
+        if failOp:
+            failExpr = failOp.expr
+            if failOp.successOp or failOp.failOp:
                 failNeedsPatching.setdefault(failExpr, set()).add(
                     len(callbacks))
         if successExpr or failExpr:
             callbacks.append(CallbackInfo(
                 Attribute(expr.func, "callbackType", Load()),
-                successName, successExpr, None,
-                failName, failExpr, None))
+                successName, successExpr,
+                failName, failExpr))
 
         successPatchTargets = successNeedsPatching.get(expr, ())
         for i in successPatchTargets:
-            callbacks[i] = callbacks[i]._replace(
-                successIndex=len(callbacks) - 1)
+            callbacks[i].successCB = callbacks[-1]
         failPatchTargets = failNeedsPatching.get(expr, ())
         for i in failPatchTargets:
-            callbacks[i] = callbacks[i]._replace(
-                failIndex=len(callbacks) - 1)
+            callbacks[i].failCB = callbacks[-1]
     return initialState, callbacks
 
 
@@ -265,12 +252,12 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
     if not toEmit:
         toEmit.append()
 
-
-    ops = buildOperationsTable(tree)
+    ops = buildOperationsDAG(tree)
     initialState, callbacks = opsToCallbacks(ops)
     boundNames.update(initialState)
-    callbackNames = [gen_sym("ioCallback") for _ in callbacks]
-    for callbackName, cb in zip(callbackNames, callbacks):
+    for cb in callbacks:
+        cb.functionName = gen_sym("ioCallback")
+    for cb in callbacks:
         if cb.successName:
             successArm = [Assign([Attribute(Name(state, Load()),
                                             cb.successName, Store())],
@@ -279,8 +266,8 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
         else:
             successArm = []
         if cb.successExpr:
-            if cb.successIndex is not None:
-                successCb = Name(callbackNames[cb.successIndex], Load())
+            if cb.successCB is not None:
+                successCb = Name(cb.successCB.functionName, Load())
             else:
                 successCb = None_
             successArm.append(Expr(Call(Attribute(
@@ -298,8 +285,8 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
                 boundNames.setdefault(cb.failName, None_)
             else:
                 failArm = []
-            if cb.failIndex is not None:
-                failCb = Name(callbackNames[cb.failIndex], Load())
+            if cb.failCB is not None:
+                failCb = Name(cb.failCB.functionName, Load())
             else:
                 failCb = None_
             failArm.append(Expr(Call(Attribute(
@@ -328,7 +315,7 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
                                Name(result, Load())),
                         successStmt]
 
-        callbackClassName = callbackName + "_Class"
+        callbackClassName = cb.functionName + "_Class"
         callbackMethod = FunctionDef("do",
                                      arguments(
                                          [Name(self_, Store()),
@@ -341,17 +328,16 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
                                  [cb.base],
                                  [callbackMethod], [])
         toEmit.append(callbackClass)
-        callbackInstance = Assign([Name(callbackName, Store())],
+        callbackInstance = Assign([Name(cb.functionName, Store())],
                                   Call(Name(callbackClassName, Load()), [], [],
                                        None, None))
         toEmit.append(callbackInstance)
-
 
     createState = Call(Name(stateClassName, Load()),
                        [Name(n, Load()) for n in freeNames], [], None, None)
     topLine = copy_location(Expr(
         Call(Attribute(ops[-1].expr, "run", Load()),
-             [createState, Name(callbackNames[0], Load())],
+             [createState, Name(callbacks[0].functionName, Load())],
              [], None, None)),
         tree[0])
     stateInit = FunctionDef(

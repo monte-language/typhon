@@ -1,7 +1,7 @@
 import ast
 from unittest import TestCase
 from macropy.core import unparse
-from typhon.macros import buildOperationsTable, opsToCallbacks
+from typhon.macros import buildOperationsDAG, opsToCallbacks
 
 sampleAst1 = """
 f = 0
@@ -67,110 +67,125 @@ class TestIOBlock(TestCase):
         Proper jump tables get built for multiple try/except blocks.
         """
         input = ast.parse(sampleAst1).body
-        output = buildOperationsTable(input)
+        output = buildOperationsDAG(input)
         self.assertEqual(
             [[unparse(line[0]).strip()] + list(line[1:]) for line in output],
             [
                 ["resolve(r, BytesObject(contents))", None, None, None, None],
-                ["ruv.magic_fsClose(vat, f)", -1, None, None, None],
+                ["ruv.magic_fsClose(vat, f)", output[0], None, None, None],
                 ["smash(r, StrObject((u'libuv error: %s' % err)))",
                  None, None, None, None],
-                ["ruv.magic_fsClose(vat, f)", -1, None, None, None],
-                ["readLoop(f, buf)", -3, -1, "contents", "err"],
+                ["ruv.magic_fsClose(vat, f)", output[2], None, None, None],
+                ["readLoop(f, buf)", output[1], output[3], "contents", "err"],
                 ['smash(r, StrObject((u"Couldn\'t open file fount: %s" % err)))',
                  None, None, None, None],
-                ['ruv.magic_fsOpen(vat, path, os.O_RDONLY, 0)', -2, -1, "f",
-                "err"],
-                ['0', -1, None, 'f', None]
+                ['ruv.magic_fsOpen(vat, path, os.O_RDONLY, 0)', output[4],
+                 output[5], "f", "err"],
+                ['0', output[6], None, 'f', None]
             ])
 
         input = ast.parse(sampleAst2).body
-        output = buildOperationsTable(input)
+        output = buildOperationsDAG(input)
         self.assertEqual(
             [[unparse(line[0]).strip()] + list(line[1:]) for line in output],
             [
                 ["ioC()", None, None, None, None],
-                ["ioB()", -1, None, None, None],
-                ["ioA()", -1, None, None, None],
-                ["io9()", -2, None, None, None],
-                ["io8()", -2, -1, None, "err3"],
-                ["io7()", -1, -2, None, "err3"],
-                ["io6()", -1, None, None, None],
-                ["io5()", -7, None, None, None],
-                ["io4()", -8, -1, None, "err2"],
-                ["io3()", -1, None, None, None],
-                ["io2()", -4, -1, "y", "err1"],
-                ["io1()", -1, -2, "x", "err1"],
-                ["1", -1, None, "x", None]
+                ["ioB()", output[0], None, None, None],
+                ["ioA()", output[1], None, None, None],
+                ["io9()", output[1], None, None, None],
+                ["io8()", output[2], output[3], None, "err3"],
+                ["io7()", output[4], output[3], None, "err3"],
+                ["io6()", output[5], None, None, None],
+                ["io5()", output[0], None, None, None],
+                ["io4()", output[0], output[7], None, "err2"],
+                ["io3()", output[8], None, None, None],
+                ["io2()", output[6], output[9], "y", "err1"],
+                ["io1()", output[10], output[9], "x", "err1"],
+                ["1", output[11], None, "x", None]
             ])
 
         input = ast.parse(sampleAst3).body
-        output = buildOperationsTable(input)
+        output = buildOperationsDAG(input)
         self.assertEqual(
             [[unparse(line[0]).strip()] + list(line[1:]) for line in output],
             [
                 ["io6()", None, None, None, None],
-                ["io5()", -1, None, None, None],
-                ["io4()", -2, -1, None, "err2"],
-                ["io3()", -3, -2, None, "err2"],
-                ["io2()", -2, -1, "y", "err1"],
-                ["io1()", -1, -2, "x", "err1"],
-                ["io0()", -1, -5, None, "err2"]
+                ["io5()", output[0], None, None, None],
+                ["io4()", output[0], output[1], None, "err2"],
+                ["io3()", output[0], output[1], None, "err2"],
+                ["io2()", output[2], output[3], "y", "err1"],
+                ["io1()", output[4], output[3], "x", "err1"],
+                ["io0()", output[5], output[1], None, "err2"]
             ])
 
-    def testOpsToCallbacks(self
-    ):
+    def testOpsToCallbacks(self):
         """
         Op lists are converted to callback lists properly.
         """
         def flattenOps(ops):
-            return  [[unparse(line[0]).strip(), line[1],
-                      line[2] and unparse(line[2]).strip(),
-                      line[3], line[4], line[5] and unparse(line[5]).strip(),
-                      line[6]] for line in ops]
+            return [[unparse(line.base).strip(), line.successName,
+                     line.successExpr and unparse(line.successExpr).strip(),
+                     line.successCB, line.failName,
+                     line.failExpr and unparse(line.failExpr).strip(),
+                     line.failCB] for line in ops]
         input = ast.parse(sampleAst1).body
-        initialState, output = opsToCallbacks(buildOperationsTable(input))
+        initialState, output = opsToCallbacks(buildOperationsDAG(input))
         self.assertEqual(initialState.keys(), ['f'])
         self.assertEqual([unparse(v) for v in initialState.values()], ['0'])
         self.assertEqual(
             flattenOps(output),
-            [
-                ['ruv.magic_fsOpen.callbackType', "f", "readLoop(f, buf)", 1, "err", 'smash(r, StrObject((u"Couldn\'t open file fount: %s" % err)))', None],
-                ['readLoop.callbackType', "contents", "ruv.magic_fsClose(vat, f)", 3, "err", "ruv.magic_fsClose(vat, f)", 2],
-                ['ruv.magic_fsClose.callbackType', None, "smash(r, StrObject((u'libuv error: %s' % err)))", None, None, None, None],
-                ['ruv.magic_fsClose.callbackType', None, "resolve(r, BytesObject(contents))", None, None, None, None]
-                ])
+            [['ruv.magic_fsOpen.callbackType', "f", "readLoop(f, buf)",
+              output[1], "err",
+              'smash(r, StrObject((u"Couldn\'t open file fount: %s" % err)))',
+              None],
+             ['readLoop.callbackType', "contents", "ruv.magic_fsClose(vat, f)",
+              output[3], "err", "ruv.magic_fsClose(vat, f)", output[2]],
+             ['ruv.magic_fsClose.callbackType', None,
+              "smash(r, StrObject((u'libuv error: %s' % err)))", None, None,
+              None, None],
+             ['ruv.magic_fsClose.callbackType', None,
+              "resolve(r, BytesObject(contents))", None, None, None, None]])
 
         input = ast.parse(sampleAst2).body
-        initialState, output = opsToCallbacks(buildOperationsTable(input))
+        initialState, output = opsToCallbacks(buildOperationsDAG(input))
         self.assertEqual(initialState.keys(), ['x'])
         self.assertEqual([unparse(v) for v in initialState.values()], ['1'])
         self.assertEqual(
             flattenOps(output),
-            [
-                ['io1.callbackType', 'x', 'io2()', 1, 'err1', 'io3()', 2],
-                ['io2.callbackType', 'y', 'io6()', 5, 'err1', 'io3()', 2],
-                ['io3.callbackType', None, 'io4()', 3, None, None, None],
-                ['io4.callbackType', None, 'ioC()', None, 'err2', 'io5()', 4],
-                ['io5.callbackType', None, 'ioC()', None, None, None, None],
-                ['io6.callbackType', None, 'io7()', 6, None, None, None],
-                ['io7.callbackType', None, 'io8()', 7, 'err3', 'io9()', 8],
-                ['io8.callbackType', None, 'ioA()', 9, 'err3', 'io9()', 8],
-                ['io9.callbackType', None, 'ioB()', 10, None, None, None],
-                ['ioA.callbackType', None, 'ioB()', 10, None, None, None],
-                ['ioB.callbackType', None, 'ioC()', None, None, None, None]
-            ])
+            [['io1.callbackType', 'x', 'io2()', output[1], 'err1', 'io3()',
+              output[2]],
+             ['io2.callbackType', 'y', 'io6()', output[5], 'err1', 'io3()',
+              output[2]],
+             ['io3.callbackType', None, 'io4()', output[3], None, None,
+              None],
+             ['io4.callbackType', None, 'ioC()', None, 'err2', 'io5()',
+              output[4]],
+             ['io5.callbackType', None, 'ioC()', None, None, None, None],
+             ['io6.callbackType', None, 'io7()', output[6], None, None,
+              None],
+             ['io7.callbackType', None, 'io8()', output[7], 'err3', 'io9()',
+              output[8]],
+             ['io8.callbackType', None, 'ioA()', output[9], 'err3', 'io9()',
+              output[8]],
+             ['io9.callbackType', None, 'ioB()', output[10], None, None,
+              None],
+             ['ioA.callbackType', None, 'ioB()', output[10], None, None,
+              None],
+             ['ioB.callbackType', None, 'ioC()', None, None, None, None]])
 
         input = ast.parse(sampleAst3).body
-        initialState, output = opsToCallbacks(buildOperationsTable(input))
+        initialState, output = opsToCallbacks(buildOperationsDAG(input))
         self.assertEqual(initialState, {})
         self.assertEqual(
             flattenOps(output),
-            [
-                ['io0.callbackType', None, 'io1()', 1, 'err2', 'io5()', 5],
-                ['io1.callbackType', 'x', 'io2()', 2, 'err1', 'io3()', 3],
-                ['io2.callbackType', 'y', 'io4()', 4, 'err1', 'io3()', 3],
-                ['io3.callbackType', None, 'io6()', None, 'err2', 'io5()', 5],
-                ['io4.callbackType', None, 'io6()', None, 'err2', 'io5()', 5],
-                ['io5.callbackType', None, 'io6()', None, None, None, None],
-            ])
+            [['io0.callbackType', None, 'io1()', output[1], 'err2', 'io5()',
+              output[5]],
+             ['io1.callbackType', 'x', 'io2()', output[2], 'err1', 'io3()',
+              output[3]],
+             ['io2.callbackType', 'y', 'io4()', output[4], 'err1', 'io3()',
+              output[3]],
+             ['io3.callbackType', None, 'io6()', None, 'err2', 'io5()',
+              output[5]],
+             ['io4.callbackType', None, 'io6()', None, 'err2', 'io5()',
+              output[5]],
+             ['io5.callbackType', None, 'io6()', None, None, None, None]])
