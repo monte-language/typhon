@@ -25,7 +25,6 @@ from typhon.log import log
 
 from typhon.futures import Ok, Err, ERR, FutureCallback
 from typhon.objects.root import Object
-from typhon.vats import scopedVat
 
 
 class UVError(Exception):
@@ -325,6 +324,75 @@ def allocCB(handle, size, buf):
     buf.c_base = alloc_raw_storage(size)
     rffi.setintfield(buf, "c_len", size)
 
+
+streamReadStart_erase, streamReadStart_unerase = new_erasing_pair(
+    "streamReadStart")
+
+
+class StreamReadStartFutureCallback(object):
+    pass
+
+
+stashStream2, unstashStream2, unstashingStream2 = stashFor(
+    "stream", stream_tp,
+    initial=streamReadStart_erase(StreamReadStartFutureCallback()))
+
+
+def readStreamCB(stream, status, buf):
+    status = intmask(status)
+    # We only restash in the success case, not the error cases.
+    state, v = unstashStream2(stream)
+    k = streamReadStart_unerase(v)
+    if status == 0:
+        # EAGAIN or somesuch, wait til next callback
+        return
+    # Don't read any more. We'll call readStart() when we're interested in
+    # reading again.
+    readStop(stream)
+    if status > 0:
+        data = lltype.charpsize2str(buf.c_base, status)
+        k.do(state, Ok(data))
+    elif status == -4095:
+        k.do(state, Ok(""))
+    else:
+        msg = formatError(status).decode("utf-8")
+        k.do(state, (ERR, "", msg))
+
+
+class magic_readStart(object):
+    callbackType = StreamReadStartFutureCallback
+
+    def __init__(self, stream):
+        self.stream = stream
+
+    def run(self, state, k):
+        stashStream2(self.stream, (state, streamReadStart_erase(k)))
+        readStart(self.stream, allocCB, readStreamCB)
+
+class StreamWriteFutureCallback(object):
+    pass
+
+
+stashWrite2, unstashWrite2, _ = stashFor("write", write_tp)
+
+
+def writeStreamCB(uv_write, status):
+    state, sb = unstashWrite(uv_write)
+    sb.deallocate()
+    sb.k.do(state, (Ok(None)))
+
+
+class magic_write(object):
+    def __init__(self, stream, data):
+        self.stream = stream
+        self.data = data
+
+    def run(self, state, k):
+        uv_write = alloc_write()
+        sb = WriteBuf(self.data, k)
+        bufs = sb.allocate()
+        stashWrite2(uv_write, (state, sb))
+        write(uv_write, self.stream, bufs, 1, writeStreamCB)
 
 class scopedBufs(Object):
 
@@ -839,6 +907,7 @@ class WriteBuf(scopedBufs):
 
 
 class magic_fsWrite(object):
+    callbackType = FSWriteFutureCallback
     def __init__(self, vat, fd, data):
         self.vat = vat
         self.fd = fd

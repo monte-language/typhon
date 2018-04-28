@@ -24,7 +24,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
 from typhon.futures import FutureCtx, FutureCallback, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE, OK, smash
-from typhon.macros import macros, io#, io_loop
+from typhon.macros import macros, io
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapStr
 from typhon.objects.refs import LocalResolver, makePromise

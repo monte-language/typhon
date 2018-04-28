@@ -6,7 +6,7 @@ from ast import (Assign, Expr, Subscript, Attribute, List, Tuple, Name, Import,
 from collections import namedtuple
 import copy
 from macropy.core.macros import (Macros, Walker, injected_vars,
-                                 post_processing)
+                                 post_processing, unparse)
 macros = Macros()
 
 
@@ -73,6 +73,8 @@ def rewriteAsCallback(expr, cbName, state, globalNames, boundNames, freeNames):
 
 Op = namedtuple('Op', ['expr', 'successOp', 'failOp',
                        'successName', 'failName'])
+IfOp = namedtuple('IfOp', ['testExpr', 'consqOp', 'altOp', 'failOp',
+                           'failName'])
 
 
 def buildOperationsDAG(lines):
@@ -96,6 +98,21 @@ def buildOperationsDAG(lines):
         elif isinstance(line, Expr):
             flowList.append(Op(line.value, successTarget,
                                failTarget, None, failName))
+        elif isinstance(line, If):
+            altTarget = successTarget
+            if line.orelse:
+                # process else block in reverse order
+                collectLine(line.orelse[-1], failTarget, failName,
+                            successTarget)
+                for elseline in reversed(line.orelse[:-1]):
+                    collectLine(elseline, failTarget, failName, flowList[-1])
+                altTarget = flowList[-1]
+            collectLine(line.body[-1], failTarget, failName,
+                        successTarget)
+            for bodyLine in reversed(line.body[:-1]):
+                collectLine(bodyLine, failTarget, failName, flowList[-1])
+            flowList.append(IfOp(
+                line.test, flowList[-1], altTarget, failName, failTarget))
         elif isinstance(line, TryExcept):
             assert len(line.handlers) == 1, (
                 "try statements in io blocks must "
@@ -154,6 +171,29 @@ class CallbackInfo(object):
         self.failCB = patchTable.get(self.failExpr)
 
 
+class IfCallbackInfo(object):
+    def __init__(self, base, successName, testExpr, consqExpr, altExpr,
+                 failName, failExpr):
+        self.base = base
+        self.successName = successName
+        self.testExpr = testExpr
+        self.consqExpr = consqExpr
+        self.altExpr = altExpr
+        self.failName = failName
+        self.failExpr = failExpr
+        self.consqCB = None
+        self.altCB = None
+        self.failCB = None
+        self.functionName = None
+
+    def patchTarget(self, patchTable):
+        """
+        Hook up a callback to an expr feeding it.
+        """
+        self.consqCB = patchTable.get(self.consqExpr)
+        self.altCB = patchTable.get(self.altExpr)
+        self.failCB = patchTable.get(self.failExpr)
+
 
 def opsToCallbacks(ops):
     """
@@ -183,12 +223,23 @@ def opsToCallbacks(ops):
     callbacks = []
     patchTable = {}
     for op in ops:
+        if isinstance(op, IfOp):
+            # already processed this
+            continue
         expr, successOp, failOp, successName, failName = op
         if not (successOp or failOp):
             continue
-        newCB = CallbackInfo(Attribute(expr.func, "callbackType", Load()),
-                             successName, successOp and successOp.expr,
-                             failName, failOp and failOp.expr)
+        if isinstance(successOp, IfOp):
+            newCB = IfCallbackInfo(
+                Attribute(expr.func, "callbackType", Load()),
+                successName, successOp.testExpr,
+                successOp.consqOp.expr,
+                successOp.altOp.expr,
+                failName, successOp.failOp and successOp.failOp.expr)
+        else:
+            newCB = CallbackInfo(Attribute(expr.func, "callbackType", Load()),
+                                 successName, successOp and successOp.expr,
+                                 failName, failOp and failOp.expr)
         callbacks.append(newCB)
         patchTable[expr] = newCB
 
@@ -252,26 +303,37 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
     for cb in callbacks:
         cb.functionName = gen_sym("ioCallback")
 
-    def bindNameAndContinue(name, value, expr, nextCB):
+    def bindName(name, value):
         if name:
-            arm = [Assign([Attribute(Name(state, Load()),
-                                     name, Store())],
-                          Name(value, Load()))]
             boundNames.setdefault(name, None_)
+            return [Assign([Attribute(Name(state, Load()),
+                                      name, Store())],
+                           Name(value, Load()))]
         else:
-            arm = []
-        if expr:
-            arm.append(rewriteAsCallback(copy.deepcopy(expr),
-                                         nextCB and nextCB.functionName, state,
-                                         moduleGlobals, boundNames,
-                                         freeNames))
-        return arm
+            return []
+
+    def exprAsCallback(expr, nextCB):
+        return rewriteAsCallback(copy.deepcopy(expr),
+                                 nextCB and nextCB.functionName, state,
+                                 moduleGlobals, boundNames,
+                                 freeNames)
 
     for cb in callbacks:
-        successArm = bindNameAndContinue(cb.successName, successValue,
-                                         cb.successExpr, cb.successCB)
-        failArm = bindNameAndContinue(cb.failName, failValue,
-                                      cb.failExpr, cb.failCB)
+        if isinstance(cb, IfCallbackInfo):
+            successArm = bindName(cb.successName, successValue)
+            ctx = {'boundNames': boundNames, 'selfName': state,
+                   'moduleGlobals': moduleGlobals, 'freeNames': freeNames}
+            newTest, _ = rewriteFreeNames.recurse_collect(cb.testExpr, **ctx)
+            successArm.append(If(newTest,
+                                 [exprAsCallback(cb.consqExpr, cb.consqCB)],
+                                 [exprAsCallback(cb.altExpr, cb.altCB)]))
+        else:
+            successArm = bindName(cb.successName, successValue)
+            if cb.successExpr:
+                successArm.append(exprAsCallback(cb.successExpr, cb.successCB))
+        failArm = bindName(cb.failName, failValue)
+        if cb.failExpr:
+            failArm.append(exprAsCallback(cb.failExpr, cb.failCB))
         finalThrow = Raise(Call(Name('RuntimeError', Load()),
                                 [Str('unexpected failure in io '
                                      'callback')],
@@ -283,7 +345,7 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
         successStmt = If(Compare(Name(status, Load()), [Eq()],
                                  [Name(OK_, Load())]),
                          successArm,
-                         [failStmt]) if cb.successExpr else failStmt
+                         [failStmt]) if successArm else failStmt
         callbackBody = [Assign([Tuple([Name(status, Store()),
                                        Name(successValue, Store()),
                                        Name(failValue, Store())], Store())],
@@ -312,17 +374,18 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
                        [Name(n, Load()) for n in freeNames], [], None, None)
     topLine = copy_location(Expr(
         Call(Attribute(ops[-1].expr, "run", Load()),
-             [createState, Name(callbacks[0].functionName, Load())],
+             [createState, Name(callbacks[0].functionName
+                                if callbacks else "None", Load())],
              [], None, None)),
         tree[0])
     stateInit = FunctionDef(
         "__init__",
         arguments([Name(self_, Store())] +
                   [Name(n, Load()) for n in freeNames], None, None, []),
-        [Assign([Attribute(Name(self_, Load()), n, Store())], Name(n, Load()))
+        ([Assign([Attribute(Name(self_, Load()), n, Store())], Name(n, Load()))
          for n in freeNames] +
-        [Assign([Attribute(Name(self_, Load()), k, Store())], v)
-         for k, v in boundNames.items()],
+         [Assign([Attribute(Name(self_, Load()), k, Store())], v)
+          for k, v in boundNames.items()]) or [Expr(None_)],
         [])
     stateClass = ClassDef(stateClassName,
                           [Name(FutureCtx_, Load())],
