@@ -55,7 +55,7 @@ def rewriteFreeNames(tree, stop, **ctx):
             return Attribute(Name(ctx['selfName'], Load()), tree.id, tree.ctx)
 
 
-def rewriteAsCallback(expr, state, globalNames, boundNames, freeNames):
+def rewriteAsCallback(expr, cbName, state, globalNames, boundNames, freeNames):
     """
     Walk over the expr looking for non-global names. Rewrite them to be state
     lookups. Collect free names.
@@ -64,8 +64,11 @@ def rewriteAsCallback(expr, state, globalNames, boundNames, freeNames):
            'selfName': state,
            'moduleGlobals': globalNames,
            'freeNames': freeNames}
-    _, newExpr = rewriteFreeNames.recurse_collect(expr, **ctx)
-    return expr
+    newExpr, _ = rewriteFreeNames.recurse_collect(expr, **ctx)
+    return Expr(Call(Attribute(newExpr, "run", Load()),
+                     [Name(state, Load()),
+                      Name(cbName or "None", Load())], [],
+                     None, None))
 
 
 Op = namedtuple('Op', ['expr', 'successOp', 'failOp',
@@ -143,6 +146,14 @@ class CallbackInfo(object):
         self.failCB = None
         self.functionName = None
 
+    def patchTarget(self, patchTable):
+        """
+        Hook up a callback to an expr feeding it.
+        """
+        self.successCB = patchTable.get(self.successExpr)
+        self.failCB = patchTable.get(self.failExpr)
+
+
 
 def opsToCallbacks(ops):
     """
@@ -169,37 +180,21 @@ def opsToCallbacks(ops):
             break
 
     ops = ops[::-1]
-    successNeedsPatching = {}
-    failNeedsPatching = {}
     callbacks = []
-    for expr, successOp, failOp, successName, failName in ops:
-        successExpr = None
-        failExpr = None
-        if successOp:
-            # Look at successor op and put its expr in this callback
-            successExpr = successOp.expr
-            if successOp.successOp or successOp.failOp:
-                # Fix up this callback later with address of callback following
-                # this expr (if any)
-                successNeedsPatching.setdefault(successExpr, set()).add(
-                    len(callbacks))
-        if failOp:
-            failExpr = failOp.expr
-            if failOp.successOp or failOp.failOp:
-                failNeedsPatching.setdefault(failExpr, set()).add(
-                    len(callbacks))
-        if successExpr or failExpr:
-            callbacks.append(CallbackInfo(
-                Attribute(expr.func, "callbackType", Load()),
-                successName, successExpr,
-                failName, failExpr))
+    patchTable = {}
+    for op in ops:
+        expr, successOp, failOp, successName, failName = op
+        if not (successOp or failOp):
+            continue
+        newCB = CallbackInfo(Attribute(expr.func, "callbackType", Load()),
+                             successName, successOp and successOp.expr,
+                             failName, failOp and failOp.expr)
+        callbacks.append(newCB)
+        patchTable[expr] = newCB
 
-        successPatchTargets = successNeedsPatching.get(expr, ())
-        for i in successPatchTargets:
-            callbacks[i].successCB = callbacks[-1]
-        failPatchTargets = failNeedsPatching.get(expr, ())
-        for i in failPatchTargets:
-            callbacks[i].failCB = callbacks[-1]
+    for cb in callbacks:
+        cb.patchTarget(patchTable)
+
     return initialState, callbacks
 
 
@@ -234,7 +229,6 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
     `except object as err:` since the macro implementation ignores the type
     normally used for matching.
     """
-
     None_ = Name("None", Load())
     stateClassName = gen_sym("State")
     FutureCtx_ = importNames["FutureCtx"]
@@ -257,46 +251,27 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
     boundNames.update(initialState)
     for cb in callbacks:
         cb.functionName = gen_sym("ioCallback")
-    for cb in callbacks:
-        if cb.successName:
-            successArm = [Assign([Attribute(Name(state, Load()),
-                                            cb.successName, Store())],
-                                 Name(successValue, Load()))]
-            boundNames.setdefault(cb.successName, None_)
+
+    def bindNameAndContinue(name, value, expr, nextCB):
+        if name:
+            arm = [Assign([Attribute(Name(state, Load()),
+                                     name, Store())],
+                          Name(value, Load()))]
+            boundNames.setdefault(name, None_)
         else:
-            successArm = []
-        if cb.successExpr:
-            if cb.successCB is not None:
-                successCb = Name(cb.successCB.functionName, Load())
-            else:
-                successCb = None_
-            successArm.append(Expr(Call(Attribute(
-                rewriteAsCallback(copy.deepcopy(cb.successExpr), state,
-                                  moduleGlobals, boundNames, freeNames),
-                "run", Load()),
-                                        [Name(state, Load()),
-                                         successCb], [],
-                                        None, None)))
-        if cb.failExpr:
-            if cb.failName:
-                failArm = [Assign([Attribute(Name(state, Load()),
-                                             cb.failName, Store())],
-                                  Name(failValue, Load()))]
-                boundNames.setdefault(cb.failName, None_)
-            else:
-                failArm = []
-            if cb.failCB is not None:
-                failCb = Name(cb.failCB.functionName, Load())
-            else:
-                failCb = None_
-            failArm.append(Expr(Call(Attribute(
-                rewriteAsCallback(copy.deepcopy(cb.failExpr), state,
-                                  moduleGlobals, boundNames,
-                                  freeNames),
-                "run", Load()),
-                                     [Name(state, Load()),
-                                      failCb], [],
-                                     None, None)))
+            arm = []
+        if expr:
+            arm.append(rewriteAsCallback(copy.deepcopy(expr),
+                                         nextCB and nextCB.functionName, state,
+                                         moduleGlobals, boundNames,
+                                         freeNames))
+        return arm
+
+    for cb in callbacks:
+        successArm = bindNameAndContinue(cb.successName, successValue,
+                                         cb.successExpr, cb.successCB)
+        failArm = bindNameAndContinue(cb.failName, failValue,
+                                      cb.failExpr, cb.failCB)
         finalThrow = Raise(Call(Name('RuntimeError', Load()),
                                 [Str('unexpected failure in io '
                                      'callback')],
@@ -342,8 +317,10 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
         tree[0])
     stateInit = FunctionDef(
         "__init__",
-        arguments([Name(self_, Store())] + [Name(n, Load()) for n in freeNames], None, None, []),
-        [Assign([Attribute(Name(self_, Load()), n, Store())], Name(n, Load())) for n in freeNames] +
+        arguments([Name(self_, Store())] +
+                  [Name(n, Load()) for n in freeNames], None, None, []),
+        [Assign([Attribute(Name(self_, Load()), n, Store())], Name(n, Load()))
+         for n in freeNames] +
         [Assign([Attribute(Name(self_, Load()), k, Store())], v)
          for k, v in boundNames.items()],
         [])
@@ -353,6 +330,7 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
     toEmit.append(stateClass)
     return [fix_missing_locations(topLine)]
 
+
 @injected_vars.append
 def importNames(tree, src, gen_sym, **kw):
     return {
@@ -360,6 +338,7 @@ def importNames(tree, src, gen_sym, **kw):
         "OK": gen_sym("OK"),
         "ERR": gen_sym("ERR")
     }
+
 
 @injected_vars.append
 def toEmit(tree, src, importNames, **kw):
