@@ -343,6 +343,8 @@ def readStreamCB(stream, status, buf):
     # We only restash in the success case, not the error cases.
     state, v = unstashStream2(stream)
     k = streamReadStart_unerase(v)
+    if not k:
+        return
     if status == 0:
         # EAGAIN or somesuch, wait til next callback
         return
@@ -350,7 +352,7 @@ def readStreamCB(stream, status, buf):
     # reading again.
     readStop(stream)
     if status > 0:
-        data = lltype.charpsize2str(buf.c_base, status)
+        data = rffi.charpsize2str(buf.c_base, status)
         k.do(state, Ok(data))
     elif status == -4095:
         k.do(state, Ok(""))
@@ -369,6 +371,7 @@ class magic_readStart(object):
         stashStream2(self.stream, (state, streamReadStart_erase(k)))
         readStart(self.stream, allocCB, readStreamCB)
 
+
 class StreamWriteFutureCallback(object):
     pass
 
@@ -377,9 +380,10 @@ stashWrite2, unstashWrite2, _ = stashFor("write", write_tp)
 
 
 def writeStreamCB(uv_write, status):
-    state, sb = unstashWrite(uv_write)
+    state, sb = unstashWrite2(uv_write)
     sb.deallocate()
-    sb.k.do(state, (Ok(None)))
+    if sb.k:
+        sb.k.do(state, (Ok(0)))
 
 
 class magic_write(object):
@@ -853,6 +857,8 @@ def magic_fsReadCB(fs):
     state, v = unstashFS2(fs)
     k = fsRead_unerase(v)
     fsDiscard(fs)
+    if not k:
+        return
     if size > 0:
             # XXX is this coupling to state contents dangerous?
             data = rffi.charpsize2str(state.buf.c_base, size)
@@ -893,6 +899,8 @@ def magic_fsWriteCB(fs):
     size = intmask(fs.c_result)
     fsDiscard(fs)
     wb.deallocate()
+    if not wb.k:
+        return
     if size >= 0:
         wb.k.do(state, Ok(size))
     else:
@@ -930,6 +938,8 @@ def magic_fsOpenCB(fs):
     state, v = unstashFS2(fs)
     k = fsOpen_unerase(v)
     fsDiscard(fs)
+    if not k:
+        return
     if fd < 0:
         msg = formatError(fd).decode("utf-8")
         k.do(state, (ERR, 0, msg))
@@ -960,6 +970,8 @@ def magic_fsCloseCB(fs):
     state, v = unstashFS2(fs)
     k = fsClose_unerase(v)
     fsDiscard(fs)
+    if not k:
+        return
     k.do(state, Ok(None))
 
 
@@ -1006,12 +1018,13 @@ def magic_fsRenameCB(fs):
     state, v = unstashFS2(fs)
     k = fsRename_unerase(v)
     fsDiscard(fs)
+    if not k:
+        return
     if success < 0:
         msg = formatError(success).decode("utf-8")
         k.do(state, (ERR, None, msg))
     else:
         k.do(state, Ok(None))
-
 
 
 def alloc_fs():

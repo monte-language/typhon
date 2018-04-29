@@ -52,6 +52,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
+from typhon.futures import Future, Ok
 from typhon.macros import macros, io
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject
@@ -328,7 +329,7 @@ class FileSink(Object):
         return False
 
 
-class cleanup(object):
+class cleanup(Future):
     callbackType = object
 
     def __init__(self, target):
@@ -338,8 +339,12 @@ class cleanup(object):
         assert k is None
 
 
-class sendNextSink(object):
-    callbackType = object
+class SendNextSinkCallback(object):
+    pass
+
+
+class sendNextSink(Future):
+    callbackType = SendNextSinkCallback
 
     def __init__(self, target, verb, args):
         self.target = target
@@ -348,16 +353,20 @@ class sendNextSink(object):
 
     def run(self, state, k):
         from typhon.objects.collections.maps import EMPTY_MAP
-        self.target._cleanup()
         r, sink = self.target._nextSink()
-        p = self.target._vat.send(sink, self.verb, self.args, EMPTY_MAP)
+        with scopedVat(self.target._vat):
+            p = self.target._vat.send(sink, self.verb, self.args, EMPTY_MAP)
         r.resolve(p)
         if k:
-            k.do(state, None)
+            k.do(state, Ok(None))
 
 
-class sendAllSinks(object):
-    callbackType = object
+class SendAllSinksCallback(object):
+    pass
+
+
+class sendAllSinks(Future):
+    callbackType = SendAllSinksCallback
 
     def __init__(self, target, verb, args):
         self.target = target
@@ -366,9 +375,10 @@ class sendAllSinks(object):
 
     def run(self, state, k):
         from typhon.objects.collections.maps import EMPTY_MAP
-        self.target._cleanup()
-        for r, sink in self._queue:
+        print "**", self.verb
+        for r, sink in self.target._queue:
             r.resolve(NullObject)
-            p = self.target._vat.send(sink, self.verb, self.args, EMPTY_MAP)
+            with scopedVat(self.target._vat):
+                self.target._vat.send(sink, self.verb, self.args, EMPTY_MAP)
         if k:
-            k.do(state, None)
+            k.do(state, Ok(None))
