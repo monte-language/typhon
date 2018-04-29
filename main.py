@@ -14,6 +14,11 @@
 
 import sys
 
+# Abandon all hope, ye whose entrypoint is here.
+import macropy.activate
+from macropy.core.exporters import SaveExporter
+macropy.exporter = SaveExporter("exported", "typhon")
+
 from rpython.jit.codewriter.policy import JitPolicy
 from rpython.rlib import rsignal
 # from rpython.rlib import rvmprof

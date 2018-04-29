@@ -10,6 +10,8 @@ from rpython.rtyper.lltypesystem.rffi import getintfield
 from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
+from typhon.futures import resolve, smash
+from typhon.macros import macros, io
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.data import bytesToString, unwrapBytes, StrObject
 from typhon.objects.refs import LocalResolver, makePromise
@@ -96,6 +98,7 @@ class IP6AddrInfo(AddrInfo):
 
 
 def walkAI(ai):
+    # does this need to move into ruv?
     rv = []
     while ai:
         family = getintfield(ai, "c_ai_family")
@@ -109,29 +112,19 @@ def walkAI(ai):
     return rv
 
 
-def gaiCB(gai, status, ai):
-    status = intmask(status)
-    vat, resolver = ruv.unstashGAI(gai)
-    with scopedVat(vat):
-        assert isinstance(resolver, LocalResolver), "implementation error"
-        if status < 0:
-            msg = ruv.formatError(status).decode("utf-8")
-            resolver.smash(StrObject(u"libuv error: %s" % msg))
-        else:
-            gaiList = walkAI(ai)
-            resolver.resolve(wrapList(gaiList[:]))
-    ruv.freeAddrInfo(ai)
-    ruv.free(gai)
-
-
 @runnable(RUN_2)
 def getAddrInfo(node, service):
     node = unwrapBytes(node)
     service = unwrapBytes(service)
     vat = currentVat.get()
-    gai = ruv.alloc_gai()
     p, r = makePromise()
-    ruv.stashGAI(gai, (vat, r))
-    ruv.getAddrInfo(vat.uv_loop, gai, gaiCB, node, service,
-                    nullptr(ruv.s.addrinfo))
+    emptyAI = nullptr(ruv.s.addrinfo)
+    with io:
+        ai = emptyAI
+        try:
+            ai = ruv.magic_getAddrInfo(vat, node, service)
+        except object as err:
+            smash(r, StrObject(u"libuv error: %s" % err))
+        else:
+            resolve(r, wrapList(walkAI(ai)[:]))
     return p

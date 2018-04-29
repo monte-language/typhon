@@ -1,4 +1,4 @@
-{stdenv, fetchzip, lib, libsodium, libuv, libffi, pkgconfig, python27, python27Packages, vmSrc, buildJIT}:
+{stdenv, fetchzip, fetchFromGitHub, lib, libsodium, libuv, libffi, pkgconfig, pypy, pypyPackages, vmSrc, buildJIT}:
 
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let
@@ -6,22 +6,34 @@ let
     url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.10.0-src.tar.bz2";
     sha256 = "11l1wpk2rk8m44jiwzvc8rqcbpnv3g348a2z017z2dhqfsc7a6af";
   };
+  macropy = pypyPackages.buildPythonPackage rec {
+    pname = "macropy";
+    version = "1.0.4";
+    name = "${pname}-${version}";
+    src = fetchFromGitHub {
+      owner = "lihaoyi";
+      repo = "macropy";
+      rev = "13993ccb08df21a0d63b091dbaae50b9dbb3fe3e";
+      sha256 = "12496896c823h0849vnslbdgmn6z9mhfkckqa8sb8k9qqab7pyyl";
+    };
+  };
   optLevel = if buildJIT then "-Ojit" else "-O2";
+
 in
 stdenv.mkDerivation {
   name = "typhon-vm";
 
   src = vmSrc;
 
-  buildInputs = [ python27
-                  python27Packages.py python27Packages.pytest python27Packages.twisted
-                  pypySrc
+  buildInputs = [ pypy
+                  pypyPackages.py pypyPackages.pytest pypyPackages.twisted
+                  macropy pypySrc
                   pkgconfig libffi libuv libsodium ];
   propagatedBuildInputs = [ libffi libuv libsodium ];
 
   shellHook = ''
     export TYPHON_LIBRARY_PATH=${libuv.out}/lib:${libsodium.out}/lib
-    export PYTHONPATH=$TMP/typhon
+    export PYTHONPATH=$TMP/typhon:$PYTHONPATH
     if [ -e $TMP/typhon ]; then
         rm -rf $TMP/typhon
     fi
@@ -44,7 +56,7 @@ stdenv.mkDerivation {
     # Run the tests.
     trial typhon
     # Do the actual translation.
-    ${python27}/bin/python -mrpython ${optLevel} main.py
+    ${pypy}/bin/pypy -mrpython ${optLevel} main.py
     '';
 
   # We do still have the check phase, but we do the untranslated test before

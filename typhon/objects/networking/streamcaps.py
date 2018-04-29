@@ -52,6 +52,8 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
+from typhon.futures import Future, Ok
+from typhon.macros import macros, io
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject
 from typhon.objects.refs import makePromise
@@ -98,27 +100,6 @@ class _EmptySource(Object):
 emptySource = _EmptySource()
 
 
-def readStreamCB(stream, status, buf):
-    status = intmask(status)
-    # We only restash in the success case, not the error cases.
-    vat, source = ruv.unstashStream(stream)
-    assert isinstance(source, StreamSource), "Implementation error"
-    # Don't read any more. We'll call .readStart() when we're interested in
-    # reading again.
-    ruv.readStop(stream)
-    with scopedVat(vat):
-        if status > 0:
-            # Restash required.
-            ruv.stashStream(stream, (vat, source))
-            data = charpsize2str(buf.c_base, status)
-            source.deliver(data)
-        elif status == -4095:
-            # EOF.
-            source.complete()
-        else:
-            msg = ruv.formatError(status).decode("utf-8")
-            source.abort(u"libuv error: %s" % msg)
-
 @autohelp
 class StreamSource(Object):
     """
@@ -134,8 +115,6 @@ class StreamSource(Object):
 
         self._queue = []
 
-        ruv.stashStream(stream._stream, (vat, self))
-
     def _nextSink(self):
         assert self._queue, "pepperocini"
         return self._queue.pop(0)
@@ -145,25 +124,6 @@ class StreamSource(Object):
         self._stream.release()
         self._stream = None
 
-    def deliver(self, data):
-        from typhon.objects.collections.maps import EMPTY_MAP
-        r, sink = self._nextSink()
-        p = self._vat.send(sink, RUN_1, [BytesObject(data)], EMPTY_MAP)
-        r.resolve(p)
-
-    def complete(self):
-        self._cleanup()
-        from typhon.objects.collections.maps import EMPTY_MAP
-        for r, sink in self._queue:
-            r.resolve(NullObject)
-            self._vat.sendOnly(sink, COMPLETE_0, [], EMPTY_MAP)
-
-    def abort(self, reason):
-        self._cleanup()
-        from typhon.objects.collections.maps import EMPTY_MAP
-        for r, sink in self._queue:
-            r.resolve(NullObject)
-            self._vat.sendOnly(sink, ABORT_1, [StrObject(reason)], EMPTY_MAP)
 
     @method("Any", "Any")
     def run(self, sink):
@@ -179,7 +139,20 @@ class StreamSource(Object):
 
         p, r = makePromise()
         self._queue.append((r, sink))
-        ruv.readStart(self._stream._stream, ruv.allocCB, readStreamCB)
+        with io:
+            try:
+                data = ruv.magic_readStart(self._stream._stream)
+            except object as err:
+                sendAllSinks(self, ABORT_1,
+                             [StrObject(u"libuv error: %s" % err)])
+                cleanup(self)
+            else:
+                if data == "":
+                    sendAllSinks(self, COMPLETE_0, [])
+                    cleanup(self)
+                else:
+                    sendNextSink(self, RUN_1, [BytesObject(data)])
+
         return p
 
     @method("Bool")
@@ -207,10 +180,6 @@ class TTYSource(StreamSource):
         else:
             ruv.TTYSetMode(self._tty, ruv.TTY_MODE_NORMAL)
 
-def writeStreamCB(uv_write, status):
-    vat, sb = ruv.unstashWrite(uv_write)
-    sb.deallocate()
-
 @autohelp
 class StreamSink(Object):
     """
@@ -234,11 +203,8 @@ class StreamSink(Object):
             raise userError(u"run/1: Couldn't send to closed stream")
 
         # XXX backpressure?
-        uv_write = ruv.alloc_write()
-        sb = ruv.scopedBufs([data], self)
-        bufs = sb.allocate()
-        ruv.stashWrite(uv_write, (self._vat, sb))
-        ruv.write(uv_write, self._stream._stream, bufs, 1, writeStreamCB)
+        with io:
+            ruv.magic_write(self._stream._stream, data)
 
     @method("Void")
     def complete(self):
@@ -252,22 +218,6 @@ class StreamSink(Object):
     def isATTY(self):
         return False
 
-
-def readFileCB(fs):
-    size = intmask(fs.c_result)
-    vat, source = ruv.unstashFS(fs)
-    assert isinstance(source, FileSource)
-    with scopedVat(vat):
-        if size > 0:
-            data = charpsize2str(source._buf.c_base, size)
-            source.deliver(data)
-        elif size < 0:
-            msg = ruv.formatError(size).decode("utf-8")
-            source.abort(u"libuv error: %s" % msg)
-        else:
-            # EOF.
-            source.complete()
-    ruv.fsDiscard(fs)
 
 
 @autohelp
@@ -314,67 +264,29 @@ class FileSource(Object):
         assert self._queue, "pepperocini"
         return self._queue.pop(0)
 
-    def _cleanup(self):
-        uv_loop = self._vat.uv_loop
-        fs = ruv.alloc_fs()
-        ruv.stashFS(fs, (self._vat, self))
-        ruv.fsClose(uv_loop, fs, self._fd, ruv.fsUnstashAndDiscard)
-        ruv.freeBuf(self._buf)
-
-    def deliver(self, data):
-        from typhon.objects.collections.maps import EMPTY_MAP
-        r, sink = self._nextSink()
-        p = self._vat.send(sink, RUN_1, [BytesObject(data)], EMPTY_MAP)
-        r.resolve(p)
-
-    def complete(self):
-        from typhon.objects.collections.maps import EMPTY_MAP
-        r, sink = self._nextSink()
-        r.resolve(NullObject)
-        self._vat.sendOnly(sink, COMPLETE_0, [], EMPTY_MAP)
-        self._cleanup()
-
-    def abort(self, reason):
-        from typhon.objects.collections.maps import EMPTY_MAP
-        r, sink = self._nextSink()
-        r.resolve(NullObject)
-        self._vat.sendOnly(sink, ABORT_1, [StrObject(reason)], EMPTY_MAP)
-        self._cleanup()
 
     @method("Any", "Any")
     def run(self, sink):
         p, r = makePromise()
         self._queue.append((r, sink))
-        with scoped_alloc(ruv.rffi.CArray(ruv.buf_t), 1) as bufs:
-            bufs[0].c_base = self._buf.c_base
-            bufs[0].c_len = self._buf.c_len
-            fs = ruv.alloc_fs()
-            ruv.stashFS(fs, (self._vat, self))
-            ruv.fsRead(self._vat.uv_loop, fs, self._fd, bufs, 1, -1,
-                       readFileCB)
+        with io:
+            try:
+                data = ruv.magic_fsRead(self._vat, self._fd, self._buf)
+            except object as err:
+                sendAllSinks(self, ABORT_1, [StrObject(u"libuv error: %s" % err)])
+                cleanup(self)
+            else:
+                if data == "":
+                    sendAllSinks(self, COMPLETE_0, [])
+                    cleanup(self)
+                else:
+                    sendNextSink(self, RUN_1, [BytesObject(data)])
+
         return p
 
     @method("Bool")
     def isATTY(self):
         return False
-
-
-def writeFileCB(fs):
-    try:
-        vat, sb = ruv.unstashFS(fs)
-        sink = sb.obj
-        assert isinstance(sink, FileSink)
-        size = intmask(fs.c_result)
-        if size > 0:
-            # XXX backpressure drain.written(size)
-            pass
-        elif size < 0:
-            msg = ruv.formatError(size).decode("utf-8")
-            sink.abort(StrObject(u"libuv error: %s" % msg))
-        sb.deallocate()
-        ruv.fsDiscard(fs)
-    except:
-        print "Exception in writeFileCB"
 
 
 @autohelp
@@ -390,22 +302,19 @@ class FileSink(Object):
         self._vat = vat
 
     def _cleanup(self):
-        fs = ruv.alloc_fs()
-        ruv.stashFS(fs, (self._vat, self))
-        ruv.fsClose(self._vat.uv_loop, fs, self._fd, ruv.fsUnstashAndDiscard)
         self.closed = True
+        with io:
+            ruv.magic_fsClose(self._vat, self._fd)
 
     @method("Void", "Bytes")
     def run(self, data):
         if self.closed:
             raise userError(u"run/1: Couldn't write to closged file")
-
-        sb = ruv.scopedBufs([data], self)
-        bufs = sb.allocate()
-        fs = ruv.alloc_fs()
-        ruv.stashFS(fs, (self._vat, sb))
-        ruv.fsWrite(self._vat.uv_loop, fs, self._fd, bufs, 1, -1,
-                    writeFileCB)
+        with io:
+            try:
+                ruv.magic_fsWrite(self._vat, self._fd, data)
+            except object as _:
+                cleanup(self)
 
     @method("Void")
     def complete(self):
@@ -418,3 +327,58 @@ class FileSink(Object):
     @method("Bool")
     def isATTY(self):
         return False
+
+
+class cleanup(Future):
+    callbackType = object
+
+    def __init__(self, target):
+        target._cleanup()
+
+    def run(self, state, k):
+        assert k is None
+
+
+class SendNextSinkCallback(object):
+    pass
+
+
+class sendNextSink(Future):
+    callbackType = SendNextSinkCallback
+
+    def __init__(self, target, verb, args):
+        self.target = target
+        self.verb = verb
+        self.args = args
+
+    def run(self, state, k):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        r, sink = self.target._nextSink()
+        with scopedVat(self.target._vat):
+            p = self.target._vat.send(sink, self.verb, self.args, EMPTY_MAP)
+        r.resolve(p)
+        if k:
+            k.do(state, Ok(None))
+
+
+class SendAllSinksCallback(object):
+    pass
+
+
+class sendAllSinks(Future):
+    callbackType = SendAllSinksCallback
+
+    def __init__(self, target, verb, args):
+        self.target = target
+        self.verb = verb
+        self.args = args
+
+    def run(self, state, k):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        print "**", self.verb
+        for r, sink in self.target._queue:
+            r.resolve(NullObject)
+            with scopedVat(self.target._vat):
+                self.target._vat.send(sink, self.verb, self.args, EMPTY_MAP)
+        if k:
+            k.do(state, Ok(None))

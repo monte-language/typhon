@@ -16,13 +16,16 @@ from rpython.rlib import _rsocket_rffi as s
 from rpython.rlib.objectmodel import current_object_addr_as_int, specialize
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.rawstorage import alloc_raw_storage, free_raw_storage
+from rpython.rlib.rerased import new_erasing_pair
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rtyper.tool import rffi_platform
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
 from typhon.log import log
 
+from typhon.futures import Ok, Err, ERR, FutureCallback
 from typhon.objects.root import Object
+
 
 class UVError(Exception):
     """
@@ -321,6 +324,79 @@ def allocCB(handle, size, buf):
     buf.c_base = alloc_raw_storage(size)
     rffi.setintfield(buf, "c_len", size)
 
+
+streamReadStart_erase, streamReadStart_unerase = new_erasing_pair(
+    "streamReadStart")
+
+
+class StreamReadStartFutureCallback(object):
+    pass
+
+
+stashStream2, unstashStream2, unstashingStream2 = stashFor(
+    "stream", stream_tp,
+    initial=streamReadStart_erase(StreamReadStartFutureCallback()))
+
+
+def readStreamCB(stream, status, buf):
+    status = intmask(status)
+    # We only restash in the success case, not the error cases.
+    state, v = unstashStream2(stream)
+    k = streamReadStart_unerase(v)
+    if not k:
+        return
+    if status == 0:
+        # EAGAIN or somesuch, wait til next callback
+        return
+    # Don't read any more. We'll call readStart() when we're interested in
+    # reading again.
+    readStop(stream)
+    if status > 0:
+        data = rffi.charpsize2str(buf.c_base, status)
+        k.do(state, Ok(data))
+    elif status == -4095:
+        k.do(state, Ok(""))
+    else:
+        msg = formatError(status).decode("utf-8")
+        k.do(state, (ERR, "", msg))
+
+
+class magic_readStart(object):
+    callbackType = StreamReadStartFutureCallback
+
+    def __init__(self, stream):
+        self.stream = stream
+
+    def run(self, state, k):
+        stashStream2(self.stream, (state, streamReadStart_erase(k)))
+        readStart(self.stream, allocCB, readStreamCB)
+
+
+class StreamWriteFutureCallback(object):
+    pass
+
+
+stashWrite2, unstashWrite2, _ = stashFor("write", write_tp)
+
+
+def writeStreamCB(uv_write, status):
+    state, sb = unstashWrite2(uv_write)
+    sb.deallocate()
+    if sb.k:
+        sb.k.do(state, (Ok(0)))
+
+
+class magic_write(object):
+    def __init__(self, stream, data):
+        self.stream = stream
+        self.data = data
+
+    def run(self, state, k):
+        uv_write = alloc_write()
+        sb = WriteBuf(self.data, k)
+        bufs = sb.allocate()
+        stashWrite2(uv_write, (state, sb))
+        write(uv_write, self.stream, bufs, 1, writeStreamCB)
 
 class scopedBufs(Object):
 
@@ -764,6 +840,192 @@ fs_rename = rffi.llexternal("uv_fs_rename", [loop_tp, fs_tp, rffi.CCHARP,
                             rffi.INT, compilation_info=eci)
 fsRename = checking("fs_rename", fs_rename)
 
+fsRead_erase, fsRead_unerase = new_erasing_pair("fsRead")
+
+
+class FSReadFutureCallback(object):
+    pass
+
+
+stashFS2, unstashFS2, unstashingFS2 = stashFor("fs2", fs_tp,
+                                               initial=fsRead_erase(
+                                                   FSReadFutureCallback()))
+
+
+def magic_fsReadCB(fs):
+    size = intmask(fs.c_result)
+    state, v = unstashFS2(fs)
+    k = fsRead_unerase(v)
+    fsDiscard(fs)
+    if not k:
+        return
+    if size > 0:
+            # XXX is this coupling to state contents dangerous?
+            data = rffi.charpsize2str(state.buf.c_base, size)
+            k.do(state, Ok(data))
+    elif size < 0:
+        k.do(state, (ERR, "", formatError(size).decode("utf-8")))
+    else:
+        k.do(state, Ok(""))
+
+
+class magic_fsRead(object):
+    callbackType = FSReadFutureCallback
+    def __init__(self, vat, fd, buf):
+        self.vat = vat
+        self.fd = fd
+        self.buf = buf
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        stashFS2(fs, (state, fsRead_erase(k)))
+        with lltype.scoped_alloc(rffi.CArray(buf_t), 1) as bufs:
+            bufs[0].c_base = self.buf.c_base
+            bufs[0].c_len = self.buf.c_len
+            fsRead(self.vat.uv_loop, fs, self.fd, bufs, 1, -1,
+                   magic_fsReadCB)
+
+
+fsWrite_erase, fsWrite_unerase = new_erasing_pair("fsWrite")
+
+
+class FSWriteFutureCallback(object):
+    pass
+
+
+def magic_fsWriteCB(fs):
+    state, v = unstashFS2(fs)
+    wb = fsWrite_unerase(v)
+    size = intmask(fs.c_result)
+    fsDiscard(fs)
+    wb.deallocate()
+    if not wb.k:
+        return
+    if size >= 0:
+        wb.k.do(state, Ok(size))
+    else:
+        wb.k.do(state, (ERR, 0, formatError(size).decode("utf-8")))
+
+
+class WriteBuf(scopedBufs):
+    def __init__(self, data, k):
+        self.data = [data]
+        self.k = k
+        self.scoping = lltype.scoped_alloc(rffi.CArray(buf_t), len(self.data))
+
+
+class magic_fsWrite(object):
+    callbackType = FSWriteFutureCallback
+    def __init__(self, vat, fd, data):
+        self.vat = vat
+        self.fd = fd
+        self.data = data
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        wb = WriteBuf(self.data, k)
+        stashFS2(fs, (state, fsWrite_erase(wb)))
+        bufs = wb.allocate()
+        fsWrite(self.vat.uv_loop, fs, self.fd, bufs, 1, -1,
+                magic_fsWriteCB)
+
+
+fsOpen_erase, fsOpen_unerase = new_erasing_pair("fsOpen")
+
+
+def magic_fsOpenCB(fs):
+    fd = intmask(fs.c_result)
+    state, v = unstashFS2(fs)
+    k = fsOpen_unerase(v)
+    fsDiscard(fs)
+    if not k:
+        return
+    if fd < 0:
+        msg = formatError(fd).decode("utf-8")
+        k.do(state, (ERR, 0, msg))
+    else:
+        k.do(state, Ok(fd))
+
+
+class FSOpenFutureCallback(object):
+    pass
+
+
+class magic_fsOpen(object):
+    callbackType = FSOpenFutureCallback
+    def __init__(self, vat, path, flags, mode):
+        self.vat = vat
+        self.path = path
+        self.flags = flags
+        self.mode = mode
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        stashFS2(fs, (state, fsOpen_erase(k)))
+        fsOpen(self.vat.uv_loop, fs, self.path, self.flags, self.mode,
+               magic_fsOpenCB)
+
+
+def magic_fsCloseCB(fs):
+    state, v = unstashFS2(fs)
+    k = fsClose_unerase(v)
+    fsDiscard(fs)
+    if not k:
+        return
+    k.do(state, Ok(None))
+
+
+fsClose_erase, fsClose_unerase = new_erasing_pair("fsClose")
+
+
+class FSCloseFutureCallback(object):
+    pass
+
+
+class magic_fsClose(object):
+    callbackType = FSCloseFutureCallback
+    def __init__(self, vat, f):
+        self.vat = vat
+        self.f = f
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        stashFS2(fs, (state, fsClose_erase(k)))
+        fsClose(self.vat.uv_loop, fs, self.f, magic_fsCloseCB)
+
+
+fsRename_erase, fsRename_unerase = new_erasing_pair("fsRename")
+
+
+class FSRenameFutureCallback(object):
+    pass
+
+class magic_fsRename(object):
+    callbackType = FSRenameFutureCallback
+    def __init__(self, vat, src, dest):
+        self.vat = vat
+        self.src = src
+        self.dest = dest
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        stashFS2(fs, (state, fsRename_erase(k)))
+        fsRename(self.vat.uv_loop, fs, self.src, self.dest, magic_fsRenameCB)
+
+
+def magic_fsRenameCB(fs):
+    success = intmask(fs.c_result)
+    state, v = unstashFS2(fs)
+    k = fsRename_unerase(v)
+    fsDiscard(fs)
+    if not k:
+        return
+    if success < 0:
+        msg = formatError(success).decode("utf-8")
+        k.do(state, (ERR, None, msg))
+    else:
+        k.do(state, Ok(None))
+
 
 def alloc_fs():
     return lltype.malloc(cConfig["fs_t"], flavor="raw", zero=True)
@@ -777,6 +1039,7 @@ def fsDiscard(fs):
 def fsUnstashAndDiscard(fs):
     unstashFS(fs)
     fsDiscard(fs)
+
 
 gai_cb = rffi.CCallback([gai_tp, rffi.INT, s.addrinfo_ptr], lltype.Void)
 
@@ -818,6 +1081,38 @@ def IP6Name(sockaddr):
     with rffi.scoped_alloc_buffer(size) as buf:
         check("ip6_name", ip6_name(sockaddr, buf.raw, size))
         return buf.str(size).split('\x00', 1)[0]
+
+
+def magic_gaiCB(gai, status, ai):
+    status = intmask(status)
+    state, k = unstashGAI(gai)
+    if status < 0:
+        msg = formatError(status).decode("utf-8")
+        k.do(state, (ERR, lltype.nullptr(s.addrinfo), msg))
+    else:
+        k.do(state, Ok(ai))
+    freeAddrInfo(ai)
+    free(gai)
+
+
+class GetAddrInfoCallback(object):
+    pass
+
+
+class magic_getAddrInfo(object):
+    callbackType = GetAddrInfoCallback
+
+    def __init__(self, vat, node, service):
+        self.vat = vat
+        self.node = node
+        self.service = service
+
+    def run(self, state, k):
+        gai = alloc_gai()
+        stashGAI(gai, (state, k))
+        getAddrInfo(self.vat.uv_loop, gai, magic_gaiCB, self.node,
+                    self.service, lltype.nullptr(s.addrinfo))
+
 
 signal_cb = rffi.CCallback([signal_tp, rffi.INT], lltype.Void)
 signal_init = rffi.llexternal("uv_signal_init", [loop_tp, signal_tp],
