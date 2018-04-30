@@ -1,13 +1,22 @@
-import "lib/tubes" =~ [=> makeMapPump :DeepFrozen,
-     => makePumpTube :DeepFrozen,
-     => chain :DeepFrozen,
-]
-import "lib/enum" =~ [=> makeEnum :DeepFrozen]
-import "lib/codec/percent" =~ [=> PercentEncoding :DeepFrozen]
-import "lib/codec" =~ [=> composeCodec :DeepFrozen]
-import "lib/record" =~ [=> makeRecord :DeepFrozen]
 import "unittest" =~ [=> unittest]
+import "lib/codec" =~ [=> composeCodec :DeepFrozen]
+import "lib/codec/percent" =~ [=> PercentEncoding :DeepFrozen]
 import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
+import "lib/enum" =~ [=> makeEnum :DeepFrozen]
+import "lib/record" =~ [=> makeRecord :DeepFrozen]
+import "lib/streams" =~ [
+    => alterSink :DeepFrozen,
+    => flow :DeepFrozen,
+    => fuse :DeepFrozen,
+]
+import "lib/tubes" =~ [
+     => makePumpTube :DeepFrozen,
+]
+import "http/headers" =~ [
+    => Headers :DeepFrozen,
+    => emptyHeaders :DeepFrozen,
+    => parseHeader :DeepFrozen,
+]
 exports (makeHTTPEndpoint)
 
 # Copyright (C) 2014 Google Inc. All rights reserved.
@@ -28,12 +37,6 @@ exports (makeHTTPEndpoint)
 # Strange as it sounds, the percent encoding is actually *outside* the UTF-8
 # encoding!
 def UTF8Percent :DeepFrozen := composeCodec(PercentEncoding, UTF8)
-
-def [Headers :DeepFrozen,
-     makeHeaders :DeepFrozen] := makeRecord("Headers",
-     ["contentLength" => NullOk[Int],
-      "contentType" => NullOk[Pair[Str, Str]],
-      "spareHeaders" => Map[Str, Str]])
 
 def [Request :DeepFrozen,
      makeRequest :DeepFrozen] := makeRecord("Request",
@@ -62,102 +65,81 @@ def makeRequestPump() as DeepFrozen:
     var buf :Bytes := b``
     var pendingRequest := null
     var pendingRequestLine := null
-    var headers :Headers := makeHeaders(null, null, [].asMap())
+    var headers :Headers := emptyHeaders()
 
-    return object requestPump:
-        to started():
-            null
+    def parse(ej) :Bool:
+        # Return whether more parsing can take place.
+        # Eject if the parse fails.
 
-        to progressed(amount):
-            null
+        switch (requestState):
+            match ==REQUEST:
+                if (buf.indexOf(b`$\r$\n`) == -1):
+                    return false
 
-        to stopped(_):
-            null
+                # XXX it'd be swell if these were subpatterns
+                def b`@{via (UTF8.decode) verb} @{via (UTF8Percent.decode) uri} HTTP/1.1$\r$\n@t` exit ej := buf
+                pendingRequestLine := [verb, uri]
+                headers := emptyHeaders()
+                requestState := HEADER
+                buf := t
+                return true
 
-        to received(bytes :Bytes) :List:
-            # traceln(`received bytes $bytes`)
-            buf += bytes
+            match ==HEADER:
+                def index := buf.indexOf(b`$\r$\n`)
 
-            var shouldParseMore :Bool := true
+                if (index == -1):
+                    return false
 
-            while (shouldParseMore):
-                escape badParse:
-                    shouldParseMore := requestPump.parse(badParse)
-                catch _:
-                    return [null]
-
-            if (pendingRequest != null):
-                def rv := [pendingRequest]
-                pendingRequest := null
-                return rv
-
-            return []
-
-        to parse(ej) :Bool:
-            # Return whether more parsing can take place.
-            # Eject if the parse fails.
-
-            switch (requestState):
-                match ==REQUEST:
-                    if (buf.indexOf(b`$\r$\n`) == -1):
-                        return false
-
-                    # XXX it'd be swell if these were subpatterns
-                    def b`@{via (UTF8.decode) verb} @{via (UTF8Percent.decode) uri} HTTP/1.1$\r$\n@t` exit ej := buf
-                    pendingRequestLine := [verb, uri]
-                    headers := makeHeaders(null, null, [].asMap())
-                    requestState := HEADER
-                    buf := t
+                if (index == 0):
+                    # Single newline; end of headers.
+                    requestState := BODY
+                    buf := buf.slice(2)
+                    # Copy the content length to become the body length.
+                    def contentLength := headers.getContentLength()
+                    if (contentLength != null):
+                        bodyState := [FIXED, contentLength]
                     return true
 
-                match ==HEADER:
-                    if (buf.indexOf(b`$\r$\n`) == -1):
-                        return false
+                def slice := buf.slice(0, index)
+                headers := parseHeader(headers, slice)
+                buf := buf.slice(index + 2)
+                return true
 
-                    if (buf =~ b`$\r$\n@t`):
-                        requestState := BODY
-                        buf := t
-                        return true
+            match ==BODY:
+                switch (bodyState):
+                    # XXX this should eventually just deliver each chunk
+                    # to a tube.
+                    match [==FIXED, len]:
+                        if (buf.size() >= len):
+                            def body := buf.slice(0, len)
+                            buf slice= (len)
+                            requestState := REQUEST
+                            def [verb, uri] := pendingRequestLine
+                            pendingRequest := makeRequest(verb, uri,
+                                                          headers, body)
+                            bodyState := [FIXED, 0]
+                        else:
+                            return false
+                return true
 
-                    def b`@{via (UTF8.decode) header}:@{via (UTF8.decode) value}$\r$\n@t` exit ej := buf
-                    switch (header.toLowerCase()):
-                        match `content-length`:
-                            try:
-                                def len  := _makeInt(value.trim())
-                                headers withContentLength= (len)
-                                bodyState := [FIXED, len]
-                            catch p:
-                                throw.eject(ej, p)
-                        match `content-type`:
-                            # XXX should support options, right?
-                            def `@type/@subtype` exit ej := value.trim()
-                            headers withContentType= ([type, subtype])
-                        match _:
-                            def spareHeaders := headers.getSpareHeaders()
-                            headers withSpareHeaders= (spareHeaders.with(header, value.trim()))
-                    buf := t
-                    return true
+    return def requestPump(bytes :Bytes) :List:
+        # traceln(`received bytes $bytes`)
+        buf += bytes
 
-                match ==BODY:
-                    switch (bodyState):
-                        # XXX this should eventually just deliver each chunk
-                        # to a tube.
-                        match [==FIXED, len]:
-                            if (buf.size() >= len):
-                                def body := buf.slice(0, len)
-                                buf slice= (len)
-                                requestState := REQUEST
-                                def [verb, uri] := pendingRequestLine
-                                pendingRequest := makeRequest(verb, uri,
-                                                              headers, body)
-                                bodyState := [FIXED, 0]
-                            else:
-                                return false
-                    return true
+        var shouldParseMore :Bool := true
 
+        while (shouldParseMore):
+            escape badParse:
+                shouldParseMore := parse(badParse)
+            catch _:
+                return [null]
 
-def makeRequestTube() as DeepFrozen:
-    return makePumpTube(makeRequestPump())
+        if (pendingRequest != null):
+            def rv := [pendingRequest]
+            pendingRequest := null
+            return rv
+
+        return []
 
 
 def statusMap :Map[Int, Str] := [
@@ -171,32 +153,18 @@ def statusMap :Map[Int, Str] := [
 
 
 def makeResponsePump() as DeepFrozen:
-    return object responsePump:
-        to started():
-            null
-
-        to progressed(amount):
-            null
-
-        to stopped(_):
-            null
-
-        to received(response):
-            def [statusCode, headers, body] := response
-            def statusDescription := statusMap.fetch(statusCode,
-                                                     "Unknown Status")
-            def status := `$statusCode $statusDescription`
-            var rv := [b`HTTP/1.1 $status$\r$\n`]
-            for header => value in (headers):
-                def headerLine := `$header: $value`
-                rv with= (b`$headerLine$\r$\n`)
-            rv with= (b`$\r$\n`)
-            rv with= (body)
-            return rv
-
-
-def makeResponseTube() as DeepFrozen:
-    return makePumpTube(makeResponsePump())
+    return def responsePump(response):
+        def [statusCode, headers, body] := response
+        def statusDescription := statusMap.fetch(statusCode,
+                                                 "Unknown Status")
+        def status := `$statusCode $statusDescription`
+        var rv := [b`HTTP/1.1 $status$\r$\n`]
+        for header => value in (headers):
+            def headerLine := `$header: $value`
+            rv with= (b`$headerLine$\r$\n`)
+        rv with= (b`$\r$\n`)
+        rv with= (body)
+        return rv
 
 
 def serverHeader :Map[Str, Str] := [
@@ -223,19 +191,19 @@ def processorWrapper(app) as DeepFrozen:
     return wrappedProcessor
 
 
-def makeProcessingTube(app) as DeepFrozen:
-    return makePumpTube(makeMapPump(processorWrapper(app)))
+def makeProcessingPump(app) as DeepFrozen:
+    def wrapper := processorWrapper(app)
+    return def processingPump(request):
+        return [wrapper(request)]
 
 
 def makeHTTPEndpoint(endpoint) as DeepFrozen:
     return object HTTPEndpoint:
         to listen(processor):
-            def responder(fount, drain):
-                chain([
-                    fount,
-                    makeRequestTube(),
-                    makeProcessingTube(processor),
-                    makeResponseTube(),
-                    drain,
-                ])
-            endpoint.listen(responder)
+            def responder(source, sink):
+                def request := makeRequestPump()
+                def processing := makeProcessingPump(processor)
+                def response := makeResponsePump()
+                def fused := fuse(request, fuse(processing, response))
+                flow(source, alterSink.fusePump(fused, sink))
+            endpoint.listenStream(responder)

@@ -1,3 +1,23 @@
+import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
+import "lib/gai" =~ [=> makeGAI :DeepFrozen]
+import "lib/enum" =~ [=> makeEnum :DeepFrozen]
+import "lib/streams" =~ [
+    => Pump :DeepFrozen,
+    => Source :DeepFrozen,
+    => alterSource :DeepFrozen,
+    => flow :DeepFrozen,
+    => makePump :DeepFrozen,
+    => makeSink :DeepFrozen,
+]
+import "http/headers" =~ [
+    => Headers :DeepFrozen,
+    => emptyHeaders :DeepFrozen,
+    => parseHeader :DeepFrozen,
+    => IDENTITY :DeepFrozen,
+    => CHUNKED :DeepFrozen,
+]
+exports (main, makeRequest)
+
 # Copyright (C) 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,136 +32,205 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
-import "lib/gai" =~ [=> makeGAI :DeepFrozen]
-import "lib/enum" =~ [=> makeEnum :DeepFrozen]
-import "lib/tubes" =~ [
-    => makeMapPump :DeepFrozen,
-    => makePumpTube :DeepFrozen,
-]
-
-exports (main)
-
 
 def lowercase(specimen, ej) as DeepFrozen:
     def s :Str exit ej := specimen
     return s.toLowerCase()
 
 
-def makeCommonHeaders(contentLength :NullOk[Int]) as DeepFrozen:
-    return object commonHeaders:
-        to _printOn(out):
-            out.print("<common HTTP headers: ")
-            out.print(`Content length: $contentLength`)
-            out.print(">")
-
-        to finiteBody() :Bool:
-            return contentLength != null
-
-        to smallBody() :Bool:
-            return contentLength != null && contentLength < 1024 * 1024
-
-
-def makeResponse(status :Int, commonHeaders, extraHeaders, body) as DeepFrozen:
+def makeResponse(status :Int, headers :Headers, bodySource :Source) as DeepFrozen:
     return object response:
         to _printOn(out):
-            out.print(`<response $status: $commonHeaders ($extraHeaders)>`)
+            out.print(`<response $status: $headers>`)
 
-        to getBody():
-            return body
+        to status() :Int:
+            return status
+
+        to headers() :Headers:
+            return headers
+
+        to source():
+            return bodySource
 
 
-def [HTTPState, REQUEST, HEADER, BODY, BUFFERBODY, FOUNTBODY] := makeEnum(
-    ["request", "header", "body", "body (buffered)", "body (streaming)"])
+def [HTTPState :DeepFrozen,
+     REQUEST :DeepFrozen,
+     HEADER :DeepFrozen,
+     BODY :DeepFrozen,
+] := makeEnum(["request", "header", "body"])
 
 
-def makeResponseDrain(resolver) as DeepFrozen:
+def makeBodyMachine(headers :Headers) as DeepFrozen:
+    def contentLength :NullOk[Int] := headers.getContentLength()
+    var resolver := null
+    var buf :Bytes := b``
+    var done :Bool := false
+
+    def source(sink) :Vow[Void] as Source:
+        traceln(`source($sink) done=$done buf.size()=${buf.size()} resolver=$resolver`)
+        return if (done):
+            if (buf.size() == 0):
+                sink<-complete()
+            else:
+                # Final chunk.
+                sink<-(buf)
+                buf := b``
+                sink<-complete()
+        else:
+            sink<-(buf)
+            buf := b``
+
+    def feed(bs :Bytes) :Bool:
+        traceln(`feed($bs)`)
+        buf += bs
+        return true
+
+    def machine := if (contentLength == null) {
+        feed
+    } else {
+        var remaining :Int := contentLength
+
+        def finiteBodyMachine(bs :Bytes) :Bool {
+            "A controller for a finite body."
+
+            remaining -= bs.size()
+            return if (remaining <= 0) {
+                feed(bs)
+                done := true
+                false
+            } else {
+                feed(bs)
+            }
+        }
+    }
+
+    return [machine, source]
+
+def [ChunkedState :DeepFrozen,
+     SIZE :DeepFrozen,
+     CHUNK :DeepFrozen,
+] := makeEnum(["size", "chunk"])
+
+# XXX this is...not ideal.
+def hexDigits :Map[Int, Int] := [
+    for i in (b`0123456789abcdefABCDEF`)
+    i => _makeInt.withRadix(16).fromBytes(_makeBytes.fromInts([i]))]
+
+def makeChunkedPump() :Pump as DeepFrozen:
+    "Make a pump which decodes chunked transfer coding."
+
+    var chunkSize :Int := 0
+    var chunks := []
+
+    object chunkMachine:
+        to getStateGuard():
+            return ChunkedState
+
+        to getInitialState():
+            return [SIZE, 1]
+
+        to advance(state, data):
+            return switch (state):
+                match ==SIZE:
+                    def i := data[0]
+                    if (i == b`$\r`[0]):
+                        traceln(`SIZE->CHUNK $chunkSize $data`)
+                        # Chunks will looks like b`$\n...$\r$\n` so we'll have
+                        # three extra characters to trim off.
+                        def rv := [CHUNK, chunkSize + 3]
+                        chunkSize := 0
+                        rv
+                    else:
+                        chunkSize *= 16
+                        chunkSize += hexDigits[i]
+                        traceln(`SIZE $chunkSize $data`)
+                        [SIZE, 1]
+                match ==CHUNK:
+                    def slice := data.slice(1, data.size() - 2)
+                    def chunk := _makeBytes.fromInts(slice)
+                    traceln(`CHUNK $chunk`)
+                    chunks with= (chunk)
+                    [SIZE, 1]
+
+        to results():
+            def rv := chunks
+            chunks := []
+            return rv
+
+    return makePump.fromStateMachine(chunkMachine)
+
+
+def makeResponseSink(resolver) as DeepFrozen:
     var state :HTTPState := REQUEST
     var buf :Bytes := b``
-    var headers := null
+    var headers :Headers := emptyHeaders()
     var status :NullOk[Int] := null
-    var label := null
 
-    var contentLength :NullOk[Int] := null
-    var commonHeaders := null
-    def bytesToInt(s, e):
-        try:
-            return _makeInt.fromBytes(s)
-        catch p:
-            e(p)
+    var bodyMachine := null
 
-    return object responseDrain:
-        to receive(bytes):
-            buf += bytes
-            responseDrain.parse()
+    def nextLine(ej) :Bytes:
+        def b`@line$\r$\n@tail` exit ej := buf
+        buf := tail
+        return line
 
-        to flowingFrom(fount):
-            return responseDrain
-
-        to flowAborted(reason):
-            traceln(`Flow aborted: $reason`)
-
-        to flowStopped(reason):
-            traceln(`End of response: $reason`)
-
-        to parseStatus(ej):
-            def b`HTTP/1.1 @{via (bytesToInt) statusCode} @{via (UTF8.decode) label}$\r$\n@tail` exit ej := buf
-            status := statusCode
+    def parseStatus(ej):
+        def line := nextLine(ej)
+        if (line =~ b`HTTP/1.1 @{via (_makeInt.fromBytes) s} @label`):
+            status := s
             traceln(`Status: $status ($label)`)
-            buf := tail
             state := HEADER
-            headers := [].asMap().diverge()
+            headers := emptyHeaders()
 
-        to parseHeader(ej):
-            escape final:
-                def b`@{via (UTF8.decode) key}: @value$\r$\n@tail` exit final := buf
-                buf := tail
-                switch (key):
-                    match via (lowercase) =="content-length":
-                        contentLength := bytesToInt(value, ej)
-                    match header:
-                        headers[header] := UTF8.decode(value, null)
-            catch _:
-                def b`$\r$\n@tail` exit ej := buf
-                buf := tail
-                state := BODY
-
-        to parse():
-            while (true):
-                switch (state):
-                    match ==REQUEST:
-                        responseDrain.parseStatus(__break)
-                    match ==HEADER:
-                        responseDrain.parseHeader(__break)
-                    match ==BODY:
-                        commonHeaders := makeCommonHeaders(contentLength)
-                        if (commonHeaders.finiteBody()):
-                            traceln("Currently expecting finite body")
-                            if (commonHeaders.smallBody()):
-                                traceln("Body is small; will buffer in memory")
-                                state := BUFFERBODY
-                            else:
-                                traceln("Body isn't small")
-                                state := FOUNTBODY
-                    match ==BUFFERBODY:
-                        if (buf.size() >= contentLength):
-                            def body := buf.slice(0, contentLength)
-                            buf := buf.slice(contentLength, buf.size())
-                            responseDrain.finalize(body)
-                        else:
-                            break
-                    match ==FOUNTBODY:
-                        traceln("I'm not prepared to do this yet!")
-                        throw("Couldn't do fount body!")
-
-        to finalize(body):
-            def response := makeResponse(status, commonHeaders,
-                                         headers.snapshot(), body)
+    def parseHeaderLine(ej):
+        def line := nextLine(ej)
+        if (line.size() == 0):
+            # Double newline; end of headers.
+            state := BODY
+            def [machine, var source :Source] := makeBodyMachine(headers)
+            bodyMachine := machine
+            # Rig up body decoder.
+            for encoding in (headers.getTransferEncoding()):
+                switch (encoding):
+                    match ==IDENTITY:
+                        # No-op.
+                        null
+                    match ==CHUNKED:
+                        source := alterSource.fusePump(makeChunkedPump(),
+                                                       source)
+            def response := makeResponse(status, headers, source)
             resolver.resolve(response)
+        else:
+            headers := parseHeader(headers, line)
+
+    def parse():
+        while (true):
+            switch (state):
+                match ==REQUEST:
+                    parseStatus(__break)
+                match ==HEADER:
+                    parseHeaderLine(__break)
+                match ==BODY:
+                    def more :Bool := bodyMachine(buf)
+                    buf := b``
+                    if (!more):
+                        bodyMachine := null
+                        state := REQUEST
+                    break
+
+    return object responseSink:
+        to complete():
+            traceln(`Response complete`)
+
+        to abort(reason):
+            traceln(`Response aborted: $reason`)
+
+        to run(bytes):
+            buf += bytes
+            parse()
 
 
-def makeRequest(makeTCP4ClientEndpoint, host :Bytes, resource :Str) as DeepFrozen:
-    var port :Int := 80
+def makeRequest(makeTCP4ClientEndpoint, host :Bytes, resource :Str,
+                => port :Int := 80) as DeepFrozen:
     def headers := [
         "Host" => host,
         "Connection" => b`close`,
@@ -151,22 +240,23 @@ def makeRequest(makeTCP4ClientEndpoint, host :Bytes, resource :Str) as DeepFroze
         to put(key, value :Bytes):
             headers[key] := value
 
-        to write(verb, drain):
-            drain.receive(UTF8.encode(`$verb $resource HTTP/1.1$\r$\n`, null))
+        to write(verb, sink):
+            sink(UTF8.encode(`$verb $resource HTTP/1.1$\r$\n`, null))
             for via (UTF8.encode) k => v in (headers):
-                drain.receive(b`$k: $v$\r$\n`)
-            drain.receive(b`$\r$\n`)
+                sink(b`$k: $v$\r$\n`)
+            sink(b`$\r$\n`)
 
         to send(verb :Str):
             def endpoint := makeTCP4ClientEndpoint(host, port)
-            def [fount, drain] := endpoint.connect()
+            def [source, sink] := endpoint.connectStream()
             def [p, r] := Ref.promise()
 
             # Write request.
-            when (drain) ->
-                request.write(verb, drain)
+            when (sink) ->
+                request.write(verb, sink)
+                sink.complete()
             # Read response.
-            fount<-flowTo(makeResponseDrain(r))
+            source<-(makeResponseSink(r))
 
             return p
 
@@ -174,13 +264,23 @@ def makeRequest(makeTCP4ClientEndpoint, host :Bytes, resource :Str) as DeepFroze
             return request.send("GET")
 
 
-def main(=> getAddrInfo, => makeTCP4ClientEndpoint) as DeepFrozen:
-    def addrs := getAddrInfo(b`example.com`, b``)
+def main(_argv, => getAddrInfo, => makeTCP4ClientEndpoint) as DeepFrozen:
+    def addrs := getAddrInfo(b`localhost`, b``)
     return when (addrs) ->
         def gai := makeGAI(addrs)
         def [addr] + _ := gai.TCP4()
-        def response := makeRequest(makeTCP4ClientEndpoint, addr.getAddress(), "/").get()
+        def port :Int := 3456
+        def response := makeRequest(makeTCP4ClientEndpoint, addr.getAddress(),
+                                    "/statistics?t=json", => port).get()
         when (response) ->
             traceln("Finished request with response", response)
-            traceln(UTF8.decode(response.getBody(), null))
-            0
+            def [pieces, sink] := makeSink.asList()
+            traceln("Getting body...")
+            flow(response.source(), sink)
+            when (pieces) ->
+                traceln(`Pieces: $pieces`)
+                0
+    catch problem:
+        traceln(`Problem: $problem`)
+        traceln.exception(problem)
+        1
