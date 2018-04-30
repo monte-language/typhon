@@ -1,20 +1,20 @@
-import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
-import "lib/gai" =~ [=> makeGAI :DeepFrozen]
-import "lib/enum" =~ [=> makeEnum :DeepFrozen]
+import "lib/codec/utf8" =~  [=> UTF8]
+import "lib/gai" =~ [=> makeGAI]
+import "lib/enum" =~ [=> makeEnum]
 import "lib/streams" =~ [
-    => Pump :DeepFrozen,
-    => Source :DeepFrozen,
-    => alterSource :DeepFrozen,
-    => flow :DeepFrozen,
-    => makePump :DeepFrozen,
-    => makeSink :DeepFrozen,
+    => Pump,
+    => Source,
+    => alterSource,
+    => flow,
+    => makePump,
+    => makeSink,
 ]
-import "http/headers" =~ [
-    => Headers :DeepFrozen,
-    => emptyHeaders :DeepFrozen,
-    => parseHeader :DeepFrozen,
-    => IDENTITY :DeepFrozen,
-    => CHUNKED :DeepFrozen,
+import "lib/http/headers" =~ [
+    => Headers,
+    => emptyHeaders,
+    => parseHeader,
+    => IDENTITY,
+    => CHUNKED,
 ]
 exports (main, makeRequest)
 
@@ -61,7 +61,7 @@ def [HTTPState :DeepFrozen,
 
 
 def makeBodyMachine(headers :Headers) as DeepFrozen:
-    def contentLength :NullOk[Int] := headers.getContentLength()
+    def contentLength :NullOk[Int] := headers.contentLength()
     var resolver := null
     var buf :Bytes := b``
     var done :Bool := false
@@ -189,7 +189,7 @@ def makeResponseSink(resolver) as DeepFrozen:
             def [machine, var source :Source] := makeBodyMachine(headers)
             bodyMachine := machine
             # Rig up body decoder.
-            for encoding in (headers.getTransferEncoding()):
+            for encoding in (headers.transferEncoding()):
                 switch (encoding):
                     match ==IDENTITY:
                         # No-op.

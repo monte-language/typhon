@@ -1,21 +1,17 @@
-import "unittest" =~ [=> unittest]
-import "lib/codec" =~ [=> composeCodec :DeepFrozen]
-import "lib/codec/percent" =~ [=> PercentEncoding :DeepFrozen]
-import "lib/codec/utf8" =~  [=> UTF8 :DeepFrozen]
-import "lib/enum" =~ [=> makeEnum :DeepFrozen]
-import "lib/record" =~ [=> makeRecord :DeepFrozen]
+import "lib/codec" =~ [=> composeCodec]
+import "lib/codec/percent" =~ [=> PercentEncoding]
+import "lib/codec/utf8" =~  [=> UTF8]
+import "lib/enum" =~ [=> makeEnum]
+import "lib/record" =~ [=> makeRecord]
 import "lib/streams" =~ [
-    => alterSink :DeepFrozen,
-    => flow :DeepFrozen,
-    => fuse :DeepFrozen,
+    => alterSink,
+    => flow,
+    => fuse,
 ]
-import "lib/tubes" =~ [
-     => makePumpTube :DeepFrozen,
-]
-import "http/headers" =~ [
-    => Headers :DeepFrozen,
-    => emptyHeaders :DeepFrozen,
-    => parseHeader :DeepFrozen,
+import "lib/http/headers" =~ [
+    => Headers,
+    => emptyHeaders,
+    => parseHeader,
 ]
 exports (makeHTTPEndpoint)
 
@@ -38,7 +34,7 @@ exports (makeHTTPEndpoint)
 # encoding!
 def UTF8Percent :DeepFrozen := composeCodec(PercentEncoding, UTF8)
 
-def [Request :DeepFrozen,
+def [_Request :DeepFrozen,
      makeRequest :DeepFrozen] := makeRecord("Request",
      ["verb" => Str,
       "path" => Str,
@@ -53,7 +49,7 @@ def [RequestState :DeepFrozen,
 
 def [BodyState :DeepFrozen,
      FIXED :DeepFrozen,
-     CHUNKED :DeepFrozen] := makeEnum(["fixed", "chunked"])
+     _CHUNKED :DeepFrozen] := makeEnum(["fixed", "chunked"])
 
 def makeRequestPump() as DeepFrozen:
     var requestState :RequestState := REQUEST
@@ -95,7 +91,7 @@ def makeRequestPump() as DeepFrozen:
                     requestState := BODY
                     buf := buf.slice(2)
                     # Copy the content length to become the body length.
-                    def contentLength := headers.getContentLength()
+                    def contentLength := headers.contentLength()
                     if (contentLength != null):
                         bodyState := [FIXED, contentLength]
                     return true
@@ -198,8 +194,7 @@ def makeProcessingPump(app) as DeepFrozen:
 
 
 def makeHTTPEndpoint(endpoint) as DeepFrozen:
-    return object HTTPEndpoint:
-        to listen(processor):
+    return def HTTPEndpoint.listen(processor):
             def responder(source, sink):
                 def request := makeRequestPump()
                 def processing := makeProcessingPump(processor)

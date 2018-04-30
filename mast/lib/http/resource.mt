@@ -1,6 +1,6 @@
-import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
-import "http/tag" =~ [=> tag :DeepFrozen]
-import "http/server" =~ [=> makeHTTPEndpoint :DeepFrozen]
+import "lib/codec/utf8" =~ [=> UTF8]
+import "lib/http/tag" =~ [=> tag]
+import "lib/http/server" =~ [=> makeHTTPEndpoint]
 exports (smallBody,
          notFoundResource,
          makeDebugResource,
@@ -28,7 +28,7 @@ object notFoundResource as DeepFrozen:
     to get(_):
         return notFoundResource
 
-    to run(request):
+    to run(_request):
         def [_, headers, body] := smallBody("Not found")
         return [404, headers, body]
 
@@ -120,7 +120,7 @@ def makeResourceApp(root) as DeepFrozen:
     return resourceApp
 
 
-def main(argv, => currentRuntime, => makeTCP4ServerEndpoint) as DeepFrozen:
+def main(_argv, => currentRuntime, => makeTCP4ServerEndpoint) as DeepFrozen:
     # Just a single / that shows the debug page.
     def root := makeDebugResource(currentRuntime)
 
