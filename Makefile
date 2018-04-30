@@ -70,6 +70,7 @@ mast: mast/lib/enum.mast \
 	codec \
 	entropy \
 	parsers \
+	http \
 	games \
 	bench \
 	monte \
@@ -103,6 +104,9 @@ entropy: mast/lib/entropy/pool.mast mast/lib/entropy/entropy.mast \
 parsers: mast/lib/parsers/html.mast \
 	mast/lib/pen.mast \
 	mast/lib/parse.mast
+
+http: mast/lib/http/client.mast mast/lib/http/server.mast \
+	mast/lib/http/tag.mast mast/lib/http/resource.mast
 
 games: mast/games/mafia.mast
 
