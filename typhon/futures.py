@@ -27,6 +27,10 @@ class Future(object):
     pass
 
 
+class IOEvent(object):
+    pass
+
+
 class resolve(Future):
     callbackType = object
 
@@ -37,7 +41,7 @@ class resolve(Future):
     def run(self, state, k):
         self.resolver.resolve(self.value)
         if k is not None:
-            k.do(state, OK(self.value))
+            k.do(state, Ok(self.value))
 
 
 class smash(Future):
@@ -55,7 +59,3 @@ class smash(Future):
 
 class FutureCtx(object):
     vat = None
-
-
-class FutureCallback(object):
-    pass

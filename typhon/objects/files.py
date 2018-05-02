@@ -23,7 +23,7 @@ from typhon import log, rsodium, ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
-from typhon.futures import FutureCtx, FutureCallback, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE, OK, smash
+from typhon.futures import FutureCtx, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE, OK, smash
 from typhon.macros import macros, io
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapStr

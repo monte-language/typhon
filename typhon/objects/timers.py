@@ -19,6 +19,7 @@ from rpython.rlib.rarithmetic import intmask
 from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
+from typhon.futures import IOEvent
 from typhon.objects.data import DoubleObject
 from typhon.objects.refs import LocalResolver, makePromise
 from typhon.objects.root import Object
@@ -98,12 +99,7 @@ class Timer(Object):
     def fromNow(self, duration):
         p, r = makePromise()
         vat = currentVat.get()
-        uv_timer = ruv.alloc_timer(vat.uv_loop)
-        now = ruv.now(vat.uv_loop)
-        # Stash the resolver.
-        ruv.stashTimer(uv_timer, (vat, (r, now)))
-        # repeat of 0 means "don't repeat"
-        ruv.timerStart(uv_timer, resolveTimer, int(duration * 1000), 0)
+        vat.enqueueEvent(TimerIOEvent(vat, r, duration))
         return p
 
     @method("Any", "Any")
@@ -112,3 +108,20 @@ class Timer(Object):
         vat = currentVat.get()
         now = intmask(ruv.now(vat.uv_loop)) / 1000.0
         return vat.send(obj, RUN_1, [DoubleObject(now)], EMPTY_MAP)
+
+
+class TimerIOEvent(IOEvent):
+    def __init__(self, vat, r, duration):
+        self.vat = vat
+        self.r = r
+        self.duration = duration
+        self.uv_timer = ruv.alloc_timer(vat.uv_loop)
+        self.now = ruv.now(vat.uv_loop)
+        # Stash the resolver.
+        ruv.stashTimer(self.uv_timer, (vat, (r, self.now)))
+
+    def run(self):
+        delay = ruv.now(self.vat.uv_loop) - self.now
+        # repeat of 0 means "don't repeat"
+        ruv.timerStart(self.uv_timer, resolveTimer,
+                       max(0, int(self.duration * 1000) - delay), 0)

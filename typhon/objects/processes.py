@@ -8,6 +8,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
+from typhon.futures import IOEvent
 from typhon.objects.collections.maps import monteMap
 from typhon.objects.data import BytesObject, StrObject, unwrapBytes
 from typhon.objects.networking.streamcaps import (StreamSink, StreamSource,
@@ -240,11 +241,27 @@ class makeProcess(Object):
             process = ruv.allocProcess()
             sub = SubProcess(vat, process, argv, env, stdin=stdinSink,
                              stdout=stdoutSource, stderr=stderrSource)
-            ruv.spawn(vat.uv_loop, process,
-                      file=executable, args=argv, env=packedEnv,
-                      streams=streams)
-            sub.retrievePID()
+            vat.enqueueEvent(SpawnProcessIOEvent(
+                vat, sub, process, executable, argv, packedEnv, streams))
             return sub
         except ruv.UVError as uve:
             raise userError(u"makeProcess: Couldn't spawn process: %s" %
                             uve.repr().decode("utf-8"))
+
+
+class SpawnProcessIOEvent(IOEvent):
+    def __init__(self, vat, sub, process, executable, argv,
+                 packedEnv, streams):
+        self.sub = sub
+        self.vat = vat
+        self.process = process
+        self.executable = executable
+        self.argv = argv
+        self.packedEnv = packedEnv
+        self.streams = streams
+
+    def run(self):
+        ruv.spawn(self.vat.uv_loop, self.process,
+                  file=self.executable, args=self.argv, env=self.packedEnv,
+                  streams=self.streams)
+        self.sub.retrievePID()

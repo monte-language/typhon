@@ -23,7 +23,7 @@ from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
 from typhon.log import log
 
-from typhon.futures import Ok, Err, ERR, FutureCallback
+from typhon.futures import Ok, Err, ERR
 from typhon.objects.root import Object
 
 

@@ -52,7 +52,7 @@ def rewriteFreeNames(tree, stop, **ctx):
                     tree.id not in ctx['boundNames']):
                 ctx['freeNames'].append(tree.id)
             stop()
-            return Attribute(Name(ctx['selfName'], Load()), tree.id, tree.ctx)
+            return Attribute(ctx['selfName'], tree.id, tree.ctx)
 
 
 def rewriteAsCallback(expr, cbName, state, globalNames, boundNames, freeNames):
@@ -66,8 +66,7 @@ def rewriteAsCallback(expr, cbName, state, globalNames, boundNames, freeNames):
            'freeNames': freeNames}
     newExpr, _ = rewriteFreeNames.recurse_collect(expr, **ctx)
     return Expr(Call(Attribute(newExpr, "run", Load()),
-                     [Name(state, Load()),
-                      Name(cbName or "None", Load())], [],
+                     [state, cbName or Name("None", Load())], [],
                      None, None))
 
 
@@ -283,12 +282,14 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
     None_ = Name("None", Load())
     stateClassName = gen_sym("State")
     FutureCtx_ = importNames["FutureCtx"]
+    IOEvent_ = importNames["IOEvent"]
     OK_ = importNames["OK"]
     ERR_ = importNames["ERR"]
     self_ = gen_sym("self")
     state = gen_sym("state")
     result = gen_sym("result")
     status = gen_sym("status")
+    currentVat_ = gen_sym("currentVat")
     successValue = gen_sym("successValue")
     failValue = gen_sym("failureValue")
     freeNames = []
@@ -314,14 +315,15 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
 
     def exprAsCallback(expr, nextCB):
         return rewriteAsCallback(copy.deepcopy(expr),
-                                 nextCB and nextCB.functionName, state,
+                                 nextCB and Name(nextCB.functionName, Load()),
+                                 Name(state, Load()),
                                  moduleGlobals, boundNames,
                                  freeNames)
 
     for cb in callbacks:
         if isinstance(cb, IfCallbackInfo):
             successArm = bindName(cb.successName, successValue)
-            ctx = {'boundNames': boundNames, 'selfName': state,
+            ctx = {'boundNames': boundNames, 'selfName': Name(state, Load()),
                    'moduleGlobals': moduleGlobals, 'freeNames': freeNames}
             newTest, _ = rewriteFreeNames.recurse_collect(cb.testExpr, **ctx)
             successArm.append(If(newTest,
@@ -370,15 +372,47 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
                                        None, None))
         toEmit.append(callbackInstance)
 
+    eventClassName = gen_sym("ioEvent")
+
+    estate = gen_sym("state")
+    ek = gen_sym("k")
+    eventExpr = rewriteAsCallback(
+        copy.deepcopy(ops[-1].expr),
+        Attribute(Name(self_, Load()), ek, Load()),
+        Attribute(Name(self_, Load()), estate, Load()),
+        moduleGlobals, boundNames, freeNames)
+    eventClass = ClassDef(eventClassName, [Name(IOEvent_, Load())], [
+        FunctionDef("__init__",
+                    arguments(
+                        [Name(self_, Store()),
+                         Name("state", Store()),
+                         Name("k", Store())], None, None, []),
+                    [Assign([Attribute(Name(self_, Load()), estate, Store())],
+                            Name("state", Load())),
+                     Assign([Attribute(Name(self_, Load()), ek, Store())],
+                            Name("k", Load()))],
+                    []),
+        FunctionDef("run", arguments([Name(self_, Store())], None, None, []),
+                    [eventExpr], [])
+    ], [])
+    toEmit.append(eventClass)
+
     createState = Call(Name(stateClassName, Load()),
                        [Name(n, Load()) for n in freeNames] +
                        boundNames.values(), [], None, None)
+
     topLine = copy_location(Expr(
-        Call(Attribute(ops[-1].expr, "run", Load()),
-             [createState, Name(callbacks[0].functionName
-                                if callbacks else "None", Load())],
+        Call(Attribute(Call(Attribute(Name("currentVat", Load()), "get", Load()),
+                            [], [], None, None),
+                       "enqueueEvent", Load()),
+             [Call(Name(eventClassName, Load()), [
+                 createState,
+                 Name(callbacks[0].functionName if callbacks else "None",
+                      Load())
+             ], [], None, None)],
              [], None, None)),
         tree[0])
+
     stateInit = FunctionDef(
         "__init__",
         arguments([Name(self_, Store())] +
@@ -399,6 +433,7 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
 def importNames(tree, src, gen_sym, **kw):
     return {
         "FutureCtx": gen_sym("FutureCtx"),
+        "IOEvent": gen_sym("IOEvent"),
         "OK": gen_sym("OK"),
         "ERR": gen_sym("ERR")
     }
@@ -408,7 +443,8 @@ def importNames(tree, src, gen_sym, **kw):
 def toEmit(tree, src, importNames, **kw):
     return [ImportFrom("typhon.futures",
                        [alias(k, v) for k, v in importNames.items()],
-                       0)]
+                       0),
+            ImportFrom("typhon.vats", [alias("currentVat", None)], 0)]
 
 
 @injected_vars.append

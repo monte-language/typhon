@@ -210,15 +210,27 @@ class Vat(Object):
             if resolver is not None:
                 resolver.smash(sealException(userError(u"Ejector tried to escape from vat")))
 
+    def runEvents(self):
+        with self._pendingLock:
+            for event in self._callbacks:
+                event.run()
+            del self._callbacks[:]
+
+    def enqueueEvent(self, event):
+        with self._pendingLock:
+            self._callbacks.append(event)
+
     def takeSomeTurns(self):
         # Limit the number of continuous turns to keep network latency low.
         # It's possible that more turns will be queued while we're taking
         # these turns, after all.
         count = len(self._pending)
         # print "Taking", count, "turn(s) on", self.repr()
+        if not count:
+            self.runEvents()
         for _ in range(count):
             self.takeTurn()
-
+            self.runEvents()
 
 currentVat = ThreadLocalReference(Vat)
 

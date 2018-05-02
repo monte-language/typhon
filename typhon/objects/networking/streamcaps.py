@@ -269,9 +269,12 @@ class FileSource(Object):
     def run(self, sink):
         p, r = makePromise()
         self._queue.append((r, sink))
+        # XXX long handwavey explanation of io macro limitations vs rpython
+        # type unification here
+        vat, fd, buf = self._vat, self._fd, self._buf
         with io:
             try:
-                data = ruv.magic_fsRead(self._vat, self._fd, self._buf)
+                data = ruv.magic_fsRead(vat, fd, buf)
             except object as err:
                 sendAllSinks(self, ABORT_1, [StrObject(u"libuv error: %s" % err)])
                 cleanup(self)
@@ -375,7 +378,6 @@ class sendAllSinks(Future):
 
     def run(self, state, k):
         from typhon.objects.collections.maps import EMPTY_MAP
-        print "**", self.verb
         for r, sink in self.target._queue:
             r.resolve(NullObject)
             with scopedVat(self.target._vat):
