@@ -20,6 +20,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
+from typhon.futures import IOEvent
 from typhon.objects.collections.lists import wrapList, unwrapList
 from typhon.objects.data import StrObject, unwrapBytes, unwrapInt
 from typhon.objects.networking.streamcaps import StreamSink, StreamSource
@@ -91,15 +92,31 @@ class TCPClientEndpoint(Object):
         resolvers = wrapList([sourceResolver, sinkResolver])
         ruv.stashStream(ruv.rffi.cast(ruv.stream_tp, stream),
                         (vat, resolvers))
-
-        # Make the actual connection.
-        if self.inet_type == 4:
-            ruv.tcp4Connect(stream, self.host, self.port, connectStreamCB)
-        elif self.inet_type == 6:
-            ruv.tcp6Connect(stream, self.host, self.port, connectStreamCB)
-
+        vat.enqueueEvent(ConnectStreamIOEvent(
+            vat, stream, self.host, self.port, self.inet_type))
         # Return the promises.
         return [source, sink]
+
+
+class ConnectStreamIOEvent(IOEvent):
+    """Documentation for ConnectStreamIOEvent
+
+    """
+    def __init__(self, vat, stream, host, port, inet_type):
+        self.vat = vat
+        self.stream = stream
+        self.host = host
+        self.port = port
+        self.inet_type = inet_type
+
+        def run(self):
+            # Make the actual connection.
+            if self.inet_type == 4:
+                ruv.tcp4Connect(self.stream, self.host, self.port,
+                                connectStreamCB)
+            elif self.inet_type == 6:
+                ruv.tcp6Connect(self.stream, self.host, self.port,
+                                connectStreamCB)
 
 
 @autohelp
@@ -217,7 +234,25 @@ class TCPServerEndpoint(Object):
     @method("Any", "Any")
     def listenStream(self, handler):
         vat = currentVat.get()
-        uv_server = ruv.alloc_tcp(vat.uv_loop)
+        p, r = makePromise()
+        vat.enqueueEvent(ListenStreamIOEvent(vat, self.port, handler,
+                                             self.inet_type, r))
+        return p
+
+
+class ListenStreamIOEvent(IOEvent):
+    """Documentation for ListenStreamIOEvent
+
+    """
+    def __init__(self, vat, port, handler, inet_type, r):
+        self.vat = vat
+        self.port = port
+        self.handler = handler
+        self.inet_type = inet_type
+        self.r = r
+
+    def run(self):
+        uv_server = ruv.alloc_tcp(self.vat.uv_loop)
         try:
             if self.inet_type == 4:
                 ruv.tcp4Bind(uv_server, "0.0.0.0", self.port)
@@ -228,11 +263,10 @@ class TCPServerEndpoint(Object):
                             uve.repr().decode("utf-8"))
 
         uv_stream = ruv.rffi.cast(ruv.stream_tp, uv_server)
-        ruv.stashStream(uv_stream, (vat, handler))
+        ruv.stashStream(uv_stream, (self.vat, self.handler))
         # XXX hardcoded backlog of 42
         ruv.listen(uv_stream, 42, connectionStreamCB)
-
-        return TCPServer(uv_server)
+        self.r.resolve(TCPServer(uv_server))
 
 
 @autohelp
