@@ -342,8 +342,7 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
                                 [], None, None), None, None)
         failStmt = If(Compare(Name(status, Load()), [Eq()],
                               [Name(ERR_, Load())]),
-                      failArm,
-                      [finalThrow]) if cb.failExpr else finalThrow
+                      failArm, []) if cb.failExpr else finalThrow
         successStmt = If(Compare(Name(status, Load()), [Eq()],
                                  [Name(OK_, Load())]),
                          successArm,
