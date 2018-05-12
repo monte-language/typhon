@@ -2,7 +2,7 @@ import "lib/codec" =~ [=> composeCodec]
 import "lib/codec/percent" =~ [=> PercentEncoding]
 import "lib/codec/utf8" =~  [=> UTF8]
 import "lib/enum" =~ [=> makeEnum]
-import "lib/record" =~ [=> makeRecord]
+import "lib/gadts" =~ [=> makeGADT]
 import "lib/streams" =~ [
     => alterSink,
     => flow,
@@ -34,13 +34,14 @@ exports (makeHTTPEndpoint)
 # encoding!
 def UTF8Percent :DeepFrozen := composeCodec(PercentEncoding, UTF8)
 
-def [_Request :DeepFrozen,
-     makeRequest :DeepFrozen] := makeRecord("Request",
-     ["verb" => Str,
-      "path" => Str,
-      "headers" => Headers,
-      # XXX can/should/will be a tube, especially once we have chunked
-      "body" => Bytes])
+def Request :DeepFrozen := makeGADT("Request", [
+    "full" => [
+        "verb" => Str,
+        "path" => Str,
+        "headers" => Headers,
+        "body" => Bytes,
+    ],
+])
 
 def [RequestState :DeepFrozen,
      REQUEST :DeepFrozen,
@@ -110,9 +111,9 @@ def makeRequestPump() as DeepFrozen:
                             def body := buf.slice(0, len)
                             buf slice= (len)
                             requestState := REQUEST
-                            def [verb, uri] := pendingRequestLine
-                            pendingRequest := makeRequest(verb, uri,
-                                                          headers, body)
+                            def [verb, path] := pendingRequestLine
+                            pendingRequest := Request.full(=> verb, => path,
+                                                           => headers, => body)
                             bodyState := [FIXED, 0]
                         else:
                             return false
