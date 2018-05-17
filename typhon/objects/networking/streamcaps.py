@@ -277,11 +277,13 @@ class FileSource(Object):
                 data = ruv.magic_fsRead(vat, fd, buf)
             except object as err:
                 sendAllSinks(self, ABORT_1, [StrObject(u"libuv error: %s" % err)])
+                ruv.magic_fsClose(self._vat, self._fd)
+
                 cleanup(self)
             else:
                 if data == "":
                     sendAllSinks(self, COMPLETE_0, [])
-                    cleanup(self)
+                    ruv.magic_fsClose(self._vat, self._fd)
                 else:
                     sendNextSink(self, RUN_1, [BytesObject(data)])
 
