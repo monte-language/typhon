@@ -47,7 +47,9 @@ def makeLimo(load) as DeepFrozen:
 
     def loadAll(pns):
         return promiseAllFulfilled([for pn in (pns) ? (!mods.contains(pn)) {
-            when (def expr := load<-(pn)) -> { mods[pn] := limo<-(pn, expr) }
+            when (def expr := load<-(pn)) -> {
+                when (def m := limo<-(pn, expr)) -> { mods[pn] := m }
+            }
         }])
 
     return bind limo(name, expr):
@@ -79,10 +81,11 @@ def makeLimo(load) as DeepFrozen:
 def main(_argv, => makeFileResource) as DeepFrozen:
     def loader := makeFileLoader("mast", makeFileResource)
     def limo := makeLimo(loader)
-    def pn := "lib/json"
+    def pn := "tools/repl"
     return when (def expr := loader(pn)) ->
         when (def m := limo(pn, expr)) ->
-            def instance := eval(m, safeScope)
-            traceln("instance", instance, instance.dependencies(),
-                    instance(null))
-            0
+            def context := makeMASTContext()
+            context(m.expand())
+            when (makeFileResource("out.mast")<-setContents(context.bytes())) ->
+                traceln("all done")
+                0
