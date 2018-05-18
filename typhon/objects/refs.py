@@ -117,7 +117,7 @@ class RefOps(Object):
         Return a broken ref with a description of a problem.
         """
 
-        return UnconnectedRef(problem)
+        return UnconnectedRef(currentVat.get(), problem)
 
     def optBroken(self, optProblem):
         if optProblem is NullObject:
@@ -379,10 +379,10 @@ class LocalResolver(Object):
                     except Ejecting as e:
                         if e.ejector is not ej:
                             raise
-                        target = UnconnectedRef(e.value)
+                        target = UnconnectedRef(self.vat, e.value)
                     except UserException as ue:
                         from typhon.objects.exceptions import sealException
-                        target = UnconnectedRef(sealException(ue))
+                        target = UnconnectedRef(self.vat, sealException(ue))
             self._ref.setTarget(_toRef(target, self.vat))
             self._ref.commit()
             self._buf.deliverAll(target)
@@ -401,7 +401,7 @@ class LocalResolver(Object):
 
     @method.py("Bool", "Any")
     def smash(self, problem):
-        return self._resolve(UnconnectedRef(problem), False)
+        return self._resolve(UnconnectedRef(self.vat, problem), False)
 
     @method("Bool")
     def isDone(self):
@@ -771,9 +771,10 @@ class LocalVatRef(Promise):
 
 class UnconnectedRef(Promise):
 
-    def __init__(self, problem):
+    def __init__(self, vat, problem):
         assert isinstance(problem, Object)
         self._problem = problem
+        self.vat = vat
 
     def toString(self):
         return u"<ref broken by %s>" % self._problem.toString()
@@ -804,8 +805,7 @@ class UnconnectedRef(Promise):
     def _doBreakage(self, atom, args, namedArgs):
         from typhon.objects.collections.maps import EMPTY_MAP
         if atom is _WHENMORERESOLVED_1:
-            vat = currentVat.get()
-            return vat.sendOnly(args[0], RUN_1, [self], EMPTY_MAP)
+            return self.vat.sendOnly(args[0], RUN_1, [self], EMPTY_MAP)
 
     def isResolved(self):
         return True

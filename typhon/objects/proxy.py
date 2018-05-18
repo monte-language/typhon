@@ -33,10 +33,11 @@ def sendOnly(ref, atom, args, namedArgs):
 
 
 class Proxy(Promise):
-    def __init__(self, handler, resolutionBox):
+    def __init__(self, vat, handler, resolutionBox):
         if not handler.isSettled():
             raise userError(u"Proxy handler not settled: " +
                             handler.toString())
+        self.vat = vat
         self.handler = handler
         self.resolutionBox = resolutionBox
         self.committed = False
@@ -48,7 +49,7 @@ class Proxy(Promise):
         if isinstance(self.resolutionBox, FinalSlot):
             res = self.resolutionBox.get()
         else:
-            res = UnconnectedRef(StrObject(
+            res = UnconnectedRef(self.vat, StrObject(
                 u"Resolution promise of a proxy handled by " +
                 self.handler.toString() +
                 u" didn't resolve to a FinalSlot, but " +
@@ -140,8 +141,8 @@ class DisconnectedRef(UnconnectedRef):
     different vat but doesn't anymore.
     """
 
-    def __init__(self, handler, resolutionIdentity, problem):
-        UnconnectedRef.__init__(self, problem)
+    def __init__(self, vat, handler, resolutionIdentity, problem):
+        UnconnectedRef.__init__(self, vat, problem)
         self.handler = handler
         self.resolutionIdentity = resolutionIdentity
 
@@ -170,8 +171,8 @@ class FarRef(Proxy):
     handler object.
     """
 
-    def __init__(self, handler, resolutionBox):
-        Proxy.__init__(self, handler, resolutionBox)
+    def __init__(self, vat, handler, resolutionBox):
+        Proxy.__init__(self, vat, handler, resolutionBox)
         self.resolutionIdentity = TraversalKey(resolutionBox)
 
     def computeHash(self, depth):
@@ -205,7 +206,7 @@ class FarRef(Proxy):
                 resolution.toString() + u")")
         else:
             problem = resolution._problem
-        resolution = DisconnectedRef(handler, self.resolutionIdentity,
+        resolution = DisconnectedRef(self.vat, handler, self.resolutionIdentity,
                                      problem)
         self.resolutionBox = FinalSlot(resolution, anyGuard)
         self.resolutionIdentity = None
@@ -243,6 +244,6 @@ def makeProxy(handler, resolutionBox, resolved):
     if not handler.isSettled():
         raise userError(u"Proxy handler not settled")
     if unwrapBool(resolved):
-        return FarRef(handler, resolutionBox)
+        return FarRef(currentVat.get(), handler, resolutionBox)
     else:
-        return RemotePromise(handler, resolutionBox)
+        return RemotePromise(currentVat.get(), handler, resolutionBox)
