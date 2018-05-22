@@ -151,7 +151,7 @@ def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp
         match [=="run", fullArgs, _]:
             if (fullArgs.size() != (fields.size() + 1)):
                 throw("make" + M.toString(constructorName) + " expected " + M.toString(fields.size() + 1) + " arguments (got " + M.toString(fullArgs.size()) + ")")
-            def args := fullArgs.slice(0, fullArgs.size() - 1)
+            def args :List := fullArgs.slice(0, fullArgs.size() - 1)
             def span := fullArgs.last()
             def contents := [
                 for [fname, _] => [guard, specimen :(paramGuard(fname, guard))]
@@ -162,10 +162,15 @@ def makeNodeAuthor(constructorName, fields, extraMethodMaker) as DeepFrozenStamp
             bind node implements Selfless, TransparentStamp, astStamp:
                 to getSpan():
                     return span
+
                 to withoutSpan():
                     if (span == null):
                         return node
-                    return M.call(nodeMaker, "run", args + [null], [].asMap())
+                    return M.call(nodeMaker, "run", args.with(null), [].asMap())
+
+                to withSpan(newSpan):
+                    return M.call(nodeMaker, "run", args.with(newSpan), [].asMap())
+
                 to canonical():
                     def noSpan(nod, mkr, canonicalArgs, span):
                         return M.call(mkr, "run", canonicalArgs + [null], [].asMap())
