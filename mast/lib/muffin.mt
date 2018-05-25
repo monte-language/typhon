@@ -11,7 +11,7 @@ def makeFileLoader(root, makeFileResource) as DeepFrozen:
         return when (bs) ->
             def s := UTF8.decode(bs, null)
             def lex := makeMonteLexer(s, petname)
-            parseModule(lex, astBuilder, null)
+            [s, parseModule(lex, astBuilder, null)]
 
 def bench :DeepFrozen := m`{
     object _ as DeepFrozen {
@@ -43,36 +43,53 @@ def makeLimo(load) as DeepFrozen:
         => unittest,
     ].diverge()
 
+    def need(pn):
+        return (pn != "meta") && (!mods.contains(pn))
+
     def limo
 
     def loadAll(pns):
-        return promiseAllFulfilled([for pn in (pns) ? (!mods.contains(pn)) {
-            when (def expr := load<-(pn)) -> {
-                when (def m := limo<-(pn, expr)) -> { mods[pn] := m }
+        return promiseAllFulfilled([for pn in (pns) ? (need(pn)) {
+            when (def p := load<-(pn)) -> {
+                def [s, expr] := p
+                when (def m := limo<-(pn, s, expr)) -> { mods[pn] := m }
             }
         }])
 
-    return bind limo(name, expr):
+    return bind limo(name, source, expr):
         def deps := getDependencies(expr)
         return when (loadAll(deps)) ->
-            def depExpr := astBuilder.MapExpr([for pn in (deps) {
+            def depExpr := astBuilder.MapExpr([for pn in (deps) ? (pn != "meta") {
                 def key := astBuilder.LiteralExpr(pn, null)
                 def value := mods[pn]
                 astBuilder.MapExprAssoc(key, value, null)
             }], null)
             def ln := astBuilder.LiteralExpr(name, null)
+            def ls := astBuilder.LiteralExpr(source, null)
             def instance := mods[name] := m`{
                 traceln(``first-time module $${$ln}``)
                 def deps :Map[Str, DeepFrozen] := { $depExpr }
-                def package."import"(petname) as DeepFrozen {
-                    traceln(``giving dep $$petname to $${$ln}``)
-                    return deps[petname](null)
+                def makePackage(mod :DeepFrozen) as DeepFrozen {
+                    return def package."import"(petname :Str) as DeepFrozen {
+                        return if (petname == "meta") {
+                            traceln(``giving this to $${$ln}``)
+                            object this as DeepFrozen {
+                                method module() { mod }
+                                method source() { $ls }
+                            }
+                            [=> this]
+                        } else {
+                            traceln(``giving dep $$petname to $${$ln}``)
+                            deps[petname](null)
+                        }
+                    }
                 }
                 object _ as DeepFrozen {
                     to dependencies() { return [] }
                     to run(_package) {
                         traceln(``initializing $${$ln}``)
-                        return { $expr }(package)
+                        def mod := { $expr }
+                        return mod(makePackage(mod))
                     }
                 }
             }`
@@ -81,9 +98,10 @@ def makeLimo(load) as DeepFrozen:
 def main(_argv, => makeFileResource) as DeepFrozen:
     def loader := makeFileLoader("mast", makeFileResource)
     def limo := makeLimo(loader)
-    def pn := "tools/repl"
-    return when (def expr := loader(pn)) ->
-        when (def m := limo(pn, expr)) ->
+    def pn := "quine"
+    return when (def p := loader(pn)) ->
+        def [source, expr] := p
+        when (def m := limo(pn, source, expr)) ->
             def context := makeMASTContext()
             context(m.expand())
             when (makeFileResource("out.mast")<-setContents(context.bytes())) ->
