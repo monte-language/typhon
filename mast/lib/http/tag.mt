@@ -1,3 +1,4 @@
+import "unittest" =~ [=> unittest :Any]
 exports (tag)
 
 def entities :Map[Str, Str] := [
@@ -35,16 +36,33 @@ object tag as DeepFrozen:
         def attributes :Map[Str, Str] := [for k => v in (namedArgs)
                                           ? (k =~ sk :Str && v =~ sv :Str)
                                           sk => sv]
+
+        def &repr := makeLazySlot(fn {
+            def attrStr := "".join([for k => v in (attributes) `$k="$v"`])
+            if (fragments.isEmpty()) { `<$tagType $attrStr />` } else {
+                def head := if (attributes.isEmpty()) { `<$tagType>` } else {
+                    `<$tagType $attrStr>`
+                }
+                def frags := "".join([for f in (fragments) M.toString(f)])
+                head + frags + `</$tagType>`
+            }
+        }, "guard" => Str)
         object HTMLTag as DeepFrozen:
             to _printOn(out):
-                def attrStr := "".join([for k => v in (attributes) `$k="$v"`])
-                if (fragments.size() == 0):
-                    out.print(`<$tagType $attrStr />`)
-                else:
-                    if (attributes.size() == 0):
-                        out.print(`<$tagType>`)
-                    else:
-                        out.print(`<$tagType $attrStr>`)
-                    for fragment in (fragments):
-                        out.print(`$fragment`)
-                    out.print(`</$tagType>`)
+                out.print(repr)
+
+            to asStr() :Str:
+                return repr
+
+def testHTMLTagNest(assert):
+    def t := tag.h1(tag.p("test"))
+    assert.equal(t.asStr(), "<h1><p>test</p></h1>")
+
+def testHTMLTagEscape(assert):
+    def t := tag.p("<blink/>")
+    assert.equal(t.asStr(), "<p>&lt;blink/&gt;</p>")
+
+unittest([
+    testHTMLTagNest,
+    testHTMLTagEscape,
+])

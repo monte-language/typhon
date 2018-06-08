@@ -8,6 +8,7 @@ import "lib/enum" =~ _
 import "lib/gadts" =~ _
 import "lib/http/headers" =~ _
 import "lib/http/server" =~ _
+import "lib/http/tag" =~ _
 import "lib/iterators" =~ _
 import "lib/json" =~ _
 import "lib/marley" =~ _
