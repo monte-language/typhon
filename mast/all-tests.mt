@@ -21,6 +21,7 @@ import "lib/parsers/html" =~ _
 import "lib/streams" =~ _
 import "lib/uKanren" =~ _
 import "lib/words" =~ _
+import "models/list/cons" =~ _
 import "tests/auditors" =~ _
 import "tests/b" =~ _
 import "tests/expander" =~ _
