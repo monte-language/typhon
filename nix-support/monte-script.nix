@@ -167,6 +167,13 @@ let
             ;;
     esac
     '';
+    capnpc-script = pkgs.writeScript "capnpc-monte" ''
+      #!${shellForMt}
+      ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} \
+          ${mast}/loader run mast/tools/capnpc
+    '';
+
+
 in
   stdenv.mkDerivation {
     name = if withBuild then "monte" else "monteLite";
@@ -182,7 +189,8 @@ in
       done
       ln -s ${mt-bake-py} $out/nix-support/mt-bake.py
       substituteAll ${mt-script} $out/bin/monte
-      chmod +x $out/bin/monte
+      substituteAll ${capnpc-script} $out/bin/capnpc-monte
+      chmod +x $out/bin/monte $out/bin/capnpc-monte
       '';
     src = let loc = part: (toString ./..) + part;
      in builtins.filterSource (path: type:
