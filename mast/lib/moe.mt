@@ -9,6 +9,15 @@ def nameFromPatt(patt :DeepFrozen) :Str as DeepFrozen:
         match =="FinalPattern" { patt.getNoun().getName() }
     }
 
+# A marker for dynamic values.
+object dynamic as DeepFrozen {}
+
+def sameEver(l :DeepFrozen, r :DeepFrozen) :NullOk[Bool] as DeepFrozen:
+    return if (l.getNodeName() == "LiteralExpr" &&
+               r.getNodeName() == "LiteralExpr") {
+        l.getValue() == r.getValue()
+    }
+
 object moe as DeepFrozen:
     to call(expr :DeepFrozen, verb :Str):
         def span := expr.getSpan()
@@ -80,12 +89,49 @@ object moe as DeepFrozen:
                     ab.ObjectExpr(null, mpatt`_`, null, [], script, span)
                 }
             }
+            match =="IfExpr" {
+                def test := moe(expr.getTest())
+                def cons := moe(expr.getThen())
+                def alt := moe(expr.getElse())
+                fn expand {
+                    expand.inNewScope(fn expand {
+                        def t := test(expand)
+                        switch (t) {
+                            match m`true` { expand.inNewScope(cons) }
+                            match m`false` { expand.inNewScope(alt) }
+                            match _ {
+                                ab.IfExpr(t, expand.inNewScope(cons),
+                                          expand.inNewScope(alt), span)
+                            }
+                        }
+                    })
+                }
+            }
             match =="ListExpr" {
                 def items := [for item in (expr.getItems()) moe(item)]
                 fn expand {
                     ab.MethodCallExpr(m`_makeList`, "run",
                                       [for item in (items) item(expand)], [],
                                       span)
+                }
+            }
+            match =="SameExpr" {
+                def left := moe(expr.getLeft())
+                def right := moe(expr.getRight())
+                def direction :Bool := expr.getDirection()
+                fn expand {
+                    def l := left(expand)
+                    def r := right(expand)
+                    def se := sameEver(l, r)
+                    if (se == true) {
+                        direction.pick(m`true`, m`false`)
+                    } else if (se == false) {
+                        direction.pick(m`false`, m`true`)
+                    } else if (direction) {
+                        m`_equalizer.sameEver($l, $r)`
+                    } else {
+                        m`_equalizer.sameEver($l, $r).not()`
+                    }
                 }
             }
             # Meta stuff.
@@ -106,13 +152,19 @@ object moe as DeepFrozen:
                 }
             }
             # Kernel-Monte.
+            match =="LiteralExpr" { fn _ { expr } }
             match =="SeqExpr" {
                 def exprs := [for ex in (expr.getExprs()) moe(ex)]
                 fn expand { ab.SeqExpr([for ex in (exprs) ex(expand)], span) }
             }
-            match =="LiteralExpr" { fn _ { expr } }
             match =="MethodCallExpr" { moe.call(expr, expr.getVerb()) }
-            match =="NounExpr" { fn _ { expr } }
+            match =="NounExpr" {
+                def name := expr.getName()
+                fn expand {
+                    def val := expand[name]
+                    if (val == dynamic) { expr } else { val }
+                }
+            }
             match =="ObjectExpr" {
                 def script := moe.script(expr.getScript())
                 def name := nameFromPatt(expr.getName())
@@ -127,15 +179,16 @@ object moe as DeepFrozen:
             }
         }
 
-# A marker for dynamic values.
-object dynamic as DeepFrozen {}
-
 def runMoe(expr, fqn :Str, var scope :Map, frameState :List, => parent := null) as DeepFrozen:
     while (true):
         object expand:
             to ensureDynamic(name :Str):
                 if (scope.contains(name) && scope[name] != dynamic):
+                    # Change the name to be dynamic within our scope, and
+                    # restart the expansion.
+                    traceln("making name dynamic", name)
                     scope with= (name, dynamic)
+                    traceln("restarting at", fqn)
                     continue
                 else if (parent != null):
                     parent.ensureDynamic(name)
@@ -171,6 +224,8 @@ def main(_argv) as DeepFrozen:
             }
             match message { message }
         }
+        if (echo != null) { 1 } else { 2 }
+        if (3 != 2) { 1 } else { 2 }
         echo("x", 1, => _makeMap)
     }`
     traceln("hm", input, eval(m`$input()`, safeScope))
