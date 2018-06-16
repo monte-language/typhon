@@ -19,7 +19,7 @@ def basePath :Str := "mast"
 def main(argv, => makeFileResource) as DeepFrozen:
     def loader := makeFileLoader(basePath, makeFileResource)
     def limo := makeLimo(loader)
-    def [pn, out] := argv
+    def [pn, out] := argv.slice(argv.size() - 2, argv.size())
     traceln(`Making muffin out of $pn`)
     return when (def p := loader(pn)) ->
         def [source, expr] := p
