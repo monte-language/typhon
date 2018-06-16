@@ -4,7 +4,7 @@ import "lib/streams" =~ [
     => alterSink :DeepFrozen,
     => alterSource :DeepFrozen,
 ]
-import "fun/repl" =~ [=> runREPL :DeepFrozen]
+import "lib/repl" =~ [=> runREPL :DeepFrozen]
 import "lib/help" =~ [=> help :DeepFrozen]
 exports (main)
 

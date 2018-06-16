@@ -112,7 +112,7 @@ http: mast/lib/http/client.mast mast/lib/http/server.mast \
 
 games: mast/games/mafia.mast
 
-fun: mast/fun/elements.mast mast/fun/repl.mast mast/fun/termParser.mast \
+fun: mast/fun/elements.mast mast/fun/termParser.mast \
 	mast/fun/mli.mast
 
 bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mast \
@@ -128,6 +128,7 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 	mast/lib/monte/monte_optimizer.mast \
 	mast/lib/monte/mast.mast mast/lib/monte/monte_verifier.mast \
 	mast/lib/monte/meta.mast mast/lib/monte/mix.mast mast/format.mast \
+	mast/lib/repl.mast \
 	mast/montec.mast mast/testRunner.mast mast/all-tests.mast
 
 models: mast/models/list/cons.mast

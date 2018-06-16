@@ -1,19 +1,12 @@
 import "lib/enum" =~ [=> makeEnum]
-import "lib/streams" =~ [
-    => flow :DeepFrozen,
-    => Sink :DeepFrozen,
-]
+import "lib/streams" =~ [=> flow, => Sink]
 exports (runREPL)
 
-# XXX these names are pretty lame
 def [REPLState :DeepFrozen, PS1 :DeepFrozen, PS2 :DeepFrozen] := makeEnum(["PS1", "PS2"])
 
-# XXX wheel reinvention
-object comp as DeepFrozen {}
-object abort as DeepFrozen {}
-
 def runREPL(makeParser, reducer, ps1 :Str, ps2 :Str, source, sink) as DeepFrozen:
-    sink(ps1)
+    # Show the initial prompt.
+    sink<-(ps1)
 
     var replState :REPLState := PS1
     var parser := makeParser()
@@ -34,7 +27,7 @@ def runREPL(makeParser, reducer, ps1 :Str, ps2 :Str, source, sink) as DeepFrozen
             escape ej:
                 def `@chars$\n` exit ej := s
                 # If they just thoughtlessly hit Enter, then don't bother.
-                if (replState == PS1 && chars.size() == 0):
+                if (replState == PS1 && chars.isEmpty()):
                     return prompt()
 
                 parser.feedMany(chars)
