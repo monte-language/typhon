@@ -1,17 +1,4 @@
-import "lib/codec/utf8" =~ [=> UTF8]
-import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
-import "lib/monte/monte_parser" =~ [=> parseModule]
-exports (makeLimo, main)
-
-def makeFileLoader(root, makeFileResource) as DeepFrozen:
-    return def load(petname):
-        def path := `$root/$petname.mt`
-        traceln(`loading module $path`)
-        def bs := makeFileResource(path)<-getContents()
-        return when (bs) ->
-            def s := UTF8.decode(bs, null)
-            def lex := makeMonteLexer(s, petname)
-            [s, parseModule(lex, astBuilder, null)]
+exports (makeLimo)
 
 def bench :DeepFrozen := m`{
     object _ as DeepFrozen {
@@ -94,16 +81,3 @@ def makeLimo(load) as DeepFrozen:
                 }
             }`
             instance
-
-def main(_argv, => makeFileResource) as DeepFrozen:
-    def loader := makeFileLoader("mast", makeFileResource)
-    def limo := makeLimo(loader)
-    def pn := "quine"
-    return when (def p := loader(pn)) ->
-        def [source, expr] := p
-        when (def m := limo(pn, source, expr)) ->
-            def context := makeMASTContext()
-            context(m.expand())
-            when (makeFileResource("out.mast")<-setContents(context.bytes())) ->
-                traceln("all done")
-                0

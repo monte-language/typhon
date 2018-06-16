@@ -133,7 +133,9 @@ monte:  mast/prelude/monte_ast.mast mast/lib/monte/monte_lexer.mast \
 
 models: mast/models/list/cons.mast
 
-tools: mast/tools/dump.mast mast/tools/repl.mast mast/tools/capnpc.mast mast/capn/bootstrap.mast
+tools: mast/tools/dump.mast mast/tools/repl.mast \
+	mast/tools/capnpc.mast mast/capn/bootstrap.mast \
+	mast/tools/muffin.mast
 
 mast/prelude.mast: mast/prelude.mt
 	@ echo "MONTEC-UNSAFE $<"
