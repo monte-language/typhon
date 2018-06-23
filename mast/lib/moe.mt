@@ -70,20 +70,33 @@ object moe as DeepFrozen:
         # Note that we grab the span *once*. This ensures that, even if we do
         # several rewrites, we'll correctly reattach the span at the end. ~ C.
         def span := expr.getSpan()
-        traceln(`moe initial`, expr.getNodeName(), expr)
         while (true):
             escape instead:
                 return switch (expr) {
                     # These expressions are defined in terms of Kernel-Monte.
                     match m`@specimen :(@guard)` {
-                        instead(m`$guard.coerce($specimen, null)`)
+                        instead(m`$guard.coerce($specimen, throw)`)
                     }
+                    # XXX these need to have the static scope check!
                     match m`@lhs && @rhs` {
-                        traceln(`disaster?`)
-                        instead(m`if ($lhs) { $rhs :Bool } else { false }`)
+                        def sw := ab.makeScopeWalker()
+                        def conflicts := (sw.getStaticScope(lhs).outNames() |
+                                          sw.getStaticScope(rhs).outNames())
+                        if (conflicts.isEmpty()) {
+                            instead(m`if ($lhs) { $rhs :Bool } else { false }`)
+                        } else {
+                            throw(`XXX not implemented`)
+                        }
                     }
                     match m`@lhs || @rhs` {
-                        instead(m`if ($lhs) { true } else { $rhs :Bool }`)
+                        def sw := ab.makeScopeWalker()
+                        def conflicts := (sw.getStaticScope(lhs).outNames() |
+                                          sw.getStaticScope(rhs).outNames())
+                        if (conflicts.isEmpty()) {
+                            instead(m`if ($lhs) { true } else { $rhs :Bool }`)
+                        } else {
+                            throw(`XXX not implemented`)
+                        }
                     }
                     match m`@lhs == @rhs` {
                         instead(m`_equalizer.sameEver($lhs, $rhs)`)
@@ -91,6 +104,21 @@ object moe as DeepFrozen:
                     match m`@lhs != @rhs` {
                         instead(m`_equalizer.sameEver($lhs, $rhs).not()`)
                     }
+                    match m`@start..@stop` {
+                        instead(m`_makeOrderedSpace.op__thru($start, $stop)`)
+                    }
+                    match m`@start..!@stop` {
+                        instead(m`_makeOrderedSpace.op__till($start, $stop)`)
+                    }
+                    match m`@x[@i]` { instead(m`$x.get($i)`) }
+                    # XXX needs DefExpr support first!
+                    # match m`@x[@i] := @rhs` {
+                    #     instead(m`{
+                    #         def rv := $rhs
+                    #         { $x }.put({ $i }, rv)
+                    #         rv
+                    #     }`)
+                    # }
                     # Meta stuff.
                     match m`meta.context()` {
                         fn expand {
@@ -109,6 +137,10 @@ object moe as DeepFrozen:
                         }
                     }
                     # Kernel-Monte.
+                    match m`{ @inner }` {
+                        def i := moe(inner)
+                        fn expand { ab.HideExpr(expand.inNewScope(i), span) }
+                    }
                     match m`if (@test) { @cons } else { @alt }` {
                         def t := moe(test)
                         def c := moe(cons)
@@ -150,6 +182,7 @@ object moe as DeepFrozen:
                                                       span)
                                 }
                             }
+                            # Kernel-Monte.
                             match =="LiteralExpr" { fn _ { expr } }
                             match =="MethodCallExpr" { moe.call(expr, expr.getVerb()) }
                             match =="NounExpr" {
@@ -179,9 +212,6 @@ object moe as DeepFrozen:
                     }
                 }
             catch newExpr:
-                traceln(`new expr`)
-                traceln(newExpr)
-                traceln(newExpr.getNodeName())
                 expr := newExpr
                 # And implicitly continue.
 
@@ -231,8 +261,7 @@ def main(_argv) as DeepFrozen:
             }
             match message { message }
         }
-        true && false
-        true || false
+        echo(0..!42, (42 == 7) || true)
         echo("x", 1, => _makeMap)
     }`
     traceln("hm", input, eval(m`$input()`, safeScope))
