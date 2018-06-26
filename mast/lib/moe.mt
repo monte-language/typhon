@@ -110,6 +110,17 @@ object moe as DeepFrozen:
                     match m`@start..!@stop` {
                         instead(m`_makeOrderedSpace.op__till($start, $stop)`)
                     }
+                    # Modular exponentiation doesn't have explicit parser
+                    # support. Instead, whenever the parse tree happens to
+                    # have a modpow, we match for it before matching for mod
+                    # or pow, and find it that way. ~ C.
+                    match m`@base ** @exponent % @modulus` {
+                        instead(m`$base.modPow($exponent, $modulus)`)
+                    }
+                    match m`@base ** @exponent` {
+                        instead(m`$base.pow($exponent)`)
+                    }
+                    match m`@x % @modulus` { instead(m`$x.mod($modulus)`) }
                     match m`@x[@i]` { instead(m`$x.get($i)`) }
                     # XXX needs DefExpr support first!
                     # match m`@x[@i] := @rhs` {
@@ -261,6 +272,8 @@ def main(_argv) as DeepFrozen:
             }
             match message { message }
         }
+        2 ** 5 % 13
+        2 ** (5 % 13)
         echo(0..!42, (42 == 7) || true)
         echo("x", 1, => _makeMap)
     }`
