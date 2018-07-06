@@ -12,6 +12,14 @@ def nameFromPatt(patt :DeepFrozen) :Str as DeepFrozen:
 # A marker for dynamic values.
 object dynamic as DeepFrozen {}
 
+def refine(var val, f) as DeepFrozen:
+    while (true):
+        escape instead:
+            return f(val, instead)
+        catch newVal:
+            val := newVal
+            # And implicitly continue.
+
 object moe as DeepFrozen:
     to call(expr :DeepFrozen, verb :Str):
         def span := expr.getSpan()
@@ -66,165 +74,162 @@ object moe as DeepFrozen:
                       [for m in (matchers) m(expand)], s.getSpan())
         }
 
-    to run(var expr :DeepFrozen):
+    to run(ast :DeepFrozen):
         # Note that we grab the span *once*. This ensures that, even if we do
         # several rewrites, we'll correctly reattach the span at the end. ~ C.
-        def span := expr.getSpan()
-        while (true):
-            escape instead:
-                return switch (expr) {
-                    # These expressions are defined in terms of Kernel-Monte.
-                    match m`@specimen :(@guard)` {
-                        instead(m`$guard.coerce($specimen, throw)`)
+        def span := ast.getSpan()
+        return refine(ast, fn expr, instead {
+            switch (expr) {
+                # These expressions are defined in terms of Kernel-Monte.
+                match m`@specimen :(@guard)` {
+                    instead(m`$guard.coerce($specimen, throw)`)
+                }
+                # XXX these need to have the static scope check!
+                match m`@lhs && @rhs` {
+                    def sw := ab.makeScopeWalker()
+                    def conflicts := (sw.getStaticScope(lhs).outNames() |
+                                      sw.getStaticScope(rhs).outNames())
+                    if (conflicts.isEmpty()) {
+                        instead(m`if ($lhs) { $rhs :Bool } else { false }`)
+                    } else {
+                        throw(`XXX not implemented`)
                     }
-                    # XXX these need to have the static scope check!
-                    match m`@lhs && @rhs` {
-                        def sw := ab.makeScopeWalker()
-                        def conflicts := (sw.getStaticScope(lhs).outNames() |
-                                          sw.getStaticScope(rhs).outNames())
-                        if (conflicts.isEmpty()) {
-                            instead(m`if ($lhs) { $rhs :Bool } else { false }`)
-                        } else {
-                            throw(`XXX not implemented`)
-                        }
+                }
+                match m`@lhs || @rhs` {
+                    def sw := ab.makeScopeWalker()
+                    def conflicts := (sw.getStaticScope(lhs).outNames() |
+                                      sw.getStaticScope(rhs).outNames())
+                    if (conflicts.isEmpty()) {
+                        instead(m`if ($lhs) { true } else { $rhs :Bool }`)
+                    } else {
+                        throw(`XXX not implemented`)
                     }
-                    match m`@lhs || @rhs` {
-                        def sw := ab.makeScopeWalker()
-                        def conflicts := (sw.getStaticScope(lhs).outNames() |
-                                          sw.getStaticScope(rhs).outNames())
-                        if (conflicts.isEmpty()) {
-                            instead(m`if ($lhs) { true } else { $rhs :Bool }`)
-                        } else {
-                            throw(`XXX not implemented`)
-                        }
+                }
+                match m`@lhs == @rhs` {
+                    instead(m`_equalizer.sameEver($lhs, $rhs)`)
+                }
+                match m`@lhs != @rhs` {
+                    instead(m`_equalizer.sameEver($lhs, $rhs).not()`)
+                }
+                match m`@start..@stop` {
+                    instead(m`_makeOrderedSpace.op__thru($start, $stop)`)
+                }
+                match m`@start..!@stop` {
+                    instead(m`_makeOrderedSpace.op__till($start, $stop)`)
+                }
+                # Modular exponentiation doesn't have explicit parser
+                # support. Instead, whenever the parse tree happens to
+                # have a modpow, we match for it before matching for mod
+                # or pow, and find it that way. ~ C.
+                match m`@base ** @exponent % @modulus` {
+                    instead(m`$base.modPow($exponent, $modulus)`)
+                }
+                match m`@base ** @exponent` {
+                    instead(m`$base.pow($exponent)`)
+                }
+                match m`@x % @modulus` { instead(m`$x.mod($modulus)`) }
+                match m`@x[@i]` { instead(m`$x.get($i)`) }
+                # XXX needs DefExpr support first!
+                # match m`@x[@i] := @rhs` {
+                #     instead(m`{
+                #         def rv := $rhs
+                #         { $x }.put({ $i }, rv)
+                #         rv
+                #     }`)
+                # }
+                # Meta stuff.
+                match m`meta.context()` {
+                    fn expand {
+                        def prefix := litExpr(expand.getFQNPrefix(), span)
+                        m`object _ as DeepFrozen {
+                            method getFQNPrefix() { $prefix }
+                        }`.withSpan(span)
                     }
-                    match m`@lhs == @rhs` {
-                        instead(m`_equalizer.sameEver($lhs, $rhs)`)
+                }
+                match m`meta.getState()` {
+                    fn expand {
+                        def names := [for name in (expand.getState()) {
+                            ab.MapExprExport(nounExpr("&&" + name, span), span)
+                        }]
+                        ab.MapExpr(names, span)
                     }
-                    match m`@lhs != @rhs` {
-                        instead(m`_equalizer.sameEver($lhs, $rhs).not()`)
-                    }
-                    match m`@start..@stop` {
-                        instead(m`_makeOrderedSpace.op__thru($start, $stop)`)
-                    }
-                    match m`@start..!@stop` {
-                        instead(m`_makeOrderedSpace.op__till($start, $stop)`)
-                    }
-                    # Modular exponentiation doesn't have explicit parser
-                    # support. Instead, whenever the parse tree happens to
-                    # have a modpow, we match for it before matching for mod
-                    # or pow, and find it that way. ~ C.
-                    match m`@base ** @exponent % @modulus` {
-                        instead(m`$base.modPow($exponent, $modulus)`)
-                    }
-                    match m`@base ** @exponent` {
-                        instead(m`$base.pow($exponent)`)
-                    }
-                    match m`@x % @modulus` { instead(m`$x.mod($modulus)`) }
-                    match m`@x[@i]` { instead(m`$x.get($i)`) }
-                    # XXX needs DefExpr support first!
-                    # match m`@x[@i] := @rhs` {
-                    #     instead(m`{
-                    #         def rv := $rhs
-                    #         { $x }.put({ $i }, rv)
-                    #         rv
-                    #     }`)
-                    # }
-                    # Meta stuff.
-                    match m`meta.context()` {
-                        fn expand {
-                            def prefix := litExpr(expand.getFQNPrefix(), span)
-                            m`object _ as DeepFrozen {
-                                method getFQNPrefix() { $prefix }
-                            }`.withSpan(span)
-                        }
-                    }
-                    match m`meta.getState()` {
-                        fn expand {
-                            def names := [for name in (expand.getState()) {
-                                ab.MapExprExport(nounExpr("&&" + name, span), span)
-                            }]
-                            ab.MapExpr(names, span)
-                        }
-                    }
-                    # Kernel-Monte.
-                    match m`{ @inner }` {
-                        def i := moe(inner)
-                        fn expand { ab.HideExpr(expand.inNewScope(i), span) }
-                    }
-                    match m`if (@test) { @cons } else { @alt }` {
-                        def t := moe(test)
-                        def c := moe(cons)
-                        def a := moe(alt)
-                        fn expand {
-                            expand.inNewScope(fn expand {
-                                switch (t(expand)) {
-                                    match m`true` { expand.inNewScope(c) }
-                                    match m`false` { expand.inNewScope(a) }
-                                    match newTest {
-                                        ab.IfExpr(newTest,
-                                                  expand.inNewScope(c),
-                                                  expand.inNewScope(a), span)
-                                    }
-                                }
-                            })
-                        }
-                    }
-                    match _ {
-                        # Go by node name.
-                        switch (expr.getNodeName()) {
-                            # Full-Monte.
-                            match =="FunCallExpr" { moe.call(expr, "run") }
-                            match =="FunctionExpr" {
-                                def body := moe(expr.getBody())
-                                fn expand {
-                                    def b := expand.inNewScope(body)
-                                    def meth := ab."Method"(null, "run", expr.getParams(),
-                                                            expr.getNamedParams(), null, b, span)
-                                    def script := ab.Script(null, [meth], [], span)
-                                    ab.ObjectExpr(null, mpatt`_`, null, [], script, span)
+                }
+                # Kernel-Monte.
+                match m`{ @inner }` {
+                    def i := moe(inner)
+                    fn expand { ab.HideExpr(expand.inNewScope(i), span) }
+                }
+                match m`if (@test) { @cons } else { @alt }` {
+                    def t := moe(test)
+                    def c := moe(cons)
+                    def a := moe(alt)
+                    fn expand {
+                        expand.inNewScope(fn expand {
+                            switch (t(expand)) {
+                                match m`true` { expand.inNewScope(c) }
+                                match m`false` { expand.inNewScope(a) }
+                                match newTest {
+                                    ab.IfExpr(newTest,
+                                              expand.inNewScope(c),
+                                              expand.inNewScope(a), span)
                                 }
                             }
-                            match =="ListExpr" {
-                                def items := [for item in (expr.getItems()) moe(item)]
-                                fn expand {
-                                    ab.MethodCallExpr(m`_makeList`, "run",
-                                                      [for item in (items) item(expand)], [],
-                                                      span)
-                                }
+                        })
+                    }
+                }
+                match _ {
+                    # Go by node name.
+                    switch (expr.getNodeName()) {
+                        # Full-Monte.
+                        match =="FunCallExpr" { moe.call(expr, "run") }
+                        match =="FunctionExpr" {
+                            def body := moe(expr.getBody())
+                            fn expand {
+                                def b := expand.inNewScope(body)
+                                def meth := ab."Method"(null, "run", expr.getParams(),
+                                                        expr.getNamedParams(), null, b, span)
+                                def script := ab.Script(null, [meth], [], span)
+                                ab.ObjectExpr(null, mpatt`_`, null, [], script, span)
                             }
-                            # Kernel-Monte.
-                            match =="LiteralExpr" { fn _ { expr } }
-                            match =="MethodCallExpr" { moe.call(expr, expr.getVerb()) }
-                            match =="NounExpr" {
-                                def name := expr.getName()
-                                fn expand {
-                                    def val := expand[name]
-                                    if (val == dynamic) { expr } else { val }
-                                }
+                        }
+                        match =="ListExpr" {
+                            def items := [for item in (expr.getItems()) moe(item)]
+                            fn expand {
+                                ab.MethodCallExpr(m`_makeList`, "run",
+                                                  [for item in (items) item(expand)], [],
+                                                  span)
                             }
-                            match =="ObjectExpr" {
-                                def script := moe.script(expr.getScript())
-                                def name := nameFromPatt(expr.getName())
-                                def frameNames := ab.makeScopeWalker().getStaticScope(expr).getNamesRead()
-                                fn expand {
-                                    def s := expand.inNewFrame(name, frameNames, script)
-                                    # XXX everything not in script
-                                    ab.ObjectExpr(expr.getDocstring(), expr.getName(),
-                                                  expr.getAsExpr(), expr.getAuditors(), s,
-                                                  expr.getSpan())
-                                }
+                        }
+                        # Kernel-Monte.
+                        match =="LiteralExpr" { fn _ { expr } }
+                        match =="MethodCallExpr" { moe.call(expr, expr.getVerb()) }
+                        match =="NounExpr" {
+                            def name := expr.getName()
+                            fn expand {
+                                def val := expand[name]
+                                if (val == dynamic) { expr } else { val }
                             }
-                            match =="SeqExpr" {
-                                def exprs := [for ex in (expr.getExprs()) moe(ex)]
-                                fn expand { ab.SeqExpr([for ex in (exprs) ex(expand)], span) }
+                        }
+                        match =="ObjectExpr" {
+                            def script := moe.script(expr.getScript())
+                            def name := nameFromPatt(expr.getName())
+                            def frameNames := ab.makeScopeWalker().getStaticScope(expr).getNamesRead()
+                            fn expand {
+                                def s := expand.inNewFrame(name, frameNames, script)
+                                # XXX everything not in script
+                                ab.ObjectExpr(expr.getDocstring(), expr.getName(),
+                                              expr.getAsExpr(), expr.getAuditors(), s,
+                                              expr.getSpan())
                             }
+                        }
+                        match =="SeqExpr" {
+                            def exprs := [for ex in (expr.getExprs()) moe(ex)]
+                            fn expand { ab.SeqExpr([for ex in (exprs) ex(expand)], span) }
                         }
                     }
                 }
-            catch newExpr:
-                expr := newExpr
-                # And implicitly continue.
+            }
+        })
 
 def runMoe(expr, fqn :Str, var scope :Map, frameState :List, => parent := null) as DeepFrozen:
     while (true):
