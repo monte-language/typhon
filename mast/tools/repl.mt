@@ -1,4 +1,4 @@
-import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
+import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/json" =~ [=> JSON :DeepFrozen]
 import "lib/streams" =~ [
     => alterSink :DeepFrozen,
@@ -6,6 +6,9 @@ import "lib/streams" =~ [
 ]
 import "lib/repl" =~ [=> runREPL :DeepFrozen]
 import "lib/help" =~ [=> help :DeepFrozen]
+import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
+import "lib/monte/monte_parser" =~ [=> parseModule]
+import "lib/muffin" =~ [=> makeLimo]
 exports (main)
 
 def makeMonteParser(&environment, unsealException) as DeepFrozen:
@@ -61,19 +64,55 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
                         failure += "\n" + line
                     buf := []
 
+def makeFileLoader(root, makeFileResource) as DeepFrozen:
+    return def load(petname):
+        def path := `$root/$petname.mt`
+        traceln(`Reading file: $path`)
+        def bs := makeFileResource(path)<-getContents()
+        return when (bs) ->
+            traceln(`Parsing Monte code: $path`)
+            def s := UTF8.decode(bs, null)
+            def lex := makeMonteLexer(s, petname)
+            [s, parseModule(lex, astBuilder, null)]
+
 def main(_argv,
-         # => packageLoader,
+         => makeFileResource,
          => stdio, => unsealException, => unsafeScope) :Vow[Int] as DeepFrozen:
 
-    # def playWith(module :Str, scope :Map) :Void:
-    #     "Import a module and bring it into the environment."
-    #     def map := packageLoader."import"(module)
-    #     for k :Str => v :DeepFrozen in map:
-    #         environment with= (k, &&v)
-    #         traceln(`Adding $k to environment`)
-    var environment := safeScope | unsafeScope | [
+    # Forward-declare the environment.
+    var environment := null
+
+    object repl:
+        "Some useful REPL stuff."
+
+        to instantiateModule(basePath :Str, petname :Str) :Vow[DeepFrozen]:
+            "
+            Get an instance of the  module named `petname` from `basePath` on
+            the filesystem.
+            "
+
+            def loader := makeFileLoader(basePath, makeFileResource)
+            def limo := makeLimo(loader)
+            return when (def p := loader(petname)) ->
+                def [source, expr] := p
+                when (def m := limo(petname, source, expr)) ->
+                    eval(m, safeScope)
+
+        to load(basePath :Str, petname :Str) :Vow[Void]:
+            "
+            Load the module named `petname` from `basePath` into the REPL
+            scope.
+            "
+
+            return when (def m := repl.instantiateModule(basePath, petname)) ->
+                for k => v :DeepFrozen in (m(null)):
+                    traceln(`Loading into environment: $k`)
+                    environment with= (`&&$k`, &&v)
+
+    # Set up the full environment.
+    environment := safeScope | unsafeScope | [
         # REPL-only fun.
-        => &&JSON, => &&UTF8, => &&help, # => &&playWith,
+        => &&JSON, => &&UTF8, => &&help, => &&repl,
     ]
 
     def stdin := alterSource.decodeWith(UTF8, stdio.stdin(),
