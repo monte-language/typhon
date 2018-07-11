@@ -54,19 +54,17 @@ def makeLimo(load) as DeepFrozen:
             def ln := astBuilder.LiteralExpr(name, null)
             def ls := astBuilder.LiteralExpr(source, null)
             def instance := mods[name] := m`{
-                traceln(``first-time module $${$ln}``)
+                traceln(``Defining module $${$ln}…``)
                 def deps :Map[Str, DeepFrozen] := { $depExpr }
                 def makePackage(mod :DeepFrozen) as DeepFrozen {
                     return def package."import"(petname :Str) as DeepFrozen {
                         return if (petname == "meta") {
-                            traceln(``giving this to $${$ln}``)
                             object this as DeepFrozen {
                                 method module() { mod }
                                 method source() { $ls }
                             }
                             [=> this]
                         } else {
-                            traceln(``giving dep $$petname to $${$ln}``)
                             deps[petname](null)
                         }
                     }
@@ -74,7 +72,7 @@ def makeLimo(load) as DeepFrozen:
                 object _ as DeepFrozen {
                     to dependencies() { return [] }
                     to run(_package) {
-                        traceln(``initializing $${$ln}``)
+                        traceln(``Running module $${$ln}…``)
                         def mod := { $expr }
                         return mod(makePackage(mod))
                     }
