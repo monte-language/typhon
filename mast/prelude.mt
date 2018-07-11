@@ -487,34 +487,48 @@ object _matchSame as DeepFrozenStamp:
     to run(expected):
         "The pattern ==`expected`."
 
-        def _sameMatcher(specimen, ej):
-            if (expected != specimen):
-                throw.eject(ej, ["Not same:", expected, specimen])
-            return specimen
+        # A pattern here that will be repeated later on: If an object has
+        # Selfless and Semitransparent(stamp), then it will coerce DF iff its
+        # pieces coerce DF, which is exactly the property we used to get here
+        # with a really convoluted double-decker object. ~ C.
+        return object sameMatcher implements Selfless, SemitransparentStamp:
+            to _uncall():
+                return SemitransparentStamp.seal([
+                    _matchSame,
+                    "run",
+                    [expected],
+                    [].asMap(),
+                ])
 
-        return object sameMatcher extends _sameMatcher:
-            to _conformTo(guard):
-                return if (guard == DeepFrozen):
-                    escape ej:
-                        DeepFrozen.coerce(expected, ej)
-                        def sameMatcher(specimen, ej) as DeepFrozenStamp:
-                            return _sameMatcher(specimen, ej)
+            to run(specimen, ej):
+                if (expected != specimen):
+                    throw.eject(ej, " ".join([
+                        "Specimen", M.toQuote(specimen),
+                        "is not the same as the exemplar",
+                        M.toQuote(expected),
+                    ]))
+                return specimen
 
     to different(expected):
         "The pattern !=`expected`."
 
-        def _differentMatcher(specimen, ej):
-            if (expected == specimen):
-                throw.eject(ej, ["Same:", expected, specimen])
-            return specimen
+        return object differentMatcher implements Selfless, SemitransparentStamp:
+            to _uncall():
+                return SemitransparentStamp.seal([
+                    _matchSame,
+                    "different",
+                    [expected],
+                    [].asMap(),
+                ])
 
-        return object differentMatcher extends _differentMatcher:
-            to _conformTo(guard):
-                return if (guard == DeepFrozen):
-                    escape ej:
-                        DeepFrozen.coerce(expected, ej)
-                        def differentMatcher(specimen, ej) as DeepFrozenStamp:
-                            return _differentMatcher(specimen, ej)
+            to run(specimen, ej):
+                if (expected == specimen):
+                    throw.eject(ej, " ".join([
+                        "Specimen", M.toQuote(specimen),
+                        "is the same as the exemplar",
+                        M.toQuote(expected),
+                    ]))
+                return specimen
 
 
 object _mapExtract as DeepFrozenStamp:
