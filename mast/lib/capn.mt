@@ -1,5 +1,7 @@
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
-exports (makeMessage, text)
+exports (makeMessageReader, text)
+
+"Components for reading the packing format used for capn messages."
 
 def text(pointer) as DeepFrozen:
     return if (pointer == null):
@@ -108,7 +110,10 @@ def formatWord(word :Int) as DeepFrozen:
         bits.push((((word >> i) & 0x1) == 0x1).pick("@", "."))
     return "b" + "".join(bits)
 
-def makeMessage(bs :Bytes) as DeepFrozen:
+def makeMessageReader(bs :Bytes) as DeepFrozen:
+    "Create a schema-independent object from serialized data.
+     Provides methods for basic data traversal, used by the
+     schema-driven layer."
     def get32LE(i :Int) :Int:
         var acc := 0
         for j in (0..!4):

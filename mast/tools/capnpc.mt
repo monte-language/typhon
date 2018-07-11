@@ -1,7 +1,11 @@
 import "capn/bootstrap" =~ [=> builder :DeepFrozen]
-import "lib/capn" =~ [=> makeMessage :DeepFrozen]
+import "lib/capn" =~ [=> makeMessageReader :DeepFrozen]
 import "lib/streams" =~ [=> collectBytes :DeepFrozen]
 exports (main)
+
+"This is the tool for generating a Monte module containing a reader and writer
+for a given capn schema."
+
 
 def getWord(offset :Int, width :Int, => signed :Bool := false) as DeepFrozen:
     def fullOffset := offset * width
@@ -23,11 +27,13 @@ def getPointer(offset :Int) as DeepFrozen:
     return m`root.getPointer(${astBuilder.LiteralExpr(offset, null)})`
 
 def shortName(node) as DeepFrozen:
+    "Return a node name without the FQN prefix."
     def displayName := node.displayName()
     return displayName.slice(node.displayNamePrefixLength(),
                              displayName.size())
 
-def buildStruct(nodeMap, node ? (node._which() == 1), groups) as DeepFrozen:
+def buildStructReader(nodeMap, node ? (node._which() == 1), groups) as DeepFrozen:
+    "Generate the code for reading a single capn structure."
     def struct := node.struct()
     def [whichExpr, whichMeths] := if (struct.discriminantCount() != 0) {
         def d := m`def which :Int := ${getWord(struct.discriminantOffset(), 16)}`
@@ -86,7 +92,7 @@ def buildStruct(nodeMap, node ? (node._which() == 1), groups) as DeepFrozen:
             match ==1 {
                 def group := field.group()
                 def [groupNode, groupGroups] := groups[group.typeId()]
-                buildStruct(nodeMap, groupNode, groupGroups)
+                buildStructReader(nodeMap, groupNode, groupGroups)
             }
         }
         astBuilder."Method"(null, name, [], [], null, body, null)
@@ -102,7 +108,11 @@ def buildStruct(nodeMap, node ? (node._which() == 1), groups) as DeepFrozen:
     }`
 
 def bootstrap(bs :Bytes) as DeepFrozen:
-    def root := makeMessage(bs).getRoot()
+    "Reads the schema-definition schema. Reassembles node structure then uses
+    the schema builder to generate methods for reader and writer
+    objects. Returns an AST for a module containing reader and writer."
+
+    def root := makeMessageReader(bs).getRoot()
     def cgr := builder.CodeGeneratorRequest(root)
     def nodeMap := [for node in (cgr.nodes()) node.id() => node]
     def childrenOf(parentId):
@@ -111,31 +121,37 @@ def bootstrap(bs :Bytes) as DeepFrozen:
                 id => [node, childrenOf(id)]]
     def nodeTree := [for id => node in (nodeMap) ? (node._which() == 1 &&
         !node.struct().isGroup()) id => [node, childrenOf(id)]]
-    def nodes := [for _id => [node, groups] in (nodeTree)
+    def readerNodes := [for [node, groups] in (nodeTree)
                   astBuilder."Method"(null, shortName(node),
                                       [mpatt`root :DeepFrozen`], [], null,
-                                      buildStruct(nodeMap, node, groups),
+                                      buildStructReader(nodeMap, node, groups),
                                       null)]
-    def script := astBuilder.Script(null, nodes, [], null)
-    def builderObj := astBuilder.ObjectExpr(null, mpatt`builder`,
-                                            m`DeepFrozen`, [], script, null)
+    def readerObj := astBuilder.ObjectExpr(
+        null,
+        mpatt`reader`,
+        m`DeepFrozen`,
+        [],
+        astBuilder.Script(null, readerNodes, [], null),
+        null)
     def module := m`object _ as DeepFrozen {
         method dependencies() :List[Str] { ["lib/capn"] }
         method run(package) :Map[Str, DeepFrozen] {
-            def [=> makeMessage :DeepFrozen, => text :DeepFrozen] | _ := package."import"("lib/capn")
-            $builderObj
-            [=> builder]
+            def [=> makeMessageReader :DeepFrozen, => text :DeepFrozen] | _ := package."import"("lib/capn")
+            $readerObj
+            [=> reader, builder => reader]
         }
     }`
     return module
 
 def compile(bs :Bytes) :Bytes as DeepFrozen:
+    "Generate code from capn schema. Build AST and dump as MAST."
     def expr := bootstrap(bs)
     def mast := makeMASTContext()
     mast(expr.expand())
     return mast.bytes()
 
 def main(_argv, => stdio) :Vow[Int] as DeepFrozen:
+    "Compile a schema in capn message format from stdin, write MAST to stdout."
     return when (def input := collectBytes(stdio.stdin())) ->
         def stdout := stdio.stdout()
         def output :Bytes := compile(input)

@@ -1,6 +1,9 @@
 import "lib/capn" =~ [=> text :DeepFrozen]
 exports (builder)
 
+"A hand-compiled reader for capn schemas, to be used for creating the generated
+schema reader."
+
 def Brand(_root) as DeepFrozen:
     return object brand {}
 
