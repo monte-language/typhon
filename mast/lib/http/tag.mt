@@ -1,12 +1,16 @@
 import "unittest" =~ [=> unittest :Any]
 exports (tag)
 
+# This table is only sufficient for handling tag bodies. It cannot fix up tag
+# attributes. See https://wonko.com/post/html-escaping for details. ~ C.
 def entities :Map[Str, Str] := [
     "&" => "&amp;",
     "<" => "&lt;",
     ">" => "&gt;",
     "'" => "&apos;",
     "\"" => "&quot;",
+    # MSIE only: Backticks are legal quote characters!
+    "`" => "&#096;",
 ]
 
 def flatten(pieces) as DeepFrozen:
@@ -62,7 +66,12 @@ def testHTMLTagEscape(assert):
     def t := tag.p("<blink/>")
     assert.equal(t.asStr(), "<p>&lt;blink/&gt;</p>")
 
+def testHTMLTagEscapeMSIE(assert):
+    def t := tag.p("superhero: the `")
+    assert.equal(t.asStr(), "superhero: the &#096;")
+
 unittest([
     testHTMLTagNest,
     testHTMLTagEscape,
+    testHTMLTagEscapeMSIE,
 ])
