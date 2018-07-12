@@ -138,6 +138,10 @@ tools: mast/tools/dump.mast mast/tools/repl.mast \
 	mast/tools/capnpc.mast mast/capn/bootstrap.mast \
 	mast/tools/muffin.mast
 
+stage2/muffin.mast: mast/tools/muffin.mast
+	@ echo "MUFFIN $<"
+	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l mast -l . loader run tools/muffin -typhon tools/muffin $@
+
 mast/prelude.mast: mast/prelude.mt
 	@ echo "MONTEC-UNSAFE $<"
 	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec -noverify $< $@ # 2> /dev/null
