@@ -29,8 +29,8 @@ from typhon.objects.equality import Equalizer
 from typhon.objects.exceptions import SealedException
 from typhon.objects.iteration import loop
 from typhon.objects.guards import (BindingGuard, FinalSlotGuardMaker,
-                                   VarSlotGuardMaker, anyGuard, sameGuardMaker,
-                                   subrangeGuardMaker)
+                                   VarSlotGuard, VarSlotGuardMaker, anyGuard,
+                                   sameGuardMaker, subrangeGuardMaker)
 from typhon.objects.makers import (theMakeBytes, theMakeDouble, theMakeInt,
                                    theMakeList, theMakeMap, theMakeStr)
 from typhon.objects.printers import toString
@@ -246,17 +246,52 @@ theFinalSlotMaker = FinalSlotMaker()
 
 @autohelp
 @audited.DF
+class VarBindingCurry(Object):
+    """
+    A maker of var bindings guarded by a preselected guard.
+    """
+
+    _immutable_fields_ = "guard",
+
+    def __init__(self, guard):
+        self.guard = guard
+
+    @method("Any", "Any", "Any")
+    def run(self, specimen, ej):
+        """
+        Build a var binding.
+        """
+
+        g = self.guard
+        val = g.call(u"coerce", [specimen, ej])
+        return Binding(VarSlot(val, g), VarSlotGuard(g))
+
+
+@autohelp
+@audited.DF
 class VarSlotMaker(Object):
     """
     A maker of var slots.
+
+    This object is known in the safe scope as m`_makeVarSlot`.
     """
 
     @method("Any")
     def asType(self):
+        """
+        m`VarSlot`
+        """
         return theVarSlotGuardMaker
 
     @method("Any", "Any", "Any", "Any")
     def run(self, guard, specimen, ej):
+        """
+        Build a var slot guarded by `guard` and containing `specimen`.
+
+        If m`guard != null`, then `specimen` will be coerced, and the prize
+        will be stored instead; on failure, `ej` is used to eject.
+        """
+
         if guard != NullObject:
             val = guard.call(u"coerce", [specimen, ej])
             g = guard
@@ -264,6 +299,16 @@ class VarSlotMaker(Object):
             val = specimen
             g = anyGuard
         return VarSlot(val, g)
+
+    @method("Any", "Any")
+    def makeBinding(self, guard):
+        """
+        Curry a var binding guarded by `guard`.
+        """
+
+        if guard is NullObject:
+            guard = anyGuard
+        return VarBindingCurry(guard)
 
 theVarSlotMaker = VarSlotMaker()
 
