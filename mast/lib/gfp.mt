@@ -46,8 +46,8 @@ def reifyTemporaries(tree :DeepFrozen) as DeepFrozen:
     return tree.transform(renameTransformer)
 
 def freeze(var expr :DeepFrozen) as DeepFrozen:
-    def sw := astBuilder.makeScopeWalker()
     var tempFixup :Bool := false
+    var tempCounter :Int := 0
 
     def freezeTransformer(ast, maker, args, span):
         return switch (ast):
@@ -64,19 +64,12 @@ def freeze(var expr :DeepFrozen) as DeepFrozen:
                 # Sometimes the RHS can be safely used twice.
                 if (isPure(rhs)):
                     m`&$lhs.put($rhs); $rhs`
-                # If the RHS doesn't define any names, we can make a new scope
-                # with a temporary name.
-                else if (sw.getStaticScope(rhs).outNames().isEmpty()):
-                    m`{
-                        def _temp_var := $rhs
-                        &$lhs.put(_temp_var)
-                        _temp_var
-                    }`
                 # Use a TempNounExpr and we'll fix up later.
                 else:
+                    def temp := astBuilder.TempNounExpr(`assign$tempCounter`, null)
+                    def tempPatt := astBuilder.FinalPattern(temp, null, null)
                     tempFixup := true
-                    def temp := astBuilder.TempNounExpr("assign", null)
-                    def tempPatt := astBuilder.FinalPattern(temp, null)
+                    tempCounter += 1
                     m`def $tempPatt := $rhs; &$lhs.put($temp); $temp`
             match _:
                 M.call(maker, "run", args + [span], [].asMap())
