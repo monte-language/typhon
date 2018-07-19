@@ -1399,23 +1399,24 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
         else:
             def lval := infix(ej)
+            def okNodes := ["NounExpr", "GetExpr", "PatternHoleExpr"]
             if (considerTag(":=", ej)):
                 def lt := lval.getNodeName()
-                if (["NounExpr", "GetExpr"].contains(lt)):
+                if (okNodes.contains(lt)):
                     builder.AssignExpr(lval, assign(ej), spanFrom(spanStart))
                 else:
                     throw.eject(ej, [`Invalid assignment target $lt`, lt.getSpan()])
             else if (peekTag() =~ `@op=`):
                 advance(ej)
                 def lt := lval.getNodeName()
-                if (["NounExpr", "GetExpr"].contains(lt)):
+                if (okNodes.contains(lt)):
                     builder.AugAssignExpr(op, lval, assign(ej), spanFrom(spanStart))
                 else:
                     throw.eject(ej, [`Invalid assignment target $lt`, lt.getSpan()])
             else if (peekTag() == "VERB_ASSIGN"):
                 def verb := advance(ej)[1]
                 def lt := lval.getNodeName()
-                if (["NounExpr", "GetExpr"].contains(lt)):
+                if (okNodes.contains(lt)):
                     acceptTag("(", ej)
                     acceptEOLs()
                     def node := builder.VerbAssignExpr(verb, lval, acceptList(expr),
