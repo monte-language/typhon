@@ -52,6 +52,7 @@ $(boot_objects): boot/%: mast/%
 mast: mast/lib/enum.mast \
 	mast/lib/amp.mast \
 	mast/lib/ansiColor.mast \
+	mast/lib/argv.mast \
 	mast/lib/capn.mast \
 	mast/lib/complex.mast \
 	mast/lib/continued.mast \
