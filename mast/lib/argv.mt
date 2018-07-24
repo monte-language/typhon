@@ -33,11 +33,14 @@ def makeFlagRunner(trie) as DeepFrozen:
                 # Slice and advance.
                 def args := argv.slice(i, i + arity)
                 i += arity
-                escape ej:
-                    M.call(lambda, "run", args + [ej], [].asMap())
-                catch problem:
-                    # XXX unhelpful
-                    throw(`Flag block rejected $args: $problem`)
+                if (args.isEmpty()):
+                    lambda()
+                else:
+                    escape ej:
+                        M.call(lambda, "run", args + [ej], [].asMap())
+                    catch problem:
+                        # XXX unhelpful
+                        throw(`Flag block rejected $args: $problem`)
             else:
                 # XXX ugly
                 throw("Ambiguous flag", t)
