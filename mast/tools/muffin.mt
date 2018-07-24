@@ -1,3 +1,4 @@
+import "lib/argv" =~ [=> flags]
 import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseModule]
@@ -61,8 +62,11 @@ def addTyphonHarness(expr :DeepFrozen, name :Str) :DeepFrozen as DeepFrozen:
 def main(argv, => makeFileResource) as DeepFrozen:
     def loader := makeFileLoader(basePath, makeFileResource)
     def limo := makeLimo(loader)
-    def [pn, out] := argv.slice(argv.size() - 2, argv.size())
-    def addTyphon :Bool := argv.size() >= 3 && argv[argv.size() - 3] == "-typhon"
+    var addTyphon :Bool := false
+    def parser := flags () typhon {
+        addTyphon := true
+    }
+    def [pn, out] := parser(argv)
     traceln(`Making muffin out of $pn`)
     return when (def p := loader(pn)) ->
         def [source, expr] := p

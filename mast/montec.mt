@@ -1,3 +1,4 @@
+import "lib/argv" =~ [=> flags]
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
@@ -37,38 +38,31 @@ def runPipeline(starter, [var stage] + var stages) as DeepFrozen:
 
 def parseArguments(var argv, ej) as DeepFrozen:
     var useMixer :Bool := false
-    var arguments :List[Str] := []
     var verify :Bool := true
     var terseErrors :Bool := false
     var justLint :Bool := false
     var readStdin :Bool := false
     var muffinPath :NullOk[Str] := null
+
+    # Parse argv.
+    def parser := flags () mix {
+        useMixer := true
+    } noverify {
+        verify := false
+    } terse {
+        terseErrors := true
+    } lint {
+        justLint := true
+    } stdin {
+        readStdin := true
+    } muffin path {
+        muffinPath := path
+    }
+    def arguments :List[Str] := parser(argv)
+
     def inputFile
     def outputFile
-    while (argv.size() > 0):
-        traceln(`ARGV $argv`)
-        switch (argv):
-            match [=="-mix"] + tail:
-                useMixer := true
-                argv := tail
-            match [=="-noverify"] + tail:
-                verify := false
-                argv := tail
-            match [=="-terse"] + tail:
-                terseErrors := true
-                argv := tail
-            match [=="-lint"] + tail:
-                justLint := true
-                argv := tail
-            match [=="-stdin"] + tail:
-                readStdin := true
-                argv := tail
-            match [=="-muffin", path] + tail:
-                muffinPath := path
-                argv := tail
-            match [arg] + tail:
-                arguments with= (arg)
-                argv := tail
+
     if (justLint):
         bind outputFile := null
         if (arguments !~ [bind inputFile]):
