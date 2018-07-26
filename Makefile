@@ -89,8 +89,9 @@ testMast: default mast mast/tests/lexer.mast mast/tests/parser.mast \
 	mast/tests/auditors.mast mast/tests/fail-arg.mast mast/tests/expander.mast \
 	mast/tests/optimizer.mast mast/tests/flexMap.mast mast/tests/proptests.mast \
 	mast/tests/b.mast mast/tests/region.mast mast/tests/regressions.mast \
-	mast/tests/promises.mast mast/tests/makeList.mast
-	$(MT_TYPHON) -l mast loader test all-tests
+	mast/tests/promises.mast mast/tests/makeList.mast mast/capn/testCapn.mast
+	$(MT_TYPHON) -l mast loader test all-tests && \
+	$(MT_TYPHON) -l mast loader run capn/testCapn
 
 test: testVM testMast
 
@@ -144,9 +145,9 @@ models: mast/models/list/cons.mast \
 	mast/models/list/fold.mast
 
 tools: mast/tools/dump.mast mast/tools/repl.mast \
-	mast/tools/capnpc.mast mast/capn/bootstrap.mast \
-	mast/tools/muffin.mast mast/tools/kubeless.mast \
-	mast/tools/qbe.mast
+	mast/tools/capnpc.mast mast/capn/reader.mast mast/capn/rpc.mast \
+	mast/tools/muffin.mast mast/tools/kubeless.mast mast/tools/qbe.mast
+
 
 stage2/muffin.mast: mast/tools/muffin.mast
 	@ echo "MUFFIN $<"
@@ -163,6 +164,10 @@ loader.mast: loader.mt
 %.mast: %.mt
 	@ echo "MONTEC $<"
 	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec $< $@ # 2> /dev/null
+
+%.mast: %.capn mast/tools/capnpc.mast
+	@ echo "CAPN $<"
+	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l mast -l . loader run tools/capnpc < $< > $@
 
 %.mt: %.mt.md
 	@ echo "LIT $<"

@@ -103,9 +103,12 @@ def main(_argv,
             Load the module named `petname` from `basePath` into the REPL
             scope.
             "
-
-            return when (def m := repl.instantiateModule(basePath, petname)) ->
-                for k => v :DeepFrozen in (m(null)):
+            def m := repl.instantiateModule(basePath, petname)
+            traceln(`m $m`)
+            return when (m) ->
+                traceln(`Instantiated $petname: $m`)
+                def ex := try { m(null) } catch e { traceln.exception(e); -1 }
+                for k => v :DeepFrozen in (ex):
                     traceln(`Loading into environment: $k`)
                     environment with= (`&&$k`, &&v)
 
