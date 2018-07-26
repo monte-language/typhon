@@ -23,7 +23,7 @@ from typhon.objects.networking.endpoints import (
     makeTCP4ClientEndpoint, makeTCP4ServerEndpoint, makeTCP6ClientEndpoint,
     makeTCP6ServerEndpoint)
 from typhon.objects.networking.stdio import stdio
-from typhon.objects.processes import CurrentProcess, makeProcess
+from typhon.objects.processes import makeCurrentProcess, makeProcess
 from typhon.objects.root import Object, audited
 from typhon.objects.runtime import CurrentRuntime
 from typhon.objects.slots import finalize
@@ -52,7 +52,7 @@ def unsafeScope(config):
     return finalize({
         u"Timer": Timer(),
         u"bench": bench(),
-        u"currentProcess": CurrentProcess(config),
+        u"currentProcess": makeCurrentProcess(config),
         u"currentRuntime": CurrentRuntime(),
         u"_findTyphonFile": FindTyphonFile(config.libraryPaths),
         u"getAddrInfo": getAddrInfo(),

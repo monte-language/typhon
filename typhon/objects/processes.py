@@ -22,39 +22,53 @@ FLOWTO_1 = getAtom(u"flowTo", 1)
 RUN_3 = getAtom(u"run", 3)
 
 
+def makeCurrentProcess(config):
+    argv = [StrObject(arg.decode("utf-8")) for arg in config.argv]
+
+    # Pull envp via os.environ and pack it into a map. Also, destroy each key
+    # after pulling it, which will cause RPython to either setenv(key, NULL)
+    # or unsetenv(key), whichever is available. ~ C.
+    # XXX monteMap()
+    env = monteMap()
+    for key, value in os.environ.items():
+        k = BytesObject(key)
+        v = BytesObject(value)
+        env[k] = v
+        del os.environ[key]
+
+    return CurrentProcess(os.getpid(), argv, env)
+
 @autohelp
 class CurrentProcess(Object):
     """
     The current process on the local node.
     """
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, pid, argv, env):
+        self.pid = pid
+        self.argv = argv
+        self.env = env
 
     def toString(self):
-        return u"<current process (PID %d)>" % os.getpid()
+        return u"<current process (PID %d)>" % self.pid
 
     @method("List")
     def getArguments(self):
-        return [StrObject(arg.decode("utf-8")) for arg in self.config.argv]
+        return self.argv
 
     @method("Map")
     def getEnvironment(self):
-        # XXX monteMap()
-        d = monteMap()
-        for key, value in os.environ.items():
-            k = BytesObject(key)
-            v = BytesObject(value)
-            d[k] = v
-        return d
+        return self.env
 
     @method("Int")
     def getPID(self):
-        return os.getpid()
+        return self.pid
 
     @method("Void")
     def interrupt(self):
-        os.kill(os.getpid(), signal.SIGINT)
+        # You might think that this needs to be async, but self-sent signals
+        # should probably be delivered immediately. ~ C.
+        os.kill(self.pid, signal.SIGINT)
 
 
 @autohelp

@@ -23,7 +23,7 @@ from rpython.translator.tool.cbuild import ExternalCompilationInfo
 
 from typhon.log import log
 
-from typhon.futures import Ok, Err, ERR
+from typhon.futures import Ok, ERR
 from typhon.objects.root import Object
 
 
@@ -641,6 +641,9 @@ def spawn(loop, process, file, args, env, streams):
                 options.c_stdio = rawStreams
                 rffi.setintfield(options, "c_stdio_count", len(streams))
                 add_exit_cb(options, processDiscard)
+
+                # On Windows, ask to *not* have one of those annoying
+                # console/terminal windows pop up. ~ C.
                 rffi.setintfield(options, "c_flags", UV_PROCESS_WINDOWS_HIDE)
                 rv = uv_spawn(loop, process, options)
                 free(options)
