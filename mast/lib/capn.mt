@@ -1,7 +1,18 @@
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
-exports (makeMessageReader, text)
-
+exports (makeMessageReader, makeMessageWriter, loads, text, undefined)
 "Components for reading the packing format used for capn messages."
+
+def STRUCT :Int := 0
+def LIST :Int := 1
+def FAR :Int := 2
+def LIST_SIZE_VOID :Int := 0
+def LIST_SIZE_BIT :Int := 1
+def LIST_SIZE_8 :Int := 2
+def LIST_SIZE_16 :Int := 3
+def LIST_SIZE_32 :Int := 4
+def LIST_SIZE_64 :Int := 5
+def LIST_SIZE_PTR :Int := 6
+def LIST_SIZE_COMPOSITE :Int := 7
 
 def text(pointer) as DeepFrozen:
     return if (pointer == null):
@@ -209,3 +220,83 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
                             return "cap"
                         to index() :Bool:
                             return shift(i, 32, 32)
+
+object undefined as DeepFrozen {}
+
+def bufStart :List[Int] := [0] * 16
+
+def makeMessageWriter() as DeepFrozen:
+    def buf := bufStart.diverge() # zone for segment/root pointers
+    def roundToWord(pos):
+        return (pos + (8 - 1)) & -8  # Round up to 8-byte boundary
+
+    return object messageWriter:
+        to checkTag(curtag, newtag):
+            if (curtag != null):
+                throw(`got multiple values for the union tag: ${curtag}, ${newtag}`)
+            return newtag
+
+        to allocate(n :Int):
+            def pos := buf.size()
+            buf.extend([0] * n)
+            return pos
+
+        to allocText(pos, s, => trailingZero := 1):
+            if (s == null):
+                messageWriter.writeInt64(pos, 0)
+                return -1
+            def via (UTF8.encode) bs := s
+            def nn := bs.size() + trailingZero
+            def result := messageWriter.allocList(pos, LIST_SIZE_8, nn, nn)
+            for i => b in (bs):
+                buf[result + i] := b
+            return result
+
+        to allocList(pos, sizeTag, count, length):
+            def result := messageWriter.allocate(roundToWord(length))
+            def offset := result - pos + 8
+            def p := (count << 35 | (sizeTag << 32 & 0x700000000) |
+                      (offset << 2 & 0xfffffffc) | LIST)
+            messageWriter.writeInt64(pos, p)
+            return result
+
+        to writeUint64(i, n):
+            for j in (0..!8):
+                buf[i + j] := shift(n, j * 8, 8)
+
+        to writeUint32(i, n):
+            for j in (0..!4):
+                buf[i + j] := shift(n, j * 8, 4)
+
+        # XXX extremely lazy/wasteful way to implement signed packing
+        to writeInt64(i, n):
+            messageWriter.writeUint64(i, if (n < 0) { 2*64 + n - 1 } else { n })
+
+        to writeInt32(i, n):
+            messageWriter.writeUint32(i, if (n < 0) { 2*32 + n - 1 } else { n })
+
+        to makeStructPointer(pos ? (pos % 8 == 0), dataSize, ptrSize):
+            return def structPointer.writePointer(offset):
+                # end of pointer, in words
+                def wordOffset := (offset // 8)
+                # start of data section, in words
+                def wordPos := pos // 8
+                def p := (ptrSize << 48 |
+                          dataSize << 32 & 0xffff00000000 |
+                          (wordPos - wordOffset) << 2 & 0xfffffffc)
+                messageWriter.writeInt64(offset, p)
+
+        to dumps(obj) :Bytes:
+            # segment count - 1
+            messageWriter.writeUint32(0, 0)
+            # segment size in words (i.e. not counting segment header)
+            messageWriter.writeUint32(4, (buf.size() - 8) // 8)
+            # XXX check that it's a struct pointer
+            obj.writePointer(8)
+            return _makeBytes.fromInts(buf)
+
+def loads(bs :Bytes, reader, payloadType) as DeepFrozen:
+    def root := makeMessageReader(bs).getRoot()
+    return M.call(reader, payloadType, [root], [].asMap())
+
+
