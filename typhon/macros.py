@@ -6,7 +6,7 @@ from ast import (Assign, Expr, Subscript, Attribute, List, Tuple, Name, Import,
 from collections import namedtuple
 import copy
 from macropy.core.macros import (Macros, Walker, injected_vars,
-                                 post_processing, unparse)
+                                 post_processing)
 macros = Macros()
 
 
@@ -289,7 +289,6 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
     state = gen_sym("state")
     result = gen_sym("result")
     status = gen_sym("status")
-    currentVat_ = gen_sym("currentVat")
     successValue = gen_sym("successValue")
     failValue = gen_sym("failureValue")
     freeNames = []
@@ -448,7 +447,7 @@ def toEmit(tree, src, importNames, **kw):
 
 @injected_vars.append
 def moduleGlobals(tree, src, **kw):
-    return collectModuleGlobals.recurse_collect(tree, state=None)[1]
+    return collectModuleGlobals.recurse_collect(tree)[1]
 
 
 @post_processing.append
