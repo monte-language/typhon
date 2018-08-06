@@ -1,9 +1,4 @@
-import "lib/iterators" =~ [=> zip :DeepFrozen]
 exports (expand)
-
-def reversed(it) as DeepFrozen:
-    def items := _makeList.fromIterable(it)
-    return items.reverse()
 
 def putVerb(verb, fail, span) as DeepFrozen:
     switch (verb):
@@ -124,6 +119,11 @@ def expand(node, builder, fail) as DeepFrozen:
         } else {
             builder.IfExpr(test, cons, alt, span)
         }
+
+    def sameEver(left, right, isSame :Bool, span):
+        def call := callExpr(nounExpr("_equalizer", span),
+                             "sameEver", [left, right], [], span)
+        return if (isSame) { call } else { callExpr(call, "not", [], [], span) }
 
     def seqSendOnly(ast, maker, args, span):
         "Expand send-expressions inside seq-expressions to use M.sendOnly()."
@@ -798,11 +798,7 @@ def expand(node, builder, fail) as DeepFrozen:
                 callExpr(expandMatchBind(sw, args, span, fail), "not", [], [], span)
             match =="SameExpr":
                 def [left, right, same :Bool] := args
-                def sameEver := callExpr(nounExpr("_equalizer", span),
-                                         "sameEver", [left, right], [], span)
-                if (same) { sameEver } else {
-                    callExpr(sameEver, "not", [], [], span)
-                }
+                sameEver(left, right, same, span)
             match =="AndExpr":
                 def [left, right] := args
                 expandLogical(
@@ -1051,21 +1047,38 @@ def expand(node, builder, fail) as DeepFrozen:
             match =="SwitchExpr":
                 def [expr, matchers] := args
                 def sp := tempNounExpr("specimen", span)
-                var failures := []
-                var ejs := []
-                for _ in (matchers):
-                    failures with= (tempNounExpr("failure", span))
-                    ejs with= (tempNounExpr("ej", span))
+                def clauses := [for m in (matchers) {
+                    def patt := m.getPattern()
+                    def body := m.getBody()
+                    if (patt.getNodeName() == "ViaPattern" &&
+                        (def trans := patt.getExpr()).getNodeName() == "MethodCallExpr" &&
+                        trans.getReceiver().getNodeName() == "NounExpr" &&
+                        trans.getReceiver().getName() == "_matchSame") {
+                        def isSame := trans.getVerb() == "run"
+                        def [spec] := trans.getArgs()
+                        def test := sameEver(sp, spec, isSame, span)
+                        def f := if (isSame) { `Not same as $spec` } else {
+                            `Same as $spec`
+                        }
+                        def failure := litExpr(f, span)
+                        [test, body, failure, null]
+                    } else {
+                        def failure := tempNounExpr("failure", span)
+                        def ej := tempNounExpr("ej", span)
+                        [patt, body, failure, ej]
+                    }
+                }]
                 var block := callExpr(nounExpr("_switchFailed", span), "run",
-                    [sp] + failures, [], span)
-                for [m, fail, ej] in (reversed(zip(matchers, failures, ejs))):
-                    block := makeEscapeExpr(
-                        plainPatt(ej, span),
-                        seqExpr([
-                            defExpr(m.getPattern(), ej, sp, span),
-                            m.getBody()], span),
-                        plainPatt(fail, span),
-                        block, span)
+                    [sp] + [for [_, _, f, _] in (clauses) f], [], span)
+                for [head, body, fail, ej] in (clauses.reverse()):
+                    if (ej == null):
+                        block := emitIf(head, body, block, span)
+                    else:
+                        block := makeEscapeExpr(
+                            plainPatt(ej, span),
+                            seqExpr([defExpr(head, ej, sp, span), body], span),
+                            plainPatt(fail, span),
+                            block, span)
                 builder.HideExpr(seqExpr([
                     defExpr(plainPatt(sp, span), null, expr, span),
                     block], span), span)

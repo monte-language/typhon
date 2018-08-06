@@ -418,11 +418,10 @@ def specimens := [
      "
      {
          def specimen_1 := x
-         escape ej_2 {
-             def via (_matchSame.run(2)) _ exit ej_2 := specimen_1
+         if (_equalizer.sameEver(specimen_1, 2)) {
              'a'
-         } catch failure_3 {
-             _switchFailed.run(specimen_1, failure_3)
+         } else {
+             _switchFailed.run(specimen_1, \"Not same as 'a'\")
          }
      }"],
      ["
