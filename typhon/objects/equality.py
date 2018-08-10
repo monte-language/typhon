@@ -25,7 +25,6 @@ from typhon.objects.collections.maps import ConstMap
 from typhon.objects.constants import TrueObject, FalseObject, NullObject, wrapBool
 from typhon.objects.data import (BigInt, BytesObject, CharObject,
                                  DoubleObject, IntObject, StrObject)
-from typhon.objects.ejectors import throwStr
 from typhon.objects.refs import resolution, isResolved
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
@@ -73,6 +72,10 @@ def listEq(first, second, cache):
             return equal
     # Well, nothing failed, so it would seem that they must be equal.
     return EQUAL
+
+
+def signOf(x):
+    return math.copysign(1, x)
 
 
 def optSame(first, second, cache=None):
@@ -129,6 +132,9 @@ def optSame(first, second, cache=None):
             # NaN == NaN
             if math.isnan(fd) and math.isnan(sd):
                 return eq(True)
+            # 0.0 != -0.0
+            elif signOf(fd) != signOf(sd):
+                return eq(False)
             else:
                 return eq(fd == sd)
         return INEQUAL
