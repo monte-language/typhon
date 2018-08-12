@@ -127,7 +127,9 @@ of `&labelMap[labels]`, a slot that can be addressed as a proxy for the value.
         to child(via (trans) params):
             return object childLabelSlot:
                 to get():
-                    return values[params]
+                    return values.fetch(params, fn {
+                        values[params] := zero
+                    })
                 to put(v):
                     values[params] := v
 ```
@@ -778,11 +780,28 @@ def testGauge(assert):
     assert.equal(r.collect(), ["test_tests" => 5.7])
 ```
 
+And make sure labels work:
+
+```
+def testCounterLabels(assert):
+    def labels := ["t"]
+    def r := makeCollectorRegistry("test")
+    def c := r.counter("tests", "Silent help.", => labels)
+    c.inc(["t" => "200"])
+    def child := c.labels(["t" => "400"])
+    child.inc(2.0)
+    assert.equal(r.collect().sortKeys(), [
+        `test_tests{t="200"}` => 1.0,
+        `test_tests{t="400"}` => 2.0,
+    ])
+```
+
 And register the tests.
 
 ```
 unittest([
     testCounter,
+    testCounterLabels,
     testGauge,
 ])
 ```
