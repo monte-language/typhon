@@ -20,6 +20,7 @@ import "lib/monte/meta" =~ _
 # import "lib/monte/mix" =~ _
 import "lib/parse" =~ _
 import "lib/parsers/html" =~ _
+import "lib/prom" =~ _
 import "lib/streams" =~ _
 import "lib/uKanren" =~ _
 import "lib/words" =~ _

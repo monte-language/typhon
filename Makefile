@@ -65,6 +65,7 @@ mast: mast/lib/enum.mast \
 	mast/lib/marley.mast \
 	mast/lib/matrices.mast \
 	mast/lib/pra.mast \
+	mast/lib/prom.mast \
 	mast/lib/streams.mast \
 	mast/lib/uKanren.mast \
 	mast/lib/words.mast \
@@ -155,6 +156,10 @@ loader.mast: loader.mt
 %.mast: %.mt
 	@ echo "MONTEC $<"
 	@ $(MT_TYPHON) $(PROFILE_FLAGS) -l boot loader run montec $< $@ # 2> /dev/null
+
+%.mt: %.mt.md
+	@ echo "LIT $<"
+	@ ./lit.sh -i $<
 
 clean:
 	@ echo "CLEAN"
