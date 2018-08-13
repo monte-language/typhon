@@ -472,6 +472,10 @@ object makePump as DeepFrozen:
         return def takeWhilePump(packet) :EOSOk as Pump:
             return if (on && (on := pred(packet))) { [packet] } else { [endOfStream] }
 
+    to map(f) :Pump:
+        return def mapPump(packet) :List as Pump:
+            return [f(packet)]
+
     to filter(predicate) :Pump:
         return def filterPump(packet) :List as Pump:
             return if (predicate(packet)) { [packet] } else { [] }
