@@ -71,7 +71,7 @@ def parseHeader(headers :Headers, bs :Bytes) :Headers as DeepFrozen:
             def transferEncoding := parseTransferEncoding(value)
             headers.with(=> transferEncoding)
         match b`user-agent`:
-            headers.with("userAgent" => value)
+            headers.with("userAgent" => UTF8.decode(value, null))
         match h:
             def spareHeaders := headers.spareHeaders()
             headers.with("spareHeaders" => spareHeaders.with(h, value))
@@ -80,6 +80,12 @@ def testParseHeaderTransferEncoding(assert):
     def headers := parseHeader(emptyHeaders(), b`Transfer-Encoding: chunked`)
     assert.equal(headers.transferEncoding(), [CHUNKED])
 
+def testParseHeaderUAFx(assert):
+    def ua := b`User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/60.0`
+    def headers := parseHeader(emptyHeaders(), ua)
+    assert.equal(headers.userAgent(), "Mozilla/5.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/60.0")
+
 unittest([
     testParseHeaderTransferEncoding,
+    testParseHeaderUAFx,
 ])
