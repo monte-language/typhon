@@ -195,11 +195,19 @@ def makeProcessingPump(app) as DeepFrozen:
 
 
 def makeHTTPEndpoint(endpoint) as DeepFrozen:
-    return def HTTPEndpoint.listen(processor):
-            def responder(source, sink):
-                def request := makeRequestPump()
-                def processing := makeProcessingPump(processor)
-                def response := makeResponsePump()
-                def fused := fuse(request, fuse(processing, response))
-                flow(source, alterSink.fusePump(fused, sink))
-            endpoint.listenStream(responder)
+    return def HTTPEndpoint.listen(app):
+        "
+        Listen for HTTP requests and run them through `app`.
+
+        `app(request)` should return a response, which is a tuple of the form
+        `[statusCode :Int, headers :Map[Str, Str], body :Bytes]`, or `null` if
+        the request is not satisfiable.
+        "
+
+        def responder(source, sink):
+            def request := makeRequestPump()
+            def processing := makeProcessingPump(app)
+            def response := makeResponsePump()
+            def fused := fuse(request, fuse(processing, response))
+            flow(source, alterSink.fusePump(fused, sink))
+        endpoint.listenStream(responder)
