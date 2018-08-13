@@ -1,6 +1,7 @@
 ```
 import "unittest" =~ [=> unittest :Any]
-exports ()
+import "lib/codec/utf8" =~ [=> UTF8]
+exports (makeRegistry, textExposition, addMonitoringOnto)
 ```
 
 Quotes are largely out-of-order; Monte requires that we declare names before
@@ -242,10 +243,10 @@ We can have collector registries. In fact, we shall make registries our key
 objects.
 
 ```
-def makeCollectorRegistry(registryName :Str) as DeepFrozen:
+def makeRegistry(registryName :Str) as DeepFrozen:
     def collectors := [].asMap().diverge()
 
-    return object collectorRegistry:
+    return object registry:
 ```
 
 > CollectorRegistry SHOULD offer `register()`/`unregister()` functions, and a
@@ -676,19 +677,6 @@ Okay, so the idea is that, since help strings have been nigh-useless in the
 past, they could be more useful in the future, if we all work together and
 establish some cultural expectations.
 
-> ## Exposition
-> 
-> Clients MUST implement the text-based exposition format outlined in the
-> [exposition formats](/docs/instrumenting/exposition_formats) documentation.
-
-Sure.
-
-> Reproducible order of the exposed metrics is ENCOURAGED (especially for human
-> readable formats) if it can be implemented without a significant resource cost.
-
-Monte gives this property nearly for free; we must only avoid techniques like
-sorting.
-
 > ## Standard and runtime collectors
 > 
 > Client libraries SHOULD offer what they can of the Standard exports, documented
@@ -725,7 +713,7 @@ We can, if given `currentRuntime`, ask for Typhon-specific heap information.
 
 ```
         to processMetrics(currentRuntime):
-            def processMetrics.collect():
+            def processMetrics():
                 def heap := currentRuntime.getHeapStatistics()
                 return [
                     "heap_bytes" => heap.getMemoryUsage().asDouble(),
@@ -741,6 +729,48 @@ We can, if given `currentRuntime`, ask for Typhon-specific heap information.
 
 We should export vat information from the runtime.
 
+> ## Exposition
+>
+> Clients MUST implement the text-based exposition format outlined in the
+> [exposition formats](/docs/instrumenting/exposition_formats) documentation.
+
+We cheat heavily here, since we don't intend to implement any other exposition
+formats for a very long time, and have HELP and TYPE prepacked by
+`registry.collect()`. As a result, the actual exposition is quite brief.
+
+```
+def textExposition(registry) :Bytes as DeepFrozen:
+    def lines := [for k => v in (registry.collect()) `$k $v`]
+    return UTF8.encode("\n".join(lines), null)
+```
+
+We also can provide a basic bit of middleware which adds the scrape endpoints
+onto an application. After a bit of fussing with the application API, the best
+composition seems to be for users to build and pass in their own registry.
+
+```
+def addMonitoringOnto(app, registry) as DeepFrozen:
+    "
+    Add Prometheus-compatible scrape endpoints onto `app`, collecting from
+    `registry`.
+    "
+
+    return def promMonitoringWrapperApp(req):
+        return switch (req.path()):
+            match =="/healthz":
+                [200, [].asMap(), b`je'e`]
+            match =="/metrics":
+                [200, [].asMap(), textExposition(registry)]
+            match _:
+                app(req)
+```
+
+> Reproducible order of the exposed metrics is ENCOURAGED (especially for human
+> readable formats) if it can be implemented without a significant resource cost.
+
+Monte gives this property nearly for free; we must only avoid techniques like
+sorting.
+
 > ## Unit tests
 > 
 > Client libraries SHOULD have unit tests covering the core instrumentation
@@ -750,7 +780,7 @@ Sure. Let's do a basic sanity test:
 
 ```
 def testCounter(assert):
-    def r := makeCollectorRegistry("test")
+    def r := makeRegistry("test")
     def c := r.counter("tests", "This help string will never be seen.")
     assert.equal(r.collect(), ["test_tests" => 0.0])
     c.inc()
@@ -761,7 +791,7 @@ And we'll take gauges for a test drive too:
 
 ```
 def testGauge(assert):
-    def r := makeCollectorRegistry("test")
+    def r := makeRegistry("test")
     def g := r.gauge("tests", "This help string will never be seen.")
     # Doubles are exact on this integer range, so these operations should be
     # trivially exact.
@@ -785,7 +815,7 @@ And make sure labels work:
 ```
 def testCounterLabels(assert):
     def labels := ["t"]
-    def r := makeCollectorRegistry("test")
+    def r := makeRegistry("test")
     def c := r.counter("tests", "Silent help.", => labels)
     c.inc(["t" => "200"])
     def child := c.labels(["t" => "400"])
