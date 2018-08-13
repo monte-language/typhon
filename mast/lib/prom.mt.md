@@ -1,7 +1,10 @@
 ```
 import "unittest" =~ [=> unittest :Any]
 import "lib/codec/utf8" =~ [=> UTF8]
-exports (makeRegistry, textExposition, addMonitoringOnto)
+import "lib/http/apps" =~ [=> Response, => addBaseOnto]
+import "lib/http/headers" =~ [=> emptyHeaders]
+import "lib/http/server" =~ [=> makeHTTPEndpoint]
+exports (makeRegistry, textExposition, addMonitoringOnto, main)
 ```
 
 Quotes are largely out-of-order; Monte requires that we declare names before
@@ -756,11 +759,15 @@ def addMonitoringOnto(app, registry) as DeepFrozen:
     "
 
     return def promMonitoringWrapperApp(req):
+        traceln(`monitoring`, app, req, registry)
         return switch (req.path()):
             match =="/healthz":
-                [200, [].asMap(), b`je'e`]
+                Response.full("statusCode" => 200, "headers" => emptyHeaders(),
+                              "body" => b`je'e`)
             match =="/metrics":
-                [200, [].asMap(), textExposition(registry)]
+                def body := textExposition(registry)
+                Response.full("statusCode" => 200, "headers" => emptyHeaders(),
+                              => body)
             match _:
                 app(req)
 ```
@@ -866,7 +873,21 @@ Additionally, this module has very few dependencies.
 > example, the Java simpleclient `simpleclient` module has no dependencies, and
 > the `simpleclient_servlet` has the HTTP bits.
 
-It is 2018, so Monte has HTTP tools in the standard library.
+It is 2018, so Monte has HTTP tools in the standard library. We can define a
+basic entrypoint to show off usage.
+
+```
+def main(_argv, => currentRuntime, => makeTCP4ServerEndpoint) as DeepFrozen:
+    def registry := makeRegistry("demo")
+    registry.processMetrics(currentRuntime)
+    def app := addMonitoringOnto(addBaseOnto(traceln), registry)
+
+    def port :Int := 8080
+    def endpoint := makeHTTPEndpoint(makeTCP4ServerEndpoint(port))
+    endpoint.listen(app)
+
+    return 0
+```
 
 > ## Performance considerations
 > 

@@ -3,11 +3,7 @@ import "lib/codec/percent" =~ [=> PercentEncoding]
 import "lib/codec/utf8" =~  [=> UTF8]
 import "lib/enum" =~ [=> makeEnum]
 import "lib/gadts" =~ [=> makeGADT]
-import "lib/streams" =~ [
-    => alterSink,
-    => flow,
-    => fuse,
-]
+import "lib/streams" =~ [=> alterSink, => flow, => fuse, => makePump]
 import "lib/http/headers" =~ [
     => Headers,
     => emptyHeaders,
@@ -38,7 +34,8 @@ def Request :DeepFrozen := makeGADT("Request", [
     "full" => [
         "verb" => Str,
         "path" => Str,
-        "headers" => Headers,
+        # "headers" => Headers,
+        "headers" => DeepFrozen,
         "body" => Bytes,
     ],
 ])
@@ -120,7 +117,6 @@ def makeRequestPump() as DeepFrozen:
                 return true
 
     return def requestPump(bytes :Bytes) :List:
-        # traceln(`received bytes $bytes`)
         buf += bytes
 
         var shouldParseMore :Bool := true
@@ -146,67 +142,39 @@ def statusMap :Map[Int, Str] := [
     307 => "Temporary Redirect",
     400 => "Bad Request",
     404 => "Not Found",
+    500 => "Internal Server Error",
+    501 => "Not Implemented",
 ]
 
 
 def makeResponsePump() as DeepFrozen:
     return def responsePump(response):
-        def [statusCode, headers, body] := response
+        traceln(`responsePump($response)`)
+        def statusCode :Int := response.statusCode()
+        def headers :Headers := response.headers()
+        def body :Bytes := response.body()
         def statusDescription := statusMap.fetch(statusCode,
                                                  "Unknown Status")
         def status := `$statusCode $statusDescription`
-        var rv := [b`HTTP/1.1 $status$\r$\n`]
-        for header => value in (headers):
-            def headerLine := `$header: $value`
-            rv with= (b`$headerLine$\r$\n`)
-        rv with= (b`$\r$\n`)
-        rv with= (body)
+        def rv := [b`HTTP/1.1 $status$\r$\n`].diverge()
+        for header => value in (headers.spareHeaders()):
+            rv.push(b`$header: $value$\r$\n`)
+        rv.push(b`Content-Length: ${M.toString(body.size())}$\r$\n`)
+        rv.push(b`$\r$\n`)
+        rv.push(response.body())
         return rv
-
-
-def serverHeader :Map[Str, Str] := [
-    "Server" => "Monte (Typhon) (.i ma'a tarci pulce)",
-]
-
-def processorWrapper(app) as DeepFrozen:
-    def wrappedProcessor(request):
-        # null means a bad request that was unparseable.
-        def [statusCode, headers, body] := if (request == null) {
-            # We must close the connection after a bad request, since a parse
-            # failure leaves the request tube in an indeterminate state.
-            [400, ["Connection" => "close"], []]
-        } else {
-            try {
-                app(request)
-            } catch problem {
-                traceln(`Caught problem in app:`)
-                traceln.exception(problem)
-                [500, ["Connection" => "close"], []]
-            }
-        }
-        return [statusCode, headers | serverHeader, body]
-    return wrappedProcessor
-
-
-def makeProcessingPump(app) as DeepFrozen:
-    def wrapper := processorWrapper(app)
-    return def processingPump(request):
-        return [wrapper(request)]
-
 
 def makeHTTPEndpoint(endpoint) as DeepFrozen:
     return def HTTPEndpoint.listen(app):
         "
         Listen for HTTP requests and run them through `app`.
 
-        `app(request)` should return a response, which is a tuple of the form
-        `[statusCode :Int, headers :Map[Str, Str], body :Bytes]`, or `null` if
-        the request is not satisfiable.
+        `app(request)` should return a `Response` or `null`.
         "
 
         def responder(source, sink):
             def request := makeRequestPump()
-            def processing := makeProcessingPump(app)
+            def processing := makePump.map(app)
             def response := makeResponsePump()
             def fused := fuse(request, fuse(processing, response))
             flow(source, alterSink.fusePump(fused, sink))
