@@ -719,7 +719,7 @@ We can, if given `currentRuntime`, ask for Typhon-specific heap information.
             def processMetrics():
                 def heap := currentRuntime.getHeapStatistics()
                 return [
-                    "heap_bytes" => heap.getMemoryUsage().asDouble(),
+                    "process_heap_bytes" => heap.getMemoryUsage().asDouble(),
                 ]
             collectors["process"] := processMetrics
 ```
@@ -743,8 +743,8 @@ formats for a very long time, and have HELP and TYPE prepacked by
 
 ```
 def textExposition(registry) :Bytes as DeepFrozen:
-    def lines := [for k => v in (registry.collect()) `$k $v`]
-    return UTF8.encode("\n".join(lines), null)
+    def lines := [for k => v in (registry.collect()) `$k $v$\n`]
+    return UTF8.encode("".join(lines), null)
 ```
 
 We also can provide a basic bit of middleware which adds the scrape endpoints
@@ -759,7 +759,6 @@ def addMonitoringOnto(app, registry) as DeepFrozen:
     "
 
     return def promMonitoringWrapperApp(req):
-        traceln(`monitoring`, app, req, registry)
         return switch (req.path()):
             match =="/healthz":
                 Response.full("statusCode" => 200, "headers" => emptyHeaders(),
