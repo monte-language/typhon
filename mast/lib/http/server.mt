@@ -9,6 +9,7 @@ import "lib/http/headers" =~ [
     => emptyHeaders,
     => parseHeader,
 ]
+import "lib/http/response" =~ [=> Response]
 exports (makeHTTPEndpoint)
 
 # Copyright (C) 2014 Google Inc. All rights reserved.
@@ -147,9 +148,22 @@ def statusMap :Map[Int, Str] := [
 ]
 
 
+# If we get `null` from the app, then we'll use this response. Also it's nice
+# to have a fake response around for testing. This is kind of a duplicate of
+# stuff in lib/http/apps though.
+def defaultResponse :DeepFrozen := Response.full(
+    "statusCode" => 501,
+    "headers" => emptyHeaders().with("spareHeaders" => [
+        b`Connection` => b`close`,
+        b`Server` => b`Monte (Typhon) (.i ma'a tarci pulce)`,
+    ]),
+    "body" => b`Not Implemented`,
+)
+
+
 def makeResponsePump() as DeepFrozen:
-    return def responsePump(response):
-        traceln(`responsePump($response)`)
+    return def responsePump(var response):
+        if (response == null) { response := defaultResponse }
         def statusCode :Int := response.statusCode()
         def headers :Headers := response.headers()
         def body :Bytes := response.body()

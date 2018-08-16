@@ -1,10 +1,11 @@
 ```
 import "unittest" =~ [=> unittest :Any]
 import "lib/codec/utf8" =~ [=> UTF8]
-import "lib/http/apps" =~ [=> Response, => addBaseOnto]
+import "lib/http/apps" =~ [=> addBaseOnto]
 import "lib/http/headers" =~ [=> emptyHeaders]
+import "lib/http/response" =~ [=> Response]
 import "lib/http/server" =~ [=> makeHTTPEndpoint]
-exports (makeRegistry, textExposition, addMonitoringOnto, main)
+exports (makeBuckets, makeRegistry, textExposition, addMonitoringOnto, main)
 ```
 
 Quotes are largely out-of-order; Monte requires that we declare names before
@@ -49,6 +50,17 @@ We will need to invoke `eval()` several times with the safe scope.
 ```
 def safeEval(expr :DeepFrozen) as DeepFrozen:
     return eval(expr, safeScope)
+```
+
+Monte and Go have slightly different formatting for doubles.
+
+```
+def formatDouble(d :Double) :Str as DeepFrozen:
+    return switch (d) {
+        match ==Infinity { "+Inf" }
+        match ==(-Infinity) { "-Inf" }
+        match _ { M.toString(d) }
+    }
 ```
 
 We will need a basic primitive for handling the multidimensionality of labels
@@ -107,7 +119,8 @@ help avoid re-entrancy bugs.
                 [namespace => values[[]]]
             } else {
                 [for k => v in (values) {
-                    def guts := ",".join([for k => v in (labels) `$k="$v"`])
+                    def d := formatDouble(v)
+                    def guts := ",".join([for k => v in (labels) `$k="$d"`])
                     `$namespace{$guts}`
                 } => v]
             }
@@ -136,6 +149,46 @@ of `&labelMap[labels]`, a slot that can be addressed as a proxy for the value.
                     })
                 to put(v):
                     values[params] := v
+```
+
+> A histogram SHOULD have the same default buckets as other client libraries.
+
+How normative. This document really should spell out what those default
+buckets are!
+
+```
+def defaultBuckets :List[Double] := [
+    0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5,
+    0.75, 1.0, 2.5, 5.0, 7.5, 10.0, Infinity,
+]
+```
+
+> A histogram MUST offer a way to manually choose the buckets. Ways to set
+> buckets in a `linear(start, width, count)` and `exponential(start, factor,
+> count)` fashion SHOULD be offered. Count MUST exclude the `+Inf` bucket.
+
+```
+object makeBuckets as DeepFrozen:
+    to linear(start :Double, width :Double, count :Int) :List[Double]:
+        return [for i in (0..!count) start + i * width] + [Infinity]
+
+    to exponential(start :Double, factor :Double, count :Int) :List[Double]:
+        return [for i in (0..!count) start + factor ** i] + [Infinity]
+```
+
+And test.
+
+```
+def testMakeBucketsLinear(assert):
+    assert.equal(makeBuckets.linear(1.0, 1.0, 3), [1.0, 2.0, 3.0, Infinity])
+
+def testMakeBucketsExponential(assert):
+    assert.equal(makeBuckets.linear(1.0, 2.0, 3), [1.0, 2.0, 4.0, Infinity])
+
+unittest([
+    testMakeBucketsLinear,
+    testMakeBucketsExponential,
+])
 ```
 
 > ## Conventions
@@ -285,7 +338,7 @@ Sure. We define these collectors below, to line up with this document.
 > Counter and Gauge MUST be part of the client library. At least one of Summary
 > and Histogram MUST be offered.
 
-We present Counters and Gauges. I'll do the others later.
+We present Counters, Gauges, and Histograms. I'll do Summaries later.
 
 > These should be primarily used as file-static variables, that is, global
 > variables defined in the same file as the code they’re instrumenting. The
@@ -487,7 +540,7 @@ We'll offer a named argument.
                     labelMap[params] := v
                 to labels(params :Map[Str, Str]):
                     def &val := labelMap.child(params)
-                    return object childCounter extends &val:
+                    return object childGauge extends &val:
                         to inc():
                             val += 1.0
                         to inc(v :Double):
@@ -549,36 +602,86 @@ I might just repeat, "Timers are privileged in Monte," each time.
 > can do it by hand). This should follow the same pattern as Gauge/Histogram.
 > 
 > Summary `_count`/`_sum` MUST start at 0.
-> 
+
 > ### Histogram
 > 
 > [Histograms](/docs/concepts/metric_types/#histogram) allow aggregatable
 > distributions of events, such as request latencies. This is at its core a
 > counter per bucket.
-> 
+
+```
+        to histogram(name :Str ? (!collectors.contains(name)), help :Str,
+```
+
 > A histogram MUST NOT allow `le` as a user-set label, as `le` is used internally
 > to designate buckets.
-> 
-> A histogram MUST offer a way to manually choose the buckets. Ways to set
-> buckets in a `linear(start, width, count)` and `exponential(start, factor,
-> count)` fashion SHOULD be offered. Count MUST exclude the `+Inf` bucket.
-> 
-> A histogram SHOULD have the same default buckets as other client libraries.
+
+```
+                     "labels" => labels :List[Str] ? (!labels.contains("le")) := [],
+```
+
 > Buckets MUST NOT be changeable once the metric is created.
-> 
+
+```
+                     => buckets :List[Double] := defaultBuckets):
+```
+
+> Histogram  `_count`/`_sum` and the buckets MUST start at 0.
+
+```
+            def zero :Double := 0.0
+            var count :Int := 0
+            var sum :Double := 0.0
+```
+
+```
+            def labelMap := makeLabelMap(`${registryName}_${name}_bucket`,
+                                         ["le"] + labels, "zero" => 0.0)
+            collectors[name] := fn {
+                labelMap.collect() | [
+                    `${registryName}_${name}_count` => `$count`,
+                    `${registryName}_${name}_sum` => `$sum`,
+                ]
+            }
+            object histogram:
+                to help() :Str:
+                    return help
+```
+
 > A histogram MUST have the following methods:
 > 
 > * `observe(double v)`: Observe the given amount
-> 
+
+```
+                to observe(params :Map[Str, Str], v :Double):
+                    count += 1
+                    sum += v
+                    for bucket in (buckets):
+                        if (v <= bucket):
+                            labelMap[params.with("le", bucket)] += 1.0
+                to labels(params :Map[Str, Str]):
+                    # We have to do a bucket lookup every time anyway, so
+                    # don't bother trying to produce a slot.
+                    return def childHistogram.observe(v :Double):
+                        count += 1
+                        sum += v
+                        for bucket in (buckets):
+                            if (v <= bucket):
+                                labelMap[params.with("le", bucket)] += 1.0
+            return if (labels.isEmpty()) {
+                histogram.labels([].asMap())
+            } else { histogram }
+```
+
 > A histogram SHOULD have the following methods:
 > 
 > Some way to time code for users in seconds. In Python this is the `time()`
 > decorator/context manager. In Java this is `startTimer`/`observeDuration`.
 > Units other than seconds MUST NOT be offered (if a user wants something else,
 > they can do it by hand). This should follow the same pattern as Gauge/Summary.
-> 
-> Histogram  `_count`/`_sum` and the buckets MUST start at 0.
-> 
+
+Timers are privileged in Monte.
+
 > **Further metrics considerations**
 > 
 > Providing additional functionality in metrics beyond what’s documented above as
@@ -587,7 +690,7 @@ I might just repeat, "Timers are privileged in Monte," each time.
 > If there’s a common use case you can make simpler then go for it, as long as it
 > won’t encourage undesirable behaviours (such as suboptimal metric/label
 > layouts, or doing computation in the client).
-> 
+
 > ### Labels
 > 
 > Labels are one of the [most powerful
@@ -832,6 +935,29 @@ def testCounterLabels(assert):
     ])
 ```
 
+How about histograms?
+
+```
+def testHistogram(assert):
+    def buckets := makeBuckets.linear(0.0, 1.0, 5)
+    def r := makeRegistry("test")
+    def h := r.histogram("tests", "", => buckets)
+    h.observe(2.5)
+    h.observe(3.5)
+    assert.equal(r.collect().sortKeys(), [
+        `test_tests_count` => 2.0,
+        # FP exactness!
+        `test_tests_sum` => 6.0,
+        `test_tests_bucket{le="0.0"}` => 0.0,
+        `test_tests_bucket{le="1.0"}` => 0.0,
+        `test_tests_bucket{le="2.0"}` => 0.0,
+        `test_tests_bucket{le="3.0"}` => 1.0,
+        `test_tests_bucket{le="4.0"}` => 2.0,
+        `test_tests_bucket{le="5.0"}` => 2.0,
+        `test_tests_bucket{le="+Inf"}` => 2.0,
+    ])
+```
+
 And register the tests.
 
 ```
@@ -839,8 +965,14 @@ unittest([
     testCounter,
     testCounterLabels,
     testGauge,
+    testHistogram,
 ])
 ```
+
+Why aren't these tests earlier? Well, we needed to finish defining the
+registry maker! Unlike in languages like Python, where class scope is still
+executable, we can't take arbitrary actions in object literals; we can only
+define methods and matchers.
 
 > Client libraries are ENCOURAGED to offer ways that make it easy for users to
 > unit-test their use of the instrumentation code. For example, the
@@ -848,7 +980,7 @@ unittest([
 
 Due to the confinement properties of Monte, along with the lack of global
 mutable state, it should be trivial for any user to replace registries for
-testing.
+testing, as we have done, by calling `makeRegistry` as they like.
 
 > ## Packaging and dependencies
 > 
@@ -865,7 +997,9 @@ impact on the behavior of the application.
 > an adverse impact on the application?
 
 Monte has a much better per-module compilation story than its peers.
-Additionally, this module has very few dependencies.
+Additionally, this module has very few dependencies; every imported module is
+in the "lib" namespace of the standard library. (Except the magic "unittest"
+module!)
 
 > It is suggested that where this may arise, that the core instrumentation is
 > separated from the bridges/exposition of metrics in a given format. For

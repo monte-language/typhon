@@ -1,28 +1,13 @@
 ```
 import "lib/gadts" =~ [=> makeGADT]
 import "lib/http/headers" =~ [=> Headers, => emptyHeaders]
-exports (Response, addBaseOnto)
+import "lib/http/response" =~ [=> Response]
+exports (addBaseOnto)
 ```
 
 This is a small collection of useful HTTP applications. We provide strong
 opinions and a roadmap for folks who want to write their own opinionated
 scaffolding.
-
-First, we need to define what a response is. Historically, a response has
-consisted of a status code, some headers, and a body.
-
-In the future, we'll support streaming bodies in a separate constructor.
-
-```
-def Response :DeepFrozen := makeGADT("Response", [
-    "full" => [
-        "statusCode" => Int,
-        # "headers" => Headers,
-        "headers" => DeepFrozen,
-        "body" => Bytes,
-    ],
-])
-```
 
 To raise Monte awareness, as well as to make it easier to deploy headers that
 should be everywhere, we can pre-build a custom header map.

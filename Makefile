@@ -112,7 +112,8 @@ parsers: mast/lib/parsers/html.mast \
 http: mast/lib/http/client.mast mast/lib/http/server.mast \
 	mast/lib/http/tag.mast mast/lib/http/resource.mast \
 	mast/lib/http/headers.mast \
-	mast/lib/http/apps.mast
+	mast/lib/http/apps.mast \
+	mast/lib/http/response.mast
 
 games: mast/games/mafia.mast
 
