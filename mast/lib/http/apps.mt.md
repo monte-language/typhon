@@ -1,5 +1,4 @@
 ```
-import "lib/gadts" =~ [=> makeGADT]
 import "lib/http/headers" =~ [=> Headers, => emptyHeaders]
 import "lib/http/response" =~ [=> Response]
 exports (addBaseOnto)
@@ -82,7 +81,8 @@ def addBaseOnto(app) as DeepFrozen:
         if (res == null) { res := error501 }
         def spares := res.headers().spareHeaders() | theHeaders.spareHeaders()
         def newHeaders := res.headers().with("spareHeaders" => spares)
-        res.with("headers" => newHeaders)
+        res := res.with("headers" => newHeaders)
+        return res
     return baseApp
 ```
 

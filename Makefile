@@ -141,7 +141,7 @@ models: mast/models/list/cons.mast
 
 tools: mast/tools/dump.mast mast/tools/repl.mast \
 	mast/tools/capnpc.mast mast/capn/bootstrap.mast \
-	mast/tools/muffin.mast
+	mast/tools/muffin.mast mast/tools/kubeless.mast
 
 stage2/muffin.mast: mast/tools/muffin.mast
 	@ echo "MUFFIN $<"

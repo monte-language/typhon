@@ -163,6 +163,7 @@ def defaultResponse :DeepFrozen := Response.full(
 
 def makeResponsePump() as DeepFrozen:
     return def responsePump(var response):
+        traceln(`responsePump($response)`)
         if (response == null) { response := defaultResponse }
         def statusCode :Int := response.statusCode()
         def headers :Headers := response.headers()
