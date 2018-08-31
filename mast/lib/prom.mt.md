@@ -31,6 +31,80 @@ Prometheus take for granted.
 
 ## Preamble
 
+Prometheus uses double-precision floating-point numbers for values. This is
+unfortunate because of the known edge cases:
+
+    ▲> def x := 9_007_199_254_740_992
+    Result: 9007199254740992
+    ▲> x + 1
+    Result: 9007199254740993
+    ▲> x + 1.0
+    Result: 9007199254740992.000000
+
+We can use (Kahan
+summation)[https://en.wikipedia.org/wiki/Kahan_summation_algorithm] to
+compensate for this failure.
+
+```
+def kahanWrap(var d :Double) as DeepFrozen:
+```
+
+`c` is for "compensator" or "compensation".
+
+```
+    var c :Double := 0.0
+```
+
+We'll use a coercible wrapper object.
+
+```
+    return object kahanDouble:
+        to _conformTo(g):
+            return d - c
+```
+
+Putting a precise value into the wrapper will reset the compensator.
+
+```
+        to put(v :Double):
+            d := v
+            c := 0.0
+```
+
+And here is the core of the Kahan algorithm.
+
+```
+        to add(v :Double):
+            var y := v - c
+            var t := d + y
+            c := t - d - y
+            d := t
+```
+
+We can flip every sign in order to do subtraction, but it's much easier and
+just as legal to flip the sign of the input.
+
+```
+        to subtract(v :Double):
+            kahanDouble + -v
+```
+
+We can test that this technique works, too.
+
+```
+def testKahanWrapOverflow(assert):
+    def top :Double := 9_007_199_254_740_992.0
+    def expected :Double := 9_007_199_254_740_994.0
+    def d := kahanWrap(top)
+    d + 1.0
+    d + 1.0
+    assert.equal(d :Double, expected)
+
+unittest([
+    testKahanWrapOverflow,
+])
+```
+
 We will need a way to declare monotone names; we can do it with a custom slot.
 
 ```
@@ -43,13 +117,6 @@ def makeMonotoneSlot(v, guard :DeepFrozen) as DeepFrozen:
             if (v > u):
                 throw(`Monotonicity failed: $v > $u`)
             storage := u
-```
-
-We will need to invoke `eval()` several times with the safe scope.
-
-```
-def safeEval(expr :DeepFrozen) as DeepFrozen:
-    return eval(expr, safeScope)
 ```
 
 Monte and Go have slightly different formatting for doubles.
@@ -67,17 +134,6 @@ We will need a basic primitive for handling the multidimensionality of labels
 in a flexible way. This maker wraps a map from a canonical ordering of label
 parameters to the raw counter/gauge/bucket storage, which in all cases will be
 unwrapped values.
-
-We will only use `Double` for values, because Prometheus uses double-precision
-floating-point numbers for values. This is unfortunate because of the known
-edge cases:
-
-    ▲> def x := 9_007_199_254_740_992
-    Result: 9007199254740992
-    ▲> x + 1
-    Result: 9007199254740993
-    ▲> x + 1.0
-    Result: 9007199254740992.000000
 
 We'll also permit overriding the zero value, for gauges.
 
