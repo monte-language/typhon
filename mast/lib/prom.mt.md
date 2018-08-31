@@ -59,7 +59,7 @@ We'll use a coercible wrapper object.
 
 ```
     return object kahanDouble:
-        to _conformTo(g):
+        to _conformTo(_guard):
             return d - c
 ```
 
@@ -105,20 +105,6 @@ unittest([
 ])
 ```
 
-We will need a way to declare monotone names; we can do it with a custom slot.
-
-```
-def makeMonotoneSlot(v, guard :DeepFrozen) as DeepFrozen:
-    var storage :guard := v
-    return object monotoneSlot:
-        to get():
-            return storage
-        to put(u :guard):
-            if (v > u):
-                throw(`Monotonicity failed: $v > $u`)
-            storage := u
-```
-
 Monte and Go have slightly different formatting for doubles.
 
 ```
@@ -133,7 +119,8 @@ def formatDouble(d :Double) :Str as DeepFrozen:
 We will need a basic primitive for handling the multidimensionality of labels
 in a flexible way. This maker wraps a map from a canonical ordering of label
 parameters to the raw counter/gauge/bucket storage, which in all cases will be
-unwrapped values.
+Kahan wrappers. Since we are storing wrappers, we will not support
+reassignment into storage, just the retrieval operations for the wrappers.
 
 We'll also permit overriding the zero value, for gauges.
 
@@ -150,7 +137,7 @@ zero out the default bucket to prevent missing metrics.
 
 ```
     if (labels.isEmpty()):
-        values[[]] := zero
+        values[[]] := kahanWrap(zero)
 ```
 
 This transformer takes a map of label names to label parameters, and returns
@@ -175,6 +162,12 @@ help avoid re-entrancy bugs.
                 [namespace => values[[]]]
             } else {
                 [for k => v in (values) {
+```
+
+Note that this is the point where the wrapper is coerced to `Double` by
+`formatDouble`. Coercion is not always obvious.
+
+```
                     def d := formatDouble(v)
                     def guts := ",".join([for k => v in (labels) `$k="$d"`])
                     `$namespace{$guts}`
@@ -187,24 +180,8 @@ And these map operations include the zero-value cushion.
 ```
         to get(via (trans) params):
             return values.fetch(params, fn {
-                values[params] := zero
+                values[params] := kahanWrap(zero)
             })
-        to put(via (trans) params, v):
-            values[params] := v
-```
-
-If a user fixes the label parameters, then they can get the Monte equivalent
-of `&labelMap[labels]`, a slot that can be addressed as a proxy for the value.
-
-```
-        to child(via (trans) params):
-            return object childLabelSlot:
-                to get():
-                    return values.fetch(params, fn {
-                        values[params] := zero
-                    })
-                to put(v):
-                    values[params] := v
 ```
 
 > A histogram SHOULD have the same default buckets as other client libraries.
@@ -498,14 +475,14 @@ have `Int`-valued counters, but it is impractical.
 
 ```
                 to inc(params :Map[Str, Str]):
-                    labelMap[params] += 1.0
+                    labelMap[params] + 1.0
 ```
 
 > * `inc(double v)`: Increment the counter by the given amount. MUST check that v >= 0.
 
 ```
                 to inc(params :Map[Str, Str], v :PosDouble):
-                    labelMap[params] += v
+                    labelMap[params] + v
 ```
 
 > The general way to provide access to labeled dimension of a metric is via a
@@ -515,12 +492,12 @@ have `Int`-valued counters, but it is impractical.
 
 ```
                 to labels(params :Map[Str, Str]):
-                    def &val := labelMap.child(params)
-                    return object childCounter extends &val:
+                    def val := labelMap[params]
+                    return object childCounter:
                         to inc():
-                            val += 1.0
+                            val + 1.0
                         to inc(v :PosDouble):
-                            val += v
+                            val + v
 ```
 
 Another problem which manifests here for the first (and not the last) time is
@@ -585,28 +562,28 @@ We'll offer a named argument.
 
 ```
                 to inc(params :Map[Str, Str]):
-                    labelMap[params] += 1.0
+                    labelMap[params] + 1.0
                 to inc(params :Map[Str, Str], v :Double):
-                    labelMap[params] += v
+                    labelMap[params] + v
                 to dec(params :Map[Str, Str]):
-                    labelMap[params] -= 1.0
+                    labelMap[params] - 1.0
                 to dec(params :Map[Str, Str], v :Double):
-                    labelMap[params] -= v
+                    labelMap[params] - v
                 to set(params :Map[Str, Str], v :Double):
-                    labelMap[params] := v
+                    labelMap[params][] := v
                 to labels(params :Map[Str, Str]):
-                    def &val := labelMap.child(params)
-                    return object childGauge extends &val:
+                    def val := labelMap[params]
+                    return object childGauge:
                         to inc():
-                            val += 1.0
+                            val + 1.0
                         to inc(v :Double):
-                            val += v
+                            val + v
                         to dec():
-                            val -= 1.0
+                            val - 1.0
                         to dec(v :Double):
-                            val -= v
+                            val - v
                         to set(v :Double):
-                            val := v
+                            val[] := v
             return if (labels.isEmpty()) {
                 gauge.labels([].asMap())
             } else { gauge }
@@ -684,19 +661,23 @@ I might just repeat, "Timers are privileged in Monte," each time.
 
 > Histogram  `_count`/`_sum` and the buckets MUST start at 0.
 
+We will use compensation on the sum.
+
 ```
             def zero :Double := 0.0
             var count :Int := 0
-            var sum :Double := 0.0
+            var sum :Double := kahanWrap(zero)
 ```
+
+Note the coercion of `sum`, again by `formatDouble`.
 
 ```
             def labelMap := makeLabelMap(`${registryName}_${name}_bucket`,
-                                         ["le"] + labels, "zero" => 0.0)
+                                         ["le"] + labels, => zero)
             collectors[name] := fn {
                 labelMap.collect() | [
                     `${registryName}_${name}_count` => `$count`,
-                    `${registryName}_${name}_sum` => `$sum`,
+                    `${registryName}_${name}_sum` => `${formatDouble(sum)}`,
                 ]
             }
             object histogram:
@@ -711,19 +692,19 @@ I might just repeat, "Timers are privileged in Monte," each time.
 ```
                 to observe(params :Map[Str, Str], v :Double):
                     count += 1
-                    sum += v
+                    sum + v
                     for bucket in (buckets):
                         if (v <= bucket):
-                            labelMap[params.with("le", bucket)] += 1.0
+                            labelMap[params.with("le", bucket)] + 1.0
                 to labels(params :Map[Str, Str]):
                     # We have to do a bucket lookup every time anyway, so
                     # don't bother trying to produce a slot.
                     return def childHistogram.observe(v :Double):
                         count += 1
-                        sum += v
+                        sum + v
                         for bucket in (buckets):
                             if (v <= bucket):
-                                labelMap[params.with("le", bucket)] += 1.0
+                                labelMap[params.with("le", bucket)] + 1.0
             return if (labels.isEmpty()) {
                 histogram.labels([].asMap())
             } else { histogram }
@@ -1085,7 +1066,8 @@ def main(_argv, => currentRuntime, => makeTCP4ServerEndpoint) as DeepFrozen:
 > and applications.
 
 Sure. However, it is not possible to contend on writes or reads in Monte when
-running synchronous code.
+running synchronous code, unless doing reëntrant tricks. We don't have to
+worry about this.
 
 > In our experience the least performant is mutexes.
 > 
