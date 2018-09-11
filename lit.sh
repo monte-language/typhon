@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#!nix-shell -i bash -p bash gawk
+#!nix-shell -i bash -p bash gawk less
 set -e
 
 # default values

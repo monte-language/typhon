@@ -2,7 +2,13 @@
 
 stdenv.mkDerivation {
     name = "typhon";
-    buildInputs = [ typhonVm ];
+
+    src = mastSrc;
+
+    buildInputs = [ typhonVm
+      # Needed for lit.sh
+      pkgs.gawk pkgs.less ];
+
     shellHook = ''
     function rrTest() {
        CNT=0
@@ -15,14 +21,23 @@ stdenv.mkDerivation {
        echo $CNT
     }
     '';
+
+    # Make lit.sh call bash directly instead of invoking an inner nix-shell;
+    # with Nix 2 the inner-shell trick doesn't work right.
+    patchPhase = ''
+      sed -i -e '1 s|^.*$|#!${pkgs.bash}/bin/bash|' lit.sh
+    '';
+
     buildPhase = ''
       ln -s ${typhonVm}/mt-typhon .
-      '';
+      make
+    '';
+
     installPhase = ''
       mkdir -p $out/bin
       cp -r mast loader.mast $out/
-      '';
+    '';
+
     checkPhase = "make testMast";
     doCheck = true;
-    src = mastSrc;
 }
