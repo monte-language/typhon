@@ -23,8 +23,13 @@ let
         p == loc "/lit.sh" ||
         p == loc "/loader.mast" ||
         p == loc "/repl.mast")) ./..;
+  pypy = nixpkgs.pypy.override { packageOverrides = (s: su: {
+    mock = su.mock.overridePythonAttrs (old: { doCheck = false; });
+    pytest = su.pytest.overridePythonAttrs (old: { doCheck = false; });
+  }); };
   vmConfig = {
-    inherit vmSrc;
+    inherit vmSrc pypy ;
+    pypyPackages = pypy.pkgs;
     libsodium = libsodium0;
     # Want to build Typhon with Clang instead of GCC? Uncomment this next
     # line. ~ C.

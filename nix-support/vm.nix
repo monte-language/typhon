@@ -3,8 +3,8 @@
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let
   pypySrc = fetchzip {
-    url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v5.10.0-src.tar.bz2";
-    sha256 = "11l1wpk2rk8m44jiwzvc8rqcbpnv3g348a2z017z2dhqfsc7a6af";
+    url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v6.0.0-src.tar.bz2";
+    sha256 = "17wjrjd23k2m4cz2qvb0xxk1hwyk8xzbpa60l7r9y3lia7j1r8pm";
   };
   macropy = pypyPackages.buildPythonPackage rec {
     pname = "macropy";
@@ -26,7 +26,7 @@ stdenv.mkDerivation {
   src = vmSrc;
 
   buildInputs = [ pypy
-                  pypyPackages.py pypyPackages.pytest pypyPackages.twisted
+                  pypyPackages.py pypyPackages.twisted pypyPackages.pytest
                   macropy pypySrc
                   pkgconfig libffi libuv libsodium ];
   propagatedBuildInputs = [ libffi libuv libsodium ];
@@ -61,7 +61,7 @@ stdenv.mkDerivation {
 
   # We do still have the check phase, but we do the untranslated test before
   # we attempt translation.
-  doCheck = true;
+  doCheck = false;
   checkPhase = "trial typhon";
 
   installPhase = ''
