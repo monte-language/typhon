@@ -22,6 +22,7 @@ let
         p == loc "/Makefile" ||
         p == loc "/lit.sh" ||
         p == loc "/loader.mast" ||
+        p == loc "/lit.sh" ||
         p == loc "/repl.mast")) ./..;
   pypy = nixpkgs.pypy.override { packageOverrides = (s: su: {
     mock = su.mock.overridePythonAttrs (old: { doCheck = false; });
