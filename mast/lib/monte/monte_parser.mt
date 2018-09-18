@@ -151,6 +151,8 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
     def acceptVerb(ej):
         return if (peekTag() == ".String.") {
             advance(ej)[1]
+        } else if (peekTag() == VALUE_HOLE) {
+            builder.ValueHoleExpr(advance(ej)[1], spanHere())
         } else {
             def t := acceptTag("IDENTIFIER", ej)
             _makeStr.fromStr(t[1], t[2])

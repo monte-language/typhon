@@ -72,7 +72,7 @@ object Ast as DeepFrozenStamp implements astGuardStamp:
         if (!_auditedBy(astStamp, specimen) && !_auditedBy(KernelAstStamp, specimen)):
             def conformed := specimen._conformTo(Ast)
             if (!_auditedBy(astStamp, conformed) && !_auditedBy(KernelAstStamp, conformed)):
-                throw.eject(ej, M.toString(specimen) + " not an ast node")
+                throw.eject(ej, M.toQuote(specimen) + " not an ast node")
             else:
                 return conformed
         return specimen
@@ -103,6 +103,9 @@ def NamePattern :DeepFrozen := Ast["FinalPattern", "VarPattern",
                                    "BindPattern", "SlotPattern",
                                    "BindingPattern", "IgnorePattern",
                                    "ValueHolePattern", "PatternHolePattern"]
+
+
+def Verb :DeepFrozen := Any[Ast["ValueHoleExpr"], Ast["PatternHoleExpr"], Str]
 
 
 def baseFieldName(name) as DeepFrozenStamp:
@@ -555,14 +558,14 @@ def makeCoreAst() as DeepFrozenStamp:
         "MetaStateExpr"         => [].asMap(),
         "SeqExpr"               => ["exprs*" => Expr],
         "MethodCallExpr"        => ["receiver" => Expr,
-                                    "verb" => Str,
+                                    "verb" => Verb,
                                     "args*" => Expr,
                                     "namedArgs*" => NamedArg],
         "FunCallExpr"           => ["receiver" => Expr,
                                     "args*" => Expr,
                                     "namedArgs*" => NamedArg],
         "SendExpr"              => ["receiver" => Expr,
-                                    "verb" => Str,
+                                    "verb" => Verb,
                                     "args*" => Expr,
                                     "namedArgs*" => NamedArg],
         "FunSendExpr"           => ["receiver" => Expr,
@@ -589,13 +592,13 @@ def makeCoreAst() as DeepFrozenStamp:
                                     "isTop" => Bool],
         "PrefixExpr"            => ["op" => Str, "receiver" => Expr],
         "CoerceExpr"            => ["specimen" => Expr, "guard?" => Expr],
-        "CurryExpr"             => ["receiver" => Expr, "verb" => Str, "isSend" => Bool],
+        "CurryExpr"             => ["receiver" => Expr, "verb" => Verb, "isSend" => Bool],
         "ExitExpr"              => ["name" => Str, "value?" => Expr],
         "ForwardExpr"           => ["pattern" => Ast["FinalPattern"]],
         "DefExpr"               => ["pattern" => Pattern, "exit?" => Expr,
                                     "expr" => Expr],
         "AssignExpr"            => ["lvalue" => Expr, "rvalue" => Expr],
-        "VerbAssignExpr"        => ["verb" => Str, "lvalue" => Expr,
+        "VerbAssignExpr"        => ["verb" => Verb, "lvalue" => Expr,
                                     "rvalues*" => Expr],
         "AugAssignExpr"         => ["op" => Str, "lvalue" => Expr, "rvalue" => Expr],
         "FunctionExpr"          => ["params*" => Pattern,
@@ -673,10 +676,10 @@ def makeCoreAst() as DeepFrozenStamp:
         "NamedParamImport" => ["value" => Pattern, "default?" => Expr],
     ],
     "Method" => [
-        "Method" => ["docstring?" => Str, "verb" => Str, "params*" => Pattern,
+        "Method" => ["docstring?" => Str, "verb" => Verb, "params*" => Pattern,
                      "namedParams*" => NamedParam, "resultGuard?" => Expr,
                      "body" => Expr],
-        "To"     => ["docstring?" => Str, "verb" => Str, "params*" => Pattern,
+        "To"     => ["docstring?" => Str, "verb" => Verb, "params*" => Pattern,
                      "namedParams*" => NamedParam, "resultGuard?" => Expr,
                      "body" => Expr]
     ],
@@ -689,7 +692,7 @@ def makeCoreAst() as DeepFrozenStamp:
     "Script" => [
         "Script"         => ["extends?" => Expr, "methods*" => Method_,
                              "matchers*" => Matcher],
-        "FunctionScript" => ["verb" => Str, "params*" => Pattern,
+        "FunctionScript" => ["verb" => Verb, "params*" => Pattern,
                              "namedParams*" => NamedParam,
                              "resultGuard?" => Expr,
                              "body" => Expr]
@@ -698,7 +701,7 @@ def makeCoreAst() as DeepFrozenStamp:
         "ParamDesc" => ["name" => Str, "guard?" => Expr]
     ],
     "MessageDesc" => [
-        "MessageDesc" => ["docstring?" => Str, "verb" => Str,
+        "MessageDesc" => ["docstring?" => Str, "verb" => Verb,
                           "params*" => ParamDesc, "namedParams*" => ParamDesc,
                           "resultGuard?" => Expr]
     ],
