@@ -1401,7 +1401,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
 
         else:
             def lval := infix(ej)
-            def okNodes := ["NounExpr", "GetExpr", "PatternHoleExpr"]
+            def okNodes := ["NounExpr", "GetExpr", "PatternHoleExpr", "ValueHoleExpr"]
             if (considerTag(":=", ej)):
                 def lt := lval.getNodeName()
                 if (okNodes.contains(lt)):
