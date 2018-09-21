@@ -36,8 +36,17 @@ def makeParser() as DeepFrozen:
     }
     def sum_type := constructor.joinedBy(pipe) + (pk.string("attributes") >> fields).optional()
     def product_type := fields
-    def type := sum_type / product_type
-    def definitions := (typ_id + (equals >> type)).bracket(ws, ws).zeroOrMore()
+    # Divergence from the original grammar in order to simplify AST-building;
+    # we double up on `typ_id << equals`.
+    def typ_eq := typ_id << equals
+    def sum_definition := (typ_eq + sum_type) % fn [ty, [[con] + cons, attrs]] {
+        ["Sum", ty, attrs, con, cons]
+    }
+    def product_definition := (typ_eq + product_type) % fn [ty, [f] + fs] {
+        ["Product", ty, f, fs]
+    }
+    def definition := sum_definition / product_definition
+    def definitions := definition.bracket(ws, ws).zeroOrMore()
     return definitions
 
 def runParser(s :Str, ej) as DeepFrozen:
