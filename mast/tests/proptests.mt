@@ -154,7 +154,7 @@ def prop.test(arbs, f, => iterations :Int := 100) as DeepFrozen:
             def failures := [].diverge()
             def cases := [for _ in (0..!iterations) {
                 [for arb in (arbs) arb.arbitrary(entropy)]
-            }].diverge()
+            }].asSet().asList().diverge()
             def tried := [].asSet().diverge()
             def failed := [].asSet().diverge()
             while (!cases.isEmpty()):
@@ -200,6 +200,16 @@ def prop.test(arbs, f, => iterations :Int := 100) as DeepFrozen:
                     `Case $args failure: $blurb`
                 }]
                 assert.fail(`Property $f failed on cases: ${"\n".join(messages)}`)
+
+def testPropNoRepeatedBools(assert):
+    var timesCalled :Int := 0
+    prop.test([arb.Bool()], fn _hy, _b { timesCalled += 1 })(assert)
+    assert.equal(timesCalled, 2)
+
+# We won't run tests many times with the same input.
+unittest([
+    testPropNoRepeatedBools,
+])
 
 def ringAxioms(strategy):
     def ringAxiomAbelianAssociative(hy, a, b, c):
