@@ -61,9 +61,11 @@ def makeLimo(load) as DeepFrozen:
                 def makePackage(mod :DeepFrozen) as DeepFrozen {
                     return def package."import"(petname :Str) as DeepFrozen {
                         return if (petname == "meta") {
+                            def source :Str := $ls
                             object this as DeepFrozen {
                                 method module() { mod }
-                                method source() { $ls }
+                                method ast() { ::"m````".fromStr(source) }
+                                method source() { source }
                             }
                             [=> this]
                         } else {
