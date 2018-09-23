@@ -1,4 +1,5 @@
-exports (expandExpr, main)
+# import "meta" =~ [=> this]
+exports (expandExpr)
 
 def ab :DeepFrozen := astBuilder
 def litExpr :DeepFrozen := ab.LiteralExpr
@@ -269,20 +270,4 @@ def runMoe(expr, fqn :Str, var scope :Map, frameState :List, => parent := null) 
 def expandExpr(expr, fqn :Str) as DeepFrozen:
     return runMoe(moe(expr), fqn, [].asMap(), [])
 
-def main(_argv) as DeepFrozen:
-    def input := m`fn {
-        object echo {
-            method derp() {
-                [true, meta.getState(), (meta.context()).getFQNPrefix()]
-            }
-            match message { message }
-        }
-        2 ** 5 % 13
-        2 ** (5 % 13)
-        echo(0..!42, (42 == 7) || true)
-        echo("x", 1, => _makeMap)
-    }`
-    traceln("hm", input, eval(m`$input()`, safeScope))
-    def output := expandExpr(input, "derp.mt")
-    traceln("yay", output)
-    return 0
+# traceln(expandExpr(this.ast(), "moe.mt"))
