@@ -41,14 +41,6 @@ def makeQuasiAstTransformer(values) as DeepFrozen:
             match =="PatternHolePattern" {
                 throw("Pattern-holes not allowed in QL exprs")
             }
-            match nn ? (["MethodCallExpr", "SendExpr"].contains(nn)) {
-                def v := node.getVerb()
-                if (v !~ _ :Str && v.getNodeName() == "ValueHoleExpr") {
-                    M.call(maker, "run", [node.getReceiver(), values[v.getIndex()], node.getArgs(), node.getNamedArgs(), span], [].asMap())
-                } else {
-                    M.call(maker, "run", args + [span], [].asMap())
-                }
-            }
             match _ {
                 M.call(maker, "run", args + [span], [].asMap())
             }

@@ -127,7 +127,8 @@ def transformArg(f, fname, guard, arg) as DeepFrozenStamp:
         else if (fname.endsWith("*")):
             return [for n in (arg)
                     n.transform(f)]
-        else if (_auditedBy(astGuardStamp, guard)):
+        else if (_auditedBy(astGuardStamp, guard) ||
+                  (guard == Verb && arg !~ _ :Str)):
             return arg.transform(f)
         else:
             return arg
