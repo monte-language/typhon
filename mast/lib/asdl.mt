@@ -1,6 +1,6 @@
 import "lib/iterators" =~ [=> zip]
 import "lib/pen" =~ [=> pk, => makeSlicer]
-exports (runParser)
+exports (asdlParser, asdlBuilder)
 
 "The Zephyr Abstract Syntax Description Language."
 
@@ -88,7 +88,7 @@ def makeParser(builder) as DeepFrozen:
     def definitions := definition.bracket(ws, ws).zeroOrMore()
     return definitions
 
-def runParser(s :Str, ej) as DeepFrozen:
+def bootParser(s :Str, ej) as DeepFrozen:
     def p := makeParser(bootBuilder)
     return p(makeSlicer.fromString(s), ej)
 
@@ -102,13 +102,13 @@ def boot :Str := `
           | Sequence(identifier, identifier?)
 `
 
-def [ast, _] := runParser(boot, null)
-
-traceln(ast)
+def [ast, _] := bootParser(boot, null)
 
 # XXX borrowed from lib/gadts, should move to where zip lives?
 def transpose(l :List) as DeepFrozen:
     return _makeList.fromIterable(M.call(zip, "run", l, [].asMap()))
+
+def isPrimitive :DeepFrozen := ["identifier", "int"].contains
 
 def makeBuilderMaker() as DeepFrozen:
     var count :Int := 0
@@ -133,21 +133,23 @@ def makeBuilderMaker() as DeepFrozen:
                 l.snapshot()
             }
             def script := astBuilder.Script(null, methods, [], null)
-            def obj := astBuilder.ObjectExpr(null, mpatt`asdlBuilder`, null,
-                                             [], script, null)
+            def obj := astBuilder.ObjectExpr(null, mpatt`asdlBuilder`,
+                                             m`DeepFrozen`, [], script, null)
             def ast := astBuilder.SeqExpr(gs.with(obj), null)
             return eval(ast, safeScope)
 
         to Sum(id, fields, con, cons):
             # XXX fields
+            fields
             def methods := [con] + cons
-            def namePatt := makeNamePatt(id)
+            def namePatt := astBuilder.FinalPattern(
+                astBuilder.NounExpr(id, null), m`DeepFrozen`, null)
             def guard := m`interface $namePatt {}`
             return [methods, guard]
         to Product(ty, f, fs):
-            throw("too lazy sorry")
+            throw("too lazy sorry", ty, f, fs)
         to Con(name, fs):
-            def [exprs, patts, isSequences] := transpose(fs)
+            def [exprs, patts, visitors] := transpose(fs)
             def comma := m`out.print(", ")`
             def printer := m`to _printOn(out) {
                 out.print(${astBuilder.LiteralExpr(name, null)})
@@ -157,11 +159,6 @@ def makeBuilderMaker() as DeepFrozen:
                 null)}
                 out.print(")")
             }`
-            def visitors := [for i => expr in (exprs) {
-                if (isSequences[i]) {
-                    m`[for x in ($expr) x(f)]`
-                } else { expr }
-            }]
             def runner := m`method run(f) {
                 ${astBuilder.MethodCallExpr(m`f`, name, visitors, [], null)}
             }`
@@ -175,22 +172,28 @@ def makeBuilderMaker() as DeepFrozen:
             def n := nextNoun(ty, name)
             # XXX astBuilder guard bug?
             def patt := astBuilder.FinalPattern(n, m`Any`, null)
-            return [n, patt, false]
+            def v := if (isPrimitive(ty)) { n } else { m`$n(f)` }
+            return [n, patt, v]
         to Option(ty, name):
             def n := nextNoun(ty, name)
             # XXX astBuilder substitution bug
             def patt := astBuilder.FinalPattern(n, m`NullOk`, null)
-            return [n, patt, false]
+            def v := if (isPrimitive(ty)) { n } else { m`$n(f)` }
+            return [n, patt, v]
         to Sequence(ty, name):
             def n := nextNoun(ty, name)
             def patt := astBuilder.FinalPattern(n, m`List`, null)
-            return [n, patt, true]
+            def v := if (isPrimitive(ty)) { n } else { m`[for x in ($n) x(f)]` }
+            return [n, patt, v]
 
-def asdlBuilder := makeBuilderMaker()(ast)
-traceln(asdlBuilder)
+def asdlBuilder :DeepFrozen := makeBuilderMaker()(ast)
 
-def runNewParser(s :Str, ej):
+def asdlParser(s :Str, ej) :DeepFrozen as DeepFrozen:
+    "Parse a string into an AST builder."
+
     def p := makeParser(asdlBuilder)
-    return p(makeSlicer.fromString(s), ej)
-
-traceln(runNewParser(boot, null))
+    def [ast, tail] := p(makeSlicer.fromString(s), ej)
+    escape tailtest:
+        def next := tail.next(tailtest)
+        throw.eject(ej, `parser found junk at the end: $next`)
+    return makeBuilderMaker()(ast)
