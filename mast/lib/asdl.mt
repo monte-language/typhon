@@ -70,7 +70,7 @@ def makeParser(builder) as DeepFrozen:
     def fields := field.joinedBy(comma).bracket(pk.string("("),
                                                 pk.string(")") << ws)
     def constructor := (con_id + fields.optional()) % fn [name, fs] {
-        builder.Con(name, fs)
+        builder.Con(name, if (fs == null) { [] } else { fs })
     }
     def sum_type := constructor.joinedBy(pipe) + (
         (pk.string("attributes") >> fields) / pk.pure([]))
