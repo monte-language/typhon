@@ -12,6 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import time
+
 from rpython.rlib.debug import debug_print
 
 from typhon.atoms import getAtom
@@ -60,8 +62,8 @@ class TraceLn(Object):
         debug_print(line.encode("utf-8"))
 
     def writeTracePreamble(self):
-        vat = currentVat.get()
-        self.writeLine(u"TRACE: From vat " + vat.name)
+        line = u"TRACE: time %f vat %s" % (time.time(), currentVat.get().name)
+        self.writeLine(line)
 
     def writeTraceLine(self, line):
         self.writeLine(u" ~ " + line)
