@@ -20,50 +20,59 @@ object logic as DeepFrozen:
 
     to plus(left, right):
         # Optimization: Remove zeroes from the tree.
-        if (isZero(left)) { return right }
-        if (isZero(right)) { return left }
-        return fn ej {
-            escape la { left(la) } catch p {
-                if (p =~ [x, next]) {
-                    throw.eject(ej, [x, logic.plus(right, next)])
-                } else { right(ej) }
+        return if (isZero(left)) {
+            right
+        } else if (isZero(right)) { left } else {
+            fn ej {
+                escape la { left(la) } catch p {
+                    if (p =~ [x, next]) {
+                        throw.eject(ej, [x, logic.plus(right, next)])
+                    } else { right(ej) }
+                }
             }
         }
 
     to "bind"(action, f):
         # Again, remove zeroes from the tree.
-        if (isZero(action)) { return zero }
-        return fn ej {
-            escape la { action(la) } catch p {
-                if (p =~ [x, next]) {
-                    logic.plus(f(x), logic."bind"(next, f))(ej)
-                } else { throw.eject(ej, null) }
+        return if (isZero(action)) { zero } else {
+            fn ej {
+                escape la { action(la) } catch p {
+                    if (p =~ [x, next]) {
+                        logic.plus(f(x), logic."bind"(next, f))(ej)
+                    } else { throw.eject(ej, null) }
+                }
             }
         }
 
     to ifte(test, cons, alt):
         # The zero test is a little different here.
-        if (isZero(test)) { return alt }
-        return fn ej {
-            escape la { test(la) } catch p {
-                if (p =~ [x, next]) {
-                    logic.plus(cons(x), logic."bind"(next, cons))
-                } else { alt }(ej)
+        return if (isZero(test)) { alt } else {
+            fn ej {
+                escape la { test(la) } catch p {
+                    if (p =~ [x, next]) {
+                        logic.plus(cons(x), logic."bind"(next, cons))
+                    } else { alt }(ej)
+                }
             }
         }
 
     to once(action):
         # Again, remove zeroes from the tree.
-        if (isZero(action)) { return zero }
-        return fn ej {
-            escape la { action(la) } catch p {
-                throw.eject(ej, if (p =~ [x, _next]) { [x, zero] } else { null })
+        return if (isZero(action)) { zero } else {
+            fn ej {
+                escape la { action(la) } catch p {
+                    throw.eject(ej, if (p =~ [x, _next]) { [x, zero] } else { null })
+                }
             }
         }
 
     to sum(actions :List):
         var rv := zero
         for i => action in (actions.reverse()):
+            # Skip zeroes.
+            if (isZero(action)):
+                continue
+
             # Do even-odd alternation in order to keep the tree from getting
             # too heavy on one side. This will cause the exploration of the
             # tree to fan out nicely:
