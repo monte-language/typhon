@@ -63,6 +63,7 @@ mast: mast/lib/enum.mast \
 	mast/lib/help.mast \
 	mast/lib/iterators.mast \
 	mast/lib/json.mast \
+	mast/lib/logji.mast \
 	mast/lib/marley.mast \
 	mast/lib/matrices.mast \
 	mast/lib/pra.mast \
