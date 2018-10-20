@@ -61,21 +61,30 @@ object logic as DeepFrozen:
             }
         }
 
-    to sum(actions):
+    to sum(actions :List):
         var rv := zero
-        for action in (actions):
-            rv := logic.plus(rv, action)
+        for i => action in (actions.reverse()):
+            # Do even-odd alternation in order to keep the tree from getting
+            # too heavy on one side. This will cause the exploration of the
+            # tree to fan out nicely:
+            # ▲> _makeList.fromIterable(logic.makeIterable(logic.sum([for i in (0..10) logic.pure(i)])))
+            # Result: [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9]
+            rv := if (i % 2 == 0) {
+                logic.plus(action, rv)
+            } else {
+                logic.plus(rv, action)
+            }
         return rv
 
-def iterate(var action):
-    return def makeIterator._makeIterator():
-        var i :Int := 0
-        return def iterator.next(ej):
-            escape la:
-                action(la)
-            catch p:
-                def [x, act] exit ej := p
-                action := act
-                def rv := [i, x]
-                i += 1
-                return rv
+    to makeIterable(var action):
+        return def makeIterator._makeIterator():
+            var i :Int := 0
+            return def iterator.next(ej):
+                escape la:
+                    action(la)
+                catch p:
+                    def [x, act] exit ej := p
+                    action := act
+                    def rv := [i, x]
+                    i += 1
+                    return rv
