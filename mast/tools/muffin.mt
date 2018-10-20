@@ -40,6 +40,7 @@ def addTyphonHarness(expr :DeepFrozen, name :Str) :DeepFrozen as DeepFrozen:
     # executable, argv[1] is what Typhon thinks our module is called, and the
     # rest are the "actual" argv that user-level code wants for main(). ~ C.
     return m`{
+        traceln("starting Typhon harness…")
         def argv := currentProcess.getArguments().slice(2)
 
         def excludes := ["typhonEval", "_findTyphonFile", "bench"].asSet()
@@ -47,6 +48,7 @@ def addTyphonHarness(expr :DeepFrozen, name :Str) :DeepFrozen as DeepFrozen:
                                   ? (!excludes.contains(n))
                                   n => v]
 
+        traceln("instantiating…")
         def mod := typhonAstEval(normalize(readMAST($packed), typhonAstBuilder),
                                  safeScope, $topname)
         def [=> main] | _ := mod(null)
@@ -74,7 +76,10 @@ def main(argv, => makeFileResource) as DeepFrozen:
             if (addTyphon):
                 m := addTyphonHarness(m, pn)
             def context := makeMASTContext()
-            context(m.expand())
+            traceln("Expanding…")
+            def expanded := m.expand()
+            traceln("Writing MAST…")
+            context(expanded)
             when (makeFileResource(out)<-setContents(context.bytes())) ->
                 traceln("all done")
                 0
