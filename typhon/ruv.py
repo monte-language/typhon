@@ -13,14 +13,14 @@ import sys
 from functools import wraps
 
 from rpython.rlib import _rsocket_rffi as s
-from rpython.rlib.objectmodel import current_object_addr_as_int, specialize
+from rpython.rlib.objectmodel import (current_object_addr_as_int, specialize,
+                                      we_are_translated)
 from rpython.rlib.rarithmetic import intmask
 from rpython.rlib.rawstorage import alloc_raw_storage, free_raw_storage
 from rpython.rlib.rerased import new_erasing_pair
 from rpython.rtyper.lltypesystem import lltype, rffi
 from rpython.rtyper.tool import rffi_platform
 from rpython.translator.tool.cbuild import ExternalCompilationInfo
-
 from typhon.log import log
 
 from typhon.futures import Ok, ERR
@@ -636,7 +636,15 @@ def spawn(loop, process, file, args, env, streams):
                             flags |= UV_READABLE_PIPE
                         elif i in (1, 2):
                             flags |= UV_WRITABLE_PIPE
-                        set_stdio_stream(rawStreams[i], stream)
+                        if not we_are_translated():
+                            # doing extra allocations here to work around ll2ctypes'
+                            # desire to gratuitously copy arrays
+                            with lltype.scoped_alloc(stdio_container_t) as con:
+                                set_stdio_stream(con, stream)
+                                for field in rawStreams[i]._T._names:
+                                    setattr(rawStreams[i], field, getattr(con, field))
+                        else:
+                            set_stdio_stream(rawStreams[i], stream)
                     rffi.setintfield(rawStreams[i], "c_flags", flags)
                 options.c_stdio = rawStreams
                 rffi.setintfield(options, "c_stdio_count", len(streams))
