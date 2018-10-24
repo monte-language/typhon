@@ -22,7 +22,14 @@ def unittest :DeepFrozen := m`{
 
 def getDependencies(expr) as DeepFrozen:
     def module := eval(expr, safeScope)
-    return [for dep in (module.dependencies()) ? (dep != "meta") dep]
+    def rv := [].diverge()
+    var wantsMeta := false
+    for dep in (module.dependencies()):
+        if (dep == "meta"):
+            wantsMeta := true
+        else:
+            rv.push(dep)
+    return [rv, wantsMeta]
 
 def makeLimo(load) as DeepFrozen:
     def mods := [
@@ -46,7 +53,7 @@ def makeLimo(load) as DeepFrozen:
         return promiseAllFulfilled(pending)
 
     return bind limo(name, source, expr) :Vow[DeepFrozen]:
-        def deps := getDependencies(expr)
+        def [deps, wantsMeta :Bool] := getDependencies(expr)
         return when (loadAll(deps)) ->
             def depExpr := astBuilder.MapExpr([for pn in (deps) {
                 def key := astBuilder.LiteralExpr(pn, null)
@@ -55,22 +62,27 @@ def makeLimo(load) as DeepFrozen:
             }], null)
             def ln := astBuilder.LiteralExpr(name, null)
             def ls := astBuilder.LiteralExpr(source, null)
+            def importBody := if (wantsMeta) {
+                m`if (petname == "meta") {
+                    def source :Str := $ls
+                    object this as DeepFrozen {
+                        method module() { mod }
+                        method ast() { ::"m````".fromStr(source) }
+                        method source() { source }
+                    }
+                    [=> this]
+                } else {
+                    deps[petname](null)
+                }`
+            } else {
+                m`deps[petname](null)`
+            }
             def instance := mods[name] := m`{
                 traceln(``Defining module $${$ln}…``)
                 def deps :Map[Str, DeepFrozen] := { $depExpr }
                 def makePackage(mod :DeepFrozen) as DeepFrozen {
                     return def package."import"(petname :Str) as DeepFrozen {
-                        return if (petname == "meta") {
-                            def source :Str := $ls
-                            object this as DeepFrozen {
-                                method module() { mod }
-                                method ast() { ::"m````".fromStr(source) }
-                                method source() { source }
-                            }
-                            [=> this]
-                        } else {
-                            deps[petname](null)
-                        }
+                        return $importBody
                     }
                 }
                 object _ as DeepFrozen {
