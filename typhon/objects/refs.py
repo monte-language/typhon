@@ -183,6 +183,16 @@ class RefOps(Object):
 
         return self.isEventual(ref) and isResolved(ref)
 
+    @method("Any", "Any", "Any", "Any")
+    def when(self, o, callback, errback):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        p, r = makePromise()
+        vat = currentVat.get()
+        vat.sendOnly(o, _WHENMORERESOLVED_1,
+                     [WhenReactor(callback, errback, o, r, vat)],
+                     EMPTY_MAP)
+        return p
+
     @method("Any", "Any", "Any")
     def whenResolved(self, o, callback):
         from typhon.objects.collections.maps import EMPTY_MAP
@@ -248,6 +258,60 @@ class RefOps(Object):
 
         return self.isNear(o) and not self.isSelfless(o)
 
+
+@autohelp
+class WhenReactor(Object):
+    """
+    A reactor which handles both resolved and broken promises, invoking the
+    success callback if the promise is not resolved and not broken. The failure
+    callback is invoked if the promise is broken, or if the success callback
+    produces a broken promise or throws.
+    """
+
+    done = False
+
+    def __init__(self, callback, errback, ref, resolver, vat):
+        self._cb = callback
+        self._eb = errback
+        self._ref = _toRef(ref, vat)
+        self._resolver = resolver
+        self.vat = vat
+
+    def toString(self):
+        return u"<when: %s | %s>" % (self._cb.toString(), self._eb.toString())
+
+    @method("Void", "Any")
+    def run(self, unused):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        if self.done:
+            return
+
+        if self._ref.isResolved():
+            if isBroken(self._ref):
+                f = self._eb
+            else:
+                f = self._cb
+            try:
+                outcome = f.call(u"run", [self._ref])
+                if not isBroken(self._ref) and isBroken(outcome):
+                    # success arm returned a broken promise
+                    outcome = self._eb.call(u"run", [outcome])
+                self._resolver.resolve(outcome)
+            except UserException as ue:
+                from typhon.objects.exceptions import sealException
+                if not isBroken(self._ref):
+                    # success arm threw
+                    try:
+                        self._resolver.resolve(self._eb.call(u"run", [UnconnectedRef(currentVat.get(), sealException(ue))]))
+                    except UserException as ue2:
+                        self._resolver.smash(sealException(ue2))
+                else:
+                    # failure arm threw
+                    self._resolver.smash(sealException(ue))
+            self.done = True
+        else:
+            self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
+                              EMPTY_MAP)
 
 @autohelp
 class WhenBrokenReactor(Object):
