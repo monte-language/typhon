@@ -484,21 +484,29 @@ def specimens := [
          y
      ",
      "
-     Ref.whenResolved(x,
+     Ref.\"when\"(x,
      object _ {
          \"when-resolved\"
          method run(resolution_1) {
-             if (Ref.isBroken(resolution_1)) {
-                 resolution_1
-             } else {
-                 y
-             }
+             y
          }
          method _printOn(out) {
              out.print(\"<when-resolved fn at <<test>#:span::1:6:1:7>>\")
          }
-
-     })
+     },
+     object _ {
+         \"when-broken\"
+         method run(broken_2) {
+             def problem_3 := Ref.optProblem(broken_2)
+             traceln(\"Unhandled broken promise\")
+             traceln.exception(problem_3)
+             problem_3
+         }
+         method _printOn(out) {
+             out.print(\"<when-broken fn at <<test>#:span::1:6:1:7>>\")
+         }
+     },
+     )
      "],
     ["
      when (x) ->
@@ -507,22 +515,16 @@ def specimens := [
          z
      ",
      "
-     Ref.whenBroken(
-     Ref.whenResolved(x,
+     Ref.\"when\"(x,
      object _ {
          \"when-resolved\"
          method run(resolution_1) {
-             if (Ref.isBroken(resolution_1)) {
-                 resolution_1
-             } else {
-                 y
-             }
+             y
          }
          method _printOn(out) {
              out.print(\"<when-resolved fn at <<test>#:span::1:6:1:7>>\")
          }
-
-     }),
+     },
      object _ {
          \"when-broken\"
          method run(broken_2) {
@@ -535,10 +537,10 @@ def specimens := [
              }
          }
          method _printOn(out) {
-             out.print(\"<when-broken fn at <<test>#:span::1:0:6:1>>\")
+             out.print(\"<when-broken fn at <<test>#:span::1:6:1:7>>\")
          }
-
-     })"],
+     },
+     )"],
      ["`hello $x world`",
       `::"````".valueMaker(_makeList.run("hello ", ::"````".valueHole(0), " world")).substitute(_makeList.run(x))`],
      ["def foo`(@x)` := 1",

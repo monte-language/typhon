@@ -1134,17 +1134,14 @@ def expand(node, builder, fail) as DeepFrozen:
                     callExpr(nounExpr("Ref", span), "isBroken",
                          [resolution], [], span),
                     resolution, block, span)
-                def wr := callExpr(nounExpr("Ref", span),
-                    "whenResolved", [expr,
-                                     makeFn("when-resolved",
-                                            [plainPatt(resolution, span)], [],
-                                            whenblock,
-                                            expr.getSpan())], [], span)
                 def prob2 := tempNounExpr("problem", span)
                 var handler := prob2
                 if (catchers.isEmpty()):
                     # No when-broken clauses to emit.
-                    return wr
+                    handler := seqExpr([
+                        callExpr(nounExpr("traceln", span), "run", [litExpr("Unhandled broken promise", span)], [], span),
+                        callExpr(nounExpr("traceln", span), "exception", [prob2], [], span),
+                        prob2], span)
                 for cat in (catchers):
                     def fail := tempNounExpr("fail", cat.getSpan())
                     handler := makeEscapeExpr(
@@ -1157,8 +1154,13 @@ def expand(node, builder, fail) as DeepFrozen:
                         ignorePatt(null, cat.getSpan()), handler, cat.getSpan())
                 def broken := tempNounExpr("broken", span)
                 def wb := callExpr(
-                        nounExpr("Ref", span), "whenBroken", [
-                            wr, makeFn(
+                        nounExpr("Ref", span), "when", [
+                            expr,
+                            makeFn("when-resolved",
+                                   [plainPatt(resolution, span)], [],
+                                   whenblock,
+                                   expr.getSpan()),
+                            makeFn(
                                 "when-broken",
                                 [plainPatt(broken, span)], [],
                                 seqExpr([
