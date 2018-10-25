@@ -17,7 +17,7 @@ from rpython.rlib.rstring import UnicodeBuilder
 from typhon.autohelp import autohelp, method
 from typhon.errors import UserException
 from typhon.objects.data import CharObject, StrObject, unwrapStr
-from typhon.objects.refs import Promise, resolution
+from typhon.objects.refs import Promise, isBroken, resolution
 from typhon.objects.root import Object
 from typhon.profile import profileTyphon
 
@@ -74,8 +74,16 @@ class Printer(Object):
     @profileTyphon("Printer.quote/1")
     def objPrint(self, item):
         item = resolution(item)
-        if isinstance(item, Promise):
+        if isinstance(item, Promise) and isBroken(item):
+            if item._problem in self.context:
+                self.ub.append(u"<Ref broken by: **CYCLE**>")
+            else:
+                self.ub.append(item.toString())
+        elif isinstance(item, Promise) and not item.isResolved():
             self.ub.append(u"<promise>")
+        elif isinstance(item, Promise):
+            # probably a far ref of some kind
+            self.ub.append(item.toString())
         elif item in self.context:
             self.ub.append(u"<**CYCLE**>")
         else:
