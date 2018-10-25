@@ -110,6 +110,7 @@ def repackMonteMethods(cls):
 
 
 wrappers = {
+    "AnyInt": "typhon.objects.data",
     "BigInt": "typhon.objects.data",
     "Bool": "typhon.objects.constants",
     "Bytes": "typhon.objects.data",

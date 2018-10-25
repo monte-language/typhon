@@ -1012,7 +1012,13 @@ def isBigInt(o):
     return isinstance(bi, BigInt)
 
 
-def promoteToBigInt(o):
+def isAnyInt(o):
+    from typhon.objects.refs import resolution
+    bi = resolution(o)
+    return isinstance(bi, BigInt) or isinstance(bi, IntObject)
+
+
+def unwrapAnyInt(o):
     from typhon.objects.refs import resolution
     i = resolution(o)
     if isinstance(i, BigInt):
@@ -1021,6 +1027,8 @@ def promoteToBigInt(o):
         return rbigint.fromint(i.getInt())
     raise WrongType(u"Not promotable to big integer!")
 
+
+promoteToBigInt = unwrapAnyInt
 
 @runnable(RUN_6, [deepFrozenStamp])
 def _makeSourceSpan(uri, isOneToOne, startLine, startCol, endLine, endCol):

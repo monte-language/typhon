@@ -511,7 +511,7 @@ def paramCheck(pname, typ, name):
 paramGuards = {
     'CharExpr': {'c': 'Char'},
     'DoubleExpr': {'d': 'Double'},
-    'IntExpr': {'i': 'Int'},
+    'IntExpr': {'i': 'AnyInt'},
     'StrExpr': {'s': 'Str'},
     'CallExpr': {'verb': 'Str'},
     'ObjectExpr': {'doc': 'Str'},
