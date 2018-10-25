@@ -403,7 +403,7 @@ def test_moduleExports(assert):
     assert.equal(module("exports (a)\ndef a := 1"), ta`Module([], ["a"], DefExpr(FinalPattern(NounExpr("a"), null), null, LiteralExpr(1)))`)
 
 def test_module(assert):
-    assert.equal(module("import \"foo\" =~ foo\nimport \"blee\" =~ [=> a, => b]\nexports (a)\ndef a := 1"), ta`Module([Import("foo", FinalPattern(NounExpr("foo"), null)), Import("blee", MapPattern([MapPatternImport(FinalPattern(NounExpr("a"), null), null), MapPatternImport(FinalPattern(NounExpr("b"), null), null)], IgnorePattern(null)))], [NounExpr("a")], DefExpr(FinalPattern(NounExpr("a"), null), null, LiteralExpr(1)))`)
+    assert.equal(module("import \"foo\" =~ foo\nimport \"blee\" =~ [=> a, => b]\nexports (a)\ndef a := 1"), ta`Module([Import("foo", FinalPattern(NounExpr("foo"), null)), Import("blee", MapPattern([MapPatternImport(FinalPattern(NounExpr("a"), null), null), MapPatternImport(FinalPattern(NounExpr("b"), null), null)], null))], [NounExpr("a")], DefExpr(FinalPattern(NounExpr("a"), null), null, LiteralExpr(1)))`)
 
 # def test_holes(assert):
 #     assert.equal(quasiMonteParser.valueMaker(["foo(", quasiMonteParser.valueHole(0), ")"]), ta`ValueHoleExpr(0)`)

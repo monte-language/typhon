@@ -421,7 +421,7 @@ def specimens := [
          if (_equalizer.sameEver(specimen_1, 2)) {
              'a'
          } else {
-             _switchFailed.run(specimen_1, \"Not same as 'a'\")
+             _switchFailed.run(specimen_1, \"Not same as 2\")
          }
      }"],
      ["
@@ -484,9 +484,9 @@ def specimens := [
          y
      ",
      "
-     Ref.whenResolved(x,
+     Ref.\"when\"(x,
      object _ {
-         \"when-resolved\"
+         \"when-near\"
          method run(resolution_1) {
              if (Ref.isBroken(resolution_1)) {
                  resolution_1
@@ -495,10 +495,22 @@ def specimens := [
              }
          }
          method _printOn(out) {
-             out.print(\"<when-resolved fn at <<test>#:span::1:6:1:7>>\")
+             out.print(\"<when-near fn at <<test>#:span::1:6:1:7>>\")
          }
-
-     })
+     },
+     object _ {
+         \"when-broken\"
+         method run(broken_2) {
+             def problem_3 := Ref.optProblem(broken_2)
+             traceln.run(\"Unhandled broken promise at <<test>#:span::1:0:4:1>\")
+             traceln.exception(problem_3)
+             Ref.broken(problem_3)
+         }
+         method _printOn(out) {
+             out.print(\"<when-broken fn at <<test>#:span::1:0:4:1>>\")
+         }
+     },
+     )
      "],
     ["
      when (x) ->
@@ -507,10 +519,9 @@ def specimens := [
          z
      ",
      "
-     Ref.whenBroken(
-     Ref.whenResolved(x,
+     Ref.\"when\"(x,
      object _ {
-         \"when-resolved\"
+         \"when-near\"
          method run(resolution_1) {
              if (Ref.isBroken(resolution_1)) {
                  resolution_1
@@ -519,10 +530,9 @@ def specimens := [
              }
          }
          method _printOn(out) {
-             out.print(\"<when-resolved fn at <<test>#:span::1:6:1:7>>\")
+             out.print(\"<when-near fn at <<test>#:span::1:6:1:7>>\")
          }
-
-     }),
+     },
      object _ {
          \"when-broken\"
          method run(broken_2) {
@@ -537,8 +547,8 @@ def specimens := [
          method _printOn(out) {
              out.print(\"<when-broken fn at <<test>#:span::1:0:6:1>>\")
          }
-
-     })"],
+     },
+     )"],
      ["`hello $x world`",
       `::"````".valueMaker(_makeList.run("hello ", ::"````".valueHole(0), " world")).substitute(_makeList.run(x))`],
      ["def foo`(@x)` := 1",
@@ -573,7 +583,7 @@ def specimens := [
     [`import "blee" =~ [=> a] | b; exports (foo); def foo := 1`,
      `object _ as DeepFrozen {
           method run(package_1) :(Map.get(Str, DeepFrozen)) {
-              def via (_mapExtract.run("a")) [a :DeepFrozen, b] := package_1."import"("blee")
+              def via (_mapExtract.run("a")) [a, b] := package_1."import"("blee")
               def foo := 1
               _makeMap.fromPairs(_makeList.run(_makeList.run("foo", foo)))
           }
