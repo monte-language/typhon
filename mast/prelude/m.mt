@@ -77,7 +77,7 @@ def makeM(ast :Ast, label :Str, isKernel :Bool) as DeepFrozen:
             "Walk over the pattern AST and the specimen comparing each node.
             Value holes in the pattern are substituted before comparison.
             Pattern holes are used to collect nodes to return for binding."
-            def nextNodePairs := [[ast.canonical(), specimen.canonical()]].diverge()
+            def nextNodePairs := [[ast, specimen]].diverge()
 
             def results := [].asMap().diverge()
             while (nextNodePairs.size() != 0):
@@ -92,8 +92,10 @@ def makeM(ast :Ast, label :Str, isKernel :Bool) as DeepFrozen:
                 if (patternNode.getNodeName() != specimenNode.getNodeName()):
                     throw.eject(ej, "<" + patternNode.getNodeName() + "> != <" + specimenNode.getNodeName() ">")
                 # Let's look at node contents now.
-                def argPairs := zipList(patternNode._uncall()[2],
-                                        specimenNode._uncall()[2])
+                def pattArgs := patternNode._uncall()[2]
+                def specArgs := specimenNode._uncall()[2]
+                def argPairs := zipList(pattArgs.slice(0, pattArgs.size() - 1),
+                                        specArgs.slice(0, specArgs.size() - 1))
                 for [pattArg, specArg] in (argPairs):
                     if (pattArg =~ _ :Ast):
                         if (specArg =~ _ :Ast):
