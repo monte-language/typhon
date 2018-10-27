@@ -31,10 +31,7 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
         formatError(e, err)
 
     def spanHere():
-        return if (position + 1 >= tokens.size()):
-            null
-        else:
-            tokens[position.max(0)][2]
+        return tokens[position.min(tokens.size() - 1).max(0)][2]
 
     def spanNext():
         return if (position + 2 >= tokens.size()):
