@@ -126,7 +126,7 @@ def printObjectHeadOn(script, name, asExpr, auditors, out, _priority) as DeepFro
         astPrint(name, out, priorities["pattern"])
         if (verb != "run"):
             out.print(".")
-            if (isIdentifier()):
+            if (isIdentifier(verb)):
                 out.print(verb)
             else:
                 out.quote(verb)
