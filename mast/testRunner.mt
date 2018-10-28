@@ -173,10 +173,10 @@ Error in source $source from test $test:
 `
         stdout(UTF8.encode(line, null))
 
-    def updateScreen():
+    def updateScreen(results):
         def counts := `completed/running/errors/total: $completed/$running/$errors/$total`
-        def info := ` Last source: $lastSource Last test: $lastTest`
-        return stdout<-(clearLine + UTF8.encode(counts + info, null))
+        def info := `Remaining: ${[for [k, p] in (results) ? (!Ref.isResolved(p)) k]}`
+        return stdout<-(UTF8.encode("\n" + counts + info, null))
 
     def startTest(asserter, k, test):
         total += 1
@@ -209,10 +209,11 @@ Error in source $source from test $test:
         def asserter := makeAsserter()
         def results := [for [k, test] in (tests)
                         startTest<-(asserter, k, test)]
+        def status := [for [[k, test], p] in (zip(tests, results)) [k, p]]
         # Do the initial screen update.
-        updateScreen()
+        updateScreen(status)
         return when (promiseAllFulfilled(results)) ->
-            updateScreen()
+            updateScreen(status)
             stdout(UTF8.encode(`$\nRan ${results.size()} tests!$\n`, null))
             object resultSummary:
                 to fails():

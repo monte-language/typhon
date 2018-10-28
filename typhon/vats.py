@@ -158,6 +158,7 @@ class Vat(Object):
         from typhon.objects.refs import Promise, resolution
 
         with self._pendingLock:
+            print self._pending[0]
             resolver, target, atom, args, namedArgs = self._pending.pop(0)
 
         # Set up our Miranda FAIL.
@@ -225,7 +226,7 @@ class Vat(Object):
         # It's possible that more turns will be queued while we're taking
         # these turns, after all.
         count = len(self._pending)
-        # print "Taking", count, "turn(s) on", self.repr()
+        print "Taking", count, "turn(s) and", len(self._callbacks), "callbacks on", self
         if not count:
             self.runEvents()
         for _ in range(count):

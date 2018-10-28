@@ -722,10 +722,13 @@ def promiseAllFulfilled(vows) as DeepFrozenStamp:
     for v in (vows):
         Ref.whenResolvedOnly(v, def done(_) {
             if (Ref.isBroken(v)) {
+                traceln("**BAM** broken at", v)
                 r.resolveRace(v)
             } else if ((counter -= 1) <= 0) {
+                traceln("tick tock", counter)
                 r.resolve(vows)
             }
+            traceln("tick tock", counter)
         })
     return p
 
