@@ -143,7 +143,8 @@ models: mast/models/list/cons.mast
 
 tools: mast/tools/dump.mast mast/tools/repl.mast \
 	mast/tools/capnpc.mast mast/capn/bootstrap.mast \
-	mast/tools/muffin.mast mast/tools/kubeless.mast
+	mast/tools/muffin.mast mast/tools/kubeless.mast \
+	mast/tools/qbe.mast
 
 stage2/muffin.mast: mast/tools/muffin.mast
 	@ echo "MUFFIN $<"
@@ -164,6 +165,12 @@ loader.mast: loader.mt
 %.mt: %.mt.md
 	@ echo "LIT $<"
 	@ ./lit.sh -i $<
+
+test-qbe.ssa: mast/tools/qbe.mast
+	$(MT_TYPHON) -l mast -l . loader run tools/qbe > $@
+
+test-qbe.s: test-qbe.ssa
+	qbe -o $@ $<
 
 clean:
 	@ echo "CLEAN"
