@@ -66,6 +66,9 @@ def makePredicateGuard(predicate :DeepFrozenStamp, label :Str) as DeepFrozenStam
         to coerce(specimen, ej):
             def error := try {
                 if (predicate(specimen)) { return specimen }
+                if (!Ref.isNear(specimen)) {
+                        throw.eject(ej, ["Must be near:", specimen])
+                }
                 def conformed := specimen._conformTo(predicateGuard)
                 if (predicate(conformed)) { return conformed }
                 "Failed guard (" + label + "):"
@@ -107,6 +110,9 @@ object List as DeepFrozenStamp:
         if (isList(specimen)):
             return specimen
 
+        if (!Ref.isNear(specimen)):
+            throw.eject(ej, ["Must be near:", specimen])
+
         def conformed := specimen._conformTo(List)
 
         if (isList(conformed)):
@@ -129,6 +135,8 @@ object List as DeepFrozenStamp:
                 return subGuard
 
             to coerce(var specimen, ej):
+                if (!Ref.isNear(specimen)):
+                    throw.eject(ej, ["Must be near:", specimen])
                 if (!isList(specimen)):
                     specimen := specimen._conformTo(SubList)
 
@@ -166,6 +174,9 @@ object Set as DeepFrozenStamp:
         if (isSet(specimen)):
             return specimen
 
+        if (!Ref.isNear(specimen)):
+            throw.eject(ej, ["Must be near:", specimen])
+
         def conformed := specimen._conformTo(Set)
 
         if (isSet(conformed)):
@@ -188,6 +199,8 @@ object Set as DeepFrozenStamp:
                 return subGuard
 
             to coerce(var specimen, ej):
+                if (!Ref.isNear(specimen)):
+                    throw.eject(ej, ["Must be near:", specimen])
                 if (!isSet(specimen)):
                     specimen := specimen._conformTo(SubSet)
 
@@ -225,6 +238,9 @@ object Map as DeepFrozenStamp:
         if (isMap(specimen)):
             return specimen
 
+        if (!Ref.isNear(specimen)):
+            throw.eject(ej, ["Must be near:", specimen])
+
         def conformed := specimen._conformTo(Map)
 
         if (isMap(conformed)):
@@ -248,6 +264,10 @@ object Map as DeepFrozenStamp:
                 return [keyGuard, valueGuard]
 
             to coerce(var specimen, ej):
+
+                if (!Ref.isNear(specimen)):
+                    throw.eject(ej, ["Must be near:", specimen])
+
                 if (!isMap(specimen)):
                     specimen := specimen._conformTo(SubMap)
 
@@ -281,11 +301,6 @@ object NullOk as DeepFrozenStamp:
     to coerce(specimen, ej):
         if (specimen == null):
             return specimen
-
-        def conformed := specimen._conformTo(NullOk)
-
-        if (conformed == null):
-            return conformed
 
         throw.eject(ej, ["Not null:", specimen])
 
@@ -331,6 +346,9 @@ object Pair as DeepFrozenStamp:
         if (isList(specimen) && specimen.size() == 2):
             return specimen
 
+        if (!Ref.isNear(specimen)):
+            throw.eject(ej, ["Must be near:", specimen])
+
         def conformed := specimen._conformTo(Map)
 
         if (isList(conformed) && conformed.size() == 2):
@@ -354,6 +372,9 @@ object Pair as DeepFrozenStamp:
                 return [firstGuard, secondGuard]
 
             to coerce(var specimen, ej):
+                if (!Ref.isNear(specimen)):
+                    throw.eject(ej, ["Must be near:", specimen])
+
                 if (!isList(specimen) || specimen.size() != 2):
                     specimen := specimen._conformTo(SubPair)
 
