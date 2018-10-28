@@ -38,11 +38,7 @@ def makeCompiler() as DeepFrozen:
             }
             `)
 
-def FAILURE :Bytes := b`0`
 def INT :Bytes := b`1`
-# def STR :Bytes := b`1`
-# def LIST :Bytes := b`2`
-# def MAP :Bytes := b`3`
 
 def makePrelude(c) as DeepFrozen:
     c.function(b`makeObject`, ":object", ["tag" => "l", "data" => "l"], b`
@@ -53,36 +49,24 @@ def makePrelude(c) as DeepFrozen:
         ret %p
     `)
 
-    # XXX needs automatic bigint promotion
     c.function(b`intNext`, ":object", ["i" => "l"], b`
         %i =l add %i, 1
         %obj =:object call $$makeObject(l $INT, l %i)
         ret %obj
     `)
 
-    c.function(b`intCallMessage`, ":object",
-                      ["i" => "l", "message" => ":message"], b`
-        %verb =l loadl %message
+    c.function(b`Int`, ":object",
+               ["i" => "l", "verb" => "l", "args" => "l", "namedArgs" => "l"],
+               b`
         %diff =w call $$memcmp(l %verb, l $$${c.constant("next")}, w 5)
         jnz %diff, @@fail, @@next
     @@next
-        %rv =:object call $$intNext(l %i)
+        # XXX needs automatic bigint promotion
+        %i =l add %i, 1
+        %rv =:object call $$makeObject(l $$Int, l %i)
         ret %rv
     @@fail
         ret $$theFailure
-    `)
-
-    c.function(b`MCallMessage`, ":object",
-                      ["obj" => ":object", "message" => ":message"], b`
-        %tag =l loadl %obj
-        %p =l add %obj, 8
-        %data =l loadl %p
-        jnz %tag, @@int, @@fail
-    @@fail
-        ret $$theFailure
-    @@int
-        %rv =:object call $$intCallMessage(l %data, :message %message)
-        ret %rv
     `)
 
 def compile(compiler, expr :DeepFrozen, nameMaker) as DeepFrozen:
@@ -93,7 +77,7 @@ def compile(compiler, expr :DeepFrozen, nameMaker) as DeepFrozen:
             switch (expr.getValue()) {
                 match i :Int {
                     compiler.function(name, ":object", ["frame" => "l"], b`
-                        %obj =:object call $$makeObject(l $INT, l ${M.toString(i)})
+                        %obj =:object call $$makeObject(l $$Int, l ${M.toString(i)})
                         ret %obj
                     `)
                     name
@@ -107,9 +91,10 @@ def compile(compiler, expr :DeepFrozen, nameMaker) as DeepFrozen:
             # no-stale-stack-frames rule.
             compiler.function(name, ":object", ["frame" => "l"], b`
                 %target =:object call $$$target(l %frame)
-                %message =l alloc8 24
-                storel $$$verb, %message
-                %obj =:object call $$MCallMessage(:object %target, :message %message)
+                %script =l loadl %target
+                %targetData =l add %target, 8
+                %data =l loadl %targetData
+                %obj =:object call %script(l %data, l $$$verb, l 0, l 0)
                 ret %obj
             `)
             name
@@ -130,7 +115,7 @@ def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
 
     # { l %verb, l %args, l %namedArgs }
     type :message = { l, l, l }
-    data $$theFailure = { l $FAILURE, l 0 }
+    data $$theFailure = { l 0, l 0 }
     ` + c.finish() + b`
     data $$hello = { b"Hello from compiled native Monte!", b 0 }
     data $$landing = { b"Stuck the landing?", b 0 }
@@ -141,7 +126,7 @@ def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
         %obj =:object call $$$name(l 0)
         %r =w call $$puts(l $$landing)
         %tag =l loadl %obj
-        %isInt =w ceql %tag, $INT
+        %isInt =w ceql %tag, $$Int
         jnz %isInt, @@success, @@fail
     @@success
         %data =l add %obj, 8
