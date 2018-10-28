@@ -52,7 +52,7 @@ from typhon import ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
-from typhon.futures import Future, Ok
+from typhon.futures import Future, Ok, IOEvent
 from typhon.macros import macros, io
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject
@@ -180,6 +180,17 @@ class TTYSource(StreamSource):
         else:
             ruv.TTYSetMode(self._tty, ruv.TTY_MODE_NORMAL)
 
+
+class StreamSinkCleanup(IOEvent):
+    def __init__(self, streamSink):
+        self.streamSink = streamSink
+
+    def run(self):
+        self.streamSink.closed = True
+        self.streamSink._stream.release()
+        self.streamSink._stream = None
+
+
 @autohelp
 class StreamSink(Object):
     """
@@ -193,9 +204,7 @@ class StreamSink(Object):
         self._vat = vat
 
     def _cleanup(self):
-        self.closed = True
-        self._stream.release()
-        self._stream = None
+        currentVat.get().enqueueEvent(StreamSinkCleanup(self))
 
     @method("Void", "Bytes")
     def run(self, data):
