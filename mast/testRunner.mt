@@ -156,7 +156,7 @@ def makeAsserter() as DeepFrozen:
 # to the beginning of the line. ~ C.
 def clearLine :Bytes := b`$\x1b[2K$\r`
 
-def makeRunner(stdout, unsealException) as DeepFrozen:
+def makeRunner(stdout, unsealException, Timer) as DeepFrozen:
     var lastSource := null
     var lastTest := null
     var total :Int := 0
@@ -178,12 +178,22 @@ Error in source $source from test $test:
         def info := ` Last source: $lastSource Last test: $lastTest`
         return stdout<-(clearLine + UTF8.encode(counts + info, null))
 
+    def either(left, right):
+        def [p, r] := Ref.promise()
+        left <- _whenMoreResolved(r.resolveRace)
+        right <- _whenMoreResolved(r.resolveRace)
+        return p
+
     def startTest(asserter, k, test):
         total += 1
         running += 1
 
         def st :Str := M.toString(test)
-        return when (test<-(asserter(st))) ->
+        def timeout := Ref.whenResolved(
+            Timer.fromNow(60.0),
+            fn _ { Ref.broken(`Timeout running $test`) },
+        )
+        return when (either(timeout, test<-(asserter(st)))) ->
             lastSource := k
             lastTest := test
             running -= 1

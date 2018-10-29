@@ -180,7 +180,7 @@ def loaderMain() :Vow[Int]:
             when (someMods) ->
                 def [[=> makeRunner] | _, _] := testRunner
                 def stdout := stdio.stdout()
-                def runner := makeRunner(stdout, unsealException)
+                def runner := makeRunner(stdout, unsealException, Timer)
                 def results := runner<-runTests(collectedTests)
                 when (results) ->
                     def fails :Int := results.fails()
