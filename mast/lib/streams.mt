@@ -226,8 +226,7 @@ def testCollectStr(assert):
 def testCollectBytes(assert):
     def source := makeSource.fromIterable([b`baseball`, b`diamond`, b`ring`])
     def bs := collectBytes(source)
-    when (bs) ->
-        assert.equal(bs, b`baseballdiamondring`)
+    return Ref.whenNear(bs, fn _ { assert.equal(bs, b`baseballdiamondring`) })
 
 unittest([
     testCollectStr,
