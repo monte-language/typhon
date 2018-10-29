@@ -230,6 +230,24 @@ class RefOps(Object):
                             [WhenBrokenReactor(callback, o, None, vat)],
                             EMPTY_MAP)
 
+    @method("Any", "Any", "Any")
+    def whenNear(self, o, callback):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        p, r = makePromise()
+        vat = currentVat.get()
+        vat.sendOnly(o, _WHENMORERESOLVED_1,
+                     [WhenNearReactor(callback, o, r, vat)],
+                     EMPTY_MAP)
+        return p
+
+    @method("Any", "Any", "Any")
+    def whenNearOnly(self, o, callback):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        vat = currentVat.get()
+        return vat.sendOnly(o, _WHENMORERESOLVED_1,
+                            [WhenNearReactor(callback, o, None, vat)],
+                            EMPTY_MAP)
+
     @method("Bool", "Any")
     def isDeepFrozen(self, o):
         """
@@ -312,6 +330,51 @@ class WhenReactor(Object):
         else:
             self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
                               EMPTY_MAP)
+
+@autohelp
+class WhenNearReactor(Object):
+    """
+    A reactor that invokes its callback when a promise is resolved successfully.
+    """
+
+    done = False
+
+    def __init__(self, callback, ref, resolver, vat):
+        self._cb = callback
+        self._ref = _toRef(ref, vat)
+        self._resolver = resolver
+        self.vat = vat
+
+    def toString(self):
+        return u"<when near: %s>" % self._cb.toString()
+
+    @method("Void", "Any")
+    def run(self, unused):
+        from typhon.objects.collections.maps import EMPTY_MAP
+        if self.done:
+            return
+
+        if self._ref.state() is NEAR:
+            try:
+                outcome = self._cb.call(u"run", [self._ref])
+                if self._resolver is not None:
+                    self._resolver.resolve(outcome)
+            except UserException as ue:
+                if self._resolver is None:
+                    raise
+                else:
+                    from typhon.objects.exceptions import sealException
+                    self._resolver.smash(sealException(ue))
+
+            self.done = True
+        elif self._ref.state() is BROKEN:
+            if self._resolver is not None:
+                self._resolver.resolve(self._ref)
+            self.done = True
+        else:
+            self.vat.sendOnly(self._ref, _WHENMORERESOLVED_1, [self],
+                              EMPTY_MAP)
+
 
 @autohelp
 class WhenBrokenReactor(Object):
