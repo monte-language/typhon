@@ -72,7 +72,7 @@ object makeSink as DeepFrozen:
 
         # Reuse the list machinery.
         def [p, listSink] := makeSink.asList()
-        return [when (p) -> { b``.join(p) }, listSink]
+        return [Ref.whenNear(p, fn bs { b``.join(bs) }), listSink]
 
 def testMakeSinkAsList(assert):
     def [l, sink] := makeSink.asList()
