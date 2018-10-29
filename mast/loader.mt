@@ -193,7 +193,7 @@ def loaderMain() :Vow[Int]:
                             stdout(b`~ $error$\n`)
                     when (stdout.complete()) -> { fails.min(1) }
                 catch problem:
-                    stdout(b`Test suite failed: ${M.toString(problem)}$\n`)
+                    stdout(b`Test suite failed: ${M.toString(unsealException(problem))}$\n`)
                     when (stdout.complete()) -> { 1 }
         match [=="bench"] + modnames:
             def someMods := promiseAllFulfilled(
