@@ -224,7 +224,14 @@ def testCollectStr(assert):
         assert.equal(s, "123")
 
 def testCollectBytes(assert):
-    def source := makeSource.fromIterable([b`baseball`, b`diamond`, b`ring`])
+    def blobs := [b`baseball`, b`diamond`, b`ring`]
+    var i :Int := -1
+    def source(sink):
+        i += 1
+        if (i >= 3):
+            sink.complete()
+        else:
+            sink(blobs[i])
     def bs := collectBytes(source)
     return Ref.whenNear(bs, fn _ { assert.equal(bs, b`baseballdiamondring`) })
 
