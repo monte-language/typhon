@@ -38,8 +38,6 @@ def makeCompiler() as DeepFrozen:
             }
             `)
 
-def INT :Bytes := b`1`
-
 def makePrelude(c) as DeepFrozen:
     c.function(b`makeObject`, ":object", ["tag" => "l", "data" => "l"], b`
         %p =l call $$calloc(w 2, w 8)
@@ -49,25 +47,44 @@ def makePrelude(c) as DeepFrozen:
         ret %p
     `)
 
-    c.function(b`intNext`, ":object", ["i" => "l"], b`
-        %i =l add %i, 1
-        %obj =:object call $$makeObject(l $INT, l %i)
-        ret %obj
-    `)
+    def go(script):
+        # Inelegant hack: We can't get a standard loop counter here, so we do
+        # it by hand and deliberately make it cheap to compute the following
+        # counter value (+1) in order to avoid running the loop twice. ~ C.
+        var counter :Int := 0
+        return b`$\n`.join([for verb => body in (script) {
+            def marker := M.toString(counter)
+            def is := b`%isItVerb$marker`
+            def const := c.constant(verb)
+            def len := M.toString(verb.size() + 1)
+            b`
+            @@checkFor$marker
+                $is =w call $$memcmp(l %verb, l $$$const, w $len)
+                jnz $is, @@do$marker, @@checkFor${M.toString(counter += 1)}
+            @@do$marker
+            ` + body
+        }]) + b`
+        @@checkFor${M.toString(counter)}
+            # We are actually out of checks. So it is now time for failure.
+            ret $$theFailure
+        `
 
     c.function(b`Int`, ":object",
                ["i" => "l", "verb" => "l", "args" => "l", "namedArgs" => "l"],
-               b`
-        %diff =w call $$memcmp(l %verb, l $$${c.constant("next")}, w 5)
-        jnz %diff, @@fail, @@next
-    @@next
-        # XXX needs automatic bigint promotion
-        %i =l add %i, 1
-        %rv =:object call $$makeObject(l $$Int, l %i)
-        ret %rv
-    @@fail
-        ret $$theFailure
-    `)
+        go([
+            "next" => b`
+                # XXX needs automatic bigint promotion
+                %i =l add %i, 1
+                %rv =:object call $$makeObject(l $$Int, l %i)
+                ret %rv
+            `,
+            "previous" => b`
+                %i =l sub %i, 1
+                %rv =:object call $$makeObject(l $$Int, l %i)
+                ret %rv
+            `,
+        ])
+    )
 
 def compile(compiler, expr :DeepFrozen, nameMaker) as DeepFrozen:
     def label := nameMaker()
@@ -140,7 +157,7 @@ def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
 
 def main(_argv, => stdio) as DeepFrozen:
     def stdout := stdio.stdout()
-    def expr := m`41.next()`
+    def expr := m`42.previous().next()`
     def program := makeProgram(expr)
     return when (stdout<-(program)) ->
         when (stdout<-complete()) -> { 0 }
