@@ -13,18 +13,24 @@ def makeCompiler() as DeepFrozen:
         counter += 1
         return b`_monte_${ty}_${M.toString(counter)}`
 
+    def constCache := [].asMap().diverge()
+
     return object compiler:
         to finish():
             return b`$\n`.join(pieces)
 
         to constant(value):
-            def name := nameMaker("const")
-            switch (value):
-                match s :Str:
-                    pieces.push(b`
-                        data $$$name = { b${M.toQuote(s)}, b 0 }
-                    `)
-            return name
+            return constCache.fetch(value, fn {
+                def name := nameMaker("const")
+                switch (value) {
+                    match s :Str {
+                        pieces.push(b`
+                            data $$$name = { b${M.toQuote(s)}, b 0 }
+                        `)
+                    }
+                }
+                constCache[value] := name
+            })
 
         to function(name :Bytes, ret :Str, args :Map[Str, Str], body :Bytes):
             if (funcs.contains(name)):
