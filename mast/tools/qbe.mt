@@ -39,6 +39,10 @@ def makeCompiler() as DeepFrozen:
             funcs[name] := [ret, [for ty => _ in (args) ty]]
             pieces.push(b`
             function $ret $$$name($params) {
+            @@_entrance
+                jmp @@start
+            @@fail
+                ret $$theFailure
             @@start
                 $body
             }
@@ -53,12 +57,41 @@ def makePrelude(c) as DeepFrozen:
         ret %p
     `)
 
+    def doOffset(offset):
+        return M.toString(offset * 8)
+
+    def load(struct, offset, target, => temp := b`%_load_temp_p`):
+        return b`
+            $temp =l add $struct, ${doOffset(offset)}
+            $target =l loadl $temp
+        `
+
+    def store(struct, offset, value, => temp := b`%_store_temp_p`):
+        return b`
+            $temp =l add $struct, ${doOffset(offset)}
+            storel $value, $temp
+        `
+
+    c.function(b`makeCons`, ":list", ["head" => "l", "rest" => ":list"], b`
+        %p =l call $$calloc(w 3, w 8)
+        ${store(b`%p`, 0, b`%head`)}
+        jnz %rest, @@cons, @@empty
+    @@cons
+        ${store(b`%p`, 1, b`%rest`)}
+        ${load(b`%rest`, 2, b`%size`)}
+        %size =l add %size, 1
+        ${store(b`%p`, 2, b`%size`)}
+        ret %p
+    @@empty
+        ${store(b`%p`, 2, b`1`)}
+        ret %p
+    `)
+
     c.function(b`listSize`, "l", ["list" => ":list"], b`
-        jnz %list, @@getSize, @@empty
-    @@getSize
-        %p =l add %list, 8
-        %rv =l loadl %p
-        ret %rv
+        jnz %list, @@cons, @@empty
+    @@cons
+        ${load(b`%list`, 2, b`%size`)}
+        ret %size
     @@empty
         ret 0
     `)
@@ -95,10 +128,33 @@ def makePrelude(c) as DeepFrozen:
             ret $$theFailure
         `
 
+    def getArgs(argTypes):
+        def pieces := [].diverge()
+        for arg => ty in (argTypes):
+            def temp := b`%_monte_arg_temp`
+            def unwrap := switch (ty) {
+                match ==Any { b`` }
+                match ==Int { load(temp, 1, temp) }
+            }
+            pieces.push(b`
+                ${load(b`%args`, 0, temp)}
+                $unwrap
+                $arg =l copy $temp
+            `)
+        return b`
+            ${load(b`%args`, 1, b`%args`)}
+        `.join(pieces)
+
     # XXX needs automatic bigint promotion
     c.function(b`Int`, ":object",
                ["i" => "l", "verb" => "l", "args" => ":list", "namedArgs" => "l"],
         go([
+            ["add", 1] => b`
+                ${getArgs([b`%j` => Int])}
+                %i =l add %i, %j
+                %rv =:object call $$makeObject(l $$Int, l %i)
+                ret %rv
+            `,
             ["next", 0] => b`
                 %i =l add %i, 1
                 %rv =:object call $$makeObject(l $$Int, l %i)
@@ -130,6 +186,19 @@ def compile(compiler, expr :DeepFrozen, nameMaker) as DeepFrozen:
         match =="MethodCallExpr" {
             def target := compile(compiler, expr.getReceiver(), nameMaker)
             def verb := compiler.constant(expr.getVerb())
+            def argPairs := [for arg in (expr.getArgs()) {
+                def n := compile(compiler, arg, nameMaker)
+                def t := b`%_monte_method_arg_${nameMaker()}`
+                [t, b`
+                    $t =:object call $$$n(l %frame)
+                `]
+            }]
+            def argAssigns := b`$\n`.join([for [_, assign] in (argPairs) assign])
+            def argBuild := b`$\n`.join([for [t, _] in (argPairs.reverse()) {
+                b`
+                    %args =:list call $$makeCons(l $t, :list %args)
+                `
+            }])
             # We can stack-allocate messages because of the
             # no-stale-stack-frames rule.
             compiler.function(name, ":object", ["frame" => "l"], b`
@@ -137,7 +206,10 @@ def compile(compiler, expr :DeepFrozen, nameMaker) as DeepFrozen:
                 %script =l loadl %target
                 %targetData =l add %target, 8
                 %data =l loadl %targetData
-                %obj =:object call %script(l %data, l $$$verb, :list 0, l 0)
+                $argAssigns
+                %args =l copy 0
+                $argBuild
+                %obj =:object call %script(l %data, l $$$verb, :list %args, l 0)
                 ret %obj
             `)
             name
@@ -156,7 +228,7 @@ def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
     # { l %script, l %data }
     type :object = { l, l }
 
-    # { l %next, l %size, l %data }
+    # { l %head, l %rest, l %size }
     type :list = { l, l, l }
 
     # { l %verb, l %args, l %namedArgs }
@@ -186,7 +258,7 @@ def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
 
 def main(_argv, => stdio) as DeepFrozen:
     def stdout := stdio.stdout()
-    def expr := m`42.previous().next()`
+    def expr := m`20.add(20).next().next()`
     def program := makeProgram(expr)
     return when (stdout<-(program)) ->
         when (stdout<-complete()) -> { 0 }
