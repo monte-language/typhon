@@ -53,38 +53,58 @@ def makePrelude(c) as DeepFrozen:
         ret %p
     `)
 
+    c.function(b`listSize`, "l", ["list" => ":list"], b`
+        jnz %list, @@getSize, @@empty
+    @@getSize
+        %p =l add %list, 8
+        %rv =l loadl %p
+        ret %rv
+    @@empty
+        ret 0
+    `)
+
     def go(script):
         # Inelegant hack: We can't get a standard loop counter here, so we do
         # it by hand and deliberately make it cheap to compute the following
         # counter value (+1) in order to avoid running the loop twice. ~ C.
         var counter :Int := 0
-        return b`$\n`.join([for verb => body in (script) {
+        def tree := b`$\n`.join([for [verb, arity] => body in (script) {
             def marker := M.toString(counter)
-            def is := b`%isItVerb$marker`
+            def isVerb := b`%isItVerb$marker`
+            def cmpArity := b`%cmpArity$marker`
             def const := c.constant(verb)
             def len := M.toString(verb.size() + 1)
+            # So inelegant.
+            counter += 1
             b`
-            @@checkFor$marker
-                $is =w call $$memcmp(l %verb, l $$$const, w $len)
-                jnz $is, @@do$marker, @@checkFor${M.toString(counter += 1)}
+            @@checkVerbFor$marker
+                $isVerb =w call $$memcmp(l %verb, l $$$const, w $len)
+                jnz $isVerb, @@checkVerbFor${M.toString(counter)}, @@checkArityFor$marker
+            @@checkArityFor$marker
+                $cmpArity =w ceql %arity, ${M.toString(arity)}
+                jnz $cmpArity, @@checkVerbFor${M.toString(counter)}, @@do$marker
             @@do$marker
             ` + body
-        }]) + b`
-        @@checkFor${M.toString(counter)}
+        }])
+        return b`
+            %arity =l call $$listSize(:list %args)
+        ` + tree + b`
+        @@checkVerbFor${M.toString(counter)}
             # We are actually out of checks. So it is now time for failure.
+            %_r =w call $$puts(l $$${c.constant("welp\n")})
             ret $$theFailure
         `
 
+    # XXX needs automatic bigint promotion
     c.function(b`Int`, ":object",
-               ["i" => "l", "verb" => "l", "args" => "l", "namedArgs" => "l"],
+               ["i" => "l", "verb" => "l", "args" => ":list", "namedArgs" => "l"],
         go([
-            "next" => b`
-                # XXX needs automatic bigint promotion
+            ["next", 0] => b`
                 %i =l add %i, 1
                 %rv =:object call $$makeObject(l $$Int, l %i)
                 ret %rv
             `,
-            "previous" => b`
+            ["previous", 0] => b`
                 %i =l sub %i, 1
                 %rv =:object call $$makeObject(l $$Int, l %i)
                 ret %rv
@@ -117,7 +137,7 @@ def compile(compiler, expr :DeepFrozen, nameMaker) as DeepFrozen:
                 %script =l loadl %target
                 %targetData =l add %target, 8
                 %data =l loadl %targetData
-                %obj =:object call %script(l %data, l $$$verb, l 0, l 0)
+                %obj =:object call %script(l %data, l $$$verb, :list 0, l 0)
                 ret %obj
             `)
             name
@@ -133,15 +153,18 @@ def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
     makePrelude(c)
     def name := compile(c, expr, nameMaker)
     return b`
-    # { l %tag, l %data }
+    # { l %script, l %data }
     type :object = { l, l }
+
+    # { l %next, l %size, l %data }
+    type :list = { l, l, l }
 
     # { l %verb, l %args, l %namedArgs }
     type :message = { l, l, l }
     data $$theFailure = { l 0, l 0 }
     ` + c.finish() + b`
     data $$hello = { b"Hello from compiled native Monte!", b 0 }
-    data $$landing = { b"Stuck the landing?", b 0 }
+    data $$landing = { b"Stuck the landing!", b 0 }
     data $$failed = { b"Failed to get an int", b 0 }
     export function w $$main() {
     @@start
