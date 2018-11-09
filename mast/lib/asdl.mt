@@ -14,6 +14,7 @@ object bootBuilder as DeepFrozen:
                 f.Sum(id, [for x in (fields) x(f)], con(f),
                       [for x in (cons) x(f)])
             }
+            method walk(f) { f.Sum(id, fields, con, cons) }
         }
     to Product(ty, f, fs):
         return object Product {
@@ -21,26 +22,31 @@ object bootBuilder as DeepFrozen:
             method run(runner) {
                 f.Product(ty, f(runner), [for x in (fs) x(runner)])
             }
+            method walk(walker) { walker.Product(ty, f, fs) }
         }
     to Con(name, fs):
         return object Con {
             to _printOn(out) { out.print(`Con($name, $fs)`) }
             method run(f) { f.Con(name, [for x in (fs) x(f)]) }
+            method walk(f) { f.Con(name, fs) }
         }
     to Id(ty, name):
         return object Id {
             to _printOn(out) { out.print(`Id($ty, $name)`) }
             method run(f) { f.Id(ty, name) }
+            method walk(f) { f.Id(ty, name) }
         }
     to Option(ty, name):
         return object Option {
             to _printOn(out) { out.print(`Option($ty, $name)`) }
             method run(f) { f.Option(ty, name) }
+            method walk(f) { f.Option(ty, name) }
         }
     to Sequence(ty, name):
         return object Sequence {
             to _printOn(out) { out.print(`Sequence($ty, $name)`) }
             method run(f) { f.Sequence(ty, name) }
+            method walk(f) { f.Sequence(ty, name) }
         }
 
 def makeParser(builder) as DeepFrozen:
@@ -125,7 +131,7 @@ def makeBuilderMaker() as DeepFrozen:
 
     return object builderMaker:
         to run(tys):
-            def [methodss, gs] := transpose([for ty in (tys) ty(builderMaker)])
+            def [methodss, gs] := transpose([for ty in (tys) ty.walk(builderMaker)])
             # XXX is there really not a flatmap somewhere?
             def methods := {
                 def l := [].diverge()
@@ -136,12 +142,13 @@ def makeBuilderMaker() as DeepFrozen:
             def obj := astBuilder.ObjectExpr(null, mpatt`asdlBuilder`,
                                              m`DeepFrozen`, [], script, null)
             def ast := astBuilder.SeqExpr(gs.with(obj), null)
+            traceln("built", ast)
             return eval(ast, safeScope)
 
         to Sum(id, fields, con, cons):
             # XXX fields
             fields
-            def methods := [con] + cons
+            def methods := [for c in ([con] + cons) c.walk(builderMaker)]
             def namePatt := astBuilder.FinalPattern(
                 astBuilder.NounExpr(id, null), m`DeepFrozen`, null)
             def guard := m`interface $namePatt {}`
@@ -149,7 +156,7 @@ def makeBuilderMaker() as DeepFrozen:
         to Product(ty, f, fs):
             throw("too lazy sorry", ty, f, fs)
         to Con(name, fs):
-            def [exprs, patts, visitors] := transpose(fs)
+            def [exprs, patts, visitors] := transpose([for f in (fs) f.walk(builderMaker)])
             def comma := m`out.print(", ")`
             def printer := m`to _printOn(out) {
                 out.print(${astBuilder.LiteralExpr(name, null)})
@@ -162,7 +169,10 @@ def makeBuilderMaker() as DeepFrozen:
             def runner := m`method run(f) {
                 ${astBuilder.MethodCallExpr(m`f`, name, visitors, [], null)}
             }`
-            def script := astBuilder.Script(null, [printer, runner], [], null)
+            def walker := m`method walk(f) {
+                ${astBuilder.MethodCallExpr(m`f`, name, exprs, [], null)}
+            }`
+            def script := astBuilder.Script(null, [printer, runner, walker], [], null)
             def namePatt := astBuilder.FinalPattern(
                 astBuilder.NounExpr(name, null), null, null)
             def body := astBuilder.ObjectExpr(null, namePatt, null, [],
