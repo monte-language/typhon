@@ -115,7 +115,7 @@ escape tailtest:
 def isPrimitive :DeepFrozen := ["identifier", "int"].contains
 def comma :DeepFrozen := m`out.print(", ")`
 
-def makeBuilderMaker() as DeepFrozen:
+def makeBuilderMaker(=> builderName :DeepFrozen := mpatt`asdlBuilder`) as DeepFrozen:
     var count :Int := 0
     def nextName(prefix :Str) :Str:
         count += 1
@@ -137,8 +137,8 @@ def makeBuilderMaker() as DeepFrozen:
             for ty in (tys):
                 ty.walk(builderMaker)
             def script := astBuilder.Script(null, methods.snapshot(), [], null)
-            def obj := astBuilder.ObjectExpr(null, mpatt`asdlBuilder`,
-                                             m`DeepFrozen`, [], script, null)
+            def obj := astBuilder.ObjectExpr(null, builderName, m`DeepFrozen`,
+                                             [], script, null)
             def ast := astBuilder.SeqExpr(gs.with(obj), null)
             return eval(ast, safeScope)
 
@@ -158,9 +158,9 @@ def makeBuilderMaker() as DeepFrozen:
 
         to Con(name, fs):
             # traceln(`Con($name, $fs)`)
-            def exprs := [].diverge()
-            def patts := [].diverge()
-            def visitors := [].diverge()
+            def exprs := [[].diverge()].diverge()
+            def patts := [[].diverge()].diverge()
+            def visitors := [[].diverge()].diverge()
 
             def fieldGuards := [
                 "Id" => m`Any`,
@@ -176,13 +176,26 @@ def makeBuilderMaker() as DeepFrozen:
 
             object fieldWalker:
                 match [verb, [ty, name], _]:
-                    def g := fieldGuards[verb]
-                    exprs.push(def n := nextNoun(ty, name))
-                    # XXX astBuilder guard bug?
-                    patts.push(astBuilder.FinalPattern(n, g, null))
-                    visitors.push(if (isPrimitive(ty)) { n } else {
-                        fieldVisitors[verb](n)
-                    })
+                    if (products.contains(ty)):
+                        for l in ([exprs, patts, visitors]):
+                            l.push([].diverge())
+                        for field in (products[ty]):
+                            field.walk(fieldWalker)
+                        def es := astBuilder.ListExpr(exprs.pop().snapshot(), null)
+                        exprs.last().push(es)
+                        def ps := astBuilder.ListPattern(patts.pop().snapshot(), null, null)
+                        patts.last().push(ps)
+                        def vs := astBuilder.ListExpr(visitors.pop().snapshot(), null)
+                        visitors.last().push(vs)
+                    else:
+                        def g := fieldGuards[verb]
+                        exprs.last().push(def n := nextNoun(ty, name))
+                        # XXX astBuilder guard bug?
+                        patts.last().push(astBuilder.FinalPattern(n, g, null))
+                        visitors.last().push(if (isPrimitive(ty)) { n } else {
+                            fieldVisitors[verb](n)
+                        })
+                    null
 
             for f in (fs):
                 f.walk(fieldWalker)
@@ -191,27 +204,27 @@ def makeBuilderMaker() as DeepFrozen:
                 out.print(${astBuilder.LiteralExpr(name, null)})
                 out.print("(")
                 ${astBuilder.SeqExpr(
-                    [comma].join([for e in (exprs) m`out.print($e)`]),
+                    [comma].join([for e in (exprs.last()) m`out.print($e)`]),
                 null)}
                 out.print(")")
             }`
             def runner := m`method run(f) {
-                ${astBuilder.MethodCallExpr(m`f`, name, visitors.snapshot(), [], null)}
+                ${astBuilder.MethodCallExpr(m`f`, name, visitors.last().snapshot(), [], null)}
             }`
             def walker := m`method walk(f) {
-                ${astBuilder.MethodCallExpr(m`f`, name, exprs.snapshot(), [], null)}
+                ${astBuilder.MethodCallExpr(m`f`, name, exprs.last().snapshot(), [], null)}
             }`
             def script := astBuilder.Script(null, [printer, runner, walker], [], null)
             def namePatt := astBuilder.FinalPattern(
                 astBuilder.NounExpr(name, null), null, null)
             def body := astBuilder.ObjectExpr(null, namePatt, null, [],
                                               script, null)
-            def rv := astBuilder."Method"(null, name, patts.snapshot(), [], null, body, null)
+            def rv := astBuilder."Method"(null, name, patts.last().snapshot(), [], null, body, null)
             methods.push(rv)
 
 def asdlBuilder :DeepFrozen := makeBuilderMaker()(ast)
 
-def asdlParser(s :Str, ej) :DeepFrozen as DeepFrozen:
+def asdlParser(builderName :DeepFrozen, s :Str, ej) :DeepFrozen as DeepFrozen:
     "Parse a string into an AST builder."
 
     def p := makeParser(asdlBuilder)
@@ -219,4 +232,4 @@ def asdlParser(s :Str, ej) :DeepFrozen as DeepFrozen:
     escape tailtest:
         def next := tail.next(tailtest)
         throw.eject(ej, `parser found junk at the end: $next`)
-    return makeBuilderMaker()(ast)
+    return makeBuilderMaker(=> builderName)(ast)
