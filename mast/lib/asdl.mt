@@ -74,17 +74,19 @@ def makeParser(builder) as DeepFrozen:
                     }
                   }
     def fields := field.joinedBy(comma).bracket(pk.string("("),
-                                                pk.string(")") << ws)
+                                                pk.string(")"))
     def constructor := (con_id + fields.optional()) % fn [name, fs] {
         builder.Con(name, if (fs == null) { [] } else { fs })
     }
-    def sum_type := constructor.joinedBy(pipe) + (
-        (pk.string("attributes") >> fields) / pk.pure([]))
+    # Divergence from the original grammar: Factor attributes.
+    def attribKeyword := ws >> pk.string("attributes") << ws
+    def attribs := (attribKeyword >> fields) / pk.pure([])
+    def sum_type := constructor.joinedBy(pipe)
     def product_type := fields
     # Divergence from the original grammar in order to simplify AST-building;
     # we double up on `typ_id << equals`.
     def typ_eq := typ_id << equals
-    def sum_definition := (typ_eq + sum_type) % fn [ty, [[con] + cons, attrs]] {
+    def sum_definition := (typ_eq + sum_type + attribs) % fn [[ty, [con] + cons], attrs] {
         builder.Sum(ty, attrs, con, cons)
     }
     def product_definition := (typ_eq + product_type) % fn [ty, [f] + fs] {
@@ -103,12 +105,13 @@ def boot :Str := `
     asdl_ty = Sum(identifier, field*, constructor, constructor*)
             | Product(identifier, field, field*)
     constructor = Con(identifier, field*)
-    field = Id(identifier, identifier?)
-          | Option(identifier, identifier?)
-          | Sequence(identifier, identifier?)
+    field = Id | Option | Sequence attributes (identifier, identifier?)
 `
 
-def [ast, _] := bootParser(boot, null)
+def [ast, tail] := bootParser(boot, null)
+escape tailtest:
+    def next := tail.next(tailtest)
+    throw(`Junk trying to boot ASDL parser: $next`)
 
 # XXX borrowed from lib/gadts, should move to where zip lives?
 def transpose(l :List) as DeepFrozen:
@@ -142,13 +145,16 @@ def makeBuilderMaker() as DeepFrozen:
             def obj := astBuilder.ObjectExpr(null, mpatt`asdlBuilder`,
                                              m`DeepFrozen`, [], script, null)
             def ast := astBuilder.SeqExpr(gs.with(obj), null)
-            traceln("built", ast)
             return eval(ast, safeScope)
 
         to Sum(id, fields, con, cons):
-            # XXX fields
-            fields
-            def methods := [for c in ([con] + cons) c.walk(builderMaker)]
+            # traceln(`Sum($id, $fields, $con, $cons)`)
+            def methods := [for c in ([con] + cons) {
+                def fullCon := c.walk(def walker.Con(name, fs) {
+                    return bootBuilder.Con(name, fs + fields)
+                })
+                fullCon.walk(builderMaker)
+            }]
             def namePatt := astBuilder.FinalPattern(
                 astBuilder.NounExpr(id, null), m`DeepFrozen`, null)
             def guard := m`interface $namePatt {}`
@@ -156,7 +162,10 @@ def makeBuilderMaker() as DeepFrozen:
         to Product(ty, f, fs):
             throw("too lazy sorry", ty, f, fs)
         to Con(name, fs):
-            def [exprs, patts, visitors] := transpose([for f in (fs) f.walk(builderMaker)])
+            # traceln(`Con($name, $fs)`)
+            def [exprs, patts, visitors] := if (fs.isEmpty()) {
+                [[], [], []]
+            } else { transpose([for f in (fs) f.walk(builderMaker)]) }
             def comma := m`out.print(", ")`
             def printer := m`to _printOn(out) {
                 out.print(${astBuilder.LiteralExpr(name, null)})
@@ -179,18 +188,21 @@ def makeBuilderMaker() as DeepFrozen:
                                               script, null)
             return astBuilder."Method"(null, name, patts, [], null, body, null)
         to Id(ty, name):
+            # traceln(`Id($ty, $name)`)
             def n := nextNoun(ty, name)
             # XXX astBuilder guard bug?
             def patt := astBuilder.FinalPattern(n, m`Any`, null)
             def v := if (isPrimitive(ty)) { n } else { m`$n(f)` }
             return [n, patt, v]
         to Option(ty, name):
+            # traceln(`Option($ty, $name)`)
             def n := nextNoun(ty, name)
             # XXX astBuilder substitution bug
             def patt := astBuilder.FinalPattern(n, m`NullOk`, null)
             def v := if (isPrimitive(ty)) { n } else { m`$n(f)` }
             return [n, patt, v]
         to Sequence(ty, name):
+            # traceln(`Sequence($ty, $name)`)
             def n := nextNoun(ty, name)
             def patt := astBuilder.FinalPattern(n, m`List`, null)
             def v := if (isPrimitive(ty)) { n } else { m`[for x in ($n) x(f)]` }
