@@ -107,6 +107,17 @@ def pure(x :DeepFrozen) as DeepFrozen:
     return def pure(s, _) as DeepFrozen:
         return [x, s]
 
+def traceParser(parser, label :Str) as DeepFrozen:
+    return def tracingParser(s, ej):
+        traceln("Parser trace start:", label, s)
+        escape la:
+            def [rv, s2] := parser(s, la)
+            traceln("Parser trace return:", label, s2, rv)
+            return [rv, s2]
+        catch problem:
+            traceln("Parser trace fail:", label, problem)
+            throw.eject(ej, problem)
+
 def binding(p, f) as DeepFrozen:
     return def bound(s, ej):
         def [b, s2] := p(s, ej)
@@ -213,6 +224,9 @@ def augment(parser) as DeepFrozen:
 
         to bracket(bra, ket):
             return bra >> augmentedParser << ket
+
+        to trace(label :Str):
+            return augment(traceParser(augmentedParser, label))
 
 def done(slicer) :Bool as DeepFrozen:
     return escape ej { slicer.next(ej); false } catch _ { true }
