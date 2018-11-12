@@ -5,7 +5,8 @@ exports (zip)
 
 object noPadding as DeepFrozen {}
 
-def makeZipper(iterables :List, padding) as DeepFrozen:
+# The logic in truncatingZippingIterator cannot handle zero iterables. ~ C.
+def makeZipper(iterables :List ? (!iterables.isEmpty()), padding) as DeepFrozen:
     def iterators := [for iterable in (iterables) iterable._makeIterator()]
     return if (padding == noPadding):
         def truncatingZippingIterator.next(ej) :Pair[List, List]:
@@ -36,7 +37,8 @@ def makeZipper(iterables :List, padding) as DeepFrozen:
                 ej("Iteration finished")
             return [ks.snapshot(), vs.snapshot()]
 
-def allSameLength(iterables) :Bool as DeepFrozen:
+# Same precondition as main zipper. ~ C.
+def allSameLength(iterables :List ? (!iterables.isEmpty())) :Bool as DeepFrozen:
     def ej := __return
     def trySize(i):
         return try { i.size() } catch _ {
@@ -59,6 +61,12 @@ object zip as DeepFrozen:
     Also known as a transposition or a convolution.
     "
 
+    # Handle empty lists early.
+    match [=="run", [], _]:
+        []
+    match [=="ragged", [], _]:
+        []
+
     match [=="run", iterables ? (allSameLength(iterables)), _]:
         def zipped._makeIterator():
             "
@@ -75,6 +83,10 @@ object zip as DeepFrozen:
             "A ragged zipping iterator."
 
             return makeZipper(iterables, padding)
+
+# XXX be less lazy and write proptests
+def testZipListsEmpty(assert):
+    assert.equal(_makeList.fromIterable(M.call(zip, "run", [], [].asMap())), [])
 
 def testZipLists(assert):
     def l := [1, 2, 3, 4, 5]
@@ -102,6 +114,7 @@ def testZipListsRaggedPadding(assert):
                  expected)
 
 unittest([
+    testZipListsEmpty,
     testZipLists,
     testZipListsSameLengthCheck,
     testZipListsRagged,
