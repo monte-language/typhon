@@ -66,6 +66,7 @@ mast: mast/lib/enum.mast \
 	mast/lib/logji.mast \
 	mast/lib/marley.mast \
 	mast/lib/matrices.mast \
+	mast/lib/mim.mast \
 	mast/lib/pra.mast \
 	mast/lib/prom.mast \
 	mast/lib/streams.mast \
