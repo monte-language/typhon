@@ -65,7 +65,7 @@ def makeParser(builder) as DeepFrozen:
     def con_id := (upper + alpha_num.zeroOrMore()) % buildId
     def id := typ_id / con_id
     def field := (typ_id + pk.satisfies("*?".contains).optional() +
-                  id.optional()) % fn [[ty, deco], name] {
+                  (ws >> id.optional())) % fn [[ty, deco], name] {
                     switch (deco) {
                         match ==null { builder.Id(ty, name) }
                         match =='?' { builder.Option(ty, name) }
@@ -112,7 +112,8 @@ escape tailtest:
     def next := tail.next(tailtest)
     throw(`Junk trying to boot ASDL parser: $next`)
 
-def isPrimitive :DeepFrozen := ["identifier", "int"].contains
+# Traditional ASDL has three types: identifier, int, str
+def isPrimitive :DeepFrozen := ["bool", "df", "identifier", "int", "str"].contains
 def comma :DeepFrozen := m`out.print(", ")`
 
 def makeBuilderMaker(=> builderName :DeepFrozen := mpatt`asdlBuilder`) as DeepFrozen:
@@ -164,7 +165,7 @@ def makeBuilderMaker(=> builderName :DeepFrozen := mpatt`asdlBuilder`) as DeepFr
 
             def fieldGuards := [
                 "Id" => m`Any`,
-                "Option" => m`NullOk`,
+                "Option" => m`NullOk[Any]`,
                 "Sequence" => m`List`,
             ]
 
