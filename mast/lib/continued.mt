@@ -170,6 +170,8 @@ def makeRegularMachine(feed) as DeepFrozen:
         return [feed(), 1]
 
     return object regularMachine extends makeMachine(generalFeed):
+        to _printOn(out):
+            out.print(super)
         to forceFeed(p):
             return super.forceFeed(p, 1)
 
