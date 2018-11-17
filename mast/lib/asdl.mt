@@ -101,10 +101,10 @@ def bootParser(s :Str, ej) as DeepFrozen:
 
 # Figure 15
 def boot :Str := `
+    field = Id | Option | Sequence attributes (identifier, identifier?)
+    constructor = Con(identifier, field*)
     asdl_ty = Sum(identifier, field*, constructor, constructor*)
             | Product(identifier, field, field*)
-    constructor = Con(identifier, field*)
-    field = Id | Option | Sequence attributes (identifier, identifier?)
 `
 
 def [ast, tail] := bootParser(boot, null)
@@ -116,7 +116,7 @@ escape tailtest:
 def isPrimitive :DeepFrozen := ["bool", "df", "identifier", "int", "str"].contains
 def comma :DeepFrozen := m`out.print(", ")`
 
-def makeBuilderMaker(=> builderName :DeepFrozen := mpatt`asdlBuilder`) as DeepFrozen:
+def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
     var count :Int := 0
     def nextName(prefix :Str) :Str:
         count += 1
@@ -133,47 +133,32 @@ def makeBuilderMaker(=> builderName :DeepFrozen := mpatt`asdlBuilder`) as DeepFr
     def methods := [].diverge()
     def gs := [].diverge()
 
-    return object builderMaker:
-        to run(tys):
-            for ty in (tys):
-                ty.walk(builderMaker)
-            def script := astBuilder.Script(null, methods.snapshot(), [], null)
-            def obj := astBuilder.ObjectExpr(null, builderName, m`DeepFrozen`,
-                                             [], script, null)
-            def ast := astBuilder.SeqExpr(gs.with(obj), null)
-            return eval(ast, safeScope)
+    def typeGuards := [
+        "bool" => m`Bool`,
+        "df" => m`DeepFrozen`,
+        "identifier" => m`Str`,
+        "int" => m`Int`,
+        "str" => m`Str`,
+    ].diverge()
 
-        to Sum(id, fields, con, cons):
-            # traceln(`Sum($id, $fields, $con, $cons)`)
-            for c in ([con] + cons):
-                def fullCon := c.walk(def walker.Con(name, fs) {
-                    return bootBuilder.Con(name, fs + fields)
-                })
-                fullCon.walk(builderMaker)
-            def namePatt := astBuilder.FinalPattern(
-                astBuilder.NounExpr(id, null), m`DeepFrozen`, null)
-            gs.push(m`interface $namePatt {}`)
+    def fieldGuards := [
+        "Id" => fn g { g },
+        "Option" => fn g { m`NullOk[$g]` },
+        "Sequence" => fn g { m`List[$g]` },
+    ]
 
-        to Product(ty, f, fs):
-            products[ty] := [f] + fs
+    def fieldVisitors := [
+        "Id" => fn n { m`$n(f)` },
+        "Option" => fn n { m`$n(f)` },
+        "Sequence" => fn n { m`[for x in ($n) x(f)]` },
+    ]
 
-        to Con(name, fs):
+    def makeConWalker(conGuard, attributeFields):
+        return def walker.Con(name, fs):
             # traceln(`Con($name, $fs)`)
             def exprs := [[].diverge()].diverge()
             def patts := [[].diverge()].diverge()
             def visitors := [[].diverge()].diverge()
-
-            def fieldGuards := [
-                "Id" => m`Any`,
-                "Option" => m`NullOk[Any]`,
-                "Sequence" => m`List`,
-            ]
-
-            def fieldVisitors := [
-                "Id" => fn n { m`$n(f)` },
-                "Option" => fn n { m`$n(f)` },
-                "Sequence" => fn n { m`[for x in ($n) x(f)]` },
-            ]
 
             object fieldWalker:
                 match [verb, [ty, name], _]:
@@ -189,7 +174,9 @@ def makeBuilderMaker(=> builderName :DeepFrozen := mpatt`asdlBuilder`) as DeepFr
                         def vs := astBuilder.ListExpr(visitors.pop().snapshot(), null)
                         visitors.last().push(vs)
                     else:
-                        def g := fieldGuards[verb]
+                        traceln("available", typeGuards.getKeys())
+                        def tyGuard := typeGuards[ty]
+                        def g := fieldGuards[verb](tyGuard)
                         exprs.last().push(def n := nextNoun(ty, name))
                         # XXX astBuilder guard bug?
                         patts.last().push(astBuilder.FinalPattern(n, g, null))
@@ -198,7 +185,7 @@ def makeBuilderMaker(=> builderName :DeepFrozen := mpatt`asdlBuilder`) as DeepFr
                         })
                     null
 
-            for f in (fs):
+            for f in (fs + attributeFields):
                 f.walk(fieldWalker)
 
             def printer := m`to _printOn(out) {
@@ -218,12 +205,39 @@ def makeBuilderMaker(=> builderName :DeepFrozen := mpatt`asdlBuilder`) as DeepFr
             def script := astBuilder.Script(null, [printer, runner, walker], [], null)
             def namePatt := astBuilder.FinalPattern(
                 astBuilder.NounExpr(name, null), null, null)
-            def body := astBuilder.ObjectExpr(null, namePatt, null, [],
+            def body := astBuilder.ObjectExpr(null, namePatt, conGuard, [],
                                               script, null)
             def rv := astBuilder."Method"(null, name, patts.last().snapshot(), [], null, body, null)
             methods.push(rv)
 
-def asdlBuilder :DeepFrozen := makeBuilderMaker()(ast)
+    return object builderMaker:
+        to run(tys):
+            for ty in (tys):
+                ty.walk(builderMaker)
+            def script := astBuilder.Script(null, methods.snapshot(), [], null)
+            def obj := astBuilder.ObjectExpr(null, builderName, m`DeepFrozen`,
+                                             [], script, null)
+            def ast := astBuilder.SeqExpr(gs.with(obj), null)
+            traceln(ast)
+            return eval(ast, safeScope)
+
+        to Sum(id, fields, con, cons):
+            # traceln(`Sum($id, $fields, $con, $cons)`)
+            def nameNoun := astBuilder.NounExpr(id, null)
+            def namePatt := astBuilder.FinalPattern(nameNoun, m`DeepFrozen`,
+                                                    null)
+            # To allow for self-referencing, we want to name the type before
+            # building each constructor.
+            traceln("pushing", id)
+            typeGuards[id] := nameNoun
+            for c in ([con] + cons):
+                c.walk(makeConWalker(nameNoun, fields))
+            gs.push(m`interface $namePatt {}`)
+
+        to Product(ty, f, fs):
+            products[ty] := [f] + fs
+
+def asdlBuilder :DeepFrozen := makeBuilderMaker(mpatt`asdlBuilder`)(ast)
 
 def asdlParser(builderName :DeepFrozen, s :Str, ej) :DeepFrozen as DeepFrozen:
     "Parse a string into an AST builder."
@@ -233,4 +247,4 @@ def asdlParser(builderName :DeepFrozen, s :Str, ej) :DeepFrozen as DeepFrozen:
     escape tailtest:
         def next := tail.next(tailtest)
         throw.eject(ej, `parser found junk at the end: $next`)
-    return makeBuilderMaker(=> builderName)(ast)
+    return makeBuilderMaker(builderName)(ast)
