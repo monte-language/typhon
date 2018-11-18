@@ -101,10 +101,10 @@ def bootParser(s :Str, ej) as DeepFrozen:
 
 # Figure 15
 def boot :Str := `
-    field = Id | Option | Sequence attributes (identifier, identifier?)
-    constructor = Con(identifier, field*)
     asdl_ty = Sum(identifier, field*, constructor, constructor*)
             | Product(identifier, field, field*)
+    constructor = Con(identifier, field*)
+    field = Id | Option | Sequence attributes (identifier, identifier?)
 `
 
 def [ast, tail] := bootParser(boot, null)
@@ -115,6 +115,18 @@ escape tailtest:
 # Traditional ASDL has three types: identifier, int, str
 def isPrimitive :DeepFrozen := ["bool", "df", "identifier", "int", "str"].contains
 def comma :DeepFrozen := m`out.print(", ")`
+
+def gatherTys(tys :List) as DeepFrozen:
+    def sumTys := [].diverge()
+    def prodTys := [].diverge()
+
+    for ty in (tys):
+        ty.walk(object tyGatherer {
+            to Product(ty, _f, _fs) { prodTys.push(ty) }
+            to Sum(id, _fields, _con, _cons) { sumTys.push(id) }
+        })
+
+    return [sumTys, prodTys]
 
 def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
     var count :Int := 0
@@ -131,7 +143,6 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
 
     def products := [].asMap().diverge()
     def methods := [].diverge()
-    def gs := [].diverge()
 
     def typeGuards := [
         "bool" => m`Bool`,
@@ -174,7 +185,6 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
                         def vs := astBuilder.ListExpr(visitors.pop().snapshot(), null)
                         visitors.last().push(vs)
                     else:
-                        traceln("available", typeGuards.getKeys())
                         def tyGuard := typeGuards[ty]
                         def g := fieldGuards[verb](tyGuard)
                         exprs.last().push(def n := nextNoun(ty, name))
@@ -210,32 +220,35 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
             def rv := astBuilder."Method"(null, name, patts.last().snapshot(), [], null, body, null)
             methods.push(rv)
 
-    return object builderMaker:
-        to run(tys):
-            for ty in (tys):
-                ty.walk(builderMaker)
-            def script := astBuilder.Script(null, methods.snapshot(), [], null)
-            def obj := astBuilder.ObjectExpr(null, builderName, m`DeepFrozen`,
-                                             [], script, null)
-            def ast := astBuilder.SeqExpr(gs.with(obj), null)
-            traceln(ast)
-            return eval(ast, safeScope)
+    return def builderMaker(tys):
+        # These statements will run before we define our builder.
+        def preamble := [].diverge()
 
-        to Sum(id, fields, con, cons):
-            # traceln(`Sum($id, $fields, $con, $cons)`)
-            def nameNoun := astBuilder.NounExpr(id, null)
-            def namePatt := astBuilder.FinalPattern(nameNoun, m`DeepFrozen`,
+        def [sumTys, prodTys] := gatherTys(tys)
+        for sumTy in (sumTys):
+            def sumGuard := astBuilder.NounExpr("_sum_type_" + sumTy, null)
+            def sumPatt := astBuilder.FinalPattern(sumGuard, m`DeepFrozen`,
                                                     null)
-            # To allow for self-referencing, we want to name the type before
-            # building each constructor.
-            traceln("pushing", id)
-            typeGuards[id] := nameNoun
-            for c in ([con] + cons):
-                c.walk(makeConWalker(nameNoun, fields))
-            gs.push(m`interface $namePatt {}`)
+            preamble.push(m`interface $sumPatt {}`)
+            typeGuards[sumTy] := sumGuard
+        for prodTy in (prodTys):
+            typeGuards[prodTy] := m`List`
 
-        to Product(ty, f, fs):
-            products[ty] := [f] + fs
+        for ty in (tys):
+            ty.walk(object tyWalker {
+                to Sum(id, fields, con, cons) {
+                    def nameNoun := typeGuards[id]
+                    def conWalker := makeConWalker(nameNoun, fields)
+                    for c in ([con] + cons) { c.walk(conWalker) }
+                }
+                to Product(ty, f, fs) { products[ty] := [f] + fs }
+            })
+        def script := astBuilder.Script(null, methods.snapshot(), [], null)
+        def obj := astBuilder.ObjectExpr(null, builderName, m`DeepFrozen`,
+                                         [], script, null)
+        def ast := astBuilder.SeqExpr(preamble.with(obj), null)
+        traceln(ast)
+        return eval(ast, safeScope)
 
 def asdlBuilder :DeepFrozen := makeBuilderMaker(mpatt`asdlBuilder`)(ast)
 
