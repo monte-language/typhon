@@ -1,5 +1,5 @@
 import "lib/asdl" =~ [=> asdlParser]
-exports (monteBuilder)
+exports (monteBuilder, rebuild, expand)
 
 def monteBuilder :DeepFrozen := asdlParser(mpatt`monteBuilder`, `
     expr = LiteralExpr(df value)
@@ -20,13 +20,13 @@ def monteBuilder :DeepFrozen := asdlParser(mpatt`monteBuilder`, `
          | BinaryExpr(expr left, str op, expr right)
          | CompareExpr(expr left, str op, expr right)
          | RangeExpr(expr left, str op, expr right)
-         | SameExpr(expr left, expr right, df direction)
+         | SameExpr(expr left, expr right, bool direction)
          | MatchBindExpr(expr specimen, pattern pattern)
          | MismatchExpr(expr specimen, pattern pattern)
          | ControlExpr(expr target, str operator, expr* args, pattern* params,
                        expr body, bool isTop)
          | PrefixExpr(str op, expr receiver)
-         | CoerceExpr(expr specimen, expr? guard)
+         | CoerceExpr(expr specimen, expr guard)
          | CurryExpr(expr receiver, str verb, bool isSend)
          | ExitExpr(str name, expr? value)
          | ForwardExpr(pattern pattern)
@@ -74,6 +74,7 @@ def monteBuilder :DeepFrozen := asdlParser(mpatt`monteBuilder`, `
             | MapPattern(mapPatternItem* patterns, pattern? tail)
             | ViaPattern(expr expr, pattern pattern)
             | SuchThatPattern(pattern pattern, expr expr)
+            | SamePattern(expr value, bool direction)
             | QuasiParserPattern(str? name, quasiPiece* quasis)
             | ValueHolePattern(int index)
             | PatternHolePattern(int index)
@@ -109,3 +110,66 @@ def monteBuilder :DeepFrozen := asdlParser(mpatt`monteBuilder`, `
                attributes (df span)
     import = (str name, pattern pattern)
 `, null)
+
+def rebuild(ast :DeepFrozen) as DeepFrozen:
+    def rebuilder(node, _maker, args, span):
+        def verb := node.getNodeName()
+        return M.call(monteBuilder, verb, args.with(span), [].asMap())
+    return ast.transform(rebuilder)
+
+def rangeOps :Map[Str, Str] := [
+    ".." => "thru",
+    "..!" => "till",
+]
+
+def mb :DeepFrozen := monteBuilder
+def expand(ast :DeepFrozen) as DeepFrozen:
+    def ex :DeepFrozen := expand
+    object expander as DeepFrozen:
+        to FunCallExpr(receiver, args, namedArgs, span):
+            return mb.MethodCallExpr(receiver, "run", args, namedArgs, span)
+
+        to SendExpr(receiver, verb, args, namedArgs, span):
+            def nas := mb.MapExpr([for na in (namedArgs) {
+                na(object _ {
+                    to NamedArg(k, v, span) {
+                        return mb.MapExprAssoc(k, v, span)
+                    }
+                    to NamedArgExport(v, span) {
+                        return mb.MapExprExport(v, span)
+                    }
+                })
+            }])
+            return mb.MethodCallExpr(ex(m`M`), "send",
+                                     [receiver, mb.LiteralExpr(verb, null),
+                                      mb.ListExpr(args, null), nas], [], span)
+
+        to FunSendExpr(receiver, args, namedArgs, span):
+            return mb.SendExpr(receiver, "run", args, namedArgs, span)
+
+        to GetExpr(receiver, indices, span):
+            return mb.MethodCallExpr(receiver, "get", indices, [], span)
+
+        to RangeExpr(start, op, stop, span):
+            def verb := "op__" + rangeOps[op]
+            return mb.MethodCallExpr(ex(m`_makeOrderedSpace`), verb,
+                                     [start, stop], [], span)
+
+        to SameExpr(lhs, rhs, isSame, span):
+            def expr := mb.MethodCallExpr(ex(m`_equalizer`), "sameEver",
+                                          [lhs, rhs], [], span)
+            return if (isSame) { expr } else {
+                mb.MethodCallExpr(expr, "not", [], [], span)
+            }
+
+        to CoerceExpr(specimen, guard, span):
+            return mb.MethodCallExpr(guard, "coerce",
+                                     [specimen, ex(m`throw`)], [], span)
+
+        to ListExpr(exprs, span):
+            return mb.MethodCallExpr(ex(m`_makeList`), "run", exprs, [], span)
+
+        # Kernel-Monte is handled here.
+        match [verb, args, _]:
+            M.call(monteBuilder, verb, args, [].asMap())
+    return rebuild(ast)(expander)

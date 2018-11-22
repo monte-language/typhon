@@ -247,7 +247,6 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
         def obj := astBuilder.ObjectExpr(null, builderName, m`DeepFrozen`,
                                          [], script, null)
         def ast := astBuilder.SeqExpr(preamble.with(obj), null)
-        traceln(ast)
         return eval(ast, safeScope)
 
 def asdlBuilder :DeepFrozen := makeBuilderMaker(mpatt`asdlBuilder`)(ast)
