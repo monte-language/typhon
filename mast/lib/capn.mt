@@ -268,12 +268,22 @@ def makeMessageWriter() as DeepFrozen:
             for j in (0..!4):
                 buf[i + j] := shift(n, j * 8, 4)
 
+        to writeUint16(i, n):
+            buf[i] := shift(n, 0, 2)
+            buf[i + 1] := shift(n, 8, 2)
+
         # XXX extremely lazy/wasteful way to implement signed packing
         to writeInt64(i, n):
             messageWriter.writeUint64(i, if (n < 0) { 2*64 + n - 1 } else { n })
 
         to writeInt32(i, n):
             messageWriter.writeUint32(i, if (n < 0) { 2*32 + n - 1 } else { n })
+
+        to writeInt16(i, n):
+            messageWriter.writeUint16(i, if (n < 0) { 2*16 + n - 1 } else { n })
+
+        to writeEnum(i, e):
+            messageWriter.writeUint16(i, e.asInteger())
 
         to makeStructPointer(pos ? (pos % 8 == 0), dataSize, ptrSize):
             return def structPointer.writePointer(offset):

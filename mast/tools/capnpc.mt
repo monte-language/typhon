@@ -52,7 +52,7 @@ def getWord(offset :Int, width :Int, => signed :Bool := false) as DeepFrozen:
         def mask := L(2 ** width - 1)
         expr := m`$expr & $mask`
     if (signed):
-        expr := m`$expr - ${L(2 ** width)} & -${L(2 ** width)}`
+        expr := m`$expr - ${L(2 ** width)} & ${L(2 ** width - 1)}`
     return expr
 
 def getPointer(offset :Int) as DeepFrozen:
@@ -115,7 +115,10 @@ def buildStructReader(nodeMap, node ? (node._which() == 1), groups) as DeepFroze
                         m`[for r in (${getPointer(offset)}) $innerExpr]`
                     }
                     # XXX enums?
-                    match ==15 { m`null` }
+                    match ==15 {
+                            def n := L(shortName(nodeMap[type.enum().typeId()]))
+                            m`enums[$n].getValues()[${getWord(offset, 16)}]`
+                    }
                     match ==16 {
                         def n := shortName(nodeMap[type.struct().typeId()])
                         astBuilder.MethodCallExpr(m`reader`, n,
@@ -168,7 +171,7 @@ def slotSize(node, slot) as DeepFrozen:
         match ==9 { 8 } # uint64
         match ==10 { 4 } # float32
         match ==11 { 8 } # float64
-        match ==15 { 4 } # enum
+        match ==15 { 2 } # enum
         # text, data, list, struct, anyPointer
         match w ? ([12, 13, 14, 16, 18].contains(w)) { 8 + node.struct().dataWordCount() }
         match w { throw(`unknown type $w`) }
@@ -211,7 +214,7 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
                                9 => "Uint64",
                                10 => "Float32",
                                11 => "Float64",
-                               15 => "Int16" ]
+                               15 => "Enum" ]
             def verb := "write" + typenames0[slot.type()._which()]
             writeExpr := m`builder.$verb(pos + $offsetL, $arg)`
         match ==12:
@@ -301,13 +304,24 @@ def bootstrap(bs :Bytes) as DeepFrozen:
         astBuilder.Script(null, writerMethods.with(m`method dump(root) { builder.dumps(root) }`) , [], null),
         null)
     def makeWriterObj := m`def makeWriter() as DeepFrozen { def builder := makeMessageWriter(); return $writerObj }`
+    def mapEnum(node):
+        def ens := [for en in (node.enum().enumerants())
+                    [en.codeOrder(), L(en.name())]].sort()
+        return m`makeEnum.asMap(${astBuilder.ListExpr([for [_, n] in (ens) n], null)})`
+    def enums := astBuilder.MapExpr(
+        [for node in (nodeMap) ? (node._which() == 2)
+            astBuilder.MapExprAssoc(L(shortName(node)), mapEnum(node), null)],
+        null)
+
     def module := m`object _ as DeepFrozen {
-        method dependencies() :List[Str] { ["lib/capn"] }
+        method dependencies() :List[Str] { ["lib/capn", "lib/enum"] }
         method run(package) :Map[Str, DeepFrozen] {
             def [=> makeMessageWriter :DeepFrozen, => text :DeepFrozen] | _ := package."import"("lib/capn")
+            def [=> makeEnum :DeepFrozen ] | _ := package."import"("lib/enum")
+            def enums :DeepFrozen := $enums
             $readerObj
             $makeWriterObj
-            [=> reader, => makeWriter]
+            [=> enums, => reader, => makeWriter]
         }
     }`
     return module
