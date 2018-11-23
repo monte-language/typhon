@@ -174,7 +174,7 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
             Zero pointers are represented as None.
             "
             def i := message.getSegmentWord(segment, offset)
-            # traceln(`message.interpretPointer($segment, $offset) ${formatWord(i)}`)
+            # traceln(`message.interpretPointer($segment, $offset)@@${segmentPositions[segment] + offset} ${formatWord(i)}`)
             if (i == 0x0):
                 return null
             return switch (i & 0x3):
@@ -241,12 +241,12 @@ def makeMessageWriter() as DeepFrozen:
             buf.extend([0] * n)
             return pos
 
-        to allocText(pos, s, => trailingZero := 1):
+        to allocText(pos, s, => trailingZero := true):
             if (s == null):
                 messageWriter.writeInt64(pos, 0)
                 return -1
             def via (UTF8.encode) bs := s
-            def nn := bs.size() + trailingZero
+            def nn := bs.size() + trailingZero.pick(1, 0)
             def result := messageWriter.allocList(pos, LIST_SIZE_8, nn, nn)
             for i => b in (bs):
                 buf[result + i] := b
@@ -254,7 +254,7 @@ def makeMessageWriter() as DeepFrozen:
 
         to allocList(pos, sizeTag, count, length):
             def result := messageWriter.allocate(roundToWord(length))
-            def offset := result - pos + 8
+            def offset := (result - pos - 8) // 8
             def p := (count << 35 | (sizeTag << 32 & 0x700000000) |
                       (offset << 2 & 0xfffffffc) | LIST)
             messageWriter.writeInt64(pos, p)
@@ -272,6 +272,9 @@ def makeMessageWriter() as DeepFrozen:
             buf[i] := shift(n, 0, 2)
             buf[i + 1] := shift(n, 8, 2)
 
+        to writeUint8(i, n):
+            buf[i] := shift(n, 0, 2)
+
         # XXX extremely lazy/wasteful way to implement signed packing
         to writeInt64(i, n):
             messageWriter.writeUint64(i, if (n < 0) { 2*64 + n - 1 } else { n })
@@ -281,6 +284,9 @@ def makeMessageWriter() as DeepFrozen:
 
         to writeInt16(i, n):
             messageWriter.writeUint16(i, if (n < 0) { 2*16 + n - 1 } else { n })
+
+        to writeInt8(i, n):
+            messageWriter.writeUint8(i, if (n < 0) { 2*8 + n - 1 } else { n })
 
         to writeEnum(i, e):
             messageWriter.writeUint16(i, e.asInteger())

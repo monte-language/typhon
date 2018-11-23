@@ -157,8 +157,14 @@ def buildStructReader(nodeMap, node ? (node._which() == 1), groups) as DeepFroze
     }`
 
 def noDiscriminant :Int := 65535
-def slotSize(node, slot) as DeepFrozen:
-    return switch (slot.type()._which()) {
+
+def slotOffset(node, slot) as DeepFrozen:
+    def w := slot.type()._which()
+    # pointer type
+    if ([12, 13, 14, 16, 18].contains(w)) {
+        return slot.offset() * 8 + node.struct().dataWordCount() * 8
+    }
+    def size := switch (w) {
         match ==0 { 0 } # void
         match ==1 { 0 } # bool (just 1 bit)
         match ==2 { 1 } # int8
@@ -172,10 +178,8 @@ def slotSize(node, slot) as DeepFrozen:
         match ==10 { 4 } # float32
         match ==11 { 8 } # float64
         match ==15 { 2 } # enum
-        # text, data, list, struct, anyPointer
-        match w ? ([12, 13, 14, 16, 18].contains(w)) { 8 + node.struct().dataWordCount() }
-        match w { throw(`unknown type $w`) }
-    }
+        match _ { throw(`unknown type $w`) }    }
+    return slot.offset() * size
 
 
 def runtimeName(nodeMap, node) as DeepFrozen:
@@ -191,7 +195,7 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
         return astBuilder.SeqExpr([m`def $argNames := ${N(f.name())}`] + [for subf in (groupNode.struct().fields()) fieldWriter(nodeMap, groupGroups, groupNode, subf)], null)
     var writeExpr := m`null`
     def slot := f.slot()
-    def offset := slot.offset() * slotSize(node, slot)
+    def offset := slotOffset(node, slot)
     def offsetL := L(offset)
     def fname := N(f.name())
     switch (slot.type()._which()):
@@ -249,14 +253,18 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
     else:
         return writeExpr
 
+def isVoidSlot(f) as DeepFrozen:
+    return f._which() == 0 && f.slot().type()._which() == 0
+
 def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
     def struct := node.struct()
     def fields := struct.fields()
     def dataSize := struct.dataWordCount()
     def ptrSize := struct.pointerCount()
     def sig := [for f in (fields)
-                astBuilder.FinalPattern(astBuilder.NounExpr(f.name(), null),
-                                        null, null)]
+                astBuilder.FinalPattern(
+                    astBuilder.NounExpr(f.name(), null),
+                    if (isVoidSlot(f)) { m`Void` } else { null }, null)]
     def unions := [for u in (fields)
                    ? (u._which() == 1 &&
                       nodeMap[u.group().typeId()].struct().discriminantCount() > 0)
