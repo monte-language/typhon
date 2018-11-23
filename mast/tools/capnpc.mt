@@ -101,7 +101,7 @@ def buildStructReader(nodeMap, node ? (node._which() == 1), groups) as DeepFroze
                     match ==11 { m`null` }
                     match ==12 { m`text(${getPointer(offset)})` }
                     # XXX data?
-                    match ==13 { m`null` }
+                    match ==13 { m`_makeBytes.fromInts(_makeList.fromIterable(${getPointer(offset)}))` }
                     match ==14 {
                         def innerType := type.list().elementType()
                         def innerExpr := switch (innerType._which()) {
@@ -226,7 +226,7 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
             writeExpr := m`builder.allocText(pos + $offsetL, $fname)`
         match ==13:
             # data
-            writeExpr := m`builder.allocData(pos + $offsetL, $fname)`
+            writeExpr := m`builder.allocData(pos + $offsetL, $fname, "trailing_zero" => false)`
         match ==14:
             # list
             def type := slot.type().list().elementType()

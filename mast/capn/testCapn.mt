@@ -9,8 +9,8 @@ exports (main)
 def [=> makeMessageReader :DeepFrozen] | _ := capn
 
 def formatWords(bs) as DeepFrozen:
-    return object _ { to _printOn(out) {
-    out.print("\n".join([for i in (0..!(bs.size() // 8)) M.toString(bs.slice(i*8, i*8 + 8))])) } }
+    return def words._printOn(out) {
+    out.print("\n".join([for i in (0..!(bs.size() // 8)) M.toString(bs.slice(i*8, i*8 + 8))])) }
 
 def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio, => unsealException, => Timer) as DeepFrozen:
     def [ (b`CAPNPC`) => CAPNPC ] | _ := currentProcess.getEnvironment()
@@ -184,8 +184,33 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             def root := makeMessageReader(bs).getRoot()
             def p := reader.Point(root)
             assert.equal(p.x(), 1)
-            traceln("text ptr")
             assert.equal(p.y(), "hello capnp")
+
+    def testData(assert):
+        def schema := "
+            @0xe62e66ea90a396da;
+            struct Point {
+                x @0 :Int64;
+                y @1 :Data;
+            }"
+        return when (def m := compile(schema, "data")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makePoint(1, b`hello capnp`)
+            def bs := writer.dump(pt)
+            assert.equal(
+                _makeList.fromIterable(bs),
+                _makeList.fromIterable(
+                    b`$\x00$\x00$\x00$\x00$\x05$\x00$\x00$\x00` +
+                    b`$\x00$\x00$\x00$\x00$\x01$\x00$\x01$\x00` +
+                    b`$\x01$\x00$\x00$\x00$\x00$\x00$\x00$\x00` +
+                    b`$\x01$\x00$\x00$\x00$\x5a$\x00$\x00$\x00` +
+                    b`hello ca` +
+                    b`pnp$\x00$\x00$\x00$\x00$\x00`))
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Point(root)
+            assert.equal(p.x(), 1)
+            assert.equal(p.y(), b`hello capnp`)
 
     def stdout := stdio.stdout()
     def runner := makeRunner(stdout, unsealException, Timer)
@@ -195,6 +220,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             ["testOrder", testOrder],
             ["testVoid", testVoid],
             ["testText", testText],
+            ["testData", testData],
         ])) -> {
             def fails :Int := t.fails()
             stdout(b`${M.toString(t.total())} tests run, `)

@@ -241,11 +241,17 @@ def makeMessageWriter() as DeepFrozen:
             buf.extend([0] * n)
             return pos
 
-        to allocText(pos, s, => trailingZero := true):
+        to allocText(pos, s :NullOk[Str]):
             if (s == null):
                 messageWriter.writeInt64(pos, 0)
                 return -1
             def via (UTF8.encode) bs := s
+            return messageWriter.allocData(pos, bs, "trailingZero" => true)
+
+        to allocData(pos, bs :NullOk[Bytes], => trailingZero := false):
+            if (bs == null):
+                messageWriter.writeInt64(pos, 0)
+                return -1
             def nn := bs.size() + trailingZero.pick(1, 0)
             def result := messageWriter.allocList(pos, LIST_SIZE_8, nn, nn)
             for i => b in (bs):
