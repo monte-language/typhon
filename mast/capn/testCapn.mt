@@ -212,6 +212,35 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             assert.equal(p.x(), 1)
             assert.equal(p.y(), b`hello capnp`)
 
+    def testStruct(assert):
+        def schema := "
+            @0xbf5147cbbecf40c1;
+            struct Point {
+                x @0 :Int64;
+                y @1 :Int64;
+            }
+            struct Foo {
+                x @0 :Point;
+            }"
+        return when (def m := compile(schema, "struct")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makeFoo(writer.makePoint(3, 4))
+            def bs := writer.dump(pt)
+            # assert.equal(
+            #     _makeList.fromIterable(bs),
+            #     [0, 0, 0, 0,
+            #      4, 0, 0, 0,
+            #      0, 2, 0, 0, 0, 0, 1, 0,
+            #      3, 0, 0, 0, 0, 0, 0, 0,
+            #      4, 0, 0, 0, 0, 0, 0, 0,
+            #      0, 0, 0, 0, 2, 0, 0, 0,
+            #     ])
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Foo(root).x()
+            assert.equal(p.x(), 3)
+            assert.equal(p.y(), 4)
+
     def stdout := stdio.stdout()
     def runner := makeRunner(stdout, unsealException, Timer)
     return when (def t := runner.runTests([
@@ -221,6 +250,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             ["testVoid", testVoid],
             ["testText", testText],
             ["testData", testData],
+            ["testStruct", testStruct],
         ])) -> {
             def fails :Int := t.fails()
             stdout(b`${M.toString(t.total())} tests run, `)

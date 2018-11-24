@@ -173,13 +173,16 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
 
             Zero pointers are represented as None.
             "
-            def i := message.getSegmentWord(segment, offset)
+            def i :Int := message.getSegmentWord(segment, offset)
             # traceln(`message.interpretPointer($segment, $offset)@@${segmentPositions[segment] + offset} ${formatWord(i)}`)
             if (i == 0x0):
                 return null
             return switch (i & 0x3):
                 match ==0x0:
-                    def structOffset :Int := 1 + offset + shift(i, 2, 30)
+                    var offsetVal := shift(i, 2, 30)
+                    if (offsetVal > (2 ** 15 - 1)):
+                        offsetVal := offsetVal - 2**30
+                    def structOffset :Int := 1 + offset + offsetVal
                     def dataSize :Int := shift(i, 32, 16)
                     def pointerCount :Int := shift(i, 48, 16)
                     makeStructPointer(message, segment, structOffset,
@@ -213,7 +216,7 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
                     else:
                         message.interpretPointer(targetSegment, targetOffset)
                 match ==0x3 ? (shift(i, 2, 30) == 0x0):
-                    object capPointer:
+                    object capPointer implements DeepFrozen:
                         to _printOn(out):
                             out.print(`<cap $i>`)
                         to type() :Str:
@@ -299,13 +302,11 @@ def makeMessageWriter() as DeepFrozen:
 
         to makeStructPointer(pos ? (pos % 8 == 0), dataSize, ptrSize):
             return def structPointer.writePointer(offset):
-                # end of pointer, in words
-                def wordOffset := (offset // 8)
-                # start of data section, in words
-                def wordPos := pos // 8
-                def p := (ptrSize << 48 |
-                          dataSize << 32 & 0xffff00000000 |
-                          (wordPos - wordOffset) << 2 & 0xfffffffc)
+                def totalOffset := (pos - offset - 8) // 8
+                def p := ((ptrSize << 48) |
+                          (dataSize << 32 & 0xffff00000000) |
+                          (totalOffset << 2 & 0xfffffffc) |
+                          STRUCT)
                 messageWriter.writeInt64(offset, p)
 
         to dumps(obj) :Bytes:

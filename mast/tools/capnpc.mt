@@ -203,7 +203,7 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
             null
         match ==1:
             # bool
-            def arg := if (slot.hadExplicitDefault()) { m`${N(f.name())} ^ ${L(extractValue(slot.defaultValue()))}` } else { m`${astBuilder.NounExpr(f.name(), null)}`}
+            def arg := if (slot.hadExplicitDefault()) { m`$fname ^ ${L(extractValue(slot.defaultValue()))}` } else { m`${astBuilder.NounExpr(f.name(), null)}`}
             writeExpr := m`builder.writeBool(${L(slot.offset() // 8)}, ${L(slot.offset() % 8)}, $arg)`
         match _ :(2..11 | 15..15):
             # enum, primitive
@@ -235,7 +235,7 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
         match ==16:
             # struct
             def structName := runtimeName(nodeMap, nodeMap[slot.type().struct().typeId()])
-            writeExpr := m`builder.copyFromStruct(pos + $offsetL, ${L(structName)}, $fname)`
+            writeExpr := m`$fname.writePointer(pos + $offsetL)`
         match ==18:
             writeExpr := m`null`
         match unknownType:
