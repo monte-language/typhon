@@ -227,19 +227,120 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             def writer := makeWriter()
             def pt := writer.makeFoo(writer.makePoint(3, 4))
             def bs := writer.dump(pt)
-            # assert.equal(
-            #     _makeList.fromIterable(bs),
-            #     [0, 0, 0, 0,
-            #      4, 0, 0, 0,
-            #      0, 2, 0, 0, 0, 0, 1, 0,
-            #      3, 0, 0, 0, 0, 0, 0, 0,
-            #      4, 0, 0, 0, 0, 0, 0, 0,
-            #      0, 0, 0, 0, 2, 0, 0, 0,
-            #     ])
+            assert.equal(
+                _makeList.fromIterable(bs),
+                [0, 0, 0, 0,
+                 4, 0, 0, 0,
+                 8, 0, 0, 0, 0, 0, 1, 0,
+                 3, 0, 0, 0, 0, 0, 0, 0,
+                 4, 0, 0, 0, 0, 0, 0, 0,
+                 0xf4, 0xff, 0xff, 0xff, 2, 0, 0, 0,
+                ])
             def root := makeMessageReader(bs).getRoot()
             def p := reader.Foo(root).x()
             assert.equal(p.x(), 3)
             assert.equal(p.y(), 4)
+
+    def testList(assert):
+        def schema := "
+            @0xbf5147cbbecf40c1;
+            struct Foo {
+                x @0 :List(Int8);
+            }"
+        return when (def m := compile(schema, "list")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makeFoo([1, 2, 3, 4])
+            def bs := writer.dump(pt)
+            assert.equal(
+                _makeList.fromIterable(bs),
+                [0, 0, 0, 0,
+                 3, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 1, 0,
+                 1, 0, 0, 0, 0x22, 0, 0, 0,
+                 1, 2, 3, 4, 0, 0, 0, 0,
+                ])
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Foo(root)
+            assert.equal(p.x(), [1, 2, 3, 4])
+
+    def testListOfVoid(assert):
+        def schema := "
+            @0xbf5147cbbecf40c1;
+            struct Foo {
+                x @0 :List(Void);
+            }"
+        return when (def m := compile(schema, "list_void")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makeFoo([null, null, null, null])
+            def bs := writer.dump(pt)
+            assert.equal(
+                _makeList.fromIterable(bs),
+                [0, 0, 0, 0,
+                 2, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 1, 0,
+                 1, 0, 0, 0, 0x20, 0, 0, 0,
+                ])
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Foo(root)
+            assert.equal(p.x(), [null, null, null, null])
+
+    def testListOfText(assert):
+        def schema := "
+            @0xbf5147cbbecf40c1;
+            struct Foo {
+                x @0 :List(Text);
+            }"
+        return when (def m := compile(schema, "list_text")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makeFoo(["foo", "bar", "baz"])
+            def bs := writer.dump(pt)
+            assert.equal(
+                _makeList.fromIterable(bs),
+                [0, 0, 0, 0,
+                 8, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 1, 0,
+                 1, 0, 0, 0, 0x1e, 0, 0, 0,
+                 9, 0, 0, 0, 0x22, 0, 0, 0,
+                 9, 0, 0, 0, 0x22, 0, 0, 0,
+                 9, 0, 0, 0, 0x22, 0, 0, 0,
+                 0x66, 0x6f, 0x6f, 0, 0, 0, 0, 0, # foo
+                 0x62, 0x61, 0x72, 0, 0, 0, 0, 0, # bar
+                 0x62, 0x61, 0x7a, 0, 0, 0, 0, 0, # baz
+                ])
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Foo(root)
+            assert.equal(p.x(), ["foo", "bar", "baz"])
+
+    def testListOfData(assert):
+        def schema := "
+            @0xbf5147cbbecf40c1;
+            struct Foo {
+                x @0 :List(Data);
+            }"
+        return when (def m := compile(schema, "list_data")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makeFoo([b`foo`, b`bar`, b`baz`])
+            def bs := writer.dump(pt)
+            assert.equal(
+                _makeList.fromIterable(bs),
+                [0, 0, 0, 0,
+                 8, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 1, 0,
+                 1, 0, 0, 0, 0x1e, 0, 0, 0,
+                 9, 0, 0, 0, 0x1a, 0, 0, 0,
+                 9, 0, 0, 0, 0x1a, 0, 0, 0,
+                 9, 0, 0, 0, 0x1a, 0, 0, 0,
+                 0x66, 0x6f, 0x6f, 0, 0, 0, 0, 0, # foo
+                 0x62, 0x61, 0x72, 0, 0, 0, 0, 0, # bar
+                 0x62, 0x61, 0x7a, 0, 0, 0, 0, 0, # baz
+                ])
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Foo(root)
+            assert.equal(p.x(), [b`foo`, b`bar`, b`baz`])
 
     def stdout := stdio.stdout()
     def runner := makeRunner(stdout, unsealException, Timer)
@@ -251,6 +352,10 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             ["testText", testText],
             ["testData", testData],
             ["testStruct", testStruct],
+            ["testList", testList],
+            ["testListOfVoid", testListOfVoid],
+            ["testListOfText", testListOfText],
+            ["testListOfData", testListOfData],
         ])) -> {
             def fails :Int := t.fails()
             stdout(b`${M.toString(t.total())} tests run, `)

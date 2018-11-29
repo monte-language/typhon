@@ -27,6 +27,53 @@ def typenames :Map[Int, Str]:= [
     18 => "anyPointer",
 ]
 
+def LIST_SIZE_VOID :Int := 0
+def LIST_SIZE_BIT :Int := 1
+def LIST_SIZE_8 :Int := 2
+def LIST_SIZE_16 :Int := 3
+def LIST_SIZE_32 :Int := 4
+def LIST_SIZE_64 :Int := 5
+def LIST_SIZE_PTR :Int := 6
+def LIST_SIZE_COMPOSITE :Int := 7
+
+def sizeTags :Map[Str, Int] := [
+    "void" => LIST_SIZE_VOID,
+    "bool" => LIST_SIZE_BIT,
+    "int8" => LIST_SIZE_8,
+    "int16" => LIST_SIZE_16,
+    "int32" => LIST_SIZE_32,
+    "int64" => LIST_SIZE_64,
+    "uint8" => LIST_SIZE_8,
+    "uint16" => LIST_SIZE_16,
+    "uint32" => LIST_SIZE_32,
+    "uint64" => LIST_SIZE_64,
+    "float32" => LIST_SIZE_32,
+    "float64" => LIST_SIZE_64,
+    "enum" => LIST_SIZE_16,
+    "text" => LIST_SIZE_PTR,
+    "data" => LIST_SIZE_PTR,
+    "list" => LIST_SIZE_PTR,
+    "struct" => LIST_SIZE_COMPOSITE,
+    "interface" => LIST_SIZE_PTR,
+    "anyPointer" => LIST_SIZE_PTR,
+]
+
+def typeSize :Map[Int, Int] := [
+    0 => 0, # void
+    1 => 0, # bool (just 1 bit)
+    2 => 1, # int8
+    3 => 2, # int16
+    4 => 4, # int32
+    5 => 8, # int64
+    6 => 1, # uint8
+    7 => 2, # uint16
+    8 => 4, # uint32
+    9 => 8, # uint64
+    10 => 4, # float32
+    11 => 8, # float64
+    15 => 2, # enum
+]
+
 def L(value) as DeepFrozen:
     switch (value):
         match ==true:
@@ -111,10 +158,18 @@ def buildStructReader(nodeMap, node ? (node._which() == 1), groups) as DeepFroze
                                                           [m`r`], [],
                                                           null)
                             }
+                            match ==12 {
+                                m`text(r)`
+                            }
+                            match ==13 {
+                                m`_makeBytes.fromInts(_makeList.fromIterable(r))`
+                            }
+                            match _ {
+                                m`r`
+                            }
                         }
                         m`[for r in (${getPointer(offset)}) $innerExpr]`
                     }
-                    # XXX enums?
                     match ==15 {
                             def n := L(shortName(nodeMap[type.enum().typeId()]))
                             m`enums[$n].getValues()[${getWord(offset, 16)}]`
@@ -164,21 +219,7 @@ def slotOffset(node, slot) as DeepFrozen:
     if ([12, 13, 14, 16, 18].contains(w)) {
         return slot.offset() * 8 + node.struct().dataWordCount() * 8
     }
-    def size := switch (w) {
-        match ==0 { 0 } # void
-        match ==1 { 0 } # bool (just 1 bit)
-        match ==2 { 1 } # int8
-        match ==3 { 2 } # int16
-        match ==4 { 4 } # int32
-        match ==5 { 8 } # int64
-        match ==6 { 1 } # uint8
-        match ==7 { 2 } # uint16
-        match ==8 { 4 } # uint32
-        match ==9 { 8 } # uint64
-        match ==10 { 4 } # float32
-        match ==11 { 8 } # float64
-        match ==15 { 2 } # enum
-        match _ { throw(`unknown type $w`) }    }
+    def size := typeSize[w]
     return slot.offset() * size
 
 
@@ -197,7 +238,19 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
     def slot := f.slot()
     def offset := slotOffset(node, slot)
     def offsetL := L(offset)
-    def fname := N(f.name())
+    def fname := N("f_" + f.name())
+    def typenames0 := [ 1 => "Bool",
+                        2 => "Int8",
+                       3 => "Int16",
+                       4 => "Int32",
+                       5 => "Int64",
+                       6 => "Uint8",
+                       7 => "Uint16",
+                       8 => "Uint32",
+                       9 => "Uint64",
+                       10 => "Float32",
+                       11 => "Float64",
+                       15 => "Enum" ]
     switch (slot.type()._which()):
         match ==0:
             null
@@ -208,17 +261,6 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
         match _ :(2..11 | 15..15):
             # enum, primitive
             def arg := if (slot.hadExplicitDefault()) { m`$fname ^ ${L(extractValue(slot.defaultValue()))}` } else { fname }
-            def typenames0 := [ 2 => "Int8",
-                               3 => "Int16",
-                               4 => "Int32",
-                               5 => "Int64",
-                               6 => "Uint8",
-                               7 => "Uint16",
-                               8 => "Uint32",
-                               9 => "Uint64",
-                               10 => "Float32",
-                               11 => "Float64",
-                               15 => "Enum" ]
             def verb := "write" + typenames0[slot.type()._which()]
             writeExpr := m`builder.$verb(pos + $offsetL, $arg)`
         match ==12:
@@ -230,8 +272,59 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
         match ==14:
             # list
             def type := slot.type().list().elementType()
-            # XXX write actual type info
-            writeExpr := m`builder.copyFromList(pos + $offsetL, ${L(type._which())}, $fname)`
+            def sizeTag := L(sizeTags[typenames[type._which()]])
+            switch (type._which()):
+                match ==16:
+                    def innerStruct := nodeMap[type.struct().typeId()].struct()
+                    def structSize := L(innerStruct.dataWordCount() +
+                                        innerStruct.pointerCount())
+                    # consider using preferredListEncoding
+                    writeExpr := m`{
+                        def listPos := builder.allocList(
+                            pos + $offsetL, $sizeTag,
+                            $structSize * $fname.size(),
+                            ($structSize * $fname.size() + 1) * 8)
+                        builder.writeStructList(listPos, $fname)
+                    }`
+                match ==12:
+                    writeExpr := m`{
+                        def listPos := builder.allocList(
+                            pos, $sizeTag, $fname.size(),
+                            $fname.size() * 8)
+                        for _i => _item in ($fname) {
+                            builder.allocText(listPos + (_i * 8), _item)
+                        }
+                    }`
+                match ==13:
+                    writeExpr := m`{
+                        def listPos := builder.allocList(
+                            pos, $sizeTag, $fname.size(),
+                            $fname.size() * 8)
+                        for _i => _item in ($fname) {
+                            builder.allocData(listPos + (_i * 8), _item)
+                        }
+                    }`
+                match ==1:
+                    writeExpr := m`{
+                        def listPos := builder.allocList(pos, $sizeTag, $fname.size(),
+                                                         -$fname.size())
+                        for _i => _item in ($fname) {
+                            builder.writeBool(listPos + (_i // 8), _i % 8, _item)
+                        }
+                    }`
+                match ==0:
+                    writeExpr := m`def listPos := builder.allocList(pos, $sizeTag, $fname.size(), 0)`
+                match t:
+                    def verb := "write" + typenames0[t]
+                    def width := L(typeSize[t])
+                    def totalSize := m`$fname.size() * $width`
+                    writeExpr := m`{
+                        def listPos := builder.allocList(pos, $sizeTag, $fname.size(),
+                                                         $totalSize)
+                        for _i => _item in ($fname) {
+                            builder.$verb(listPos + (_i * $width), _item)
+                        }
+                    }`
         match ==16:
             # struct
             def structName := runtimeName(nodeMap, nodeMap[slot.type().struct().typeId()])
@@ -253,8 +346,33 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
     else:
         return writeExpr
 
-def isVoidSlot(f) as DeepFrozen:
-    return f._which() == 0 && f.slot().type()._which() == 0
+def getCapnTypeGuard(t) as DeepFrozen:
+    return switch (t._which()):
+        match ==0:
+            m`Void`
+        match ==1:
+            m`Bool`
+        match ==12:
+            m`Str`
+        match ==13:
+            m`Bytes`
+        match ==14:
+            if ((def lt := getCapnTypeGuard(t.list().elementType())) != null):
+                m`List[$lt]`
+            else:
+                m`List` 
+
+        match _ :(2..9):
+            m`Int`
+        match _ :(10..11):
+            m`Double`
+        match _:
+            null
+
+def getFieldGuard(f) as DeepFrozen:
+    if (f._which() == 0):
+        return getCapnTypeGuard(f.slot().type())
+    return null
 
 def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
     def struct := node.struct()
@@ -263,8 +381,8 @@ def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
     def ptrSize := struct.pointerCount()
     def sig := [for f in (fields)
                 astBuilder.FinalPattern(
-                    astBuilder.NounExpr(f.name(), null),
-                    if (isVoidSlot(f)) { m`Void` } else { null }, null)]
+                    astBuilder.NounExpr("f_" + f.name(), null),
+                    getFieldGuard(f), null)]
     def unions := [for u in (fields)
                    ? (u._which() == 1 &&
                       nodeMap[u.group().typeId()].struct().discriminantCount() > 0)

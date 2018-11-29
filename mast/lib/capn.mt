@@ -5,14 +5,9 @@ exports (makeMessageReader, makeMessageWriter, loads, text, undefined)
 def STRUCT :Int := 0
 def LIST :Int := 1
 def FAR :Int := 2
-def LIST_SIZE_VOID :Int := 0
-def LIST_SIZE_BIT :Int := 1
+
 def LIST_SIZE_8 :Int := 2
-def LIST_SIZE_16 :Int := 3
-def LIST_SIZE_32 :Int := 4
-def LIST_SIZE_64 :Int := 5
-def LIST_SIZE_PTR :Int := 6
-def LIST_SIZE_COMPOSITE :Int := 7
+
 
 def text(pointer) as DeepFrozen:
     return if (pointer == null):
@@ -48,7 +43,11 @@ def makeStructPointer(message :DeepFrozen, segment :Int, offset :Int,
             return [for i in (0..!pointerSize) structPointer.getPointer(i)]
 
 def storages :DeepFrozen := [
-    null,
+    object void as DeepFrozen {
+        to _printOn(out) { out.print("void") }
+        to signature() { return "void" }
+        to get(_, _, _, _) { return null }
+    },
     null,
     object uint8 as DeepFrozen {
         to _printOn(out) { out.print(`uint8`) }
@@ -62,7 +61,13 @@ def storages :DeepFrozen := [
     null,
     null,
     null,
-    null,
+    object pointerStorage as DeepFrozen {
+        to _printOn(out) { out.print(`pointer`) }
+        to signature() { return "pointer" }
+        to get(message, segment :Int, offset :Int, index :Int) {
+            return message.interpretPointer(segment, offset + index)
+        }
+    },
 ]
 
 def makeCompositeStorage :DeepFrozen := {
@@ -88,7 +93,7 @@ def makeCompositeStorage :DeepFrozen := {
 
 def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
                     storage :DeepFrozen) as DeepFrozen:
-    return object listPointer as DeepFrozen:
+    object listPointer as DeepFrozen:
         to _printOn(out):
             out.print(`<list of $storage @@$segment+$offset x$size>`)
 
@@ -111,7 +116,7 @@ def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
 
         to size() :Int:
             return size
-
+    return listPointer
 def formatWord(word :Int) as DeepFrozen:
     # LSB 0 1 ... 63 64 MSB
     def bits := [].diverge()
@@ -181,7 +186,7 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
                 match ==0x0:
                     var offsetVal := shift(i, 2, 30)
                     if (offsetVal > (2 ** 15 - 1)):
-                        offsetVal := offsetVal - 2**30
+                        offsetVal := offsetVal - 2 ** 30
                     def structOffset :Int := 1 + offset + offsetVal
                     def dataSize :Int := shift(i, 32, 16)
                     def pointerCount :Int := shift(i, 48, 16)
@@ -275,14 +280,14 @@ def makeMessageWriter() as DeepFrozen:
 
         to writeUint32(i, n):
             for j in (0..!4):
-                buf[i + j] := shift(n, j * 8, 4)
+                buf[i + j] := shift(n, j * 8, 8)
 
         to writeUint16(i, n):
-            buf[i] := shift(n, 0, 2)
-            buf[i + 1] := shift(n, 8, 2)
+            buf[i] := shift(n, 0, 8)
+            buf[i + 1] := shift(n, 8, 8)
 
         to writeUint8(i, n):
-            buf[i] := shift(n, 0, 2)
+            buf[i] := shift(n, 0, 8)
 
         # XXX extremely lazy/wasteful way to implement signed packing
         to writeInt64(i, n):
