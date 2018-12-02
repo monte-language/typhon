@@ -327,7 +327,6 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
                     }`
         match ==16:
             # struct
-            def structName := runtimeName(nodeMap, nodeMap[slot.type().struct().typeId()])
             writeExpr := m`$fname.writePointer(pos + $offsetL)`
         match ==18:
             writeExpr := m`null`
@@ -360,7 +359,7 @@ def getCapnTypeGuard(t) as DeepFrozen:
             if ((def lt := getCapnTypeGuard(t.list().elementType())) != null):
                 m`List[$lt]`
             else:
-                m`List` 
+                m`List`
 
         match _ :(2..9):
             m`Int`
@@ -380,20 +379,27 @@ def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
     def dataSize := struct.dataWordCount()
     def ptrSize := struct.pointerCount()
     def sig := [for f in (fields)
-                astBuilder.FinalPattern(
-                    astBuilder.NounExpr("f_" + f.name(), null),
-                    getFieldGuard(f), null)]
+                astBuilder.NamedParam(
+                    L(f.name()),
+                    astBuilder.FinalPattern(
+                        astBuilder.NounExpr("f_" + f.name(), null),
+                        getFieldGuard(f), null),
+                    N("null"), null)]
     def unions := [for u in (fields)
                    ? (u._which() == 1 &&
                       nodeMap[u.group().typeId()].struct().discriminantCount() > 0)
                    m`var ${N(u.name() + "_curtag")} := null`]
+    def writeFuncName := N("write_" + shortName(node))
     def writes := unions + [for f in (fields) fieldWriter(nodeMap, groups, node, f)]
+    def writeFunc := astBuilder.ObjectExpr(null, astBuilder.FinalPattern(writeFuncName, null, null), m`DeepFrozen`, [], astBuilder.FunctionScript("run", [astBuilder.FinalPattern(N("pos"), null, null), astBuilder.FinalPattern(N("builder"), null, null)], sig, null, astBuilder.SeqExpr(writes, null), null), null)
+    def writeExpr := astBuilder.FunCallExpr(writeFuncName, [N("pos"), N("builder")], [for f in (fields) astBuilder.NamedArg(L(f.name()), N("f_" + f.name()), null)], null)
     def body := astBuilder.SeqExpr(
-        [m`def pos := builder.allocate(${L((dataSize + ptrSize) * 8)})`] +
-        writes +
-        [m`builder.makeStructPointer(pos, ${L(dataSize)}, ${L(ptrSize)})`],
+        [m`def pos := builder.allocate(${L((dataSize + ptrSize) * 8)}); $writeExpr; builder.makeStructPointer(pos, ${L(dataSize)}, ${L(ptrSize)})`],
         null)
-    return [sig, body]
+    return [
+        writeFunc,
+        astBuilder."Method"(null, makerName(node), [], sig, null, body, null)
+    ]
 
 def bootstrap(bs :Bytes) as DeepFrozen:
     "Reads the schema-definition capn message. Reassembles node structure then
@@ -421,9 +427,12 @@ def bootstrap(bs :Bytes) as DeepFrozen:
         [],
         astBuilder.Script(null, readerNodes, [], null),
         null)
-    def writerMethods := [for [node, groups] in (nodeTree) (
-        def [sig, body] := buildStructWriterMethod(nodeMap, node, groups)
-        astBuilder."Method"(null, makerName(node), sig, [], null, body, null))]
+    def writeFuncs := [].diverge()
+    def writerMethods := [].diverge()
+    for [node, groups] in (nodeTree):
+        def [writeFunc, writeMethod] := buildStructWriterMethod(nodeMap, node, groups)
+        writeFuncs.push(writeFunc)
+        writerMethods.push(writeMethod)
     def writerObj := astBuilder.ObjectExpr(
         null, mpatt`writer`,
         null, [],
@@ -445,6 +454,7 @@ def bootstrap(bs :Bytes) as DeepFrozen:
             def [=> makeMessageWriter :DeepFrozen, => text :DeepFrozen] | _ := package."import"("lib/capn")
             def [=> makeEnum :DeepFrozen ] | _ := package."import"("lib/enum")
             def enums :DeepFrozen := $enums
+            ${astBuilder.SeqExpr(writeFuncs, null)}
             $readerObj
             $makeWriterObj
             [=> enums, => reader, => makeWriter]

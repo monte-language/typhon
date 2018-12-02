@@ -65,7 +65,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "trivial")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makePoint(3, 4)
+            def pt := writer.makePoint("x" => 3, "y" => 4)
             def bs := writer.dump(pt)
             assert.equal(
                 _makeList.fromIterable(bs),
@@ -97,7 +97,8 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "enum")) ->
             def [=> enums, => reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makePoint(1, 2, enums["Color"]["yellow"])
+            def pt := writer.makePoint("x" => 1, "y" => 2,
+                                       "color" => enums["Color"]["yellow"])
             def bs := writer.dump(pt)
             def root := makeMessageReader(bs).getRoot()
             def p := reader.Point(root)
@@ -125,7 +126,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "order")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makePoint(1, 2, 3)
+            def pt := writer.makePoint("z" => 3, "x" => 1, "y" => 2)
             def bs := writer.dump(pt)
             def root := makeMessageReader(bs).getRoot()
             def p := reader.Point(root)
@@ -144,7 +145,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "void")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makePoint(1, 2, null)
+            def pt := writer.makePoint("x" => 1, "y" => 2)
             def bs := writer.dump(pt)
             def root := makeMessageReader(bs).getRoot()
             def p := reader.Point(root)
@@ -170,7 +171,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "text")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makePoint(1, "hello capnp")
+            def pt := writer.makePoint("x" => 1, "y" => "hello capnp")
             def bs := writer.dump(pt)
             assert.equal(
                 _makeList.fromIterable(bs),
@@ -196,7 +197,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "data")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makePoint(1, b`hello capnp`)
+            def pt := writer.makePoint("x" => 1, "y" => b`hello capnp`)
             def bs := writer.dump(pt)
             assert.equal(
                 _makeList.fromIterable(bs),
@@ -225,7 +226,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "struct")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makeFoo(writer.makePoint(3, 4))
+            def pt := writer.makeFoo("x" => writer.makePoint("x" => 3, "y" => 4))
             def bs := writer.dump(pt)
             assert.equal(
                 _makeList.fromIterable(bs),
@@ -250,7 +251,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "list")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makeFoo([1, 2, 3, 4])
+            def pt := writer.makeFoo("x" => [1, 2, 3, 4])
             def bs := writer.dump(pt)
             assert.equal(
                 _makeList.fromIterable(bs),
@@ -273,7 +274,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "list_void")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makeFoo([null, null, null, null])
+            def pt := writer.makeFoo("x" => [null, null, null, null])
             def bs := writer.dump(pt)
             assert.equal(
                 _makeList.fromIterable(bs),
@@ -295,7 +296,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "list_text")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makeFoo(["foo", "bar", "baz"])
+            def pt := writer.makeFoo("x" => ["foo", "bar", "baz"])
             def bs := writer.dump(pt)
             assert.equal(
                 _makeList.fromIterable(bs),
@@ -323,7 +324,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
         return when (def m := compile(schema, "list_data")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
-            def pt := writer.makeFoo([b`foo`, b`bar`, b`baz`])
+            def pt := writer.makeFoo("x" => [b`foo`, b`bar`, b`baz`])
             def bs := writer.dump(pt)
             assert.equal(
                 _makeList.fromIterable(bs),
