@@ -305,6 +305,17 @@ def makeMessageWriter() as DeepFrozen:
         to writeEnum(i, e):
             messageWriter.writeUint16(i, e.asInteger())
 
+        to writeStructList(var pos, structWriter, structMaps, dataSize, ptrSize):
+            messageWriter.writeInt64(
+                pos,
+                (ptrSize << 48) |
+                (dataSize << 32 & 0xffff00000000) |
+                (structMaps.size()  << 2 & 0xfffffffc))
+            pos += 8
+            for map in (structMaps):
+                M.call(structWriter, "run", [pos, messageWriter], map)
+                pos += (dataSize + ptrSize) * 8
+
         to makeStructPointer(pos ? (pos % 8 == 0), dataSize, ptrSize):
             return def structPointer.writePointer(offset):
                 def totalOffset := (pos - offset - 8) // 8

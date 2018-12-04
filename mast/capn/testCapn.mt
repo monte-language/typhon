@@ -343,6 +343,41 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             def p := reader.Foo(root)
             assert.equal(p.x(), [b`foo`, b`bar`, b`baz`])
 
+    def testListOfStructs(assert):
+        def schema := "
+            @0xbf5147cbbecf40c1;
+            struct Polygon {
+                struct Point {
+                    x @0 :Int64;
+                    y @1 :Int64;
+                }
+                points @0 :List(Point);
+            }"
+        return when (def m := compile(schema, "list_structs", "dump" => true)) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def poly := writer.makePolygon(
+                "points" => [["x" => 1, "y" => 2], ["x" => 3, "y" => 4]])
+            def bs := writer.dump(poly)
+            assert.equal(
+                _makeList.fromIterable(bs),
+                [0, 0, 0, 0,
+                 7, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 1, 0,
+                 1, 0, 0, 0, 0x27, 0, 0, 0, # list ptr
+                 8, 0, 0, 0, 2, 0, 0, 0,    # list tag
+                 1, 0, 0, 0, 0, 0, 0, 0,
+                 2, 0, 0, 0, 0, 0, 0, 0,
+                 3, 0, 0, 0, 0, 0, 0, 0,
+                 4, 0, 0, 0, 0, 0, 0, 0,
+                ])
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Polygon(root)
+            assert.equal(p.points()[0].x(), 1)
+            assert.equal(p.points()[0].y(), 2)
+            assert.equal(p.points()[1].x(), 3)
+            assert.equal(p.points()[1].y(), 4)
+
     def stdout := stdio.stdout()
     def runner := makeRunner(stdout, unsealException, Timer)
     return when (def t := runner.runTests([
@@ -357,6 +392,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             ["testListOfVoid", testListOfVoid],
             ["testListOfText", testListOfText],
             ["testListOfData", testListOfData],
+            ["testListOfStructs", testListOfStructs],
         ])) -> {
             def fails :Int := t.fails()
             stdout(b`${M.toString(t.total())} tests run, `)
