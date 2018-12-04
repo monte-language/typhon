@@ -229,18 +229,14 @@ def runtimeName(nodeMap, node) as DeepFrozen:
     def parent := nodeMap[node.scopeId()]
     return `${runtimeName(nodeMap, parent)}.${shortName(node)}`
 
-def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
-    if (f._which() == 1):
-        def [groupNode, groupGroups] := groups[f.group().typeId()]
-        def argNames := astBuilder.ListPattern([for subf in (groupNode.struct().fields()) astBuilder.FinalPattern(N(subf.name()), null, null)], null, null)
-        return astBuilder.SeqExpr([m`def $argNames := ${N(f.name())}`] + [for subf in (groupNode.struct().fields()) fieldWriter(nodeMap, groupGroups, groupNode, subf)], null)
+def fieldWriter(nodeMap, node, f) as DeepFrozen:
     var writeExpr := m`null`
     def slot := f.slot()
     def offset := slotOffset(node, slot)
     def offsetL := L(offset)
     def fname := N("f_" + f.name())
-    def typenames0 := [ 1 => "Bool",
-                        2 => "Int8",
+    def typenames0 := [1 => "Bool",
+                       2 => "Int8",
                        3 => "Int16",
                        4 => "Int32",
                        5 => "Int64",
@@ -250,7 +246,7 @@ def fieldWriter(nodeMap, groups, node, f) as DeepFrozen:
                        9 => "Uint64",
                        10 => "Float32",
                        11 => "Float64",
-                       15 => "Enum" ]
+                       15 => "Enum"]
     switch (slot.type()._which()):
         match ==0:
             null
@@ -376,26 +372,69 @@ def getFieldGuard(f) as DeepFrozen:
         return getCapnTypeGuard(f.slot().type())
     return null
 
+def groupMapPattern(g, groups) as DeepFrozen:
+    def subgroupMaps := [].diverge()
+    for [sg, subgroups] in (groups):
+        subgroupMaps.push(
+            astBuilder.MapPatternAssoc(
+                L(shortName(g)),
+                groupMapPattern(sg, subgroups),
+                null))
+    return astBuilder.MapPattern(
+        [for f in (g.struct().fields())
+         astBuilder.MapPatternAssoc(
+             L(f.name()),
+             astBuilder.FinalPattern(
+                 N("f_" + f.name()),
+                 getFieldGuard(f), null),
+             N("null"), null)] + subgroupMaps,
+        null, null)
+
+def flattishMap(tree, f) as DeepFrozen:
+    "This isn't classic flatMap but I don't know what to call it"
+    def result := [].diverge()
+    for [leaf, branches] in (tree):
+        result.extend(f(leaf))
+        for b in (branches):
+            result.extend(flattishMap(b, f))
+    return result.snapshot()
+
+
 def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
     def struct := node.struct()
     def fields := struct.fields()
     def dataSize := struct.dataWordCount()
     def ptrSize := struct.pointerCount()
-    def sig := [for f in (fields)
-                astBuilder.NamedParam(
-                    L(f.name()),
-                    astBuilder.FinalPattern(
-                        astBuilder.NounExpr("f_" + f.name(), null),
-                        getFieldGuard(f), null),
-                    N("null"), null)]
-    def unions := [for u in (fields)
-                   ? (u._which() == 1 &&
-                      nodeMap[u.group().typeId()].struct().discriminantCount() > 0)
-                   m`var ${N(u.name() + "_curtag")} := null`]
+    def sig := ([for f in (fields) ? (f._which() == 0)
+                 astBuilder.NamedParam(
+                     L(f.name()),
+                     astBuilder.FinalPattern(
+                         N("f_" + f.name()),
+                         getFieldGuard(f), null),
+                     N("null"), null)] +
+                [for [g, subgroups] in (groups)
+                 astBuilder.NamedParam(
+                     L(shortName(g)),
+                     groupMapPattern(g, subgroups), null, null)])
+
+    # def unions := [for u in (fields)
+    #                ? (u._which() == 1 &&
+    #                   nodeMap[u.group().typeId()].struct().discriminantCount() > 0)
+    #                m`var ${N(u.name() + "_curtag")} := null`]
+    def groupFields := flattishMap(groups, fn g { (g.struct().fields()) })
+    traceln("!!", groupFields, [for f in (groupFields) f._which()])
+    def allFields := fields + groupFields
+    def writerSig := [for f in (allFields) ? (f._which() == 0)
+                      astBuilder.NamedParam(
+                          L(f.name()),
+                          astBuilder.FinalPattern(
+                              N("f_" + f.name()),
+                              getFieldGuard(f), null),
+                          N("null"), null)]
     def writerMethName := "write_" + shortName(node)
-    def writes := unions + [for f in (fields) fieldWriter(nodeMap, groups, node, f)]
-    def writeFunc := astBuilder."Method"(null, writerMethName, [astBuilder.FinalPattern(N("pos"), null, null), astBuilder.FinalPattern(N("builder"), null, null)], sig, null, astBuilder.SeqExpr(writes, null), null)
-    def writeExpr := astBuilder.MethodCallExpr(N("structWriter"), writerMethName, [N("pos"), N("builder")], [for f in (fields) astBuilder.NamedArg(L(f.name()), N("f_" + f.name()), null)], null)
+    def writes := [for f in (allFields) ? (f._which() == 0) fieldWriter(nodeMap, node, f)]
+    def writeFunc := astBuilder."Method"(null, writerMethName, [astBuilder.FinalPattern(N("pos"), null, null), astBuilder.FinalPattern(N("builder"), null, null)], writerSig, null, astBuilder.SeqExpr(writes, null), null)
+    def writeExpr := astBuilder.MethodCallExpr(N("structWriter"), writerMethName, [N("pos"), N("builder")], [for f in (allFields) ? (f._which() == 0) astBuilder.NamedArg(L(f.name()), N("f_" + f.name()), null)], null)
     def body := astBuilder.SeqExpr(
         [m`def pos := builder.allocate(${L((dataSize + ptrSize) * 8)}); $writeExpr; builder.makeStructPointer(pos, ${L(dataSize)}, ${L(ptrSize)})`],
         null)
