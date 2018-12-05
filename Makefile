@@ -39,7 +39,7 @@ endif
 
 # This, being the first rule in the file, will be the default rule to make. It
 # is *not* because of the name.
-default: mt-typhon mast fun
+default: mt-typhon mast
 
 mt-typhon:
 	$(PYTHON) -mrpython $(OPTLEVEL) ./main.py
@@ -64,7 +64,6 @@ mast: mast/lib/enum.mast \
 	mast/lib/iterators.mast \
 	mast/lib/json.mast \
 	mast/lib/logji.mast \
-	mast/lib/marley.mast \
 	mast/lib/matrices.mast \
 	mast/lib/mim.mast \
 	mast/lib/pra.mast \
@@ -121,7 +120,8 @@ http: mast/lib/http/client.mast mast/lib/http/server.mast \
 games: mast/games/mafia.mast
 
 fun: mast/fun/elements.mast mast/fun/termParser.mast \
-	mast/fun/mli.mast mast/fun/symbolic.mast
+	mast/fun/mli.mast mast/fun/symbolic.mast \
+	mast/fun/marley.mast
 
 bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mast \
 	mast/bench/primeCount.mast mast/bench/brot.mast \

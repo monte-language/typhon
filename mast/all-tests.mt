@@ -1,4 +1,6 @@
-import "fun/elements" =~ _
+# Not testing fun/. ~ C.
+# import "fun/elements" =~ _
+# import "fun/marley" =~ _
 import "lib/amp" =~ _
 import "lib/argv" =~ _
 import "lib/codec/percent" =~ _
@@ -12,7 +14,6 @@ import "lib/http/server" =~ _
 import "lib/http/tag" =~ _
 import "lib/iterators" =~ _
 import "lib/json" =~ _
-import "lib/marley" =~ _
 import "lib/matrices" =~ _
 import "lib/monte/monte_verifier" =~ _
 import "lib/monte/meta" =~ _
