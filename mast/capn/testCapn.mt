@@ -388,7 +388,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             }
             color @2 :Text;
         }"
-        return when (def m := compile(schema, "group", "dump" => true)) ->
+        return when (def m := compile(schema, "group")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
             def pt := writer.makePoint("position" => ["x" => 3, "y" => 4], "color" => "red")
@@ -408,6 +408,42 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             assert.equal(p.position().x(), 3)
             assert.equal(p.position().y(), 4)
 
+    def testNestedGroups(assert):
+        def schema := "
+        @0xbf5147cbbecf40c1;
+        struct Shape {
+            position :group {
+                a :group {
+                    x @0 :Int64;
+                    y @1 :Int64;
+                }
+                b :group {
+                    x @2 :Int64;
+                    y @3 :Int64;
+                }
+            }
+        }"
+        return when (def m := compile(schema, "nestedGroup", "dump" => true)) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makeShape("position" => ["a" => ["x" => 1, "y" => 2], "b" => ["x" => 3, "y" => 4]])
+            def bs := writer.dump(pt)
+            assert.equal(
+                _makeList.fromIterable(bs),
+                [0, 0, 0, 0,
+                 5, 0, 0, 0,
+                 0, 0, 0, 0, 4, 0, 0, 0,
+                 1, 0, 0, 0, 0, 0, 0, 0,
+                 2, 0, 0, 0, 0, 0, 0, 0,
+                 3, 0, 0, 0, 0, 0, 0, 0,
+                 4, 0, 0, 0, 0, 0, 0, 0
+                ])
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Shape(root)
+            assert.equal(p.position().a().x(), 1)
+            assert.equal(p.position().a().y(), 2)
+            assert.equal(p.position().b().x(), 3)
+            assert.equal(p.position().b().y(), 4)
     def stdout := stdio.stdout()
     def runner := makeRunner(stdout, unsealException, Timer)
     return when (def t := runner.runTests([
@@ -424,6 +460,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             ["testListOfData", testListOfData],
             ["testListOfStructs", testListOfStructs],
             ["testGroup", testGroup],
+            ["testNestedGroups", testNestedGroups],
         ])) -> {
             def fails :Int := t.fails()
             stdout(b`${M.toString(t.total())} tests run, `)
