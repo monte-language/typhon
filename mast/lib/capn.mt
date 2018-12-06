@@ -1,13 +1,15 @@
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
-exports (makeMessageReader, makeMessageWriter, loads, text, undefined)
+exports (Absent, absent, makeMessageReader, makeMessageWriter, loads, text, undefined)
 "Components for reading the packing format used for capn messages."
+
+object absent as DeepFrozen {}
+def Absent :DeepFrozen := Same[absent]
 
 def STRUCT :Int := 0
 def LIST :Int := 1
 def FAR :Int := 2
 
 def LIST_SIZE_8 :Int := 2
-
 
 def text(pointer) as DeepFrozen:
     return if (pointer == null):
@@ -305,14 +307,14 @@ def makeMessageWriter() as DeepFrozen:
         to writeEnum(i, e):
             messageWriter.writeUint16(i, e.asInteger())
 
-        to writeStructListTag(pos, structWriter, listSize, dataSize, ptrSize):
+        to writeStructListTag(pos, listSize, dataSize, ptrSize):
             messageWriter.writeInt64(
                 pos,
                 (ptrSize << 48) |
                 (dataSize << 32 & 0xffff00000000) |
                 (listSize << 2 & 0xfffffffc))
             return pos + 8
-        
+
         to makeStructPointer(pos ? (pos % 8 == 0), dataSize, ptrSize):
             return def structPointer.writePointer(offset):
                 def totalOffset := (pos - offset - 8) // 8
@@ -321,6 +323,15 @@ def makeMessageWriter() as DeepFrozen:
                           (totalOffset << 2 & 0xfffffffc) |
                           STRUCT)
                 messageWriter.writeInt64(offset, p)
+
+        to writeUnionTag(pos, union):
+            var selectedName := absent
+            for name => [field, discriminant] in (union):
+                if (field != absent):
+                    if (selectedName != absent):
+                        throw(`Can't provide both "$selectedName" and "$name" fields of union`)
+                    selectedName := name
+                    messageWriter.writeUint16(pos, discriminant)
 
         to dumps(obj) :Bytes:
             # segment count - 1

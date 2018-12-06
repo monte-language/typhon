@@ -252,23 +252,23 @@ def collectFields(struct, groups) as DeepFrozen:
 def getCapnTypeGuard(t) as DeepFrozen:
     return switch (t._which()):
         match ==0:
-            m`Void`
+            m`Any[Absent, Void]`
         match ==1:
-            m`Bool`
+            m`Any[Absent, Bool]`
         match ==12:
-            m`Str`
+            m`Any[Absent, Str]`
         match ==13:
-            m`Bytes`
+            m`Any[Absent, Bytes]`
         match ==14:
             if ((def lt := getCapnTypeGuard(t.list().elementType())) != null):
-                m`List[$lt]`
+                m`Any[Absent, List[$lt]]`
             else:
-                m`List`
+                m`Any[Absent, List]`
 
         match _ :(2..9):
-            m`Int`
+            m`Any[Absent, Int]`
         match _ :(10..11):
-            m`Double`
+            m`Any[Absent, Double]`
         match _:
             null
 
@@ -312,12 +312,13 @@ def fieldWriter(nodeMap, node, _, f, fname) as DeepFrozen:
                        10 => "Float32",
                        11 => "Float64",
                        15 => "Enum"]
+
     switch (slot.type()._which()):
         match ==0:
             null
         match ==1:
             # bool
-            def arg := if (slot.hadExplicitDefault()) { m`$fname ^ ${L(extractValue(slot.defaultValue()))}` } else { m`${astBuilder.NounExpr(f.name(), null)}`}
+            def arg := if (slot.hadExplicitDefault()) { m`$fname ^ ${L(extractValue(slot.defaultValue()))}` } else { fname }
             writeExpr := m`builder.writeBool(pos + ${L(slot.offset() // 8)}, ${L(slot.offset() % 8)}, $arg)`
         match _ :(2..11 | 15..15):
             # enum, primitive
@@ -358,7 +359,6 @@ def fieldWriter(nodeMap, node, _, f, fname) as DeepFrozen:
                         null, null)
                     def structItems :=  [for name => _ in (fields | groupFields) N(name)]
                     def structWriterCall := astBuilder.MethodCallExpr(N("structWriter"), innerStructWriter, [m`listPos + (i * $structSize * 8)`, m`builder`] + structItems, [], null)
-                    traceln("!!", mapPatt)
                     # consider using preferredListEncoding
                     writeExpr := m`{
                         def tagPos := builder.allocList(
@@ -367,7 +367,6 @@ def fieldWriter(nodeMap, node, _, f, fname) as DeepFrozen:
                             ($structSize * $fname.size() + 1) * 8)
                         def listPos := builder.writeStructListTag(
                             tagPos,
-                            structWriter.$innerStructWriter,
                             $fname.size(),
                             ${L(innerStruct.dataWordCount())},
                             ${L(innerStruct.pointerCount())})
@@ -421,28 +420,13 @@ def fieldWriter(nodeMap, node, _, f, fname) as DeepFrozen:
         match ==18:
             writeExpr := m`null`
         match unknownType:
-            throw(`field ${node.displayName()}#${f.name()} has unknown type $unknownType`)
-    if (f.discriminantValue() != noDiscriminant):
-        # union handling
-        def unionOffset := node.struct().discriminantOffset() * 2
-        def fieldName := shortName(node)
-        def v0 := N(f.name())
-        def v1 := N(f.name() + "_curtag")
-        def v3 := L(fieldName)
-        def v4 := L(unionOffset)
-        def v5 := L(f.discriminantValue())
-        return m`if ($v0 != null) { $v1 := builder.checkTag($v1, $v3); builder.writeInt16($v4, $v5); $writeExpr }`
-    else:
-        return writeExpr
+            throw(`field ${node.displayName()}#$fname has unknown type $unknownType`)
+    return m`if ($fname != absent) { $writeExpr }`
 
 def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
     def struct := node.struct()
     def dataSize := struct.dataWordCount()
     def ptrSize := struct.pointerCount()
-    # def unions := [for u in (fields)
-    #                ? (u._which() == 1 &&
-    #                   nodeMap[u.group().typeId()].struct().discriminantCount() > 0)
-    #                m`var ${N(u.name() + "_curtag")} := null`]
     def [fields, groupFields] := collectFields(struct, groups)
     def allFields := fields | groupFields
     def sig := ([for name => f in (fields) ? (f._which() == 0)
@@ -451,7 +435,7 @@ def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
                      astBuilder.FinalPattern(
                          N(name),
                          getFieldGuard(f), null),
-                     N("null"), null)] +
+                     N("absent"), null)] +
                 [for [g, subgroups] in (groups) {
                  astBuilder.NamedParam(
                      L(shortName(g)),
@@ -463,7 +447,12 @@ def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
     def writerMethName := "write_" + shortName(node)
     def writes := [for name => f in (allFields) fieldWriter(nodeMap, node, groups, f, N(name))]
     def writeFunc := astBuilder."Method"(null, writerMethName, [astBuilder.FinalPattern(N("pos"), null, null), astBuilder.FinalPattern(N("builder"), null, null)] + writerSig, [], null, astBuilder.SeqExpr(writes, null), null)
-    def writeExpr := astBuilder.MethodCallExpr(N("structWriter"), writerMethName, [N("pos"), N("builder")] + [for name => _ in (allFields) N(name)], [], null)
+    var writeExpr := astBuilder.MethodCallExpr(N("structWriter"), writerMethName, [N("pos"), N("builder")] + [for name => _ in (allFields) N(name)], [], null)
+    if (struct.discriminantCount() > 0):
+        # union handling
+        def unionOffset := L(struct.discriminantOffset() * 2)
+        def unionMap := astBuilder.MapExpr([for name => unionField in (fields) ? (unionField.discriminantValue() != noDiscriminant) astBuilder.MapExprAssoc(L(unionField.name()), m`[${N(name)},${L(unionField.discriminantValue())}]`, null)], null)
+        writeExpr := m`builder.writeUnionTag(pos + $unionOffset, $unionMap); $writeExpr`
     def body := astBuilder.SeqExpr(
         [m`def pos := builder.allocate(${L((dataSize + ptrSize) * 8)}); $writeExpr; builder.makeStructPointer(pos, ${L(dataSize)}, ${L(ptrSize)})`],
         null)
@@ -523,7 +512,7 @@ def bootstrap(bs :Bytes) as DeepFrozen:
     def module := m`object _ as DeepFrozen {
         method dependencies() :List[Str] { ["lib/capn", "lib/enum"] }
         method run(package) :Map[Str, DeepFrozen] {
-            def [=> makeMessageWriter :DeepFrozen, => text :DeepFrozen] | _ := package."import"("lib/capn")
+            def [=> Absent :DeepFrozen, => absent :DeepFrozen, => makeMessageWriter :DeepFrozen, => text :DeepFrozen] | _ := package."import"("lib/capn")
             def [=> makeEnum :DeepFrozen ] | _ := package."import"("lib/enum")
             def enums :DeepFrozen := $enums
             $structWriterObj

@@ -423,7 +423,7 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
                 }
             }
         }"
-        return when (def m := compile(schema, "nestedGroup", "dump" => true)) ->
+        return when (def m := compile(schema, "nestedGroup")) ->
             def [=> reader, => makeWriter] | _ := m
             def writer := makeWriter()
             def pt := writer.makeShape("position" => ["a" => ["x" => 1, "y" => 2], "b" => ["x" => 3, "y" => 4]])
@@ -444,7 +444,51 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             assert.equal(p.position().a().y(), 2)
             assert.equal(p.position().b().x(), 3)
             assert.equal(p.position().b().y(), 4)
+
+    def testTrivialUnion(assert):
+        def schema := "
+        @0xbf5147cbbecf40c1;
+        struct Shape {
+          area @0 :Int64;
+          perimeter @1 :Int64;
+          union {
+            circle @2 :Int64;      # radius
+            square @3 :Int64;      # width
+            empty  @4 :Void;
+            fooBar @5 :Void;
+          }
+        }"
+        return when (def m := compile(schema, "trivialUnion")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makeShape("area" => 1, "circle" => 2, "perimeter" => 3)
+            def bs := writer.dump(pt)
+            assert.equal(
+                _makeList.fromIterable(bs),
+                [0, 0, 0, 0,
+                 5, 0, 0, 0,
+                 0, 0, 0, 0, 4, 0, 0, 0,
+                 1, 0, 0, 0, 0, 0, 0, 0,
+                 3, 0, 0, 0, 0, 0, 0, 0,
+                 2, 0, 0, 0, 0, 0, 0, 0,
+                 0, 0, 0, 0, 0, 0, 0, 0
+                ])
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Shape(root)
+            assert.equal(p.area(), 1)
+            assert.equal(p.perimeter(), 3)
+            assert.equal(p._which(), 0)
+            assert.equal(p.circle(), 2)
+            def qt := writer.makeShape("area" => 1, "empty" => null, "perimeter" => 3)
+            def q := reader.Shape(makeMessageReader(writer.dump(qt)).getRoot())
+            assert.equal(q._which(), 2)
+            assert.equal(q.empty(), null)
+            assert.equal(q.perimeter(), 3)
+            def err := assert.throws(fn {writer.makeShape("empty" => null, "circle" => 2)})
+            assert.equal(unsealException(err, null)[0], `Can't provide both "circle" and "empty" fields of union`)
+
     def stdout := stdio.stdout()
+    def print(via (UTF8.encode) msg) { stdout(msg) }
     def runner := makeRunner(stdout, unsealException, Timer)
     return when (def t := runner.runTests([
             ["testTrivial", testTrivial],
@@ -461,16 +505,17 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             ["testListOfStructs", testListOfStructs],
             ["testGroup", testGroup],
             ["testNestedGroups", testNestedGroups],
+            ["testTrivialUnion", testTrivialUnion],
         ])) -> {
             def fails :Int := t.fails()
-            stdout(b`${M.toString(t.total())} tests run, `)
-            stdout(b`${M.toString(fails)} failures$\n`)
+            print(`${M.toString(t.total())} tests run, `)
+            print(`${M.toString(fails)} failures$\n`)
             for loc => errors in (t.errors()) {
-                stdout(b`In $loc:$\n`)
-                for error in (errors) { stdout(b`~ $error$\n`) }
+                print(`In $loc:$\n`)
+                for error in (errors) { print(`~ $error$\n`) }
             }
             fails.min(1)
         } catch problem {
-            stdout(b`Test suite failed: ${M.toString(unsealException(problem))}$\n`)
+            print(`Test suite failed: ${M.toString(unsealException(problem, null))}$\n`)
             1
         }
