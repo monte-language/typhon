@@ -482,10 +482,182 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             def qt := writer.makeShape("area" => 1, "empty" => null, "perimeter" => 3)
             def q := reader.Shape(makeMessageReader(writer.dump(qt)).getRoot())
             assert.equal(q._which(), 2)
+            assert.equal(q.area(), 1)
             assert.equal(q.empty(), null)
             assert.equal(q.perimeter(), 3)
             def err := assert.throws(fn {writer.makeShape("empty" => null, "circle" => 2)})
             assert.equal(unsealException(err, null)[0], `Can't provide both "circle" and "empty" fields of union`)
+            def rt := writer.makeShape("area" => 1, "perimeter" => 3)
+            def r := reader.Shape(makeMessageReader(writer.dump(rt)).getRoot())
+            assert.equal(r._which(), 0)
+            assert.equal(r.circle(), 0)
+            assert.equal(r.area(), 1)
+            assert.equal(r.perimeter(), 3)
+
+    def testNamedUnion(assert):
+        def schema := "
+        @0xbf5147cbbecf40c1;
+        struct Person {
+          name @0 :Text;
+          job :union {
+              unemployed @1 :Void;
+              retired @2 :Void;
+              worker @3 :Text;
+          }
+        }"
+        return when (def m := compile(schema, "namedUnion")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makePerson("name" => "bob", "job" => ["unemployed" => null])
+            def bs := writer.dump(pt)
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Person(root)
+            assert.equal(p.name(), "bob")
+            assert.equal(p.job()._which(), 0)
+            assert.equal(p.job().unemployed(), null)
+            def qt := writer.makePerson("name" => "bob", "job" => ["retired" => null])
+            def q := reader.Person(makeMessageReader(writer.dump(qt)).getRoot())
+            assert.equal(q.name(), "bob")
+            assert.equal(q.job()._which(), 1)
+            assert.equal(q.job().retired(), null)
+            def rt := writer.makePerson("name" => "bob", "job" => ["worker" => "capn"])
+            def r := reader.Person(makeMessageReader(writer.dump(rt)).getRoot())
+            assert.equal(r.name(), "bob")
+            assert.equal(r.job()._which(), 2)
+            assert.equal(r.job().worker(), "capn")
+
+    def testManyUnions(assert):
+        def schema := "
+        @0xbf5147cbbecf40c1;
+        struct Person {
+          name @0 :Text;
+          union {
+              male @1 :Void;
+              female @4 :Void;
+          }
+          location :union {
+              home @2 :Void;
+              work @7 :Void;
+          }
+          job :union {
+              unemployed @3 :Void;
+              retired @5 :Void;
+              worker @6 :Text;
+          }
+        }"
+        return when (def m := compile(schema, "groupInUnion")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makePerson("male" => null, "name" => "bob", "location" => ["work" => null], "job" => ["retired" => null])
+            def bs := writer.dump(pt)
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Person(root)
+            assert.equal(p.name(), "bob")
+            assert.equal(p._which(), 0)
+            assert.equal(p.location()._which(), 1)
+            assert.equal(p.job()._which(), 1)
+
+    def testNestedUnion(assert):
+        def schema := "
+        @0xbf5147cbbecf40c1;
+        struct Person {
+          name @0 :Text;
+          job :union {
+              unemployed @1 :Void;
+              retired @2 :Void;
+              employed :group {
+                  companyName @3 :Text;
+                  union {
+                      finance @4 :Void;
+                      it @5 :Void;
+                      other @6 :Void;
+                  }
+                  position :union {
+                      manager @7 :Void;
+                      worker @8 :Void;
+                  }
+              }
+          }
+        }"
+        return when (def m := compile(schema, "nestedUnion")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makePerson(
+                "name" => "bob",
+                "job" => [
+                    "employed" => [
+                        "companyName" => "capn",
+                        "it" => null,
+                        "position" => ["worker" => null]]])
+            def bs := writer.dump(pt)
+            def root := makeMessageReader(bs).getRoot()
+            def p := reader.Person(root)
+            assert.equal(p.name(), "bob")
+            assert.equal(p.job()._which(), 2)
+            def employer := p.job().employed()
+            assert.equal(employer.companyName(), "capn")
+            assert.equal(employer._which(), 1)
+            assert.equal(employer.it(), null)
+            assert.equal(employer.position()._which(), 1)
+            assert.equal(employer.position().worker(), null)
+
+    def testNestedUnionInList(assert):
+        def schema := "
+        @0xbf5147cbbecf40c1;
+        struct Company {
+          struct Person {
+            name @0 :Text;
+            job :union {
+                unemployed @1 :Void;
+                retired @2 :Void;
+                employed :group {
+                    companyName @3 :Text;
+                    union {
+                        finance @4 :Void;
+                        it @5 :Void;
+                        other @6 :Void;
+                    }
+                    position :union {
+                        manager @7 :Void;
+                        worker @8 :Void;
+                    }
+                }
+            }
+          }
+          people @0 :List(Person);
+        }"
+        return when (def m := compile(schema, "nestedUnionInList")) ->
+            def [=> reader, => makeWriter] | _ := m
+            def writer := makeWriter()
+            def pt := writer.makeCompany("people" => [
+                [
+                    "name" => "bob",
+                    "job" => [
+                        "employed" => [
+                            "companyName" => "capn",
+                            "it" => null,
+                            "position" => ["worker" => null]]]
+                ],
+                [
+                    "name" => "alice",
+                    "job" => ["retired" => null],
+                ],
+            ])
+            def bs := writer.dump(pt)
+            def root := makeMessageReader(bs).getRoot()
+            def c := reader.Company(root)
+            def p := c.people()[0]
+            assert.equal(p.name(), "bob")
+            assert.equal(p.job()._which(), 2)
+            def employer := p.job().employed()
+            assert.equal(employer.companyName(), "capn")
+            assert.equal(employer._which(), 1)
+            assert.equal(employer.it(), null)
+            assert.equal(employer.position()._which(), 1)
+            assert.equal(employer.position().worker(), null)
+
+            assert.equal(c.people()[1].name(), "alice")
+            assert.equal(c.people()[1].job()._which(), 1)
 
     def stdout := stdio.stdout()
     def print(via (UTF8.encode) msg) { stdout(msg) }
@@ -506,6 +678,10 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             ["testGroup", testGroup],
             ["testNestedGroups", testNestedGroups],
             ["testTrivialUnion", testTrivialUnion],
+            ["testNamedUnion", testNamedUnion],
+            ["testManyUnions", testManyUnions],
+            ["testNestedUnion", testNestedUnion],
+            ["testNestedUnionInList", testNestedUnionInList]
         ])) -> {
             def fails :Int := t.fails()
             print(`${M.toString(t.total())} tests run, `)

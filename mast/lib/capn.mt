@@ -325,10 +325,10 @@ def makeMessageWriter() as DeepFrozen:
                 messageWriter.writeInt64(offset, p)
 
         to writeUnionTag(pos, union):
-            var selectedName := absent
+            var selectedName := null
             for name => [field, discriminant] in (union):
-                if (field != absent):
-                    if (selectedName != absent):
+                if (field != absent && field != [].asMap()):
+                    if (selectedName != null):
                         throw(`Can't provide both "$selectedName" and "$name" fields of union`)
                     selectedName := name
                     messageWriter.writeUint16(pos, discriminant)

@@ -235,19 +235,25 @@ def childrenOf(nodeMap, parentId) as DeepFrozen:
             id => [node, childrenOf(nodeMap, id)]]
 
 def groupMap(tree, f) as DeepFrozen:
-    var result := [].asMap()
+    var result1 := [].asMap()
+    var result2 := []
     for [leaf, branches] in (tree):
-        result |= f(leaf)
-        result |= groupMap(branches, f)
-    return result
+        def m := f(leaf)
+        result1 |= m
+        result2 with= ([leaf, m])
+        def [rest1, rest2] := groupMap(branches, f)
+        result1 |= rest1
+        result2 += rest2
+    return [result1, result2]
 
 def collectFields(struct, groups) as DeepFrozen:
     def fields := [for f in (struct.fields()) ? (f._which() == 0) "f_" + f.name() => f]
-    def groupFields := groupMap(
+    def [groupFields, fieldsByGroup] := groupMap(
         groups, fn g { [for f in (g.struct().fields()) ? (f._which() == 0)
-                        `f_${shortName(g)}_${f.name()}` => f] })
+                         `f_${shortName(g)}_${f.name()}` => f]
+            })
 
-    return [fields, groupFields]
+    return [fields, groupFields, fieldsByGroup]
 
 def getCapnTypeGuard(t) as DeepFrozen:
     return switch (t._which()):
@@ -275,25 +281,10 @@ def getCapnTypeGuard(t) as DeepFrozen:
 def getFieldGuard(f) as DeepFrozen:
     if (f._which() == 0):
         return getCapnTypeGuard(f.slot().type())
+    else if (f._which() == 1):
+        # XXX consider constraining to names in group
+        return m`Map`
     return null
-
-def groupMapPattern(g, groups) as DeepFrozen:
-    def subgroupMaps := [].diverge()
-    for [sg, subgroups] in (groups):
-        subgroupMaps.push(
-            astBuilder.MapPatternAssoc(
-                L(shortName(sg)),
-                groupMapPattern(sg, subgroups),
-                null, null))
-    return astBuilder.MapPattern(
-        [for f in (g.struct().fields()) ? (f._which() == 0)
-         astBuilder.MapPatternAssoc(
-             L(f.name()),
-             astBuilder.FinalPattern(
-                 N(`f_${shortName(g)}_${f.name()}`),
-                 getFieldGuard(f), null),
-             N("null"), null)] + subgroupMaps,
-        null, null)
 
 def fieldWriter(nodeMap, node, _, f, fname) as DeepFrozen:
     var writeExpr := m`null`
@@ -342,23 +333,16 @@ def fieldWriter(nodeMap, node, _, f, fname) as DeepFrozen:
                     def innerStructWriter := "write_" + shortName(innerNode)
                     def structSize := L(innerStruct.dataWordCount() +
                                         innerStruct.pointerCount())
-                    def innerGroups := childrenOf(nodeMap, type.struct().typeId())
-                    def [fields, groupFields] := collectFields(innerStruct, innerGroups)
+                    def fields := [for f in (innerStruct.fields()) "f_" + f.name() => f]
                     def mapPatt := astBuilder.MapPattern(
-                        [for name => f in (fields) ? (f._which() == 0)
+                        [for name => f in (fields)
                          astBuilder.MapPatternAssoc(
                              L(f.name()),
-                             astBuilder.FinalPattern(
-                                 N(name),
-                                 getFieldGuard(f), null),
-                             N("null"), null)] +
-                        [for [g, subgroups] in (innerGroups) {
-                            astBuilder.NamedParam(
-                                L(shortName(g)),
-                                groupMapPattern(g, subgroups), null, null) }],
+                             astBuilder.FinalPattern(N(name), null, null),
+                             N("absent"),
+                             null)],
                         null, null)
-                    def structItems :=  [for name => _ in (fields | groupFields) N(name)]
-                    def structWriterCall := astBuilder.MethodCallExpr(N("structWriter"), innerStructWriter, [m`listPos + (i * $structSize * 8)`, m`builder`] + structItems, [], null)
+                    def structWriterCall := astBuilder.MethodCallExpr(m`structWriter`, innerStructWriter, [m`listPos + (i * $structSize * 8)`, m`builder`] + [for name => _ in (fields) N(name)], [], null)
                     # consider using preferredListEncoding
                     writeExpr := m`{
                         def tagPos := builder.allocList(
@@ -371,8 +355,8 @@ def fieldWriter(nodeMap, node, _, f, fname) as DeepFrozen:
                             ${L(innerStruct.dataWordCount())},
                             ${L(innerStruct.pointerCount())})
                         for i => map in ($fname) {
-                            def $mapPatt := map
-                            $structWriterCall
+                         def $mapPatt := map
+                         $structWriterCall
                         }
                     }`
                 match ==12:
@@ -427,32 +411,61 @@ def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
     def struct := node.struct()
     def dataSize := struct.dataWordCount()
     def ptrSize := struct.pointerCount()
-    def [fields, groupFields] := collectFields(struct, groups)
-    def allFields := fields | groupFields
-    def sig := ([for name => f in (fields) ? (f._which() == 0)
-                 astBuilder.NamedParam(
-                     L(f.name()),
-                     astBuilder.FinalPattern(
-                         N(name),
-                         getFieldGuard(f), null),
-                     N("absent"), null)] +
-                [for [g, subgroups] in (groups) {
-                 astBuilder.NamedParam(
-                     L(shortName(g)),
-                     groupMapPattern(g, subgroups), null, null) }])
-    def writerSig := [for name => f in (allFields)
+    def fields := [for f in (struct.fields()) "f_" + f.name() => f]
+    def sig := [for name => f in (fields)
+                astBuilder.NamedParam(
+                    L(f.name()),
+                    astBuilder.FinalPattern(
+                        N(name),
+                        getFieldGuard(f), null),
+                    if (f._which() == 1) {
+                        m`[].asMap()`
+                    } else {
+                        N("absent")
+                    }, null)]
+    def writerSig := [for name => f in (fields)
                       astBuilder.FinalPattern(
                           N(name),
                           getFieldGuard(f), null)]
     def writerMethName := "write_" + shortName(node)
-    def writes := [for name => f in (allFields) fieldWriter(nodeMap, node, groups, f, N(name))]
-    def writeFunc := astBuilder."Method"(null, writerMethName, [astBuilder.FinalPattern(N("pos"), null, null), astBuilder.FinalPattern(N("builder"), null, null)] + writerSig, [], null, astBuilder.SeqExpr(writes, null), null)
-    var writeExpr := astBuilder.MethodCallExpr(N("structWriter"), writerMethName, [N("pos"), N("builder")] + [for name => _ in (allFields) N(name)], [], null)
+    def unionTagsWrites := [].diverge()
+    def generateUnionTag(st, fi):
+        def unionOffset := L(st.discriminantOffset() * 2)
+        def unionMap := astBuilder.MapExpr([for name => unionField in (fi) ? (unionField.discriminantValue() != noDiscriminant) astBuilder.MapExprAssoc(L(unionField.name()), m`[${N(name)},${L(unionField.discriminantValue())}]`, null)], null)
+        return m`builder.writeUnionTag(pos + $unionOffset, $unionMap)`
+
     if (struct.discriminantCount() > 0):
         # union handling
-        def unionOffset := L(struct.discriminantOffset() * 2)
-        def unionMap := astBuilder.MapExpr([for name => unionField in (fields) ? (unionField.discriminantValue() != noDiscriminant) astBuilder.MapExprAssoc(L(unionField.name()), m`[${N(name)},${L(unionField.discriminantValue())}]`, null)], null)
-        writeExpr := m`builder.writeUnionTag(pos + $unionOffset, $unionMap); $writeExpr`
+        unionTagsWrites.push(generateUnionTag(struct, fields))
+    def unpackGroups := [].diverge()
+    def writableFields := [for name => f in (fields) ? (f._which() == 0) name => f].diverge()
+    def groupStack := [for name => f in (fields) ? (f._which() == 1) name => nodeMap[f.group().typeId()]].diverge()
+    while (groupStack.size() > 0):
+        def [name, g] := groupStack.pop()
+        def groupUnpacks := [].diverge()
+        def unionMap := [].asMap().diverge()
+        for f in (g.struct().fields()):
+            def n := `${name}_${f.name()}`
+            unionMap[n] := f
+            groupUnpacks.push(astBuilder.MapPatternAssoc(
+                L(f.name()),
+                astBuilder.FinalPattern(
+                    N(n),
+                    getFieldGuard(f), null),
+                if (f._which() == 1) { m`[].asMap()` } else { N("absent") }, null))
+            if (f._which() == 1):
+                groupStack[n] := nodeMap[f.group().typeId()]
+            else:
+                writableFields[n] := f
+        def groupUnpacker := astBuilder.MapPattern(groupUnpacks.snapshot(), null, null)
+        unpackGroups.push(m`def $groupUnpacker := ${N(name)}`)
+        if (g.struct().discriminantCount() > 0):
+            unionTagsWrites.push(generateUnionTag(g.struct(), unionMap))
+
+    def writes := [for name => f in (writableFields) fieldWriter(nodeMap, node, groups, f, N(name))]
+    def writeFunc := astBuilder."Method"(null, writerMethName, [astBuilder.FinalPattern(N("pos"), null, null), astBuilder.FinalPattern(N("builder"), null, null)] + writerSig, [], null, astBuilder.SeqExpr(unpackGroups + unionTagsWrites + writes, null), null)
+    var writeExpr := astBuilder.MethodCallExpr(N("structWriter"), writerMethName, [N("pos"), N("builder")] + [for name => _ in (fields) N(name)], [], null)
+
     def body := astBuilder.SeqExpr(
         [m`def pos := builder.allocate(${L((dataSize + ptrSize) * 8)}); $writeExpr; builder.makeStructPointer(pos, ${L(dataSize)}, ${L(ptrSize)})`],
         null)
