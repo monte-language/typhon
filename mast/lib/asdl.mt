@@ -3,7 +3,11 @@ exports (asdlParser, asdlBuilder)
 
 "The Zephyr Abstract Syntax Description Language."
 
+# ASDL:
 # ftp://ftp.cs.princeton.edu/techreports/1997/554.pdf
+
+# The two styles of recursion we generate are related to:
+# http://okmij.org/ftp/tagless-final/course/Boehm-Berarducci.html
 
 object bootBuilder as DeepFrozen:
     to Sum(id, fields, con, cons):
