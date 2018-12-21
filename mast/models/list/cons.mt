@@ -1,4 +1,5 @@
 import "unittest" =~ [=> unittest :Any]
+import "tests/makeList" =~ [=> testMakeList]
 exports (authorMakeList)
 
 def nilIterator.next(ej) as DeepFrozen:
@@ -52,17 +53,6 @@ def authorMakeList(stamp :DeepFrozen) as DeepFrozen:
 
 interface TestStamp {}
 
-def testListIsEmpty(assert):
-    def makeList := authorMakeList(TestStamp)
-    assert.equal(makeList().isEmpty(), true)
-    assert.equal(makeList(42).isEmpty(), false)
-
-def testListSize(assert):
-    def makeList := authorMakeList(TestStamp)
-    assert.equal(makeList().size(), 0)
-    assert.equal(makeList(42).size(), 1)
-    assert.equal(makeList(42, 5).size(), 2)
-
 def testListIterator(assert):
     def makeList := authorMakeList(TestStamp)
     def l := makeList(2, 2, 2)
@@ -71,9 +61,9 @@ def testListIterator(assert):
     assert.equal(result, expected)
 
 def suite := [
-    testListIsEmpty,
-    testListSize,
     testListIterator,
 ]
 
 unittest(suite)
+
+unittest(testMakeList(authorMakeList(TestStamp)))
