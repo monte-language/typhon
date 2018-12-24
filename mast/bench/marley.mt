@@ -1,5 +1,5 @@
 import "bench" =~ [=> bench]
-import "lib/parsers/marley" =~ [=> marley__quasiParser]
+import "lib/parsers/marley" =~ [=> ::"marley``"]
 exports ()
 
 def marleyBench():
