@@ -1,7 +1,18 @@
 {stdenv, pkgs, lib, typhonVm}:
 let
   boot = ../boot;
-  mastSrc = ../mast;
+  mastSrc = stdenv.mkDerivation {
+    name = "processed-mast";
+    src = ../mast;
+    buildInputs = [ pkgs.gawk pkgs.less ];
+    buildPhase = ''
+      bash ${../lit.sh} -v -i .
+    '';
+    installPhase = ''
+      mkdir -p $out
+      cp -R * $out/
+    '';
+  };
   buildMonteModule = name: mt: let
     basename = baseNameOf mt;
     flags = if basename == "prelude.mt" || basename == "loader.mt"
