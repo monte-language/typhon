@@ -8,6 +8,7 @@ def Absent :DeepFrozen := Same[absent]
 def STRUCT :Int := 0
 def LIST :Int := 1
 def FAR :Int := 2
+def OTHER :Int := 3
 
 def LIST_SIZE_8 :Int := 2
 
@@ -128,6 +129,18 @@ def formatWord(word :Int) as DeepFrozen:
         bits.push((((word >> i) & 0x1) == 0x1).pick("@", "."))
     return "b" + "".join(bits)
 
+interface CapPointer implements DeepFrozen:
+    to index() :Int
+
+def makeCapPointer(index) as DeepFrozen:
+    return object capPointer implements DeepFrozen, CapPointer:
+        to _printOn(out):
+            out.print(`<cap $index>`)
+        to type() :Str:
+            return "cap"
+        to index() :Int:
+            return index
+
 def makeMessageReader(bs :Bytes) as DeepFrozen:
     "Create a schema-independent object from serialized data.
      Provides methods for basic data traversal, used by the
@@ -223,12 +236,12 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
                     else:
                         message.interpretPointer(targetSegment, targetOffset)
                 match ==0x3 ? (shift(i, 2, 30) == 0x0):
-                    object capPointer implements DeepFrozen:
+                    object capPointer implements DeepFrozen, CapPointer:
                         to _printOn(out):
                             out.print(`<cap $i>`)
                         to type() :Str:
                             return "cap"
-                        to index() :Bool:
+                        to index() :Int:
                             return shift(i, 32, 32)
 
 object undefined as DeepFrozen {}
@@ -323,6 +336,9 @@ def makeMessageWriter() as DeepFrozen:
                           (totalOffset << 2 & 0xfffffffc) |
                           STRUCT)
                 messageWriter.writeInt64(offset, p)
+
+        to writeCapPointer(pos, ptr :CapPointer):
+            messageWriter.writeInt64(pos, (ptr.index() << 32 & 0xffffffff) | OTHER)
 
         to writeUnionTag(pos, union):
             var selectedName := null
