@@ -659,6 +659,31 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             assert.equal(c.people()[1].name(), "alice")
             assert.equal(c.people()[1].job()._which(), 1)
 
+    def testReadPointerCycle(assert):
+        def schema := "
+        @0xbf5147cbbecf40c1;
+        struct Tree {
+          node :union {
+            branch @0 :Tree;
+            leaf @1 :Int64;
+          }
+        }"
+        return when (def m := compile(schema, "readPointerCycle")) ->
+            def [=> reader] | _ := m
+            def bs := (b`$\x00$\x00$\x00$\x00$\x02$\x00$\x00$\x00` +
+                       b`$\x00$\x00$\x00$\x00$\x02$\x00$\x01$\x00` +
+                       b`$\x00$\x00$\x00$\x00$\x00$\x00$\x00$\x00` +
+                       b`$\x00$\x00$\x00$\x00$\x00$\x00$\x00$\x00` +
+                       b`$\xf0$\xff$\xff$\xff$\x00$\x00$\x01$\x00`)
+            def root := makeMessageReader(bs).getRoot()
+            var t := reader.Tree(root)
+            try:
+                for _ in (0..100):
+                    t := t.node().branch()
+                assert.fail("Pointer cycle did not terminate")
+            catch _:
+                null
+
     def stdout := stdio.stdout()
     def print(via (UTF8.encode) msg) { stdout(msg) }
     def runner := makeRunner(stdout, unsealException, Timer)
@@ -681,7 +706,9 @@ def main(_argv, => currentProcess, => makeProcess, => makeFileResource, => stdio
             ["testNamedUnion", testNamedUnion],
             ["testManyUnions", testManyUnions],
             ["testNestedUnion", testNestedUnion],
-            ["testNestedUnionInList", testNestedUnionInList]
+            ["testNestedUnionInList", testNestedUnionInList],
+            ["testReadPointerCycle", testReadPointerCycle],
+            # ["testReadDeepNesting", testReadDeepNesting],
         ])) -> {
             def fails :Int := t.fails()
             print(`${M.toString(t.total())} tests run, `)

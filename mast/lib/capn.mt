@@ -28,7 +28,7 @@ def shift(i :Int, offset :(0..!64), width :(0..64)) :Int as DeepFrozen:
     return (i >> offset) & mask(width)
 
 def makeStructPointer(message :DeepFrozen, segment :Int, offset :Int,
-                      dataSize :Int, pointerSize :Int) as DeepFrozen:
+                      dataSize :Int, pointerSize :Int, depthLimit :Int) as DeepFrozen:
     return object structPointer as DeepFrozen:
         to _printOn(out):
             out.print(`<struct @@$segment+$offset d$dataSize p$pointerSize>`)
@@ -40,7 +40,7 @@ def makeStructPointer(message :DeepFrozen, segment :Int, offset :Int,
             return message.getSegmentWord(segment, offset + i)
 
         to getPointer(i :Int):
-            return message.interpretPointer(segment, offset + dataSize + i)
+            return message.interpretPointer(segment, offset + dataSize + i, depthLimit)
 
         to getPointers() :List:
             return [for i in (0..!pointerSize) structPointer.getPointer(i)]
@@ -49,13 +49,13 @@ def storages :DeepFrozen := [
     object void as DeepFrozen {
         to _printOn(out) { out.print("void") }
         to signature() { return "void" }
-        to get(_, _, _, _) { return null }
+        to get(_, _, _, _, _) { return null }
     },
     null,
     object uint8 as DeepFrozen {
         to _printOn(out) { out.print(`uint8`) }
         to signature() { return "uint8" }
-        to get(message, segment :Int, offset :Int, index :Int) {
+        to get(message, segment :Int, offset :Int, index :Int, _) {
             def indexOffset :Int := index // 8
             def word :Int := message.getSegmentWord(segment, offset + indexOffset)
             return shift(word, (index % 8) * 8, 8)
@@ -67,8 +67,8 @@ def storages :DeepFrozen := [
     object pointerStorage as DeepFrozen {
         to _printOn(out) { out.print(`pointer`) }
         to signature() { return "pointer" }
-        to get(message, segment :Int, offset :Int, index :Int) {
-            return message.interpretPointer(segment, offset + index)
+        to get(message, segment :Int, offset :Int, index :Int, depthLimit :Int) {
+            return message.interpretPointer(segment, offset + index, depthLimit)
         }
     },
 ]
@@ -85,17 +85,17 @@ def makeCompositeStorage :DeepFrozen := {
 
             to signature() { return ["composite", dataSize, pointerSize] }
 
-            to get(message, segment :Int, offset :Int, index :Int) {
+            to get(message, segment :Int, offset :Int, index :Int, depthLimit) {
                 def structOffset :Int := offset + stride * index
                 return makeStructPointer(message, segment, structOffset,
-                                         dataSize, pointerSize)
+                                         dataSize, pointerSize, depthLimit)
             }
         }
     }
 }
 
 def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
-                    storage :DeepFrozen) as DeepFrozen:
+                    storage :DeepFrozen, depthLimit :Int) as DeepFrozen:
     object listPointer as DeepFrozen:
         to _printOn(out):
             out.print(`<list of $storage @@$segment+$offset x$size>`)
@@ -106,7 +106,7 @@ def makeListPointer(message :DeepFrozen, segment :Int, offset :Int, size :Int,
                 if (position >= size):
                     throw.eject(ej, "End of iteration")
                 def element := storage.get(message, segment, offset,
-                                           position)
+                                           position, depthLimit)
                 def rv := [position, element]
                 position += 1
                 return rv
@@ -129,7 +129,7 @@ def formatWord(word :Int) as DeepFrozen:
         bits.push((((word >> i) & 0x1) == 0x1).pick("@", "."))
     return "b" + "".join(bits)
 
-interface CapPointer implements DeepFrozen:
+interface CapPointer :DeepFrozen:
     to index() :Int
 
 def makeCapPointer(index) as DeepFrozen:
@@ -184,17 +184,20 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
             # traceln(`getSegmentWord($segment, $i) -> ${formatWord(rv)}`)
             return rv
 
-        to getRoot():
-            return message.interpretPointer(0, 0)
+        to getRoot(=> depthLimit := 100):
+            return message.interpretPointer(0, 0, depthLimit)
 
-        to interpretPointer(segment :Int, offset :Int) :NullOk[Any]:
+        to interpretPointer(segment :Int, offset :Int, var depthLimit :Int) :NullOk[Any]:
             "
             Dereference a word as a pointer.
 
             Zero pointers are represented as None.
             "
+            if (depthLimit == 0):
+                throw("Pointer traversal limit reached")
+            depthLimit -= 1
             def i :Int := message.getSegmentWord(segment, offset)
-            # traceln(`message.interpretPointer($segment, $offset)@@${segmentPositions[segment] + offset} ${formatWord(i)}`)
+            # traceln(`message.interpretPointer($segment, $offset, $depthLimit)@@${segmentPositions[segment] + offset} ${formatWord(i)}`)
             if (i == 0x0):
                 return null
             return switch (i & 0x3):
@@ -206,7 +209,7 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
                     def dataSize :Int := shift(i, 32, 16)
                     def pointerCount :Int := shift(i, 48, 16)
                     makeStructPointer(message, segment, structOffset,
-                                      dataSize, pointerCount)
+                                      dataSize, pointerCount, depthLimit)
                 match ==0x1:
                     def listOffset :Int := 1 + offset + shift(i, 2, 30)
                     def elementType :Int := shift(i, 32, 3)
@@ -222,11 +225,11 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
                         def pointerCount :Int := shift(tag, 48, 16)
                         def wordSize :Int := shift(i, 35, 29)
                         makeListPointer(message, segment, listOffset + 1, listSize,
-                                 makeCompositeStorage(structSize, pointerCount))
+                                 makeCompositeStorage(structSize, pointerCount), depthLimit)
                     else:
                         def listSize :Int := shift(i, 35, 29)
                         makeListPointer(message, segment, listOffset, listSize,
-                                 storages[elementType])
+                                 storages[elementType], depthLimit)
                 match ==0x2:
                     def targetSegment :Int := shift(i, 32, 32)
                     def targetOffset :Int := shift(i, 3, 29)
@@ -234,7 +237,7 @@ def makeMessageReader(bs :Bytes) as DeepFrozen:
                     if (wideLanding):
                         throw("Can't handle wide landings yet!")
                     else:
-                        message.interpretPointer(targetSegment, targetOffset)
+                        message.interpretPointer(targetSegment, targetOffset, depthLimit)
                 match ==0x3 ? (shift(i, 2, 30) == 0x0):
                     object capPointer implements DeepFrozen, CapPointer:
                         to _printOn(out):
@@ -254,10 +257,6 @@ def makeMessageWriter() as DeepFrozen:
         return (pos + (8 - 1)) & -8  # Round up to 8-byte boundary
 
     return object messageWriter:
-        to checkTag(curtag, newtag):
-            if (curtag != null):
-                throw(`got multiple values for the union tag: ${curtag}, ${newtag}`)
-            return newtag
 
         to allocate(n :Int):
             def pos := buf.size()
