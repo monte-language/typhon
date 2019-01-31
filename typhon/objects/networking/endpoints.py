@@ -109,14 +109,14 @@ class ConnectStreamIOEvent(IOEvent):
         self.port = port
         self.inet_type = inet_type
 
-        def run(self):
-            # Make the actual connection.
-            if self.inet_type == 4:
-                ruv.tcp4Connect(self.stream, self.host, self.port,
-                                connectStreamCB)
-            elif self.inet_type == 6:
-                ruv.tcp6Connect(self.stream, self.host, self.port,
-                                connectStreamCB)
+    def run(self):
+        # Make the actual connection.
+        if self.inet_type == 4:
+            ruv.tcp4Connect(self.stream, self.host, self.port,
+                            connectStreamCB)
+        elif self.inet_type == 6:
+            ruv.tcp6Connect(self.stream, self.host, self.port,
+                            connectStreamCB)
 
 
 @autohelp
