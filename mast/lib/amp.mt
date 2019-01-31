@@ -153,7 +153,7 @@ def makeAMP(sink, handler) as DeepFrozen:
             def AMPSink(box) as Sink:
                 return process<-(box)
             def boxPump := makePump.fromStateMachine(makeAMPPacketMachine())
-            return alterSink.withPump(boxPump, AMPSink)
+            return alterSink.fusePump(boxPump, AMPSink)
 
         to send(command :Str, var arguments :Map, expectReply :Bool):
             return if (expectReply):
@@ -188,7 +188,7 @@ def main(argv, => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint) as DeepFroz
     def port := 9876
     switch (argv):
         match [=="-client"]:
-            def ep := makeTCP4ClientEndpoint("127.0.0.1", port)
+            def ep := makeTCP4ClientEndpoint(b`127.0.0.1`, port)
             def client := makeAMPClient(ep)
             client.connectStream(fn command, args {
                 traceln(command, args)
