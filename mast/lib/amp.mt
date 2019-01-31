@@ -126,7 +126,8 @@ def makeAMP(sink, handler) as DeepFrozen:
                     def result := handler<-(_command, arguments)
                     when (result) ->
                         def packet := result | [=> _answer]
-                        sink<-(packAMPPacket(packet))
+                        def packetBytes := packAMPPacket(packet)
+                        sink <- (packetBytes)
                     catch _error_description:
                         # Even errors will be sent!
                         def packet := result | [=> _answer,
@@ -134,7 +135,7 @@ def makeAMP(sink, handler) as DeepFrozen:
                         sink<-(packAMPPacket(packet))
             match [=> _answer] | arguments:
                 # Successful reply.
-                def answer := _makeInt.fromBytes(_answer)
+                def answer := _makeInt.fromBytes(UTF8.encode(_answer, null))
                 if (pending.contains(answer)):
                     pending[answer].resolve(arguments)
                     pending without= (answer)
@@ -183,6 +184,7 @@ def makeAMPClient(endpoint) as DeepFrozen:
         return when (def [source, sink] := endpoint.connectStream()) ->
             def amp := makeAMP(sink, handler)
             flow(source, amp.sink())
+            amp
 
 def main(argv, => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint) as DeepFrozen:
     def port := 9876
@@ -190,15 +192,19 @@ def main(argv, => makeTCP4ClientEndpoint, => makeTCP4ServerEndpoint) as DeepFroz
         match [=="-client"]:
             def ep := makeTCP4ClientEndpoint(b`127.0.0.1`, port)
             def client := makeAMPClient(ep)
-            client.connectStream(fn command, args {
+            def amp := client.connectStream(fn command, args {
                 traceln(command, args)
-                ["answer" => 42]
+                ["answer" => "42"]
             })
+            def result := amp <- send("add", ["a" => "17", "b" => "25"], true)
+            when (result) ->
+                traceln("success", result)
+
         match [=="-server"]:
             def ep := makeTCP4ServerEndpoint(port)
             def server := makeAMPServer(ep)
             server.listenStream(fn command, args {
                 traceln(command, args)
-                ["answer" => 42]
+                ["answer" => "42"]
             })
     return 0
