@@ -1,19 +1,8 @@
 {stdenv, pkgs, lib, typhonVm}:
 let
   boot = ../boot;
-  # Preprocess the mast/ folder with lit.sh
-  mastSrc = stdenv.mkDerivation {
-    name = "processed-mast";
-    src = ../mast;
-    buildInputs = [ pkgs.gawk pkgs.less ];
-    buildPhase = ''
-      bash ${../lit.sh} -v -i .
-    '';
-    installPhase = ''
-      mkdir -p $out
-      cp -R * $out/
-    '';
-  };
+  # Don't preprocess the mast/ folder with lit.sh
+  mastSrc = ../mast;
   # Compile a single module from .mt to .mast
   buildMonteModule = name: mt: let
     basename = baseNameOf mt;
