@@ -11,7 +11,7 @@ def cons(x, xs) as DeepFrozen:
     return fn f { f.Cons(x, xs(f)) }
 
 def isNil(f) :Bool as DeepFrozen:
-    return f(object _ {
+    return f(object isNilChecker {
         to Nil() { return true }
         to Cons(_, _) { return false }
     })
@@ -28,18 +28,18 @@ object tail as DeepFrozen:
     to Cons(_x, xs):
         return xs
 
-# NB: We need access to the list-maker in order to produce the pair that we
-# are returning.
-def iterate(makeList, var f) as DeepFrozen:
+def iterate(var f) as DeepFrozen:
     var i :Int := 0
     return def listIterator.next(ej):
-        def val := f(object _ {
-            to Nil() { throw.eject(ej, "end of iteration") }
-            to Cons(x, _) { return x }
+        if (isNil(f)):
+            throw.eject(ej, "end of iteration")
+        var val := null;
+        f(object unfolder {
+            to Nil() { return nil }
+            to Cons(x, xs) {val := x; f := xs; return cons(x, xs)}
         })
-        def rv := makeList(i, val)
+        def rv := [i, val]
         i += 1
-        f := f(tail)
         return rv
 
 def authorMakeList(stamp :DeepFrozen) as DeepFrozen:
@@ -60,7 +60,7 @@ def authorMakeList(stamp :DeepFrozen) as DeepFrozen:
                         to size() :Int:
                             return fold(size)
                         to _makeIterator():
-                            return iterate(makeList, fold)
+                            return iterate(fold)
 
 interface TestStamp {}
 
