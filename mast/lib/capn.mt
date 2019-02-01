@@ -334,6 +334,7 @@ def makeMessageWriter() as DeepFrozen:
                           (dataSize << 32 & 0xffff00000000) |
                           (totalOffset << 2 & 0xfffffffc) |
                           STRUCT)
+                # traceln("writing struct pointer", totalOffset, dataSize, ptrSize)
                 messageWriter.writeInt64(offset, p)
 
         to writeCapPointer(pos, ptr :CapPointer):
