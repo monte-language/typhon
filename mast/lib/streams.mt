@@ -836,10 +836,10 @@ object alterSource as DeepFrozen:
 
         return alterSource.fusePump(makePump.takeWhile(predicate), source)
 
-    to filter(predicate, source) :Source:
-        "Filter packets coming out of `source` with `predicate`."
+    # to filter(predicate, source) :Source:
+    #     "Filter packets coming out of `source` with `predicate`."
 
-        return alterSource.fusePump(makePump.filter(predicate), source)
+    #     return alterSource.fusePump(makePump.filter(predicate), source)
 
     to scan(f, z, source) :Source:
         "Produce partial folds of `source` with function `f` and initial value
@@ -865,11 +865,14 @@ def testAlterSourceMap(assert):
     return when (flow(mapSource, sink)) ->
         assert.willEqual(l, [1, 2, 3])
 
-def testAlterSourceFilter(assert):
-    def [l, sink] := makeSink.asList()
-    def source := makeSource.fromIterable([0, 1, 2, 3, 4])
-    def filterSource := alterSource.filter(fn [_, x] { x % 2 == 0 }, source)
-    return when (flow(filterSource, sink)) ->
-        assert.willEqual(l, [0, 2, 4])
+# def testAlterSourceFilter(assert):
+#     def [l, sink] := makeSink.asList()
+#     def source := makeSource.fromIterable([0, 1, 2, 3, 4])
+#     def filterSource := alterSource.filter(fn [_, x] { x % 2 == 0 }, source)
+#     return when (flow(filterSource, sink)) ->
+#         assert.willEqual(l, [0, 2, 4])
 
-unittest([testAlterSourceMap, testAlterSourceFilter])
+unittest([
+    testAlterSourceMap,
+    # testAlterSourceFilter,
+])
