@@ -122,7 +122,8 @@ games: mast/games/mafia.mast
 
 fun: mast/fun/elements.mast mast/fun/termParser.mast \
 	mast/fun/mli.mast mast/fun/symbolic.mast \
-	mast/fun/marley.mast
+	mast/fun/marley.mast mast/fun/capnDemo/message.mast \
+	mast/fun/capnDemo/demo.mast
 
 bench: mast/bench/nqueens.mast mast/bench/richards.mast mast/bench/montstone.mast \
 	mast/bench/primeCount.mast mast/bench/brot.mast \
