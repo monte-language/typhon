@@ -68,7 +68,7 @@ def testHTMLTagEscape(assert):
 
 def testHTMLTagEscapeMSIE(assert):
     def t := tag.p("superhero: the `")
-    assert.equal(t.asStr(), "superhero: the &#096;")
+    assert.equal(t.asStr(), "<p>superhero: the &#096;</p>")
 
 unittest([
     testHTMLTagNest,
