@@ -5,6 +5,7 @@ import "lib/http/apps" =~ [=> addBaseOnto]
 import "lib/http/headers" =~ [=> emptyHeaders]
 import "lib/http/response" =~ [=> Response]
 import "lib/http/server" =~ [=> makeHTTPEndpoint]
+import "lib/iterators" =~ [=> zip :DeepFrozen]
 exports (makeBuckets, makeRegistry, textExposition, addMonitoringOnto, main)
 ```
 
@@ -162,14 +163,7 @@ help avoid re-entrancy bugs.
                 [namespace => values[[]]]
             } else {
                 [for k => v in (values) {
-```
-
-Note that this is the point where the wrapper is coerced to `Double` by
-`formatDouble`. Coercion is not always obvious.
-
-```
-                    def d := formatDouble(v)
-                    def guts := ",".join([for k => v in (labels) `$k="$d"`])
+                    def guts := ",".join([for [lk, lv] in (zip(labels, k)) `$lk="${lv}"`])
                     `$namespace{$guts}`
                 } => v]
             }
@@ -676,8 +670,8 @@ Note the coercion of `sum`, again by `formatDouble`.
                                          ["le"] + labels, => zero)
             collectors[name] := fn {
                 labelMap.collect() | [
-                    `${registryName}_${name}_count` => `$count`,
-                    `${registryName}_${name}_sum` => `${formatDouble(sum)}`,
+                    `${registryName}_${name}_count` => count,
+                    `${registryName}_${name}_sum` => sum,
                 ]
             }
             object histogram:
@@ -695,7 +689,7 @@ Note the coercion of `sum`, again by `formatDouble`.
                     sum + v
                     for bucket in (buckets):
                         if (v <= bucket):
-                            labelMap[params.with("le", bucket)] + 1.0
+                            labelMap[params.with("le", formatDouble(bucket))] + 1.0
                 to labels(params :Map[Str, Str]):
                     # We have to do a bucket lookup every time anyway, so
                     # don't bother trying to produce a slot.
@@ -704,7 +698,7 @@ Note the coercion of `sum`, again by `formatDouble`.
                         sum + v
                         for bucket in (buckets):
                             if (v <= bucket):
-                                labelMap[params.with("le", bucket)] + 1.0
+                                labelMap[params.with("le", formatDouble(bucket))] + 1.0
             return if (labels.isEmpty()) {
                 histogram.labels([].asMap())
             } else { histogram }
@@ -918,19 +912,28 @@ Monte gives this property nearly for free; we must only avoid techniques like
 sorting.
 
 > ## Unit tests
-> 
+>
 > Client libraries SHOULD have unit tests covering the core instrumentation
 > library and exposition.
 
-Sure. Let's do a basic sanity test:
+Sure. We'll need to coerce our collector output to match our test data:
+
+```
+def coerce(m):
+    def maybeDouble(specimen):
+         return escape ej { Double.coerce(specimen, ej) } catch _ { specimen }
+    return [for k => v in (m) k => maybeDouble(v)]
+```
+
+Let's do a basic sanity test:
 
 ```
 def testCounter(assert):
     def r := makeRegistry("test")
     def c := r.counter("tests", "This help string will never be seen.")
-    assert.equal(r.collect(), ["test_tests" => 0.0])
+    assert.equal(coerce(r.collect()), ["test_tests" => 0.0])
     c.inc()
-    assert.equal(r.collect(), ["test_tests" => 1.0])
+    assert.equal(coerce(r.collect()), ["test_tests" => 1.0])
 ```
 
 And we'll take gauges for a test drive too:
@@ -941,19 +944,19 @@ def testGauge(assert):
     def g := r.gauge("tests", "This help string will never be seen.")
     # Doubles are exact on this integer range, so these operations should be
     # trivially exact.
-    assert.equal(r.collect(), ["test_tests" => 0.0])
+    assert.equal(coerce(r.collect()), ["test_tests" => 0.0])
     g.inc()
-    assert.equal(r.collect(), ["test_tests" => 1.0])
+    assert.equal(coerce(r.collect()), ["test_tests" => 1.0])
     g.inc(2.0)
-    assert.equal(r.collect(), ["test_tests" => 3.0])
+    assert.equal(coerce(r.collect()), ["test_tests" => 3.0])
     g.dec()
-    assert.equal(r.collect(), ["test_tests" => 2.0])
+    assert.equal(coerce(r.collect()), ["test_tests" => 2.0])
     g.dec(3.0)
-    assert.equal(r.collect(), ["test_tests" => -1.0])
+    assert.equal(coerce(r.collect()), ["test_tests" => -1.0])
     # Nontrivial FP exactness. We can rely on this due to passthrough; .set/1
     # is effectively an algebraic action.
     g.set(5.7)
-    assert.equal(r.collect(), ["test_tests" => 5.7])
+    assert.equal(coerce(r.collect()), ["test_tests" => 5.7])
 ```
 
 And make sure labels work:
@@ -966,7 +969,7 @@ def testCounterLabels(assert):
     c.inc(["t" => "200"])
     def child := c.labels(["t" => "400"])
     child.inc(2.0)
-    assert.equal(r.collect().sortKeys(), [
+    assert.equal(coerce(r.collect().sortKeys()), [
         `test_tests{t="200"}` => 1.0,
         `test_tests{t="400"}` => 2.0,
     ])
@@ -981,10 +984,10 @@ def testHistogram(assert):
     def h := r.histogram("tests", "", => buckets)
     h.observe(2.5)
     h.observe(3.5)
-    assert.equal(r.collect().sortKeys(), [
-        `test_tests_count` => 2.0,
+    assert.equal(coerce(r.collect().sortKeys()), [
+        `test_tests_count` => "2.0",
         # FP exactness!
-        `test_tests_sum` => 6.0,
+        `test_tests_sum` => "6.0",
         `test_tests_bucket{le="0.0"}` => 0.0,
         `test_tests_bucket{le="1.0"}` => 0.0,
         `test_tests_bucket{le="2.0"}` => 0.0,
