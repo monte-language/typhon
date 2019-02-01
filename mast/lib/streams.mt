@@ -135,8 +135,12 @@ def flow(source, sink) :Vow[Void] as DeepFrozen:
     "Flow all packets from `source` to `sink`, returning a `Vow` which
      resolves to `null` upon completion or a broken promise upon failure."
 
-    def [p, r] := Ref.promise()
+    if (Ref.isBroken(sink)):
+        return sink
+    if (Ref.isBroken(source)):
+        return source
 
+    def [p, r] := Ref.promise()
     object flowSink as Sink:
         to run(packet) :Vow[Void]:
             # We must pass the packet to the sink, and not request another
@@ -172,6 +176,10 @@ def testFlow(assert):
     return when (flow(source, sink)) ->
         assert.willEqual(l, [[0, 1], [1, 2], [2, 3]])
 
+def testFlowBrokenSink(assert):
+    def source := makeSource.fromIterable([1, 2, 3])
+    return assert.willBreak(flow(source, Ref.broken("no sink")))
+
 def testFlowAbort(assert):
     def source(sink) as Source:
         sink.abort("test")
@@ -195,6 +203,7 @@ unittest([
     testFlow,
     testFlowAbort,
     testFlowFail,
+    testFlowBrokenSink,
 ])
 
 def collectStr(source) :Vow[Str] as DeepFrozen:
