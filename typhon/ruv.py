@@ -599,7 +599,7 @@ def allocProcess():
 def processDiscard(process, exit_status, term_signal):
     vat, subprocess = unstashProcess(process)
     subprocess.exited(exit_status, term_signal)
-    free(process)
+    uv_close(rffi.cast(handle_tp, process), closeAndFreeCB)
 
 
 UV_PROCESS_WINDOWS_HIDE = 1 << 4
