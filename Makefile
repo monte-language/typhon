@@ -147,6 +147,7 @@ models: mast/models/list/cons.mast \
 
 tools: mast/tools/dump.mast mast/tools/repl.mast \
 	mast/tools/capnpc.mast mast/capn/reader.mast mast/capn/rpc.mast \
+	mast/capn/rpc-twoparty.mast mast/capn/montevalue.mast \
 	mast/tools/muffin.mast mast/tools/kubeless.mast mast/tools/qbe.mast
 
 
