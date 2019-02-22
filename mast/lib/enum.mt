@@ -26,6 +26,9 @@ def makeEnumObject(i :DeepFrozen, name :DeepFrozen) as DeepFrozen:
         to asInteger() :Int:
             return i
 
+        to op__cmp(rhs):
+            return i.op__cmp(rhs.asInteger())
+
 def DF :Same[DeepFrozen] := DeepFrozen
 
 object makeEnum as DeepFrozen:
