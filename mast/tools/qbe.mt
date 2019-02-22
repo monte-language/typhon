@@ -1,229 +1,347 @@
-exports (main)
+import "lib/asdl" =~ [=> asdlParser]
+import "lib/codec/utf8" =~ [=> UTF8]
+exports (qbe, main)
 
 # https://c9x.me/compile/
 
 # http://scheme2006.cs.uchicago.edu/11-ghuloum.pdf
 
+def qbe :DeepFrozen := asdlParser(mpatt`qbe`, `
+    ty = W | L | S | D | Agg(str name)
+    func = Func(ty ty, str name, arg* params, block* blocks)
+    block = Block(str label, inst* insts, jump end)
+    jump = Jump(str label) | NonZero(str val, str nonzero, str zero)
+         | Ret(str? val)
+    inst = Bin(ty ty, str op, str retval, str left, str right)
+         | Store(ty ty, str val, str addr)
+         | Load(ty ty, str retval, str addr)
+         | Alloc(int align, int size, str retval)
+         | Copy(ty ty, str dest, str src)
+         | Call(str val, ty ty, str retval, arg* args)
+    arg = Arg(ty ty, str name)
+`, null)
+
+object stringify as DeepFrozen:
+    to L():
+        return "l"
+
+    to W():
+        return "w"
+
+    to Agg(name):
+        return ":" + name
+
+    to Func(ty, name, params, blocks):
+        return `function $ty $$$name(${",".join(params)}) {
+        ${"\n".join(blocks)}
+        }
+        `
+
+    to Block(label, insts, end):
+        return `@@$label
+        ${"\n".join(insts)}
+        $end
+        `
+
+    to Jump(label):
+        return "jmp " + label
+
+    to NonZero(val, nonzero, zero):
+        return `jnz $val, $nonzero, $zero`
+
+    to Ret(val):
+        return if (val == null) { "ret" } else { "ret " + val }
+
+    to Bin(ty, op, retval, left, right):
+        return `$retval =$ty $op $left, $right`
+
+    to Store(ty, val, addr):
+        return `store$ty $val, $addr`
+
+    to Load(ty, retval, addr):
+        return `$retval =$ty load$ty $addr`
+
+    to Alloc(align, size, retval):
+        return `$retval =l alloc$align $size`
+
+    to Copy(ty, dest, src):
+        return `$dest =$ty copy $src`
+
+    to Call(val, ty, retval, args):
+        return `$retval =$ty call $val(${",".join(args)})`
+
+    to Arg(ty, name):
+        return ty + " " + name
+
+def doOffset(offset :Int) :Str as DeepFrozen:
+    return M.toString(offset * 8)
+
 def makeCompiler() as DeepFrozen:
+    def L := qbe.L()
+
     def pieces := [].diverge()
-    def funcs := [].asMap().diverge()
 
     var counter := 0
-    def nameMaker(ty) :Bytes:
+    def nameMaker(ty) :Str:
         counter += 1
-        return b`_monte_${ty}_${M.toString(counter)}`
+        return `_monte_${ty}_$counter`
 
-    def constCache := [].asMap().diverge()
+    def dataCache := [].asMap().diverge()
+    def fetchData(k, action):
+        return dataCache.fetch(k, fn { dataCache[k] := action })
 
     return object compiler:
         to finish():
-            return b`$\n`.join(pieces)
+            return UTF8.encode("\n".join(pieces), null)
+
+        to temp():
+            return "%" + nameMaker("temp")
+
+        to label():
+            return "@" + nameMaker("label")
+
+        to load(struct, offset :Int, target):
+            def temp := compiler.temp()
+            return [
+                qbe.Bin(L, "add", temp, struct, doOffset(offset)),
+                qbe.Load(L, target, temp),
+            ]
+
+        to store(struct, offset :Int, value):
+            def temp := compiler.temp()
+            return [
+                qbe.Bin(L, "add", temp, struct, doOffset(offset)),
+                qbe.Store(L, value, temp),
+            ]
+
+        to allocList(elements :List):
+            def list := compiler.temp()
+            def blocks := [qbe.Alloc(4, 3 * 8, list)].diverge()
+            def allocTemp := compiler.temp()
+            for i => elt in (elements.reverse()) {
+                blocks.extend([
+                    qbe.Alloc(4, 3 * 8, allocTemp),
+                ] + (
+                    compiler.store(allocTemp, 0, elt) +
+                    compiler.store(allocTemp, 1, list) +
+                    compiler.store(allocTemp, 2, M.toString(i))
+                ) + [
+                    qbe.Copy(L, list, allocTemp),
+                ])
+            }
+            return [list, blocks]
+
+        to allocMessage(verb, args, namedArgs):
+            def message := compiler.temp()
+            def stores := (
+                compiler.store(message, 0, verb) +
+                compiler.store(message, 1, args) +
+                compiler.store(message, 2, namedArgs)
+            )
+            return [message, [qbe.Alloc(4, 3 * 8, message)] + stores]
 
         to constant(value):
-            return constCache.fetch(value, fn {
+            return fetchData(["constant", value], fn {
                 def name := nameMaker("const")
                 switch (value) {
                     match s :Str {
-                        pieces.push(b`
+                        pieces.push(`
                             data $$$name = { b${M.toQuote(s)}, b 0 }
                         `)
                     }
                 }
-                constCache[value] := name
             })
 
-        to function(name :Bytes, ret :Str, args :Map[Str, Str], body :Bytes):
-            if (funcs.contains(name)):
-                throw(`Name $name was declared twice`)
-            def params := b`,`.join([for n => ty in (args) b`$ty %$n`])
-            funcs[name] := [ret, [for ty => _ in (args) ty]]
-            pieces.push(b`
-            function $ret $$$name($params) {
-            @@_entrance
-                jmp @@start
-            @@fail
-                ret $$theFailure
-            @@start
-                $body
+        to prebuilt(value):
+            return fetchData(["prebuilt", value], fn {
+                def name := nameMaker("pbo")
+                switch (value) {
+                    match i :Int {
+                        pieces.push(`
+                            data $$$name = { l $$Int, b${M.toQuote(i)} }
+                        `)
+                    }
+                }
+            })
+
+        to function(qbeExpr):
+            def piece := qbeExpr(stringify)
+            pieces.push(piece)
+
+        to functionBuilder(ty, name, params):
+            var label := compiler.label()
+            var rv := compiler.temp()
+            def blocks := [qbe.Block(label, [], qbe.Ret(rv))].diverge()
+            return object builder:
+                to finish():
+                    def firstLabel := compiler.label()
+                    def firstBlock := qbe.Block(firstLabel, [],
+                                                qbe.Jump(label))
+                    def func := qbe.Func(ty, name, params,
+                                         [firstBlock] + blocks)
+                    compiler.function(func)
+
+                to expr(expr):
+                    def [pl, pb] := compiler.compile(expr, rv, label)
+                    label := pl
+                    blocks.extend(pb)
+
+
+        to compile(expr :DeepFrozen, rv, nextLabel :Str):
+            return switch (expr.getNodeName()) {
+                match =="LiteralExpr" {
+                    def pbo := compiler.prebuilt(expr.getValue())
+                    def label := compiler.label()
+                    [label, qbe.Block(label, [qbe.Copy(qbe.L(), rv, pbo)], qbe.Jump(nextLabel))]
+                }
+                match =="MethodCallExpr" {
+                    var blocks := []
+                    def targetTemp := compiler.temp()
+                    def verb := compiler.constant(expr.getVerb())
+                    var nextArgLabel := compiler.label()
+                    def rargTemps := [].diverge()
+                    def rargs := [for arg in (expr.getArgs().reverse()) {
+                        def argTemp := compiler.temp()
+                        def [l, bs] := compiler.compile(arg, argTemp, nextArgLabel)
+                        blocks += bs
+                        nextArgLabel := l
+                        rargTemps.push(argTemp)
+                    }]
+                    var label := compiler.label()
+                    def insts := [].diverge()
+                    # We can stack-allocate messages and argument lists
+                    # because of the no-stale-stack-frames rule.
+                    def [argsTemp, lbs] := compiler.allocList(rargTemps.reverse())
+                    insts.extend(lbs)
+                    def [message, mbs] := compiler.allocMessage(verb, argsTemp, "0")
+                    insts.extend(mbs)
+                    def script := compiler.temp()
+                    def closure := compiler.temp()
+                    def receiver := compiler.temp()
+                    def callBlock := qbe.Block(label, insts +
+                        compiler.load(receiver, 0, script) +
+                        compiler.load(receiver, 1, closure) + [
+                        qbe.Call(script, L, rv,
+                            [qbe.Arg(L, closure), qbe.Arg(L, message)]),
+                    ], qbe.Jump(nextLabel))
+                    # Get the target.
+                    def target := compiler.temp()
+                    def [receiverLabel, receiverBlocks] := compiler.compile(expr.getReceiver(),
+                                                   target, label)
+                }
             }
-            `)
 
 def makePrelude(c) as DeepFrozen:
-    c.function(b`makeObject`, ":object", ["tag" => "l", "data" => "l"], b`
-        %p =l call $$calloc(w 2, w 8)
-        storel %tag, %p
-        %q =l add %p, 8
-        storel %data, %q
-        ret %p
-    `)
+    def L := qbe.L()
+    def W := qbe.W()
 
-    def doOffset(offset):
-        return M.toString(offset * 8)
+    c.function(qbe.Func(qbe.Agg("object"), "makeObject",
+                        [qbe.Arg(L, "%tag"), qbe.Arg(L, "%data")], [
+        qbe.Block("start", [
+            qbe.Call("$calloc", L, "%p", [qbe.Arg(W, "2"), qbe.Arg(W, "8")]),
+            qbe.Store(L, "%tag", "%p"),
+            qbe.Bin(L, "add", "%q", "%p", "8"),
+            qbe.Store(L, "%data", "%q"),
+        ], qbe.Ret("%p"))
+    ]))
 
-    def load(struct, offset, target, => temp := b`%_load_temp_p`):
-        return b`
-            $temp =l add $struct, ${doOffset(offset)}
-            $target =l loadl $temp
-        `
+    def list := qbe.Agg("list")
+    c.function(qbe.Func(list, "makeCons",
+                        [qbe.Arg(L, "head"), qbe.Arg(list, "rest")], [
+        qbe.Block("start", [
+            qbe.Call("$calloc", L, "%p", [qbe.Arg(W, "3"), qbe.Arg(W, "8")]),
+        ] + c.store("%p", 0, "%head"), qbe.NonZero("%rest", "cons", "empty")),
+        qbe.Block("cons", c.store("%p", 1, "%rest") + c.load("%rest", 2, "%size") + [
+            qbe.Bin(L, "add", "%size", "%size", "1"),
+        ] + c.store("%p", 2, "%size"), qbe.Ret("%p")),
+        qbe.Block("empty", c.store("%p", 2, "1"), qbe.Ret("%p")),
+    ]))
 
-    def store(struct, offset, value, => temp := b`%_store_temp_p`):
-        return b`
-            $temp =l add $struct, ${doOffset(offset)}
-            storel $value, $temp
-        `
-
-    c.function(b`makeCons`, ":list", ["head" => "l", "rest" => ":list"], b`
-        %p =l call $$calloc(w 3, w 8)
-        ${store(b`%p`, 0, b`%head`)}
-        jnz %rest, @@cons, @@empty
-    @@cons
-        ${store(b`%p`, 1, b`%rest`)}
-        ${load(b`%rest`, 2, b`%size`)}
-        %size =l add %size, 1
-        ${store(b`%p`, 2, b`%size`)}
-        ret %p
-    @@empty
-        ${store(b`%p`, 2, b`1`)}
-        ret %p
-    `)
-
-    c.function(b`listSize`, "l", ["list" => ":list"], b`
-        jnz %list, @@cons, @@empty
-    @@cons
-        ${load(b`%list`, 2, b`%size`)}
-        ret %size
-    @@empty
-        ret 0
-    `)
+    c.function(qbe.Func(L, "listSize", [qbe.Arg(list, "list")], [
+        qbe.Block("start", [], qbe.NonZero("%list", "cons", "empty")),
+        qbe.Block("cons", c.load("%list", 2, "%size"), qbe.Ret("%size")),
+        qbe.Block("empty", [], qbe.Ret("0")),
+    ]))
 
     def go(script):
-        # Inelegant hack: We can't get a standard loop counter here, so we do
-        # it by hand and deliberately make it cheap to compute the following
-        # counter value (+1) in order to avoid running the loop twice. ~ C.
-        var counter :Int := 0
-        def tree := b`$\n`.join([for [verb, arity] => body in (script) {
-            def marker := M.toString(counter)
-            def isVerb := b`%isItVerb$marker`
-            def cmpArity := b`%cmpArity$marker`
+        def rv := [].diverge()
+
+        # NB: One extra label for the end.
+        def scriptParts := [for [verb, arity] => body in (script) [verb, arity, body]]
+        def verbLabels := [for _ in (0..script.size()) c.label()]
+
+        def treeStart := verbLabels[0]
+        def treeEnd := verbLabels.last()
+
+        for i => [verb, arity, body] in (scriptParts):
+            def verbLabel := verbLabels[i]
+            def nextVerbLabel := verbLabels[i + 1]
+            def arityLabel := c.label()
+            def doLabel := c.label()
+            def isVerb := c.temp()
+            def cmpArity := c.temp()
             def const := c.constant(verb)
             def len := M.toString(verb.size() + 1)
-            # So inelegant.
-            counter += 1
-            b`
-            @@checkVerbFor$marker
-                $isVerb =w call $$memcmp(l %verb, l $$$const, w $len)
-                jnz $isVerb, @@checkVerbFor${M.toString(counter)}, @@checkArityFor$marker
-            @@checkArityFor$marker
-                $cmpArity =w ceql %arity, ${M.toString(arity)}
-                jnz $cmpArity, @@checkVerbFor${M.toString(counter)}, @@do$marker
-            @@do$marker
-            ` + body
-        }])
-        return b`
-            %arity =l call $$listSize(:list %args)
-        ` + tree + b`
-        @@checkVerbFor${M.toString(counter)}
+            rv.extend([
+                qbe.Block(verbLabel, [
+                    qbe.Call("$memcmp", W, isVerb,
+                             [qbe.Arg(L, "%verb"), qbe.Arg(L, const),
+                              qbe.Arg(W, len)]),
+                ], qbe.NonZero(isVerb, nextVerbLabel, arityLabel)),
+                qbe.Block(arityLabel, [
+                    qbe.Bin(W, "ceql", cmpArity, "%arity", M.toString(arity)),
+                ], qbe.NonZero(cmpArity, nextVerbLabel, doLabel)),
+                qbe.Block(doLabel, body, qbe.Ret("%rv")),
+            ])
+        def start := qbe.Block("start", [
+            qbe.Call("$listSize", L, "%arity", [qbe.Arg(list, "%args")]),
+        ], qbe.Jump(treeStart))
+        def end := qbe.Block(treeEnd, [
             # We are actually out of checks. So it is now time for failure.
-            %_r =w call $$puts(l $$${c.constant("welp\n")})
-            ret $$theFailure
-        `
+            qbe.Call("$puts", W, "%_r", [qbe.Arg(L, c.constant("welp\n"))]),
+        ], qbe.Ret("$theFailure"))
+        return [start] + rv + [end]
 
     def getArgs(argTypes):
         def pieces := [].diverge()
         for arg => ty in (argTypes):
-            def temp := b`%_monte_arg_temp`
+            def temp := "%_monte_arg_temp"
             def unwrap := switch (ty) {
-                match ==Any { b`` }
-                match ==Int { load(temp, 1, temp) }
+                match ==Any { [] }
+                match ==Int { c.load(temp, 1, temp) }
             }
-            pieces.push(b`
-                ${load(b`%args`, 0, temp)}
-                $unwrap
-                $arg =l copy $temp
-            `)
-        return b`
-            ${load(b`%args`, 1, b`%args`)}
-        `.join(pieces)
+            pieces.extend(c.load("%args", 0, temp) + unwrap + [
+                qbe.Copy(L, arg, temp)
+            ])
+        return c.load("%args", 1, "%args").join(pieces)
 
     # XXX needs automatic bigint promotion
-    c.function(b`Int`, ":object",
-               ["i" => "l", "verb" => "l", "args" => ":list", "namedArgs" => "l"],
+    def message := qbe.Agg("message")
+    c.function(qbe.Func(qbe.Agg("object"), "Int",
+                        [qbe.Arg(L, "%i"), qbe.Arg(message, "msg")], 
         go([
-            ["add", 1] => b`
-                ${getArgs([b`%j` => Int])}
-                %i =l add %i, %j
-                %rv =:object call $$makeObject(l $$Int, l %i)
-                ret %rv
-            `,
-            ["next", 0] => b`
-                %i =l add %i, 1
-                %rv =:object call $$makeObject(l $$Int, l %i)
-                ret %rv
-            `,
-            ["previous", 0] => b`
-                %i =l sub %i, 1
-                %rv =:object call $$makeObject(l $$Int, l %i)
-                ret %rv
-            `,
+            ["add", 1] => getArgs(["%j" => Int]) + [
+                qbe.Bin(L, "add", "%i", "%i", "%j"),
+                qbe.Call("$makeObject", qbe.Agg("object"), "%rv",
+                         [qbe.Arg(L, "$Int"), qbe.Arg(L, "%i")]),
+            ],
+            ["next", 0] => [
+                qbe.Bin(L, "add", "%i", "%i", "1"),
+                qbe.Call("$makeObject", qbe.Agg("object"), "%rv",
+                         [qbe.Arg(L, "$Int"), qbe.Arg(L, "%i")]),
+            ],
+            ["previous", 0] => [
+                qbe.Bin(L, "sub", "%i", "%i", "1"),
+                qbe.Call("$makeObject", qbe.Agg("object"), "%rv",
+                         [qbe.Arg(L, "$Int"), qbe.Arg(L, "%i")]),
+            ],
         ])
-    )
-
-def compile(compiler, expr :DeepFrozen, nameMaker) as DeepFrozen:
-    def label := nameMaker()
-    def name := b`_monte_block_$label`
-    return switch (expr.getNodeName()) {
-        match =="LiteralExpr" {
-            switch (expr.getValue()) {
-                match i :Int {
-                    compiler.function(name, ":object", ["frame" => "l"], b`
-                        %obj =:object call $$makeObject(l $$Int, l ${M.toString(i)})
-                        ret %obj
-                    `)
-                    name
-                }
-            }
-        }
-        match =="MethodCallExpr" {
-            def target := compile(compiler, expr.getReceiver(), nameMaker)
-            def verb := compiler.constant(expr.getVerb())
-            def argPairs := [for arg in (expr.getArgs()) {
-                def n := compile(compiler, arg, nameMaker)
-                def t := b`%_monte_method_arg_${nameMaker()}`
-                [t, b`
-                    $t =:object call $$$n(l %frame)
-                `]
-            }]
-            def argAssigns := b`$\n`.join([for [_, assign] in (argPairs) assign])
-            def argBuild := b`$\n`.join([for [t, _] in (argPairs.reverse()) {
-                b`
-                    %args =:list call $$makeCons(l $t, :list %args)
-                `
-            }])
-            # We can stack-allocate messages because of the
-            # no-stale-stack-frames rule.
-            compiler.function(name, ":object", ["frame" => "l"], b`
-                %target =:object call $$$target(l %frame)
-                %script =l loadl %target
-                %targetData =l add %target, 8
-                %data =l loadl %targetData
-                $argAssigns
-                %args =l copy 0
-                $argBuild
-                %obj =:object call %script(l %data, l $$$verb, :list %args, l 0)
-                ret %obj
-            `)
-            name
-        }
-    }
+    ))
 
 def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
-    var counter := 0
-    def nameMaker() :Bytes:
-        counter += 1
-        return b`${M.toString(counter)}`
     def c := makeCompiler()
     makePrelude(c)
-    def name := compile(c, expr, nameMaker)
+    def name := c.compile(expr)
     return b`
     # { l %script, l %data }
     type :object = { l, l }
