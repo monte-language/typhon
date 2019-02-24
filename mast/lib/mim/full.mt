@@ -122,6 +122,10 @@ def rangeOps :Map[Str, Str] := [
     "..!" => "till",
 ]
 
+def binaryOps :Map[Str, Str] := [
+    "+" => "add",
+]
+
 def mb :DeepFrozen := monteBuilder
 def expand(ast :DeepFrozen) as DeepFrozen:
     def ex :DeepFrozen := expand
@@ -150,7 +154,10 @@ def expand(ast :DeepFrozen) as DeepFrozen:
         to GetExpr(receiver, indices, span):
             return mb.MethodCallExpr(receiver, "get", indices, [], span)
 
-        to RangeExpr(start, op, stop, span):
+        to BinaryExpr(left, op :Str, right, span):
+            return mb.MethodCallExpr(left, binaryOps[op], [right], [], span)
+
+        to RangeExpr(start, op :Str, stop, span):
             def verb := "op__" + rangeOps[op]
             return mb.MethodCallExpr(ex(m`_makeOrderedSpace`), verb,
                                      [start, stop], [], span)
