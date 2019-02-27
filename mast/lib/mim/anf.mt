@@ -1,6 +1,8 @@
 import "lib/asdl" =~ [=> asdlParser]
 exports (anf, makeNormal)
 
+# http://matt.might.net/articles/a-normalization/
+
 def anf :DeepFrozen := asdlParser(mpatt`anf`, `
     atom = LiteralExpr(df value)
          | NounExpr(str name)
@@ -106,6 +108,9 @@ def makeNormal() as DeepFrozen:
                             })
                         })
                     })
+                }
+                to FinallyExpr(body, unwinder, span) {
+                    return k(anf.FinallyExpr(normal.alpha(body), normal.alpha(unwinder), span))
                 }
                 to IfExpr(test, cons, alt, span) {
                     return normal.name(test, fn t {
