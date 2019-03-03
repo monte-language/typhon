@@ -389,6 +389,74 @@ object Pair as DeepFrozenStamp:
         else:
             throw.eject(ej, "Not a Pair guard")
 
+object _TupleGuardStamp:
+    to audit(audition):
+        return true
+
+object Tuple as DeepFrozenStamp:
+    "
+    A guard which, when specialized with a list of subguards, will guard
+    'tuples', or lists of the same length, with each element guarded by the
+    corresponding subguard.
+    "
+
+    to _printOn(out):
+        out.print("Tuple")
+
+    to coerce(specimen, ej):
+        if (isList(specimen)):
+            return specimen
+
+        if (!Ref.isNear(specimen)):
+            throw.eject(ej, ["Must be near:", specimen])
+
+        def conformed := specimen._conformTo(Tuple)
+
+        if (isList(conformed)):
+            return conformed
+
+        throw.eject(ej, ["(Probably) not a pair:", specimen])
+
+    to extractGuards(specimen, ej):
+        if (specimen == Tuple):
+            return Any
+        else if (_auditedBy(_TupleGuardStamp, specimen)):
+            return specimen.getGuards()
+        else:
+            throw.eject(ej, "Not a Tuple guard")
+
+    # NB: mpatt`=="get"` isn't available yet this early. ~ C.
+    match [_verb :Same["get"], subguards, _]:
+        object SubTuple implements _TupleGuardStamp, Selfless, TransparentStamp:
+            to _printOn(out):
+                out.print("Tuple[")
+                for i => g in (subguards):
+                    if (i != 0):
+                        out.print(", ")
+                    g._printOn(out)
+                out.print("]")
+
+            to _uncall():
+                return [Tuple, "get", subguards, [].asMap()]
+
+            to getGuards():
+                return subguards
+
+            to coerce(var specimen, ej):
+                if (!Ref.isNear(specimen)):
+                    throw.eject(ej, ["Must be near:", specimen])
+
+                if (!isList(specimen) || specimen.size() != subguards.size()):
+                    specimen := specimen._conformTo(SubTuple)
+
+                if (!isList(specimen) || specimen.size() != subguards.size()):
+                    throw.eject(ej, ["Not a tuple:", specimen])
+
+                def rv := [].diverge()
+                for i => g in (subguards):
+                    rv.push(g.coerce(specimen[i], ej))
+                return rv.snapshot()
+
 object _VowStamp:
     to audit(audition):
         return true
@@ -733,7 +801,7 @@ def promiseAllFulfilled(vows) as DeepFrozenStamp:
 def scopeNames := [
     => Any, => Bool, => Bytes, => Char, => DeepFrozen, => Double, => Empty,
     => Int, => List, => Map, => NullOk, => Near, => Pair, => Same, => Set,
-    => Selfless, => Str, => SubrangeGuard, => Void, => Vow,
+    => Selfless, => Str, => SubrangeGuard, => Tuple, => Void, => Vow,
     => null, => Infinity, => NaN, => false, => true,
     => _auditedBy, => _equalizer, => _loop,
     => _makeList, => _makeMap, => _makeInt, => _makeDouble,
