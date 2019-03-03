@@ -23,8 +23,6 @@ from typhon.objects.ejectors import Ejector, throwStr
 from typhon.objects.printers import toString
 from typhon.objects.root import Object, audited
 from typhon.profile import profileTyphon
-from typhon.rstrategies import rstrategies
-from typhon.strategies.lists import strategyFactory
 
 
 @autohelp
@@ -60,36 +58,39 @@ class FlexList(Object):
     A mutable list of objects.
     """
 
-    rstrategies.make_accessors(strategy="strategy", storage="storage")
-
-    strategy = None
-
-    def __init__(self, flexObjects):
-        strategy = strategyFactory.strategy_type_for(flexObjects)
-        strategyFactory.set_initial_strategy(self, strategy, len(flexObjects),
-                                             flexObjects)
+    def __init__(self, objects, guard=None):
+        self._g = guard
+        self._l = [self.coerce(obj) for obj in objects]
 
     def toString(self):
         return toString(self)
 
+    def coerce(self, element):
+        if self._g is None:
+            return element
+        else:
+            from typhon.objects.constants import NullObject
+            return self._g.call(u"coerce", [element, NullObject])
+
     @method("Void", "Any")
     def _printOn(self, printer):
         printer.call(u"print", [StrObject(u"[")])
-        items = self.strategy.fetch_all(self)
-        for i, obj in enumerate(items):
-            printer.call(u"quote", [obj])
-            if i + 1 < len(items):
+        for i, obj in enumerate(self._l):
+            if i != 0:
                 printer.call(u"print", [StrObject(u", ")])
-        printer.call(u"print", [StrObject(u"].diverge()")])
+            printer.call(u"quote", [obj])
+        printer.call(u"print", [StrObject(u"].diverge(")])
+        if self._g is not None:
+            printer.call(u"print", [self._g])
+        printer.call(u"print", [StrObject(u")")])
 
     @method("Bool")
     def empty(self):
-        return self.strategy.size(self) == 0
+        return not bool(self._l)
 
     @method("List", "List")
     def join(self, pieces):
         l = []
-        filler = self.strategy.fetch_all(self)
         first = True
         for piece in pieces:
             # For all iterations except the first, append a copy of
@@ -97,7 +98,7 @@ class FlexList(Object):
             if first:
                 first = False
             else:
-                l.extend(filler)
+                l.extend(self._l)
 
             l.append(piece)
         return l[:]
@@ -105,16 +106,23 @@ class FlexList(Object):
     @method("List")
     def _uncall(self):
         from typhon.objects.collections.maps import EMPTY_MAP
-        return [wrapList(self.snapshot()), StrObject(u"diverge"),
-                wrapList([]), EMPTY_MAP]
+        args = wrapList([] if self._g is None else [self._g])
+        return [wrapList(self.snapshot()), StrObject(u"diverge"), args,
+                EMPTY_MAP]
 
     @method("List", "List")
     def add(self, other):
-        return self.strategy.fetch_all(self) + other
+        return self._l + other
 
     @method("Any")
     def diverge(self):
-        return FlexList(self.strategy.fetch_all(self))
+        "A mutable copy of this list."
+        return FlexList(self._l)
+
+    @method("Any", "Any", _verb="diverge")
+    def divergeGuard(self, guard):
+        "A mutable copy of this list, guarded by `guard`."
+        return FlexList(self._l, guard=guard)
 
     @method("Void", "Any")
     def extend(self, other):
@@ -123,70 +131,69 @@ class FlexList(Object):
             data = unwrapList(other)
         except:
             data = listFromIterable(other)
-        # Required to avoid passing an empty list to .append(), which
-        # apparently cannot deal. Also a quick win. ~ C.
-        if len(data) != 0:
-            self.strategy.append(self, data)
+        self._l.extend([self.coerce(elt) for elt in data])
 
     @method("Any", "Int")
     def get(self, index):
         # Lookup by index.
-        if index >= self.strategy.size(self) or index < 0:
+        if 0 <= index < len(self._l):
+            return self._l[index]
+        else:
             raise userError(u"get/1: Index %d is out of bounds" % index)
-        return self.strategy.fetch(self, index)
 
     @method("Void", "Int", "Any")
     def insert(self, index, value):
-        if index < 0:
+        if 0 <= index < len(self._l):
+            self._l.insert(index, self.coerce(value))
+        elif index == len(self._l):
+            self._l.append(self.coerce(value))
+        else:
             raise userError(u"insert/2: Index %d is out of bounds" % index)
-        self.strategy.insert(self, index, [value])
 
     @method("Any")
     def last(self):
-        size = self.strategy.size(self)
-        if size:
-            return self.strategy.fetch(self, size - 1)
-        raise userError(u"last/0: Empty list has no last element")
+        try:
+            return self._l[-1]
+        except IndexError:
+            raise userError(u"last/0: Empty list has no last element")
 
     @method("List", "Int")
     def multiply(self, count):
         # multiply/1: Create a new list by repeating this list's contents.
-        return self.strategy.fetch_all(self) * count
+        return self._l * count
 
     @method("Any")
     def pop(self):
         try:
-            return self.strategy.pop(self, self.strategy.size(self) - 1)
+            return self._l.pop()
         except IndexError:
             raise userError(u"pop/0: Pop from empty list")
 
     @method("Void", "Any")
     def push(self, value):
-        self.strategy.append(self, [value])
+        self._l.append(self.coerce(value))
 
     @method("List")
     def reverse(self):
-        new = self.strategy.fetch_all(self)[:]
+        new = self._l[:]
         new.reverse()
         return new
 
     @method("Void")
     def reverseInPlace(self):
-        new = self.strategy.fetch_all(self)[:]
-        new.reverse()
-        self.strategy.store_all(self, new)
+        self._l.reverse()
 
     @method("List", "Any", _verb="with")
     def _with(self, value):
         # with/1: Create a new list with an appended object.
-        return self.strategy.fetch_all(self) + [value]
+        return self._l + [value]
 
     @method("List", "Int", "Any", _verb="with")
     def withIndex(self, index, value):
         # Make a new ConstList.
-        if index >= self.strategy.size(self) or index < 0:
+        if not (0 < index < len(self._l)):
             raise userError(u"with/2: Index %d is out of bounds" % index)
-        new = self.strategy.fetch_all(self)[:]
+        new = self._l[:]
         new[index] = value
         return new
 
@@ -194,13 +201,13 @@ class FlexList(Object):
     def _makeIterator(self):
         # This is the behavior we choose: Iterating over a FlexList grants
         # iteration over a snapshot of the list's contents at that point.
-        return listIterator(self.strategy.fetch_all(self))
+        return listIterator(self._l[:])
 
     @method("Map")
     def asMap(self):
         from typhon.objects.collections.maps import monteMap
         d = monteMap()
-        for i, o in enumerate(self.strategy.fetch_all(self)):
+        for i, o in enumerate(self._l):
             d[IntObject(i)] = o
         return d
 
@@ -208,14 +215,14 @@ class FlexList(Object):
     def asSet(self):
         from typhon.objects.collections.maps import monteMap
         d = monteMap()
-        for o in self.strategy.fetch_all(self):
+        for o in self._l:
             d[o] = None
         return d
 
     @method.py("Bool", "Any")
     def contains(self, needle):
         from typhon.objects.equality import EQUAL, optSame
-        for specimen in self.strategy.fetch_all(self):
+        for specimen in self._l:
             if optSame(needle, specimen) is EQUAL:
                 return True
         return False
@@ -223,34 +230,33 @@ class FlexList(Object):
     @method("Int", "Any")
     def indexOf(self, needle):
         from typhon.objects.equality import EQUAL, optSame
-        for index, specimen in enumerate(self.strategy.fetch_all(self)):
+        for index, specimen in enumerate(self._l):
             if optSame(needle, specimen) is EQUAL:
                 return index
         return -1
 
     @method.py("Void", "Int", "Any")
     def put(self, index, value):
-        top = self.strategy.size(self)
+        top = len(self._l)
         if 0 <= index < top:
-            self.strategy.store(self, index, value)
+            self._l[index] = self.coerce(value)
         else:
             raise userError(u"put/2: Index %d out of bounds for list of length %d" %
                            (index, top))
 
     @method("Int")
     def size(self):
-        return self.strategy.size(self)
+        return len(self._l)
 
     @method("Bool")
     def isEmpty(self):
-        return not self.strategy.size(self)
+        return not bool(self._l)
 
     @method("List", "Int")
     def slice(self, start):
         if start < 0:
             raise userError(u"slice/1: Negative start")
-        stop = self.strategy.size(self)
-        return self.strategy.slice(self, start, stop)
+        return self._l[start:]
 
     @method("List", "Int", "Int", _verb="slice")
     def _slice(self, start, stop):
@@ -258,11 +264,11 @@ class FlexList(Object):
             raise userError(u"slice/2: Negative start")
         if stop < 0:
             raise userError(u"slice/2: Negative stop")
-        return self.strategy.slice(self, start, stop)
+        return self._l[start:stop]
 
     @method.py("List")
     def snapshot(self):
-        return self.strategy.fetch_all(self)
+        return self._l[:]
 
 
 def unwrapList(o, ej=None):
@@ -271,7 +277,7 @@ def unwrapList(o, ej=None):
     if isinstance(l, ConstList):
         return l.objs
     if isinstance(l, FlexList):
-        return l.strategy.fetch_all(l)
+        return l._l[:]
     throwStr(ej, u"Not a list!")
 
 def isList(obj):
@@ -378,8 +384,14 @@ class ConstList(Object):
 
     @method("Any")
     def diverge(self):
-        # XXX is this copy necessary?
+        "A mutable copy of this list."
+        # NB: This copy is necessary to appease RPython.
         return FlexList(self.objs[:])
+
+    @method("Any", "Any", _verb="diverge")
+    def divergeGuard(self, guard):
+        "A mutable copy of this list, guarded by `guard`."
+        return FlexList(self.objs[:], guard=guard)
 
     @method("Any", "Int")
     def get(self, index):
