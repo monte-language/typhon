@@ -349,7 +349,7 @@ object Pair as DeepFrozenStamp:
         if (!Ref.isNear(specimen)):
             throw.eject(ej, ["Must be near:", specimen])
 
-        def conformed := specimen._conformTo(Map)
+        def conformed := specimen._conformTo(Pair)
 
         if (isList(conformed) && conformed.size() == 2):
             return conformed
