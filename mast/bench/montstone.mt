@@ -16,7 +16,7 @@
 # I am not afraid to include the relatively poorly-written parts of this
 # benchmark. ~ C.
 
-import "bench" =~ [=> bench]
+import "bench" =~ [=> bench :Any]
 import "lib/enum" =~ [=> makeEnum]
 exports ()
 
@@ -27,9 +27,9 @@ def OneToThirty := 1..30
 def OneToFifty := 1..50
 def CapitalLetter := 'A'..'Z'
 def String30 := Str
-# XXX we can't do FlexList guards
+# We can't do FlexList guards.
 def Array1Dim := Any # List[Int]
-def Array2Dim := Any # List[List[Int]]
+def Array2Dim := List # List[List[Int]]
 
 def makeRecord(var PtrComp, var Discr :Enumeration, var EnumComp :Enumeration,
                var IntComp :OneToFifty, var StringComp :String30):
@@ -89,8 +89,8 @@ var IntGlob :Int := 0
 var BoolGlob :Bool := false
 var Char1Glob :Char := '\x00'
 var Char2Glob :Char := '\x00'
-var Array1Glob :Array1Dim := ([0] * 51).diverge()
-var Array2Glob :Array2Dim := [for _ in (0..50) ([0] * 51).diverge()].diverge()
+var Array1Glob :Array1Dim := ([0] * 51).diverge(Int)
+var Array2Glob :Array2Dim := [for _ in (0..50) ([0] * 51).diverge(Int)]
 var PtrGlb := null
 var PtrGlbNext := null
 
