@@ -160,7 +160,13 @@ class ConstSet(Object):
 
     @method("Any")
     def diverge(self):
-        return FlexSet(self.objectSet.copy())
+        "A mutable copy of this set."
+        return FlexSet(self.objectSet)
+
+    @method("Any", "Any", _verb="diverge")
+    def divergeGuard(self, guard):
+        "A mutable copy of this set, guarded by `guard`."
+        return FlexSet(self.objectSet, guard=guard)
 
     @method("List")
     def asList(self):
@@ -215,11 +221,21 @@ class FlexSet(Object):
     An ordered set of distinct objects.
     """
 
-    def __init__(self, objectSet):
-        self.objectSet = objectSet
+    def __init__(self, objectSet, guard=None):
+        self._g = guard
+        self.objectSet = monteSet()
+        for obj in objectSet:
+            self.objectSet[self.coerce(obj)] = None
 
     def toString(self):
         return toString(self)
+
+    def coerce(self, element):
+        if self._g is None:
+            return element
+        else:
+            from typhon.objects.constants import NullObject
+            return self._g.call(u"coerce", [element, NullObject])
 
     @method("Void", "Any")
     def _printOn(self, printer):
@@ -228,7 +244,20 @@ class FlexSet(Object):
             printer.call(u"quote", [obj])
             if i + 1 < len(self.objectSet):
                 printer.call(u"print", [StrObject(u", ")])
-        printer.call(u"print", [StrObject(u"].asSet().diverge()")])
+        printer.call(u"print", [StrObject(u"].asSet().diverge(")])
+        if self._g is not None:
+            printer.call(u"print", [self._g])
+        printer.call(u"print", [StrObject(u")")])
+
+    @method("List")
+    def _uncall(self):
+        from typhon.objects.collections.lists import wrapList
+        from typhon.objects.collections.maps import EMPTY_MAP
+        # [1,2,3].asSet().diverge() -> [[[1,2,3], "asSet"], "diverge"]
+        rv = wrapList(self.objectSet.keys())
+        args = wrapList([] if self._g is None else [self._g])
+        return [wrapList([rv, StrObject(u"asSet"), wrapList([]), EMPTY_MAP]),
+                StrObject(u"diverge"), args, EMPTY_MAP]
 
     @method("Any")
     def _makeIterator(self):
@@ -316,7 +345,7 @@ class FlexSet(Object):
 
     @method("Void", "Any")
     def include(self, key):
-        self.objectSet[key] = None
+        self.objectSet[self.coerce(key)] = None
 
     @method("Void", "Any")
     def remove(self, key):
@@ -333,22 +362,19 @@ class FlexSet(Object):
         else:
             raise userError(u"pop/0: Pop from empty set")
 
-    @method("List")
-    def _uncall(self):
-        from typhon.objects.collections.lists import wrapList
-        from typhon.objects.collections.maps import EMPTY_MAP
-        # [1,2,3].asSet().diverge() -> [[[1,2,3], "asSet"], "diverge"]
-        rv = wrapList(self.objectSet.keys())
-        return [wrapList([rv, StrObject(u"asSet"), wrapList([]), EMPTY_MAP]),
-                StrObject(u"diverge"), wrapList([]), EMPTY_MAP]
-
     @method("Set")
     def asSet(self):
         return self.snapshot()
 
     @method("Any")
     def diverge(self):
-        return FlexSet(self.objectSet.copy())
+        "A mutable copy of this set."
+        return FlexSet(self.objectSet)
+
+    @method("Any", "Any", _verb="diverge")
+    def divergeGuard(self, guard):
+        "A mutable copy of this set, guarded by `guard`."
+        return FlexSet(self.objectSet, guard=guard)
 
     @method("List")
     def asList(self):

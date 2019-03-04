@@ -117,8 +117,18 @@ class ConstMap(Object):
 
     @method("Any")
     def diverge(self):
-        # Split off a copy so that we are not mutated.
-        return FlexMap(self.objectMap.copy())
+        "A mutable copy of this map."
+        # Don't need to copy here; FlexMap's constructor makes the copy.
+        return FlexMap(self.objectMap)
+
+    @method("Any", "Any", "Any", _verb="diverge")
+    def divergeGuard(self, keyGuard, valueGuard):
+        """
+        A mutable copy of this map, with keys guarded by `keyGuard` and
+        values by `valueGuard`.
+        """
+        return FlexMap(self.objectMap, keyGuard=keyGuard,
+                       valueGuard=valueGuard)
 
     @method("Any", "Any", "Any")
     def fetch(self, key, thunk):
@@ -286,8 +296,26 @@ class FlexMap(Object):
     An ordered map of objects.
     """
 
-    def __init__(self, objectMap):
-        self.objectMap = objectMap
+    def __init__(self, objectMap, keyGuard=None, valueGuard=None):
+        self._kg = keyGuard
+        self._vg = valueGuard
+        self.objectMap = monteMap()
+        for k, v in objectMap.iteritems():
+            self.objectMap[self.coerceKey(k)] = self.coerceValue(v)
+
+    def coerceKey(self, element):
+        if self._kg is None:
+            return element
+        else:
+            from typhon.objects.constants import NullObject
+            return self._kg.call(u"coerce", [element, NullObject])
+
+    def coerceValue(self, element):
+        if self._vg is None:
+            return element
+        else:
+            from typhon.objects.constants import NullObject
+            return self._vg.call(u"coerce", [element, NullObject])
 
     @method("Void", "Any")
     def _printOn(self, printer):
@@ -303,7 +331,12 @@ class FlexMap(Object):
         printer.call(u"print", [StrObject(u"]")])
         if len(self.objectMap) == 0:
             printer.call(u"print", [StrObject(u".asMap()")])
-        printer.call(u"print", [StrObject(u".diverge()")])
+        printer.call(u"print", [StrObject(u".diverge(")])
+        if self._kg is not None and self._vg is not None:
+            printer.call(u"print", [self._kg])
+            printer.call(u"print", [StrObject(u", ")])
+            printer.call(u"print", [self._vg])
+        printer.call(u"print", [StrObject(u")")])
 
     @staticmethod
     def fromPairs(wrappedPairs):
@@ -325,7 +358,7 @@ class FlexMap(Object):
 
     @method("Void", "Any", "Any")
     def put(self, key, value):
-        self.objectMap[key] = value
+        self.objectMap[self.coerceKey(key)] = self.coerceValue(value)
 
     @method("Void", "Any")
     def removeKey(self, key):
@@ -348,7 +381,17 @@ class FlexMap(Object):
 
     @method("Any")
     def diverge(self):
-        return FlexMap(self.objectMap.copy())
+        "A mutable copy of this map."
+        return FlexMap(self.objectMap)
+
+    @method("Any", "Any", "Any", _verb="diverge")
+    def divergeGuard(self, keyGuard, valueGuard):
+        """
+        A mutable copy of this map, with keys guarded by `keyGuard` and
+        values by `valueGuard`.
+        """
+        return FlexMap(self.objectMap, keyGuard=keyGuard,
+                       valueGuard=valueGuard)
 
     @method("Any", "Any", "Any")
     def fetch(self, key, thunk):
@@ -406,7 +449,7 @@ class FlexMap(Object):
     def _with(self, key, value):
         # Replace by key.
         d = self.objectMap.copy()
-        d[key] = value
+        d[self.coerceKey(key)] = self.coerceValue(value)
         return d
 
     @method("Map", "Any")
@@ -426,8 +469,11 @@ class FlexMap(Object):
     @method("List")
     def _uncall(self):
         from typhon.objects.collections.lists import wrapList
-        return [ConstMap(self.objectMap.copy()), StrObject(u"diverge"),
-                wrapList([]), EMPTY_MAP]
+        args = wrapList([] if (self._kg is None and self._vg is None) else [
+            self._kg, self._vg
+        ])
+        return [ConstMap(self.objectMap.copy()), StrObject(u"diverge"), args,
+                EMPTY_MAP]
 
     @method("Bool", "Any")
     def contains(self, needle):
