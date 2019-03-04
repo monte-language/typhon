@@ -77,6 +77,7 @@ def makeFileLoader(root, makeFileResource) as DeepFrozen:
 
 def main(_argv,
          => makeFileResource,
+         => Timer,
          => stdio, => unsealException, => unsafeScope) :Vow[Int] as DeepFrozen:
 
     # Forward-declare the environment.
@@ -111,6 +112,16 @@ def main(_argv,
                 for k => v :DeepFrozen in (ex):
                     traceln(`Loading into environment: $k`)
                     environment with= (`&&$k`, &&v)
+
+        to benchmark(callable) :Vow[Double]:
+            "Run `callable` repeatedly, recording the time taken."
+            def iterations :Int := 10_000
+            def ps := [for _ in (0..!iterations) Timer.measureTimeTaken(callable)]
+            return when (promiseAllFulfilled(ps)) ->
+                var total := 0.0
+                for [_, t] in (ps):
+                    total += t
+                total / iterations
 
     # Set up the full environment.
     environment := safeScope | unsafeScope | [
