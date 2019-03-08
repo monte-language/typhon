@@ -21,7 +21,7 @@ let
 
 in
 stdenv.mkDerivation {
-  name = "typhon-vm";
+  name = if buildJIT then "typhon-vm" else "typhon-vm-nojit";
 
   src = vmSrc;
 

@@ -173,10 +173,10 @@ let
           ${mast}/loader run tools/capnpc "$@"
     '';
 
-
+  drvName = "${if withBuild then "monte" else "monte-lite"}-${typhonVm.name}";
 in
   stdenv.mkDerivation {
-    name = if withBuild then "monte" else "monteLite";
+    name = drvName;
     buildInputs = [ typhonVm mast rlwrap ] ++ (if withBuild then [ nix-prefetch-scripts ] else []);
     buildPhase = ''
       '';
