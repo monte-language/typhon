@@ -169,8 +169,8 @@ let
     '';
     capnpc-script = pkgs.writeScript "capnpc-monte" ''
       #!${shellForMt}
-      ${typhonVm}/mt-typhon -l ${mast}/mast -l ${mast} \
-          ${mast}/loader run mast/tools/capnpc
+      ${typhonVm}/mt-typhon -l ${mast} \
+          ${mast}/loader run tools/capnpc "$@"
     '';
 
 
