@@ -46,7 +46,7 @@ object deCapnKit as DeepFrozen:
                         ["literal" => ["bytes" => bs]]
 
             to buildImport(varName :Str) :Node:
-                return ["import" => varName]
+                return ["noun" => varName]
 
             to buildIbid(tempIndex :Int) :Node:
                 if (! (tempIndex < nextTemp)):
