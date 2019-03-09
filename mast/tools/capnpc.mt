@@ -339,7 +339,7 @@ def fieldWriter(nodeMap, node, _, f, fname) as DeepFrozen:
                          astBuilder.MapPatternAssoc(
                              L(f.name()),
                              astBuilder.FinalPattern(N(name), null, null),
-                             N("absent"),
+                             if (f._which() == 1) { m`[].asMap()` } else { N("absent") },
                              null)],
                         null, null)
                     def structWriterCall := astBuilder.MethodCallExpr(m`structWriter`, innerStructWriter, [m`listPos + (i * $structSize * 8)`, m`builder`] + [for name => _ in (fields) N(name)], [], null)
