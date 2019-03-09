@@ -28,7 +28,7 @@ def main(_argv) :Vow[Int] as DeepFrozen:
                 t_1.resolve(_makeList.run(def t_2 :Any := 1, t_0, def t_4 :Any := 3));$\
                 t_0`.canonical() :(astBuilder.getAstGuard()))
 
-    test(deSubgraphKit.recognize(x, deJSONKit.makeBuilder()),
+    test(deSubgraphKit.recognize(x, deCapnKit.makeBuilder()),
          ["defrec", 0,
           ["call", ["import", "_makeList"], "run",
            [["define", 2, 1], ["ibid", 0], ["define", 4, 3]], [].asMap()]])
