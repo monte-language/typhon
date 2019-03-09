@@ -1,0 +1,45 @@
+#!/usr/bin/env rune
+
+# Copyright 2003 Hewlett Packard, Inc. under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+def Uncaller := <type:org.erights.e.elib.serial.Uncaller>
+
+/**
+ * Used to represent the failure to serialize an object.
+ * <p>
+ * "opaque" because it represents objects that weren't transparent to the
+ * serializer in question.
+ *
+ * @author Mark S. Miller
+ */
+def opaque__uriGetter0 implements Uncaller {
+
+    /**
+     * Always succeeds, returning a "&lt;opaque:...&gt;" expression that shows
+     * what presumably could not be serialized.
+     * <p>
+     * Since this always succeeds, it should only appear last in any uncaller
+     * chain.
+     *
+     * @return Notice the lack of nullOk in the result guard, since this always
+     *         succeeds.
+     */
+    to optUncall(obj) :[any, String, any[]] {
+
+        var str := E.toString(obj)
+        if (str.startsWith("<") && str.endsWith(">")) {
+            # Strip off outer angle brackets
+            str := str(1,str.size()-1)
+        }
+        [opaque__uriGetter0, "get", [str]]
+    }
+
+    /**
+     * If the uncall is actually performed, this returns a broken reference
+     * whose problem shows what presumably could not be serialized.
+     */
+    to get(str :String) :any {
+        Ref.broken(`opaque:$str`)
+    }
+}

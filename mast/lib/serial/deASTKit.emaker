@@ -1,0 +1,214 @@
+#!/usr/bin/env rune
+
+# Copyright 2003 Hewlett Packard, Inc. under the terms of the MIT X license
+# found at http://www.opensource.org/licenses/mit-license.html ................
+
+def Term := <type:org.quasiliteral.term.Term>
+def DEBuilderOf := <elib:serial.DEBuilderOf>
+
+/**
+ * A Data-E AST is (XXX need explanation)
+ *
+ * @author Mark S. Miller
+ */
+def deASTKit {
+
+    /**
+     * Uses deASTKit as a filter (in the Unix pipe sense) to make a
+     * builder like wrappedBuilder, but in which deASTKit's simplifications
+     * are applied first.
+     */
+    to wrap(wrappedBuilder) :near {
+        def WrappedRoot := wrappedBuilder.getRootType()
+
+        def wrapper extends deASTKit.makeBuilder() {
+            to getRootType() :near { WrappedRoot }
+            to buildRoot(root :Term) :WrappedRoot {
+                def astRoot := super.buildRoot(root)
+                deASTKit.recognize(astRoot, wrappedBuilder)
+            }
+        }
+    }
+
+    /**
+     * Makes a simplified Data-E representation.
+     * <p>
+     * By "simplified", we mean that some optimization occur at build time, so
+     * the result of recognizing what's built may be smaller and simpler than
+     * the original. In particular, unused temp variables are removed, and
+     * Defrec expressions where there isn't actually a cyclic use are turned
+     * into Define expressions. The final simplification step -- repacking the
+     * remaining temporary indicies to remove gaps -- happens during
+     * recognition rather than building, since the builder we're calling is
+     * responsible for generating packed temp indices anyway.
+     * <p>
+     * Builds a tree by argument passing, rather than using a stack. But still
+     * relies on post-order in order to notice variable usage.
+     */
+    to makeBuilder() :near {
+
+        # The index of the next temp variable
+        var nextTemp := 0
+
+        # Which temp variables have been reused?
+        def varReused := [].diverge(boolean)
+
+        def deASTBuilder implements DEBuilderOf(Term, Term) {
+
+            to getNodeType() :near { Term }
+            to getRootType() :near { Term }
+
+            /**
+             * Return the result after some simplifying transformations.
+             * <p>
+             * As we've been building the argument root, we kept track of
+             * which temp variables are actually used. For those that were
+             * defined but not actually used, remove the definition leaving
+             * the simplified rValue.
+             * <p>
+             * We can ignore defrec(..) and only need to look for define(..)
+             * since, if the variable isn't used, the defrec(..) would already
+             * have been simplified into a define(..).
+             */
+            to buildRoot(root :Term) :Term {
+                def simplify(ast :Term) :Term {
+                    if (ast =~ term`define(@tempI, @rValue)`) {
+                        if (! varReused[tempI.getOptData()]) {
+                            return simplify(rValue)
+                        }
+                    }
+                    # generic recursive case
+                    def term`@tag(@args*)` := ast
+                    var simpArgs := []
+                    for arg in args {
+                        simpArgs with= simplify(arg)
+                    }
+                    term`$tag($simpArgs*)`
+                }
+                simplify(root)
+            }
+
+            to buildLiteral(value) :Term {
+                if (value =~ str :String) {
+                    term`.String.$str`
+                } else {
+                    term`$value`
+                }
+            }
+
+            to buildImport(varName :String) :Term {
+                term`import(.String.$varName)`
+            }
+
+            to buildIbid(tempIndex :int) :Term {
+                require(tempIndex < nextTemp, thunk {
+                    `internal: $tempIndex must be < $nextTemp`
+                })
+                varReused[tempIndex] := true
+                term`ibid($tempIndex)`
+            }
+
+            to buildCall(rec :Term, verb :String, args :Term[]) :Term {
+                term`call($rec, .String.$verb, [$args*])`
+            }
+
+            to buildDefine(rValue :Term) :[Term, int] {
+                def tempIndex := nextTemp
+                nextTemp += 1
+                varReused[tempIndex] := false
+                def defExpr := term`define($tempIndex, $rValue)`
+                [defExpr, tempIndex]
+            }
+
+            to buildPromise() :int {
+                def promIndex := nextTemp
+                nextTemp += 2
+                varReused[promIndex] := false
+                varReused[promIndex+1] := false
+                promIndex
+            }
+
+            /**
+             * If the temp variable wasn't actually used during the building
+             * of rValue, build a define(..) instead of a defrec(..).
+             */
+            to buildDefrec(resIndex :int, rValue :Term) :Term {
+                def promIndex := resIndex-1
+
+                if (varReused[promIndex]) {
+                    # We have a cycle
+                    term`defrec($promIndex, $rValue)`
+                } else {
+                    # No cycle
+                    term`define($promIndex, $rValue)`
+                }
+            }
+        }
+    }
+
+
+    to recognize(ast :Term, builder) :(def Root := builder.getRootType()) {
+
+        def Node := builder.getNodeType()
+
+        # Maps from represented (unpacked) to reported (packed) temporary
+        # variable indicies.
+        def tempIndices := [].asMap().diverge()
+
+        def subRecognize(sub :Term) :Node {
+
+            switch (sub) {
+
+                match term`.int.@i` {
+                    builder.buildLiteral(i.getOptData())
+                }
+                match term`.float64.@f` {
+                    builder.buildLiteral(f.getOptData())
+                }
+                match term`.char.@c` {
+                    builder.buildLiteral(c.getOptData())
+                }
+                match term`.String.@str` {
+                    builder.buildLiteral(str.getOptString())
+                }
+
+                match term`import(@varName)` {
+                    builder.buildImport(varName.getOptString())
+                }
+                match term`ibid(@tempI)` {
+                    def newTempIndex := tempIndices[tempI.getOptData()]
+                    builder.buildIbid(newTempIndex)
+                }
+                match term`call(@rec, @verb, [@args*])` {
+                    def recNode := subRecognize(rec)
+                    var argNodes := []
+                    for arg in args {
+                        argNodes with= subRecognize(arg)
+                    }
+                    builder.buildCall(recNode, verb.getOptString(), argNodes)
+                }
+                match term`define(@tempI, @rValue)` {
+                    def rValueNode := subRecognize(rValue)
+                    def [resultNode, newTempIndex] :=
+                      builder.buildDefine(rValueNode)
+                    tempIndices.put(tempI.getOptData(),
+                                    newTempIndex,
+                                    true)
+                    resultNode
+                }
+                match term`defrec(@promI, @rValue)` {
+                    def promIndex := promI.getOptData()
+                    def resIndex := promIndex+1
+                    def newPromIndex := builder.buildPromise()
+                    def newResIndex := newPromIndex+1
+                    tempIndices.put(promIndex, newPromIndex, true)
+                    tempIndices.put(resIndex, newResIndex, true)
+
+                    def rValueNode := subRecognize(rValue)
+                    builder.buildDefrec(newResIndex, rValueNode)
+                }
+            }
+        }
+        builder.buildRoot(subRecognize(ast))
+    }
+}
