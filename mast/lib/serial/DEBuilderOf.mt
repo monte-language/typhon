@@ -4,7 +4,7 @@
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
 # module "org.erights.e.elib.serial.DEBuilderOf"
-import "./guards" =~ [=>Guard :DeepFrozen]
+import "lib/serial/guards" =~ [=>Guard :DeepFrozen]
 exports (DEBuilderOf)
 
 # /**

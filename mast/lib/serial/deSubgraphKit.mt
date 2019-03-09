@@ -6,10 +6,10 @@
 # module "org.erights.e.elib.serial.deSubgraphKit"
 
 # TODO: import "serial.deASTKit" =~ [=>deASTKit :DeepFrozen]
-import "./elib/serial/DEBuilderOf" =~ [=>DEBuilderOf :DeepFrozen]
+import "lib/serial/DEBuilderOf" =~ [=>DEBuilderOf :DeepFrozen]
 # TODO: import "serial.deSrcKit" =~ [=>deSrcKit :DeepFrozen]
-import "./elib/tables/makeCycleBreaker" =~ [=>makeCycleBreaker :DeepFrozen]
-import "./elib/serial/makeUncaller" =~ [=>makeUncaller :DeepFrozen, =>Uncaller :DeepFrozen]
+import "lib/tables/makeCycleBreaker" =~ [=>makeCycleBreaker :DeepFrozen]
+import "lib/serial/makeUncaller" =~ [=>makeUncaller :DeepFrozen, =>Uncaller :DeepFrozen]
 exports (makeUnevaler, deSubgraphKit)
 
 def defaultUncallers :DeepFrozen := makeUncaller.getDefaultUncallers()

@@ -2,8 +2,8 @@
 # found at http://www.opensource.org/licenses/mit-license.html ................
 
 # def makeURIKit := <import:org.quasiliteral.syntax.URIKit>
-import "elib/serial/DEBuilderOf" =~ [=> DEBuilderOf :DeepFrozen]
-import "elib/serial/deMNodeKit" =~ [=> deMNodeKit :DeepFrozen]
+import "lib/serial/DEBuilderOf" =~ [=> DEBuilderOf :DeepFrozen]
+import "lib/serial/deMNodeKit" =~ [=> deMNodeKit :DeepFrozen]
 exports (deSrcKit)
 
 # /**

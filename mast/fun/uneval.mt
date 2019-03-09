@@ -1,7 +1,7 @@
-import "elib/serial/deSubgraphKit" =~ [=>deSubgraphKit :DeepFrozen]
-import "elib/serial/deMNodeKit" =~ [=>deMNodeKit :DeepFrozen]
-import "elib/serial/deSrcKit" =~ [=>deSrcKit :DeepFrozen]
-import "deJSONKit" =~ [=>deJSONKit :DeepFrozen]
+import "lib/serial/deSubgraphKit" =~ [=>deSubgraphKit :DeepFrozen]
+import "lib/serial/deMNodeKit" =~ [=>deMNodeKit :DeepFrozen]
+import "lib/serial/deSrcKit" =~ [=>deSrcKit :DeepFrozen]
+import "capn/deCapnKit" =~ [=>deCapnKit :DeepFrozen]
 exports (main)
 
 def test(actual, expected) as DeepFrozen:
