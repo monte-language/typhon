@@ -16,7 +16,6 @@ object deCapnKit as DeepFrozen:
         def w := makeWriter()
 
         def expr(nargs :Map):
-            traceln("@@expr", nargs)
             return M.call(w, "makeDataExpr", [], nargs)
 
         return object deCapnBuilder implements DEBuilderOf[Node, Root]:
@@ -26,11 +25,9 @@ object deCapnKit as DeepFrozen:
                 Root
 
             to buildRoot(root :Node) :Node:
-                traceln("buildRoot@@", root)
                 return w.dump(expr(root))
 
             to buildLiteral(it :Literal) :Node:
-                traceln("buildLiteral@@", it)
                 return switch (it):
                     match i :Int:
                         def ii := if (-(2 ** 31) <= i && i < 2 ** 31) {
@@ -38,7 +35,6 @@ object deCapnKit as DeepFrozen:
                         } else {
                             w.makeInteger("bigint" => b`${i}@@`)
                         }
-                        traceln("Integer@@", ii)
                         ["literal" => ["int" => ii]]
                     match x :Double:
                         ["literal" => ["double" => x]]
@@ -50,11 +46,9 @@ object deCapnKit as DeepFrozen:
                         ["literal" => ["bytes" => bs]]
 
             to buildImport(varName :Str) :Node:
-                traceln("buildImport@@", ["varName" => varName])
                 return ["import" => varName]
 
             to buildIbid(tempIndex :Int) :Node:
-                traceln("buildIbid@@", ["tempIndex" => tempIndex])
                 if (! (tempIndex < nextTemp)):
                     throw(`assertion failure: $tempIndex < $nextTemp`)
                 varReused[tempIndex] := true
@@ -62,7 +56,6 @@ object deCapnKit as DeepFrozen:
                 return ["ibid" => tempIndex]
 
             to buildCall(rec :Node, verb :Str, args :List[Node], nargs :Map[Str, Node]) :Node:
-                traceln("buildCall@@", ["rec" => rec, "verb" => verb, "args" => args, "nargs" => nargs])
                 def message := ["verb" => verb,
                                 "args" => args,
                                 "namedArgs" => [for k => v in (nargs) ["key" => k, "value" => v]]
@@ -70,7 +63,6 @@ object deCapnKit as DeepFrozen:
                 return ["call" => ["receiver" => expr(rec), "message" => message]]
 
             to buildDefine(rValue :Node) :Pair[Node, Int]:
-                traceln("buildDefine@@", ["rValue" => rValue])
                 def tempIndex := nextTemp
                 nextTemp += 1
                 varReused[tempIndex] := false
@@ -78,7 +70,6 @@ object deCapnKit as DeepFrozen:
                 return [defNode, tempIndex]
 
             to buildPromise() :Int:
-                traceln("buildPromise@@")
                 def promIndex := nextTemp
                 nextTemp += 2
                 varReused[promIndex] := false
@@ -86,7 +77,6 @@ object deCapnKit as DeepFrozen:
                 return promIndex
 
             to buildDefrec(resIndex :Int, rValue :Node) :Node:
-                traceln("buildDefrec@@", ["resIndex" => resIndex, "rValue" => rValue])
                 def promIndex := resIndex - 1
                 # traceln(`buildDefrec: $promIndex reused? ${varReused[promIndex]}.`)
                 return if (varReused[promIndex]):
@@ -97,5 +87,6 @@ object deCapnKit as DeepFrozen:
                     ["defExpr" => ["index" => promIndex, "rValue" => expr(rValue)]]
 
     to recognize():
+        reader
         throw("@@not implemented")
         #@@Char
