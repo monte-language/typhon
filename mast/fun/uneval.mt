@@ -13,7 +13,7 @@ def test(actual, expected) as DeepFrozen:
         traceln(` got: $actual`)
 
 
-def main(_argv) :Vow[Int] as DeepFrozen:
+def main(_argv, => stdio) :Vow[Int] as DeepFrozen:
     def s := M.toString
 
     def x := [1, x, 3]
@@ -28,8 +28,6 @@ def main(_argv) :Vow[Int] as DeepFrozen:
                 t_1.resolve(_makeList.run(def t_2 :Any := 1, t_0, def t_4 :Any := 3));$\
                 t_0`.canonical() :(astBuilder.getAstGuard()))
 
-    test(deSubgraphKit.recognize(x, deCapnKit.makeBuilder()),
-         ["defrec", 0,
-          ["call", ["import", "_makeList"], "run",
-           [["define", 2, 1], ["ibid", 0], ["define", 4, 3]], [].asMap()]])
-    return 0
+    def output := deSubgraphKit.recognize(x, deCapnKit.makeBuilder())
+    def stdout := stdio.stdout()
+    return when (stdout(output), stdout<-complete()) -> { 0 }
