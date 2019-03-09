@@ -27,7 +27,7 @@ object deCapnKit as DeepFrozen:
 
             to buildRoot(root :Node) :Node:
                 traceln("buildRoot@@", root)
-                return expr(root)
+                return w.dump(expr(root))
 
             to buildLiteral(it :Literal) :Node:
                 traceln("buildLiteral@@", it)
