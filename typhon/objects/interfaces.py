@@ -61,6 +61,6 @@ class ComputedInterface(Object):
     @method("Set")
     def getMethods(self):
         d = monteSet()
-        for atom in self.atoms:
-            d[ComputedMethod(atom.arity, None, atom.verb)] = None
+        for atom, docstring in self.atoms.iteritems():
+            d[ComputedMethod(atom.arity, docstring, atom.verb)] = None
         return d
