@@ -162,7 +162,7 @@ def alterMethods(cls):
     NOT_RPYTHON
     """
 
-    atoms = []
+    atoms = {}
     imports = set()
     execNames = {"Refused": Refused}
 
@@ -186,7 +186,10 @@ def alterMethods(cls):
         else:
             atom = getAtom(verb, len(args))
             atomName = namedLiteral(atom)
-            atoms.append(atom)
+            ds = f.__doc__
+            if ds is not None:
+                ds = ds.decode("utf-8")
+            atoms[atom] = ds
             atomTest = "atom is %s" % atomName
             argNames = []
             for i, arg in enumerate(args):
@@ -302,8 +305,7 @@ def autohelp(cls):
     # Must only be done once.
     repackMonteMethods(cls)
 
-    atomList = alterMethods(cls)
-    atomDict = {k: None for k in atomList}
+    atomDict = alterMethods(cls)
 
     def respondingAtoms(self):
         return atomDict
