@@ -1,10 +1,13 @@
+import "lib/capn" =~ [=> makeMessageReader :DeepFrozen]
 import "lib/serial/DEBuilderOf" =~ [=> DEBuilderOf :DeepFrozen]
 import "capn/montevalue" =~ [=> reader, => makeWriter]
+
 exports (deCapnKit)
 
 
-def Node :DeepFrozen := Any  # writer?
-def Root :DeepFrozen := Any  # Bytes?
+def Node :DeepFrozen := Map[Str, Any]  # Named arguments to makeDataExpr
+def Root :DeepFrozen := Bytes          # capn message
+
 
 object deCapnKit as DeepFrozen:
     to makeBuilder():
@@ -24,7 +27,7 @@ object deCapnKit as DeepFrozen:
             method getRootType() :Near:
                 Root
 
-            to buildRoot(root :Node) :Node:
+            to buildRoot(root :Node) :Bytes:
                 return w.dump(expr(root))
 
             to buildLiteral(it :Literal) :Node:
@@ -86,7 +89,55 @@ object deCapnKit as DeepFrozen:
                     # No cycle
                     ["defExpr" => ["index" => promIndex, "rValue" => expr(rValue)]]
 
-    to recognize():
-        reader
-        throw("@@not implemented")
-        #@@Char
+    to recognize(msg :Root, builder) :(def _Root := builder.getRootType()):
+        def Node := builder.getNodeType()
+
+        def build(expr):
+            return switch (expr._which()) {
+                match ==0 { # literal
+                    def lit := expr.literal()
+                    switch (lit._which()) {
+                        match ==0 {
+                            def litInt := lit.int()
+                            switch (litInt._which()) {
+                                match ==0 { litInt.int32() }
+                                match ==1 { throw("not implemented: bigint") }
+                            }
+                        }
+                        match ==1 { lit.double() }
+                        match ==2 { lit.str() }
+                        match ==3 { lit.char()[0] } #@@@@hmm... use int instead?
+                        match ==4 { lit.bytes() }
+                    }
+                }
+                match ==1 {
+                    builder.buildImport(expr.noun())
+                }
+                match ==2 {
+                    builder.buildIbid(expr.ibid())
+                }
+                match ==3 {
+                    def call := expr.call()
+                    def msg := call.message()
+                    def args := [for arg in (msg.args()) build(arg)]
+                    def nargs := [for n => arg in (msg.namedArgs()) n => build(arg)]
+                    builder.buildCall(build(call.receiver()), msg.verb(), args, nargs)
+                }
+                match ==4 {  # defExpr
+                    # ISSUE: we're not using the de.index() field. Is it needed?
+                    def de := expr.defExpr()
+                    def [val, _tempIndex] := builder.buildDefine(build(de.rValue()))
+                    val
+                }
+                match ==5 {  # defRec
+                    # ISSUE: we're not using the dr.promIndex() field. Is it needed?
+                    def dr := expr.defRec()
+                    def promIndex := builder.buildPromise()
+                    return builder.buildDefrec(promIndex + 1, build(dr.rValue()))
+                }
+                match other { throw(`not implemented: ${other}`) }
+            }
+
+        def expr := reader.DataExpr(makeMessageReader(msg).getRoot())
+
+        return builder.buildRoot(build(expr))
