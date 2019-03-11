@@ -251,35 +251,35 @@ object deSubgraphKit as DeepFrozen {
         def Root := Any
 
         return object deSubgraphBuilder implements DEBuilderOf(Node, Root) {
-            to getNodeType() :Near { Node }
-            to getRootType() :Near { Root }
+            method getNodeType() :Near { Node }
+            method getRootType() :Near { Root }
 
-            to buildRoot(root :Node)        :Root { root }
-            to buildLiteral(value)          :Node { value }
-            to buildImport(varName :Str) :Node { scope[varName] }
-            to buildIbid(tempIndex :Int)    :Node { temps[tempIndex] }
+            method buildRoot(root :Node)        :Root { root }
+            method buildLiteral(value)          :Node { value }
+            method buildImport(varName :Str) :Node { scope[varName] }
+            method buildIbid(tempIndex :Int)    :Node { temps[tempIndex] }
 
-            to buildCall(rec :Node, verb :Str, args :List[Node], nargs :Map[Str, Node]) :Node {
+            method buildCall(rec :Node, verb :Str, args :List[Node], nargs :Map[Str, Node]) :Node {
                 M.call(rec, verb, args, nargs)
             }
 
-            to buildDefine(rValue :Node) :Pair[Node, Int] {
                 def tempIndex := nextTemp
                 nextTemp += 1
                 temps[tempIndex] := rValue
+            method buildDefine(rValue :Node) :Pair[Node, Int] {
                 [rValue, tempIndex]
             }
 
-            to buildPromise() :Int {
                 def promIndex := nextTemp
                 nextTemp += 2
+            method buildPromise() :Int {
                 def [prom,res] := Ref.promise()
                 temps[promIndex] := prom
                 temps[promIndex+1] := res
                 promIndex
             }
 
-            to buildDefrec(resIndex :Int, rValue :Node) :Node {
+            method buildDefrec(resIndex :Int, rValue :Node) :Node {
                 temps[resIndex].resolve(rValue)
                 rValue
             }
@@ -296,7 +296,7 @@ object deSubgraphKit as DeepFrozen {
     # /**
     #  *
     #  */
-    to makeRecognizer(optUncallers, optScalpel) :Near {
+    method makeRecognizer(optUncallers, optScalpel) :Near {
         def uncallers := if (null == optUncallers) {
             defaultUncallers
         } else {
