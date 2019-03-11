@@ -250,7 +250,7 @@ object deSubgraphKit as DeepFrozen {
         def Node := Any
         def Root := Any
 
-        return object deSubgraphBuilder implements DEBuilderOf(Node, Root) {
+        return object deSubgraphBuilder implements DEBuilderOf[Node, Root] {
             method getNodeType() :Near { Node }
             method getRootType() :Near { Root }
 
