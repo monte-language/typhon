@@ -241,9 +241,6 @@ object deSubgraphKit as DeepFrozen {
     #  */
     to makeBuilder(scope) :Near {
 
-        # The index of the next temp variable
-        var nextTemp := 0
-
         # The frame of temp variables
         def temps := [].diverge()
 
@@ -263,19 +260,17 @@ object deSubgraphKit as DeepFrozen {
                 M.call(rec, verb, args, nargs)
             }
 
-                def tempIndex := nextTemp
-                nextTemp += 1
-                temps[tempIndex] := rValue
             method buildDefine(rValue :Node) :Pair[Node, Int] {
+                def tempIndex := temps.size()
+                temps.push(rValue)
                 [rValue, tempIndex]
             }
 
-                def promIndex := nextTemp
-                nextTemp += 2
             method buildPromise() :Int {
+                def promIndex := temps.size()
                 def [prom,res] := Ref.promise()
-                temps[promIndex] := prom
-                temps[promIndex+1] := res
+                temps.push(prom)
+                temps.push(res)
                 promIndex
             }
 
