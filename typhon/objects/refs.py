@@ -79,10 +79,24 @@ class RefOps(Object):
     def toString(self):
         return u"<Ref>"
 
-    @method("Any", "Any", "Any", "Any")
-    def makeProxy(self, x, y, z):
-        from typhon.objects.proxy import makeProxy
-        return makeProxy(x, y, z)
+    @method("Any", "Any", "Any", resolved="Bool")
+    def makeProxy(self, handler, resolution, resolved=False):
+        """
+        Build a proxy far object.
+
+        Proxy objects are inherently always far, but they are not required to
+        resolve to a definite far object.
+
+        A proxy waits on a `resolution`, which should be a promise for a
+        FinalSlot, and delivers sent messages to `handler` while waiting. If
+        the `resolution` never resolves, then the `handler` controls the
+        behavior of the proxy.
+
+        `resolved` proxies are settled on a far object.
+        """
+
+        from typhon.objects.proxy import makeProxy as mp
+        return mp(handler, resolution, resolved)
 
     @method("Any", "Any")
     def optProblem(self, ref):

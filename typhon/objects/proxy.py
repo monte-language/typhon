@@ -3,7 +3,7 @@ from typhon.errors import userError
 from typhon.vats import currentVat
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.collections.maps import EMPTY_MAP
-from typhon.objects.data import NullObject, StrObject, unwrapBool
+from typhon.objects.data import NullObject, StrObject
 from typhon.objects.equality import EQUAL, TraversalKey, optSame, isSameEver
 from typhon.objects.guards import anyGuard
 from typhon.objects.refs import (EVENTUAL, NEAR, Promise, UnconnectedRef,
@@ -33,6 +33,8 @@ def sendOnly(ref, atom, args, namedArgs):
 
 
 class Proxy(Promise):
+    committed = False
+
     def __init__(self, vat, handler, resolutionBox):
         if not handler.isSettled():
             raise userError(u"Proxy handler not settled: " +
@@ -40,7 +42,6 @@ class Proxy(Promise):
         self.vat = vat
         self.handler = handler
         self.resolutionBox = resolutionBox
-        self.committed = False
 
     def commit(self):
         if self.committed:
@@ -224,6 +225,7 @@ class RemotePromise(Proxy):
     are delivered to the ref's message handler. After resolution calls and
     sends are both forwarded to the resolution object.
     """
+
     def eq(self, other):
         if not isinstance(other, RemotePromise):
             return False
@@ -243,7 +245,8 @@ class RemotePromise(Proxy):
 def makeProxy(handler, resolutionBox, resolved):
     if not handler.isSettled():
         raise userError(u"Proxy handler not settled")
-    if unwrapBool(resolved):
-        return FarRef(currentVat.get(), handler, resolutionBox)
+    vat = currentVat.get()
+    if resolved:
+        return FarRef(vat, handler, resolutionBox)
     else:
-        return RemotePromise(currentVat.get(), handler, resolutionBox)
+        return RemotePromise(vat, handler, resolutionBox)
