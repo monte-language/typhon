@@ -4,7 +4,7 @@ struct DataExpr {
   struct Integer {
     union {
       int32  @0 :Int32;
-      bigint @1 :Data;
+      bigint @1 :Text;
     }
   }
 
@@ -18,7 +18,7 @@ struct DataExpr {
       int    @0 :Integer;
       double @1 :Float64;
       str    @2 :Text;
-      char   @3 :Text;
+      char   @3 :Int32;
       bytes  @4 :Data;
     }
 

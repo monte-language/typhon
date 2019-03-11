@@ -8,6 +8,8 @@ exports (deCapnKit)
 def Node :DeepFrozen := Map[Str, Any]  # Named arguments to makeDataExpr
 def Root :DeepFrozen := Bytes          # capn message
 
+def Int32 :DeepFrozen := -(2 ** 31)..!2 ** 31
+
 
 object deCapnKit as DeepFrozen:
     to makeBuilder():
@@ -31,22 +33,15 @@ object deCapnKit as DeepFrozen:
                 return w.dump(expr(root))
 
             to buildLiteral(it :Literal) :Node:
-                return switch (it):
-                    match i :Int:
-                        def ii := if (-(2 ** 31) <= i && i < 2 ** 31) {
-                            w.makeInteger("int32" => i)
-                        } else {
-                            w.makeInteger("bigint" => b`${i}@@`)
-                        }
-                        ["literal" => ["int" => ii]]
-                    match x :Double:
-                        ["literal" => ["double" => x]]
-                    match s :Str:
-                        ["literal" => ["str" => s]]
-                    match ch: Char:
-                        ["literal" => ["char" => ch]]
-                    match bs: Bytes:
-                        ["literal" => ["bytes" => bs]]
+                def lit := switch (it) {
+                    match i :Int32  { ["int" => w.makeInteger("int32" => i)] }
+                    match i :Int    { ["int" => w.makeInteger("bigint" => `${i}`)] }
+                    match x :Double { ["double" => x] }
+                    match s :Str    { ["str" => s] }
+                    match ch: Char  { ["char" => ch.asInteger()] }
+                    match bs: Bytes { ["bytes" => bs] }
+                }
+                return ["literal" => lit]
 
             to buildImport(varName :Str) :Node:
                 return ["noun" => varName]
@@ -101,12 +96,12 @@ object deCapnKit as DeepFrozen:
                             def litInt := lit.int()
                             switch (litInt._which()) {
                                 match ==0 { litInt.int32() }
-                                match ==1 { throw("not implemented: bigint") }
+                                match ==1 { _makeInt(litInt.bigint()) }
                             }
                         }
                         match ==1 { lit.double() }
                         match ==2 { lit.str() }
-                        match ==3 { lit.char()[0] } #@@@@hmm... use int instead?
+                        match ==3 { '@' - 64 + lit.char() }
                         match ==4 { lit.bytes() }
                     }
                 }

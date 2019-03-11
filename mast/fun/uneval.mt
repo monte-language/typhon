@@ -16,12 +16,10 @@ def test(actual, expected) as DeepFrozen:
 def main(_argv) :Vow[Int] as DeepFrozen:
     def s := M.toString
 
-    def data := [null, true, false, 1,
-                 # bigint is TODO
+    def data := [null, true, false, 1, 2 ** 32 + 123,
                  # 2.54 messageWriter lacks writeFloat64
                  # https://github.com/monte-language/typhon/issues/206
-                 "abc",
-                 # 'A', TODO
+                 "abc",'A',
                  # b`hello` TODO: Problem: Can't uneval <makeBytes>
     ]
     def dataMsg := deSubgraphKit.recognize(data,
