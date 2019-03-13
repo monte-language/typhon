@@ -50,6 +50,18 @@ def isIdentifier(name :Str) :Bool as DeepFrozenStamp:
         return false
     return idStart.contains(name[0]) && all(name.slice(1), idPart.contains)
 
+def maybe(node, f):
+    "handle omitted guards in the form of LiteralExpr(null) from readMAST"
+    if (node != null &&
+        !(node.getNodeName() == "LiteralExpr" && node.getValue() == null)):
+        return f(node)
+
+def printGuardOpt(guardOpt, out, level):
+    maybe(guardOpt, fn guard {
+        out.print(" :")
+        astPrint(guard, out, priorities[level])
+    })
+
 def printListOn(left, nodes, sep, right, out, priority) as DeepFrozenStamp:
     out.print(left)
     if (nodes.size() >= 1):
@@ -132,24 +144,28 @@ def printObjectHeadOn(script, name, asExpr, auditors, out, _priority) as DeepFro
                 out.quote(verb)
         printListOn("(", patterns, ", ", "", out, priorities["pattern"])
         printListOn("", namedPatterns, ", ", ")", out, priorities["pattern"])
-        if (resultGuard != null):
+        maybe(resultGuard, fn _ {
             out.print(" :")
             astPrint(resultGuard, out, priorities["call"])
-        if (asExpr != null):
+        })
+        maybe(asExpr, fn _ {
             out.print(" as ")
             astPrint(asExpr, out, priorities["call"])
+        })
         if (auditors.size() > 0):
             printListOn(" implements ", auditors, ", ", "", out, priorities["call"])
     else:
         def extend := script.getExtends()
         out.print("object ")
         astPrint(name, out, priorities["pattern"])
-        if (extend != null):
+        maybe(extend, fn _ {
             out.print(" extends ")
             astPrint(extend, out, priorities["order"])
-        if (asExpr != null):
+        })
+        maybe(asExpr, fn _ {
             out.print(" as ")
             astPrint(asExpr, out, priorities["call"])
+        })
         if (auditors.size() > 0):
             printListOn(" implements ", auditors, ", ", "", out, priorities["call"])
 
@@ -167,22 +183,6 @@ def quasiPrint(name, quasis, out) as DeepFrozenStamp:
                     p := priorities["braceExpr"]
         astPrint(q, out, p)
     out.print("`")
-
-
-def getGuardOpt(node):
-    "handle omitted guards in the form of LiteralExpr(null) from readMAST"
-    def guardOpt := node.getGuard()
-    if (guardOpt == null ||
-        (guardOpt.getNodeName() == "LiteralExpr" && guardOpt.getValue() == null)):
-        return null
-    return guardOpt
-
-def printGuardOpt(node, out, level):
-    def guard := getGuardOpt(node)
-    if (guard != null) {
-        out.print(" :")
-        astPrint(guard, out, priorities[level])
-    }
 
 
 bind printerActions :Map[Str, DeepFrozen] := [
@@ -476,10 +476,10 @@ bind printerActions :Map[Str, DeepFrozen] := [
             out.print("(")
         }
         out.print(self.getName())
-        if (self.getValue() != null) {
+        maybe(self.getValue(), fn ex {
             out.print(" ")
-            astPrint(self.getValue(), out, priority)
-        }
+            astPrint(ex, out, priority)
+        })
         if (priorities["call"] < priority) {
             out.print(")")
         }
@@ -503,11 +503,10 @@ bind printerActions :Map[Str, DeepFrozen] := [
             out.print("def ")
         }
         astPrint(pattern, out, priorities["pattern"])
-        def exit_ := self.getExit()
-        if (exit_ != null) {
+        maybe(self.getExit(), fn exit_ {
             out.print(" exit ")
             astPrint(exit_, out, priorities["call"])
-        }
+        })
         out.print(" := ")
         astPrint(self.getExpr(), out, priorities["assign"])
         if (priorities["assign"] < priority) {
@@ -563,7 +562,6 @@ bind printerActions :Map[Str, DeepFrozen] := [
             def verb := self.getVerb()
             def patterns := self.getParams()
             def namedPatts := self.getNamedParams()
-            def resultGuard := self.getResultGuard()
             if (isIdentifier(verb)) {
                 out.print(verb)
             } else {
@@ -574,10 +572,7 @@ bind printerActions :Map[Str, DeepFrozen] := [
                 out.print(", ")
             }
             printListOn("", namedPatts, ", ", ")", out, priorities["pattern"])
-            if (resultGuard != null) {
-                out.print(" :")
-                astPrint(resultGuard, out, priorities["call"])
-            }
+            printGuardOpt(self.getResultGuard(), out, "call")
         }, self.getDocstring(), self.getBody(), out, priority)
     },
     "To" => def printTo(self, out, priority) as DeepFrozenStamp {
@@ -586,7 +581,6 @@ bind printerActions :Map[Str, DeepFrozen] := [
             def verb := self.getVerb()
             def patterns := self.getParams()
             def namedPatts := self.getNamedParams()
-            def resultGuard := self.getResultGuard()
             if (isIdentifier(verb)) {
                 out.print(verb)
             } else {
@@ -597,10 +591,7 @@ bind printerActions :Map[Str, DeepFrozen] := [
                 out.print(", ")
             }
             printListOn("", namedPatts, ", ", ")", out, priorities["pattern"])
-            if (resultGuard != null) {
-                out.print(" :")
-                astPrint(resultGuard, out, priorities["call"])
-            }
+            printGuardOpt(self.getResultGuard(), out, "call")
         }, self.getDocstring(), self.getBody(), out, priority)
     },
     "Matcher" => def printMatcher(self, out, priority) as DeepFrozenStamp {
@@ -638,23 +629,21 @@ bind printerActions :Map[Str, DeepFrozen] := [
     },
     "ListComprehensionExpr" => def printListComprehensionExpr(self, out, _priority) as DeepFrozenStamp {
         out.print("[for ")
-        def key := self.getKey()
         def value := self.getValue()
         def iterable := self.getIterable()
-        def filter := self.getFilter()
-        if (key != null) {
+        maybe(self.getKey(), fn key {
             astPrint(key, out, priorities["pattern"])
             out.print(" => ")
-        }
+        })
         astPrint(value, out, priorities["pattern"])
         out.print(" in (")
         astPrint(iterable, out, priorities["braceExpr"])
         out.print(") ")
-        if (filter != null) {
+        maybe(self.getFilter(), fn filter {
             out.print("if (")
             astPrint(filter, out, priorities["braceExpr"])
             out.print(") ")
-        }
+        })
         astPrint(self.getBody(), out, priorities["braceExpr"])
         out.print("]")
     },
@@ -671,50 +660,46 @@ bind printerActions :Map[Str, DeepFrozen] := [
         printListOn("[", self.getPairs(), ", ", "]", out, priorities["braceExpr"])
     },
     "MapComprehensionExpr" => def printMapComprehensionExpr(self, out, _priority) as DeepFrozenStamp {
-        def key := self.getKey()
         def value := self.getValue()
         def iterable := self.getIterable()
-        def filter := self.getFilter()
         out.print("[for ")
-        if (key != null) {
+        maybe(self.getKey(), fn key {
             astPrint(key, out, priorities["pattern"])
             out.print(" => ")
-        }
+        })
         astPrint(value, out, priorities["pattern"])
         out.print(" in (")
         astPrint(iterable, out, priorities["braceExpr"])
         out.print(") ")
-        if (filter != null) {
+        maybe(self.getFilter(), fn filter {
             out.print("if (")
             astPrint(filter, out, priorities["braceExpr"])
             out.print(") ")
-        }
+        })
         astPrint(self.getBodyKey(), out, priorities["braceExpr"])
         out.print(" => ")
         astPrint(self.getBodyValue(), out, priorities["braceExpr"])
         out.print("]")
     },
     "ForExpr" => def printForExpr(self, out, priority) as DeepFrozenStamp {
-        def key := self.getKey()
         def value := self.getValue()
         def iterable := self.getIterable()
         printExprSuiteOn(fn {
             out.print("for ")
-            if (key != null) {
+            maybe(self.getKey(), fn key {
                 astPrint(key, out, priorities["pattern"])
                 out.print(" => ")
-            }
+            })
             astPrint(value, out, priorities["pattern"])
             out.print(" in ")
             astPrint(iterable, out, priorities["braceExpr"])
         }, self.getBody(), false, out, priority)
-        def catchPattern := self.getCatchPattern()
-        if (catchPattern != null) {
+        maybe(self.getCatchPattern(), fn catchPattern {
             printExprSuiteOn(fn {
                 out.print("catch ")
                 astPrint(catchPattern, out, priorities["pattern"])
             }, self.getCatchBody(), true, out, priority)
-        }
+        })
     },
     "ObjectExpr" => def printObjectExpr(self, out, priority) as DeepFrozenStamp {
         def script := self.getScript()
@@ -736,14 +721,13 @@ bind printerActions :Map[Str, DeepFrozen] := [
         } else {
             out.print(name)
         }
-        printGuardOpt(self, out, "call")
+        printGuardOpt(self.getGuard(), out, "call")
     },
     "MessageDesc" => def printMessageDesc(self, out, priority) as DeepFrozenStamp {
         def head := self.getHead()
         def verb := self.getVerb()
         def params := self.getParams()
         def namedParams := self.getNamedParams()
-        def resultGuard := self.getResultGuard()
         def docstring := self.getDocstring()
         #XXX hacckkkkkk
         if (head == "to") {
@@ -761,11 +745,8 @@ bind printerActions :Map[Str, DeepFrozen] := [
             out.print(", ")
         }
         printListOn("", namedParams, ", ", ")", out, priorities["pattern"])
-        if (resultGuard != null) {
-            out.print(" :")
-            astPrint(resultGuard, out, priorities["call"])
-        }
         if (docstring != null) {
+        printGuardOpt(self.getResultGuard(), out, "call")
             def bracey := priorities["braceExpr"] <= priority
             def indentOut := out.indent(INDENT)
             if (bracey) {
@@ -781,15 +762,14 @@ bind printerActions :Map[Str, DeepFrozen] := [
 
     },
     "InterfaceExpr" => def printInterfaceExpr(self, out, priority) as DeepFrozenStamp {
-        def stamp := self.getStamp()
         def parents := self.getParents()
         def auditors := self.getAuditors()
         out.print("interface ")
         out.print(self.getName())
-        if (stamp != null) {
+        maybe(self.getStamp(), fn stamp {
             out.print(" guards ")
             astPrint(stamp, out, priorities["pattern"])
-        }
+        })
         if (parents.size() > 0) {
             printListOn(" extends ", parents, ", ", "", out, priorities["call"])
         }
@@ -815,14 +795,13 @@ bind printerActions :Map[Str, DeepFrozen] := [
         out.print("interface ")
         out.print(self.getName())
         var cuddle := true
-        def stamp := self.getStamp()
         def parents := self.getParents()
         def auditors := self.getAuditors()
-        if (stamp != null) {
+        maybe(self.getStamp(), fn stamp {
             out.print(" guards ")
             astPrint(stamp, out, priorities["pattern"])
             cuddle := false
-        }
+        })
         if (parents.size() > 0) {
             printListOn(" extends ", parents, ", ", "", out, priorities["call"])
             cuddle := false
@@ -837,7 +816,6 @@ bind printerActions :Map[Str, DeepFrozen] := [
         def messageDesc := self.getMessageDesc()
         def params := messageDesc.getParams()
         def namedParams := messageDesc.getNamedParams()
-        def resultGuard := messageDesc.getResultGuard()
         def docstring := self.getDocstring()
         printListOn("(", params, ", ", "", out, priorities["pattern"])
         if (params.size() > 0 && namedParams.size() > 0) {
@@ -845,11 +823,8 @@ bind printerActions :Map[Str, DeepFrozen] := [
         }
         printListOn("", namedParams, ", ", ")", out, priorities["pattern"])
 
-        if (resultGuard != null) {
-            out.print(" :")
-            astPrint(resultGuard, out, priorities["call"])
-        }
         if (docstring != null) {
+        printGuardOpt(messageDesc.getResultGuard(), out, "call")
             def bracey := priorities["braceExpr"] <= priority
             def indentOut := out.indent(INDENT)
             if (bracey) {
@@ -882,22 +857,22 @@ bind printerActions :Map[Str, DeepFrozen] := [
         for m in (self.getCatchers()) {
             astPrint(m, out, priority)
         }
-        if (self.getFinally() != null) {
+        maybe(self.getFinally(), fn expr {
             printExprSuiteOn(fn {out.print("finally")},
-                self.getFinally(), true, out, priority)
-        }
+                expr, true, out, priority)
+        })
     },
     "EscapeExpr" => def printEscapeExpr(self, out, priority) as DeepFrozenStamp {
         printExprSuiteOn(fn {
             out.print("escape ")
             astPrint(self.getEjectorPattern(), out, priorities["pattern"])
         }, self.getBody(), false, out, priority)
-        if (self.getCatchPattern() != null) {
+        maybe(self.getCatchPattern(), fn pat {
             printExprSuiteOn(fn {
                 out.print("catch ")
-                astPrint(self.getCatchPattern(), out, priorities["pattern"])
+                astPrint(pat, out, priorities["pattern"])
             }, self.getCatchBody(), true, out, priority)
-        }
+        })
     },
     "SwitchExpr" => def printSwitchExpr(self, out, priority) as DeepFrozenStamp {
         out.print("switch (")
@@ -934,11 +909,11 @@ bind printerActions :Map[Str, DeepFrozen] := [
             for c in (self.getCatchers()) {
                 astPrint(c, out, priority)
             }
-            if (self.getFinally() != null) {
+            maybe(self.getFinally(), fn expr {
                 printExprSuiteOn(fn {
                     out.print("finally")
-                }, self.getFinally(), true, out, priority)
-            }
+                }, expr, true, out, priority)
+            })
     },
     "IfExpr" => def printIfExpr(self, out, priority) as DeepFrozenStamp {
         printExprSuiteOn(fn {
@@ -946,8 +921,7 @@ bind printerActions :Map[Str, DeepFrozen] := [
             astPrint(self.getTest(), out, priorities["braceExpr"])
             out.print(")")
             }, self.getThen(), false, out, priority)
-        def alt := self.getElse()
-        if (alt != null) {
+        maybe(self.getElse(), fn alt {
             if (alt.getNodeName() == "IfExpr") {
                 if (priorities["braceExpr"] <= priority) {
                     out.print(" ")
@@ -959,7 +933,7 @@ bind printerActions :Map[Str, DeepFrozen] := [
             } else {
                 printExprSuiteOn(fn {out.print("else")}, alt, true, out, priority)
             }
-        }
+        })
 
     },
     "WhileExpr" => def printWhileExpr(self, out, priority) as DeepFrozenStamp {
@@ -968,10 +942,9 @@ bind printerActions :Map[Str, DeepFrozen] := [
             astPrint(self.getTest(), out, priorities["braceExpr"])
             out.print(")")
             }, self.getBody(), false, out, priority)
-        def catcher := self.getCatcher()
-        if (catcher != null) {
+        maybe(self.getCatcher(), fn catcher {
             astPrint(catcher, out, priority)
-        }
+        })
     },
     "HideExpr" => def printHideExpr(self, out, _priority) as DeepFrozenStamp {
         def indentOut := out.indent(INDENT)
@@ -1002,12 +975,12 @@ bind printerActions :Map[Str, DeepFrozen] := [
     },
     "FinalPattern" => def printFinalPattern(self, out, priority) as DeepFrozenStamp {
         astPrint(self.getNoun(), out, priority)
-        printGuardOpt(self, out, "order")
+        printGuardOpt(self.getGuard(), out, "order")
     },
     "SlotPattern" => def printSlotPattern(self, out, priority) as DeepFrozenStamp {
         out.print("&")
         astPrint(self.getNoun(), out, priority)
-        printGuardOpt(self, out, "order")
+        printGuardOpt(self.getGuard(), out, "order")
     },
     "BindingPattern" => def printBindingPattern(self, out, priority) as DeepFrozenStamp {
         out.print("&&")
@@ -1016,29 +989,27 @@ bind printerActions :Map[Str, DeepFrozen] := [
     "VarPattern" => def printVarPattern(self, out, priority) as DeepFrozenStamp {
         out.print("var ")
         astPrint(self.getNoun(), out, priority)
-        printGuardOpt(self, out, "order")
+        printGuardOpt(self.getGuard(), out, "order")
     },
     "BindPattern" => def printBindPattern(self, out, priority) as DeepFrozenStamp {
         out.print("bind ")
         astPrint(self.getNoun(), out, priority)
-        printGuardOpt(self, out, "order")
+        printGuardOpt(self.getGuard(), out, "order")
     },
     "IgnorePattern" => def printIgnorePattern(self, out, _priority) as DeepFrozenStamp {
         out.print("_")
-        printGuardOpt(self, out, "order")
+        printGuardOpt(self.getGuard(), out, "order")
     },
     "ListPattern" => def printListPattern(self, out, _priority) as DeepFrozenStamp {
         printListOn("[", self.getPatterns(), ", ", "]", out, priorities["pattern"])
-        def tail := self.getTail()
-        if (tail != null) {
+        maybe(self.getTail(), fn tail {
             out.print(" + ")
             astPrint(tail, out, priorities["pattern"])
-        }
+        })
     },
     "MapPatternAssoc" => def printMapPatternAssoc(self, out, priority) as DeepFrozenStamp {
         def key := self.getKey()
         def value := self.getValue()
-        def default := self.getDefault()
         if (key.getNodeName() == "LiteralExpr") {
             astPrint(key, out, priority)
         } else {
@@ -1048,33 +1019,30 @@ bind printerActions :Map[Str, DeepFrozen] := [
         }
         out.print(" => ")
         astPrint(value, out, priority)
-        if (default != null) {
+        maybe(self.getDefault(), fn default {
             out.print(" := (")
             astPrint(default, out, priorities["braceExpr"])
             out.print(")")
-        }
+        })
     },
     "MapPatternImport" => def printMapPatternImport(self, out, priority) as DeepFrozenStamp {
         out.print("=> ")
         astPrint(self.getValue(), out, priority)
-        def default := self.getDefault()
-        if (default != null) {
+        maybe(self.getDefault(), fn default {
             out.print(" := (")
             astPrint(default, out, "braceExpr")
             out.print(")")
-        }
+        })
     },
     "MapPattern" => def printMapPattern(self, out, _priority) as DeepFrozenStamp {
         printListOn("[", self.getPatterns(), ", ", "]", out, priorities["pattern"])
-        def tail := self.getTail()
-        if (tail != null) {
+        maybe(self.getTail(), fn tail {
             out.print(" | ")
             astPrint(tail, out, priorities["pattern"])
-        }
+        })
     },
     "NamedParam" => def printNamedParam(self, out, priority) as DeepFrozenStamp {
         def key := self.getKey()
-        def default := self.getDefault()
         if (key.getNodeName() == "LiteralExpr") {
             astPrint(key, out, priority)
         } else {
@@ -1084,21 +1052,20 @@ bind printerActions :Map[Str, DeepFrozen] := [
         }
         out.print(" => ")
         astPrint(self.getValue(), out, priority)
-        if (default != null) {
+        maybe(self.getDefault(), fn default {
             out.print(" := (")
             astPrint(default, out, priorities["braceExpr"])
             out.print(")")
-        }
+        })
     },
     "NamedParamImport" => def printNamedParamImport(self, out, priority) as DeepFrozenStamp {
         out.print("=> ")
         astPrint(self.getValue(), out, priority)
-        def default := self.getDefault()
-        if (default != null) {
+        maybe(self.getDefault(), fn default {
             out.print(" := (")
             astPrint(default, out, priorities["braceExpr"])
             out.print(")")
-        }
+        })
     },
     "ViaPattern" => def printViaPattern(self, out, priority) as DeepFrozenStamp {
         out.print("via (")
@@ -1141,7 +1108,8 @@ bind printerActions :Map[Str, DeepFrozen] := [
         def pattern := self.getPattern()
         if (priorities["braceExpr"] < priority) {
             if (pattern.getNodeName() == "FinalPattern") {
-                if (getGuardOpt(pattern) == null && isIdentifier(pattern.getNoun().getName())) {
+                if (!maybe(pattern.getGuard(), fn _ { true }) &&
+                    isIdentifier(pattern.getNoun().getName())) {
                     astPrint(pattern, out, priority)
                     return
                 }
