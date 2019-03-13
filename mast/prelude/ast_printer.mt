@@ -168,6 +168,23 @@ def quasiPrint(name, quasis, out) as DeepFrozenStamp:
         astPrint(q, out, p)
     out.print("`")
 
+
+def getGuardOpt(node):
+    "handle omitted guards in the form of LiteralExpr(null) from readMAST"
+    def guardOpt := node.getGuard()
+    if (guardOpt == null ||
+        (guardOpt.getNodeName() == "LiteralExpr" && guardOpt.getValue() == null)):
+        return null
+    return guardOpt
+
+def printGuardOpt(node, out, level):
+    def guard := getGuardOpt(node)
+    if (guard != null) {
+        out.print(" :")
+        astPrint(guard, out, priorities[level])
+    }
+
+
 bind printerActions :Map[Str, DeepFrozen] := [
     "MetaContextExpr" => def printMetaContextExpr(_self, out, _priority) as DeepFrozenStamp {
         out.print("meta.context()")
@@ -719,11 +736,7 @@ bind printerActions :Map[Str, DeepFrozen] := [
         } else {
             out.print(name)
         }
-        def guard := self.getGuard()
-        if (guard != null) {
-            out.print(" :")
-            astPrint(guard, out, priorities["call"])
-        }
+        printGuardOpt(self, out, "call")
     },
     "MessageDesc" => def printMessageDesc(self, out, priority) as DeepFrozenStamp {
         def head := self.getHead()
@@ -989,20 +1002,12 @@ bind printerActions :Map[Str, DeepFrozen] := [
     },
     "FinalPattern" => def printFinalPattern(self, out, priority) as DeepFrozenStamp {
         astPrint(self.getNoun(), out, priority)
-        def guard := self.getGuard()
-        if (guard != null) {
-            out.print(" :")
-            astPrint(guard, out, priorities["order"])
-        }
+        printGuardOpt(self, out, "order")
     },
     "SlotPattern" => def printSlotPattern(self, out, priority) as DeepFrozenStamp {
         out.print("&")
         astPrint(self.getNoun(), out, priority)
-        def guard := self.getGuard()
-        if (guard != null) {
-            out.print(" :")
-            astPrint(guard, out, priorities["order"])
-        }
+        printGuardOpt(self, out, "order")
     },
     "BindingPattern" => def printBindingPattern(self, out, priority) as DeepFrozenStamp {
         out.print("&&")
@@ -1011,28 +1016,16 @@ bind printerActions :Map[Str, DeepFrozen] := [
     "VarPattern" => def printVarPattern(self, out, priority) as DeepFrozenStamp {
         out.print("var ")
         astPrint(self.getNoun(), out, priority)
-        def guard := self.getGuard()
-        if (guard != null) {
-            out.print(" :")
-            astPrint(guard, out, priorities["order"])
-        }
+        printGuardOpt(self, out, "order")
     },
     "BindPattern" => def printBindPattern(self, out, priority) as DeepFrozenStamp {
         out.print("bind ")
         astPrint(self.getNoun(), out, priority)
-        def guard := self.getGuard()
-        if (guard != null) {
-            out.print(" :")
-            astPrint(guard, out, priorities["order"])
-        }
+        printGuardOpt(self, out, "order")
     },
     "IgnorePattern" => def printIgnorePattern(self, out, _priority) as DeepFrozenStamp {
         out.print("_")
-        def guard := self.getGuard()
-        if (guard != null) {
-            out.print(" :")
-            astPrint(guard, out, priorities["order"])
-        }
+        printGuardOpt(self, out, "order")
     },
     "ListPattern" => def printListPattern(self, out, _priority) as DeepFrozenStamp {
         printListOn("[", self.getPatterns(), ", ", "]", out, priorities["pattern"])
@@ -1148,7 +1141,7 @@ bind printerActions :Map[Str, DeepFrozen] := [
         def pattern := self.getPattern()
         if (priorities["braceExpr"] < priority) {
             if (pattern.getNodeName() == "FinalPattern") {
-                if (pattern.getGuard() == null && isIdentifier(pattern.getNoun().getName())) {
+                if (getGuardOpt(pattern) == null && isIdentifier(pattern.getNoun().getName())) {
                     astPrint(pattern, out, priority)
                     return
                 }
