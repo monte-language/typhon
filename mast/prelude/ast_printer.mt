@@ -1108,7 +1108,7 @@ bind printerActions :Map[Str, DeepFrozen] := [
         def pattern := self.getPattern()
         if (priorities["braceExpr"] < priority) {
             if (pattern.getNodeName() == "FinalPattern") {
-                if (!maybe(pattern.getGuard(), fn _ { true }) &&
+                if (maybe(pattern.getGuard(), fn g { g }) == null &&
                     isIdentifier(pattern.getNoun().getName())) {
                     astPrint(pattern, out, priority)
                     return
