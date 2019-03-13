@@ -823,8 +823,8 @@ bind printerActions :Map[Str, DeepFrozen] := [
         }
         printListOn("", namedParams, ", ", ")", out, priorities["pattern"])
 
-        if (docstring != null) {
         printGuardOpt(messageDesc.getResultGuard(), out, "call")
+        if (docstring != null) {
             def bracey := priorities["braceExpr"] <= priority
             def indentOut := out.indent(INDENT)
             if (bracey) {
