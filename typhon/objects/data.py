@@ -308,15 +308,33 @@ class DoubleObject(Object):
 
     @method("Double")
     def log(self):
-        return math.log(self._d)
+        "This number's natural logarithm."
+
+        try:
+            return math.log(self._d)
+        except ValueError:
+            raise userError(u"Cannot take natural logarithm of non-positive %f" %
+                    self._d)
 
     @method("Double", "Double", _verb="log")
     def logBase(self, base):
-        return math.log(self._d) / math.log(base)
+        "This number's logarithm."
+
+        try:
+            return math.log(self._d) / math.log(base)
+        except ValueError:
+            raise userError(u"Cannot take base %f logarithm of non-positive %f" %
+                    (base, self._d))
 
     @method("Double", "Int", _verb="log")
     def logBaseInt(self, base):
-        return math.log(self._d) / math.log(base)
+        "This number's logarithm."
+
+        try:
+            return math.log(self._d) / math.log(base)
+        except ValueError:
+            raise userError(u"Cannot take base %d logarithm of non-positive %f" %
+                    (base, self._d))
 
     # Trigonometry.
 
