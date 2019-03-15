@@ -307,6 +307,12 @@ class DoubleObject(Object):
     # Logarithms.
 
     @method("Double")
+    def exp(self):
+        "Euler's constant ℯ exponentiated to this number."
+
+        return math.exp(self._d)
+
+    @method("Double")
     def log(self):
         "This number's natural logarithm."
 
