@@ -298,11 +298,23 @@ class DoubleObject(Object):
 
     @method("Double", "Double")
     def pow(self, exponent):
-        return math.pow(self._d, exponent)
+        "This number exponentiated to `exponent`."
+
+        try:
+            return math.pow(self._d, exponent)
+        except OverflowError:
+            raise userError(u"Cannot raise %f to exponent %f" % (self._d,
+                exponent))
 
     @method("Double", "Int", _verb="pow")
     def powInt(self, exponent):
-        return math.pow(self._d, exponent)
+        "This number exponentiated to `exponent`."
+
+        try:
+            return math.pow(self._d, exponent)
+        except OverflowError:
+            raise userError(u"Cannot raise %f to exponent %d" % (self._d,
+                exponent))
 
     # Logarithms.
 
