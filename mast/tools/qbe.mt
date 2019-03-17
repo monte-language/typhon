@@ -1,4 +1,5 @@
-exports (main)
+import "lib/mim/pipeline" =~ [=> go]
+exports (makeCompiler, makeProgram, main)
 
 # https://c9x.me/compile/
 
@@ -14,15 +15,24 @@ def makeCompiler() as DeepFrozen:
         return b`_monte_${ty}_${M.toString(counter)}`
 
     def constCache := [].asMap().diverge()
+    def pboCache := [].asMap().diverge()
 
     return object compiler:
         to finish():
             return b`$\n`.join(pieces)
 
+        to temp():
+            return nameMaker(b`temp`)
+
         to constant(value):
             return constCache.fetch(value, fn {
                 def name := nameMaker("const")
                 switch (value) {
+                    match i :Int {
+                        pieces.push(b`
+                            data $$$name = ${M.toString(i)}
+                        `)
+                    }
                     match s :Str {
                         pieces.push(b`
                             data $$$name = { b${M.toQuote(s)}, b 0 }
@@ -30,6 +40,15 @@ def makeCompiler() as DeepFrozen:
                     }
                 }
                 constCache[value] := name
+            })
+
+        to prebuild(script :Bytes, value :DeepFrozen):
+            return pboCache.fetch([script, value], fn {
+                def name := nameMaker("pbo")
+                pieces.push(b`
+                    data $$$name = { l $$$script, l ${compiler.constant(value)} }
+                `)
+                pboCache[[script, value]] := name
             })
 
         to function(name :Bytes, ret :Str, args :Map[Str, Str], body :Bytes):
@@ -168,53 +187,67 @@ def makePrelude(c) as DeepFrozen:
         ])
     )
 
-def compile(compiler, expr :DeepFrozen, nameMaker) as DeepFrozen:
-    def label := nameMaker()
-    def name := b`_monte_block_$label`
-    return switch (expr.getNodeName()) {
-        match =="LiteralExpr" {
-            switch (expr.getValue()) {
-                match i :Int {
-                    compiler.function(name, ":object", ["frame" => "l"], b`
-                        %obj =:object call $$makeObject(l $$Int, l ${M.toString(i)})
-                        ret %obj
-                    `)
-                    name
-                }
+def compileMoar(compiler) as DeepFrozen:
+    return object exprCompiler:
+        to FinalPattern(name :Str, _guard, _span):
+            return fn specimen {
+                b`$name =:object copy $specimen`
             }
-        }
-        match =="MethodCallExpr" {
-            def target := compile(compiler, expr.getReceiver(), nameMaker)
-            def verb := compiler.constant(expr.getVerb())
-            def argPairs := [for arg in (expr.getArgs()) {
-                def n := compile(compiler, arg, nameMaker)
-                def t := b`%_monte_method_arg_${nameMaker()}`
-                [t, b`
-                    $t =:object call $$$n(l %frame)
-                `]
-            }]
-            def argAssigns := b`$\n`.join([for [_, assign] in (argPairs) assign])
-            def argBuild := b`$\n`.join([for [t, _] in (argPairs.reverse()) {
-                b`
-                    %args =:list call $$makeCons(l $t, :list %args)
+
+        to Atom(inner, _span):
+            return inner
+
+        to LiteralExpr(value, _span):
+            def l := compiler.prebuild(b`${M.toString(value._getAllegedInterface())}`, value)
+            return fn rv { b`$rv =:object copy $l` }
+
+        to MethodCallExpr(receiver, verb :Str, args, _namedArgs, _span):
+            def allocTemp := compiler.temp()
+            def linkTemp := compiler.temp()
+            def sizeTemp := compiler.temp()
+
+            def receiverTemp := compiler.temp()
+            def scriptTemp := compiler.temp()
+            def closureTemp := compiler.temp()
+            def receiverCode := receiver(receiverTemp) + b`
+                $scriptTemp =:object loadl $receiverTemp
+                $receiverTemp =l add $receiverTemp, 8
+                $closureTemp =:object loadl $receiverTemp
+            `
+
+            def argList := compiler.temp()
+            def argCode := b`$\n`.join([for arg in (args.reverse()) {
+                def argTemp := compiler.temp()
+                arg(argTemp) + b`
+                    $allocTemp =:object alloc8 24
+                    storel $argTemp, $allocTemp
+                    $linkTemp =l add $allocTemp, 8
+                    storel $argList, $linkTemp
+                    $sizeTemp =l add $sizeTemp, 1
+                    $linkTemp =l add $linkTemp, 8
+                    storel $argList, $sizeTemp
+                    $argList =:object copy $allocTemp
                 `
             }])
-            # We can stack-allocate messages because of the
-            # no-stale-stack-frames rule.
-            compiler.function(name, ":object", ["frame" => "l"], b`
-                %target =:object call $$$target(l %frame)
-                %script =l loadl %target
-                %targetData =l add %target, 8
-                %data =l loadl %targetData
-                $argAssigns
-                %args =l copy 0
-                $argBuild
-                %obj =:object call %script(l %data, l $$$verb, :list %args, l 0)
-                ret %obj
-            `)
-            name
-        }
-    }
+
+            def messageTemp := compiler.temp()
+            def messageCode := b`
+                $messageTemp =:message alloc8 24
+                storel $messageTemp, ${compiler.constant(verb)}
+                $linkTemp =l add $messageTemp, 8
+                storel $linkTemp, $argList
+            `
+            return fn rv {
+                argCode + messageCode + b`$rv =:object call $scriptTemp(l $closureTemp, l $messageTemp)`
+            }
+
+        to LetExpr(patt, expr, body, _span):
+            def exprTemp := compiler.temp()
+            def pattCode := expr(exprTemp) + patt(exprTemp)
+            return fn rv { pattCode + body(rv) }
+
+def compile(c, expr) as DeepFrozen:
+    return go(expr)(compileMoar(c))
 
 def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
     var counter := 0
@@ -223,7 +256,7 @@ def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
         return b`${M.toString(counter)}`
     def c := makeCompiler()
     makePrelude(c)
-    def name := compile(c, expr, nameMaker)
+    def guts := compile(c, expr)(b`%obj`)
     return b`
     # { l %script, l %data }
     type :object = { l, l }
@@ -241,7 +274,7 @@ def makeProgram(expr :DeepFrozen) :Bytes as DeepFrozen:
     export function w $$main() {
     @@start
         %r =w call $$puts(l $$hello)
-        %obj =:object call $$$name(l 0)
+        $guts
         %r =w call $$puts(l $$landing)
         %tag =l loadl %obj
         %isInt =w ceql %tag, $$Int
