@@ -45,7 +45,6 @@ def makeLimo(load) as DeepFrozen:
             if (!mods.contains(pn)):
                 def p := when (def loaded := load<-(pn)) -> {
                     def [s, expr] := loaded
-                    traceln(`Loaded $pn`)
                     limo<-(pn, s, expr)
                 }
                 mods[pn] := p
@@ -60,7 +59,6 @@ def makeLimo(load) as DeepFrozen:
                 def value :DeepFrozen := mods[pn]
                 astBuilder.MapExprAssoc(key, value, null)
             }], null)
-            def ln := astBuilder.LiteralExpr(name, null)
             def ls := astBuilder.LiteralExpr(source, null)
             def importBody := if (wantsMeta) {
                 m`if (petname == "meta") {
@@ -78,7 +76,6 @@ def makeLimo(load) as DeepFrozen:
                 m`deps[petname](null)`
             }
             def instance := mods[name] := m`{
-                traceln(``Defining module $${$ln}…``)
                 def deps :Map[Str, DeepFrozen] := { $depExpr }
                 def makePackage(mod :DeepFrozen) as DeepFrozen {
                     return def package."import"(petname :Str) as DeepFrozen {
@@ -88,7 +85,6 @@ def makeLimo(load) as DeepFrozen:
                 object _ as DeepFrozen {
                     to dependencies() { return [] }
                     to run(_package) {
-                        traceln(``Running module $${$ln}…``)
                         def mod := { $expr }
                         return mod(makePackage(mod))
                     }
