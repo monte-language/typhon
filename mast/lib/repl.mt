@@ -11,6 +11,9 @@ def runREPL(makeParser, reducer, ps1 :Str, ps2 :Str, source, sink) as DeepFrozen
     var replState :REPLState := PS1
     var parser := makeParser()
 
+    # The serial number of the next promise/eventual value we see.
+    var promiseCounter :Int := 0
+
     def reset():
         replState := PS1
         parser := makeParser()
@@ -40,7 +43,15 @@ def runREPL(makeParser, reducer, ps1 :Str, ps2 :Str, source, sink) as DeepFrozen
                     switch (parser.results()):
                         match [result] + _:
                             def reduced := reducer(result)
-                            sink(`Result: $reduced$\n`)
+                            if (Ref.isResolved(reduced)):
+                                sink(`Result: $reduced$\n`)
+                            else:
+                                sink(`Promise $promiseCounter: $reduced$\n`)
+                                promiseCounter += 1
+                                when (reduced) ->
+                                    sink(`Resolved $promiseCounter: $reduced$\n`)
+                                catch problem:
+                                    sink(`Problem $promiseCounter: $problem$\n`)
                         match _:
                             sink(`No result?$\n`)
                     reset()
