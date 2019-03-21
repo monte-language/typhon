@@ -164,7 +164,7 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
 
     def fieldVisitors := [
         "Id" => fn n { m`$n(f)` },
-        "Option" => fn n { m`$n(f)` },
+        "Option" => fn n { m`if ($n != null) { $n(f) }` },
         "Sequence" => fn n { m`[for x in ($n) x(f)]` },
     ]
 
