@@ -22,31 +22,33 @@ def makeCompiler() as DeepFrozen:
             return b`$\n`.join(pieces)
 
         to temp():
-            return nameMaker(b`temp`)
+            return b`%` + nameMaker(b`temp`)
 
         to constant(value):
-            return constCache.fetch(value, fn {
-                def name := nameMaker("const")
-                switch (value) {
-                    match i :Int {
-                        pieces.push(b`
-                            data $$$name = ${M.toString(i)}
-                        `)
+            return if (value =~ i :Int) { b`${M.toString(i)}` } else {
+                constCache.fetch(value, fn {
+                    def name := b`$$` + nameMaker("const")
+                    switch (value) {
+                        match i :Int {
+                            pieces.push(b`
+                                data $name = ${M.toString(i)}
+                            `)
+                        }
+                        match s :Str {
+                            pieces.push(b`
+                                data $name = { b${M.toQuote(s)}, b 0 }
+                            `)
+                        }
                     }
-                    match s :Str {
-                        pieces.push(b`
-                            data $$$name = { b${M.toQuote(s)}, b 0 }
-                        `)
-                    }
-                }
-                constCache[value] := name
-            })
+                    constCache[value] := name
+                })
+            }
 
         to prebuild(script :Bytes, value :DeepFrozen):
             return pboCache.fetch([script, value], fn {
-                def name := nameMaker("pbo")
+                def name := b`$$` + nameMaker("pbo")
                 pieces.push(b`
-                    data $$$name = { l $$$script, l ${compiler.constant(value)} }
+                    data $name = { l $$$script, l ${compiler.constant(value)} }
                 `)
                 pboCache[[script, value]] := name
             })
@@ -120,7 +122,7 @@ def makePrelude(c) as DeepFrozen:
         # it by hand and deliberately make it cheap to compute the following
         # counter value (+1) in order to avoid running the loop twice. ~ C.
         var counter :Int := 0
-        def tree := b`$\n`.join([for [verb, arity] => body in (script) {
+        def tree := b`$\n`.join([for [verb :Str, arity] => body in (script) {
             def marker := M.toString(counter)
             def isVerb := b`%isItVerb$marker`
             def cmpArity := b`%cmpArity$marker`
@@ -130,12 +132,15 @@ def makePrelude(c) as DeepFrozen:
             counter += 1
             b`
             @@checkVerbFor$marker
-                $isVerb =w call $$memcmp(l %verb, l $$$const, w $len)
+                %_r =w call $$puts(l ${c.constant(`checking for verb $verb$\n`)})
+                $isVerb =w call $$memcmp(l %verb, l $const, w $len)
                 jnz $isVerb, @@checkVerbFor${M.toString(counter)}, @@checkArityFor$marker
             @@checkArityFor$marker
+                %_r =w call $$puts(l ${c.constant(`checking for arity $arity$\n`)})
                 $cmpArity =w ceql %arity, ${M.toString(arity)}
                 jnz $cmpArity, @@checkVerbFor${M.toString(counter)}, @@do$marker
             @@do$marker
+                %_r =w call $$puts(l ${c.constant(`entering method $verb/$arity$\n`)})
             ` + body
         }])
         return b`
@@ -143,7 +148,7 @@ def makePrelude(c) as DeepFrozen:
         ` + tree + b`
         @@checkVerbFor${M.toString(counter)}
             # We are actually out of checks. So it is now time for failure.
-            %_r =w call $$puts(l $$${c.constant("welp\n")})
+            %_r =w call $$puts(l ${c.constant("welp\n")})
             ret $$theFailure
         `
 
@@ -187,24 +192,34 @@ def makePrelude(c) as DeepFrozen:
         ])
     )
 
+def cspan(span :DeepFrozen, _ej) :Bytes as DeepFrozen:
+    return b`# ${M.toString(span)}`
+
 def compileMoar(compiler) as DeepFrozen:
     return object exprCompiler:
-        to FinalPattern(name :Str, _guard, _span):
-            return fn specimen {
-                b`$name =:object copy $specimen`
-            }
+        to FinalPattern(name :Str, _guard, via (cspan) span):
+            return fn specimen { b`
+                $span
+                %$name =l copy $specimen
+            ` }
 
         to Atom(inner, _span):
             return inner
 
-        to LiteralExpr(value, _span):
+        to LiteralExpr(value, via (cspan) span):
             def l := compiler.prebuild(b`${M.toString(value._getAllegedInterface())}`, value)
-            return fn rv { b`$rv =:object copy $l` }
+            return fn rv { b`
+                $span
+                $rv =l copy $l
+            ` }
 
-        to NounExpr(name, _span):
-            return fn rv { b`$rv =:object copy %$name` }
+        to NounExpr(name, via (cspan) span):
+            return fn rv { b`
+                $span
+                $rv =l copy %$name
+            ` }
 
-        to MethodCallExpr(receiver, verb :Str, args, _namedArgs, _span):
+        to MethodCallExpr(receiver, verb :Str, args, _namedArgs, via (cspan) span):
             def allocTemp := compiler.temp()
             def linkTemp := compiler.temp()
             def sizeTemp := compiler.temp()
@@ -213,36 +228,43 @@ def compileMoar(compiler) as DeepFrozen:
             def scriptTemp := compiler.temp()
             def closureTemp := compiler.temp()
             def receiverCode := receiver(receiverTemp) + b`
-                $scriptTemp =:object loadl $receiverTemp
+                $span: receiver
+                $scriptTemp =l loadl $receiverTemp
                 $receiverTemp =l add $receiverTemp, 8
-                $closureTemp =:object loadl $receiverTemp
+                $closureTemp =l loadl $receiverTemp
             `
 
             def argList := compiler.temp()
-            def argCode := b`$\n`.join([for arg in (args.reverse()) {
+            def argCode := b`
+                $span: args
+                $argList =l copy 0
+                $sizeTemp =l copy 0
+            ` + b``.join([for arg in (args.reverse()) {
                 def argTemp := compiler.temp()
                 arg(argTemp) + b`
-                    $allocTemp =:object alloc8 24
+                    $allocTemp =l alloc8 24
                     storel $argTemp, $allocTemp
                     $linkTemp =l add $allocTemp, 8
                     storel $argList, $linkTemp
                     $sizeTemp =l add $sizeTemp, 1
                     $linkTemp =l add $linkTemp, 8
-                    storel $argList, $sizeTemp
-                    $argList =:object copy $allocTemp
+                    storel $sizeTemp, $linkTemp
+                    $argList =l copy $allocTemp
                 `
             }])
 
             def messageTemp := compiler.temp()
             def messageCode := b`
-                $messageTemp =:message alloc8 24
+                $span: message
+                $messageTemp =l alloc8 24
                 storel $messageTemp, ${compiler.constant(verb)}
                 $linkTemp =l add $messageTemp, 8
                 storel $linkTemp, $argList
             `
-            return fn rv {
-                argCode + messageCode + b`$rv =:object call $scriptTemp(l $closureTemp, l $messageTemp)`
-            }
+            return fn rv { receiverCode + argCode + messageCode + b`
+                $span: call
+                $rv =:object call $scriptTemp(l $closureTemp, l $messageTemp)
+            ` }
 
         to LetExpr(patt, expr, body, _span):
             def exprTemp := compiler.temp()
