@@ -46,12 +46,12 @@ def runREPL(makeParser, reducer, ps1 :Str, ps2 :Str, source, sink) as DeepFrozen
                             if (Ref.isResolved(reduced)):
                                 sink(`Result: $reduced$\n`)
                             else:
-                                sink(`Promise $promiseCounter: $reduced$\n`)
-                                promiseCounter += 1
+                                def pc := promiseCounter += 1
+                                sink(`Promise $pc: $reduced$\n`)
                                 when (reduced) ->
-                                    sink(`Resolved $promiseCounter: $reduced$\n`)
+                                    sink(`Resolved $pc: $reduced$\n`)
                                 catch problem:
-                                    sink(`Problem $promiseCounter: $problem$\n`)
+                                    sink(`Problem $pc: $problem$\n`)
                         match _:
                             sink(`No result?$\n`)
                     reset()
