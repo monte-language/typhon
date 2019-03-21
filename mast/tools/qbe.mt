@@ -201,6 +201,9 @@ def compileMoar(compiler) as DeepFrozen:
             def l := compiler.prebuild(b`${M.toString(value._getAllegedInterface())}`, value)
             return fn rv { b`$rv =:object copy $l` }
 
+        to NounExpr(name, _span):
+            return fn rv { b`$rv =:object copy %$name` }
+
         to MethodCallExpr(receiver, verb :Str, args, _namedArgs, _span):
             def allocTemp := compiler.temp()
             def linkTemp := compiler.temp()
