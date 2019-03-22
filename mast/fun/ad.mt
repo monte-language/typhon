@@ -21,11 +21,23 @@ object makeDual as DeepFrozen:
                 epsilon._printOn(out)
                 out.print("ε")
 
+            to op__cmp(via (D) other :DeepFrozen):
+                return real.op__cmp(other.real())
+
             to real():
                 return real
 
             to epsilon():
                 return epsilon
+
+            to abs():
+                return if (real >= 0.0) { dualNumber } else {
+                    makeDual(-real, -epsilon)
+                }
+
+            to negate():
+                # Negation is like multiplication by -1.
+                return makeDual(-real, -epsilon)
 
             to add(via (D) other :DeepFrozen):
                 return makeDual(real + other.real(), epsilon + other.epsilon())
@@ -65,36 +77,38 @@ object makeDual as DeepFrozen:
                 return makeDual(real.cos(), real.sin() * -epsilon)
 
 def minimize(f, starts :List[Double],
-             => var gamma :Double := (1/128),
-             => epsilon :Double := (10.0 ** -7)) :List[Double] as DeepFrozen:
-    var minimum :List[Double] := starts
-    var counter :Int := 0
-    while (gamma > 0.0):
-        counter += 1
-        def elevation := M.call(f, "run", minimum, [].asMap())
-        def ds := [for i => _ in (minimum) {
-            def args := [for j => a in (minimum) {
-                makeDual(a, (i == j).pick(1.0, 0.0))
+             => var gamma :Double := (1/128)) as DeepFrozen:
+    def invoke(args):
+        return M.call(f, "run", args, [].asMap())
+
+    return def minimizingIterable._makeIterator():
+        var counter :Int := 0
+        var minimum :List[Double] := starts
+
+        return def minimizingIterator.next(ej):
+            def gradient := [for i => _ in (minimum) {
+                def args := [for j => a in (minimum) {
+                    makeDual(a, (i == j).pick(1.0, 0.0))
+                }]
+                invoke(args).epsilon()
             }]
-            M.call(f, "run", args, [].asMap())
-        }]
-        def next := [for i => a in (minimum) a - gamma * ds[i].epsilon()]
-        def ledge := M.call(f, "run", next, [].asMap())
-        def error := {
-            var eps := 0.0
-            for d in (ds) { eps += d.epsilon() ** 2 }
-            eps.sqrt()
-        }
-        if (ledge >= elevation):
-            # traceln("overshoot ds", ds, "minimum", minimum, "next", next, "gamma", gamma)
-            gamma *= 0.25
-            continue
-        if (error <= epsilon):
-            return next
-        # Set up for the next loop.
-        minimum := next
-        if (counter % 1000 == 0 && gamma < 1.0):
-            gamma *= 2.0
-        if (counter % 10000 == 0):
-            traceln("iteration", counter, "minimum", minimum, "error", error)
-    return minimum
+            def best := invoke(minimum)
+            minimum := while (true) {
+                def candidate := [for i => a in (minimum) a - gamma * gradient[i]]
+                if (invoke(candidate) < best) { break candidate }
+                # traceln(`candidate $candidate no good, gamma $gamma`)
+                # Turn gamma down and try again.
+                gamma *= 0.5
+                if (gamma <= 0.0) {
+                    throw.eject(ej,
+                        "Cannot hear the gradient and the noise knob doesn't go any lower")
+                }
+
+            }
+            # Slowly turn gamma back up.
+            if (counter % 100 == 0 && gamma < 1.0):
+                gamma *= 2.0
+
+            def rv := [counter, minimum]
+            counter += 1
+            return rv
