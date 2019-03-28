@@ -1,57 +1,96 @@
-# Copyright (C) 2015 Google Inc. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not
-# use this file except in compliance with the License. You may obtain a copy
-# of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
-# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
-# License for the specific language governing permissions and limitations
-# under the License.
-
-import "lib/entropy/pool" =~  [=> makePool :DeepFrozen]
+import "lib/entropy/pool" =~  [=> makePool]
 exports (makeEntropy)
 
 def makeEntropy(generator) as DeepFrozen:
+    "Augment a random number generator."
+
     def pool := makePool(generator)
 
     return object entropy:
+        "An ergonomic source of random values."
+
+        # Methods inherited from our component objects.
+
         to availableEntropy() :Int:
             return pool.availableEntropy()
 
         to getAlgorithm() :Str:
             return generator.getAlgorithm()
 
-        to nextBool() :Bool:
-            return pool.getSomeBits(1) == 0
+        # Primitive value generation.
 
-        to nextInt(n :(Int > 0)) :Int:
+        to nextBool() :Bool:
+            "
+            Either `true` or `false`.
+
+            Uses 1 bit.
+            "
+
+            return pool.getSomeBits(1).isZero()
+
+        to nextInt(n :(Int > 0)) :(0..n):
+            "
+            An `Int` in `0..n`.
+
+            Uses Θ(lg `n`) bits.
+            "
+
             # Unbiased selection: If a sample doesn't fit within the bound,
             # then discard it and take another one.
             def k := n.bitLength()
             var rv := pool.getSomeBits(k)
-            # traceln(`nextInt($n) k=$k -> $rv`)
-            while (rv >= n):
-                # traceln(`Was too big!`)
+            while (rv > n):
                 rv := pool.getSomeBits(k)
-                # traceln(`nextInt($n) k=$k -> $rv`)
             return rv
 
-        to nextDouble() :Double:
+        to nextDouble() :(0.0..!1.0):
+            "
+            A `Double` in `(0.0..!1.0)`.
+
+            Uses 53 bits.
+            "
+
             return pool.getSomeBits(53) / (1 << 53)
 
+        # Draws from common probability distributions.
+
         to nextExponential(lambda :Double):
-            "The exponential distribution with half-life λ."
+            "
+            The exponential distribution with half-life λ.
+
+            Uses 53 bits.
+            "
 
             # This kind of inversion lets us avoid a conditional check for 0.0
             # before taking a logarithm.
             def d := 1.0 - entropy.nextDouble()
             return -(d.log()) / lambda
 
+        # Operations on Lists.
+
+        # XXX change this method name, it sucks
         to nextDraw(l :List):
-            "Draw randomly from `l`."
+            "
+            Draw an element from `l`.
+
+            Uses Θ(lg `l.size()`) bits.
+            "
 
             return l[entropy.nextInt(l.size())]
+
+        to shuffle(l :List) :List:
+            "
+            Permute `l`.
+
+            Uses Θ(`l.size()` * lg `l.size()`) bits.
+            "
+
+            def fl := l.diverge()
+            # https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
+            def n := l.size() - 1
+            for i in (0..!n):
+                def j := entropy.nextInt(n - i) + i
+                def temp := fl[i]
+                fl[i] := fl[j]
+                fl[j] := temp
+            return fl.snapshot()
