@@ -70,6 +70,34 @@ def makeEntropy(generator) as DeepFrozen:
             def d := 1.0 - entropy.nextDouble()
             return -(d.log()) / lambda
 
+        to nextSphere(n :(Int >= 1)):
+            "
+            A tuple on the unit `n`-sphere.
+
+            Uses `n` * 53 bits.
+            "
+
+            # http://extremelearning.com.au/how-to-generate-uniformly-random-points-on-n-spheres-and-n-balls/
+            var d := 0.0
+            def us := [for _ in (0..n) {
+                def x := entropy.nextDouble()
+                d += x ** 2
+                x
+            }]
+            def norm := d.sqrt()
+            return [for u in (us) u / norm]
+
+        to nextBall(n :(Int >= 2)):
+            "
+            A tuple within the unit `n`-ball.
+
+            Uses (`n` + 1) * 53 bits.
+            "
+
+            # https://mathoverflow.net/questions/33129/
+            # Intuition: https://www.youtube.com/watch?v=GNcFjFmqEc8
+            return entropy.nextSphere(n + 1).slice(0, n)
+
         # Operations on Lists.
 
         to nextElement(l :List):
