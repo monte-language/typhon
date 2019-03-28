@@ -135,7 +135,7 @@ object arb as DeepFrozen:
     match [=="Any", subArbs, _]:
         object arbAny as Arb:
             to arbitrary(entropy):
-                return entropy.nextDraw(subArbs).arbitrary(entropy)
+                return entropy.nextElement(subArbs).arbitrary(entropy)
 
             to shrink(_) :List:
                 # We don't know which of our subordinates created the value.

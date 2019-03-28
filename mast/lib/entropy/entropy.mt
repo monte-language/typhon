@@ -7,7 +7,11 @@ def makeEntropy(generator) as DeepFrozen:
     def pool := makePool(generator)
 
     return object entropy:
-        "An ergonomic source of random values."
+        "
+        An ergonomic source of random values.
+
+        Methods whose verbs begin with \"next\" are probabalistic.
+        "
 
         # Methods inherited from our component objects.
 
@@ -68,10 +72,9 @@ def makeEntropy(generator) as DeepFrozen:
 
         # Operations on Lists.
 
-        # XXX change this method name, it sucks
-        to nextDraw(l :List):
+        to nextElement(l :List):
             "
-            Draw an element from `l`.
+            An element from `l`.
 
             Uses Θ(lg `l.size()`) bits.
             "
