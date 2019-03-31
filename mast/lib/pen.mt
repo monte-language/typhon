@@ -16,8 +16,41 @@ object finishedSlicer as DeepFrozen:
     to span():
         return null
 
+def makeGenericListSlicer(l :List[DeepFrozen], sourceName :NullOk[Str]) as DeepFrozen:
+    def size :Int := l.size()
+    def makeListSlicer(index :Int) as DeepFrozen:
+        if (index >= size):
+            return finishedSlicer
+
+        def [token :DeepFrozen, span :DeepFrozen] := if (sourceName == null) {
+            [l[index], _makeSourceSpan("<list>", false, 0, index, 0, index + 1)]
+        } else { l[index] }
+
+        return object listSlicer as DeepFrozen:
+            to _printOn(out):
+                out.print(`<list $index/$size>`)
+
+            to next(ej):
+                def i := index + 1
+                return if (i <= size) {
+                    def slicer := makeListSlicer(i)
+                    [token, slicer]
+                } else { listSlicer.eject(ej, `End of token-list`) }
+
+            to eject(ej, reason :Str):
+                throw.eject(ej, [reason, span])
+
+            to span():
+                return span
+
+    return makeListSlicer(0)
+
 object makeSlicer as DeepFrozen:
+    "A zero-copy abstraction over strings, lists of tokens, etc."
+
     to fromString(s :Str, => sourceName :Str := "<parsed string>"):
+        "Slice into `s`, using `sourceName` for source spans."
+
         def size :Int := s.size()
         def makeStringSlicer(index :Int, line :Int, col :Int) as DeepFrozen:
             def pos() as DeepFrozen:
@@ -44,61 +77,15 @@ object makeSlicer as DeepFrozen:
 
         return makeStringSlicer(0, 1, 1)
 
-    to fromPairs(pairs :List[DeepFrozen]):
-        def size :Int := pairs.size()
-        def makeListSlicer(index :Int) as DeepFrozen:
-            if (index >= size):
-                return finishedSlicer
+    to fromPairs(pairs :List[Pair[DeepFrozen, DeepFrozen]]):
+        "Slice into `pairs`, whose elements should be [token, span] pairs."
 
-            def [token :DeepFrozen, span :DeepFrozen] := pairs[index]
-
-            return object listSlicer as DeepFrozen:
-                to _printOn(out):
-                    out.print(`<list $index/$size>`)
-
-                to next(ej):
-                    def i := index + 1
-                    return if (i <= size) {
-                        def slicer := makeListSlicer(i)
-                        [token, slicer]
-                    } else { listSlicer.eject(ej, `End of token-list`) }
-
-                to eject(ej, reason :Str):
-                    throw.eject(ej, [reason, span])
-
-                to span():
-                    return span
-
-        return makeListSlicer(0)
+        return makeGenericListSlicer(pairs, null)
 
     to fromList(l :List[DeepFrozen]):
-        def size :Int := l.size()
-        def makeListSlicer(index :Int) as DeepFrozen:
-            if (index >= size):
-                return finishedSlicer
+        "Slice into `l`, using `sourceName` for source spans."
 
-            def token :DeepFrozen := l[index]
-            def pos() as DeepFrozen:
-                return _makeSourceSpan("<list>", false, 0, index, 0, index + 1)
-
-            return object listSlicer as DeepFrozen:
-                to _printOn(out):
-                    out.print(`<list $index/$size>`)
-
-                to next(ej):
-                    def i := index + 1
-                    return if (i <= size) {
-                        def slicer := makeListSlicer(i)
-                        [token, slicer]
-                    } else { listSlicer.eject(ej, `End of token-list`) }
-
-                to eject(ej, reason :Str):
-                    throw.eject(ej, [reason, pos()])
-
-                to span():
-                    return pos()
-
-        return makeListSlicer(0)
+        return makeGenericListSlicer(l, "<list>")
 
 def concat([x, xs :List]) as DeepFrozen:
     return [x] + xs
