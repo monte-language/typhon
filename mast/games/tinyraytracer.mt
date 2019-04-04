@@ -1,4 +1,4 @@
-exports (render, makeSphere, main)
+exports (render, makeSphere, spheres, lights)
 
 # https://github.com/ssloy/tinyraytracer/wiki/Part-1:-understandable-raytracing
 
@@ -19,7 +19,21 @@ def norm(v) as DeepFrozen:
     def n := sum.sqrt()
     return [for x in (v) x / n]
 
+def unitVector(source, dest) as DeepFrozen:
+    "The unit vector pointing from `source` towards `dest`."
+    def delta := [for i => x in (source) dest[i] - x]
+    return norm(delta)
+
 # "Classes" for our various "types" of object.
+
+def makeMaterial(diffuseColor :List[Double]) as DeepFrozen:
+    return def material.shade(diffuseLightIntensity) as DeepFrozen:
+        return [for m in (diffuseColor) m * diffuseLightIntensity]
+
+def makeLight(position :List[Double], intensity :Double) as DeepFrozen:
+    return def light.illuminate(point, normal) as DeepFrozen:
+        def lightDir := unitVector(position, point)
+        return intensity * dot(lightDir, normal).max(0.0)
 
 def makeSphere(center :List[Double], radius :(Double > 0.0),
                material :List[Double]) as DeepFrozen:
@@ -27,6 +41,9 @@ def makeSphere(center :List[Double], radius :(Double > 0.0),
     return object sphere as DeepFrozen:
         to material():
             return material
+
+        to normal(v):
+            return unitVector(center, v)
 
         to rayIntersect(orig, dir):
             def L := [for i => c in (center) c - orig[i]]
@@ -43,26 +60,34 @@ def makeSphere(center :List[Double], radius :(Double > 0.0),
                 [true, thc + tca]
             } else { [false, null] }
 
-def castRay(orig, dir, spheres) as DeepFrozen:
+def castRay(orig, dir, spheres, lights) as DeepFrozen:
     var spheresDist := Infinity
-    var color := [0.2, 0.7, 0.8]
+    var best := null
     for sphere in (spheres):
         def [intersects, dist] := sphere.rayIntersect(orig, dir)
         if (intersects && dist < spheresDist):
             spheresDist := dist
-            color := sphere.material()
-    return color
+            best := sphere
+    return if (best == null) { [0.2, 0.7, 0.8] } else {
+        def hit := [for i => o in (orig) o + dir[i] * spheresDist]
+        def N := best.normal(hit)
+        var diffuseLightIntensity := 0.0
+        for light in (lights) {
+            diffuseLightIntensity += light.illuminate(hit, N)
+        }
+        best.material().shade(diffuseLightIntensity)
+    }
 
 def ORIGIN :List[Double] := [0.0] * 3
 
-def render(width :Int, height :Int, spheres) :Bytes as DeepFrozen:
+def render(width :Int, height :Int, spheres, lights) :Bytes as DeepFrozen:
     def fov :Double := (PI / 6).tan()
     def aspectRatio :Double := width / height
     def framebuffer := [for k in (0..!(width * height)) {
         def [j, i] := k.divMod(width)
         def x := ((2 * i + 1) / width - 1) * fov * aspectRatio
         def y := -((2 * j + 1) / height - 1) * fov
-        castRay(ORIGIN, norm([x, y, -1.0]), spheres)
+        castRay(ORIGIN, norm([x, y, -1.0]), spheres, lights)
     }]
     def preamble := b`P6$\n${M.toString(width)} ${M.toString(height)}$\n255$\n`
     def body := [].diverge()
@@ -73,12 +98,19 @@ def render(width :Int, height :Int, spheres) :Bytes as DeepFrozen:
             body.push(x)
     return preamble + _makeBytes.fromInts(body)
 
-def main() as DeepFrozen:
-    def ivory := [0.4, 0.4, 0.3]
-    def redRubber := [0.3, 0.1, 0.1]
+def spheres() as DeepFrozen:
+    def ivory := makeMaterial([0.4, 0.4, 0.3])
+    def redRubber := makeMaterial([0.3, 0.1, 0.1])
     return [
         makeSphere([-3.0, 0.0, -16.0], 2.0, ivory),
         makeSphere([-1.0, -1.5, -12.0], 2.0, redRubber),
         makeSphere([1.5, -0.5, -18.0], 3.0, redRubber),
         makeSphere([7.0, 5.0, -18.0], 4.0, ivory),
+    ]
+
+def lights() as DeepFrozen:
+    return [
+        makeLight([-20.0, 20.0, 20.0], 1.5),
+        makeLight([30.0, 50.0, -25.0], 1.8),
+        makeLight([30.0, 20.0, 30.0], 1.7),
     ]
