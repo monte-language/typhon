@@ -264,6 +264,16 @@ class DoubleObject(Object):
     def isZero(self):
         return self._d == 0.0
 
+    # Doubles are related to each other.
+
+    @method("Double", "Double")
+    def min(self, other):
+        return min(self._d, other)
+
+    @method("Double", "Double")
+    def max(self, other):
+        return max(self._d, other)
+
     @method("Double")
     def abs(self):
         return abs(self._d)
