@@ -229,12 +229,13 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
         def preamble := [].diverge()
 
         def [sumTys, prodTys] := gatherTys(tys)
-        for sumTy in (sumTys):
+        for sumTy :Str in (sumTys):
             def sumGuard := astBuilder.NounExpr("_sum_type_" + sumTy, null)
             def sumPatt := astBuilder.FinalPattern(sumGuard, m`DeepFrozen`,
                                                     null)
             preamble.push(m`interface $sumPatt {}`)
             typeGuards[sumTy] := sumGuard
+            methods.push(m`to $sumTy() { return $sumGuard }`)
         for prodTy in (prodTys):
             typeGuards[prodTy] := m`List`
 
