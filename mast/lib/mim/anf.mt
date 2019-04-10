@@ -21,9 +21,8 @@ def anf :DeepFrozen := asdlParser(mpatt`anf`, `
             | LetExpr(pattern pattern, complex expr, complex body)
             | Atom(atom atom)
             attributes (df span)
-    pattern = IgnorePattern(atom? guard)
-            | FinalPattern(str noun, atom? guard)
-            | VarPattern(str noun, atom? guard)
+    pattern = IgnorePattern
+            | FinalPattern(str noun)
             | BindingPattern(str noun)
             | ListPattern(pattern* patterns)
             attributes (df span)
@@ -53,8 +52,13 @@ def makeNormal() as DeepFrozen:
     def gensym():
         counter += 1
         return `_temp_anf_sym$counter`
+
+    # We are doing a sort of context-passing. Each k() is a hole for placing a
+    # value into the caller's context.
+
     return object normal:
         to name(m, k):
+            # k() wants an atom.
             return normal(m, fn n {
                 n.walk(object namer {
                     match [constructor, args, _] {
@@ -65,7 +69,7 @@ def makeNormal() as DeepFrozen:
                             match =="BindingExpr" { k(n) }
                             match _ {
                                 def t := gensym()
-                                anf.LetExpr(anf.FinalPattern(t, null, null), n,
+                                anf.LetExpr(anf.FinalPattern(t, null), n,
                                             k(anf.NounExpr(t, null)), null)
                             }
                         }
@@ -74,6 +78,7 @@ def makeNormal() as DeepFrozen:
             })
 
         to names(ms, k):
+            # k() wants a list of atoms.
             return switch (ms) {
                 match [] { k([]) }
                 match [m] + tail {
@@ -83,22 +88,54 @@ def makeNormal() as DeepFrozen:
                 }
             }
 
-        to patt(patt, k):
+        to matchBind(patt, specimen, ej, k):
+            # k() wants nothing. It should be run after `patt` is bound.
             return patt.walk(object normalizer {
                 to IgnorePattern(guard, span) {
-                    return normal.name(guard, fn g {
-                        k(anf.IgnorePattern(g, span))
-                    })
+                    return if (guard == null) { k() } else {
+                        normal.name(guard, fn g {
+                            anf.LetExpr(anf.IgnorePattern(span),
+                                        anf.MethodCallExpr(g, "coerce",
+                                                           [specimen, ej], [],
+                                                           span),
+                                        k())
+                        })
+                    }
                 }
                 to FinalPattern(noun, guard, span) {
                     def name := nounToName(noun)
-                    return normal.name(guard, fn g {
-                        k(anf.FinalPattern(name, g, span))
-                    })
+                    return if (guard == null) {
+                        anf.LetExpr(anf.FinalPattern(name, span),
+                                    anf.Atom(specimen, span),
+                                    k(), span)
+                    } else {
+                        normal.name(guard, fn g {
+                            def slot := gensym()
+                            anf.LetExpr(anf.FinalPattern(slot, span),
+                                        anf.MethodCallExpr(anf.NounExpr("_makeFinalSlot",
+                                                                        span),
+                                                           "run",
+                                                           [g, specimen, ej],
+                                                           [], span),
+                                        anf.LetExpr(anf.BindingPattern(name,
+                                                                       span),
+                                                    anf.MethodCallExpr(anf.NounExpr("_slotToBinding",
+                                                                                    span),
+                                                                       "run",
+                                                                       [anf.NounExpr(slot,
+                                                                                     span),
+                                                                        ej],
+                                                                       [],
+                                                                       span),
+                                                    k(), span),
+                                        span)
+                        })
+                    }
                 }
             })
 
         to run(expr, k):
+            # k() wants a complex expression.
             return expr.walk(object normalizer {
                 to LiteralExpr(value, span) {
                     return k(anf.Atom(anf.LiteralExpr(value, span), span))
@@ -138,15 +175,19 @@ def makeNormal() as DeepFrozen:
                 }
                 # These expressions are compiled away entirely.
                 to DefExpr(patt, ex, expr, span) {
-                    return normal.name(ex, fn x {
-                        # XXX exit?
-                        normal.name(expr, fn e {
-                            def complex := anf.Atom(e, span)
-                            normal.patt(patt, fn p {
-                                anf.LetExpr(p, complex, k(complex), span)
+                    def finishDef(x) {
+                        return normal.name(expr, fn e {
+                            normal.matchBind(patt, e, x, fn {
+                                k(anf.Atom(e, span))
                             })
                         })
-                    })
+                    }
+                    return if (ex == null) {
+                        # XXX is this a good idea?
+                        finishDef(anf.NounExpr("null", span))
+                    } else {
+                        normal.name(ex, finishDef)
+                    }
                 }
                 to SeqExpr(exprs, span) {
                     return normal.names(exprs, fn ns {

@@ -124,6 +124,18 @@ def rangeOps :Map[Str, Str] := [
 
 def binaryOps :Map[Str, Str] := [
     "+" => "add",
+    "*" => "multiply",
+    "-" => "subtract",
+    "//" => "floorDivide",
+    "/" => "approxDivide",
+    "%" => "mod",
+    "**" => "pow",
+    "&" => "and",
+    "|" => "or",
+    "^" => "xor",
+    "&!" => "butNot",
+    "<<" => "shiftLeft",
+    ">>" => "shiftRight",
 ]
 
 def mb :DeepFrozen := monteBuilder

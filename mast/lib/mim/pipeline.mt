@@ -5,6 +5,8 @@ exports (go, evaluate)
 def go(expr :DeepFrozen) as DeepFrozen:
     return makeNormal().alpha(expand(expr))
 
+def b :DeepFrozen := "&&".add
+
 def evaluate(expr, frame) as DeepFrozen:
     "
     Interpret `expr` within `frame`, returning a value or raising an
@@ -12,7 +14,7 @@ def evaluate(expr, frame) as DeepFrozen:
     "
 
     def getBinding(name, span):
-        return frame.fetch(name, fn {
+        return frame.fetch(b(name), fn {
             throw(`Name ::"$name" not in frame at $span`)
         })
 
@@ -25,20 +27,11 @@ def evaluate(expr, frame) as DeepFrozen:
 
     def matchBind(patt, value):
         return patt.walk(object patternMatchBinder {
-            to IgnorePattern(guard, _span) {
-                guard.coerce(patt, null)
-                return frame
-            }
+            to IgnorePattern(_span) { return frame }
 
-            to FinalPattern(noun, guard) {
-                return frame.with(noun, guard.coerce(value, null))
-            }
+            to FinalPattern(noun, _span) { return frame.with(b(noun), &&value) }
 
-            # to VarPattern(noun, guard) {
-            #     frame.with(noun, guard.coerce(value, null))
-            # }
-
-            to BindingPattern(noun) { return frame.with(noun, &&value) }
+            to BindingPattern(noun, _span) { return frame.with(b(noun), value) }
 
             to ListPattern(patterns, span) {
                 def l :List := value
@@ -46,6 +39,7 @@ def evaluate(expr, frame) as DeepFrozen:
                     throw(`List pattern couldn't match ${patterns.size()} patterns against ${l.size()} specimens at $span`)
                 }
                 var f := frame
+                # XXX wrong, but maybe ListPatts are going away in lib/mim/anf?
                 for i => p in (patterns) { f := matchBind(p, l[i]) }
                 return f
             }
