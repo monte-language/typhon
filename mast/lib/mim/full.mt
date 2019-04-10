@@ -141,7 +141,7 @@ def binaryOps :Map[Str, Str] := [
 def mb :DeepFrozen := monteBuilder
 def expand(ast :DeepFrozen) as DeepFrozen:
     def ex :DeepFrozen := expand
-    object expander as DeepFrozen:
+    object xp as DeepFrozen:
         to FunCallExpr(receiver, args, namedArgs, span):
             return mb.MethodCallExpr(receiver, "run", args, namedArgs, span)
 
@@ -185,10 +185,15 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             return mb.MethodCallExpr(guard, "coerce",
                                      [specimen, ex(m`throw`)], [], span)
 
+        to AugAssignExpr(op :Str, lvalue, rvalue, span):
+            return mb.AssignExpr(lvalue,
+                                 xp.BinaryExpr(lvalue, op, rvalue, span),
+                                 span)
+
         to ListExpr(exprs, span):
             return mb.MethodCallExpr(ex(m`_makeList`), "run", exprs, [], span)
 
         # Kernel-Monte is handled here.
         match [verb, args, _]:
             M.call(monteBuilder, verb, args, [].asMap())
-    return rebuild(ast)(expander)
+    return rebuild(ast)(xp)

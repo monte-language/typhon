@@ -13,7 +13,6 @@ def anf :DeepFrozen := asdlParser(mpatt`anf`, `
          attributes (df span)
     complex = MethodCallExpr(atom receiver, str verb, atom* args,
                              namedArg* namedArgs)
-            | AssignExpr(atom lvalue, atom rvalue)
             | FinallyExpr(complex body, complex unwinder)
             | EscapeExpr(pattern ejectorPattern, complex body,
                          pattern? catchPattern, complex? catchBody)
@@ -49,9 +48,13 @@ def nameForPatt(patt) :Str as DeepFrozen:
 
 def makeNormal() as DeepFrozen:
     var counter :Int := 0
-    def gensym():
+    def gensym() :Str:
         counter += 1
         return `_temp_anf_sym$counter`
+    def letsym(complex, k):
+        # k() wants a noun as a Str.
+        def sym :Str := gensym()
+        return anf.LetExpr(anf.FinalPattern(sym, null), complex, k(sym), null)
 
     # We are doing a sort of context-passing. Each k() is a hole for placing a
     # value into the caller's context.
@@ -68,9 +71,7 @@ def makeNormal() as DeepFrozen:
                             match =="NounExpr" { k(n) }
                             match =="BindingExpr" { k(n) }
                             match _ {
-                                def t := gensym()
-                                anf.LetExpr(anf.FinalPattern(t, null), n,
-                                            k(anf.NounExpr(t, null)), null)
+                                letsym(n, fn t { k(anf.NounExpr(t, null)) })
                             }
                         }
                     }
@@ -110,26 +111,47 @@ def makeNormal() as DeepFrozen:
                                     k(), span)
                     } else {
                         normal.name(guard, fn g {
-                            def slot := gensym()
-                            anf.LetExpr(anf.FinalPattern(slot, span),
-                                        anf.MethodCallExpr(anf.NounExpr("_makeFinalSlot",
+                            letsym(anf.MethodCallExpr(anf.NounExpr("_makeFinalSlot",
+                                                                   span),
+                                                      "run",
+                                                      [g, specimen, ej], [],
+                                                      span), fn slot {
+                                anf.LetExpr(anf.BindingPattern(name, span),
+                                            anf.MethodCallExpr(anf.NounExpr("_slotToBinding",
+                                                                            span),
+                                                               "run",
+                                                               [anf.NounExpr(slot,
+                                                                             span),
+                                                                ej],
+                                                               [], span),
+                                            k(), span)
+                            })
+                        })
+                    }
+                }
+                to VarPattern(noun, guard, span) {
+                    def name := nounToName(noun)
+                    def finishVar(g) {
+                        return letsym(anf.MethodCallExpr(anf.NounExpr("_makeVarSlot",
+                                                                      span),
+                                                         "run",
+                                                         [g, specimen, ej], [],
+                                                         span), fn slot {
+                            anf.LetExpr(anf.BindingPattern(name, span),
+                                        anf.MethodCallExpr(anf.NounExpr("_slotToBinding",
                                                                         span),
                                                            "run",
-                                                           [g, specimen, ej],
+                                                           [anf.NounExpr(slot,
+                                                                         span),
+                                                            ej],
                                                            [], span),
-                                        anf.LetExpr(anf.BindingPattern(name,
-                                                                       span),
-                                                    anf.MethodCallExpr(anf.NounExpr("_slotToBinding",
-                                                                                    span),
-                                                                       "run",
-                                                                       [anf.NounExpr(slot,
-                                                                                     span),
-                                                                        ej],
-                                                                       [],
-                                                                       span),
-                                                    k(), span),
-                                        span)
+                                        k(), span)
                         })
+                    }
+                    return if (guard == null) {
+                        finishVar(anf.NounExpr("Any", span))
+                    } else {
+                        normal.name(guard, finishVar)
                     }
                 }
             })
@@ -188,6 +210,25 @@ def makeNormal() as DeepFrozen:
                     } else {
                         normal.name(ex, finishDef)
                     }
+                }
+                to AssignExpr(lvalue, rvalue, span) {
+                    # XXX should we do this in the expander instead?
+                    def name := nounToName(lvalue)
+                    return normal.name(rvalue, fn rv {
+                        letsym(anf.Atom(anf.BindingExpr(name, span), span),
+                               fn binding {
+                            letsym(anf.MethodCallExpr(anf.NounExpr(binding,
+                                                                   span),
+                                                      "get", [], [], span),
+                                   fn slot {
+                                letsym(anf.MethodCallExpr(anf.NounExpr(slot,
+                                                                       span),
+                                                          "put", [rv], [],
+                                                          span),
+                                       fn _ { k(rv) })
+                            })
+                        })
+                    })
                 }
                 to SeqExpr(exprs, span) {
                     return normal.names(exprs, fn ns {
