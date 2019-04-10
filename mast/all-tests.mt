@@ -17,8 +17,6 @@ import "lib/json" =~ _
 import "lib/matrices" =~ _
 import "lib/monte/monte_verifier" =~ _
 import "lib/monte/meta" =~ _
-# XXX currently broken ~ C.
-# import "lib/monte/mix" =~ _
 import "lib/parse" =~ _
 import "lib/parsers/html" =~ _
 # import "lib/prom" =~ _
