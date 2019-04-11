@@ -195,10 +195,6 @@ def expand(node, builder, fail) as DeepFrozen:
                 return ejExpr
         return builder.EscapeExpr(ejPatt, ejExpr, catchPatt, catchExpr, span)
 
-    def makeSlotPatt(n, span):
-        return viaPatt(nounExpr("_slotToBinding", span),
-             builder.BindingPattern(n, span), span)
-
     def makeFn(flavor, args, namedArgs, body, span):
         "Like m`fn $args { $body }`, but in Kernel-Monte."
 
