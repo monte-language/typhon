@@ -138,6 +138,9 @@ def binaryOps :Map[Str, Str] := [
     ">>" => "shiftRight",
 ]
 
+def nounName.NounExpr(name :Str, _span) :Str as DeepFrozen:
+    return name
+
 def mb :DeepFrozen := monteBuilder
 def expand(ast :DeepFrozen) as DeepFrozen:
     def ex :DeepFrozen := expand
@@ -157,8 +160,8 @@ def expand(ast :DeepFrozen) as DeepFrozen:
                 })
             }])
             return mb.MethodCallExpr(ex(m`M`), "send",
-                                     [receiver, mb.LiteralExpr(verb, null),
-                                      mb.ListExpr(args, null), nas], [], span)
+                                     [receiver, mb.LiteralExpr(verb, span),
+                                      xp.ListExpr(args, span), nas], [], span)
 
         to FunSendExpr(receiver, args, namedArgs, span):
             return mb.SendExpr(receiver, "run", args, namedArgs, span)
@@ -193,7 +196,39 @@ def expand(ast :DeepFrozen) as DeepFrozen:
         to ListExpr(exprs, span):
             return mb.MethodCallExpr(ex(m`_makeList`), "run", exprs, [], span)
 
-        # Kernel-Monte is handled here.
+        # Patterns.
+
+        to SlotPattern(noun, guard, span):
+            def slotToBinding := ex(m`_slotToBinding`)
+            def trans := if (guard == null) { slotToBinding } else {
+                mb.MethodCallExpr(slotToBinding, "run", [guard], [], span)
+            }
+            return mb.ViaPattern(trans, mb.BindingPattern(noun, span), span)
+
+        to BindPattern(noun, guard, span):
+            def g := if (guard == null) { ex(m`null`) } else { guard }
+            def resolver := mb.NounExpr(noun(nounName) + "_Resolver", span)
+            return mb.ViaPattern(mb.MethodCallExpr(ex(m`_bind`), "run",
+                                                   [resolver, g], [], span),
+                                 mb.IgnorePattern(null, span))
+
+        to SuchThatPattern(patt, expr, span):
+            def st := ex(m`_suchThat`)
+            def innerPatt := mb.ViaPattern(mb.MethodCallExpr(st, "run",
+                                                             [expr], [],
+                                                             span),
+                                           mb.IgnorePattern(null, span))
+            return mb.ViaPattern(st, mb.ListPattern([patt, innerPatt], null,
+                                                    span), span)
+
+        to SamePattern(value, direction :Bool, span):
+            def verb :Str := direction.pick("run", "different")
+            return mb.ViaPattern(mb.MethodCallExpr(ex(m`_matchSame`), verb,
+                                                   [value], [], span),
+                                 mb.IgnorePattern(null, span))
+
+        # Kernel-Monte is handled here; kernel nodes generally only need to be
+        # recursed through, not changed.
         match [verb, args, _]:
             M.call(monteBuilder, verb, args, [].asMap())
     return rebuild(ast)(xp)
