@@ -14,7 +14,7 @@ exports (main)
 def makeMonteParser(&environment, unsealException) as DeepFrozen:
     var failure :NullOk[Str] := null
     var result := null
-    var buf := []
+    var line :Str := ""
 
     return object monteEvalParser:
         to getFailure() :NullOk[Str]:
@@ -24,45 +24,27 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
             return failure != null
 
         to finished() :Bool:
-            return buf == []
+            return result != null
 
         to results() :List:
             return [result]
 
-        to feed(token):
-            monteEvalParser.feedMany([token])
+        to feedMany(s :Str):
+            if (s.size() == 0):
+                return
 
-        to reset():
-            failure := null
-            result := null
-            return monteEvalParser
-
-        to feedMany(tokens):
-            if (buf.size() == 0):
-                # Buffer the first line.
-                buf with= (tokens)
-            else:
-                 if (tokens != ""):
-                     # If we know we need to buffer more, don't invoke the parser.
-                     buf with= (tokens)
-                     return
-                 # ... If there's data in the buffer and a blank line is
-                 # received, go ahead and parse.
+            line += s
             try:
                 escape ejPartial:
-                    def [val, newEnv] := eval.evalToPair("\n".join(buf) + "\n", environment, => ejPartial, "inRepl" => true)
+                    def [val, newEnv] := eval.evalToPair(line, environment, => ejPartial, "inRepl" => true)
                     result := val
                     # Preserve side-effected new stuff from e.g. playWith.
                     environment := newEnv | environment
-                    buf := []
             catch p:
                 # Typhon's exception handling is kinda broken so we try to cope
                 # by ignoring things that aren't sealed exceptions.
                 if (p =~ via (unsealException) [problem, trail]):
-                    failure := `Exception: $problem`
-                    for line in (trail.reverse()):
-                        failure += "\n" + line
-                    buf := []
+                    failure := `Exception: $problem$\n` + "\n".join(trail.reverse())
 
 def makeFileLoader(root, makeFileResource) as DeepFrozen:
     return def load(petname):
@@ -132,6 +114,6 @@ def main(_argv,
     def stdin := alterSource.decodeWith(UTF8, stdio.stdin(),
                                         "withExtras" => true)
     def stdout := alterSink.encodeWith(UTF8, stdio.stdout())
-    def parser := makeMonteParser(&environment, unsealException)
-    def p := runREPL(parser.reset, fn x {x}, "▲> ", "…> ", stdin, stdout)
+    def p := runREPL(fn { makeMonteParser(&environment, unsealException) },
+                     M.toQuote, "▲> ", "…> ", stdin, stdout)
     return when (p) -> { 0 }
