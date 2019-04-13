@@ -13,7 +13,7 @@ exports (main)
 
 def makeMonteParser(&environment, unsealException) as DeepFrozen:
     var failure :NullOk[Str] := null
-    var result := null
+    def result
     var line :Str := ""
 
     return object monteEvalParser:
@@ -24,7 +24,7 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
             return failure != null
 
         to finished() :Bool:
-            return result != null
+            return Ref.isNear(result)
 
         to results() :List:
             return [result]
@@ -37,7 +37,7 @@ def makeMonteParser(&environment, unsealException) as DeepFrozen:
             try:
                 escape ejPartial:
                     def [val, newEnv] := eval.evalToPair(line, environment, => ejPartial, "inRepl" => true)
-                    result := val
+                    bind result := val
                     # Preserve side-effected new stuff from e.g. playWith.
                     environment := newEnv | environment
             catch p:
