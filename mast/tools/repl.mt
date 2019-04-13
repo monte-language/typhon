@@ -5,7 +5,7 @@ import "lib/streams" =~ [
     => alterSource :DeepFrozen,
 ]
 import "lib/repl" =~ [=> runREPL :DeepFrozen]
-import "lib/help" =~ [=> help :DeepFrozen]
+import "lib/help" =~ [=> help]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseModule]
 import "lib/muffin" =~ [=> makeLimo]
@@ -105,15 +105,22 @@ def main(_argv,
                     total += t
                 total / iterations
 
-    # Set up the full environment.
-    environment := safeScope | unsafeScope | [
-        # REPL-only fun.
-        => &&JSON, => &&UTF8, => &&help, => &&repl,
-    ]
-
+    # Set up stdio.
     def stdin := alterSource.decodeWith(UTF8, stdio.stdin(),
                                         "withExtras" => true)
     def stdout := alterSink.encodeWith(UTF8, stdio.stdout())
+
+    object REPLHelp extends help:
+        match message:
+            stdout(M.callWithMessage(super, message))
+            null
+
+    # Set up the full environment.
+    environment := safeScope | unsafeScope | [
+        # REPL-only fun.
+        => &&JSON, => &&UTF8, => &&repl,
+        "&&help" => &&REPLHelp,
+    ]
     def p := runREPL(fn { makeMonteParser(&environment, unsealException) },
                      M.toQuote, "▲> ", "…> ", stdin, stdout)
     return when (p) -> { 0 }
