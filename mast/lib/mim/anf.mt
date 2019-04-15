@@ -14,10 +14,10 @@ def anf :DeepFrozen := asdlParser(mpatt`anf`, `
     complex = MethodCallExpr(atom receiver, str verb, atom* args,
                              namedArg* namedArgs)
             | FinallyExpr(complex body, complex unwinder)
-            | EscapeExpr(pattern ejectorPattern, complex body,
-                         pattern? catchPattern, complex? catchBody)
             | IfExpr(atom test, complex then, complex else)
             | LetExpr(pattern pattern, complex expr, complex body)
+            | EscapeExpr(pattern pattern, complex body)
+            | JumpExpr(atom ejector, atom arg)
             | Atom(atom atom)
             attributes (df span)
     pattern = IgnorePattern
@@ -51,10 +51,14 @@ def makeNormal() as DeepFrozen:
     def gensym() :Str:
         counter += 1
         return `_temp_anf_sym$counter`
-    def letsym(complex, k):
+    def letsym(complex, k, span):
         # k() wants a noun as a Str.
         def sym :Str := gensym()
-        return anf.LetExpr(anf.FinalPattern(sym, null), complex, k(sym), null)
+        return anf.LetExpr(anf.FinalPattern(sym, span), complex, k(sym), span)
+    def escapesym(k, span):
+        # k() wants a noun as a Str.
+        def sym :Str := gensym()
+        return anf.EscapeExpr(anf.FinalPattern(sym, span), k(sym), span)
 
     # We are doing a sort of context-passing. Each k() is a hole for placing a
     # value into the caller's context.
@@ -71,7 +75,8 @@ def makeNormal() as DeepFrozen:
                             match =="NounExpr" { k(n) }
                             match =="BindingExpr" { k(n) }
                             match _ {
-                                letsym(n, fn t { k(anf.NounExpr(t, null)) })
+                                letsym(n, fn t { k(anf.NounExpr(t, null)) },
+                                null)
                             }
                         }
                     }
@@ -125,7 +130,7 @@ def makeNormal() as DeepFrozen:
                                                                 ej],
                                                                [], span),
                                             k(), span)
-                            })
+                            }, span)
                         })
                     }
                 }
@@ -146,7 +151,7 @@ def makeNormal() as DeepFrozen:
                                                             ej],
                                                            [], span),
                                         k(), span)
-                        })
+                        }, span)
                     }
                     return if (guard == null) {
                         finishVar(anf.NounExpr("Any", span))
@@ -195,6 +200,36 @@ def makeNormal() as DeepFrozen:
                         k(anf.IfExpr(t, normal.alpha(cons), normal.alpha(alt), span))
                     })
                 }
+                to EscapeExpr(ejPatt, body, catchPatt, catchBody, span) {
+                    return k(if (catchPatt == null || catchBody == null) {
+                        # Easy case: Nothing much changes.
+                        escapesym(fn ej {
+                            normal.matchBind(ejPatt, anf.NounExpr(ej, span),
+                                             null, fn { normal.alpha(body) })
+                        }, span)
+                    } else {
+                        # Tricky case: Turn the catcher into a second ejector
+                        # on the outside.
+                        escapesym(fn rv {
+                            def inner := escapesym(fn ej {
+                                normal.matchBind(ejPatt, anf.NounExpr(ej, span),
+                                                 null, fn {
+                                    normal.name(normal.alpha(body), fn b {
+                                        anf.JumpExpr(anf.NounExpr(rv, span),
+                                                     b, span)
+                                    })
+                                })
+                            }, span)
+                            letsym(inner, fn i {
+                                normal.matchBind(catchPatt,
+                                                 anf.NounExpr(i, span), null,
+                                                 fn {
+                                     normal.alpha(catchBody)
+                                })
+                            }, span)
+                        }, span)
+                    })
+                }
                 # These expressions are compiled away entirely.
                 to DefExpr(patt, ex, expr, span) {
                     def finishDef(x) {
@@ -226,8 +261,8 @@ def makeNormal() as DeepFrozen:
                                                           "put", [rv], [],
                                                           span),
                                        fn _ { k(rv) })
-                            })
-                        })
+                            }, span)
+                        }, span)
                     })
                 }
                 to SeqExpr(exprs, span) {

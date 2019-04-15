@@ -53,22 +53,20 @@ def evaluate(expr, frame) as DeepFrozen:
                           [].asMap())
         }
 
-        # to AssignExpr(lvalue, rvalue, span):
-
         to FinallyExpr(body, unwinder, _span) {
             return try {
                 evaluate(body, frame)
             } finally { evaluate(unwinder, frame) }
         }
 
-        to EscapeExpr(ejectorPattern, body, catchPattern, catchBody, _span) {
+        to EscapeExpr(patt, body, _span) {
             return escape ej {
-                evaluate(body, matchBind(ejectorPattern, ej))
-            } catch problem {
-                if (catchPattern != null && catchBody != null) {
-                    evaluate(catchBody, matchBind(catchPattern, problem))
-                }
+                evaluate(body, matchBind(patt, ej))
             }
+        }
+
+        to JumpExpr(ejector, arg, _span) {
+            throw.eject(ejector, arg)
         }
 
         to IfExpr(test, cons, alt, _span) {
