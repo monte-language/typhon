@@ -120,6 +120,14 @@ escape tailtest:
 def isPrimitive :DeepFrozen := ["bool", "df", "identifier", "int", "str"].contains
 def comma :DeepFrozen := m`out.print(", ")`
 
+def theTypeGuards :Map[Str, DeepFrozen] := [
+    "bool" => m`Bool`,
+    "df" => m`DeepFrozen`,
+    "identifier" => m`Str`,
+    "int" => m`Int`,
+    "str" => m`Str`,
+]
+
 def gatherTys(tys :List) as DeepFrozen:
     def sumTys := [].diverge()
     def prodTys := [].diverge()
@@ -131,6 +139,26 @@ def gatherTys(tys :List) as DeepFrozen:
         })
 
     return [sumTys, prodTys]
+
+def makeStack(mode :Str) as DeepFrozen:
+    def s := [[].diverge()].diverge()
+    return object stack:
+        to push():
+            s.push([].diverge())
+        to pop():
+            def l := switch (mode) {
+                match =="expr" {
+                    astBuilder.ListExpr(s.pop().snapshot(), null)
+                }
+                match =="patt" {
+                    astBuilder.ListPattern(s.pop().snapshot(), null, null)
+                }
+            }
+            s.last().push(l)
+        to append(val):
+            s.last().push(val)
+        to snapshot():
+            return s.last().snapshot()
 
 def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
     var count :Int := 0
@@ -148,13 +176,7 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
     def products := [].asMap().diverge()
     def methods := [].diverge()
 
-    def typeGuards := [
-        "bool" => m`Bool`,
-        "df" => m`DeepFrozen`,
-        "identifier" => m`Str`,
-        "int" => m`Int`,
-        "str" => m`Str`,
-    ].diverge()
+    def typeGuards := theTypeGuards.diverge()
 
     def fieldGuards := [
         "Id" => fn g { g },
@@ -170,31 +192,26 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
 
     def makeConWalker(conGuard, attributeFields):
         return def walker.Con(name, fs):
-            # traceln(`Con($name, $fs)`)
-            def exprs := [[].diverge()].diverge()
-            def patts := [[].diverge()].diverge()
-            def visitors := [[].diverge()].diverge()
+            def exprs := makeStack("expr")
+            def patts := makeStack("patt")
+            def visitors := makeStack("expr")
 
             object fieldWalker:
                 match [verb, [ty, name], _]:
                     if (products.contains(ty)):
-                        for l in ([exprs, patts, visitors]):
-                            l.push([].diverge())
+                        for s in ([exprs, patts, visitors]):
+                            s.push()
                         for field in (products[ty]):
                             field.walk(fieldWalker)
-                        def es := astBuilder.ListExpr(exprs.pop().snapshot(), null)
-                        exprs.last().push(es)
-                        def ps := astBuilder.ListPattern(patts.pop().snapshot(), null, null)
-                        patts.last().push(ps)
-                        def vs := astBuilder.ListExpr(visitors.pop().snapshot(), null)
-                        visitors.last().push(vs)
+                        for s in ([exprs, patts, visitors]):
+                            s.pop()
                     else:
                         def tyGuard := typeGuards[ty]
                         def g := fieldGuards[verb](tyGuard)
-                        exprs.last().push(def n := nextNoun(ty, name))
-                        # XXX astBuilder guard bug?
-                        patts.last().push(astBuilder.FinalPattern(n, g, null))
-                        visitors.last().push(if (isPrimitive(ty)) { n } else {
+                        exprs.append(def n := nextNoun(ty, name))
+                        # XXX Monte parser bug; mpatt`$n :$g` should work.
+                        patts.append(astBuilder.FinalPattern(n, g, null))
+                        visitors.append(if (isPrimitive(ty)) { n } else {
                             fieldVisitors[verb](n)
                         })
                     null
@@ -206,22 +223,34 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
                 out.print(${astBuilder.LiteralExpr(name, null)})
                 out.print("(")
                 ${astBuilder.SeqExpr(
-                    [comma].join([for e in (exprs.last()) m`out.print($e)`]),
+                    [comma].join([for e in (exprs.snapshot()) m`out.print($e)`]),
                 null)}
                 out.print(")")
             }`
             def runner := m`method run(f) {
-                ${astBuilder.MethodCallExpr(m`f`, name, visitors.last().snapshot(), [], null)}
+                "
+                Rewrite this term, bottom-up, over ``f``.
+
+                This term's components will be visited, and then this term;
+                each argument will have already been rewritten.
+                "
+                ${astBuilder.MethodCallExpr(m`f`, name, visitors.snapshot(), [], null)}
             }`
             def walker := m`method walk(f) {
-                ${astBuilder.MethodCallExpr(m`f`, name, exprs.last().snapshot(), [], null)}
+                "
+                Take one rewriting step of this term over ``f``.
+
+                This term's components will not be visited automatically;
+                ``f`` is responsible for any recursive actions.
+                "
+                ${astBuilder.MethodCallExpr(m`f`, name, exprs.snapshot(), [], null)}
             }`
             def script := astBuilder.Script(null, [printer, runner, walker], [], null)
             def namePatt := astBuilder.FinalPattern(
                 astBuilder.NounExpr(name, null), null, null)
             def body := astBuilder.ObjectExpr(null, namePatt, conGuard, [],
                                               script, null)
-            def rv := astBuilder."Method"(null, name, patts.last().snapshot(), [], null, body, null)
+            def rv := astBuilder."Method"(null, name, patts.snapshot(), [], null, body, null)
             methods.push(rv)
 
     return def builderMaker(tys):
@@ -232,11 +261,12 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
         for sumTy :Str in (sumTys):
             def sumGuard := astBuilder.NounExpr("_sum_type_" + sumTy, null)
             def sumPatt := astBuilder.FinalPattern(sumGuard, m`DeepFrozen`,
-                                                    null)
+                                                   null)
             preamble.push(m`interface $sumPatt {}`)
             typeGuards[sumTy] := sumGuard
             methods.push(m`to $sumTy() { return $sumGuard }`)
         for prodTy in (prodTys):
+            # XXX why not more specific?
             typeGuards[prodTy] := m`List`
 
         for ty in (tys):
