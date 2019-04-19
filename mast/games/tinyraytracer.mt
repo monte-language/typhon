@@ -1,3 +1,4 @@
+import "fun/ppm" =~ [=> packPPM]
 exports (render, makeSphere, spheres, lights)
 
 # https://github.com/ssloy/tinyraytracer/wiki/Part-1:-understandable-raytracing
@@ -192,15 +193,7 @@ def render(width :Int, height :Int, spheres, lights) :Bytes as DeepFrozen:
         def y := -((2 * j + 1) / height - 1) * fov
         castRay(ORIGIN, norm([x, y, -1.0]), spheres, lights)
     }]
-    def preamble := b`P6$\n${M.toString(width)} ${M.toString(height)}$\n255$\n`
-    def body := [].diverge()
-    for i in (0..!(width * height)):
-        def c := framebuffer[i]
-        def max := c[0].max(c[1]).max(c[2])
-        def s := if (max > 1.0) { [for comp in (c) comp / max] } else { c }
-        for x in (s):
-            body.push((255 * x.min(1.0).max(0.0)).floor())
-    return preamble + _makeBytes.fromInts(body)
+    return packPPM(width, height, framebuffer)
 
 def spheres() as DeepFrozen:
     def ivory := makeMaterial(1.0, [0.6, 0.3, 0.1, 0.0], [0.4, 0.4, 0.3], 50.0)
