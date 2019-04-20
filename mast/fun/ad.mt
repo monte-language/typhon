@@ -1,4 +1,4 @@
-exports (makeDual, minimize)
+exports (makeDual, gradientAt, minimize)
 
 def E :Double := 2.71828_18284_59045_23536_02874
 
@@ -76,6 +76,16 @@ object makeDual as DeepFrozen:
             to cos():
                 return makeDual(real.cos(), real.sin() * -epsilon)
 
+def gradientAt(f, coords :List[Double]) :List[Double] as DeepFrozen:
+    "The gradient of `f` at the provided coordinates."
+
+    return [for i => _ in (coords) {
+        def args := [for j => a in (coords) {
+            makeDual(a, (i == j).pick(1.0, 0.0))
+        }]
+        M.call(f, "run", args, [].asMap()).epsilon()
+    }]
+
 def minimize(f, starts :List[Double],
              => var gamma :Double := (1/128)) as DeepFrozen:
     def invoke(args):
@@ -86,12 +96,7 @@ def minimize(f, starts :List[Double],
         var minimum :List[Double] := starts
 
         return def minimizingIterator.next(ej):
-            def gradient := [for i => _ in (minimum) {
-                def args := [for j => a in (minimum) {
-                    makeDual(a, (i == j).pick(1.0, 0.0))
-                }]
-                invoke(args).epsilon()
-            }]
+            def gradient := gradientAt(f, minimum)
             def best := invoke(minimum)
             minimum := while (true) {
                 def candidate := [for i => a in (minimum) a - gamma * gradient[i]]
