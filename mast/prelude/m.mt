@@ -177,9 +177,9 @@ object ::"m``" as DeepFrozen:
         def qast := parseExpression(lexer, astBuilder, throw, throw)
         return makeM(qast, "m", false)
 
-    to fromStr(source :Str):
+    to fromStr(source :Str, => ej := throw, => ejPartial := throw):
         def tree := parseExpression(makeMonteLexer(source, "m``.fromStr/1"),
-                                    astBuilder, throw, throw)
+                                    astBuilder, ej, ejPartial)
         return makeM(tree, "m", false)
 
 object ::"mpatt``" as DeepFrozen:
