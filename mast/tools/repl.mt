@@ -1,58 +1,60 @@
 import "lib/codec/utf8" =~ [=> UTF8]
-import "lib/json" =~ [=> JSON :DeepFrozen]
-import "lib/streams" =~ [
-    => alterSink :DeepFrozen,
-    => alterSource :DeepFrozen,
-]
-import "lib/repl" =~ [=> runREPL :DeepFrozen]
+import "lib/commandLine" =~ [=> makePrompt]
 import "lib/help" =~ [=> help]
+import "lib/json" =~ [=> JSON]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseModule]
 import "lib/muffin" =~ [=> makeLimo]
 exports (main)
 
-def makeMonteParser(&environment, unsealException) as DeepFrozen:
-    var failure :NullOk[Str] := null
-    def result
-    var line :Str := ""
+# The names throughout this section are historical.
 
-    return object monteEvalParser:
-        to getFailure() :NullOk[Str]:
-            return failure
+def PS1 :Bytes := UTF8.encode("▲> ", null)
+def PS2 :Bytes := UTF8.encode(" … ", null)
 
-        to failed() :Bool:
-            return failure != null
-
-        to finished() :Bool:
-            return Ref.isNear(result)
-
-        to results() :List:
-            return [result]
-
-        to feedMany(s :Str):
-            if (s.size() == 0):
-                return
-
-            line += s
-            try:
+def read(prompt, => previous := b``) as DeepFrozen:
+    return when (def next := prompt<-ask(previous.isEmpty().pick(PS1, PS2))) ->
+        def line := previous + next
+        if (line.isEmpty()):
+            read<-(prompt)
+        else:
+            escape parseError:
                 escape ejPartial:
-                    def [val, newEnv] := eval.evalToPair(line, environment, => ejPartial, "inRepl" => true)
-                    bind result := val
-                    # Preserve side-effected new stuff from e.g. playWith.
-                    environment := newEnv | environment
-            catch p:
+                    ::"m``".fromStr(UTF8.decode(line, ejPartial),
+                                    "ej" => parseError, => ejPartial)
+                catch _:
+                    read<-(prompt, "previous" => line)
+            catch problem:
+                def complaint := UTF8.encode(`Parse error:$\n$problem`, null)
+                when (prompt<-writeLine(complaint)) ->
+                    read<-(prompt)
+
+def readEvalPrintLoop(prompt, var locals, unsealException) as DeepFrozen:
+    def go():
+        when (def expr := read<-(prompt)) ->
+            def repr := try {
+                def [rv, env] := eval.evalToPair(expr, locals, "inRepl" => true)
+                # Preserve side-effected new stuff from e.g. playWith.
+                locals |= env
+                `Result: ${M.toQuote(rv)}`
+            } catch p {
                 # Typhon's exception handling is kinda broken so we try to cope
                 # by ignoring things that aren't sealed exceptions.
-                if (p =~ via (unsealException) [problem, trail]):
-                    failure := `Exception: $problem$\n` + "\n".join(trail.reverse())
+                if (p =~ via (unsealException) [problem, trail]) {
+                    `Exception: $problem$\n` + "\n".join(trail.reverse())
+                } else { `Unknown problem: $p` }
+            }
+            when (prompt<-writeLine(UTF8.encode(repr, null))) ->
+                go<-()
+    go()
 
-def makeFileLoader(root, makeFileResource) as DeepFrozen:
+def makeFileLoader(log, root, makeFileResource) as DeepFrozen:
     return def load(petname):
         def path := `$root/$petname.mt`
-        traceln(`Reading file: $path`)
+        log(`Reading file: $path`)
         def bs := makeFileResource(path)<-getContents()
         return when (bs) ->
-            traceln(`Parsing Monte code: $path`)
+            log(`Parsing Monte code: $path`)
             def s := UTF8.decode(bs, null)
             def lex := makeMonteLexer(s, petname)
             [s, parseModule(lex, astBuilder, null)]
@@ -65,8 +67,16 @@ def main(_argv,
     # Forward-declare the environment.
     var environment := null
 
+    def [prompt, cleanup] := makePrompt(stdio)
+    def log(s :Str):
+        prompt.writeLine(b`Log: ` + UTF8.encode(s, null))
+
     object repl:
         "Some useful REPL stuff."
+
+        to complete():
+            "Cleanly exit the REPL."
+            cleanup()
 
         to instantiateModule(basePath :Str, petname :Str) :Vow[DeepFrozen]:
             "
@@ -74,7 +84,7 @@ def main(_argv,
             the filesystem.
             "
 
-            def loader := makeFileLoader(basePath, makeFileResource)
+            def loader := makeFileLoader(log, basePath, makeFileResource)
             def limo := makeLimo(loader)
             return when (def p := loader(petname)) ->
                 def [source, expr] := p
@@ -87,12 +97,12 @@ def main(_argv,
             scope.
             "
             def m := repl.instantiateModule(basePath, petname)
-            traceln(`m $m`)
+            log(`m $m`)
             return when (m) ->
-                traceln(`Instantiated $petname: $m`)
+                log(`Instantiated $petname: $m`)
                 def ex := try { m(null) } catch e { traceln.exception(e); -1 }
                 for k => v :DeepFrozen in (ex):
-                    traceln(`Loading into environment: $k`)
+                    log(`Loading into environment: $k`)
                     environment with= (`&&$k`, &&v)
 
         to benchmark(callable) :Vow[Double]:
@@ -105,14 +115,9 @@ def main(_argv,
                     total += t
                 total / iterations
 
-    # Set up stdio.
-    def stdin := alterSource.decodeWith(UTF8, stdio.stdin(),
-                                        "withExtras" => true)
-    def stdout := alterSink.encodeWith(UTF8, stdio.stdout())
-
     object REPLHelp extends help:
         match message:
-            stdout(M.callWithMessage(super, message))
+            prompt.writeLine(UTF8.encode(M.callWithMessage(super, message), null))
             null
 
     # Set up the full environment.
@@ -121,6 +126,6 @@ def main(_argv,
         => &&JSON, => &&UTF8, => &&repl,
         "&&help" => &&REPLHelp,
     ]
-    def p := runREPL(fn { makeMonteParser(&environment, unsealException) },
-                     M.toQuote, "▲> ", "…> ", stdin, stdout)
-    return when (p) -> { 0 }
+
+    readEvalPrintLoop<-(prompt, environment, unsealException)
+    return when (prompt<-whenDone()) -> { 0 }
