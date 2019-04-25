@@ -29,7 +29,7 @@ def read(prompt, => previous := b``) as DeepFrozen:
                 when (prompt<-writeLine(complaint)) ->
                     read<-(prompt)
 
-def readEvalPrintLoop(prompt, var locals, unsealException) as DeepFrozen:
+def readEvalPrintLoop(prompt, &locals, unsealException) as DeepFrozen:
     def go():
         when (def expr := read<-(prompt)) ->
             def repr := try {
@@ -127,5 +127,5 @@ def main(_argv,
         "&&help" => &&REPLHelp,
     ]
 
-    readEvalPrintLoop<-(prompt, environment, unsealException)
+    readEvalPrintLoop<-(prompt, &environment, unsealException)
     return when (prompt<-whenDone()) -> { 0 }
