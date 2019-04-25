@@ -1504,13 +1504,14 @@ def parseMonte(lex, builder, mode, err, errPartial) as DeepFrozen:
             }
         }
         acceptEOLs()
-        if (position < (tokens.size() - 1)):
+        if (position > (tokens.size() - 1)):
             # Ran off the end.
             formatError(lastError, errPartial)
-        if (position > (tokens.size() - 1)):
+        else if (position < (tokens.size() - 1)):
             # Didn't consume enough.
             formatError(lastError, err)
         else:
+            # Squeeze theorem~
             return val
     catch p:
         formatError(p, err)
