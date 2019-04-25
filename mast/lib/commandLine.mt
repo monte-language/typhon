@@ -1,6 +1,5 @@
-import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/wrappers" =~ [=> makeRevokable]
-exports (makePrompt, main)
+exports (makePrompt)
 
 def makePrompt(stdio) as DeepFrozen:
     "
@@ -62,15 +61,3 @@ def makePrompt(stdio) as DeepFrozen:
                 prompt.readLine()
 
     return [makeRevokable(prompt, &enabled), cleanup]
-
-def main(_argv, => stdio) as DeepFrozen:
-    def [prompt, _cleanup] := makePrompt(stdio)
-    prompt<-writeLine(b`Hello world!`)
-    def go():
-        when (def line := prompt<-ask(b`? `)) ->
-            def rv := eval(UTF8.decode(line, null), safeScope)
-            when (prompt<-writeLine(UTF8.encode(M.toQuote(rv), null))) ->
-                go<-()
-    go<-()
-    def rv
-    return rv
