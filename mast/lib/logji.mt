@@ -1,4 +1,4 @@
-exports (logic)
+exports (logic, makeKanren)
 
 # A simple logic monad.
 # Loosely based on http://homes.sice.indiana.edu/ccshan/logicprog/LogicT-icfp2005.pdf
@@ -97,3 +97,67 @@ object logic as DeepFrozen:
                     def rv := [i, x]
                     i += 1
                     return rv
+
+# µKanren: Logic variables and unification.
+# http://webyrd.net/scheme-2013/papers/HemannMuKanren2013.pdf
+
+def makeKanren() as DeepFrozen:
+    def [varSealer, varUnsealer] := makeBrandPair("logic variable")
+    def varb := varUnsealer.unsealing
+
+    def makeCS(s :Map, c :Int):
+        return object kanren:
+            "A state for doing logical unification."
+
+            to fresh(count :Int):
+                "Allocate `count` fresh logic variables."
+
+                def next := c + count
+                def vars := [for i in (c..!next) varSealer.seal(i)]
+                return [makeCS(s, next)] + vars
+
+            to walk(v):
+                "
+                Look up `v` in this logic context.
+
+                If this method returns its argument unchanged, then it is
+                either an unbound logic variable or not a logic variable at
+                all.
+                "
+
+                return switch (v) {
+                    match via (varb) via (s.fetch) x { kanren.walk(x) }
+                    match us :List { [for u in (us) kanren.walk(u)] }
+                    match _ { v }
+                }
+
+            to unify(u, v):
+                return switch ([kanren.walk(u), kanren.walk(v)]) {
+                    match [via (varb) i, via (varb) j] {
+                        logic.pure(if (i == j) { kanren } else {
+                            makeCS(s.with(i, v), c)
+                        })
+                    }
+                    match [via (varb) i, rhs] {
+                        logic.pure(makeCS(s.with(i, rhs), c))
+                    }
+                    match [lhs, via (varb) j] {
+                        logic.pure(makeCS(s.with(j, lhs), c))
+                    }
+                    # XXX: zip() from lib/iterators doesn't have a good API
+                    # for doing this sort of ragged work cleanly.
+                    match [us :List, vs :List] {
+                        if (us.size() == vs.size()) {
+                            var rv := logic.pure(kanren)
+                            for i => x in (us) {
+                                rv := logic."bind"(rv, fn k { k.unify(x, vs[i]) })
+                            }
+                            rv
+                        } else { logic.zero() }
+                    }
+                    match [x, y] {
+                        if (x == y) { logic.pure(kanren) } else { logic.zero() }
+                    }
+                }
+
+    return makeCS([].asMap(), 0)

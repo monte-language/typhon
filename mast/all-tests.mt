@@ -21,7 +21,6 @@ import "lib/parse" =~ _
 import "lib/parsers/html" =~ _
 # import "lib/prom" =~ _
 import "lib/streams" =~ _
-import "lib/uKanren" =~ _
 import "lib/words" =~ _
 import "models/list/cons" =~ _
 import "models/list/fold" =~ _
