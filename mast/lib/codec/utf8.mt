@@ -12,9 +12,8 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-import "bench" =~ [=> bench :Any]
 import "unittest" =~ [=> unittest :Any]
-exports (UTF8)
+exports (UTF8, benchmarkUTF8)
 
 def chr(i :Int) :Char as DeepFrozen:
     return '\x00' + i
@@ -67,7 +66,7 @@ def decodeCore(var bs :Bytes, _ej) as DeepFrozen:
             # Invalid sequence. Move forward and try again.
             buf.push('\ufffd')
             offset += 1
-    return ["".join([for ch in (buf) ch.asString()]), bs.slice(offset)]
+    return [_makeStr.fromChars(buf), bs.slice(offset)]
 
 def testDecodeCoreThreeBytes(assert):
     assert.equal(decodeCore(b`$\xe2`, null), ["", b`$\xe2`])
@@ -77,9 +76,9 @@ def testDecodeCoreThreeBytes(assert):
 unittest([testDecodeCoreThreeBytes])
 
 
-def encodeCore(c :Char) :Bytes as DeepFrozen:
+def encodeCore(c :Char) :List[Int] as DeepFrozen:
     def i := c.asInteger()
-    def l := if (i < 0x80) {
+    return if (i < 0x80) {
         # One byte.
         [i]
     } else if (i < 0x800) {
@@ -97,16 +96,14 @@ def encodeCore(c :Char) :Bytes as DeepFrozen:
             0x80 | (i & 0x3f),
         ]
     }
-    return _makeBytes.fromInts(l)
 
 
 # The codec itself.
 
 object UTF8 as DeepFrozen:
     to decode(specimen, ej) :Str:
-        def bs :Bytes exit ej := specimen
-        def [s, remainder] exit ej := decodeCore(bs, ej)
-        if (remainder.size() != 0):
+        def [s, remainder] exit ej := decodeCore(Bytes.coerce(specimen, ej), ej)
+        if (!remainder.isEmpty()):
             throw.eject(ej, [remainder, "was not empty"])
         return s
 
@@ -115,48 +112,45 @@ object UTF8 as DeepFrozen:
         return decodeCore(bs, ej)
 
     to encode(specimen, ej) :Bytes:
-        def s :Str exit ej := specimen
-        var rv :Bytes := b``
-        for c in (s):
-            rv += encodeCore(c)
-        return rv
+        def is := [].diverge()
+        for c in (Str.coerce(specimen, ej)):
+            is.extend(encodeCore(c))
+        return _makeBytes.fromInts(is)
 
-def encodeBench():
-    def via (UTF8.encode) xs := "This is a test of the UTF-8 encoder… "
-    def via (UTF8.encode) ys := "¥ · £ · € · $ · ¢ · ₡ · ₢ · ₣ · ₤ · ₥ · ₦ · ₧ · ₨ · ₩ · ₪ · ₫ · ₭ · ₮ · ₯ · ₹"
-    return xs + ys
+object benchmarkUTF8 as DeepFrozen:
+    "Benchmarks for UTF8."
 
-bench(encodeBench, "UTF-8 encoding")
+    to encode():
+        def via (UTF8.encode) xs := "This is a test of the UTF-8 encoder… "
+        def via (UTF8.encode) ys := "¥ · £ · € · $ · ¢ · ₡ · ₢ · ₣ · ₤ · ₥ · ₦ · ₧ · ₨ · ₩ · ₪ · ₫ · ₭ · ₮ · ₯ · ₹"
+        return xs + ys
 
-
-# def decodeBench():
-#     def via (UTF8.decode) xs := b`This is a test of the UTF-8 encoder$\xe2$\x80$\xa6 `
-#     def via (UTF8.decode) ys := _makeBytes.fromInts([194, 165, 32, 194, 183,
-#                                                      32, 194, 163, 32, 194,
-#                                                      183, 32, 226, 130, 172,
-#                                                      32, 194, 183, 32, 36, 32,
-#                                                      194, 183, 32, 194, 162,
-#                                                      32, 194, 183, 32, 226,
-#                                                      130, 161, 32, 194, 183,
-#                                                      32, 226, 130, 162, 32,
-#                                                      194, 183, 32, 226, 130,
-#                                                      163, 32, 194, 183, 32,
-#                                                      226, 130, 164, 32, 194,
-#                                                      183, 32, 226, 130, 165,
-#                                                      32, 194, 183, 32, 226,
-#                                                      130, 166, 32, 194, 183,
-#                                                      32, 226, 130, 167, 32,
-#                                                      194, 183, 32, 226, 130,
-#                                                      168, 32, 194, 183, 32,
-#                                                      226, 130, 169, 32, 194,
-#                                                      183, 32, 226, 130, 170,
-#                                                      32, 194, 183, 32, 226,
-#                                                      130, 171, 32, 194, 183,
-#                                                      32, 226, 130, 173, 32,
-#                                                      194, 183, 32, 226, 130,
-#                                                      174, 32, 194, 183, 32,
-#                                                      226, 130, 175, 32, 194,
-#                                                      183, 32, 226, 130, 185])
-#     return xs + ys
-
-# bench(decodeBench, "UTF-8 decoding")
+    to decode():
+        def via (UTF8.decode) xs := b`This is a test of the UTF-8 encoder$\xe2$\x80$\xa6 `
+        def via (UTF8.decode) ys := _makeBytes.fromInts([194, 165, 32, 194, 183,
+                                                         32, 194, 163, 32, 194,
+                                                         183, 32, 226, 130, 172,
+                                                         32, 194, 183, 32, 36, 32,
+                                                         194, 183, 32, 194, 162,
+                                                         32, 194, 183, 32, 226,
+                                                         130, 161, 32, 194, 183,
+                                                         32, 226, 130, 162, 32,
+                                                         194, 183, 32, 226, 130,
+                                                         163, 32, 194, 183, 32,
+                                                         226, 130, 164, 32, 194,
+                                                         183, 32, 226, 130, 165,
+                                                         32, 194, 183, 32, 226,
+                                                         130, 166, 32, 194, 183,
+                                                         32, 226, 130, 167, 32,
+                                                         194, 183, 32, 226, 130,
+                                                         168, 32, 194, 183, 32,
+                                                         226, 130, 169, 32, 194,
+                                                         183, 32, 226, 130, 170,
+                                                         32, 194, 183, 32, 226,
+                                                         130, 171, 32, 194, 183,
+                                                         32, 226, 130, 173, 32,
+                                                         194, 183, 32, 226, 130,
+                                                         174, 32, 194, 183, 32,
+                                                         226, 130, 175, 32, 194,
+                                                         183, 32, 226, 130, 185])
+        return xs + ys
