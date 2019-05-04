@@ -69,7 +69,7 @@ def main(_argv,
 
     def [prompt, cleanup] := makePrompt(stdio)
     def log(s :Str):
-        prompt.writeLine(b`Log: ` + UTF8.encode(s, null))
+        prompt.setLine(b`Log: ` + UTF8.encode(s, null))
 
     object repl:
         "Some useful REPL stuff."
@@ -97,22 +97,27 @@ def main(_argv,
             scope.
             "
             def m := repl.instantiateModule(basePath, petname)
-            log(`m $m`)
+            log(`Loading module: $m`)
             return when (m) ->
                 log(`Instantiated $petname: $m`)
                 def ex := try { m(null) } catch e { traceln.exception(e); -1 }
                 for k => v :DeepFrozen in (ex):
                     log(`Loading into environment: $k`)
                     environment with= (`&&$k`, &&v)
+                    prompt.writeLine(b`Loaded module: $petname`)
 
         to benchmark(callable) :Vow[Double]:
             "Run `callable` repeatedly, recording the time taken."
             def iterations :Int := 10_000
-            def ps := [for _ in (0..!iterations) Timer.measureTimeTaken(callable)]
+            var total := 0.0
+            def ps := [for i in (0..!iterations) {
+                def t := Timer<-measureTimeTaken(callable)
+                when (t) -> {
+                    total += t[1]
+                    log(M.toString(total / i) + "=" * (72 * i // iterations))
+                }
+            }]
             return when (promiseAllFulfilled(ps)) ->
-                var total := 0.0
-                for [_, t] in (ps):
-                    total += t
                 total / iterations
 
     object REPLHelp extends help:
