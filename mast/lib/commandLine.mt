@@ -1,6 +1,10 @@
 import "lib/wrappers" =~ [=> makeRevokable]
 exports (makePrompt)
 
+# This magic sequence clears the current line of stdout and moves the cursor
+# to the beginning of the line. ~ C.
+def clearLine :Bytes := b`$\x1b[2K` + b`$\r`
+
 def makePrompt(stdio) as DeepFrozen:
     "
     A basic CLI toolkit on `stdio`.
@@ -11,23 +15,13 @@ def makePrompt(stdio) as DeepFrozen:
     def stdin := stdio.stdin()
     def stdout := stdio.stdout()
     var enabled :Bool := true
-    var lastLineSize :Int := 0
     var lineBuffer :Bytes := b``
     def whenDone
 
     def cleanup():
-        if (lastLineSize > 0):
-            stdout<-(b`$\n`)
         return when (stdout<-complete()) ->
             enabled := false
             bind whenDone := null
-
-    # Internal only.
-    def prepareLine(bs :Bytes) :Bytes:
-        def newLineSize := bs.size()
-        def padding := b` ` * (lastLineSize - newLineSize).max(0)
-        lastLineSize := newLineSize
-        return bs + padding
 
     object prompt:
         to whenDone():
@@ -38,7 +32,7 @@ def makePrompt(stdio) as DeepFrozen:
         to writeLine(bs :Bytes):
             "Write `bs` and start a new line."
 
-            return stdout<-(prepareLine(bs) + b`$\n`)
+            return stdout<-(clearLine + bs + b`$\n`)
 
         to setLine(bs :Bytes):
             "
@@ -48,10 +42,15 @@ def makePrompt(stdio) as DeepFrozen:
             `.writeLine` will come later to set the current line permanently.
             "
 
-            return stdout<-(prepareLine(bs) + b`$\r`)
+            return stdout<-(clearLine + bs)
 
         to readLine() :Vow[Bytes]:
             "Read a line of `Bytes`."
+
+            # Maybe we've already read a line?
+            if (lineBuffer =~ b`@line$\n@rest`):
+                lineBuffer := rest
+                return line
 
             def rv
             stdin<-(object filler {
@@ -73,12 +72,7 @@ def makePrompt(stdio) as DeepFrozen:
         to ask(query :Bytes) :Vow[Bytes]:
             "Prompt the user with `query`."
 
-            # Bug: While we are waiting for the user's reply, we do not
-            # account for redrawing `query` when setting the line. Shouldn't
-            # we? ~ C.
-
-            if (lastLineSize > 0) { prompt.writeLine(b``) }
-            return when (stdout<-(query)) ->
+            return when (stdout<-(clearLine + query)) ->
                 prompt.readLine()
 
     return [makeRevokable(prompt, &enabled), cleanup]

@@ -1,4 +1,5 @@
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
+import "lib/commandLine" =~ [=> makePrompt]
 import "lib/iterators" =~ [=> zip :DeepFrozen]
 exports (makeRunner)
 
@@ -152,11 +153,8 @@ def makeAsserter() as DeepFrozen:
                     return when (l, r) ->
                         assert.equal(l, r)
 
-# This magic sequence clears the current line of stdout and moves the cursor
-# to the beginning of the line. ~ C.
-def clearLine :Bytes := b`$\x1b[2K$\r`
-
-def makeRunner(stdout, unsealException, Timer) as DeepFrozen:
+def makeRunner(stdio, unsealException, Timer) as DeepFrozen:
+    def [prompt, cleanup] := makePrompt(stdio)
     var lastSource := null
     var lastTest := null
     var total :Int := 0
@@ -171,12 +169,12 @@ Error in source $source from test $test:
     ${err[0]}
 ~~~
 `
-        stdout(UTF8.encode(line, null))
+        prompt.writeLine(UTF8.encode(line, null))
 
     def updateScreen():
         def counts := `completed/running/errors/total: $completed/$running/$errors/$total`
         def info := ` Last source: $lastSource Last test: $lastTest`
-        return stdout<-(clearLine + UTF8.encode(counts + info, null))
+        return prompt.setLine(UTF8.encode(counts + info, null))
 
     def either(left, right):
         def [p, r] := Ref.promise()
@@ -191,7 +189,7 @@ Error in source $source from test $test:
         def st :Str := M.toString(test)
         def timeout := Ref.whenResolved(
             Timer.fromNow(60.0),
-            fn _ { Ref.broken(`Timeout running $test`) },
+            fn _ { Ref.broken(`Timeout running $st`) },
         )
         return when (either(timeout, test<-(asserter(st)))) ->
             lastSource := k
@@ -216,20 +214,23 @@ Error in source $source from test $test:
             updateScreen()
 
     return def runner.runTests(tests):
+        prompt.writeLine(b`Starting test runner.`)
         def asserter := makeAsserter()
-        def results := [for [k, test] in (tests)
-                        startTest<-(asserter, k, test)]
+        def testIterator := tests._makeIterator()
+        def go():
+            return escape ej {
+                def [_, [k, test]] := testIterator.next(ej)
+                when (startTest<-(asserter, k, test)) -> { go<-() }
+            }
         # Do the initial screen update.
         updateScreen()
-        return when (promiseAllFulfilled(results)) ->
-            updateScreen()
-            stdout(UTF8.encode(`$\nRan ${results.size()} tests!$\n`, null))
-            object resultSummary:
-                to fails():
-                    return asserter.fails()
-
-                to total():
-                    return asserter.total()
-
-                to errors():
-                    return asserter.errors()
+        # Start iterating through tests.
+        return when (go<-()) ->
+            def finalMessage := UTF8.encode(`Successfully ran all $total tests!`, null)
+            when (prompt.writeLine(finalMessage)) ->
+                cleanup<-()
+                # Exit code: Only returns 0 if there were 0 failures.
+                asserter.fails().min(1)
+        catch problem:
+            prompt.writeLine(b`Test suite failed: ${M.toString(unsealException(problem))}`)
+            when (cleanup<-()) -> { 1 }

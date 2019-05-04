@@ -179,22 +179,8 @@ def loaderMain() :Vow[Int]:
                 [def testRunner := makeModuleAndConfiguration("testRunner", newReader)])
             when (someMods) ->
                 def [[=> makeRunner] | _, _] := testRunner
-                def stdout := stdio.stdout()
-                def runner := makeRunner(stdout, unsealException, Timer)
-                def results := runner<-runTests(collectedTests)
-                when (results) ->
-                    def fails :Int := results.fails()
-                    stdout(b`${M.toString(results.total())} tests run, `)
-                    stdout(b`${M.toString(fails)} failures$\n`)
-                    # Exit code: Only returns 0 if there were 0 failures.
-                    for loc => errors in (results.errors()):
-                        stdout(b`In $loc:$\n`)
-                        for error in (errors):
-                            stdout(b`~ $error$\n`)
-                    when (stdout.complete()) -> { fails.min(1) }
-                catch problem:
-                    stdout(b`Test suite failed: ${M.toString(unsealException(problem))}$\n`)
-                    when (stdout.complete()) -> { 1 }
+                def runner := makeRunner(stdio, unsealException, Timer)
+                runner<-runTests(collectedTests)
         match [=="bench"] + modnames:
             def someMods := promiseAllFulfilled(
                 [for modname in (modnames)
