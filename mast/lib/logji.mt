@@ -1,4 +1,4 @@
-exports (logic, makeKanren)
+exports (logic, makeKanren, unify)
 
 # A simple logic monad.
 # Loosely based on http://homes.sice.indiana.edu/ccshan/logicprog/LogicT-icfp2005.pdf
@@ -101,11 +101,52 @@ object logic as DeepFrozen:
 # µKanren: Logic variables and unification.
 # http://webyrd.net/scheme-2013/papers/HemannMuKanren2013.pdf
 
+# Notes on the data model:
+# * We use a brand to protect logic variables from inspection
+# * The variables themselves are Ints
+# * We unify entire lists at a time, rather than Scheme-style pairs
+# * Unbound fresh logic variables are not scoped! Use this for extraction
+
 def makeKanren() as DeepFrozen:
     def [varSealer, varUnsealer] := makeBrandPair("logic variable")
     def varb := varUnsealer.unsealing
 
-    def makeCS(s :Map, c :Int):
+    def walkOn(s :Map, v):
+        return switch (v) {
+            match via (varb) via (s.fetch) x { walkOn(s, x) }
+            match us :List { [for u in (us) walkOn(s, u)] }
+            match _ { v }
+        }
+
+    def unifyOn(s :Map, u, v):
+        return switch ([walkOn(s, u), walkOn(s, v)]) {
+            match [via (varb) i, via (varb) j] {
+                if (i == j) { [].asMap() } else { [i => v, j => v] }
+            }
+            match [via (varb) i, rhs] { [i => rhs] }
+            match [lhs, via (varb) j] { [j => lhs] }
+            # XXX: zip() from lib/iterators doesn't have a good API
+            # for doing this sort of ragged work cleanly.
+            match [us :List, vs :List] {
+                if (us.size() == vs.size()) {
+                    var rv := [].asMap()
+                    for i => x in (us) {
+                        def sub := unifyOn(s, x, vs[i])
+                        if (sub == null) { return null }
+                        rv |= sub
+                    }
+                    rv
+                }
+            }
+            match [x, y] { if (x == y) { [].asMap() } }
+        }
+
+    # s: substitutions
+    # d: disequality constraint store
+    # c: next state variable offset
+    def makeCS(s :Map, d :List[Map], c :Int):
+        "Create a constraint package."
+
         return object kanren:
             "A state for doing logical unification."
 
@@ -114,7 +155,7 @@ def makeKanren() as DeepFrozen:
 
                 def next := c + count
                 def vars := [for i in (c..!next) varSealer.seal(i)]
-                return [makeCS(s, next)] + vars
+                return [makeCS(s, d, next)] + vars
 
             to walk(v):
                 "
@@ -125,39 +166,65 @@ def makeKanren() as DeepFrozen:
                 all.
                 "
 
-                return switch (v) {
-                    match via (varb) via (s.fetch) x { kanren.walk(x) }
-                    match us :List { [for u in (us) kanren.walk(u)] }
-                    match _ { v }
-                }
+                return walkOn(s, v)
 
             to unify(u, v):
-                return switch ([kanren.walk(u), kanren.walk(v)]) {
-                    match [via (varb) i, via (varb) j] {
-                        logic.pure(if (i == j) { kanren } else {
-                            makeCS(s.with(i, v), c)
-                        })
-                    }
-                    match [via (varb) i, rhs] {
-                        logic.pure(makeCS(s.with(i, rhs), c))
-                    }
-                    match [lhs, via (varb) j] {
-                        logic.pure(makeCS(s.with(j, lhs), c))
-                    }
-                    # XXX: zip() from lib/iterators doesn't have a good API
-                    # for doing this sort of ragged work cleanly.
-                    match [us :List, vs :List] {
-                        if (us.size() == vs.size()) {
-                            var rv := logic.pure(kanren)
-                            for i => x in (us) {
-                                rv := logic."bind"(rv, fn k { k.unify(x, vs[i]) })
+                return switch (unifyOn(s, u, v)) {
+                    match ==null { logic.zero() }
+                    match ==([].asMap()) { logic.pure(kanren) }
+                    match subs {
+                        def news := s | subs
+                        def newd := [].diverge()
+                        for constraint in (d) {
+                            # NB: Each key in the constraint must be sealed in
+                            # order to appear as varb.
+                            def ks := [for k in (constraint.getKeys()) {
+                                varSealer.seal(k)
+                            }]
+                            def vs := constraint.getValues()
+                            switch (unifyOn(news, ks, vs)) {
+                                match ==null { null }
+                                match ==([].asMap()) { return logic.zero() }
+                                match cons { newd.push(cons) }
                             }
-                            rv
-                        } else { logic.zero() }
-                    }
-                    match [x, y] {
-                        if (x == y) { logic.pure(kanren) } else { logic.zero() }
+                        }
+                        logic.pure(makeCS(news, newd.snapshot(), c))
                     }
                 }
 
-    return makeCS([].asMap(), 0)
+            to disunify(u, v):
+                return switch (unifyOn(s, u, v)) {
+                    match ==null { logic.pure(kanren) }
+                    match ==([].asMap()) { logic.zero() }
+                    match subs {
+                        logic.pure(makeCS(s, d.with(subs), c))
+                    }
+                }
+
+            to cond(fs :List):
+                var rv := logic.zero()
+                for f in (fs):
+                    rv := logic.plus(rv, f(kanren))
+                return rv
+
+            to all(fs :List):
+                var rv := logic.pure(kanren)
+                for f in (fs):
+                    rv := logic."bind"(rv, f)
+                return rv
+
+    return makeCS([].asMap(), [], 0)
+
+object unify as DeepFrozen:
+    to run(lhs, rhs):
+        return def unifying(k):
+            return k.unify(lhs, rhs)
+
+    to dis(lhs, rhs):
+        return def disunifying(k):
+            return k.disunify(lhs, rhs)
+
+object cond as DeepFrozen:
+    match [=="run", fs, _]:
+        def conde(k):
+            return k.cond(fs)
