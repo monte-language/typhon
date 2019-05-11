@@ -1,9 +1,16 @@
 import "lib/mim/full" =~ [=> expand]
-import "lib/mim/anf" =~ [=> makeNormal]
+import "lib/mim/anf" =~ [=> anf, => makeNormal]
+import "lib/mim/mix" =~ [=> makeMixer]
 exports (go, evaluate)
 
 def go(expr :DeepFrozen) as DeepFrozen:
-    return makeNormal().alpha(expand(expr))
+    def normalized := makeNormal().alpha(expand(expr))
+    def reductionBasis := [
+        => &&true, => &&false, => &&null,
+        => &&_makeList,
+        => &&Bool, => &&Char, => &&Double, => &&Int, => &&Str,
+    ]
+    return makeMixer(anf, reductionBasis).mix(normalized, [].asMap())
 
 def b :DeepFrozen := "&&".add
 
