@@ -94,7 +94,20 @@ def makeMixer(anf, reductionBasis) as DeepFrozen:
                 }
             }
 
-            to NounExpr(name, span) {
+            # XXX factor out shared code with NounExpr?
+            to BindingExpr(name :Str, span) {
+                return switch (`&&$name`) {
+                    match via (frame.fetch) green { k(green) }
+                    match via (reductionBasis.fetch) outer {
+                        escape deopt { k([outer, deopt, span]) } catch _ {
+                            k(anf.BindingExpr(name, span))
+                        }
+                    }
+                    match _ { k(anf.BindingExpr(name, span)) }
+                }
+            }
+
+            to NounExpr(name :Str, span) {
                 return switch (`&&$name`) {
                     match via (frame.fetch) [&&green, deopt, span] {
                         k([green, deopt, span])
@@ -125,6 +138,14 @@ def makeMixer(anf, reductionBasis) as DeepFrozen:
                 to IgnorePattern(span):
                     return if (isGreen(specimen)) { k(frame) } else {
                         anf.LetExpr(anf.IgnorePattern(span),
+                                    residualize(specimen), k(frame), span)
+                    }
+
+                to BindingPattern(noun :Str, span):
+                    return if (isGreen(specimen)) {
+                        k(frame.with(`&&$noun`, specimen))
+                    } else {
+                        anf.LetExpr(anf.BindingPattern(noun, span),
                                     residualize(specimen), k(frame), span)
                     }
 

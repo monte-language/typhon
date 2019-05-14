@@ -3,6 +3,89 @@ import "lib/mim/anf" =~ [=> anf, => makeNormal]
 import "lib/mim/mix" =~ [=> makeMixer]
 exports (go, evaluate)
 
+object pretty as DeepFrozen:
+    to LiteralExpr(value, _):
+        return M.toQuote(value)
+
+    to NounExpr(name, _):
+        # XXX shame syntax
+        return name
+
+    to SlotExpr(name, _):
+        return `&$name`
+
+    to BindingExpr(name, _):
+        return `&&$name`
+
+    to ObjectExpr(docstring, name, asExpr, auditors, script, _):
+        def auds := if (asExpr != null) { `as $asExpr` } else { "" }
+        def imps := if (auditors.isEmpty()) { "" } else {
+            `implements ${", ".join(auditors)}`
+        }
+        def doc := if (docstring == null) { "" } else { M.toQuote(docstring) }
+        return `object $name $auds $imps {$doc $script }`
+
+    to MethodCallExpr(receiver, verb, arguments, namedArguments, _):
+        def args := ", ".join(arguments)
+        def namedArgs := ", ".join(namedArguments)
+        def message := if (args.isEmpty() && namedArgs.isEmpty()) { "" } else {
+            if (args.isEmpty()) { namedArgs } else if (namedArgs.isEmpty()) { args }
+        }
+        return `$receiver.${M.toQuote(verb)}($message)`
+
+    to FinallyExpr(body, unwinder, _):
+        return `try { $body } finally { $unwinder }`
+
+    to IfExpr(test, alt, cons, _):
+        return `if ($test) { $alt } else { $cons }`
+
+    to LetExpr(pattern, expr, body, _):
+        return `let ($expr) =~ $pattern in { $body }`
+
+    to EscapeExpr(pattern, body, _):
+        return `escape $pattern { $body }`
+
+    to JumpExpr(ejector, arg, _):
+        return `throw.eject($ejector, $arg)`
+
+    to Atom(atom, _):
+        return atom
+
+    to IgnorePattern(_):
+        return "_"
+
+    to FinalPattern(noun, _):
+        return noun
+
+    to BindingPattern(noun, _):
+        return `&&$noun`
+
+    to ListPattern(patterns, _):
+        return `[${",".join(patterns)}]`
+
+    to NamedArg(key, value, _):
+        return `($key) => $value`
+
+    to NamedParam(key, value, default, _):
+        def d := if (default != null) { ` := $default` } else { "" }
+        return `($key) => $value` + d
+
+    to "Method"(docstring, verb, parameters, namedParameters, resultGuard, body, _):
+        def params := ", ".join(parameters)
+        def namedParams := ", ".join(namedParameters)
+        def sig := if (params.isEmpty() && namedParams.isEmpty()) { "" } else {
+            if (params.isEmpty()) { namedParams } else if (namedParams.isEmpty()) { params }
+        }
+        def rg := if (resultGuard == null) { "" } else { `:$resultGuard` }
+        def doc := if (docstring == null) { "" } else { M.toQuote(doc) }
+        return `method ${M.toQuote(verb)}($sig) $rg {$doc $body }`
+
+    to Script(methods, matchers, _):
+        def ms := " ".join([for [patt, body] in (matchers) {
+            `match $patt { $body }`
+        }])
+        return `${" ".join(methods)} $ms`
+
 def go(expr :DeepFrozen) as DeepFrozen:
     def normalized := makeNormal().alpha(expand(expr))
     def reductionBasis := [
@@ -10,7 +93,8 @@ def go(expr :DeepFrozen) as DeepFrozen:
         => &&_makeList,
         => &&Bool, => &&Char, => &&Double, => &&Int, => &&Str,
     ]
-    return makeMixer(anf, reductionBasis).mix(normalized, [].asMap())
+    def compiled := makeMixer(anf, reductionBasis).mix(normalized, [].asMap())
+    return compiled(pretty)
 
 def b :DeepFrozen := "&&".add
 

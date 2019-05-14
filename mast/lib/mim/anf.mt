@@ -260,7 +260,7 @@ def makeNormal() as DeepFrozen:
                                                                        span),
                                                           "put", [rv], [],
                                                           span),
-                                       fn _ { k(rv) })
+                                       fn _ { k(rv) }, span)
                             }, span)
                         }, span)
                     })
