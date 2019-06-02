@@ -121,6 +121,7 @@ def isPrimitive :DeepFrozen := ["bool", "df", "identifier", "int", "str"].contai
 def comma :DeepFrozen := m`out.print(", ")`
 
 def theTypeGuards :Map[Str, DeepFrozen] := [
+    "any" => m`Any`,
     "bool" => m`Bool`,
     "df" => m`DeepFrozen`,
     "identifier" => m`Str`,
