@@ -25,20 +25,22 @@ def countBrot(k :DeepFrozen, a :Complex, ej, => threshold :Double := 2.0,
         rv := k(rv, a)
     throw.eject(ej, "Out of iterations")
 
-def fixingViewport(x :Double, _) :Double as DeepFrozen:
-    return 4.0 * x - 2.0
-
 def maxIterations :Int := 255
 
-def makeBrot() as DeepFrozen:
-    def draw(via (fixingViewport) x :Double, via (fixingViewport) y :Double,
-             => aspectRatio :Double):
+# -0.25, -0.4, (1/2)
+# -1.7529296875, -0.025, (1/32)
+
+def makeBrot(xc :Double, yc :Double, height :Double) as DeepFrozen:
+    def draw(x :Double, y :Double, => aspectRatio :Double):
+        # [0, 1] -> [xc - width/2, xc + width/2]
+        def xr := xc + (height * aspectRatio * (x - 0.5))
+        def yr := yc + (height * (y - 0.5))
         escape ej:
-            def count := countBrot(mandelbrot, makeComplex(x * aspectRatio, y), ej, => maxIterations)
+            def count := countBrot(burningShip, makeComplex(xr, yr), ej, => maxIterations)
             # Lerp from white to purple to blue, modulating everything by intensity.
             return [
                 1.0 - (count / maxIterations),
-                1.0 - (count / maxIterations / 2),
+                1.0 - (count * 2 / maxIterations),
                 1.0,
             ]
         catch _:
