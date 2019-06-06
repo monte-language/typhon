@@ -187,7 +187,7 @@ def ORIGIN :List[Double] := [0.0] * 3
 def fov :Double := (PI / 6).tan()
 
 def render(spheres, lights) as DeepFrozen:
-    def draw(x :Double, y :Double, => aspectRatio :Double):
+    def draw.drawAt(x :Double, y :Double, => aspectRatio :Double):
         def xr := (x - 0.5) * 2.0 * fov * aspectRatio
         def yr := (y - 0.5) * 2.0 * fov
         return castRay(ORIGIN, norm([xr, yr, -1.0]), spheres, lights)
