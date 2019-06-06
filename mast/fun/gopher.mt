@@ -20,7 +20,36 @@ def obtainRequest(source) :Vow[Bytes] as DeepFrozen:
     })
     return rv
 
-def makeGopherHole(gopherMap :Map) as DeepFrozen:
+def intToBytes(v, ej) as DeepFrozen:
+    def i :Int exit ej := v
+    def s :Str exit ej := M.toString(i)
+    def rv :Bytes exit ej := _makeBytes.fromStr(s)
+    return rv
+
+def makeMenuWriter(myHost :Bytes, myPort :Bytes) as DeepFrozen:
+    return def menuWriter(write) as DeepFrozen:
+        return object menu:
+            to i(label :Bytes):
+                "Informational text."
+                write(b`i$label${TAB}fake${TAB}(NULL)${TAB}0$CRLF`)
+
+            to "1"(label :Bytes, selector :Bytes, => host :Bytes := myHost,
+                   => port :Bytes := myPort):
+                "Menu."
+                write(b`1$label$TAB$selector$TAB$host$TAB$port$CRLF`)
+
+def errorResource(write) as DeepFrozen:
+    write(b`3Selector Not Found$TAB$TAB$TAB$CRLF`)
+    write(b`.$CRLF`)
+
+def makeGopherHole(root, => host :Bytes, "port" => via (intToBytes) port :Bytes := 70) as DeepFrozen:
+    # selectors => resources
+    def resources := [b`` => root].diverge()
+    # Reverse lookup, resources => selectors
+    # def selectors := [root => b``].diverge()
+
+    def menuWriter := makeMenuWriter(host, port)
+
     return def handle(source, sink):
         # Gopher is line-oriented. However, requests have no keepalive, so
         # CRLF is actually a terminator of the entire request, rather than a
@@ -28,20 +57,23 @@ def makeGopherHole(gopherMap :Map) as DeepFrozen:
         when (def request := obtainRequest(source)) ->
             # To facilitate streaming, we allow the resource to write multiple
             # times directly into the sink.
-            def resource := gopherMap[request]
-            when (resource(sink<-run)) ->
+            def resource := resources.fetch(request, &errorResource.get)
+            def write := sink<-run
+            def menu := menuWriter(write)
+            when (resource(write, => menu)) ->
                 sink<-complete()
 
-def writeMap(write) as DeepFrozen:
-    write(b`iHello World!${TAB}fake${TAB}(NULL)${TAB}0$CRLF.$CRLF`)
-
-def myMap :Map[Bytes, DeepFrozen] := [
-    b`` => writeMap,
-]
+def myRoot(write, => menu) as DeepFrozen:
+    menu.i(b`Hello world!`)
+    menu.i(b`This is a lot easier now.`)
+    menu."1"(b`Don't click me?`, b`fakeSelector`)
+    write(b`.$CRLF`)
 
 def main(_argv, => makeTCP4ServerEndpoint) as DeepFrozen:
     # XXX grab port from argv, default to 70?
-    def ep := makeTCP4ServerEndpoint(7070)
-    ep.listenStream(makeGopherHole(myMap))
+    def port :Int := 7070
+    def ep := makeTCP4ServerEndpoint(port)
+    def hole := makeGopherHole(myRoot, "host" => b`localhost`, => port)
+    ep.listenStream(hole)
     def never
     return when (never) -> { 0 }
