@@ -30,7 +30,7 @@ def anf :DeepFrozen := asdlParser(mpatt`anf`, `
     method = Method(str? docstring, str verb, pattern* params,
                     namedParam* namedParams, atom? resultGuard, complex body,
                     df span)
-    matcher = (pattern pattern, complex body)
+    matcher = Matcher(pattern pattern, complex body)
     script = Script(method* methods, matcher* matchers, df span)
 `, null)
 

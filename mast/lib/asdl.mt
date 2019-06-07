@@ -19,14 +19,6 @@ object bootBuilder as DeepFrozen:
             }
             method walk(f) { f.Sum(id, fields, con, cons) }
         }
-    to Product(ty, f, fs):
-        return object Product {
-            to _printOn(out) { out.print(`Product($ty, $f, $fs)`) }
-            method run(runner) {
-                f.Product(ty, f(runner), [for x in (fs) x(runner)])
-            }
-            method walk(walker) { walker.Product(ty, f, fs) }
-        }
     to Con(name, fs):
         return object Con {
             to _printOn(out) { out.print(`Con($name, $fs)`) }
@@ -85,17 +77,12 @@ def makeParser(builder) as DeepFrozen:
     def attribKeyword := ws >> pk.string("attributes") << ws
     def attribs := (attribKeyword >> fields) / pk.pure([])
     def sum_type := constructor.joinedBy(pipe)
-    def product_type := fields
     # Divergence from the original grammar in order to simplify AST-building;
     # we double up on `typ_id << equals`.
     def typ_eq := typ_id << equals
-    def sum_definition := (typ_eq + sum_type + attribs) % fn [[ty, [con] + cons], attrs] {
+    def definition := (typ_eq + sum_type + attribs) % fn [[ty, [con] + cons], attrs] {
         builder.Sum(ty, attrs, con, cons)
     }
-    def product_definition := (typ_eq + product_type) % fn [ty, [f] + fs] {
-        builder.Product(ty, f, fs)
-    }
-    def definition := sum_definition / product_definition
     def definitions := definition.bracket(ws, ws).zeroOrMore()
     return definitions
 
@@ -104,9 +91,10 @@ def bootParser(s :Str, ej) as DeepFrozen:
     return p(makeSlicer.fromString(s), ej)
 
 # Figure 15
+# We don't do products. They're usually not what is wanted, and they
+# complicate the compiler. ~ C.
 def boot :Str := `
     asdl_ty = Sum(identifier, field*, constructor, constructor*)
-            | Product(identifier, field, field*)
     constructor = Con(identifier, field*)
     field = Id | Option | Sequence attributes (identifier, identifier?)
 `
@@ -129,38 +117,6 @@ def theTypeGuards :Map[Str, DeepFrozen] := [
     "str" => m`Str`,
 ]
 
-def gatherTys(tys :List) as DeepFrozen:
-    def sumTys := [].diverge()
-    def prodTys := [].diverge()
-
-    for ty in (tys):
-        ty.walk(object tyGatherer {
-            to Product(ty, _f, _fs) { prodTys.push(ty) }
-            to Sum(id, _fields, _con, _cons) { sumTys.push(id) }
-        })
-
-    return [sumTys, prodTys]
-
-def makeStack(mode :Str) as DeepFrozen:
-    def s := [[].diverge()].diverge()
-    return object stack:
-        to push():
-            s.push([].diverge())
-        to pop():
-            def l := switch (mode) {
-                match =="expr" {
-                    astBuilder.ListExpr(s.pop().snapshot(), null)
-                }
-                match =="patt" {
-                    astBuilder.ListPattern(s.pop().snapshot(), null, null)
-                }
-            }
-            s.last().push(l)
-        to append(val):
-            s.last().push(val)
-        to snapshot():
-            return s.last().snapshot()
-
 def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
     var count :Int := 0
     def nextName(prefix :Str) :Str:
@@ -174,10 +130,7 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
         return astBuilder.FinalPattern(
             astBuilder.NounExpr(name, null), null, null)
 
-    def products := [].asMap().diverge()
     def methods := [].diverge()
-
-    def typeGuards := theTypeGuards.diverge()
 
     def fieldGuards := [
         "Id" => fn g { g },
@@ -193,28 +146,22 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
 
     def makeConWalker(conGuard, attributeFields):
         return def walker.Con(name, fs):
-            def exprs := makeStack("expr")
-            def patts := makeStack("patt")
-            def visitors := makeStack("expr")
+            def exprs := [].diverge()
+            def patts := [].diverge()
+            def visitors := [].diverge()
 
             object fieldWalker:
                 match [verb, [ty, name], _]:
-                    if (products.contains(ty)):
-                        for s in ([exprs, patts, visitors]):
-                            s.push()
-                        for field in (products[ty]):
-                            field.walk(fieldWalker)
-                        for s in ([exprs, patts, visitors]):
-                            s.pop()
-                    else:
-                        def tyGuard := typeGuards[ty]
-                        def g := fieldGuards[verb](tyGuard)
-                        exprs.append(def n := nextNoun(ty, name))
-                        # XXX Monte parser bug; mpatt`$n :$g` should work.
-                        patts.append(astBuilder.FinalPattern(n, g, null))
-                        visitors.append(if (isPrimitive(ty)) { n } else {
-                            fieldVisitors[verb](n)
-                        })
+                    def tyGuard := theTypeGuards.fetch(ty, fn {
+                        astBuilder.NounExpr("_sum_type_" + ty, null)
+                    })
+                    def g := fieldGuards[verb](tyGuard)
+                    exprs.push(def n := nextNoun(ty, name))
+                    # XXX Monte parser bug; mpatt`$n :$g` should work.
+                    patts.push(astBuilder.FinalPattern(n, g, null))
+                    visitors.push(if (isPrimitive(ty)) { n } else {
+                        fieldVisitors[verb](n)
+                    })
                     null
 
             for f in (fs + attributeFields):
@@ -258,26 +205,15 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
         # These statements will run before we define our builder.
         def preamble := [].diverge()
 
-        def [sumTys, prodTys] := gatherTys(tys)
-        for sumTy :Str in (sumTys):
-            def sumGuard := astBuilder.NounExpr("_sum_type_" + sumTy, null)
-            def sumPatt := astBuilder.FinalPattern(sumGuard, m`DeepFrozen`,
-                                                   null)
-            preamble.push(m`interface $sumPatt {}`)
-            typeGuards[sumTy] := sumGuard
-            methods.push(m`to $sumTy() { return $sumGuard }`)
-        for prodTy in (prodTys):
-            # XXX why not more specific?
-            typeGuards[prodTy] := m`List`
-
         for ty in (tys):
-            ty.walk(object tyWalker {
-                to Sum(id, fields, con, cons) {
-                    def nameNoun := typeGuards[id]
-                    def conWalker := makeConWalker(nameNoun, fields)
-                    for c in ([con] + cons) { c.walk(conWalker) }
-                }
-                to Product(ty, f, fs) { products[ty] := [f] + fs }
+            ty.walk(def tyWalker.Sum(id :Str, fields, con, cons) {
+                def sumGuard := astBuilder.NounExpr("_sum_type_" + id, null)
+                def sumPatt := astBuilder.FinalPattern(sumGuard, m`DeepFrozen`,
+                                                       null)
+                preamble.push(m`interface $sumPatt {}`)
+                methods.push(m`to $id() { return $sumGuard }`)
+                def conWalker := makeConWalker(sumGuard, fields)
+                for c in ([con] + cons) { c.walk(conWalker) }
             })
         def script := astBuilder.Script(null, methods.snapshot(), [], null)
         def obj := astBuilder.ObjectExpr(null, builderName, m`DeepFrozen`,
