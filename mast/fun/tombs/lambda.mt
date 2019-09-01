@@ -1,4 +1,4 @@
-exports ()
+exports (lambda)
 
 # The untyped lambda calculus, using de Bruijn indices.
 
