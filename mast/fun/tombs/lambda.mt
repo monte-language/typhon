@@ -1,4 +1,4 @@
-exports (lambda)
+exports (lambda, lambdaToMonte, lambdaToSKI)
 
 # The untyped lambda calculus, using de Bruijn indices.
 
@@ -36,13 +36,25 @@ def inc(tree) as DeepFrozen:
     }
 
 object lambda as DeepFrozen:
+    to signature():
+        return "lambda"
+
+    to guard():
+        return Any
+
     to id():
         return ["λ", 0]
 
     to compose(left, right):
+        # XXX eta-reduce?
         return [left, right]
 
-    to compile(tree) :DeepFrozen:
+
+object lambdaToMonte as DeepFrozen:
+    to signature():
+        return ["lambda", "monte"]
+
+    to run(tree) :DeepFrozen:
         def vars := "xyzw"
         var sp := 0
         def go(t):
@@ -60,8 +72,12 @@ object lambda as DeepFrozen:
             }
         return go(tree)
 
-    to compileToSKI(tree):
-        def r := lambda.compileToSKI
+object lambdaToSKI as DeepFrozen:
+    to signature():
+        return ["lambda", "ski"]
+
+    to run(tree):
+        def r := lambdaToSKI
         return switch (tree) {
             match ==["λ", 0] { "i" }
             match [left ? (left != "λ"), right] { [r(left), r(right)] }
@@ -74,8 +90,3 @@ object lambda as DeepFrozen:
             match [=="λ", [=="λ", e]] { r(["λ", inc(r(["λ", dec(e)]))]) }
             match x { x }
         }
-
-traceln(lambda.compileToSKI(["λ", ["λ", [0, 1]]]))
-traceln(lambda.compileToSKI(["λ", ["λ", [1, 0]]]))
-traceln(lambda.compile(["λ", ["λ", [0, 1]]]))
-traceln(lambda.compile(["λ", ["λ", [1, 0]]]))

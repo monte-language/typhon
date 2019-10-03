@@ -1,22 +1,16 @@
-exports (ski)
+exports (SKI, SKIToMonte)
 
 # https://en.wikipedia.org/wiki/SKI_combinator_calculus
 
-def s :DeepFrozen := m`fn x { fn y { fn z { x(z)(y(z)) } } }`
-def k :DeepFrozen := m`fn x { fn _ { x } }`
-def i :DeepFrozen := m`fn x { x }`
-def combinators :Map[Str, DeepFrozen] := [=> s, => k, => i]
+object SKI as DeepFrozen:
+    to signature():
+        return "ski"
 
-object ski as DeepFrozen:
-    to id() :DeepFrozen:
-        return i
+    to guard():
+        return Any
 
-    to compile(tree, ej) :DeepFrozen:
-        return switch (tree) {
-            match [via (ski.compile) x, via (ski.compile) y] { m`$x($y)` }
-            match via (combinators.fetch) c { c }
-            match invalid { throw.eject(ej, `Invalid branch $invalid`) }
-        }
+    to id():
+        return "i"
 
     to compose(left, right):
         # Partial evaluation to affine normal form. It doesn't matter how the
@@ -34,17 +28,26 @@ object ski as DeepFrozen:
             # input; that is, if one of them is a partially-applied Kx.
             # S(Kx)yz -> x(yz)
             match [[=="s", [=="k", x]], y] {
-                ski.compose(x, ski.compose(y, right))
+                SKI.compose(x, SKI.compose(y, right))
             }
             # Sx(Ky)z -> xzy
             match [[=="s", x], [=="k", y]] {
-                ski.compose(ski.compose(x, right), y)
+                SKI.compose(SKI.compose(x, right), y)
             }
             match _ { [left, right] }
         }
 
-    to optimize(tree):
+def s :DeepFrozen := m`fn x { fn y { fn z { x(z)(y(z)) } } }`
+def k :DeepFrozen := m`fn x { fn _ { x } }`
+def i :DeepFrozen := m`fn x { x }`
+def combinators :Map[Str, DeepFrozen] := [=> s, => k, => i]
+
+object SKIToMonte as DeepFrozen:
+    to signature():
+        return ["ski", "monte"]
+
+    to run(tree) :DeepFrozen:
         return switch (tree) {
-            match [x, y] { ski.compose(x, y) }
-            match leaf { leaf }
+            match [via (SKIToMonte) x, via (SKIToMonte) y] { m`$x($y)` }
+            match via (combinators.fetch) c { c }
         }
