@@ -36,10 +36,12 @@ let
     };
     mtBusybox = monte.override { shellForMt = "${nixpkgs.busybox}/bin/sh"; };
     mtLite = mtBusybox.override { withBuild = false; };
+  };
+  typhonDocker = {
     mtDocker = nixpkgs.dockerTools.buildImage {
         name = "monte-dev";
         tag = "latest";
-        contents = [nixpkgs.nix.out nixpkgs.busybox mtBusybox typhonVmJIT];
+        contents = [nixpkgs.nix.out nixpkgs.busybox typhon.mtBusybox typhon.typhonVmJIT];
         runAsRoot = ''
           #!${nixpkgs.busybox}/bin/sh
           mkdir -p /etc
@@ -56,7 +58,7 @@ let
     mtLiteDocker = nixpkgs.dockerTools.buildImage {
         name = "repl";
         tag = "latest";
-        contents = [mtLite typhonVmJIT];
+        contents = with typhon; [mtLite typhonVmJIT];
         config = {
             Cmd = [ "/bin/monte" "repl" ];
             WorkingDir = "/";
