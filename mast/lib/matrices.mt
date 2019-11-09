@@ -38,6 +38,9 @@ object makeMatrix as DeepFrozen implements makerAuditor:
             to _uncall():
                 return serializer(makeMatrix, [columns])
 
+            to columns():
+                return columns
+
             to size() :Pair[Int, Int]:
                 return [rowSize, columns.size()]
 
