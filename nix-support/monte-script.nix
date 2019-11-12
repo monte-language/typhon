@@ -116,6 +116,7 @@ let
             if [[ -z $SOURCE ]]; then
                 usage 1
             else
+                DEST=''${3:''${SOURCE%.mt}.mast}
                 ${typhonVm}/mt-typhon -l ${mast} ${mast}/loader \
                            run montec -mix "$SOURCE" "''${SOURCE%.mt}.mast"
             fi
