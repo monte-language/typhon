@@ -186,6 +186,8 @@ class StreamSinkCleanup(IOEvent):
         self.streamSink = streamSink
 
     def run(self):
+        if self.streamSink.closed:
+            return
         self.streamSink.closed = True
         self.streamSink._stream.release()
         self.streamSink._stream = None
