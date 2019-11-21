@@ -54,7 +54,7 @@ object makeStore as DeepFrozen:
                 to delete():
                     storage.removeKey(ref)
 
-    to fromAdjunction(store, ana, kata, => mapRef := id):
+    to fromAdjunction(store, ana, kata, => mapRef := id) :Store:
         "
         Transform data as it moves to and from a store.
 
@@ -86,3 +86,36 @@ object makeStore as DeepFrozen:
                     }
                 to delete():
                     return loc<-delete()
+
+    to writingThrough(core :Vow[Store], cache :Vow[Store]) :Store:
+        "
+        Wrap access to `core` with access to `cache`. Reads to `core` will be
+        copied to `cache`; writes to `core` will write through `cache`.
+
+        As the names suggest, this method is meant to implement write-through
+        caching architectures. However, it is suitable for any sort of
+        write-through arrangement, regardless of whether `cache` is durable.
+        "
+
+        return def writeThroughStore(ref) as Store:
+            def coreLoc := core<-(ref)
+            def cacheLoc := cache<-(ref)
+            def copy():
+                return when (def p := coreLoc<-get()) -> { cacheLoc<-put(p) }
+            return object writeThroughLocation as Location:
+                to get():
+                    return when (def p := cacheLoc<-get()) -> { p } catch _ {
+                        copy()
+                    }
+                to put(value):
+                    return when (coreLoc<-put(value),
+                                 cacheLoc<-put(value)) -> { null }
+                to merge(new):
+                    return when (copy()) -> {
+                        when (def p := cacheLoc<-merge(new)) -> {
+                            cacheLoc<-put(p)
+                        }
+                    }
+                to delete():
+                    return when (coreLoc<-delete(),
+                                 cacheLoc<-delete()) -> { null }
