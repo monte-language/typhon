@@ -119,3 +119,8 @@ object makeStore as DeepFrozen:
                 to delete():
                     return when (coreLoc<-delete(),
                                  cacheLoc<-delete()) -> { null }
+
+    to applyingCodec(store :Store, codec :DeepFrozen) :Store:
+        def ana(value, => FAIL) { return codec.encode(value, FAIL) }
+        def kata(value, => FAIL) { return codec.decode(value, FAIL) }
+        return makeStore.fromAdjunction(store, ana, kata)
