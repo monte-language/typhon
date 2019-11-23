@@ -1,6 +1,11 @@
 { system ? builtins.currentSystem }:
 let
-  nixpkgs = import <nixpkgs> { inherit system; };
+  nixball = builtins.fetchTarball {
+    name = "typhon-pinned-nixpkgs";
+    url = https://github.com/NixOS/nixpkgs/archive/ab5863afada3c1b50fc43bf774b75ea71b287cde.tar.gz;
+    sha256 = "1iv5xmklasnv3cyhz4nbjd49kgyxcmg815p0ab817fy49nn8js7f";
+  };
+  nixpkgs = import nixball { inherit system; };
   lib = nixpkgs.lib;
   libsodium0 = nixpkgs.libsodium.overrideDerivation (oldAttrs: {stripAllList = "lib";});
   vmSrc = let loc = part: (toString ./..) + part;
