@@ -138,6 +138,12 @@ def binaryOps :Map[Str, Str] := [
     ">>" => "shiftRight",
 ]
 
+def unaryOps :Map[Str, Str] := [
+    "!" => "not",
+    "-" => "negate",
+    "~" => "complement",
+]
+
 def nounName.NounExpr(name :Str, _span) :Str as DeepFrozen:
     return name
 
@@ -183,6 +189,9 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             return if (isSame) { expr } else {
                 mb.MethodCallExpr(expr, "not", [], [], span)
             }
+
+        to PrefixExpr(op :Str, receiver, span):
+            return mb.MethodCallExpr(receiver, unaryOps[op], [], [], span)
 
         to CoerceExpr(specimen, guard, span):
             return mb.MethodCallExpr(guard, "coerce",
