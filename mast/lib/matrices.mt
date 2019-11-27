@@ -1,9 +1,5 @@
 import "unittest" =~ [=> unittest :Any]
-import "tests/proptests" =~ [
-    => Arb :DeepFrozen,
-    => arb :DeepFrozen,
-    => prop :DeepFrozen,
-]
+import "lib/proptests" =~ [=> Arb, => arb, => prop]
 import "lib/iterators" =~ [=> zip :DeepFrozen]
 exports (Mat, makeMatrix)
 

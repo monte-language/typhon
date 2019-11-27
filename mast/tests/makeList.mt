@@ -1,5 +1,5 @@
 import "unittest" =~ [=> unittest :Any]
-import "tests/proptests" =~ [=> arb, => prop]
+import "lib/proptests" =~ [=> arb, => prop]
 exports (testMakeList)
 
 def testMakeList(makeList) as DeepFrozen:

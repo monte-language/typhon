@@ -1,8 +1,5 @@
 import "unittest" =~ [=> unittest :Any]
-import "tests/proptests" =~ [
-    => arb :DeepFrozen,
-    => prop :DeepFrozen,
-]
+import "lib/proptests" =~ [=> arb, => prop]
 exports (mp, ::"parse``", main)
 
 # Parse: Dead-simple reasonably-performing incremental parser toolkit.

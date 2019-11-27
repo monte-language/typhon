@@ -1,7 +1,9 @@
+# import "unittest" =~ [=> unittest :Any]
+# import "tests/acceptance" =~ [=> acceptanceSuite]
 import "lib/mim/full" =~ [=> expand]
 import "lib/mim/anf" =~ [=> anf, => makeNormal]
 import "lib/mim/mix" =~ [=> makeMixer]
-exports (go, evaluate)
+exports (go, pretty, evaluate)
 
 object pretty as DeepFrozen:
     to LiteralExpr(value, _):
@@ -93,8 +95,7 @@ def go(expr :DeepFrozen) as DeepFrozen:
         => &&_makeList,
         => &&Bool, => &&Char, => &&Double, => &&Int, => &&Str,
     ]
-    def compiled := makeMixer(anf, reductionBasis).mix(normalized, [].asMap())
-    return compiled(pretty)
+    return makeMixer(anf, reductionBasis).mix(normalized, [].asMap())
 
 def b :DeepFrozen := "&&".add
 
@@ -136,7 +137,7 @@ def evaluate(expr, frame) as DeepFrozen:
             }
         })
 
-    return expr.walk(object evaluator {
+    return expr.walk(object evaluator extends atom {
         to MethodCallExpr(receiver, verb, args, _namedArgs, _span) {
             # XXX Miranda, namedArgs
             return M.call(receiver(atom), verb,
@@ -170,3 +171,5 @@ def evaluate(expr, frame) as DeepFrozen:
 
         to Atom(a, _span) { return a(atom) }
     })
+
+# unittest(acceptanceSuite(fn expr, frame { evaluate(go(expr), frame) }))

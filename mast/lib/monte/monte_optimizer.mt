@@ -1,4 +1,3 @@
-import "lib/freezer" =~ [=> freeze]
 import "lib/iterators" =~ [=> zip]
 exports (optimize)
 # I don't know what this all is yet.
@@ -483,6 +482,6 @@ def optimize(var expr) as DeepFrozen:
     ## serializable, and right now there are several things that the AST dumper
     ## doesn't know what to do with. So constant folding is disabled.
 
-    expr transform= (freeze)
+    # expr := freeze(expr)
 
     return expr
