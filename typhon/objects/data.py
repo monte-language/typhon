@@ -1164,9 +1164,10 @@ class SourceSpan(Object):
         from typhon.objects.collections.maps import EMPTY_MAP
         return [
             makeSourceSpan, StrObject(u"run"),
-            wrapList([wrapBool(self._isOneToOne), IntObject(self.startLine),
-                       IntObject(self.startCol), IntObject(self.endLine),
-                       IntObject(self.endCol)]), EMPTY_MAP]
+            wrapList([self.uri, wrapBool(self._isOneToOne),
+                      IntObject(self.startLine), IntObject(self.startCol),
+                      IntObject(self.endLine), IntObject(self.endCol)]),
+            EMPTY_MAP]
 
     def toSpan(self):
         return Span(self.uri.toString(), self._isOneToOne,
