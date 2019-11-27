@@ -3,7 +3,6 @@ import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
 import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
-import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
 import "lib/streams" =~ [=> alterSink :DeepFrozen,
                          => flow :DeepFrozen,
                          => makeSink :DeepFrozen]
@@ -199,7 +198,6 @@ def main(argv,
             }, config))
         },
         stopwatch(expandTree),
-        if (config.useMixer()) { stopwatch(optimize) },
         stopwatch(serialize),
         writeOutputFile,
     ]}

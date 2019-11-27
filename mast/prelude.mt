@@ -876,7 +876,6 @@ for module in ([
     # parser needs pen
     "lib/monte/monte_parser",
     "lib/monte/monte_expander",
-    "lib/monte/monte_optimizer",
     "lib/codec/utf8",
 ]):
     dependencies[module] := loadit(module)

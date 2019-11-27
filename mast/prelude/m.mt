@@ -4,7 +4,6 @@ import "lib/monte/monte_parser" =~ [
     => parsePattern :DeepFrozen,
 ]
 import "lib/monte/monte_expander" =~ [=> expand :DeepFrozen]
-import "lib/monte/monte_optimizer" =~ [=> optimize :DeepFrozen]
 #import "lib/monte/normalizer" =~ [=> normalize :DeepFrozen]
 import "boot" =~ [=> TransparentStamp :DeepFrozen]
 exports (::"m``", ::"mpatt``", eval)
@@ -129,14 +128,6 @@ def makeM(ast :Ast, label :Str, isKernel :Bool) as DeepFrozen:
             catch error:
                 throw(`Couldn't expand to Kernel-Monte: $error`)
 
-        to mix():
-            "Aggressively optimize Kernel-Monte."
-
-            if (!isKernel):
-                throw(`Can't optimize unexpanded AST`)
-
-            return makeM(optimize(ast), label, true)
-
 def makeQuasiTokenLexer(template, sourceLabel :Str) as DeepFrozen:
     def source := [].diverge()
     var val := -1
@@ -235,6 +226,6 @@ object eval as DeepFrozen:
             parseExpression(makeMonteLexer(source, filename), astBuilder,
                             throw, ejPartial)
         } else {expr}
-        def ast := optimize(expand(fullAst, astBuilder, throw))
+        def ast := expand(fullAst, astBuilder, throw)
         def nast := normalize(ast, typhonAstBuilder)
         return evaluator.evalToPair(nast, environment, filename, => inRepl)
