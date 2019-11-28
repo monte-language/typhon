@@ -1,3 +1,4 @@
+import "lib/freezer" =~ [=> freeze]
 import "lib/pen" =~ [=> pk, => makeSlicer]
 exports (asdlParser, asdlBuilder)
 
@@ -130,7 +131,11 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
         return astBuilder.FinalPattern(
             astBuilder.NounExpr(name, null), null, null)
 
+    # The methods for building each constructor.
     def methods := [].diverge()
+
+    # The raw constructor atoms, used for error messages.
+    def atoms := [].asMap().diverge()
 
     def fieldGuards := [
         "Id" => fn g { g },
@@ -164,6 +169,7 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
                     })
                     null
 
+            atoms[name] := fs.size() + attributeFields.size()
             for f in (fs + attributeFields):
                 f.walk(fieldWalker)
 
@@ -207,6 +213,7 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
 
         for ty in (tys):
             ty.walk(def tyWalker.Sum(id :Str, fields, con, cons) {
+                atoms[id] := fields.size()
                 def sumGuard := astBuilder.NounExpr("_sum_type_" + id, null)
                 def sumPatt := astBuilder.FinalPattern(sumGuard, m`DeepFrozen`,
                                                        null)
@@ -215,7 +222,18 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
                 def conWalker := makeConWalker(sumGuard, fields)
                 for c in ([con] + cons) { c.walk(conWalker) }
             })
-        def script := astBuilder.Script(null, methods.snapshot(), [], null)
+        preamble.push(m`def atoms :DeepFrozen := ${freeze(atoms.snapshot())}`)
+        def friendly := m`match [verb, args, _] {
+            def message := escape ej {
+                def len := atoms.fetch(verb, fn {
+                    ej(``This builder doesn't know constructor $$verb``)
+                })
+                ``Constructor $$verb needs $$len fields, not $${args.size()}``
+            }
+            throw(message)
+        }`
+        def script := astBuilder.Script(null, methods.snapshot(), [friendly],
+                                        null)
         def obj := astBuilder.ObjectExpr(null, builderName, m`DeepFrozen`,
                                          [], script, null)
         def ast := astBuilder.SeqExpr(preamble.with(obj), null)
