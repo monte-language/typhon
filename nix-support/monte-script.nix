@@ -96,6 +96,7 @@ let
             fi
             ;;
         muffin)
+            shift
             ${typhonVm}/mt-typhon -l ${mast} \
               ${mast}/loader run tools/muffin "$@"
             ;;
