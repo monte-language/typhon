@@ -108,7 +108,7 @@ def monteBuilder :DeepFrozen := asdlParser(mpatt`monteBuilder`, `
                | QuasiExprHole(expr expr)
                | QuasiPatternHole(pattern pattern)
                attributes (df span)
-    import = Import(str name, pattern pattern)
+    import = Import(str name, pattern pattern, df span)
 `, null)
 
 def rebuild(ast :DeepFrozen) as DeepFrozen:

@@ -231,6 +231,7 @@ def makeNormal() as DeepFrozen:
                     })
                 }
                 # These expressions are compiled away entirely.
+                to HideExpr(expr, _span) { return k(expr.walk(normalizer)) }
                 to DefExpr(patt, ex, expr, span) {
                     def finishDef(x) {
                         return normal.name(expr, fn e {
