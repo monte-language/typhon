@@ -8,7 +8,7 @@ def anf :DeepFrozen := asdlParser(mpatt`anf`, `
          | NounExpr(str name)
          | SlotExpr(str name)
          | BindingExpr(str name)
-         | ObjectExpr(str? docstring, str name, atom? asExpr,
+         | ObjectExpr(str? docstring, str? name, atom? asExpr,
                       atom* auditors, script script)
          attributes (df span)
     complex = MethodCallExpr(atom receiver, str verb, atom* args,
@@ -40,9 +40,13 @@ def id(x) as DeepFrozen:
 def nounToName(noun) :Str as DeepFrozen:
     return noun(def extractNoun.NounExpr(name, _) { return name })
 
-def nameForPatt(patt) :Str as DeepFrozen:
+def nameForPatt(patt) :NullOk[Str] as DeepFrozen:
     return patt(object pattNamer {
-        to FinalPattern(noun, _, _) { return nounToName(noun) }
+        to IgnorePattern(_, _) { return null }
+        to FinalPattern(noun, _, _) {
+            # XXX fucky input types
+            return if (noun =~ s :Str) { s } else { nounToName(noun) }
+        }
         to NounExpr(name, _) { return name }
     })
 
@@ -173,12 +177,15 @@ def makeNormal() as DeepFrozen:
                 to BindingExpr(value, span) {
                     return k(anf.Atom(anf.BindingExpr(value, span), span))
                 }
-                to ObjectExpr(docstring, namePatt, asExpr, auditors, script) {
+                to ObjectExpr(docstring, namePatt, asExpr, auditors, script,
+                              span) {
                     # XXX script
-                    def name :Str := nameForPatt(namePatt)
+                    # XXX names can be null?
+                    def name :NullOk[Str] := nameForPatt(namePatt)
                     return normal.name(asExpr, fn a {
                         normal.names(auditors, fn auds {
-                            k(anf.ObjectExpr(docstring, name, a, auds, script))
+                            k(anf.Atom(anf.ObjectExpr(docstring, name, a, auds, script,
+                                                      span), span))
                         })
                     })
                 }

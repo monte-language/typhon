@@ -63,10 +63,13 @@ def makeMixer(anf, reductionBasis) as DeepFrozen:
         return rv.walk(object atomizer {
             match [constructor, args, _] {
                 switch (constructor) {
+                    # XXX uh? style?
                     match =="Atom" { k(args[0]) }
                     match =="LiteralExpr" { k(rv) }
                     match =="NounExpr" { k(rv) }
                     match =="BindingExpr" { k(rv) }
+                    # XXX need to walk under script?
+                    match =="ObjectExpr" { k(rv) }
                     match _ {
                         counter += 1
                         def t := `_temp_mixer_sym$counter`
@@ -119,6 +122,11 @@ def makeMixer(anf, reductionBasis) as DeepFrozen:
                     }
                     match _ { k(anf.NounExpr(name, span)) }
                 }
+            }
+
+            to ObjectExpr(docstring, name, asExpr, auditors, script, span) {
+                return k(anf.ObjectExpr(docstring, name, asExpr, auditors,
+                                        script, span))
             }
         })
 

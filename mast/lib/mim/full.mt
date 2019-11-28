@@ -155,7 +155,9 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             return mb.MethodCallExpr(receiver, "run", args, namedArgs, span)
 
         to SendExpr(receiver, verb, args, namedArgs, span):
-            def nas := mb.MapExpr([for na in (namedArgs) {
+            # XXX refactor? This reuses .MapExpr() logic, but only by building
+            # new intermediate monteBuilder nodes.
+            def nas := xp.MapExpr([for na in (namedArgs) {
                 na(object _ {
                     to NamedArg(k, v, span) {
                         return mb.MapExprAssoc(k, v, span)
@@ -204,6 +206,28 @@ def expand(ast :DeepFrozen) as DeepFrozen:
 
         to ListExpr(exprs, span):
             return mb.MethodCallExpr(ex(m`_makeList`), "run", exprs, [], span)
+
+        to MapExpr(pairs, span):
+            def ps := [for pair in (pairs) pair.walk(object mapExpr {
+                to MapExprAssoc(key, value, span) {
+                    return xp.ListExpr([key, value], span)
+                }
+                to MapExprExport(value, span) {
+                    return xp.ListExpr([value.walk(object mapExprExport {
+                        to NounExpr(name, span) {
+                            return mb.LiteralExpr(name, span)
+                        }
+                        to SlotExpr(name, span) {
+                            return mb.LiteralExpr("&" + name, span)
+                        }
+                        to BindingExpr(name, span) {
+                            return mb.LiteralExpr("&&" + name, span)
+                        }
+                    }), value], span)
+                }
+            })]
+            return mb.MethodCallExpr(ex(m`_makeMap`), "fromPairs", ps, [],
+                                     span)
 
         # Patterns.
 
