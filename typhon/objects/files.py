@@ -191,7 +191,7 @@ class FileResource(Object):
             try:
                 f = ruv.magic_fsOpen(vat, path, os.O_RDONLY, 0000)
             except object as err:
-                smash(r, StrObject(u"Couldn't open file fount: %s" % err))
+                smash(r, StrObject(u"Couldn't open file fount for %s: %s" % (path.decode("utf-8"), err)))
             else:
                 try:
                     contents = readLoop(f, buf)
