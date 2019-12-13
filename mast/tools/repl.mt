@@ -1,6 +1,7 @@
 import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/commandLine" =~ [=> makePrompt]
 import "lib/help" =~ [=> help]
+import "lib/iterators" =~ [=> async]
 import "lib/json" =~ [=> JSON]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseModule]
@@ -59,6 +60,20 @@ def makeFileLoader(log, root, makeFileResource) as DeepFrozen:
             def lex := makeMonteLexer(s, petname)
             [s, parseModule(lex, astBuilder, null)]
 
+# XXX should go to its own module, figure out a name!
+def consoleDraw.drawingFrom(d) as DeepFrozen:
+    def phi :Double := ((5.0).sqrt() - 1) / 2
+    return def draw(height :(Int > 0)):
+        def width :(Int > 0) := (height * phi).floor() + 1
+        return [for h in (0..!height) {
+            b``.join([for w in (0..!width) {
+                def [r, g, b] := d.drawAt(w / width, h / height,
+                                          "aspectRatio" => phi)
+                # Average luminosity, half-assed
+                (r + g + b > 1.5).pick(b`#`, b` `)
+            }])
+        }]
+
 def main(_argv,
          => makeFileResource,
          => Timer,
@@ -101,10 +116,11 @@ def main(_argv,
             return when (m) ->
                 log(`Instantiated $petname: $m`)
                 def ex := try { m(null) } catch e { traceln.exception(e); -1 }
-                for k => v :DeepFrozen in (ex):
+                return async."for"(ex, fn k, v :DeepFrozen {
                     log(`Loading into environment: $k`)
                     environment with= (`&&$k`, &&v)
-                    prompt.writeLine(b`Loaded module: $petname`)
+                    prompt<-writeLine(b`Loaded module: $petname`)
+                })
 
         to benchmark(callable) :Vow[Double]:
             "Run `callable` repeatedly, recording the time taken."
@@ -119,6 +135,11 @@ def main(_argv,
             }]
             return when (promiseAllFulfilled(ps)) ->
                 total / iterations
+
+        to draw(drawable) :Vow[Void]:
+            "Draw `drawable` to the screen."
+            def draw := consoleDraw.drawingFrom(drawable)
+            return async."for"(draw(20), fn _, line { prompt<-writeLine(line) })
 
     object REPLHelp extends help:
         match message:

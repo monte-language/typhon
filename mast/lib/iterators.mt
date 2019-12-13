@@ -1,5 +1,5 @@
 import "unittest" =~ [=> unittest :Any]
-exports (zip)
+exports (async, zip)
 
 # A prelude-safe library of tools for working with iterators.
 
