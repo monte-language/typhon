@@ -232,7 +232,7 @@ object continued as DeepFrozen:
         machine.forceFeed(1, 1)
         return machine
 
-    to sqrt(x :Int):
+    to squareRoot(x :Int):
         "The square root of an integer."
 
         # sqrt(x) = 1 + (x - 1)/(1 + sqrt(x))
@@ -266,7 +266,7 @@ def testPiDigits(assert):
         assert.equal(extractor.produceDigit(null), digit)
 
 def testSqrt2Digits(assert):
-    def sqrt2 := continued.sqrt(2)
+    def sqrt2 := continued.squareRoot(2)
     def extractor := sqrt2.extractDigits(10)
     for digit in ([1, 4, 1, 4]):
         assert.equal(extractor.produceDigit(null), digit)

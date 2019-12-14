@@ -32,7 +32,7 @@ def makeComplex(r :Double, i :Double) as DeepFrozen:
             return makeComplex(r, -i)
 
         to abs() :Double:
-            return (r * r + i * i).sqrt()
+            return r.euclidean(i)
 
         to add(other :Complex) :Complex:
             return makeComplex(r + other.real(), i + other.imag())

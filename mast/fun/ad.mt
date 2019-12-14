@@ -63,18 +63,18 @@ object makeDual as DeepFrozen:
                     def er :DeepFrozen := exponent.real()
                     def ee :DeepFrozen := exponent.epsilon()
                     def rv := real ** er
-                    makeDual(rv, rv * ((epsilon * er / real) + (ee * real.log())))
+                    makeDual(rv, rv * ((epsilon * er / real) + (ee * real.logarithm())))
                 }
 
-            to exp():
+            to exponential():
                 def rv := E ** real
                 return makeDual(rv, rv * epsilon)
 
-            to sin():
-                return makeDual(real.sin(), real.cos() * epsilon)
+            to sine():
+                return makeDual(real.sine(), real.cosine() * epsilon)
 
-            to cos():
-                return makeDual(real.cos(), real.sin() * -epsilon)
+            to cosine():
+                return makeDual(real.cosine(), real.sine() * -epsilon)
 
 def gradientAt(f, coords :List[Double]) :List[Double] as DeepFrozen:
     "The gradient of `f` at the provided coordinates."

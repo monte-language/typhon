@@ -68,7 +68,7 @@ def makeEntropy(generator) as DeepFrozen:
             # This kind of inversion lets us avoid a conditional check for 0.0
             # before taking a logarithm.
             def d := 1.0 - entropy.nextDouble()
-            return -(d.log()) / lambda
+            return -(d.logarithm()) / lambda
 
         to nextSphere(n :(Int >= 1)):
             "
@@ -84,7 +84,7 @@ def makeEntropy(generator) as DeepFrozen:
                 d += x ** 2
                 x
             }]
-            def norm := d.sqrt()
+            def norm := d.squareRoot()
             return [for u in (us) u / norm]
 
         to nextBall(n :(Int >= 2)):

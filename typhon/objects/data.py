@@ -207,6 +207,25 @@ def isChar(obj):
     return isinstance(resolution(obj), CharObject)
 
 
+def isNegative(d):
+    # Python thinks 0.0 == -0.0. Our plan is to use copysign here onto a
+    # basic float (1.0), and then to compare it to 0.0. The only edge case is
+    # if d is NaN, in which case copysign returns 1.0 and we return False.
+    return math.copysign(1.0, d) < 0.0
+
+INF = float("inf")
+NEG_INF = float("-inf")
+def mathLog(d):
+    if isNegative(d):
+        raise userError(u"Cannot take natural logarithm of non-positive %f" %
+                        d)
+    # Python won't do math.log(0.0) so we have to special-case it.
+    elif d == 0.0:
+        return NEG_INF
+    else:
+        return math.log(d)
+
+
 @autohelp
 @audited.DFSelfless
 class DoubleObject(Object):
@@ -286,10 +305,6 @@ class DoubleObject(Object):
     def negate(self):
         return -self._d
 
-    @method("Double")
-    def sqrt(self):
-        return math.sqrt(self._d)
-
     @method("Double", "Double")
     def approxDivide(self, divisor):
         return self._d / divisor
@@ -326,60 +341,144 @@ class DoubleObject(Object):
             raise userError(u"Cannot raise %f to exponent %d" % (self._d,
                 exponent))
 
+    @method("Double")
+    def squareRoot(self):
+        # Python thinks math.sqrt(-0.0) == -0.0. Whoops! We have to guard for
+        # it ourselves.
+        if isNegative(self._d):
+            raise userError(u"Cannot take negative square root of %f" %
+                            self._d)
+        return math.sqrt(self._d)
+
+    # Intermediate arithmetic building blocks.
+
+    @method("Double")
+    def reciprocal(self):
+        "This number's multiplicative inverse."
+
+        # Ugh. Python 0.0 == -0.0, which worked out well earlier for the
+        # comparison methods, but here it means that we need to copysign. Why
+        # are we doing this, you might ask? Division by zero here is like
+        # division by a number too small to represent, but still positive; its
+        # multiplicative inverse is a number too large to represent, but still
+        # positive; that is, Infinity.
+        if self._d == 0.0:
+            return math.copysign(INF, self._d)
+        else:
+            return 1.0 / self._d
+
+    @method("Double", "Double")
+    def euclidean(self, other):
+        "The L² or Euclidean metric in the plane."
+
+        # Herbie's regime analysis gives us bounds for x (us), and we can
+        # extend those bounds to y (them) by symmetry. Beyond these bounds, x
+        # (symmetrically y) is so big/small, and thus its square so big, that
+        # 1) We will overflow to Infinity if we take its square
+        # 2) Well, maybe not, but if we add in y² then yes overflow
+        # 3) Well, maybe not if y is small, but then we'll be insensitive to
+        #    the actual value of y since y « x
+        # The only hitch here is that if both and x and y are beyond the
+        # bounds, then we need to pick whichever is closer to the actual
+        # value. To draw a picture:
+        # 0 --- x --- y -|- Infinity --- x² --- y² ----|--------
+        #                |                             ^ x² + y²
+        #                ^ x < y < sqrt(x² + y²)
+        # This inequality suggests that max(|x|, |y|) is closest.
+        MIN = -3.3032099476572043e+84
+        MAX = 1.943934747643532e+128
+        if MIN <= self._d < MAX and MIN <= other < MAX:
+            return math.sqrt(self._d * self._d + other * other)
+        else:
+            return max(abs(self._d), abs(other))
+
     # Logarithms.
 
     @method("Double")
-    def exp(self):
+    def exponential(self):
         "Euler's constant ℯ exponentiated to this number."
 
         return math.exp(self._d)
 
     @method("Double")
-    def log(self):
-        "This number's natural logarithm."
+    def logarithm(self):
+        """
+        This number's natural logarithm.
+        """
 
-        try:
-            return math.log(self._d)
-        except ValueError:
-            raise userError(u"Cannot take natural logarithm of non-positive %f" %
-                    self._d)
+        return mathLog(self._d)
 
-    @method("Double", "Double", _verb="log")
+    @method("Double", "Double", _verb="logarithm")
     def logBase(self, base):
-        "This number's logarithm."
+        "This number's logarithm in `base`."
 
-        try:
-            return math.log(self._d) / math.log(base)
-        except ValueError:
-            raise userError(u"Cannot take base %f logarithm of non-positive %f" %
-                    (base, self._d))
+        # Avoid division by zero.
+        if base == 1.0:
+            raise userError(u"Cannot take logarithm base 1")
+        return mathLog(self._d) / mathLog(base)
 
-    @method("Double", "Int", _verb="log")
+    @method("Double", "Int", _verb="logarithm")
     def logBaseInt(self, base):
-        "This number's logarithm."
+        "This number's logarithm in `base`."
 
-        try:
-            return math.log(self._d) / math.log(base)
-        except ValueError:
-            raise userError(u"Cannot take base %d logarithm of non-positive %f" %
-                    (base, self._d))
+        # Avoid division by zero.
+        if base == 1:
+            raise userError(u"Cannot take logarithm base 1")
+        return mathLog(self._d) / mathLog(float(base))
 
     # Trigonometry.
 
     @method("Double")
-    def sin(self):
+    def sine(self):
         return math.sin(self._d)
 
     @method("Double")
-    def cos(self):
+    def cosine(self):
         return math.cos(self._d)
 
     @method("Double")
-    def tan(self):
+    def tangent(self):
         return math.tan(self._d)
+
+    @method("Double")
+    def cosecant(self):
+        return 1.0 / math.sin(self._d)
+
+    @method("Double")
+    def secant(self):
+        return 1.0 / math.cos(self._d)
+
+    @method("Double")
+    def cotangent(self):
+        return 1.0 / math.tan(self._d)
+
+    @method("Double")
+    def arcSine(self):
+        return math.asin(self._d)
+
+    @method("Double")
+    def arcCosine(self):
+        return math.acos(self._d)
+
+    @method("Double", "Double")
+    def arcTangent(self, x):
+        return math.atan2(self._d, x)
+
+    @method("Double")
+    def arcCosecant(self):
+        return math.sin(1.0 / self._d)
+
+    @method("Double")
+    def arcSecant(self):
+        return math.cos(1.0 / self._d)
+
+    @method("Double", "Double")
+    def arcCotangent(self, x):
+        return math.atan2(x, self._d)
 
     @method("Bytes")
     def toBytes(self):
+        "The IEEE 754 packed representation of this number."
         # float_pack() takes a double and gives us the packed integer; we need
         # to reinterpret it as packed ASCII and repack into bytes.
         x = float_pack(self._d, 8)
@@ -415,7 +514,7 @@ class DoubleObject(Object):
 
 # These double objects are prebuilt (and free to use), since building
 # on-the-fly floats from strings doesn't work in RPython.
-Infinity = DoubleObject(float("inf"))
+Infinity = DoubleObject(INF)
 NaN = DoubleObject(float("nan"))
 
 

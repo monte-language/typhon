@@ -17,7 +17,7 @@ def norm(v) as DeepFrozen:
     var sum := 0.0
     for x in (v):
         sum += x * x
-    def n := sum.sqrt()
+    def n := sum.squareRoot()
     return [for x in (v) x / n]
 
 def negate(vs) as DeepFrozen:
@@ -68,7 +68,7 @@ def makeMaterial(refractiveIndex :Double,
             }
             def k := 1 - eta * eta * (1 - cosi * cosi)
             return if (k.atLeastZero()) {
-                add(scale(I, eta), scale(N, eta * cosi - k.sqrt()))
+                add(scale(I, eta), scale(N, eta * cosi - k.squareRoot()))
             }
 
         to shade(diffuseLightIntensity, specularLightIntensity, reflectColor,
@@ -123,7 +123,7 @@ def makeSphere(center :List[Double], radius :(Double > 0.0),
             # positive.
             def thcs := r2 - d2
             if (thcs.belowZero()) { return [false, null] }
-            def thc := thcs.sqrt()
+            def thc := thcs.squareRoot()
             return if (thc < tca) {
                 [true, thc - tca]
             } else if (thc < -tca) {
@@ -184,7 +184,7 @@ def castRay(orig, dir, spheres, lights, => depth := 0) as DeepFrozen:
 
 def ORIGIN :List[Double] := [0.0] * 3
 
-def fov :Double := (PI / 6).tan()
+def fov :Double := (PI / 6).tangent()
 
 def render(spheres, lights) as DeepFrozen:
     def draw.drawAt(x :Double, y :Double, => aspectRatio :Double):

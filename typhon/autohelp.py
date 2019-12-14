@@ -46,7 +46,7 @@ def method(rv, *args, **kwargs):
     """
 
     # Mark methods that must be automatically helped. Record an unprocessed
-    # tuple of (args, namedArgs, returnGuard).
+    # tuple of (verb, args, namedArgs, returnGuard, spare).
 
     def deco(f):
         verb = kwargs.pop("_verb", f.__name__)

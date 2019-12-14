@@ -6,7 +6,7 @@ exports ()
 # other languages, per the original microbenchmark.
 
 def sqrt(i :Int) :Double as DeepFrozen:
-    return (i + 0.0).sqrt()
+    return (i + 0.0).squareRoot()
 
 def isPrime(n :Int) :Bool as DeepFrozen:
     if (n < 2):

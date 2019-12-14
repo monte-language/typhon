@@ -62,7 +62,7 @@ def makeFileLoader(log, root, makeFileResource) as DeepFrozen:
 
 # XXX should go to its own module, figure out a name!
 def consoleDraw.drawingFrom(d) as DeepFrozen:
-    def phi :Double := ((5.0).sqrt() - 1) / 2
+    def phi :Double := ((5.0).squareRoot() - 1) / 2
     return def draw(height :(Int > 0)):
         def width :(Int > 0) := (height * phi).floor() + 1
         return [for h in (0..!height) {

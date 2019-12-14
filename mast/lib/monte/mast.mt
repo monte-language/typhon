@@ -110,7 +110,7 @@ def makeMASTContext() as DeepFrozen:
                             def bs := UTF8.encode(c.asString(), null)
                             b`LC$bs`
                         match d :Double:
-                            def bs := d.toBytes()
+                            def bs := d.asBytes()
                             b`LD$bs`
                         match i :Int:
                             def zz := if (i < 0) {((i << 1) ^ -1) | 1} else {i << 1}
