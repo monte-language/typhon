@@ -141,6 +141,21 @@ def main(_argv,
             def draw := consoleDraw.drawingFrom(drawable)
             return async."for"(draw(20), fn _, line { prompt<-writeLine(line) })
 
+        to graph(f) :Vow[Void]:
+            "
+            Draw a graph of a function from Doubles to Doubles to the screen.
+            "
+            def rows := [for _ in (0..!20) ([b` `] * 20).diverge()]
+            for column in (0..!20):
+                def y := f(column * 0.1 - 1.0)
+                def row := 20 - ((y + 1.0) * 10).floor()
+                if (row < 0 || row >= rows.size()):
+                    continue
+                rows[row][column] := b`#`
+            return async."for"(rows, fn _, line {
+                prompt<-writeLine(b``.join(line))
+            })
+
     object REPLHelp extends help:
         match message:
             prompt.writeLine(UTF8.encode(M.callWithMessage(super, message), null))
