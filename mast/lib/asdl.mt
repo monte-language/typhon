@@ -11,8 +11,9 @@ exports (asdlParser, asdlBuilder)
 # http://okmij.org/ftp/tagless-final/course/Boehm-Berarducci.html
 
 object bootBuilder as DeepFrozen:
-    to Sum(id, fields, con, cons):
-        return object Sum {
+    to Sum(id :Str, fields :List[DeepFrozen], con :DeepFrozen,
+           cons :DeepFrozen):
+        return object Sum as DeepFrozen {
             to _printOn(out) { out.print(`Sum($id, $fields, $con, $cons)`) }
             method run(f) {
                 f.Sum(id, [for x in (fields) x(f)], con(f),
@@ -20,26 +21,26 @@ object bootBuilder as DeepFrozen:
             }
             method walk(f) { f.Sum(id, fields, con, cons) }
         }
-    to Con(name, fs):
-        return object Con {
+    to Con(name :Str, fs :List[DeepFrozen]):
+        return object Con as DeepFrozen {
             to _printOn(out) { out.print(`Con($name, $fs)`) }
             method run(f) { f.Con(name, [for x in (fs) x(f)]) }
             method walk(f) { f.Con(name, fs) }
         }
-    to Id(ty, name):
-        return object Id {
+    to Id(ty :Str, name :NullOk[Str]):
+        return object Id as DeepFrozen {
             to _printOn(out) { out.print(`Id($ty, $name)`) }
             method run(f) { f.Id(ty, name) }
             method walk(f) { f.Id(ty, name) }
         }
-    to Option(ty, name):
-        return object Option {
+    to Option(ty :Str, name :NullOk[Str]):
+        return object Option as DeepFrozen {
             to _printOn(out) { out.print(`Option($ty, $name)`) }
             method run(f) { f.Option(ty, name) }
             method walk(f) { f.Option(ty, name) }
         }
-    to Sequence(ty, name):
-        return object Sequence {
+    to Sequence(ty :Str, name :NullOk[Str]):
+        return object Sequence as DeepFrozen {
             to _printOn(out) { out.print(`Sequence($ty, $name)`) }
             method run(f) { f.Sequence(ty, name) }
             method walk(f) { f.Sequence(ty, name) }
@@ -87,9 +88,13 @@ def makeParser(builder) as DeepFrozen:
     def definitions := definition.bracket(ws, ws).zeroOrMore()
     return definitions
 
-def bootParser(s :Str, ej) as DeepFrozen:
+def parseBootFragment(s :Str) as DeepFrozen:
     def p := makeParser(bootBuilder)
-    return p(makeSlicer.fromString(s), ej)
+    def [rv, tail] := p(makeSlicer.fromString(s), null)
+    escape tailtest:
+        def next := tail.next(tailtest)
+        throw(`Junk trying to boot ASDL parser: $next`)
+    return rv
 
 # Figure 15
 # We don't do products. They're usually not what is wanted, and they
@@ -100,17 +105,19 @@ def boot :Str := `
     field = Id | Option | Sequence attributes (identifier, identifier?)
 `
 
-def [ast, tail] := bootParser(boot, null)
-escape tailtest:
-    def next := tail.next(tailtest)
-    throw(`Junk trying to boot ASDL parser: $next`)
+def bindingFragment :Str := `
+    var = Var(str name)
+    lam = Lam(var binding, df body)
+`
+
+def ast :DeepFrozen := parseBootFragment(boot)
+def bindingClauses :DeepFrozen := parseBootFragment(bindingFragment)
 
 # Traditional ASDL has three types: identifier, int, str
 def isPrimitive :DeepFrozen := ["bool", "df", "identifier", "int", "str"].contains
 def comma :DeepFrozen := m`out.print(", ")`
 
 def theTypeGuards :Map[Str, DeepFrozen] := [
-    "any" => m`Any`,
     "bool" => m`Bool`,
     "df" => m`DeepFrozen`,
     "identifier" => m`Str`,
@@ -118,7 +125,7 @@ def theTypeGuards :Map[Str, DeepFrozen] := [
     "str" => m`Str`,
 ]
 
-def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
+def makeBuilderMaker(builderName :DeepFrozen, addBindings :Bool) as DeepFrozen:
     var count :Int := 0
     def nextName(prefix :Str) :Str:
         count += 1
@@ -158,7 +165,7 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
             object fieldWalker:
                 match [verb, [ty, name], _]:
                     def tyGuard := theTypeGuards.fetch(ty, fn {
-                        astBuilder.NounExpr("_sum_type_" + ty, null)
+                        astBuilder.NounExpr("_sum_guard_" + ty, null)
                     })
                     def g := fieldGuards[verb](tyGuard)
                     exprs.push(def n := nextNoun(ty, name))
@@ -202,24 +209,44 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
             def script := astBuilder.Script(null, [printer, runner, walker], [], null)
             def namePatt := astBuilder.FinalPattern(
                 astBuilder.NounExpr(name, null), null, null)
-            def body := astBuilder.ObjectExpr(null, namePatt, conGuard, [],
-                                              script, null)
+            def body := astBuilder.ObjectExpr(null, namePatt, m`DeepFrozen`,
+                                              [conGuard], script, null)
             def rv := astBuilder."Method"(null, name, patts.snapshot(), [], null, body, null)
             methods.push(rv)
 
-    return def builderMaker(tys):
+    return def builderMaker(var tys):
         # These statements will run before we define our builder.
-        def preamble := [].diverge()
+        def preamble := [
+            m`def DF :Same[DeepFrozen] := DeepFrozen`
+        ].diverge()
+
+        # If ABTs are enabled, mix in the ABT clauses.
+        if (addBindings):
+            tys += bindingClauses
 
         for ty in (tys):
             ty.walk(def tyWalker.Sum(id :Str, fields, con, cons) {
                 atoms[id] := fields.size()
-                def sumGuard := astBuilder.NounExpr("_sum_type_" + id, null)
-                def sumPatt := astBuilder.FinalPattern(sumGuard, m`DeepFrozen`,
-                                                       null)
-                preamble.push(m`interface $sumPatt {}`)
+                def idName := astBuilder.NounExpr(id, null)
+                def sumGuard := astBuilder.NounExpr("_sum_guard_" + id, null)
+                def sumStamp := astBuilder.NounExpr("_sum_stamp_" + id, null)
+                def sumGuardPatt := astBuilder.FinalPattern(sumGuard,
+                                                            m`DeepFrozen`,
+                                                            null)
+                def sumStampPatt := astBuilder.FinalPattern(sumStamp,
+                                                            m`DeepFrozen`,
+                                                            null)
+                def decl := m`def [$sumGuardPatt, $sumStampPatt] := {
+                    interface ISum :DF guards SumStamp :DF {}
+                    [object $idName extends ISum as DF implements SubrangeGuard[DF] {
+                        to coerce(specimen, ej) :DF {
+                            return ISum.coerce(specimen, ej)
+                        }
+                    }, SumStamp]
+                }`
+                preamble.push(decl)
                 methods.push(m`to $id() { return $sumGuard }`)
-                def conWalker := makeConWalker(sumGuard, fields)
+                def conWalker := makeConWalker(sumStamp, fields)
                 for c in ([con] + cons) { c.walk(conWalker) }
             })
         preamble.push(m`def atoms :DeepFrozen := ${freeze(atoms.snapshot())}`)
@@ -239,14 +266,25 @@ def makeBuilderMaker(builderName :DeepFrozen) as DeepFrozen:
         def ast := astBuilder.SeqExpr(preamble.with(obj), null)
         return eval(ast, safeScope)
 
-def asdlBuilder :DeepFrozen := makeBuilderMaker(mpatt`asdlBuilder`)(ast)
+def asdlBuilder :DeepFrozen := makeBuilderMaker(mpatt`asdlBuilder`, false)(ast)
 
-def asdlParser(builderName :DeepFrozen, s :Str, ej) :DeepFrozen as DeepFrozen:
-    "Parse a string into an AST builder."
+def asdlParser(builderName :DeepFrozen, s :Str, ej,
+               => addBindings :Bool := false) :DeepFrozen as DeepFrozen:
+    "
+    Parse a string into an AST builder.
+
+    `builderName` ought to be a Monte pattern AST, like m`asdlBuilder`. It
+    will be used to name the AST builder object.
+
+    `addBindings` will cause ABT constructors to be added to the AST builder,
+    turning it into an ABT builder. `builder.Var(name :Str)` creates a named
+    hole. `builder.Lam(var :Var, expr :Ast)` creates a lambda-style
+    abstraction over the ABT `expr`, binding `name`.
+    "
 
     def p := makeParser(asdlBuilder)
     def [ast, tail] := p(makeSlicer.fromString(s), ej)
     escape tailtest:
         def next := tail.next(tailtest)
         throw.eject(ej, `parser found junk at the end: $next`)
-    return makeBuilderMaker(builderName)(ast)
+    return makeBuilderMaker(builderName, addBindings)(ast)
