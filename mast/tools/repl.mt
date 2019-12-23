@@ -10,7 +10,7 @@ exports (main)
 
 # The names throughout this section are historical.
 
-def PS1 :Bytes := UTF8.encode("▲> ", null)
+def PS1 :Bytes := UTF8.encode("⛰  ", null)
 def PS2 :Bytes := UTF8.encode(" … ", null)
 
 def read(prompt, => previous := b``) as DeepFrozen:
