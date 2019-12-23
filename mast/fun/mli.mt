@@ -1,4 +1,4 @@
-exports (makeCompiler, ev, main)
+exports (makeCompiler, ev)
 
 # Using closures for code generation:
 # http://www.iro.umontreal.ca/~feeley/papers/FeeleyLapalmeCL87.pdf
@@ -336,61 +336,3 @@ def ev(expr, scope) as DeepFrozen:
     def names := [for `&&@k` => _ in (scope) k].diverge()
     def compile := makeCompiler(names)
     return compile(expr)(scope.getValues())[0]
-
-def bfInterp :DeepFrozen := m`def bf(insts :Str) {
-    def jumps := {
-        def m := [].asMap().diverge()
-        def stack := [].diverge()
-        for i => c in (insts) {
-            if (c == '[') { stack.push(i) } else if (c == ']') {
-                def j := stack.pop()
-                m[i] := j
-                m[j] := i
-            }
-        }
-        m.snapshot()
-    }
-
-    return def interpret() {
-        var i := 0
-        var pointer := 0
-        def tape := [0].diverge()
-        def output := [].diverge()
-        while (i < insts.size()) {
-            switch(insts[i]) {
-                match =='>' {
-                    pointer += 1
-                    while (pointer >= tape.size()) { tape.push(0) }
-                }
-                match =='<' { pointer -= 1 }
-                match =='+' { tape[pointer] += 1 }
-                match =='-' { tape[pointer] -= 1 }
-                match =='.' { output.push(tape[pointer]) }
-                match ==',' { tape[pointer] := 0 }
-                match =='[' {
-                    if (tape[pointer] == 0) { i := jumps[i] }
-                }
-                match ==']' {
-                    if (tape[pointer] != 0) { i := jumps[i] }
-                }
-            }
-            i += 1
-        }
-        return output.snapshot()
-    }
-}`
-
-def main(_argv, => makeFileResource) as DeepFrozen:
-    def bf := ev(bfInterp.expand(), safeScope)
-    traceln(bf("+++.>>.<<[->>+<<].>>.")())
-    def bs := makeFileResource("mast/fun/mli.mast")<-getContents()
-    return when (bs) ->
-        escape ej:
-            def ast := readMAST(bs, "filename" => "meta", "FAIL" => ej)
-            def module := ev(ast, safeScope)(null)
-            traceln("module", module)
-            def metamod := module["ev"](ast, safeScope)(null)
-            traceln("metamod", metamod)
-            0
-        catch problem:
-            when (traceln(`Problem decoding MAST: $problem`)) -> { 1 }
