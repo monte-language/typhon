@@ -1,5 +1,4 @@
 import "lib/complex" =~ [=> Complex, => makeComplex]
-import "fun/ppm" =~ [=> makePPM]
 exports (burningShip, mandelbrot,
     countBrot, makeBrot)
 
@@ -31,7 +30,7 @@ def maxIterations :Int := 255
 # -1.7529296875, -0.025, (1/32)
 
 def makeBrot(xc :Double, yc :Double, height :Double) as DeepFrozen:
-    def draw.drawAt(x :Double, y :Double, => aspectRatio :Double):
+    return def draw.drawAt(x :Double, y :Double, => aspectRatio :Double):
         # [0, 1] -> [xc - width/2, xc + width/2]
         def xr := xc + (height * aspectRatio * (x - 0.5))
         def yr := yc + (height * (y - 0.5))
@@ -46,4 +45,3 @@ def makeBrot(xc :Double, yc :Double, height :Double) as DeepFrozen:
         catch _:
             # Probably in the set.
             return [0.0] * 3
-    return makePPM.drawingFrom(draw)
