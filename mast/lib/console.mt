@@ -24,8 +24,23 @@ def boldColor(c :Bytes) :Bytes as DeepFrozen:
 # important for index maths later on.
 def hatchRamp :Bytes := b` .o+X#`
 
-def consoleDraw.drawingFrom(d) as DeepFrozen:
+# XXX common code should move up?
+def makeSuperSampler(d, => epsilon :Double := 10e-6) as DeepFrozen:
+    return def superSampler.drawAt(x :Double, y :Double):
+        def [var r, var g, var b] := d.drawAt(x, y)
+        for dx in ([-1, 1]):
+            for dy in ([-1, 1]):
+                def [dr, dg, db] := d.drawAt(x + epsilon * dx,
+                                             y + epsilon * dy)
+                r += dr
+                g += dg
+                b += db
+        # Is it HDR if we don't clamp?
+        return [r * 0.2, g * 0.2, b * 0.2]
+
+def consoleDraw.drawingFrom(drawable) as DeepFrozen:
     "Draw a drawable `d` to any number of rows of characters."
+    def d := makeSuperSampler(drawable)
     return def draw(height :(Int > 0)):
         "Draw a drawable to `height` rows of characters."
         def width :(Int > 0) := (height * phi).floor() + 1
