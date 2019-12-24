@@ -100,15 +100,16 @@ def main(_argv,
             scope.
             "
             def m := repl.instantiateModule(basePath, petname)
-            log(`Loading module: $m`)
+            prompt<-writeLine(b`Loading module $petname from $basePath`)
             return when (m) ->
-                log(`Instantiated $petname: $m`)
-                def ex := try { m(null) } catch e { traceln.exception(e); -1 }
-                return async."for"(ex, fn k, v :DeepFrozen {
-                    log(`Loading into environment: $k`)
+                prompt<-writeLine(b`Instantiated $petname`)
+                when (async."for"(m(null), fn k :Str, v :DeepFrozen {
+                    prompt<-writeLine(b`Loading into environment: $k`)
                     environment with= (`&&$k`, &&v)
-                    prompt<-writeLine(b`Loaded module: $petname`)
-                })
+                })) -> { prompt<-writeLine(b`Loaded module: $petname`) }
+            catch problem:
+                traceln.exception(problem)
+                prompt<-writeLine(b`Couldn't instantiate $petname`)
 
         to benchmark(callable) :Vow[Double]:
             "Run `callable` repeatedly, recording the time taken."
