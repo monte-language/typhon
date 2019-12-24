@@ -1,4 +1,3 @@
-import "fun/ppm" =~ [=> makePPM]
 exports (render, makeSphere, spheres, lights)
 
 # https://github.com/ssloy/tinyraytracer/wiki/Part-1:-understandable-raytracing
@@ -187,11 +186,10 @@ def ORIGIN :List[Double] := [0.0] * 3
 def fov :Double := (PI / 6).tangent()
 
 def render(spheres, lights) as DeepFrozen:
-    def draw.drawAt(x :Double, y :Double, => aspectRatio :Double):
+    return def draw.drawAt(x :Double, y :Double, => aspectRatio :Double := 1.0):
         def xr := (x - 0.5) * 2.0 * fov * aspectRatio
         def yr := (y - 0.5) * 2.0 * fov
         return castRay(ORIGIN, norm([xr, yr, -1.0]), spheres, lights)
-    return makePPM.drawingFrom(draw)
 
 def spheres() as DeepFrozen:
     def ivory := makeMaterial(1.0, [0.6, 0.3, 0.1, 0.0], [0.4, 0.4, 0.3], 50.0)
