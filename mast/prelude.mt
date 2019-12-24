@@ -813,8 +813,10 @@ def scopeNames := [
     => _validateFor,
     => _switchFailed, => _makeVerbFacet, => _comparer, => _suchThat,
     => _matchSame, => _bind, => _quasiMatcher, => _splitList,
-    => M, => Ref,  => throw, => astEval, => typhonAstEval, => typhonAstBuilder, => loadMAST, => promiseAllFulfilled,
-    => makeLazySlot]
+    => M, => Ref,  => throw, => promiseAllFulfilled,
+    => astEval, => typhonAstEval, => typhonAstBuilder,
+    => makeLazySlot,
+]
 
 def scopeAsDF(scope):
     return [for k => v in (scope)
