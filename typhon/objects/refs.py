@@ -514,7 +514,7 @@ class LocalResolver(Object):
             if self.guard is not None and not isinstance(target,
                     UnconnectedRef):
                 # Coerce. If there's a problem, then smash the promise.
-                with Ejector() as ej:
+                with Ejector(u"resolver Vow") as ej:
                     try:
                         target = self.guard.call(u"coerce", [target, ej])
                     except Ejecting as e:

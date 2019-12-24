@@ -269,7 +269,7 @@ def deepFrozenSupersetOf(guard):
         return True
 
     if isinstance(guard, SameGuard):
-        with Ejector() as ej:
+        with Ejector(u"deepFrozenSupersetOf") as ej:
             try:
                 v = guard.value
                 checkDeepFrozen(v, monteMap(), ej, v)
@@ -283,7 +283,7 @@ def deepFrozenSupersetOf(guard):
         superGuard = getGlobalValue(superGuardName)
         if superGuard is None:
             continue
-        with Ejector() as ej:
+        with Ejector(u"deepFrozenSupersetOf") as ej:
             try:
                 subGuard = superGuard.call(u"extractGuard", [guard, ej])
                 return deepFrozenSupersetOf(subGuard)
@@ -295,7 +295,7 @@ def deepFrozenSupersetOf(guard):
         pairGuard = getGlobalValue(pairGuardName)
         if pairGuard is None:
             continue
-        with Ejector() as ej:
+        with Ejector(u"deepFrozenSupersetOf") as ej:
             try:
                 guardPair = pairGuard.call(u"extractGuards", [guard, ej])
                 l = unwrapList(guardPair, ej)

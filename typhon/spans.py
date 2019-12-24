@@ -13,3 +13,7 @@ class Span(object):
         self.startCol = startCol
         self.endLine = endLine
         self.endCol = endCol
+
+    def format(self):
+        return u"%s:%d:%d:%d:%d" % (self.source, self.startLine,
+                                    self.startCol, self.endLine, self.endCol)

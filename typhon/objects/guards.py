@@ -164,7 +164,7 @@ class AnyOfGuard(Object):
     @method("Any", "Any", "Any")
     def coerce(self, specimen, ej):
         for g in self.subguards:
-            with Ejector() as cont:
+            with Ejector(u"Any") as cont:
                 try:
                     return g.call(u"coerce", [specimen, cont])
                 except Ejecting as e:

@@ -38,8 +38,12 @@ class Ejector(Object):
 
     active = True
 
+    def __init__(self, label=None):
+        self._label = label
+
     def toString(self):
-        return u"<ejector>" if self.active else u"<ejector (inert)>"
+        template = u"<ejector at %s%s>"
+        return template % (self._label, u" (inert)" if self.active else u"")
 
     @method("Void")
     def run(self):
@@ -54,7 +58,8 @@ class Ejector(Object):
             self.disable()
             raise Ejecting(self, payload)
         else:
-            raise userError(u"Inactive ejector was fired")
+            raise userError(u"Inactive ejector from %s was fired" %
+                            self._label)
 
     def fireString(self, message):
         return self.fire(StrObject(message))

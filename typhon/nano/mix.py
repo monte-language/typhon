@@ -132,7 +132,7 @@ MixIR = NoLiteralsIR.extend("Mix",
 # XXX I don't know why this isn't defined anywhere else. The version in
 # t.o.refs is suspect. ~ C.
 def isDeepFrozen(obj):
-    with Ejector() as ej:
+    with Ejector(u"isDeepFrozen") as ej:
         try:
             deepFrozenGuard.coerce(obj, ej)
             return True

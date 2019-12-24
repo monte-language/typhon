@@ -466,7 +466,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
     def visitEscapeOnlyExpr(self, patt, body, span):
         # jit_debug("EscapeOnlyExpr")
-        with Ejector() as ej:
+        with Ejector(span.format()) as ej:
             self.matchBind(patt, ej)
             try:
                 val = self.visitExpr(body)
@@ -478,7 +478,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
     def visitEscapeExpr(self, patt, body, catchPatt, catchBody, span):
         # jit_debug("EscapeExpr")
-        with Ejector() as ej:
+        with Ejector(span.format()) as ej:
             self.matchBind(patt, ej)
             try:
                 val = self.visitExpr(body)

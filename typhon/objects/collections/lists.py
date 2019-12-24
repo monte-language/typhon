@@ -289,7 +289,7 @@ def isList(obj):
 def listFromIterable(obj):
     rv = []
     iterator = obj.call(u"_makeIterator", [])
-    with Ejector() as ej:
+    with Ejector(u"makeList.fromIterable") as ej:
         while True:
             try:
                 l = unwrapList(iterator.call(u"next", [ej]))

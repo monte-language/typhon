@@ -40,7 +40,7 @@ loopDriver = JitDriver(greens=["method", "displayName"],
 def slowLoop(iterable, consumer):
     iterator = iterable.call(u"_makeIterator", [])
 
-    with Ejector() as ej:
+    with Ejector(u"slowLoop") as ej:
         while True:
             try:
                 values = iterator.call(u"next", [ej])
@@ -80,7 +80,7 @@ def loop(iterable, consumer):
 
     # XXX We want to use a with-statement here, but we cannot because of
     # something weird about the merge point.
-    ej = Ejector()
+    ej = Ejector(u"loop")
     try:
         while True:
             # JIT merge point.
