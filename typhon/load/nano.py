@@ -364,10 +364,7 @@ class MASTContext(object):
                 print "No expressions yet"
 
 
-def loadMASTBytes(bs, noisy=False):
-    # XXX removed in the next commit?
-    filename = u"<unknown>"
-
+def loadMASTBytes(bs, filename, noisy=False):
     if not bs.startswith(MAGIC):
         raise InvalidMAST("Wrong magic bytes '%s'" % bs[:len(MAGIC)])
     bs = bs[len(MAGIC):]
@@ -393,12 +390,3 @@ def loadMASTBytes(bs, noisy=False):
         return context.exprs[-1]
     except IndexError:
         raise InvalidMAST("No expressions in MAST")
-
-
-def loadMASTHandle(handle, noisy=False):
-    return loadMASTBytes(handle.read(), noisy)
-
-
-def loadMAST(path, noisy=False):
-    with open(path, "rb") as handle:
-        return loadMASTHandle(handle, noisy)

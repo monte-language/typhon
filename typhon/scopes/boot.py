@@ -18,10 +18,10 @@ from typhon.autohelp import autohelp, method
 from typhon.errors import userError
 from typhon.importing import AstModule, obtainModule
 from typhon.load.nano import loadMASTBytes as realLoad
-from typhon.nano.mast import ASTWrapper, BuildKernelNodes, theASTBuilder
+from typhon.nano.mast import ASTWrapper, theASTBuilder
 from typhon.nano.interp import (evalToPair as astEvalToPair,
                                 scope2env)
-from typhon.nodes import Expr, kernelAstStamp
+from typhon.nodes import kernelAstStamp
 from typhon.objects.auditors import (deepFrozenStamp, semitransparentStamp,
                                      transparentStamp)
 from typhon.objects.collections.lists import ConstList
@@ -95,6 +95,11 @@ class GetMonteFile(Object):
 @autohelp
 @audited.DF
 class AstEval(Object):
+    """
+    Typhon-specific AST evaluation.
+
+    This object is a stain.
+    """
 
     def __init__(self, recorder):
         self.recorder = recorder
@@ -117,31 +122,21 @@ class AstEval(Object):
 @autohelp
 @audited.DF
 class AstEval0(Object):
+    """
+    Typhon-specific AST evaluation.
+
+    This object is a stain.
+    """
 
     def __init__(self, recorder):
         self.recorder = recorder
 
-    @method("Any", "Any", "Any")
-    @profileTyphon("typhonAstEval.run/2")
-    def run(self, bs, scope):
-        ast = realLoad(unwrapBytes(bs))
-        return astEvalToPair(ast, scope, u"<eval>")[0]
-
-    @method("List", "Any", "Any", inRepl="Bool")
-    def evalToPair(self, bs, scope, inRepl=False):
-        ast = realLoad(unwrapBytes(bs))
-        result, envMap = astEvalToPair(ast, scope, u"<eval>", inRepl)
+    @method("List", "Any", "Any", inRepl="Bool", filename="Str")
+    @profileTyphon("astEval.evalToPair/2")
+    def evalToPair(self, bs, scope, inRepl=False, filename=u"<eval>"):
+        ast = realLoad(unwrapBytes(bs), filename)
+        result, envMap = astEvalToPair(ast, scope, filename, inRepl)
         return [result, envMap]
-
-
-@runnable(RUN_1, [deepFrozenStamp])
-def loadMAST(bs):
-    return BuildKernelNodes().visitExpr(realLoad(unwrapBytes(bs)))
-
-
-@runnable(RUN_1, [deepFrozenStamp])
-def loadMAST(bs):
-    return BuildKernelNodes().visitExpr(realLoad(unwrapBytes(bs)))
 
 
 def bootScope(paths, recorder):
@@ -170,7 +165,6 @@ def bootScope(paths, recorder):
         u"SemitransparentStamp": semitransparentStamp,
 
         u"getMonteFile": GetMonteFile(paths, recorder),
-        u"loadMAST": loadMAST(),
         u"typhonAstEval": ae,
         u"typhonAstBuilder": theASTBuilder,
         u"astEval": AstEval0(recorder)
