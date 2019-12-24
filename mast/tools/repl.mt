@@ -1,5 +1,6 @@
 import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/commandLine" =~ [=> makePrompt]
+import "lib/graphing" =~ [=> calculateGraph]
 import "lib/help" =~ [=> help]
 import "lib/iterators" =~ [=> async]
 import "lib/json" =~ [=> JSON]
@@ -145,16 +146,10 @@ def main(_argv,
             "
             Draw a graph of a function from Doubles to Doubles to the screen.
             "
-            def rows := [for _ in (0..!20) ([b` `] * 20).diverge()]
-            for column in (0..!20):
-                def y := f(column * 0.1 - 1.0)
-                def row := 20 - ((y + 1.0) * 10).floor()
-                if (row < 0 || row >= rows.size()):
-                    continue
-                rows[row][column] := b`#`
-            return async."for"(rows, fn _, line {
-                prompt<-writeLine(b``.join(line))
-            })
+            # Aspect ratio has to be manually done here.
+            def graphed := calculateGraph(f, 25, 50, -2.0, -1.0, 2.0, 1.0)
+            def rows := [for row in (graphed) UTF8.encode(row, null)]
+            return async."for"(rows, fn _, line { prompt<-writeLine(line) })
 
     object REPLHelp extends help:
         match message:
