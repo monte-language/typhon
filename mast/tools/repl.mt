@@ -1,5 +1,6 @@
 import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/commandLine" =~ [=> makePrompt]
+import "lib/console" =~ [=> consoleDraw]
 import "lib/graphing" =~ [=> calculateGraph]
 import "lib/help" =~ [=> help]
 import "lib/iterators" =~ [=> async]
@@ -60,20 +61,6 @@ def makeFileLoader(log, root, makeFileResource) as DeepFrozen:
             def s := UTF8.decode(bs, null)
             def lex := makeMonteLexer(s, petname)
             [s, parseModule(lex, astBuilder, null)]
-
-# XXX should go to its own module, figure out a name!
-def consoleDraw.drawingFrom(d) as DeepFrozen:
-    def phi :Double := ((5.0).squareRoot() - 1) / 2
-    return def draw(height :(Int > 0)):
-        def width :(Int > 0) := (height * phi).floor() + 1
-        return [for h in (0..!height) {
-            b``.join([for w in (0..!width) {
-                def [r, g, b] := d.drawAt(w / width, h / height,
-                                          "aspectRatio" => phi)
-                # Average luminosity, half-assed
-                (r + g + b > 1.5).pick(b`#`, b` `)
-            }])
-        }]
 
 def main(_argv,
          => makeFileResource,
@@ -140,7 +127,7 @@ def main(_argv,
         to draw(drawable) :Vow[Void]:
             "Draw `drawable` to the screen."
             def draw := consoleDraw.drawingFrom(drawable)
-            return async."for"(draw(20), fn _, line { prompt<-writeLine(line) })
+            return async."for"(draw(25), fn _, line { prompt<-writeLine(line) })
 
         to graph(f) :Vow[Void]:
             "
