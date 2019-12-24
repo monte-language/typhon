@@ -477,7 +477,7 @@ class DoubleObject(Object):
         return math.atan2(x, self._d)
 
     @method("Bytes")
-    def toBytes(self):
+    def asBytes(self):
         "The IEEE 754 packed representation of this number."
         # float_pack() takes a double and gives us the packed integer; we need
         # to reinterpret it as packed ASCII and repack into bytes.
