@@ -1,3 +1,4 @@
+import "lib/iterators" =~ [=> zip]
 exports (withDomain, concreteMonte, ev)
 
 # Using closures for code generation:
@@ -74,8 +75,53 @@ object concreteMonte as DeepFrozen:
             }
         }
 
-    to call(receiver, message):
-        return M.callWithMessage(receiver, message)
+    to call(receiver, verb, args, namedArgs):
+        return M.call(receiver, verb, args, namedArgs)
+
+def listProduct(l :List) as DeepFrozen:
+    return if (l =~ [head] + tail) {
+        def rv := [].asSet().diverge()
+        for h in (head) {
+            for t in (listProduct(tail)) { rv.include([h] + t) }
+        }
+        rv.snapshot()
+    } else { [[]].asSet() }
+
+def mapProduct(m :Map) as DeepFrozen:
+    def keys := m.getKeys()
+    return [for values in (listProduct(m.getValues())) {
+        _makeMap.fromPairs(_makeList.fromIterable(zip(keys, values)))
+    }].asSet()
+
+def multi(domain :DeepFrozen) as DeepFrozen:
+    return object multiMonte as DeepFrozen:
+        "A non-deterministic flavor of `domain`."
+
+        to literal(value):
+            traceln("literal", value)
+            return [value].asSet()
+
+        to objectLiteral(displayName, atoms, matchers, miranda, closure):
+            def obj := domain.objectLiteral(displayName, atoms, matchers,
+                                            miranda, closure)
+            return [obj].asSet()
+
+        to call(receiver, verb, args, namedArgs):
+            traceln("call", receiver, verb, args, namedArgs)
+            # Take a Cartesian product.
+            def rv := [].asSet().diverge()
+            for r in (receiver):
+                for a in (args):
+                    for na in (namedArgs):
+                        # We need to take the Cartesian for args and named
+                        # args as well.
+                        def uas := listProduct(a)
+                        def unas := mapProduct(na)
+                        for ua in (uas):
+                            for una in (unas):
+                                traceln("primcall", r, verb, ua, una)
+                                rv.include(domain.call(r, verb, ua, una))
+            return rv.snapshot()
 
 # We ask that δ be DF. It's just too painful to reason about otherwise.
 
@@ -197,7 +243,9 @@ def withDomain(delta :DeepFrozen) as DeepFrozen:
             to run(expr):
                 if (expr == null) { return fn _ { null } }
                 return switch (expr.getNodeName()) {
-                    match =="LiteralExpr" { fn env { [expr.getValue(), env] } }
+                    match =="LiteralExpr" {
+                        fn env { [delta.literal(expr.getValue()), env] }
+                    }
                     match =="BindingExpr" {
                         def index := indexOf(expr.getName())
                         fn env { [env[index], env] }
@@ -311,8 +359,9 @@ def withDomain(delta :DeepFrozen) as DeepFrozen:
                             def [r, e] := receiver(env)
                             def [a, e2] := map(args, e)
                             def [ns, e3] := mapPairs(namedArgs, e2)
-                            def message := [delta.literal(expr.getVerb()), a, ns]
-                            def rv := delta.call(r, message)
+                            def rv := delta.call(r, expr.getVerb(),
+                                                 delta.literal(a),
+                                                 delta.literal(ns))
                             [rv, e3]
                         }
                     }
@@ -360,7 +409,6 @@ def withDomain(delta :DeepFrozen) as DeepFrozen:
                         }
                     }
                 }
-
 
 
 def ev(expr, scope) as DeepFrozen:
