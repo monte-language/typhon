@@ -123,6 +123,26 @@ def multi(domain :DeepFrozen) as DeepFrozen:
                                 rv.include(domain.call(r, verb, ua, una))
             return rv.snapshot()
 
+def literalTypes :DeepFrozen := [
+    Int => [
+        ["add", 1] => [Int, [Int], [].asMap()],
+    ],
+]
+
+object gradualTyper as DeepFrozen:
+    to literal(value):
+        return literalTypes[value._getAllegedInterface()]
+
+    to objectLiteral(_displayName, atoms, _matchers, _miranda, _closure):
+        # XXX not specific enough
+        return [for [verb, len] => _ in (atoms)
+                [verb, len] => [Any, [Any] * len, [].asMap()]]
+
+    to call(receiver, verb, args, namedArgs):
+        return escape ej {
+            def sig := receiver.fetch([verb, args.size()], ej)
+        } catch _ { null }
+
 # We ask that δ be DF. It's just too painful to reason about otherwise.
 
 def withDomain(delta :DeepFrozen) as DeepFrozen:
