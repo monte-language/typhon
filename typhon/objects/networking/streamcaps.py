@@ -46,7 +46,7 @@ from signal import SIGWINCH
 
 from rpython.rlib.rarithmetic import intmask
 from rpython.rtyper.lltypesystem.lltype import scoped_alloc
-from rpython.rtyper.lltypesystem.rffi import charpsize2str, INTP
+from rpython.rtyper.lltypesystem.rffi import INTP
 
 from typhon import ruv
 from typhon.atoms import getAtom
@@ -59,7 +59,7 @@ from typhon.objects.data import BytesObject, StrObject
 from typhon.objects.refs import makePromise
 from typhon.objects.signals import SignalHandle
 from typhon.objects.root import Object
-from typhon.vats import scopedVat
+from typhon.vats import currentVat, scopedVat
 
 ABORT_1 = getAtom(u"abort", 1)
 COMPLETE_0 = getAtom(u"complete", 0)
@@ -124,6 +124,10 @@ class StreamSource(Object):
         self._stream.release()
         self._stream = None
 
+    @method("Bool")
+    def isATTY(self):
+        "Whether this source is reading from a TTY."
+        return False
 
     @method("Any", "Any")
     def run(self, sink):
@@ -155,10 +159,6 @@ class StreamSource(Object):
 
         return p
 
-    @method("Bool")
-    def isATTY(self):
-        return False
-
 @autohelp
 class TTYSource(StreamSource):
     """
@@ -171,6 +171,7 @@ class TTYSource(StreamSource):
 
     @method("Bool")
     def isATTY(self):
+        "Whether this source is reading from a TTY."
         return True
 
     @method("Void", "Bool")
@@ -208,6 +209,11 @@ class StreamSink(Object):
     def _cleanup(self):
         currentVat.get().enqueueEvent(StreamSinkCleanup(self))
 
+    @method("Bool")
+    def isATTY(self):
+        "Whether this sink is writing to a TTY."
+        return False
+
     @method("Void", "Bytes")
     def run(self, data):
         if self.closed:
@@ -225,10 +231,6 @@ class StreamSink(Object):
     def abort(self, problem):
         self._cleanup()
 
-    @method("Bool")
-    def isATTY(self):
-        return False
-
 
 
 @autohelp
@@ -241,8 +243,18 @@ class TTYSink(StreamSink):
         self._tty = tty
         StreamSink.__init__(self, stream, vat)
 
+    @method("Bool")
+    def isATTY(self):
+        "Whether this source is reading from a TTY."
+        return True
+
     @method("Any")
     def getWindowSize(self):
+        """
+        The current window size.
+
+        There is inherent TOCTTOU bugginess in this method.
+        """
         from typhon.objects.data import wrapInt
         from typhon.objects.collections.lists import ConstList
         with scoped_alloc(INTP.TO, 1) as widthp, \
@@ -254,6 +266,7 @@ class TTYSink(StreamSink):
 
     @method("Any", "Any")
     def whenWindowSizeChanges(self, cb):
+        "Call `cb` when the window size changes."
         return SignalHandle(SIGWINCH, cb, self._vat)
 
 @autohelp
