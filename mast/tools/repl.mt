@@ -128,7 +128,7 @@ def main(_argv,
         to draw(drawable) :Vow[Void]:
             "Draw `drawable` to the screen."
             def draw := consoleDraw.drawingFrom(drawable)
-            return async."for"(draw(25), fn _, line { prompt<-writeLine(line) })
+            return async."for"(draw(25, 25), fn _, line { prompt<-writeLine(line) })
 
         to graph(f) :Vow[Void]:
             "

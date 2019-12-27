@@ -2,9 +2,6 @@ exports (consoleDraw)
 
 # Console (emulator) drawing utilities.
 
-# The golden ratio. Specifically, the one which is greater than 1.
-def phi :Double := ((5.0).squareRoot() + 1) / 2
-
 def resetColor :Bytes := b`$\x1b[0m`
 
 # Color modelling: RGB channels can be at three different intensity levels:
@@ -38,16 +35,16 @@ def makeSuperSampler(d, => epsilon :Double := 10e-6) as DeepFrozen:
         # Is it HDR if we don't clamp?
         return [r * 0.2, g * 0.2, b * 0.2]
 
-def consoleDraw.drawingFrom(drawable) as DeepFrozen:
+def consoleDraw.drawingFrom(d) as DeepFrozen:
     "Draw a drawable `d` to any number of rows of characters."
-    def d := makeSuperSampler(drawable)
-    return def draw(height :(Int > 0)):
+    # def d := makeSuperSampler(drawable)
+    return def draw(height :(Int > 0), width :(Int > 0)):
         "Draw a drawable to `height` rows of characters."
-        def width :(Int > 0) := (height * phi).floor() + 1
+        def aspectRatio := width / height
         return [for h in (0..!height) {
             b``.join([for w in (0..!width) {
                 def [r, g, b] := d.drawAt(w / width, h / height,
-                                          "aspectRatio" => phi)
+                                          => aspectRatio)
                 def sum := r + g + b
                 # XXX gamma?
                 if (r > 0.5 || g > 0.5 || b > 0.5) {
