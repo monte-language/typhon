@@ -1,14 +1,8 @@
-import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
-import "lib/streams" =~ [=> Sink :DeepFrozen]
-
+import "lib/codec/utf8" =~ [=> UTF8]
+import "lib/streams" =~ [=> Sink, => Source]
 exports (activateTerminal)
 
 def CSI :Bytes := b`$\x1b[`
-def KEY_NAMES :List[Str] := [
-    "UP_ARROW", "DOWN_ARROW", "RIGHT_ARROW", "LEFT_ARROW",
-    "HOME", "INSERT", "DELETE", "END", "PGUP", "PGDN", "NUMPAD_MIDDLE",
-    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9",
-    "F10", "F11", "F12"]
 
 def dec(x :Int) :Bytes as DeepFrozen:
     def s := M.toString(x)
@@ -17,75 +11,24 @@ def dec(x :Int) :Bytes as DeepFrozen:
 def undec(bs :Bytes, ej) :Int as DeepFrozen:
     return _makeInt(UTF8.decode(bs, ej), ej)
 
-def makeTerminalPair(stdin, stdout) as DeepFrozen:
+def lowFKeys :Map[Int, Str] := [
+    80 => "F1", 81 => "F2",
+    82 => "F3", 83 => "F4"]
 
-    var cursorReports := [].diverge()
-    object termout:
-        to write(bytes):
-            stdout(bytes)
+def tildeSeqs :Map[Int, Str] := [
+    1 => "HOME", 2 => "INSERT", 3 => "DELETE", 4 => "END",
+                  5 => "PGUP", 6 => "PGDN",
+                  11 => "F1", 12 => "F2", 13 => "F3", 14 => "F4",
+                  15 => "F5", 17 => "F6", 18 => "F7", 19 => "F8",
+                  20 => "F9", 21 => "F10", 23 => "F11", 24 => "F12"]
 
-        to clear():
-            stdout(b`${CSI}2J`)
+def simpleControlSeqs :Map[Str, Str] := [
+    "A" => "UP_ARROW", "B" => "DOWN_ARROW",
+    "C" => "RIGHT_ARROW", "D" => "LEFT_ARROW",
+    "E" => "NUMPAD_MIDDLE", "F" => "END",
+    "H" => "HOME"]
 
-        to enterAltScreen():
-            stdout(b`${CSI}?1049h`)
-
-        to leaveAltScreen():
-            stdout(b`${CSI}?1049l`)
-
-        to move(y :Int, x :Int):
-            stdout(b`${CSI}${dec(y)};${dec(x)}H`)
-
-        to moveLeft(n):
-            stdout(b`${CSI}${dec(n)}D`)
-
-        to eraseLeft():
-            stdout(b`${CSI}1K`)
-
-        to eraseRight():
-            stdout(b`${CSI}0K`)
-
-        to setMargins(top :Int, bottom :Int):
-            stdout(b`${CSI}${dec(top)};${dec(bottom)}r`)
-
-        to insertLines(n :Int):
-            stdout(b`${CSI}${dec(n)}L`)
-
-        to deleteLines(n :Int):
-            stdout(b`${CSI}${dec(n)}M`)
-
-        to eraseLine():
-            stdout(b`${CSI}K`)
-
-        to getCursorReport():
-            def [response, r] := Ref.promise()
-            cursorReports.insert(0, r)
-            stdout(b`${CSI}6n`)
-            return response
-
-        to hideCursor():
-            stdout(b`${CSI}?25l`)
-
-        to showCursor():
-            stdout(b`${CSI}?25h`)
-
-    def lowFKeys :Map[Int, Str] := [
-        80 => "F1", 81 => "F2",
-        82 => "F3", 83 => "F4"]
-
-    def tildeSeqs :Map[Int, Str] := [
-        1 => "HOME", 2 => "INSERT", 3 => "DELETE", 4 => "END",
-                      5 => "PGUP", 6 => "PGDN",
-                      11 => "F1", 12 => "F2", 13 => "F3", 14 => "F4",
-                      15 => "F5", 17 => "F6", 18 => "F7", 19 => "F8",
-                      20 => "F9", 21 => "F10", 23 => "F11", 24 => "F12"]
-
-    def simpleControlSeqs :Map[Str, Str] := [
-        "A" => "UP_ARROW", "B" => "DOWN_ARROW",
-        "C" => "RIGHT_ARROW", "D" => "LEFT_ARROW",
-        "E" => "NUMPAD_MIDDLE", "F" => "END",
-        "H" => "HOME"]
-
+def makeInputSource(stdin, cursorReports) as DeepFrozen:
     object controlSequenceParser:
         to "~"(seq, fail):
             return tildeSeqs.fetch(
@@ -96,7 +39,7 @@ def makeTerminalPair(stdin, stdout) as DeepFrozen:
                 }, fail)
 
         to R(seq, fail):
-            if (cursorReports.size() == 0):
+            if (cursorReports.isEmpty()):
                 throw.eject(fail, `Unsolicited cursor report`)
             def [via (undec) row,
                  via (undec) col] exit fail := seq.split(b`;`)
@@ -105,122 +48,172 @@ def makeTerminalPair(stdin, stdout) as DeepFrozen:
         match [verb, [_, fail], _]:
             simpleControlSeqs.fetch(verb, fail)
 
+    def bufferedEvents := [].diverge()
+    var state := "data"
+    var escBuffer :List[Int] := []
+    var writeStart :NullOk[Int] := 0
+    var writeEnd :NullOk[Int] := null
+    def pump():
+        object bufferingSink as Sink:
+            to complete():
+                return stdin.complete()
 
-    object termin:
-        to flowTo(sink):
-            def [terminVow, terminR] := Ref.promise()
-            var state := "data"
-            var escBuffer := []
-            var writeStart := 0
-            var writeEnd := null
-            object terminalSink as Sink:
-                to complete():
-                    terminR.resolve(null)
-                    return sink.complete()
-                to abort(p):
-                    terminR.smash(p)
-                    return sink.abort(p)
+            to abort(problem):
+                return stdin.abort(problem)
 
-                to run(packet):
-                    if (Ref.isResolved(terminVow)):
+            to run(packet):
+                def deliver(message) { bufferedEvents.insert(0, message) }
+                def handleControlSequence(content, terminator):
+                    def keyname := M.call(controlSequenceParser,
+                                          terminator,
+                                          [content, throw],
+                                          [].asMap())
+                    deliver(["KEY", keyname])
+                def handleLowFunction(ch):
+                    if (!lowFKeys.contains(ch)):
+                        traceln(`Unrecognized ^[O sequence`)
                         return
-                    def deliver(msg):
-                        if (msg[1] == null):
-                            # Oh well, try again
-                            stdin <- (terminalSink)
-                            return
-                        return when (sink <- (msg)) ->
-                            def p0 := stdin <- (terminalSink)
-                            null
-                        catch p:
-                            traceln.exception(p)
-                            terminR.smash(p)
-                            sink.abort(p)
-                            Ref.broken(p)
-                    def handleControlSequence(content, terminator):
-                        escape e:
-                            def keyname := M.call(controlSequenceParser,
-                                                  terminator,
-                                                  [content, throw],
-                                                  [].asMap())
-                            return deliver(["KEY", keyname])
-                        catch p:
-                            traceln(p)
-                    def handleLowFunction(ch):
-                        if (!lowFKeys.contains(ch)):
-                            traceln(`Unrecognized ^[O sequence`)
-                            return
-                        def k := lowFKeys[ch]
-                        return deliver(["KEY", k])
-                    def handleText(data):
-                        return deliver(["DATA", data])
+                    def k := lowFKeys[ch]
+                    return deliver(["KEY", k])
+                def handleText(data):
+                    return deliver(["DATA", data])
 
-                    for i => byte in (packet):
-                        switch (state):
-                            match =="data":
-                                if (byte == 0x1b):
-                                    state := "escaped"
-                                    if (writeEnd != null):
-                                         handleText(packet.slice(writeStart,
-                                                                 writeEnd))
-                                         writeStart := null
-                                         writeEnd := null
-                                else:
-                                    writeEnd := i
-                            match =="escaped":
-                                if (byte == '['.asInteger()):
-                                    state := "bracket-escaped"
-                                else if (byte == 'O'.asInteger()):
-                                    state := "low-function-escaped"
-                                else:
-                                    state := "data"
-                                    writeStart := i + 1
-                                    writeEnd := null
-                                    deliver(["DATA", b`$\x1b`])
-                            match =="bracket-escaped":
-                                if (byte == 'O'.asInteger()):
-                                    state := "low-function-escaped"
-                                else if (('A'.asInteger()..'Z'.asInteger()
-                                         ).contains(byte) ||
-                                         byte == '~'.asInteger()):
-                                    handleControlSequence(
-                                        _makeBytes.fromInts(escBuffer),
-                                        _makeStr.fromChars(['\x00' + byte]))
-                                    escBuffer := []
-                                    writeStart := i + 1
-                                    state := "data"
-                                else:
-                                    escBuffer with= (byte)
-
-                            match =="low-function-escaped":
-                                handleLowFunction(byte)
+                for i => byte in (packet):
+                    switch (state):
+                        match =="data":
+                            if (byte == 0x1b):
+                                state := "escaped"
+                                if (writeEnd != null):
+                                     handleText(packet.slice(writeStart,
+                                                             writeEnd))
+                                     writeStart := null
+                                     writeEnd := null
+                            else:
+                                writeEnd := i
+                        match =="escaped":
+                            if (byte == '['.asInteger()):
+                                state := "bracket-escaped"
+                            else if (byte == 'O'.asInteger()):
+                                state := "low-function-escaped"
+                            else:
+                                state := "data"
+                                writeStart := i + 1
+                                writeEnd := null
+                                deliver(["DATA", b`$\x1b`])
+                        match =="bracket-escaped":
+                            if (byte == 'O'.asInteger()):
+                                state := "low-function-escaped"
+                            else if (('A'.asInteger()..'Z'.asInteger()
+                                     ).contains(byte) ||
+                                     byte == '~'.asInteger()):
+                                handleControlSequence(
+                                    _makeBytes.fromInts(escBuffer),
+                                    _makeStr.fromChars(['\x00' + byte]))
+                                escBuffer := []
                                 writeStart := i + 1
                                 state := "data"
-                            match s:
-                                throw(`Illegal state $s`)
-                    if (state == "data"):
-                        if (writeStart != packet.size()):
-                            handleText(packet.slice(writeStart))
-                        writeStart := 0
-                        writeEnd := null
+                            else:
+                                escBuffer with= (byte)
 
-            return when (stdin <- (terminalSink)) ->
-                terminVow
-            catch problem:
-                traceln.exception(problem)
-                terminR.smash(problem)
-                Ref.broken(problem)
-    return [termin, termout]
+                        match =="low-function-escaped":
+                            handleLowFunction(byte)
+                            writeStart := i + 1
+                            state := "data"
+                        match s:
+                            throw(`Illegal state $s`)
+                if (state == "data"):
+                    if (writeStart != packet.size()):
+                        handleText(packet.slice(writeStart))
+                    writeStart := 0
+                    writeEnd := null
 
+        return when (stdin<-(bufferingSink)) ->
+            if (bufferedEvents.isEmpty()) { pump<-() } else {
+                bufferedEvents.pop()
+            }
+
+    return def inputSource(sink) as Source:
+        return when (def next := pump<-()) -> { sink(next) }
+
+def makeOutputCursor(stdout, cursorReports) as DeepFrozen:
+    return object outputCursor:
+        to write(bytes :Bytes):
+            return stdout<-(bytes)
+
+        to clear():
+            return stdout<-(b`${CSI}2J`)
+
+        to enterAltScreen():
+            return stdout<-(b`${CSI}?1049h`)
+
+        to leaveAltScreen():
+            return stdout<-(b`${CSI}?1049l`)
+
+        to move(y :Int, x :Int):
+            return stdout<-(b`${CSI}${dec(y)};${dec(x)}H`)
+
+        to moveLeft(n :Int):
+            return stdout<-(b`${CSI}${dec(n)}D`)
+
+        to eraseLeft():
+            return stdout<-(b`${CSI}1K`)
+
+        to eraseRight():
+            return stdout<-(b`${CSI}0K`)
+
+        to setMargins(top :Int, bottom :Int):
+            return stdout<-(b`${CSI}${dec(top)};${dec(bottom)}r`)
+
+        to insertLines(n :Int):
+            return stdout<-(b`${CSI}${dec(n)}L`)
+
+        to deleteLines(n :Int):
+            return stdout<-(b`${CSI}${dec(n)}M`)
+
+        to eraseLine():
+            return stdout<-(b`${CSI}K`)
+
+        to getCursorReport():
+            cursorReports.insert(0, def response)
+            stdout(b`${CSI}6n`)
+            return response
+
+        to hideCursor():
+            return stdout<-(b`${CSI}?25l`)
+
+        to showCursor():
+            return stdout<-(b`${CSI}?25h`)
 
 def activateTerminal(stdio) as DeepFrozen:
     def stdin := stdio.stdin()
     def stdout := stdio.stdout()
-    # if (!(stdin.isATTY() && stdout.isATTY())):
-    #     stdout(b`A terminal is required$\n`)
-    #     return 1
-    def [width, height] := stdout.getWindowSize()
-    if (!(width >= 80 && height >= 24)):
-        throw("Terminal must be at least 80x24.")
-    stdin.setRawMode(true)
-    return [[width, height], makeTerminalPair(stdin, stdout)]
+    # XXX Typhon bug; always returns false for some reason
+    # if (!stdin.isATTY() || !stdout.isATTY()):
+    #     throw(`Cannot activate terminal on non-TTY`)
+
+    def [var width :Int, var height :Int] := stdout.getWindowSize()
+    def sigwinch := stdout.whenWindowSizeChanges(fn _ {
+        def [w, h] := stdout.getWindowSize()
+        width := w
+        height := h
+    })
+    return when (stdin<-setRawMode(true)) ->
+        def cursorReports := [].diverge()
+        def inputSource := makeInputSource(stdin, cursorReports)
+        def outputCursor := makeOutputCursor(stdout, cursorReports)
+        object term:
+            to quit():
+                sigwinch.disarm()
+                stdin<-setRawMode(false)
+
+            to height() :Int:
+                return height
+
+            to width() :Int:
+                return width
+
+            to inputSource():
+                return inputSource
+
+            to outputCursor():
+                return outputCursor
