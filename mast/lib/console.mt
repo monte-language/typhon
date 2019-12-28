@@ -21,12 +21,13 @@ def color(r :Double, g :Double, b :Double) :Bytes as DeepFrozen:
 
 # XXX common code should move up?
 def makeSuperSampler(d, => epsilon :Double := 10e-6) as DeepFrozen:
-    return def superSampler.drawAt(x :Double, y :Double):
-        def [var r, var g, var b] := d.drawAt(x, y)
+    return def superSampler.drawAt(x :Double, y :Double,
+                                   => aspectRatio :Double):
+        def [var r, var g, var b] := d.drawAt(x, y, => aspectRatio)
         for dx in ([-1, 1]):
             for dy in ([-1, 1]):
                 def [dr, dg, db] := d.drawAt(x + epsilon * dx,
-                                             y + epsilon * dy)
+                                             y + epsilon * dy, => aspectRatio)
                 r += dr
                 g += dg
                 b += db

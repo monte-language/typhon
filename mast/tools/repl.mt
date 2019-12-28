@@ -128,14 +128,18 @@ def main(_argv,
         to draw(drawable) :Vow[Void]:
             "Draw `drawable` to the screen."
             def draw := consoleDraw.drawingFrom(drawable)
-            return async."for"(draw(25, 25), fn _, line { prompt<-writeLine(line) })
+            def [width, height] := stdio.stdout().getWindowSize()
+            return async."for"(draw(height, width), fn _, line { prompt<-writeLine(line) })
 
         to graph(f) :Vow[Void]:
             "
             Draw a graph of a function from Doubles to Doubles to the screen.
             "
+            def [width, height] := stdio.stdout().getWindowSize()
             # Aspect ratio has to be manually done here.
-            def graphed := calculateGraph(f, 25, 50, -2.0, -1.0, 2.0, 1.0)
+            def ratio := width / height
+            def graphed := calculateGraph(f, height, width, -ratio, -1.0,
+                                          ratio, 1.0)
             def rows := [for row in (graphed) UTF8.encode(row, null)]
             return async."for"(rows, fn _, line { prompt<-writeLine(line) })
 
