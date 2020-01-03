@@ -1,31 +1,50 @@
 import "unittest" =~ [=> unittest :Any]
-exports (parse, assemble, concat)
+exports (parse, assemble, concat, polyMonte)
 
-def specials :List[Char] := [' ', ',', '(', ')']
-def specialPred(x) as DeepFrozen { return !specials.contains(x) }
+def specials :Set[Char] := "(), ".asSet()
 
-object functors as DeepFrozen:
-    to id(x):
-        return x
+def parseAt(s :Str, start :Int) as DeepFrozen:
+    var position :Int := start
+    def more() { return position < s.size() }
+    def rv := [].diverge()
+    while (more() && !specials.contains(s[position])):
+        def top := position
+        while (more() && !specials.contains(s[position])):
+            position += 1
+        def name := s.slice(top, position)
+        if (more() && s[position] == '('):
+            def args := [].diverge()
+            position += 1
+            while (s[position] != ')'):
+                def [elt, pos] := parseAt(s, position)
+                args.push(elt)
+                position := pos
+                if (s[position] == ','):
+                    position += 1
+            rv.push([name, args.snapshot()])
+            position += 1
+        else:
+            rv.push(name)
+        def shouldBreak := more() && s[position] != ' '
+        if (shouldBreak):
+            break
+        else:
+            position += 1
+    return [rv.snapshot(), position]
 
-    to diagonal(x):
-        return [x, x]
-
-def parse(s :Str, cat :DeepFrozen) as DeepFrozen:
-    def path := s.split(" ")
-    def go(id) { return M.call(cat, id, [], [].asMap()) }
-    return [for expr in (path) switch (expr) {
-        match `@functor(@guts)` {
-            def args := [for a in (guts.split(",")) go(a)]
-            M.call(functors, functor, args, [].asMap())
-        }
-        match id { go(id) }
-    }]
+def parse(s :Str) as DeepFrozen { return parseAt(s, 0)[0] }
 
 def assemble(cat :DeepFrozen, path :List) as DeepFrozen:
     var rv := cat.id()
-    for arrow in (path):
-        rv := cat.compose(rv, arrow)
+    for obj in (path):
+        def f := switch (obj) {
+            match [con, args] {
+                M.call(cat, con, [for arg in (args) assemble(cat, arg)],
+                       [].asMap())
+            }
+            match arr { M.call(cat, arr, [], [].asMap()) }
+        }
+        rv := cat.compose(rv, f)
     return rv
 
 object polyMonte as DeepFrozen:
