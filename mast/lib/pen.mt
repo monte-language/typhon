@@ -77,6 +77,35 @@ object makeSlicer as DeepFrozen:
 
         return makeStringSlicer(0, 1, 1)
 
+    to fromBytes(bs :Bytes, => sourceName :Str := "<parsed bytestring>"):
+        "Slice into `bs`, using `sourceName` for source spans."
+
+        def size :Int := bs.size()
+        def makeBytesSlicer(index :Int, line :Int, col :Int) as DeepFrozen:
+            def pos() as DeepFrozen:
+                return _makeSourceSpan(sourceName, true, line, col, line, col + 1)
+
+            return object stringSlicer as DeepFrozen:
+                to _printOn(out):
+                    out.print(`<bytestring line=$line col=$col>`)
+
+                to next(ej):
+                    def i := index + 1
+                    return if (i <= size) {
+                        def slicer := if (bs[index] == 10) {
+                            makeBytesSlicer(i, line + 1, 1)
+                        } else { makeBytesSlicer(i, line, col + 1) }
+                        [bs[index], slicer]
+                    } else { stringSlicer.eject(ej, `End of string`) }
+
+                to eject(ej, reason :Str):
+                    throw.eject(ej, [reason, pos()])
+
+                to span():
+                    return pos()
+
+        return makeBytesSlicer(0, 1, 1)
+
     to fromPairs(pairs :List[Pair[DeepFrozen, DeepFrozen]]):
         "Slice into `pairs`, whose elements should be [token, span] pairs."
 
@@ -224,8 +253,10 @@ object pk as DeepFrozen:
     to pure(obj :DeepFrozen):
         return augment(pure(obj))
 
-    to anything(s, ej):
-        return s.next(ej)
+    to anything():
+        return augment(def parseAnything(s, ej) as DeepFrozen {
+            return s.next(ej)
+        })
 
     to satisfies(pred :DeepFrozen):
         object satisfier as DeepFrozen:
