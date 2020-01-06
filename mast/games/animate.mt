@@ -5,12 +5,13 @@ import "lib/console" =~ [=> consoleDraw]
 import "lib/entropy/entropy" =~ [=> makeEntropy]
 exports (main)
 
-def target :Double := 60.0
-def N :Int := 2**5
-def makeFrameCounter() as DeepFrozen:
-    var fps := 1.0
-    return def counter.observe(t):
-        return fps := ((N - 1) * fps + (t.reciprocal().floor())) / N
+def N :Int := 2**4
+def makeMMASlot(var v) as DeepFrozen:
+    return object MMASlot:
+        to get():
+            return v
+        to put(x):
+            v := ((N - 1) * v + x) / N
 
 def makePath(var x :Double, var dx :Double) as DeepFrozen:
     return def path.advance(t :Double) :Double:
@@ -27,14 +28,16 @@ def makeTriangle.withEntropy(entropy) as DeepFrozen:
     return def advanceTri(t):
         return M.call(triangle, "run", [for p in (paths) p.advance(t)], [].asMap())
 
-def drawOnto(height, width, drawable, cursor, fps, renderingTime) as DeepFrozen:
-    def rows := consoleDraw.drawingFrom(drawable)(height, width)
+def drawOnto(height, width, drawable, cursor, header) as DeepFrozen:
+    def [_] + rows := consoleDraw.drawingFrom(drawable)(height, width)
+    # Draw only once, by compositing the header on top of the first row.
+    def headed := if (header.size() > width) { header.slice(0, width) } else {
+        header + b` ` * (width - header.size())
+    }
     return promiseAllFulfilled([
         cursor<-clear(),
         cursor<-move(0, 0),
-        cursor<-write(b``.join(rows)),
-        cursor<-move(0, 0),
-        cursor<-write(b`Hello from the other side  FPS: ${M.toString(fps)}/${M.toString(target)}  Rendering time: ${M.toString(renderingTime.floor())}ms`),
+        cursor<-write(b``.join([headed] + rows)),
     ])
 
 def startCanvasMode(cursor) as DeepFrozen:
@@ -43,23 +46,29 @@ def startCanvasMode(cursor) as DeepFrozen:
 def stopCanvasMode(cursor) as DeepFrozen:
     return when (cursor<-showCursor(), cursor<-leaveAltScreen()) -> { null }
 
+def target :Double := 60.0
+
 def main(_argv, => currentRuntime, => stdio, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def [tri] + tris := [for _ in (0..!2) makeTriangle.withEntropy(entropy)]
     def term := activateTerminal(stdio)
     def cursor := term<-outputCursor()
-    def counter := makeFrameCounter()
     var stop := false
-    var renderingTime := 0.0
+    def &renderingTime := makeMMASlot(0.0)
+    def &fps := makeMMASlot(target)
     def go(t):
         if (stop) { return }
-        def fps := counter.observe(t)
+        fps := t.reciprocal()
         var drawable := tri(t)
         for tri in (tris):
             drawable := pd(drawable, tri(t), composite.over)
+        def header := b`  `.join([
+            b`Hello from the other side`,
+            b`FPS: ${M.toString(fps)}/${M.toString(target)}`,
+            b`Rendering time: ${M.toString(renderingTime.floor())}ms`,
+        ])
         def p := Timer.measureTimeTaken(fn {
-            drawOnto(term.height(), term.width(), drawable, cursor, fps,
-                     renderingTime)
+            drawOnto(term.height(), term.width(), drawable, cursor, header)
         })
         when (p) ->
             def [_, rt] := p
