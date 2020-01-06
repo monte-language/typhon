@@ -1,6 +1,6 @@
 import "fun/mcurses" =~ [=> activateTerminal]
 import "fun/shapes" =~ [=> triangle]
-import "lib/colors" =~ [=> composite, => pd]
+import "lib/colors" =~ [=> composite, => pd, => makeColor]
 import "lib/console" =~ [=> consoleDraw]
 import "lib/entropy/entropy" =~ [=> makeEntropy]
 exports (main)
@@ -21,12 +21,16 @@ def makePath(var x :Double, var dx :Double) as DeepFrozen:
         return x
 
 def makeTriangle.withEntropy(entropy) as DeepFrozen:
+    def color := M.call(makeColor, "RGB", [for _ in (0..!4) {
+        1.0 - entropy.nextExponential(7.0)
+    }], [].asMap())
     def paths := [for _ in (0..!6) {
         makePath(entropy.nextDouble(), entropy.nextExponential(5.0))
     }]
 
     return def advanceTri(t):
-        return M.call(triangle, "run", [for p in (paths) p.advance(t)], [].asMap())
+        return M.call(triangle, "run",
+                      [color] + [for p in (paths) p.advance(t)], [].asMap())
 
 def drawOnto(height, width, drawable, cursor, header) as DeepFrozen:
     def [_] + rows := consoleDraw.drawingFrom(drawable)(height, width)
@@ -50,7 +54,7 @@ def FPS_LIMIT :Double := 60.0
 
 def main(_argv, => currentRuntime, => stdio, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def [tri] + tris := [for _ in (0..!2) makeTriangle.withEntropy(entropy)]
+    def [tri] + tris := [for _ in (0..!5) makeTriangle.withEntropy(entropy)]
     def term := activateTerminal(stdio)
     def cursor := term<-outputCursor()
     var stop := false
