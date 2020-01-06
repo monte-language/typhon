@@ -46,7 +46,7 @@ def startCanvasMode(cursor) as DeepFrozen:
 def stopCanvasMode(cursor) as DeepFrozen:
     return when (cursor<-showCursor(), cursor<-leaveAltScreen()) -> { null }
 
-def target :Double := 60.0
+def FPS_LIMIT :Double := 60.0
 
 def main(_argv, => currentRuntime, => stdio, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
@@ -54,7 +54,8 @@ def main(_argv, => currentRuntime, => stdio, => Timer) as DeepFrozen:
     def term := activateTerminal(stdio)
     def cursor := term<-outputCursor()
     var stop := false
-    def &renderingTime := makeMMASlot(0.0)
+    var target :Double := FPS_LIMIT
+    def &renderingTime := makeMMASlot(100.0)
     def &fps := makeMMASlot(target)
     def go(t):
         if (stop) { return }
@@ -73,9 +74,14 @@ def main(_argv, => currentRuntime, => stdio, => Timer) as DeepFrozen:
         when (p) ->
             def [_, rt] := p
             renderingTime := rt * 1000
+            # Geometric mean of target and FPS, rendering time is
+            # seconds/frame so is already reciprocated
+            target := (target.reciprocal() + rt).reciprocal() * 2
+            # Buuuut! Hard-clamp at 60.
+            if (target > FPS_LIMIT) { target := FPS_LIMIT }
             when (def d := Timer.fromNow(target.reciprocal())) -> { go<-(d) }
     return when (startCanvasMode<-(cursor)) ->
         go(1.0)
-        when (Timer.fromNow(120.0)) ->
+        when (Timer.fromNow(60.0)) ->
             stop := true
             when (stopCanvasMode<-(cursor), term<-quit()) -> { 0 }
