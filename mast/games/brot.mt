@@ -1,6 +1,6 @@
 import "lib/complex" =~ [=> Complex, => makeComplex]
-exports (burningShip, mandelbrot,
-    countBrot, makeBrot)
+import "lib/colors" =~ [=> makeColor]
+exports (burningShip, mandelbrot, countBrot, makeBrot)
 
 def burningShip(z :Complex, c :Complex) :Complex as DeepFrozen:
     def a := makeComplex(z.real().abs(), z.imag().abs())
@@ -36,12 +36,13 @@ def makeBrot(xc :Double, yc :Double, height :Double) as DeepFrozen:
         def yr := yc + (height * (y - 0.5))
         escape ej:
             def count := countBrot(burningShip, makeComplex(xr, yr), ej, => maxIterations)
-            # Lerp from white to purple to blue, modulating everything by intensity.
-            return [
-                1.0 - (count / maxIterations),
-                1.0 - (count * 2 / maxIterations),
+            # Lerp from white to purple, modulating everything by intensity.
+            return makeColor.RGB(
                 1.0,
-            ]
+                1.0 - (count / maxIterations),
+                1.0,
+                1.0,
+            )
         catch _:
             # Probably in the set.
-            return [0.0] * 3
+            return makeColor.clear()

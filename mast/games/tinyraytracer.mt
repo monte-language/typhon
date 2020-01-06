@@ -1,3 +1,4 @@
+import "lib/colors" =~ [=> makeColor]
 exports (render, makeSphere, spheres, lights)
 
 # https://github.com/ssloy/tinyraytracer/wiki/Part-1:-understandable-raytracing
@@ -189,7 +190,8 @@ def render(spheres, lights) as DeepFrozen:
     return def draw.drawAt(x :Double, y :Double, => aspectRatio :Double := 1.0):
         def xr := (x - 0.5) * 2.0 * fov * aspectRatio
         def yr := (y - 0.5) * 2.0 * fov
-        return castRay(ORIGIN, norm([xr, yr, -1.0]), spheres, lights)
+        def [r, g, b] := castRay(ORIGIN, norm([xr, yr, -1.0]), spheres, lights)
+        return makeColor.RGB(r, g, b, 1.0)
 
 def spheres() as DeepFrozen:
     def ivory := makeMaterial(1.0, [0.6, 0.3, 0.1, 0.0], [0.4, 0.4, 0.3], 50.0)

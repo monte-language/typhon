@@ -10,7 +10,9 @@ def makePPM.drawingFrom(d) as DeepFrozen:
         def aspectRatio :Double := width / height
         for h in (0..!height):
             for w in (0..!width):
-                def rgb := d.drawAt(w / width, h / height, => aspectRatio)
-                for component in (rgb):
-                    body.push((255 * component.min(1.0).max(0.0)).floor())
+                def color := d.drawAt(w / width, h / height, => aspectRatio)
+                def [r, g, b, _] := color.sRGB()
+                body.push((255 * r).floor())
+                body.push((255 * g).floor())
+                body.push((255 * b).floor())
         return preamble + _makeBytes.fromInts(body)
