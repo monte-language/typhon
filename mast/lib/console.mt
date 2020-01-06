@@ -19,7 +19,7 @@ def colorCube(r :Double, g :Double, b :Double) :Bytes as DeepFrozen:
         b`$\x1b[38;5;232m`
     } else { b`$\x1b[38;5;${M.toString(rgb(r, g, b))}m` }
 
-def ramp :Bytes := b` .*+oO#0%@@`
+def ramp :Bytes := b` .*+oO0@@`
 def getRamp(a :Double) :Bytes as DeepFrozen:
     var i := (a * ramp.size()).floor()
     return if (i == ramp.size()) { ramp.slice(i - 1, i) } else {

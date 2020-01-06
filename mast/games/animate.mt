@@ -27,14 +27,14 @@ def makeTriangle.withEntropy(entropy) as DeepFrozen:
     return def advanceTri(t):
         return M.call(triangle, "run", [for p in (paths) p.advance(t)], [].asMap())
 
-def drawOnto(height, width, drawable, cursor, fps) as DeepFrozen:
+def drawOnto(height, width, drawable, cursor, fps, renderingTime) as DeepFrozen:
     def rows := consoleDraw.drawingFrom(drawable)(height, width)
     return promiseAllFulfilled([
         cursor<-clear(),
         cursor<-move(0, 0),
         cursor<-write(b``.join(rows)),
         cursor<-move(0, 0),
-        cursor<-write(b`Hello from the other side  FPS: ${M.toString(fps)}/${M.toString(target)}`),
+        cursor<-write(b`Hello from the other side  FPS: ${M.toString(fps)}/${M.toString(target)}  Rendering time: ${M.toString(renderingTime.floor())}ms`),
     ])
 
 def startCanvasMode(cursor) as DeepFrozen:
@@ -45,20 +45,28 @@ def stopCanvasMode(cursor) as DeepFrozen:
 
 def main(_argv, => currentRuntime, => stdio, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def tri1 := makeTriangle.withEntropy(entropy)
-    def tri2 := makeTriangle.withEntropy(entropy)
+    def [tri] + tris := [for _ in (0..!2) makeTriangle.withEntropy(entropy)]
     def term := activateTerminal(stdio)
     def cursor := term<-outputCursor()
     def counter := makeFrameCounter()
     var stop := false
+    var renderingTime := 0.0
     def go(t):
         if (stop) { return }
         def fps := counter.observe(t)
-        def drawable := pd(tri1(t), tri2(t), composite.over)
-        when (drawOnto(term.height(), term.width(), drawable, cursor, fps)) ->
+        var drawable := tri(t)
+        for tri in (tris):
+            drawable := pd(drawable, tri(t), composite.over)
+        def p := Timer.measureTimeTaken(fn {
+            drawOnto(term.height(), term.width(), drawable, cursor, fps,
+                     renderingTime)
+        })
+        when (p) ->
+            def [_, rt] := p
+            renderingTime := rt * 1000
             when (def d := Timer.fromNow(target.reciprocal())) -> { go<-(d) }
     return when (startCanvasMode<-(cursor)) ->
         go(1.0)
-        when (Timer.fromNow(60.0)) ->
+        when (Timer.fromNow(120.0)) ->
             stop := true
             when (stopCanvasMode<-(cursor), term<-quit()) -> { 0 }

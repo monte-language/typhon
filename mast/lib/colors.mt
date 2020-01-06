@@ -25,8 +25,8 @@ def _makeColor(r :Chan, g :Chan, b :Chan, a :Chan) :DeepFrozen as DeepFrozen:
         "
         A sample from four-dimensional color space.
 
-        Specifically, this color is stored in linear sRGB color space.
-        Internally, we allocate a Double for each channel.
+        Specifically, this color is stored in linear sRGB color space. Color
+        channels are premultiplied with the alpha channel.
         "
 
         to alpha():
@@ -95,15 +95,24 @@ object makeColor as DeepFrozen:
         return clear
 
     to sRGB(red :Double, green :Double, blue :Double, alpha :Double):
-        "An sRGB color sample."
+        "
+        An sRGB color sample.
 
-        return _makeColor(sRGB2linear(red), sRGB2linear(green),
-                          sRGB2linear(blue), alpha)
+        Colors will be multiplied by `alpha`.
+        "
+
+        return _makeColor(sRGB2linear(red) * alpha,
+                          sRGB2linear(green) * alpha,
+                          sRGB2linear(blue) * alpha, alpha)
 
     to RGB(red :Double, green :Double, blue :Double, alpha :Double):
-        "A linear RGB color sample."
+        "
+        A linear RGB color sample.
 
-        return _makeColor(red, green, blue, alpha)
+        Colors will be multiplied by `alpha`.
+        "
+
+        return _makeColor(red * alpha, green * alpha, blue * alpha, alpha)
 
 def pd(src, dest, op) as DeepFrozen:
     "
@@ -141,7 +150,7 @@ object composite as DeepFrozen:
         def [sr, sg, sb, sa] := s.RGB()
         def [dr, dg, db, da] := d.RGB()
         def ra := sa + da * (1 - sa)
-        def rr := (sr * sa + dr * da * (1 - sa)) / ra
-        def rg := (sg * sa + dg * da * (1 - sa)) / ra
-        def rb := (sb * sa + db * da * (1 - sa)) / ra
-        return makeColor.RGB(rr, rg, rb, ra)
+        def rr := (sr + dr * (1 - sa))
+        def rg := (sg + dg * (1 - sa))
+        def rb := (sb + db * (1 - sa))
+        return _makeColor(rr, rg, rb, ra)
