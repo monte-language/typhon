@@ -70,14 +70,18 @@ def main(_argv, => currentRuntime, => stdio, => Timer) as DeepFrozen:
         def header := b`  `.join([
             b`Hello from the other side`,
             b`FPS: ${M.toString(fps)}/${M.toString(target)}`,
-            b`Rendering time: ${M.toString(renderingTime.floor())}ms`,
+            # XXX Monte parser bug: I can't start this long out-of line with
+            # ${ and have to instead start it with a (.
+            b`Rendering time per fragment: ${M.toString(
+                (renderingTime / (term.width() * term.height())).floor()
+            )}us`,
         ])
         def p := Timer.measureTimeTaken(fn {
             drawOnto(term.height(), term.width(), drawable, cursor, header)
         })
         when (p) ->
             def [_, rt] := p
-            renderingTime := rt * 1000
+            renderingTime := rt * 1_000_000
             # Geometric mean of target and FPS, rendering time is
             # seconds/frame so is already reciprocated
             target := (target.reciprocal() + rt).reciprocal() * 2
