@@ -1,5 +1,4 @@
-import "unittest" =~ [=> unittest :Any]
-exports (parse, assemble, concat, polyMonte)
+exports (parse, assemble, catMonte)
 
 def specials :Set[Char] := "(), ".asSet()
 
@@ -47,18 +46,15 @@ def assemble(cat :DeepFrozen, path :List) as DeepFrozen:
         rv := cat.compose(rv, f)
     return rv
 
-object polyMonte as DeepFrozen:
+object catMonte as DeepFrozen:
     to id():
         return fn x { x }
 
     to compose(f, g):
         return fn x { g(f(x)) }
 
-    to unit(size :Int):
-        return [null] * size
-
     to pair(left, right):
-        return [left, right]
+        return fn x { [left(x), right(x)] }
 
     to exl():
         return fn [l, _] { l }
@@ -66,151 +62,62 @@ object polyMonte as DeepFrozen:
     to exr():
         return fn [_, r] { r }
 
-    to braid():
-        return fn [l, r] { [r, l] }
-
-    to diagonal():
-        return fn x { [x, x] }
+    to unit():
+        return fn _ { [] }
 
     to apply():
         return fn [f, x] { f(x) }
 
-# http://tunes.org/~iepos/joy.html
+    to curry(f):
+        return fn x { fn y { f([x, y]) } }
 
-# This is a theory of concatenative combinators. We will show that some common
-# combinators yield a Turing category.
+    to uncurry(f):
+        return fn [x, y] { f(x)(y) }
 
-object concat as DeepFrozen:
+    to "0"():
+        return fn _ { 0 }
+
+    to succ():
+        return fn x { x + 1 }
+
+    to pr(q, f):
+        return fn x { var rv := q([]); for _ in (0..!x) { rv := f(rv) }; rv }
+
+object autoMonte as DeepFrozen:
+    "
+    Monte primitives as a low-level automaton.
+    "
+
+    # We use Mealy machines in the above category of functions.
+    # Our machine state is a list/array of Monte values, and our inputs and
+    # outputs are single Monte values. A machine skeleton:
+    # fn s, i { [s', o] }
+
+    # However, we are implementing the *simulations*. A simulation sends
+    # machines to machines.
+
     to id():
-        return []
+        return fn m { m }
 
-    to compose(x, y):
-        return x + y
+    to compose(f, g):
+        return fn x { g(f(x)) }
 
-    to unit(size :Int):
-        return ["drop"] * size
-
-    to pair(left :List, right :List):
-        return right + left
+    to pair(left, right):
+        return fn x {
+            def lx := left(x)
+            def rx := right(x)
+            fn s, i {
+                def [sl, ol] := lx(s, i)
+                def [sr, or] := rx(s, i)
+                [[sl, sr], [ol, or]]
+            }
+        }
 
     to exl():
-        return ["drop"]
+        return fn x { fn [s, _], [i, _] { [s, i] } }
 
     to exr():
-        return ["swap", "drop"]
+        return fn x { fn [_, s], [_, i] { [s, i] } }
 
-    to braid():
-        return ["swap"]
-
-    to diagonal():
-        return ["dup"]
-
-# The internal hom is encoded using quotations. As a consequence, every
-# internal hom comes with source code.
-
-    to apply():
-        return ["swap", "i"]
-
-    to tuple():
-        return [["i", "swap"], "cons"]
-
-    to lift():
-        return [[[["i"], "cons"], "dip", ["dip"], "dip", "i", "cons"],
-                "cons", "cons", "cons"]
-
-    to curry():
-        return [[[["i"]], "dip", ["cons", "dip", "i"], "dip", "i"], "cons",
-                "cons", "cons"]
-
-    to uncurry():
-        return [[["swap"], "dip", "i", "i"], "cons"]
-
-    to codeApply():
-        return [["i", "swap", "cat"], "cons"]
-
-    to codeLambda():
-        return ["i"]
-
-# Products are encoded directly using the stack. This gives a strict monoidal
-# product, so that we do not need to check the triangle nor pentagon
-# identities.
-
-def reduce(q :List) :List as DeepFrozen:
-    "Shrink a quotation according to the equivalence of stack effects."
-
-    # Keep this sorted.
-    return switch (q) {
-        match [=="dup", =="drop"] + rest { reduce(rest) }
-        match [=="dup", =="swap"] + rest { reduce(["dup"] + rest) }
-        match [=="swap", =="swap"] + rest { reduce(rest) }
-        match [[[=="i"], =="dip", =="i"], =="cons", =="cons"] + rest {
-            reduce(["cat"] + rest)
-        }
-        match [[], =="cons"] + rest { reduce(["unit"] + rest) }
-        match [q :List] + rest { [reduce(q)] + reduce(rest) }
-        match [head] + rest { [head] + reduce(rest) }
-        match _ { q }
-    }
-
-def catReduceCartesian(assert):
-    def diag := concat.diagonal()
-    def e := concat.unit(1)
-    def left := concat.pair([], e)
-    def right := concat.pair(e, [])
-
-    assert.equal(reduce(diag + left), [])
-    assert.equal(reduce(diag + right), [])
-    assert.equal(concat.exl(), reduce(left))
-    assert.equal(concat.exr(), reduce(right))
-
-def catReduceBraid(assert):
-    assert.equal(reduce(concat.braid() + concat.braid()), [])
-
-def catReduceCurry(assert):
-    assert.equal(reduce(concat.curry() + concat.uncurry()), [])
-    assert.equal(reduce(concat.uncurry() + concat.curry()), [])
-
-def catReduceTuring(assert):
-    assert.equal(reduce(concat.codeApply() + concat.codeLambda()), [])
-
-unittest([
-    catReduceCartesian,
-    catReduceBraid,
-    catReduceCurry,
-    catReduceTuring,
-])
-
-def makeInterpreter() as DeepFrozen:
-    def stack := [].diverge()
-
-    return def interpret(q :List):
-        for inst in (q):
-            switch (inst) {
-                match =="cat" {
-                    def r := stack.pop()
-                    def l := stack.pop()
-                    stack.push(l + r)
-                }
-                match =="cons" {
-                    def t := stack.pop()
-                    def h := stack.pop()
-                    stack.push([h] + t)
-                }
-                match =="dip" {
-                    def f := stack.pop()
-                    def s := stack.pop()
-                    interpret(f)
-                    stack.push(s)
-                }
-                match =="drop" { stack.pop() }
-                match =="dup" { stack.push(stack.last()) }
-                match =="i" { interpret(stack.pop()) }
-                match =="swap" {
-                    def x := stack.pop()
-                    def y := stack.pop()
-                    stack.push(x)
-                    stack.push(y)
-                }
-                match l :List { stack.push(l) }
-            }
-        return stack.snapshot()
+    to unit():
+        return fn x { fn _, i { i } }
