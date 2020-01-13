@@ -43,9 +43,14 @@ def consoleDraw.drawingFrom(d) as DeepFrozen:
     return def draw(height :(Int > 0), width :(Int > 0)):
         "Draw a drawable to `height` rows of characters."
         def aspectRatio := width / height
+        def dh := height.asDouble().reciprocal() * 0.5
+        def dw := width.asDouble().reciprocal() * 0.5
         return [for h in (0..!height) {
             b``.join([for w in (0..!width) {
-                def color := d.drawAt(w / width, h / height, => aspectRatio)
+                # Pixel sample location: One sample drawn right in the middle
+                # of each bounding box. Super-rough.
+                def color := d.drawAt(dw + w / width, dh + h / height,
+                                      => aspectRatio)
                 def [r, g, b, a] := color.sRGB()
                 colorCube(r, g, b) + getRamp(a)
             }]) + resetColor
