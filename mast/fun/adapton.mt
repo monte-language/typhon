@@ -1,4 +1,5 @@
-exports (adapton)
+import "fun/stores" =~ [=> Location, => Store]
+exports (makeSheet)
 
 # http://adapton.org/
 
@@ -8,89 +9,68 @@ exports (adapton)
 # understands when only part of a system has changed, and incrementally
 # updates the system in a way that attempts to minimize extra work.
 
-def addEdge(sup, sub) as DeepFrozen:
-    sub.addSuperEdge(sup)
-    sup.addSubEdge(sub)
+def keyFetch(m, k :Str) as DeepFrozen:
+    return m.fetch(k, fn { m[k] := [].asSet().diverge() })
 
-def delEdge(sup, sub) as DeepFrozen:
-    sub.delSuperEdge(sup)
-    sup.delSubEdge(sub)
+def makeSheet() as DeepFrozen:
+    "
+    Generate a fresh sheet.
 
-# XXX split thunk implementation into thunks and refs?
+    Each sheet has its own namespace and private storage.
+    "
 
-def makeThunk(thunk, var result, var clean :Bool) as DeepFrozen:
-    def sub := [].asSet().diverge()
-    def sup := [].asSet().diverge()
-    return object adaptonThunk:
-        to addSuperEdge(a):
-            sup.include(a)
+    # Indeed, by the folklore of containment, each sheet ought to be isolated
+    # from each other! We don't take special effort to ensure this, though.
 
-        to delSuperEdge(a):
-            if (sup.contains(a)):
-                sup.remove(a)
+    def thunks := [].asMap().diverge(Str, DeepFrozen)
+    # Hygiene to avoid storing cleanliness bits: When a value is invalidated,
+    # we remove it from storage entirely.
+    def results := [].asMap().diverge(Str, DeepFrozen)
+    # Super-links: Each link goes up.
+    def sups := [].asMap().diverge()
+    # Sub-links: Each link goes down.
+    def subs := [].asMap().diverge()
 
-        to addSubEdge(a):
-            sub.include(a)
+    def dirty(k):
+        if (results.contains(k)):
+            results.removeKey(k)
+            for a in (keyFetch(sups, k)) { dirty(a) }
 
-        to delSubEdge(a):
-            if (sub.contains(a)):
-                sub.remove(a)
+    def addEdge(sup, sub):
+        traceln(`edge + $sup $sub`)
+        keyFetch(subs, sub).include(sup)
+        keyFetch(sups, sup).include(sub)
 
-        to result():
-            return result
+    def delEdge(sup, sub):
+        traceln(`edge - $sup $sub`)
+        keyFetch(subs, sub).remove(sup)
+        keyFetch(sups, sup).remove(sub)
 
-        to compute():
-            return if (clean) { result } else {
-                for a in (sub) { 
-                    delEdge(adaptonThunk, a)
-                }
-                clean := true
-                result := thunk()
-                adaptonThunk.compute()
-            }
+    def trackingCellsRun(thunk):
+        def seen := [].asSet().diverge()
+        def cells.get(k):
+            seen.include(k)
+            return results[k]
+        def rv := thunk(cells)
+        traceln(`run $thunk -> $rv (seen ${seen.asList()})`)
+        return [rv, seen.snapshot()]
 
-        to dirty():
-            if (clean):
-                clean := false
-                for a in (sup):
-                    a.dirty()
+    return def sheet(k :Str) as Store:
+        "
+        An incrementally-computed network of values.
+        "
 
-        to set(v):
-            result := v
-            adaptonThunk.dirty()
-
-def makeForcer() as DeepFrozen:
-    var currentlyAdapting := null
-    return def force(a):
-        def prevAdapting := currentlyAdapting
-        currentlyAdapting := a
-        def result := a.compute()
-        currentlyAdapting := prevAdapting
-        if (currentlyAdapting != null):
-            addEdge(currentlyAdapting, a)
-        return result
-
-object adapton as DeepFrozen:
-    to newRef(val):
-        def t := makeThunk(t.result, val, true)
-        return object refSlot:
+        return object cell as Location:
             to get():
-                return t.compute()
-            to put(v):
-                t.set(v)
-            to getGuard():
-                return Any
-            to ref():
-                return t
-
-    to newThunk(f):
-        return makeThunk(f, null, false)
-
-    to addEdge(sup, sub):
-        addEdge(sup, sub)
-
-    to delEdge(sup, sub):
-        delEdge(sup, sub)
-
-    to force(a):
-        return makeForcer()(a)
+                return results.fetch(k, fn {
+                    # Drop all sub-edges.
+                    for a in (keyFetch(subs, k)) { delEdge(k, a) }
+                    def [res, seen] := trackingCellsRun(thunks[k])
+                    # Add new sub-edges for everything just used.
+                    for a in (seen) { addEdge(k, a) }
+                    # XXX check fixed point?
+                    results[k] := res
+                })
+            to put(value :DeepFrozen):
+                thunks[k] := def just(_cells) as DeepFrozen { return value }
+                dirty(k)
