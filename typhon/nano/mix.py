@@ -10,16 +10,14 @@ The separation allows us to make the first part short and sweet.
 
 from collections import OrderedDict
 
-from typhon.errors import Ejecting, UserException
+from typhon.errors import UserException
 from typhon.nano.scopes import SEV_BINDING, SEV_NOUN, SEV_SLOT
 from typhon.nano.structure import AtomIR
-from typhon.objects.auditors import deepFrozenGuard
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
                                  StrObject)
-from typhon.objects.ejectors import Ejector
 from typhon.objects.guards import FinalSlotGuard, VarSlotGuard, anyGuard
 from typhon.objects.user import Audition
-from typhon.objects.slots import Binding, FinalSlot, VarSlot
+from typhon.objects.slots import FinalSlot, VarSlot
 
 from typhon.nano.mast import BuildKernelNodes
 from typhon.objects.user import AuditClipboard
@@ -28,7 +26,6 @@ from typhon.objects.user import AuditClipboard
 def mix(ast, outers):
     ast = FillOuters(outers).visitExpr(ast)
     ast = ThawLiterals().visitExpr(ast)
-    ast = SpecializeCalls().visitExpr(ast)
     ast = SplitAuditors().visitExpr(ast)
     ast = DischargeAuditors().visitExpr(ast)
     return ast
@@ -120,77 +117,8 @@ class ThawLiterals(NoOutersIR.makePassTo(NoLiteralsIR)):
     def visitStrExpr(self, s, span):
         return self.dest.LiveExpr(StrObject(s), span)
 
-MixIR = NoLiteralsIR.extend("Mix",
-    ["Exception"],
-    {
-        "Expr": {
-            "ExceptionExpr": [("exception", "Exception")],
-        }
-    }
-)
 
-# XXX I don't know why this isn't defined anywhere else. The version in
-# t.o.refs is suspect. ~ C.
-def isDeepFrozen(obj):
-    with Ejector(u"isDeepFrozen") as ej:
-        try:
-            deepFrozenGuard.coerce(obj, ej)
-            return True
-        except Ejecting as ex:
-            if ex.ejector is not ej:
-                raise
-    return False
-
-class SpecializeCalls(NoLiteralsIR.makePassTo(MixIR)):
-
-    def enliven(self, expr):
-        """
-        If `expr` is live and DeepFrozen or thawable, return the live object.
-
-        Otherwise, return None.
-        """
-
-        # Side-effect: The live object might have observable side effects even
-        # though it is DeepFrozen; in particular, traceln() comes to mind. If
-        # it *is* traceln(), then we make an effort to not write misleading
-        # things into the debug log. ~ C.
-
-        if isinstance(expr, self.dest.LiveExpr):
-            obj = expr.obj
-
-            # Special case for traceln().
-            from typhon.scopes.safe import TraceLn
-            if isinstance(obj, TraceLn):
-                return None
-
-            if isinstance(obj, Binding) or isinstance(obj, FinalSlot):
-                return obj
-            elif isDeepFrozen(obj):
-                return obj
-        return None
-
-    def visitCallExpr(self, obj, atom, args, namedArgs, span):
-        obj = self.visitExpr(obj)
-        args = [self.visitExpr(arg) for arg in args]
-        namedArgs = [self.visitNamedArg(namedArg) for namedArg in namedArgs]
-        liveObj = self.enliven(obj)
-        if liveObj is not None:
-            liveArgs = [self.enliven(arg) for arg in args]
-            if None not in liveArgs:
-                # XXX named args
-                if not namedArgs:
-                    try:
-                        result = liveObj.call(atom.verb, liveArgs)
-                        assert result is not None, "livewire"
-                        if isDeepFrozen(result):
-                            return self.dest.LiveExpr(result, span)
-                        # print "Not DF:", str(result)[:50]
-                    except UserException as ue:
-                        return self.dest.ExceptionExpr(ue, span)
-        return self.dest.CallExpr(obj, atom, args, namedArgs, span)
-
-
-SplitAuditorsIR = MixIR.extend(
+SplitAuditorsIR = NoLiteralsIR.extend(
     "SplitAuditors",
     ["AST"],
     {
@@ -204,7 +132,7 @@ SplitAuditorsIR = MixIR.extend(
 )
 
 
-class SplitAuditors(MixIR.makePassTo(SplitAuditorsIR)):
+class SplitAuditors(NoLiteralsIR.makePassTo(SplitAuditorsIR)):
 
     def visitObjectExpr(self, patt, guards, auditors, script, span):
         patt = self.visitPatt(patt)
