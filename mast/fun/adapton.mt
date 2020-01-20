@@ -33,27 +33,39 @@ def makeSheet() as DeepFrozen:
 
     def dirty(k):
         if (results.contains(k)):
+            traceln(`dirty $k`)
             results.removeKey(k)
             for a in (keyFetch(sups, k)) { dirty(a) }
 
     def addEdge(sup, sub):
         traceln(`edge + $sup $sub`)
-        keyFetch(subs, sub).include(sup)
-        keyFetch(sups, sup).include(sub)
+        keyFetch(subs, sup).include(sub)
+        keyFetch(sups, sub).include(sup)
 
     def delEdge(sup, sub):
         traceln(`edge - $sup $sub`)
-        keyFetch(subs, sub).remove(sup)
-        keyFetch(sups, sup).remove(sub)
+        if ((def s := keyFetch(subs, sup)).contains(sub)):
+            s.remove(sub)
+        if ((def s := keyFetch(sups, sub)).contains(sup)):
+            s.remove(sup)
 
     def trackingCellsRun(thunk):
-        def seen := [].asSet().diverge()
-        def cells.get(k):
-            seen.include(k)
-            return results[k]
-        def rv := thunk(cells)
-        traceln(`run $thunk -> $rv (seen ${seen.asList()})`)
-        return [rv, seen.snapshot()]
+        return escape ej:
+            var seen := [].asSet().diverge()
+            object cells:
+                to get(k):
+                    seen.include(k)
+                    return results.fetch(k, fn { ej(k) })
+                to fetch(k, f):
+                    seen.include(k)
+                    return results.fetch(k, f)
+            def rv := thunk(cells)
+            traceln(`run $thunk -> $rv (seen ${seen.asList()})`)
+            [rv, seen.snapshot()]
+        catch missingKey:
+            missingKey
+
+    object bottom {}
 
     return def sheet(k :Str) as Store:
         "
@@ -62,15 +74,28 @@ def makeSheet() as DeepFrozen:
 
         return object cell as Location:
             to get():
-                return results.fetch(k, fn {
+                traceln(`get $k`)
+                def go():
                     # Drop all sub-edges.
                     for a in (keyFetch(subs, k)) { delEdge(k, a) }
-                    def [res, seen] := trackingCellsRun(thunks[k])
-                    # Add new sub-edges for everything just used.
-                    for a in (seen) { addEdge(k, a) }
-                    # XXX check fixed point?
-                    results[k] := res
-                })
+                    return when (def run := trackingCellsRun<-(thunks[k])) ->
+                        if (run =~ [res, seen]) {
+                            # Add new sub-edges for everything just used.
+                            for a in (seen) { addEdge(k, a) }
+                            # Check for whether we are recursive and, if so, whether
+                            # we have reached a fixpoint yet.
+                            if (seen.contains(k) &&
+                                res != results.fetch(k, &bottom.get)) {
+                                traceln(`recursing on $k`)
+                                results[k] := res
+                                go()
+                            } else { results[k] := res }
+                        } else {
+                            # Missing key. Go re-run this subcomputation, since
+                            # its result is gone. Then, try again.
+                            when (sheet(run)<-get()) -> { go() }
+                        }
+                return results.fetch(k, go)
             to put(value :DeepFrozen):
-                thunks[k] := def just(_cells) as DeepFrozen { return value }
+                thunks[k] := value
                 dirty(k)
