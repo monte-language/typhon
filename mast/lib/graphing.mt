@@ -34,10 +34,12 @@ def calculateGraph(f, height :Int, width :Int, x1 :Double, y1 :Double,
         # through f(), changing multiplication to division and addition to
         # subtraction.
         def ys := [for i in (0..!glyphsSize) {
-            f(column * sx + (0.05 * i) + x1)
+            # If f() isn't defined on the interval, then that's fine; just NaN
+            # instead, and we'll handle NaN in a moment.
+            try { f(column * sx + (0.05 * i) + x1) } catch _ { NaN }
         }]
         # The viewport is upside-down, remember?
-        def superrows := [for y in (ys) {
+        def superrows := [for y in (ys) ? (y != NaN) {
             ((height - ((y - y1) / sy)) * glyphsSize).floor()
         }]
         def rows := [for sr in (superrows)
