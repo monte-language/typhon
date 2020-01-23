@@ -327,7 +327,8 @@ class DoubleObject(Object):
 
         try:
             return math.pow(self._d, exponent)
-        except OverflowError:
+        # ValueError here means negative number raised to non-integral power
+        except (OverflowError, ValueError):
             raise userError(u"Cannot raise %f to exponent %f" % (self._d,
                 exponent))
 
