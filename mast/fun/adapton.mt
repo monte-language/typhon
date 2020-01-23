@@ -1,5 +1,5 @@
 import "fun/stores" =~ [=> Location, => Store]
-exports (makeSheet)
+exports (constantly, makeSheet)
 
 # http://adapton.org/
 
@@ -11,6 +11,15 @@ exports (makeSheet)
 
 def keyFetch(m, k :Str) as DeepFrozen:
     return m.fetch(k, fn { m[k] := [].asSet().diverge() })
+
+def constantly(x :DeepFrozen) as DeepFrozen:
+    "
+    The constant function which always returns `x`.
+
+    This is a good way to put constant values into a sheet.
+    "
+
+    return def const(_cells) as DeepFrozen { return x }
 
 def makeSheet() as DeepFrozen:
     "
@@ -33,17 +42,14 @@ def makeSheet() as DeepFrozen:
 
     def dirty(k):
         if (results.contains(k)):
-            traceln(`dirty $k`)
             results.removeKey(k)
             for a in (keyFetch(sups, k)) { dirty(a) }
 
     def addEdge(sup, sub):
-        traceln(`edge + $sup $sub`)
         keyFetch(subs, sup).include(sub)
         keyFetch(sups, sub).include(sup)
 
     def delEdge(sup, sub):
-        traceln(`edge - $sup $sub`)
         if ((def s := keyFetch(subs, sup)).contains(sub)):
             s.remove(sub)
         if ((def s := keyFetch(sups, sub)).contains(sup)):
@@ -60,7 +66,6 @@ def makeSheet() as DeepFrozen:
                     seen.include(k)
                     return results.fetch(k, f)
             def rv := thunk(cells)
-            traceln(`run $thunk -> $rv (seen ${seen.asList()})`)
             [rv, seen.snapshot()]
         catch missingKey:
             missingKey
@@ -74,7 +79,6 @@ def makeSheet() as DeepFrozen:
 
         return object cell as Location:
             to get():
-                traceln(`get $k`)
                 def go():
                     # Drop all sub-edges.
                     for a in (keyFetch(subs, k)) { delEdge(k, a) }
@@ -86,7 +90,6 @@ def makeSheet() as DeepFrozen:
                             # we have reached a fixpoint yet.
                             if (seen.contains(k) &&
                                 res != results.fetch(k, &bottom.get)) {
-                                traceln(`recursing on $k`)
                                 results[k] := res
                                 go()
                             } else { results[k] := res }
