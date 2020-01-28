@@ -53,7 +53,7 @@ def unsafeScope(config):
         u"Timer": Timer(),
         u"bench": bench(),
         u"currentProcess": makeCurrentProcess(config),
-        u"currentRuntime": CurrentRuntime(),
+        u"currentRuntime": CurrentRuntime(config),
         u"_findTyphonFile": FindTyphonFile(config.libraryPaths),
         u"getAddrInfo": getAddrInfo(),
         u"makeFileResource": makeFileResource(),

@@ -6,7 +6,7 @@ from typhon.autohelp import autohelp, method
 from typhon.nano.interp import InterpObject
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.collections.maps import monteMap
-from typhon.objects.data import IntObject, StrObject
+from typhon.objects.data import IntObject, StrObject, unwrapBytes, wrapBytes
 from typhon.objects.root import Object
 
 
@@ -139,6 +139,27 @@ def makeReactorStats():
 
 
 @autohelp
+class ConfigConfig(Object):
+    """
+    Allow changing some settings of the runtime.
+    """
+
+    def __init__(self, config):
+        self._config = config
+
+    @method("List")
+    def getLoggingTags(self):
+        "The current logging tags."
+        return [wrapBytes(bs) for bs in self._config.loggerTags]
+
+    @method("Void", "List")
+    def setLoggingTags(self, tags):
+        "Change the logging tags."
+        self._config.loggerTags = [unwrapBytes(bs) for bs in tags]
+        self._config.enableLogging()
+
+
+@autohelp
 class CurrentRuntime(Object):
     """
     The Typhon runtime.
@@ -148,6 +169,9 @@ class CurrentRuntime(Object):
 
     This object is necessarily unsafe and nondeterministic.
     """
+
+    def __init__(self, config):
+        self._config = config
 
     @method("Any")
     def getCrypt(self):
@@ -161,3 +185,7 @@ class CurrentRuntime(Object):
     @method("Any")
     def getReactorStatistics(self):
         return makeReactorStats()
+
+    @method("Any")
+    def getConfiguration(self):
+        return ConfigConfig(self._config)
