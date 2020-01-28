@@ -104,5 +104,7 @@ class Configuration(object):
 
     def enableLogging(self):
         from typhon import log
+        tags = {}
         for tag in self.loggerTags:
-            log.logger.tags[tag] = None
+            tags[tag] = None
+        log.logger.tags = tags
