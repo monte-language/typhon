@@ -9,6 +9,7 @@ from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
 from typhon.futures import IOEvent
+from typhon.log import log
 from typhon.objects.collections.maps import monteMap
 from typhon.objects.data import BytesObject, StrObject, unwrapBytes
 from typhon.objects.networking.streamcaps import (StreamSink, StreamSource,
@@ -275,6 +276,15 @@ class SpawnProcessIOEvent(IOEvent):
         self.streams = streams
 
     def run(self):
+        NULL = nullptr(ruv.stream_t)
+        indices = [str(i) for i, ptr in enumerate(self.streams)
+                   if ptr != NULL]
+        log(["uv", "process"],
+            ("Spawning subprocess '%s', args '%s', env '%s', FDs %s" %
+                (self.executable,
+                 " ".join(self.argv),
+                 self.packedEnv,
+                 " ".join(indices))).decode("utf-8"))
         ruv.spawn(self.vat.uv_loop, self.process,
                   file=self.executable, args=self.argv, env=self.packedEnv,
                   streams=self.streams)
