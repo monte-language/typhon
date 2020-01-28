@@ -591,21 +591,19 @@ class Promise(Object):
         # Strangely, we cannot be part of the looping problem here!
         return self.isResolved()
 
-    def recv(self, atom, args):
-        from typhon.objects.collections.maps import EMPTY_MAP
+    def recvNamed(self, atom, args, namedArgs):
+        # Is it _whenMoreResolved? If not, treat it like a call.
         if atom is _WHENMORERESOLVED_1:
-            return self._whenMoreResolved(args[0])
+            callback = args[0]
+            from typhon.objects.collections.maps import EMPTY_MAP
+            # Welcome to _whenMoreResolved.
+            # This method's implementation, in Monte, should be:
+            # to _whenMoreResolved(callback): callback<-(self)
+            vat = currentVat.get()
+            vat.sendOnly(callback, RUN_1, [self], EMPTY_MAP)
+            return NullObject
 
-        return self.callAll(atom, args, EMPTY_MAP)
-
-    def _whenMoreResolved(self, callback):
-        from typhon.objects.collections.maps import EMPTY_MAP
-        # Welcome to _whenMoreResolved.
-        # This method's implementation, in Monte, should be:
-        # to _whenMoreResolved(callback): callback<-(self)
-        vat = currentVat.get()
-        vat.sendOnly(callback, RUN_1, [self], EMPTY_MAP)
-        return NullObject
+        return self.callAll(atom, args, namedArgs)
 
     # Eventual sends.
 

@@ -234,18 +234,14 @@ class Object(object):
             return NullObject
         return None
 
+    # Override this method to customize dispatch behavior. You are responsible
+    # for Miranda methods if you do this!
     def recvNamed(self, atom, args, namedArgs):
-        try:
-            return self.recv(atom, args)
-        except Refused:
-            val = self.mirandaMethods(atom, args, namedArgs)
-            if val is None:
-                raise
-            else:
-                return val
-
-    def recv(self, atom, args):
-        raise Refused(self, atom, args)
+        val = self.mirandaMethods(atom, args, namedArgs)
+        if val is None:
+            raise Refused(self, atom, args)
+        else:
+            return val
 
     # Auditors.
 
@@ -347,14 +343,18 @@ def runnable(singleAtom=None, _stamps=[]):
             def respondingAtoms(self):
                 return {theAtom: doc}
 
-            def recv(self, atom, listArgs):
+            def recvNamed(self, atom, args, namedArgs):
                 if atom is theAtom:
-                    args = ()
+                    targs = ()
                     for i in unrolledArity:
-                        args += (listArgs[i],)
-                    return f(*args)
+                        targs += (args[i],)
+                    return f(*targs)
                 else:
-                    raise Refused(self, atom, listArgs)
+                    val = self.mirandaMethods(atom, args, namedArgs)
+                    if val is None:
+                        raise Refused(self, atom, args)
+                    else:
+                        return val
 
         return runnableObject
 
