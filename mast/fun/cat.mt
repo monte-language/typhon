@@ -1,4 +1,5 @@
-exports (parse, assemble, catMonte)
+import "lib/asdl" =~ [=> asdlParser]
+exports (parse, assemble, catMonte, computationGraph, ports)
 
 def specials :Set[Char] := "(), ".asSet()
 
@@ -121,3 +122,112 @@ object autoMonte as DeepFrozen:
 
     to unit():
         return fn x { fn _, i { i } }
+
+# http://conal.net/papers/compiling-to-categories/compiling-to-categories.pdf
+# p8
+
+def ports :DeepFrozen := asdlParser(mpatt`ports`, `
+    ports = UnitP
+          | BoolP(int)
+          | DoubleP(int)
+          | IntP(int)
+          | PairP(ports, ports)
+          | FunP(df)
+`, null)
+
+object state as DeepFrozen:
+    "The State monad."
+
+    to pure(x :DeepFrozen):
+        return def pureState(s) as DeepFrozen { return [x, s] }
+
+    to fmap(f :DeepFrozen):
+        return def fmapState(action :DeepFrozen) as DeepFrozen:
+            return def mappedState(s1) as DeepFrozen:
+                def [x, s2] := action(s1)
+                return [f(x), s2]
+
+    to join(action :DeepFrozen):
+        return def joinState(s1) as DeepFrozen:
+            def [act, s2] := action(s1)
+            return act(s2)
+
+    to ">>="(action :DeepFrozen, f :DeepFrozen):
+        return def bindState(s1) as DeepFrozen:
+            def [x, s2] := action(s1)
+            return f(x)(s2)
+
+    to liftA2(f :DeepFrozen, a1 :DeepFrozen, a2 :DeepFrozen):
+        return def liftA2State(s1) as DeepFrozen:
+            def [x, s2] := a1(s1)
+            def [y, s3] := a2(s2)
+            return [f(x, y), s3]
+
+    to get():
+        return def getState(s) as DeepFrozen:
+            return [s, s]
+
+    to put(x :DeepFrozen):
+        return def putState(s) as DeepFrozen:
+            return [null, x]
+
+    to modify(f :DeepFrozen):
+        return def modifyState(s) as DeepFrozen:
+            return [null, f(s)]
+
+def const(x :DeepFrozen) as DeepFrozen:
+    return def constantly(_) as DeepFrozen { return x }
+
+def genPorts(arity :Int) as DeepFrozen:
+    return state.">>="(state.get(), def g1([o :Int, comps]) as DeepFrozen {
+        return state.">>="(state.put([o + arity, comps]),
+                           const(state.pure(o)))
+    })
+
+def makeCompGraph(compName :Str, arity :Int, f :DeepFrozen) as DeepFrozen:
+    return def compGraph(ps :DeepFrozen) as DeepFrozen:
+        return state.">>="(genPorts(arity), def compPort(p :DeepFrozen) as DeepFrozen {
+            def new :DeepFrozen := M.call(f, "run",
+                                          _makeList.fromIterable(p..!(p + arity)),
+                                          [].asMap())
+            def append([o, comps]) as DeepFrozen {
+                return [o, comps.with([compName, ps, new])]
+            }
+            return state.">>="(state.modify(append), const(state.pure(new)))
+        })
+
+object computationGraph as DeepFrozen:
+    "A basic SSA computation graph."
+
+    to id():
+        return def idGraph(ps) as DeepFrozen { return state.pure(ps) }
+
+    to compose(f :DeepFrozen, g :DeepFrozen):
+        return def composedGraph(ps) as DeepFrozen {
+            # Kleisli composition.
+            return state.join(state.fmap(g)(f(ps)))
+        }
+
+    to unit():
+        return def unitGraph(ps) as DeepFrozen:
+            return state.pure(ports.UnitP())
+
+    to pair(left :DeepFrozen, right :DeepFrozen):
+        return def pairGraph(ps) as DeepFrozen:
+            return state.liftA2(ports.PairP, left(ps), right(ps))
+
+    to exl():
+        return def leftGraph(ps) as DeepFrozen:
+            return ps.walk(def walker.PairP(l, _) { return state.pure(l) })
+
+    to exr():
+        return def rightGraph(ps) as DeepFrozen:
+            return ps.walk(def walker.PairP(_, r) { return state.pure(r) })
+
+    # And extra operations.
+
+    to mulC():
+        return makeCompGraph("×", 1, ports.IntP)
+
+    to addC():
+        return makeCompGraph("+", 1, ports.IntP)
