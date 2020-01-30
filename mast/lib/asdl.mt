@@ -113,17 +113,20 @@ def bindingFragment :Str := `
 def ast :DeepFrozen := parseBootFragment(boot)
 def bindingClauses :DeepFrozen := parseBootFragment(bindingFragment)
 
-# Traditional ASDL has three types: identifier, int, str
-def isPrimitive :DeepFrozen := ["bool", "df", "identifier", "int", "str"].contains
 def comma :DeepFrozen := m`out.print(", ")`
 
+# Traditional ASDL has three types: identifier, int, str
+# We extend this with a type for DF objects, as well as other Monte
+# primitive types.
 def theTypeGuards :Map[Str, DeepFrozen] := [
     "bool" => m`Bool`,
     "df" => m`DeepFrozen`,
+    "double" => m`Double`,
     "identifier" => m`Str`,
     "int" => m`Int`,
     "str" => m`Str`,
 ]
+def isPrimitive :DeepFrozen := theTypeGuards.getKeys().contains
 
 def makeBuilderMaker(builderName :DeepFrozen, addBindings :Bool) as DeepFrozen:
     var count :Int := 0
