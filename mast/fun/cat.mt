@@ -224,6 +224,26 @@ object computationGraph as DeepFrozen:
         return def rightGraph(ps) as DeepFrozen:
             return ps.walk(def walker.PairP(_, r) { return state.pure(r) })
 
+    to apply():
+        return def applyGraph(ps) as DeepFrozen:
+            return ps.walk(def walker.PairP(fun, x) {
+                return fun.walk(def funp.FunP(g) { return g(x) })
+            })
+
+    to curry(f :DeepFrozen):
+        return def curryGraph(ps1 :DeepFrozen) as DeepFrozen:
+            return state.pure(ports.FunP(def curriedGraph(ps2) as DeepFrozen {
+                return f(ports.PairP(ps1, ps2))
+            }))
+
+    to uncurry(g :DeepFrozen):
+        return def uncurryGraph(ps :DeepFrozen) as DeepFrozen:
+            return ps.walk(def walker.PairP(l, r :DeepFrozen) {
+                return state.">>="(g(l), def uncurried(graph) as DeepFrozen {
+                    return graph.walk(def funp.FunP(f) { return f(r) })
+                })
+            })
+
     # And extra operations.
 
     to mulC():
