@@ -1,5 +1,17 @@
 import "lib/asdl" =~ [=> asdlParser]
-exports (parse, assemble, catMonte, computationGraph, ports)
+exports (parse, assemble, buildExpr, catMonte, computationGraph, ports)
+
+# We'll need some conventions. We're doing the Cartesian closed category
+# approach, so we'll see these combinators:
+# Categories: id
+# Products: pair(f,g) exl exr
+# Terminus: unit
+# Internal homs: apply curry uncurry
+# NNO: zero succ pr(q,f)
+
+# We also have .compose(f,g) for performing compositions. We require that
+# .id() and .compose(f,g) be available on every category, and the rest is
+# dynamically typed.
 
 def specials :Set[Char] := "(), ".asSet()
 
@@ -47,6 +59,9 @@ def assemble(cat :DeepFrozen, path :List) as DeepFrozen:
         rv := cat.compose(rv, f)
     return rv
 
+def buildExpr(cat :DeepFrozen, s :Str) as DeepFrozen:
+    return assemble(cat, parse(s))
+
 object catMonte as DeepFrozen:
     to id():
         return fn x { x }
@@ -75,7 +90,7 @@ object catMonte as DeepFrozen:
     to uncurry(f):
         return fn [x, y] { f(x)(y) }
 
-    to "0"():
+    to zero():
         return fn _ { 0 }
 
     to succ():
@@ -84,45 +99,7 @@ object catMonte as DeepFrozen:
     to pr(q, f):
         return fn x { var rv := q([]); for _ in (0..!x) { rv := f(rv) }; rv }
 
-object autoMonte as DeepFrozen:
-    "
-    Monte primitives as a low-level automaton.
-    "
-
-    # We use Mealy machines in the above category of functions.
-    # Our machine state is a list/array of Monte values, and our inputs and
-    # outputs are single Monte values. A machine skeleton:
-    # fn s, i { [s', o] }
-
-    # However, we are implementing the *simulations*. A simulation sends
-    # machines to machines.
-
-    to id():
-        return fn m { m }
-
-    to compose(f, g):
-        return fn x { g(f(x)) }
-
-    to pair(left, right):
-        return fn x {
-            def lx := left(x)
-            def rx := right(x)
-            fn s, i {
-                def [sl, ol] := lx(s, i)
-                def [sr, or] := rx(s, i)
-                [[sl, sr], [ol, or]]
-            }
-        }
-
-    to exl():
-        return fn x { fn [s, _], [i, _] { [s, i] } }
-
-    to exr():
-        return fn x { fn [_, s], [_, i] { [s, i] } }
-
-    to unit():
-        return fn x { fn _, i { i } }
-
+# Turn CCCs into SSA computational graphs.
 # http://conal.net/papers/compiling-to-categories/compiling-to-categories.pdf
 # p8
 
@@ -243,6 +220,19 @@ object computationGraph as DeepFrozen:
                     return graph.walk(def funp.FunP(f) { return f(r) })
                 })
             })
+
+    to zero():
+        return makeCompGraph("0", 1, ports.IntP)
+
+    to succ():
+        return makeCompGraph("+1", 1, ports.IntP)
+
+    to pr(q :DeepFrozen, f :DeepFrozen):
+        def prep := computationGraph.pair(computationGraph.unit(),
+                                          computationGraph.id())
+        def qf := computationGraph.compose(prep, computationGraph.pair(q, f))
+        def rec := makeCompGraph("ℕ", 1, ports.IntP)
+        return computationGraph.compose(qf, rec)
 
     # And extra operations.
 
