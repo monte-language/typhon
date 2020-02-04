@@ -705,12 +705,27 @@ class IntObject(Object):
             return BigInt(rbigint.fromint(self._i).pow(rbigint.fromint(exponent),
                                                        rbigint.fromint(modulus)))
 
+    @method("BigInt", "BigInt", _verb="mod")
+    def modBigInt(self, modulus):
+        try:
+            return rbigint.fromint(self._i).mod(modulus)
+        except ZeroDivisionError:
+            raise userError(u"mod/1: Integer division by zero")
+
     @method("Int", "Int")
     def mod(self, modulus):
         try:
             return self._i % modulus
         except ZeroDivisionError:
             raise userError(u"mod/1: Integer division by zero")
+
+    @method("List", "BigInt", _verb="divMod")
+    def divModBigInt(self, modulus):
+        try:
+            q, r = rbigint.fromint(self._i).divmod(modulus)
+            return [BigInt(q), BigInt(r)]
+        except ZeroDivisionError:
+            raise userError(u"divMod/1: Integer division by zero")
 
     @method("List", "Int")
     def divMod(self, modulus):
