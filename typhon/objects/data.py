@@ -477,6 +477,18 @@ class DoubleObject(Object):
     def arcCotangent(self, x):
         return math.atan2(x, self._d)
 
+    # Decompositions.
+
+    @method("List")
+    def normalizedExponent(self):
+        """
+        The unique [m, e] such that this number equals m`m * 2 ** e`.
+
+        The significand m is a Double and the exponent e is an Int.
+        """
+        m, e = math.frexp(self._d)
+        return [DoubleObject(m), IntObject(e)]
+
     @method("Bytes")
     def asBytes(self):
         "The IEEE 754 packed representation of this number."
@@ -484,6 +496,8 @@ class DoubleObject(Object):
         # to reinterpret it as packed ASCII and repack into bytes.
         x = float_pack(self._d, 8)
         return "".join([chr(x >> ((7 - i) * 8) & 0xff) for i in range(8)])
+
+    # And basic arithmetic.
 
     @method("Double", "Double")
     def add(self, other):
