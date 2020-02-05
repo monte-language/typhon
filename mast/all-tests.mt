@@ -6,6 +6,7 @@ import "lib/argv" =~ _
 import "lib/codec/percent" =~ _
 import "lib/codec/utf8" =~ _
 import "lib/continued" =~ _
+import "lib/doubles" =~ _
 import "lib/entropy/pool" =~ _
 import "lib/enum" =~ _
 import "lib/gadts" =~ _

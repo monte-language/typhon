@@ -1,4 +1,5 @@
-exports (dragon4)
+import "unittest" =~ [=> unittest :Any]
+exports (dragon4, makeKahan)
 
 # All about Doubles!
 
@@ -103,3 +104,33 @@ def dragon4(d :Double) :Str as DeepFrozen:
         l.push('e')
         _makeStr.fromChars(l) + `$H`
     })
+
+
+def makeKahan() as DeepFrozen:
+    var d :Double := 0.0
+    var c :Double := 0.0
+    return object kahan:
+        "A compensated addition."
+
+        to get():
+            return d - c
+
+        to run(v :Double):
+            "Add `v` to the current total."
+            var y := v - c
+            var t := d + y
+            c := t - d - y
+            d := t
+
+def testKahanWrapOverflow(assert):
+    def top :Double := 9_007_199_254_740_992.0
+    def expected :Double := 9_007_199_254_740_994.0
+    def k := makeKahan()
+    k(top)
+    k(1.0)
+    k(1.0)
+    assert.equal(k[], expected)
+
+unittest([
+    testKahanWrapOverflow,
+])
