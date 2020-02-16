@@ -1,5 +1,5 @@
 import "lib/asdl" =~ [=> asdlParser]
-exports (parse, assemble, buildExpr, catMonte, computationGraph, ports)
+exports (buildExpr, makeReader, catPrint, computationGraph, ports)
 
 # We'll need some conventions. We're doing the Cartesian closed category
 # approach, so we'll see these combinators:
@@ -62,42 +62,32 @@ def assemble(cat :DeepFrozen, path :List) as DeepFrozen:
 def buildExpr(cat :DeepFrozen, s :Str) as DeepFrozen:
     return assemble(cat, parse(s))
 
-object catMonte as DeepFrozen:
-    to id():
-        return fn x { x }
-
+object catPrint as DeepFrozen:
     to compose(f, g):
-        return fn x { g(f(x)) }
+        return if (f == "id") { g } else if (g == "id") { f } else { `$f $g` }
 
-    to pair(left, right):
-        return fn x { [left(x), right(x)] }
+    match [verb, args, _]:
+        if (args.isEmpty()) { verb } else { `$verb(${",".join(args)})` }
 
-    to exl():
-        return fn [l, _] { l }
+def makeMonad(pure :Str, fmap :Str, join :Str) :DeepFrozen as DeepFrozen:
+    return def monadOn(cat :DeepFrozen) as DeepFrozen:
+        def pureExpr := buildExpr(cat, pure)
+        def fmapExpr := buildExpr(cat, fmap)
+        def joinExpr := buildExpr(cat, join)
 
-    to exr():
-        return fn [_, r] { r }
+        return object kleisliCategory as DeepFrozen:
+            to id():
+                return pureExpr
 
-    to unit():
-        return fn _ { [] }
+            to compose(f :DeepFrozen, g :DeepFrozen):
+                return cat.compose(f, cat.compose(g, cat.compose(fmapExpr,
+                                                                 joinExpr)))
 
-    to apply():
-        return fn [f, x] { f(x) }
-
-    to curry(f):
-        return fn x { fn y { f([x, y]) } }
-
-    to uncurry(f):
-        return fn [x, y] { f(x)(y) }
-
-    to zero():
-        return fn _ { 0 }
-
-    to succ():
-        return fn x { x + 1 }
-
-    to pr(q, f):
-        return fn x { var rv := q([]); for _ in (0..!x) { rv := f(rv) }; rv }
+def makeReader :DeepFrozen := makeMonad(
+    "curry(exl)",
+    "curry(curry(pair(exl exl,pair(exl exr,exr) apply) apply))",
+    "curry(pair(apply,exr) apply)",
+)
 
 # Turn CCCs into SSA computational graphs.
 # http://conal.net/papers/compiling-to-categories/compiling-to-categories.pdf
