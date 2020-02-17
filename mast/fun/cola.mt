@@ -17,7 +17,6 @@ def makeWorld() as DeepFrozen:
     def bump(size :Int):
         def rv := heap.size()
         for _ in (0..!size) { heap.push(0) }
-        traceln(`bump($size) -> $rv (${size + rv})`)
         return rv
 
     def internStr(symbol :Str) :Int:
@@ -28,6 +27,9 @@ def makeWorld() as DeepFrozen:
             rv
         })
 
+    def unintern(i :Int) :Str:
+        return uninterned.fetch(i, fn { `<raw value $i>` })
+
     def intern(_self, args :List[Int]) :Int:
         return internStr(_makeStr.fromChars([for c in (args) '\x00' + c]))
 
@@ -37,55 +39,78 @@ def makeWorld() as DeepFrozen:
     heap[DELEGATED_STR] := "delegated".size()
     for c in ("delegated") { heap[bump(1)] := c.asInteger() }
 
+    def walkHeapList(start :Int):
+        if (start == 0) { return [] }
+        return def listWalker._makeIterator():
+            var next := start
+            return def listerator.next(ej):
+                if (next == 0) { throw.eject(ej, "End of list") }
+                def k := heap[next]
+                def v := heap[next + 1]
+                def rv := [next, [k, v]]
+                next := heap[next + 2]
+                return rv
+
     # This implementation determines vtable layout. We'll start with something
     # naive but easy to extend:
     # [ parent | next ]
     # parent is 0 if no parent. next points to the tail of a linked list:
     # [ kn | vn | next ]
     # In both cases, next is 0 if there's no more methods.
-    def doLookup(self :Int, symbol :Int) :Int:
+    def doLookup(self :Int, selector :Int) :Int:
         def parent := heap[self]
-        var next := self + 1
-        while (next != 0):
-            if (heap[next] == symbol):
-                return heap[next + 1]
-            next := heap[next + 2]
-        return if (parent == 0) { 0 } else { doLookup(parent, symbol) }
+        for [k, v] in (walkHeapList(heap[self + 1])):
+            if (k == selector):
+                return v
+        return if (parent == 0) { 0 } else { doLookup(parent, selector) }
 
     def addMethod(self :Int, selector :Int, meth :Int):
-        var next := self + 1
-        while (next != 0):
-            if (heap[next] == selector):
+        def start := heap[self + 1]
+        if (start == 0):
+            traceln(`first addMethod($self, $selector, $meth)`)
+            def new := bump(3)
+            heap[new] := selector
+            heap[new + 1] := meth
+            heap[self + 1] := new
+            return 0
+        var last := 0
+        for link => [k, _] in (walkHeapList(heap[self + 1])):
+            if (k == selector):
                 traceln(`replacing addMethod($self, $selector, $meth)`)
-                heap[next + 1] := meth
-                return 0
-            if (heap[next + 2] == 0):
-                traceln(`new addMethod($self, $selector, $meth)`)
-                def link := bump(3)
-                heap[link] := selector
                 heap[link + 1] := meth
-                heap[next + 2] := link
                 return 0
-            next := heap[next + 2]
+            last := link
+        traceln(`new addMethod($self, $selector, $meth)`)
+        def new := bump(3)
+        heap[new] := selector
+        heap[new + 1] := meth
+        heap[last + 2] := new
+        return 0
 
     def allocate(self :Int, size :Int) :Int:
-        def obj := bump(1 + size * 3) + 1
-        heap[obj - 1] := self
-        # Pre-link the vtable, so that it can be traversed.
-        for i in (0..!size):
-            def next := obj + 3 * i + 2
-            heap[next] := next + 1
+        # The end of the table is a raw data region of the given size.
+        # [ vtable || data ... ]
+        # Return pointer points directly to the start of the vtable, which is
+        # one word in.
+        def obj := bump(1 + size)
+        heap[obj] := self
         traceln(`allocate($self, $size) -> $obj`)
         return obj
 
     def delegated(self :Int) :Int:
-        def child :Int := allocate(if (self == 0) { 0 } else { heap[self - 1] }, 2)
+        # We now need to reserve two words of data for the vtable's own data.
+        # [ vtable || parent | next | data ... ]
+        def child :Int := allocate(if (self == 0) { 0 } else { heap[self] }, 2)
         heap[child] := self
         traceln(`delegated($self) -> $child`)
         return child
 
     # 0
-    def vtableVT :Int := delegated(0)
+    # The "vtable of vtables". This degenerate object has an identity, but no
+    # vtable of its own. Instead, it has one single behavior, lookup, which is
+    # hardcoded into send().
+    def vtvt :Int := delegated(0)
+    heap[vtvt] := vtvt
 
     def meths := [
         LOOKUP => fn self, args { doLookup(self, args[0]) },
@@ -95,77 +120,73 @@ def makeWorld() as DeepFrozen:
         DELEGATED => fn self, _ { delegated(self) },
     ]
 
-    # We must define send() after allocating the first vtable.
+    # We must define send() after allocating the vtable of vtables, since we
+    # need to special-case sends to it.
     def send(obj :Int, selector :Int, args :List[Int]):
-        def vt := heap[obj - 1]
-        def meth := if (selector == lookup && obj == vtableVT) {
+        if (obj == 0) { return 0 }
+        def vt := heap[obj]
+        def meth := if (selector == lookup && obj == vtvt) {
             doLookup(vt, lookup)
         } else { send(vt, lookup, [selector]) }
-        return meths[meth](obj, args)
+        def rv := meths[meth](obj, args)
+        traceln(`send($obj, ${unintern(selector)}, $args) -> $rv`)
+        return rv
 
-    def dump(label :Str, vt :Int):
+    def dump(label :Str, self :Int):
+        def vt := heap[self]
         def parent := heap[vt]
-        def selectors := [].diverge()
-        var next := vt + 1
-        while (next != 0):
-            selectors.push(switch (heap[next]) {
-                match ==0 { break }
-                match via (uninterned.fetch) s { s }
-                match i { `<raw value $i>` }
-            })
-            next := heap[next + 2]
-        traceln(`$label: VT at $vt (parent $parent) selectors ${selectors.snapshot()}`)
+        def selectors := [for [k, _] in (walkHeapList(heap[vt + 1])) unintern(k)]
+        traceln(`$label: Object at $self, VT at $vt (parent $parent) selectors $selectors`)
 
     # 1
-    heap[vtableVT - 1] := vtableVT
-
-    dump("vtable", vtableVT)
-
     def objectVT :Int := delegated(0)
-    heap[objectVT - 1] := vtableVT
-    heap[vtableVT + 1] := objectVT
-
-    dump("object", objectVT)
-
     def symbolVT :Int := delegated(objectVT)
+    def vtableVT :Int := delegated(objectVT)
 
-    dump("symbol", symbolVT)
+    def vtable := delegated(0)
+    heap[vtable] := vtableVT
+
+    def obj := allocate(objectVT, 0)
+
+    dump("vtableVT", vtableVT)
+    dump("vtable", vtable)
+    dump("symbolVT", symbolVT)
+    dump("objectVT", objectVT)
+    dump("object", obj)
 
     # 2
     addMethod(vtableVT, internStr("lookup"), LOOKUP)
 
-    dump("vtable", vtableVT)
-
     # 3
     addMethod(vtableVT, internStr("addMethod"), ADD_METHOD)
-
-    dump("vtable", vtableVT)
 
     # 4
     addMethod(vtableVT, internStr("allocate"), ALLOCATE)
 
-    dump("vtable", vtableVT)
+    dump("vtable", vtable)
 
-    def symbol :Int := send(vtableVT, internStr("allocate"), [1])
+    def symbol :Int := send(vtable, internStr("allocate"), [0])
+
+    dump("symbol", symbol)
 
     # 5
     addMethod(symbolVT, internStr("intern"), INTERN)
 
-    dump("symbol", symbolVT)
+    dump("symbol", symbol)
 
     # 6
     def delegatedSelector :Int := send(symbol, internStr("intern"),
                                        [DELEGATED_STR])
     send(vtableVT, internStr("addMethod"), [delegatedSelector, DELEGATED])
 
-    dump("vtable", vtableVT)
+    dump("vtable", vtable)
 
     return object colaWorld:
         to initialScope() :Map[Str, Int]:
             return [
                 => symbol,
-                => vtableVT,
-                => objectVT,
+                => vtable,
+                => obj,
             ]
 
         to intern(symbol :Str) :Int:
