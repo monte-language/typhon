@@ -2,7 +2,7 @@
 
 import sys
 from typhon.errors import LoadFailed, UserException
-from typhon.load.nano import InvalidMAST, loadMAST
+from typhon.load.nano import InvalidMAST, loadMASTBytes
 from typhon.nano.main import mainPipeline
 from typhon.nano.structure import prettifyStructure
 from typhon.nodes import InvalidAST
@@ -38,7 +38,7 @@ safeScopeNames = [
 def entryPoint(argv):
     path = argv[1]
     try:
-        expr = loadMAST(path, noisy=False)
+        expr = loadMASTBytes(open(path, "rb").read(), path, noisy=False)
     except InvalidAST:
         print "Invalid AST"
         return 1
