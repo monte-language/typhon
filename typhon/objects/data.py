@@ -299,6 +299,8 @@ class DoubleObject(Object):
 
     @method("Int")
     def floor(self):
+        if math.isnan(self._d):
+            raise userError(u".floor/0: No Int is the smallest Int less than NaN")
         return int(self._d)
 
     @method("Double")
