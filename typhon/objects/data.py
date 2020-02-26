@@ -765,9 +765,12 @@ class IntObject(Object):
         except OverflowError:
             return BigInt(rbigint.fromint(self._i).int_mul(other))
 
-    @method("Int")
+    @method("Any")
     def negate(self):
-        return -self._i
+        try:
+            return IntObject(ovfcheck(-self._i))
+        except OverflowError:
+            return BigInt(rbigint.fromint(self._i).neg())
 
     @method("Int")
     def next(self):
