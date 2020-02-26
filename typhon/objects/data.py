@@ -397,11 +397,16 @@ class DoubleObject(Object):
 
     # Logarithms.
 
-    @method("Double")
+    @method("Any")
     def exponential(self):
         "Euler's constant ℯ exponentiated to this number."
 
-        return math.exp(self._d)
+        try:
+            return DoubleObject(math.exp(self._d))
+        except OverflowError:
+            # We are so large that our exponential can't be represented
+            # accurately. But we can smoothly go to infinity.
+            return Infinity
 
     @method("Double")
     def logarithm(self):
