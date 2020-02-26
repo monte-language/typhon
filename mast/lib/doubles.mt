@@ -28,7 +28,7 @@ def p :Int := 53
 # The output base.
 def B :Int := 10
 
-def ::"(FPP)²"(f :Int, e :Int) as DeepFrozen:
+def ::"(FPP)²"(f :(Int > 0), e :Int) as DeepFrozen:
     # f ≠ 0.0
     var R :Int := f << 0.max(e - p)
     var S :Int := 1 << 0.max(p - e)
@@ -89,7 +89,9 @@ def dragon4(d :Double) :Str as DeepFrozen:
     def [normal, e] := d.normalizedExponent()
     return exceptions.fetch(normal, fn {
         # normal ≠ 0.0
-        def [var H, digits] := ::"(FPP)²"((normal * (2.0 ** p)).floor(), e)
+        def isNegative := normal < 0.0
+        def n := (isNegative.pick(-normal, normal) * (2.0 ** p)).floor()
+        def [var H, digits] := ::"(FPP)²"(n, e)
         # Eat some 0. We must have at least one digit available.
         var head := digits.next(null)
         while (head[1].isZero()) { head := digits.next(__break) }
@@ -102,7 +104,8 @@ def dragon4(d :Double) :Str as DeepFrozen:
         # We may have to pad with 0, though, because we munched so hard.
         if (l.last() == '.') { l.push('0') }
         l.push('e')
-        _makeStr.fromChars(l) + `$H`
+        def rv := _makeStr.fromChars(l) + `$H`
+        if (isNegative) { "-" + rv } else { rv }
     })
 
 
