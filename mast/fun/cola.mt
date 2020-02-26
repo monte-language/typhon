@@ -2,6 +2,51 @@ exports (makeWorld)
 
 # https://www.piumarta.com/software/cola/objmodel2.pdf
 
+# https://golem.ph.utexas.edu/category/2019/08/turing_categories.html
+# Category
+# =>
+def ID :Int := 0x0
+# Monoidal
+# a : X -> Y, b : Z -> W => c : (X, Z) -> (Y, W)
+def PAIR :Int := 0x1
+# a : X -> (Y, Z) => b : X -> Y
+def EXL :Int := 0x2
+# a : X -> (Y, Z) => b : X -> Z
+def EXR :Int := 0x3
+# Closed
+# a : X -> (Y -o Z) => b : (X, Y) -> Z
+def CURRY :Int := 0x4
+# a : (X, Y) -> Z => b : X -> (Y -o Z)
+def UNCURRY :Int := 0x5
+# a : X -> (Y -o Z, Y) => b : X -> Z
+def EVAL :Int := 0x6
+# Cartesian
+# a : X -> Y => b : X -> (Y, Y)
+def DUP :Int := 0x7
+# a : X -> Y => b : X -> 1
+def DROP :Int := 0x8
+# NNO
+# a : 1 -> X, b : X -> X => c : X -> NNO
+def PR :Int := 0x9
+# Turing
+# a : [X -> Y], b : [Y -> Z] => c : [X -> Z]
+def COMPOSE :Int := 0xa
+# a : X -> Y => b : [X -> Y]
+def LAMB :Int := 0xb
+# a : [X -> Y] => b : X -> Y
+def APPLY :Int := 0xc
+
+def makeThing(insts) as DeepFrozen:
+    def heap := [].diverge()
+    def stack := [ID].diverge()
+
+    for inst in (insts):
+        switch (inst):
+            match ==ID:
+                null
+            match ==PAIR:
+                null
+
 def LOOKUP :Int := 0
 def ADD_METHOD :Int := 1
 def ALLOCATE :Int := 2
