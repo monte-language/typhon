@@ -100,7 +100,16 @@ def dragon4(d :Double) :Str as DeepFrozen:
         # possibility, so either way, head is the correct first digit.
         H := head[0]
         def l := ['0' + head[1], '.'].diverge()
-        while (true) { l.push('0' + digits.next(__break)[1]) }
+        var spaceCounter :Int := 3
+        while (true) {
+            def [_, d] := digits.next(__break)
+            if (spaceCounter.isZero()) {
+                spaceCounter := 3
+                l.push('_')
+            }
+            spaceCounter -= 1
+            l.push('0' + d)
+        }
         # We may have to pad with 0, though, because we munched so hard.
         if (l.last() == '.') { l.push('0') }
         l.push('e')
