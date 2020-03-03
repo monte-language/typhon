@@ -13,9 +13,15 @@ exports (makeCLog)
 # iterables. When iterated, they yield i => x pairs, where i is the
 # traditional Int index and x is a Bool.
 
+# Every representation has some fast operations. What are fast operations for
+# binary continued logarithms?
+# +1 to first coefficient => *2
+
 # We define several transformations. Normally, for compactness, we will want
 # to coalesce multiple consecutive true bits into a single datum using
-# run-length encoding, giving a list of Ints.
+# run-length encoding, giving a list of Ints. This also allows us to give a
+# leading negative coefficient, which extends the system down into the unit
+# interval.
 
 def coalesce(iterable) as DeepFrozen:
     return def coalescingIterable._makeIterator():
@@ -44,7 +50,7 @@ def rational(numerator :Int, denominator :Int) as DeepFrozen:
         var q :Int := denominator
         var k :Int := 0
         return def rationalIterator.next(ej):
-            traceln(`p / q $p / $q`)
+            # traceln(`p / q $p / $q`)
             if (q.isZero() || p == q) { throw.eject(ej, "No more digits") }
             # Find the multiplier for q.
             def v := (p // q).bitLength() - 1
@@ -67,18 +73,17 @@ def gcd(var u :Int, var v :Int) as DeepFrozen:
         v := r
     return u
 
-# Quadratic surds require a four-number support structure, representing the
-# linear transformation around the surd.
+# Quadratic surds require a four-number support structure. We implement them
+# with the "monster" algorithm which operates on generalized surds and their
+# support structures all at once.
 
-# NB: The original invariants are reduced here, and instead maintained
-# imperatively.
 def monster(n :(Int > 1), var p :Int, var q :Int, var c :Int,
             var d :Int) as DeepFrozen:
     "Return digits for (p/q)(c+d√n) exactly and quickly."
     if (d == 0) { return rational(p * c, q) }
     var k := 0
     return def fastSurdIterator.next(ej) {
-        traceln(`(p / q)(c + d√n) ($p / $q)($c + $d√$n)`)
+        # traceln(`(p / q)(c + d√n) ($p / $q)($c + $d√$n)`)
         # Sign parity of d determines operations.
         def signParity := d.aboveZero()
         # Is x ≥ 2?
@@ -120,6 +125,77 @@ def monster(n :(Int > 1), var p :Int, var q :Int, var c :Int,
         return rv
     }
 
+# Homographic functions, of the form (ax+b)/(cx+d) with all constants
+# integers, can be applied. Examples:
+# a=1, c=0, d=1: addition by b
+# b=0, c=0, d=1: multiplication by a
+# b=0, c=0: multiplication by a/d
+# a=0, b=1, c=1, d=0: reciprocal
+# If we take this as a matrix,
+# [ a b ]
+# [ c d ]
+# Then any composition of such matrices is also homographic.
+
+def homographic(var a :Int, var b :Int, var c :Int, var d :Int, iterable) as DeepFrozen:
+    var k :Int := 0
+    return def homographicIterable._makeIterator():
+        def iterator := iterable._makeIterator()
+        return def homographicIterator.next(ej):
+            # We will check not just that d and c+d have the same sign, but
+            # also that top >= 2 iff bottom >=2.
+            while (true):
+                # First, sign check. Are we even facing the same
+                # direction? And, can we divide?
+                if (!c.isZero() && !(c + d).isZero() &&
+                    d.aboveZero() == (c + d).aboveZero()):
+                    def top := (a + b) // (c + d)
+                    def bottom := a // c
+                    # We need top ≥ 2 iff bottom ≥ 2, or
+                    # 1 < top < 2 iff 1 < bottom < 2. But since top and bottom
+                    # are computed with integer maths, the latter case means
+                    # that top == bottom == 1.
+                    if ((top >= 2 && bottom >= 2) ||
+                        (top == 1 && bottom == 1)):
+                        # We are settled enough to egest.
+                        break
+                # We're not settled; we need at least one more digit. If
+                # upstream is finished, then so are we.
+                # traceln(`ingest (${a}x + $b)/(${c}x + $d)`)
+                def n := iterator.next(ej)[1]
+                # Ingest n 1s.
+                a *= 2 ** n
+                c *= 2 ** n
+                # Ingest 0: a -1 and reciprocation.
+                var t := a + b
+                b := a
+                a := t
+                t := c + d
+                d := c
+                c := t
+            # Egest.
+            def v := (a // c) >= 2
+            # traceln(`egest (${a}x + $b)/(${c}x + $d) -> $v`)
+            def rv := [k, v]
+            k += 1
+            # Update the matrix.
+            if (v):
+                c *= 2
+                d *= 2
+            else:
+                var t := a - c
+                a := c
+                c := t
+                t := b - d
+                b := d
+                d := t
+            # And remove extra factors.
+            def f := gcd(gcd(a, b), gcd(c, d))
+            a //= f
+            b //= f
+            c //= f
+            d //= f
+            return rv
+
 object makeCLog as DeepFrozen:
     to fromRational(n :Int, d :Int):
         "An iterator over the continued logarithm of `n / d`."
@@ -134,6 +210,28 @@ object makeCLog as DeepFrozen:
         def surdIterable._makeIterator():
             return monster(n, 1, 1, 0, 1)
         return coalesce(surdIterable)
+
+    to fromQuadraticExpression(p :(Int > 0), q :(Int > 0), c :Int, d :Int,
+                               n :(Int > 0)):
+        "
+        An iterator over the continued logarithm of (p/q)(c+d√n).
+
+        Every quadratic equation's solution is of this form; given
+        ax² + bx + c, the solutions are (1/2a)(-b±1√(b²-4ac)).
+        "
+
+        def quadraticIterable._makeIterator():
+            return monster(n, p, q, c, d)
+        return coalesce(quadraticIterable)
+
+    to linearTransformation(a :Int, b :Int, c :Int, d :Int):
+        "
+        Apply the linear transformation (ax+b)/(cx+d) to a continued
+        logarithm.
+        "
+
+        return def linearTransformation(x) as DeepFrozen:
+            return coalesce(homographic(a, b, c, d, x))
 
     to fromDouble(x :Double):
         "
