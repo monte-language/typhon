@@ -1,4 +1,5 @@
 import "lib/colors" =~ [=> makeColor]
+import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "fun/ppm" =~ [=> makePPM]
 exports (main)
 
@@ -24,7 +25,7 @@ object makeV3 as DeepFrozen:
                 return z
 
             to asColor():
-                return makeColor.RGB(x, y, z, 1.0)
+                return makeColor.sRGB(x, y, z, 1.0)
 
             to norm() :Double:
                 return x ** 2 + y ** 2 + z ** 2
@@ -55,16 +56,16 @@ object makeV3 as DeepFrozen:
                     M.callWithMessage(z, message),
                 )
 
-def origin :DeepFrozen := makeV3(0.0, 0.0, 0.0)
+def zero :DeepFrozen := makeV3(0.0, 0.0, 0.0)
+def one :DeepFrozen := makeV3(1.0, 1.0, 1.0)
+
+def origin :DeepFrozen := zero
 def lowerLeft :DeepFrozen := makeV3(-2.0, -1.0, -1.0)
 def horizontal :DeepFrozen := makeV3(4.0, 0.0, 0.0)
 def vertical :DeepFrozen := makeV3(0.0, 2.0, 0.0)
 
-def pointRay(origin, direction, t :Double) as DeepFrozen:
-    return origin + direction * t
-
-def makeSphere(center :DeepFrozen, radius :Double) as DeepFrozen:
-    return def sphere.hit(origin, direction, tMin :Double, tMax :Double, ej) as DeepFrozen:
+def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
+    return def sphere.hit(origin, direction, tMin :Double, tMax :Double, ej):
         def oc := origin - center
         def a := direction.dot(direction)
         def b := 2.0 * oc.dot(direction)
@@ -77,36 +78,90 @@ def makeSphere(center :DeepFrozen, radius :Double) as DeepFrozen:
             t := (-b + discriminant.squareRoot()) / (2.0 * a)
         if (t > tMax || t < tMin):
             throw.eject(ej, "no hit in range")
-        def p := pointRay(origin, direction, t)
-        return [t, p, ((center - p) / -radius).unit()]
+        # Point from origin along direction by amount t.
+        def p := origin + direction * t
+        return [t, p, ((center - p) / -radius).unit(), material]
 
-def makeHittables(hs :List[DeepFrozen]) as DeepFrozen:
-    return def hittables.hit(origin, direction, tMin :Double, tMax :Double, ej) as DeepFrozen:
+def makeHittables(hs :List) as DeepFrozen:
+    return def hittables.hit(origin, direction, tMin :Double, tMax :Double, ej):
         var rv := null
         var closestSoFar :Double := tMax
         for h in (hs):
-            def [t, _, _] := rv := h.hit(origin, direction, tMin,
-                                         closestSoFar, __continue)
+            def [t, _, _, _] := rv := h.hit(origin, direction, tMin,
+                                            closestSoFar, __continue)
             closestSoFar := t
         if (rv == null):
             throw.eject(ej, "no hits")
         return rv
 
-def world :DeepFrozen := makeHittables([
-    makeSphere(makeV3(0.0, 0.0, -1.0), 0.5),
-    makeSphere(makeV3(0.0, -100.5, -1.0), 100.0),
-])
+def makeLambertian(entropy, albedo :DeepFrozen) as DeepFrozen:
+    return def lambertian.scatter(origin, _direction, p, N, _ej):
+        def [rx, ry, rz] := entropy.nextBall(3)
+        # NB: Original does `target := p + ...; color(p, target - p)` but we
+        # can avoid a spurious addition/subtraction pair.
+        def target := (N + makeV3(rx, ry, rz)).unit()
+        return [p, target, albedo]
 
-def chapter5.drawAt(u :Double, v :Double) as DeepFrozen:
-    def direction := (lowerLeft + horizontal * u + vertical * (1.0 - v)).unit()
-    return escape ej:
-        def [_, _, N] := world.hit(origin, direction, 0.0, Infinity, ej)
-        ((N + 1.0) * 0.5).asColor()
+def makeMetal(entropy, albedo :DeepFrozen, fuzz :(Double <= 1.0)) as DeepFrozen:
+    return def metal.scatter(origin, direction, p, N, ej):
+        def d := direction.unit()
+        def reflected := d - N * (2.0 * d.dot(N))
+        if (reflected.dot(N).belowZero()) { throw.eject(ej, "absorbed?") }
+        def [fx, fy, fz] := entropy.nextBall(3)
+        def fuzzed := reflected + makeV3(fx, fy, fz) * fuzz
+        return [p, fuzzed, albedo]
+
+def blueSky :DeepFrozen := makeV3(0.5, 0.7, 1.0)
+
+def color(entropy, origin, direction, world, depth) as DeepFrozen:
+    if (depth > 50) { return zero }
+    return escape miss:
+        # Set minimum t in order to avoid shadow acne.
+        def [_, p, N, mat] := world.hit(origin, direction, 1.0e-5, Infinity,
+                                        miss)
+        escape absorbed:
+            def [so, sd, attenuation] := mat.scatter(origin, direction, p, N,
+                                                     absorbed)
+            attenuation * color(entropy, so, sd, world, depth + 1)
+        catch _:
+            zero
     catch _:
         def t := 0.5 * (direction.y() + 1.0)
-        def lerp := makeV3(0.5, 0.7, 1.0) * t + makeV3(1.0, 1.0, 1.0) * (1.0 - t)
-        lerp.asColor()
+        blueSky * t + one * (1.0 - t)
 
-def main(_argv, => makeFileResource) as DeepFrozen:
-    def ppm := makePPM.drawingFrom(chapter5)(400, 200)
-    return when (makeFileResource("weekend.ppm")<-setContents(ppm)) -> { 0 }
+# NB: 100 is possible, but 12 is not visibly better than 5. Runtime increases
+# linearly with this number.
+def subsamples :Int := 5
+
+def chapter8(entropy) as DeepFrozen:
+    def world := makeHittables([
+        makeSphere(makeV3(0.0, 0.0, -1.0), 0.5,
+                   makeLambertian(entropy, makeV3(0.8, 0.3, 0.3))),
+        makeSphere(makeV3(0.0, -100.5, -1.0), 100.0,
+                   makeLambertian(entropy, makeV3(0.8, 0.8, 0.0))),
+        makeSphere(makeV3(1.0, 0.0, -1.0), 0.5,
+                   makeMetal(entropy, makeV3(0.8, 0.6, 0.2), 1.0)),
+        # NB: Original has fuzz 0.3, but I wanted to see a polished finish.
+        makeSphere(makeV3(-1.0, 0.0, -1.0), 0.5,
+                   makeMetal(entropy, makeV3(0.8, 0.8, 0.8), 0.001)),
+    ])
+
+    return def drawable.drawAt(u :Double, v :Double):
+        var rv := zero
+        for _ in (0..!subsamples):
+            # Important: These must be two uncorrelated random offsets.
+            def du := u + (entropy.nextDouble() / 100.0)
+            def dv := v + (entropy.nextDouble() / 100.0)
+            def direction := (lowerLeft + horizontal * du + vertical * (1.0 - dv)).unit()
+            rv += color(entropy, origin, direction, world, 0)
+        return (rv / subsamples).asColor()
+
+def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
+    def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
+    def drawable := chapter8(entropy)
+    def t := Timer.measureTimeTaken(fn { drawable.drawAt(0.5, 0.5) })
+    return when (t) ->
+        def [_, d] := t
+        traceln(`Time per fragment: $d seconds (${d * 200 * 100} seconds total)`)
+        def ppm := makePPM.drawingFrom(drawable)(200, 100)
+        when (makeFileResource("weekend.ppm")<-setContents(ppm)) -> { 0 }
