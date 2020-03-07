@@ -1,3 +1,4 @@
+import "lib/doubles" =~ [=> makeKahan]
 import "lib/entropy/pool" =~  [=> makePool]
 exports (makeEntropy)
 
@@ -78,13 +79,14 @@ def makeEntropy(generator) as DeepFrozen:
             "
 
             # http://extremelearning.com.au/how-to-generate-uniformly-random-points-on-n-spheres-and-n-balls/
-            var d := 0.0
+            # Since x will be small, x ** 2 may be denorm'd; use Kahan compensation.
+            def d := makeKahan()
             def us := [for _ in (0..n) {
                 def x := entropy.nextDouble()
-                d += x ** 2
+                d(x ** 2)
                 x
             }]
-            def norm := d.squareRoot()
+            def norm := d[].squareRoot()
             return [for u in (us) u / norm]
 
         to nextBall(n :(Int >= 2)):
