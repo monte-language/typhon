@@ -187,31 +187,51 @@ def makeCamera(entropy, lookFrom, lookAt, up, vfov :Double, aspect :Double,
         def origin := lookFrom + offset * lensRadius
         return [origin, lowerLeft + horizontal * u + vertical * v - origin]
 
-# NB: 100 is possible, but 12 is not visibly better than 5. Runtime increases
-# linearly with this number.
-def subsamples :Int := 5
+def randomScene(entropy) as DeepFrozen:
+    def rand := entropy.nextDouble
+    def rv := [
+        makeSphere(makeV3(0.0, -10_000.0, 0.0), 10_000.0,
+                   makeLambertian(entropy, makeV3(0.5, 0.5, 0.5))),
+        makeSphere(makeV3(0.0, 1.0, 0.0), 1.0,
+                   makeDielectric(entropy, 1.5)),
+        makeSphere(makeV3(-4.0, 1.0, 0.0), 1.0,
+                   makeLambertian(entropy, makeV3(0.4, 0.2, 0.1))),
+        makeSphere(makeV3(4.0, 1.0, 0.0), 1.0,
+                   makeMetal(entropy, makeV3(0.7, 0.6, 0.5), 0.0)),
+    ].diverge()
+    for a in (-11..11):
+        for b in (-11..11):
+            def chooseMat := rand()
+            def center := makeV3(a + 0.9 * rand(), 0.2,
+                                 b + 0.9 * rand())
+            if ((center - makeV3(4.0, 0.0, 2.0)).norm() <= 0.9) { continue }
+            def material := if (chooseMat < 0.8) {
+                makeLambertian(entropy,
+                               makeV3(rand() * rand(), rand() * rand(),
+                                      rand() * rand()))
+            } else if (chooseMat < 0.95) {
+                makeMetal(entropy,
+                          makeV3(0.5 * (1.0 + rand()), 0.5 * (1.0 + rand()),
+                                 0.5 * (1.0 + rand())),
+                          0.5 * rand())
+            } else { makeDielectric(entropy, 1.5) }
+            rv.push(makeSphere(center, 0.2, material))
+    # XXX cutting down for speed
+    return makeHittables(rv.slice(0, 24).snapshot())
 
-def chapter10(entropy, aspectRatio) as DeepFrozen:
+# NB: Runtime increases linearly with this number.
+def subsamples :Int := 2
+
+def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # Which way is up? This way.
     def up := makeV3(0.0, 1.0, 0.0)
 
     # What are we looking at?
-    def lookAt := makeV3(0.0, 0.0, -1.0)
+    def lookAt := makeV3(0.0, 0.0, 0.0)
 
-    def world := makeHittables([
-        makeSphere(lookAt, 0.5,
-                   makeLambertian(entropy, makeV3(0.1, 0.2, 0.5))),
-        makeSphere(makeV3(0.0, -100.5, -1.0), 100.0,
-                   makeLambertian(entropy, makeV3(0.8, 0.8, 0.0))),
-        makeSphere(makeV3(1.0, 0.0, -1.0), 0.5,
-                   makeMetal(entropy, makeV3(0.8, 0.6, 0.2), 1.0)),
-        makeSphere(makeV3(-1.0, 0.0, -1.0), 0.5,
-                   makeDielectric(entropy, 1.5)),
-        makeSphere(makeV3(-1.0, 0.0, -1.0), -0.45,
-                   makeDielectric(entropy, 1.5)),
-    ])
+    def world := randomScene(entropy)
 
-    def lookFrom := makeV3(3.0, 3.0, 2.0)
+    def lookFrom := makeV3(6.0, 1.0, 2.0)
     def distToFocus := (lookFrom - lookAt).norm()
     # NB: Aspect ratio is fixed, and we ignore the requested ratio.
     def camera := makeCamera(entropy, lookFrom, lookAt, up, 90.0, aspectRatio,
@@ -232,7 +252,7 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def w := 200
     def h := 100
-    def drawable := chapter10(entropy, w / h)
+    def drawable := makeDrawable(entropy, w / h)
     def t := Timer.measureTimeTaken(fn { drawable.drawAt(0.5, 0.5) })
     return when (t) ->
         def [_, d] := t
