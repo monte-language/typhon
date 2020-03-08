@@ -216,8 +216,11 @@ class ConstMap(Object):
         return needle in self.objectMap
 
     @method.py("Map", "Map", _verb="or")
-    @profileTyphon("Map.or/1")
+    # @profileTyphon("Map.or/1")
     def _or(self, other):
+        # Maybe we're empty.
+        if not self.objectMap:
+            return other
         # XXX This is currently linear time. Can it be better? If not, prove
         # it, please.
         rv = self.objectMap.copy()
@@ -248,7 +251,7 @@ class ConstMap(Object):
             rv[k] = v
         return rv
 
-    @method("Int")
+    @method.py("Int")
     def size(self):
         return len(self.objectMap)
 
@@ -481,6 +484,9 @@ class FlexMap(Object):
 
     @method("Map", "Map", _verb="or")
     def _or(self, other):
+        # Maybe we're empty.
+        if not self.objectMap:
+            return other
         # XXX This is currently linear time. Can it be better? If not, prove
         # it, please.
         rv = self.objectMap.copy()

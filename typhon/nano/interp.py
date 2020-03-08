@@ -130,19 +130,18 @@ class InterpObject(Object):
     # Auditor report.
     report = None
 
-    def __init__(self, name, script, frame, fqn):
-        self.fqn = fqn
+    def __init__(self, name, script, frame):
         self.script = script
         self.frame = frame
-
-        from typhon.metrics import globalRecorder
-        globalRecorder().makeInstanceOf(self.fqn)
 
     def docString(self):
         return self.script.doc
 
     def getDisplayName(self):
         return self.script.name
+
+    def getFQN(self):
+        return self.script.layout.fqn
 
     # Justified by the immutability of stamps on the script. ~ C.
     @unroll_safe
@@ -275,7 +274,7 @@ class InterpObject(Object):
 
     def recvNamed(self, atom, args, namedArgs):
         method = self.getMethod(atom)
-        if method:
+        if method is not None:
             return self.runMethod(method, args, namedArgs)
         else:
             # Maybe we should invoke a Miranda method.
@@ -530,7 +529,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
                  in frameTable.frameInfo]
 
         # Build the object.
-        val = InterpObject(objName, script, frame, script.layout.fqn)
+        val = InterpObject(objName, script, frame)
 
         # Check whether we have a spot in the frame.
         position = frameTable.positionOf(objName)
@@ -597,7 +596,7 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
 
         assert len(script.layout.frameNames) == len(frame), "shortcoming"
 
-        o = InterpObject(objName, script, frame, script.layout.fqn)
+        o = InterpObject(objName, script, frame)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
             o.report = clipboard.audit(auds, guardInfo)

@@ -29,7 +29,7 @@ RUN_2 = getAtom(u"run", 2)
 
 
 def getLocation(method, displayName):
-    return displayName
+    return displayName.encode("utf-8")
 
 
 loopDriver = JitDriver(greens=["method", "displayName"],
@@ -67,7 +67,7 @@ def loop(iterable, consumer):
     # manual effort. It's really not a common pathway at all.
     if not isinstance(consumer, InterpObject):
         return slowLoop(iterable, consumer)
-    displayName = consumer.getDisplayName().encode("utf-8")
+    displayName = consumer.getDisplayName()
 
     # Rarer path: If the consumer doesn't actually have a method for run/2,
     # then they're not going to be JIT'd. Again, the compiler and optimizer

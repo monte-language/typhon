@@ -33,7 +33,9 @@ def attachFQN(cls):
     name = cls.__name__
 
     fqn = u"%s$%s" % (path, name)
-    cls.fqn = fqn
+    def getFQN(self):
+        return fqn
+    cls.getFQN = getFQN
 
 
 def method(rv, *args, **kwargs):

@@ -94,7 +94,7 @@ class UserException(Exception):
                     str(span.endCol).decode('utf-8'))
             rv.append(u"  %s.%s(%s)" % (printObjTerse(target), atom.verb,
                                         argString))
-            path, name = target.fqn.split(u"$", 1)
+            path, name = target.getFQN().split(u"$", 1)
             rv.append(u"File '%s'%s, in object %s:" % (path, spanStr, name))
         return rv
 

@@ -47,7 +47,7 @@ class ComputedInterface(Object):
     def __init__(self, obj):
         self.atoms = obj.respondingAtoms()
         self.docstring = obj.docString()
-        self.fqn = obj.fqn
+        self.fqn = obj.getFQN()
 
     def toString(self):
         return u"<interface from %s>" % self.fqn

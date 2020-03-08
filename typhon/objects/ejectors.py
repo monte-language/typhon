@@ -72,7 +72,7 @@ class Ejector(Object):
         return self
 
     def __exit__(self, *args):
-        usageRate.observe(not self.active)
+        # usageRate.observe(not self.active)
         self.disable()
 
 

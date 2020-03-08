@@ -77,14 +77,16 @@ class Object(object):
     A Monte object.
     """
 
-    _immutable_fields_ = "fqn", "_samenessHash?"
+    _immutable_fields_ = "_hashed?", "_samenessHash?"
 
-    _samenessHash = False, 0
-
-    fqn = u"anonymous$typhon$object"
+    _hashed = False
+    _samenessHash = 0
 
     def __repr__(self):
         return self.toQuote().encode("utf-8")
+
+    def getFQN(self):
+        return u"anonymous$typhon$object"
 
     def toQuote(self):
         return self.toString()
@@ -129,11 +131,10 @@ class Object(object):
         If two objects are equal, then their sameness hash will be equal.
         """
 
-        hashed, samenessHash = self._samenessHash
-
-        if not hashed:
-            self._samenessHash = _, samenessHash = True, self.computeHash(7)
-        return samenessHash
+        if not self._hashed:
+            self._samenessHash = self.computeHash(7)
+            self._hashed = True
+        return self._samenessHash
 
     def call(self, verb, arguments, namedArgs=None, span=None):
         """
@@ -155,9 +156,8 @@ class Object(object):
 
         # Promote the atom, on the basis that atoms are generally reused.
         atom = promote(atom)
-        # Log the atom to the JIT log. Don't do this if the atom's not
-        # promoted; it'll be slow.
-        jit_debug(atom.repr)
+        # Log the (promoted!) atom to the JIT log.
+        jit_debug(atom.repr, 0 if namedArgsMap is None else namedArgsMap.size())
 
         if namedArgsMap is None or namedArgsMap.isEmpty():
             namedArgsMap = MIRANDA_MAP
