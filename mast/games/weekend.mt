@@ -102,14 +102,49 @@ def makeLambertian(entropy, albedo :DeepFrozen) as DeepFrozen:
         def target := (N + makeV3(rx, ry, rz)).unit()
         return [p, target, albedo]
 
+def reflect(v, n) as DeepFrozen:
+    def uv := v.unit()
+    return uv - n * (2.0 * uv.dot(n))
+
 def makeMetal(entropy, albedo :DeepFrozen, fuzz :(Double <= 1.0)) as DeepFrozen:
     return def metal.scatter(origin, direction, p, N, ej):
-        def d := direction.unit()
-        def reflected := d - N * (2.0 * d.dot(N))
+        def reflected := reflect(direction, N)
         if (reflected.dot(N).belowZero()) { throw.eject(ej, "absorbed?") }
         def [fx, fy, fz] := entropy.nextBall(3)
         def fuzzed := reflected + makeV3(fx, fy, fz) * fuzz
         return [p, fuzzed, albedo]
+
+def refract(v, n, coeff :Double, ej) as DeepFrozen:
+    def uv := v.unit()
+    def dt := uv.dot(n)
+    def discriminant := 1.0 - coeff ** 2 * (1.0 - dt ** 2)
+    if (discriminant.atMostZero()) { throw.eject(ej, "internally reflected") }
+    return (uv - n * dt) * coeff - n * discriminant.squareRoot()
+
+# https://en.wikipedia.org/wiki/Schlick%27s_approximation
+def schlick(cosine :Double, refractiveIndex :Double) :Double as DeepFrozen:
+    def r0 :Double := ((1.0 - refractiveIndex) / (1.0 + refractiveIndex)) ** 2
+    return r0 + (1.0 - r0) * (1.0 - cosine) ** 5
+
+def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
+    # XXX should have blue be 0?
+    def attenuation :DeepFrozen := makeV3(1.0, 1.0, 1.0)
+    return def dielectric.scatter(origin, direction, p, N, _ej):
+        def prod := direction.dot(N)
+        def [outwardNormal, coeff, cosine] := if (prod > 0) {
+            [-N, refractiveIndex, refractiveIndex * prod]
+        } else {
+            [N, refractiveIndex.reciprocal(), -prod]
+        }
+        return escape internal {
+            def refracted := refract(direction, outwardNormal, coeff,
+                                     internal)
+            def reflectProb := schlick(cosine / direction.norm(),
+                                       refractiveIndex)
+            if (entropy.nextDouble() < reflectProb) {
+                [p, refracted, attenuation]
+            } else { [p, reflect(direction, N), attenuation] }
+        } catch _ { [p, reflect(direction, N), attenuation] }
 
 def blueSky :DeepFrozen := makeV3(0.5, 0.7, 1.0)
 
@@ -136,14 +171,15 @@ def subsamples :Int := 5
 def chapter8(entropy) as DeepFrozen:
     def world := makeHittables([
         makeSphere(makeV3(0.0, 0.0, -1.0), 0.5,
-                   makeLambertian(entropy, makeV3(0.8, 0.3, 0.3))),
+                   makeLambertian(entropy, makeV3(0.1, 0.2, 0.5))),
         makeSphere(makeV3(0.0, -100.5, -1.0), 100.0,
                    makeLambertian(entropy, makeV3(0.8, 0.8, 0.0))),
         makeSphere(makeV3(1.0, 0.0, -1.0), 0.5,
                    makeMetal(entropy, makeV3(0.8, 0.6, 0.2), 1.0)),
-        # NB: Original has fuzz 0.3, but I wanted to see a polished finish.
         makeSphere(makeV3(-1.0, 0.0, -1.0), 0.5,
-                   makeMetal(entropy, makeV3(0.8, 0.8, 0.8), 0.001)),
+                   makeDielectric(entropy, 1.5)),
+        makeSphere(makeV3(-1.0, 0.0, -1.0), -0.45,
+                   makeDielectric(entropy, 1.5)),
     ])
 
     return def drawable.drawAt(u :Double, v :Double):
