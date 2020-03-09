@@ -157,7 +157,7 @@ class Object(object):
         # Promote the atom, on the basis that atoms are generally reused.
         atom = promote(atom)
         # Log the (promoted!) atom to the JIT log.
-        jit_debug(atom.repr, 0 if namedArgsMap is None else namedArgsMap.size())
+        jit_debug(atom.repr)
 
         if namedArgsMap is None or namedArgsMap.isEmpty():
             namedArgsMap = MIRANDA_MAP
