@@ -28,7 +28,19 @@ def makeMatrixSemiring(semiring :DeepFrozen, n :(Int > 0)) as DeepFrozen:
             rv := semiring.add(rv, x)
         return rv
 
+    # We're going to do column-major addressing:
+    # [ 0 3 6 ]
+    # [ 1 4 7 ]
+    # [ 2 5 8 ]
+
     return object matrixSemiring as DeepFrozen:
+        "
+        A closed semiring of matrices on a closed semiring.
+
+        This closed semiring features closure, and additionally can solve
+        affine maps.
+        "
+
         to zero() :List:
             return [semiring.zero()] * n ** 2
 
@@ -39,14 +51,15 @@ def makeMatrixSemiring(semiring :DeepFrozen, n :(Int > 0)) as DeepFrozen:
             } else { semiring.zero() }]
 
         to closure(x :List) :List:
+            # Lehmann's algorithm.
             # https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.71.7650&rep=rep1&type=pdf
             var a := x
             for k in (0..!n):
                 a := [for index => val in (a) {
-                    def [j, i] := index.divMod(n)
-                    semiring.add(val, semiring.multiply(a[i + k * n],
+                    def [i, j] := index.divMod(n)
+                    semiring.add(val, semiring.multiply(a[i * n + k],
                         semiring.multiply(semiring.closure(a[k + k * n]),
-                            a[k + j * n])))
+                            a[k * n + j])))
                 }]
             return matrixSemiring.add(matrixSemiring.one(), a)
 
@@ -58,6 +71,23 @@ def makeMatrixSemiring(semiring :DeepFrozen, n :(Int > 0)) as DeepFrozen:
             for i in (0..!n):
                 for j in (0..!n):
                     rv.push(sum([for k in (0..!n) {
-                        semiring.multiply(left[i + k * n], right[k + j * n])
+                        semiring.multiply(left[i * n + k], right[k * n + j])
                     }]))
             return rv.snapshot()
+
+        to solveAffineMap(a :List, var b :List) :List:
+            "
+            Solve an affine mapping of the form x = Ax + B.
+
+            `b` need not be square; it may be as thin as a single column or as
+            wide as a square. The solution will be as wide as `b`.
+            "
+
+            # Stretch b to be square.
+            def stride := b.size() // n
+            if (stride < n) { b += [semiring.zero()] * (n * (n - stride)) }
+            traceln(`sizes ${a.size()} ${b.size()}`)
+            # Construct the solution.
+            def rv := matrixSemiring.multiply(matrixSemiring.closure(a), b)
+            # And unstretch.
+            return rv.slice(0, n * stride)
