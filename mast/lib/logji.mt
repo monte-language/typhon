@@ -1,4 +1,4 @@
-exports (logic, makeKanren, unify)
+exports (logic, makeKanren, Katren)
 
 # A simple logic monad.
 # Loosely based on http://homes.sice.indiana.edu/ccshan/logicprog/LogicT-icfp2005.pdf
@@ -11,14 +11,20 @@ def isZero(action) :Bool as DeepFrozen:
 
 object logic as DeepFrozen:
     to zero():
+        "Never succeed."
+
         return zero
 
     to pure(value):
+        "Succeed in just one case."
+
         return fn ej {
             throw.eject(ej, [value, zero])
         }
 
     to plus(left, right):
+        "Succeed if `left` or `right` succeed."
+
         # Optimization: Remove zeroes from the tree.
         return if (isZero(left)) {
             right
@@ -28,6 +34,18 @@ object logic as DeepFrozen:
                     if (p =~ [x, next]) {
                         throw.eject(ej, [x, logic.plus(right, next)])
                     } else { right(ej) }
+                }
+            }
+        }
+
+    to map(action, f):
+        # Remove zeroes from the tree.
+        return if (isZero(action)) { zero } else {
+            fn ej {
+                escape la { action(la) } catch p {
+                    if (p =~ [x, next]) {
+                        logic.plus(logic.pure(f(x)), logic.map(next, f))(ej)
+                    } else { throw.eject(ej, null) }
                 }
             }
         }
@@ -215,16 +233,169 @@ def makeKanren() as DeepFrozen:
 
     return makeCS([].asMap(), [], 0)
 
-object unify as DeepFrozen:
-    to run(lhs, rhs):
-        return def unifying(k):
-            return k.unify(lhs, rhs)
+# https://arxiv.org/pdf/1706.00526.pdf
 
-    to dis(lhs, rhs):
-        return def disunifying(k):
-            return k.disunify(lhs, rhs)
+object Katren as DeepFrozen:
+    "
+    A category of logic variables, ala miniKanren.
 
-object cond as DeepFrozen:
-    match [=="run", fs, _]:
-        def conde(k):
-            return k.cond(fs)
+    Arrows in this category take a pair of a Kanren context and a logic
+    variable, and return a logical action yielding many pairs of contexts and
+    variables. Run an arrow with an empty context and a fresh variable, and
+    get a logical action for zero or more contexts and variables.
+    "
+
+    to id():
+        return fn k, u { logic.pure([k, u]) }
+
+    to compose(f, g):
+        return fn k1, u {
+            logic."bind"(f(k1, u), fn [k2, v] {
+                g(k2, v)
+            })
+        }
+
+    # Daggering.
+
+    to dagger(f):
+        return fn k1, u {
+            def [k2, v, fu] := k1.fresh(2)
+            logic."bind"(f(k2, fu), fn [k3, fv] {
+                logic.map(k3.unify([u, v], [fv, fu]), fn k4 { [k4, v] })
+            })
+        }
+
+    # Products. Note that we are using prod(), not pair()!
+
+    to exl():
+        return fn k1, u {
+            def [k2, l, r] := k1.fresh(2)
+            logic.map(k2.unify(u, [l, r]), fn k3 { [k3, l] })
+        }
+
+    to exr():
+        return fn k1, u {
+            def [k2, l, r] := k1.fresh(2)
+            logic.map(k2.unify(u, [l, r]), fn k3 { [k3, r] })
+        }
+
+    to prod(f, g):
+        return fn k1, u {
+            def [k2, inl, inr, outl, outr, v] := k1.fresh(5)
+            logic."bind"(k2.unify([u, v], [[inl, inr], [outl, outr]]), fn k3 {
+                logic."bind"(f(k3, inl), fn [k4, outf] {
+                    # We have a choice here: Do we unify f's output with our
+                    # return value first, or do we run g? This amounts to
+                    # short-circuiting g, if we so choose. ~ C.
+                    logic."bind"(g(k4, inr), fn [k5, outg] {
+                        logic.map(k5.unify([outf, outg], [outl, outr]), fn k6 {
+                            [k6, v]
+                        })
+                    })
+                })
+            })
+        }
+
+    to braid():
+        return fn k1, u {
+            def [k2, v, l, r] := k1.fresh(3)
+            logic.map(k2.unify([u, v], [[l, r], [r, l]]), fn k3 { [k3, v] })
+        }
+
+    # Cartesian copying.
+
+    to copy():
+        return fn k1, u {
+            def [k2, v] := k1.fresh(1)
+            logic.map(k2.unify([u, u], v), fn k3 { [k3, v] })
+        }
+
+    to delete():
+        return fn k, _ {
+            # Cheat: We use null to carry the I type, and unification always
+            # succeeds (because any input will be related to the lone possible
+            # output), so we effectively can kill the input.
+            logic.pure([k, null])
+        }
+
+    to merge():
+        return fn k1, u {
+            def [k2, v] := k1.fresh(1)
+            logic.map(k2.unify(u, [v, v]), fn k3 { [k3, v] })
+        }
+
+    to create():
+        return fn k1, u {
+            # Note that, unlike in delete(), we have to pre-kill the input
+            # value. This will be required later. One might think of delete()
+            # as reaping logic values which are being allocated here.
+            def [k2, v] := k1.fresh(1)
+            logic.map(k2.unify(u, null), fn k3 { [k3, v] })
+        }
+
+    # Compact closure.
+
+    to unit():
+        return fn k1, u {
+            # As with create(), pre-kill.
+            def [k2, v, pipe] := k1.fresh(2)
+            logic.map(k2.unify([u, v], [null, [pipe, pipe]]), fn k3 {
+                [k3, v]
+            })
+        }
+
+    to counit():
+        return fn k1, u {
+            # As with delete(), cheat.
+            def [k2, pipe] := k1.fresh(1)
+            logic.map(k2.unify(u, [pipe, pipe]), fn k3 { [k3, null] })
+        }
+
+    # Logical operations.
+
+    to and(f, g):
+        # This one is easier to compose than to open-code.
+        return Katren.compose(Katren.copy(),
+                              Katren.compose(Katren.prod(f, g),
+                                             Katren.merge()))
+
+    to "true"():
+        return fn k, _ { logic.pure(k.fresh(1)) }
+
+    # NNO.
+
+    to zero():
+        return fn k1, u {
+            logic.map(k1.unify(u, null), fn k2 { [k2, 0] })
+        }
+
+    to succ():
+        return fn k1, u {
+            # This is basically a custom constraint. We're going to examine u
+            # and see whether it is already bound; if so, then we cheat, but
+            # if not, then we iterate.
+            if (k1.walk(u) =~ i :Int) { logic.pure([k1, i + 1]) } else {
+                def [k2, v] := k1.fresh(1)
+                def go(k, x) {
+                    def isZero := logic.map(k.unify([u, v], [x, x + 1]),
+                                            fn k3 { [k3, v] })
+                    def notZero := logic."bind"(k.disunify(u, x), fn k3 {
+                        go(k3, x + 1)
+                    })
+                    return logic.plus(isZero, notZero)
+                }
+                go(k2, 0)
+            }
+        }
+
+    to pr(q, f):
+        return def go(k1, u):
+            # Either it's zero, or it's not.
+            def isZero := logic."bind"(k1.unify(u, 0), fn k2 {
+                q(k2, null)
+            })
+            def notZero := logic."bind"(k1.disunify(u, 0), fn k2 {
+                # So it's at least one? Unsucc and recurse.
+                Katren.compose(Katren.dagger(Katren.succ()), Katren.compose(go, f))(k2, u)
+            })
+            return logic.plus(isZero, notZero)
