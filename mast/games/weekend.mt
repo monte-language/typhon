@@ -87,7 +87,7 @@ def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
 def makeHittables(hs :List) as DeepFrozen:
     return def hittables.hit(origin, direction, tMin :Double, tMax :Double, ej):
         var rv := null
-        var closestSoFar :Double := tMax
+        var closestSoFar := tMax
         for h in (hs):
             def [t, _, _, _] := rv := h.hit(origin, direction, tMin,
                                             closestSoFar, __continue)
@@ -99,8 +99,6 @@ def makeHittables(hs :List) as DeepFrozen:
 def makeLambertian(entropy, albedo :DeepFrozen) as DeepFrozen:
     return def lambertian.scatter(_direction, p, N, _ej):
         def [rx, ry, rz] := entropy.nextBall(3)
-        # NB: Original does `target := p + ...; color(p, target - p)` but we
-        # can avoid a spurious addition/subtraction pair.
         def target := (N + makeV3(rx, ry, rz)).unit()
         return [p, target, albedo]
 
@@ -125,11 +123,12 @@ def refract(v, n, coeff :Double, ej) as DeepFrozen:
 
 # https://en.wikipedia.org/wiki/Schlick%27s_approximation
 def schlick(cosine :Double, refractiveIndex :Double) :Double as DeepFrozen:
-    def r0 :Double := ((1.0 - refractiveIndex) / (1.0 + refractiveIndex)) ** 2
+    def r0 := ((1.0 - refractiveIndex) / (1.0 + refractiveIndex)) ** 2
     return r0 + (1.0 - r0) * (1.0 - cosine) ** 5
 
 def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
-    # XXX should have blue be 0?
+    # NB: The original deliberately destroys the blue channel, but I don't see
+    # why that should be done.
     def attenuation :DeepFrozen := makeV3(1.0, 1.0, 1.0)
     return def dielectric.scatter(direction, p, N, _ej):
         def prod := direction.unit().dot(N)
@@ -151,7 +150,6 @@ def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
 def blueSky :DeepFrozen := makeV3(0.5, 0.7, 1.0)
 
 def color(entropy, origin, direction, world, depth) as DeepFrozen:
-    if (depth > 50) { return zero }
     return escape miss:
         # Set minimum t in order to avoid shadow acne.
         def [_, p, N, mat] := world.hit(origin, direction, 1.0e-5, Infinity,
@@ -159,7 +157,9 @@ def color(entropy, origin, direction, world, depth) as DeepFrozen:
         escape absorbed:
             def [so, sd, attenuation] := mat.scatter(direction, p, N,
                                                      absorbed)
-            attenuation * color(entropy, so, sd, world, depth + 1)
+            if (depth < 50) {
+                attenuation * color(entropy, so, sd, world, depth + 1)
+            } else { zero }
         catch _:
             zero
     catch _:
@@ -216,18 +216,18 @@ def randomScene(entropy) as DeepFrozen:
                           0.5 * rand())
             } else { makeDielectric(entropy, 1.5) }
             rv.push(makeSphere(center, 0.2, material))
-    # XXX cutting down for speed
-    return makeHittables(rv.slice(0, 24).snapshot())
+    # XXX limited for speed
+    return makeHittables(rv.snapshot())
 
 # NB: Runtime increases linearly with this number.
-def subsamples :Int := 2
+def subsamples :Int := 5
 
 def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # Which way is up? This way.
     def up := makeV3(0.0, 1.0, 0.0)
 
     # What are we looking at?
-    def lookAt := makeV3(0.0, 0.0, 0.0)
+    def lookAt := makeV3(4.0, 0.0, 1.0)
 
     def world := randomScene(entropy)
 
@@ -242,16 +242,16 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
         var rv := zero
         for _ in (0..!subsamples):
             # Important: These must be two uncorrelated random offsets.
-            def du := u + (entropy.nextDouble() / 100.0)
-            def dv := v + (entropy.nextDouble() / 100.0)
+            def du := u + (entropy.nextDouble() / 1_000.0)
+            def dv := v + (entropy.nextDouble() / 1_000.0)
             def [origin, direction] := camera.getRay(du, dv)
             rv += color(entropy, origin, direction, world, 0)
         return (rv / subsamples).asColor()
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def w := 200
-    def h := 100
+    def w := 160
+    def h := 120
     def drawable := makeDrawable(entropy, w / h)
     def t := Timer.measureTimeTaken(fn { drawable.drawAt(0.5, 0.5) })
     return when (t) ->
