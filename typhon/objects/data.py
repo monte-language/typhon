@@ -355,7 +355,7 @@ class DoubleObject(Object):
 
     # Intermediate arithmetic building blocks.
 
-    @method("Double")
+    @method.py("Double")
     def reciprocal(self):
         "This number's multiplicative inverse."
 
@@ -460,13 +460,21 @@ class DoubleObject(Object):
     def cotangent(self):
         return 1.0 / math.tan(self._d)
 
+    # NB: Inverse trig functions have restricted ranges.
+
     @method("Double")
     def arcSine(self):
-        return math.asin(self._d)
+        try:
+            return math.asin(self._d)
+        except ValueError:
+            raise userError(u".arcSine/0: %f out of range" % self._d)
 
     @method("Double")
     def arcCosine(self):
-        return math.acos(self._d)
+        try:
+            return math.acos(self._d)
+        except ValueError:
+            raise userError(u".arcCosine/0: %f out of range" % self._d)
 
     @method("Double", "Double")
     def arcTangent(self, x):
@@ -474,11 +482,17 @@ class DoubleObject(Object):
 
     @method("Double")
     def arcCosecant(self):
-        return math.sin(1.0 / self._d)
+        try:
+            return math.asin(self.reciprocal())
+        except ValueError:
+            raise userError(u".arcCosecant/0: %f out of range" % self._d)
 
     @method("Double")
     def arcSecant(self):
-        return math.cos(1.0 / self._d)
+        try:
+            return math.acos(self.reciprocal())
+        except ValueError:
+            raise userError(u".arcSecant/0: %f out of range" % self._d)
 
     @method("Double", "Double")
     def arcCotangent(self, x):
