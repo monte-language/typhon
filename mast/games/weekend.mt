@@ -67,7 +67,9 @@ def zero :DeepFrozen := makeV3(0.0, 0.0, 0.0)
 def one :DeepFrozen := makeV3(1.0, 1.0, 1.0)
 
 def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
-    return def sphere.hit(origin, direction, tMin :Double, tMax :Double, ej):
+    return def sphere.hit(ray, tMin :Double, tMax :Double, ej):
+        def origin := ray.origin()
+        def direction := ray.direction()
         def oc := origin - center
         def a := direction.dot(direction)
         def b := 2.0 * oc.dot(direction)
@@ -81,38 +83,60 @@ def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
         if (t > tMax || t < tMin):
             throw.eject(ej, "no hit in range")
         # Point from origin along direction by amount t.
-        def p := origin + direction * t
+        def p := ray.pointAtParameter(t)
         return [t, p, ((center - p) / -radius).unit(), material]
 
+def makeMovingSphere(startCenter, stopCenter, startTime :Double,
+                     stopTime :Double, radius :Double, material) as DeepFrozen:
+    def pathCenter := stopCenter - startCenter
+    def duration := stopTime - startTime
+    return def movingSphere.hit(ray, tMin :Double, tMax :Double, ej):
+        def center := startCenter + pathCenter * ((ray.time() - startTime) / duration)
+        return makeSphere(center, radius, material).hit(ray, tMin, tMax, ej)
+
 def makeHittables(hs :List) as DeepFrozen:
-    return def hittables.hit(origin, direction, tMin :Double, tMax :Double, ej):
+    return def hittables.hit(ray, tMin :Double, tMax :Double, ej):
         var rv := null
         var closestSoFar := tMax
         for h in (hs):
-            def [t, _, _, _] := rv := h.hit(origin, direction, tMin,
-                                            closestSoFar, __continue)
+            def [t, _, _, _] := rv := h.hit(ray, tMin, closestSoFar,
+                                            __continue)
             closestSoFar := t
         if (rv == null):
             throw.eject(ej, "no hits")
         return rv
 
+def makeRay(origin, direction, time :Double) as DeepFrozen:
+    return object ray:
+        to origin():
+            return origin
+
+        to direction():
+            return direction
+
+        to time():
+            return time
+
+        to pointAtParameter(t :Double):
+            return origin + direction * t
+
 def makeLambertian(entropy, albedo :DeepFrozen) as DeepFrozen:
-    return def lambertian.scatter(_direction, p, N, _ej):
+    return def lambertian.scatter(ray, p, N, _ej):
         def [rx, ry, rz] := entropy.nextBall(3)
         def target := (N + makeV3(rx, ry, rz)).unit()
-        return [p, target, albedo]
+        return [makeRay(p, target, ray.time()), albedo]
 
 def reflect(v, n) as DeepFrozen:
     def uv := v.unit()
     return uv - n * (2.0 * uv.dot(n))
 
 def makeMetal(entropy, albedo :DeepFrozen, fuzz :(Double <= 1.0)) as DeepFrozen:
-    return def metal.scatter(direction, p, N, ej):
-        def reflected := reflect(direction.unit(), N)
+    return def metal.scatter(ray, p, N, ej):
+        def reflected := reflect(ray.direction().unit(), N)
         if (reflected.dot(N).belowZero()) { throw.eject(ej, "absorbed?") }
         def [fx, fy, fz] := entropy.nextBall(3)
         def fuzzed := reflected + makeV3(fx, fy, fz) * fuzz
-        return [p, fuzzed, albedo]
+        return [makeRay(p, fuzzed, ray.time()), albedo]
 
 def refract(v, n, coeff :Double, ej) as DeepFrozen:
     def uv := v.unit()
@@ -130,7 +154,8 @@ def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
     # NB: The original deliberately destroys the blue channel, but I don't see
     # why that should be done.
     def attenuation :DeepFrozen := makeV3(1.0, 1.0, 1.0)
-    return def dielectric.scatter(direction, p, N, _ej):
+    return def dielectric.scatter(ray, p, N, _ej):
+        def direction := ray.direction()
         def prod := direction.unit().dot(N)
         def [outwardNormal, coeff, cosine] := if (prod > 0) {
             [-N, refractiveIndex, refractiveIndex * prod]
@@ -143,22 +168,23 @@ def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
             def reflectProb := schlick(cosine / direction.norm(),
                                        refractiveIndex)
             if (entropy.nextDouble() < reflectProb) {
-                [p, refracted, attenuation]
-            } else { [p, reflect(direction, N), attenuation] }
-        } catch _ { [p, reflect(direction, N), attenuation] }
+                [makeRay(p, refracted, ray.time()), attenuation]
+            } else { internal() }
+        } catch _ {
+            [makeRay(p, reflect(direction, N), ray.time()), attenuation]
+        }
 
 def blueSky :DeepFrozen := makeV3(0.5, 0.7, 1.0)
 
-def color(entropy, origin, direction, world, depth) as DeepFrozen:
+def color(entropy, ray, world, depth) as DeepFrozen:
+    def direction := ray.direction()
     return escape miss:
         # Set minimum t in order to avoid shadow acne.
-        def [_, p, N, mat] := world.hit(origin, direction, 1.0e-5, Infinity,
-                                        miss)
+        def [_, p, N, mat] := world.hit(ray, 1.0e-5, Infinity, miss)
         escape absorbed:
-            def [so, sd, attenuation] := mat.scatter(direction, p, N,
-                                                     absorbed)
+            def [scattered, attenuation] := mat.scatter(ray, p, N, absorbed)
             if (depth < 50) {
-                attenuation * color(entropy, so, sd, world, depth + 1)
+                attenuation * color(entropy, scattered, world, depth + 1)
             } else { zero }
         catch _:
             zero
@@ -167,7 +193,8 @@ def color(entropy, origin, direction, world, depth) as DeepFrozen:
         blueSky * t + one * (1.0 - t)
 
 def makeCamera(entropy, lookFrom, lookAt, up, vfov :Double, aspect :Double,
-               aperture :Double, focusDist :Double) as DeepFrozen:
+               aperture :Double, focusDist :Double, startTime :Double,
+               stopTime :Double) as DeepFrozen:
     def lensRadius := aperture / 2.0
     # Convert from angles to radians.
     def theta := vfov * 0.0.arcCosine() / 90.0
@@ -180,12 +207,15 @@ def makeCamera(entropy, lookFrom, lookAt, up, vfov :Double, aspect :Double,
         (u * halfWidth + v * halfHeight + w) * focusDist)
     def horizontal := u * (2.0 * halfWidth * focusDist)
     def vertical := v * (2.0 * halfHeight * focusDist)
+    def duration := stopTime - startTime
 
     return def camera.getRay(u :Double, v :Double):
         def [rx, ry] := entropy.nextBall(2)
         def offset := u * rx + v * ry
+        def time := startTime + entropy.nextDouble() * duration
         def origin := lookFrom + offset * lensRadius
-        return [origin, lowerLeft + horizontal * u + vertical * v - origin]
+        def direction := lowerLeft + horizontal * u + vertical * v - origin
+        return makeRay(origin, direction, time)
 
 def randomScene(entropy) as DeepFrozen:
     def rand := entropy.nextDouble
@@ -199,8 +229,10 @@ def randomScene(entropy) as DeepFrozen:
         makeSphere(makeV3(4.0, 1.0, 0.0), 1.0,
                    makeMetal(entropy, makeV3(0.7, 0.6, 0.5), 0.0)),
     ].diverge()
-    for a in (-11..11):
-        for b in (-11..11):
+    # XXX limited for speed, is originally -11..11
+    def region := -2..2
+    for a in (region):
+        for b in (region):
             def chooseMat := rand()
             def center := makeV3(a + 0.9 * rand(), 0.2,
                                  b + 0.9 * rand())
@@ -215,12 +247,13 @@ def randomScene(entropy) as DeepFrozen:
                                  0.5 * (1.0 + rand())),
                           0.5 * rand())
             } else { makeDielectric(entropy, 1.5) }
-            rv.push(makeSphere(center, 0.2, material))
-    # XXX limited for speed
+            def jitter := makeV3(0.0, entropy.nextDouble(), 0.0)
+            rv.push(makeMovingSphere(center, center + jitter, 0.0, 1.0, 0.2,
+                                     material))
     return makeHittables(rv.snapshot())
 
 # NB: Runtime increases linearly with this number.
-def subsamples :Int := 5
+def subsamples :Int := 12
 
 def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # Which way is up? This way.
@@ -235,7 +268,7 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     def distToFocus := (lookFrom - lookAt).norm()
     # NB: Aspect ratio is fixed, and we ignore the requested ratio.
     def camera := makeCamera(entropy, lookFrom, lookAt, up, 90.0, aspectRatio,
-                             1.0, distToFocus)
+                             1.0, distToFocus, 0.0, 1.0)
     return def drawable.drawAt(u :Double, var v :Double):
         # Rendering is upside-down WRT Monte conventions.
         v := 1.0 - v
@@ -244,8 +277,8 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
             # Important: These must be two uncorrelated random offsets.
             def du := u + (entropy.nextDouble() / 1_000.0)
             def dv := v + (entropy.nextDouble() / 1_000.0)
-            def [origin, direction] := camera.getRay(du, dv)
-            rv += color(entropy, origin, direction, world, 0)
+            def ray := camera.getRay(du, dv)
+            rv += color(entropy, ray, world, 0)
         return (rv / subsamples).asColor()
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
