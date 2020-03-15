@@ -130,7 +130,7 @@ class InterpObject(Object):
     # Auditor report.
     report = None
 
-    def __init__(self, name, script, frame):
+    def __init__(self, script, frame):
         self.script = script
         self.frame = frame
 
@@ -523,16 +523,15 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
     @unroll_safe
     def visitClearObjectExpr(self, patt, script, span):
         # jit_debug("ClearObjectExpr")
-        objName = script.name
         frameTable = script.layout.frameTable
         frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
                  in frameTable.frameInfo]
 
         # Build the object.
-        val = InterpObject(objName, script, frame)
+        val = InterpObject(script, frame)
 
         # Check whether we have a spot in the frame.
-        position = frameTable.positionOf(objName)
+        position = frameTable.positionOf(script.name)
 
         # Set up the self-binding.
         selfGuard = self.selfGuard(patt)
@@ -572,7 +571,6 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         # as-guard/auditor.
         # XXX In the future, we could erase the as-guard semantics earlier.
         guardAuditor = None
-        objName = script.name
         if not isinstance(patt, self.src.IgnorePatt):
             # If there's a guard, use that as the as-guard.
             if not isinstance(patt.guard, self.src.NullExpr):
@@ -591,19 +589,19 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         frame = [self.lookupBinding(scope, index) for (_, scope, index, _)
                  in frameTable.frameInfo]
         # Set up guard information.
-        guardInfo = GuardInfo(guards, frameTable, objName, guardAuditor,
+        guardInfo = GuardInfo(guards, frameTable, script.name, guardAuditor,
                 self.guardLookup)
 
         assert len(script.layout.frameNames) == len(frame), "shortcoming"
 
-        o = InterpObject(objName, script, frame)
+        o = InterpObject(script, frame)
         if auds and (len(auds) != 1 or auds[0] is not NullObject):
             # Actually perform the audit.
             o.report = clipboard.audit(auds, guardInfo)
         val = self.runGuard(guardAuditor, o, theThrower)
 
         # Check whether we have a spot in the frame.
-        position = frameTable.positionOf(objName)
+        position = frameTable.positionOf(script.name)
 
         # Set up the self-binding.
         if isinstance(patt, self.src.IgnorePatt):
