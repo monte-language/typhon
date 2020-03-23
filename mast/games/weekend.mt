@@ -105,7 +105,7 @@ def makeAABB(min, max) as DeepFrozen:
             # precisely when it swaps truth values.
             def signs := (t1.min(tMax) - t0.max(tMin)) * invD
             for sign in (signs):
-                if (sign <= 0.0) { return false }
+                if (sign.atMostZero()) { return false }
             return true
 
 def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
@@ -250,20 +250,29 @@ def makeRay(origin, direction, time :Double) as DeepFrozen:
         to pointAtParameter(t :Double):
             return origin + direction * t
 
-def makeLambertian(entropy, albedo :DeepFrozen) as DeepFrozen:
-    return def lambertian.scatter(ray, p, N, _ej):
+def makeConstantTexture(color) as DeepFrozen:
+    return def constantTexture.value(_u, _v, _p):
+        return color
+
+def makeCheckerTexture(even, odd) as DeepFrozen:
+    return def checkerTexture.value(u, v, p):
+        def sines := (p * 10.0).sine().product()
+        return (sines.belowZero()).pick(odd, even).value(u, v, p)
+
+def makeLambertian(entropy, texture) as DeepFrozen:
+    return def lambertian.scatter(ray, p, N):
         def [rx, ry, rz] := entropy.nextBall(3)
         def target := (N + makeV3(rx, ry, rz)).unit()
-        return [makeRay(p, target, ray.time()), albedo]
+        return [makeRay(p, target, ray.time()), texture.value(0.0, 0.0, p)]
 
 def reflect(v, n) as DeepFrozen:
     def uv := v.unit()
     return uv - n * (2.0 * uv.dot(n))
 
 def makeMetal(entropy, albedo :DeepFrozen, fuzz :(Double <= 1.0)) as DeepFrozen:
-    return def metal.scatter(ray, p, N, ej):
+    return def metal.scatter(ray, p, N):
         def reflected := reflect(ray.direction().unit(), N)
-        if (reflected.dot(N).belowZero()) { throw.eject(ej, "absorbed?") }
+        if (reflected.dot(N).belowZero()) { return null }
         def [fx, fy, fz] := entropy.nextBall(3)
         def fuzzed := reflected + makeV3(fx, fy, fz) * fuzz
         return [makeRay(p, fuzzed, ray.time()), albedo]
@@ -284,7 +293,7 @@ def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
     # NB: The original deliberately destroys the blue channel, but I don't see
     # why that should be done.
     def attenuation :DeepFrozen := makeV3(1.0, 1.0, 1.0)
-    return def dielectric.scatter(ray, p, N, _ej):
+    return def dielectric.scatter(ray, p, N):
         def direction := ray.direction()
         def prod := direction.unit().dot(N)
         def [outwardNormal, coeff, cosine] := if (prod > 0) {
@@ -311,12 +320,9 @@ def color(entropy, ray, world, depth) as DeepFrozen:
     # Set minimum t in order to avoid shadow acne.
     def hit := world.hit(ray, 1.0e-5, Infinity)
     return if (hit =~ [_, p, N, mat]) {
-        escape absorbed {
-            def [scattered, attenuation] := mat.scatter(ray, p, N, absorbed)
-            if (depth < 50) {
-                attenuation * color(entropy, scattered, world, depth + 1)
-            } else { zero }
-        } catch _ { zero }
+        if (depth < 50 && mat.scatter(ray, p, N) =~ [scattered, attenuation]) {
+            attenuation * color(entropy, scattered, world, depth + 1)
+        } else { zero }
     } else {
         def t := 0.5 * (direction.unit().y() + 1.0)
         blueSky * t + one * (1.0 - t)
@@ -351,11 +357,14 @@ def randomScene(entropy) as DeepFrozen:
     def rand := entropy.nextDouble
     def rv := [
         makeSphere(makeV3(0.0, -10_000.0, 0.0), 10_000.0,
-                   makeLambertian(entropy, makeV3(0.5, 0.5, 0.5))),
+                   makeLambertian(entropy,
+                                  makeCheckerTexture(makeConstantTexture(makeV3(0.2, 0.3, 0.1)),
+                                                     makeConstantTexture(makeV3(0.9, 0.9, 0.9))))),
         makeSphere(makeV3(0.0, 1.0, 0.0), 1.0,
                    makeDielectric(entropy, 1.5)),
         makeSphere(makeV3(-4.0, 1.0, 0.0), 1.0,
-                   makeLambertian(entropy, makeV3(0.4, 0.2, 0.1))),
+                   makeLambertian(entropy,
+                                  makeConstantTexture(makeV3(0.4, 0.2, 0.1)))),
         makeSphere(makeV3(4.0, 1.0, 0.0), 1.0,
                    makeMetal(entropy, makeV3(0.7, 0.6, 0.5), 0.0)),
     ].diverge()
@@ -369,8 +378,9 @@ def randomScene(entropy) as DeepFrozen:
             if ((center - makeV3(4.0, 0.0, 2.0)).norm() <= 0.9) { continue }
             def material := if (chooseMat < 0.8) {
                 makeLambertian(entropy,
-                               makeV3(rand() * rand(), rand() * rand(),
-                                      rand() * rand()))
+                               makeConstantTexture(makeV3(rand() * rand(),
+                                                          rand() * rand(),
+                                                          rand() * rand())))
             } else if (chooseMat < 0.95) {
                 makeMetal(entropy,
                           makeV3(0.5 * (1.0 + rand()), 0.5 * (1.0 + rand()),
@@ -382,14 +392,25 @@ def randomScene(entropy) as DeepFrozen:
                                      material))
     return makeBVH.fromHittables(entropy, rv.snapshot(), 0.0, 1.0)
 
+def sphereStudy(entropy) as DeepFrozen:
+    def checker := makeLambertian(entropy,
+                                  makeCheckerTexture(makeConstantTexture(makeV3(0.2, 0.3, 0.1)),
+                                                     makeConstantTexture(makeV3(0.9, 0.9, 0.9))))
+    def bigSphere := makeSphere(makeV3(0.0, -10_000.0, 0.0), 10_000.0,
+                                checker)
+    def study := makeSphere(makeV3(0.0, 1.0, 0.0), 1.0,
+                            makeDielectric(entropy, 1.5))
+    def spheres := [bigSphere, study]
+    return makeBVH.fromHittables(entropy, spheres, 0.0, 1.0)
+
 # https://en.wikipedia.org/wiki/Student%27s_t-distribution#Table_of_selected_values
 # 99.8% two-sided CI
-# def tTable :List[Double] := [
-#     318.3, 22.33, 10.21, 7.173, 5.893, 5.208, 4.785, 4.501, 4.297, 4.144,
-#     4.025, 3.930, 3.852, 3.787, 3.733, 3.686, 3.646, 3.610, 3.579, 3.552,
-#     3.527, 3.505, 3.485, 3.467, 3.450, 3.435, 3.421, 3.408, 3.396, 3.385,
-# ]
-# def tFinal :Double := 3.090
+def tTable :List[Double] := [
+    318.3, 22.33, 10.21, 7.173, 5.893, 5.208, 4.785, 4.501, 4.297, 4.144,
+    4.025, 3.930, 3.852, 3.787, 3.733, 3.686, 3.646, 3.610, 3.579, 3.552,
+    3.527, 3.505, 3.485, 3.467, 3.450, 3.435, 3.421, 3.408, 3.396, 3.385,
+]
+def tFinal :Double := 3.090
 # 90% two-sided CI
 # def tTable :List[Double] := [
 #     6.314, 2.920, 2.353, 2.132, 2.015, 1.943, 1.895, 1.860, 1.833, 1.812,
@@ -398,20 +419,16 @@ def randomScene(entropy) as DeepFrozen:
 # ]
 # def tFinal :Double := 1.645
 # 50% two-sided CI
-def tTable :List[Double] := [
-    1.000, 0.816, 0.765, 0.741, 0.727, 0.718, 0.711, 0.706, 0.703, 0.700,
-    0.697, 0.695, 0.694, 0.692, 0.691, 0.690, 0.689, 0.688, 0.688, 0.687,
-]
-def tFinal :Double := 0.674
+# def tTable :List[Double] := [
+#     1.000, 0.816, 0.765, 0.741, 0.727, 0.718, 0.711, 0.706, 0.703, 0.700,
+#     0.697, 0.695, 0.694, 0.692, 0.691, 0.690, 0.689, 0.688, 0.688, 0.687,
+# ]
+# def tFinal :Double := 0.674
 
-def vectorSum(vs) as DeepFrozen:
-    var rv := zero
-    for v in (vs) { rv += v }
-    return rv
-
-# NB: This is the minimum from the first weekend, but here it is our maximum
-# and we'll adaptively hope that we often need far fewer.
-def maxSamples :Int := 20
+# NB: We adaptively need far fewer than this.
+# At 50% CI, blue sky takes only 2 samples; checkerboards take about 30.
+# At 90% CI, blue sky takes about 3 samples, checkerboards take about 10.
+def maxSamples :Int := 1_000
 
 def makeSampleCounter() as DeepFrozen:
     var samplesTaken := 0
@@ -480,7 +497,11 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # What are we looking at?
     def lookAt := makeV3(4.0, 0.0, 1.0)
 
-    def world := randomScene(entropy)
+    # Weekend scene. Big and slow.
+    # def world := randomScene(entropy)
+
+    # Study of single sphere above larger floor sphere.
+    def world := sphereStudy(entropy)
 
     def lookFrom := makeV3(6.0, 2.0, 2.0)
     def distToFocus := (lookFrom - lookAt).norm()
@@ -520,7 +541,9 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
                     => countersMade,
                     => countersMaxed,
                 ] | _ := counter.stats()
-                traceln(`Status: ${percent(countersMade)} (${samplesTaken / countersMade} samples/pixel) (${percent(countersMaxed)} maxed)`)
+                def compensatedSamples := samplesTaken - maxSamples * countersMaxed
+                def compensatedCounters := countersMade - countersMaxed
+                traceln(`Status: ${percent(countersMade)} (${samplesTaken / countersMade} (${compensatedSamples / compensatedCounters}) samples/pixel) (${percent(countersMaxed)} maxed)`)
             i += 1
             drawer.next(__break)
         def ppm := drawer.finish()
