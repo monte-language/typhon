@@ -1,4 +1,4 @@
-exports (makeMatrix, chu)
+exports (makeMatrix)
 
 object makeMatrix as DeepFrozen:
     # Addressing is column-major. x_ij -> i + j * stride
@@ -24,11 +24,20 @@ object makeMatrix as DeepFrozen:
             to get(row :(0..!i), column :(0..!j)):
                 return l[row + column * i]
 
-            to dual():
+            to row(row :(0..!i)):
+                return [for column in (0..!j) l[row + column * i]]
+
+            to column(column :(0..!j)):
+                return [for row in (0..!i) l[row + column * i]]
+
+            to complement():
                 return makeMatrix(j, i, [for x in (0..!i * j) {
                     def [column, row] := x.divMod(j)
                     matrix[column, row]
                 }])
+
+            to not():
+                return makeMatrix(i, j, [for x in (l) !x])
 
             to tensor(other):
                 def via (makeMatrix.un) [oi, oj, ol] := other
@@ -41,14 +50,14 @@ object makeMatrix as DeepFrozen:
                 for f in (0..!oj ** i):
                     for g in (0..!j ** oi):
                         def col := [for x in (0..!ni) {
-                            def [a, b] := x.divMod(i)
+                            def [a, b] := x.divMod(oi)
                             # How to apply a function encoded as a number like
                             # this? f has i different choices, each with width
                             # oj. This is like using oj as a base. To
                             # evaluate, first divide by the base at the index,
                             # then take the modulus of the width.
-                            def fa := (f // oj ** a) % i
-                            def gb := (g // j ** b) % oi
+                            def fa := (f // oj ** a) % oj
+                            def gb := (g // j ** b) % j
                             def val := matrix[a, gb]
                             if (val != other[b, fa]) { continue }
                             val
@@ -57,21 +66,29 @@ object makeMatrix as DeepFrozen:
                         nj += 1
                 return makeMatrix(ni, nj, F.snapshot())
 
-            to separate():
-                def seen := [].asSet().diverge()
-                def toSkip := [].diverge()
+            to collapse():
+                def seenRows := [].asSet().diverge()
+                def rowsToSkip := [].diverge()
                 for row in (0..!i):
-                    def r := [for column in (0..!j) matrix[row, column]]
-                    toSkip.push(seen.contains(r))
-                    seen.include(r)
-                return if (toSkip.isEmpty()) { matrix } else {
-                    def cols := [for index => x in (l)
-                                 ? (!toSkip[index % i]) x]
-                    makeMatrix(seen.size(), j, cols)
+                    def r := matrix.row(row)
+                    rowsToSkip.push(seenRows.contains(r))
+                    seenRows.include(r)
+                def seenCols := [].asSet().diverge()
+                def colsToSkip := [].diverge()
+                for col in (0..!i):
+                    def c := matrix.column(col)
+                    colsToSkip.push(seenCols.contains(c))
+                    seenCols.include(c)
+                return if (rowsToSkip.isEmpty() && colsToSkip.isEmpty()) { matrix } else {
+                    def data := [for index => x in (l) ? ({
+                        def [c, r] := index.divMod(i)
+                        !rowsToSkip.contains(r) && !colsToSkip.contains(c)
+                    }) x]
+                    makeMatrix(seenRows.size(), seenCols.size(), data)
                 }
 
             to implies(other):
-                return matrix.tensor(other.dual()).separate().dual()
+                return ~(matrix.tensor(~other)).collapse()
 
             to plus(other):
                 def via (makeMatrix.un) [oi, oj, ol] := other
@@ -85,7 +102,22 @@ object makeMatrix as DeepFrozen:
                 return makeMatrix(ni, nj, cols)
 
             to with(other):
-                return matrix.dual().plus(other.dual()).dual()
+                return ~(~matrix).plus(~other)
+
+            to isPointed() :Bool:
+                for row in (0..!i):
+                    def next := __continue
+                    for x in (matrix.row(row)):
+                        if (!x) { next() }
+                    return true
+                return false
+
+            to discreteness() :Double:
+                def p := 2 ** i - j
+                def q := 2 ** j - i
+                # NB: http://boole.stanford.edu/pub/gamut.pdf p5 claims this
+                # cannot divide by zero.
+                return (p - q) / (p + q)
 
     to identity(n :Int):
         return makeMatrix(n, n, [for x in (0..!n ** 2) {
@@ -93,34 +125,21 @@ object makeMatrix as DeepFrozen:
             i == j
         }])
 
-object chu as DeepFrozen:
-    to invert(space):
-        return object invertedChuSpace:
-            to rows():
-                return space.columns()
+    to unit():
+        return makeMatrix(1, 2, [false, true])
 
-            to columns():
-                return space.rows()
-
-            to get(i, j):
-                return space[j, i]
-
-    to CABA(size :Int):
-        return object completeAtomicBooleanChuSpace:
-            to rows():
-                return size
-
-            to columns():
-                return 2 ** size
-
-            to get(i, j) :Bool:
-                return !(j & (1 << i)).isZero()
-
-    to isPointed(space) :Bool:
-        for i in (0..!space.rows()):
-            def next := __continue
-            for j in (0..!space.columns()):
-                if (space[i, j]):
-                    next()
-            return true
-        return false
+    to completeAtomicBooleanAlgebra(n :Int):
+        "The complete atomic Boolean algebra (CABA) with `n` elements."
+        # [ 0 0 0 ... ]
+        # [ 1 0 0     ]
+        # [ 0 1 0     ]
+        # [ 1 1 0     ]
+        # [ 0 0 1     ]
+        # [ 1 0 1     ]
+        # [ 0 1 1     ]
+        # [ 1 1 1     ]
+        # [ ...       ]
+        return makeMatrix(2 ** n, n, [for x in (0..!n * 2 ** n) {
+            def [i, j] := x.divMod(2 ** n)
+            !(1 << i & j).isZero()
+        }])
