@@ -79,7 +79,6 @@ class Module(Object):
         self.recorder = recorder
         self.origin = origin
         self.astSource = None
-        self.smallcapsSource = None
         self.locals = {}
 
 
