@@ -315,17 +315,24 @@ def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
 
 def blueSky :DeepFrozen := makeV3(0.5, 0.7, 1.0)
 
+# Usually only a few dozen bounces at most, but certain critical angles on
+# dielectric or metal surfaces can cause this to skyrocket.
+def maxDepth :Int := 200
+
+# NB: Returns not just the color, but also the depth that we needed to go to
+# to examine the color.
 def color(entropy, ray, world, depth) as DeepFrozen:
     def direction := ray.direction()
     # Set minimum t in order to avoid shadow acne.
     def hit := world.hit(ray, 1.0e-5, Infinity)
     return if (hit =~ [_, p, N, mat]) {
-        if (depth < 50 && mat.scatter(ray, p, N) =~ [scattered, attenuation]) {
-            attenuation * color(entropy, scattered, world, depth + 1)
-        } else { zero }
+        if (depth < maxDepth && mat.scatter(ray, p, N) =~ [scattered, attenuation]) {
+            def [c, d] := color(entropy, scattered, world, depth + 1)
+            [attenuation * c, d]
+        } else { [zero, depth] }
     } else {
         def t := 0.5 * (direction.unit().y() + 1.0)
-        blueSky * t + one * (1.0 - t)
+        [blueSky * t + one * (1.0 - t), depth]
     }
 
 def makeCamera(entropy, lookFrom, lookAt, up, vfov :Double, aspect :Double,
@@ -404,36 +411,100 @@ def sphereStudy(entropy) as DeepFrozen:
     return makeBVH.fromHittables(entropy, spheres, 0.0, 1.0)
 
 # https://en.wikipedia.org/wiki/Student%27s_t-distribution#Table_of_selected_values
-# 99.8% two-sided CI
-def tTable :List[Double] := [
-    318.3, 22.33, 10.21, 7.173, 5.893, 5.208, 4.785, 4.501, 4.297, 4.144,
-    4.025, 3.930, 3.852, 3.787, 3.733, 3.686, 3.646, 3.610, 3.579, 3.552,
-    3.527, 3.505, 3.485, 3.467, 3.450, 3.435, 3.421, 3.408, 3.396, 3.385,
-]
-def tFinal :Double := 3.090
-# 90% two-sided CI
+# http://www.davidmlane.com/hyperstat/t_table.html
+# 99.9% two-sided CI
+def tTable :List[Double] := ([
+    636.6, 31.60, 12.92, 8.610, 6.869, 5.959, 5.408, 5.041, 4.781, 4.587,
+    4.437, 4.318, 4.221, 4.140, 4.073, 4.015, 3.965, 3.922, 3.883, 3.850,
+    3.819, 3.792, 3.767, 3.745, 3.725, 3.707, 3.690, 3.674, 3.659, 3.646,
+] + [3.551] * 10 + [3.496] * 10 + [3.460] * 10 +
+    [3.416] * 20 + [3.390] * 20 + [3.373] * 20)
+def tFinal :Double := 3.291
+# 99% two-sided CI
 # def tTable :List[Double] := [
-#     6.314, 2.920, 2.353, 2.132, 2.015, 1.943, 1.895, 1.860, 1.833, 1.812,
-#     1.796, 1.782, 1.771, 1.761, 1.753, 1.746, 1.740, 1.734, 1.729, 1.725,
-#     1.721, 1.717, 1.714, 1.711, 1.708, 1.706, 1.703, 1.701, 1.699, 1.697,
+#     63.66, 9.925, 5.841, 4.604, 4.032, 3.707, 3.499, 3.355, 3.250, 3.169,
+#     3.106, 3.055, 3.012, 2.977, 2.947, 2.921, 2.898, 2.878, 2.861, 2.845,
+#     2.831, 2.819, 2.807, 2.797, 2.787, 2.779, 2.771, 2.763, 2.756, 2.750,
+#     2.744, 2.738, 2.733, 2.728, 2.723, 2.719, 2.715, 2.711, 2.707, 2.704,
+#     2.701, 2.698, 2.695, 2.692, 2.689, 2.687, 2.684, 2.682, 2.680, 2.677,
+#     2.675, 2.673, 2.671, 2.670, 2.668, 2.666, 2.664, 2.663, 2.661, 2.660,
+#     2.658, 2.657, 2.656, 2.654, 2.653, 2.652, 2.651, 2.650, 2.649, 2.647,
+#     2.646, 2.645, 2.644, 2.643, 2.643, 2.642, 2.641, 2.640, 2.639, 2.638,
+#     2.637, 2.637, 2.636, 2.635, 2.634, 2.634, 2.633, 2.632, 2.632, 2.631,
+#     2.630, 2.630, 2.629, 2.629, 2.628, 2.628, 2.627, 2.626, 2.626, 2.625,
 # ]
-# def tFinal :Double := 1.645
-# 50% two-sided CI
-# def tTable :List[Double] := [
-#     1.000, 0.816, 0.765, 0.741, 0.727, 0.718, 0.711, 0.706, 0.703, 0.700,
-#     0.697, 0.695, 0.694, 0.692, 0.691, 0.690, 0.689, 0.688, 0.688, 0.687,
-# ]
-# def tFinal :Double := 0.674
+# def tFinal :Double := 2.576
 
-# NB: We adaptively need far fewer than this.
-# At 50% CI, blue sky takes only 2 samples; checkerboards take about 30.
-# At 90% CI, blue sky takes about 3 samples, checkerboards take about 10.
-def maxSamples :Int := 1_000
+def chiTable := [
+    0.5 => 5.35,
+    0.7 => 7.23,
+    0.8 => 8.56,
+    0.9 => 10.64,
+    0.95 => 12.59,
+    0.99 => 16.81,
+    0.999 => 22.46,
+]
+def qualityCutoff :Double := chiTable[0.999]
+
+# NB: We adaptively need far fewer than this; keep this at about 5x the
+# recommended ceiling. However, we *must* have at least 2 samples, and each
+# additional minimum sample raises the quality floor tremendously.
+# At 50% CI, we need 2-3 samples.
+# At 90% CI, we need 2-5 samples.
+# At 95% CI, we need 8-10 samples.
+# At 99% CI, we need 20-45 samples.
+# At 99.9% CI, we need 500-2000 samples.
+def minSamples :Int := 2
+def maxSamples :Int := 5_000
+
+def makeWelfordTracker(zero) as DeepFrozen:
+    # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
+    # We will track the number of samples, the mean, and the sum of squares of
+    # offsets from the mean. When it comes time to output, we will emit the
+    # mean as in traditional supersampling.
+    var N := 0
+
+    # NB: To ensure that vectors are allowed here, we not only pass in the
+    # zero, but carefully keep M1 & M2 on the left and scalars on the right
+    # for operations.
+    var M1 := zero
+    var M2 := zero
+
+    return object welfordTracker:
+        "
+        Estimate a value by taking samples online.
+
+        The update takes constant time.
+        "
+
+        to count():
+            return N
+
+        to mean():
+            return M1
+
+        to variance():
+            return M2 / (N - 1)
+
+        to standardDeviation():
+            return welfordTracker.variance().squareRoot()
+
+        to run(sample):
+            # Welford's algorithm for observations. First, update the count.
+            N += 1
+            # Then, update the mean. We'll need to save the old mean too.
+            def mean := M1
+            def delta := sample - mean
+            M1 += delta / N
+            # Finally, the component M2 of variance.
+            M2 += delta * (sample - M1)
 
 def makeSampleCounter() as DeepFrozen:
     var samplesTaken := 0
     var countersMade := 0
     var countersMaxed := 0
+
+    var depthTracker := makeWelfordTracker(0.0)
 
     return object sampleCounter:
         to stats():
@@ -444,58 +515,48 @@ def makeSampleCounter() as DeepFrozen:
             ]
 
         to run():
+            var sampleTracker := makeWelfordTracker(zero)
             countersMade += 1
 
-            # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
-            # We will track the number of samples, the mean, and the sum of squares of
-            # offsets from the mean. When it comes time to output, we will emit the
-            # mean as in traditional supersampling.
-            var N := 0
-            var M1 := zero
-            var M2 := zero
-
             return object sampler:
+                to count():
+                    return sampleTracker.count()
+
                 to value():
-                    return M1
+                    return sampleTracker.mean()
 
-                to observe(sample):
-                    # Welford's algorithm for observations. First, update the count.
-                    N += 1
-                    # Then, update the mean. We'll need to save the old mean too.
-                    def mean := M1
-                    def delta := sample - mean
-                    M1 += delta / N
-                    # Finally, the component M2 of variance.
-                    M2 += delta * (sample - M1)
-
+                to observe(sample, depth):
+                    sampleTracker(sample)
+                    depthTracker(depth)
                     samplesTaken += 1
-                    if (N == maxSamples):
+                    if (sampleTracker.count() == maxSamples):
                         countersMaxed += 1
 
                 to needsMore():
-                    if (N < 2) { return true }
+                    def N := sampleTracker.count()
+                    if (N < minSamples) { return true }
                     if (N > maxSamples) { return false }
 
-                    def variance := M2 / (N - 1)
                     # This fencepost is correct; -1 comes from Student's
                     # t-distribution and degrees of freedom, and -1 comes from
                     # 0-indexing vs 1-indexing.
-                    def t := if (N - 2 < tTable.size()) { tTable[N - 2] } else { tFinal }
-                    # NB: Gain of 256x to change units to numbers of ulps left.
-                    # We want to be sure of pixel colors. We have 8 bits of fidelity
-                    # in the output, so we should sample to 1 in 256 parts.
-                    def interval := (variance / N).squareRoot() * t * 256
+                    def tValue := if (N - 2 < tTable.size()) { tTable[N - 2] } else { tFinal }
+                    def tTest := (sampleTracker.variance() / N).squareRoot()
+                    def pValue := tTest * tValue
+                    # https://en.wikipedia.org/wiki/Fisher's_method
+                    def fTest := pValue.logarithm().sum() * -2
                     # if (N % 100 == 0):
-                    #     traceln(`N=$N M1=$M1 M2=$M2 interval $interval`)
-                    # Are channels roughly below 1.0 ulps of uncertainty?
-                    return interval.sum() > 3.0
+                    #     traceln(`N=$N t=$tTest p=$pValue f=$fTest q=$qualityCutoff`)
+                    # This f-test has 3 degrees of freedom, so we compare it
+                    # to the chi-squared table for 6 degrees.
+                    return fTest < qualityCutoff
 
 def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # Which way is up? This way.
     def up := makeV3(0.0, 1.0, 0.0)
 
     # What are we looking at?
-    def lookAt := makeV3(4.0, 0.0, 1.0)
+    def lookAt := zero
 
     # Weekend scene. Big and slow.
     # def world := randomScene(entropy)
@@ -503,7 +564,7 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # Study of single sphere above larger floor sphere.
     def world := sphereStudy(entropy)
 
-    def lookFrom := makeV3(6.0, 2.0, 2.0)
+    def lookFrom := makeV3(4.0, 3.0, 3.0)
     def distToFocus := (lookFrom - lookAt).norm()
     # NB: Aspect ratio is fixed, and we ignore the requested ratio.
     def camera := makeCamera(entropy, lookFrom, lookAt, up, 90.0, aspectRatio,
@@ -513,14 +574,24 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
         # Rendering is upside-down WRT Monte conventions.
         v := 1.0 - v
         def sampler := counter()
+        def depthEstimator := makeWelfordTracker(0.0)
         while (sampler.needsMore()):
             # Important: These must be two uncorrelated random offsets.
             def du := u + (entropy.nextDouble() / 1_000.0)
             def dv := v + (entropy.nextDouble() / 1_000.0)
             def ray := camera.getRay(du, dv)
-            def sample := color(entropy, ray, world, 0)
-            sampler.observe(sample)
-        return sampler.value().asColor()
+            def [sample, depth] := color(entropy, ray, world, 0)
+            sampler.observe(sample, depth)
+            depthEstimator(depth)
+        # For funsies: Tint red based on number of samples required; tint
+        # green based on average depth of samples. Red ranges from minSamples
+        # to maxSamples. Green ranges from no reflections (0) to maxDepth. I
+        # say "tint" but I've just done it with a lerp.
+        def red := (sampler.count() - minSamples) / maxSamples
+        def green := depthEstimator.mean() / maxDepth
+        def tint := makeV3(red, green, 0.0)
+        def sample := sampler.value()
+        return (sample + (-sample + 1.0) * tint).asColor()
     return [counter, drawable]
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
@@ -534,16 +605,17 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
         traceln(`Scene prepared in ${dd}s`)
         def drawer := makePPM.drawingFrom(drawable)(w, h)
         var i := 0
+        def start := Timer.unsafeNow()
         while (true):
-            if (i % 100 == 0):
+            if (i % 200 == 0):
                 def [
                     => samplesTaken,
                     => countersMade,
                     => countersMaxed,
                 ] | _ := counter.stats()
-                def compensatedSamples := samplesTaken - maxSamples * countersMaxed
-                def compensatedCounters := countersMade - countersMaxed
-                traceln(`Status: ${percent(countersMade)} (${samplesTaken / countersMade} (${compensatedSamples / compensatedCounters}) samples/pixel) (${percent(countersMaxed)} maxed)`)
+                def samplesPerSecond := samplesTaken / (Timer.unsafeNow() - start)
+                def samplesPerCounter := samplesTaken / countersMade
+                traceln(`Status: ${percent(countersMade)} ($samplesPerSecond samples/s) ($samplesPerCounter samples/px) (${percent(countersMaxed)} maxed)`)
             i += 1
             drawer.next(__break)
         def ppm := drawer.finish()
