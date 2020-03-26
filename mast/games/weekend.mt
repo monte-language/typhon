@@ -56,6 +56,12 @@ object makeV3 as DeepFrozen:
                     x * oy - y * ox,
                 )
 
+            to floor():
+                # Special case for the one case in simplex noise where we'd
+                # really prefer to be using integer vectors.
+                return makeV3(x.floor().asDouble(), y.floor().asDouble(),
+                              z.floor().asDouble())
+
             to op__cmp(via (makeV3.un) [ox, oy, oz]):
                 def cx := x.op__cmp(ox)
                 return if (cx.isZero()) {
@@ -259,6 +265,85 @@ def makeCheckerTexture(even, odd) as DeepFrozen:
         def sines := (p * 10.0).sine().product()
         return (sines.belowZero()).pick(odd, even).value(u, v, p)
 
+# http://staffwww.itn.liu.se/~stegu/simplexnoise/simplexnoise.pdf
+# https://github.com/bravoserver/bravo/blob/master/bravo/simplex.py
+
+# These are the 12 3D unit bivectors.
+def edges2 :List[List[Int]] := [
+    [-1, -1, 0], [-1, 0, -1], [-1, 0, 1], [-1, 1, 0], [0, -1, -1], [0, -1, 1],
+    [0, 1, -1], [0, 1, 1], [1, -1, 0], [1, 0, -1], [1, 0, 1], [1, 1, 0],
+]
+
+# The size of the permutation used to configure simplex noise. 2 ** 8 is
+# traditional; Bravo used this bigger field because it empirically gave better
+# results.
+def noiseSeedSize :Int := 2 ** 10
+
+# https://catlikecoding.com/unity/tutorials/simplex-noise/
+# Magic number for scaling up 3D noise. Bravo and other sources incorrectly
+# use 32; this is actually about 37.837227.
+def noiseScale :Double := 3.0.squareRoot() * 8192 / 375
+
+def makeSimplexNoise(entropy) as DeepFrozen:
+    # Make the list wrap around, and we will need fewer mod operations on the
+    # indices when we do lookups.
+    def p := entropy.shuffle(_makeList.fromIterable(0..!noiseSeedSize)) * 3
+    def edges := [for [x, y, z] in (edges2)
+                  makeV3(x.asDouble(), y.asDouble(), z.asDouble())]
+    def edgesSize := edges2.size()
+    def gi(ijk):
+        def [i, j, k] := [for c in (ijk) c.floor() % noiseSeedSize]
+        return edges[p[i + p[j + p[k]]] % edgesSize]
+    return object noiseMaker:
+        to noise(p):
+            # Skew into ijk space. Magic number 1/3=F(3).
+            def s := p.sum() / 3
+            def ijk := (p + s).floor()
+            # Unskew back into xyz space. Magic number 1/6=G(3).
+            def t := ijk.sum() / 6
+            def xyz0 := p - (ijk - t)
+            def [x, y, z] := makeV3.un(xyz0, null)
+            # xyz0 determines the cube. Choose the tetrahedron.
+            def [ijk1, ijk2] := if (x >= y) {
+                if (y >= z) {
+                    [makeV3(1.0, 0.0, 0.0), makeV3(1.0, 1.0, 0.0)]
+                } else if (x >= z) {
+                    [makeV3(1.0, 0.0, 0.0), makeV3(1.0, 0.0, 1.0)]
+                } else { [makeV3(0.0, 0.0, 1.0), makeV3(1.0, 0.0, 1.0)] }
+            } else {
+                if (y < z) {
+                    [makeV3(0.0, 0.0, 1.0), makeV3(0.0, 1.0, 1.0)]
+                } else if (x < z) {
+                    [makeV3(0.0, 1.0, 0.0), makeV3(0.0, 1.0, 1.0)]
+                } else { [makeV3(0.0, 1.0, 0.0), makeV3(1.0, 1.0, 0.0)] }
+            }
+            def corners := [
+                zero => xyz0,
+                ijk1 => xyz0 - ijk1 + 1/6,
+                ijk2 => xyz0 - ijk2 + 2/6,
+                # one => xyz0 - 1.0 + 3/6,
+                one  => xyz0 - 0.5,
+            ]
+            var n := 0.0
+            for offset => corner in (corners):
+                # NB: Bravo and others incorrectly have 0.6, not 0.5, here.
+                def t := 0.5 - corner.dot(corner)
+                if (t.aboveZero()):
+                    n += t ** 4 * gi(ijk + offset).dot(corner)
+            return n * noiseScale
+
+        to turbulence(p, depth):
+            # Depth can be at little as 3; 6 or 7 is quite good.
+            var rv := 0.0
+            var k := 1
+            # NB: I have a doubt. By basic interval analysis, the octaves have
+            # intervals [-1,1], [-1/2,1/2], [-1/4,1/4], ... which should sum
+            # up to [-2.2]. But apparently this isn't a problem in practice?
+            for _ in (0..!depth):
+                rv += noiseMaker.noise(p * k) / k
+                k *= 2
+            return rv
+
 def makeLambertian(entropy, texture) as DeepFrozen:
     return def lambertian.scatter(ray, p, N):
         def [rx, ry, rz] := entropy.nextBall(3)
@@ -313,6 +398,17 @@ def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
             [makeRay(p, reflect(direction, N), ray.time()), attenuation]
         }
 
+def makeMarbleTexture(noise) as DeepFrozen:
+    def scale := 0.5
+    return def noisyTexture.value(_u, _v, p):
+        def grey := (p.z() * scale + noise.turbulence(p, 7) * 10.0).sine()
+        # Scale from [-1,1] to [0,1].
+        def scaled := 0.5 * (1.0 + grey)
+        # Scoop greens and blues in the mid range to create a rosy red marble.
+        def scooped := scaled ** 2
+        # And amplify the red to give some vibrancy.
+        return makeV3(scaled.squareRoot(), scooped, scooped)
+
 def blueSky :DeepFrozen := makeV3(0.5, 0.7, 1.0)
 
 # Usually only a few dozen bounces at most, but certain critical angles on
@@ -332,6 +428,7 @@ def color(entropy, ray, world, depth) as DeepFrozen:
         } else { [zero, depth] }
     } else {
         def t := 0.5 * (direction.unit().y() + 1.0)
+        # XXX here's a lerp, there's a lerp, we should factor out lerps
         [blueSky * t + one * (1.0 - t), depth]
     }
 
@@ -403,10 +500,13 @@ def sphereStudy(entropy) as DeepFrozen:
     def checker := makeLambertian(entropy,
                                   makeCheckerTexture(makeConstantTexture(makeV3(0.2, 0.3, 0.1)),
                                                      makeConstantTexture(makeV3(0.9, 0.9, 0.9))))
+    # https://docs.unrealengine.com/en-US/Engine/Rendering/Materials/PhysicallyBased/index.html
+    # def platinum := makeMetal(entropy, makeV3(0.672, 0.637, 0.585), 0.05)
+    # def glass := makeDielectric(entropy, 1.5)
+    def marble := makeLambertian(entropy, makeMarbleTexture(makeSimplexNoise(entropy)))
     def bigSphere := makeSphere(makeV3(0.0, -10_000.0, 0.0), 10_000.0,
                                 checker)
-    def study := makeSphere(makeV3(0.0, 1.0, 0.0), 1.0,
-                            makeDielectric(entropy, 1.5))
+    def study := makeSphere(makeV3(0.0, 1.0, 0.0), 1.0, marble)
     def spheres := [bigSphere, study]
     return makeBVH.fromHittables(entropy, spheres, 0.0, 1.0)
 
@@ -444,7 +544,7 @@ def chiTable := [
     0.99 => 16.81,
     0.999 => 22.46,
 ]
-def qualityCutoff :Double := chiTable[0.999]
+def qualityCutoff :Double := chiTable[0.9]
 
 # NB: We adaptively need far fewer than this; keep this at about 5x the
 # recommended ceiling. However, we *must* have at least 2 samples, and each
@@ -499,64 +599,31 @@ def makeWelfordTracker(zero) as DeepFrozen:
             # Finally, the component M2 of variance.
             M2 += delta * (sample - M1)
 
-def makeSampleCounter() as DeepFrozen:
-    var samplesTaken := 0
-    var countersMade := 0
-    var countersMaxed := 0
+def needsMoreSamples(sampler) as DeepFrozen:
+    def N := sampler.count()
+    if (N < minSamples) { return true }
+    if (N > maxSamples) { return false }
 
-    var depthTracker := makeWelfordTracker(0.0)
-
-    return object sampleCounter:
-        to stats():
-            return [
-                => samplesTaken,
-                => countersMade,
-                => countersMaxed,
-            ]
-
-        to run():
-            var sampleTracker := makeWelfordTracker(zero)
-            countersMade += 1
-
-            return object sampler:
-                to count():
-                    return sampleTracker.count()
-
-                to value():
-                    return sampleTracker.mean()
-
-                to observe(sample, depth):
-                    sampleTracker(sample)
-                    depthTracker(depth)
-                    samplesTaken += 1
-                    if (sampleTracker.count() == maxSamples):
-                        countersMaxed += 1
-
-                to needsMore():
-                    def N := sampleTracker.count()
-                    if (N < minSamples) { return true }
-                    if (N > maxSamples) { return false }
-
-                    # This fencepost is correct; -1 comes from Student's
-                    # t-distribution and degrees of freedom, and -1 comes from
-                    # 0-indexing vs 1-indexing.
-                    def tValue := if (N - 2 < tTable.size()) { tTable[N - 2] } else { tFinal }
-                    def tTest := (sampleTracker.variance() / N).squareRoot()
-                    def pValue := tTest * tValue
-                    # https://en.wikipedia.org/wiki/Fisher's_method
-                    def fTest := pValue.logarithm().sum() * -2
-                    # if (N % 100 == 0):
-                    #     traceln(`N=$N t=$tTest p=$pValue f=$fTest q=$qualityCutoff`)
-                    # This f-test has 3 degrees of freedom, so we compare it
-                    # to the chi-squared table for 6 degrees.
-                    return fTest < qualityCutoff
+    # This fencepost is correct; -1 comes from Student's
+    # t-distribution and degrees of freedom, and -1 comes from
+    # 0-indexing vs 1-indexing.
+    def tValue := if (N - 2 < tTable.size()) { tTable[N - 2] } else { tFinal }
+    def tTest := (sampler.variance() / N).squareRoot()
+    def pValue := tTest * tValue
+    # https://en.wikipedia.org/wiki/Fisher's_method
+    def fTest := pValue.logarithm().sum() * -2
+    # if (N % 100 == 0):
+    #     traceln(`N=$N t=$tTest p=$pValue f=$fTest q=$qualityCutoff`)
+    # This f-test has 3 degrees of freedom, so we compare it
+    # to the chi-squared table for 6 degrees.
+    return fTest < qualityCutoff
 
 def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # Which way is up? This way.
     def up := makeV3(0.0, 1.0, 0.0)
 
     # What are we looking at?
-    def lookAt := zero
+    def lookAt := makeV3(0.0, 1.0, 0.0)
 
     # Weekend scene. Big and slow.
     # def world := randomScene(entropy)
@@ -564,59 +631,55 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # Study of single sphere above larger floor sphere.
     def world := sphereStudy(entropy)
 
-    def lookFrom := makeV3(4.0, 3.0, 3.0)
+    def lookFrom := makeV3(1.5, 2.0, 2.0)
     def distToFocus := (lookFrom - lookAt).norm()
     # NB: Aspect ratio is fixed, and we ignore the requested ratio.
+    # NB: Aperture is normally 1.0 but we set it to tighter 0.25 for now to
+    # examine textures.
     def camera := makeCamera(entropy, lookFrom, lookAt, up, 90.0, aspectRatio,
-                             1.0, distToFocus, 0.0, 1.0)
-    def counter := makeSampleCounter()
-    def drawable.drawAt(u :Double, var v :Double):
+                             0.25, distToFocus, 0.0, 1.0)
+    return def drawable.drawAt(u :Double, var v :Double):
         # Rendering is upside-down WRT Monte conventions.
         v := 1.0 - v
-        def sampler := counter()
+        def sampler := makeWelfordTracker(zero)
         def depthEstimator := makeWelfordTracker(0.0)
-        while (sampler.needsMore()):
+        while (needsMoreSamples(sampler)):
             # Important: These must be two uncorrelated random offsets.
             def du := u + (entropy.nextDouble() / 1_000.0)
             def dv := v + (entropy.nextDouble() / 1_000.0)
             def ray := camera.getRay(du, dv)
             def [sample, depth] := color(entropy, ray, world, 0)
-            sampler.observe(sample, depth)
+            sampler(sample)
             depthEstimator(depth)
         # For funsies: Tint red based on number of samples required; tint
         # green based on average depth of samples. Red ranges from minSamples
         # to maxSamples. Green ranges from no reflections (0) to maxDepth. I
         # say "tint" but I've just done it with a lerp.
-        def red := (sampler.count() - minSamples) / maxSamples
-        def green := depthEstimator.mean() / maxDepth
-        def tint := makeV3(red, green, 0.0)
-        def sample := sampler.value()
-        return (sample + (-sample + 1.0) * tint).asColor()
-    return [counter, drawable]
+        def sample := if (false) {
+            def red := (sampler.count() - minSamples) / maxSamples
+            def green := depthEstimator.mean() / maxDepth
+            def tint := makeV3(red, green, 0.0)
+            def sample := sampler.mean()
+            (sample + (-sample + 1.0) * tint)
+        } else { sampler.mean() }
+        return sample.asColor()
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def w := 160
-    def h := 120
-    def percent(i) { return `${(i * 100) / (w * h)}%` }
+    def w := 320
+    def h := 240
     def p := Timer.measureTimeTaken(fn { makeDrawable(entropy, w / h) })
     return when (p) ->
-        def [[counter, drawable], dd] := p
+        def [drawable, dd] := p
         traceln(`Scene prepared in ${dd}s`)
         def drawer := makePPM.drawingFrom(drawable)(w, h)
         var i := 0
         def start := Timer.unsafeNow()
         while (true):
-            if (i % 200 == 0):
-                def [
-                    => samplesTaken,
-                    => countersMade,
-                    => countersMaxed,
-                ] | _ := counter.stats()
-                def samplesPerSecond := samplesTaken / (Timer.unsafeNow() - start)
-                def samplesPerCounter := samplesTaken / countersMade
-                traceln(`Status: ${percent(countersMade)} ($samplesPerSecond samples/s) ($samplesPerCounter samples/px) (${percent(countersMaxed)} maxed)`)
             i += 1
+            if (i % 500 == 0):
+                def pixelsPerSecond := i / (Timer.unsafeNow() - start)
+                traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s)`)
             drawer.next(__break)
         def ppm := drawer.finish()
         when (makeFileResource("weekend.ppm")<-setContents(ppm)) -> { 0 }
