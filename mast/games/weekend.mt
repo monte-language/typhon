@@ -114,6 +114,15 @@ def makeAABB(min, max) as DeepFrozen:
                 if (sign.atMostZero()) { return false }
             return true
 
+def flipN(hittable) as DeepFrozen:
+    return object flippedNormals:
+        to boundingBox(t0 :Double, t1 :Double):
+            return hittable.boundingBox(t0, t1)
+
+        to hit(ray, tMin :Double, tMax :Double):
+            return if (hittable.hit(ray, tMin, tMax) =~ [t, u, v, p, N, m]):
+                [t, u, v, p, -N, m]
+
 def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
     return object sphere:
         to boundingBox(_t0 :Double, _t1 :Double):
@@ -137,7 +146,81 @@ def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
             if (t > tMax || t < tMin) { return null }
             # Point from origin along direction by amount t.
             def p := ray.pointAtParameter(t)
-            return [t, p, ((center - p) / -radius).unit(), material]
+            # XXX compute real u and v!
+            def u := def v := 0.0
+            return [t, u, v, p, ((center - p) / -radius).unit(), material]
+
+# I *guess* we're duplicating this three times.
+
+def makeXYRect(x0 :Double, x1 :Double, y0 :Double, y1 :Double, k :Double,
+               material) as DeepFrozen:
+    return object XYRect:
+        to boundingBox(_t0 :Double, _t1 :Double):
+            return makeAABB(makeV3(x0, y0, k - 0.001), makeV3(x1, y1, k + 0.001))
+
+        to hit(ray, tMin :Double, tMax :Double):
+            def origin := ray.origin()
+            def direction := ray.direction()
+            def t := (k - origin.z()) / direction.z()
+            if (t < tMin || t > tMax) { return null }
+            def x := origin.x() + t * direction.x()
+            if (x < x0 || x > x1) { return null }
+            def y := origin.y() + t * direction.y()
+            if (y < y0 || y > y1) { return null }
+            def u := (x - x0) / (x1 - x0)
+            def v := (y - y0) / (y1 - y0)
+            return [t, u, v, ray.pointAtParameter(t), makeV3(0.0, 0.0, 1.0),
+                    material]
+
+def makeXZRect(x0 :Double, x1 :Double, z0 :Double, z1 :Double, k :Double,
+               material) as DeepFrozen:
+    return object XZRect:
+        to boundingBox(_t0 :Double, _t1 :Double):
+            return makeAABB(makeV3(x0, k - 0.001, z0), makeV3(x1, k + 0.001, z1))
+
+        to hit(ray, tMin :Double, tMax :Double):
+            def origin := ray.origin()
+            def direction := ray.direction()
+            def t := (k - origin.y()) / direction.y()
+            if (t < tMin || t > tMax) { return null }
+            def x := origin.x() + t * direction.x()
+            if (x < x0 || x > x1) { return null }
+            def z := origin.z() + t * direction.z()
+            if (z < z0 || z > z1) { return null }
+            def u := (x - x0) / (x1 - x0)
+            def v := (z - z0) / (z1 - z0)
+            return [t, u, v, ray.pointAtParameter(t), makeV3(0.0, 1.0, 0.0),
+                    material]
+
+def makeYZRect(y0 :Double, y1 :Double, z0 :Double, z1 :Double, k :Double,
+               material) as DeepFrozen:
+    return object YZRect:
+        to boundingBox(_t0 :Double, _t1 :Double):
+            return makeAABB(makeV3(k - 0.001, y0, z0), makeV3(k + 0.001, y1, z1))
+
+        to hit(ray, tMin :Double, tMax :Double):
+            def origin := ray.origin()
+            def direction := ray.direction()
+            def t := (k - origin.x()) / direction.x()
+            if (t < tMin || t > tMax) { return null }
+            def y := origin.y() + t * direction.y()
+            if (y < y0 || y > y1) { return null }
+            def z := origin.z() + t * direction.z()
+            if (z < z0 || z > z1) { return null }
+            def u := (y - y0) / (y1 - y0)
+            def v := (z - z0) / (z1 - z0)
+            return [t, u, v, ray.pointAtParameter(t), makeV3(1.0, 0.0, 0.0),
+                    material]
+
+def makeBox(p0, p1, material) as DeepFrozen:
+    return [
+        makeXYRect(p0.x(), p1.x(), p0.y(), p1.y(), p1.z(), material),
+        flipN(makeXYRect(p0.x(), p1.x(), p0.y(), p1.y(), p0.z(), material)),
+        makeXZRect(p0.x(), p1.x(), p0.z(), p1.z(), p1.y(), material),
+        flipN(makeXZRect(p0.x(), p1.x(), p0.z(), p1.z(), p0.y(), material)),
+        makeYZRect(p0.y(), p1.y(), p0.z(), p1.z(), p1.x(), material),
+        flipN(makeYZRect(p0.y(), p1.y(), p0.z(), p1.z(), p0.x(), material)),
+    ]
 
 def makeMovingSphere(startCenter, stopCenter, startTime :Double,
                      stopTime :Double, radius :Double, material) as DeepFrozen:
@@ -265,6 +348,45 @@ def makeCheckerTexture(even, odd) as DeepFrozen:
         def sines := (p * 10.0).sine().product()
         return (sines.belowZero()).pick(odd, even).value(u, v, p)
 
+def makeIsotropic(entropy, texture) as DeepFrozen:
+    return object isotropic:
+        to scatter(ray, p, _N):
+            def [rx, ry, rz] := entropy.nextBall(3)
+            def target := makeV3(rx, ry, rz)
+            return [makeRay(p, target, ray.time()), texture.value(0.0, 0.0, p)]
+
+        to emitted(_u, _v, _p):
+            return zero
+
+def makeConstantMedium(entropy, boundary, density :Double, texture) as DeepFrozen:
+    def phaseFunction := makeIsotropic(entropy, texture)
+
+    return object constantMedium:
+        to boundingBox(t0 :Double, t1 :Double):
+            return boundary.boundingBox(t0, t1)
+
+        to hit(ray, tMin :Double, tMax :Double):
+            return if (boundary.hit(ray, -Infinity, Infinity) =~
+                       [t1, u1, v1, p1, N1, m1]) {
+                if (boundary.hit(ray, t1 + 0.0001, Infinity) =~
+                    [t2, u2, v2, p2, N2, m2]) {
+                    def r1t := t1.max(tMin)
+                    def r2t := t2.min(tMax)
+                    if (r1t >= r2t) { return null }
+                    def length := ray.direction().norm()
+                    def distanceInsideBoundary := (r2t - r1t) * length
+                    def hitDistance := entropy.nextExponential(density)
+                    if (hitDistance < distanceInsideBoundary) {
+                        def t := r1t + hitDistance / length
+                        # XXX random unit normal vector, should be factored
+                        def [rx, ry, rz] := entropy.nextBall(3)
+                        def N := makeV3(rx, ry, rz)
+                        [t, 0.0, 0.0, ray.pointAtParameter(t), N,
+                         phaseFunction]
+                    }
+                }
+            }
+
 # http://staffwww.itn.liu.se/~stegu/simplexnoise/simplexnoise.pdf
 # https://github.com/bravoserver/bravo/blob/master/bravo/simplex.py
 
@@ -344,23 +466,42 @@ def makeSimplexNoise(entropy) as DeepFrozen:
                 k *= 2
             return rv
 
+def makeMarbleTexture(noise) as DeepFrozen:
+    def scale := 0.5
+    return def noisyTexture.value(_u, _v, p):
+        def grey := (p.z() * scale + noise.turbulence(p, 7) * 10.0).sine()
+        # Scale from [-1,1] to [0,1].
+        def scaled := 0.5 * (1.0 + grey)
+        # Scoop greens and blues in the mid range to create a rosy red marble.
+        def scooped := scaled ** 2
+        # And amplify the red to give some vibrancy.
+        return makeV3(scaled.squareRoot(), scooped, scooped)
+
 def makeLambertian(entropy, texture) as DeepFrozen:
-    return def lambertian.scatter(ray, p, N):
-        def [rx, ry, rz] := entropy.nextBall(3)
-        def target := (N + makeV3(rx, ry, rz)).unit()
-        return [makeRay(p, target, ray.time()), texture.value(0.0, 0.0, p)]
+    return object lambertianMaterial:
+        to scatter(ray, p, N):
+            def [rx, ry, rz] := entropy.nextBall(3)
+            def target := (N + makeV3(rx, ry, rz)).unit()
+            return [makeRay(p, target, ray.time()), texture.value(0.0, 0.0, p)]
+
+        to emitted(_u, _v, _p):
+            return zero
 
 def reflect(v, n) as DeepFrozen:
     def uv := v.unit()
     return uv - n * (2.0 * uv.dot(n))
 
 def makeMetal(entropy, albedo :DeepFrozen, fuzz :(Double <= 1.0)) as DeepFrozen:
-    return def metal.scatter(ray, p, N):
-        def reflected := reflect(ray.direction().unit(), N)
-        if (reflected.dot(N).belowZero()) { return null }
-        def [fx, fy, fz] := entropy.nextBall(3)
-        def fuzzed := reflected + makeV3(fx, fy, fz) * fuzz
-        return [makeRay(p, fuzzed, ray.time()), albedo]
+    return object metalMaterial:
+        to scatter(ray, p, N):
+            def reflected := reflect(ray.direction().unit(), N)
+            if (reflected.dot(N).belowZero()) { return null }
+            def [fx, fy, fz] := entropy.nextBall(3)
+            def fuzzed := reflected + makeV3(fx, fy, fz) * fuzz
+            return [makeRay(p, fuzzed, ray.time()), albedo]
+
+        to emitted(_u, _v, _p):
+            return zero
 
 def refract(v, n, coeff :Double, ej) as DeepFrozen:
     def uv := v.unit()
@@ -378,42 +519,43 @@ def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
     # NB: The original deliberately destroys the blue channel, but I don't see
     # why that should be done.
     def attenuation :DeepFrozen := makeV3(1.0, 1.0, 1.0)
-    return def dielectric.scatter(ray, p, N):
-        def direction := ray.direction()
-        def prod := direction.unit().dot(N)
-        def [outwardNormal, coeff, cosine] := if (prod > 0) {
-            [-N, refractiveIndex, refractiveIndex * prod]
-        } else {
-            [N, refractiveIndex.reciprocal(), -prod]
-        }
-        return escape internal {
-            def refracted := refract(direction, outwardNormal, coeff,
-                                     internal)
-            def reflectProb := schlick(cosine / direction.norm(),
-                                       refractiveIndex)
-            if (entropy.nextDouble() < reflectProb) {
-                [makeRay(p, refracted, ray.time()), attenuation]
-            } else { internal() }
-        } catch _ {
-            [makeRay(p, reflect(direction, N), ray.time()), attenuation]
-        }
+    return object dielectricMaterial:
+        to scatter(ray, p, N):
+            def direction := ray.direction()
+            def prod := direction.unit().dot(N)
+            def [outwardNormal, coeff, cosine] := if (prod > 0) {
+                [-N, refractiveIndex, refractiveIndex * prod]
+            } else {
+                [N, refractiveIndex.reciprocal(), -prod]
+            }
+            return escape internal {
+                def refracted := refract(direction, outwardNormal, coeff,
+                                         internal)
+                def reflectProb := schlick(cosine / direction.norm(),
+                                           refractiveIndex)
+                if (entropy.nextDouble() < reflectProb) {
+                    [makeRay(p, refracted, ray.time()), attenuation]
+                } else { internal() }
+            } catch _ {
+                [makeRay(p, reflect(direction, N), ray.time()), attenuation]
+            }
 
-def makeMarbleTexture(noise) as DeepFrozen:
-    def scale := 0.5
-    return def noisyTexture.value(_u, _v, p):
-        def grey := (p.z() * scale + noise.turbulence(p, 7) * 10.0).sine()
-        # Scale from [-1,1] to [0,1].
-        def scaled := 0.5 * (1.0 + grey)
-        # Scoop greens and blues in the mid range to create a rosy red marble.
-        def scooped := scaled ** 2
-        # And amplify the red to give some vibrancy.
-        return makeV3(scaled.squareRoot(), scooped, scooped)
+        to emitted(_u, _v, _p):
+            return zero
+
+def makeDiffuseLight(texture) as DeepFrozen:
+    return object diffuselyLitMaterial:
+        to scatter(_ray, _p, _N):
+            return null
+
+        to emitted(u, v, p):
+            return texture.value(u, v, p)
 
 def blueSky :DeepFrozen := makeV3(0.5, 0.7, 1.0)
 
 # Usually only a few dozen bounces at most, but certain critical angles on
 # dielectric or metal surfaces can cause this to skyrocket.
-def maxDepth :Int := 200
+def maxDepth :Int := 50
 
 # NB: Returns not just the color, but also the depth that we needed to go to
 # to examine the color.
@@ -421,15 +563,19 @@ def color(entropy, ray, world, depth) as DeepFrozen:
     def direction := ray.direction()
     # Set minimum t in order to avoid shadow acne.
     def hit := world.hit(ray, 1.0e-5, Infinity)
-    return if (hit =~ [_, p, N, mat]) {
+    return if (hit =~ [_, u, v, p, N, mat]) {
+        def emitted := mat.emitted(u, v, p)
         if (depth < maxDepth && mat.scatter(ray, p, N) =~ [scattered, attenuation]) {
             def [c, d] := color(entropy, scattered, world, depth + 1)
-            [attenuation * c, d]
-        } else { [zero, depth] }
+            [emitted + attenuation * c, d]
+        } else { [emitted, depth] }
     } else {
+        # XXX [-1,1] -> [0,1] we should factor out this too
         def t := 0.5 * (direction.unit().y() + 1.0)
-        # XXX here's a lerp, there's a lerp, we should factor out lerps
-        [blueSky * t + one * (1.0 - t), depth]
+        if (true) {
+            # XXX here's a lerp, there's a lerp, we should factor out lerps
+            [blueSky * t + one * (1.0 - t), depth]
+        } else { [zero, depth] }
     }
 
 def makeCamera(entropy, lookFrom, lookAt, up, vfov :Double, aspect :Double,
@@ -507,8 +653,34 @@ def sphereStudy(entropy) as DeepFrozen:
     def bigSphere := makeSphere(makeV3(0.0, -10_000.0, 0.0), 10_000.0,
                                 checker)
     def study := makeSphere(makeV3(0.0, 1.0, 0.0), 1.0, marble)
-    def spheres := [bigSphere, study]
+    def smoke := makeConstantMedium(entropy, study, 0.1,
+                                    makeConstantTexture(one))
+    def spheres := [bigSphere, smoke]
     return makeBVH.fromHittables(entropy, spheres, 0.0, 1.0)
+
+def cornellBox(entropy) as DeepFrozen:
+    def [red, white, green] := [for color in ([
+        makeV3(0.65, 0.05, 0.05),
+        one * 0.73,
+        makeV3(0.12, 0.45, 0.15),
+    ]) makeLambertian(entropy, makeConstantTexture(color))]
+    def light := makeDiffuseLight(makeConstantTexture(one * 15.0))
+    def walls := [
+        flipN(makeYZRect(0.0, 555.0, 0.0, 555.0, 555.0, green)),
+        makeYZRect(0.0, 555.0, 0.0, 555.0, 0.0, red),
+        makeXZRect(213.0, 343.0, 227.0, 332.0, 554.0, light),
+        flipN(makeXZRect(0.0, 555.0, 0.0, 555.0, 555.0, white)),
+        makeXZRect(0.0, 555.0, 0.0, 555.0, 0.0, white),
+        flipN(makeXYRect(0.0, 555.0, 0.0, 555.0, 555.0, white)),
+        # Debugging ball.
+        # makeSphere(makeV3(278.0, 278.0, 0.0), 100.0, green),
+    ]
+    def box1 := makeBox(makeV3(130.0, 0.0, 65.0), makeV3(295.0, 165.0, 230.0),
+                        white)
+    def box2 := makeBox(makeV3(265.0, 0.0, 295.0), makeV3(430.0, 330.0, 460.0),
+                        white)
+    def scene := walls + box1 + box2
+    return makeBVH.fromHittables(entropy, scene, 0.0, 1.0)
 
 # https://en.wikipedia.org/wiki/Student%27s_t-distribution#Table_of_selected_values
 # http://www.davidmlane.com/hyperstat/t_table.html
@@ -544,7 +716,7 @@ def chiTable := [
     0.99 => 16.81,
     0.999 => 22.46,
 ]
-def qualityCutoff :Double := chiTable[0.9]
+def qualityCutoff :Double := chiTable[0.95]
 
 # NB: We adaptively need far fewer than this; keep this at about 5x the
 # recommended ceiling. However, we *must* have at least 2 samples, and each
@@ -555,7 +727,7 @@ def qualityCutoff :Double := chiTable[0.9]
 # At 99% CI, we need 20-45 samples.
 # At 99.9% CI, we need 500-2000 samples.
 def minSamples :Int := 2
-def maxSamples :Int := 5_000
+def maxSamples :Int := 1_000
 
 def makeWelfordTracker(zero) as DeepFrozen:
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
@@ -622,22 +794,26 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # Which way is up? This way.
     def up := makeV3(0.0, 1.0, 0.0)
 
-    # What are we looking at?
-    def lookAt := makeV3(0.0, 1.0, 0.0)
-
     # Weekend scene. Big and slow.
     # def world := randomScene(entropy)
-
     # Study of single sphere above larger floor sphere.
     def world := sphereStudy(entropy)
+    # The Cornell Box.
+    # def world := cornellBox(entropy)
 
-    def lookFrom := makeV3(1.5, 2.0, 2.0)
+    # What are we looking at?
+    # def lookAt := makeV3(278.0, 278.0, 0.0)
+    # def lookFrom := makeV3(278.0, 278.0, -800.0)
+
+    def lookAt := makeV3(0.0, 1.0, 0.0)
+    def lookFrom := makeV3(3.0, 2.0, 4.0)
+    def fov := 40.0
+    def aperture := 0.0005
     def distToFocus := (lookFrom - lookAt).norm()
+    # NB: In degrees!
     # NB: Aspect ratio is fixed, and we ignore the requested ratio.
-    # NB: Aperture is normally 1.0 but we set it to tighter 0.25 for now to
-    # examine textures.
-    def camera := makeCamera(entropy, lookFrom, lookAt, up, 90.0, aspectRatio,
-                             0.25, distToFocus, 0.0, 1.0)
+    def camera := makeCamera(entropy, lookFrom, lookAt, up, fov, aspectRatio,
+                             aperture, distToFocus, 0.0, 1.0)
     return def drawable.drawAt(u :Double, var v :Double):
         # Rendering is upside-down WRT Monte conventions.
         v := 1.0 - v
@@ -649,25 +825,28 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
             def dv := v + (entropy.nextDouble() / 1_000.0)
             def ray := camera.getRay(du, dv)
             def [sample, depth] := color(entropy, ray, world, 0)
+            # NB: Sample might be overly-bright here, but for HDR's sake, we
+            # don't clamp yet.
             sampler(sample)
             depthEstimator(depth)
         # For funsies: Tint red based on number of samples required; tint
         # green based on average depth of samples. Red ranges from minSamples
         # to maxSamples. Green ranges from no reflections (0) to maxDepth. I
         # say "tint" but I've just done it with a lerp.
-        def sample := if (false) {
+        def sample := if (true) {
             def red := (sampler.count() - minSamples) / maxSamples
             def green := depthEstimator.mean() / maxDepth
             def tint := makeV3(red, green, 0.0)
             def sample := sampler.mean()
             (sample + (-sample + 1.0) * tint)
         } else { sampler.mean() }
-        return sample.asColor()
+        # Okay, *now* we clamp.
+        return sample.min(1.0).asColor()
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def w := 320
-    def h := 240
+    def w := 160
+    def h := 120
     def p := Timer.measureTimeTaken(fn { makeDrawable(entropy, w / h) })
     return when (p) ->
         def [drawable, dd] := p
@@ -678,8 +857,10 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
         while (true):
             i += 1
             if (i % 500 == 0):
-                def pixelsPerSecond := i / (Timer.unsafeNow() - start)
-                traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s)`)
+                def duration := Timer.unsafeNow() - start
+                def pixelsPerSecond := i / duration
+                def timeRemaining := ((w * h) - i) / pixelsPerSecond
+                traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s) (${timeRemaining}s left)`)
             drawer.next(__break)
         def ppm := drawer.finish()
         when (makeFileResource("weekend.ppm")<-setContents(ppm)) -> { 0 }
