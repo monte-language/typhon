@@ -10,6 +10,12 @@ object makeV3 as DeepFrozen:
         def [==makeV3, =="run", args, _] exit ej := specimen._uncall()
         return args
 
+    to randomUnit(entropy):
+        def [x, y, z] := [for coord in (entropy.nextSphere(2)) {
+            coord * entropy.nextBool().pick(1.0, -1.0)
+        }]
+        return makeV3(x, y, z)
+
     to run(x :Double, y :Double, z :Double):
         return object vec3 as DeepFrozen:
             to _makeIterator():
@@ -123,6 +129,8 @@ def flipN(hittable) as DeepFrozen:
             return if (hittable.hit(ray, tMin, tMax) =~ [t, u, v, p, N, m]):
                 [t, u, v, p, -N, m]
 
+def HALF_PI :Double := 1.0.arcSine()
+
 def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
     return object sphere:
         to boundingBox(_t0 :Double, _t1 :Double):
@@ -146,9 +154,14 @@ def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
             if (t > tMax || t < tMin) { return null }
             # Point from origin along direction by amount t.
             def p := ray.pointAtParameter(t)
-            # XXX compute real u and v!
-            def u := def v := 0.0
-            return [t, u, v, p, ((center - p) / -radius).unit(), material]
+            def N := ((p - center) / radius).unit()
+            # Compute u and v based on the normal, which is on the unit
+            # sphere.
+            def phi := N.z().arcTangent(N.x())
+            def theta := N.y().arcSine()
+            def u := (phi + 2 * HALF_PI) / (4 * HALF_PI)
+            def v := (theta + HALF_PI) / (2 * HALF_PI)
+            return [t, u, v, p, N, material]
 
 # I *guess* we're duplicating this three times.
 
@@ -351,8 +364,7 @@ def makeCheckerTexture(even, odd) as DeepFrozen:
 def makeIsotropic(entropy, texture) as DeepFrozen:
     return object isotropic:
         to scatter(ray, p, _N):
-            def [rx, ry, rz] := entropy.nextBall(3)
-            def target := makeV3(rx, ry, rz)
+            def target := makeV3.randomUnit(entropy)
             return [makeRay(p, target, ray.time()), texture.value(0.0, 0.0, p)]
 
         to emitted(_u, _v, _p):
@@ -378,9 +390,7 @@ def makeConstantMedium(entropy, boundary, density :Double, texture) as DeepFroze
                     def hitDistance := entropy.nextExponential(density)
                     if (hitDistance < distanceInsideBoundary) {
                         def t := r1t + hitDistance / length
-                        # XXX random unit normal vector, should be factored
-                        def [rx, ry, rz] := entropy.nextBall(3)
-                        def N := makeV3(rx, ry, rz)
+                        def N := makeV3.randomUnit(entropy)
                         [t, 0.0, 0.0, ray.pointAtParameter(t), N,
                          phaseFunction]
                     }
@@ -480,8 +490,10 @@ def makeMarbleTexture(noise) as DeepFrozen:
 def makeLambertian(entropy, texture) as DeepFrozen:
     return object lambertianMaterial:
         to scatter(ray, p, N):
-            def [rx, ry, rz] := entropy.nextBall(3)
-            def target := (N + makeV3(rx, ry, rz)).unit()
+            # NB: The original uses randomness *in* the unit sphere,
+            # intentionally; this gives cubic pinching at the corners, though,
+            # compared to using unit vectors.
+            def target := (N + makeV3.randomUnit(entropy)).unit()
             return [makeRay(p, target, ray.time()), texture.value(0.0, 0.0, p)]
 
         to emitted(_u, _v, _p):
@@ -496,8 +508,7 @@ def makeMetal(entropy, albedo :DeepFrozen, fuzz :(Double <= 1.0)) as DeepFrozen:
         to scatter(ray, p, N):
             def reflected := reflect(ray.direction().unit(), N)
             if (reflected.dot(N).belowZero()) { return null }
-            def [fx, fy, fz] := entropy.nextBall(3)
-            def fuzzed := reflected + makeV3(fx, fy, fz) * fuzz
+            def fuzzed := reflected + makeV3.randomUnit(entropy) * fuzz
             return [makeRay(p, fuzzed, ray.time()), albedo]
 
         to emitted(_u, _v, _p):
@@ -555,7 +566,7 @@ def blueSky :DeepFrozen := makeV3(0.5, 0.7, 1.0)
 
 # Usually only a few dozen bounces at most, but certain critical angles on
 # dielectric or metal surfaces can cause this to skyrocket.
-def maxDepth :Int := 50
+def maxDepth :Int := 100
 
 # NB: Returns not just the color, but also the depth that we needed to go to
 # to examine the color.
@@ -596,6 +607,7 @@ def makeCamera(entropy, lookFrom, lookAt, up, vfov :Double, aspect :Double,
     def duration := stopTime - startTime
 
     return def camera.getRay(u :Double, v :Double):
+        # NB: .nextBall() is right; we want an offset *within* the lens.
         def [rx, ry] := entropy.nextBall(2)
         def offset := u * rx + v * ry
         def time := startTime + entropy.nextDouble() * duration
@@ -643,19 +655,19 @@ def randomScene(entropy) as DeepFrozen:
     return makeBVH.fromHittables(entropy, rv.snapshot(), 0.0, 1.0)
 
 def sphereStudy(entropy) as DeepFrozen:
-    def checker := makeLambertian(entropy,
-                                  makeCheckerTexture(makeConstantTexture(makeV3(0.2, 0.3, 0.1)),
-                                                     makeConstantTexture(makeV3(0.9, 0.9, 0.9))))
+    # def checker := makeLambertian(entropy,
+    #                               makeCheckerTexture(makeConstantTexture(makeV3(0.2, 0.3, 0.1)),
+    #                                                  makeConstantTexture(makeV3(0.9, 0.9, 0.9))))
     # https://docs.unrealengine.com/en-US/Engine/Rendering/Materials/PhysicallyBased/index.html
-    # def platinum := makeMetal(entropy, makeV3(0.672, 0.637, 0.585), 0.05)
+    def platinum := makeMetal(entropy, makeV3(0.672, 0.637, 0.585), 0.0001)
     # def glass := makeDielectric(entropy, 1.5)
     def marble := makeLambertian(entropy, makeMarbleTexture(makeSimplexNoise(entropy)))
     def bigSphere := makeSphere(makeV3(0.0, -10_000.0, 0.0), 10_000.0,
-                                checker)
-    def study := makeSphere(makeV3(0.0, 1.0, 0.0), 1.0, marble)
-    def smoke := makeConstantMedium(entropy, study, 0.1,
-                                    makeConstantTexture(one))
-    def spheres := [bigSphere, smoke]
+                                marble)
+    def study := makeSphere(makeV3(0.0, 1.0, 0.0), 1.0, platinum)
+    # def smoke := makeConstantMedium(entropy, study, 0.01,
+    #                                 makeMarbleTexture(makeSimplexNoise(entropy)))
+    def spheres := [bigSphere, study]
     return makeBVH.fromHittables(entropy, spheres, 0.0, 1.0)
 
 def cornellBox(entropy) as DeepFrozen:
@@ -726,8 +738,12 @@ def qualityCutoff :Double := chiTable[0.95]
 # At 95% CI, we need 8-10 samples.
 # At 99% CI, we need 20-45 samples.
 # At 99.9% CI, we need 500-2000 samples.
-def minSamples :Int := 2
+def minSamples :Int := 3
 def maxSamples :Int := 1_000
+
+# We will track the number of samples, the mean, and the sum of squares of
+# offsets from the mean. When it comes time to output, we will emit the
+# mean as in traditional supersampling.
 
 def makeWelfordTracker(zero) as DeepFrozen:
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford's_online_algorithm
@@ -833,7 +849,7 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
         # green based on average depth of samples. Red ranges from minSamples
         # to maxSamples. Green ranges from no reflections (0) to maxDepth. I
         # say "tint" but I've just done it with a lerp.
-        def sample := if (true) {
+        def sample := if (false) {
             def red := (sampler.count() - minSamples) / maxSamples
             def green := depthEstimator.mean() / maxDepth
             def tint := makeV3(red, green, 0.0)
