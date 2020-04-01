@@ -86,8 +86,8 @@ def makeEntropy(generator) as DeepFrozen:
                 d(x ** 2)
                 x
             }]
-            def norm := d[].squareRoot()
-            return [for u in (us) u / norm]
+            def inorm := d[].squareRoot().reciprocal()
+            return [for u in (us) u * inorm]
 
         to nextBall(n :(Int >= 2)):
             "
