@@ -12,7 +12,7 @@ object makeV3 as DeepFrozen:
 
     to randomUnit(entropy):
         def [x, y, z] := [for coord in (entropy.nextSphere(2)) {
-            coord * entropy.nextBool().pick(1.0, -1.0)
+            if (entropy.nextBool()) { -coord } else { coord }
         }]
         return makeV3(x, y, z)
 
@@ -485,7 +485,7 @@ def makeMarbleTexture(noise) as DeepFrozen:
         # Scoop greens and blues in the mid range to create a rosy red marble.
         def scooped := scaled ** 2
         # And amplify the red to give some vibrancy.
-        return makeV3(scaled.squareRoot(), scooped, scooped)
+        return makeV3(scooped, scaled.squareRoot(), scooped)
 
 def makeLambertian(entropy, texture) as DeepFrozen:
     return object lambertianMaterial:
@@ -631,7 +631,7 @@ def randomScene(entropy) as DeepFrozen:
                    makeMetal(entropy, makeV3(0.7, 0.6, 0.5), 0.0)),
     ].diverge()
     # XXX limited for speed, is originally -11..11
-    def region := -4..4
+    def region := -11..11
     for a in (region):
         for b in (region):
             def chooseMat := rand()
@@ -811,9 +811,9 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     def up := makeV3(0.0, 1.0, 0.0)
 
     # Weekend scene. Big and slow.
-    # def world := randomScene(entropy)
+    def world := randomScene(entropy)
     # Study of single sphere above larger floor sphere.
-    def world := sphereStudy(entropy)
+    # def world := sphereStudy(entropy)
     # The Cornell Box.
     # def world := cornellBox(entropy)
 
@@ -823,10 +823,10 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
 
     def lookAt := makeV3(0.0, 1.0, 0.0)
     def lookFrom := makeV3(3.0, 2.0, 4.0)
+    # NB: In degrees!
     def fov := 40.0
     def aperture := 0.0005
     def distToFocus := (lookFrom - lookAt).norm()
-    # NB: In degrees!
     # NB: Aspect ratio is fixed, and we ignore the requested ratio.
     def camera := makeCamera(entropy, lookFrom, lookAt, up, fov, aspectRatio,
                              aperture, distToFocus, 0.0, 1.0)
@@ -861,8 +861,8 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def w := 160
-    def h := 120
+    def w := 320
+    def h := 180
     def p := Timer.measureTimeTaken(fn { makeDrawable(entropy, w / h) })
     return when (p) ->
         def [drawable, dd] := p
