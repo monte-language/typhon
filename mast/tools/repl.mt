@@ -51,16 +51,48 @@ def readEvalPrintLoop(prompt, &locals, unsealException) as DeepFrozen:
                 go<-()
     go()
 
+def loadPlain(log, root, makeFileResource, petname) as DeepFrozen:
+    def path := `$root/$petname.mt`
+    log(`Reading file: $path`)
+    def bs := makeFileResource(path)<-getContents()
+    return when (bs) ->
+        log(`Parsing Monte code: $path`)
+        def s := UTF8.decode(bs, null)
+        def lex := makeMonteLexer(s, petname)
+        [s, parseModule(lex, astBuilder, null)]
+
+# XXX factor with mast/montec
+def stripMarkdown(s :Str) :Str as DeepFrozen:
+    var skip :Bool := true
+    def lines := [].diverge()
+    for line in (s.split("\n")):
+        # If we are to skip a line, push a blank line in order to create 2D
+        # space and keep the spans the same as they were.
+        if (line == "```"):
+            lines.push("")
+            skip := !skip
+        else:
+            lines.push(skip.pick("", line))
+    # Parser bug: We usually need to end with a newline.
+    lines.push("")
+    return "\n".join(lines)
+
+def loadLiterate(log, root, makeFileResource, petname) as DeepFrozen:
+    def path := `$root/$petname.mt.md`
+    log(`Reading file: $path`)
+    def bs := makeFileResource(path)<-getContents()
+    return when (bs) ->
+        log(`Parsing Monte code: $path`)
+        def s := stripMarkdown(UTF8.decode(bs, null))
+        def lex := makeMonteLexer(s, petname)
+        [s, parseModule(lex, astBuilder, null)]
+
 def makeFileLoader(log, root, makeFileResource) as DeepFrozen:
     return def load(petname):
-        def path := `$root/$petname.mt`
-        log(`Reading file: $path`)
-        def bs := makeFileResource(path)<-getContents()
-        return when (bs) ->
-            log(`Parsing Monte code: $path`)
-            def s := UTF8.decode(bs, null)
-            def lex := makeMonteLexer(s, petname)
-            [s, parseModule(lex, astBuilder, null)]
+        def lit := loadLiterate(log, root, makeFileResource, petname)
+        return when (lit) -> { lit } catch _ {
+            loadPlain(log, root, makeFileResource, petname)
+        }
 
 def main(_argv,
          => makeFileResource,
