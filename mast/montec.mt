@@ -1,4 +1,5 @@
 import "lib/argv" =~ [=> flags]
+import "lib/asdl" =~ [=> buildASDLModule]
 import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer :DeepFrozen]
 import "lib/monte/monte_parser" =~ [=> parseModule :DeepFrozen]
@@ -108,15 +109,9 @@ def makeMuffin(loader) as DeepFrozen:
         traceln(`Got muffin request! Loader is $loader`)
         return mod
 
-def checkExtension(filename :Str) :Str as DeepFrozen:
-    return switch (filename) {
-        match `@_.mt` { ".mt" }
-        match `@_.mt.md` { ".mt.md" }
-    }
+def noPreprocessing(s :Str, _pn) :Str as DeepFrozen { return s }
 
-def noPreprocessing(s :Str) :Str as DeepFrozen { return s }
-
-def stripMarkdown(s :Str) :Str as DeepFrozen:
+def stripMarkdown(s :Str, _pn) :Str as DeepFrozen:
     var skip :Bool := true
     def lines := [].diverge()
     for line in (s.split("\n")):
@@ -134,7 +129,13 @@ def stripMarkdown(s :Str) :Str as DeepFrozen:
 def preprocessors :Map[Str, DeepFrozen] := [
     ".mt" => noPreprocessing,
     ".mt.md" => stripMarkdown,
+    ".asdl" => noPreprocessing,
 ]
+
+def checkExtension(filename :Str) :Str as DeepFrozen:
+    for extension => _ in (preprocessors):
+        if (filename.endsWith(extension)) { return extension }
+    throw(`Filename $filename doesn't have a recognized extension`)
 
 
 def main(argv,
@@ -148,24 +149,30 @@ def main(argv,
 
     def stdout := alterSink.encodeWith(UTF8, stdio.stdout())
 
-    def parse(data :Str):
+    def parse([extension :Str, data :Str]):
         "Parse and verify a Monte source file."
 
-        def tree
-        def lex := makeMonteLexer(data, inputFile)
-        escape e {
-            bind tree := parseModule(lex, astBuilder, e)
-        } catch parseError {
-            stdout(
-                if (config.terseErrors()) {
-                    inputFile + ":" + parseError.formatCompact() + "\n"
-                } else {parseError.formatPretty()})
+        return if (extension == ".asdl") {
+            # ASDL modules have their own parser.
+            [null, buildASDLModule(data, inputFile.split(".")[0])]
+        } else {
+            def lex := makeMonteLexer(data, inputFile)
+            def tree := escape e {
+                parseModule(lex, astBuilder, e)
+            } catch parseError {
+                stdout(
+                    if (config.terseErrors()) {
+                        inputFile + ":" + parseError.formatCompact() + "\n"
+                    } else {parseError.formatPretty()})
 
-            throw("Syntax error")
+                throw("Syntax error")
+            }
+            [lex, tree]
         }
-        return [lex, tree]
 
     def verify([lex, tree]):
+        # Custom parsers with no lexer probably don't need verification.
+        if (lex == null) { return tree }
         def stdout := stdio.stdout()
         var anyErrors :Bool := false
         for [report, isSerious] in ([
@@ -209,7 +216,7 @@ def main(argv,
         traceln(`Recognized extension $extension`)
         def preprocessor := preprocessors[extension]
         def p := makeFileResource(inputFile)<-getContents()
-        when (p) -> { preprocessor(UTF8.decode(p, null)) }
+        when (p) -> { [extension, preprocessor(UTF8.decode(p, null))] }
     }
 
     def writeOutputFile(bs):
@@ -225,7 +232,7 @@ def main(argv,
         if ((def path := config.muffinPath()) != null) {
             makeMuffin(makeLoader(fn petname {
                 def p := makeFileResource(`$path/$petname.mt`)<-getContents()
-                when (p) -> { UTF8.decode(p, null) }
+                when (p) -> { [".mt", UTF8.decode(p, null)] }
             }, config))
         },
         stopwatch(expandTree),

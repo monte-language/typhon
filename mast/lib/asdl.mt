@@ -1,6 +1,6 @@
 import "lib/freezer" =~ [=> freeze]
 import "lib/pen" =~ [=> pk, => makeSlicer]
-exports (asdlParser, asdlBuilder)
+exports (asdlBuilder, buildASDLModule)
 
 "The Zephyr Abstract Syntax Description Language."
 
@@ -264,30 +264,35 @@ def makeBuilderMaker(builderName :DeepFrozen, addBindings :Bool) as DeepFrozen:
         }`
         def script := astBuilder.Script(null, methods.snapshot(), [friendly],
                                         null)
-        def obj := astBuilder.ObjectExpr(null, builderName, m`DeepFrozen`,
+        def builderPatt := astBuilder.FinalPattern(builderName, null, null)
+        def obj := astBuilder.ObjectExpr(null, builderPatt, m`DeepFrozen`,
                                          [], script, null)
-        def ast := astBuilder.SeqExpr(preamble.with(obj), null)
-        return eval(ast, safeScope)
+        # To be eval'd in safeScope.
+        return astBuilder.SeqExpr(preamble.with(obj), null)
 
-def asdlBuilder :DeepFrozen := makeBuilderMaker(mpatt`asdlBuilder`, false)(ast)
+def asdlBuilder :DeepFrozen := makeBuilderMaker(m`asdlBuilder`, false)(ast)
 
-def asdlParser(builderName :DeepFrozen, s :Str, ej,
-               => addBindings :Bool := false) :DeepFrozen as DeepFrozen:
-    "
-    Parse a string into an AST builder.
-
-    `builderName` ought to be a Monte pattern AST, like m`asdlBuilder`. It
-    will be used to name the AST builder object.
-
-    `addBindings` will cause ABT constructors to be added to the AST builder,
-    turning it into an ABT builder. `builder.Var(name :Str)` creates a named
-    hole. `builder.Lam(var :Var, expr :Ast)` creates a lambda-style
-    abstraction over the ABT `expr`, binding `name`.
-    "
-
+def buildASDLModule(s :Str, petname :Str) :DeepFrozen as DeepFrozen:
     def p := makeParser(asdlBuilder)
-    def [ast, tail] := p(makeSlicer.fromString(s), ej)
+    def [ast, tail] := p(makeSlicer.fromString(s), null)
     escape tailtest:
         def next := tail.next(tailtest)
-        throw.eject(ej, `parser found junk at the end: $next`)
-    return makeBuilderMaker(builderName, addBindings)(ast)
+        throw(`parser found junk at the end: $next`)
+    def plainName := astBuilder.NounExpr(petname + "ASTBuilder", null)
+    def plainPatt := astBuilder.FinalPattern(plainName, null, null)
+    def withBindingsName := astBuilder.NounExpr(petname + "ABTBuilder", null)
+    def withBindingsPatt := astBuilder.FinalPattern(withBindingsName, null, null)
+    def plain := makeBuilderMaker(plainName, false)(ast)
+    def withBindings := makeBuilderMaker(withBindingsName, true)(ast)
+    def module := m`object _ {
+        to dependencies() { return [] }
+        to run(_) {
+            def $plainPatt := { $plain }
+            def $withBindingsPatt := { $withBindings }
+            return [
+                => $plainName,
+                => $withBindingsName,
+            ]
+        }
+    }`
+    return module

@@ -1,5 +1,6 @@
-import "lib/asdl" =~ [=> asdlParser]
-exports (buildExpr, makeReader, catPrint, computationGraph, ports)
+# import "fun/ports" =~ [=> portsASTBuilder]
+# exports (buildExpr, makeReader, catPrint, computationGraph, ports)
+exports (buildExpr, makeReader, catPrint)
 
 # We'll need some conventions. We're doing the Cartesian closed category
 # approach, so we'll see these combinators:
@@ -93,15 +94,6 @@ def makeReader :DeepFrozen := makeMonad(
 # http://conal.net/papers/compiling-to-categories/compiling-to-categories.pdf
 # p8
 
-def ports :DeepFrozen := asdlParser(mpatt`ports`, `
-    ports = UnitP
-          | BoolP(int)
-          | DoubleP(int)
-          | IntP(int)
-          | PairP(ports, ports)
-          | FunP(df)
-`, null)
-
 object state as DeepFrozen:
     "The State monad."
 
@@ -163,71 +155,73 @@ def makeCompGraph(compName :Str, arity :Int, f :DeepFrozen) as DeepFrozen:
             return state.">>="(state.modify(append), const(state.pure(new)))
         })
 
-object computationGraph as DeepFrozen:
-    "A basic SSA computation graph."
-
-    to id():
-        return def idGraph(ps) as DeepFrozen { return state.pure(ps) }
-
-    to compose(f :DeepFrozen, g :DeepFrozen):
-        return def composedGraph(ps) as DeepFrozen {
-            # Kleisli composition.
-            return state.join(state.fmap(g)(f(ps)))
-        }
-
-    to unit():
-        return def unitGraph(ps) as DeepFrozen:
-            return state.pure(ports.UnitP())
-
-    to pair(left :DeepFrozen, right :DeepFrozen):
-        return def pairGraph(ps) as DeepFrozen:
-            return state.liftA2(ports.PairP, left(ps), right(ps))
-
-    to exl():
-        return def leftGraph(ps) as DeepFrozen:
-            return ps.walk(def walker.PairP(l, _) { return state.pure(l) })
-
-    to exr():
-        return def rightGraph(ps) as DeepFrozen:
-            return ps.walk(def walker.PairP(_, r) { return state.pure(r) })
-
-    to apply():
-        return def applyGraph(ps) as DeepFrozen:
-            return ps.walk(def walker.PairP(fun, x) {
-                return fun.walk(def funp.FunP(g) { return g(x) })
-            })
-
-    to curry(f :DeepFrozen):
-        return def curryGraph(ps1 :DeepFrozen) as DeepFrozen:
-            return state.pure(ports.FunP(def curriedGraph(ps2) as DeepFrozen {
-                return f(ports.PairP(ps1, ps2))
-            }))
-
-    to uncurry(g :DeepFrozen):
-        return def uncurryGraph(ps :DeepFrozen) as DeepFrozen:
-            return ps.walk(def walker.PairP(l, r :DeepFrozen) {
-                return state.">>="(g(l), def uncurried(graph) as DeepFrozen {
-                    return graph.walk(def funp.FunP(f) { return f(r) })
-                })
-            })
-
-    to zero():
-        return makeCompGraph("0", 1, ports.IntP)
-
-    to succ():
-        return makeCompGraph("+1", 1, ports.IntP)
-
-    to pr(q :DeepFrozen, f :DeepFrozen):
-        def prep := computationGraph.pair(computationGraph.unit(),
-                                          computationGraph.id())
-        def qf := computationGraph.compose(prep, computationGraph.pair(q, f))
-        def rec := makeCompGraph("ℕ", 1, ports.IntP)
-        return computationGraph.compose(qf, rec)
-
-    # And extra operations.
-
-    to mulC():
-        return makeCompGraph("×", 1, ports.IntP)
-
-    to addC():
-        return makeCompGraph("+", 1, ports.IntP)
+# def ports :DeepFrozen := portsASTBuilder
+# 
+# object computationGraph as DeepFrozen:
+#     "A basic SSA computation graph."
+# 
+#     to id():
+#         return def idGraph(ps) as DeepFrozen { return state.pure(ps) }
+# 
+#     to compose(f :DeepFrozen, g :DeepFrozen):
+#         return def composedGraph(ps) as DeepFrozen {
+#             # Kleisli composition.
+#             return state.join(state.fmap(g)(f(ps)))
+#         }
+# 
+#     to unit():
+#         return def unitGraph(ps) as DeepFrozen:
+#             return state.pure(ports.UnitP())
+# 
+#     to pair(left :DeepFrozen, right :DeepFrozen):
+#         return def pairGraph(ps) as DeepFrozen:
+#             return state.liftA2(ports.PairP, left(ps), right(ps))
+# 
+#     to exl():
+#         return def leftGraph(ps) as DeepFrozen:
+#             return ps.walk(def walker.PairP(l, _) { return state.pure(l) })
+# 
+#     to exr():
+#         return def rightGraph(ps) as DeepFrozen:
+#             return ps.walk(def walker.PairP(_, r) { return state.pure(r) })
+# 
+#     to apply():
+#         return def applyGraph(ps) as DeepFrozen:
+#             return ps.walk(def walker.PairP(fun, x) {
+#                 return fun.walk(def funp.FunP(g) { return g(x) })
+#             })
+# 
+#     to curry(f :DeepFrozen):
+#         return def curryGraph(ps1 :DeepFrozen) as DeepFrozen:
+#             return state.pure(ports.FunP(def curriedGraph(ps2) as DeepFrozen {
+#                 return f(ports.PairP(ps1, ps2))
+#             }))
+# 
+#     to uncurry(g :DeepFrozen):
+#         return def uncurryGraph(ps :DeepFrozen) as DeepFrozen:
+#             return ps.walk(def walker.PairP(l, r :DeepFrozen) {
+#                 return state.">>="(g(l), def uncurried(graph) as DeepFrozen {
+#                     return graph.walk(def funp.FunP(f) { return f(r) })
+#                 })
+#             })
+# 
+#     to zero():
+#         return makeCompGraph("0", 1, ports.IntP)
+# 
+#     to succ():
+#         return makeCompGraph("+1", 1, ports.IntP)
+# 
+#     to pr(q :DeepFrozen, f :DeepFrozen):
+#         def prep := computationGraph.pair(computationGraph.unit(),
+#                                           computationGraph.id())
+#         def qf := computationGraph.compose(prep, computationGraph.pair(q, f))
+#         def rec := makeCompGraph("ℕ", 1, ports.IntP)
+#         return computationGraph.compose(qf, rec)
+# 
+#     # And extra operations.
+# 
+#     to mulC():
+#         return makeCompGraph("×", 1, ports.IntP)
+# 
+#     to addC():
+#         return makeCompGraph("+", 1, ports.IntP)
