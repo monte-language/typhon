@@ -1,7 +1,5 @@
-import "lib/mim/syntax/full" =~ [=> fullASTBuilder]
+import "lib/mim/syntax/full" =~ ["ASTBuilder" => monteBuilder]
 exports (monteBuilder, rebuild, expand)
-
-def monteBuilder :DeepFrozen := fullASTBuilder
 
 def rebuild(ast :DeepFrozen) as DeepFrozen:
     def rebuilder(node, _maker, args, span):

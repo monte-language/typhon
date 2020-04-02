@@ -12,7 +12,7 @@ let
     in pkgs.runCommand name {} ''
         ${typhonVm}/mt-typhon -l ${boot} ${boot}/loader run montec ${flags} ${mt} $out
       '';
-  exts = [ ".mt" ".mt.md" ];
+  exts = [ ".mt" ".mt.md" ".asdl" ];
   # Compile a whole tree.
   buildMonteTree = root: context: files: lib.concatLists (lib.mapAttrsToList (filename: filetype:
     let

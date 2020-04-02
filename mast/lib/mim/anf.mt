@@ -1,9 +1,7 @@
-import "lib/mim/syntax/anf" =~ [=> anfASTBuilder]
+import "lib/mim/syntax/anf" =~ ["ASTBuilder" => anf]
 exports (anf, makeNormal)
 
 # http://matt.might.net/articles/a-normalization/
-
-def anf :DeepFrozen := anfASTBuilder
 
 def id(x) as DeepFrozen:
     return x

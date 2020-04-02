@@ -270,7 +270,8 @@ def makeBuilderMaker(builderName :DeepFrozen, addBindings :Bool) as DeepFrozen:
         # To be eval'd in safeScope.
         return astBuilder.SeqExpr(preamble.with(obj), null)
 
-def asdlBuilder :DeepFrozen := makeBuilderMaker(m`asdlBuilder`, false)(ast)
+def asdlBuilder :DeepFrozen := eval(
+    makeBuilderMaker(m`asdlBuilder`, false)(ast), safeScope)
 
 def buildASDLModule(s :Str, petname :Str) :DeepFrozen as DeepFrozen:
     def p := makeParser(asdlBuilder)
@@ -279,19 +280,17 @@ def buildASDLModule(s :Str, petname :Str) :DeepFrozen as DeepFrozen:
         def next := tail.next(tailtest)
         throw(`parser found junk at the end: $next`)
     def plainName := astBuilder.NounExpr(petname + "ASTBuilder", null)
-    def plainPatt := astBuilder.FinalPattern(plainName, null, null)
     def withBindingsName := astBuilder.NounExpr(petname + "ABTBuilder", null)
-    def withBindingsPatt := astBuilder.FinalPattern(withBindingsName, null, null)
     def plain := makeBuilderMaker(plainName, false)(ast)
     def withBindings := makeBuilderMaker(withBindingsName, true)(ast)
-    def module := m`object _ {
+    def module := m`object _ as DeepFrozen {
         to dependencies() { return [] }
         to run(_) {
-            def $plainPatt := { $plain }
-            def $withBindingsPatt := { $withBindings }
+            def ASTBuilder := { $plain }
+            def ABTBuilder := { $withBindings }
             return [
-                => $plainName,
-                => $withBindingsName,
+                => ASTBuilder,
+                => ABTBuilder,
             ]
         }
     }`

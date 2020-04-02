@@ -1,0 +1,28 @@
+atom = LiteralExpr(df value)
+     | NounExpr(str name)
+     | SlotExpr(str name)
+     | BindingExpr(str name)
+     | ObjectExpr(str? docstring, str? name, atom? asExpr,
+                  atom* auditors, script script)
+     attributes (df span)
+complex = MethodCallExpr(atom receiver, str verb, atom* args,
+                         namedArg* namedArgs)
+        | FinallyExpr(complex body, complex unwinder)
+        | IfExpr(atom test, complex then, complex else)
+        | LetExpr(pattern pattern, complex expr, complex body)
+        | EscapeExpr(pattern pattern, complex body)
+        | JumpExpr(atom ejector, atom arg)
+        | Atom(atom atom)
+        attributes (df span)
+pattern = IgnorePattern
+        | FinalPattern(str noun)
+        | BindingPattern(str noun)
+        | ListPattern(pattern* patterns)
+        attributes (df span)
+namedArg = NamedArg(atom key, atom value, df span)
+namedParam = NamedParam(atom key, pattern value, atom? default, df span)
+method = Method(str? docstring, str verb, pattern* params,
+                namedParam* namedParams, atom? resultGuard, complex body,
+                df span)
+matcher = Matcher(pattern pattern, complex body)
+script = Script(method* methods, matcher* matchers, df span)
