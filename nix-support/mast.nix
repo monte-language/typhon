@@ -13,6 +13,7 @@ let
         ${typhonVm}/mt-typhon -l ${boot} ${boot}/loader run montec ${flags} ${mt} $out
       '';
   mtToMast = filename: (lib.removeSuffix ".mt" filename) + ".mast";
+  mtMdToMast = filename: (lib.removeSuffix ".mt.md" filename) + ".mast";
   # Compile a whole tree.
   buildMonteTree = root: context: files: lib.concatLists (lib.mapAttrsToList (filename: filetype:
     let
@@ -23,6 +24,9 @@ let
       else if lib.hasSuffix ".mt" filename then [{
         name = mtToMast rel;
         path = buildMonteModule (mtToMast filename) abs;
+      }] else if lib.hasSuffix ".mt.md" filename then [{
+        name = mtMdToMast rel;
+        path = buildMonteModule (mtMdToMast filename) abs;
       }] else []
   ) files);
   tree = buildMonteTree mastSrc "" (builtins.readDir mastSrc);
