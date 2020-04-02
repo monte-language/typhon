@@ -12,8 +12,7 @@ let
     in pkgs.runCommand name {} ''
         ${typhonVm}/mt-typhon -l ${boot} ${boot}/loader run montec ${flags} ${mt} $out
       '';
-  mtToMast = filename: (lib.removeSuffix ".mt" filename) + ".mast";
-  mtMdToMast = filename: (lib.removeSuffix ".mt.md" filename) + ".mast";
+  exts = [ ".mt" ".mt.md" ];
   # Compile a whole tree.
   buildMonteTree = root: context: files: lib.concatLists (lib.mapAttrsToList (filename: filetype:
     let
@@ -21,13 +20,13 @@ let
       abs = root + ("/" + rel);
     in if filetype == "directory"
       then buildMonteTree root rel (builtins.readDir abs)
-      else if lib.hasSuffix ".mt" filename then [{
-        name = mtToMast rel;
-        path = buildMonteModule (mtToMast filename) abs;
-      }] else if lib.hasSuffix ".mt.md" filename then [{
-        name = mtMdToMast rel;
-        path = buildMonteModule (mtMdToMast filename) abs;
-      }] else []
+      else let
+        ext = lib.findFirst (ext: lib.hasSuffix ext filename) "none" exts;
+        rename = n: (lib.removeSuffix ext n) + ".mast";
+      in lib.optional (ext != "none") {
+        name = rename rel;
+        path = buildMonteModule (rename filename) abs;
+      }
   ) files);
   tree = buildMonteTree mastSrc "" (builtins.readDir mastSrc);
   buildMASTFarm = pkgs.linkFarm "mast" tree;

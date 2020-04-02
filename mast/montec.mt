@@ -109,9 +109,9 @@ def makeMuffin(loader) as DeepFrozen:
         traceln(`Got muffin request! Loader is $loader`)
         return mod
 
-def noPreprocessing(s :Str, _pn) :Str as DeepFrozen { return s }
+def noPreprocessing(s :Str) :Str as DeepFrozen { return s }
 
-def stripMarkdown(s :Str, _pn) :Str as DeepFrozen:
+def stripMarkdown(s :Str) :Str as DeepFrozen:
     var skip :Bool := true
     def lines := [].diverge()
     for line in (s.split("\n")):
