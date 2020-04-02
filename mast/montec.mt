@@ -108,13 +108,41 @@ def makeMuffin(loader) as DeepFrozen:
         traceln(`Got muffin request! Loader is $loader`)
         return mod
 
+def checkExtension(filename :Str) :Str as DeepFrozen:
+    return switch (filename) {
+        match `@_.mt` { ".mt" }
+        match `@_.mt.md` { ".mt.md" }
+    }
+
+def noPreprocessing(s :Str) :Str as DeepFrozen { return s }
+
+def stripMarkdown(s :Str) :Str as DeepFrozen:
+    var skip :Bool := true
+    def lines := [].diverge()
+    for line in (s.split("\n")):
+        # If we are to skip a line, push a blank line in order to create 2D
+        # space and keep the spans the same as they were.
+        if (line == "```"):
+            lines.push("")
+            skip := !skip
+        else:
+            lines.push(skip.pick("", line))
+    # Parser bug: We usually need to end with a newline.
+    lines.push("")
+    return "\n".join(lines)
+
+def preprocessors :Map[Str, DeepFrozen] := [
+    ".mt" => noPreprocessing,
+    ".mt.md" => stripMarkdown,
+]
+
 
 def main(argv,
          => Timer, => makeFileResource,
          => stdio) :Vow[Int] as DeepFrozen:
     def config := parseArguments(argv, throw)
-    def inputFile := config.getInputFile()
-    def outputFile := config.getOutputFile()
+    def inputFile :Str := config.getInputFile()
+    def outputFile :Str := config.getOutputFile()
 
     def stopwatch := makeStopwatch(Timer)
 
@@ -177,8 +205,11 @@ def main(argv,
         flow(stdio.stdin(), decodedSink)
         when (l) -> { "".join(l) }
     } else {
+        def extension := checkExtension(inputFile)
+        traceln(`Recognized extension $extension`)
+        def preprocessor := preprocessors[extension]
         def p := makeFileResource(inputFile)<-getContents()
-        when (p) -> { UTF8.decode(p, null) }
+        when (p) -> { preprocessor(UTF8.decode(p, null)) }
     }
 
     def writeOutputFile(bs):
