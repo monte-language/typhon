@@ -118,11 +118,22 @@ def dragon4(d :Double) :Str as DeepFrozen:
     })
 
 
-def makeKahan() as DeepFrozen:
-    var d :Double := 0.0
+def makeKahan(=> zero :Double := 0.0) as DeepFrozen:
+    "
+    Use compensated addition to estimate a floating-point value.
+
+    The addition starts at `zero`.
+    "
+
+    var d :Double := zero
     var c :Double := 0.0
     return object kahan:
-        "A compensated addition."
+        "
+        A compensated addition.
+
+        `.run/1` this object to add to its internal counter; `.get/0` this
+        object to read out its internal counter.
+        "
 
         to get():
             return d - c

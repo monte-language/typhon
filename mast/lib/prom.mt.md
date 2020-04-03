@@ -1,6 +1,7 @@
 ```
 import "unittest" =~ [=> unittest :Any]
 import "lib/codec/utf8" =~ [=> UTF8]
+import "lib/doubles" =~ [=> makeKahan]
 import "lib/http/apps" =~ [=> addBaseOnto]
 import "lib/http/headers" =~ [=> emptyHeaders]
 import "lib/http/response" =~ [=> Response]
@@ -42,69 +43,9 @@ unfortunate because of the known edge cases:
     ▲> x + 1.0
     Result: 9007199254740992.000000
 
-We can use (Kahan
-summation)[https://en.wikipedia.org/wiki/Kahan_summation_algorithm] to
+We will use [Kahan
+summation](https://en.wikipedia.org/wiki/Kahan_summation_algorithm) to
 compensate for this failure.
-
-```
-def kahanWrap(var d :Double) as DeepFrozen:
-```
-
-`c` is for "compensator" or "compensation".
-
-```
-    var c :Double := 0.0
-```
-
-We'll use a coercible wrapper object.
-
-```
-    return object kahanDouble:
-        to _conformTo(_guard):
-            return d - c
-```
-
-Putting a precise value into the wrapper will reset the compensator.
-
-```
-        to put(v :Double):
-            d := v
-            c := 0.0
-```
-
-And here is the core of the Kahan algorithm.
-
-```
-        to add(v :Double):
-            var y := v - c
-            var t := d + y
-            c := t - d - y
-            d := t
-```
-
-We can flip every sign in order to do subtraction, but it's much easier and
-just as legal to flip the sign of the input.
-
-```
-        to subtract(v :Double):
-            kahanDouble + -v
-```
-
-We can test that this technique works, too.
-
-```
-def testKahanWrapOverflow(assert):
-    def top :Double := 9_007_199_254_740_992.0
-    def expected :Double := 9_007_199_254_740_994.0
-    def d := kahanWrap(top)
-    d + 1.0
-    d + 1.0
-    assert.equal(d :Double, expected)
-
-unittest([
-    testKahanWrapOverflow,
-])
-```
 
 Monte and Go have slightly different formatting for doubles.
 
@@ -138,7 +79,7 @@ zero out the default bucket to prevent missing metrics.
 
 ```
     if (labels.isEmpty()):
-        values[[]] := kahanWrap(zero)
+        values[[]] := makeKahan(=> zero)
 ```
 
 This transformer takes a map of label names to label parameters, and returns
@@ -174,7 +115,7 @@ And these map operations include the zero-value cushion.
 ```
         to get(via (trans) params):
             return values.fetch(params, fn {
-                values[params] := kahanWrap(zero)
+                values[params] := makeKahan(=> zero)
             })
 ```
 
@@ -469,14 +410,14 @@ have `Int`-valued counters, but it is impractical.
 
 ```
                 to inc(params :Map[Str, Str]):
-                    labelMap[params] + 1.0
+                    labelMap[params](1.0)
 ```
 
 > * `inc(double v)`: Increment the counter by the given amount. MUST check that v >= 0.
 
 ```
                 to inc(params :Map[Str, Str], v :PosDouble):
-                    labelMap[params] + v
+                    labelMap[params](v)
 ```
 
 > The general way to provide access to labeled dimension of a metric is via a
@@ -489,9 +430,9 @@ have `Int`-valued counters, but it is impractical.
                     def val := labelMap[params]
                     return object childCounter:
                         to inc():
-                            val + 1.0
+                            val(1.0)
                         to inc(v :PosDouble):
-                            val + v
+                            val(v)
 ```
 
 Another problem which manifests here for the first (and not the last) time is
@@ -556,28 +497,28 @@ We'll offer a named argument.
 
 ```
                 to inc(params :Map[Str, Str]):
-                    labelMap[params] + 1.0
+                    labelMap[params](1.0)
                 to inc(params :Map[Str, Str], v :Double):
-                    labelMap[params] + v
+                    labelMap[params](v)
                 to dec(params :Map[Str, Str]):
-                    labelMap[params] - 1.0
+                    labelMap[params](-1.0)
                 to dec(params :Map[Str, Str], v :Double):
-                    labelMap[params] - v
+                    labelMap[params](-v)
                 to set(params :Map[Str, Str], v :Double):
-                    labelMap[params][] := v
+                    labelMap[params] := makeKahan("zero" => v)
                 to labels(params :Map[Str, Str]):
-                    def val := labelMap[params]
+                    var val := labelMap[params]
                     return object childGauge:
                         to inc():
-                            val + 1.0
+                            val(1.0)
                         to inc(v :Double):
-                            val + v
+                            val(v)
                         to dec():
-                            val - 1.0
+                            val(-1.0)
                         to dec(v :Double):
-                            val - v
+                            val(-v)
                         to set(v :Double):
-                            val[] := v
+                            val := labelMap[params] := makeKahan("zero" => v)
             return if (labels.isEmpty()) {
                 gauge.labels([].asMap())
             } else { gauge }
@@ -660,7 +601,7 @@ We will use compensation on the sum.
 ```
             def zero :Double := 0.0
             var count :Int := 0
-            var sum :Double := kahanWrap(zero)
+            var sum :Double := makeKahan(=> zero)
 ```
 
 Note the coercion of `sum`, again by `formatDouble`.
@@ -671,7 +612,7 @@ Note the coercion of `sum`, again by `formatDouble`.
             collectors[name] := fn {
                 labelMap.collect() | [
                     `${registryName}_${name}_count` => count,
-                    `${registryName}_${name}_sum` => sum,
+                    `${registryName}_${name}_sum` => sum[],
                 ]
             }
             object histogram:
@@ -686,19 +627,19 @@ Note the coercion of `sum`, again by `formatDouble`.
 ```
                 to observe(params :Map[Str, Str], v :Double):
                     count += 1
-                    sum + v
+                    sum(v)
                     for bucket in (buckets):
                         if (v <= bucket):
-                            labelMap[params.with("le", formatDouble(bucket))] + 1.0
+                            labelMap[params.with("le", formatDouble(bucket))](1.0)
                 to labels(params :Map[Str, Str]):
                     # We have to do a bucket lookup every time anyway, so
                     # don't bother trying to produce a slot.
                     return def childHistogram.observe(v :Double):
                         count += 1
-                        sum + v
+                        sum(v)
                         for bucket in (buckets):
                             if (v <= bucket):
-                                labelMap[params.with("le", formatDouble(bucket))] + 1.0
+                                labelMap[params.with("le", formatDouble(bucket))](1.0)
             return if (labels.isEmpty()) {
                 histogram.labels([].asMap())
             } else { histogram }
@@ -916,24 +857,15 @@ sorting.
 > Client libraries SHOULD have unit tests covering the core instrumentation
 > library and exposition.
 
-Sure. We'll need to coerce our collector output to match our test data:
-
-```
-def coerce(m):
-    def maybeDouble(specimen):
-         return escape ej { Double.coerce(specimen, ej) } catch _ { specimen }
-    return [for k => v in (m) k => maybeDouble(v)]
-```
-
-Let's do a basic sanity test:
+Sure. Let's do a basic sanity test:
 
 ```
 def testCounter(assert):
     def r := makeRegistry("test")
     def c := r.counter("tests", "This help string will never be seen.")
-    assert.equal(coerce(r.collect()), ["test_tests" => 0.0])
+    assert.equal(r.collect(), ["test_tests" => 0.0])
     c.inc()
-    assert.equal(coerce(r.collect()), ["test_tests" => 1.0])
+    assert.equal(r.collect(), ["test_tests" => 1.0])
 ```
 
 And we'll take gauges for a test drive too:
@@ -944,19 +876,19 @@ def testGauge(assert):
     def g := r.gauge("tests", "This help string will never be seen.")
     # Doubles are exact on this integer range, so these operations should be
     # trivially exact.
-    assert.equal(coerce(r.collect()), ["test_tests" => 0.0])
+    assert.equal(r.collect(), ["test_tests" => 0.0])
     g.inc()
-    assert.equal(coerce(r.collect()), ["test_tests" => 1.0])
+    assert.equal(r.collect(), ["test_tests" => 1.0])
     g.inc(2.0)
-    assert.equal(coerce(r.collect()), ["test_tests" => 3.0])
+    assert.equal(r.collect(), ["test_tests" => 3.0])
     g.dec()
-    assert.equal(coerce(r.collect()), ["test_tests" => 2.0])
+    assert.equal(r.collect(), ["test_tests" => 2.0])
     g.dec(3.0)
-    assert.equal(coerce(r.collect()), ["test_tests" => -1.0])
+    assert.equal(r.collect(), ["test_tests" => -1.0])
     # Nontrivial FP exactness. We can rely on this due to passthrough; .set/1
     # is effectively an algebraic action.
     g.set(5.7)
-    assert.equal(coerce(r.collect()), ["test_tests" => 5.7])
+    assert.equal(r.collect(), ["test_tests" => 5.7])
 ```
 
 And make sure labels work:
@@ -969,7 +901,7 @@ def testCounterLabels(assert):
     c.inc(["t" => "200"])
     def child := c.labels(["t" => "400"])
     child.inc(2.0)
-    assert.equal(coerce(r.collect().sortKeys()), [
+    assert.equal(r.collect().sortKeys(), [
         `test_tests{t="200"}` => 1.0,
         `test_tests{t="400"}` => 2.0,
     ])
@@ -984,7 +916,7 @@ def testHistogram(assert):
     def h := r.histogram("tests", "", => buckets)
     h.observe(2.5)
     h.observe(3.5)
-    assert.equal(coerce(r.collect().sortKeys()), [
+    assert.equal(r.collect().sortKeys(), [
         `test_tests_count` => "2.0",
         # FP exactness!
         `test_tests_sum` => "6.0",
