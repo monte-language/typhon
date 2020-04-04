@@ -1,3 +1,4 @@
+import "lib/asdl" =~ [=> buildASDLModule]
 import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/commandLine" =~ [=> makePrompt]
 import "lib/console" =~ [=> consoleDraw]
@@ -61,7 +62,8 @@ def loadPlain(log, root, makeFileResource, petname) as DeepFrozen:
         def lex := makeMonteLexer(s, petname)
         [s, parseModule(lex, astBuilder, null)]
 
-# XXX factor with mast/montec
+# XXX factor with mast/montec all of these custom loaders.
+
 def stripMarkdown(s :Str) :Str as DeepFrozen:
     var skip :Bool := true
     def lines := [].diverge()
@@ -82,16 +84,28 @@ def loadLiterate(log, root, makeFileResource, petname) as DeepFrozen:
     log(`Reading file: $path`)
     def bs := makeFileResource(path)<-getContents()
     return when (bs) ->
-        log(`Parsing Monte code: $path`)
+        log(`Parsing literate Monte code: $path`)
         def s := stripMarkdown(UTF8.decode(bs, null))
         def lex := makeMonteLexer(s, petname)
         [s, parseModule(lex, astBuilder, null)]
+
+def loadASDL(log, root, makeFileResource, petname) as DeepFrozen:
+    def path := `$root/$petname.asdl`
+    log(`Reading file: $path`)
+    def bs := makeFileResource(path)<-getContents()
+    return when (bs) ->
+        log(`Parsing Zephyr ASDL specification: $path`)
+        def s := UTF8.decode(bs, null)
+        [s, buildASDLModule(s, petname)]
 
 def makeFileLoader(log, root, makeFileResource) as DeepFrozen:
     return def load(petname):
         def lit := loadLiterate(log, root, makeFileResource, petname)
         return when (lit) -> { lit } catch _ {
-            loadPlain(log, root, makeFileResource, petname)
+            def asdl := loadASDL(log, root, makeFileResource, petname)
+            when (asdl) -> { asdl } catch _ {
+                loadPlain(log, root, makeFileResource, petname)
+            }
         }
 
 def main(_argv,
