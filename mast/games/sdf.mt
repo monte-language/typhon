@@ -20,9 +20,6 @@ def sumRow :DeepFrozen := V.makeFold(one * 0.0, sumPlus)
 def maxPlus(x, y) as DeepFrozen { return x.max(y) }
 def max :DeepFrozen := V.makeFold(-Infinity, maxPlus)
 
-def allPlus(x, y) as DeepFrozen { return x & y }
-def all :DeepFrozen := V.makeFold(true, allPlus)
-
 def norm(v) as DeepFrozen:
     return sumDouble(v ** 2).squareRoot()
 
@@ -172,7 +169,8 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
     def viewToWorld := viewMatrix(eye, one * 0.0, V(0.0, 1.0, 0.0))
 
     return def drawable.drawAt(u :Double, v :Double, => aspectRatio :Double):
-        def viewDir := rayDirection(fov, u, v, aspectRatio)
+        # NB: Flip vertical axis.
+        def viewDir := rayDirection(fov, u, 1.0 - v, aspectRatio)
         def worldDir := viewToWorld(viewDir)
 
         def distance := shortestDistanceToSurface(sdf, eye, worldDir, 0.0,
@@ -191,6 +189,19 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
         return makeColor.RGB(r, g, b, 1.0)
 
+def cylinder(c :DeepFrozen) as DeepFrozen:
+    "
+    The cross of infinite cylinders centered at the origin and with radius `c`
+    in each axis.
+    "
+
+    def [cx :Double, cy :Double, cz :Double] := V.un(c, null)
+    return def cyl(p) as DeepFrozen:
+        def [px, py, pz] := V.un(p, null)
+        return (px.euclidean(py) - cz).min(
+            py.euclidean(pz) - cx).min(
+            pz.euclidean(px) - cy)
+
 def repeat(sdf :DeepFrozen, c :DeepFrozen) as DeepFrozen:
     "Repeat `sdf` over orthorhombic lattice `c`."
 
@@ -198,11 +209,11 @@ def repeat(sdf :DeepFrozen, c :DeepFrozen) as DeepFrozen:
     return def repeated(p) as DeepFrozen:
         return sdf(mod(p + half, c) - half)
 
-def sdf :DeepFrozen := repeat(makeSphere(1.0), V(3.0, 5.0, 4.0))
-# def sdf :DeepFrozen := union(
-#     repeat(makeSphere(1.0), V(2.0, 10.0, 2.0)),
-#     translate(makeSphere(10_000.0), V(0.0, -10_000.0, 0.0)),
-# )
+def sdf :DeepFrozen := repeat(difference(
+    intersect(makeSphere(1.2), makeCube(1.0)),
+    cylinder(one * 0.5),
+), V(3.0, 5.0, 4.0))
+# translate(makeSphere(10_000.0), V(0.0, -10_000.0, 0.0))
 
 def main(_argv, => makeFileResource, => Timer) as DeepFrozen:
     # def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
