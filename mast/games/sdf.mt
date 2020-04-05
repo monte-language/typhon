@@ -1,3 +1,4 @@
+import "games/csg" =~ ["ASTBuilder" => CSG]
 import "lib/colors" =~ [=> makeColor]
 import "lib/vectors" =~ [=> V]
 import "fun/ppm" =~ [=> makePPM]
@@ -10,6 +11,13 @@ exports (main)
 # object is some geometry, and the return value is the signed distance from
 # the argument point to the nearest point on the geometry, with negative
 # distance indicating that the point is within the geometry.
+
+# https://en.wikipedia.org/wiki/Constructive_solid_geometry
+
+# Constructed solids are built from geometric primitives and some basic
+# set-theoretic operations. There is a functor CSG -> SDF which assigns each
+# shape a function that can determine distances to that shape. This will be
+# our main insight for interacting with our constructed geometry.
 
 def one :DeepFrozen := V(1.0, 1.0, 1.0)
 
@@ -46,33 +54,6 @@ def cross(x, y) as DeepFrozen:
 # https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/reflect.xhtml
 def reflect(I, N) as DeepFrozen:
     return I - N * (2.0 * dot(I, N))
-
-def makeSphere(radius :Double) as DeepFrozen:
-    return def sphere(p) as DeepFrozen:
-        return norm(p) - radius
-
-def makeBox(b :DeepFrozen) as DeepFrozen:
-    return def box(p) as DeepFrozen:
-        def q := p.abs() - b
-        return norm(q.max(0.0)) + max(q).min(0.0)
-
-def makeCube(length :Double) as DeepFrozen:
-    return makeBox(one * length)
-
-def translate(sdf :DeepFrozen, offset :DeepFrozen) as DeepFrozen:
-    return def translated(p) as DeepFrozen { return sdf(p - offset) }
-
-def scale(sdf :DeepFrozen, scale :Double) as DeepFrozen:
-    return def scaled(p) as DeepFrozen { return sdf(p / scale) * scale }
-
-def intersect(l :DeepFrozen, r :DeepFrozen) as DeepFrozen:
-    return def intersected(p) as DeepFrozen { return l(p).max(r(p)) }
-
-def union(l :DeepFrozen, r :DeepFrozen) as DeepFrozen:
-    return def unioned(p) as DeepFrozen { return l(p).min(r(p)) }
-
-def difference(l :DeepFrozen, r :DeepFrozen) as DeepFrozen:
-    return def subtracted(p) as DeepFrozen { return l(p).max(-(r(p))) }
 
 def PI :Double := 1.0.arcSine() * 2
 
@@ -165,6 +146,8 @@ def viewMatrix(eye :DeepFrozen, center, up) as DeepFrozen:
         # traceln(`moveCamera($dir) -> $rv`)
         return rv
 
+def maxDepth :Double := 100.0
+
 def drawSignedDistanceFunction(sdf) as DeepFrozen:
     def viewToWorld := viewMatrix(eye, one * 0.0, V(0.0, 1.0, 0.0))
 
@@ -174,8 +157,8 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         def worldDir := viewToWorld(viewDir)
 
         def distance := shortestDistanceToSurface(sdf, eye, worldDir, 0.0,
-                                                  100.0)
-        if (distance >= 100.0) { return makeColor.clear() }
+                                                  maxDepth)
+        if (distance >= maxDepth) { return makeColor.clear() }
         # traceln(`hit $u $v $distance`)
 
         def p := eye + worldDir * distance
@@ -189,36 +172,75 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
         return makeColor.RGB(r, g, b, 1.0)
 
-def cylinder(c :DeepFrozen) as DeepFrozen:
-    "
-    The cross of infinite cylinders centered at the origin and with radius `c`
-    in each axis.
-    "
+object asSDF as DeepFrozen:
+    "Compile a CSG expression to its corresponding SDF."
 
-    def [cx :Double, cy :Double, cz :Double] := V.un(c, null)
-    return def cyl(p) as DeepFrozen:
-        def [px, py, pz] := V.un(p, null)
-        return (px.euclidean(py) - cz).min(
-            py.euclidean(pz) - cx).min(
-            pz.euclidean(px) - cy)
+    to Sphere(radius :Double):
+        return fn p { norm(p) - radius }
 
-def repeat(sdf :DeepFrozen, c :DeepFrozen) as DeepFrozen:
-    "Repeat `sdf` over orthorhombic lattice `c`."
+    to Box(height :Double, width :Double, depth :Double):
+        def b := V(height, width, depth)
+        return fn p {
+            def q := p.abs() - b
+            norm(q.max(0.0)) + max(q).min(0.0)
+        }
 
-    def half :DeepFrozen := c * 0.5
-    return def repeated(p) as DeepFrozen:
-        return sdf(mod(p + half, c) - half)
+    to Cube(length :Double):
+        return asSDF.Box(length, length, length)
 
-def sdf :DeepFrozen := repeat(difference(
-    intersect(makeSphere(1.2), makeCube(1.0)),
-    cylinder(one * 0.5),
-), V(3.0, 5.0, 4.0))
-# translate(makeSphere(10_000.0), V(0.0, -10_000.0, 0.0))
+    to InfiniteCylindricalCross(cx :Double, cy :Double, cz :Double):
+        "
+        The cross of infinite cylinders centered at the origin and with radius `c`
+        in each axis.
+        "
+
+        return fn p {
+            def [px, py, pz] := V.un(p, null)
+            (px.euclidean(py) - cz).min(
+             py.euclidean(pz) - cx).min(
+             pz.euclidean(px) - cy)
+        }
+
+    to Translation(shape, dx :Double, dy :Double, dz :Double):
+        def offset := V(dx, dy, dz)
+        return fn p { shape(p) - offset }
+
+    to Scaling(shape, factor :Double):
+        return fn p { shape(p / factor) * factor }
+
+    to OrthorhombicCrystal(shape, cx :Double, cy :Double, cz :Double):
+        def c := V(cx, cy, cz)
+        def half := c * 0.5
+        return fn p { shape(mod(p + half, c) - half) }
+
+    to Intersection(shape, shapes :List):
+        return fn p {
+            var rv := shape(p)
+            for s in (shapes) { rv max= (s(p)) }
+            rv
+        }
+
+    to Union(shape, shapes :List):
+        return fn p {
+            var rv := shape(p)
+            for s in (shapes) { rv min= (s(p)) }
+            rv
+        }
+
+    to Difference(minuend, subtrahend):
+        return fn p { minuend(p).max(-(subtrahend(p))) }
+
+def solid :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
+    CSG.Intersection(CSG.Sphere(1.2), [CSG.Cube(1.0)]),
+    CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5),
+) , 3.0, 5.0, 4.0)
+traceln(`Defined solid: $solid`)
 
 def main(_argv, => makeFileResource, => Timer) as DeepFrozen:
     # def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def w := 320
     def h := 180
+    def sdf := solid(asSDF)
     def drawable := drawSignedDistanceFunction(sdf)
     def drawer := makePPM.drawingFrom(drawable)(w, h)
     # drawable.drawAt(0.0, 0.0, "aspectRatio" => 1.0)
