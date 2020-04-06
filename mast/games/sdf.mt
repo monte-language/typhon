@@ -41,6 +41,10 @@ def dot(u, v) as DeepFrozen:
 def mod(x, y) as DeepFrozen:
     return x - y * (x / y).floor()
 
+# https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/mix.xhtml
+def mix(x, y, a :Double) as DeepFrozen:
+    return x * (1.0 - a) + y * a
+
 # https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/cross.xhtml
 def cross(x, y) as DeepFrozen:
     def [x0, x1, x2] := V.un(x, null)
@@ -112,19 +116,39 @@ def phongIllumination(sdf, ka, kd, ks, alpha :Double, p, eye) as DeepFrozen:
 
     return color
 
+# https://erleuchtet.org/~cupe/permanent/enhanced_sphere_tracing.pdf
+# The over-relaxation logic is omitted because it provoked constant
+# misrendering for only a 10% speedup. (I probably implemented it wrong.)
 def shortestDistanceToSurface(sdf, eye, direction, start :Double,
-                              end :Double) :Double as DeepFrozen:
+                              end :Double, pixelRadius :Double) as DeepFrozen:
     var depth := start
-    for _ in (0..!maxSteps):
+    # Track signs, based on where we've started.
+    def sign := sdf(eye).belowZero().pick(-1.0, 1.0)
+    for i in (0..!maxSteps):
         def step := eye + direction * depth
-        def distance := sdf(step)
-        # traceln(`sdf($eye, $direction, $depth) -> sdf($step) -> $distance`)
-        if (distance < epsilon):
-            return depth
-        depth += distance
+        def signedDistance := sdf(step) * sign
+        def distance := signedDistance.abs()
+        # traceln(`$i: sdf($eye, $direction, $depth) -> sdf($step) -> $signedDistance`)
+
+        # We can and should leave as soon as the first hit happens which is
+        # close enough to reasonably occlude the pixel.
+        # NB: In the paper's original algorithm, there's some additional
+        # machinery for checking candidate values, but we go with either the
+        # first hit or nothing.
+        def error := distance / depth
+        # traceln(`$i: error $error, threshold $pixelRadius`)
+        if (error < pixelRadius):
+            return [depth, i]
+
+        # No hits.
         if (depth >= end):
-            break
-    return end
+            return [end, i]
+
+        # Step and iterate.
+        depth += signedDistance
+
+    # No hits.
+    return [end, maxSteps]
 
 def rayDirection(fieldOfView :Double, u :Double, v :Double,
                  aspectRatio :Double) as DeepFrozen:
@@ -146,31 +170,83 @@ def viewMatrix(eye :DeepFrozen, center, up) as DeepFrozen:
         # traceln(`moveCamera($dir) -> $rv`)
         return rv
 
-def maxDepth :Double := 100.0
+def maxDepth :Double := 50.0
+
+# Do a couple rounds of gradient descent in order to polish an estimated hit.
+# This works about as well as you might expect: After two rounds, the hit is
+# accurate to 1 in 1 million, and three rounds is almost always enough.
+# The error comes from:
+# https://static.aminer.org/pdf/PDF/000/593/434/efficient_antialiased_rendering_of_d_linear_fractals.pdf
+# But it is just the pixel area over the distance traveled!
+def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as DeepFrozen:
+    def pixelArea := PI * pixelRadius ** 2
+    var t := distance
+    for i in (0..!3):
+        def f := sdf(eye + dir * t)
+        # traceln(`$i: t $t f(t) $f`)
+        t += f - pixelArea / t
+    return t
+
+# Super-sample towards the "corners" of the pixel, were it square. Since our
+# output device has square-ish pixels, this will look better than doing just
+# the axes.
+def superSamplingOffsets :List[List[Double]] := [
+    [0.0, 0.0],
+    [1.0, 1.0],
+    [-1.0, -1.0],
+    [1.0, -1.0],
+    [-1.0, 1.0],
+]
 
 def drawSignedDistanceFunction(sdf) as DeepFrozen:
     def viewToWorld := viewMatrix(eye, one * 0.0, V(0.0, 1.0, 0.0))
 
-    return def drawable.drawAt(u :Double, v :Double, => aspectRatio :Double):
-        # NB: Flip vertical axis.
-        def viewDir := rayDirection(fov, u, 1.0 - v, aspectRatio)
-        def worldDir := viewToWorld(viewDir)
+    return def drawable.drawAt(u :Double, v :Double, => aspectRatio :Double,
+                               => pixelRadius :Double):
+        var rv := one * 0.0
+        var hits := 0
+        for [du, dv] in (superSamplingOffsets):
+            def x := u + du * pixelRadius
+            # NB: Flip vertical axis.
+            def y := (1.0 - v) + dv * pixelRadius
+            def viewDir := rayDirection(fov, x, y, aspectRatio)
+            def worldDir := viewToWorld(viewDir)
 
-        def distance := shortestDistanceToSurface(sdf, eye, worldDir, 0.0,
-                                                  maxDepth)
-        if (distance >= maxDepth) { return makeColor.clear() }
-        # traceln(`hit $u $v $distance`)
+            def [estimate, steps] := shortestDistanceToSurface(sdf, eye, worldDir,
+                                                               0.0, maxDepth,
+                                                               pixelRadius)
+            if (estimate >= maxDepth) { continue }
 
-        def p := eye + worldDir * distance
-        def ka := (estimateNormal(sdf, p) * 0.5) + 0.5
-        def kd := one * 0.5
-        def ks := one
-        def shininess := 10.0
+            def distance := refineEstimate(sdf, eye, worldDir, estimate,
+                                           pixelRadius)
+            # traceln(`hit $u $v $estimate $distance`)
 
-        def color := phongIllumination(sdf, ka, kd, ks, shininess, p, eye)
+            def p := eye + worldDir * distance
+            # Shade ambient lighting with the normal, scaled up; this looks like
+            # colored gels from the three axes.
+            def ka := (estimateNormal(sdf, p) * 0.5) + 0.5
+            def kd := one
+            def ks := one
+            def shininess := 10.0
+
+            # Debugging: Shade diffuse material from white to magenta with the
+            # number of steps taken; this makes material look pinker as it becomes
+            # harder to estimate.
+            # def color := mix(one, V(1.0, 0.0, 1.0), steps / maxSteps)
+            def color := phongIllumination(sdf, ka, kd, ks, shininess, p, eye)
+
+            rv += color
+            hits += 1
+
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
-        def [r, g, b] := _makeList.fromIterable(color.min(1.0))
-        return makeColor.RGB(r, g, b, 1.0)
+        def scale := superSamplingOffsets.size()
+        def [r, g, b] := _makeList.fromIterable((rv / scale).min(1.0))
+        # Coverage to alpha~
+        return makeColor.RGB(r, g, b, hits / scale)
+
+# See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
+# many implementation examples, as well as other primitives not listed here.
+# http://mercury.sexy/hg_sdf/ is another possible source of implementations.
 
 object asSDF as DeepFrozen:
     "Compile a CSG expression to its corresponding SDF."
@@ -237,16 +313,13 @@ def solid :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
 traceln(`Defined solid: $solid`)
 
 def main(_argv, => makeFileResource, => Timer) as DeepFrozen:
-    # def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def w := 320
     def h := 180
     def sdf := solid(asSDF)
     def drawable := drawSignedDistanceFunction(sdf)
+    # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
+    # throw("yay?")
     def drawer := makePPM.drawingFrom(drawable)(w, h)
-    # drawable.drawAt(0.0, 0.0, "aspectRatio" => 1.0)
-    # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.0)
-    # drawable.drawAt(1.0, 1.0, "aspectRatio" => 1.0)
-    # throw("hmm")
     var i := 0
     def start := Timer.unsafeNow()
     while (true):

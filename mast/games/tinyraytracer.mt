@@ -1,5 +1,6 @@
 import "lib/colors" =~ [=> makeColor]
-exports (render, makeSphere, spheres, lights)
+import "fun/ppm" =~ [=> makePPM]
+exports (main, render, makeSphere, spheres, lights)
 
 # https://github.com/ssloy/tinyraytracer/wiki/Part-1:-understandable-raytracing
 
@@ -212,3 +213,21 @@ def lights() as DeepFrozen:
         makeLight([30.0, 50.0, -25.0], 1.8),
         makeLight([30.0, 20.0, 30.0], 1.7),
     ]
+
+def main(_argv, => makeFileResource, => Timer) as DeepFrozen:
+    def w := 320
+    def h := 180
+    def drawable := render(spheres(), lights())
+    def drawer := makePPM.drawingFrom(drawable)(w, h)
+    var i := 0
+    def start := Timer.unsafeNow()
+    while (true):
+        i += 1
+        if (i % 500 == 0):
+            def duration := Timer.unsafeNow() - start
+            def pixelsPerSecond := i / duration
+            def timeRemaining := ((w * h) - i) / pixelsPerSecond
+            traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s) (${timeRemaining}s left)`)
+        drawer.next(__break)
+    def ppm := drawer.finish()
+    return when (makeFileResource("tiny.ppm")<-setContents(ppm)) -> { 0 }
