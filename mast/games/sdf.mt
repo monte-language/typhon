@@ -61,19 +61,27 @@ def reflect(I, N) as DeepFrozen:
 
 def PI :Double := 1.0.arcSine() * 2
 
-def epsilon :Double := 0.000_000_1
-
 def maxSteps :Int := 100
 
+# Cheap normal estimation. Pick a small epsilon and evaluate the two-sided
+# derivative:
+# (f(p + e) - f(p - e)) / 2e
+# Since e is the same for all three axes, and we want to return a unit vector,
+# we don't have to divide at the end.
+# https://commons.wikimedia.org/wiki/File:AbsoluteErrorNumericalDifferentiationExample.png
+# This epsilon balances all of our concerns when used with the hack below.
+def epsilon :Double := 0.000_000_1
 def epsilonX :DeepFrozen := V(epsilon, 0.0, 0.0)
 def epsilonY :DeepFrozen := V(0.0, epsilon, 0.0)
 def epsilonZ :DeepFrozen := V(0.0, 0.0, epsilon)
-
 def estimateNormal(sdf, p) as DeepFrozen:
+    # Hack: Get a much better epsilon by pre-scaling with the (norm of) the
+    # zero, see https://en.wikipedia.org/wiki/Numerical_differentiation
+    def scale := norm(p)
     return unit(V(
-        sdf(p + epsilonX) - sdf(p - epsilonX),
-        sdf(p + epsilonY) - sdf(p - epsilonY),
-        sdf(p + epsilonZ) - sdf(p - epsilonZ),
+        sdf(p + epsilonX * scale) - sdf(p - epsilonX * scale),
+        sdf(p + epsilonY * scale) - sdf(p - epsilonY * scale),
+        sdf(p + epsilonZ * scale) - sdf(p - epsilonZ * scale),
     ))
 
 # https://en.wikipedia.org/wiki/Phong_reflection_model
@@ -92,7 +100,7 @@ def phongContribForLight(sdf, kd, ks, alpha :Double, p, eye, lightPos,
     def spec := if (base.belowZero()) { 0.0 } else { ks * base ** alpha }
     return lightIntensity * (kd * diff + ks * spec)
 
-def fov :Double := (PI / 16).tangent()
+def fov :Double := (PI / 8).tangent()
 def eye :DeepFrozen := V(8.0, 5.0, 7.0)
 
 def phongIllumination(sdf, ka, kd, ks, alpha :Double, p, eye) as DeepFrozen:
@@ -181,68 +189,45 @@ def maxDepth :Double := 50.0
 def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as DeepFrozen:
     def pixelArea := PI * pixelRadius ** 2
     var t := distance
-    for i in (0..!3):
+    for _ in (0..!3):
         def f := sdf(eye + dir * t)
-        # traceln(`$i: t $t f(t) $f`)
         t += f - pixelArea / t
     return t
-
-# Super-sample towards the "corners" of the pixel, were it square. Since our
-# output device has square-ish pixels, this will look better than doing just
-# the axes.
-def superSamplingOffsets :List[List[Double]] := [
-    [0.0, 0.0],
-    [1.0, 1.0],
-    [-1.0, -1.0],
-    [1.0, -1.0],
-    [-1.0, 1.0],
-]
 
 def drawSignedDistanceFunction(sdf) as DeepFrozen:
     def viewToWorld := viewMatrix(eye, one * 0.0, V(0.0, 1.0, 0.0))
 
     return def drawable.drawAt(u :Double, v :Double, => aspectRatio :Double,
                                => pixelRadius :Double):
-        var rv := one * 0.0
-        var hits := 0
-        for [du, dv] in (superSamplingOffsets):
-            def x := u + du * pixelRadius
-            # NB: Flip vertical axis.
-            def y := (1.0 - v) + dv * pixelRadius
-            def viewDir := rayDirection(fov, x, y, aspectRatio)
-            def worldDir := viewToWorld(viewDir)
+        # NB: Flip vertical axis.
+        def viewDir := rayDirection(fov, u, 1.0 - v, aspectRatio)
+        def worldDir := viewToWorld(viewDir)
 
-            def [estimate, steps] := shortestDistanceToSurface(sdf, eye, worldDir,
-                                                               0.0, maxDepth,
-                                                               pixelRadius)
-            if (estimate >= maxDepth) { continue }
+        def [estimate, steps] := shortestDistanceToSurface(sdf, eye, worldDir,
+                                                           0.0, maxDepth,
+                                                           pixelRadius)
+        if (estimate >= maxDepth) { return makeColor.clear() }
 
-            def distance := refineEstimate(sdf, eye, worldDir, estimate,
-                                           pixelRadius)
-            # traceln(`hit $u $v $estimate $distance`)
+        def distance := refineEstimate(sdf, eye, worldDir, estimate,
+                                       pixelRadius)
+        # traceln(`hit $u $v $estimate $distance`)
 
-            def p := eye + worldDir * distance
-            # Shade ambient lighting with the normal, scaled up; this looks like
-            # colored gels from the three axes.
-            def ka := (estimateNormal(sdf, p) * 0.5) + 0.5
-            def kd := one
-            def ks := one
-            def shininess := 10.0
+        def p := eye + worldDir * distance
+        # Use the normal for lighting, since we don't have a material.
+        def ka := (estimateNormal(sdf, p) * 0.5) + 0.5
+        def kd := ka
+        def ks := one
+        def shininess := 10.0
 
-            # Debugging: Shade diffuse material from white to magenta with the
-            # number of steps taken; this makes material look pinker as it becomes
-            # harder to estimate.
-            # def color := mix(one, V(1.0, 0.0, 1.0), steps / maxSteps)
-            def color := phongIllumination(sdf, ka, kd, ks, shininess, p, eye)
-
-            rv += color
-            hits += 1
+        # Debugging: Shade diffuse material from white to magenta with the
+        # number of steps taken; this makes material look pinker as it becomes
+        # harder to estimate.
+        # def color := mix(one, V(1.0, 0.0, 1.0), steps / maxSteps)
+        def color := phongIllumination(sdf, ka, kd, ks, shininess, p, eye)
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
-        def scale := superSamplingOffsets.size()
-        def [r, g, b] := _makeList.fromIterable((rv / scale).min(1.0))
-        # Coverage to alpha~
-        return makeColor.RGB(r, g, b, hits / scale)
+        def [r, g, b] := _makeList.fromIterable(color.min(1.0))
+        return makeColor.RGB(r, g, b, 1.0)
 
 # See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
 # many implementation examples, as well as other primitives not listed here.
