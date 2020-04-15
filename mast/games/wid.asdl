@@ -1,3 +1,19 @@
 sizing = Flow | Box | Fixed
 widget = Text(str text)
+       | Edit(str buffer)
+       | Button(str label)
+       | SolidFill(str pattern)
        | Divider(str pattern)
+       | BarGraph
+       | ProgressBar
+       | BigText
+       | Padding(widget)
+       | Filler(widget)
+       | BoxAdapter(widget)
+       | LineBox(widget)
+       | Columns(widget*)
+       | Pile(widget*)
+       | Frame(widget? header, widget body, widget? footer)
+       | ListBox(widget*)
+       | GridFlow(widget*)
+       | Overlay(widget bottom, widget top)

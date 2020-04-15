@@ -16,6 +16,9 @@ object sizing as DeepFrozen:
     to Frame(_, _, _):
         return wid.Box()
 
+    to LineBox(w):
+        return w(sizing)
+
 def isQuit(event) :Bool as DeepFrozen:
     return event == ["DATA", b`$\x03`]
 
@@ -36,6 +39,18 @@ def renderOnto(canvas) as DeepFrozen:
 
         to Frame(_, _, _):
             null
+
+        to LineBox(w):
+            def width := canvas.width()
+            def height := canvas.height()
+            def headerRow := b`+` + b`-` * (width - 2) + b`+`
+            def plainRow := b`|` + b` ` * (width - 2) + b`|`
+            def rv := [
+                canvas(0, headerRow),
+                canvas(height - 1, headerRow),
+            ] + [for row in (1..!(height - 1)) canvas(row, plainRow)]
+            def sub := w.walk(renderOnto(canvas.sub(1, 1, width - 1, height - 1)))
+            return promiseAllFulfilled(rv.with(sub))
 
 def Pos :DeepFrozen := (Int >= 0)
 
@@ -60,29 +75,36 @@ object makeCanvas as DeepFrozen:
             to height() :Int:
                 return height
 
+            to sub(x :Pos, y :Pos, w :Pos, h :Pos):
+                return makeCanvas.atOffset(cursor, x0 + x, y0 + y, w, h)
+
+def makeBlurb(b :Str) as DeepFrozen:
+    return wid.LineBox(wid.Text(b))
+
 def main(_argv, => stdio) as DeepFrozen:
     def term := activateTerminal(stdio)
     def cursor := term<-outputCursor()
     return when (term) ->
         def source := term<-inputSource()
+        var widget := makeBlurb(blurb)
         when (source, startCanvasMode(cursor)) ->
-            var widget := wid.Text(blurb)
             def draw():
                 def canvas := makeCanvas(cursor, term.width(), term.height())
-                return widget(renderOnto(canvas))
+                return widget.walk(renderOnto(canvas))
             var more :Bool := true
             def testSink(event):
                 if (isQuit(event)):
                     more := false
-                widget := wid.Text(`Got event: $event`)
+                widget := makeBlurb(`Got event: $event`)
                 return draw()
             def go():
                 return when (draw(), source<-(testSink)) ->
                     if (more) { go() } else {
                         when (stopCanvasMode(cursor)) -> { term<-quit() }
                     }
-            when (go()) -> { 0 }
-    catch problem:
-        when (stopCanvasMode(cursor), term<-quit()) ->
-            traceln.exception(problem)
-            1
+            when (go()) ->
+                0
+            catch problem:
+                when (stopCanvasMode(cursor), term<-quit()) ->
+                    traceln.exception(problem)
+                    1
