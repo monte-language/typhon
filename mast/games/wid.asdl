@@ -1,0 +1,3 @@
+sizing = Flow | Box | Fixed
+widget = Text(str text)
+       | Divider(str pattern)
