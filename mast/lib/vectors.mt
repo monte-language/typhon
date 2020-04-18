@@ -1,4 +1,4 @@
-exports (V)
+exports (V, glsl)
 
 # Generalized wrapping for vectorized/broadcasting operations.
 
@@ -75,3 +75,79 @@ object V as DeepFrozen:
                 M.call(V, "run",
                        [for x in (args) M.callWithMessage(x, message)],
                        [].asMap())
+
+# Monoids needed for GLSL.
+def sumPlus(x, y) as DeepFrozen { return x + y }
+def sumDouble :DeepFrozen := V.makeFold(0.0, sumPlus)
+
+object glsl as DeepFrozen:
+    "
+    An implementation of vectorized routines suitable for graphics work.
+
+    As the names suggest, this object is designed to be familiar to speakers
+    of GLSL, the language used by Mesa3D for shaders.
+    "
+
+    # When I link to Khronos, I am emphasizing that our routine is directly
+    # derived from their mathematical specification. We use recipes which are
+    # compatible with them in all cases, so the link does not indicate just
+    # that we are compatible, but that we used their specification to write
+    # our code.
+
+    # Lacking any preference, keep these alphabetical, but do sort by
+    # complexity and inclusion, so that simpler methods come earlier and
+    # methods which reference others come later.
+
+    # https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/mod.xhtml
+    to mod(x, y):
+        "`x % y`, but for vectors of doubles."
+        return x - y * (x / y).floor()
+
+    to dot(u, v):
+        "The dot product of `u` and `v`."
+        return sumDouble(u * v)
+
+    # https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/cross.xhtml
+    to cross(x, y):
+        "The cross product of `x` and `y`."
+
+        def [x0, x1, x2] := V.un(x, null)
+        def [y0, y1, y2] := V.un(y, null)
+        return V(
+            x1 * y2 - y1 * x2,
+            x2 * y0 - y2 * x0,
+            x0 * y1 - y0 * x1,
+        )
+
+    # https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/mix.xhtml
+    to mix(x, y, a :Double):
+        "
+        Linearly interpolate between `x` and `y` with weight `a`.
+
+        When `a` is 0.0, returns `x`; when `a` is 1.0, returns `y`. For fun,
+        does not check whether `a :(0.0..1.0)`.
+        "
+
+        return x * (1.0 - a) + y * a
+
+    # https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/reflect.xhtml
+    to reflect(I, N):
+        "Reflect `I` across normal `N`."
+        return I - N * (2.0 * glsl.dot(I, N))
+
+
+    # https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/refract.xhtml
+    to refract(I, N, eta :Double):
+        "
+        Refract `I` at normal `N` with ratio of indices of refraction `eta`.
+
+        Unlike GLSL, return `null`, rather than the zero vector, if the angle
+        of incidence would lead to reflection rather than refraction.
+        "
+
+        def cosi := glsl.dot(N, I)
+        def k := 1.0 - eta * eta * (1.0 - cosi * cosi)
+        # NB: Because we check that k ≥ 0, √k should be safe.
+        return if (k.atLeastZero()) {
+            I * eta + N * (eta * cosi + k.squareRoot())
+        }

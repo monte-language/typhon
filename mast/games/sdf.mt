@@ -1,6 +1,6 @@
 import "games/csg" =~ ["ASTBuilder" => CSG]
 import "lib/colors" =~ [=> makeColor]
-import "lib/vectors" =~ [=> V]
+import "lib/vectors" =~ [=> V, => glsl]
 import "fun/ppm" =~ [=> makePPM]
 exports (main)
 
@@ -34,34 +34,9 @@ def norm(v) as DeepFrozen:
 def unit(v) as DeepFrozen:
     return v * norm(v).reciprocal()
 
-def dot(u, v) as DeepFrozen:
-    return sumDouble(u * v)
-
-# https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/mod.xhtml
-def mod(x, y) as DeepFrozen:
-    return x - y * (x / y).floor()
-
-# https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/mix.xhtml
-def mix(x, y, a :Double) as DeepFrozen:
-    return x * (1.0 - a) + y * a
-
-# https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/cross.xhtml
-def cross(x, y) as DeepFrozen:
-    def [x0, x1, x2] := V.un(x, null)
-    def [y0, y1, y2] := V.un(y, null)
-    return V(
-        x1 * y2 - y1 * x2,
-        x2 * y0 - y2 * x0,
-        x0 * y1 - y0 * x1,
-    )
-
-# https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/reflect.xhtml
-def reflect(I, N) as DeepFrozen:
-    return I - N * (2.0 * dot(I, N))
-
 def PI :Double := 1.0.arcSine() * 2
 
-def maxSteps :Int := 100
+def maxSteps :Int := 50
 
 # Cheap normal estimation. Pick a small epsilon and evaluate the two-sided
 # derivative:
@@ -89,14 +64,14 @@ def phongContribForLight(sdf, kd, ks, alpha :Double, p, eye, lightPos,
                          lightIntensity) as DeepFrozen:
     def N := estimateNormal(sdf, p)
     def L := unit(lightPos - p)
-    def R := unit(reflect(-L, N))
+    def R := unit(glsl.reflect(-L, N))
 
-    def diff := dot(L, N)
+    def diff := glsl.dot(L, N)
 
     if (diff.belowZero()):
         return V(0.0, 0.0, 0.0)
 
-    def base := dot(R, unit(eye - p))
+    def base := glsl.dot(R, unit(eye - p))
     def spec := if (base.belowZero()) { 0.0 } else { ks * base ** alpha }
     return lightIntensity * (kd * diff + ks * spec)
 
@@ -170,8 +145,8 @@ def rayDirection(fieldOfView :Double, u :Double, v :Double,
 def viewMatrix(eye :DeepFrozen, center, up) as DeepFrozen:
     # https://www.khronos.org/registry/OpenGL-Refpages/gl2.1/xhtml/gluLookAt.xml
     def f :DeepFrozen := unit(center - eye)
-    def s :DeepFrozen := unit(cross(f, up))
-    def u :DeepFrozen := cross(s, f)
+    def s :DeepFrozen := unit(glsl.cross(f, up))
+    def u :DeepFrozen := glsl.cross(s, f)
     # traceln(`viewMatrix($eye, $center, $up) -> $s $u ${-f}`)
     return def moveCamera(dir) as DeepFrozen:
         def rv := sumRow(V(s, u, -f) * dir)
@@ -222,7 +197,7 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         # Debugging: Shade diffuse material from white to magenta with the
         # number of steps taken; this makes material look pinker as it becomes
         # harder to estimate.
-        # def color := mix(one, V(1.0, 0.0, 1.0), steps / maxSteps)
+        # def color := glsl.mix(one, V(1.0, 0.0, 1.0), steps / maxSteps)
         def color := phongIllumination(sdf, ka, kd, ks, shininess, p, eye)
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
@@ -272,7 +247,7 @@ object asSDF as DeepFrozen:
     to OrthorhombicCrystal(shape, cx :Double, cy :Double, cz :Double):
         def c := V(cx, cy, cz)
         def half := c * 0.5
-        return fn p { shape(mod(p + half, c) - half) }
+        return fn p { shape(glsl.mod(p + half, c) - half) }
 
     to Intersection(shape, shapes :List):
         return fn p {
