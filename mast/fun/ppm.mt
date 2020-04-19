@@ -106,18 +106,31 @@ def makeSuperSampler(d) as DeepFrozen:
             def [jx, jy] := V.un(V(x, y) + (c - 0.5) * pixelRadius, null)
             draw(jx, jy)
             c := frac(c + plastic)
+        # XXX For funsies: Tint red based on number of samples required; tint
+        # green based on average depth of samples. Red ranges from minSamples
+        # to maxSamples. Green ranges from no reflections (0) to maxDepth. I
+        # say "tint" but I've just done it with a lerp.
+        # def sample := if (false) {
+        #     def red := (sampler.count() - minSamples) / maxSamples
+        #     def green := depthEstimator.mean() / maxDepth
+        #     def tint := makeV3(red, green, 0.0)
+        #     def sample := sampler.mean()
+        #     (sample + (-sample + 1.0) * tint)
+        # } else { sampler.mean() }
+        # # Okay, *now* we clamp.
+        # return sample.min(1.0).asColor()
         def [r, g, b, a] := [for s in (samplers) s.mean()]
         # NB: lib/colors does a premultiply here; I think we're *not*
         # premultiplied, so that this is correct.
         return makeColor.RGB(r, g, b, a)
 
 
-def makePPM.drawingFrom(d) as DeepFrozen:
+def makePPM.drawingFrom(drawable) as DeepFrozen:
     "
     Draw from drawable/shader `d` repeatedly to form an image.
     "
 
-    # def d := makeSuperSampler(drawable)
+    def d := makeSuperSampler(drawable)
 
     return def draw(width :(Int > 0), height :(Int > 0)):
         def preamble := b`P6$\n${M.toString(width)} ${M.toString(height)}$\n255$\n`

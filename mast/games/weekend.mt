@@ -16,11 +16,6 @@ def randomUnit(entropy) as DeepFrozen:
 # XXX common code not yet factored to lib/vectors
 def sumPlus(x, y) as DeepFrozen { return x + y }
 def sumDouble :DeepFrozen := V.makeFold(0.0, sumPlus)
-def norm(v) as DeepFrozen:
-    return sumDouble(v ** 2).squareRoot()
-
-def unit(v) as DeepFrozen:
-    return v * norm(v).reciprocal()
 
 def productTimes(x, y) as DeepFrozen { return x * y }
 def productDouble :DeepFrozen := V.makeFold(1.0, productTimes)
@@ -88,7 +83,7 @@ def makeSphere(center :DeepFrozen, radius :Double, material) as DeepFrozen:
             if (t > tMax || t < tMin) { return null }
             # Point from origin along direction by amount t.
             def p := ray.pointAtParameter(t)
-            def N := unit((p - center) / radius)
+            def N := glsl.normalize((p - center) / radius)
             # Compute u and v based on the normal, which is on the unit
             # sphere.
             def [x, y, z] := V.un(N, null)
@@ -320,7 +315,7 @@ def makeConstantMedium(entropy, boundary, density :Double, texture) as DeepFroze
                     def r1t := t1.max(tMin)
                     def r2t := t2.min(tMax)
                     if (r1t >= r2t) { return null }
-                    def length := norm(ray.direction())
+                    def length := glsl.length(ray.direction())
                     def distanceInsideBoundary := (r2t - r1t) * length
                     def hitDistance := entropy.nextExponential(density)
                     if (hitDistance < distanceInsideBoundary) {
@@ -428,7 +423,7 @@ def makeLambertian(entropy, texture) as DeepFrozen:
             # NB: The original uses randomness *in* the unit sphere,
             # intentionally; this gives cubic pinching at the corners, though,
             # compared to using unit vectors.
-            def target := unit(N + randomUnit(entropy))
+            def target := glsl.normalize(N + randomUnit(entropy))
             return [makeRay(p, target, ray.time()), texture.value(0.0, 0.0, p)]
 
         to emitted(_u, _v, _p):
@@ -437,7 +432,7 @@ def makeLambertian(entropy, texture) as DeepFrozen:
 def makeMetal(entropy, albedo :DeepFrozen, fuzz :(Double <= 1.0)) as DeepFrozen:
     return object metalMaterial:
         to scatter(ray, p, N):
-            def reflected := glsl.reflect(unit(ray.direction()), N)
+            def reflected := glsl.reflect(glsl.normalize(ray.direction()), N)
             if (glsl.dot(reflected, N).belowZero()) { return null }
             def fuzzed := reflected + randomUnit(entropy) * fuzz
             return [makeRay(p, fuzzed, ray.time()), albedo]
@@ -458,7 +453,7 @@ def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
     return object dielectricMaterial:
         to scatter(ray, p, N):
             def direction := ray.direction()
-            def prod := glsl.dot(unit(direction), N)
+            def prod := glsl.dot(glsl.normalize(direction), N)
             def [outwardNormal, coeff, cosine] := if (prod > 0) {
                 [-N, refractiveIndex, refractiveIndex * prod]
             } else {
@@ -468,7 +463,7 @@ def makeDielectric(entropy, refractiveIndex :Double) as DeepFrozen:
             # consider whether we will actually refract.
             def refracted := glsl.refract(direction, outwardNormal, coeff)
             return if (refracted != null &&
-                       (schlick(norm(cosine / direction), refractiveIndex) >
+                       (schlick(glsl.length(cosine / direction), refractiveIndex) >
                         entropy.nextDouble())) {
                 [makeRay(p, refracted, ray.time()), attenuation]
             } else {
@@ -506,7 +501,7 @@ def color(entropy, ray, world, depth) as DeepFrozen:
         } else { [emitted, depth] }
     } else {
         # XXX [-1,1] -> [0,1] we should factor out this too
-        def [_, t, _] := V.un((unit(direction) + 1.0) * 0.5, null)
+        def [_, t, _] := V.un((glsl.normalize(direction) + 1.0) * 0.5, null)
         # Whether there is an ambient blue sky.
         if (true) {
             [glsl.mix(one, blueSky, t), depth]
@@ -521,8 +516,8 @@ def makeCamera(entropy, lookFrom, lookAt, up, vfov :Double, aspect :Double,
     def theta := vfov * 0.0.arcCosine() / 90.0
     def halfHeight := (theta / 2.0).tangent()
     def halfWidth := halfHeight * aspect
-    def w := unit(lookFrom - lookAt)
-    def u := unit(glsl.cross(up, w))
+    def w := glsl.normalize(lookFrom - lookAt)
+    def u := glsl.normalize(glsl.cross(up, w))
     def v := glsl.cross(w, u)
     def lowerLeft := lookFrom - (
         (u * halfWidth + v * halfHeight + w) * focusDist)
@@ -560,7 +555,7 @@ def randomScene(entropy) as DeepFrozen:
         for b in (region):
             def chooseMat := rand()
             def center := V(a + 0.9 * rand(), 0.2, b + 0.9 * rand())
-            if (norm((center - V(4.0, 0.0, 2.0))) <= 0.9) { continue }
+            if (glsl.length((center - V(4.0, 0.0, 2.0))) <= 0.9) { continue }
             def material := if (chooseMat < 0.8) {
                 makeLambertian(entropy,
                                makeConstantTexture(V(rand() * rand(),
@@ -637,7 +632,7 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # NB: In degrees!
     def fov := 40.0
     def aperture := 0.0005
-    def distToFocus := norm(lookFrom - lookAt)
+    def distToFocus := glsl.distance(lookFrom, lookAt)
     # NB: Aspect ratio is fixed, and we ignore the requested ratio.
     def camera := makeCamera(entropy, lookFrom, lookAt, up, fov, aspectRatio,
                              aperture, distToFocus, 0.0, 1.0)

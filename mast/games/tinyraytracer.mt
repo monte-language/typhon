@@ -12,17 +12,6 @@ exports (main, render, makeSphere, spheres, lights)
 # accurate as hard-coding it.)
 def PI :Double := 0.0.arcCosine() * 2
 
-# XXX common code with games/sdf, lib/vectors
-
-def sumPlus(x, y) as DeepFrozen { return x + y }
-def sumDouble :DeepFrozen := V.makeFold(0.0, sumPlus)
-
-def norm(v) as DeepFrozen:
-    return sumDouble(v ** 2).squareRoot()
-
-def unit(v) as DeepFrozen:
-    return v * norm(v).reciprocal()
-
 def perturb(point, N, dir) as DeepFrozen:
     def eps := N * (1e-3 * glsl.dot(dir, N).belowZero().pick(-1.0, 1.0))
     return point + eps
@@ -76,7 +65,7 @@ def makeLight(position :DeepFrozen, intensity :Double) as DeepFrozen:
     return object light as DeepFrozen:
         to shadow(point, N):
             def offset := position - point
-            def lightDistance := norm(offset)
+            def lightDistance := glsl.length(offset)
             # NB: Lm := unit(position - point)
             def Lm := offset * lightDistance.reciprocal()
             def shadowOrigin := perturb(point, N, -Lm)
@@ -84,7 +73,7 @@ def makeLight(position :DeepFrozen, intensity :Double) as DeepFrozen:
 
         to illuminate(v, point, N, exp):
             # Lm is our unit vector from the point to the light
-            def Lm := unit(position - point)
+            def Lm := glsl.normalize(position - point)
             def diff := intensity * glsl.dot(Lm, N).max(0.0)
             # Rm is our unit vector physically reflected from the point
             def Rm := glsl.reflect(-Lm, N)
@@ -104,7 +93,7 @@ def makeSphere(center :DeepFrozen, radius :(Double > 0.0),
             return material
 
         to normal(v):
-            return unit(v - center)
+            return glsl.normalize(v - center)
 
         to rayIntersect(orig, dir):
             def L := center - orig
@@ -191,7 +180,7 @@ def render(spheres, lights) as DeepFrozen:
         def xr := (x - 0.5) * 2.0 * fov * aspectRatio
         # NB: Flip vertical.
         def yr := (0.5 - y) * 2.0 * fov
-        def rgb := castRay(ORIGIN, unit(V(xr, yr, -1.0)), spheres, lights)
+        def rgb := castRay(ORIGIN, glsl.normalize(V(xr, yr, -1.0)), spheres, lights)
         # NB: min() to clamp away HDR.
         def [r, g, b] := _makeList.fromIterable(rgb.min(1.0))
         return makeColor.RGB(r, g, b, 1.0)

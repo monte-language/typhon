@@ -103,9 +103,22 @@ object glsl as DeepFrozen:
         "`x % y`, but for vectors of doubles."
         return x - y * (x / y).floor()
 
-    to dot(u, v):
+    to dot(u, v) :Double:
         "The dot product of `u` and `v`."
         return sumDouble(u * v)
+
+    to length(u) :Double:
+        "The distance of `u` from the origin."
+        return sumDouble(u ** 2).squareRoot()
+
+    to normalize(u):
+        "The unit vector pointing in the same direction as `u`."
+        return u * glsl.length(u).reciprocal()
+
+    # https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/distance.xhtml
+    to distance(p0, p1) :Double:
+        "The length of the vector from `p0` to `p1`."
+        return glsl.length(p0 - p1)
 
     # https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/cross.xhtml
     to cross(x, y):
