@@ -1,5 +1,7 @@
 import "games/csg" =~ ["ASTBuilder" => CSG]
 import "lib/colors" =~ [=> makeColor]
+import "lib/entropy/entropy" =~ [=> makeEntropy]
+import "lib/noise" =~ [=> makeSimplexNoise]
 import "lib/vectors" =~ [=> V, => glsl]
 import "fun/ppm" =~ [=> makePPM]
 exports (main)
@@ -28,12 +30,6 @@ def sumRow :DeepFrozen := V.makeFold(one * 0.0, sumPlus)
 def maxPlus(x, y) as DeepFrozen { return x.max(y) }
 def max :DeepFrozen := V.makeFold(-Infinity, maxPlus)
 
-def norm(v) as DeepFrozen:
-    return sumDouble(v ** 2).squareRoot()
-
-def unit(v) as DeepFrozen:
-    return v * norm(v).reciprocal()
-
 def PI :Double := 1.0.arcSine() * 2
 
 def maxSteps :Int := 50
@@ -52,8 +48,8 @@ def epsilonZ :DeepFrozen := V(0.0, 0.0, epsilon)
 def estimateNormal(sdf, p) as DeepFrozen:
     # Hack: Get a much better epsilon by pre-scaling with the (norm of) the
     # zero, see https://en.wikipedia.org/wiki/Numerical_differentiation
-    def scale := norm(p)
-    return unit(V(
+    def scale := glsl.length(p)
+    return glsl.normalize(V(
         sdf(p + epsilonX * scale) - sdf(p - epsilonX * scale),
         sdf(p + epsilonY * scale) - sdf(p - epsilonY * scale),
         sdf(p + epsilonZ * scale) - sdf(p - epsilonZ * scale),
@@ -63,19 +59,20 @@ def estimateNormal(sdf, p) as DeepFrozen:
 def phongContribForLight(sdf, kd, ks, alpha :Double, p, eye, lightPos,
                          lightIntensity) as DeepFrozen:
     def N := estimateNormal(sdf, p)
-    def L := unit(lightPos - p)
-    def R := unit(glsl.reflect(-L, N))
+    def L := glsl.normalize(lightPos - p)
+    def R := glsl.normalize(glsl.reflect(-L, N))
 
     def diff := glsl.dot(L, N)
 
     if (diff.belowZero()):
         return V(0.0, 0.0, 0.0)
 
-    def base := glsl.dot(R, unit(eye - p))
+    def base := glsl.dot(R, glsl.normalize(eye - p))
     def spec := if (base.belowZero()) { 0.0 } else { ks * base ** alpha }
     return lightIntensity * (kd * diff + ks * spec)
 
-def fov :Double := (PI / 8).tangent()
+def crystalfov :Double := (PI / 8).tangent()
+def fov :Double := (PI / 18).tangent()
 def eye :DeepFrozen := V(8.0, 5.0, 7.0)
 
 def phongIllumination(sdf, ka, kd, ks, alpha :Double, p, eye) as DeepFrozen:
@@ -138,14 +135,14 @@ def rayDirection(fieldOfView :Double, u :Double, v :Double,
     def fovr := fieldOfView * 2.0
     def x := (u - 0.5) * fovr * aspectRatio
     def y := (v - 0.5) * fovr
-    def rv := unit(V(x, y, -1.0))
+    def rv := glsl.normalize(V(x, y, -1.0))
     # traceln(`rayDirection($fieldOfView, $u, $v, $aspectRatio) -> $rv`)
     return rv
 
 def viewMatrix(eye :DeepFrozen, center, up) as DeepFrozen:
     # https://www.khronos.org/registry/OpenGL-Refpages/gl2.1/xhtml/gluLookAt.xml
-    def f :DeepFrozen := unit(center - eye)
-    def s :DeepFrozen := unit(glsl.cross(f, up))
+    def f :DeepFrozen := glsl.normalize(center - eye)
+    def s :DeepFrozen := glsl.normalize(glsl.cross(f, up))
     def u :DeepFrozen := glsl.cross(s, f)
     # traceln(`viewMatrix($eye, $center, $up) -> $s $u ${-f}`)
     return def moveCamera(dir) as DeepFrozen:
@@ -153,7 +150,7 @@ def viewMatrix(eye :DeepFrozen, center, up) as DeepFrozen:
         # traceln(`moveCamera($dir) -> $rv`)
         return rv
 
-def maxDepth :Double := 50.0
+def maxDepth :Double := 20.0
 
 # Do a couple rounds of gradient descent in order to polish an estimated hit.
 # This works about as well as you might expect: After two rounds, the hit is
@@ -208,74 +205,96 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
 # many implementation examples, as well as other primitives not listed here.
 # http://mercury.sexy/hg_sdf/ is another possible source of implementations.
 
-object asSDF as DeepFrozen:
+def asSDF(entropy) as DeepFrozen:
     "Compile a CSG expression to its corresponding SDF."
 
-    to Sphere(radius :Double):
-        return fn p { norm(p) - radius }
+    return object compileSDF:
+        to Sphere(radius :Double):
+            return fn p { glsl.length(p) - radius }
 
-    to Box(height :Double, width :Double, depth :Double):
-        def b := V(height, width, depth)
-        return fn p {
-            def q := p.abs() - b
-            norm(q.max(0.0)) + max(q).min(0.0)
-        }
+        to Box(height :Double, width :Double, depth :Double):
+            def b := V(height, width, depth)
+            return fn p {
+                def q := p.abs() - b
+                glsl.length(q.max(0.0)) + max(q).min(0.0)
+            }
 
-    to Cube(length :Double):
-        return asSDF.Box(length, length, length)
+        to Cube(length :Double):
+            return compileSDF.Box(length, length, length)
 
-    to InfiniteCylindricalCross(cx :Double, cy :Double, cz :Double):
-        "
-        The cross of infinite cylinders centered at the origin and with radius `c`
-        in each axis.
-        "
+        to InfiniteCylindricalCross(cx :Double, cy :Double, cz :Double):
+            "
+            The cross of infinite cylinders centered at the origin and with radius `c`
+            in each axis.
+            "
 
-        return fn p {
-            def [px, py, pz] := V.un(p, null)
-            (px.euclidean(py) - cz).min(
-             py.euclidean(pz) - cx).min(
-             pz.euclidean(px) - cy)
-        }
+            return fn p {
+                def [px, py, pz] := V.un(p, null)
+                (px.euclidean(py) - cz).min(
+                 py.euclidean(pz) - cx).min(
+                 pz.euclidean(px) - cy)
+            }
 
-    to Translation(shape, dx :Double, dy :Double, dz :Double):
-        def offset := V(dx, dy, dz)
-        return fn p { shape(p) - offset }
+        to Translation(shape, dx :Double, dy :Double, dz :Double):
+            def offset := V(dx, dy, dz)
+            return fn p { shape(p) - offset }
 
-    to Scaling(shape, factor :Double):
-        return fn p { shape(p / factor) * factor }
+        to Scaling(shape, factor :Double):
+            return fn p { shape(p / factor) * factor }
 
-    to OrthorhombicCrystal(shape, cx :Double, cy :Double, cz :Double):
-        def c := V(cx, cy, cz)
-        def half := c * 0.5
-        return fn p { shape(glsl.mod(p + half, c) - half) }
+        to Displacement(shape, d, scale :Double):
+            return fn p { shape(p) + d(p) * scale }
 
-    to Intersection(shape, shapes :List):
-        return fn p {
-            var rv := shape(p)
-            for s in (shapes) { rv max= (s(p)) }
-            rv
-        }
+        to OrthorhombicCrystal(shape, cx :Double, cy :Double, cz :Double):
+            def c := V(cx, cy, cz)
+            def half := c * 0.5
+            return fn p { shape(glsl.mod(p + half, c) - half) }
 
-    to Union(shape, shapes :List):
-        return fn p {
-            var rv := shape(p)
-            for s in (shapes) { rv min= (s(p)) }
-            rv
-        }
+        to Intersection(shape, shapes :List):
+            return fn p {
+                var rv := shape(p)
+                for s in (shapes) { rv max= (s(p)) }
+                rv
+            }
 
-    to Difference(minuend, subtrahend):
-        return fn p { minuend(p).max(-(subtrahend(p))) }
+        to Union(shape, shapes :List):
+            return fn p {
+                var rv := shape(p)
+                for s in (shapes) { rv min= (s(p)) }
+                rv
+            }
 
-def solid :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
+        to Difference(minuend, subtrahend):
+            return fn p { minuend(p).max(-(subtrahend(p))) }
+
+        # The displacement operators are on the same domain as SDFs, but they
+        # return values in [-1, 1].
+
+        to Sines(lx :Double, ly :Double, lz :Double):
+            def l := V(lx, ly, lz)
+            return fn p { sumDouble((p * l).sine()) }
+
+        to Noise(lx :Double, ly :Double, lz :Double, octaves :Int):
+            def l := V(lx, ly, lz)
+            def noise := makeSimplexNoise(entropy)
+            return fn p { noise.turbulence(p * l, octaves) }
+
+def crystal :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
     CSG.Intersection(CSG.Sphere(1.2), [CSG.Cube(1.0)]),
     CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5),
 ) , 3.0, 5.0, 4.0)
+def solid :DeepFrozen := CSG.Displacement(CSG.Sphere(1.0),
+    CSG.Noise(3.4, 3.4, 3.4, 4), 1.0)
 traceln(`Defined solid: $solid`)
 
-def main(_argv, => makeFileResource, => Timer) as DeepFrozen:
-    def w := 320
-    def h := 180
-    def sdf := solid(asSDF)
+def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
+    def w := 320 * 2
+    def h := 180 * 2
+    # NB: We only need entropy to seed the SDF's noise; we don't need to
+    # continually take random numbers while drawing. This is an infelicity in
+    # lib/noise's API.
+    def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
+    def sdf := solid(asSDF(entropy))
     def drawable := drawSignedDistanceFunction(sdf)
     # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # throw("yay?")

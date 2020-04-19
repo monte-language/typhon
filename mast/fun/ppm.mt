@@ -125,12 +125,17 @@ def makeSuperSampler(d) as DeepFrozen:
         return makeColor.RGB(r, g, b, a)
 
 
-def makePPM.drawingFrom(drawable) as DeepFrozen:
+def makePPM.drawingFrom(var drawable, => superSample :Bool := false) as DeepFrozen:
     "
     Draw from drawable/shader `d` repeatedly to form an image.
+
+    If `superSample` is set, then use quasirandom Monte Carlo supersampling to
+    antialias and dither. This generally improves image quality at the cost of
+    increasing the number of drawing operations.
     "
 
-    def d := makeSuperSampler(drawable)
+    if (superSample):
+        drawable := makeSuperSampler(drawable)
 
     return def draw(width :(Int > 0), height :(Int > 0)):
         def preamble := b`P6$\n${M.toString(width)} ${M.toString(height)}$\n255$\n`
@@ -144,8 +149,8 @@ def makePPM.drawingFrom(drawable) as DeepFrozen:
         return object drawingIterable:
             to next(ej):
                 if (h >= height) { throw.eject(ej, "done") }
-                def color := d.drawAt(w / width, h / height, => aspectRatio,
-                                      => pixelRadius)
+                def color := drawable.drawAt(w / width, h / height,
+                                             => aspectRatio, => pixelRadius)
                 def [r, g, b, _] := color.sRGB()
                 body.push((255 * r).floor())
                 body.push((255 * g).floor())

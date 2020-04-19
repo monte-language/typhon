@@ -20,7 +20,9 @@ object V as DeepFrozen:
         This method helps implement auto-vectorized behaviors.
         "
 
-        def [==V, =="run", args, _] exit ej := specimen._uncall()
+        # XXX should be ==V, but diamond dependencies will cause vectors from
+        # one import to be unusable in another import.
+        def [_, =="run", args, _] exit ej := specimen._uncall()
         return args
 
     to makeFold(zero :DeepFrozen, plus :DeepFrozen):
