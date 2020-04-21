@@ -1,5 +1,6 @@
 import "fun/ppm" =~ [=> makePPM]
 import "lib/colors" =~ [=> makeColor]
+import "lib/samplers" =~ [=> samplerConfig]
 import "lib/vectors" =~ [=> V, => glsl]
 exports (main, render, makeSphere, spheres, lights)
 
@@ -218,7 +219,8 @@ def main(_argv, => makeFileResource, => Timer) as DeepFrozen:
     def drawable := render(ss, ls)
     # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # throw("yay?")
-    def drawer := makePPM.drawingFrom(drawable)(w, h)
+    def config := samplerConfig.Center()
+    def drawer := makePPM.drawingFrom(drawable, config)(w, h)
     var i := 0
     def start := Timer.unsafeNow()
     while (true):

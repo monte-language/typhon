@@ -2,6 +2,7 @@ import "games/csg" =~ ["ASTBuilder" => CSG]
 import "lib/colors" =~ [=> makeColor]
 import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/noise" =~ [=> makeSimplexNoise]
+import "lib/samplers" =~ [=> samplerConfig]
 import "lib/vectors" =~ [=> V, => glsl]
 import "fun/ppm" =~ [=> makePPM]
 exports (main)
@@ -32,7 +33,7 @@ def max :DeepFrozen := V.makeFold(-Infinity, maxPlus)
 
 def PI :Double := 1.0.arcSine() * 2
 
-def maxSteps :Int := 50
+def maxSteps :Int := 120
 
 # Cheap normal estimation. Pick a small epsilon and evaluate the two-sided
 # derivative:
@@ -186,9 +187,12 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
 
         def p := eye + worldDir * distance
         # Use the normal for lighting, since we don't have a material.
-        def ka := (estimateNormal(sdf, p) * 0.5) + 0.5
-        def kd := ka
-        def ks := one
+        # def ka := (estimateNormal(sdf, p) * 0.5) + 0.5
+        # def kd := ka
+        # Use a green rubber material.
+        def ka := V(0.3, 0.9, 0.3)
+        def kd := one * 0.9
+        def ks := one * 0.1
         def shininess := 10.0
 
         # Debugging: Shade diffuse material from white to magenta with the
@@ -283,13 +287,14 @@ def crystal :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
     CSG.Intersection(CSG.Sphere(1.2), [CSG.Cube(1.0)]),
     CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5),
 ) , 3.0, 5.0, 4.0)
-def solid :DeepFrozen := CSG.Displacement(CSG.Sphere(1.0),
+def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(1.0),
     CSG.Noise(3.4, 3.4, 3.4, 4), 1.0)
+def solid :DeepFrozen := crystal
 traceln(`Defined solid: $solid`)
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
-    def w := 320 * 2
-    def h := 180 * 2
+    def w := 320
+    def h := 180
     # NB: We only need entropy to seed the SDF's noise; we don't need to
     # continually take random numbers while drawing. This is an infelicity in
     # lib/noise's API.
@@ -298,7 +303,8 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def drawable := drawSignedDistanceFunction(sdf)
     # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # throw("yay?")
-    def drawer := makePPM.drawingFrom(drawable)(w, h)
+    def config := samplerConfig.Quincunx()
+    def drawer := makePPM.drawingFrom(drawable, config)(w, h)
     var i := 0
     def start := Timer.unsafeNow()
     while (true):

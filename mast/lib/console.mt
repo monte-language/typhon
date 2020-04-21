@@ -1,3 +1,4 @@
+import "lib/samplers" =~ [=> samplerConfig, => makeDiscreteSampler]
 exports (consoleDraw)
 
 # Console (emulator) drawing utilities.
@@ -23,34 +24,21 @@ def getRamp(a :Double) :Bytes as DeepFrozen:
         ramp.slice(i, i + 1)
     }
 
-# XXX common code should move up?
-def makeSuperSampler(d, => epsilon :Double := 10e-5) as DeepFrozen:
-    return def superSampler.drawAt(x :Double, y :Double,
-                                   => aspectRatio :Double):
-        def color := d.drawAt(x, y, => aspectRatio)
-        # NB: Work in linear RGB!
-        var channels := color.RGB()
-        for dx in ([-1, 1]):
-            for dy in ([-1, 1]):
-                def c := d.drawAt(x + epsilon * dx, y + epsilon * dy,
-                                  => aspectRatio)
-                channels := [for i => chan in (c.RGB()) channels[i] + chan]
-        return [for chan in (channels) chan * 0.2]
-
 def consoleDraw.drawingFrom(d) as DeepFrozen:
     "Draw a drawable `d` to any number of rows of characters."
-    # def d := makeSuperSampler(drawable)
+
+    # Pixel sample location: One sample drawn right in the middle of each
+    # bounding box. Super-rough.
+    def config :DeepFrozen := samplerConfig.Center()
+    # def config :DeepFrozen := samplerConfig.Quincunx()
+
     return def draw(height :(Int > 0), width :(Int > 0)):
         "Draw a drawable to `height` rows of characters."
-        def aspectRatio := width / height
-        def dh := height.asDouble().reciprocal() * 0.5
-        def dw := width.asDouble().reciprocal() * 0.5
+
+        def discreteSampler := makeDiscreteSampler(d, config, width, height)
         return [for h in (0..!height) {
             b``.join([for w in (0..!width) {
-                # Pixel sample location: One sample drawn right in the middle
-                # of each bounding box. Super-rough.
-                def color := d.drawAt(dw + w / width, dh + h / height,
-                                      => aspectRatio)
+                def color := discreteSampler.pixelAt(w, h)
                 def [r, g, b, a] := color.sRGB()
                 colorCube(r, g, b) + getRamp(a)
             }]) + resetColor

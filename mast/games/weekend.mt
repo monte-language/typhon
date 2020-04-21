@@ -1,6 +1,7 @@
 import "lib/colors" =~ [=> makeColor]
 import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/noise" =~ [=> makeSimplexNoise]
+import "lib/samplers" =~ [=> samplerConfig]
 import "lib/vectors" =~ [=> V, => glsl]
 import "fun/ppm" =~ [=> makePPM]
 exports (main)
@@ -15,9 +16,6 @@ def randomUnit(entropy) as DeepFrozen:
     return V(x, y, z)
 
 # XXX common code not yet factored to lib/vectors
-def sumPlus(x, y) as DeepFrozen { return x + y }
-def sumDouble :DeepFrozen := V.makeFold(0.0, sumPlus)
-
 def productTimes(x, y) as DeepFrozen { return x * y }
 def productDouble :DeepFrozen := V.makeFold(1.0, productTimes)
 
@@ -404,8 +402,6 @@ def makeDiffuseLight(texture) as DeepFrozen:
         to emitted(u, v, p):
             return texture.value(u, v, p)
 
-def blueSky :DeepFrozen := V(0.5, 0.7, 1.0)
-
 # Usually only a few dozen bounces at most, but certain critical angles on
 # dielectric or metal surfaces can cause this to skyrocket.
 def maxDepth :Int := 100
@@ -425,10 +421,8 @@ def color(entropy, ray, world, depth) as DeepFrozen:
     } else {
         # XXX [-1,1] -> [0,1] we should factor out this too
         def [_, t, _] := V.un((glsl.normalize(direction) + 1.0) * 0.5, null)
-        # Whether there is an ambient blue sky.
-        if (true) {
-            [glsl.mix(one, blueSky, t), depth]
-        } else { [zero, depth] }
+        # Whether there is an ambient light.
+        if (true) { [one, depth] } else { [zero, depth] }
     }
 
 def makeCamera(entropy, lookFrom, lookAt, up, vfov :Double, aspect :Double,
@@ -579,7 +573,8 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     return when (p) ->
         def [drawable, dd] := p
         traceln(`Scene prepared in ${dd}s`)
-        def drawer := makePPM.drawingFrom(drawable)(w, h)
+        def config := samplerConfig.TTest(samplerConfig.Center(), 0.9, 3, 1_000)
+        def drawer := makePPM.drawingFrom(drawable, config)(w, h)
         var i := 0
         def start := Timer.unsafeNow()
         while (true):
