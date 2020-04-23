@@ -438,27 +438,45 @@ class DoubleObject(Object):
 
     @method("Double")
     def sine(self):
-        return math.sin(self._d)
+        try:
+            return math.sin(self._d)
+        except ValueError:
+            raise userError(u".sine/0: %f out of range" % self._d)
 
     @method("Double")
     def cosine(self):
-        return math.cos(self._d)
+        try:
+            return math.cos(self._d)
+        except ValueError:
+            raise userError(u".cosine/0: %f out of range" % self._d)
 
     @method("Double")
     def tangent(self):
-        return math.tan(self._d)
+        try:
+            return math.tan(self._d)
+        except ValueError:
+            raise userError(u".tangent/0: %f out of range" % self._d)
 
     @method("Double")
     def cosecant(self):
-        return 1.0 / math.sin(self._d)
+        try:
+            return 1.0 / math.sin(self._d)
+        except ValueError:
+            raise userError(u".cosecant/0: %f out of range" % self._d)
 
     @method("Double")
     def secant(self):
-        return 1.0 / math.cos(self._d)
+        try:
+            return 1.0 / math.cos(self._d)
+        except ValueError:
+            raise userError(u".secant/0: %f out of range" % self._d)
 
     @method("Double")
     def cotangent(self):
-        return 1.0 / math.tan(self._d)
+        try:
+            return 1.0 / math.tan(self._d)
+        except ValueError:
+            raise userError(u".cotangent/0: %f out of range" % self._d)
 
     # NB: Inverse trig functions have restricted ranges.
 
