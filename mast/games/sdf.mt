@@ -8,6 +8,8 @@ import "fun/ppm" =~ [=> makePPM]
 exports (main)
 
 # http://jamie-wong.com/2016/07/15/ray-marching-signed-distance-functions/
+# https://erleuchtet.org/~cupe/permanent/enhanced_sphere_tracing.pdf
+# https://www.cs.williams.edu/~morgan/cs371-f14/reading/implicit.pdf
 
 # Signed distance functions, or SDFs, are objects with a .run/1 which sends 3D
 # vectors of Doubles to a single Double. The interpretation is that the
@@ -32,8 +34,6 @@ def maxPlus(x, y) as DeepFrozen { return x.max(y) }
 def max :DeepFrozen := V.makeFold(-Infinity, maxPlus)
 
 def PI :Double := 1.0.arcSine() * 2
-
-def maxSteps :Int := 120
 
 # Cheap normal estimation. Pick a small epsilon and evaluate the two-sided
 # derivative:
@@ -72,8 +72,7 @@ def phongContribForLight(sdf, kd, ks, alpha :Double, p, eye, lightPos,
     def spec := if (base.belowZero()) { 0.0 } else { ks * base ** alpha }
     return lightIntensity * (kd * diff + ks * spec)
 
-def crystalfov :Double := (PI / 8).tangent()
-def fov :Double := (PI / 18).tangent()
+def fov :Double := (PI / 8).tangent()
 def eye :DeepFrozen := V(8.0, 5.0, 7.0)
 
 def phongIllumination(sdf, ka, kd, ks, alpha :Double, p, eye) as DeepFrozen:
@@ -97,9 +96,8 @@ def phongIllumination(sdf, ka, kd, ks, alpha :Double, p, eye) as DeepFrozen:
 
     return color
 
-# https://erleuchtet.org/~cupe/permanent/enhanced_sphere_tracing.pdf
-# The over-relaxation logic is omitted because it provoked constant
-# misrendering for only a 10% speedup. (I probably implemented it wrong.)
+def maxSteps :Int := 100
+
 def shortestDistanceToSurface(sdf, eye, direction, start :Double,
                               end :Double, pixelRadius :Double) as DeepFrozen:
     var depth := start
@@ -108,15 +106,23 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
     for i in (0..!maxSteps):
         def step := eye + direction * depth
         def signedDistance := sdf(step) * sign
-        def distance := signedDistance.abs()
         # traceln(`$i: sdf($eye, $direction, $depth) -> sdf($step) -> $signedDistance`)
+
+        # If we took a step and ended up inside the geometry, but we took the
+        # step size based on the geometry's SDF, then we must conclude that
+        # there is numerical instability inside the SDF. This happens all the
+        # time; it's not wrong or weird, but it does mean that this guess was
+        # actually extremely good and we should treat the remaining negative
+        # offset as numerical error.
+        if (signedDistance.belowZero()):
+            return [depth, i]
 
         # We can and should leave as soon as the first hit happens which is
         # close enough to reasonably occlude the pixel.
         # NB: In the paper's original algorithm, there's some additional
         # machinery for checking candidate values, but we go with either the
         # first hit or nothing.
-        def error := distance / depth
+        def error := signedDistance.abs() / depth
         # traceln(`$i: error $error, threshold $pixelRadius`)
         if (error < pixelRadius):
             return [depth, i]
@@ -125,7 +131,6 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
         if (depth >= end):
             return [end, i]
 
-        # Step and iterate.
         depth += signedDistance
 
     # No hits.
@@ -162,9 +167,16 @@ def maxDepth :Double := 20.0
 def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as DeepFrozen:
     def pixelArea := PI * pixelRadius ** 2
     var t := distance
-    for _ in (0..!3):
-        def f := sdf(eye + dir * t)
-        t += f - pixelArea / t
+    var err := Infinity
+    for i in (0..!3):
+        def newErr := sdf(eye + dir * t) - pixelArea / t
+        # It is quite possible that we're not improving the estimate; that is,
+        # that we are numerically unstable near a divergent fixed point. If
+        # that's the case, then give up to avoid making things worse.
+        if (newErr.abs() > err.abs()) { break }
+        # traceln(`refine $i: sdf($eye + $dir * $t) -> $newErr`)
+        err := newErr
+        t += err
     return t
 
 def drawSignedDistanceFunction(sdf) as DeepFrozen:
@@ -179,11 +191,14 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         def [estimate, steps] := shortestDistanceToSurface(sdf, eye, worldDir,
                                                            0.0, maxDepth,
                                                            pixelRadius)
+        # Clearly show where we aren't taking enough steps by highlighting
+        # with magenta.
+        if (steps >= maxSteps) { return makeColor.RGB(1.0, 0.0, 1.0, 1.0) }
         if (estimate >= maxDepth) { return makeColor.clear() }
 
         def distance := refineEstimate(sdf, eye, worldDir, estimate,
                                        pixelRadius)
-        # traceln(`hit $u $v $estimate $distance`)
+        # traceln(`hit u=$u v=$v estimate=$estimate distance=$distance steps=$steps`)
 
         def p := eye + worldDir * distance
         # Use the normal for lighting, since we don't have a material.
@@ -195,10 +210,6 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         def ks := one * 0.1
         def shininess := 10.0
 
-        # Debugging: Shade diffuse material from white to magenta with the
-        # number of steps taken; this makes material look pinker as it becomes
-        # harder to estimate.
-        # def color := glsl.mix(one, V(1.0, 0.0, 1.0), steps / maxSteps)
         def color := phongIllumination(sdf, ka, kd, ks, shininess, p, eye)
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
@@ -246,8 +257,29 @@ def asSDF(entropy) as DeepFrozen:
         to Scaling(shape, factor :Double):
             return fn p { shape(p / factor) * factor }
 
-        to Displacement(shape, d, scale :Double):
-            return fn p { shape(p) + d(p) * scale }
+        to Displacement(shape, displacement, scale :Double):
+            # return fn p { shape(p) + displacement(p) * scale }
+            # Optimization: Since the shape is not displaced by more than
+            # [-scale, scale], consider queries which would be further away
+            # than that:
+            #
+            # 8< - - - - -)  K          D  <         |         >
+            # camera      p  kappa  delta  scale   shape   -scale
+            #
+            # If shape(p) - scale is positive, then computing displacement(p)
+            # would be a waste. We'll lie to try to avoid that waste. We set
+            # two constants, delta and kappa. Above kappa, we hide the
+            # displacement; below it, we will be honest. While we are hiding,
+            # we appear to have extra padding delta.
+            def delta := scale * 1.000_1
+            # Some trigonometry and estimates suggest that kappa needs to be
+            # fairly large compared to delta, and indeed we otherwise get
+            # artifacts for glancing blows.
+            def kappa := scale * 1.5
+            return fn p {
+                def x := shape(p)
+                if (x > kappa) { x - delta } else { x + displacement(p) * scale }
+            }
 
         to OrthorhombicCrystal(shape, cx :Double, cy :Double, cz :Double):
             def c := V(cx, cy, cz)
@@ -272,11 +304,13 @@ def asSDF(entropy) as DeepFrozen:
             return fn p { minuend(p).max(-(subtrahend(p))) }
 
         # The displacement operators are on the same domain as SDFs, but they
-        # return values in [-1, 1].
+        # return values in [-1, 1]. We will rely on this property!
 
         to Sines(lx :Double, ly :Double, lz :Double):
             def l := V(lx, ly, lz)
-            return fn p { sumDouble((p * l).sine()) }
+            # Since each sine wave is in [-1, 1], the sum is in [-3, 3].
+            def scale :Double := 3.0.reciprocal()
+            return fn p { sumDouble((p * l).sine()) * scale }
 
         to Noise(lx :Double, ly :Double, lz :Double, octaves :Int):
             def l := V(lx, ly, lz)
@@ -287,9 +321,11 @@ def crystal :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
     CSG.Intersection(CSG.Sphere(1.2), [CSG.Cube(1.0)]),
     CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5),
 ) , 3.0, 5.0, 4.0)
-def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(1.0),
-    CSG.Noise(3.4, 3.4, 3.4, 4), 1.0)
-def solid :DeepFrozen := crystal
+def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
+    CSG.Noise(3.4, 3.4, 3.4, 5), 3.0)
+def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
+    CSG.Sines(5.0, 5.0, 5.0), 3.0)
+def solid :DeepFrozen := kaboom
 traceln(`Defined solid: $solid`)
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
@@ -302,8 +338,9 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def sdf := solid(asSDF(entropy))
     def drawable := drawSignedDistanceFunction(sdf)
     # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
+    # drawable.drawAt(0.5, 0.45, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # throw("yay?")
-    def config := samplerConfig.Quincunx()
+    def config := samplerConfig.QuasirandomMonteCarlo(10)
     def drawer := makePPM.drawingFrom(drawable, config)(w, h)
     var i := 0
     def start := Timer.unsafeNow()

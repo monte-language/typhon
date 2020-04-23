@@ -553,13 +553,10 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # NB: Aspect ratio is fixed, and we ignore the requested ratio.
     def camera := makeCamera(entropy, lookFrom, lookAt, up, fov, aspectRatio,
                              aperture, distToFocus, 0.0, 1.0)
-    return def drawable.drawAt(u :Double, var v :Double):
-        # Rendering is upside-down WRT Monte conventions.
-        v := 1.0 - v
-        # Important: These must be two uncorrelated random offsets.
-        def du := u + (entropy.nextDouble() / 1_000_000.0)
-        def dv := v + (entropy.nextDouble() / 1_000_000.0)
-        def ray := camera.getRay(du, dv)
+    return def drawable.drawAt(u :Double, var v :Double,
+                               => pixelRadius :Double):
+        # NB: Rendering is upside-down WRT Monte conventions.
+        def ray := camera.getRay(u, 1.0 - v)
         def [sample, depth] := color(entropy, ray, world, 0)
         # Okay, *now* we clamp.
         def [r, g, b] := _makeList.fromIterable(sample.min(1.0))
@@ -573,7 +570,14 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     return when (p) ->
         def [drawable, dd] := p
         traceln(`Scene prepared in ${dd}s`)
-        def config := samplerConfig.TTest(samplerConfig.Center(), 0.9, 3, 1_000)
+        # The original design. Some number of samples, jittered reasonably
+        # around the pixel in a responsible manner. QRMC is a good way to
+        # achieve this effect without introducing obvious aliasing or
+        # dithering effects. The original starts at 100 and then climbs to
+        # 1_000 and eventually 10_000.
+        def config := samplerConfig.QuasirandomMonteCarlo(25)
+        # My adaptive take on the original design.
+        # def config := samplerConfig.TTest(samplerConfig.QuasirandomMonteCarlo(1), 0.999, 5, 20)
         def drawer := makePPM.drawingFrom(drawable, config)(w, h)
         var i := 0
         def start := Timer.unsafeNow()

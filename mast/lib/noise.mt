@@ -73,14 +73,16 @@ def makeSimplexNoise(entropy) as DeepFrozen:
                     n += t ** 4 * glsl.dot(gi(ijk + offset), corner)
             return n * noiseScale
 
-        to turbulence(p, depth):
+        to turbulence(p, depth :Int):
             # Depth can be at little as 3; 6 or 7 is quite good.
             var rv := 0.0
             var k := 1
-            # NB: I have a doubt. By basic interval analysis, the octaves have
-            # intervals [-1,1], [-1/2,1/2], [-1/4,1/4], ... which should sum
-            # up to [-2.2]. But apparently this isn't a problem in practice?
             for _ in (0..!depth):
                 rv += noiseMaker.noise(p * k) / k
                 k *= 2
-            return rv
+            # NB: By basic interval analysis, the octaves have intervals
+            # [-1,1], [-1/2,1/2], [-1/4,1/4], ... which should sum up to
+            # [-2,2]. While many implementations simply consider this to be an
+            # acceptable risk, I think that it is better to ensure correct
+            # ranges here and require users to do their own amplification.
+            return rv * 0.5
