@@ -170,7 +170,12 @@ def main(_argv, => Timer, => stdio) as DeepFrozen:
             def testSink(event):
                 if (isQuit(event)):
                     more := false
-                message := `Got event: $event`
+                if (event == ["DATA", b`$\x7f`]):
+                    # Backspace
+                    message slice= (0, message.size() - 1)
+                if (event =~ [=="DATA", c :(b` `..b`~`)]):
+                    # Printable characters.
+                    message with= ('\x00' + c[0])
                 return draw()
             def go():
                 return when (draw(), source<-(testSink)) ->
