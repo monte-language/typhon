@@ -143,7 +143,6 @@ def main(argv,
          => stdio) :Vow[Int] as DeepFrozen:
     def config := parseArguments(argv, throw)
     def inputFile :Str := config.getInputFile()
-    def outputFile :Str := config.getOutputFile()
 
     def stopwatch := makeStopwatch(Timer)
 
@@ -220,7 +219,7 @@ def main(argv,
     }
 
     def writeOutputFile(bs):
-        return makeFileResource(outputFile)<-setContents(bs)
+        return makeFileResource(config.getOutputFile())<-setContents(bs)
 
     def frontend := [
         stopwatch(parse),
@@ -241,4 +240,5 @@ def main(argv,
     ]}
     def stages := [for s in (frontend + backend) ? (s != null) s]
     def p := runPipeline(starter, stages)
+
     return when (p) -> { 0 } catch problem { traceln.exception(problem); 1 }
