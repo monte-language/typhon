@@ -29,6 +29,30 @@ var ConstList = Cello(ConstList,
     Instance(New, ConstList_New, NULL),
     Instance(Call, ConstList_Call));
 
+struct True {};
+struct False {};
+
+var trueObj(var args) {
+    var verb = get(args, $I(0));
+    throw(Refused, "doesn't respond to verb %$", verb);
+}
+
+var falseObj(var args) {
+    var verb = get(args, $I(0));
+    throw(Refused, "doesn't respond to verb %$", verb);
+}
+
+/* Return whether a var is Monte's true or false. Throw if it's neither. */
+bool isTrue(var b) {
+    if (eq(b, $(Function, trueObj))) {
+        return true;
+    } else if (eq(b, $(Function, falseObj))) {
+        return false;
+    } else {
+        throw(TypeError, "%$ !~ _ :Bool", b);
+    }
+}
+
 var makeList(var args) {
     print("makeList(%$)", args);
     var verb = get(args, $I(0));

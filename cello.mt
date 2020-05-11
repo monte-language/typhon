@@ -4,6 +4,8 @@ exports (main)
 
 def outers :Map[Str, Bytes] := [
     "_makeList" => b`makeList`,
+    "true" => b`trueObj`,
+    "false" => b`falseObj`,
 ]
 
 def compileProgramOnto(expr, lines) :Bytes as DeepFrozen:
@@ -32,6 +34,9 @@ def compileProgramOnto(expr, lines) :Bytes as DeepFrozen:
             def emptyMap := b`new(Table, Ref, Ref)`
             return b`call($receiver, $newVerb, $packedArgs, $emptyMap)`
 
+        to IfExpr(test, cons, alt, _span):
+            return b`isTrue($test) ? ($cons) : ($alt)`
+
         to FinalPattern(noun, _span):
             return b`$noun`
 
@@ -46,6 +51,8 @@ def buildEntrypoint(lines :List[Bytes], module :Bytes) :Bytes as DeepFrozen:
     #include "Cello.h"
 
     extern var ConstList;
+
+    bool isTrue(var);
 
     $externFuns
 
@@ -70,14 +77,14 @@ def buildEntrypoint(lines :List[Bytes], module :Bytes) :Bytes as DeepFrozen:
     }
     `
 
-def expr :DeepFrozen := m`[6, 7].size()`
+def expr :DeepFrozen := m`def x := 6; def y := true; if (y) { x } else { y }`
 
 def main(_argv, => stdio) as DeepFrozen:
     def lines := [].diverge(Bytes)
     def normalized := makeNormal().alpha(expand(expr))
     traceln(normalized)
     def rv := compileProgramOnto(normalized, lines)
-    def program := buildEntrypoint(lines.snapshot(), rv)
+    def program := buildEntrypoint(lines.reverse(), rv)
     def stdout := stdio.stdout()
     return when (stdout<-(program)) ->
         when (stdout<-complete()) -> { 0 }
