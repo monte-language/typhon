@@ -6,9 +6,12 @@ def outers :Map[Str, Bytes] := [
     "_makeList" => b`makeList`,
     "true" => b`trueObj`,
     "false" => b`falseObj`,
+    "null" => b`nullObj`,
+    "Int" => b`guardInt`,
 ]
 
 def compileProgramOnto(expr, lines) :Bytes as DeepFrozen:
+    var locals := [].asMap()
     object compiler:
         to LiteralExpr(x, _span):
             return switch (x) {
@@ -24,7 +27,7 @@ def compileProgramOnto(expr, lines) :Bytes as DeepFrozen:
             return atom
 
         to LetExpr(pattern, expr, body, _span):
-            lines.push(b`var $pattern = $expr;`)
+            locals |= pattern(expr, b`copy($$(Function, nullObj))`)
             return body
 
         to MethodCallExpr(receiver, verb :Str, args, _namedArgs, _span):
@@ -37,8 +40,18 @@ def compileProgramOnto(expr, lines) :Bytes as DeepFrozen:
         to IfExpr(test, cons, alt, _span):
             return b`isTrue($test) ? ($cons) : ($alt)`
 
-        to FinalPattern(noun, _span):
-            return b`$noun`
+        to FinalPattern(noun, guard, _span):
+            return fn expr, ej {
+                if (guard == null) {
+                    lines.push(b`var $noun = $expr;`)
+                } else {
+                    lines.push(b`var $noun = call($guard,
+                        new(String, $$S("coerce")),
+                        new(Tuple, $expr, $ej),
+                        new(Table, Ref, Ref));`)
+                }
+                [noun => null]
+            }
 
         match [verb, args, _]:
             throw(`Next to do: $verb/${args.size()}`)
@@ -77,7 +90,11 @@ def buildEntrypoint(lines :List[Bytes], module :Bytes) :Bytes as DeepFrozen:
     }
     `
 
-def expr :DeepFrozen := m`def x := 6; def y := true; if (y) { x } else { y }`
+def expr :DeepFrozen := m`{
+    def x :Int := 6
+    def y := 5
+    if (true) { x } else { y }
+}`
 
 def main(_argv, => stdio) as DeepFrozen:
     def lines := [].diverge(Bytes)

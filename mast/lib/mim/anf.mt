@@ -27,11 +27,11 @@ def makeNormal() as DeepFrozen:
     def letsym(complex, k, span):
         # k() wants a noun as a Str.
         def sym :Str := gensym()
-        return anf.LetExpr(anf.FinalPattern(sym, span), complex, k(sym), span)
+        return anf.LetExpr(anf.FinalPattern(sym, null, span), complex, k(sym), span)
     def escapesym(k, span):
         # k() wants a noun as a Str.
         def sym :Str := gensym()
-        return anf.EscapeExpr(anf.FinalPattern(sym, span), k(sym), span)
+        return anf.EscapeExpr(anf.FinalPattern(sym, null, span), k(sym), span)
 
     # We are doing a sort of context-passing. Each k() is a hole for placing a
     # value into the caller's context.
@@ -84,24 +84,14 @@ def makeNormal() as DeepFrozen:
                 to FinalPattern(noun, guard, span) {
                     def name := nounToName(noun)
                     return if (guard == null) {
-                        anf.LetExpr(anf.FinalPattern(name, span),
+                        anf.LetExpr(anf.FinalPattern(name, null, span),
                                     anf.Atom(specimen, span),
                                     k(), span)
                     } else {
-                        normal.name(guard, fn g {
-                            letsym(anf.MethodCallExpr(anf.NounExpr("_makeFinalSlot",
-                                                                   span),
-                                                      "run",
-                                                      [g, specimen, ej], [],
-                                                      span), fn slot {
-                                anf.LetExpr(anf.BindingPattern(name, span),
-                                            anf.MethodCallExpr(anf.NounExpr("_slotToBinding",
-                                                                            span),
-                                                               "run",
-                                                               [anf.NounExpr(slot,
-                                                                             span),
-                                                                ej],
-                                                               [], span),
+                        normal(guard, fn g {
+                            letsym(g, fn ng {
+                                anf.LetExpr(anf.FinalPattern(name, ng, span),
+                                            anf.Atom(specimen, span),
                                             k(), span)
                             }, span)
                         })
@@ -109,27 +99,18 @@ def makeNormal() as DeepFrozen:
                 }
                 to VarPattern(noun, guard, span) {
                     def name := nounToName(noun)
-                    def finishVar(g) {
-                        return letsym(anf.MethodCallExpr(anf.NounExpr("_makeVarSlot",
-                                                                      span),
-                                                         "run",
-                                                         [g, specimen, ej], [],
-                                                         span), fn slot {
-                            anf.LetExpr(anf.BindingPattern(name, span),
-                                        anf.MethodCallExpr(anf.NounExpr("_slotToBinding",
-                                                                        span),
-                                                           "run",
-                                                           [anf.NounExpr(slot,
-                                                                         span),
-                                                            ej],
-                                                           [], span),
-                                        k(), span)
-                        }, span)
-                    }
                     return if (guard == null) {
-                        finishVar(anf.NounExpr("Any", span))
+                        anf.LetExpr(anf.VarPattern(name, null, span),
+                                    anf.Atom(specimen, span),
+                                    k(), span)
                     } else {
-                        normal.name(guard, finishVar)
+                        normal(guard, fn g {
+                            letsym(g, fn ng {
+                                anf.LetExpr(anf.VarPattern(name, ng, span),
+                                            anf.Atom(specimen, span),
+                                            k(), span)
+                            }, span)
+                        })
                     }
                 }
             })

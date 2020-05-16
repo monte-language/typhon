@@ -15,7 +15,8 @@ complex = MethodCallExpr(atom receiver, str verb, atom* args,
         | Atom(atom atom)
         attributes (df span)
 pattern = IgnorePattern
-        | FinalPattern(str noun)
+        | FinalPattern(str noun, str? guard)
+        | VarPattern(str noun, str? guard)
         | BindingPattern(str noun)
         | ListPattern(pattern* patterns)
         attributes (df span)

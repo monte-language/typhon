@@ -29,8 +29,10 @@ var ConstList = Cello(ConstList,
     Instance(New, ConstList_New, NULL),
     Instance(Call, ConstList_Call));
 
-struct True {};
-struct False {};
+var nullObj(var args) {
+    var verb = get(args, $I(0));
+    throw(Refused, "doesn't respond to verb %$", verb);
+}
 
 var trueObj(var args) {
     var verb = get(args, $I(0));
@@ -60,4 +62,15 @@ var makeList(var args) {
         throw(Refused, "doesn't respond to verb %$", verb);
     }
     return new(ConstList, get(args, $I(1)));
+}
+
+var guardInt(var args) {
+    print("guardInt(%$)", args);
+    var verb = get(args, $I(0));
+    if (neq(verb, $S("coerce"))) {
+        throw(Refused, "doesn't respond to verb %$", verb);
+    }
+    var specimen = get(get(args, $I(1)), $I(0));
+    /* XXX typechecking */
+    return specimen;
 }
