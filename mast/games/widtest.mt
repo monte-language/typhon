@@ -4,17 +4,11 @@ import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/welford" =~ [=> makeWelford]
 exports (main)
 
-def blurb :Str := `
-Hi! This is a simple key-testing program. Tap any key on your input device,
-and if this program senses anything, it'll print out what it sensed. To exit,
-try to send SIGINT (^C).
-`
-
 def flowText(s :Str, width :Int) :List[Str] as DeepFrozen:
     def lines := [].diverge()
     var currentLine := [].diverge()
     var currentLength := 0
-    for word in (s.replace("\n", " ").split(" ")):
+    for word in (s.replace("\r", " ").split(" ")):
         if (word.size() + 1 + currentLength > width):
             lines.push(" ".join(currentLine))
             currentLine := [].diverge()
@@ -47,6 +41,17 @@ def sizeOf(width :Int, height :Int) as DeepFrozen:
                 maxHeight max= (h)
             return [columnWidth, maxHeight]
 
+        to Pile(widgets :List):
+            var maxWidth := 0
+            var totalHeight := 0
+            for widget in (widgets):
+                def [w, h] := widget.walk(sizeOf(width, height))
+                def newHeight := totalHeight + h
+                if (newHeight > height) { break }
+                maxWidth max= (w)
+                totalHeight := newHeight
+            return [maxWidth, totalHeight]
+
         to Frame(_header, _body, _footer):
             return [width, height]
 
@@ -54,15 +59,14 @@ def sizeOf(width :Int, height :Int) as DeepFrozen:
             def [w, h] := widget.walk(sizeOf(width - 2, height - 2))
             return [w + 2, h + 2]
 
-def isQuit(event) :Bool as DeepFrozen:
-    return event == ["DATA", b`$\x03`]
-
 # XXX common code with games/animate
 def startCanvasMode(cursor) as DeepFrozen:
+    traceln("starting canvas mode")
     return when (cursor<-enterAltScreen(), cursor<-hideCursor()) -> { null }
 
 def stopCanvasMode(cursor) as DeepFrozen:
-    return when (cursor<-showCursor(), cursor<-leaveAltScreen()) -> { null }
+    return when (cursor<-showCursor(), cursor<-leaveAltScreen()) ->
+        traceln("stopping canvas mode")
 
 def renderOnto(canvas) as DeepFrozen:
     return object renderer:
@@ -79,6 +83,17 @@ def renderOnto(canvas) as DeepFrozen:
             for i => widget in (widgets):
                 widget.walk(renderOnto(canvas.sub(width * i, 0, width,
                                                   height)))
+
+        to Pile(widgets :List):
+            # XXX algorithm overlaps with sizeof()
+            def width := canvas.width()
+            def height := canvas.height()
+            var offset := 0
+            for widget in (widgets):
+                def [_, h] := widget.walk(sizeOf(width, height - offset))
+                offset += h
+                if (offset > height) { break }
+                widget.walk(renderOnto(canvas.sub(0, offset, width, h)))
 
         to Frame(header, body, footer):
             def width := canvas.width()
@@ -137,49 +152,86 @@ object makeCanvas as DeepFrozen:
             to sub(x :Pos, y :Pos, w :Pos, h :Pos):
                 return makeCanvas.atOffset(cursor, x0 + x, y0 + y, w, h)
 
-def makeBlurb(b :Str, rt :Double, now :Double) as DeepFrozen:
-    return wid.LineBox(wid.Frame(
-        wid.LineBox(wid.Text("Widget Testing!")),
-        wid.LineBox(wid.Text(b)),
-        wid.LineBox(wid.Columns([
-            wid.Text(`Render time: ${(rt * 1000).floor()}ms`),
-            wid.Text(`System clock: $now`),
-        ])),
-    ))
+def makeREPL(Timer, unsealException) as DeepFrozen:
+    def rt := makeWelford()
+    def et := makeWelford()
+    var command :Str := ""
+    var done :Bool := false
+    var result := null
 
-def main(_argv, => Timer, => stdio) as DeepFrozen:
-    var rt := makeWelford()
-    var message := blurb
+    return object repl:
+        to done() :Bool:
+            return done
+
+        to asWidget():
+            def now := Timer.unsafeNow()
+            return wid.LineBox(wid.Frame(
+                wid.LineBox(wid.Text("Experimental REPL")),
+                wid.LineBox(wid.Pile([
+                    wid.Text(`⛰  $command`),
+                    wid.Text(`Result: $result`),
+                ])),
+                wid.LineBox(wid.Columns([
+                    wid.Text(`Render time: ${(rt.mean() * 1000).floor()}ms`),
+                    wid.Text(`Eval time: ${(et.mean() * 1000).floor()}ms`),
+                    wid.Text(`System clock: $now`),
+                ])),
+            ))
+
+        to timeTaken(t :Double):
+            rt(t)
+
+        to run(event):
+            if (event =~ [=="DATA", c]):
+                switch (c):
+                    match b`$\x03`:
+                        # ^C
+                        done := true
+                    match b`$\r`:
+                        # Enter
+                        def expr := command
+                        def t := Timer.measureTimeTaken(fn {
+                            result := eval(expr, safeScope)
+                        })
+                        when (t) -> { et(t) } catch problem {
+                            result := `Error in eval(): ${unsealException(problem)}`
+                        }
+                        command := ""
+                    match b`$\x7f`:
+                        # Backspace
+                        command slice= (0, command.size() - 1)
+                    match _ :(b` `..b`~`):
+                        # Printable characters.
+                        command with= ('\x00' + c[0])
+
+        to complete():
+            done := true
+
+        to abort(problem):
+            result := `Error with event: ${unsealException(problem)}`
+
+def main(_argv, => Timer, => stdio, => unsealException) as DeepFrozen:
     def term := activateTerminal(stdio)
     def cursor := term<-outputCursor()
     return when (term) ->
         def source := term<-inputSource()
         when (source, startCanvasMode(cursor)) ->
+            def repl := makeREPL(Timer, unsealException)
             def draw():
-                def widget := makeBlurb(message, rt.mean(), Timer.unsafeNow())
+                # XXX width/height info should be passed to REPL?
+                def widget := repl.asWidget()
                 def canvas := makeCanvas(cursor, term.width(), term.height())
                 def startTime := Timer.unsafeNow()
                 return when (widget.walk(renderOnto(canvas))) ->
                     def stopTime := Timer.unsafeNow()
-                    rt(stopTime - startTime)
-            var more :Bool := true
+                    repl.timeTaken(stopTime - startTime)
             def redrawRegularly():
-                return if (more):
-                    when (Timer.fromNow(1.0)) ->
+                return when (Timer.fromNow(1.0)) ->
+                    if (!repl.done()):
                         when (draw()) -> { redrawRegularly() }
-            def testSink(event):
-                if (isQuit(event)):
-                    more := false
-                if (event == ["DATA", b`$\x7f`]):
-                    # Backspace
-                    message slice= (0, message.size() - 1)
-                if (event =~ [=="DATA", c :(b` `..b`~`)]):
-                    # Printable characters.
-                    message with= ('\x00' + c[0])
-                return draw()
             def go():
-                return when (draw(), source<-(testSink)) ->
-                    if (more) { go() } else {
+                return when (draw(), source<-(repl)) ->
+                    if (!repl.done()) { go() } else {
                         when (stopCanvasMode(cursor)) -> { term<-quit() }
                     }
             when (go(), redrawRegularly()) ->
