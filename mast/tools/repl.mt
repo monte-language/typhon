@@ -9,6 +9,7 @@ import "lib/json" =~ [=> JSON]
 import "lib/monte/monte_lexer" =~ [=> makeMonteLexer]
 import "lib/monte/monte_parser" =~ [=> parseModule]
 import "lib/muffin" =~ [=> makeLimo]
+import "lib/which" =~ [=> makePathSearcher, => makeWhich]
 exports (main)
 
 # The names throughout this section are historical.
@@ -109,9 +110,13 @@ def makeFileLoader(log, root, makeFileResource) as DeepFrozen:
         }
 
 def main(_argv,
+         => currentProcess,
          => makeFileResource,
+         => makeProcess,
          => Timer,
-         => stdio, => unsealException, => unsafeScope) :Vow[Int] as DeepFrozen:
+         => stdio,
+         => unsealException,
+         => unsafeScope) :Vow[Int] as DeepFrozen:
 
     # Forward-declare the environment.
     var environment := null
@@ -121,7 +126,16 @@ def main(_argv,
         prompt.setLine(b`Log: ` + UTF8.encode(s, null))
 
     object repl:
-        "Some useful REPL stuff."
+        "
+        Some useful REPL stuff.
+
+        .complete/0: Exit.
+        .load/2: Load a module from a directory.
+        .benchmark/1: Estimate the runtime of a fn.
+        .draw/1: Draw a drawable using ASCII art.
+        .graph/1: Draw a fn from Doubles to Doubles like a graphing calculator.
+        .which/1: Look up a process path.
+        "
 
         to complete():
             "Cleanly exit the REPL."
@@ -194,11 +208,16 @@ def main(_argv,
             prompt.writeLine(UTF8.encode(M.callWithMessage(super, message), null))
             null
 
+    def which := makeWhich(makeProcess,
+                           makePathSearcher(makeFileResource,
+                                            currentProcess.getEnvironment()[b`PATH`]))
+
     # Set up the full environment.
     environment := safeScope | unsafeScope | [
         # REPL-only fun.
         => &&JSON, => &&UTF8, => &&repl,
         "&&help" => &&REPLHelp,
+        => &&which,
     ]
 
     readEvalPrintLoop<-(prompt, &environment, unsealException)

@@ -61,6 +61,7 @@ def makeWhich(makeProcess, pathSearch) as DeepFrozen:
                 to _printOn(out):
                     out.print(`<makeProcess $path>`)
 
-                match [=="run", [subArgs] + args, namedArgs]:
-                    def newArgs := [encodedPath, [encodedBin] + subArgs] + args
+                match [=="run", [subArgs :List[Bytes], env :Map[Bytes, Bytes]],
+                       namedArgs]:
+                    def newArgs := [encodedPath, [encodedBin] + subArgs, env]
                     M.call(makeProcess, "run", newArgs, namedArgs)
