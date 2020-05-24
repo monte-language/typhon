@@ -89,6 +89,8 @@ def loadLiterate(log, root, makeFileResource, petname) as DeepFrozen:
         def s := stripMarkdown(UTF8.decode(bs, null))
         def lex := makeMonteLexer(s, petname)
         [s, parseModule(lex, astBuilder, null)]
+    catch _:
+        null
 
 def loadASDL(log, root, makeFileResource, petname) as DeepFrozen:
     def path := `$root/$petname.asdl`
@@ -98,14 +100,20 @@ def loadASDL(log, root, makeFileResource, petname) as DeepFrozen:
         log(`Parsing Zephyr ASDL specification: $path`)
         def s := UTF8.decode(bs, null)
         [s, buildASDLModule(s, petname)]
+    catch _:
+        null
 
 def makeFileLoader(log, root, makeFileResource) as DeepFrozen:
     return def load(petname):
         def lit := loadLiterate(log, root, makeFileResource, petname)
-        return when (lit) -> { lit } catch _ {
-            def asdl := loadASDL(log, root, makeFileResource, petname)
-            when (asdl) -> { asdl } catch _ {
-                loadPlain(log, root, makeFileResource, petname)
+        return when (lit) -> {
+            if (lit != null) { lit } else {
+                def asdl := loadASDL(log, root, makeFileResource, petname)
+                when (asdl) -> {
+                    if (asdl != null) { asdl } else {
+                        loadPlain(log, root, makeFileResource, petname)
+                    }
+                }
             }
         }
 
