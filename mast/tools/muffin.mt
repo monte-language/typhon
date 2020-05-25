@@ -61,20 +61,44 @@ def addTyphonHarness(expr :DeepFrozen, name :Str) :DeepFrozen as DeepFrozen:
         exitStatus :Vow[Int]
     }`
 
+def closeExpression(expr :DeepFrozen, _name :Str) :DeepFrozen as DeepFrozen:
+    "Close an expression so that it has no free variables."
+
+    # Our strategy is to take safeScope as a lone argument, and assign its
+    # bindings to the scope surrounding our expression. We can leverage
+    # _mapExtract, as a special case.
+    def extractors := [for k => _ in (safeScope.without("&&_mapExtract")) {
+        astBuilder.MapPatternImport(
+            astBuilder.BindingPattern(
+                astBuilder.NounExpr(k, null), null), null, null)
+    }]
+    def extraction := astBuilder.MapPattern(extractors, mpatt`_`, null)
+    return m`fn safeScope {
+        def &&_mapExtract := safeScope["&&_mapExtract"]
+        def $extraction := safeScope
+        { $expr }()
+    }`.expand()
+
+def harnesses :Map[Str, DeepFrozen] := [
+    "typhon" => addTyphonHarness,
+    "closed" => closeExpression,
+]
+
 def main(argv, => makeFileResource) as DeepFrozen:
     def loader := makeFileLoader(basePath, makeFileResource)
     def limo := makeLimo(loader)
-    var addTyphon :Bool := false
+    var harness :Str := "closed"
     def parser := flags () typhon {
-        addTyphon := true
+        harness := "typhon"
+    } closed {
+        harness := "closed"
     }
     def [pn, out] := parser(argv)
     traceln(`Making muffin out of $pn`)
     return when (def p := loader(pn)) ->
         def [source, expr] := p
         when (var m := limo(pn, source, expr)) ->
-            if (addTyphon):
-                m := addTyphonHarness(m, pn)
+            m := harnesses[harness](m, pn)
             def context := makeMASTContext()
             traceln("Expanding…")
             def expanded := m.expand()
