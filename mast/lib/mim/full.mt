@@ -133,14 +133,14 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             def resolver := mb.NounExpr(noun(nounName) + "_Resolver", span)
             return mb.ViaPattern(mb.MethodCallExpr(ex(m`_bind`), "run",
                                                    [resolver, g], [], span),
-                                 mb.IgnorePattern(null, span))
+                                 mb.IgnorePattern(null, span), span)
 
         to SuchThatPattern(patt, expr, span):
             def st := ex(m`_suchThat`)
             def innerPatt := mb.ViaPattern(mb.MethodCallExpr(st, "run",
                                                              [expr], [],
                                                              span),
-                                           mb.IgnorePattern(null, span))
+                                           mb.IgnorePattern(null, span), span)
             return mb.ViaPattern(st, mb.ListPattern([patt, innerPatt], null,
                                                     span), span)
 
@@ -148,7 +148,7 @@ def expand(ast :DeepFrozen) as DeepFrozen:
             def verb :Str := direction.pick("run", "different")
             return mb.ViaPattern(mb.MethodCallExpr(ex(m`_matchSame`), verb,
                                                    [value], [], span),
-                                 mb.IgnorePattern(null, span))
+                                 mb.IgnorePattern(null, span), span)
 
         # Kernel-Monte is handled here; kernel nodes generally only need to be
         # recursed through, not changed.

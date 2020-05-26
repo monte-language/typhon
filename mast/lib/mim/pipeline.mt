@@ -56,8 +56,8 @@ object pretty as DeepFrozen:
     to IgnorePattern(_):
         return "_"
 
-    to FinalPattern(noun, _):
-        return noun
+    to FinalPattern(noun, guard, _):
+        return if (guard == null) { noun } else { `$noun :$guard` }
 
     to BindingPattern(noun, _):
         return `&&$noun`

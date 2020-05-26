@@ -19,16 +19,19 @@ def nameForPatt(patt) :NullOk[Str] as DeepFrozen:
         to NounExpr(name, _) { return name }
     })
 
+def Atom :DeepFrozen := anf.atom()
+def Complex :DeepFrozen := anf.complex()
+
 def makeNormal() as DeepFrozen:
     var counter :Int := 0
     def gensym() :Str:
         counter += 1
         return `_temp_anf_sym$counter`
-    def letsym(complex, k, span):
+    def letsym(complex :Complex, k, span) :Complex:
         # k() wants a noun as a Str.
         def sym :Str := gensym()
         return anf.LetExpr(anf.FinalPattern(sym, null, span), complex, k(sym), span)
-    def escapesym(k, span):
+    def escapesym(k, span) :Complex:
         # k() wants a noun as a Str.
         def sym :Str := gensym()
         return anf.EscapeExpr(anf.FinalPattern(sym, null, span), k(sym), span)
@@ -37,7 +40,7 @@ def makeNormal() as DeepFrozen:
     # value into the caller's context.
 
     return object normal:
-        to name(m, k):
+        to name(m, k) :Complex:
             # k() wants an atom.
             return normal(m, fn n {
                 n.walk(object namer {
@@ -56,7 +59,7 @@ def makeNormal() as DeepFrozen:
                 })
             })
 
-        to names(ms, k):
+        to names(ms :List, k) :Complex:
             # k() wants a list of atoms.
             return switch (ms) {
                 match [] { k([]) }
@@ -67,7 +70,7 @@ def makeNormal() as DeepFrozen:
                 }
             }
 
-        to matchBind(patt, specimen, ej, k):
+        to matchBind(patt, specimen :Atom, ej :Atom, k) :Complex:
             # k() wants nothing. It should be run after `patt` is bound.
             return patt.walk(object normalizer {
                 to IgnorePattern(guard, span) {
@@ -80,6 +83,12 @@ def makeNormal() as DeepFrozen:
                                         k())
                         })
                     }
+                }
+                to BindingPattern(noun, span) {
+                    def name := nounToName(noun)
+                    return anf.LetExpr(anf.BindingPattern(name, span),
+                                       anf.Atom(specimen, span),
+                                       k(), span)
                 }
                 to FinalPattern(noun, guard, span) {
                     def name := nounToName(noun)
@@ -113,9 +122,18 @@ def makeNormal() as DeepFrozen:
                         })
                     }
                 }
+                to ViaPattern(trans, subpatt, span) {
+                    return normal.name(trans, fn t {
+                        letsym(anf.MethodCallExpr(trans, "run",
+                                                  [specimen, ej], [], span),
+                               fn s {
+                            normal.matchBind(subpatt, anf.NounExpr(s, span), ej, k)
+                        }, span)
+                    })
+                }
             })
 
-        to run(expr, k):
+        to run(expr, k) :Complex:
             # k() wants a complex expression.
             return expr.walk(object normalizer {
                 to LiteralExpr(value, span) {
@@ -230,5 +248,5 @@ def makeNormal() as DeepFrozen:
                 }
             })
 
-        to alpha(expr):
+        to alpha(expr) :Complex:
             return normal(expr, id)

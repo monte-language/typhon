@@ -157,11 +157,11 @@ def makeMixer(anf, reductionBasis) as DeepFrozen:
                                     residualize(specimen), k(frame), span)
                     }
 
-                to FinalPattern(noun :Str, span):
+                to FinalPattern(noun :Str, guard, span):
                     return if (specimen =~ [green, deopt, span]) {
                         k(frame.with(`&&$noun`, [&&green, deopt, span]))
                     } else {
-                        anf.LetExpr(anf.FinalPattern(noun, span),
+                        anf.LetExpr(anf.FinalPattern(noun, guard, span),
                                     residualize(specimen), k(frame), span)
                     }
 
