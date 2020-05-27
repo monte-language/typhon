@@ -35,6 +35,12 @@ def makeNormal() as DeepFrozen:
         # k() wants a noun as a Str.
         def sym :Str := gensym()
         return anf.EscapeExpr(anf.FinalPattern(sym, null, span), k(sym), span)
+    # Easy calls without named args when everything is already an atom. The
+    # return value in the continuation is also an atom.
+    def callsym(receiver :Atom, verb :Str, args :List[Atom], k, span) :Complex:
+        # k() wants a noun as an Atom.
+        return letsym(anf.MethodCallExpr(receiver, verb, args, [], span),
+                      fn rv { k(anf.NounExpr(rv, span)) }, span)
 
     # We are doing a sort of context-passing. Each k() is a hole for placing a
     # value into the caller's context.
@@ -124,12 +130,49 @@ def makeNormal() as DeepFrozen:
                 }
                 to ViaPattern(trans, subpatt, span) {
                     return normal.name(trans, fn t {
-                        letsym(anf.MethodCallExpr(trans, "run",
-                                                  [specimen, ej], [], span),
-                               fn s {
+                        callsym(trans, "run", [specimen, ej], fn s {
                             normal.matchBind(subpatt, anf.NounExpr(s, span), ej, k)
                         }, span)
                     })
+                }
+                to ListPattern(patts, tail, span) {
+                    def listGuard := anf.NounExpr("List", span)
+                    def pattSize := anf.LiteralExpr(patts.size(), span)
+                    def zeroVerb := (tail == null).pick("isZero", "atLeastZero")
+                    return callsym(listGuard, "coerce", [specimen, ej], fn l {
+                        callsym(l, "size", [], fn size {
+                            callsym(size, "subtract", [pattSize], fn rem {
+                                callsym(rem, zeroVerb, [], fn b {
+                                    def go(i) {
+                                        return if (i >= patts.size()) {
+                                            if (tail == null) { k() } else {
+                                                callsym(l, "slice",
+                                                        [pattSize], fn rest {
+                                                    normal.matchBind(tail,
+                                                                     rest, ej,
+                                                                     k)
+                                                })
+                                            }
+                                        } else { 
+                                            def index := anf.LiteralExpr(i, span)
+                                            callsym(l, "get", [index], fn s {
+                                                normal.matchBind(patts[i], s,
+                                                                 ej, fn {
+                                                    go(i + 1)
+                                                })
+                                            }, span)
+                                        }
+                                    }
+                                    def fail := anf.MethodCallExpr(
+                                        anf.NounExpr("throw", span),
+                                        "eject",
+                                        [ej, anf.LiteralExpr(`List pattern needed ${patts.size()} elements`, span)],
+                                        [], span)
+                                    anf.IfExpr(b, go(0), fail, span)
+                                }, span)
+                            }, span)
+                        }, span)
+                    }, span)
                 }
             })
 

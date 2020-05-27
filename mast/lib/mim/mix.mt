@@ -75,8 +75,8 @@ def makeMixer(anf, reductionBasis) as DeepFrozen:
                         def t := `_temp_mixer_sym$counter`
                         def span := args.last()
                         def noun := anf.NounExpr(t, span)
-                        anf.LetExpr(anf.FinalPattern(t, span), rv, k(noun),
-                                    span)
+                        anf.LetExpr(anf.FinalPattern(t, null, span), rv,
+                                    k(noun), span)
                     }
                 }
             }
@@ -198,5 +198,25 @@ def makeMixer(anf, reductionBasis) as DeepFrozen:
                                                      verb, argAtoms,
                                                      namedArgs, span))
                             })
+                        }
+                    })
+
+                to IfExpr(test, cons, alt, span):
+                    return atom(test, frame, fn t {
+                        if (isGreen(t)) {
+                            # If it's not Bool, just deoptimize!
+                            def b := Bool.coerce(t[0], t[1])
+                            # Since we will only walk one of the blocks, we
+                            # can delegate our walk to the chosen block.
+                            b.pick(cons, alt).walk(walker)
+                        } else {
+                            # Use the same frame twice; it doesn't matter
+                            # which order we try the blocks in, as long as we
+                            # get to both of them.
+                            cons.walk(mixer(frame, fn c {
+                                alt.walk(mixer(frame, fn a {
+                                    k(anf.IfExpr(t, c, a, span))
+                                }))
+                            }))
                         }
                     })
