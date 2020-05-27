@@ -140,35 +140,34 @@ def makeNormal() as DeepFrozen:
                     def pattSize := anf.LiteralExpr(patts.size(), span)
                     def zeroVerb := (tail == null).pick("isZero", "atLeastZero")
                     return callsym(listGuard, "coerce", [specimen, ej], fn l {
+                        def go(i) {
+                            return if (i >= patts.size()) {
+                                if (tail == null) { k() } else {
+                                    callsym(l, "slice", [pattSize], fn rest {
+                                        normal.matchBind(tail, rest, ej, k)
+                                    })
+                                }
+                            } else {
+                                def index := anf.LiteralExpr(i, span)
+                                callsym(l, "get", [index], fn s {
+                                    normal.matchBind(patts[i], s, ej, fn {
+                                        go(i + 1)
+                                    })
+                                }, span)
+                            }
+                        }
+                        def tower := go(0)
+
+                        def fail := anf.MethodCallExpr(
+                            anf.NounExpr("throw", span),
+                            "eject",
+                            [ej, anf.LiteralExpr(`List pattern needed ${patts.size()} elements`, span)],
+                            [], span)
+
                         callsym(l, "size", [], fn size {
                             callsym(size, "subtract", [pattSize], fn rem {
                                 callsym(rem, zeroVerb, [], fn b {
-                                    def go(i) {
-                                        return if (i >= patts.size()) {
-                                            if (tail == null) { k() } else {
-                                                callsym(l, "slice",
-                                                        [pattSize], fn rest {
-                                                    normal.matchBind(tail,
-                                                                     rest, ej,
-                                                                     k)
-                                                })
-                                            }
-                                        } else { 
-                                            def index := anf.LiteralExpr(i, span)
-                                            callsym(l, "get", [index], fn s {
-                                                normal.matchBind(patts[i], s,
-                                                                 ej, fn {
-                                                    go(i + 1)
-                                                })
-                                            }, span)
-                                        }
-                                    }
-                                    def fail := anf.MethodCallExpr(
-                                        anf.NounExpr("throw", span),
-                                        "eject",
-                                        [ej, anf.LiteralExpr(`List pattern needed ${patts.size()} elements`, span)],
-                                        [], span)
-                                    anf.IfExpr(b, go(0), fail, span)
+                                    anf.IfExpr(b, tower, fail, span)
                                 }, span)
                             }, span)
                         }, span)
