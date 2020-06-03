@@ -53,15 +53,10 @@ def readEvalPrintLoop(prompt, &locals, unsealException) as DeepFrozen:
                 go<-()
     go()
 
-def loadPlain(log, root, makeFileResource, petname) as DeepFrozen:
-    def path := `$root/$petname.mt`
-    log(`Reading file: $path`)
-    def bs := makeFileResource(path)<-getContents()
-    return when (bs) ->
-        log(`Parsing Monte code: $path`)
-        def s := UTF8.decode(bs, null)
-        def lex := makeMonteLexer(s, petname)
-        [s, parseModule(lex, astBuilder, null)]
+def loadPlain(file :Bytes, petname, ej) as DeepFrozen:
+    def s := UTF8.decode(file, ej)
+    def lex := makeMonteLexer(s, petname)
+    return [s, parseModule(lex, astBuilder, ej), "Monte source"]
 
 # XXX factor with mast/montec all of these custom loaders.
 
@@ -80,42 +75,57 @@ def stripMarkdown(s :Str) :Str as DeepFrozen:
     lines.push("")
     return "\n".join(lines)
 
-def loadLiterate(log, root, makeFileResource, petname) as DeepFrozen:
-    def path := `$root/$petname.mt.md`
-    log(`Reading file: $path`)
-    def bs := makeFileResource(path)<-getContents()
-    return when (bs) ->
-        log(`Parsing literate Monte code: $path`)
-        def s := stripMarkdown(UTF8.decode(bs, null))
-        def lex := makeMonteLexer(s, petname)
-        [s, parseModule(lex, astBuilder, null)]
-    catch _:
-        null
+def loadLiterate(file :Bytes, petname, ej) as DeepFrozen:
+    def s := stripMarkdown(UTF8.decode(file, ej))
+    def lex := makeMonteLexer(s, petname)
+    return [s, parseModule(lex, astBuilder, ej), "Monte literate source"]
 
-def loadASDL(log, root, makeFileResource, petname) as DeepFrozen:
-    def path := `$root/$petname.asdl`
-    log(`Reading file: $path`)
-    def bs := makeFileResource(path)<-getContents()
-    return when (bs) ->
-        log(`Parsing Zephyr ASDL specification: $path`)
-        def s := UTF8.decode(bs, null)
-        [s, buildASDLModule(s, petname)]
-    catch _:
-        null
+def loadASDL(file :Bytes, petname, ej) as DeepFrozen:
+    def s := UTF8.decode(file, ej)
+    return [s, buildASDLModule(s, petname), "Zephyr ASDL specification"]
 
-def makeFileLoader(log, root, makeFileResource) as DeepFrozen:
-    return def load(petname):
-        def lit := loadLiterate(log, root, makeFileResource, petname)
-        return when (lit) -> {
-            if (lit != null) { lit } else {
-                def asdl := loadASDL(log, root, makeFileResource, petname)
-                when (asdl) -> {
-                    if (asdl != null) { asdl } else {
-                        loadPlain(log, root, makeFileResource, petname)
-                    }
-                }
-            }
-        }
+def loadMAST(file :Bytes, petname, ej) as DeepFrozen:
+    # XXX readMAST is currently in safeScope, but might be removed; if we need
+    # to import it, it's currently in lib/monte/mast.
+    def expr := readMAST(file, "filename" => petname, "FAIL" => ej)
+    # We don't exactly have original source code. That's okay though; the only
+    # feature that we're missing out on is the self-import technology in
+    # lib/muffin, which we won't need.
+    return [null, expr, "Kernel-Monte packed source"]
+
+def loaders :Map[Str, DeepFrozen] := [
+    "asdl" => loadASDL,
+    "mt.md" => loadLiterate,
+    "mt" => loadPlain,
+    # Always try MAST after Monte source code! Protect users from stale MAST.
+    "mast" => loadMAST,
+]
+
+def makeFileLoader(log, root :Str, makeFileResource) as DeepFrozen:
+    return def load(petname :Str):
+        def it := loaders._makeIterator()
+        def go():
+            return escape noMoreLoaders:
+                def [extension, loader] := it.next(noMoreLoaders)
+                def path := `$root/$petname.$extension`
+                def bs := makeFileResource(path)<-getContents()
+                when (bs) ->
+                    log(`Read file: $path`)
+                    escape ej:
+                        def rv := loader(bs, petname, ej)
+                        if (rv == null) { go() } else {
+                            def [source, expr, description] := rv
+                            log(`Loaded $description: $path`)
+                            [source, expr]
+                        }
+                    catch parseProblem:
+                        log(`Problem parsing $path: $parseProblem`)
+                        throw(parseProblem)
+                catch _:
+                    go()
+            catch _:
+                null
+        return go()
 
 def main(_argv,
          => currentProcess,
@@ -131,7 +141,7 @@ def main(_argv,
 
     def [prompt, cleanup] := makePrompt(stdio)
     def log(s :Str):
-        prompt.setLine(b`Log: ` + UTF8.encode(s, null))
+        prompt.writeLine(b`Log: ` + UTF8.encode(s, null))
 
     object repl:
         "
@@ -142,7 +152,6 @@ def main(_argv,
         .benchmark/1: Estimate the runtime of a fn.
         .draw/1: Draw a drawable using ASCII art.
         .graph/1: Draw a fn from Doubles to Doubles like a graphing calculator.
-        .which/1: Look up a process path.
         "
 
         to complete():
@@ -158,9 +167,11 @@ def main(_argv,
             def loader := makeFileLoader(log, basePath, makeFileResource)
             def limo := makeLimo(loader)
             return when (def p := loader(petname)) ->
-                def [source, expr] := p
+                def [source :NullOk[Str], expr] := p
                 when (def m := limo(petname, source, expr)) ->
                     eval(m, safeScope)
+            catch problem:
+                log(`Couldn't instantiate $petname: $problem`)
 
         to load(basePath :Str, petname :Str) :Vow[Void]:
             "

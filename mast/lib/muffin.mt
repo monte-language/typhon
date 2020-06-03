@@ -51,7 +51,7 @@ def makeLimo(load) as DeepFrozen:
             pending.push(mods[pn])
         return promiseAllFulfilled(pending)
 
-    return bind limo(name, source, expr) :Vow[DeepFrozen]:
+    return bind limo(name, source :NullOk[Str], expr) :Vow[DeepFrozen]:
         def [deps, wantsMeta :Bool] := getDependencies(expr)
         return when (loadAll(deps)) ->
             def depExpr := astBuilder.MapExpr([for pn in (deps) {
@@ -59,14 +59,18 @@ def makeLimo(load) as DeepFrozen:
                 def value :DeepFrozen := mods[pn]
                 astBuilder.MapExprAssoc(key, value, null)
             }], null)
-            def ls := astBuilder.LiteralExpr(source, null)
+            def ls := if (source != null) {
+                astBuilder.LiteralExpr(source, null)
+            } else { m`null` }
             def importBody := if (wantsMeta) {
                 m`if (petname == "meta") {
-                    def source :Str := $ls
+                    def source :NullOk[Str] := $ls
                     object this as DeepFrozen {
                         method module() { mod }
-                        method ast() { ::"m````".fromStr(source) }
-                        method source() { source }
+                        method ast() :NullOk[DeepFrozen] {
+                            if (source != null) { ::"m````".fromStr(source) }
+                        }
+                        method source() :NullOk[Str] { source }
                     }
                     [=> this]
                 } else {

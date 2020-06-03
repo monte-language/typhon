@@ -1,7 +1,7 @@
 import "capn/reader" =~ [=> reader :DeepFrozen]
 import "lib/capn" =~ [=> makeMessageReader :DeepFrozen]
 import "lib/streams" =~ [=> collectBytes :DeepFrozen]
-exports (main)
+exports (compileCapn, main)
 
 "This is the tool for generating a Monte module containing a reader and writer
 for a given capn schema."
@@ -474,7 +474,7 @@ def buildStructWriterMethod(nodeMap, node, groups) as DeepFrozen:
         astBuilder."Method"(null, makerName(node), [], sig, null, body, null)
     ]
 
-def bootstrap(bs :Bytes) as DeepFrozen:
+def compileCapn(bs :Bytes) :DeepFrozen as DeepFrozen:
     "Reads the schema-definition capn message. Reassembles node structure then
     uses the schema builder to generate methods for reader and writer
     objects. Returns an AST for a module containing reader and writer."
@@ -536,17 +536,12 @@ def bootstrap(bs :Bytes) as DeepFrozen:
     }`
     return module
 
-def compile(bs :Bytes) :Bytes as DeepFrozen:
-    "Generate code from capn schema. Build AST and dump as MAST."
-    def expr := bootstrap(bs)
-    def mast := makeMASTContext()
-    mast(expr.expand())
-    return mast.bytes()
-
 def main(_argv, => stdio) :Vow[Int] as DeepFrozen:
     "Compile a schema in capn message format from stdin, write MAST to stdout."
     return when (def input := collectBytes(stdio.stdin())) ->
         def stdout := stdio.stdout()
-        def output :Bytes := compile(input)
+        def expr :DeepFrozen := compileCapn(input)
+        def mast := makeMASTContext()
+        mast(expr.expand())
+        def output :Bytes := mast.bytes()
         when (stdout(output), stdout<-complete()) -> { 0 }
-
