@@ -210,9 +210,10 @@ def makeBuilderMaker(builderName :DeepFrozen, addBindings :Bool) as DeepFrozen:
                 ${astBuilder.MethodCallExpr(m`f`, name, exprs.snapshot(), [], null)}
             }`
             def script := astBuilder.Script(null, [printer, runner, walker], [], null)
-            def namePatt := astBuilder.FinalPattern(
-                astBuilder.NounExpr(name, null), null, null)
-            def body := astBuilder.ObjectExpr(null, namePatt, m`DeepFrozen`,
+            # To allow cons with names like "Any", which would otherwise
+            # shadow safe scope, we use an IgnorePattern here and throw away
+            # the name. We already override ._printOn/1 so nothing is lost.
+            def body := astBuilder.ObjectExpr(null, mpatt`_`, m`DeepFrozen`,
                                               [conGuard], script, null)
             def rv := astBuilder."Method"(null, name, patts.snapshot(), [], null, body, null)
             methods.push(rv)
