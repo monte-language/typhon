@@ -168,7 +168,7 @@ def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as Deep
     def pixelArea := PI * pixelRadius ** 2
     var t := distance
     var err := Infinity
-    for i in (0..!3):
+    for _i in (0..!3):
         def newErr := sdf(eye + dir * t) - pixelArea / t
         # It is quite possible that we're not improving the estimate; that is,
         # that we are numerically unstable near a divergent fixed point. If
@@ -325,8 +325,15 @@ def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
     CSG.Noise(3.4, 3.4, 3.4, 5), 3.0)
 def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
     CSG.Sines(5.0, 5.0, 5.0), 3.0)
-def solid :DeepFrozen := kaboom
+def solid :DeepFrozen := crystal
 traceln(`Defined solid: $solid`)
+
+def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
+    var d := size.asDouble()
+    for s in (["", "Ki", "Mi", "Gi", "Ti", "Pi"]):
+        if (d < 256.0):
+            return `$count objects ($d ${s}B)`
+        d /= 1024.0
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def w := 320
@@ -351,6 +358,10 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
             def pixelsPerSecond := i / duration
             def timeRemaining := ((w * h) - i) / pixelsPerSecond
             traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s) (${timeRemaining}s left)`)
+            # def buckets := currentRuntime.getHeapStatistics().getBuckets()
+            # def finalSlots := formatBucket(buckets["FinalSlot"])
+            # def varSlots := formatBucket(buckets["VarSlot"])
+            # traceln(`Memory: FinalSlot $finalSlots VarSlot $varSlots`)
         drawer.next(__break)
     def ppm := drawer.finish()
     return when (makeFileResource("sdf.ppm")<-setContents(ppm)) -> { 0 }
