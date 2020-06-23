@@ -237,12 +237,12 @@ def makeEvaluator(var scopes: List[Scope]) as DeepFrozen:
         to VarPattern(noun, guardExprOpt :NullOk[Expr], _pos):
             evaluator.namePattern(noun, guardExprOpt, _makeVarSlot)
 
-        to ListPattern(patts :List[Pattern], _tail :Void, _pos):
+        to ListPattern(patts :List[Pattern], _tail :Void, pos):
             # Kernel list patterns have no tail.
             def l :List exit patternFailure := specimen
             if (patts.size() != l.size()):
                 throw.eject(patternFailure,
-                            `Failed list pattern (needed ${patts.size()}, got ${l.size()})`)
+                            `Failed list pattern at $pos (needed ${patts.size()}, got ${l.size()})`)
             def ej := patternFailure
             for ix => patt in (patts):
                 evaluator.matchBind(patt, specimen[ix], => ej)

@@ -709,8 +709,8 @@ class Evaluator(ProfileNameIR.makePassTo(None)):
         listSpecimen = unwrapList(self.specimen, ej=self.patternFailure)
         ej = self.patternFailure
         if len(patts) != len(listSpecimen):
-            throw(ej, StrObject(u"Failed list pattern (needed %d, got %d)" %
-                                (len(patts), len(listSpecimen))))
+            throw(ej, StrObject(u"Failed list pattern at %s (needed %d, got %d)" %
+                                (span.format(), len(patts), len(listSpecimen))))
         for i in range(len(patts)):
             self.matchBind(patts[i], listSpecimen[i], ej)
 
