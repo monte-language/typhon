@@ -1,6 +1,7 @@
 import "fun/monads" =~ [=> makeMonad]
-exports (ddist, bddist, bmc, weighted, bayes, guard,
-         sampleWeights, sample, sampleWithRejections, sequential)
+exports (ddist, bddist, bmc, wsmc, weighted, bayes, guard,
+         sampleWeights, sample, sampleWithRejections, sequential,
+         sampleWeightedMonteCarlo, resample)
 
 # A monadic approach to computing probabilities.
 # http://www.randomhacks.net/files/build-your-own-probability-monads.pdf
@@ -117,3 +118,31 @@ def sequential(action) as DeepFrozen:
     "Send a Monte Carlo `action` to the sequential Monte Carlo monad."
 
     return fn n :Int { fn entropy { sample(entropy, action, n) } }
+
+def wsmc :DeepFrozen := makeMonad.writer(smc, probMonoid)
+
+def sampleWeightedMonteCarlo(outcomes :Map[Any, Double]) as DeepFrozen:
+    "
+    An action in the weighted sequential Monte Carlo monad for sampling from
+    weighted outcomes.
+    "
+
+    # XXX hax digging under the monad
+    return smc (sequential(sampleWeights(outcomes))) map x { [x, 1.0] }
+
+def resample(action) as DeepFrozen:
+    "
+    Resample an action in the weighted sequential Monte Carlo monad.
+    "
+
+    # XXX digging under the monad, maybe inevitable?
+    return fn n :Int {
+        fn entropy {
+            def particles := action(n)(entropy)
+            def outcomes := [].asMap().diverge()
+            for [particle, p] in (particles) {
+                outcomes[particle] := outcomes.fetch(particle, fn { 0.0 }) + p
+            }
+            sampleWeightedMonteCarlo(outcomes.snapshot())(n)(entropy)
+        }
+    }
