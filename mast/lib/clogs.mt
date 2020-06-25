@@ -1,3 +1,4 @@
+import "lib/ints" =~ [=> greatestCommonDenominator]
 exports (makeCLog)
 
 # https://arxiv.org/abs/1606.06984
@@ -65,14 +66,6 @@ def rational(numerator :Int, denominator :Int) as DeepFrozen:
             while ((p & 1).isZero() && (q & 1).isZero()) { p >>= 1; q >>= 1 }
             return rv
 
-def gcd(var u :Int, var v :Int) as DeepFrozen:
-    # Euclid's: https://en.wikipedia.org/wiki/Euclidean_algorithm
-    while (v != 0):
-        def r := u % v
-        u := v
-        v := r
-    return u
-
 # Quadratic surds require a four-number support structure. We implement them
 # with the "monster" algorithm which operates on generalized surds and their
 # support structures all at once.
@@ -113,13 +106,13 @@ def monster(n :(Int > 1), var p :Int, var q :Int, var c :Int,
         if (p.belowZero()) { p := -p; c := -c; d := -d }
         # Simplify c and d.
         if (!c.isZero() && !d.isZero()) {
-            def f1 := gcd(c.abs(), d.abs())
+            def f1 := greatestCommonDenominator(c.abs(), d.abs())
             c //= f1
             d //= f1
             p *= f1
         }
         # Simplify p and q.
-        def f2 := gcd(p, q)
+        def f2 := greatestCommonDenominator(p, q)
         p //= f2
         q //= f2
         return rv
@@ -189,7 +182,9 @@ def homographic(var a :Int, var b :Int, var c :Int, var d :Int, iterable) as Dee
                 b := d
                 d := t
             # And remove extra factors.
-            def f := gcd(gcd(a, b), gcd(c, d))
+            def f := greatestCommonDenominator(
+                greatestCommonDenominator(a, b),
+                greatestCommonDenominator(c, d))
             a //= f
             b //= f
             c //= f
@@ -201,7 +196,7 @@ object makeCLog as DeepFrozen:
         "An iterator over the continued logarithm of `n / d`."
 
         # XXX might not be necessary/useful?
-        def f := gcd(n, d)
+        def f := greatestCommonDenominator(n, d)
         return rational(n // f, d // f)
 
     to fromSurd(n :(Int > 1)):
