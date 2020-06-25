@@ -13,4 +13,4 @@ jobs:
                   nickname: monte-notify-irc
                   message: |
                       ${{ github.actor }} pushed ${{ github.event.ref }} ${{ github.event.compare }}
-                      ${{ join(github.event.commits.*.message, '\n') }}
+                      ${{ join(github.event.commits.*.message, ' ') }}
