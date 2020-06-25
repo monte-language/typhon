@@ -171,7 +171,8 @@ def main(_argv,
                 when (def m := limo(petname, source, expr)) ->
                     eval(m, safeScope)
             catch problem:
-                log(`Couldn't instantiate $petname: $problem`)
+                traceln.exception(problem)
+                log(`Couldn't instantiate $petname`)
 
         to load(basePath :Str, petname :Str) :Vow[Void]:
             "
@@ -188,7 +189,7 @@ def main(_argv,
                 })) -> { prompt<-writeLine(b`Loaded module: $petname`) }
             catch problem:
                 traceln.exception(problem)
-                prompt<-writeLine(b`Couldn't instantiate $petname`)
+                prompt<-writeLine(b`Couldn't load $petname`)
 
         to benchmark(callable) :Vow[Double]:
             "Run `callable` repeatedly, recording the time taken."
