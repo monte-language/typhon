@@ -145,6 +145,72 @@ object makeMonad as DeepFrozen:
                                 }
                             }
 
+    to state(m :DeepFrozen):
+        "A monad which threads mutable state through monad `m`."
+
+        return object state as DeepFrozen:
+            "
+            The state monad.
+
+            This monad takes an additional state argument, and passes it from
+            action to action, so that joined computations effectively mutate
+            the state. Crucially, this illusion does not actually require that
+            the state object itself be mutable; the state may be `DeepFrozen`.
+
+            This monad is a transformer and acts under some other effects.
+            "
+
+            # NB: Since we are doing a relatively strict and uncurried version
+            # of this monad, it doesn't particularly matter which order we put
+            # our variables in. We have four choices; of those, two are
+            # headaches, one is what Haskell does, and one is what we do here
+            # in order to more closely match .writer/2.
+
+            to pure(x):
+                return fn x, s { m.pure([x, s]) }
+
+            to zero():
+                return fn _, _ { m.zero() }
+
+            to get():
+                return fn _, s { m.pure([s, s]) }
+
+            to set(x):
+                return fn _, s { m.pure([null, x]) }
+
+            to modify(f):
+                return fn x, s { m.pure([x, f(s)]) }
+
+            to control(verb :Str, ==1, ==1, block):
+                return switch (verb):
+                    match =="map":
+                        def mapMonad.controlRun():
+                            def [[ma], lambda] := block()
+                            return m (ma) map f {
+                                fn x, s1 {
+                                    def [y, s2] := f(x, s1)
+                                    [lambda(y, null), s2]
+                                }
+                            }
+                    match =="do":
+                        def doMonad.controlRun():
+                            def [[ma], lambda] := block()
+                            return m (ma) do f {
+                                fn x, s1 {
+                                    def [y, s2] := f(x, s1)
+                                    lambda(y, null)
+                                }
+                            }
+                    match =="modify":
+                        def modifyMonad.controlRun():
+                            def [[ma], lambda] := block()
+                            return m (ma) map f {
+                                fn x, s1 {
+                                    def [y, s2] := f(x, s1)
+                                    [y, lambda(s2, null)]
+                                }
+                            }
+
     to maybe(m :DeepFrozen):
         "A partial monad."
 
@@ -186,4 +252,53 @@ object makeMonad as DeepFrozen:
                                 if (x == failure) { m.pure(failure) } else {
                                     lambda(x, null)
                                 }
+                            }
+
+    to either(m :DeepFrozen):
+        "A coproduct or sum monad."
+
+        return object eitherMonad as DeepFrozen:
+            "
+            The either monad.
+
+            This monad encodes a disjoint union. We call the carrier side the
+            'right' side, and the exceptional side the 'left' side. Actions in
+            the monad will be short-circuited by the left side's values, by
+            default. These are historical conventions.
+
+            To run this monad's actions, pass an object with both .left/1 and
+            .right/1 methods.
+
+            This monad is a transformer and acts under some other effects.
+            "
+
+            to pure(x):
+                return m.pure(fn e { e.right(x) })
+
+            to throw(error):
+                return m.pure(fn e { e.left(error) })
+
+            to control(verb :Str, ==1, ==1, block):
+                return switch (verb):
+                    match =="map":
+                        def mapMonad.controlRun():
+                            def [[ma], lambda] := block()
+                            return m (ma) map s {
+                                s(object mapEither {
+                                    to left(l) { return fn e { e.left(l) } }
+                                    to right(r) {
+                                        return fn e {
+                                            e.right(lambda(r, null))
+                                        }
+                                    }
+                                })
+                            }
+                    match =="do":
+                        def doMonad.controlRun():
+                            def [[ma], lambda] := block()
+                            return m (ma) do s {
+                                s(object doEither {
+                                    to left(l) { return eitherMonad.throw(l) }
+                                    to right(r) { return lambda(r, null) }
+                                })
                             }
