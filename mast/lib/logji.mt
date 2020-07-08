@@ -10,6 +10,18 @@ def isZero(action) :Bool as DeepFrozen:
     return _equalizer.sameYet(action, zero) == true
 
 object logic as DeepFrozen:
+    "
+    A continuation monad for logic puzzles.
+
+    This monad non-deterministically explores many possibilies, and uses
+    logical operators to add and remove those possibilities from
+    consideration.
+
+    To run this monad's actions, call .run/1 with an ejector. The ejector will
+    eventually be fired, with the escaping value either a pair of a value and
+    a new action, or `null` for no more results.
+    "
+
     to zero():
         "Never succeed."
 
@@ -18,9 +30,7 @@ object logic as DeepFrozen:
     to pure(value):
         "Succeed in just one case."
 
-        return fn ej {
-            throw.eject(ej, [value, zero])
-        }
+        return fn ej { throw.eject(ej, [value, zero]) }
 
     to plus(left, right):
         "Succeed if `left` or `right` succeed."
@@ -73,6 +83,23 @@ object logic as DeepFrozen:
                 }
             }
         }
+
+    to control(verb :Str, ==1, ==1, block):
+        return switch (verb):
+            match =="map":
+                def mapMonad.controlRun():
+                    def [[action], lambda] := block()
+                    return logic.map(action, fn x { lambda(x, null) })
+            match =="do":
+                def doMonad.controlRun():
+                    def [[action], lambda] := block()
+                    return logic."bind"(action, fn x { lambda(x, null) })
+            match =="then":
+                def thenMonad.control(=="else", ==0, ==0, block2):
+                    return def elseMonad.controlRun():
+                        def [[test], cons] := block()
+                        def [[], alt] := block2()
+                        return logic.ifte(test, fn x { cons(x, null) }, alt())
 
     to once(action):
         # Again, remove zeroes from the tree.
@@ -250,9 +277,7 @@ object Katren as DeepFrozen:
 
     to compose(f, g):
         return fn k1, u {
-            logic."bind"(f(k1, u), fn [k2, v] {
-                g(k2, v)
-            })
+            logic (f(k1, u)) do [k2, v] { g(k2, v) }
         }
 
     # Daggering.
@@ -260,9 +285,9 @@ object Katren as DeepFrozen:
     to dagger(f):
         return fn k1, u {
             def [k2, v, fu] := k1.fresh(2)
-            logic."bind"(f(k2, fu), fn [k3, fv] {
-                logic.map(k3.unify([u, v], [fv, fu]), fn k4 { [k4, v] })
-            })
+            logic (f(k2, fu)) do [k3, fv] {
+                logic (k3.unify([u, v], [fv, fu])) map k4 { [k4, v] }
+            }
         }
 
     # Products. Note that we are using prod(), not pair()!
@@ -270,36 +295,36 @@ object Katren as DeepFrozen:
     to exl():
         return fn k1, u {
             def [k2, l, r] := k1.fresh(2)
-            logic.map(k2.unify(u, [l, r]), fn k3 { [k3, l] })
+            logic (k2.unify(u, [l, r])) map k3 { [k3, l] }
         }
 
     to exr():
         return fn k1, u {
             def [k2, l, r] := k1.fresh(2)
-            logic.map(k2.unify(u, [l, r]), fn k3 { [k3, r] })
+            logic (k2.unify(u, [l, r])) map k3 { [k3, r] }
         }
 
     to prod(f, g):
         return fn k1, u {
             def [k2, inl, inr, outl, outr, v] := k1.fresh(5)
-            logic."bind"(k2.unify([u, v], [[inl, inr], [outl, outr]]), fn k3 {
-                logic."bind"(f(k3, inl), fn [k4, outf] {
+            logic (k2.unify([u, v], [[inl, inr], [outl, outr]])) do k3 {
+                logic (f(k3, inl)) do [k4, outf] {
                     # We have a choice here: Do we unify f's output with our
                     # return value first, or do we run g? This amounts to
                     # short-circuiting g, if we so choose. ~ C.
-                    logic."bind"(g(k4, inr), fn [k5, outg] {
-                        logic.map(k5.unify([outf, outg], [outl, outr]), fn k6 {
+                    logic (g(k4, inr)) do [k5, outg] {
+                        logic (k5.unify([outf, outg], [outl, outr])) map k6 {
                             [k6, v]
-                        })
-                    })
-                })
-            })
+                        }
+                    }
+                }
+            }
         }
 
     to braid():
         return fn k1, u {
             def [k2, v, l, r] := k1.fresh(3)
-            logic.map(k2.unify([u, v], [[l, r], [r, l]]), fn k3 { [k3, v] })
+            logic (k2.unify([u, v], [[l, r], [r, l]])) map k3 { [k3, v] }
         }
 
     # Cartesian copying.
@@ -307,7 +332,7 @@ object Katren as DeepFrozen:
     to copy():
         return fn k1, u {
             def [k2, v] := k1.fresh(1)
-            logic.map(k2.unify([u, u], v), fn k3 { [k3, v] })
+            logic (k2.unify([u, u], v)) map k3 { [k3, v] }
         }
 
     to delete():
@@ -321,7 +346,7 @@ object Katren as DeepFrozen:
     to merge():
         return fn k1, u {
             def [k2, v] := k1.fresh(1)
-            logic.map(k2.unify(u, [v, v]), fn k3 { [k3, v] })
+            logic (k2.unify(u, [v, v])) map k3 { [k3, v] }
         }
 
     to create():
@@ -330,7 +355,7 @@ object Katren as DeepFrozen:
             # value. This will be required later. One might think of delete()
             # as reaping logic values which are being allocated here.
             def [k2, v] := k1.fresh(1)
-            logic.map(k2.unify(u, null), fn k3 { [k3, v] })
+            logic (k2.unify(u, null)) map k3 { [k3, v] }
         }
 
     # Compact closure.
@@ -339,16 +364,16 @@ object Katren as DeepFrozen:
         return fn k1, u {
             # As with create(), pre-kill.
             def [k2, v, pipe] := k1.fresh(2)
-            logic.map(k2.unify([u, v], [null, [pipe, pipe]]), fn k3 {
+            logic (k2.unify([u, v], [null, [pipe, pipe]])) map k3 {
                 [k3, v]
-            })
+            }
         }
 
     to counit():
         return fn k1, u {
             # As with delete(), cheat.
             def [k2, pipe] := k1.fresh(1)
-            logic.map(k2.unify(u, [pipe, pipe]), fn k3 { [k3, null] })
+            logic (k2.unify(u, [pipe, pipe])) map k3 { [k3, null] }
         }
 
     # Logical operations.
@@ -366,7 +391,7 @@ object Katren as DeepFrozen:
 
     to zero():
         return fn k1, u {
-            logic.map(k1.unify(u, null), fn k2 { [k2, 0] })
+            logic (k1.unify(u, null)) map k2 { [k2, 0] }
         }
 
     to succ():
@@ -377,11 +402,12 @@ object Katren as DeepFrozen:
             if (k1.walk(u) =~ i :Int) { logic.pure([k1, i + 1]) } else {
                 def [k2, v] := k1.fresh(1)
                 def go(k, x) {
-                    def isZero := logic.map(k.unify([u, v], [x, x + 1]),
-                                            fn k3 { [k3, v] })
-                    def notZero := logic."bind"(k.disunify(u, x), fn k3 {
+                    def isZero := logic (k.unify([u, v], [x, x + 1])) map k3 {
+                        [k3, v]
+                    }
+                    def notZero := logic (k.disunify(u, x)) do k3 {
                         go(k3, x + 1)
-                    })
+                    }
                     return logic.plus(isZero, notZero)
                 }
                 go(k2, 0)
@@ -391,11 +417,9 @@ object Katren as DeepFrozen:
     to pr(q, f):
         return def go(k1, u):
             # Either it's zero, or it's not.
-            def isZero := logic."bind"(k1.unify(u, 0), fn k2 {
-                q(k2, null)
-            })
-            def notZero := logic."bind"(k1.disunify(u, 0), fn k2 {
+            def isZero := logic (k1.unify(u, 0)) do k2 { q(k2, null) }
+            def notZero := logic (k1.disunify(u, 0)) do k2 {
                 # So it's at least one? Unsucc and recurse.
                 Katren.compose(Katren.dagger(Katren.succ()), Katren.compose(go, f))(k2, u)
-            })
+            }
             return logic.plus(isZero, notZero)
