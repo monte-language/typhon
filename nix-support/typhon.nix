@@ -39,6 +39,16 @@ let
     monte = callPackage ./monte-script.nix {
       typhonVm = typhonVmJIT; mast = mast;
     };
+    capnMast = callPackage ./capn.nix {
+      pkgs = nixpkgs; monte = monte;
+    };
+    fullMast = nixpkgs.symlinkJoin {
+      name = "mast-full";
+      paths = [ mast capnMast ];
+    };
+    fullMonte = callPackage ./monte-script.nix {
+      typhonVm = typhonVmJIT; mast = fullMast;
+    };
     mtBusybox = monte.override { shellForMt = "${nixpkgs.busybox}/bin/sh"; };
     mtLite = mtBusybox.override { withBuild = false; };
   };
