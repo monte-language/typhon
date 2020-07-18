@@ -1,5 +1,6 @@
-import "lib/codec/utf8" =~ [=> UTF8 :DeepFrozen]
+import "lib/codec/utf8" =~ [=> UTF8]
 exports (Absent, absent, makeMessageReader, makeMessageWriter, loads, text, undefined)
+
 "Components for reading the packing format used for capn messages."
 
 object absent as DeepFrozen {}
@@ -7,7 +8,7 @@ def Absent :DeepFrozen := Same[absent]
 
 def STRUCT :Int := 0
 def LIST :Int := 1
-def FAR :Int := 2
+# def FAR :Int := 2
 def OTHER :Int := 3
 
 def LIST_SIZE_8 :Int := 2
@@ -349,17 +350,25 @@ def makeMessageWriter() as DeepFrozen:
                     selectedName := name
                     messageWriter.writeUint16(pos, discriminant)
 
-        to dumps(obj) :Bytes:
+        to dumps(structPointer) :Bytes:
+            "
+            Write the current message context to a bytestring, with
+            `structPointer` pointing to the root of the message.
+            "
+
             # segment count - 1
             messageWriter.writeUint32(0, 0)
             # segment size in words (i.e. not counting segment header)
             messageWriter.writeUint32(4, (buf.size() - 8) // 8)
             # XXX check that it's a struct pointer
-            obj.writePointer(8)
+            structPointer.writePointer(8)
             return _makeBytes.fromInts(buf)
 
-def loads(bs :Bytes, reader, payloadType) as DeepFrozen:
+def loads(bs :Bytes, reader, payloadType :Str) as DeepFrozen:
+    "
+    Interpret `bs` as a Capn Proto message, using `reader` for the schema and
+    `payloadType` as the root message type.
+    "
+
     def root := makeMessageReader(bs).getRoot()
     return M.call(reader, payloadType, [root], [].asMap())
-
-

@@ -512,7 +512,15 @@ def compileCapn(bs :Bytes) :DeepFrozen as DeepFrozen:
         null, [],
         astBuilder.Script(null, builderMethods.with(m`method dump(root) { builder.dumps(root) }`) , [], null),
         null)
-    def makeWriterObj := m`def makeWriter() as DeepFrozen { def builder := makeMessageWriter(); return $writerObj }`
+    def makeWriterObj := m`def makeWriter() as DeepFrozen {
+        "
+        Create a new message writer.
+
+        A fresh writer is required for every message.
+        "
+        def builder := makeMessageWriter()
+        return $writerObj
+    }`
     def mapEnum(node):
         def ens := [for en in (node.enum().enumerants())
                     [en.codeOrder(), L(en.name())]].sort()
@@ -525,7 +533,9 @@ def compileCapn(bs :Bytes) :DeepFrozen as DeepFrozen:
     def module := m`object _ as DeepFrozen {
         method dependencies() :List[Str] { ["lib/capn", "lib/enum"] }
         method run(package) :Map[Str, DeepFrozen] {
-            def [=> Absent :DeepFrozen, => absent :DeepFrozen, => makeMessageWriter :DeepFrozen, => text :DeepFrozen] | _ := package."import"("lib/capn")
+            def [=> Absent :DeepFrozen, => absent :DeepFrozen,
+                 => makeMessageWriter :DeepFrozen,
+                 => text :DeepFrozen] | _ := package."import"("lib/capn")
             def [=> makeEnum :DeepFrozen ] | _ := package."import"("lib/enum")
             def enums :DeepFrozen := $enums
             $structWriterObj
