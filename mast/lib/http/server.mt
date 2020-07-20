@@ -77,7 +77,7 @@ def makeRequestPump() as DeepFrozen:
     var contentType :NullOk[MediaType] := null
     var userAgent :NullOk[Str] := null
     var transferEncoding :List[TransferEncoding] := []
-    var spares := [].asMap().diverge()
+    var spares := [].asMap().diverge(Str, Str)
 
     def parseHeader(bs :Bytes):
         "Parse a bytestring header and add it to a header record."
@@ -93,8 +93,8 @@ def makeRequestPump() as DeepFrozen:
                 transferEncoding := parseTransferEncoding(value)
             match b`user-agent`:
                 userAgent := UTF8.decode(value, null)
-            match h:
-                spares[h] := value
+            match via (UTF8.decode) h:
+                spares[h] := UTF8.decode(value, null)
 
     def parse(ej) :Bool:
         # Return whether more parsing can take place.
@@ -146,15 +146,15 @@ def makeRequestPump() as DeepFrozen:
                             buf slice= (len)
                             requestState := REQUEST
                             def [verb, path] := pendingRequestLine
-                            def spareHeaders := [for [k, v] in (spares) {
+                            def spareHeaders := [for k => v in (spares) {
                                 headerBuilder.Header(k, v)
                             }]
                             def headers := headerBuilder.RequestHeaders(
-                                => contentLength,
-                                => contentType,
-                                => userAgent,
-                                => transferEncoding,
-                                => spareHeaders,
+                                contentLength,
+                                contentType,
+                                userAgent,
+                                transferEncoding,
+                                spareHeaders,
                             )
                             pendingRequest := [=> verb, => path, => headers,
                                                => body]
@@ -222,10 +222,9 @@ def formatMediaType.Media(registeredType, subType) as DeepFrozen:
 
 def makeResponsePump() as DeepFrozen:
     return def responsePump(var response):
-        traceln(`responsePump($response)`)
         if (response == null) { response := defaultResponse }
         def [=> statusCode :Int,
-             => headers :ResponseHeaders,
+             => headers :NullOk[ResponseHeaders],
              => body :Bytes] := response
         def statusDescription := statusMap.fetch(statusCode,
                                                  "Unknown Status")

@@ -58,7 +58,7 @@ things regarding error handling.
 
 ```
 def addBaseOnto(app) as DeepFrozen:
-    def baseApp(request):
+    return def baseApp(request):
         traceln(`baseApp($request)`)
         # null means a bad request that was unparseable.
         return if (request == null) {
@@ -76,7 +76,6 @@ def addBaseOnto(app) as DeepFrozen:
                 error500
             }
         }
-    return baseApp
 ```
 
 This base is surprisingly resilient; consider how `addBaseOnto(traceln)` might
