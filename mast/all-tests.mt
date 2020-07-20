@@ -9,7 +9,6 @@ import "lib/continued" =~ _
 import "lib/doubles" =~ _
 import "lib/entropy/pool" =~ _
 import "lib/enum" =~ _
-import "lib/gadts" =~ _
 import "lib/http/tag" =~ _
 import "lib/iterators" =~ _
 import "lib/json" =~ _
