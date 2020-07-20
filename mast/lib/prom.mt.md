@@ -3,9 +3,8 @@ import "unittest" =~ [=> unittest :Any]
 import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/doubles" =~ [=> makeKahan]
 import "lib/http/apps" =~ [=> addBaseOnto]
-import "lib/http/headers" =~ [=> emptyHeaders]
 import "lib/http/server" =~ [=> makeHTTPEndpoint]
-import "lib/iterators" =~ [=> zip :DeepFrozen]
+import "lib/iterators" =~ [=> zip]
 exports (makeBuckets, makeRegistry, textExposition, addMonitoringOnto, main)
 ```
 
@@ -836,11 +835,10 @@ def addMonitoringOnto(app, registry) as DeepFrozen:
         def [=> path] | _ := req
         return switch (path):
             match =="/healthz":
-                ["statusCode" => 200, "headers" => emptyHeaders(),
-                 "body" => b`je'e`]
+                ["statusCode" => 200, "headers" => null, "body" => b`je'e`]
             match =="/metrics":
                 def body := textExposition(registry)
-                ["statusCode" => 200, "headers" => emptyHeaders(), => body]
+                ["statusCode" => 200, "headers" => null, => body]
             match _:
                 app(req)
 ```

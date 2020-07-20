@@ -62,7 +62,7 @@ def makeParser(builder) as DeepFrozen:
     def typ_id := (lower + alpha_num.zeroOrMore()) % buildId
     def con_id := (upper + alpha_num.zeroOrMore()) % buildId
     def id := typ_id / con_id
-    def field := (typ_id + pk.satisfies("*?".contains).optional() +
+    def field := (ws >> typ_id + pk.satisfies("*?".contains).optional() +
                   (ws >> id.optional())) % fn [[ty, deco], name] {
                     switch (deco) {
                         match ==null { builder.Id(ty, name) }

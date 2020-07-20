@@ -3,7 +3,6 @@ This is a runnable tool.
 ```
 import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/http/apps" =~ [=> addBaseOnto]
-import "lib/http/headers" =~ [=> emptyHeaders]
 import "lib/http/server" =~ [=> makeHTTPEndpoint]
 import "lib/prom" =~ [=> addMonitoringOnto, => makeRegistry]
 exports (main)
@@ -33,7 +32,7 @@ def makeKubelessApp(handler) as DeepFrozen:
         return try {
             def rv := handler(event, context)
             if (rv =~ body :Bytes) {
-                ["statusCode" => 200, "headers" => emptyHeaders(), => body]
+                ["statusCode" => 200, "headers" => null, => body]
             } else { rv }
         } catch problem {
             traceln.exception(problem)
