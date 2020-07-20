@@ -127,7 +127,7 @@ let
             if [[ -z $SOURCE ]]; then
                 usage 1
             else
-                if [[ "$SOURCE" == *.mt ]]; then
+                if [[ "$SOURCE" != *.mast ]]; then
                    MASTSOURCE=''${SOURCE%.mt}.mast
                    ${typhonVm}/mt-typhon -l ${mast} \
                        ${mast}/loader run montec -mix "$SOURCE" "$MASTSOURCE"
