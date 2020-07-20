@@ -4,7 +4,6 @@ import "lib/codec/utf8" =~  [=> UTF8]
 import "lib/enum" =~ [=> makeEnum]
 import "lib/http/headers" =~ ["ASTBuilder" => headerBuilder]
 import "lib/streams" =~ [=> alterSink, => flow, => fuse, => makePump]
-import "unittest" =~ [=> unittest :Any]
 exports (makeHTTPEndpoint)
 
 # Copyright (C) 2014 Google Inc. All rights reserved.
@@ -21,7 +20,7 @@ exports (makeHTTPEndpoint)
 # License for the specific language governing permissions and limitations
 # under the License.
 
-def Headers :DeepFrozen := headerBuilder.headers()
+def ResponseHeaders :DeepFrozen := headerBuilder.responseHeaders()
 def MediaType :DeepFrozen := headerBuilder.mediaType()
 def RegisteredType :DeepFrozen := headerBuilder.registeredType()
 def TransferEncoding :DeepFrozen := headerBuilder.transferEncoding()
@@ -36,16 +35,6 @@ def parseTransferEncoding(bs :Bytes) :List[TransferEncoding] as DeepFrozen:
             match b`gzip` { headerBuilder.Gzip() }
         }]
 
-def testTransferEncoding(assert):
-    assert.equal(parseTransferEncoding(b`identity`), [headerBuilder.Identity()])
-    assert.equal(parseTransferEncoding(b`Chunked`), [headerBuilder.Chunked()])
-    assert.equal(parseTransferEncoding(b`gzip, chunked`),
-                 [headerBuilder.Gzip(), headerBuilder.Chunked()])
-
-unittest([
-    testTransferEncoding,
-])
-
 def registeredTypes :Map[Str, RegisteredType] := [for verb in ([
     "Application", "Audio", "Example", "Font", "Image", "Message", "Model",
     "Multipart", "Text", "Video"])
@@ -54,7 +43,7 @@ def registeredTypes :Map[Str, RegisteredType] := [for verb in ([
 def parseMediaType(value :Bytes) :MediaType as DeepFrozen:
     # XXX should support options, right?
     def via (UTF8.decode) `@type/@subtype` := value
-    return headerBuilder.MediaType(registeredTypes[type], subtype)
+    return headerBuilder.Media(registeredTypes[type], subtype)
 
 
 # Strange as it sounds, the percent encoding is actually *outside* the UTF-8
@@ -213,13 +202,12 @@ def serverBanner :Str := "Monte (Typhon) (.i ma'a tarci pulce)"
 # stuff in lib/http/apps though.
 def defaultResponse :DeepFrozen := [
     "statusCode" => 501,
-    "headers" => headerBuilder.Headers(
-        "contentType" => headerBuilder.MediaType(headerBuilder.Text(),
-                                                 "plain"),
-        "connection" => headerBuilder.Close(),
-        "server" => serverBanner,
-        "transferEncoding" => [],
-        "spareHeaders" => [],
+    "headers" => headerBuilder.ResponseHeaders(
+        headerBuilder.Media(headerBuilder.Text(), "plain"),
+        headerBuilder.Close(),
+        serverBanner,
+        [],
+        [],
     ),
     "body" => b`Not Implemented`,
 ]
@@ -237,7 +225,7 @@ def makeResponsePump() as DeepFrozen:
         traceln(`responsePump($response)`)
         if (response == null) { response := defaultResponse }
         def [=> statusCode :Int,
-             => headers :Headers,
+             => headers :ResponseHeaders,
              => body :Bytes] := response
         def statusDescription := statusMap.fetch(statusCode,
                                                  "Unknown Status")
@@ -268,7 +256,6 @@ def makeResponsePump() as DeepFrozen:
                         rv.push(b`$k: $v$\r$\n`)
                     })
                 }
-                for header => value in (headers.spareHeaders()):
             })
         rv.push(b`Content-Length: ${M.toString(body.size())}$\r$\n`)
         rv.push(b`$\r$\n`)
@@ -281,9 +268,9 @@ def makeHTTPEndpoint(endpoint) as DeepFrozen:
         Listen for HTTP requests and run them through `app`.
 
         `app(request)` will repeatedly recieve request quadruplets of
-        [=> verb :Str, => path :Str, => headers :Headers, => body :Bytes] and
+        [=> verb :Str, => path :Str, => headers :RequestHeaders, => body :Bytes] and
         should return response triples of
-        [=> statusCode :Int, => headers :Headers, => body :Bytes] or `null`.
+        [=> statusCode :Int, => headers :ResponseHeaders, => body :Bytes] or `null`.
         "
 
         def responder(source, sink):

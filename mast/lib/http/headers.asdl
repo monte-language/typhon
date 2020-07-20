@@ -1,10 +1,10 @@
 transferEncoding = Identity | Chunked | Compress | Deflate | Gzip
 registeredType = Application | Audio | Example | Font | Image | Message
                | Model | Multipart | Text | Video
-connectionHandling = Close | KeepAlive
+connection = Close | KeepAlive
 
 mediaType = Media(registeredType, str subType)
 extraHeader = Header(str key, str value)
 
-headers = RequestHeaders(int? contentLength, mediaType? contentType, str? userAgent, transferEncoding* transferEncoding, extraHeader* spareHeaders)
-        | ResponseHeaders(mediaType? contentType, connection?, str? server, transferEncoding*, extraHeader* spareHeaders)
+requestHeaders = RequestHeaders(int? contentLength, mediaType? contentType, str? userAgent, transferEncoding* transferEncoding, extraHeader* spareHeaders)
+responseHeaders = ResponseHeaders(mediaType? contentType, connection?, str? server, transferEncoding*, extraHeader* spareHeaders)

@@ -6,16 +6,16 @@ def inferTypeFor(expr, errors) as DeepFrozen:
         # Atoms: Return just a type.
         to LiteralExpr(val, span) {
             return switch (val) {
-                match _ :Int { types.Int() }
+                match _ :Int { types.IntTy() }
                 match _ {
                     errors.push([span,
                                  `Didn't know you could put $val in literals`])
-                    types.Any()
+                    types.AnyTy()
                 }
             }
         }
         to NounExpr(_name, _span) {
-            return types.Any()
+            return types.AnyTy()
         }
         # Complex expressions: Return a type and an environment.
         to Atom(a, _span) {

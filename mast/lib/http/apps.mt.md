@@ -11,12 +11,16 @@ Some error responses are pre-built in order to encourage not giving ad-hoc
 error messages to users. When giving an error response, we'd like to advise
 the client that the connection should be closed.
 
+The response header structure is specified in Zephyr ASDL, an abstract syntax
+description language. We can import this structure from the module
+"lib/http/headers", as if it were regular Monte code. The structure is
+primarily exposed as an [abstract syntax
+tree](https://en.wikipedia.org/wiki/Abstract_syntax_tree) builder.
+
 ```
+# XXX lib/asdl doesn't support named args
 def closeHeaders :DeepFrozen := headerBuilder.ResponseHeaders(
-    "contentType" => null,
-    "connection" => headerBuilder.Close(),
-    "transferEncoding" => [],
-    "spareHeaders" => [],
+    null, headerBuilder.Close(), null, [], [],
 )
 ```
 
