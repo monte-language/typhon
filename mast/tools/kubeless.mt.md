@@ -15,15 +15,15 @@ Today we shall provide a harness for
 ```
 def makeKubelessApp(handler) as DeepFrozen:
     return def kubelessApp(request):
-        def data := request.body()
+        def [=> headers, => body] | _ := request
         def [
             => ::"event-id" := null,
             => ::"event-namespace" := null,
             => ::"event-time" := null,
             => ::"event-type" := null,
-        ] | _ := request.headers().spareHeaders()
+        ] | _ := headers.spareHeaders()
         def event := [
-            => data,
+            "data" => body,
             => ::"event-id",
             => ::"event-namespace",
             => ::"event-time",

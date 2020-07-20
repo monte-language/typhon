@@ -16,12 +16,20 @@ def smallBody(s) as DeepFrozen:
             "Connection" => "close",
             "Content-Length" => `${body.size()}`,
         ]
-        return [200, headers, body]
+        return ["statusCode" => 200, => headers, => body]
     catch _:
         return null
 
 
 object notFoundResource as DeepFrozen:
+    "
+    A leaf resource which indicates that the actual requested resource was
+    not found.
+
+    This resource simply returns a 404 status code and a minimal error
+    message.
+    "
+
     to getStaticChildren():
         return [].asMap()
 
@@ -29,8 +37,8 @@ object notFoundResource as DeepFrozen:
         return notFoundResource
 
     to run(_request):
-        def [_, headers, body] := smallBody("Not found")
-        return [404, headers, body]
+        def [=> headers, => body] | _ := smallBody("Not found")
+        return ["statusCode" => 404, => headers, => body]
 
 
 def autoSI(var amount) as DeepFrozen:
@@ -53,13 +61,13 @@ def makeDebugResource(runtime) as DeepFrozen:
             return notFoundResource
 
         to run(request):
-            def headers := request.getHeaders()
+            def [=> headers, => body] | _ := request
             def requestTag := tag.div(
                 tag.h2("Request"),
                 tag.h3("Headers"),
                 tag.p(`$headers`),
                 tag.h3("Body"),
-                tag.p(`${request.getBody()}`))
+                tag.p(`$body`))
 
             def heap := runtime.getHeapStatistics()
             def reactor := runtime.getReactorStatistics()
@@ -106,7 +114,8 @@ def makeResourceApp(root) as DeepFrozen:
     def resourceApp(request):
         traceln(`resourceApp $request`)
         escape badRequest:
-            def [==""] + segments exit badRequest := request.getPath().split("/")
+            def [=> path] | _ exit badRequest := request
+            def [==""] + segments exit badRequest := path.split("/")
             var resource := root
             for segment in (segments.slice(0, segments.size() - 1)):
                 resource get= (segment)
@@ -115,8 +124,8 @@ def makeResourceApp(root) as DeepFrozen:
                 resource get= (final)
             return resource(request)
         catch _:
-            def [_, headers, body] := smallBody("bad request?")
-            return [400, headers, body]
+            def [=> headers, => body] | _ := smallBody("bad request?")
+            return ["statusCode" => 400, => headers, => body]
     return resourceApp
 
 

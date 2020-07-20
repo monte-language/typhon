@@ -833,7 +833,8 @@ def addMonitoringOnto(app, registry) as DeepFrozen:
     "
 
     return def promMonitoringWrapperApp(req):
-        return switch (req.path()):
+        def [=> path] | _ := req
+        return switch (path):
             match =="/healthz":
                 ["statusCode" => 200, "headers" => emptyHeaders(),
                  "body" => b`je'e`]

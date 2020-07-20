@@ -2,7 +2,6 @@ import "lib/codec" =~ [=> composeCodec]
 import "lib/codec/percent" =~ [=> PercentEncoding]
 import "lib/codec/utf8" =~  [=> UTF8]
 import "lib/enum" =~ [=> makeEnum]
-import "lib/gadts" =~ [=> makeGADT]
 import "lib/streams" =~ [=> alterSink, => flow, => fuse, => makePump]
 import "lib/http/headers" =~ [
     => Headers,
@@ -29,16 +28,6 @@ exports (makeHTTPEndpoint)
 # Strange as it sounds, the percent encoding is actually *outside* the UTF-8
 # encoding!
 def UTF8Percent :DeepFrozen := composeCodec(PercentEncoding, UTF8)
-
-def Request :DeepFrozen := makeGADT("Request", [
-    "full" => [
-        "verb" => Str,
-        "path" => Str,
-        # "headers" => Headers,
-        "headers" => DeepFrozen,
-        "body" => Bytes,
-    ],
-])
 
 def [RequestState :DeepFrozen,
      REQUEST :DeepFrozen,
@@ -109,8 +98,8 @@ def makeRequestPump() as DeepFrozen:
                             buf slice= (len)
                             requestState := REQUEST
                             def [verb, path] := pendingRequestLine
-                            pendingRequest := Request.full(=> verb, => path,
-                                                           => headers, => body)
+                            pendingRequest := [=> verb, => path, => headers,
+                                               => body]
                             bodyState := [FIXED, 0]
                         else:
                             return false
@@ -183,7 +172,9 @@ def makeHTTPEndpoint(endpoint) as DeepFrozen:
         "
         Listen for HTTP requests and run them through `app`.
 
-        `app(request)` should return a response triple of
+        `app(request)` will repeatedly recieve request quadruplets of
+        [=> verb :Str, => path :Str, => headers :Headers, => body :Bytes] and
+        should return response triples of
         [=> statusCode :Int, => headers :Headers, => body :Bytes] or `null`.
         "
 
