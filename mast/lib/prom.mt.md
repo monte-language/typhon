@@ -4,7 +4,6 @@ import "lib/codec/utf8" =~ [=> UTF8]
 import "lib/doubles" =~ [=> makeKahan]
 import "lib/http/apps" =~ [=> addBaseOnto]
 import "lib/http/headers" =~ [=> emptyHeaders]
-import "lib/http/response" =~ [=> Response]
 import "lib/http/server" =~ [=> makeHTTPEndpoint]
 import "lib/iterators" =~ [=> zip :DeepFrozen]
 exports (makeBuckets, makeRegistry, textExposition, addMonitoringOnto, main)
@@ -836,12 +835,11 @@ def addMonitoringOnto(app, registry) as DeepFrozen:
     return def promMonitoringWrapperApp(req):
         return switch (req.path()):
             match =="/healthz":
-                Response.full("statusCode" => 200, "headers" => emptyHeaders(),
-                              "body" => b`je'e`)
+                ["statusCode" => 200, "headers" => emptyHeaders(),
+                 "body" => b`je'e`]
             match =="/metrics":
                 def body := textExposition(registry)
-                Response.full("statusCode" => 200, "headers" => emptyHeaders(),
-                              => body)
+                ["statusCode" => 200, "headers" => emptyHeaders(), => body]
             match _:
                 app(req)
 ```

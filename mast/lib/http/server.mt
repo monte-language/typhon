@@ -9,7 +9,6 @@ import "lib/http/headers" =~ [
     => emptyHeaders,
     => parseHeader,
 ]
-import "lib/http/response" =~ [=> Response]
 exports (makeHTTPEndpoint)
 
 # Copyright (C) 2014 Google Inc. All rights reserved.
@@ -151,23 +150,23 @@ def statusMap :Map[Int, Str] := [
 # If we get `null` from the app, then we'll use this response. Also it's nice
 # to have a fake response around for testing. This is kind of a duplicate of
 # stuff in lib/http/apps though.
-def defaultResponse :DeepFrozen := Response.full(
+def defaultResponse :DeepFrozen := [
     "statusCode" => 501,
     "headers" => emptyHeaders().with("spareHeaders" => [
         b`Connection` => b`close`,
         b`Server` => b`Monte (Typhon) (.i ma'a tarci pulce)`,
     ]),
     "body" => b`Not Implemented`,
-)
+]
 
 
 def makeResponsePump() as DeepFrozen:
     return def responsePump(var response):
         traceln(`responsePump($response)`)
         if (response == null) { response := defaultResponse }
-        def statusCode :Int := response.statusCode()
-        def headers :Headers := response.headers()
-        def body :Bytes := response.body()
+        def [=> statusCode :Int,
+             => headers :Headers,
+             => body :Bytes] := response
         def statusDescription := statusMap.fetch(statusCode,
                                                  "Unknown Status")
         def status := `$statusCode $statusDescription`
@@ -176,7 +175,7 @@ def makeResponsePump() as DeepFrozen:
             rv.push(b`$header: $value$\r$\n`)
         rv.push(b`Content-Length: ${M.toString(body.size())}$\r$\n`)
         rv.push(b`$\r$\n`)
-        rv.push(response.body())
+        rv.push(body)
         return rv
 
 def makeHTTPEndpoint(endpoint) as DeepFrozen:
@@ -184,7 +183,8 @@ def makeHTTPEndpoint(endpoint) as DeepFrozen:
         "
         Listen for HTTP requests and run them through `app`.
 
-        `app(request)` should return a `Response` or `null`.
+        `app(request)` should return a response triple of
+        [=> statusCode :Int, => headers :Headers, => body :Bytes] or `null`.
         "
 
         def responder(source, sink):

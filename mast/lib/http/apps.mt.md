@@ -1,6 +1,5 @@
 ```
 import "lib/http/headers" =~ [=> Headers, => emptyHeaders]
-import "lib/http/response" =~ [=> Response]
 exports (addBaseOnto)
 ```
 
@@ -32,27 +31,27 @@ indicating a mistake on their end, while 500 is a generic server error,
 indicating a problem internally.
 
 ```
-def error400 :DeepFrozen := Response.full(
+def error400 :DeepFrozen := [
     "statusCode" => 400,
     "headers" => closeHeaders,
     "body" => b`Bad Request`,
-)
+]
 
-def error500 :DeepFrozen := Response.full(
+def error500 :DeepFrozen := [
     "statusCode" => 500,
     "headers" => closeHeaders,
     "body" => b`Internal Server Error`,
-)
+]
 ```
 
 We'll also need a 501, for indicating that a request went unhandled.
 
 ```
-def error501 :DeepFrozen := Response.full(
+def error501 :DeepFrozen := [
     "statusCode" => 501,
     "headers" => closeHeaders,
     "body" => b`Not Implemented`,
-)
+]
 ```
 
 Here is the first application. It always returns a response, so it should be
@@ -79,10 +78,10 @@ def addBaseOnto(app) as DeepFrozen:
         }
         traceln(`res $res`)
         if (res == null) { res := error501 }
-        def spares := res.headers().spareHeaders() | theHeaders.spareHeaders()
-        def newHeaders := res.headers().with("spareHeaders" => spares)
-        res := res.with("headers" => newHeaders)
-        return res
+        def [=> statusCode, => headers, => body] := res
+        def spares := headers.spareHeaders() | theHeaders.spareHeaders()
+        def newHeaders := headers.with("spareHeaders" => spares)
+        return [=> statusCode, "headers" => newHeaders, => body]
     return baseApp
 ```
 
