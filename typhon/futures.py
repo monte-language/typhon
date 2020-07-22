@@ -4,17 +4,17 @@ OK, ERR, LOOP_BREAK, LOOP_CONTINUE = makeEnum(
     "Future", ("OK", "ERR", "LOOP_BREAK", "LOOP_CONTINUE"))
 
 
-@specialize.argtype(0)
+@specialize.ll()
 def Ok(value):
     return (OK, value, None)
 
 
-@specialize.argtype(0)
+@specialize.ll()
 def Err(err):
     return (ERR, None, err)
 
 
-@specialize.argtype(0)
+@specialize.ll()
 def Break(value):
     return (LOOP_BREAK, value, None)
 
