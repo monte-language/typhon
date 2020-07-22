@@ -98,7 +98,9 @@ class IP6AddrInfo(AddrInfo):
 
 
 def walkAI(ai):
-    # does this need to move into ruv?
+    # Does this need to move into ruv? No, while it touches ruv objects, it is
+    # traversing them and packing them into Monte objects. We want to keep
+    # Monte out of ruv, so this sort of function should live here. ~ C.
     rv = []
     while ai:
         family = getintfield(ai, "c_ai_family")

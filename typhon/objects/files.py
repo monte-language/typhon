@@ -13,10 +13,11 @@
 # under the License.
 
 import os
+import stat
 
 from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rarithmetic import intmask
-from rpython.rtyper.lltypesystem.lltype import scoped_alloc
+from rpython.rtyper.lltypesystem.lltype import nullptr, scoped_alloc
 from rpython.rtyper.lltypesystem.rffi import charpsize2str
 
 from typhon import log, rsodium, ruv
@@ -150,6 +151,210 @@ class writeLoop(object):
             writeLoop_k0)
 
 
+fileTypes = {
+    stat.S_IFSOCK: u"socket",
+    stat.S_IFLNK:  u"symbolic link",
+    stat.S_IFREG:  u"regular file",
+    stat.S_IFBLK:  u"block device",
+    stat.S_IFDIR:  u"directory",
+    stat.S_IFCHR:  u"character device",
+    stat.S_IFIFO:  u"named pipe",
+}
+
+def packTime(timespec):
+    return timespec.c_tv_sec + (timespec.c_tv_nsec / 1000000000)
+
+@autohelp
+class FileStatistics(Object):
+    """
+    Information about an object on the filesystem.
+    """
+
+    _immutable_fields_ = (
+            "major", "minor", "st_mode", "type", "hardLinks", "user", "group",
+            "inode", "size", "blockSize", "aTime", "mTime", "cTime",
+    )
+
+    def __init__(self, lstat):
+        # This is what glibc does.
+        st_dev = lstat.c_st_dev
+        self.major = intmask(((st_dev >> 8) & 0xfff) |
+                             ((st_dev >> 32) & ~0xfff))
+        self.minor = intmask(((st_dev >> 0) & 0xff) |
+                             ((st_dev >> 12) & ~0xff))
+
+        self.st_mode = intmask(lstat.c_st_mode)
+        self.type = fileTypes.get(stat.S_IFMT(self.st_mode),
+                                  u"unknown file type")
+        self.hardLinks = intmask(lstat.c_st_nlink)
+        self.user = intmask(lstat.c_st_uid)
+        self.group = intmask(lstat.c_st_gid)
+        # ...
+        self.inode = intmask(lstat.c_st_ino)
+        self.size = intmask(lstat.c_st_size)
+        self.blockSize = intmask(lstat.c_st_blksize)
+        # self.blocks = intmask(lstat.c_st_blocks)
+        self.aTime = packTime(lstat.c_st_atim)
+        self.mTime = packTime(lstat.c_st_mtim)
+        self.cTime = packTime(lstat.c_st_ctim)
+        # ...
+
+    def toString(self):
+        return u"<%s %d on device %d:%d>" % (self.type, self.inode,
+                                             self.major, self.minor)
+
+    @method("Int")
+    def deviceClass(self):
+        "The device class, or major ID."
+        return self.major
+
+    @method("Int")
+    def deviceInstance(self):
+        "The device instance, or minor ID."
+        return self.minor
+
+    @method("Str")
+    def fileType(self):
+        """
+        The file type.
+
+        Known file types include "socket", "symbolic link", "regular file",
+        "block device", "directory", "character device", and "named pipe".
+        """
+        return self.type
+
+    @method("Bool")
+    def runsAsUser(self):
+        """
+        Whether executing this file would run the resulting process as this
+        file's user.
+
+        Note that it is possible for this file to be marked to run as user
+        even if it is not actually executable.
+        """
+        return bool(self.st_mode & stat.S_ISUID)
+
+    @method("Bool")
+    def runsAsGroup(self):
+        """
+        Whether executing this file would run the resulting process as this
+        file's group.
+        """
+        return bool(self.st_mode & stat.S_ISGID) and bool(self.st_mode & stat.S_IXGRP)
+
+    @method("Bool")
+    def mandatesLocking(self):
+        """
+        Whether this file is locked with a mandatory lock upon access.
+        """
+        return bool(self.st_mode & stat.S_ISGID) and not bool(self.st_mode & stat.S_IXGRP)
+
+    @method("Bool")
+    def isSticky(self):
+        """
+        Whether this file's permissions are sticky.
+        """
+        return bool(self.st_mode & stat.S_ISVTX)
+
+    @method("Bool")
+    def ownerMayRead(self):
+        "Whether the owner has read permission."
+        return bool(self.st_mode & stat.S_IRUSR)
+
+    @method("Bool")
+    def ownerMayWrite(self):
+        "Whether the owner has write permission."
+        return bool(self.st_mode & stat.S_IWUSR)
+
+    @method("Bool")
+    def ownerMayExecute(self):
+        "Whether the owner has execute permission."
+        return bool(self.st_mode & stat.S_IXUSR)
+
+    @method("Bool")
+    def groupMayRead(self):
+        "Whether the group has read permission."
+        return bool(self.st_mode & stat.S_IRGRP)
+
+    @method("Bool")
+    def groupMayWrite(self):
+        "Whether the group has write permission."
+        return bool(self.st_mode & stat.S_IWGRP)
+
+    @method("Bool")
+    def groupMayExecute(self):
+        "Whether the group has execute permission."
+        return bool(self.st_mode & stat.S_IXGRP)
+
+    @method("Bool")
+    def othersMayRead(self):
+        "Whether others have read permission."
+        return bool(self.st_mode & stat.S_IROTH)
+
+    @method("Bool")
+    def othersMayWrite(self):
+        "Whether others have write permission."
+        return bool(self.st_mode & stat.S_IWOTH)
+
+    @method("Bool")
+    def othersMayExecute(self):
+        "Whether others have execute permission."
+        return bool(self.st_mode & stat.S_IXOTH)
+
+    @method("Int")
+    def hardLinks(self):
+        "The number of hard links."
+        return self.hardLinks
+
+    @method("Int")
+    def user(self):
+        "The owning user ID."
+        return self.user
+
+    @method("Int")
+    def group(self):
+        "The owning group ID."
+        return self.group
+
+    # uint64_t st_rdev;
+
+    @method("Int")
+    def indexNode(self):
+        "The index node ('inode') ID."
+        return self.inode
+
+    @method("Int", _verb="size")
+    def _size(self):
+        "The size."
+        return self.size
+
+    @method("Int", _verb="blockSize")
+    def _blockSize(self):
+        "The preferred block size."
+        return self.blockSize
+
+    # uint64_t st_blocks;
+    # uint64_t st_flags;
+    # uint64_t st_gen;
+
+    @method("Double")
+    def accessedTime(self):
+        "The last time of access."
+        return self.aTime
+
+    @method("Double")
+    def modifiedTime(self):
+        "The last time of modification."
+        return self.mTime
+
+    @method("Double")
+    def changedTime(self):
+        "The last time of metadata change."
+        return self.cTime
+
+    # uv_timespec_t st_birthtim;
+
+
 @autohelp
 class FileResource(Object):
     """
@@ -229,6 +434,24 @@ class FileResource(Object):
                     ruv.magic_fsClose(vat, f)
                     ruv.magic_fsRename(vat, path, self.asBytes())
                     resolve(r, NullObject)
+        return p
+
+    @method("Any")
+    def getStatistics(self):
+        p, r = makePromise()
+        vat = currentVat.get()
+        # Copying a pattern from t.o.networking.dns for appeasing the macro
+        # generator. We must not appear to do work on the RHS of an
+        # assignment, or we will anger the macro magic. ~ C.
+        emptyLStat = nullptr(ruv.stat_t)
+        with io:
+            lstat = emptyLStat
+            try:
+                lstat = ruv.magic_fsLStat(vat, self.asBytes())
+            except object as err:
+                smash(r, StrObject(u"Couldn't stat file: %s" % err))
+            else:
+                resolve(r, FileStatistics(lstat))
         return p
 
     @method("Any", "Any")
