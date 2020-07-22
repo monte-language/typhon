@@ -116,11 +116,33 @@ class CConfig:
     pipe_t = rffi_platform.Struct("uv_pipe_t", [("data", rffi.VOIDP)])
     signal_t = rffi_platform.Struct("uv_signal_t", [("data", rffi.VOIDP)])
     tty_t = rffi_platform.Struct("uv_tty_t", [("data", rffi.VOIDP)])
+    timespec_t = rffi_platform.Struct("uv_timespec_t",
+                                      [("tv_sec", rffi.LONG),
+                                       ("tv_nsec", rffi.LONG)])
+    stat_t = rffi_platform.Struct("uv_stat_t",
+                                  [("st_dev", rffi.ULONGLONG),
+                                   ("st_mode", rffi.ULONGLONG),
+                                   ("st_nlink", rffi.ULONGLONG),
+                                   ("st_uid", rffi.ULONGLONG),
+                                   ("st_gid", rffi.ULONGLONG),
+                                   ("st_rdev", rffi.ULONGLONG),
+                                   ("st_ino", rffi.ULONGLONG),
+                                   ("st_size", rffi.ULONGLONG),
+                                   ("st_blksize", rffi.ULONGLONG),
+                                   ("st_blocks", rffi.ULONGLONG),
+                                   ("st_flags", rffi.ULONGLONG),
+                                   ("st_gen", rffi.ULONGLONG),
+                                   ("st_atim", timespec_t),
+                                   ("st_mtim", timespec_t),
+                                   ("st_ctim", timespec_t),
+                                   ("st_birthtim",
+                                    timespec_t)])
     fs_t = rffi_platform.Struct("uv_fs_t",
                                 [("data", rffi.VOIDP),
                                  ("path", rffi.CONST_CCHARP),
                                  ("result", rffi.SSIZE_T),
-                                 ("ptr", rffi.VOIDP)])
+                                 ("ptr", rffi.VOIDP),
+                                 ("statbuf", stat_t)])
     getaddrinfo_t = rffi_platform.Struct("uv_getaddrinfo_t",
                                          [("data", rffi.VOIDP)])
     buf_t = rffi_platform.Struct("uv_buf_t",
@@ -149,6 +171,7 @@ tcp_tp = rffi.lltype.Ptr(cConfig["tcp_t"])
 pipe_tp = rffi.lltype.Ptr(cConfig["pipe_t"])
 signal_tp = rffi.lltype.Ptr(cConfig["signal_t"])
 tty_tp = rffi.lltype.Ptr(cConfig["tty_t"])
+stat_t = cConfig["stat_t"]
 fs_tp = rffi.lltype.Ptr(cConfig["fs_t"])
 gai_tp = rffi.lltype.Ptr(cConfig["getaddrinfo_t"])
 buf_tp = lltype.Ptr(cConfig["buf_t"])
@@ -846,6 +869,10 @@ fs_write = rffi.llexternal("uv_fs_write", [loop_tp, fs_tp, rffi.INT,
                                            rffi.LONGLONG, fs_cb],
                            rffi.INT, compilation_info=eci)
 fsWrite = checking("fs_write", fs_write)
+fs_lstat = rffi.llexternal("uv_fs_lstat", [loop_tp, fs_tp, rffi.CCHARP,
+                                           fs_cb],
+                           rffi.INT, compilation_info=eci)
+fsLStat = checking("fs_lstat", fs_lstat)
 fs_rename = rffi.llexternal("uv_fs_rename", [loop_tp, fs_tp, rffi.CCHARP,
                                              rffi.CCHARP, fs_cb],
                             rffi.INT, compilation_info=eci)
@@ -1003,6 +1030,38 @@ class magic_fsClose(object):
         fs = alloc_fs()
         stashFS2(fs, (state, fsClose_erase(k)))
         fsClose(self.vat.uv_loop, fs, self.f, magic_fsCloseCB)
+
+
+fsLStat_erase, fsLStat_unerase = new_erasing_pair("fsLStat")
+
+
+class FSLStatFutureCallback(object):
+    pass
+
+class magic_fsLStat(object):
+    callbackType = FSLStatFutureCallback
+
+    def __init__(self, vat, path):
+        self.vat = vat
+        self.path = path
+
+    def run(self, state, k):
+        fs = alloc_fs()
+        stashFS2(fs, (state, fsLStat_erase(k)))
+        fsLStat(self.vat.uv_loop, fs, self.path, magic_fsLStatCB)
+
+def magic_fsLStatCB(fs):
+    success = intmask(fs.c_result)
+    state, v = unstashFS2(fs)
+    k = fsLStat_unerase(v)
+    if not k:
+        return
+    if success < 0:
+        msg = formatError(success).decode("utf-8")
+        k.do(state, (ERR, lltype.nullptr(stat_t), msg))
+    else:
+        k.do(state, Ok(fs.c_statbuf))
+    fsDiscard(fs)
 
 
 fsRename_erase, fsRename_unerase = new_erasing_pair("fsRename")
