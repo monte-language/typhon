@@ -9,11 +9,11 @@ exports (makePathSearcher, makeWhich)
 def makePathSearcher(makeFileResource, PATH :Bytes) as DeepFrozen:
     def paths :List[Str] := [for p in (PATH.split(b`:`)) UTF8.decode(p, null)]
     def check(p :Str):
-        # Borrowed from https://github.com/washort/buda/blob/master/buda.mt:
-        # The path is valid when we can get its contents.
-        # XXX we should probably check that it's executable?
-        return when (makeFileResource(p).getContents()) ->
-            true
+        def stat := makeFileResource(p).getStatistics()
+        # The path is valid when we can execute it, and since we probably
+        # don't own anything on PATH, we'll check for just the o+x bit.
+        return when (stat) ->
+            stat.othersMayExecute()
         catch _:
             false
 
@@ -34,7 +34,7 @@ def makePathSearcher(makeFileResource, PATH :Bytes) as DeepFrozen:
                 when (def found := check(cand)) ->
                     if (found) { cache[bin] := cand } else { go() }
             catch _:
-                null
+                Ref.broken(`Executable $bin not found on path`)
         return go()
 
 def makeWhich(makeProcess, pathSearch) as DeepFrozen:
