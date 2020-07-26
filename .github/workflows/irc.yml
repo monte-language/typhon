@@ -1,6 +1,7 @@
 name: "IRC Notice"
-on: [push]
-
+on:
+    pull_request:
+    push:
 jobs:
     test:
         runs-on: ubuntu-latest
@@ -14,3 +15,11 @@ jobs:
                   message: |
                       ${{ github.actor }} pushed ${{ github.event.ref }} ${{ github.event.compare }}
                       ${{ join(github.event.commits.*.message, ' ') }}
+            - name: pr
+              uses: rectalogic/notify-irc@v1
+              if: github.event_name == 'pull_request'
+              with:
+                  channel: "#monte"
+                  nickname: monte-notify-irc
+                  message: |
+                      ${{ github.actor }} ${{ github.event.action }} PR ${{ github.event.number }}
