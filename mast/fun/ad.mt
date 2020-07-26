@@ -1,7 +1,5 @@
 exports (makeDual, gradientAt, minimize)
 
-def E :Double := 2.71828_18284_59045_23536_02874
-
 object makeDual as DeepFrozen:
     to coerce(specimen, _ej) :DeepFrozen:
         return switch (specimen) {
@@ -67,7 +65,7 @@ object makeDual as DeepFrozen:
                 }
 
             to exponential():
-                def rv := E ** real
+                def rv := real.exponential()
                 return makeDual(rv, rv * epsilon)
 
             to sine():
@@ -88,6 +86,8 @@ def gradientAt(f, coords :List[Double]) :List[Double] as DeepFrozen:
 
 def minimize(f, starts :List[Double],
              => var gamma :Double := (1/128)) as DeepFrozen:
+    "Find values near `starts` which minimize `f`, a function on Doubles."
+
     def invoke(args):
         return M.call(f, "run", args, [].asMap())
 
