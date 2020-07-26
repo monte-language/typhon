@@ -1,4 +1,4 @@
-exports (bddist, bwsmc)
+exports (DProb, bddist, bwsmc)
 
 # A monadic approach to computing probabilities.
 # http://www.randomhacks.net/files/build-your-own-probability-monads.pdf
@@ -53,6 +53,8 @@ def normalizeWeights(outcomes :Map[Any, Double]) :Map[Any, Double] as DeepFrozen
             ? (k != ruledOut)
             k => weight * scale].sortValues().reverse()
 
+def DProb :DeepFrozen := Map[Any, Double]
+
 object bddist as DeepFrozen:
     "
     Bayesian discrete probability distributions.
@@ -61,17 +63,17 @@ object bddist as DeepFrozen:
     precise but voluminious. Use `bwsmc` for efficient approximate methods.
     "
 
-    to pure(x):
+    to pure(x) :DProb:
         return bddist.fromWeights([x => 1.0])
 
-    to zero():
+    to zero() :DProb:
         return bddist.fromWeights([].asMap())
 
     to control(verb :Str, ==1, ==1, block):
         return switch (verb):
             match =="map":
                 def mapMonad.controlRun():
-                    def [[ma], lambda] := block()
+                    def [[ma :DProb], lambda] := block()
                     def rv := [].asMap().diverge()
                     for k => p in (ma) {
                         def lk := lambda(k, null)
@@ -80,7 +82,7 @@ object bddist as DeepFrozen:
                     return bddist.fromWeights(rv.snapshot())
             match =="do":
                 def doMonad.controlRun():
-                    def [[ma], lambda] := block()
+                    def [[ma :DProb], lambda] := block()
                     def rv := [].asMap().diverge()
                     for k => p in (ma) {
                         for lk => lp in (lambda(k, null)) {
@@ -89,7 +91,7 @@ object bddist as DeepFrozen:
                     }
                     return bddist.fromWeights(rv.snapshot())
 
-    to fromWeights(outcomes :Map[Any, Double]):
+    to fromWeights(outcomes :DProb) :DProb:
         "
         Normalize a map of weights so that they sum to 1.0, and put them into the
         (b)ddist monad.
@@ -138,7 +140,7 @@ object bwsmc as DeepFrozen:
                         normalizeWeights(rv.snapshot())
                     }
 
-    to fromWeights(outcomes :Map[Any, Double]):
+    to fromWeights(outcomes :DProb):
         "An action in the Monte Carlo monad for sampling from weighted outcomes."
 
         # Our strategy is to build a list of cumulative weights in (0.0..1.0), and
