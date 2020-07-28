@@ -68,6 +68,66 @@ object makeMonad as DeepFrozen:
 
         return listMonad
 
+    to econt(m :DeepFrozen):
+        "A mother of all monads which uses ejectors within a single turn."
+
+        return object ejectorContinuationMonad as DeepFrozen:
+            "
+            A continuation monad.
+
+            This monad suspends and sequences all actions; it is a mother of
+            all monads. When provided with an ejector, this monad's actions
+            execute until a value is produced and the ejector is fired with
+            the value.
+
+            Actions use `throw.eject/2` to ensure that ejectors really are
+            fired; they should not return values.
+
+            This monad is a transformer and acts 'under' some other effects;
+            however, this monad is a mother of all monads, and acts over its
+            transformed effects.
+            "
+
+            to pure(x):
+                return fn ej { throw.eject(ej, m.pure(x)) }
+
+            to callCC(f):
+                "
+                Call `f` with the current continuation. `f` may return a
+                monadic action as normal, or it may invoke the continuation
+                with the monadic action to be returned.
+
+                The continuation will be reified as an ejector, so it may only
+                be called once and is delimited to prevent misuse.
+                "
+
+                return escape ej { f(ej) }
+
+            # XXX shift/reset would go here, but since ejectors are already
+            # delimited, they're equivalent to callCC/id.
+
+            to control(verb :Str, ==1, ==1, block):
+                return switch (verb):
+                    match =="map":
+                        def mapMonad.controlRun():
+                            def [[f], lambda] := block()
+                            return fn ej {
+                                def ma := escape la { f(la) }
+                                def mb := m (ma) map x { lambda(x, null) }
+                                throw.eject(ej, mb)
+                            }
+                    match =="do":
+                        def doMonad.controlRun():
+                            def [[f], lambda] := block()
+                            return fn ej {
+                                def ma := escape la { f(la) }
+                                # XXX for most monads, `do` and `map` will get
+                                # through the same amount of work before being
+                                # aborted by the ejector. But `do` is
+                                # technically more correct.
+                                m (ma) do x { lambda(x, null)(ej) }
+                            }
+
     to reader(m :DeepFrozen):
         "A monad which reads from an environment."
 
