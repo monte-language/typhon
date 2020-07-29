@@ -68,12 +68,12 @@ object makeMonad as DeepFrozen:
 
         return listMonad
 
-    to econt(m :DeepFrozen):
+    to error(m :DeepFrozen):
         "A mother of all monads which uses ejectors within a single turn."
 
         return object ejectorContinuationMonad as DeepFrozen:
             "
-            A continuation monad.
+            A continuation monad. Also, an error-handling monad.
 
             This monad suspends and sequences all actions; it is a mother of
             all monads. When provided with an ejector, this monad's actions
@@ -81,7 +81,7 @@ object makeMonad as DeepFrozen:
             the value.
 
             Actions use `throw.eject/2` to ensure that ejectors really are
-            fired; they should not return values.
+            fired.
 
             This monad is a transformer and acts 'under' some other effects;
             however, this monad is a mother of all monads, and acts over its
@@ -89,7 +89,10 @@ object makeMonad as DeepFrozen:
             "
 
             to pure(x):
-                return fn ej { throw.eject(ej, m.pure(x)) }
+                return fn _ { m.pure(x) }
+
+            to throw(problem):
+                return fn ej { throw.eject(ej, problem) }
 
             to callCC(f):
                 "
@@ -112,20 +115,13 @@ object makeMonad as DeepFrozen:
                         def mapMonad.controlRun():
                             def [[f], lambda] := block()
                             return fn ej {
-                                def ma := escape la { f(la) }
-                                def mb := m (ma) map x { lambda(x, null) }
-                                throw.eject(ej, mb)
+                                m (f(ej)) map x { lambda(x, ej) }
                             }
                     match =="do":
                         def doMonad.controlRun():
                             def [[f], lambda] := block()
                             return fn ej {
-                                def ma := escape la { f(la) }
-                                # XXX for most monads, `do` and `map` will get
-                                # through the same amount of work before being
-                                # aborted by the ejector. But `do` is
-                                # technically more correct.
-                                m (ma) do x { lambda(x, null)(ej) }
+                                m (f(ej)) do x { lambda(x, ej)(ej) }
                             }
 
     to reader(m :DeepFrozen):
