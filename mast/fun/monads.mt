@@ -267,6 +267,70 @@ object makeMonad as DeepFrozen:
                                 }
                             }
 
+    to rws(m :DeepFrozen, w :DeepFrozen):
+        "
+        A monad which combines reader, writer, and state effects on monad `m`
+        and monoid `w` in a coherent fashion.
+        "
+
+        return object RWSMonad as DeepFrozen:
+            "
+            The reader+writer+state monad.
+
+            This monad's actions take an additional two arguments, the
+            environment and the state, and return fresh states and monoidal
+            logs along with the result.
+
+            This monad is a transformer and acts under some other effects.
+            "
+
+            to pure(x):
+                return fn _e, s { m.pure([x, s, w.one()]) }
+
+            to ask():
+                return fn e, s { m.pure([e, s, w.one()]) }
+
+            to tell(x):
+                return fn _e, s { m.pure([null, s, x]) }
+
+            to get():
+                return fn _e, s { m.pure([s, s, w.one()]) }
+
+            to set(x):
+                return fn _e, s { m.pure([null, x, w.one()]) }
+
+            to modify(f):
+                return fn _e, s { m.pure([null, f(s), w.one()]) }
+
+            to control(verb :Str, ==1, ==1, block):
+                return switch (verb):
+                    match =="map":
+                        def mapMonad.controlRun():
+                            def [[ma], lambda] := block()
+                            return fn e, s1 {
+                                m (ma(e, s1)) map [x, s2, l] {
+                                    [lambda(x, null), s2, l]
+                                }
+                            }
+                    match =="do":
+                        def doMonad.controlRun():
+                            def [[ma], lambda] := block()
+                            return fn e, s1 {
+                                m (ma(e, s1)) do [x, s2, l] {
+                                    m (lambda(x, null)) map z {
+                                        [z, s2, l]
+                                    }
+                                }
+                            }
+                    match =="modify":
+                        def modifyMonad.controlRun():
+                            def [[ma], lambda] := block()
+                            return fn e, s1 {
+                                m (ma(e, s1)) map [x, s2, l] {
+                                    [x, lambda(s2, null), l]
+                                }
+                            }
+
     to maybe(m :DeepFrozen):
         "A partial monad."
 
