@@ -2,9 +2,8 @@
 # import "tests/acceptance" =~ [=> acceptanceSuite]
 import "lib/mim/full" =~ [=> expand]
 import "lib/mim/anf" =~ [=> makeNormal]
-import "lib/mim/gradual" =~ [=> typeCheck]
 # import "lib/mim/mix" =~ [=> makeMixer]
-exports (go, lint, pretty, evaluate)
+exports (go, pretty, evaluate)
 
 object pretty as DeepFrozen:
     to LiteralExpr(value, _):
@@ -98,12 +97,6 @@ def go(expr :DeepFrozen) as DeepFrozen:
     # ]
     # return makeMixer(anf, reductionBasis).mix(normalized, [].asMap())
     return normalized
-
-def lint(expr :DeepFrozen) as DeepFrozen:
-    "A list of [span, problem :Str] errors in `expr`."
-
-    def normalized := makeNormal().alpha(expand(expr))
-    return typeCheck(normalized)
 
 def b :DeepFrozen := "&&".add
 
