@@ -124,6 +124,9 @@ object makeMonad as DeepFrozen:
                                 m (f(ej)) do x { lambda(x, ej)(ej) }
                             }
 
+            match [verb, args, namedArgs]:
+                fn _ { M.call(m, verb, args, namedArgs) }
+
     to reader(m :DeepFrozen):
         "A monad which reads from an environment."
 
