@@ -43,7 +43,7 @@ class Ejector(Object):
 
     def toString(self):
         template = u"<ejector at %s%s>"
-        return template % (self._label, u" (inert)" if self.active else u"")
+        return template % (self._label, u"" if self.active else u" (inert)")
 
     @method("Void")
     def run(self):
