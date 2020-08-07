@@ -1,4 +1,4 @@
-exports (makeMonad)
+exports (makeMonad, sequence)
 
 # Monad transformers ala mtl.
 
@@ -226,48 +226,39 @@ object makeMonad as DeepFrozen:
             # in order to more closely match .writer/2.
 
             to pure(x):
-                return fn x, s { m.pure([x, s]) }
+                return fn s { m.pure([x, s]) }
 
             to zero():
-                return fn _, _ { m.zero() }
+                return fn _ { m.zero() }
 
             to get():
-                return fn _, s { m.pure([s, s]) }
+                return fn s { m.pure([s, s]) }
 
             to set(x):
-                return fn _, s { m.pure([null, x]) }
+                return fn s { m.pure([null, x]) }
 
             to modify(f):
-                return fn x, s { m.pure([x, f(s)]) }
+                return fn s { m.pure([null, f(s)]) }
 
             to control(verb :Str, ==1, ==1, block):
                 return switch (verb):
                     match =="map":
                         def mapMonad.controlRun():
                             def [[ma], lambda] := block()
-                            return m (ma) map f {
-                                fn x, s1 {
-                                    def [y, s2] := f(x, s1)
-                                    [lambda(y, null), s2]
-                                }
+                            return fn s1 {
+                                m (ma(s1)) map [x, s2] { [lambda(x, null), s2] }
                             }
                     match =="do":
                         def doMonad.controlRun():
                             def [[ma], lambda] := block()
-                            return m (ma) do f {
-                                fn x, s1 {
-                                    def [y, s2] := f(x, s1)
-                                    lambda(y, null)
-                                }
+                            return fn s1 {
+                                m (ma(s1)) do [x, s2] { lambda(x, null)(s2) }
                             }
                     match =="modify":
                         def modifyMonad.controlRun():
                             def [[ma], lambda] := block()
-                            return m (ma) map f {
-                                fn x, s1 {
-                                    def [y, s2] := f(x, s1)
-                                    [y, lambda(s2, null)]
-                                }
+                            return fn s1 {
+                                m (ma(s1)) map [x, s2] { [x, lambda(s2, null)] }
                             }
 
     to rws(m :DeepFrozen, w :DeepFrozen):
@@ -319,9 +310,9 @@ object makeMonad as DeepFrozen:
                         def doMonad.controlRun():
                             def [[ma], lambda] := block()
                             return fn e, s1 {
-                                m (ma(e, s1)) do [x, s2, l] {
-                                    m (lambda(x, null)) map z {
-                                        [z, s2, l]
+                                m (ma(e, s1)) do [x, s2, l1] {
+                                    m (lambda(x, null)(e, s2)) map [y, s3, l2] {
+                                        [y, s2, w.multiply(l1, l2)]
                                     }
                                 }
                             }
@@ -425,3 +416,16 @@ object makeMonad as DeepFrozen:
                                     to right(r) { return lambda(r, null) }
                                 })
                             }
+
+def sequence(m :DeepFrozen, actions :List) as DeepFrozen:
+    "
+    Run `actions` in sequence in monad `m` and return a single monadic action
+    which accumulates all of the results.
+
+    This function is, and must be, notoriously slow. It has quadratic time
+    complexity in the length of `actions`.
+    "
+
+    return if (actions =~ [ma] + mas) {
+        m (ma) do x { m (sequence(m, mas)) map xs { [x] + xs } }
+    } else { m.pure([]) }
