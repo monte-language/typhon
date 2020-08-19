@@ -8,6 +8,27 @@ object vatMonoid as DeepFrozen:
     to multiply(x, y):
         return x + y
 
+def traceFrame(m :DeepFrozen, action, message :Str) as DeepFrozen:
+    return m (action) do rv {
+        m (m.get()) map frame {
+            traceln(`traceFrame: $frame ($message)`)
+            rv
+        }
+    }
+
+def sequenceLast(m :DeepFrozen, [ma] + mas) as DeepFrozen:
+    "
+    Run `ma` and then `mas` in sequence in monad `m` and return a single
+    monadic action which just has the final result.
+
+    Like `sequence`, but faster because it does not build a massive
+    intermediate list of results. Still quadratic, though.
+    "
+
+    return if (mas.isEmpty()) { ma } else {
+        m (ma) do _ { sequenceLast(m, mas) }
+    }
+
 def monteMonad :DeepFrozen := makeMonad.error(makeMonad.rws(makeMonad.identity(), vatMonoid))
 
 def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
@@ -18,8 +39,26 @@ def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
             # XXX
             return m.pure([].asMap())
 
+        to matchBind(patt :DeepFrozen):
+            # Pattern actions yield null. We take an expression action which
+            # yields the value to be bound.
+            return switch (patt.getNodeName()):
+                match =="FinalPattern":
+                    def name :Str := patt.getNoun().getName()
+                    fn specimen, _ej {
+                        m.modify(fn frame {
+                            frame.with(name, specimen)
+                        })
+                    }
+
+        to nullOk(maybe :NullOk[DeepFrozen]):
+            return if (maybe == null) { m.pure(null) } else { interpret(maybe) }
+
         to run(expr :DeepFrozen):
+            # Expression actions yield values.
             return switch (expr.getNodeName()):
+                match =="SeqExpr":
+                    sequenceLast(m, [for e in (expr.getExprs()) interpret(e)])
                 match =="LiteralExpr":
                     m.pure(d.literal(expr.getValue()))
                 match =="NounExpr":
@@ -36,6 +75,15 @@ def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
                                 traceln(`r $r verb $verb args $a namedArgs $na`)
                                 d.call(r, verb, a, na)
                             }
+                        }
+                    }
+                match =="DefExpr":
+                    def rhs := interpret(expr.getExpr())
+                    def ex := interpret.nullOk(expr.getExit())
+                    def patt := interpret.matchBind(expr.getPattern())
+                    m (rhs) do rv {
+                        m (ex) do ej {
+                            m (patt(rv, ej)) map _ { rv }
                         }
                     }
 
@@ -62,7 +110,7 @@ def tycheck :DeepFrozen := makeInterpreter(monteMonad, typesOnly)
 traceln(`tycheck $tycheck`)
 
 def go() as DeepFrozen:
-    def expr := m`x.add(2)`
+    def expr := m`def y := 3; 4; x.add(y)`
     def abs := tycheck(expr)
     traceln(`action $abs`)
     escape ej:
