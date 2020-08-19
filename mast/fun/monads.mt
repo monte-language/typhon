@@ -312,7 +312,7 @@ object makeMonad as DeepFrozen:
                             return fn e, s1 {
                                 m (ma(e, s1)) do [x, s2, l1] {
                                     m (lambda(x, null)(e, s2)) map [y, s3, l2] {
-                                        [y, s2, w.multiply(l1, l2)]
+                                        [y, s3, w.multiply(l1, l2)]
                                     }
                                 }
                             }
