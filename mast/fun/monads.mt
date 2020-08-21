@@ -94,6 +94,9 @@ object makeMonad as DeepFrozen:
             to throw(problem):
                 return fn ej { throw.eject(ej, problem) }
 
+            to reset(f):
+                return fn _ej { escape la { f(la) } }
+
             to callCC(f):
                 "
                 Call `f` with the current continuation. `f` may return a
@@ -105,9 +108,6 @@ object makeMonad as DeepFrozen:
                 "
 
                 return escape ej { f(ej) }
-
-            # XXX shift/reset would go here, but since ejectors are already
-            # delimited, they're equivalent to callCC/id.
 
             to control(verb :Str, ==1, ==1, block):
                 return switch (verb):

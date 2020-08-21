@@ -29,6 +29,13 @@ def sequenceLast(m :DeepFrozen, [ma] + mas) as DeepFrozen:
         m (ma) do _ { sequenceLast(m, mas) }
     }
 
+def freshScope(m :DeepFrozen, action) as DeepFrozen:
+    # NB: Later, we'll need to only change part of the state, so we don't
+    # trash the heap.
+    return m (m.get()) do frame {
+        m (action) do rv { m (m.set(frame)) map _ { rv } }
+    }
+
 def monteMonad :DeepFrozen := makeMonad.error(makeMonad.rws(makeMonad.identity(), vatMonoid))
 
 def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
@@ -43,6 +50,11 @@ def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
             # Pattern actions yield null. We take an expression action which
             # yields the value to be bound.
             return switch (patt.getNodeName()):
+                # XXX guards!?
+                match =="IgnorePattern":
+                    fn _specimen, _ej {
+                        m.pure(null)
+                    }
                 match =="FinalPattern":
                     def name :Str := patt.getNoun().getName()
                     fn specimen, _ej {
@@ -86,6 +98,12 @@ def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
                             m (patt(rv, ej)) map _ { rv }
                         }
                     }
+                match =="EscapeExpr":
+                    def patt := interpret.matchBind(expr.getEjectorPattern())
+                    def body := interpret(expr.getBody())
+                    freshScope(m, m.callCC(fn ej {
+                        m (patt(ej, null)) do _ { body }
+                    }))
 
 object concreteMonte as DeepFrozen:
     to literal(x):
@@ -110,7 +128,7 @@ def tycheck :DeepFrozen := makeInterpreter(monteMonad, typesOnly)
 traceln(`tycheck $tycheck`)
 
 def go() as DeepFrozen:
-    def expr := m`def y := 3; 4; x.add(y)`
+    def expr := m`def y := escape _ { 3 }; 4; x.add(y)`
     def abs := tycheck(expr)
     traceln(`action $abs`)
     escape ej:
