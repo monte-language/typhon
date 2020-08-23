@@ -1,4 +1,4 @@
-import "fun/monads" =~ [=> makeMonad, => sequence]
+import "lib/monads" =~ [=> makeMonad, => sequence]
 exports (go)
 
 object vatMonoid as DeepFrozen:
