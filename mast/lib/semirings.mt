@@ -4,6 +4,8 @@ exports (booleanSemiring, makeMatrixSemiring)
 # http://stedolan.net/research/semirings.pdf
 
 object booleanSemiring as DeepFrozen:
+    "The Boolean semiring."
+
     to zero():
         return false
 
@@ -18,6 +20,25 @@ object booleanSemiring as DeepFrozen:
 
     to multiply(left, right):
         return left & right
+
+def makeSetMonoidSemiring(monoid :DeepFrozen) as DeepFrozen:
+    "The semiring on sets of elements of `monoid`."
+
+    to zero():
+        return [].asSet()
+
+    to one():
+        return [monoid.one()].asSet()
+
+    to add(left, right):
+        return left | right
+
+    to multiply(left, right):
+        def rv := [].asSet().diverge()
+        for l in (left):
+            for r in (right):
+                rv.include(monoid.multiply(l, r))
+        return rv.snapshot()
 
 def makeMatrixSemiring(semiring :DeepFrozen, n :(Int > 0)) as DeepFrozen:
     "The closed semiring of `n` × `n` matrices of elements of `sr`."
