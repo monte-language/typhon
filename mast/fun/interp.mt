@@ -10,7 +10,7 @@ object vatMonoid as DeepFrozen:
 
 def traceFrame(m :DeepFrozen, action, message :Str) as DeepFrozen:
     return m (action) do rv {
-        m (m.get()) map frame {
+        m (m.get()) map [_, frame] {
             traceln(`traceFrame: $frame ($message)`)
             rv
         }
@@ -29,14 +29,21 @@ def sequenceLast(m :DeepFrozen, [ma] + mas) as DeepFrozen:
         m (ma) do _ { sequenceLast(m, mas) }
     }
 
-def freshScope(m :DeepFrozen, action) as DeepFrozen:
-    # NB: Later, we'll need to only change part of the state, so we don't
-    # trash the heap.
-    return m (m.get()) do frame {
-        m (action) do rv { m (m.set(frame)) map _ { rv } }
-    }
+# What's in the stack?
+# The State in RWS is a pair [heap, frame].
 
 def monteMonad :DeepFrozen := makeMonad.error(makeMonad.rws(makeMonad.identity(), vatMonoid))
+
+def freshScope(m :DeepFrozen, action) as DeepFrozen:
+    "Save the current frame, run `action`, and then restore the frame."
+
+    return m (m.get()) do [_, frame] {
+        m (action) do rv {
+            m (m.modify(fn [heap, _] {
+                [heap, frame]
+            })) map _ { rv }
+        }
+    }
 
 def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
     "Build an interpreter on monad `m` and domain `d`."
@@ -53,7 +60,7 @@ def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
                 match =="BindingPattern":
                     def name :Str := patt.getNoun().getName()
                     fn specimen, _ej {
-                        m.modify(fn frame {
+                        m.modify(fn [heap, frame] {
                             frame.with(name, specimen)
                         })
                     }
@@ -66,7 +73,7 @@ def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
                 match =="FinalPattern":
                     def name :Str := patt.getNoun().getName()
                     fn specimen, _ej {
-                        m.modify(fn frame {
+                        m.modify(fn [heap, frame] {
                             frame.with(name, specimen)
                         })
                     }
@@ -84,7 +91,7 @@ def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
                     m.pure(lit)
                 match =="NounExpr":
                     def name := expr.getName()
-                    m (m.get()) map frame { frame[name] }
+                    m (m.get()) map [heap, frame] { frame[name] }
                 match =="MethodCallExpr":
                     def receiver := interpret(expr.getReceiver())
                     def verb :Str := expr.getVerb()
@@ -158,8 +165,10 @@ def go() as DeepFrozen:
         traceln(`ejector $ej`)
         def flowed := abs(ej)
         traceln(`flowed action $flowed`)
-        def rv := flowed(null, ["x" => Int])
+        def rv := flowed(null, [[].asMap(), ["x" => Int]])
         traceln(`rv $rv`)
+    catch problem:
+        traceln(`problem $problem`)
 
     def action := interp(expr)
     traceln(`action $action`)
@@ -167,8 +176,10 @@ def go() as DeepFrozen:
         traceln(`ejector $ej`)
         def flowed := action(ej)
         traceln(`flowed action $flowed`)
-        def rv := flowed(null, ["x" => 3])
+        def rv := flowed(null, [[].asMap(), ["x" => 3]])
         traceln(`rv $rv`)
+    catch problem:
+        traceln(`problem $problem`)
 
     def comp := staging(expr)
     traceln(`action $comp`)
@@ -176,5 +187,7 @@ def go() as DeepFrozen:
         traceln(`ejector $ej`)
         def flowed := comp(ej)
         traceln(`flowed action $flowed`)
-        def rv := flowed(null, ["x" => m`3`])
+        def rv := flowed(null, [[].asMap(), ["x" => m`3`]])
         traceln(`rv $rv`)
+    catch problem:
+        traceln(`problem $problem`)
