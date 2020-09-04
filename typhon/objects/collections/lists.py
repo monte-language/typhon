@@ -49,7 +49,7 @@ class listIterator(Object):
             self._index += 1
             return rv
         else:
-            throwStr(ej, u"Iterator exhausted")
+            throwStr(ej, u"listIterator.next/1: end of list")
 
 
 @autohelp
@@ -278,7 +278,7 @@ def unwrapList(o, ej=None):
         return l.objs
     if isinstance(l, FlexList):
         return l._l[:]
-    throwStr(ej, u"Not a list!")
+    throwStr(ej, u"Specimen is not List: " + l.toString())
 
 def isList(obj):
     from typhon.objects.refs import resolution

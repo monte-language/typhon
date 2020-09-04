@@ -28,7 +28,7 @@ from typhon.objects.collections.helpers import asSet
 from typhon.objects.collections.lists import unwrapList, wrapList
 from typhon.objects.collections.maps import EMPTY_MAP, monteMap
 from typhon.objects.data import (BigInt, CharObject, DoubleObject, IntObject,
-                                 StrObject, promoteToBigInt, unwrapStr)
+                                 StrObject, unwrapAnyInt, unwrapStr)
 from typhon.objects.ejectors import throwStr
 from typhon.objects.root import Object, audited
 from typhon.pretty import Buffer, LineWriter
@@ -259,7 +259,7 @@ class LiteralMaker(Object):
         if o is NullObject:
             return Null
         if isinstance(o, IntObject):
-            return Int(promoteToBigInt(o))
+            return Int(unwrapAnyInt(o))
         if isinstance(o, BigInt):
             try:
                 return Int(o.bi)

@@ -167,7 +167,7 @@ def unwrapBool(o):
         return True
     if b is FalseObject:
         return False
-    raise WrongType(u"Not a boolean!")
+    raise WrongType(u"Specimen is not Bool: " + b.toString())
 
 def isBool(obj):
     from typhon.objects.refs import resolution

@@ -47,7 +47,7 @@ class mapIterator(Object):
             self._index += 1
             return rv
         else:
-            throwStr(ej, u"next/1: Iterator exhausted")
+            throwStr(ej, u"mapIterator.next/1: end of map")
 
 
 @autohelp
@@ -89,7 +89,8 @@ class ConstMap(Object):
         for obj in unwrapList(wrappedPairs):
             pair = unwrapList(obj)
             if len(pair) != 2:
-                raise userError(u"fromPairs/1: Not a pair")
+                raise userError(
+                        u"_makeMap.fromPairs/1: tuple is not pair, but length %d" % len(pair))
             d[pair[0]] = pair[1]
         return ConstMap(d)
 
@@ -341,17 +342,6 @@ class FlexMap(Object):
             printer.call(u"print", [self._vg])
         printer.call(u"print", [StrObject(u")")])
 
-    @staticmethod
-    def fromPairs(wrappedPairs):
-        from typhon.objects.collections.lists import unwrapList
-        d = monteMap()
-        for obj in unwrapList(wrappedPairs):
-            pair = unwrapList(obj)
-            if len(pair) != 2:
-                raise userError(u"fromPairs/1: Not a pair")
-            d[pair[0]] = pair[1]
-        return ConstMap(d)
-
     def toString(self):
         return toString(self)
 
@@ -368,7 +358,7 @@ class FlexMap(Object):
         try:
             del self.objectMap[key]
         except KeyError:
-            raise userError(u"removeKey/1: Key not in map")
+            raise userError(u"removeKey/1: Key not in map: " + key.toString())
 
     @method("List")
     def pop(self):
@@ -537,7 +527,7 @@ def unwrapMap(o):
         return m.objectMap
     if isinstance(m, FlexMap):
         return m.objectMap
-    raise WrongType(u"Not a map!")
+    raise WrongType(u"Specimen is not Map: " + m.toString())
 
 def wrapMap(d):
     return ConstMap(d)

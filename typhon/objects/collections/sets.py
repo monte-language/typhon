@@ -402,7 +402,7 @@ def unwrapSet(o):
         return m.objectSet
     if isinstance(m, FlexSet):
         return m.objectSet
-    raise WrongType(u"Not a set!")
+    raise WrongType(u"Specimen is not Set: " + m.toString())
 
 def wrapSet(d):
     return ConstSet(d)

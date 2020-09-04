@@ -197,7 +197,7 @@ def unwrapChar(o):
     c = resolution(o)
     if isinstance(c, CharObject):
         return c.getChar()
-    raise WrongType(u"Not a char!")
+    raise WrongType(u"Specimen is not Char: " + c.toString())
 
 def wrapChar(c):
     return CharObject(c)
@@ -577,7 +577,7 @@ def unwrapDouble(o):
     d = resolution(o)
     if isinstance(d, DoubleObject):
         return d.getDouble()
-    raise WrongType(u"Not a double!")
+    raise WrongType(u"Specimen is not Double: " + d.toString())
 
 def wrapDouble(d):
     return DoubleObject(d)
@@ -926,8 +926,8 @@ def unwrapInt(o):
         try:
             return i.bi.toint()
         except OverflowError:
-            raise WrongType(u"Integer was too large")
-    raise WrongType(u"Not an integer!")
+            raise WrongType(u"Specimen is Int but too wide")
+    raise WrongType(u"Specimen is not Int: " + i.toString())
 
 def wrapInt(i):
     return IntObject(i)
@@ -1215,7 +1215,7 @@ def unwrapBigInt(o):
     bi = resolution(o)
     if isinstance(bi, BigInt):
         return bi.bi
-    raise WrongType(u"Not a big integer!")
+    raise WrongType(u"Specimen is not (wide) Int: " + bi.toString())
 
 def wrapBigInt(bi):
     try:
@@ -1242,10 +1242,9 @@ def unwrapAnyInt(o):
         return i.bi
     if isinstance(i, IntObject):
         return rbigint.fromint(i.getInt())
-    raise WrongType(u"Not promotable to big integer!")
+    raise WrongType(
+            u"Specimen is not Int (even after coercion): " + i.toString())
 
-
-promoteToBigInt = unwrapAnyInt
 
 @runnable(RUN_6, [deepFrozenStamp])
 def _makeSourceSpan(uri, isOneToOne, startLine, startCol, endLine, endCol):
@@ -1625,7 +1624,7 @@ def unwrapStr(o):
     s = resolution(o)
     if isinstance(s, StrObject):
         return s.getString()
-    raise WrongType(u"Not a string!")
+    raise WrongType(u"Specimen is not Str: " + s.toString())
 
 def wrapStr(s):
     return StrObject(s)
@@ -1872,7 +1871,7 @@ def unwrapBytes(o):
     s = resolution(o)
     if isinstance(s, BytesObject):
         return s.getBytes()
-    raise WrongType(u"Not a bytestring!")
+    raise WrongType(u"Specimen is not Bytes: " + s.toString())
 
 def wrapBytes(bs):
     return BytesObject(bs)
