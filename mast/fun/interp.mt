@@ -50,11 +50,19 @@ def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
             # Pattern actions yield null. We take an expression action which
             # yields the value to be bound.
             return switch (patt.getNodeName()):
+                match =="BindingPattern":
+                    def name :Str := patt.getNoun().getName()
+                    fn specimen, _ej {
+                        m.modify(fn frame {
+                            frame.with(name, specimen)
+                        })
+                    }
                 # XXX guards!?
                 match =="IgnorePattern":
                     fn _specimen, _ej {
                         m.pure(null)
                     }
+                # XXX and heap slots?
                 match =="FinalPattern":
                     def name :Str := patt.getNoun().getName()
                     fn specimen, _ej {
@@ -72,7 +80,8 @@ def makeInterpreter(m :DeepFrozen, d :DeepFrozen) as DeepFrozen:
                 match =="SeqExpr":
                     sequenceLast(m, [for e in (expr.getExprs()) interpret(e)])
                 match =="LiteralExpr":
-                    m.pure(d.literal(expr.getValue()))
+                    def lit := d.literal(expr.getValue())
+                    m.pure(lit)
                 match =="NounExpr":
                     def name := expr.getName()
                     m (m.get()) map frame { frame[name] }
@@ -121,11 +130,25 @@ object typesOnly as DeepFrozen:
             match [==Int, =="add", [==Int]]:
                 Int
 
+# Using closures for code generation:
+# http://www.iro.umontreal.ca/~feeley/papers/FeeleyLapalmeCL87.pdf
+
+object stagingCompiler as DeepFrozen:
+    to literal(x):
+        return astBuilder.LiteralExpr(x, null)
+
+    to call(receiver, verb :Str, args :List, namedArgs :Map):
+        # XXX namedArgs
+        return astBuilder.MethodCallExpr(receiver, verb, args, [], null)
+
 def interp :DeepFrozen := makeInterpreter(monteMonad, concreteMonte)
 traceln(`interp $interp`)
 
 def tycheck :DeepFrozen := makeInterpreter(monteMonad, typesOnly)
 traceln(`tycheck $tycheck`)
+
+def staging :DeepFrozen := makeInterpreter(monteMonad, stagingCompiler)
+traceln(`staging $staging`)
 
 def go() as DeepFrozen:
     def expr := m`def y := escape _ { 3 }; 4; x.add(y)`
@@ -145,4 +168,13 @@ def go() as DeepFrozen:
         def flowed := action(ej)
         traceln(`flowed action $flowed`)
         def rv := flowed(null, ["x" => 3])
+        traceln(`rv $rv`)
+
+    def comp := staging(expr)
+    traceln(`action $comp`)
+    escape ej:
+        traceln(`ejector $ej`)
+        def flowed := comp(ej)
+        traceln(`flowed action $flowed`)
+        def rv := flowed(null, ["x" => m`3`])
         traceln(`rv $rv`)
