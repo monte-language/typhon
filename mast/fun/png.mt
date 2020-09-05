@@ -7,6 +7,8 @@ def fifthBitUnset(c :Int) :Bool as DeepFrozen:
     return (c & (1 << 5)).isZero()
 
 object chunkType as DeepFrozen:
+    "Examine PNG chunk types."
+
     to isCritical(type :Bytes) :Bool:
         return fifthBitUnset(type[0])
 
@@ -29,12 +31,16 @@ def CRCTable :List[Int] := [for n in (0..!0x100) {
 }]
 
 def CRC32(bs :Bytes) :Int as DeepFrozen:
+    "Compute the CRC-32 of `bs`."
+
     var h :Int := 0xffff_ffff
     for i in (bs):
         h := CRCTable[(h ^ i) & 0xff] ^ (h >> 8)
     return h ^ 0xffff_ffff
 
 def chunksOf(bs :Bytes) as DeepFrozen:
+    "Iterate over PNG data, yielding chunks."
+
     return def chunkIterable._makeIterator():
         # XXX should be monotonic
         var offset :Int := 0
@@ -60,6 +66,7 @@ def chunksOf(bs :Bytes) as DeepFrozen:
             def crc := long()
             if (crc != CRC32(ty + chunk)):
                 throw("Bad CRC on chunk")
+            traceln(`chunk ty $ty length $length`)
             return [ty, chunk]
 
 def Int4 :DeepFrozen := 0..!0x1_0000_0000
@@ -75,6 +82,8 @@ def buildChunk(ty :Bytes, chunk :Bytes) :Bytes as DeepFrozen:
     return length + body + crc
 
 object makePNG as DeepFrozen:
+    "Pack PNG chunk data into single bytestrings."
+
     to fromChunks(chunkIterator) :Bytes:
         "
         Build a PNG from an iterator of PNG chunks.
