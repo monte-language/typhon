@@ -439,8 +439,10 @@ class LayOutScopes(NoAssignIR.makePassTo(LayoutIR)):
         origLayout = self.layout
         self.layout = layout1 = ScopeBox(origLayout)
         origLayout.addChild(layout1)
+        # The test and if-branch go in the same scope box.
         t = self.visitExpr(test)
         c = self.visitExpr(consq)
+        # The else-branch does not get access to names bound in the test.
         self.layout = layout2 = ScopeBox(origLayout)
         origLayout.addChild(layout2)
         e = self.visitExpr(alt)
