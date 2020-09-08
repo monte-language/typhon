@@ -9,8 +9,10 @@ def adler32(bs :Bytes) :Int as DeepFrozen:
     var s1 := 1
     var s2 := 0
     for i in (bs):
-        s1 := (s1 + i) % BASE
-        s2 := (s2 + s1) % BASE
+        s1 += i
+        if (s1 >= BASE) { s1 -= BASE }
+        s2 += s1
+        if (s2 >= BASE) { s2 -= BASE }
     return (s2 << 16) | s1
 
 def pack4be(i :Int) :Bytes as DeepFrozen:
