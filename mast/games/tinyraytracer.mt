@@ -1,4 +1,4 @@
-import "fun/ppm" =~ [=> makePPM]
+import "fun/png" =~ [=> makePNG]
 import "lib/colors" =~ [=> makeColor]
 import "lib/samplers" =~ [=> samplerConfig]
 import "lib/vectors" =~ [=> V, => glsl]
@@ -220,7 +220,7 @@ def main(_argv, => makeFileResource, => Timer) as DeepFrozen:
     # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # throw("yay?")
     def config := samplerConfig.Center()
-    def drawer := makePPM.drawingFrom(drawable, config)(w, h)
+    def drawer := makePNG.drawingFrom(drawable, config)(w, h)
     var i := 0
     def start := Timer.unsafeNow()
     while (true):
@@ -231,5 +231,5 @@ def main(_argv, => makeFileResource, => Timer) as DeepFrozen:
             def timeRemaining := ((w * h) - i) / pixelsPerSecond
             traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s) (${timeRemaining}s left)`)
         drawer.next(__break)
-    def ppm := drawer.finish()
-    return when (makeFileResource("tiny.ppm")<-setContents(ppm)) -> { 0 }
+    def png := drawer.finish()
+    return when (makeFileResource("tiny.png")<-setContents(png)) -> { 0 }

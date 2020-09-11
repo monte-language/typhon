@@ -3,7 +3,7 @@ import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/noise" =~ [=> makeSimplexNoise]
 import "lib/samplers" =~ [=> samplerConfig]
 import "lib/vectors" =~ [=> V, => glsl]
-import "fun/ppm" =~ [=> makePPM]
+import "fun/png" =~ [=> makePNG]
 exports (main)
 
 # https://www.realtimerendering.com/raytracing/Ray%20Tracing%20in%20a%20Weekend.pdf
@@ -578,7 +578,7 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
         def config := samplerConfig.QuasirandomMonteCarlo(25)
         # My adaptive take on the original design.
         # def config := samplerConfig.TTest(samplerConfig.QuasirandomMonteCarlo(1), 0.999, 5, 20)
-        def drawer := makePPM.drawingFrom(drawable, config)(w, h)
+        def drawer := makePNG.drawingFrom(drawable, config)(w, h)
         var i := 0
         def start := Timer.unsafeNow()
         while (true):
@@ -589,5 +589,5 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
                 def timeRemaining := ((w * h) - i) / pixelsPerSecond
                 traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s) (${timeRemaining}s left)`)
             drawer.next(__break)
-        def ppm := drawer.finish()
-        when (makeFileResource("weekend.ppm")<-setContents(ppm)) -> { 0 }
+        def png := drawer.finish()
+        when (makeFileResource("weekend.png")<-setContents(png)) -> { 0 }

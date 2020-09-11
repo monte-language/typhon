@@ -4,7 +4,7 @@ import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/noise" =~ [=> makeSimplexNoise]
 import "lib/samplers" =~ [=> samplerConfig]
 import "lib/vectors" =~ [=> V, => glsl]
-import "fun/ppm" =~ [=> makePPM]
+import "fun/png" =~ [=> makePNG]
 exports (main)
 
 # http://jamie-wong.com/2016/07/15/ray-marching-signed-distance-functions/
@@ -348,7 +348,7 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     # drawable.drawAt(0.5, 0.45, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # throw("yay?")
     def config := samplerConfig.QuasirandomMonteCarlo(10)
-    def drawer := makePPM.drawingFrom(drawable, config)(w, h)
+    def drawer := makePNG.drawingFrom(drawable, config)(w, h)
     var i := 0
     def start := Timer.unsafeNow()
     while (true):
@@ -363,5 +363,5 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
             # def varSlots := formatBucket(buckets["VarSlot"])
             # traceln(`Memory: FinalSlot $finalSlots VarSlot $varSlots`)
         drawer.next(__break)
-    def ppm := drawer.finish()
-    return when (makeFileResource("sdf.ppm")<-setContents(ppm)) -> { 0 }
+    def png := drawer.finish()
+    return when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }
