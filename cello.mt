@@ -8,7 +8,13 @@ def outers :Map[Str, Bytes] := [
     "false" => b`falseObj`,
     "null" => b`nullObj`,
     "Int" => b`guardInt`,
+    "Any" => b`guardAny`,
 ]
+
+# We compile simple expressions to C expressions, and complex expressions to C
+# statements; each expression is returned, but statements are written out line
+# by line onto `lines`. Patterns write C statements and return information
+# about which local names were written.
 
 def compileProgramOnto(expr, lines) :Bytes as DeepFrozen:
     var locals := [].asMap()
@@ -63,6 +69,7 @@ def buildEntrypoint(lines :List[Bytes], module :Bytes) :Bytes as DeepFrozen:
     return b`
     #include "Cello.h"
 
+    extern var FinalSlot;
     extern var ConstList;
 
     bool isTrue(var);
