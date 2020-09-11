@@ -31,14 +31,17 @@ def packBlock(bs :Bytes, final :Bool) :Bytes as DeepFrozen:
 # Magic number for choosing "deflate".
 def compressionMethod :Int := 8
 
+# Block size. Cannot be larger than 0xffff.
+def blockSize :Int := 0xffff
+
 def deflate(bs :Bytes) :Bytes as DeepFrozen:
     def windowSize := 0
     def cmf := compressionMethod | (windowSize << 4)
     # cmf * 256 + flg == 0 (mod 31)
     def flg := -(cmf * 0x100) % 31
-    def blockCount := bs.size() // 0x1_0000
+    def blockCount := bs.size() // blockSize
     def packed := [for i in (0..!blockCount) {
-        packBlock(bs.slice(i * 0x1_0000, i * 0x1_0000 + 0xffff), false)
+        packBlock(bs.slice(i * blockSize, (i + 1) * blockSize), false)
     }]
-    def final := packBlock(bs.slice(blockCount * 0x1_0000), true)
+    def final := packBlock(bs.slice(blockCount * blockSize), true)
     return _makeBytes.fromInts([cmf, flg]) + b``.join(packed) + final + pack4be(adler32(bs))
