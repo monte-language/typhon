@@ -1,3 +1,4 @@
+import "lib/samplers" =~ [=> makeDiscreteSampler]
 import "fun/deflate" =~ [=> deflate]
 exports (chunkType, CRC32, chunksOf, makePNG)
 
@@ -97,9 +98,10 @@ object makePNG as DeepFrozen:
             chunks.push(buildChunk(ty, chunk))
         return b``.join(chunks)
 
-    to drawingFrom(d):
+    to drawingFrom(drawable, config):
         "
-        Draw from drawable/shader `d` repeatedly to form an image.
+        Draw from `drawable` repeatedly to form an image, using `config` for
+        sampling configuration.
         "
         return def draw(width :Int4, height :Int4):
             # Width, height, bit depth, color type, compression, filter,
@@ -117,11 +119,19 @@ object makePNG as DeepFrozen:
                 body.push(c & 0xff)
 
             def aspectRatio :Double := width / height
-            for h in (0..!height):
-                # Filter type for this scanline: 0 for no filtering.
-                body.push(0)
-                for w in (0..!width):
-                    def color := d.drawAt(w / width, h / height, => aspectRatio)
+            def discreteSampler := makeDiscreteSampler(drawable, config, width, height)
+
+            var h := 0
+            var w := 0
+
+            return object drawingIterable:
+                to next(ej):
+                    if (h >= height) { throw.eject(ej, "done") }
+
+                    # Filter type for this scanline: 0 for no filtering.
+                    if (w.isZero()) { body.push(0) }
+
+                    def color := discreteSampler.pixelAt(w, h)
                     # Kludge: Color is premultiplied, but PNG stores colors
                     # unpremultiplied. Fortunately, alpha is a Double and we
                     # can recover the original color with negligible loss.
@@ -136,15 +146,22 @@ object makePNG as DeepFrozen:
                         for chan in ([r, g, b]):
                             push(chan * a.reciprocal())
                         push(a)
-            def idat := deflate(_makeBytes.fromInts(body))
 
-            return makePNG.fromChunks([
-                b`IHDR` => ihdr,
-                # NB: We don't emit compatibility gAMA or cHRM; too much work
-                # to emit fixed values from the specification. We also don't
-                # have a strong preference as to how our sRGB values will be
-                # interpreted.
-                b`sRGB` => b`$\x00`,
-                b`IDAT` => idat,
-                b`IEND` => b``,
-            ])
+                    w += 1
+                    if (w >= width):
+                        w := 0
+                        h += 1
+
+                to finish():
+                    def idat := deflate(_makeBytes.fromInts(body))
+
+                    return makePNG.fromChunks([
+                        b`IHDR` => ihdr,
+                        # NB: We don't emit compatibility gAMA or cHRM; too much work
+                        # to emit fixed values from the specification. We also don't
+                        # have a strong preference as to how our sRGB values will be
+                        # interpreted.
+                        b`sRGB` => b`$\x00`,
+                        b`IDAT` => idat,
+                        b`IEND` => b``,
+                    ])
