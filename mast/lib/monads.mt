@@ -68,6 +68,52 @@ object makeMonad as DeepFrozen:
 
         return listMonad
 
+    to cont(m :DeepFrozen):
+        "A mother of all monads which uses traditional continuation encoding."
+
+        return object functionContinuationMonad as DeepFrozen:
+            "
+            An undelimited continuation monad.
+
+            This monad suspends actions by waiting for a continuation. The
+            continuation completes the action by taking the action's result
+            value and finishing whatever computation may come next.
+
+            To run actions from this monad, simply provide the identity
+            function.
+            "
+
+            to pure(x):
+                return fn k { k(m.pure(x)) }
+
+            to callCC(f):
+                "
+                An action which suspends the continuation and passes it to `f`
+                as a callable function. `f` should return an action in this
+                monad, but may also invoke the suspended continuation in order
+                to complete it.
+
+                Since this monad's continuations are undelimited, `f` may
+                invoke its argument continuation zero or more times.
+                "
+
+                return fn k { f(fn a { fn _ { k(a) } })(k) }
+
+            to control(verb :Str, ==1, ==1, block):
+                return switch (verb):
+                    match =="map":
+                        def mapMonad.controlRun():
+                            def [[f], lambda] := block()
+                            return fn k {
+                                m (f(k)) map x { lambda(x, null) }
+                            }
+                    match =="do":
+                        def doMonad.controlRun():
+                            def [[f], lambda] := block()
+                            return fn k {
+                                m (f(k)) do x { lambda(x, null)(k) }
+                            }
+
     to error(m :DeepFrozen):
         "A mother of all monads which uses ejectors within a single turn."
 
