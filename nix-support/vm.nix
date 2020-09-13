@@ -3,8 +3,8 @@
 # $ nix-prefetch-hg https://bitbucket.org/pypy/pypy
 let
   pypySrc = fetchzip {
-    url = "https://bitbucket.org/pypy/pypy/downloads/pypy2-v6.0.0-src.tar.bz2";
-    sha256 = "17wjrjd23k2m4cz2qvb0xxk1hwyk8xzbpa60l7r9y3lia7j1r8pm";
+    url = "https://downloads.python.org/pypy/pypy2.7-v7.3.1-src.tar.bz2";
+    sha256 = "01bz1s32rz5b57q45d71427m4lslfivxardl05pmrqnw8278453q";
   };
   macropy = pypyPackages.buildPythonPackage rec {
     pname = "macropy";

@@ -1419,6 +1419,7 @@ class StrObject(Object):
     _immutable_fields_ = "_s",
 
     def __init__(self, s):
+        assert s is not None, "perverse"
         self._s = s
 
     def toString(self):

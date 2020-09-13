@@ -1069,6 +1069,7 @@ class Obj(Expr):
     _immutable_fields_ = "_d", "_n", "_as", "_implements[*]", "_script"
 
     def __init__(self, doc, name, objectAs, implements, script):
+        assert doc is not None, "inexplainable"
         self._d = doc
         self._n = name
         self._as = objectAs
