@@ -17,6 +17,8 @@ def linear2sRGB(u :Double) :Double as DeepFrozen:
         ((u * 200 + 11) / 211) ** (12 / 5)
     }
 
+def clamp(x :Double) :Double as DeepFrozen { return x.min(1.0).max(0.0) }
+
 def _makeColor(r :Chan, g :Chan, b :Chan, a :Chan) :DeepFrozen as DeepFrozen:
     # No public docstring; this ought never to be directly exported.
     # All input channels must be premultiplied and clamped.
@@ -28,6 +30,9 @@ def _makeColor(r :Chan, g :Chan, b :Chan, a :Chan) :DeepFrozen as DeepFrozen:
         Specifically, this color is stored in linear sRGB color space. Color
         channels are premultiplied with the alpha channel.
         "
+
+        to _printOn(out):
+            out.print(`<color [$r, $g, $b, $a]>`)
 
         to alpha():
             return a
@@ -113,6 +118,32 @@ object makeColor as DeepFrozen:
         "
 
         return _makeColor(red * alpha, green * alpha, blue * alpha, alpha)
+
+    to HCL(hue :Double, chroma :Double, luma :Double, alpha :Double):
+        "
+        An HCL color sample.
+
+        HCL is not a single standard; we implement an HSL-style scheme.
+
+        Colors will be multiplied by `alpha`.
+        "
+
+        def h := hue * 6
+        def x := chroma * (1 - ((h - 2 * (h / 2).floor()) - 1).abs())
+        def [r1, g1, b1] := switch (h.floor() % 6) {
+            match ==0 { [chroma, x, 0.0] }
+            match ==1 { [x, chroma, 0.0] }
+            match ==2 { [0.0, chroma, x] }
+            match ==3 { [0.0, x, chroma] }
+            match ==4 { [x, 0.0, chroma] }
+            match ==5 { [chroma, 0.0, x] }
+        }
+        def m := luma - (0.30 * r1 + 0.59 * g1 + 0.11 * b1)
+        # NB: These colors can be out of gamut, so we'll need to clamp, *but*
+        # we can carefully combine clamping and premultiplication so that
+        # brilliant edge colors still stand out.
+        return _makeColor(clamp(alpha * (r1 + m)), clamp(alpha * (g1 + m)),
+                          clamp(alpha * (b1 + m)), alpha)
 
 def pd(src, dest, op) as DeepFrozen:
     "
