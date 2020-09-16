@@ -315,6 +315,10 @@ class DoubleObject(Object):
     def approxDivideInt(self, divisor):
         return self._d / divisor
 
+    @method("Double", "BigInt", _verb="approxDivide")
+    def approxDivideBigInt(self, divisor):
+        return self._d / divisor.tofloat()
+
     @method("Int", "Double")
     def floorDivide(self, divisor):
         return int(math.floor(self._d / divisor))
@@ -322,6 +326,10 @@ class DoubleObject(Object):
     @method("Int", "Int", _verb="floorDivide")
     def floorDivideInt(self, divisor):
         return int(math.floor(self._d / divisor))
+
+    @method("Double", "BigInt", _verb="floorDivide")
+    def approxDivideBigInt(self, divisor):
+        return int(math.floor(self._d / divisor.tofloat()))
 
     @method("Double", "Double")
     def pow(self, exponent):
@@ -546,6 +554,10 @@ class DoubleObject(Object):
     def addInt(self, other):
         return self._d + other
 
+    @method("Double", "BigInt", _verb="add")
+    def addBigInt(self, other):
+        return self._d + other.tofloat()
+
     @method("Double", "Double")
     def multiply(self, other):
         return self._d * other
@@ -554,6 +566,10 @@ class DoubleObject(Object):
     def multiplyInt(self, other):
         return self._d * other
 
+    @method("Double", "BigInt", _verb="multiply")
+    def multiplyBigInt(self, other):
+        return self._d * other.tofloat()
+
     @method("Double", "Double")
     def subtract(self, other):
         return self._d - other
@@ -561,6 +577,10 @@ class DoubleObject(Object):
     @method("Double", "Int", _verb="subtract")
     def subtractInt(self, other):
         return self._d - other
+
+    @method("Double", "BigInt", _verb="subtract")
+    def subtractBigInt(self, other):
+        return self._d - other.tofloat()
 
     def getDouble(self):
         return self._d
