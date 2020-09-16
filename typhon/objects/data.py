@@ -22,6 +22,7 @@ from rpython.rlib.rbigint import BASE10, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
 from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
+from rpython.rlib.rfloat import erf, erfc, gamma
 from rpython.rlib.rstring import StringBuilder, UnicodeBuilder, replace, split
 from rpython.rlib.rstruct.ieee import float_pack
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
@@ -523,6 +524,18 @@ class DoubleObject(Object):
     @method("Double", "Double")
     def arcCotangent(self, x):
         return math.atan2(x, self._d)
+
+    # Statistics helpers.
+    # Elusive Eight: https://www.evanmiller.org/statistical-shortcomings-in-standard-math-libraries.html
+
+    @method("Double")
+    def cumulativeNormal(self):
+        """
+        The cumulative probability of the normal distribution.
+        """
+
+        z = 1.0 / math.sqrt(2.0)
+        return 1.0 - erfc(self._d * z) * 0.5
 
     # Decompositions.
 
