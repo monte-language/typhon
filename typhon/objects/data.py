@@ -22,7 +22,7 @@ from rpython.rlib.rbigint import BASE10, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
 from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
-from rpython.rlib.rfloat import erf, erfc, gamma
+from rpython.rlib.rfloat import erfc, lgamma
 from rpython.rlib.rstring import StringBuilder, UnicodeBuilder, replace, split
 from rpython.rlib.rstruct.ieee import float_pack
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
@@ -534,6 +534,72 @@ class DoubleObject(Object):
 
     # Statistics helpers.
     # Elusive Eight: https://www.evanmiller.org/statistical-shortcomings-in-standard-math-libraries.html
+
+    @method("Double", "Double", "Double")
+    def cumulativeBeta(self, a, b):
+        """
+        The cumulative probability of the beta distribution on two parameters.
+
+        This is also known as the regularized incomplete beta function.
+        """
+
+        # https://codeplea.com/incomplete-beta-function-c
+        # https://dlmf.nist.gov/8.17
+        x = self._d
+
+        # Preconditions.
+        if x == 0.0:
+            return 0.0
+        if x == 1.0:
+            return 1.0
+        if not (0.0 < x < 1.0):
+            raise userError(u".cumulativeBeta/2: %f out of range" % self._d)
+
+        # First, symmetry. We need to be in the convergent region. If not
+        # x < (a + 1) / (a + b + 2)
+        # then we use
+        # I_x(a, b) = 1 - I_(1-x)(b, a)
+        # to rewrite and become convergent.
+        w = 1.0 - x
+        flip = x * (a + b + 2) >= a + 1
+        if flip:
+            x, w = w, x
+            a, b = b, a
+
+        # The scaling factor in front. Work logarithmically to avoid overflow.
+        lbeta = lgamma(a) + lgamma(b) - lgamma(a + b)
+        # NB: If x = 0 or x = 1 then ValueError!
+        scale = math.exp(math.log(x) * a + math.log(w) * b
+                         - math.log(a) - lbeta)
+
+        # Lentz's algorithm to find the continued-fraction approximant.
+        # The first coefficient is always 1, which has been inlined here.
+        d = 1.0
+        c = 2.0
+        f = 2.0
+
+        # The coefficients are generated in pairs, so we have to check the
+        # parity of m and decompose into 2k or 2k + 1. The number of
+        # coefficients to generate comes from Cephes.
+        for m in range(1, 300):
+            bot = (a + m) * (a + m - 1)
+            k = m >> 1
+            top = -1 * (a + k) * (a + b + k) if m & 1 else k * (b - k)
+            ai = top * x / bot
+
+            d = 1.0 / (1.0 + ai * d)
+            c = 1.0 + (ai / c)
+            f *= c * d
+
+            # This stopping threshold is from Cephes: 3 * epsilon
+            if abs(1.0 - c * d) < 3.33e-16:
+                break
+
+        # The continued fraction has a leading edge that we need to remove.
+        rv = (f - 1.0) * scale
+
+        # Finally, do we need to flip?
+        return 1.0 - rv if flip else rv
 
     @method("Double")
     def cumulativeNormal(self):
