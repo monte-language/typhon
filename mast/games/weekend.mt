@@ -409,7 +409,7 @@ def maxDepth :Int := 100
 # NB: Returns not just the color, but also the depth that we needed to go to
 # to examine the color.
 def color(entropy, ray, world, depth) as DeepFrozen:
-    def direction := ray.direction()
+    # def direction := ray.direction()
     # Set minimum t in order to avoid shadow acne.
     def hit := world.hit(ray, 1.0e-5, Infinity)
     return if (hit =~ [_, u, v, p, N, mat]) {
@@ -420,7 +420,7 @@ def color(entropy, ray, world, depth) as DeepFrozen:
         } else { [emitted, depth] }
     } else {
         # XXX [-1,1] -> [0,1] we should factor out this too
-        def [_, t, _] := V.un((glsl.normalize(direction) + 1.0) * 0.5, null)
+        # def [_, t, _] := V.un((glsl.normalize(direction) + 1.0) * 0.5, null)
         # Whether there is an ambient light.
         if (true) { [one, depth] } else { [zero, depth] }
     }
@@ -553,19 +553,18 @@ def makeDrawable(entropy, aspectRatio) as DeepFrozen:
     # NB: Aspect ratio is fixed, and we ignore the requested ratio.
     def camera := makeCamera(entropy, lookFrom, lookAt, up, fov, aspectRatio,
                              aperture, distToFocus, 0.0, 1.0)
-    return def drawable.drawAt(u :Double, var v :Double,
-                               => pixelRadius :Double):
+    return def drawable.drawAt(u :Double, v :Double):
         # NB: Rendering is upside-down WRT Monte conventions.
         def ray := camera.getRay(u, 1.0 - v)
-        def [sample, depth] := color(entropy, ray, world, 0)
+        def [sample, _depth] := color(entropy, ray, world, 0)
         # Okay, *now* we clamp.
         def [r, g, b] := _makeList.fromIterable(sample.min(1.0))
         return makeColor.RGB(r, g, b, 1.0)
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
-    def w := 320
-    def h := 180
+    def w := 640
+    def h := 360
     def p := Timer.measureTimeTaken(fn { makeDrawable(entropy, w / h) })
     return when (p) ->
         def [drawable, dd] := p
@@ -575,9 +574,11 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
         # achieve this effect without introducing obvious aliasing or
         # dithering effects. The original starts at 100 and then climbs to
         # 1_000 and eventually 10_000.
-        def config := samplerConfig.QuasirandomMonteCarlo(25)
-        # My adaptive take on the original design.
-        # def config := samplerConfig.TTest(samplerConfig.QuasirandomMonteCarlo(1), 0.999, 5, 20)
+        # def config := samplerConfig.QuasirandomMonteCarlo(25)
+        # My adaptive take on the original design. Repeated center sampling
+        # will jitter due to inherent randomness in the tracing algorithm, so
+        # repeat until statistically stable.
+        def config := samplerConfig.TTest(samplerConfig.Center(), 0.999, 3, 100)
         def drawer := makePNG.drawingFrom(drawable, config)(w, h)
         var i := 0
         def start := Timer.unsafeNow()
