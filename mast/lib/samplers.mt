@@ -36,7 +36,16 @@ def averageColor(colors :List) as DeepFrozen:
     return M.call(makeColor, "RGB", [for chan in (channels) chan * scale],
                   [].asMap())
 
-# XXX Elusive Eight could remove these tables!
+def cumulativeT(t :Double, v :Int) :Double as DeepFrozen:
+    "The CDF for Student's t-distribution with `v` degrees of freedom."
+
+    def x := v / (t * t + v)
+    return 1.0 - x.cumulativeBeta(v * 0.5, 0.5)
+
+def cumulativeChi2(x :Double, k :Int) :Double as DeepFrozen:
+    "The CDF for the χ2 distribution with `k` degrees of freedom."
+
+    return (x * 0.5).cumulativeGamma(k * 0.5)
 
 # https://en.wikipedia.org/wiki/Student%27s_t-distribution#Table_of_selected_values
 # http://www.davidmlane.com/hyperstat/t_table.html
@@ -48,18 +57,6 @@ def tTable :List[Double] := ([
 ] + [3.551] * 10 + [3.496] * 10 + [3.460] * 10 +
     [3.416] * 20 + [3.390] * 20 + [3.373] * 20)
 def tFinal :Double := 3.291
-
-# XXX these two tables should be generated from scratch, should be computed,
-# but we don't have the Elusive Eight yet.
-def chiTable :Map[Double, Double] := [
-    0.5 => 5.35,
-    0.7 => 7.23,
-    0.8 => 8.56,
-    0.9 => 10.64,
-    0.95 => 12.59,
-    0.99 => 16.81,
-    0.999 => 22.46,
-]
 
 def sumPlus(x, y) as DeepFrozen { return x + y }
 def sum :DeepFrozen := V.makeFold(0.0, sumPlus)
@@ -97,7 +94,10 @@ def needsMoreSamples(samplers :List, qualityCutoff :Double) as DeepFrozen:
         traceln(`N=$N t=$tTests p=$pValues f=$fTest q=$qualityCutoff`)
     # This f-test has 3 degrees of freedom, so we compare it
     # to the chi-squared table for 6 degrees.
-    return fTest < qualityCutoff
+    def probability := cumulativeChi2(fTest, 6)
+    # Quality is in nines, probability is 1 - nines. We want an improbably
+    # high-quality sample, so we want to flip probability around.
+    return 1.0 - probability > qualityCutoff
 
 def makeDiscreteSampler(drawable, config,
                         width :(Int > 0),
@@ -178,15 +178,13 @@ def makeDiscreteSampler(drawable, config,
             }
 
         to TTest(sampler, quality :Double, minimumCount :Int, maximumCount :Int):
-            # XXX Elusive Eight, so that we don't need a table
-            def cutoff :Double := chiTable[quality]
             return fn x, y {
                 def samplers := [makeWelford(), makeWelford(), makeWelford(),
                                  makeWelford()]
                 var count := 0
                 while (count < minimumCount || (count < maximumCount &&
                                                 needsMoreSamples(samplers,
-                                                                 cutoff))) {
+                                                                 quality))) {
                     count += 1
                     def color := sampler(x, y)
                     for i => channel in (color.RGB()) { samplers[i](channel) }
