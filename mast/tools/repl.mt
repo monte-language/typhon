@@ -211,15 +211,21 @@ def main(_argv,
             def [width, height] := stdio.stdout().getWindowSize()
             return async."for"(draw(height, width), fn _, line { prompt<-writeLine(line) })
 
-        to graph(f) :Vow[Void]:
+        to graph(f, => window :NullOk[List[Double]] := null) :Vow[Void]:
             "
             Draw a graph of a function from Doubles to Doubles to the screen.
+
+            `=> window`, when provided, should be a list of four Doubles
+            [x1, y1, x2, y2] which will override the automatic scaled window.
+            Note that the terminal window size will still control the aspect ratio!
             "
             def [width, height] := stdio.stdout().getWindowSize()
             # Aspect ratio has to be manually done here.
-            def ratio := width / height
-            def graphed := calculateGraph(f, height, width, -ratio, -1.0,
-                                          ratio, 1.0)
+            def [x1, y1, x2, y2] := if (window != null) { window } else {
+                def ratio := width / height
+                [-ratio, -1.0, ratio, 1.0]
+            }
+            def graphed := calculateGraph(f, height, width, x1, y1, x2, y2)
             def rows := [for row in (graphed) UTF8.encode(row, null)]
             return async."for"(rows, fn _, line { prompt<-writeLine(line) })
 
