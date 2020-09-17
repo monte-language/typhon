@@ -601,6 +601,44 @@ class DoubleObject(Object):
         # Finally, do we need to flip?
         return 1.0 - rv if flip else rv
 
+    @method("Double", "Double")
+    def cumulativeGamma(self, a):
+        """
+        The cumulative probability of the gamma distribution on one parameter.
+
+        This is also known as the regularized lower incomplete gamma function.
+        """
+
+        # https://www.maths.lancs.ac.uk/jameson/gammainc.pdf
+        # This is largely a copy of Proposition 6, as implemented by Cephes.
+        x = self._d
+
+        if x < 0.0 or a < 0.0:
+            return 0.0
+
+        # XXX Cephes switches to the upper incomplete function, and uses a
+        # continued fraction, when x > 1.0 and x > a. Is this necessary or
+        # just faster to converge?
+
+        # We work under logs for speed and dynamic range, pulling apart
+        # multiplicative terms. The first term is x ** a * e ** -x and
+        # we also will add in our 1/gamma(x) scale as well.
+        scale = math.exp(math.log(x) * a - x - lgamma(a))
+
+        r = a
+        acc = 1.0
+        s = 1.0
+        # The stopping condition is when machine epsilon dominates the next
+        # additional term. This can be much quicker than computing all ~20
+        # terms for which 1/n! > epsilon, and handles more cases.
+        while acc / s > 1.38e-17:
+            r += 1.0
+            acc *= x / r
+            s += acc
+
+        # And we're done. Assemble our creation.
+        return scale * s / a
+
     @method("Double")
     def cumulativeNormal(self):
         """
