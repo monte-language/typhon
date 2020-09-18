@@ -233,6 +233,126 @@ def runPoly(A, x):
         rv += a
     return rv
 
+def cumBeta(x, a, b):
+    # First, symmetry. We need to be in the convergent region. If not
+    # x < (a + 1) / (a + b + 2)
+    # then we use
+    # I_x(a, b) = 1 - I_(1-x)(b, a)
+    # to rewrite and become convergent.
+    w = 1.0 - x
+    flip = x * (a + b + 2) >= a + 1
+    if flip:
+        x, w = w, x
+        a, b = b, a
+
+    # The scaling factor in front. Work logarithmically to avoid overflow.
+    lbeta = lgamma(a) + lgamma(b) - lgamma(a + b)
+    # NB: If x = 0 or x = 1 then ValueError!
+    scale = math.exp(math.log(x) * a + math.log(w) * b
+                     - math.log(a) - lbeta)
+
+    # Lentz's algorithm to find the continued-fraction approximant.
+    # The first coefficient is always 1, which has been inlined here.
+    d = 1.0
+    c = 2.0
+    f = 2.0
+
+    # The coefficients are generated in pairs, so we have to check the
+    # parity of m and decompose into 2k or 2k + 1. The number of
+    # coefficients to generate comes from Cephes.
+    for m in range(1, 300):
+        bot = (a + m) * (a + m - 1)
+        k = m >> 1
+        top = -1 * (a + k) * (a + b + k) if m & 1 else k * (b - k)
+        ai = top * x / bot
+
+        d = 1.0 / (1.0 + ai * d)
+        c = 1.0 + (ai / c)
+        f *= c * d
+
+        # This stopping threshold is from Cephes: 3 * epsilon
+        if abs(1.0 - c * d) < 3.33e-16:
+            break
+
+    # The continued fraction has a leading edge that we need to remove.
+    rv = (f - 1.0) * scale
+
+    # Finally, do we need to flip?
+    return 1.0 - rv if flip else rv
+
+def cumGamma(x, a):
+    # There are four regimes and we must use different techniques in each
+    # of them. What's implemented currently is technique PT, which works
+    # well for the thin strip of small-x unbounded-a values that are
+    # typically used in statistics. Cephes switches to technique CF when
+    # both x > 1.0 and x > a. We could implement up to all four; see
+    # https://arxiv.org/abs/1306.1754
+
+    # https://www.maths.lancs.ac.uk/jameson/gammainc.pdf
+    # This is largely a copy of Proposition 6, as implemented by Cephes.
+    if x < 0.0 or a < 0.0:
+        return 0.0
+
+    # We work under logs for speed and dynamic range, pulling apart
+    # multiplicative terms. The first term is x ** a * e ** -x and
+    # we also will add in our 1/gamma(x) scale as well.
+    scale = math.exp(math.log(x) * a - x - lgamma(a))
+
+    r = a
+    acc = 1.0
+    s = 1.0
+    # The stopping condition is when machine epsilon dominates the next
+    # additional term. This can be much quicker than computing all ~20
+    # terms for which 1/n! > epsilon, and handles more cases.
+    while acc / s > 1.38e-17:
+        r += 1.0
+        acc *= x / r
+        s += acc
+
+    # And we're done. Assemble our creation.
+    return scale * s / a
+
+def quantNormal(x):
+    # http://csg.sph.umich.edu/abecasis/gas_power_calculator/algorithm-as-241-the-percentage-points-of-the-normal-distribution.pdf
+    A = [2.5090809287301226727e3, 3.3430575583588128105e4,
+         6.7265770927008700853e4, 4.5921953931549871457e4,
+         1.3731693765509461125e4, 1.9715909503065514427e3,
+         1.3314166789178437745e2, 3.3871328727963666080e0]
+    B = [5.2264952788528545610e3, 2.8729085735721942674e4,
+         3.9307895800092710610e4, 2.1213794301586595867e4,
+         5.3941960214247511077e3, 6.8718700749205790830e2,
+         4.2313330701600911252e1, 1.0]
+    C = [7.74545014278341407640e-4, 2.27238449892691845833e-2,
+         2.41780725177450611770e-1, 1.27045825245236838258e0,
+         3.64784832476320460504e0, 5.76949722146069140550e0,
+         4.63033784615654529590e0, 1.42343711074968357734e0]
+    D = [1.05075007164441684324e-9, 5.47593808499534494600e-4,
+         1.51986665636164571966e-2, 1.48103976427480074590e-1,
+         6.89767334985100004550e-1, 1.67638483018380384940e0,
+         2.05319162663775882187e0, 1.0]
+    E = [2.01033439929228813265e-7, 2.71155556874348757815e-5,
+         1.24266094738807843860e-3, 2.65321895265761230930e-2,
+         2.96560571828504891230e-1, 1.78482653991729133580e0,
+         5.46378491116411436990e0, 6.65790464350110377720e0]
+    F = [2.04426310338993978564e-15, 1.42151175831644588870e-7,
+         1.84631831751005468180e-5, 7.86869131145613259100e-4,
+         1.48753612908506148525e-2, 1.36929880922735805310e-1,
+         5.99832206555887937690e-1, 1.0]
+
+    q = x - 0.5
+    if abs(q) <= 0.425:
+        # NB: 0.180625 = 0.425 ** 2
+        x = 0.180625 - q * q
+        return q * runPoly(A, x) / runPoly(B, x)
+    else:
+        r = math.sqrt(-math.log(min(x, 1.0 - x)))
+        if r <= 5.0:
+            x = r - 1.6
+            return math.copysign(runPoly(C, x) / runPoly(D, x), q)
+        else:
+            x = r - 5.0
+            return math.copysign(runPoly(E, x) / runPoly(F, x), q)
+
 
 @autohelp
 @audited.DFSelfless
@@ -555,51 +675,61 @@ class DoubleObject(Object):
         if not (0.0 < x < 1.0):
             raise userError(u".cumulativeBeta/2: %f out of range" % self._d)
 
-        # First, symmetry. We need to be in the convergent region. If not
-        # x < (a + 1) / (a + b + 2)
-        # then we use
-        # I_x(a, b) = 1 - I_(1-x)(b, a)
-        # to rewrite and become convergent.
-        w = 1.0 - x
-        flip = x * (a + b + 2) >= a + 1
-        if flip:
-            x, w = w, x
-            a, b = b, a
+        return cumBeta(x, a, b)
 
-        # The scaling factor in front. Work logarithmically to avoid overflow.
-        lbeta = lgamma(a) + lgamma(b) - lgamma(a + b)
-        # NB: If x = 0 or x = 1 then ValueError!
-        scale = math.exp(math.log(x) * a + math.log(w) * b
-                         - math.log(a) - lbeta)
+    @method("Double", "Double", "Double")
+    def quantileBeta(self, a, b):
+        """
+        The quantile of the beta distribution on two parameters.
+        """
 
-        # Lentz's algorithm to find the continued-fraction approximant.
-        # The first coefficient is always 1, which has been inlined here.
-        d = 1.0
-        c = 2.0
-        f = 2.0
+        # https://core.ac.uk/download/pdf/82140723.pdf
+        # https://www.boost.org/doc/libs/1_74_0/libs/math/doc/html/math_toolkit/sf_beta/ibeta_inv_function.html
+        # Halley's method.
+        # Guess: 0.5
+        # First derivative: x ** (a - 1) * (1 - x) ** (b - 1) / beta(a, b)
+        # Second derivative: x ** (a - 2) * (1 - x) ** (b - 2) *
+        #                    (x * (2 - a - b) - 1) / beta(a, b)
+        # f''/f': (x * (2 - a - b) - 1) / x * (1 - x)
+        y = self._d
 
-        # The coefficients are generated in pairs, so we have to check the
-        # parity of m and decompose into 2k or 2k + 1. The number of
-        # coefficients to generate comes from Cephes.
-        for m in range(1, 300):
-            bot = (a + m) * (a + m - 1)
-            k = m >> 1
-            top = -1 * (a + k) * (a + b + k) if m & 1 else k * (b - k)
-            ai = top * x / bot
+        if a <= 0.0 or b <= 0.0:
+            return 0.0
 
-            d = 1.0 / (1.0 + ai * d)
-            c = 1.0 + (ai / c)
-            f *= c * d
+        if y <= 0.0:
+            return 0.0
+        elif y >= 1.0:
+            return 1.0
 
-            # This stopping threshold is from Cephes: 3 * epsilon
-            if abs(1.0 - c * d) < 3.33e-16:
+        # Log of beta, for scaling the derivative.
+        lb = lgamma(a) + lgamma(b) - lgamma(a + b)
+
+        # Initial guess.
+        x = 0.5
+        print "quantileBeta guess x", x
+
+        # And iterate until it's a good guess.
+        for i in range(20):
+            # f, f', f/f'
+            f0 = cumBeta(x, a, b) - y
+            f1 = math.exp(math.log(x) * (a - 1) + math.log(1 - x) * (b - 1) - lb)
+            f01 = f0 / f1
+            # f''/2f'
+            f21 = (x * (2 - a - b) - 1) / 2 * x * (1 - x)
+            # Halley's error term.
+            err = f01 / (1 - f01 * f21)
+            if abs(err) < 1e-16:
                 break
+            x -= err
+            # If we somehow slip over the edge, then don't panic and just
+            # assume that we underflowed and got bad luck on rounding.
+            if x < 0.0:
+                x = 0.0
+            elif x > 1.0:
+                x = 1.0
+            print "i", i, "x", x, "err", err, "f0", f0, "f1", f1, "f2", (f21 * f1 * 2)
 
-        # The continued fraction has a leading edge that we need to remove.
-        rv = (f - 1.0) * scale
-
-        # Finally, do we need to flip?
-        return 1.0 - rv if flip else rv
+        return x
 
     @method("Double", "Double")
     def cumulativeGamma(self, a):
@@ -609,35 +739,57 @@ class DoubleObject(Object):
         This is also known as the regularized lower incomplete gamma function.
         """
 
-        # https://www.maths.lancs.ac.uk/jameson/gammainc.pdf
-        # This is largely a copy of Proposition 6, as implemented by Cephes.
-        x = self._d
+        return cumGamma(self._d, a)
 
-        if x < 0.0 or a < 0.0:
+    @method("Double", "Double")
+    def quantileGamma(self, a):
+        """
+        The quantile of the gamma distribution on one parameter.
+        """
+
+        # Halley's method.
+        # Guess: 0.5
+        # First derivative: x ** (a - 1) * e ** -x / gamma(a)
+        # Second derivative: e ** -x * ((a - 1) * x ** (a - 2) - x ** (a - 1)) / gamma(a)
+        # f''/f': ((a - 1) / x) - 1
+        y = self._d
+
+        if a <= 0.0:
             return 0.0
 
-        # XXX Cephes switches to the upper incomplete function, and uses a
-        # continued fraction, when x > 1.0 and x > a. Is this necessary or
-        # just faster to converge?
+        if not (0.0 < y < 1.0):
+            raise userError(u".quantileGamma/1: %f out of range" % y)
 
-        # We work under logs for speed and dynamic range, pulling apart
-        # multiplicative terms. The first term is x ** a * e ** -x and
-        # we also will add in our 1/gamma(x) scale as well.
-        scale = math.exp(math.log(x) * a - x - lgamma(a))
+        lg = lgamma(a)
 
-        r = a
-        acc = 1.0
-        s = 1.0
-        # The stopping condition is when machine epsilon dominates the next
-        # additional term. This can be much quicker than computing all ~20
-        # terms for which 1/n! > epsilon, and handles more cases.
-        while acc / s > 1.38e-17:
-            r += 1.0
-            acc *= x / r
-            s += acc
+        # A reasonable guess, based on Cephes.
+        # d = 1.0 / (9 * a)
+        # t = 1.0 - d - quantNormal(y) * math.sqrt(d)
+        # rv = a * t * t * t
+        # A poor but safe guess.
+        x = 0.5
 
-        # And we're done. Assemble our creation.
-        return scale * s / a
+        # And iterate until it's good enough.
+        for i in range(20):
+            # f, f', f/f'
+            f0 = cumGamma(x, a) - y
+            f1 = math.exp(math.log(x) * (a - 1) - x - lg)
+            f01 = f0 / f1
+            # f''/2f'
+            f21 = (((a - 1) / x) - 1) / 2
+            # Halley's error term.
+            err = f01 / (1 - f01 * f21)
+            if abs(err) < 1e-16:
+                break
+            x -= err
+            # If we somehow slip over the edge, then don't panic and just
+            # assume that we underflowed and got bad luck on rounding.
+            if x < 0.0:
+                x = 0.0
+            elif x > 1.0:
+                x = 1.0
+            print "i", i, "x", x, "err", err, "f0", f0, "f1", f1, "f2", (f21 * f1 * 2)
+        return x
 
     @method("Double")
     def cumulativeNormal(self):
@@ -657,45 +809,7 @@ class DoubleObject(Object):
         if not (0.0 < self._d < 1.0):
             raise userError(u".quantileNormal/0: %f out of range" % self._d)
 
-        # http://csg.sph.umich.edu/abecasis/gas_power_calculator/algorithm-as-241-the-percentage-points-of-the-normal-distribution.pdf
-        A = [2.5090809287301226727e3, 3.3430575583588128105e4,
-             6.7265770927008700853e4, 4.5921953931549871457e4,
-             1.3731693765509461125e4, 1.9715909503065514427e3,
-             1.3314166789178437745e2, 3.3871328727963666080e0]
-        B = [5.2264952788528545610e3, 2.8729085735721942674e4,
-             3.9307895800092710610e4, 2.1213794301586595867e4,
-             5.3941960214247511077e3, 6.8718700749205790830e2,
-             4.2313330701600911252e1, 1.0]
-        C = [7.74545014278341407640e-4, 2.27238449892691845833e-2,
-             2.41780725177450611770e-1, 1.27045825245236838258e0,
-             3.64784832476320460504e0, 5.76949722146069140550e0,
-             4.63033784615654529590e0, 1.42343711074968357734e0]
-        D = [1.05075007164441684324e-9, 5.47593808499534494600e-4,
-             1.51986665636164571966e-2, 1.48103976427480074590e-1,
-             6.89767334985100004550e-1, 1.67638483018380384940e0,
-             2.05319162663775882187e0, 1.0]
-        E = [2.01033439929228813265e-7, 2.71155556874348757815e-5,
-             1.24266094738807843860e-3, 2.65321895265761230930e-2,
-             2.96560571828504891230e-1, 1.78482653991729133580e0,
-             5.46378491116411436990e0, 6.65790464350110377720e0]
-        F = [2.04426310338993978564e-15, 1.42151175831644588870e-7,
-             1.84631831751005468180e-5, 7.86869131145613259100e-4,
-             1.48753612908506148525e-2, 1.36929880922735805310e-1,
-             5.99832206555887937690e-1, 1.0]
-
-        q = self._d - 0.5
-        if abs(q) <= 0.425:
-            # NB: 0.180625 = 0.425 ** 2
-            x = 0.180625 - q * q
-            return q * runPoly(A, x) / runPoly(B, x)
-        else:
-            r = math.sqrt(-math.log(min(self._d, 1.0 - self._d)))
-            if r <= 5.0:
-                x = r - 1.6
-                return math.copysign(runPoly(C, x) / runPoly(D, x), q)
-            else:
-                x = r - 5.0
-                return math.copysign(runPoly(E, x) / runPoly(F, x), q)
+        return quantNormal(self._d)
 
     # Decompositions.
 
