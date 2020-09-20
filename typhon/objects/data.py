@@ -1342,6 +1342,10 @@ class BigInt(Object):
             return DoubleObject(self.bi.truediv(rbigint.fromint(other)))
         except ZeroDivisionError:
             return NaN
+        except OverflowError:
+            # Trade overflow for reduced dynamic range.
+            negate = self.bi.sign < 0 ^ other < 0
+            return DoubleObject(-Infinity._d) if negate else Infinity
 
     @method("BigInt", "Double", _verb="floorDivide")
     def floorDivideDouble(self, other):
