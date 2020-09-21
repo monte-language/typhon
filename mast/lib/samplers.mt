@@ -42,21 +42,16 @@ def cumulativeT(t :Double, v :Int) :Double as DeepFrozen:
     def x := v / (t * t + v)
     return 1.0 - x.cumulativeBeta(v * 0.5, 0.5)
 
+def quantileT(y :Double, v :Int) :Double as DeepFrozen:
+    "The quantile function for Student's t-distribution with `v` degrees of freedom."
+
+    def x := (1.0 - y).quantileBeta(v * 0.5, 0.5)
+    return ((v / x) - v).squareRoot()
+
 def cumulativeChi2(x :Double, k :Int) :Double as DeepFrozen:
     "The CDF for the χ2 distribution with `k` degrees of freedom."
 
     return (x * 0.5).cumulativeGamma(k * 0.5)
-
-# https://en.wikipedia.org/wiki/Student%27s_t-distribution#Table_of_selected_values
-# http://www.davidmlane.com/hyperstat/t_table.html
-# 99.9% two-sided CI
-def tTable :List[Double] := ([
-    636.6, 31.60, 12.92, 8.610, 6.869, 5.959, 5.408, 5.041, 4.781, 4.587,
-    4.437, 4.318, 4.221, 4.140, 4.073, 4.015, 3.965, 3.922, 3.883, 3.850,
-    3.819, 3.792, 3.767, 3.745, 3.725, 3.707, 3.690, 3.674, 3.659, 3.646,
-] + [3.551] * 10 + [3.496] * 10 + [3.460] * 10 +
-    [3.416] * 20 + [3.390] * 20 + [3.373] * 20)
-def tFinal :Double := 3.291
 
 def sumPlus(x, y) as DeepFrozen { return x + y }
 def sum :DeepFrozen := V.makeFold(0.0, sumPlus)
@@ -80,21 +75,19 @@ def needsMoreSamples(samplers :List, qualityCutoff :Double) as DeepFrozen:
     if (N < minSamples) { return true }
     if (N > maxSamples) { return false }
 
-    # This fencepost is correct; -1 comes from Student's
-    # t-distribution and degrees of freedom, and -1 comes from
-    # 0-indexing vs 1-indexing.
-    def tValue := if (N - 2 < tTable.size()) { tTable[N - 2] } else { tFinal }
+    # Recall that t-tests ask for N-1 degrees of freedom.
+    def tValue := quantileT(qualityCutoff, N - 1)
     def variances := M.call(V, "run", [for s in (samplers) s.variance()],
                             [].asMap())
     def tTests := (variances / N).squareRoot()
     def pValues := tTests * tValue
     # https://en.wikipedia.org/wiki/Fisher's_method
     def fTest := sum(pValues.logarithm()) * -2
-    if (N % 100 == 0):
-        traceln(`N=$N t=$tTests p=$pValues f=$fTest q=$qualityCutoff`)
     # This f-test has 3 degrees of freedom, so we compare it
     # to the chi-squared table for 6 degrees.
     def probability := cumulativeChi2(fTest, 6)
+    if (N % 100 == 0):
+        traceln(`N=$N t=$tTests p=$pValues f=$fTest prob=$probability`)
     # Quality is in nines, probability is 1 - nines. We want an improbably
     # high-quality sample, so we want to flip probability around.
     return 1.0 - probability > qualityCutoff
