@@ -828,6 +828,39 @@ class DoubleObject(Object):
 
         return quantNormal(self._d)
 
+    @method("Double", "Double")
+    def besselFirst(self, v):
+        """
+        The Bessel function of the first kind of degree `v`.
+
+        There are many Bessel functions; these are the ones traditionally
+        notated as J, not Y.
+        """
+
+        # https://dlmf.nist.gov/10.2
+        # Power series.
+        # XXX when z is large, then we need to switch to Henkel's series. But,
+        # like, how large? Really large, apparently?
+        z = self._d
+
+        # Special values.
+        if z == 0.0:
+            return 1.0 if v == 0.0 else 0.0
+
+        scale = math.pow(z * 0.5, v)
+        a = math.log(0.25 * z * z)
+
+        rv = 0.0
+        for i in range(100):
+            # Work under logs so we can lgamma().
+            term = math.exp(a * i - lgamma(i + 1) - lgamma(v + i + 1))
+            rv = rv - term if i & 1 else rv + term
+            if term < 1e-16:
+                break
+            # print "rv", rv, "term", term
+
+        return scale * rv
+
     # Decompositions.
 
     @method("List")
