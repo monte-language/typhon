@@ -290,7 +290,7 @@ def cumGamma(x, a):
 
     # https://www.maths.lancs.ac.uk/jameson/gammainc.pdf
     # This is largely a copy of Proposition 6, as implemented by Cephes.
-    if x < 0.0 or a < 0.0:
+    if x <= 0.0 or a < 0.0:
         return 0.0
 
     # We work under logs for speed and dynamic range, pulling apart
@@ -704,12 +704,20 @@ class DoubleObject(Object):
         # Log of beta, for scaling the derivative.
         lb = lgamma(a) + lgamma(b) - lgamma(a + b)
 
-        # Initial guess.
+        # Initial guess. Since we're stuck between 0 and 1, we can use
+        # bisection to gain 1 bit/loop for the first few loops, and then
+        # switch to Halley's method once we have 3-5 good bits.
         x = 0.5
-        print "quantileBeta guess x", x
 
-        # And iterate until it's a good guess.
-        for i in range(20):
+        # Bisection.
+        bias = 0.25
+        for i in range(10):
+            f0 = cumBeta(x, a, b) - y
+            x = x - bias if f0 > 0.0 else x + bias
+            bias *= 0.5
+
+        # And Halley iteration.
+        for i in range(10):
             # f, f', f/f'
             f0 = cumBeta(x, a, b) - y
             f1 = math.exp(math.log(x) * (a - 1) + math.log(1 - x) * (b - 1) - lb)
@@ -724,10 +732,9 @@ class DoubleObject(Object):
             # If we somehow slip over the edge, then don't panic and just
             # assume that we underflowed and got bad luck on rounding.
             if x < 0.0:
-                x = 0.0
+                return 0.0
             elif x > 1.0:
-                x = 1.0
-            print "i", i, "x", x, "err", err, "f0", f0, "f1", f1, "f2", (f21 * f1 * 2)
+                return 1.0
 
         return x
 
@@ -747,8 +754,11 @@ class DoubleObject(Object):
         The quantile of the gamma distribution on one parameter.
         """
 
+        # XXX better guesses possible, see https://arxiv.org/abs/1306.1754
+
         # Halley's method.
-        # Guess: 0.5
+        # Guess: let d = 1 / (9 * a) in
+        #        a * (1.0 - d - y.quantileNormal() * d.squareRoot()) ** 3
         # First derivative: x ** (a - 1) * e ** -x / gamma(a)
         # Second derivative: e ** -x * ((a - 1) * x ** (a - 2) - x ** (a - 1)) / gamma(a)
         # f''/f': ((a - 1) / x) - 1
@@ -762,15 +772,25 @@ class DoubleObject(Object):
 
         lg = lgamma(a)
 
-        # A reasonable guess, based on Cephes.
-        # d = 1.0 / (9 * a)
-        # t = 1.0 - d - quantNormal(y) * math.sqrt(d)
-        # rv = a * t * t * t
-        # A poor but safe guess.
-        x = 0.5
+        # A reasonable guess, based on Cephes. When a is small, x can start
+        # below -1, so we clamp to something small but positive.
+        d = 1.0 / (9 * a)
+        t = 1.0 - d - quantNormal(y) * math.sqrt(d)
+        x = max(a * t * t * t, 1e-8)
 
-        # And iterate until it's good enough.
-        for i in range(20):
+        # The guess often overshoots, so we'll bisect until it's not
+        # overshooting.
+        for i in range(10):
+            f0 = cumGamma(x, a) - y
+            if f0 > 0.0:
+                x *= 0.5
+            else:
+                break
+
+        # And iterate until it's good enough. We do a hybrid of Halley and
+        # bisection; if the Halley step would take us below 0, then bisect
+        # downwards instead.
+        for i in range(10):
             # f, f', f/f'
             f0 = cumGamma(x, a) - y
             f1 = math.exp(math.log(x) * (a - 1) - x - lg)
@@ -781,14 +801,11 @@ class DoubleObject(Object):
             err = f01 / (1 - f01 * f21)
             if abs(err) < 1e-16:
                 break
-            x -= err
-            # If we somehow slip over the edge, then don't panic and just
-            # assume that we underflowed and got bad luck on rounding.
-            if x < 0.0:
-                x = 0.0
-            elif x > 1.0:
-                x = 1.0
-            print "i", i, "x", x, "err", err, "f0", f0, "f1", f1, "f2", (f21 * f1 * 2)
+            # Would we go negative?
+            if x - err < 0.0:
+                x *= 0.5
+            else:
+                x -= err
         return x
 
     @method("Double")
