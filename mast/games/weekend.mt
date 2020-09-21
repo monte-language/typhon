@@ -578,7 +578,7 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
         # My adaptive take on the original design. Repeated center sampling
         # will jitter due to inherent randomness in the tracing algorithm, so
         # repeat until statistically stable.
-        def config := samplerConfig.TTest(samplerConfig.Center(), 0.9999, 2, 1_000)
+        def config := samplerConfig.TTest(samplerConfig.Center(), 0.9999, 5, 100)
         def drawer := makePNG.drawingFrom(drawable, config)(w, h)
         var i := 0
         def start := Timer.unsafeNow()

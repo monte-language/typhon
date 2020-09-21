@@ -171,16 +171,22 @@ def makeDiscreteSampler(drawable, config,
             }
 
         to TTest(sampler, quality :Double, minimumCount :Int, maximumCount :Int):
+            # Take minimum number of samples, perform a t-test; if the test
+            # fails, evaluate the maximum number of samples instead.
+            # XXX I bet that there's a way to use the result of the t-test to
+            # guess how *many* samples we should take.
             return fn x, y {
                 def samplers := [makeWelford(), makeWelford(), makeWelford(),
                                  makeWelford()]
-                var count := 0
-                while (count < minimumCount || (count < maximumCount &&
-                                                needsMoreSamples(samplers,
-                                                                 quality))) {
-                    count += 1
+                for _ in (0..!minimumCount) {
                     def color := sampler(x, y)
                     for i => channel in (color.RGB()) { samplers[i](channel) }
+                }
+                if (needsMoreSamples(samplers, quality)) {
+                    for _ in (minimumCount..!maximumCount) {
+                        def color := sampler(x, y)
+                        for i => channel in (color.RGB()) { samplers[i](channel) }
+                    }
                 }
                 def [r, g, b, a] := [for s in (samplers) s.mean()]
                 makeColor.RGB(r, g, b, a)
