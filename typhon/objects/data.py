@@ -22,7 +22,7 @@ from rpython.rlib.rbigint import BASE10, rbigint
 from rpython.rlib.jit import elidable
 from rpython.rlib.objectmodel import _hash_float, specialize
 from rpython.rlib.rarithmetic import LONG_BIT, intmask, ovfcheck
-from rpython.rlib.rfloat import erfc, lgamma
+from rpython.rlib.rfloat import DBL_EPSILON, erfc, lgamma
 from rpython.rlib.rstring import StringBuilder, UnicodeBuilder, replace, split
 from rpython.rlib.rstruct.ieee import float_pack
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
@@ -216,6 +216,7 @@ def isNegative(d):
 
 INF = float("inf")
 NEG_INF = float("-inf")
+NAN = float("nan")
 def mathLog(d):
     if isNegative(d):
         raise userError(u"Cannot take natural logarithm of non-positive %f" %
@@ -270,8 +271,8 @@ def cumBeta(x, a, b):
         c = 1.0 + (ai / c)
         f *= c * d
 
-        # This stopping threshold is from Cephes: 3 * epsilon
-        if abs(1.0 - c * d) < 3.33e-16:
+        # This stopping threshold is from Cephes.
+        if abs(1.0 - c * d) < 3 * DBL_EPSILON:
             break
 
     # The continued fraction has a leading edge that we need to remove.
@@ -304,7 +305,7 @@ def cumGamma(x, a):
     # The stopping condition is when machine epsilon dominates the next
     # additional term. This can be much quicker than computing all ~20
     # terms for which 1/n! > epsilon, and handles more cases.
-    while acc / s > 1.38e-17:
+    while acc / s > DBL_EPSILON:
         r += 1.0
         acc *= x / r
         s += acc
@@ -926,7 +927,7 @@ class DoubleObject(Object):
 # These double objects are prebuilt (and free to use), since building
 # on-the-fly floats from strings doesn't work in RPython.
 Infinity = DoubleObject(INF)
-NaN = DoubleObject(float("nan"))
+NaN = DoubleObject(NAN)
 
 
 def unwrapDouble(o):
@@ -1056,7 +1057,7 @@ class IntObject(Object):
     def _and(self, other):
         return self._i & other
 
-    @method("Any", "Any")
+    @method("Double", "Any")
     def approxDivide(self, other):
         """
         Promote this object to `Double` and perform division with a given
@@ -1065,10 +1066,10 @@ class IntObject(Object):
 
         divisor = promoteToDouble(other)
         try:
-            return DoubleObject(float(self._i) / divisor)
+            return float(self._i) / divisor
         except ZeroDivisionError:
             # We tried to divide by zero.
-            return NaN
+            return NAN
 
     @method("Int")
     def complement(self):
@@ -1379,23 +1380,23 @@ class BigInt(Object):
     def approxDivideDouble(self, other):
         return self.bi.tofloat() / other
 
-    @method("Any", "BigInt")
+    @method("Double", "BigInt")
     def approxDivide(self, other):
         try:
-            return DoubleObject(self.bi.truediv(other))
+            return self.bi.truediv(other)
         except ZeroDivisionError:
-            return NaN
+            return NAN
 
-    @method("Any", "Int", _verb="approxDivide")
+    @method("Double", "Int", _verb="approxDivide")
     def approxDivideInt(self, other):
         try:
-            return DoubleObject(self.bi.truediv(rbigint.fromint(other)))
+            return self.bi.truediv(rbigint.fromint(other))
         except ZeroDivisionError:
-            return NaN
+            return NAN
         except OverflowError:
             # Trade overflow for reduced dynamic range.
             negate = self.bi.sign < 0 ^ other < 0
-            return DoubleObject(-Infinity._d) if negate else Infinity
+            return NEG_INF if negate else INF
 
     @method("BigInt", "Double", _verb="floorDivide")
     def floorDivideDouble(self, other):
