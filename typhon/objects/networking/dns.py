@@ -3,7 +3,6 @@ DNS getaddrinfo().
 """
 
 from rpython.rlib import _rsocket_rffi as s
-from rpython.rlib.rarithmetic import intmask
 from rpython.rtyper.lltypesystem.lltype import nullptr
 from rpython.rtyper.lltypesystem.rffi import getintfield
 
@@ -14,9 +13,9 @@ from typhon.futures import resolve, smash
 from typhon.macros import macros, io
 from typhon.objects.collections.lists import wrapList
 from typhon.objects.data import bytesToString, unwrapBytes, StrObject
-from typhon.objects.refs import LocalResolver, makePromise
+from typhon.objects.refs import makePromise
 from typhon.objects.root import Object, runnable
-from typhon.vats import currentVat, scopedVat
+from typhon.vats import currentVat
 
 
 RUN_2 = getAtom(u"run", 2)

@@ -15,22 +15,20 @@
 import os
 import stat
 
-from rpython.rlib.objectmodel import specialize
 from rpython.rlib.rarithmetic import intmask
-from rpython.rtyper.lltypesystem.lltype import nullptr, scoped_alloc
-from rpython.rtyper.lltypesystem.rffi import charpsize2str
+from rpython.rtyper.lltypesystem.lltype import nullptr
 
 from typhon import log, rsodium, ruv
 from typhon.atoms import getAtom
 from typhon.autohelp import autohelp, method
 from typhon.errors import userError
-from typhon.futures import FutureCtx, resolve, Ok, Err, Break, Continue, LOOP_BREAK, LOOP_CONTINUE, OK, smash
+from typhon.futures import FutureCtx, resolve, Ok, Break, Continue, LOOP_BREAK, LOOP_CONTINUE, OK, smash
 from typhon.macros import macros, io
 from typhon.objects.constants import NullObject
 from typhon.objects.data import BytesObject, StrObject, unwrapStr
-from typhon.objects.refs import LocalResolver, makePromise
+from typhon.objects.refs import makePromise
 from typhon.objects.root import Object, runnable
-from typhon.vats import currentVat, scopedVat
+from typhon.vats import currentVat
 
 
 ABORTFLOW_0 = getAtom(u"abortFlow", 0)

@@ -12,7 +12,7 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
-from rpython.rlib.jit import elidable, unroll_safe
+from rpython.rlib.jit import elidable
 from rpython.rlib.rstring import UnicodeBuilder
 from rpython.rlib.unicodedata import unicodedb_6_2_0 as unicodedb
 

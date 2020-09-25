@@ -455,8 +455,8 @@ class DoubleObject(Object):
     def floorDivideInt(self, divisor):
         return int(math.floor(self._d / divisor))
 
-    @method("Double", "BigInt", _verb="floorDivide")
-    def approxDivideBigInt(self, divisor):
+    @method("Int", "BigInt", _verb="floorDivide")
+    def floorDivideBigInt(self, divisor):
         return int(math.floor(self._d / divisor.tofloat()))
 
     @method("Double", "Double")

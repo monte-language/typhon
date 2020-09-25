@@ -5,8 +5,8 @@ from ast import (Assign, Expr, Subscript, Attribute, List, Tuple, Name, Import,
                  arguments, copy_location, fix_missing_locations, Str, Raise)
 from collections import namedtuple
 import copy
-from macropy.core.macros import (Macros, Walker, injected_vars,
-                                 post_processing, unparse)
+
+from macropy.core.macros import Macros, Walker, injected_vars, post_processing
 macros = Macros()
 
 
@@ -289,7 +289,7 @@ def io(tree, target, gen_sym, moduleGlobals, importNames, toEmit, **kw):
     state = gen_sym("state")
     result = gen_sym("result")
     status = gen_sym("status")
-    currentVat_ = gen_sym("currentVat")
+    # currentVat_ = gen_sym("currentVat")
     successValue = gen_sym("successValue")
     failValue = gen_sym("failureValue")
     freeNames = []

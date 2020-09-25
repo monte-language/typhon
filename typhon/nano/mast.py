@@ -7,7 +7,7 @@ from rpython.rlib.rbigint import BASE10, rbigint
 
 from typhon import nodes
 from typhon.atoms import getAtom
-from typhon.autohelp import autoguard, autohelp, method
+from typhon.autohelp import autohelp, method
 from typhon.errors import userError
 from typhon.nanopass import makeIR
 from typhon.objects.constants import NullObject
@@ -105,7 +105,7 @@ class SaveScripts(MastIR.makePassTo(SaveScriptIR)):
         mast = MastIR.ObjectExpr(doc, patt, auditors, methods, matchers, span)
         patt = self.visitPatt(patt)
         auditors = [self.visitExpr(auditor) for auditor in auditors]
-        methods = [self.visitMethod(method) for method in methods]
+        methods = [self.visitMethod(meth) for meth in methods]
         matchers = [self.visitMatcher(matcher) for matcher in matchers]
         return self.dest.ObjectExpr(doc, patt, auditors, methods, matchers,
                                     mast, span)
@@ -235,8 +235,8 @@ class PrettyMAST(MastIR.makePassTo(None)):
                     self.write(u", ")
                     self.visitExpr(auditor)
         self.write(u" {")
-        for method in methods:
-            self.visitMethod(method)
+        for meth in methods:
+            self.visitMethod(meth)
         for matcher in matchers:
             self.visitMatcher(matcher)
         self.write(u"}")
@@ -462,14 +462,6 @@ class GeneratedCodeLoader(object):
 
 def wrapperCls(name, superName, paramInfo):
     accessors = []
-  #   if paramInfo:
-  #       for pname, typ in paramInfo:
-  #           g = paramGuards.get(name, {}).get(pname, "Any")
-  #           accessors.append("""
-  # @method("%s")
-  # def get%s(self):
-  #  return self._ast.%s
-  #           """ % (g, pname.title(), pname))
     return """
  @autohelp
  class %s(%s):
@@ -543,7 +535,6 @@ def checkSpan():
 
 def makeMastBuilder():
     "NOT_RPYTHON"
-    import itertools
     methods = []
     wrapperClasses = []
     for groupName, group in MastIR.nonterms.items():
