@@ -77,39 +77,6 @@ def estimateNormal(sdf, p) as DeepFrozen:
         sdf(p + epsilonZ * scale) - sdf(p - epsilonZ * scale),
     ))
 
-# https://en.wikipedia.org/wiki/Phong_reflection_model
-def phongContribForLight(N, kd, ks, alpha :Double, p, eye, lightPos) as DeepFrozen:
-    def L := glsl.normalize(lightPos - p)
-    def R := glsl.normalize(glsl.reflect(-L, N))
-
-    def diff := glsl.dot(L, N)
-
-    if (diff.belowZero()):
-        return zero
-
-    def base := glsl.dot(R, glsl.normalize(eye - p))
-    def spec := if (base.belowZero()) { 0.0 } else { ks * base ** alpha }
-    return kd * diff + ks * spec
-
-def phongIllumination(N, ka, kd, ks, alpha :Double, p, eye) as DeepFrozen:
-    var color := ka * 0.5
-
-    def lights := [
-        V(0.0, 2.0, 4.0),
-        V(-4.0, 2.0, 0.0),
-        V(0.74, 0.0, 2.0),
-        V(0.0, -0.74, 2.0),
-        # Put a light behind the camera.
-        eye - one,
-    ]
-
-    for pos in (lights):
-        def contribution := phongContribForLight(N, kd, ks, alpha, p, eye,
-                                                 pos)
-        color += contribution * 0.4
-
-    return color
-
 def maxSteps :Int := 100
 
 def shortestDistanceToSurface(sdf, eye, direction, start :Double,
@@ -151,14 +118,24 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
     # No hits.
     return [end, maxSteps]
 
-def rayDirection(fieldOfView :Double, u :Double, v :Double,
-                 aspectRatio :Double) as DeepFrozen:
-    def fovr := fieldOfView * 2.0
-    def x := (u - 0.5) * fovr * aspectRatio
-    def y := (v - 0.5) * fovr
-    def rv := glsl.normalize(V(x, y, -1.0))
-    # traceln(`rayDirection($fieldOfView, $u, $v, $aspectRatio) -> $rv`)
-    return rv
+def makeRayDirection(fieldOfView :Double) as DeepFrozen:
+    "
+    Fix a field of view for casting rays in a given direction.
+
+    The field of view should be given as the angle in radians from the center
+    of the camera to its edge; pi / 8 or pi / 6 are common choices.
+    "
+
+    # The tangent of the FOV angle gives how fast one half of the screen
+    # expands; doubling it gives the full screen ratio.
+    def fovr :Double := fieldOfView.tangent() * 2.0
+
+    return def rayDirection(u :Double, v :Double, aspectRatio :Double) as DeepFrozen:
+        def x := (u - 0.5) * fovr * aspectRatio
+        def y := (v - 0.5) * fovr
+        def rv := glsl.normalize(V(x, y, -1.0))
+        # traceln(`rayDirection($fieldOfView, $u, $v, $aspectRatio) -> $rv`)
+        return rv
 
 def viewMatrix(eye :DeepFrozen, center, up) as DeepFrozen:
     # https://www.khronos.org/registry/OpenGL-Refpages/gl2.1/xhtml/gluLookAt.xml
@@ -194,27 +171,18 @@ def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as Deep
         t += err
     return t
 
-def fov :Double := (PI / 8).tangent()
-def eye :DeepFrozen := V(8.0, 5.0, 7.0)
-
 def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
     "Draw signed distance function `sdf` with associated texture function `tf`."
 
+    def eye :DeepFrozen := V(8.0, 5.0, 7.0)
+    def fov :Double := PI / 8
     def viewToWorld := viewMatrix(eye, zero, V(0.0, 1.0, 0.0))
-
-    # Use the normal for lighting, since we don't have a material.
-    # def ka := (estimateNormal(sdf, p) * 0.5) + 0.5
-    # def kd := ka
-    # Use a green rubber material.
-    def ka := V(0.3, 0.9, 0.3)
-    def kd := one * 0.9
-    def ks := one * 0.1
-    def shininess :Double := 10.0
+    def rayDirection := makeRayDirection(fov)
 
     return def drawable.drawAt(u :Double, v :Double, => aspectRatio :Double,
                                => pixelRadius :Double):
         # NB: Flip vertical axis.
-        def viewDir := rayDirection(fov, u, 1.0 - v, aspectRatio)
+        def viewDir := rayDirection(u, 1.0 - v, aspectRatio)
         def worldDir := viewToWorld(viewDir)
 
         def [estimate, steps] := shortestDistanceToSurface(sdf, eye, worldDir,
@@ -223,6 +191,7 @@ def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
         # Clearly show where we aren't taking enough steps by highlighting
         # with magenta.
         if (steps >= maxSteps) { return makeColor.RGB(1.0, 0.0, 1.0, 1.0) }
+        # Clearly show where there is nothing.
         if (estimate >= maxDepth) { return makeColor.clear() }
 
         def distance := refineEstimate(sdf, eye, worldDir, estimate,
@@ -235,8 +204,20 @@ def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
         # intersection is approximate, the normal is also approximate.
         def N := estimateNormal(sdf, p)
 
-        # The color of the SDF at the distance.
-        def color := phongIllumination(N, ka, kd, ks, shininess, p, eye)
+        # The color of the SDF at the distance. This is a function of
+        # illuminating the SDF with each light.
+        def lights := [
+            V(0.0, 2.0, 4.0),
+            V(-4.0, 2.0, 0.0),
+            V(0.74, 0.0, 2.0),
+            V(0.0, -0.74, 2.0),
+            # Put a light behind the camera.
+            eye - one,
+        ]
+        # XXX We'll need to do something smarter for shadows, so that we don't
+        # try to include lights which don't actually hit. Maybe filter the
+        # lights here by seeing which lights hit near p?
+        def color := tf(eye, lights, p, N)
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
@@ -245,15 +226,44 @@ def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
 def asTF() as DeepFrozen:
     "Compile a CSG material to its corresponding texture function."
 
+    # It would be nice if colors didn't need p and N, but they do. Indeed,
+    # right now I've left p out, and just use N, but that won't do for proper
+    # texturing later.
+
     return object compileTF:
         to Color(red, green, blue):
-            return fn _p, _N { V(red, green, blue) }
+            def color := V(red, green, blue)
+            return fn _N { color }
 
         to Normal():
-            return fn _p, N { N }
+            # Convert the normal, which is in [-1, 1], to be in [0, 1].
+            return fn N { N * 0.5 + 0.5 }
 
         to Phong(specular, diffuse, ambient, shininess):
-            return fn eye, light, p, N {
+            # https://en.wikipedia.org/wiki/Phong_reflection_model
+            return fn eye, lights, p, N {
+                # XXX ambient light is V(0.5, 0.5, 0.5)
+                var color := ambient(N) * 0.5
+
+                def ks := specular(N)
+                def kd := diffuse(N)
+
+                for light in (lights) {
+                    def L := glsl.normalize(light - p)
+                    def diff := glsl.dot(L, N)
+
+                    color += if (diff.belowZero()) { zero } else {
+                        def R := glsl.normalize(glsl.reflect(-L, N))
+                        def base := glsl.dot(R, glsl.normalize(eye - p))
+                        def spec := if (base.belowZero()) { 0.0 } else {
+                            ks * base ** shininess
+                        }
+                        # XXX light color is V(0.4, 0.4, 0.4)
+                        (kd * diff + ks * spec) * 0.4
+                    }
+                }
+
+                color
             }
 
 # See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
@@ -357,7 +367,26 @@ def asSDF(entropy) as DeepFrozen:
             def noise := makeSimplexNoise(entropy)
             return fn p { noise.turbulence(p * l, octaves) }
 
-# Holey green boxes in a lattice.
+# Use the normal to show the gradient.
+def debugNormal :DeepFrozen := CSG.Phong(
+    CSG.Color(0.1, 0.1, 0.1),
+    CSG.Normal(),
+    CSG.Normal(),
+    10.0,
+)
+# A basic green rubber material.
+def greenRubber :DeepFrozen := CSG.Phong(
+    CSG.Color(0.1, 0.1, 0.1),
+    CSG.Color(0.9, 0.9, 0.9),
+    CSG.Color(0.3, 0.9, 0.3),
+    10.0,
+)
+def material :DeepFrozen := debugNormal
+traceln(`Defined material: $material`)
+
+# Debugging cubes, good for testing shadows.
+def boxes :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Cube(1.0), 5.0, 5.0, 5.0)
+# Holey boxes in a lattice.
 def crystal :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
     CSG.Intersection(CSG.Sphere(1.2), [CSG.Cube(1.0)]),
     CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5),
@@ -368,7 +397,7 @@ def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
 # More imitation tinykaboom, but deterministic.
 def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
     CSG.Sines(5.0, 5.0, 5.0), 3.0)
-def solid :DeepFrozen := crystal
+def solid :DeepFrozen := boxes
 traceln(`Defined solid: $solid`)
 
 def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
@@ -386,7 +415,8 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     # lib/noise's API.
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def sdf := solid(asSDF(entropy))
-    def drawable := drawSignedDistanceFunction(sdf, null)
+    def tf := material(asTF())
+    def drawable := drawSignedDistanceFunction(sdf, tf)
     # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # drawable.drawAt(0.5, 0.45, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # throw("yay?")
