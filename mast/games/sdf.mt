@@ -1,4 +1,4 @@
-import "games/csg" =~ ["ASTBuilder" => CSG]
+import "lib/asdl" =~ [=> buildASDLModule]
 import "lib/colors" =~ [=> makeColor]
 import "lib/entropy/entropy" =~ [=> makeEntropy]
 import "lib/noise" =~ [=> makeSimplexNoise]
@@ -6,6 +6,26 @@ import "lib/samplers" =~ [=> samplerConfig]
 import "lib/vectors" =~ [=> V, => glsl]
 import "fun/png" =~ [=> makePNG]
 exports (main)
+
+def ["ASTBuilder" => CSG] | _ := eval(buildASDLModule(`
+solid = Sphere(double radius)
+      | Box(double width, double height, double depth)
+      | Cube(double length)
+      | InfiniteCylindricalCross(double xradius, double yradius, double zradius)
+      | Translation(solid shape, double dx, double dy, double dz)
+      | Scaling(solid shape, double factor)
+      | Displacement(solid shape, displacement d, double amplitude)
+      | OrthorhombicCrystal(solid repetend, double width, double height, double depth)
+      | Intersection(solid shape, solid* shapes)
+      | Union(solid shape, solid* shapes)
+      | Difference(solid minuend, solid subtrahend)
+displacement = Sines(double lx, double ly, double lz)
+             | Noise(double lx, double ly, double lz, int octaves)
+material = Phong(color specular, color diffuse, color ambient,
+                 double shininess)
+color = Color(double red, double green, double blue)
+      | Normal
+`, "csg"), safeScope)(null)
 
 # http://jamie-wong.com/2016/07/15/ray-marching-signed-distance-functions/
 # https://erleuchtet.org/~cupe/permanent/enhanced_sphere_tracing.pdf
@@ -25,6 +45,7 @@ exports (main)
 # our main insight for interacting with our constructed geometry.
 
 def one :DeepFrozen := V(1.0, 1.0, 1.0)
+def zero :DeepFrozen := one * 0.0
 
 def sumPlus(x, y) as DeepFrozen { return x + y }
 def sumDouble :DeepFrozen := V.makeFold(0.0, sumPlus)
@@ -42,7 +63,7 @@ def PI :Double := 1.0.arcSine() * 2
 # we don't have to divide at the end.
 # https://commons.wikimedia.org/wiki/File:AbsoluteErrorNumericalDifferentiationExample.png
 # This epsilon balances all of our concerns when used with the hack below.
-def epsilon :Double := 0.000_000_1
+def epsilon :Double := 0.000_1
 def epsilonX :DeepFrozen := V(epsilon, 0.0, 0.0)
 def epsilonY :DeepFrozen := V(0.0, epsilon, 0.0)
 def epsilonZ :DeepFrozen := V(0.0, 0.0, epsilon)
@@ -57,27 +78,21 @@ def estimateNormal(sdf, p) as DeepFrozen:
     ))
 
 # https://en.wikipedia.org/wiki/Phong_reflection_model
-def phongContribForLight(sdf, kd, ks, alpha :Double, p, eye, lightPos,
-                         lightIntensity) as DeepFrozen:
-    def N := estimateNormal(sdf, p)
+def phongContribForLight(N, kd, ks, alpha :Double, p, eye, lightPos) as DeepFrozen:
     def L := glsl.normalize(lightPos - p)
     def R := glsl.normalize(glsl.reflect(-L, N))
 
     def diff := glsl.dot(L, N)
 
     if (diff.belowZero()):
-        return V(0.0, 0.0, 0.0)
+        return zero
 
     def base := glsl.dot(R, glsl.normalize(eye - p))
     def spec := if (base.belowZero()) { 0.0 } else { ks * base ** alpha }
-    return lightIntensity * (kd * diff + ks * spec)
+    return kd * diff + ks * spec
 
-def fov :Double := (PI / 8).tangent()
-def eye :DeepFrozen := V(8.0, 5.0, 7.0)
-
-def phongIllumination(sdf, ka, kd, ks, alpha :Double, p, eye) as DeepFrozen:
-    def ambientLight := V(0.5, 0.5, 0.5)
-    var color := ambientLight * ka
+def phongIllumination(N, ka, kd, ks, alpha :Double, p, eye) as DeepFrozen:
+    var color := ka * 0.5
 
     def lights := [
         V(0.0, 2.0, 4.0),
@@ -89,10 +104,9 @@ def phongIllumination(sdf, ka, kd, ks, alpha :Double, p, eye) as DeepFrozen:
     ]
 
     for pos in (lights):
-        def intensity := V(0.4, 0.4, 0.4)
-        def contribution := phongContribForLight(sdf, kd, ks, alpha, p, eye,
-                                                 pos, intensity)
-        color += contribution
+        def contribution := phongContribForLight(N, kd, ks, alpha, p, eye,
+                                                 pos)
+        color += contribution * 0.4
 
     return color
 
@@ -102,6 +116,7 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
                               end :Double, pixelRadius :Double) as DeepFrozen:
     var depth := start
     # Track signs, based on where we've started.
+    # XXX needs better negative zero handling
     def sign := sdf(eye).belowZero().pick(-1.0, 1.0)
     for i in (0..!maxSteps):
         def step := eye + direction * depth
@@ -179,8 +194,22 @@ def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as Deep
         t += err
     return t
 
-def drawSignedDistanceFunction(sdf) as DeepFrozen:
-    def viewToWorld := viewMatrix(eye, one * 0.0, V(0.0, 1.0, 0.0))
+def fov :Double := (PI / 8).tangent()
+def eye :DeepFrozen := V(8.0, 5.0, 7.0)
+
+def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
+    "Draw signed distance function `sdf` with associated texture function `tf`."
+
+    def viewToWorld := viewMatrix(eye, zero, V(0.0, 1.0, 0.0))
+
+    # Use the normal for lighting, since we don't have a material.
+    # def ka := (estimateNormal(sdf, p) * 0.5) + 0.5
+    # def kd := ka
+    # Use a green rubber material.
+    def ka := V(0.3, 0.9, 0.3)
+    def kd := one * 0.9
+    def ks := one * 0.1
+    def shininess :Double := 10.0
 
     return def drawable.drawAt(u :Double, v :Double, => aspectRatio :Double,
                                => pixelRadius :Double):
@@ -200,21 +229,32 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
                                        pixelRadius)
         # traceln(`hit u=$u v=$v estimate=$estimate distance=$distance steps=$steps`)
 
+        # The actual distance.
         def p := eye + worldDir * distance
-        # Use the normal for lighting, since we don't have a material.
-        # def ka := (estimateNormal(sdf, p) * 0.5) + 0.5
-        # def kd := ka
-        # Use a green rubber material.
-        def ka := V(0.3, 0.9, 0.3)
-        def kd := one * 0.9
-        def ks := one * 0.1
-        def shininess := 10.0
+        # The normal at the point of intersection. Note that, since the
+        # intersection is approximate, the normal is also approximate.
+        def N := estimateNormal(sdf, p)
 
-        def color := phongIllumination(sdf, ka, kd, ks, shininess, p, eye)
+        # The color of the SDF at the distance.
+        def color := phongIllumination(N, ka, kd, ks, shininess, p, eye)
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
         return makeColor.RGB(r, g, b, 1.0)
+
+def asTF() as DeepFrozen:
+    "Compile a CSG material to its corresponding texture function."
+
+    return object compileTF:
+        to Color(red, green, blue):
+            return fn _p, _N { V(red, green, blue) }
+
+        to Normal():
+            return fn _p, N { N }
+
+        to Phong(specular, diffuse, ambient, shininess):
+            return fn eye, light, p, N {
+            }
 
 # See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
 # many implementation examples, as well as other primitives not listed here.
@@ -317,12 +357,15 @@ def asSDF(entropy) as DeepFrozen:
             def noise := makeSimplexNoise(entropy)
             return fn p { noise.turbulence(p * l, octaves) }
 
+# Holey green boxes in a lattice.
 def crystal :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
     CSG.Intersection(CSG.Sphere(1.2), [CSG.Cube(1.0)]),
     CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5),
 ) , 3.0, 5.0, 4.0)
+# Imitation tinykaboom.
 def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
     CSG.Noise(3.4, 3.4, 3.4, 5), 3.0)
+# More imitation tinykaboom, but deterministic.
 def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
     CSG.Sines(5.0, 5.0, 5.0), 3.0)
 def solid :DeepFrozen := crystal
@@ -343,11 +386,11 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     # lib/noise's API.
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def sdf := solid(asSDF(entropy))
-    def drawable := drawSignedDistanceFunction(sdf)
+    def drawable := drawSignedDistanceFunction(sdf, null)
     # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # drawable.drawAt(0.5, 0.45, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # throw("yay?")
-    def config := samplerConfig.QuasirandomMonteCarlo(10)
+    def config := samplerConfig.QuasirandomMonteCarlo(3)
     def drawer := makePNG.drawingFrom(drawable, config)(w, h)
     var i := 0
     def start := Timer.unsafeNow()
