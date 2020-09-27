@@ -430,7 +430,7 @@ class DoubleObject(Object):
     def floor(self):
         if math.isnan(self._d):
             raise userError(u".floor/0: No Int is the smallest Int less than NaN")
-        return int(self._d)
+        return int(math.floor(self._d))
 
     @method("Double")
     def negate(self):
@@ -459,6 +459,10 @@ class DoubleObject(Object):
     @method("Int", "BigInt", _verb="floorDivide")
     def floorDivideBigInt(self, divisor):
         return int(math.floor(self._d / divisor.tofloat()))
+
+    @method("Double", "Double")
+    def mod(self, divisor):
+        return self._d - divisor * math.floor(self._d / divisor)
 
     @method("Double", "Double")
     def pow(self, exponent):
