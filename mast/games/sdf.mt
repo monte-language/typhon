@@ -25,6 +25,7 @@ material = Phong(color specular, color diffuse, color ambient,
                  double shininess)
 color = Color(double red, double green, double blue)
       | Normal
+      | Checker
 `, "csg"), safeScope)(null)
 
 # http://jamie-wong.com/2016/07/15/ray-marching-signed-distance-functions/
@@ -53,6 +54,9 @@ def sumRow :DeepFrozen := V.makeFold(one * 0.0, sumPlus)
 
 def maxPlus(x, y) as DeepFrozen { return x.max(y) }
 def max :DeepFrozen := V.makeFold(-Infinity, maxPlus)
+
+def anyOr(x, y) as DeepFrozen { return x || y }
+def any :DeepFrozen := V.makeFold(true, anyOr)
 
 def PI :Double := 1.0.arcSine() * 2
 
@@ -300,6 +304,9 @@ def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
         return makeColor.RGB(r, g, b, 1.0)
 
+def mod(x :Double, y :Double) :Double as DeepFrozen:
+    return x - y * (x / y).floor()
+
 def asTF() as DeepFrozen:
     "Compile a CSG material to its corresponding texture function."
 
@@ -310,26 +317,29 @@ def asTF() as DeepFrozen:
     return object compileTF:
         to Color(red, green, blue):
             def color := V(red, green, blue)
-            return fn _N { color }
+            return fn _p, _N { color }
 
         to Normal():
             # Convert the normal, which is in [-1, 1], to be in [0, 1].
-            return fn N { N * 0.5 + 0.5 }
+            return fn _p, N { N * 0.5 + 0.5 }
+
+        to Checker():
+            return fn p, _N { one * (sumDouble(p.floor()) % 2.0) }
 
         to Phong(specular, diffuse, ambient, shininess):
             # https://en.wikipedia.org/wiki/Phong_reflection_model
             return object phongShader {
                 to ambient(p, N) {
                     # XXX ambient light is V(0.5, 0.5, 0.5)
-                    return ambient(N) * 0.5
+                    return ambient(p, N) * 0.5
                 }
                 to run(eye, light, p, N) {
                     def L := glsl.normalize(light - p)
                     def diff := glsl.dot(L, N)
 
                     return if (diff.belowZero()) { zero } else {
-                        def ks := specular(N)
-                        def kd := diffuse(N)
+                        def ks := specular(p, N)
+                        def kd := diffuse(p, N)
                         def R := glsl.normalize(glsl.reflect(-L, N))
                         def base := glsl.dot(R, glsl.normalize(eye - p))
                         def spec := if (base.belowZero()) { 0.0 } else {
@@ -456,8 +466,14 @@ def rubber(color) as DeepFrozen:
         color,
         10.0,
     )
+def checker :DeepFrozen := CSG.Phong(
+    CSG.Checker(),
+    CSG.Checker(),
+    CSG.Checker(),
+    1.0,
+)
 def green :DeepFrozen := CSG.Color(0.3, 0.9, 0.3)
-def material :DeepFrozen := rubber(green)
+def material :DeepFrozen := checker
 traceln(`Defined material: $material`)
 
 # Debugging spheres, good for testing shadows.
@@ -498,9 +514,6 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def sdf := solid(asSDF(entropy))
     def tf := material(asTF())
     def drawable := drawSignedDistanceFunction(sdf, tf)
-    # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
-    # drawable.drawAt(0.5, 0.45, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
-    # throw("yay?")
     # def config := samplerConfig.QuasirandomMonteCarlo(5)
     def config := samplerConfig.Center()
     def drawer := makePNG.drawingFrom(drawable, config)(w, h)
