@@ -7,7 +7,7 @@ import "lib/vectors" =~ [=> V, => glsl]
 import "fun/png" =~ [=> makePNG]
 exports (main)
 
-def ["ASTBuilder" => CSG] | _ := eval(buildASDLModule(`
+def ["ASTBuilder" => CSG :DeepFrozen] | _ := eval(buildASDLModule(`
 solid = Sphere(double radius)
       | Box(double width, double height, double depth)
       | Cube(double length)
@@ -83,7 +83,7 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
                               end :Double, pixelRadius :Double) as DeepFrozen:
     var depth := start
     # Track signs, based on where we've started.
-    # XXX needs better negative zero handling
+    # XXX Typhon should give Doubles a method for checking the sign bit!
     def sign := sdf(eye).belowZero().pick(-1.0, 1.0)
     for i in (0..!maxSteps):
         def step := eye + direction * depth
@@ -117,6 +117,75 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
 
     # No hits.
     return [end, maxSteps]
+
+def hardShadow(sdf, light, direction, start :Double, end :Double) :Double as DeepFrozen:
+    "How much `sdf` contributes to self-occlusion of `light` from `direction`."
+
+    # https://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
+    # Very much like computing hits, but with a penumbra instead of a pixel
+    # radius. So, if confused, review the standard hit computation first.
+
+    var depth := start
+    for _ in (0..!maxSteps):
+        if (depth >= end):
+            break
+        def distance := sdf(light + direction * depth)
+        if (distance.atMostZero()):
+            return 0.0
+        depth += distance
+    return 1.0
+
+def softShadow(k :Double) as DeepFrozen:
+    "
+    Build a soft shadow finder.
+
+    `k` controls fuzziness of the resulting penumbra. As `k` grows, the
+    penumbra becomes asymptotically sharper; values over 100 are like hard
+    shadows, while values below 2 are like parallel large sources of light.
+
+    `k` cannot go to zero or infinity, but at zero, the light source is
+    infinitely far, while at infinity, the light source is a nearby laser.
+    "
+
+    return def goSoftly(sdf, light, direction, start :Double, end :Double) :Double as DeepFrozen:
+        # https://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
+        # Similar to hard shadows, but with a fuzzy adjustment to the penumbra.
+
+        var depth := start
+        var shade := 1.0
+        var ph := 1e20
+        for _ in (0..!maxSteps):
+            if (depth >= end):
+                break
+
+            def distance := sdf(light + direction * depth)
+
+            # No sign tracking. As soon as we're negative, including immediately,
+            # we'll bail with zero. Indeed, we actually have to bail out sooner
+            # than that; too close to epsilon and we get numerical instability and
+            # NaNs in the following square root.
+            if (distance.atMostZero()):
+                return 0.0
+
+            # Aaltonen's technique: Search for darkest parts of the penumbra,
+            # using the prior step to refine where to search.
+            def hh := distance * distance
+            def y := hh * 0.5 / ph
+            # Numerical instability can cause this invariant to fail, in which
+            # case we definitely intersected and are in full shade.
+            if (y >= distance):
+                return 0.0
+            # Always safe because distance > y.
+            def d := (hh - y * y).squareRoot()
+            shade min= (k * d / 0.0.max(depth - y))
+            # traceln("distance", distance, "depth", depth, "hh", hh, "y", y, "d",
+            #         d, "shade", shade)
+
+            ph := distance
+            depth += distance
+
+        # How fuzzy did we get?
+        return shade
 
 def makeRayDirection(fieldOfView :Double) as DeepFrozen:
     "
@@ -198,26 +267,34 @@ def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
                                        pixelRadius)
         # traceln(`hit u=$u v=$v estimate=$estimate distance=$distance steps=$steps`)
 
-        # The actual distance.
+        # The actual location of the hit after traveling the distance.
         def p := eye + worldDir * distance
         # The normal at the point of intersection. Note that, since the
         # intersection is approximate, the normal is also approximate.
         def N := estimateNormal(sdf, p)
 
+        def lights := [
+            # Behind the camera, a spotlight.
+            (eye - one) => [one * 0.2, hardShadow],
+            # From the front, a fill.
+            V(20.0, 2.0, 2.0) => [one * 0.7, softShadow(4.0)],
+            # From far above, a bright ambient light.
+            V(-5.0, 100.0, -5.0) => [one, softShadow(2.0)],
+        ]
         # The color of the SDF at the distance. This is a function of
         # illuminating the SDF with each light.
-        def lights := [
-            V(0.0, 2.0, 4.0),
-            V(-4.0, 2.0, 0.0),
-            V(0.74, 0.0, 2.0),
-            V(0.0, -0.74, 2.0),
-            # Put a light behind the camera.
-            eye - one,
-        ]
-        # XXX We'll need to do something smarter for shadows, so that we don't
-        # try to include lights which don't actually hit. Maybe filter the
-        # lights here by seeing which lights hit near p?
-        def color := tf(eye, lights, p, N)
+        var color := tf.ambient(p, N)
+        for light => [lightColor, shadow] in (lights):
+            # Let's find out how much this light contributes when pointed at
+            # the known intersection point. The maximum distance to travel is
+            # to just within a hair of the hit, to avoid acne.
+            def v := p - light
+            def intensity := shadow(sdf, light, glsl.normalize(v), 0.0,
+                                    glsl.length(v) - 0.001)
+            # The light might be blocked entirely; only compute materials if
+            # the point isn't in shade.
+            if (intensity.aboveZero()):
+                color += tf(eye, light, p, N) * lightColor * intensity
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
@@ -241,29 +318,26 @@ def asTF() as DeepFrozen:
 
         to Phong(specular, diffuse, ambient, shininess):
             # https://en.wikipedia.org/wiki/Phong_reflection_model
-            return fn eye, lights, p, N {
-                # XXX ambient light is V(0.5, 0.5, 0.5)
-                var color := ambient(N) * 0.5
-
-                def ks := specular(N)
-                def kd := diffuse(N)
-
-                for light in (lights) {
+            return object phongShader {
+                to ambient(p, N) {
+                    # XXX ambient light is V(0.5, 0.5, 0.5)
+                    return ambient(N) * 0.5
+                }
+                to run(eye, light, p, N) {
                     def L := glsl.normalize(light - p)
                     def diff := glsl.dot(L, N)
 
-                    color += if (diff.belowZero()) { zero } else {
+                    return if (diff.belowZero()) { zero } else {
+                        def ks := specular(N)
+                        def kd := diffuse(N)
                         def R := glsl.normalize(glsl.reflect(-L, N))
                         def base := glsl.dot(R, glsl.normalize(eye - p))
                         def spec := if (base.belowZero()) { 0.0 } else {
                             ks * base ** shininess
                         }
-                        # XXX light color is V(0.4, 0.4, 0.4)
-                        (kd * diff + ks * spec) * 0.4
+                        kd * diff + ks * spec
                     }
                 }
-
-                color
             }
 
 # See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
@@ -374,19 +448,26 @@ def debugNormal :DeepFrozen := CSG.Phong(
     CSG.Normal(),
     10.0,
 )
-# A basic green rubber material.
-def greenRubber :DeepFrozen := CSG.Phong(
-    CSG.Color(0.1, 0.1, 0.1),
-    CSG.Color(0.9, 0.9, 0.9),
-    CSG.Color(0.3, 0.9, 0.3),
-    10.0,
-)
-def material :DeepFrozen := debugNormal
+# A basic rubber material.
+def rubber(color) as DeepFrozen:
+    return CSG.Phong(
+        CSG.Color(0.1, 0.1, 0.1),
+        CSG.Color(0.9, 0.9, 0.9),
+        color,
+        10.0,
+    )
+def green :DeepFrozen := CSG.Color(0.3, 0.9, 0.3)
+def material :DeepFrozen := rubber(green)
 traceln(`Defined material: $material`)
 
-# Debugging cubes, good for testing shadows.
-def boxes :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Cube(1.0), 5.0, 5.0, 5.0)
-# Holey boxes in a lattice.
+# Debugging spheres, good for testing shadows.
+def boxes :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Sphere(1.0), 5.0, 5.0, 5.0)
+# Sphere study.
+def study :DeepFrozen := CSG.Union(
+    CSG.Translation(CSG.Sphere(10_000.0), 0.0, -10_000.0, 0.0), [
+    CSG.Translation(CSG.Sphere(2.0), 0.0, 2.0, 0.0),
+])
+# Holey beads in a lattice.
 def crystal :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
     CSG.Intersection(CSG.Sphere(1.2), [CSG.Cube(1.0)]),
     CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5),
@@ -394,10 +475,10 @@ def crystal :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
 # Imitation tinykaboom.
 def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
     CSG.Noise(3.4, 3.4, 3.4, 5), 3.0)
-# More imitation tinykaboom, but deterministic.
+# More imitation tinykaboom, but deterministic and faster.
 def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
     CSG.Sines(5.0, 5.0, 5.0), 3.0)
-def solid :DeepFrozen := boxes
+def solid :DeepFrozen := study
 traceln(`Defined solid: $solid`)
 
 def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
@@ -420,7 +501,8 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     # drawable.drawAt(0.5, 0.5, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # drawable.drawAt(0.5, 0.45, "aspectRatio" => 1.618, "pixelRadius" => 0.000_020)
     # throw("yay?")
-    def config := samplerConfig.QuasirandomMonteCarlo(3)
+    # def config := samplerConfig.QuasirandomMonteCarlo(5)
+    def config := samplerConfig.Center()
     def drawer := makePNG.drawingFrom(drawable, config)(w, h)
     var i := 0
     def start := Timer.unsafeNow()
