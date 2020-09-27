@@ -302,7 +302,7 @@ def asSDF(entropy) as DeepFrozen:
 
         to Translation(shape, dx :Double, dy :Double, dz :Double):
             def offset := V(dx, dy, dz)
-            return fn p { shape(p) - offset }
+            return fn p { shape(p - offset) }
 
         to Scaling(shape, factor :Double):
             return fn p { shape(p / factor) * factor }
