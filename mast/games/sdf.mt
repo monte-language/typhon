@@ -8,10 +8,11 @@ import "fun/png" =~ [=> makePNG]
 exports (main)
 
 def ["ASTBuilder" => CSG :DeepFrozen] | _ := eval(buildASDLModule(`
-solid = Sphere(double radius)
-      | Box(double width, double height, double depth)
-      | Cube(double length)
-      | InfiniteCylindricalCross(double xradius, double yradius, double zradius)
+solid = Sphere(double radius, material)
+      | Box(double width, double height, double depth, material)
+      | Cube(double length, material)
+      | InfiniteCylindricalCross(double xradius, double yradius, double zradius,
+                                 material)
       | Translation(solid shape, double dx, double dy, double dz)
       | Scaling(solid shape, double factor)
       | Displacement(solid shape, displacement d, double amplitude)
@@ -21,7 +22,8 @@ solid = Sphere(double radius)
       | Difference(solid minuend, solid subtrahend)
 displacement = Sines(double lx, double ly, double lz)
              | Noise(double lx, double ly, double lz, int octaves)
-material = Phong(color specular, color diffuse, color ambient,
+material = Lambert(color flat, color ambient)
+         | Phong(color specular, color diffuse, color ambient,
                  double shininess)
 color = Color(double red, double green, double blue)
       | Normal
@@ -76,9 +78,9 @@ def estimateNormal(sdf, p) as DeepFrozen:
     # zero, see https://en.wikipedia.org/wiki/Numerical_differentiation
     def scale := glsl.length(p)
     return glsl.normalize(V(
-        sdf(p + epsilonX * scale) - sdf(p - epsilonX * scale),
-        sdf(p + epsilonY * scale) - sdf(p - epsilonY * scale),
-        sdf(p + epsilonZ * scale) - sdf(p - epsilonZ * scale),
+        sdf(p + epsilonX * scale)[0] - sdf(p - epsilonX * scale)[0],
+        sdf(p + epsilonY * scale)[0] - sdf(p - epsilonY * scale)[0],
+        sdf(p + epsilonZ * scale)[0] - sdf(p - epsilonZ * scale)[0],
     ))
 
 def maxSteps :Int := 100
@@ -88,10 +90,11 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
     var depth := start
     # Track signs, based on where we've started.
     # XXX Typhon should give Doubles a method for checking the sign bit!
-    def sign := sdf(eye).belowZero().pick(-1.0, 1.0)
+    def sign := sdf(eye)[0].belowZero().pick(-1.0, 1.0)
     for i in (0..!maxSteps):
         def step := eye + direction * depth
-        def signedDistance := sdf(step) * sign
+        def [distance, texture] := sdf(step)
+        def signedDistance := distance * sign
         # traceln(`$i: sdf($eye, $direction, $depth) -> sdf($step) -> $signedDistance`)
 
         # If we took a step and ended up inside the geometry, but we took the
@@ -101,7 +104,7 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
         # actually extremely good and we should treat the remaining negative
         # offset as numerical error.
         if (signedDistance.belowZero()):
-            return [depth, i]
+            return [depth, i, texture]
 
         # We can and should leave as soon as the first hit happens which is
         # close enough to reasonably occlude the pixel.
@@ -111,16 +114,16 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
         def error := signedDistance.abs() / depth
         # traceln(`$i: error $error, threshold $pixelRadius`)
         if (error < pixelRadius):
-            return [depth, i]
+            return [depth, i, texture]
 
         # No hits.
         if (depth >= end):
-            return [end, i]
+            return [end, i, null]
 
         depth += signedDistance
 
     # No hits.
-    return [end, maxSteps]
+    return [end, maxSteps, null]
 
 def hardShadow(sdf, light, direction, start :Double, end :Double) :Double as DeepFrozen:
     "How much `sdf` contributes to self-occlusion of `light` from `direction`."
@@ -133,7 +136,7 @@ def hardShadow(sdf, light, direction, start :Double, end :Double) :Double as Dee
     for _ in (0..!maxSteps):
         if (depth >= end):
             break
-        def distance := sdf(light + direction * depth)
+        def [distance, _] := sdf(light + direction * depth)
         if (distance.atMostZero()):
             return 0.0
         depth += distance
@@ -162,7 +165,7 @@ def softShadow(k :Double) as DeepFrozen:
             if (depth >= end):
                 break
 
-            def distance := sdf(light + direction * depth)
+            def [distance, _] := sdf(light + direction * depth)
 
             # No sign tracking. As soon as we're negative, including immediately,
             # we'll bail with zero. Indeed, we actually have to bail out sooner
@@ -234,7 +237,7 @@ def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as Deep
     var t := distance
     var err := Infinity
     for _i in (0..!3):
-        def newErr := sdf(eye + dir * t) - pixelArea / t
+        def newErr := sdf(eye + dir * t)[0] - pixelArea / t
         # It is quite possible that we're not improving the estimate; that is,
         # that we are numerically unstable near a divergent fixed point. If
         # that's the case, then give up to avoid making things worse.
@@ -244,8 +247,8 @@ def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as Deep
         t += err
     return t
 
-def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
-    "Draw signed distance function `sdf` with associated texture function `tf`."
+def drawSignedDistanceFunction(sdf) as DeepFrozen:
+    "Draw signed distance function `sdf`."
 
     def eye :DeepFrozen := V(8.0, 5.0, 7.0)
     def fov :Double := PI / 8
@@ -258,9 +261,11 @@ def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
         def viewDir := rayDirection(u, 1.0 - v, aspectRatio)
         def worldDir := viewToWorld(viewDir)
 
-        def [estimate, steps] := shortestDistanceToSurface(sdf, eye, worldDir,
-                                                           0.0, maxDepth,
-                                                           pixelRadius)
+        def [estimate, steps, texture] := shortestDistanceToSurface(sdf, eye,
+                                                                    worldDir,
+                                                                    0.0,
+                                                                    maxDepth,
+                                                                    pixelRadius)
         # Clearly show where we aren't taking enough steps by highlighting
         # with magenta.
         if (steps >= maxSteps) { return makeColor.RGB(1.0, 0.0, 1.0, 1.0) }
@@ -279,15 +284,15 @@ def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
 
         def lights := [
             # Behind the camera, a spotlight.
-            (eye - one) => [one * 0.2, hardShadow],
+            (eye - one) => [one * 0.5, hardShadow],
             # From the front, a fill.
-            V(20.0, 2.0, 2.0) => [one * 0.7, softShadow(4.0)],
+            V(20.0, 2.0, -5.0) => [one * 3.0, softShadow(1.0)],
             # From far above, a bright ambient light.
-            V(-5.0, 100.0, -5.0) => [one, softShadow(2.0)],
+            V(-100.0, 1_000.0, 100.0) => [one * 5.0, softShadow(4.0)],
         ]
         # The color of the SDF at the distance. This is a function of
         # illuminating the SDF with each light.
-        var color := tf.ambient(p, N)
+        var color := texture.ambient(p, N)
         for light => [lightColor, shadow] in (lights):
             # Let's find out how much this light contributes when pointed at
             # the known intersection point. The maximum distance to travel is
@@ -298,7 +303,7 @@ def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
             # The light might be blocked entirely; only compute materials if
             # the point isn't in shade.
             if (intensity.aboveZero()):
-                color += tf(eye, light, p, N) * lightColor * intensity
+                color += texture(eye, light, p, N) * lightColor * intensity
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
@@ -307,14 +312,18 @@ def drawSignedDistanceFunction(sdf, tf) as DeepFrozen:
 def mod(x :Double, y :Double) :Double as DeepFrozen:
     return x - y * (x / y).floor()
 
-def asTF() as DeepFrozen:
-    "Compile a CSG material to its corresponding texture function."
+# See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
+# many implementation examples, as well as other primitives not listed here.
+# http://mercury.sexy/hg_sdf/ is another possible source of implementations.
+
+def asSDF(entropy) as DeepFrozen:
+    "Compile a CSG expression to its corresponding SDF."
 
     # It would be nice if colors didn't need p and N, but they do. Indeed,
     # right now I've left p out, and just use N, but that won't do for proper
     # texturing later.
 
-    return object compileTF:
+    return object compileSDF:
         to Color(red, green, blue):
             def color := V(red, green, blue)
             return fn _p, _N { color }
@@ -326,13 +335,23 @@ def asTF() as DeepFrozen:
         to Checker():
             return fn p, _N { one * (sumDouble(p.floor()) % 2.0) }
 
+        to Lambert(flat, ambient):
+            # https://en.wikipedia.org/wiki/Lambertian_reflectance
+            return object lambertShader {
+                to ambient(p, N) { return ambient(p, N) }
+                to run(_eye, light, p, N) {
+                    def L := glsl.normalize(light - p)
+                    def diff := glsl.dot(L, N)
+                    return if (diff.belowZero()) { zero } else {
+                        flat(p, N) * diff
+                    }
+                }
+            }
+
         to Phong(specular, diffuse, ambient, shininess):
             # https://en.wikipedia.org/wiki/Phong_reflection_model
             return object phongShader {
-                to ambient(p, N) {
-                    # XXX ambient light is V(0.5, 0.5, 0.5)
-                    return ambient(p, N) * 0.5
-                }
+                to ambient(p, N) { return ambient(p, N) }
                 to run(eye, light, p, N) {
                     def L := glsl.normalize(light - p)
                     def diff := glsl.dot(L, N)
@@ -350,28 +369,21 @@ def asTF() as DeepFrozen:
                 }
             }
 
-# See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
-# many implementation examples, as well as other primitives not listed here.
-# http://mercury.sexy/hg_sdf/ is another possible source of implementations.
+        to Sphere(radius :Double, material):
+            return fn p { [glsl.length(p) - radius, material] }
 
-def asSDF(entropy) as DeepFrozen:
-    "Compile a CSG expression to its corresponding SDF."
-
-    return object compileSDF:
-        to Sphere(radius :Double):
-            return fn p { glsl.length(p) - radius }
-
-        to Box(height :Double, width :Double, depth :Double):
+        to Box(height :Double, width :Double, depth :Double, material):
             def b := V(height, width, depth)
             return fn p {
                 def q := p.abs() - b
-                glsl.length(q.max(0.0)) + max(q).min(0.0)
+                [glsl.length(q.max(0.0)) + max(q).min(0.0), material]
             }
 
-        to Cube(length :Double):
-            return compileSDF.Box(length, length, length)
+        to Cube(length :Double, material):
+            return compileSDF.Box(length, length, length, material)
 
-        to InfiniteCylindricalCross(cx :Double, cy :Double, cz :Double):
+        to InfiniteCylindricalCross(cx :Double, cy :Double, cz :Double,
+                                    material):
             "
             The cross of infinite cylinders centered at the origin and with radius `c`
             in each axis.
@@ -379,9 +391,9 @@ def asSDF(entropy) as DeepFrozen:
 
             return fn p {
                 def [px, py, pz] := V.un(p, null)
-                (px.euclidean(py) - cz).min(
-                 py.euclidean(pz) - cx).min(
-                 pz.euclidean(px) - cy)
+                [(px.euclidean(py) - cz).min(
+                  py.euclidean(pz) - cx).min(
+                  pz.euclidean(px) - cy), material]
             }
 
         to Translation(shape, dx :Double, dy :Double, dz :Double):
@@ -423,19 +435,30 @@ def asSDF(entropy) as DeepFrozen:
         to Intersection(shape, shapes :List):
             return fn p {
                 var rv := shape(p)
-                for s in (shapes) { rv max= (s(p)) }
+                for s in (shapes) {
+                    def c := s(p)
+                    if (c[0] > rv[0]) { rv := c }
+                }
                 rv
             }
 
         to Union(shape, shapes :List):
             return fn p {
                 var rv := shape(p)
-                for s in (shapes) { rv min= (s(p)) }
+                for s in (shapes) {
+                    def c := s(p)
+                    if (c[0] < rv[0]) { rv := c }
+                }
                 rv
             }
 
         to Difference(minuend, subtrahend):
-            return fn p { minuend(p).max(-(subtrahend(p))) }
+            return fn p {
+                def m := minuend(p)
+                def [var sp, sm] := subtrahend(p)
+                sp := -sp
+                return if (m[0] > sp) { m } else { [sp, sm] }
+            }
 
         # The displacement operators are on the same domain as SDFs, but they
         # return values in [-1, 1]. We will rely on this property!
@@ -452,47 +475,37 @@ def asSDF(entropy) as DeepFrozen:
             return fn p { noise.turbulence(p * l, octaves) }
 
 # Use the normal to show the gradient.
-def debugNormal :DeepFrozen := CSG.Phong(
-    CSG.Color(0.1, 0.1, 0.1),
-    CSG.Normal(),
-    CSG.Normal(),
-    10.0,
-)
+def debugNormal :DeepFrozen := CSG.Lambert(CSG.Normal(), CSG.Color(0.2, 0.2, 0.2))
 # A basic rubber material.
 def rubber(color) as DeepFrozen:
     return CSG.Phong(
-        CSG.Color(0.1, 0.1, 0.1),
         CSG.Color(0.9, 0.9, 0.9),
         color,
-        10.0,
+        CSG.Color(0.2, 0.2, 0.2),
+        5.0,
     )
-def checker :DeepFrozen := CSG.Phong(
-    CSG.Checker(),
-    CSG.Checker(),
-    CSG.Checker(),
-    1.0,
-)
+def checker :DeepFrozen := CSG.Lambert(CSG.Checker(), CSG.Color(0.2, 0.2, 0.2))
 def green :DeepFrozen := CSG.Color(0.3, 0.9, 0.3)
-def material :DeepFrozen := checker
-traceln(`Defined material: $material`)
 
 # Debugging spheres, good for testing shadows.
-def boxes :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Sphere(1.0), 5.0, 5.0, 5.0)
+def boxes :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Sphere(1.0, debugNormal),
+                                                 5.0, 5.0, 5.0)
 # Sphere study.
 def study :DeepFrozen := CSG.Union(
-    CSG.Translation(CSG.Sphere(10_000.0), 0.0, -10_000.0, 0.0), [
-    CSG.Translation(CSG.Sphere(2.0), 0.0, 2.0, 0.0),
+    CSG.Translation(CSG.Sphere(10_000.0, checker), 0.0, -10_000.0, 0.0), [
+    CSG.Translation(CSG.Sphere(2.0, rubber(green)), 0.0, 2.0, 0.0),
 ])
 # Holey beads in a lattice.
 def crystal :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
-    CSG.Intersection(CSG.Sphere(1.2), [CSG.Cube(1.0)]),
-    CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5),
+    CSG.Intersection(CSG.Sphere(1.2, rubber(green)),
+                     [CSG.Cube(1.0, rubber(green))]),
+    CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5, rubber(green)),
 ) , 3.0, 5.0, 4.0)
 # Imitation tinykaboom.
-def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
+def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
     CSG.Noise(3.4, 3.4, 3.4, 5), 3.0)
 # More imitation tinykaboom, but deterministic and faster.
-def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0),
+def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
     CSG.Sines(5.0, 5.0, 5.0), 3.0)
 def solid :DeepFrozen := study
 traceln(`Defined solid: $solid`)
@@ -512,8 +525,7 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     # lib/noise's API.
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def sdf := solid(asSDF(entropy))
-    def tf := material(asTF())
-    def drawable := drawSignedDistanceFunction(sdf, tf)
+    def drawable := drawSignedDistanceFunction(sdf)
     # def config := samplerConfig.QuasirandomMonteCarlo(5)
     def config := samplerConfig.Center()
     def drawer := makePNG.drawingFrom(drawable, config)(w, h)
