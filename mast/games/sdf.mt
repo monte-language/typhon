@@ -125,74 +125,22 @@ def shortestDistanceToSurface(sdf, eye, direction, start :Double,
     # No hits.
     return [end, maxSteps, null]
 
-def hardShadow(sdf, light, direction, start :Double, end :Double) :Double as DeepFrozen:
+def hardShadow(sdf, light, direction, end :Double) :Double as DeepFrozen:
     "How much `sdf` contributes to self-occlusion of `light` from `direction`."
 
     # https://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
     # Very much like computing hits, but with a penumbra instead of a pixel
     # radius. So, if confused, review the standard hit computation first.
 
-    var depth := start
+    var depth := 0.0
     for _ in (0..!maxSteps):
         if (depth >= end):
             break
         def [distance, _] := sdf(light + direction * depth)
-        if (distance.atMostZero()):
+        if (distance < 0.000_000_1):
             return 0.0
         depth += distance
     return 1.0
-
-def softShadow(k :Double) as DeepFrozen:
-    "
-    Build a soft shadow finder.
-
-    `k` controls fuzziness of the resulting penumbra. As `k` grows, the
-    penumbra becomes asymptotically sharper; values over 100 are like hard
-    shadows, while values below 2 are like parallel large sources of light.
-
-    `k` cannot go to zero or infinity, but at zero, the light source is
-    infinitely far, while at infinity, the light source is a nearby laser.
-    "
-
-    return def goSoftly(sdf, light, direction, start :Double, end :Double) :Double as DeepFrozen:
-        # https://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
-        # Similar to hard shadows, but with a fuzzy adjustment to the penumbra.
-
-        var depth := start
-        var shade := 1.0
-        var ph := 1e20
-        for _ in (0..!maxSteps):
-            if (depth >= end):
-                break
-
-            def [distance, _] := sdf(light + direction * depth)
-
-            # No sign tracking. As soon as we're negative, including immediately,
-            # we'll bail with zero. Indeed, we actually have to bail out sooner
-            # than that; too close to epsilon and we get numerical instability and
-            # NaNs in the following square root.
-            if (distance.atMostZero()):
-                return 0.0
-
-            # Aaltonen's technique: Search for darkest parts of the penumbra,
-            # using the prior step to refine where to search.
-            def hh := distance * distance
-            def y := hh * 0.5 / ph
-            # Numerical instability can cause this invariant to fail, in which
-            # case we definitely intersected and are in full shade.
-            if (y >= distance):
-                return 0.0
-            # Always safe because distance > y.
-            def d := (hh - y * y).squareRoot()
-            shade min= (k * d / 0.0.max(depth - y))
-            # traceln("distance", distance, "depth", depth, "hh", hh, "y", y, "d",
-            #         d, "shade", shade)
-
-            ph := distance
-            depth += distance
-
-        # How fuzzy did we get?
-        return shade
 
 def makeRayDirection(fieldOfView :Double) as DeepFrozen:
     "
@@ -284,22 +232,24 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
 
         def lights := [
             # Behind the camera, a spotlight.
-            (eye - one) => [one * 0.5, hardShadow],
-            # From the front, a fill.
-            V(20.0, 2.0, -5.0) => [one * 3.0, softShadow(1.0)],
-            # From far above, a bright ambient light.
-            V(-100.0, 1_000.0, 100.0) => [one * 5.0, softShadow(4.0)],
+            (eye + one) => one * 0.4,
+            # From the right, a fill.
+            V(13.0, 10.0, -5.0) => one * 0.4,
+            # From the left, another fill.
+            V(-8.0, 10.0, 10.0) => one * 0.4,
+            # From far above, a gentle ambient light.
+            V(-100.0, 1_000.0, 100.0) => one * 0.1,
         ]
         # The color of the SDF at the distance. This is a function of
         # illuminating the SDF with each light.
         var color := texture.ambient(p, N)
-        for light => [lightColor, shadow] in (lights):
+        for light => lightColor in (lights):
             # Let's find out how much this light contributes when pointed at
             # the known intersection point. The maximum distance to travel is
             # to just within a hair of the hit, to avoid acne.
             def v := p - light
-            def intensity := shadow(sdf, light, glsl.normalize(v), 0.0,
-                                    glsl.length(v) - 0.001)
+            def intensity := hardShadow(sdf, light, glsl.normalize(v),
+                                        glsl.length(v) - 0.000_000_1)
             # The light might be blocked entirely; only compute materials if
             # the point isn't in shade.
             if (intensity.aboveZero()):
@@ -475,17 +425,20 @@ def asSDF(entropy) as DeepFrozen:
             return fn p { noise.turbulence(p * l, octaves) }
 
 # Use the normal to show the gradient.
-def debugNormal :DeepFrozen := CSG.Lambert(CSG.Normal(), CSG.Color(0.2, 0.2, 0.2))
-# A basic rubber material.
+def debugNormal :DeepFrozen := CSG.Lambert(CSG.Normal(), CSG.Color(0.1, 0.1, 0.1))
+# http://devernay.free.fr/cours/opengl/materials.html
+# A basic rubber material. Note that, unlike Kilgard's rubber, we put the
+# color in the diffuse component instead of specular; rubber *does* absorb
+# pigmentation and is naturally white.
 def rubber(color) as DeepFrozen:
     return CSG.Phong(
-        CSG.Color(0.9, 0.9, 0.9),
+        CSG.Color(0.4, 0.4, 0.4),
         color,
-        CSG.Color(0.2, 0.2, 0.2),
-        5.0,
+        CSG.Color(0.1, 0.1, 0.1),
+        10.0,
     )
-def checker :DeepFrozen := CSG.Lambert(CSG.Checker(), CSG.Color(0.2, 0.2, 0.2))
-def green :DeepFrozen := CSG.Color(0.3, 0.9, 0.3)
+def checker :DeepFrozen := CSG.Lambert(CSG.Checker(), CSG.Color(0.1, 0.1, 0.1))
+def green :DeepFrozen := CSG.Color(0.04, 0.7, 0.04)
 
 # Debugging spheres, good for testing shadows.
 def boxes :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Sphere(1.0, debugNormal),
