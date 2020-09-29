@@ -16,7 +16,10 @@ solid = Sphere(double radius, material)
       | Translation(solid shape, double dx, double dy, double dz)
       | Scaling(solid shape, double factor)
       | Displacement(solid shape, displacement d, double amplitude)
-      | OrthorhombicCrystal(solid repetend, double width, double height, double depth)
+      | OrthorhombicClamp(solid repetend, double period, double width,
+                          double height, double depth)
+      | OrthorhombicCrystal(solid repetend, double width, double height,
+                            double depth)
       | Intersection(solid shape, solid* shapes)
       | Union(solid shape, solid* shapes)
       | Difference(solid minuend, solid subtrahend)
@@ -27,6 +30,7 @@ material = Lambert(color flat, color ambient)
                  double shininess)
 color = Color(double red, double green, double blue)
       | Normal
+      | Gradient
       | Checker
 `, "csg"), safeScope)(null)
 
@@ -58,7 +62,7 @@ def maxPlus(x, y) as DeepFrozen { return x.max(y) }
 def max :DeepFrozen := V.makeFold(-Infinity, maxPlus)
 
 def anyOr(x, y) as DeepFrozen { return x || y }
-def any :DeepFrozen := V.makeFold(true, anyOr)
+def any :DeepFrozen := V.makeFold(false, anyOr)
 
 def PI :Double := 1.0.arcSine() * 2
 
@@ -203,11 +207,18 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
     def viewToWorld := viewMatrix(eye, zero, V(0.0, 1.0, 0.0))
     def rayDirection := makeRayDirection(fov)
 
-    return def drawable.drawAt(u :Double, v :Double, => aspectRatio :Double,
+    return def drawable.drawAt(u :Double, var v :Double,
+                               => aspectRatio :Double,
                                => pixelRadius :Double):
         # NB: Flip vertical axis.
-        def viewDir := rayDirection(u, 1.0 - v, aspectRatio)
-        def worldDir := viewToWorld(viewDir)
+        v := 1.0 - v
+        # Take our central ray, and also take four rays at edges of the pixel;
+        # we'll need them for estimating partial derivatives later.
+        def worldDir := viewToWorld(rayDirection(u, v, aspectRatio))
+        def worldDirPX := viewToWorld(rayDirection(u + pixelRadius, v, aspectRatio))
+        def worldDirNX := viewToWorld(rayDirection(u - pixelRadius, v, aspectRatio))
+        def worldDirPY := viewToWorld(rayDirection(u, v + pixelRadius, aspectRatio))
+        def worldDirNY := viewToWorld(rayDirection(u, v - pixelRadius, aspectRatio))
 
         def [estimate, steps, texture] := shortestDistanceToSurface(sdf, eye,
                                                                     worldDir,
@@ -229,6 +240,13 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         # The normal at the point of intersection. Note that, since the
         # intersection is approximate, the normal is also approximate.
         def N := estimateNormal(sdf, p)
+        # The partial derivatives in screen space at the point of
+        # intersection.
+        def glance := distance * glsl.dot(worldDir, N)
+        def dx := (worldDirPX / glsl.dot(worldDirPX, N) -
+                   worldDirNX / glsl.dot(worldDirNX, N)) * glance
+        def dy := (worldDirPY / glsl.dot(worldDirPY, N) -
+                   worldDirNY / glsl.dot(worldDirNY, N)) * glance
 
         def lights := [
             # Behind the camera, a spotlight.
@@ -242,7 +260,7 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         ]
         # The color of the SDF at the distance. This is a function of
         # illuminating the SDF with each light.
-        var color := texture.ambient(p, N)
+        var color := texture.ambient(p, N, dx, dy)
         for light => lightColor in (lights):
             # Let's find out how much this light contributes when pointed at
             # the known intersection point. The maximum distance to travel is
@@ -253,14 +271,21 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
             # The light might be blocked entirely; only compute materials if
             # the point isn't in shade.
             if (intensity.aboveZero()):
-                color += texture(eye, light, p, N) * lightColor * intensity
+                color += texture(eye, light, p, N, dx, dy) * lightColor * intensity
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
         return makeColor.RGB(r, g, b, 1.0)
 
+def frac(x) as DeepFrozen:
+    return x - x.floor()
+
 def mod(x :Double, y :Double) :Double as DeepFrozen:
     return x - y * (x / y).floor()
+
+# XXX common code not yet factored to lib/vectors
+def productTimes(x, y) as DeepFrozen { return x * y }
+def productDouble :DeepFrozen := V.makeFold(1.0, productTimes)
 
 # See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
 # many implementation examples, as well as other primitives not listed here.
@@ -269,31 +294,40 @@ def mod(x :Double, y :Double) :Double as DeepFrozen:
 def asSDF(entropy) as DeepFrozen:
     "Compile a CSG expression to its corresponding SDF."
 
-    # It would be nice if colors didn't need p and N, but they do. Indeed,
-    # right now I've left p out, and just use N, but that won't do for proper
-    # texturing later.
-
     return object compileSDF:
         to Color(red, green, blue):
             def color := V(red, green, blue)
-            return fn _p, _N { color }
+            return fn _p, _N, _dx, _dy { color }
 
         to Normal():
             # Convert the normal, which is in [-1, 1], to be in [0, 1].
-            return fn _p, N { N * 0.5 + 0.5 }
+            return fn _p, N, _dx, _dy { N * 0.5 + 0.5 }
+
+        to Gradient():
+            return fn _p, _N, dx, dy {
+                (V(max(dx.abs()), max(dy.abs()), 0.0) * 4.0).min(1.0).max(0.0)
+            }
 
         to Checker():
-            return fn p, _N { one * (sumDouble(p.floor()) % 2.0) }
+            # https://www.iquilezles.org/www/articles/filterableprocedurals/filterableprocedurals.htm
+            # XXX improved filter could be used from
+            # https://www.iquilezles.org/www/articles/morecheckerfiltering/morecheckerfiltering.htm
+            return fn p, _N, dx, dy {
+                def fwidth := dx.abs().max(dy.abs()) * 0.5
+                def i := ((frac((p - fwidth) * 0.5) - 0.5).abs() -
+                          (frac((p + fwidth) * 0.5) - 0.5).abs()) / fwidth
+                one * 0.5 * (1.0 - productDouble(i))
+            }
 
         to Lambert(flat, ambient):
             # https://en.wikipedia.org/wiki/Lambertian_reflectance
             return object lambertShader {
-                to ambient(p, N) { return ambient(p, N) }
-                to run(_eye, light, p, N) {
+                to ambient(p, N, dx, dy) { return ambient(p, N, dx, dy) }
+                to run(_eye, light, p, N, dx, dy) {
                     def L := glsl.normalize(light - p)
                     def diff := glsl.dot(L, N)
                     return if (diff.belowZero()) { zero } else {
-                        flat(p, N) * diff
+                        flat(p, N, dx, dy) * diff
                     }
                 }
             }
@@ -301,14 +335,14 @@ def asSDF(entropy) as DeepFrozen:
         to Phong(specular, diffuse, ambient, shininess):
             # https://en.wikipedia.org/wiki/Phong_reflection_model
             return object phongShader {
-                to ambient(p, N) { return ambient(p, N) }
-                to run(eye, light, p, N) {
+                to ambient(p, N, dx, dy) { return ambient(p, N, dx, dy) }
+                to run(eye, light, p, N, dx, dy) {
                     def L := glsl.normalize(light - p)
                     def diff := glsl.dot(L, N)
 
                     return if (diff.belowZero()) { zero } else {
-                        def ks := specular(p, N)
-                        def kd := diffuse(p, N)
+                        def ks := specular(p, N, dx, dy)
+                        def kd := diffuse(p, N, dx, dy)
                         def R := glsl.normalize(glsl.reflect(-L, N))
                         def base := glsl.dot(R, glsl.normalize(eye - p))
                         def spec := if (base.belowZero()) { 0.0 } else {
@@ -377,6 +411,14 @@ def asSDF(entropy) as DeepFrozen:
                 if (x > kappa) { x - delta } else { x + displacement(p) * scale }
             }
 
+        to OrthorhombicClamp(shape, c :Double, lx :Double, ly :Double,
+                             lz :Double):
+            def l := V(lx, ly, lz)
+            def rc := c.reciprocal()
+            return fn p {
+                shape(p - ((p * rc) + 0.5).floor().asDouble().max(-l).min(l) * c)
+            }
+
         to OrthorhombicCrystal(shape, cx :Double, cy :Double, cz :Double):
             def c := V(cx, cy, cz)
             def half := c * 0.5
@@ -407,7 +449,7 @@ def asSDF(entropy) as DeepFrozen:
                 def m := minuend(p)
                 def [var sp, sm] := subtrahend(p)
                 sp := -sp
-                return if (m[0] > sp) { m } else { [sp, sm] }
+                if (m[0] > sp) { m } else { [sp, sm] }
             }
 
         # The displacement operators are on the same domain as SDFs, but they
@@ -426,6 +468,8 @@ def asSDF(entropy) as DeepFrozen:
 
 # Use the normal to show the gradient.
 def debugNormal :DeepFrozen := CSG.Lambert(CSG.Normal(), CSG.Color(0.1, 0.1, 0.1))
+# Use the gradient to show the gradient.
+def debugGradient :DeepFrozen := CSG.Lambert(CSG.Gradient(), CSG.Color(0.1, 0.1, 0.1))
 # http://devernay.free.fr/cours/opengl/materials.html
 # A basic rubber material. Note that, unlike Kilgard's rubber, we put the
 # color in the diffuse component instead of specular; rubber *does* absorb
@@ -439,21 +483,34 @@ def rubber(color) as DeepFrozen:
     )
 def checker :DeepFrozen := CSG.Lambert(CSG.Checker(), CSG.Color(0.1, 0.1, 0.1))
 def green :DeepFrozen := CSG.Color(0.04, 0.7, 0.04)
+def emerald :DeepFrozen := CSG.Phong(
+    CSG.Color(0.633, 0.727811, 0.633),
+    CSG.Color(0.07568, 0.61424, 0.07568),
+    CSG.Color(0.0215, 0.1745, 0.0215),
+    76.8,
+)
+def jade :DeepFrozen := CSG.Phong(
+    CSG.Color(0.316228, 0.316228, 0.316228),
+    CSG.Color(0.54, 0.89, 0.63),
+    CSG.Color(0.135, 0.2225, 0.1575),
+    12.8,
+)
 
 # Debugging spheres, good for testing shadows.
 def boxes :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Sphere(1.0, debugNormal),
                                                  5.0, 5.0, 5.0)
 # Sphere study.
+def material := CSG.Lambert(CSG.Checker(), CSG.Color(0.1, 0.1, 0.1))
 def study :DeepFrozen := CSG.Union(
     CSG.Translation(CSG.Sphere(10_000.0, checker), 0.0, -10_000.0, 0.0), [
-    CSG.Translation(CSG.Sphere(2.0, rubber(green)), 0.0, 2.0, 0.0),
+    CSG.Translation(CSG.Sphere(2.0, debugGradient), 0.0, 2.0, 0.0),
 ])
 # Holey beads in a lattice.
-def crystal :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Difference(
-    CSG.Intersection(CSG.Sphere(1.2, rubber(green)),
-                     [CSG.Cube(1.0, rubber(green))]),
-    CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5, rubber(green)),
-) , 3.0, 5.0, 4.0)
+def crystal :DeepFrozen := CSG.OrthorhombicClamp(CSG.Difference(
+    CSG.Intersection(CSG.Sphere(1.2, emerald),
+                     [CSG.Cube(1.0, emerald)]),
+    CSG.InfiniteCylindricalCross(0.5, 0.5, 0.5, emerald),
+), 3.0, 3.0, 5.0, 4.0)
 # Imitation tinykaboom.
 def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
     CSG.Noise(3.4, 3.4, 3.4, 5), 3.0)
