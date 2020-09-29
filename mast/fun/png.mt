@@ -114,7 +114,7 @@ object makePNG as DeepFrozen:
             def push(chan :Double):
                 # Simplest arrangement that will handle infinity
                 # correctly.
-                def c := (0xffff * chan).floor().min(0xffff)
+                def c := (0x1_0000 * chan).floor().min(0xffff)
                 body.push(c >> 8)
                 body.push(c & 0xff)
 
