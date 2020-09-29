@@ -89,9 +89,9 @@ def estimateNormal(sdf, p) as DeepFrozen:
 
 def maxSteps :Int := 100
 
-def shortestDistanceToSurface(sdf, eye, direction, start :Double,
-                              end :Double, pixelRadius :Double) as DeepFrozen:
-    var depth := start
+def shortestDistanceToSurface(sdf, eye, direction, end :Double,
+                              pixelRadius :Double) as DeepFrozen:
+    var depth := 0.0
     # Track signs, based on where we've started.
     # XXX Typhon should give Doubles a method for checking the sign bit!
     def sign := sdf(eye)[0].belowZero().pick(-1.0, 1.0)
@@ -222,7 +222,6 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
 
         def [estimate, steps, texture] := shortestDistanceToSurface(sdf, eye,
                                                                     worldDir,
-                                                                    0.0,
                                                                     maxDepth,
                                                                     pixelRadius)
         # Clearly show where we aren't taking enough steps by highlighting
@@ -407,8 +406,9 @@ def asSDF(entropy) as DeepFrozen:
             # artifacts for glancing blows.
             def kappa := scale * 1.5
             return fn p {
-                def x := shape(p)
-                if (x > kappa) { x - delta } else { x + displacement(p) * scale }
+                def [x, m] := shape(p)
+                def rv := if (x > kappa) { x - delta } else { x + displacement(p) * scale }
+                [rv, m]
             }
 
         to OrthorhombicClamp(shape, c :Double, lx :Double, ly :Double,
@@ -515,9 +515,9 @@ def crystal :DeepFrozen := CSG.OrthorhombicClamp(CSG.Difference(
 def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
     CSG.Noise(3.4, 3.4, 3.4, 5), 3.0)
 # More imitation tinykaboom, but deterministic and faster.
-def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
+def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, jade),
     CSG.Sines(5.0, 5.0, 5.0), 3.0)
-def solid :DeepFrozen := study
+def solid :DeepFrozen := sines
 traceln(`Defined solid: $solid`)
 
 def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
@@ -527,9 +527,90 @@ def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
             return `$count objects ($d ${s}B)`
         d /= 1024.0
 
+object costOfConfig as DeepFrozen:
+    to Center():
+        return 1
+
+    to Quincunx():
+        return 5
+
+    to QuasirandomMonteCarlo(count :Int):
+        return count
+
+    to TTest(sampler, quality :Double, minimumCount :Int, maximumCount :Int):
+        # q% of the time, we'll be unsatisfied with the typical pixel. But
+        # the typical pixel will be typical most of the time. Using an old
+        # statistics rule of thumb for normal distributions, "most" is 2/3.
+        return 3 * sampler * (quality * maximumCount + (1.0 - quality) * minimumCount).floor()
+
+object costOfSolid as DeepFrozen:
+    to Color(_, _, _):
+        return 1
+
+    to Normal():
+        return 1
+
+    to Gradient():
+        return 2
+
+    to Checker():
+        return 5
+
+    to Lambert(flat, ambient):
+        return flat + ambient + 5
+
+    to Phong(specular, diffuse, ambient, _):
+        return specular + diffuse + ambient + 8
+
+    to Sphere(_, material):
+        return material + 1
+
+    to Box(_, _, _, material):
+        return material + 2
+
+    to Cube(_, material):
+        return material + 2
+
+    to InfiniteCylindricalCross(_, _, _, material):
+        return material + 5
+
+    to Translation(shape, _, _, _):
+        return shape + 1
+
+    to Scaling(shape, _):
+        return shape + 1
+
+    to Displacement(shape, displacement, _):
+        return shape + displacement + 1
+
+    to OrthorhombicClamp(shape, _, _, _, _):
+        return shape + 3
+
+    to OrthorhombicCrystal(shape, _, _, _):
+        return shape + 3
+
+    to Intersection(shape, shapes :List):
+        var rv := shape + 2
+        for s in (shapes) { rv += s }
+        return rv
+
+    to Union(shape, shapes :List):
+        var rv := shape + 2
+        for s in (shapes) { rv += s }
+        return rv
+
+    to Difference(minuend, subtrahend):
+        return minuend + subtrahend + 1
+
+    to Sines(_, _, _):
+        return 3
+
+    to Noise(_, _, _, octaves :Int):
+        return octaves * 2
+
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
-    def w := 320
-    def h := 180
+    def w := 640
+    def h := 360
     # NB: We only need entropy to seed the SDF's noise; we don't need to
     # continually take random numbers while drawing. This is an infelicity in
     # lib/noise's API.
@@ -538,16 +619,18 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def drawable := drawSignedDistanceFunction(sdf)
     # def config := samplerConfig.QuasirandomMonteCarlo(5)
     def config := samplerConfig.Center()
+    def cost := config(costOfConfig) * solid(costOfSolid) * w * h
     def drawer := makePNG.drawingFrom(drawable, config)(w, h)
     var i := 0
     def start := Timer.unsafeNow()
     while (true):
         i += 1
-        if (i % 500 == 0):
+        if (i % 1000 == 0):
             def duration := Timer.unsafeNow() - start
             def pixelsPerSecond := i / duration
             def timeRemaining := ((w * h) - i) / pixelsPerSecond
-            traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s) (${timeRemaining}s left)`)
+            def normPixels := (pixelsPerSecond * cost).logarithm()
+            traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s) ($normPixels work/s) (${timeRemaining}s left)`)
             # def buckets := currentRuntime.getHeapStatistics().getBuckets()
             # def finalSlots := formatBucket(buckets["FinalSlot"])
             # def varSlots := formatBucket(buckets["VarSlot"])
