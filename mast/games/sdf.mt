@@ -32,6 +32,7 @@ color = Color(double red, double green, double blue)
       | Normal
       | Gradient
       | Checker
+      | Marble(double red, double green, double blue)
 `, "csg"), safeScope)(null)
 
 # http://jamie-wong.com/2016/07/15/ray-marching-signed-distance-functions/
@@ -87,7 +88,7 @@ def estimateNormal(sdf, p) as DeepFrozen:
         sdf(p + epsilonZ * scale)[0] - sdf(p - epsilonZ * scale)[0],
     ))
 
-def maxSteps :Int := 100
+def maxSteps :Int := 50
 
 def shortestDistanceToSurface(sdf, eye, direction, end :Double,
                               pixelRadius :Double) as DeepFrozen:
@@ -176,7 +177,7 @@ def viewMatrix(eye :DeepFrozen, center, up) as DeepFrozen:
         # traceln(`moveCamera($dir) -> $rv`)
         return rv
 
-def maxDepth :Double := 20.0
+def maxDepth :Double := 50.0
 
 # Do a couple rounds of gradient descent in order to polish an estimated hit.
 # This works about as well as you might expect: After two rounds, the hit is
@@ -249,13 +250,13 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
 
         def lights := [
             # Behind the camera, a spotlight.
-            (eye + one) => one * 0.4,
+            (eye + one) => one * 0.5,
             # From the right, a fill.
-            V(13.0, 10.0, -5.0) => one * 0.4,
+            V(13.0, 10.0, -5.0) => one * 0.5,
             # From the left, another fill.
-            V(-8.0, 10.0, 10.0) => one * 0.4,
+            V(-8.0, 10.0, 10.0) => one * 0.5,
             # From far above, a gentle ambient light.
-            V(-100.0, 1_000.0, 100.0) => one * 0.1,
+            V(-100.0, 1_000.0, 100.0) => one * 0.2,
         ]
         # The color of the SDF at the distance. This is a function of
         # illuminating the SDF with each light.
@@ -316,6 +317,21 @@ def asSDF(entropy) as DeepFrozen:
                 def i := ((frac((p - fwidth) * 0.5) - 0.5).abs() -
                           (frac((p + fwidth) * 0.5) - 0.5).abs()) / fwidth
                 one * 0.5 * (1.0 - productDouble(i))
+            }
+
+        to Marble(red, green, blue):
+            # XXX noise can be filtered using derivatives; I couldn't get it
+            # to look right, though?
+            def exponents := V(red, green, blue)
+            def noise := makeSimplexNoise(entropy)
+            def half := one * 0.5
+            return fn p, _N, dx, dy {
+                def [_, _, z] := V.un(p, null)
+                def n := noise.turbulence(p, 7) * 10.0
+                def grey := (z * 0.5 + n).sine()
+                # Scale from [-1,1] to [0,1].
+                def scaled := half * (grey + 1.0)
+                (one * scaled) ** exponents
             }
 
         to Lambert(flat, ambient):
@@ -500,10 +516,15 @@ def jade :DeepFrozen := CSG.Phong(
 def boxes :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Sphere(1.0, debugNormal),
                                                  5.0, 5.0, 5.0)
 # Sphere study.
-def material := CSG.Lambert(CSG.Checker(), CSG.Color(0.1, 0.1, 0.1))
+# Effective marble should have the color throughout the stone, with a polished
+# surface creating a shiny white layer.
+def material := CSG.Phong(
+    CSG.Color(0.8, 0.8, 0.8),
+    CSG.Marble(2.0, 0.5, 2.0),
+    CSG.Color(0.1, 0.1, 0.1), 75.0)
 def study :DeepFrozen := CSG.Union(
     CSG.Translation(CSG.Sphere(10_000.0, checker), 0.0, -10_000.0, 0.0), [
-    CSG.Translation(CSG.Sphere(2.0, debugGradient), 0.0, 2.0, 0.0),
+    CSG.Translation(CSG.Sphere(2.0, material), 0.0, 2.0, 0.0),
 ])
 # Holey beads in a lattice.
 def crystal :DeepFrozen := CSG.OrthorhombicClamp(CSG.Difference(
@@ -517,7 +538,7 @@ def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
 # More imitation tinykaboom, but deterministic and faster.
 def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, jade),
     CSG.Sines(5.0, 5.0, 5.0), 3.0)
-def solid :DeepFrozen := sines
+def solid :DeepFrozen := study
 traceln(`Defined solid: $solid`)
 
 def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
@@ -555,6 +576,9 @@ object costOfSolid as DeepFrozen:
 
     to Checker():
         return 5
+
+    to Marble(_, _, _):
+        return 11
 
     to Lambert(flat, ambient):
         return flat + ambient + 5
@@ -609,8 +633,8 @@ object costOfSolid as DeepFrozen:
         return octaves * 2
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
-    def w := 640
-    def h := 360
+    def w := 320
+    def h := 180
     # NB: We only need entropy to seed the SDF's noise; we don't need to
     # continually take random numbers while drawing. This is an infelicity in
     # lib/noise's API.
@@ -619,7 +643,7 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def drawable := drawSignedDistanceFunction(sdf)
     # def config := samplerConfig.QuasirandomMonteCarlo(5)
     def config := samplerConfig.Center()
-    def cost := config(costOfConfig) * solid(costOfSolid) * w * h
+    def cost := config(costOfConfig) * solid(costOfSolid) * w * h * maxSteps
     def drawer := makePNG.drawingFrom(drawable, config)(w, h)
     var i := 0
     def start := Timer.unsafeNow()
