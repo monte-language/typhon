@@ -88,7 +88,7 @@ def estimateNormal(sdf, p) as DeepFrozen:
         sdf(p + epsilonZ * scale)[0] - sdf(p - epsilonZ * scale)[0],
     ))
 
-def maxSteps :Int := 50
+def maxSteps :Int := 100
 
 def shortestDistanceToSurface(sdf, eye, direction, end :Double,
                               pixelRadius :Double) as DeepFrozen:
@@ -177,7 +177,7 @@ def viewMatrix(eye :DeepFrozen, center, up) as DeepFrozen:
         # traceln(`moveCamera($dir) -> $rv`)
         return rv
 
-def maxDepth :Double := 50.0
+def maxDepth :Double := 500.0
 
 # Do a couple rounds of gradient descent in order to polish an estimated hit.
 # This works about as well as you might expect: After two rounds, the hit is
@@ -225,14 +225,16 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
                                                                     worldDir,
                                                                     maxDepth,
                                                                     pixelRadius)
-        # Clearly show where we aren't taking enough steps by highlighting
-        # with magenta.
-        if (steps >= maxSteps) { return makeColor.RGB(1.0, 0.0, 1.0, 1.0) }
         # Clearly show where there is nothing.
         if (estimate >= maxDepth) { return makeColor.clear() }
+        def distance := if (steps >= maxSteps) {
+            # Clearly show where we aren't taking enough steps by highlighting
+            # with magenta.
+            # return makeColor.RGB(1.0, 0.0, 1.0, 1.0)
+            # Refine the estimate using Newton's method; maybe it's alright.
+            refineEstimate(sdf, eye, worldDir, estimate, pixelRadius)
+        } else { estimate }
 
-        def distance := refineEstimate(sdf, eye, worldDir, estimate,
-                                       pixelRadius)
         # traceln(`hit u=$u v=$v estimate=$estimate distance=$distance steps=$steps`)
 
         # The actual location of the hit after traveling the distance.
@@ -523,7 +525,7 @@ def material := CSG.Phong(
     CSG.Marble(2.0, 0.5, 2.0),
     CSG.Color(0.1, 0.1, 0.1), 75.0)
 def study :DeepFrozen := CSG.Union(
-    CSG.Translation(CSG.Sphere(10_000.0, checker), 0.0, -10_000.0, 0.0), [
+    CSG.Translation(CSG.Sphere(100.0, checker), 0.0, -100.0, 0.0), [
     CSG.Translation(CSG.Sphere(2.0, material), 0.0, 2.0, 0.0),
 ])
 # Holey beads in a lattice.
