@@ -68,6 +68,10 @@ object makeDual as DeepFrozen:
                 def rv := real.exponential()
                 return makeDual(rv, rv * epsilon)
 
+            to logarithm():
+                def rv := real.logarithm()
+                return makeDual(rv, rv.reciprocal() * epsilon)
+
             to sine():
                 return makeDual(real.sine(), real.cosine() * epsilon)
 
