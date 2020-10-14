@@ -278,3 +278,18 @@ object makeReal as DeepFrozen:
         "The sum `x + y`."
 
         return bihomographic(0, 1, 1, 0, 0, 0, 0, 1, x, y)
+
+    to subtract(x, y):
+        "The difference `x - y`."
+
+        return bihomographic(0, 1, -1, 0, 0, 0, 0, 1, x, y)
+
+    to multiply(x, y):
+        "The product `x * y`."
+
+        return bihomographic(1, 0, 0, 0, 0, 0, 0, 1, x, y)
+
+    to approxDivide(x, y):
+        "The dividend `x / y`."
+
+        return bihomographic(0, 1, 0, 0, 0, 0, 1, 0, x, y)
