@@ -540,7 +540,7 @@ def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
 # More imitation tinykaboom, but deterministic and faster.
 def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, jade),
     CSG.Sines(5.0, 5.0, 5.0), 3.0)
-def solid :DeepFrozen := study
+def solid :DeepFrozen := sines
 traceln(`Defined solid: $solid`)
 
 def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
@@ -635,16 +635,16 @@ object costOfSolid as DeepFrozen:
         return octaves * 2
 
 def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
-    def w := 320
-    def h := 180
+    def w := 640
+    def h := 360
     # NB: We only need entropy to seed the SDF's noise; we don't need to
     # continually take random numbers while drawing. This is an infelicity in
     # lib/noise's API.
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def sdf := solid(asSDF(entropy))
     def drawable := drawSignedDistanceFunction(sdf)
-    # def config := samplerConfig.QuasirandomMonteCarlo(5)
-    def config := samplerConfig.Center()
+    def config := samplerConfig.QuasirandomMonteCarlo(5)
+    # def config := samplerConfig.Center()
     def cost := config(costOfConfig) * solid(costOfSolid) * w * h * maxSteps
     def drawer := makePNG.drawingFrom(drawable, config)(w, h)
     var i := 0
