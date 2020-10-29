@@ -1,6 +1,6 @@
 import "lib/samplers" =~ [=> makeDiscreteSampler]
 import "fun/deflate" =~ [=> deflate]
-exports (chunkType, CRC32, chunksOf, makePNG)
+exports (chunkType, CRC32, chunksOf, makePNG, adam7)
 
 # http://www.libpng.org/pub/png/spec/1.2/PNG-Chunks.html
 
@@ -98,6 +98,51 @@ def iterpixels(width :Int, height :Int) as DeepFrozen:
 
         return rv
 
+def ifilter(f, iterator) as DeepFrozen:
+    return def filteredIterator.next(ej):
+        def [w, h] := iterator.next(ej)
+        return f(w, h)
+
+def ichain(iterators) as DeepFrozen:
+    var i := 0
+    return def chainedIterator.next(ej):
+        while (i < iterators.size()):
+            # XXX this seems like it could be done in a better way?
+            return escape la { iterators[i].next(la) } catch _ {
+                i += 1
+                continue
+            }
+        throw.eject(ej, "out of iterators")
+
+# Adam7: Produce scanlines for seven different images, each containing
+# progressively more pixels. The images, indexed 1-7, are used to
+# progressively rebuild the original image, with the following layout:
+# 1 6 4 6 2 6 4 6
+# 7 7 7 7 7 7 7 7
+# 5 6 5 6 5 6 5 6
+# 7 7 7 7 7 7 7 7
+# 3 6 4 6 3 6 4 6
+# 7 7 7 7 7 7 7 7
+# 5 6 5 6 5 6 5 6
+# 7 7 7 7 7 7 7 7
+
+def adam7(w :Int, h :Int) as DeepFrozen:
+    return ichain([
+        # Pass 1: width // 8, height // 8
+        ifilter(fn w, h { [w << 3, h << 3] }, iterpixels(w >> 3, h >> 3)),
+        # Pass 2: width // 8 + 4, height // 8
+        ifilter(fn w, h { [w << 3 | 4, h << 3] }, iterpixels(w >> 3, h >> 3)),
+        # Pass 3: width // 4, height // 8 + 4
+        ifilter(fn w, h { [w << 2, h << 3 | 4] }, iterpixels(w >> 2, h >> 3)),
+        # Pass 4: width // 4 + 2, height // 4 + 2
+        ifilter(fn w, h { [w << 2 | 2, h << 2 | 2] }, iterpixels(w >> 2, h >> 2)),
+        # Pass 5: width // 2, height // 4 + 2
+        ifilter(fn w, h { [w << 1, h << 2 | 2] }, iterpixels(w >> 1, h >> 2)),
+        # Pass 6: width // 2 + 1, height // 2
+        ifilter(fn w, h { [w << 1 | 1, h << 1] }, iterpixels(w >> 1, h >> 1)),
+        # Pass 7: width, height // 2 + 1
+        ifilter(fn w, h { [w, h << 1 | 1] }, iterpixels(w, h >> 1)),
+    ])
 
 object makePNG as DeepFrozen:
     "Pack PNG chunk data into single bytestrings."
@@ -121,11 +166,9 @@ object makePNG as DeepFrozen:
         sampling configuration.
         "
         return def draw(width :Int4, height :Int4):
-            # Width, height, bit depth, color type, compression, filter,
-            # interlace
+            # Width, height, bit depth, color type, compression, filter, interlace
             def ihdr := pack4(width) + pack4(height) + _makeBytes.fromInts([
-                # XXX as soon as possible, implement interlacing
-                16, 6, 0, 0, 0,
+                16, 6, 0, 0, 1,
             ])
             def body := [].diverge(0..!256)
             def push(chan :Double):
@@ -138,14 +181,21 @@ object makePNG as DeepFrozen:
             def aspectRatio :Double := width / height
             def discreteSampler := makeDiscreteSampler(drawable, config, width, height)
 
-            def pixelIterable := iterpixels(width, height)
+            # Use Adam7 always.
+            def pixelIterable := adam7(width, height)
+            var lastW :Int := 0
 
             return object drawingIterable:
                 to next(ej):
                     def [w, h] := pixelIterable.next(ej)
 
-                    # Filter type for this scanline: 0 for no filtering.
-                    if (w.isZero()) { body.push(0) }
+                    # w might not be zero to start a scanline, due to
+                    # interlacing. Rather than extra coordination between the
+                    # interlaced pixel iterable and us, we track whether the
+                    # scanline is freshly happening by whether w is monotone.
+                    # The filter type starts the scanline; 0 is no filter.
+                    if (w <= lastW) { body.push(0) }
+                    lastW := w
 
                     def color := discreteSampler.pixelAt(w, h)
                     # Kludge: Color is premultiplied, but PNG stores colors
