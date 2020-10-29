@@ -501,6 +501,7 @@ def rubber(color) as DeepFrozen:
     )
 def checker :DeepFrozen := CSG.Lambert(CSG.Checker(), CSG.Color(0.1, 0.1, 0.1))
 def green :DeepFrozen := CSG.Color(0.04, 0.7, 0.04)
+def red :DeepFrozen := CSG.Color(0.7, 0.04, 0.04)
 def emerald :DeepFrozen := CSG.Phong(
     CSG.Color(0.633, 0.727811, 0.633),
     CSG.Color(0.07568, 0.61424, 0.07568),
@@ -512,6 +513,29 @@ def jade :DeepFrozen := CSG.Phong(
     CSG.Color(0.54, 0.89, 0.63),
     CSG.Color(0.135, 0.2225, 0.1575),
     12.8,
+)
+# def ivory := makeMatte([0.6, 0.3, 0.1], V(0.4, 0.4, 0.3), 50.0)
+def ivory :DeepFrozen := CSG.Phong(
+    CSG.Color(0.3, 0.3, 0.3),
+    CSG.Color(0.4, 0.4, 0.3),
+    CSG.Color(0.1, 0.1, 0.1),
+    50.0,
+)
+# def glass := makeGlassy(1.5, [0.0, 0.5, 0.1, 0.8], V(0.6, 0.7, 0.8), 125.0)
+# XXX needs to be glassy
+def glass :DeepFrozen := CSG.Phong(
+    CSG.Color(0.5, 0.5, 0.5),
+    CSG.Color(0.0, 0.0, 0.0),
+    CSG.Color(0.1, 0.1, 0.1),
+    125.0,
+)
+# def mirror := makeGlassy(1.0, [0.0, 10.0, 0.8, 0.0], V(1.0, 1.0, 1.0), 1425.0)
+# XXX glassy
+def mirror :DeepFrozen := CSG.Phong(
+    CSG.Color(1.0, 1.0, 1.0),
+    CSG.Color(0.0, 0.0, 0.0),
+    CSG.Color(0.8, 0.8, 0.8),
+    128.0,
 )
 
 # Debugging spheres, good for testing shadows.
@@ -540,7 +564,15 @@ def kaboom :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, debugNormal),
 # More imitation tinykaboom, but deterministic and faster.
 def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, jade),
     CSG.Sines(5.0, 5.0, 5.0), 3.0)
-def solid :DeepFrozen := sines
+# tinyraytracer.
+def tinytracer :DeepFrozen := CSG.Union(
+    CSG.Translation(CSG.Sphere(100.0, rubber(green)), 0.0, -110.0, 0.0), [
+    CSG.Translation(CSG.Sphere(2.0, ivory), -3.0, 0.0, -16.0),
+    CSG.Translation(CSG.Sphere(2.0, glass), -1.0, -1.5, -12.0),
+    CSG.Translation(CSG.Sphere(3.0, rubber(red)), 1.5, -0.5, -18.0),
+    CSG.Translation(CSG.Sphere(4.0, mirror), 7.0, 5.0, -18.0),
+])
+def solid :DeepFrozen := tinytracer
 traceln(`Defined solid: $solid`)
 
 def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
