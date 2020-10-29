@@ -82,6 +82,23 @@ def buildChunk(ty :Bytes, chunk :Bytes) :Bytes as DeepFrozen:
     def crc := pack4(CRC32(body))
     return length + body + crc
 
+def iterpixels(width :Int, height :Int) as DeepFrozen:
+    var w := 0
+    var h := 0
+
+    return def pixelIterator.next(ej):
+        if (h >= height) { throw.eject(ej, "done") }
+
+        def rv := [w, h]
+
+        w += 1
+        if (w >= width):
+            w := 0
+            h += 1
+
+        return rv
+
+
 object makePNG as DeepFrozen:
     "Pack PNG chunk data into single bytestrings."
 
@@ -121,12 +138,11 @@ object makePNG as DeepFrozen:
             def aspectRatio :Double := width / height
             def discreteSampler := makeDiscreteSampler(drawable, config, width, height)
 
-            var h := 0
-            var w := 0
+            def pixelIterable := iterpixels(width, height)
 
             return object drawingIterable:
                 to next(ej):
-                    if (h >= height) { throw.eject(ej, "done") }
+                    def [w, h] := pixelIterable.next(ej)
 
                     # Filter type for this scanline: 0 for no filtering.
                     if (w.isZero()) { body.push(0) }
@@ -143,14 +159,11 @@ object makePNG as DeepFrozen:
                     if (a.isZero()):
                         body.extend([0] * 2 * 4)
                     else:
+                        # Unpremultiply.
+                        def ar := a.reciprocal()
                         for chan in ([r, g, b]):
-                            push(chan * a.reciprocal())
+                            push(chan * ar)
                         push(a)
-
-                    w += 1
-                    if (w >= width):
-                        w := 0
-                        h += 1
 
                 to finish():
                     def idat := deflate(_makeBytes.fromInts(body))
