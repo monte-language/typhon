@@ -279,6 +279,9 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
         return makeColor.RGB(r, g, b, 1.0)
 
+# That's it for the code which uses SDFs. Now, for the code which compiles
+# SDFs from CSG descriptions.
+
 def frac(x) as DeepFrozen:
     return x - x.floor()
 
@@ -288,6 +291,76 @@ def mod(x :Double, y :Double) :Double as DeepFrozen:
 # XXX common code not yet factored to lib/vectors
 def productTimes(x, y) as DeepFrozen { return x * y }
 def productDouble :DeepFrozen := V.makeFold(1.0, productTimes)
+
+object expandCSG as DeepFrozen:
+    "Expand Cube constructors into Boxes."
+
+    to Cube(x :Double, material):
+        return CSG.Box(x, x, x, material)
+
+    match [constructor, args, namedArgs]:
+        M.call(CSG, constructor, args, namedArgs)
+
+def combineSpheres(l, r) as DeepFrozen:
+    return if ([l, r] =~ [[lc, lr], [rc, rr]]):
+        def v := rc - lc
+        def radius :Double := (glsl.length(v) + lr + rr) * 0.5
+        def center := lc + glsl.normalize(v) * (radius - lr)
+        [center, radius]
+
+def combineBounds(shape, shapes :List) as DeepFrozen:
+    var rv := shape
+    for s in (shapes):
+        if (rv == null) { return null }
+        rv := combineSpheres(rv, s)
+    return rv
+
+object boundingSphere as DeepFrozen:
+    "
+    The smallest sphere containing some CSG, or `null` if none exists.
+
+    Spheres are represented as a [center, radius] pair.
+    "
+
+    to Sphere(radius :Double, _mat):
+        return [zero, radius]
+
+    to Box(width :Double, height :Double, depth :Double, _mat):
+        return [zero, (width ** 2 + height ** 2 + depth ** 2).squareRoot()]
+
+    to InfiniteCylindricalCross(_x, _y, _z, _mat):
+        return null
+
+    to Translation(shape, dx :Double, dy :Double, dz :Double):
+        return if (shape =~ [center, radius]):
+            [center + V(dx, dy, dz), radius]
+
+    to Scaling(shape, factor :Double):
+        return if (shape =~ [center, radius]):
+            [center, radius * factor]
+
+    to Displacement(shape, _d, amplitude :Double):
+        return if (shape =~ [center, radius]):
+            [center, radius + amplitude]
+
+    to OrthorhombicClamp(_shape, _p, _w, _h, _d):
+        return null
+
+    to OrthorhombicCrystal(_shape, _w, _h, _d):
+        return null
+
+    to Intersection(shape, shapes :List):
+        return combineBounds(shape, shapes)
+
+    to Union(shape, shapes :List):
+        return combineBounds(shape, shapes)
+
+    to Difference(minuend, _sub):
+        return minuend
+
+    # Ignore colors, materials, etc.
+    match _:
+        null
 
 # See https://iquilezles.org/www/articles/distfunctions/distfunctions.htm for
 # many implementation examples, as well as other primitives not listed here.
@@ -379,9 +452,6 @@ def asSDF(entropy) as DeepFrozen:
                 def q := p.abs() - b
                 [glsl.length(q.max(0.0)) + max(q).min(0.0), material]
             }
-
-        to Cube(length :Double, material):
-            return compileSDF.Box(length, length, length, material)
 
         to InfiniteCylindricalCross(cx :Double, cy :Double, cz :Double,
                                     material):
@@ -567,13 +637,14 @@ def sines :DeepFrozen := CSG.Displacement(CSG.Sphere(3.0, jade),
 # tinyraytracer.
 def tinytracer :DeepFrozen := CSG.Union(
     CSG.Translation(CSG.Sphere(100.0, rubber(green)), 0.0, -110.0, 0.0), [
-    CSG.Translation(CSG.Sphere(2.0, ivory), -3.0, 0.0, -16.0),
-    CSG.Translation(CSG.Sphere(2.0, glass), -1.0, -1.5, -12.0),
-    CSG.Translation(CSG.Sphere(3.0, rubber(red)), 1.5, -0.5, -18.0),
-    CSG.Translation(CSG.Sphere(4.0, mirror), 7.0, 5.0, -18.0),
+    CSG.Translation(CSG.Sphere(2.0, ivory), -7.0, 0.0, -12.0),
+    CSG.Translation(CSG.Sphere(2.0, glass), -4.0, -1.5, -9.0),
+    CSG.Translation(CSG.Sphere(3.0, rubber(red)), -1.5, -0.5, -15.0),
+    CSG.Translation(CSG.Sphere(4.0, mirror), -11.0, 5.0, -11.0),
 ])
-def solid :DeepFrozen := tinytracer
+def solid :DeepFrozen := tinytracer(expandCSG)
 traceln(`Defined solid: $solid`)
+traceln(`Boudning sphere: ${solid(boundingSphere)}`)
 
 def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
     var d := size.asDouble()
@@ -626,9 +697,6 @@ object costOfSolid as DeepFrozen:
     to Box(_, _, _, material):
         return material + 2
 
-    to Cube(_, material):
-        return material + 2
-
     to InfiniteCylindricalCross(_, _, _, material):
         return material + 5
 
@@ -675,8 +743,8 @@ def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
     def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def sdf := solid(asSDF(entropy))
     def drawable := drawSignedDistanceFunction(sdf)
-    def config := samplerConfig.QuasirandomMonteCarlo(5)
-    # def config := samplerConfig.Center()
+    # def config := samplerConfig.QuasirandomMonteCarlo(5)
+    def config := samplerConfig.Center()
     def cost := config(costOfConfig) * solid(costOfSolid) * w * h * maxSteps
     def drawer := makePNG.drawingFrom(drawable, config)(w, h)
     var i := 0
