@@ -11,15 +11,20 @@ def ["ASTBuilder" => CSG :DeepFrozen] | _ := eval(buildASDLModule(`
 solid = Sphere(double radius, material)
       | Box(double width, double height, double depth, material)
       | Cube(double length, material)
+      | Cylinder(double height, double radius, material)
+      | Cone(double radius, double height, material)
       | InfiniteCylindricalCross(double xradius, double yradius, double zradius,
                                  material)
       | Translation(solid shape, double dx, double dy, double dz)
+      | Rotation(solid shape, double theta, double ux, double uy, double uz)
       | Scaling(solid shape, double factor)
       | Displacement(solid shape, displacement d, double amplitude)
       | OrthorhombicClamp(solid repetend, double period, double width,
                           double height, double depth)
       | OrthorhombicCrystal(solid repetend, double width, double height,
                             double depth)
+      | CubicMirror(solid repetend)
+      | OctahedralMirror(solid repetend)
       | Intersection(solid shape, solid* shapes)
       | Union(solid shape, solid* shapes)
       | Difference(solid minuend, solid subtrahend)
@@ -304,9 +309,21 @@ object expandCSG as DeepFrozen:
 def combineSpheres(l, r) as DeepFrozen:
     return if ([l, r] =~ [[lc, lr], [rc, rr]]):
         def v := rc - lc
-        def radius :Double := (glsl.length(v) + lr + rr) * 0.5
-        def center := lc + glsl.normalize(v) * (radius - lr)
-        [center, radius]
+        var lv :Double := glsl.length(v)
+        if (lv == NaN) { lv := 0.0 }
+        # If one sphere is totally inside another, then return the bigger one.
+        # Happens when the smaller center is inside the bigger sphere, and
+        # also the smaller radius plus the distance between centers is smaller
+        # than the bigger radius; this simplifies to the following checks.
+        if (lv + rr <= lr):
+            l
+        else if (lv + lr <= rr):
+            r
+        else:
+            def radius :Double := (lv + lr + rr) * 0.5
+            def center := lc + glsl.normalize(v) * (radius - lr)
+            traceln(`combineSpheres($l, $r) -> [$center, $radius]`)
+            [center, radius]
 
 def combineBounds(shape, shapes :List) as DeepFrozen:
     var rv := shape
@@ -328,12 +345,24 @@ object boundingSphere as DeepFrozen:
     to Box(width :Double, height :Double, depth :Double, _mat):
         return [zero, (width ** 2 + height ** 2 + depth ** 2).squareRoot()]
 
+    to Cylinder(height :Double, radius :Double, _mat):
+        return [zero, height.euclidean(radius)]
+
+    to Cone(radius :Double, height :Double, _mat):
+        return if (radius <= height) { [zero, height] } else {
+            def r := (height ** 2 + radius ** 2) / (2 * height)
+            [V(0.0, height - r, 0.0), r]
+        }
+
     to InfiniteCylindricalCross(_x, _y, _z, _mat):
         return null
 
     to Translation(shape, dx :Double, dy :Double, dz :Double):
         return if (shape =~ [center, radius]):
             [center + V(dx, dy, dz), radius]
+
+    to Rotation(shape, _, _, _, _):
+        return shape
 
     to Scaling(shape, factor :Double):
         return if (shape =~ [center, radius]):
@@ -348,6 +377,14 @@ object boundingSphere as DeepFrozen:
 
     to OrthorhombicCrystal(_shape, _w, _h, _d):
         return null
+
+    to CubicMirror(shape):
+        return if (shape =~ [center, radius]):
+            combineSpheres(shape, [-center, radius])
+
+    to OctahedralMirror(shape):
+        return if (shape =~ [center, radius]):
+            combineSpheres(shape, [-center, radius])
 
     to Intersection(shape, shapes :List):
         return combineBounds(shape, shapes)
@@ -453,6 +490,37 @@ def asSDF(entropy) as DeepFrozen:
                 [glsl.length(q.max(0.0)) + max(q).min(0.0), material]
             }
 
+        to Cylinder(height :Double, radius :Double, material):
+            return fn p {
+                def [px, py, pz] := V.un(p, null)
+                def dx := px.euclidean(pz) - radius
+                def dy := py.abs() - height
+                [dx.max(dy).min(0.0) + dx.max(0.0).euclidean(dy.max(0.0)), material]
+            }
+
+        to Cone(radius :Double, height :Double, material):
+            def norm :Double := height.euclidean(radius)
+            def mantleDirection := V(height, radius) / norm
+            def projectedDirection := V(radius, -height) / norm
+            return fn p {
+                def [px, py, pz] := V.un(p, null)
+                def pnorm := px.euclidean(pz)
+                def q := V(pnorm, py)
+                def tip := V(pnorm, py - height)
+                def mantle := glsl.dot(tip, mantleDirection)
+                var d := mantle.max(-py)
+                def projected := glsl.dot(tip, projectedDirection)
+                # Distance to tip.
+                if (py > height && projected.belowZero()) {
+                    d max= (glsl.length(tip))
+                }
+                # Distance to base ring.
+                if (pnorm > radius && projected > norm) {
+                    d max= (py.euclidean(pnorm - radius))
+                }
+                [d, material]
+            }
+
         to InfiniteCylindricalCross(cx :Double, cy :Double, cz :Double,
                                     material):
             "
@@ -470,6 +538,15 @@ def asSDF(entropy) as DeepFrozen:
         to Translation(shape, dx :Double, dy :Double, dz :Double):
             def offset := V(dx, dy, dz)
             return fn p { shape(p - offset) }
+
+        to Rotation(shape, ur :Double, ui :Double, uj :Double, uk :Double):
+            # https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation#Quaternion-derived_rotation_matrix
+            def R := V(
+                V(1 - 2 * (uj * uj + uk * uk), 2 * (ui * uj - uk * ur), 2 * (ui * uk + uj * ur)),
+                V(2 * (ui * uj + uk * ur), 1 - 2 * (ui * ui + uk * uk), 2 * (uj * uk - ui * ur)),
+                V(2 * (ui * uk - uj * ur), 2 * (uj * uk + ui * ur), 1 - 2 * (ui * ui + uj * uj)),
+            )
+            return fn p { shape(sumRow(R * p)) }
 
         to Scaling(shape, factor :Double):
             return fn p { shape(p / factor) * factor }
@@ -511,6 +588,16 @@ def asSDF(entropy) as DeepFrozen:
             def c := V(cx, cy, cz)
             def half := c * 0.5
             return fn p { shape(glsl.mod(p + half, c) - half) }
+
+        to CubicMirror(shape):
+            return fn p {
+                def [px, py, pz] := V.un(p.abs(), null).sort()
+                # Prefer the y-up sextant.
+                shape(V(px, pz, py))
+            }
+
+        to OctahedralMirror(shape):
+            return fn p { shape(p.abs()) }
 
         to Intersection(shape, shapes :List):
             return fn p {
@@ -607,6 +694,13 @@ def mirror :DeepFrozen := CSG.Phong(
     CSG.Color(0.8, 0.8, 0.8),
     128.0,
 )
+# Improvised.
+def iron :DeepFrozen := CSG.Phong(
+    CSG.Color(0.7, 0.7, 0.7),
+    CSG.Color(0.56, 0.57, 0.58),
+    CSG.Color(0.1, 0.1, 0.1),
+    25.0,
+)
 
 # Debugging spheres, good for testing shadows.
 def boxes :DeepFrozen := CSG.OrthorhombicCrystal(CSG.Sphere(1.0, debugNormal),
@@ -642,9 +736,20 @@ def tinytracer :DeepFrozen := CSG.Union(
     CSG.Translation(CSG.Sphere(3.0, rubber(red)), -1.5, -0.5, -15.0),
     CSG.Translation(CSG.Sphere(4.0, mirror), -11.0, 5.0, -11.0),
 ])
-def solid :DeepFrozen := tinytracer(expandCSG)
+# A morningstar.
+def fortyFive := 2.0.squareRoot().reciprocal()
+def morningstar :DeepFrozen := CSG.Union(
+    CSG.Rotation(CSG.Cylinder(5.0, 0.4, iron),
+                 fortyFive, fortyFive, 0.0, 0.0), [
+    CSG.Translation(CSG.Sphere(0.5, rubber(CSG.Color(0.3, 0.1, 0.1))), 0.0, 0.0, -3.0),
+    CSG.Translation(CSG.Union(CSG.Sphere(1.8, iron), [
+        CSG.CubicMirror(CSG.Cone(0.5, 3.0, iron)),
+    ]), 0.0, 0.0, 3.0),
+])
+def spike := CSG.OctahedralMirror(CSG.Cone(0.5, 3.0, iron))
+def solid :DeepFrozen := morningstar(expandCSG)
 traceln(`Defined solid: $solid`)
-traceln(`Boudning sphere: ${solid(boundingSphere)}`)
+traceln(`Bounding sphere: ${solid(boundingSphere)}`)
 
 def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
     var d := size.asDouble()
@@ -697,10 +802,19 @@ object costOfSolid as DeepFrozen:
     to Box(_, _, _, material):
         return material + 2
 
+    to Cylinder(_, _, material):
+        return material + 3
+
+    to Cone(_, _, material):
+        return material + 4
+
     to InfiniteCylindricalCross(_, _, _, material):
         return material + 5
 
     to Translation(shape, _, _, _):
+        return shape + 1
+
+    to Rotation(shape, _, _, _, _):
         return shape + 1
 
     to Scaling(shape, _):
@@ -714,6 +828,12 @@ object costOfSolid as DeepFrozen:
 
     to OrthorhombicCrystal(shape, _, _, _):
         return shape + 3
+
+    to CubicMirror(shape):
+        return shape + 2
+
+    to OctahedralMirror(shape):
+        return shape + 1
 
     to Intersection(shape, shapes :List):
         var rv := shape + 2
