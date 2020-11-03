@@ -24,17 +24,18 @@ solid = Sphere(double radius, material)
       | OrthorhombicCrystal(solid repetend, double width, double height,
                             double depth)
       | CubicMirror(solid repetend)
-      | OctahedralMirror(solid repetend)
       | Intersection(solid shape, solid* shapes)
       | Union(solid shape, solid* shapes)
       | Difference(solid minuend, solid subtrahend)
 displacement = Sines(double lx, double ly, double lz)
              | Noise(double lx, double ly, double lz, int octaves)
+             | Dimples(double lx, double ly, double lz)
 material = Lambert(color flat, color ambient)
          | Phong(color specular, color diffuse, color ambient,
                  double shininess)
 color = Color(double red, double green, double blue)
       | Normal
+      | Depth
       | Gradient
       | Checker
       | Marble(double red, double green, double blue)
@@ -66,9 +67,6 @@ def sumRow :DeepFrozen := V.makeFold(one * 0.0, sumPlus)
 
 def maxPlus(x, y) as DeepFrozen { return x.max(y) }
 def max :DeepFrozen := V.makeFold(-Infinity, maxPlus)
-
-def anyOr(x, y) as DeepFrozen { return x || y }
-def any :DeepFrozen := V.makeFold(false, anyOr)
 
 def PI :Double := 1.0.arcSine() * 2
 
@@ -192,18 +190,14 @@ def maxDepth :Double := 500.0
 # But it is just the pixel area over the distance traveled!
 def refineEstimate(sdf, eye, dir, distance :Double, pixelRadius :Double) as DeepFrozen:
     def pixelArea := PI * pixelRadius ** 2
-    var t := distance
-    var err := Infinity
-    for _i in (0..!3):
-        def newErr := sdf(eye + dir * t)[0] - pixelArea / t
-        # It is quite possible that we're not improving the estimate; that is,
-        # that we are numerically unstable near a divergent fixed point. If
-        # that's the case, then give up to avoid making things worse.
-        if (newErr.abs() > err.abs()) { break }
-        # traceln(`refine $i: sdf($eye + $dir * $t) -> $newErr`)
-        err := newErr
-        t += err
-    return t
+    # We're only taking two steps, and they're short when unrolled.
+    def firstErr := sdf(eye + dir * distance)[0] - pixelArea / distance
+    def t := distance + firstErr
+    def secondErr := sdf(eye + dir * t)[0] - pixelArea / t
+    # It is quite possible that we're not improving the estimate; that is,
+    # that we are numerically unstable near a divergent fixed point. So return
+    # whichever is better.
+    return (secondErr.abs() > firstErr.abs()).pick(distance, t)
 
 def drawSignedDistanceFunction(sdf) as DeepFrozen:
     "Draw signed distance function `sdf`."
@@ -232,13 +226,17 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
                                                                     pixelRadius)
         # Clearly show where there is nothing.
         if (estimate >= maxDepth) { return makeColor.clear() }
-        def distance := if (steps >= maxSteps) {
-            # Clearly show where we aren't taking enough steps by highlighting
-            # with magenta.
-            # return makeColor.RGB(1.0, 0.0, 1.0, 1.0)
-            # Refine the estimate using Newton's method; maybe it's alright.
-            refineEstimate(sdf, eye, worldDir, estimate, pixelRadius)
-        } else { estimate }
+        # XXX refineEstimate() could compute coverage-to-alpha information by
+        # returning the error.
+        def distance := refineEstimate(sdf, eye, worldDir, estimate,
+                                       pixelRadius)
+        # def distance := if (steps >= maxSteps) {
+        #     # Clearly show where we aren't taking enough steps by highlighting
+        #     # with magenta.
+        #     # return makeColor.RGB(1.0, 0.0, 1.0, 1.0)
+        #     # Refine the estimate using Newton's method; maybe it's alright.
+        #     refineEstimate(sdf, eye, worldDir, estimate, pixelRadius)
+        # } else { estimate }
 
         # traceln(`hit u=$u v=$v estimate=$estimate distance=$distance steps=$steps`)
 
@@ -247,6 +245,9 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         # The normal at the point of intersection. Note that, since the
         # intersection is approximate, the normal is also approximate.
         def N := estimateNormal(sdf, p)
+        # The depth at the point of intersection, with 0 at the camera and 1
+        # at the back wall implied by maxDepth.
+        def Z := zero * (distance / maxDepth)
         # The partial derivatives in screen space at the point of
         # intersection.
         def glance := distance * glsl.dot(worldDir, N)
@@ -267,7 +268,7 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
         ]
         # The color of the SDF at the distance. This is a function of
         # illuminating the SDF with each light.
-        var color := texture.ambient(p, N, dx, dy)
+        var color := texture.ambient(p, N, Z, dx, dy)
         for light => lightColor in (lights):
             # Let's find out how much this light contributes when pointed at
             # the known intersection point. The maximum distance to travel is
@@ -278,7 +279,7 @@ def drawSignedDistanceFunction(sdf) as DeepFrozen:
             # The light might be blocked entirely; only compute materials if
             # the point isn't in shade.
             if (intensity.aboveZero()):
-                color += texture(eye, light, p, N, dx, dy) * lightColor * intensity
+                color += texture(eye, light, p, N, Z, dx, dy) * lightColor * intensity
 
         # HDR: We wait until the last moment to clamp, but we *do* clamp.
         def [r, g, b] := _makeList.fromIterable(color.min(1.0))
@@ -382,10 +383,6 @@ object boundingSphere as DeepFrozen:
         return if (shape =~ [center, radius]):
             combineSpheres(shape, [-center, radius])
 
-    to OctahedralMirror(shape):
-        return if (shape =~ [center, radius]):
-            combineSpheres(shape, [-center, radius])
-
     to Intersection(shape, shapes :List):
         return combineBounds(shape, shapes)
 
@@ -409,14 +406,17 @@ def asSDF(entropy) as DeepFrozen:
     return object compileSDF:
         to Color(red, green, blue):
             def color := V(red, green, blue)
-            return fn _p, _N, _dx, _dy { color }
+            return fn _p, _N, _Z, _dx, _dy { color }
 
         to Normal():
             # Convert the normal, which is in [-1, 1], to be in [0, 1].
-            return fn _p, N, _dx, _dy { N * 0.5 + 0.5 }
+            return fn _p, N, _Z, _dx, _dy { N * 0.5 + 0.5 }
+
+        to Depth():
+            return fn _p, _N, Z, _dx, _dy { Z }
 
         to Gradient():
-            return fn _p, _N, dx, dy {
+            return fn _p, _N, _Z, dx, dy {
                 (V(max(dx.abs()), max(dy.abs()), 0.0) * 4.0).min(1.0).max(0.0)
             }
 
@@ -424,7 +424,7 @@ def asSDF(entropy) as DeepFrozen:
             # https://www.iquilezles.org/www/articles/filterableprocedurals/filterableprocedurals.htm
             # XXX improved filter could be used from
             # https://www.iquilezles.org/www/articles/morecheckerfiltering/morecheckerfiltering.htm
-            return fn p, _N, dx, dy {
+            return fn p, _N, _Z, dx, dy {
                 def fwidth := dx.abs().max(dy.abs()) * 0.5
                 def i := ((frac((p - fwidth) * 0.5) - 0.5).abs() -
                           (frac((p + fwidth) * 0.5) - 0.5).abs()) / fwidth
@@ -437,7 +437,7 @@ def asSDF(entropy) as DeepFrozen:
             def exponents := V(red, green, blue)
             def noise := makeSimplexNoise(entropy)
             def half := one * 0.5
-            return fn p, _N, dx, dy {
+            return fn p, _N, _Z, dx, dy {
                 def [_, _, z] := V.un(p, null)
                 def n := noise.turbulence(p, 7) * 10.0
                 def grey := (z * 0.5 + n).sine()
@@ -449,12 +449,12 @@ def asSDF(entropy) as DeepFrozen:
         to Lambert(flat, ambient):
             # https://en.wikipedia.org/wiki/Lambertian_reflectance
             return object lambertShader {
-                to ambient(p, N, dx, dy) { return ambient(p, N, dx, dy) }
-                to run(_eye, light, p, N, dx, dy) {
+                to ambient(p, N, Z, dx, dy) { return ambient(p, N, Z, dx, dy) }
+                to run(_eye, light, p, N, Z, dx, dy) {
                     def L := glsl.normalize(light - p)
                     def diff := glsl.dot(L, N)
                     return if (diff.belowZero()) { zero } else {
-                        flat(p, N, dx, dy) * diff
+                        flat(p, N, Z, dx, dy) * diff
                     }
                 }
             }
@@ -462,14 +462,14 @@ def asSDF(entropy) as DeepFrozen:
         to Phong(specular, diffuse, ambient, shininess):
             # https://en.wikipedia.org/wiki/Phong_reflection_model
             return object phongShader {
-                to ambient(p, N, dx, dy) { return ambient(p, N, dx, dy) }
-                to run(eye, light, p, N, dx, dy) {
+                to ambient(p, N, Z, dx, dy) { return ambient(p, N, Z, dx, dy) }
+                to run(eye, light, p, N, Z, dx, dy) {
                     def L := glsl.normalize(light - p)
                     def diff := glsl.dot(L, N)
 
                     return if (diff.belowZero()) { zero } else {
-                        def ks := specular(p, N, dx, dy)
-                        def kd := diffuse(p, N, dx, dy)
+                        def ks := specular(p, N, Z, dx, dy)
+                        def kd := diffuse(p, N, Z, dx, dy)
                         def R := glsl.normalize(glsl.reflect(-L, N))
                         def base := glsl.dot(R, glsl.normalize(eye - p))
                         def spec := if (base.belowZero()) { 0.0 } else {
@@ -541,15 +541,20 @@ def asSDF(entropy) as DeepFrozen:
 
         to Rotation(shape, ur :Double, ui :Double, uj :Double, uk :Double):
             # https://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation#Quaternion-derived_rotation_matrix
+            # XXX wrong!?
             def R := V(
                 V(1 - 2 * (uj * uj + uk * uk), 2 * (ui * uj - uk * ur), 2 * (ui * uk + uj * ur)),
                 V(2 * (ui * uj + uk * ur), 1 - 2 * (ui * ui + uk * uk), 2 * (uj * uk - ui * ur)),
                 V(2 * (ui * uk - uj * ur), 2 * (uj * uk + ui * ur), 1 - 2 * (ui * ui + uj * uj)),
             )
+            traceln(`Rotation($ur, $ui, $uj, $uk) -> $R`)
             return fn p { shape(sumRow(R * p)) }
 
         to Scaling(shape, factor :Double):
-            return fn p { shape(p / factor) * factor }
+            return fn p {
+                def [d, material] := shape(p / factor)
+                [d * factor, material]
+            }
 
         to Displacement(shape, displacement, scale :Double):
             # return fn p { shape(p) + displacement(p) * scale }
@@ -596,9 +601,6 @@ def asSDF(entropy) as DeepFrozen:
                 shape(V(px, pz, py))
             }
 
-        to OctahedralMirror(shape):
-            return fn p { shape(p.abs()) }
-
         to Intersection(shape, shapes :List):
             return fn p {
                 var rv := shape(p)
@@ -641,6 +643,11 @@ def asSDF(entropy) as DeepFrozen:
             def noise := makeSimplexNoise(entropy)
             return fn p { noise.turbulence(p * l, octaves) }
 
+        to Dimples(lx :Double, ly :Double, lz :Double):
+            def l := V(lx, ly, lz)
+            def noise := makeSimplexNoise(entropy)
+            return fn p { noise.noise(p * l).abs() * 2.0 - 1.0 }
+
 # Use the normal to show the gradient.
 def debugNormal :DeepFrozen := CSG.Lambert(CSG.Normal(), CSG.Color(0.1, 0.1, 0.1))
 # Use the gradient to show the gradient.
@@ -657,6 +664,7 @@ def rubber(color) as DeepFrozen:
         10.0,
     )
 def checker :DeepFrozen := CSG.Lambert(CSG.Checker(), CSG.Color(0.1, 0.1, 0.1))
+def white :DeepFrozen := CSG.Color(1.0, 1.0, 1.0)
 def green :DeepFrozen := CSG.Color(0.04, 0.7, 0.04)
 def red :DeepFrozen := CSG.Color(0.7, 0.04, 0.04)
 def emerald :DeepFrozen := CSG.Phong(
@@ -737,26 +745,22 @@ def tinytracer :DeepFrozen := CSG.Union(
     CSG.Translation(CSG.Sphere(4.0, mirror), -11.0, 5.0, -11.0),
 ])
 # A morningstar.
-def fortyFive := 2.0.squareRoot().reciprocal()
-def morningstar :DeepFrozen := CSG.Union(
-    CSG.Rotation(CSG.Cylinder(5.0, 0.4, iron),
-                 fortyFive, fortyFive, 0.0, 0.0), [
-    CSG.Translation(CSG.Sphere(0.5, rubber(CSG.Color(0.3, 0.1, 0.1))), 0.0, 0.0, -3.0),
-    CSG.Translation(CSG.Union(CSG.Sphere(1.8, iron), [
-        CSG.CubicMirror(CSG.Cone(0.5, 3.0, iron)),
-    ]), 0.0, 0.0, 3.0),
-])
-def spike := CSG.OctahedralMirror(CSG.Cone(0.5, 3.0, iron))
-def solid :DeepFrozen := morningstar(expandCSG)
-traceln(`Defined solid: $solid`)
-traceln(`Bounding sphere: ${solid(boundingSphere)}`)
-
-def formatBucket([size :Int, count :Int]) :Str as DeepFrozen:
-    var d := size.asDouble()
-    for s in (["", "Ki", "Mi", "Gi", "Ti", "Pi"]):
-        if (d < 256.0):
-            return `$count objects ($d ${s}B)`
-        d /= 1024.0
+def fortyFive :Double := 2.0.squareRoot().reciprocal()
+def morningstar :DeepFrozen := {
+    # We're going to apply displacement to the entire iron structure, to give
+    # it a hammered look.
+    def ironBall := CSG.Sphere(2.0, iron)
+    def spikedBall := CSG.Union(ironBall, [
+        CSG.CubicMirror(CSG.Cone(0.75, 4.0, iron)),
+    ])
+    def entireIron := CSG.Union(CSG.Box(0.3, 0.3, 5.0, iron), [
+        CSG.Translation(spikedBall, 0.0, 0.0, 4.0),
+    ])
+    def hammered := CSG.Displacement(entireIron, CSG.Dimples(2.0, 2.0, 2.0), 0.02)
+    CSG.Translation(CSG.Union(hammered, [
+        CSG.Translation(CSG.Sphere(0.7, rubber(CSG.Color(0.7, 0.7, 0.5))), 0.0, 0.0, -5.0),
+    ]), 0.0, 0.0, -1.0)
+}
 
 object costOfConfig as DeepFrozen:
     to Center():
@@ -781,35 +785,38 @@ object costOfSolid as DeepFrozen:
     to Normal():
         return 1
 
+    to Depth():
+        return 1
+
     to Gradient():
-        return 2
+        return 1
 
     to Checker():
-        return 5
+        return 1
 
     to Marble(_, _, _):
-        return 11
+        return 2
 
     to Lambert(flat, ambient):
-        return flat + ambient + 5
+        return flat + ambient + 1
 
     to Phong(specular, diffuse, ambient, _):
-        return specular + diffuse + ambient + 8
+        return specular + diffuse + ambient + 1
 
     to Sphere(_, material):
-        return material + 1
-
-    to Box(_, _, _, material):
         return material + 2
 
-    to Cylinder(_, _, material):
+    to Box(_, _, _, material):
         return material + 3
 
+    to Cylinder(_, _, material):
+        return material + 1
+
     to Cone(_, _, material):
-        return material + 4
+        return material + 3
 
     to InfiniteCylindricalCross(_, _, _, material):
-        return material + 5
+        return material + 3
 
     to Translation(shape, _, _, _):
         return shape + 1
@@ -818,30 +825,27 @@ object costOfSolid as DeepFrozen:
         return shape + 1
 
     to Scaling(shape, _):
-        return shape + 1
+        return shape + 2
 
     to Displacement(shape, displacement, _):
         return shape + displacement + 1
 
     to OrthorhombicClamp(shape, _, _, _, _):
-        return shape + 3
+        return shape + 18
 
     to OrthorhombicCrystal(shape, _, _, _):
-        return shape + 3
+        return shape + 9
 
     to CubicMirror(shape):
-        return shape + 2
-
-    to OctahedralMirror(shape):
         return shape + 1
 
     to Intersection(shape, shapes :List):
-        var rv := shape + 2
+        var rv := shape + 1
         for s in (shapes) { rv += s }
         return rv
 
     to Union(shape, shapes :List):
-        var rv := shape + 2
+        var rv := shape + 1
         for s in (shapes) { rv += s }
         return rv
 
@@ -849,38 +853,46 @@ object costOfSolid as DeepFrozen:
         return minuend + subtrahend + 1
 
     to Sines(_, _, _):
-        return 3
+        return 1
 
     to Noise(_, _, _, octaves :Int):
-        return octaves * 2
+        return octaves * 3
 
-def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
-    def w := 640
-    def h := 360
+    to Dimples(_, _, _):
+        return 3
+
+def traceToPNG(Timer, entropy, width :Int, height :Int, solid) as DeepFrozen:
+    traceln(`Tracing solid: $solid`)
+    traceln(`Cost: ${solid(costOfSolid)}`)
+    traceln(`Bounding sphere: ${solid(boundingSphere)}`)
     # NB: We only need entropy to seed the SDF's noise; we don't need to
     # continually take random numbers while drawing. This is an infelicity in
     # lib/noise's API.
-    def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
     def sdf := solid(asSDF(entropy))
     def drawable := drawSignedDistanceFunction(sdf)
     # def config := samplerConfig.QuasirandomMonteCarlo(5)
     def config := samplerConfig.Center()
-    def cost := config(costOfConfig) * solid(costOfSolid) * w * h * maxSteps
-    def drawer := makePNG.drawingFrom(drawable, config)(w, h)
+    def cost := config(costOfConfig) * solid(costOfSolid) * width * height * maxSteps
+    def drawer := makePNG.drawingFrom(drawable, config)(width, height)
     var i := 0
     def start := Timer.unsafeNow()
     while (true):
         i += 1
-        if (i % 1000 == 0):
+        if (i % 2000 == 0):
             def duration := Timer.unsafeNow() - start
             def pixelsPerSecond := i / duration
-            def timeRemaining := ((w * h) - i) / pixelsPerSecond
+            def timeRemaining := ((width * height) - i) / pixelsPerSecond
             def normPixels := (pixelsPerSecond * cost).logarithm()
-            traceln(`Status: ${(i * 100) / (w * h)}% ($pixelsPerSecond px/s) ($normPixels work/s) (${timeRemaining}s left)`)
-            # def buckets := currentRuntime.getHeapStatistics().getBuckets()
-            # def finalSlots := formatBucket(buckets["FinalSlot"])
-            # def varSlots := formatBucket(buckets["VarSlot"])
-            # traceln(`Memory: FinalSlot $finalSlots VarSlot $varSlots`)
+            traceln(`Status: ${(i * 100) / (width * height)}% ($pixelsPerSecond px/s) ($normPixels work/s) (${timeRemaining}s left)`)
         drawer.next(__break)
-    def png := drawer.finish()
+    return drawer.finish()
+
+def main(_argv, => currentRuntime, => makeFileResource, => Timer) as DeepFrozen:
+    def entropy := makeEntropy(currentRuntime.getCrypt().makeSecureEntropy())
+    def solid := morningstar(expandCSG)
+    def w := 640
+    def h := 360
+    def testSolid := CSG.Displacement(CSG.Sphere(2.0, rubber(CSG.Normal())),
+        CSG.Sines(2.0, 2.0, 2.0), 0.02)
+    def png := traceToPNG(Timer, entropy, w, h, testSolid)
     return when (makeFileResource("sdf.png")<-setContents(png)) -> { 0 }
